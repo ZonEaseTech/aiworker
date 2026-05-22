@@ -16,7 +16,16 @@ interface SizeBaseline {
   bundles: Record<'worker', BundleSize>
 }
 
-const criticalStudioSelectors = [
+const requiredShadcnStudioMarkers = [
+  '.bg-background',
+  '.bg-card',
+  '.bg-primary',
+  '.border-border',
+  '.rounded-lg',
+  '.text-muted-foreground',
+] as const
+
+const retiredLegacyStudioSelectors = [
   '.entry-shell',
   '.entry-side',
   '.entry-main',
@@ -25,8 +34,8 @@ const criticalStudioSelectors = [
   '.session-progress-card',
   '.artifact-rail',
   '.artifact-preview-frame',
-  '.modal-settings',
-  '.settings-sidebar',
+  '.settings-chrome',
+  '.settings-section',
   '.seg-control',
   '.markdown-preview',
   '.agent-card',
@@ -224,9 +233,13 @@ async function checkStudioCss(): Promise<void> {
     throw new Error(`no CSS assets found in ${rel(assetsDir)}`)
 
   const css = (await Promise.all(cssFiles.map(file => readFile(file, 'utf8')))).join('\n')
-  const missing = criticalStudioSelectors.filter(selector => !hasCssSelector(css, selector))
+  const missing = requiredShadcnStudioMarkers.filter(selector => !hasCssSelector(css, selector))
   if (missing.length > 0)
-    throw new Error(`worker studio CSS missing ${missing.join(', ')} in ${cssFiles.map(rel).join(', ')}`)
+    throw new Error(`worker studio CSS missing shadcn markers ${missing.join(', ')} in ${cssFiles.map(rel).join(', ')}`)
+
+  const retainedLegacySelectors = retiredLegacyStudioSelectors.filter(selector => hasCssSelector(css, selector))
+  if (retainedLegacySelectors.length > 0)
+    throw new Error(`worker studio CSS still includes retired legacy selectors ${retainedLegacySelectors.join(', ')} in ${cssFiles.map(rel).join(', ')}`)
 
   console.log(`worker studio CSS check passed (${cssFiles.map(rel).join(', ')})`)
 }

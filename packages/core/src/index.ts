@@ -23,17 +23,6 @@ export {
   type HostRuntimeOptions,
 } from './host/runtime'
 export {
-  createSoulAppBroker,
-  type SoulAppBrokerContext,
-  type SoulAppBrokerDenied,
-  type SoulAppConnectorEvidenceResult,
-  type SoulAppCreateReviewInput,
-  type SoulAppEngineInvocationInput,
-  type SoulAppMemoryProposalInput,
-  type SoulAppPermissionDecision,
-  type SoulAppStoragePutOptions,
-} from './soul-app/broker'
-export {
   bootstrapOfficialSoulApps,
   discardOfficialSoulAppLegacyMetadata,
   OFFICIAL_SOUL_APPS,
@@ -61,18 +50,12 @@ export {
   type SoulAppRegistryContext,
 } from './soul-app/registry'
 export {
-  reviewSoulAppSecurity,
-  type SoulAppSecurityReview,
-  type SoulAppSecurityReviewConnector,
-  type SoulAppSecurityReviewDescriptor,
-  type SoulAppSecurityReviewDescriptorSurface,
-  type SoulAppSecurityReviewSummary,
-} from './soul-app/security-review'
-export {
-  createSqliteSoulAppStorageProvider,
-  type SoulAppStorageProvider,
-  type SoulAppStoragePutInput,
-} from './soul-app/storage-provider'
+  invokeNativeEngine,
+  type NativeEngineBridgeEvent,
+  type NativeEngineBridgeInput,
+  type NativeEngineBridgeResult,
+  type NativeEngineInvocationStatus,
+} from './worker/engine-bridge'
 export {
   type LocalWorkerEvent,
   LocalWorkerEventBus,
@@ -82,12 +65,9 @@ export {
 export {
   createExternalEngineExecutor,
   type LocalExecutor,
-  type LocalExecutorArtifact,
   LocalExecutorFailure,
   type LocalExecutorInput,
-  type LocalExecutorLesson,
   type LocalExecutorResult,
-  type LocalExecutorReview,
 } from './worker/executor'
 export {
   type LocalFileWriteInput,
@@ -103,4 +83,5 @@ export {
   type LocalWorkerRuntimeOptions,
   type LocalWorkerSnapshot,
   type StartLocalTurnInput,
+  type WorkspaceAssetProjectionResult,
 } from './worker/runtime'

@@ -1,10 +1,10 @@
 # {{workspaceName}}
 
-> Starter People Profile for this HR workspace. Promote a reviewed profile draft to replace this scaffold.
+> Starter People Profile for this HR workspace. The HR Soul App may replace this scaffold with accepted profile content.
 
 ## Current Profile Summary
 
-No approved profile revision yet.
+No accepted profile update yet.
 
 ## Identity And Basics
 
@@ -29,7 +29,7 @@ No accepted role context yet.
 
 | Signal | Status | Source |
 | --- | --- | --- |
-| Profile baseline | Missing | No approved revision |
+| Profile baseline | Missing | No accepted profile update |
 
 ## Risks And Gaps
 
@@ -37,11 +37,11 @@ No accepted role context yet.
 
 ## Next HR Actions
 
-- Approve a profile revision to update this README.
+- Add source-backed profile evidence through the HR Soul App.
 
-## Review State
+## Profile Update State
 
-No approved profile revision yet.
+No accepted profile update yet.
 
 ## Accepted External Sections
 

@@ -1,16 +1,17 @@
 # Soul App developer workflow
 
 Soul Apps are vertical products that can run standalone or mount into AIWorker
-Host. App authors work against the public SDK, manifest protocol, and brokered
-Host capabilities. They must not import Host private modules or sibling app
-source.
+Host. App authors work against the public SDK, manifest protocol, mounted UI
+runtime and local session context. Host is now a Local Shell + Engine Bridge;
+business outputs, confirmation actions, history and domain semantics belong to
+the owning Soul App.
 
 ## Agent Workflow
 
 Repository agents should load `.agents/skills/aiworker-soul-app-dev/SKILL.md`
 before creating or modifying production Soul Apps, Soul App authoring docs,
 validation harnesses, scaffold behavior, manifests, standalone surfaces, Host
-mounted surfaces, artifact schemas, capability prompts, review rubrics, profile
+mounted surfaces, app-owned outputs, app-owned confirmation actions, profile
 views, or protocol surfaces.
 
 This document is the authoring guide. The skill is the agent-native execution
@@ -18,30 +19,15 @@ route. Hard constraints live in `docs/architecture.md#constraint-registry`.
 This file may explain authoring implications, but must not redefine the Host /
 Soul App contract.
 
-The canonical route is:
-
-```text
-root AGENTS.md -> docs/architecture.md -> aiworker-soul-app-dev skill
-  -> app manifest/docs/files -> validate/smoke evidence
-```
-
-Use `.agents/skills/aiworker-host-dev/SKILL.md` instead when the change is
-Host-owned: local daemon/API, CLI lifecycle, Worker Web Shell, Host settings,
-app registry, broker enforcement, auth/security, storage metadata, shared Host
-runtime, or shared Host/Soul protocol implementation.
-
-Do not treat `apps/AGENTS.md` as the canonical Soul App rule surface until the
-target agent runner has proven native nested AGENTS loading.
-
-Apply these registry IDs before changing app behavior: `OPERATOR-001`,
-`SOUL-001`, `PROTO-001`, `IMPORT-001`, `DATA-001` and `BROKER-001`.
+Apply these registry IDs before changing app behavior: `SOUL-001`,
+`PROTO-001`, `IMPORT-001`, `MOUNT-001`, `DATA-001` and `ENGINE-001`.
 
 Soul Apps must treat human-facing UI/workbench surfaces and external-operator
-protocol/MCP/action/search/descriptor surfaces as entry modes over the same
-app-owned domain state. These surfaces may differ, but they must resolve to the
-same workspace/session/artifact/profile/review/lesson semantics owned by the
-app. Soul Apps should not assume a specific external agent runtime; callers
-outside AIWorker own reasoning, scheduling and orchestration.
+protocol/MCP/API/descriptor surfaces as entry modes over the same app-owned
+domain state. These surfaces may differ, but they must resolve to the same
+workspace/session/output/domain-object semantics owned by the app.
+Soul Apps should not assume a specific external agent runtime; callers outside
+AIWorker own reasoning, scheduling and orchestration.
 
 ## Create
 
@@ -59,12 +45,27 @@ Production Soul Apps live under `apps/<app-id>/`. The scaffold creates:
   `host-adapter/standalone/standalone.ts`
 - package scripts for `validate`, `smoke`, and `typecheck`
 
-The starter manifest follows the current mounted design: app-owned action,
-search and configuration descriptors live under `ui.workbench`, and process locator
-intent such as terminal cwd lives under `ui.workspaceContext`. Generated
-Host-mounted services implement the matching `/protocol/actions` and
-`/protocol/search` endpoints; they do not declare or customize Host header
-slots.
+The starter manifest follows the current mounted design: app-owned UI surfaces
+use `renderer: "micro-app"` with `/micro-app/*` mounted entries, and process
+locator intent such as terminal cwd lives under `ui.workspaceContext`.
+`ui.workbench` action/search/configuration descriptors are compatibility
+metadata for app-owned entry modes; Host no longer renders or invokes them as
+generic product controls.
+Generated Host-mounted services implement the matching `/micro-app/*` routes
+and app-owned local API paths such as `/api/briefs` or `/api/briefs/search`;
+they do not declare or customize Host header slots.
+Mounted HTML should bind to the official micro-app child API:
+`window.microApp.getData`/`addDataListener` receive Host mount context and
+`window.microApp.dispatch` sends lightweight `ready`, `error` or `resize` UI
+events back to Host. App actions and search should run inside the micro-app or
+through app-owned mounted API paths; domain semantics do not belong in the data
+channel.
+
+Official Soul App web surfaces compose shared controls from `packages/ui`
+shadcn primitives. Domain-specific profiles, release decisions, accepted state,
+supporting evidence and artifact semantics stay in the owning app's `product/web` code. For non-trivial app web
+changes, record the checked `packages/ui` primitives and run `bun run ui:check`
+with the app package tests.
 
 Reference and production apps should use the fuller app layout:
 
@@ -93,7 +94,7 @@ apps/<app-id>/
 ```
 
 Use kebab-case app ids. Storage namespace, protocol route prefix, mounted
-service identity and optional broker grants are app-scoped by default.
+service identity and manifest permission hints are app-scoped by default.
 
 ## Validate
 
@@ -104,7 +105,7 @@ aiworker app validate <target-dir>
 Validation checks:
 
 - manifest schema and host compatibility
-- storage namespace and permission targets
+- declared storage namespace and compatibility/permission hints
 - artifact schema JSON files
 - engine-visible workspace files, native skills, and MCP client config
 - prompt, review, pack, UI, API, and mode entry file references
@@ -139,7 +140,7 @@ should be inspectable. `CLAUDE.md` should stay as a one-line `@AGENTS.md`
 reference when the same rules apply to Claude Code.
 
 Native skills are app-owned domain assets. They should describe the action
-purpose, required inputs, artifact shape, review boundary, and promotion rules
+purpose, required inputs, artifact shape, acceptance boundary and write rules
 that keep an engine session aligned with the Soul App workflow. Projected skill
 copies are workspace-visible and should not be ignored by default; a user or app
 may intentionally iterate them as part of the workspace history.
@@ -147,7 +148,7 @@ may intentionally iterate them as part of the workspace history.
 Only runtime or sensitive outputs should be ignored by the projected workspace
 `.gitignore`, for example `.aiworker/sessions/`, `.aiworker/projections.json`,
 and raw evidence folders that may contain sensitive source material. Do not
-ignore stable projected instructions, native skills, or reviewable artifacts just
+ignore stable projected instructions, native skills, or inspectable artifacts just
 because they came from AIWorker.
 
 ## MCP Client And Server Declarations
@@ -164,10 +165,9 @@ engine-assets/mcp-clients/claude-code/.mcp.json
 ```
 
 Generated MCP client config must not contain literal secrets, bearer tokens,
-API keys or connector credentials. Use Host connector grants, broker routes,
-environment wiring or secret references instead of writing secrets into
-manifest files, `engine-assets/`, generated app config, workspace metadata or
-logs.
+API keys or connector credentials. Use environment wiring, secret references or
+manifest-declared connector hints instead of writing secrets into manifest
+files, `engine-assets/`, generated app config, workspace metadata or logs.
 
 `engineAssets.mcpServers` is only for reusable MCP server packages that AIWorker
 can validate as generic engine assets. Use package names such as
@@ -178,18 +178,18 @@ external-system capability.
 
 Vertical or strongly app-owned local MCP servers are different. Keep their code
 with the owning Soul App, product repository, or deployment project, and bind
-them to a workspace through Host workspace MCP binding, grants, secret
-references and audit. A TTPOS operations MCP server, for example, should not be
-imported into AIWorker core unless it is intentionally generalized into a
-reusable package. The Soul App may recommend or require that binding through its
-own product documentation or future protocol descriptors, but Host still owns
-the workspace enablement and secret wiring.
+them to a workspace through Host workspace MCP binding metadata, manifest
+permission hints and secret references. A TTPOS operations MCP server, for
+example, should not be imported into AIWorker core unless it is intentionally
+generalized into a reusable package. The Soul App may recommend or require that
+binding through its own product documentation or future protocol descriptors,
+but Host still only prepares local enablement metadata and secret wiring.
 
 If a Soul App needs an agent-operable surface for an external runtime, the app
-decides whether that surface is a workbench action, search provider, descriptor,
-MCP tool/resource/prompt, or a combination of these. Host-provided MCP plumbing
-may route, authorize and audit the call, but it must not invent domain tools or
-translate app-owned meanings into generic platform semantics.
+decides whether that surface is an app-owned API path, descriptor, MCP
+tool/resource/prompt, or a combination of these. Host-provided MCP plumbing may
+locate configured adapters and pass approved context, but it must not invent
+domain tools or translate app-owned meanings into generic platform semantics.
 
 ## Smoke
 
@@ -204,9 +204,9 @@ that declare standalone support, it also starts a temporary local HTML smoke
 server and fetches it to prove the standalone surface is browser-openable. For
 apps that declare a host-mounted local service command, it starts the service,
 checks the health route, and injects the discovered base URL into the temporary
-Host-mounted smoke manifest. If the app declares `ui.workbench`, smoke also
-invokes one declared workbench action and one declared search provider through
-the mounted service protocol.
+Host-mounted smoke manifest. Smoke no longer invokes generic Host workbench
+action/search descriptors; product behavior belongs inside the mounted micro-app
+or app-owned mounted API paths.
 
 The output reports:
 
@@ -214,7 +214,6 @@ The output reports:
 - standalone support status
 - standalone smoke URL and HTTP status
 - mounted service URL and HTTP status, when declared
-- workbench action/search smoke status, when declared
 - Host mounted status
 - hosted registry status
 - artifact count or exposed descriptor count
@@ -222,17 +221,14 @@ The output reports:
 
 ## Design Boundary
 
-Host owns platform concerns:
+Host owns local shell and engine-bridge concerns:
 
-- local daemon lifecycle
-- install/enable/disable state
-- Host auth and session security
-- global appearance, language, default engine, workspace MCP binding metadata and connector settings
-- permission, storage, connector, log, search and audit brokers
-- worker/workspace/session locator
-- Host shell and Host-owned header chrome
-- mounted service launch/connect
-- protocol discovery and descriptor cache
+- start: discover, install, enable, disable, route and launch Soul Apps
+- shell: local daemon lifecycle, Web shell, CLI entry and shell preferences
+- locate: worker/workspace/session locators and selected engine context
+- mount: manifest-declared routes, micro-app surfaces and app-owned local adapters
+- bridge: session cwd/context files and engine invocation boundary
+- metadata: installed/enabled app state, routing cache, mounted surface references and platform file references
 
 Soul Apps own domain concerns:
 
@@ -241,8 +237,8 @@ Soul Apps own domain concerns:
 - capability prompts
 - artifact schemas, content and lifecycle
 - profile composition
-- review rubrics and verdict meaning
-- lesson/memory promotion semantics
+- acceptance checks and product decisions
+- domain memory or history semantics
 - app-scoped storage content
 - standalone runtime surface
 - Host mounted runtime surface
@@ -253,29 +249,30 @@ Standalone app-local calls stay inside the Soul App:
 Soul App UI/API -> app-local runtime -> app-local workspace/session/domain store
 ```
 
-Mounted calls cross the Host boundary only for shared platform capabilities:
+Mounted calls cross the Host boundary only through declared app-owned surfaces
+or thin local adapters:
 
 ```text
-Host shell -> static manifest/protocol -> mounted local service -> scoped Host broker
+Host shell -> static manifest/protocol -> mounted local service -> thin Host adapter
 ```
 
-If Host needs to show app-owned state, the app must expose it as a protocol
-view, action, status or descriptor. Host should not infer HR profiles, QA release
-verdicts, review meaning, lessons or memories from app files, DB rows, prompts
-or UI labels.
+If Host needs to show app-owned state, the app must expose it as a declared
+micro-app surface, app-owned mounted API path, status or descriptor. Host should
+not infer HR profiles, QA release verdicts, accepted state, domain history or memories
+from app files, DB rows, prompts or UI labels.
 
-Host action/search/configuration invocation must resolve a manifest-declared
-`ui.workbench` descriptor first. Host must reject undeclared protocol actions or
-search providers, and must not infer app domain behavior from protocol names.
-Descriptor `requiredPermissions` are broker-enforced before Host contacts a
-mounted Soul App service.
+Host no longer exposes generic action/search/configuration invocation from
+`ui.workbench`. Those descriptors may remain as compatibility metadata for
+app-owned services or external clients, but product execution
+belongs inside the micro-app or through app-owned mounted API paths. Host must
+reject undeclared mounted API paths and must not infer app domain behavior from
+protocol names.
 
 Mounted Soul Apps must not declare Host header slots. Host header title,
 primary action, searchbar, action menu, drawer toggles, refresh and app
-configuration placement are Host-owned chrome. App-owned workbench
-actions/search/configuration belong under `ui.workbench` and describe intent
-with `role`, not placement with
-`slot`.
+configuration placement are Host-owned chrome. App-owned actions/search/
+configuration belong inside the mounted micro-app UI or app-owned API surface,
+not as Host toolbar placement.
 
 If a Soul App needs Host process coordination, such as a future web terminal, it
 should expose workspace locator intent through `ui.workspaceContext`. Terminal
@@ -287,37 +284,29 @@ cwd descriptors must use one of the explicit sources:
 
 Host owns terminal rendering, process lifecycle and authorization. Soul Apps
 only declare the workspace context needed to resolve the correct location.
-Host auth is provider-backed. Local bearer auth is the first implementation;
-future Logto integration should stay behind the same Host provider boundary.
-Mounted Soul Apps receive operator identity through signed mount context and
-broker scope, not through caller cookies, caller authorization headers or Host
-private auth internals.
-Host storage broker providers own app-scoped namespaces and access control;
-Soul Apps own stored value semantics.
+Host enablement checks are local and lightweight. Host may inspect manifest
+compatibility, declared permission hints, connector or secret-reference hints,
+mount entries and runtime availability to decide whether the local shell can
+launch or route an app. This must not become a centralized approval, risk
+scoring or domain approval layer.
+Mounted Soul Apps receive only narrow mount context, not caller cookies, caller
+authorization headers or Host private auth internals.
 Browser `localStorage` and `sessionStorage` are not a durable domain storage
 path. Current same-realm Host mounted Soul Apps are trusted first-party code and
 must use the SDK scoped browser storage helper instead of raw Web Storage APIs.
 Use the helper only for UI state such as filters, drafts and local preferences;
-use broker storage for durable workspace/session/domain records. Do not store
-secrets, bearer tokens, connector credentials or engine credentials in browser
-storage.
-Host broker provider registry exposes storage, connector, audit and
-secret-reference provider metadata through public broker routes. Soul Apps may
-inspect this registry to adapt UX, but must not treat provider names as domain
-truth or assume future cloud providers are active until the registry marks them
-`active`.
-Host search index broker accepts only non-authoritative descriptors such as
-title, summary, reference and scope ids. Soul Apps decide what to publish and
-what results mean; Host must not use the index to infer profile fields, review
-verdict semantics or private evidence.
-Host may project manifest permissions, connector needs and descriptor
-`requiredPermissions` into a generic enablement security review before app code
-runs. Soul Apps should make those declarations clear, but Host must not turn the
-review into domain-specific approval logic.
+use app workspace files or app-owned storage for durable workspace/session/domain
+records. Do not store secrets, bearer tokens, connector credentials or engine
+credentials in browser storage.
+Soul Apps may declare compatibility, connector, secret-reference and descriptor
+requirements so Host can prepare local enablement metadata. Host does not expose
+a provider, search or audit surface as an active product center, and must not
+infer profile fields, review verdict semantics or private evidence from those
+descriptors.
 
-Use connector broker permissions for external evidence. Do not put secrets in
-manifest files, generated app config, workspace metadata, DB metadata, logs,
-prompts, review rubrics or skill files.
+Use manifest-declared connector and secret-reference hints for external
+evidence. Do not put secrets in manifest files, generated app config, workspace
+metadata, DB metadata, logs, prompts, review rubrics or skill files.
 
 Use `createSoulAppWebStorage(...)` for Host-mounted browser state:
 
@@ -341,9 +330,9 @@ fails production Soul App source that directly uses raw `localStorage` or
 ## Contribution Checklist
 
 - Open or update a PMA task and plan for each new production app.
-- Keep workspace, capability, artifact, profile, connector, permission, review
-  and lesson terms understandable to the vertical user.
+- Keep workspace, capability, artifact, profile, connector, permission,
+  accepted-state and domain-history terms understandable to the vertical user.
 - Run `aiworker app validate <path>` and `aiworker app smoke <path>`.
 - Run focused package tests and typecheck for app code.
-- Run `bun run crg:update` and `bun run crg:review` before finalizing Host code
-  changes.
+- Run `bun run crg:update` and `bun run crg:review` before finalizing production
+  code changes.

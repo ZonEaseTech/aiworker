@@ -1,5 +1,4 @@
 import type {
-  SoulAppArtifactValidationResult,
   SoulAppCapability,
   SoulAppDefinition,
   SoulAppProtocolResult,
@@ -21,22 +20,6 @@ export const QA_REFERENCE_APP_BOUNDARY = {
 } as const
 
 export const qaReferenceSoulApp: SoulAppDefinition = defineSoulApp({
-  artifact: {
-    async artifactSchemas() {
-      return qaSoulAppManifest.artifactTypes
-    },
-    async extractMetadata(_context, artifact) {
-      return {
-        appId: qaSoulAppManifest.id,
-        contentRef: artifact.contentRef,
-        kind: artifact.type,
-        releaseRisk: artifact.type === 'release-gate' ? 'gate-review' : 'coverage-review',
-      }
-    },
-    async validateArtifact(_context, artifact) {
-      return validateArtifactType(artifact.type)
-    },
-  },
   connector: {
     async declareConnectorNeeds() {
       return [
@@ -47,29 +30,6 @@ export const qaReferenceSoulApp: SoulAppDefinition = defineSoulApp({
   },
   lifecycle: lifecycleHandlers('QA reference app ready.'),
   manifest: qaSoulAppManifest,
-  review: {
-    async createReviewRubric(_context, artifactType) {
-      return {
-        checks: [
-          `Artifact type ${artifactType} maps test evidence to release risk.`,
-          'Known defects, missing evidence, and residual risk are separated.',
-          'Go/no-go recommendation is explicit and reviewable.',
-        ],
-        policyRef: qaSoulAppManifest.artifactTypes.find(type => type.id === artifactType)?.reviewPolicyRef,
-      }
-    },
-    async proposeMemoryCandidate(context, review) {
-      return {
-        evidence: [{
-          appId: context.appId,
-          artifactId: review.artifactId,
-          reviewId: review.reviewId,
-          source: 'qa-reference-app',
-        }],
-        statement: 'Promote reviewed QA release gate guidance into the QA Soul namespace.',
-      }
-    },
-  },
   runtime: {
     async prepareSessionContext(context, input) {
       const capability = resolveQaCapability(input.capabilityId)
@@ -81,7 +41,7 @@ export const qaReferenceSoulApp: SoulAppDefinition = defineSoulApp({
   },
   ui: {
     async artifactTypes() {
-      return qaSoulAppManifest.artifactTypes
+      return manifestJson.artifactTypes
     },
     async capabilities() {
       return qaSoulAppManifest.capabilities
@@ -129,14 +89,6 @@ function sessionContext(context: SoulAppScopedContext, capability: SoulAppCapabi
       'Known blockers and residual risk are separate.',
       'Recommendation is explicit and actionable.',
     ],
-  }
-}
-
-function validateArtifactType(type: string): SoulAppArtifactValidationResult {
-  const known = qaSoulAppManifest.artifactTypes.some(item => item.id === type)
-  return {
-    issues: known ? [] : [{ message: `Unknown QA artifact type: ${type}`, severity: 'error' }],
-    ok: known,
   }
 }
 

@@ -1,7 +1,10 @@
-import type { LocalWorker, VerticalSoul } from '@zonease/aiworker-shared'
+import type { LocalWorker } from '@zonease/aiworker-shared'
 import type { displaySoul, messagesFor, normalizeLocale } from '../../i18n'
+import type { VerticalSoul } from '../types.compat'
 
-import { Card } from '@zonease/aiworker-component'
+import { Card } from '@zonease/aiworker-ui/components/card'
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
+import { cn } from '@zonease/aiworker-ui/lib/utils'
 import { formatStatus } from '../../i18n'
 
 type WorkerMessages = ReturnType<typeof messagesFor>
@@ -22,21 +25,32 @@ export function WorkerIdentityBlock({
   worker: LocalWorker | null
 }) {
   return (
-    <Card className={`worker-identity ${compact ? 'compact' : ''}`}>
-      <div className="worker-identity-head">
-        <span className="kicker">{copy.workspace.currentWorker}</span>
-        <strong>{worker?.name ?? copy.workspace.noWorker}</strong>
-      </div>
-      <div className="worker-identity-grid">
-        <span>{copy.workspace.workerId}</span>
-        <strong>{worker?.id ?? '-'}</strong>
-        <span>{copy.workspace.workerStatus}</span>
-        <strong>{worker ? formatStatus(worker.status, locale) : copy.workspace.noWorker}</strong>
-        <span>{copy.workspace.workerEngine}</span>
-        <strong>{worker?.defaultEngineId ?? '-'}</strong>
-        <span>{copy.workspace.workerSoul}</span>
-        <strong>{`${soulCopy.name} / ${soul.id}`}</strong>
-      </div>
+    <Card
+      data-testid="worker-identity-card"
+      size="sm"
+      className={cn('min-w-0 gap-3 p-3', compact && 'gap-2 p-2.5')}
+    >
+      <Item variant="default" size="xs" className="px-0 py-0">
+        <ItemContent>
+          <ItemDescription>{copy.workspace.currentWorker}</ItemDescription>
+          <ItemTitle className="max-w-full">{worker?.name ?? copy.workspace.noWorker}</ItemTitle>
+        </ItemContent>
+      </Item>
+      <ItemGroup className="gap-1">
+        <WorkerIdentityRow label={copy.workspace.workerId} value={worker?.id ?? '-'} />
+        <WorkerIdentityRow label={copy.workspace.workerStatus} value={worker ? formatStatus(worker.status, locale) : copy.workspace.noWorker} />
+        <WorkerIdentityRow label={copy.workspace.workerEngine} value={worker?.defaultEngineId ?? '-'} />
+        <WorkerIdentityRow label={copy.workspace.workerSoul} value={`${soulCopy.name} / ${soul.id}`} />
+      </ItemGroup>
     </Card>
+  )
+}
+
+function WorkerIdentityRow({ label, value }: { label: string, value: string }) {
+  return (
+    <Item variant="default" size="xs" className="flex items-baseline justify-between gap-2.5 px-0 py-0">
+      <ItemDescription className="line-clamp-1 shrink-0">{label}</ItemDescription>
+      <ItemTitle className="ml-auto max-w-full">{value}</ItemTitle>
+    </Item>
   )
 }

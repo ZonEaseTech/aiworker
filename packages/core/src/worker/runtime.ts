@@ -1,10 +1,7 @@
 import type { SoulAppProjectionReceipt } from '@zonease/aiworker-shared'
 import type {
-  ArtifactRow,
   EngineInvocationRow,
   FileRow,
-  LessonRow,
-  ReviewRow,
   SessionEventRow,
   SessionRow,
   TurnRow,
@@ -13,48 +10,38 @@ import type {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import type { EngineAssetSource } from './engine-assets'
 import type { LocalExecutor, LocalExecutorEvent, LocalExecutorResult } from './executor'
-import type { GitOperationResult, ProfileWorkspaceBootstrapResult } from './profile-ledger'
-
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { formatProfilePromotionIssues, prepareProfileMarkdownForPromotion } from '@zonease/aiworker-shared'
 import {
   appendSessionEvent,
   createEngineInvocation,
-  createLesson,
-  createReview,
   createSession,
   createTurn,
   createWorkspace,
-  getArtifact,
   getSession,
   getWorker,
   getWorkspace,
-  listArtifacts,
   listEngineInvocations,
   listFiles,
-  listLessons,
-  listReviews,
   listSessionEvents,
   listSessions,
   listTurns,
+  listWorkerOverlayAssets,
   listWorkspaces,
   nextEngineInvocationSeq,
   nextSessionEventSeq,
   nextTurnSeq,
-  registerArtifact,
   updateEngineInvocation,
   updateSession,
   updateTurn,
-  upsertFile,
+  updateWorkspace,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { engineAssetProjectionReceiptPath, projectEngineAssetsToWorkspace, resolveSoulAppEngineTarget } from './engine-assets'
 import { LocalWorkerEventBus } from './events'
 import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
 import { LocalWorkspaceFiles } from './files'
-import { bootstrapProfileWorkspace, promoteProfileRevision as promoteProfileRevisionFiles } from './profile-ledger'
 
 export interface LocalWorkerRuntimeOptions {
   worker: {
@@ -99,9 +86,6 @@ export interface LocalTurnStartResult {
   invocation: EngineInvocationRow
   events: SessionEventRow[]
   files: FileRow[]
-  artifacts: ArtifactRow[]
-  review: ReviewRow | null
-  lessons: LessonRow[]
 }
 
 export interface LocalWorkerSnapshot {
@@ -111,28 +95,12 @@ export interface LocalWorkerSnapshot {
   turns: TurnRow[]
   invocations: EngineInvocationRow[]
   files: FileRow[]
-  artifacts: ArtifactRow[]
-  reviews: ReviewRow[]
-  lessons: LessonRow[]
   events: SessionEventRow[]
 }
 
-export interface PromoteProfileRevisionInput {
-  artifactId: string
-  findingsJson?: Record<string, unknown>[]
-  profileMarkdown?: string
-  risksJson?: Record<string, unknown>[]
-  tagName?: string | null
-  verdict?: ReviewRow['verdict']
-  workspaceId: string
-}
-
-export interface ProfileRevisionPromotionResult {
-  git: GitOperationResult
-  profilePath: string
-  review: ReviewRow
-  reviewPath: string
-  tag: GitOperationResult | null
+export interface WorkspaceAssetProjectionResult {
+  receipt: SoulAppProjectionReceipt | null
+  workspace: WorkspaceRow
 }
 
 export class LocalWorkerRuntime {
@@ -179,6 +147,8 @@ export class LocalWorkerRuntime {
     const rootPath = path.join(this.#workspacesRoot, id)
     const layout = await this.prepareWorkspaceLayout({
       name: input.name,
+      projectEngineAssets: true,
+      projectWorkerOverlayAssets: true,
       rootPath,
     })
     return createWorkspace({
@@ -196,13 +166,38 @@ export class LocalWorkerRuntime {
               projectionManifestPath: engineAssetProjectionReceiptPath(),
             }
           : null,
-        profileLedger: {
-          git: layout.profile.git,
-          profilePath: layout.profile.profilePath,
-        },
       },
       at: this.#now(),
     })
+  }
+
+  async reprojectWorkspaceAssets(workspaceId: string): Promise<WorkspaceAssetProjectionResult> {
+    const workspace = this.requireWorkspace(workspaceId)
+    const layout = await this.prepareWorkspaceLayout({
+      name: workspace.name,
+      preserveUnownedExistingTargets: true,
+      projectEngineAssets: true,
+      projectWorkerOverlayAssets: true,
+      rootPath: workspace.rootPath,
+    })
+    const updatedWorkspace = updateWorkspace({
+      id: workspace.id,
+      metadataJson: {
+        ...workspace.metadataJson,
+        engineAssetProjection: layout.engineAssets
+          ? {
+              projectionCount: layout.engineAssets.projections.length,
+              projectionManifestPath: engineAssetProjectionReceiptPath(),
+              projectedAt: layout.engineAssets.generatedAt,
+            }
+          : null,
+      },
+      at: this.#now(),
+    })
+    return {
+      receipt: layout.engineAssets,
+      workspace: updatedWorkspace,
+    }
   }
 
   async createSession(input: CreateLocalSessionInput): Promise<SessionRow> {
@@ -311,7 +306,7 @@ export class LocalWorkerRuntime {
       const message = error instanceof Error ? error.message : String(error)
       const recoveredOutput = error instanceof LocalExecutorFailure && error.partialResult
         ? await this.captureResult(workspace, session, turn, invocation, error.partialResult, metadata)
-        : { artifacts: [], files: [], lessons: [], review: null }
+        : { files: [] }
       const recoveredMetadata = error instanceof LocalExecutorFailure ? error.partialResult?.metadata ?? {} : {}
       const failedInvocation = updateEngineInvocation({
         id: invocation.id,
@@ -361,9 +356,6 @@ export class LocalWorkerRuntime {
       turns,
       invocations: listEngineInvocations().filter(invocation => sessionIds.has(invocation.sessionId)),
       files: listFiles().filter(file => workspaceIds.has(file.workspaceId)),
-      artifacts: listArtifacts().filter(artifact => workspaceIds.has(artifact.workspaceId)),
-      reviews: listReviews().filter(review => workspaceIds.has(review.workspaceId)),
-      lessons: listLessons().filter(lesson => workspaceIds.has(lesson.workspaceId)),
       events: listSessionEvents().filter(event => sessionIds.has(event.sessionId)),
     }
   }
@@ -373,143 +365,19 @@ export class LocalWorkerRuntime {
     return new LocalWorkspaceFiles(workspace.rootPath)
   }
 
-  async promoteProfileRevision(input: PromoteProfileRevisionInput): Promise<ProfileRevisionPromotionResult> {
-    const workspace = this.requireWorkspace(input.workspaceId)
-    const artifact = getArtifact(input.artifactId)
-    if (!artifact || artifact.workspaceId !== workspace.id)
-      throw new Error(`Artifact not found for workspace ${workspace.id}: ${input.artifactId}`)
-
-    const verdict = input.verdict ?? 'pass'
-    const reviewId = randomUUID()
-    const files = new LocalWorkspaceFiles(workspace.rootPath)
-    const artifactContent = await files.read(artifact.path)
-    const preparedProfile = prepareProfileMarkdownForPromotion({
-      artifactMarkdown: artifactContent,
-      profileMarkdown: input.profileMarkdown,
-      requireFencedDraft: !input.profileMarkdown,
-    })
-    if (!preparedProfile.ok)
-      throw new Error(`Profile promotion rejected: ${formatProfilePromotionIssues(preparedProfile.issues)}`)
-    const at = this.#now()
-    const promotion = await promoteProfileRevisionFiles({
-      artifactPath: artifact.path,
-      artifactTitle: artifact.title,
-      findingsJson: input.findingsJson ?? [{ message: 'Profile revision approved.' }],
-      now: at,
-      profileMarkdown: preparedProfile.profileMarkdown,
-      reviewId,
-      risksJson: input.risksJson ?? [],
-      tagName: input.tagName,
-      verdict,
-      workspaceName: workspace.name,
-      workspaceRoot: workspace.rootPath,
-    })
-    const review = createReview({
-      id: reviewId,
-      workspaceId: workspace.id,
-      sessionId: artifact.sessionId,
-      turnId: artifact.turnId,
-      artifactId: artifact.id,
-      verdict,
-      findingsJson: input.findingsJson ?? [{ message: 'Profile revision approved.' }],
-      risksJson: input.risksJson ?? [],
-      at,
-    })
-    if (review.sessionId) {
-      this.appendEvent(review.sessionId, 'review', { reviewId: review.id, verdict: review.verdict, profilePath: promotion.profilePath }, review.turnId, null)
-      this.bus.emit({ kind: 'review', workspaceId: workspace.id, sessionId: review.sessionId, turnId: review.turnId ?? undefined, payload: { reviewId: review.id, profilePath: promotion.profilePath }, at: this.#now() })
-    }
-    return {
-      ...promotion,
-      review,
-    }
-  }
-
   dispose(): void {
     return undefined
   }
 
   private async captureResult(
-    workspace: WorkspaceRow,
-    session: SessionRow,
-    turn: TurnRow,
-    invocation: EngineInvocationRow,
-    result: LocalExecutorResult,
-    metadata: Record<string, unknown>,
+    _workspace: WorkspaceRow,
+    _session: SessionRow,
+    _turn: TurnRow,
+    _invocation: EngineInvocationRow,
+    _result: LocalExecutorResult,
+    _metadata: Record<string, unknown>,
   ): Promise<Omit<LocalTurnStartResult, 'events' | 'invocation' | 'session' | 'turn'>> {
-    const filesApi = new LocalWorkspaceFiles(workspace.rootPath)
-    const files: FileRow[] = []
-    const artifacts: ArtifactRow[] = []
-    for (const artifact of result.artifacts ?? []) {
-      const entry = await filesApi.write({ path: artifact.path, content: artifact.content })
-      const file = upsertFile({
-        id: randomUUID(),
-        workspaceId: workspace.id,
-        path: entry.path,
-        kind: 'generated',
-        size: entry.size,
-        mtime: entry.mtime,
-        hash: entry.hash,
-        source: 'session',
-        at: this.#now(),
-      })
-      files.push(file)
-      const row = registerArtifact({
-        id: randomUUID(),
-        workspaceId: workspace.id,
-        sessionId: session.id,
-        turnId: turn.id,
-        invocationId: invocation.id,
-        path: artifact.path,
-        kind: artifact.kind ?? 'file',
-        title: artifact.title ?? artifact.path,
-        metadataJson: {
-          capabilityTemplateId: session.capabilityTemplateId,
-          fileId: file.id,
-          outputKind: artifact.kind ?? metadata.outputKind,
-          ...(typeof metadata.soulAppId === 'string' ? { soulAppId: metadata.soulAppId } : {}),
-          ...(artifact.metadata ?? {}),
-          workerId: this.workerId,
-        },
-        at: this.#now(),
-      })
-      artifacts.push(row)
-      this.appendEvent(session.id, 'artifact', { artifactId: row.id, path: row.path }, turn.id, invocation.id)
-      this.bus.emit({ kind: 'artifact', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { artifactId: row.id }, at: this.#now() })
-    }
-
-    const review = result.review
-      ? createReview({
-          id: randomUUID(),
-          workspaceId: workspace.id,
-          sessionId: session.id,
-          turnId: turn.id,
-          artifactId: artifacts[0]?.id ?? null,
-          verdict: result.review.verdict ?? 'needs_review',
-          findingsJson: result.review.findings ?? [],
-          risksJson: result.review.risks ?? [],
-          at: this.#now(),
-        })
-      : null
-    if (review) {
-      this.appendEvent(session.id, 'review', { reviewId: review.id, verdict: review.verdict }, turn.id, invocation.id)
-      this.bus.emit({ kind: 'review', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { reviewId: review.id }, at: this.#now() })
-    }
-
-    const lessons = (result.lessons ?? []).map(lesson => createLesson({
-      id: randomUUID(),
-      workspaceId: workspace.id,
-      sourceReviewId: review?.id ?? null,
-      statement: lesson.statement,
-      evidenceJson: lesson.evidence ?? [],
-      at: this.#now(),
-    }))
-    for (const lesson of lessons) {
-      this.appendEvent(session.id, 'lesson', { lessonId: lesson.id }, turn.id, invocation.id)
-      this.bus.emit({ kind: 'lesson', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { lessonId: lesson.id }, at: this.#now() })
-    }
-
-    return { files, artifacts, review, lessons }
+    return { files: [] }
   }
 
   private appendAgentEvent(sessionId: string, event: LocalExecutorEvent, turnId?: string | null, invocationId?: string | null): SessionEventRow {
@@ -551,6 +419,7 @@ export class LocalWorkerRuntime {
   }
 
   private buildInvocationPrompt(session: SessionRow, turn: TurnRow, metadata: Record<string, unknown>): string {
+    const mentions = explicitMentionLines(metadata.mentions)
     const lines = [
       `Soul worker: ${this.#workerInput.name}`,
       `Soul id: ${this.#workerInput.soulId}`,
@@ -558,80 +427,31 @@ export class LocalWorkerRuntime {
       `Capability template: ${session.capabilityTemplateId}`,
       `Output kind: ${readString(metadata.outputKind, 'business-artifact')}`,
       '',
-      'Workspace profile ledger:',
-      '- README.md is the accepted profile for this workspace.',
-      `- Proposed changes should be written under artifacts/${session.id}/ before review.`,
-      '- Human review records live under reviews/.',
-      '- Native skills may be projected under .agents/skills and .claude/skills when the Soul App provides them.',
-      '',
       'Session context:',
       session.context || '(no prior context)',
       '',
+      ...mentions,
+      ...(mentions.length > 0 ? [''] : []),
       'Turn request:',
       turn.input.trim(),
     ]
-    const hints = Array.isArray(metadata.inputHints) ? metadata.inputHints : []
-    const rubric = Array.isArray(metadata.reviewRubric) ? metadata.reviewRubric : []
-    if (hints.length > 0)
-      lines.push('', 'Input hints:', ...hints.map(item => `- ${String(item)}`))
-    if (rubric.length > 0)
-      lines.push('', 'Review rubric:', ...rubric.map(item => `- ${String(item)}`))
-    const capabilityPrompt = capabilityAsset(metadata.capabilityPrompt)
-    const capabilityReviewRubric = capabilityAsset(metadata.capabilityReviewRubric)
-    if (capabilityPrompt)
-      lines.push('', `Capability prompt source ref: ${capabilityPrompt.ref}`, 'Use the embedded content below; the source ref is not expected to exist in this workspace.', capabilityPrompt.content)
-    if (capabilityReviewRubric)
-      lines.push('', `Capability review rubric source ref: ${capabilityReviewRubric.ref}`, 'Use the embedded content below; the source ref is not expected to exist in this workspace.', capabilityReviewRubric.content)
     return lines.join('\n')
   }
 
-  private async materializeSessionContext(workspace: WorkspaceRow, session: SessionRow, metadata: Record<string, unknown>): Promise<void> {
+  private async materializeSessionContext(workspace: WorkspaceRow, session: SessionRow, _metadata: Record<string, unknown>): Promise<void> {
     const files = new LocalWorkspaceFiles(workspace.rootPath)
     const sessionRoot = path.posix.join('.aiworker', 'sessions', session.id)
-    await mkdir(files.resolve(path.posix.join(sessionRoot, 'context', 'capability')), { recursive: true })
-    await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'active-context.md')), this.buildActiveContext(session, metadata), 'utf8')
-    await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'capability', 'SKILL.md')), this.buildCapabilitySkill(session, metadata), 'utf8')
-    const capabilityPrompt = capabilityAsset(metadata.capabilityPrompt)
-    const capabilityReviewRubric = capabilityAsset(metadata.capabilityReviewRubric)
-    if (capabilityPrompt)
-      await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'capability', 'prompt.md')), capabilityPrompt.content, 'utf8')
-    if (capabilityReviewRubric)
-      await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'capability', 'review.md')), capabilityReviewRubric.content, 'utf8')
+    await mkdir(files.resolve(path.posix.join(sessionRoot, 'context')), { recursive: true })
+    await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'cwd.txt')), workspace.rootPath, 'utf8')
+    await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'engine.json')), JSON.stringify({
+      engineId: this.#workerInput.defaultEngineId,
+      soulId: this.#workerInput.soulId,
+    }, null, 2), 'utf8')
+    await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'soul-app.json')), JSON.stringify({
+      soulId: this.#workerInput.soulId,
+      name: this.#workerInput.name,
+    }, null, 2), 'utf8')
     await mkdir(files.resolve(path.posix.join(sessionRoot, 'invocations')), { recursive: true })
-  }
-
-  private buildActiveContext(session: SessionRow, metadata: Record<string, unknown>): string {
-    return [
-      `# ${session.title}`,
-      '',
-      `- Worker: ${this.#workerInput.name}`,
-      `- Soul: ${this.#workerInput.soulId}`,
-      `- Capability template: ${session.capabilityTemplateId}`,
-      `- Output kind: ${readString(metadata.outputKind, 'business-artifact')}`,
-      `- Accepted profile: README.md`,
-      `- Proposed change directory: artifacts/${session.id}/`,
-      '- Native skill projections: .agents/skills and .claude/skills when available',
-      '',
-      '## Context',
-      session.context || 'No context supplied.',
-    ].join('\n')
-  }
-
-  private buildCapabilitySkill(session: SessionRow, metadata: Record<string, unknown>): string {
-    const name = readString(metadata.skillName, session.capabilityTemplateId)
-    const rubric = Array.isArray(metadata.reviewRubric) ? metadata.reviewRubric.map(String) : []
-    const capabilityPrompt = capabilityAsset(metadata.capabilityPrompt)
-    const capabilityReviewRubric = capabilityAsset(metadata.capabilityReviewRubric)
-    return [
-      `# ${name}`,
-      '',
-      'Use this capability in the current AIWorker session only.',
-      ...(capabilityPrompt ? ['', '## Capability Prompt', `Source ref: ${capabilityPrompt.ref}`, 'Use the embedded content below; this source ref is not expected to exist in the workspace.', '', capabilityPrompt.content] : []),
-      ...(capabilityReviewRubric ? ['', '## Capability Review Rubric', `Source ref: ${capabilityReviewRubric.ref}`, 'Use the embedded content below; this source ref is not expected to exist in the workspace.', '', capabilityReviewRubric.content] : []),
-      '',
-      '## Review Rubric',
-      ...(rubric.length > 0 ? rubric.map(item => `- ${item}`) : ['- Separate facts, assumptions, risks, and next actions.']),
-    ].join('\n')
   }
 
   private async ensureInvocationRoot(workspace: WorkspaceRow, session: SessionRow, invocation: EngineInvocationRow): Promise<string> {
@@ -664,20 +484,26 @@ export class LocalWorkerRuntime {
   }
 
   private async repairWorkspaceLayouts(): Promise<void> {
-    for (const workspace of listWorkspaces(this.workerId))
-      await this.prepareWorkspaceLayout({ name: workspace.name, rootPath: workspace.rootPath })
+    for (const workspace of listWorkspaces(this.workerId)) {
+      await this.prepareWorkspaceLayout({
+        name: workspace.name,
+        projectEngineAssets: true,
+        projectWorkerOverlayAssets: false,
+        rootPath: workspace.rootPath,
+      })
+    }
   }
 
-  private async prepareWorkspaceLayout(input: { name: string, rootPath: string }): Promise<{
+  private async prepareWorkspaceLayout(input: { name: string, preserveUnownedExistingTargets?: boolean, projectEngineAssets: boolean, projectWorkerOverlayAssets: boolean, rootPath: string }): Promise<{
     engineAssets: SoulAppProjectionReceipt | null
-    profile: ProfileWorkspaceBootstrapResult
   }> {
-    const engineAssets = this.#engineAssetSource
+    const engineAssets = this.#engineAssetSource && input.projectEngineAssets
       ? await projectEngineAssetsToWorkspace({
           appId: this.#engineAssetSource.appId,
           engineAssets: this.#engineAssetSource.engineAssets,
           engineTarget: resolveSoulAppEngineTarget(this.#workerInput.defaultEngineId),
           now: this.#now(),
+          preserveUnownedExistingTargets: input.preserveUnownedExistingTargets,
           sourceRoot: this.#engineAssetSource.sourceRoot,
           variables: {
             appId: this.#engineAssetSource.appId,
@@ -685,18 +511,19 @@ export class LocalWorkerRuntime {
             workerName: this.#workerInput.name,
             workspaceName: input.name,
           },
+          workerOverlayAssets: input.projectWorkerOverlayAssets
+            ? listWorkerOverlayAssets(this.workerId).map(asset => ({
+                content: asset.content,
+                enabled: asset.enabled,
+                id: asset.id,
+                kind: asset.kind,
+                target: asset.target,
+              }))
+            : [],
           workspaceRoot: input.rootPath,
         })
       : null
-    const profile = await bootstrapProfileWorkspace({
-      name: input.name,
-      now: this.#now(),
-      rootPath: input.rootPath,
-      seedProfileFiles: !this.#engineAssetSource,
-      soulId: this.#workerInput.soulId,
-      workerName: this.#workerInput.name,
-    })
-    return { engineAssets, profile }
+    return { engineAssets }
   }
 }
 
@@ -708,11 +535,16 @@ function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
 }
 
-function capabilityAsset(value: unknown): { content: string, ref: string } | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    return null
-  const record = value as Record<string, unknown>
-  const content = readString(record.content, '')
-  const ref = readString(record.ref, '')
-  return content && ref ? { content, ref } : null
+function explicitMentionLines(value: unknown): string[] {
+  if (!Array.isArray(value))
+    return []
+  const lines = value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item))
+      return []
+    const record = item as Record<string, unknown>
+    const id = readString(record.id, '')
+    const kind = readString(record.kind, '')
+    return id && kind ? [`- ${kind}: ${id}`] : []
+  })
+  return lines.length > 0 ? ['Explicit skill mentions:', ...lines] : []
 }

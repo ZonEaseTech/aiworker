@@ -1,14 +1,13 @@
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 
-import { createSoulAppClient } from '@zonease/aiworker-soul-app-sdk'
+import { renderToStaticMarkup } from 'react-dom/server'
 
-import { qaReferenceSoulApp, qaSoulAppManifest } from '../index'
+import { QaReleaseWidgetProof } from '../../product/web/widgets/release-widget'
+import { qaSoulAppManifest } from '../index'
+import { renderSoulAppStyleLink, serveSoulAppStyle } from '../web-style'
 
 interface MountContext {
-  brokerUrl?: string
-  hostUrl?: string
-  mountToken?: string
   operatorId?: string | null
   sessionId?: string | null
   surface?: {
@@ -19,14 +18,31 @@ interface MountContext {
   workspaceId?: string | null
 }
 
-interface BrokerSearchResult {
-  items?: Array<Record<string, unknown>>
+interface ReleaseGateDraftDescriptor {
+  appId: string
+  authority: 'soul-app'
+  id: string
+  kind: 'release-gate'
+  openAction: {
+    id: string
+    input: Record<string, unknown>
+  }
+  sessionId: string | null
+  status: 'draft'
+  summary: string
+  title: string
+  workspaceId: string | null
 }
+
+const releaseGateDrafts = new Map<string, ReleaseGateDraftDescriptor>()
 
 export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
   return Bun.serve({
     async fetch(request) {
       const url = new URL(request.url)
+      const styleResponse = await serveSoulAppStyle(url)
+      if (styleResponse)
+        return styleResponse
       if (url.pathname === '/health') {
         return Response.json({
           appId: qaSoulAppManifest.id,
@@ -46,38 +62,20 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
           workspaceTypes: qaSoulAppManifest.workspaceTypes.map(type => type.id),
         })
       }
-      if (url.pathname === '/surfaces/routes/qa-home' || url.pathname === '/surfaces/panels/qa-release-panel') {
-        return Response.json(qaDescriptorSurface(request, url.pathname))
-      }
-      if (url.pathname === '/frames/widgets/qa-release-widget') {
-        return new Response(qaWidgetFrameHtml(request), {
+      if (url.pathname === '/api/capabilities' && request.method === 'GET')
+        return Response.json({ capabilities: qaSoulAppManifest.capabilities })
+      if (url.pathname === '/api/release-gates' && request.method === 'POST')
+        return Response.json(await createReleaseGateDraft(request))
+      if (url.pathname === '/api/release-gates/search' && request.method === 'GET')
+        return Response.json(searchReleaseGates(request, url))
+      if (url.pathname === '/micro-app/routes/qa-home') {
+        return new Response(qaHomeMicroAppHtml(request), {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
-      if (url.pathname === '/protocol/actions' && request.method === 'POST') {
-        const body = await request.json().catch(() => ({})) as Record<string, unknown>
-        return Response.json(await qaProtocolAction(request, String(body.protocolAction ?? '')))
-      }
-      if (url.pathname === '/protocol/search' && request.method === 'GET') {
-        return Response.json(await qaProtocolSearch(request, url))
-      }
-      if (url.pathname === '/broker/permissions') {
-        const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
-        if (!hostUrl)
-          return Response.json({ appId: qaSoulAppManifest.id, broker: 'not-configured', permissions: [] })
-        const client = createSoulAppClient({
-          appId: qaSoulAppManifest.id,
-          baseUrl: hostUrl,
-          mountToken: request.headers.get('x-aiworker-mount-token') ?? undefined,
-        })
-        return Response.json(await client.broker.permissions.list())
-      }
-      if (url.pathname === '/protocol/capabilities') {
-        return Response.json({
-          capabilities: await qaReferenceSoulApp.ui?.capabilities({
-            appId: qaSoulAppManifest.id,
-            permissions: qaSoulAppManifest.permissions,
-          }),
+      if (url.pathname === '/micro-app/widgets/qa-release-widget') {
+        return new Response(qaWidgetMicroAppHtml(request), {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
       return Response.json({ error: { code: 'NOT_FOUND', message: `Unknown QA app route: ${url.pathname}` } }, { status: 404 })
@@ -102,136 +100,109 @@ function verifyMountToken(request: Request): Response | null {
     : Response.json({ error: { code: 'INVALID_MOUNT_TOKEN', message: 'Host mount token is required.' } }, { status: 401 })
 }
 
-function qaDescriptorSurface(request: Request, pathname: string) {
+function qaWidgetMicroAppHtml(request: Request): string {
   const context = readMountContext(request)
-  return {
-    actions: [
-      {
-        id: 'create-release-review',
-        label: 'Create review',
-        method: 'POST',
-        target: `${context?.brokerUrl ?? '/broker'}/reviews`,
-      },
-    ],
-    appId: qaSoulAppManifest.id,
-    authority: 'soul-app',
-    cache: {
-      freshness: 'non-authoritative',
-    },
-    context: {
-      signed: Boolean(request.headers.get('x-aiworker-mount-signature')),
-      surfaceId: context?.surface?.id ?? null,
-      workspaceId: context?.workspaceId ?? null,
-    },
-    fields: [
-      { label: 'Domain', value: qaSoulAppManifest.soul.domain },
-      { label: 'Workspace types', value: qaSoulAppManifest.workspaceTypes.map(type => type.name).join(', ') },
-      { label: 'Evidence broker', value: qaSoulAppManifest.connectors.required.map(connector => connector.id).join(', ') },
-    ],
-    path: pathname,
-    renderer: 'host-descriptor',
-    status: 'ready',
-    title: pathname.includes('/routes/') ? 'QA Mounted Workbench' : 'Release Gate Panel',
-    type: 'aiworker.surface.descriptor.v1',
-  }
-}
-
-function qaWidgetFrameHtml(request: Request): string {
-  const context = readMountContext(request)
+  const scope = context?.surface?.scope ?? 'workspace'
+  const surfaceId = context?.surface?.id ?? 'unknown'
+  const theme = readMicroAppTheme(request)
+  const widgetMarkup = renderToStaticMarkup(QaReleaseWidgetProof({
+    badgeLabel: 'Mounted',
+    description: 'Host-mounted QA Release micro-app surface.',
+    detail: `Mounted QA micro-app surface for ${scope} scope.`,
+  }))
   return [
     '<!doctype html>',
-    '<html lang="en">',
-    '<head><meta charset="utf-8"><title>QA Release Widget</title></head>',
+    microAppHtmlOpen(theme),
+    `<head><meta charset="utf-8"><title>QA Release Widget</title>${renderSoulAppStyleLink(mountedStyleHref())}</head>`,
     '<body>',
-    '<main>',
-    '<h1>Release Widget</h1>',
-    `<p data-soul-app-id="${qaSoulAppManifest.id}">Mounted QA frame surface</p>`,
-    `<p data-surface-id="${context?.surface?.id ?? 'unknown'}">Scope ${context?.surface?.scope ?? 'workspace'}</p>`,
+    `<main data-soul-app-id="${escapeHtmlAttribute(qaSoulAppManifest.id)}" data-surface-id="${escapeHtmlAttribute(surfaceId)}">`,
+    widgetMarkup,
     '</main>',
     '</body>',
     '</html>',
   ].join('')
 }
 
-async function qaProtocolAction(request: Request, protocolAction: string) {
-  if (protocolAction === 'releaseGates.create') {
-    const persisted = await persistReleaseGateDraft(request)
-    if (!persisted.ok)
-      return persisted
-    return {
-      message: 'Release gate draft opened by QA app.',
-      ok: true,
-      redirectTo: '/qa/release',
-      refresh: true,
-    }
-  }
-  if (protocolAction === 'release.refresh') {
-    return {
-      message: 'Release data refreshed by QA app.',
-      ok: true,
-      refresh: true,
-    }
-  }
-  if (protocolAction === 'configuration.open') {
-    return {
-      message: 'QA configuration is owned by the QA app.',
-      ok: true,
-    }
-  }
+function qaHomeMicroAppHtml(request: Request): string {
+  const context = readMountContext(request)
+  const workspaceRef = context?.workspaceId ?? 'local workspace'
+  const theme = readMicroAppTheme(request)
+  const homeMarkup = renderToStaticMarkup(QaReleaseWidgetProof({
+    badgeLabel: 'QA',
+    description: 'QA release readiness is owned inside this Soul App micro-app route.',
+    detail: `Release gate workspace: ${workspaceRef}.`,
+  }))
+  return [
+    '<!doctype html>',
+    microAppHtmlOpen(theme),
+    `<head><meta charset="utf-8"><title>QA Home</title>${renderSoulAppStyleLink(mountedStyleHref())}</head>`,
+    '<body>',
+    `<main data-soul-app-id="${escapeHtmlAttribute(qaSoulAppManifest.id)}" data-route-id="qa-home">`,
+    homeMarkup,
+    '</main>',
+    '</body>',
+    '</html>',
+  ].join('')
+}
+
+function readMicroAppTheme(request: Request): 'dark' | 'light' {
+  return new URL(request.url).searchParams.get('theme') === 'dark' ? 'dark' : 'light'
+}
+
+function microAppHtmlOpen(theme: 'dark' | 'light'): string {
+  return theme === 'dark'
+    ? '<html lang="en" class="dark" style="color-scheme:dark">'
+    : '<html lang="en" style="color-scheme:light">'
+}
+
+function mountedStyleHref(): string {
+  return `/api/local/apps/${qaSoulAppManifest.id}/styles.css`
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+}
+
+async function createReleaseGateDraft(request: Request) {
+  const persisted = await persistReleaseGateDraft(request)
+  if (!persisted.ok)
+    return persisted
   return {
-    message: `Unknown QA protocol action: ${protocolAction}`,
-    ok: false,
+    message: 'Release gate draft opened by QA app.',
+    ok: true,
+    redirectTo: '/qa/release',
+    refresh: true,
   }
 }
 
 async function persistReleaseGateDraft(request: Request): Promise<{ message: string, ok: false } | { ok: true }> {
   const context = readMountContext(request)
-  if (!context?.hostUrl)
-    return { ok: true }
-
-  const draftKey = `drafts/release-gate/${context.workspaceId ?? 'app'}`
-  const workspaceRef = context.workspaceId ?? 'app'
-  const client = createSoulAppClient({
+  const draftKey = releaseGateDraftKey(context)
+  const workspaceRef = context?.workspaceId ?? 'app'
+  releaseGateDrafts.set(draftKey, {
     appId: qaSoulAppManifest.id,
-    baseUrl: context.hostUrl,
-    mountToken: context.mountToken,
+    authority: 'soul-app',
+    id: draftKey,
+    kind: 'release-gate',
+    openAction: {
+      id: 'create-release-gate',
+      input: { workspaceId: context?.workspaceId ?? null },
+    },
+    sessionId: context?.sessionId ?? null,
+    status: 'draft',
+    summary: `QA app-owned release gate draft for workspace ${workspaceRef}.`,
+    title: 'Release gate draft',
+    workspaceId: context?.workspaceId ?? null,
   })
-  try {
-    await client.broker.storage.put(draftKey, {
-      appId: qaSoulAppManifest.id,
-      kind: 'release-gate',
-      source: 'qa-mounted-action',
-      status: 'draft',
-      workspaceId: context.workspaceId ?? null,
-    }, brokerScope(context))
-    await client.broker.search.upsert(draftKey, {
-      kind: 'release-gate',
-      reference: {
-        id: workspaceRef,
-        type: context.workspaceId ? 'workspace' : 'app',
-      },
-      sessionId: context.sessionId ?? null,
-      summary: `QA app-owned release gate draft for workspace ${workspaceRef}.`,
-      title: 'Release gate draft',
-      workspaceId: context.workspaceId ?? null,
-    }, brokerScope(context))
-    return { ok: true }
-  }
-  catch (error) {
-    return {
-      message: error instanceof Error ? error.message : String(error),
-      ok: false,
-    }
-  }
+  return { ok: true }
 }
 
-async function qaProtocolSearch(request: Request, url: URL) {
+function searchReleaseGates(request: Request, url: URL) {
   const query = url.searchParams.get('query') ?? ''
-  const brokerItems = await queryBrokerReleaseSearch(request, query)
-  if (brokerItems?.length) {
+  const appOwnedItems = queryReleaseGateDrafts(request, query)
+  if (appOwnedItems.length) {
     return {
-      items: brokerItems,
-      providerId: 'releases.search',
+      items: appOwnedItems,
     }
   }
 
@@ -249,27 +220,23 @@ async function qaProtocolSearch(request: Request, url: URL) {
       summary: query ? `QA app-owned release match for ${query}` : 'Open QA release gate workspace',
       title: query ? `Release gate: ${query}` : 'Release gate draft',
     }],
-    providerId: 'releases.search',
   }
 }
 
-async function queryBrokerReleaseSearch(request: Request, query: string): Promise<Array<Record<string, unknown>> | null> {
+function queryReleaseGateDrafts(request: Request, query: string): ReleaseGateDraftDescriptor[] {
   const context = readMountContext(request)
-  if (!context?.hostUrl)
-    return null
-
-  const client = createSoulAppClient({
-    appId: qaSoulAppManifest.id,
-    baseUrl: context.hostUrl,
-    mountToken: context.mountToken,
+  const normalizedQuery = query.trim().toLowerCase()
+  return Array.from(releaseGateDrafts.values()).filter((item) => {
+    if (context?.workspaceId && item.workspaceId !== context.workspaceId)
+      return false
+    if (!normalizedQuery)
+      return true
+    return [item.id, item.kind, item.summary, item.title].some(value => value.toLowerCase().includes(normalizedQuery))
   })
-  try {
-    const result = await client.broker.search.query(query, brokerScope(context)) as BrokerSearchResult
-    return Array.isArray(result.items) ? result.items : null
-  }
-  catch {
-    return null
-  }
+}
+
+function releaseGateDraftKey(context: MountContext | null): string {
+  return `drafts/release-gate/${context?.workspaceId ?? 'app'}`
 }
 
 function readMountContext(request: Request): MountContext | null {
@@ -282,9 +249,6 @@ function readMountContext(request: Request): MountContext | null {
       return null
     const surface = isRecord(parsed.surface) ? parsed.surface : null
     return {
-      brokerUrl: typeof parsed.brokerUrl === 'string' ? parsed.brokerUrl : undefined,
-      hostUrl: request.headers.get('x-aiworker-host-url') ?? undefined,
-      mountToken: request.headers.get('x-aiworker-mount-token') ?? undefined,
       operatorId: typeof parsed.operatorId === 'string' ? parsed.operatorId : null,
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       surface: surface
@@ -299,15 +263,6 @@ function readMountContext(request: Request): MountContext | null {
   }
   catch {
     return null
-  }
-}
-
-function brokerScope(context: MountContext) {
-  return {
-    operatorId: context.operatorId ?? undefined,
-    sessionId: context.sessionId ?? undefined,
-    workerId: context.workerId ?? undefined,
-    workspaceId: context.workspaceId ?? undefined,
   }
 }
 

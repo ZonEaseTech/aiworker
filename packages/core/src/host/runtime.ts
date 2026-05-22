@@ -1,17 +1,14 @@
-import type { CapabilityTemplate, HostedSoulApp, VerticalSoul } from '@zonease/aiworker-shared'
+import type { HostedSoulApp } from '@zonease/aiworker-shared'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { OfficialLegacyMetadataDiscardResult, OfficialSoulAppBootstrapResult } from '../soul-app/official'
 import type { HostSoulCatalog, SoulAppInstallInput, SoulAppRegistryContext } from '../soul-app/registry'
-import type { SoulAppSecurityReview } from '../soul-app/security-review'
 import type { LocalExecutor } from '../worker/executor'
 import type { LocalWorkerRuntime, LocalWorkerRuntimeOptions, LocalWorkerSnapshot } from '../worker/runtime'
 
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   AppError,
   mintWorkerId,
-  parseNamespacedSoulAppCapabilityId,
 } from '@zonease/aiworker-shared'
 import {
   getWorker,
@@ -35,8 +32,28 @@ import {
   listHostSoulCatalog,
   runSoulAppHealthcheck,
 } from '../soul-app/registry'
-import { reviewSoulAppSecurity } from '../soul-app/security-review'
 import { createLocalWorkerRuntime } from '../worker/runtime'
+
+// -- inlined from deleted shared types --
+interface CapabilityTemplate {
+  description: string
+  id: string
+  inputHints: readonly string[]
+  name: string
+  outputKind: string
+  prompt: string
+  reviewRubric: readonly string[]
+  soulId: string
+}
+
+interface VerticalSoul {
+  defaultTemplates: readonly string[]
+  description: string
+  domain: string
+  id: string
+  name: string
+  status: 'available' | 'coming_soon'
+}
 
 export interface HostRuntimeOptions {
   executor?: LocalExecutor
@@ -85,13 +102,6 @@ export class HostRuntime {
 
   getApp(appId: string): HostedSoulApp | null {
     return getHostedSoulApp(appId)
-  }
-
-  reviewAppSecurity(appId: string): SoulAppSecurityReview {
-    const app = getHostedSoulApp(appId)
-    if (!app)
-      throw new Error(`Soul App not found: ${appId}`)
-    return reviewSoulAppSecurity(app, this.registryContext())
   }
 
   async installAppFromPath(manifestPath: string): Promise<HostedSoulApp> {
@@ -208,42 +218,6 @@ export class HostRuntime {
     })
   }
 
-  enrichTemplateMetadata(workerId: string, templateId: string, metadata: Record<string, unknown>): Record<string, unknown> {
-    const worker = getWorker(workerId)
-    const soul = worker ? findHostSoul(worker.soulId) : null
-    const template = findHostCapabilityTemplate(templateId)
-    if (!worker || !soul || !template)
-      return metadata
-    return {
-      ...metadata,
-      ...this.capabilityAssetMetadata(template.id),
-      capabilityTemplateId: template.id,
-      inputHints: template.inputHints,
-      outputKind: template.outputKind,
-      reviewRubric: template.reviewRubric,
-      skillName: template.name,
-      soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
-      soulName: soul.name,
-      workerId: worker.id,
-    }
-  }
-
-  private capabilityAssetMetadata(templateId: string): Record<string, unknown> {
-    const parsed = parseNamespacedSoulAppCapabilityId(templateId)
-    if (!parsed)
-      return {}
-    const app = getHostedSoulApp(parsed.appId)
-    if (!app || app.sourceKind !== 'manifest-path')
-      return {}
-    const capability = app.manifest.capabilities.find(item => item.id === parsed.capabilityId)
-    if (!capability)
-      return {}
-    return {
-      ...readCapabilityAsset(app.sourceRef, 'capabilityPrompt', capability.promptRef),
-      ...(capability.reviewRubricRef ? readCapabilityAsset(app.sourceRef, 'capabilityReviewRubric', capability.reviewRubricRef) : {}),
-    }
-  }
-
   private registryContext(): SoulAppRegistryContext {
     return {
       now: this.options.now,
@@ -274,14 +248,4 @@ function requireText(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.trim().length === 0)
     throw new Error(`Missing required field: ${field}`)
   return value.trim()
-}
-
-function readCapabilityAsset(manifestPath: string, key: string, ref: string): Record<string, unknown> {
-  try {
-    const content = readFileSync(path.resolve(path.dirname(manifestPath), ref), 'utf8').trim()
-    return content ? { [key]: { content, ref } } : {}
-  }
-  catch {
-    return {}
-  }
 }

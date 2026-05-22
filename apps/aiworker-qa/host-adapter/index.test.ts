@@ -18,23 +18,13 @@ import { afterEach, describe, expect, it } from 'bun:test'
 import qaManifestJson from '../soul-app.manifest.json' with { type: 'json' }
 import { QA_REFERENCE_APP_BOUNDARY, qaReferenceSoulApp } from './index'
 import { serveHostMounted } from './mounted/host-mounted'
+import { renderStandaloneHtml } from './standalone/standalone'
 
 const now = () => '2026-05-13T00:26:00.000Z'
 
 const executor: LocalExecutor = {
-  async invoke(input) {
+  async invoke(_input) {
     return {
-      artifacts: [{
-        content: `# Release gate\n\n${input.prompt}`,
-        kind: 'release-gate',
-        path: `artifacts/${input.sessionId}/release-gate.md`,
-        title: 'QA Release Gate',
-      }],
-      review: {
-        findings: [{ message: 'QA release gate requires human go/no-go review.' }],
-        risks: [{ message: 'Residual release risk must be accepted by the operator.' }],
-        verdict: 'warn',
-      },
       summary: 'QA reference app created one release gate artifact.',
     }
   },
@@ -49,7 +39,7 @@ describe('QA reference Soul App', () => {
     roots = []
   })
 
-  it('declares a release-focused external package boundary and protocol handlers', async () => {
+  it('declares a release-focused external package boundary and app-owned mounted surfaces', async () => {
     expect(QA_REFERENCE_APP_BOUNDARY.packageName).toBe('@zonease/aiworker-qa')
     expect(qaReferenceSoulApp.manifest.id).toBe('aiworker-qa')
     expect(await qaReferenceSoulApp.connector?.declareConnectorNeeds({ appId: 'aiworker-qa', permissions: qaReferenceSoulApp.manifest.permissions })).toHaveLength(2)
@@ -57,13 +47,20 @@ describe('QA reference Soul App', () => {
     expect(qaManifestJson.permissions).toEqual(expect.arrayContaining([
       expect.objectContaining({ action: 'read', kind: 'search', target: 'aiworker-qa' }),
       expect.objectContaining({ action: 'write', kind: 'search', target: 'aiworker-qa' }),
+      expect.objectContaining({ action: 'mount', kind: 'ui', target: 'qa-micro-app' }),
     ]))
-    expect(qaManifestJson.ui.workbench?.primaryAction?.protocolAction).toBe('releaseGates.create')
-    expect(qaManifestJson.ui.workbench?.primaryAction?.requiredPermissions).toContain('storage:write:aiworker-qa')
-    expect(qaManifestJson.ui.workbench?.primaryAction?.requiredPermissions).toContain('search:write:aiworker-qa')
-    expect(qaManifestJson.ui.workbench?.search?.protocolProvider).toBe('releases.search')
-    expect(qaManifestJson.ui.workbench?.search?.requiredPermissions).toContain('search:read:aiworker-qa')
-    expect(qaManifestJson.ui.workbench?.configuration?.protocolAction).toBe('configuration.open')
+    expect(qaManifestJson.permissions).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: 'mount', kind: 'ui', target: 'qa-workbench' }),
+    ]))
+    expect('workbench' in qaManifestJson.ui).toBe(false)
+    expect(JSON.stringify(qaManifestJson.ui)).not.toContain('host-descriptor')
+    expect(JSON.stringify(qaManifestJson.ui)).not.toContain('/surfaces/')
+    expect(qaManifestJson.ui.routes.find(route => route.id === 'qa-home')?.surface).toMatchObject({
+      entry: '/micro-app/routes/qa-home',
+      renderer: 'micro-app',
+      requiredPermissions: ['ui:mount:qa-micro-app'],
+      scope: 'app',
+    })
     expect(qaManifestJson.ui.workspaceContext?.terminal?.cwd).toEqual({ source: 'host-workspace-root' })
   })
 
@@ -81,23 +78,52 @@ describe('QA reference Soul App', () => {
       })
       expect(domainRes.status).toBe(200)
       expect(await domainRes.json()).toMatchObject({ appId: 'aiworker-qa', mounted: true })
-      const surfaceRes = await fetch(`${baseUrl}/surfaces/routes/qa-home`, {
+      const oldRouteSurfaceRes = await fetch(`${baseUrl}/surfaces/routes/qa-home`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })
-      expect(surfaceRes.status).toBe(200)
-      expect(await surfaceRes.json()).toMatchObject({
-        authority: 'soul-app',
-        cache: { freshness: 'non-authoritative' },
-        renderer: 'host-descriptor',
-        title: 'QA Mounted Workbench',
-      })
-      const frameRes = await fetch(`${baseUrl}/frames/widgets/qa-release-widget`, {
+      expect(oldRouteSurfaceRes.status).toBe(404)
+      const oldPanelSurfaceRes = await fetch(`${baseUrl}/surfaces/panels/qa-release-panel`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })
-      expect(frameRes.status).toBe(200)
-      expect(await frameRes.text()).toContain('Mounted QA frame surface')
-      const actionRes = await fetch(`${baseUrl}/protocol/actions`, {
-        body: JSON.stringify({ input: {}, protocolAction: 'releaseGates.create' }),
+      expect(oldPanelSurfaceRes.status).toBe(404)
+      const routeMicroAppRes = await fetch(`${baseUrl}/micro-app/routes/qa-home`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      })
+      expect(routeMicroAppRes.status).toBe(200)
+      const routeMicroAppHtml = await routeMicroAppRes.text()
+      expect(routeMicroAppHtml).toContain('QA release readiness is owned inside this Soul App micro-app route.')
+      expect(routeMicroAppHtml).toContain('data-route-id="qa-home"')
+      expect(routeMicroAppHtml).toContain('<link rel="stylesheet" href="/api/local/apps/aiworker-qa/styles.css">')
+      const microAppRes = await fetch(`${baseUrl}/micro-app/widgets/qa-release-widget`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      })
+      expect(microAppRes.status).toBe(200)
+      const microAppHtml = await microAppRes.text()
+      expect(microAppHtml).toContain('Mounted QA micro-app surface')
+      expect(microAppHtml).toContain('<link rel="stylesheet" href="/api/local/apps/aiworker-qa/styles.css">')
+      expect(microAppHtml).toContain('data-slot="card"')
+      expect(microAppHtml).toContain('data-slot="item-content"')
+      expect(microAppHtml).not.toContain('<h1>Release Widget</h1>')
+      const darkMicroAppRes = await fetch(`${baseUrl}/micro-app/widgets/qa-release-widget?theme=dark`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      })
+      expect(darkMicroAppRes.status).toBe(200)
+      const darkMicroAppHtml = await darkMicroAppRes.text()
+      expect(darkMicroAppHtml).toContain('<html lang="en" class="dark" style="color-scheme:dark">')
+      const capabilitiesRes = await fetch(`${baseUrl}/api/capabilities`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      })
+      expect(capabilitiesRes.status).toBe(200)
+      expect(await capabilitiesRes.json()).toMatchObject({
+        capabilities: [expect.objectContaining({ id: 'regression-matrix' }), expect.objectContaining({ id: 'release-gate' })],
+      })
+      const wrongMethodCapabilitiesRes = await fetch(`${baseUrl}/api/capabilities`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+        method: 'POST',
+      })
+      expect(wrongMethodCapabilitiesRes.status).toBe(404)
+      const actionRes = await fetch(`${baseUrl}/api/release-gates`, {
+        body: JSON.stringify({ input: {} }),
         headers: {
           'content-type': 'application/json',
           'x-aiworker-mount-token': 'test-qa-mounted-token',
@@ -111,41 +137,38 @@ describe('QA reference Soul App', () => {
         redirectTo: '/qa/release',
         refresh: true,
       })
-      const configurationRes = await fetch(`${baseUrl}/protocol/actions`, {
-        body: JSON.stringify({ input: {}, protocolAction: 'configuration.open' }),
-        headers: {
-          'content-type': 'application/json',
-          'x-aiworker-mount-token': 'test-qa-mounted-token',
-        },
-        method: 'POST',
-      })
-      expect(configurationRes.status).toBe(200)
-      expect(await configurationRes.json()).toMatchObject({
-        message: 'QA configuration is owned by the QA app.',
-        ok: true,
-      })
-      const wrongMethodActionRes = await fetch(`${baseUrl}/protocol/actions`, {
+      const wrongMethodActionRes = await fetch(`${baseUrl}/api/release-gates`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })
       expect(wrongMethodActionRes.status).toBe(404)
 
-      const searchRes = await fetch(`${baseUrl}/protocol/search?providerId=releases.search&query=release&limit=2`, {
-        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      const searchRes = await fetch(`${baseUrl}/api/release-gates/search?query=release&limit=2`, {
+        headers: {
+          'x-aiworker-mount-token': 'test-qa-mounted-token',
+        },
       })
       expect(searchRes.status).toBe(200)
-      expect(await searchRes.json()).toMatchObject({
+      const searchBody = await searchRes.json()
+      expect(searchBody).toMatchObject({
         items: [expect.objectContaining({
           appId: 'aiworker-qa',
           authority: 'soul-app',
           kind: 'release-gate',
         })],
-        providerId: 'releases.search',
       })
-      const wrongMethodSearchRes = await fetch(`${baseUrl}/protocol/search`, {
+      expect(searchBody).not.toHaveProperty('providerId')
+      const wrongMethodSearchRes = await fetch(`${baseUrl}/api/release-gates/search`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
         method: 'POST',
       })
       expect(wrongMethodSearchRes.status).toBe(404)
+      for (const oldPath of ['/protocol/actions', '/protocol/search', '/protocol/capabilities']) {
+        const oldRes = await fetch(`${baseUrl}${oldPath}`, {
+          headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+          method: oldPath === '/protocol/actions' ? 'POST' : 'GET',
+        })
+        expect(oldRes.status).toBe(404)
+      }
     }
     finally {
       server.stop()
@@ -156,58 +179,9 @@ describe('QA reference Soul App', () => {
     }
   })
 
-  it('persists release gate drafts through Host broker storage when mounted context is present', async () => {
+  it('keeps release gate drafts app-owned in mounted mode', async () => {
     const previousToken = Bun.env.AIWORKER_MOUNT_TOKEN
     Bun.env.AIWORKER_MOUNT_TOKEN = 'test-qa-mounted-token'
-    const storageCalls: Array<{ body: Record<string, unknown>, mountToken: string | null, path: string, search: URLSearchParams }> = []
-    const searchQueryCalls: Array<{ mountToken: string | null, path: string, search: URLSearchParams }> = []
-    const searchUpsertCalls: Array<{ body: Record<string, unknown>, mountToken: string | null, path: string, search: URLSearchParams }> = []
-    const host = Bun.serve({
-      async fetch(request) {
-        const url = new URL(request.url)
-        if (request.method === 'PUT' && url.pathname === '/api/local/apps/aiworker-qa/broker/storage/drafts/release-gate/workspace-qa') {
-          storageCalls.push({
-            body: await request.json() as Record<string, unknown>,
-            mountToken: request.headers.get('x-aiworker-mount-token'),
-            path: url.pathname,
-            search: url.searchParams,
-          })
-          return Response.json({ record: { appId: 'aiworker-qa', key: 'drafts/release-gate/workspace-qa' } })
-        }
-        if (request.method === 'PUT' && url.pathname === '/api/local/apps/aiworker-qa/broker/search/drafts/release-gate/workspace-qa') {
-          searchUpsertCalls.push({
-            body: await request.json() as Record<string, unknown>,
-            mountToken: request.headers.get('x-aiworker-mount-token'),
-            path: url.pathname,
-            search: url.searchParams,
-          })
-          return Response.json({ record: { appId: 'aiworker-qa', id: 'drafts/release-gate/workspace-qa' } })
-        }
-        if (request.method === 'GET' && url.pathname === '/api/local/apps/aiworker-qa/broker/search') {
-          searchQueryCalls.push({
-            mountToken: request.headers.get('x-aiworker-mount-token'),
-            path: url.pathname,
-            search: url.searchParams,
-          })
-          return Response.json({
-            authority: 'soul-app',
-            items: [{
-              appId: 'aiworker-qa',
-              authority: 'soul-app',
-              id: 'drafts/release-gate/workspace-qa',
-              kind: 'release-gate',
-              summary: 'Broker-indexed QA release descriptor',
-              title: 'Indexed Release Gate',
-              workspaceId: 'workspace-qa',
-            }],
-            query: url.searchParams.get('query') ?? '',
-          })
-        }
-        return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
-      },
-      hostname: '127.0.0.1',
-      port: 0,
-    })
     const server = serveHostMounted(0)
     const baseUrl = `http://127.0.0.1:${server.port}`
     const mountContext = Buffer.from(JSON.stringify({
@@ -218,11 +192,10 @@ describe('QA reference Soul App', () => {
     })).toString('base64url')
 
     try {
-      const actionRes = await fetch(`${baseUrl}/protocol/actions`, {
-        body: JSON.stringify({ input: {}, protocolAction: 'releaseGates.create' }),
+      const actionRes = await fetch(`${baseUrl}/api/release-gates`, {
+        body: JSON.stringify({ input: {} }),
         headers: {
           'content-type': 'application/json',
-          'x-aiworker-host-url': `http://127.0.0.1:${host.port}`,
           'x-aiworker-mount-context': mountContext,
           'x-aiworker-mount-token': 'test-qa-mounted-token',
         },
@@ -231,69 +204,25 @@ describe('QA reference Soul App', () => {
 
       expect(actionRes.status).toBe(200)
       expect(await actionRes.json()).toMatchObject({ ok: true, refresh: true })
-      const storageCall = storageCalls[0]
-      expect(storageCall).toBeDefined()
-      expect(storageCall!.mountToken).toBe('test-qa-mounted-token')
-      expect(storageCall!.path).toBe('/api/local/apps/aiworker-qa/broker/storage/drafts/release-gate/workspace-qa')
-      expect(storageCall!.search.get('operatorId')).toBe('operator-local')
-      expect(storageCall!.search.get('sessionId')).toBe('session-qa')
-      expect(storageCall!.search.get('workerId')).toBe('worker-qa')
-      expect(storageCall!.search.get('workspaceId')).toBe('workspace-qa')
-      expect(storageCall!.body).toMatchObject({
-        valueJson: {
-          appId: 'aiworker-qa',
-          kind: 'release-gate',
-          source: 'qa-mounted-action',
-          status: 'draft',
-          workspaceId: 'workspace-qa',
-        },
-      })
-      const searchUpsertCall = searchUpsertCalls[0]
-      expect(searchUpsertCall).toBeDefined()
-      expect(searchUpsertCall!.mountToken).toBe('test-qa-mounted-token')
-      expect(searchUpsertCall!.path).toBe('/api/local/apps/aiworker-qa/broker/search/drafts/release-gate/workspace-qa')
-      expect(searchUpsertCall!.search.get('operatorId')).toBe('operator-local')
-      expect(searchUpsertCall!.search.get('sessionId')).toBe('session-qa')
-      expect(searchUpsertCall!.search.get('workerId')).toBe('worker-qa')
-      expect(searchUpsertCall!.search.get('workspaceId')).toBe('workspace-qa')
-      expect(searchUpsertCall!.body).toMatchObject({
-        kind: 'release-gate',
-        reference: {
-          id: 'workspace-qa',
-          type: 'workspace',
-        },
-        sessionId: 'session-qa',
-        summary: 'QA app-owned release gate draft for workspace workspace-qa.',
-        title: 'Release gate draft',
-        workspaceId: 'workspace-qa',
-      })
 
-      const searchRes = await fetch(`${baseUrl}/protocol/search?providerId=releases.search&query=release&limit=2`, {
+      const searchRes = await fetch(`${baseUrl}/api/release-gates/search?query=release&limit=2`, {
         headers: {
-          'x-aiworker-host-url': `http://127.0.0.1:${host.port}`,
           'x-aiworker-mount-context': mountContext,
           'x-aiworker-mount-token': 'test-qa-mounted-token',
         },
       })
       expect(searchRes.status).toBe(200)
-      expect(await searchRes.json()).toMatchObject({
+      const searchBody = await searchRes.json()
+      expect(searchBody).toMatchObject({
         items: [expect.objectContaining({
           id: 'drafts/release-gate/workspace-qa',
-          title: 'Indexed Release Gate',
+          title: 'Release gate draft',
         })],
-        providerId: 'releases.search',
       })
-      const searchQueryCall = searchQueryCalls[0]
-      expect(searchQueryCall).toBeDefined()
-      expect(searchQueryCall!.mountToken).toBe('test-qa-mounted-token')
-      expect(searchQueryCall!.path).toBe('/api/local/apps/aiworker-qa/broker/search')
-      expect(searchQueryCall!.search.get('operatorId')).toBe('operator-local')
-      expect(searchQueryCall!.search.get('query')).toBe('release')
-      expect(searchQueryCall!.search.get('workspaceId')).toBe('workspace-qa')
+      expect(searchBody).not.toHaveProperty('providerId')
     }
     finally {
       server.stop()
-      host.stop()
       if (previousToken === undefined)
         delete Bun.env.AIWORKER_MOUNT_TOKEN
       else
@@ -302,6 +231,12 @@ describe('QA reference Soul App', () => {
   })
 
   it('runs the QA app in standalone and Host-mounted smoke paths', async () => {
+    const standaloneHtml = renderStandaloneHtml()
+    expect(standaloneHtml).toContain('<link rel="stylesheet" href="/styles.css">')
+    expect(standaloneHtml).toContain('data-slot="card"')
+    expect(standaloneHtml).toContain('Standalone')
+    expect(standaloneHtml).not.toContain(`<h1>${qaManifestJson.name}</h1>`)
+
     const standaloneRoot = tempRoot('standalone')
     const standalone = await createStandaloneSoulAppRuntime(qaReferenceSoulApp, {
       appHome: standaloneRoot,
@@ -330,8 +265,8 @@ describe('QA reference Soul App', () => {
       metadata: standalone.sessionMetadata(capabilityId),
       sessionId: session.id,
     })
-    expect(result.artifacts[0]?.metadataJson.soulAppId).toBe('aiworker-qa')
-    expect(result.review?.verdict).toBe('warn')
+    expect(result.turn.status).toBe('succeeded')
+    expect(result.files).toEqual([])
 
     const mountedRoot = tempRoot('mounted')
     const mounted = await createMountedSoulAppTestRuntime(qaReferenceSoulApp, {

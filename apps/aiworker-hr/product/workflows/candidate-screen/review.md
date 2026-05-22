@@ -1,4 +1,4 @@
-# Candidate Screen Review Rubric
+# Candidate Screen Acceptance Check
 
 - Evidence references are present.
 - Missing information is explicit.

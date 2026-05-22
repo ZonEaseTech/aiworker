@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import type { HostRuntime, LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext } from '@zonease/aiworker-core'
-import type { LocalReviewVerdict, SoulAppManifest } from '@zonease/aiworker-shared'
+import type { SoulAppManifest } from '@zonease/aiworker-shared'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
@@ -20,24 +20,16 @@ import {
 } from '@zonease/aiworker-core'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import {
-  formatProfilePromotionIssues,
   parseSoulAppManifestJson,
-  prepareProfileMarkdownForPromotion,
   soulAppIdSchema,
 } from '@zonease/aiworker-shared'
 import {
   closeWorkerDb,
-  createLesson,
-  getArtifact,
-  getReview,
   getSession,
   getWorker,
   getWorkspace,
   initWorkerDb,
-  listArtifacts,
   listFiles,
-  listLessons,
-  listReviews,
   listSessions,
   listSettings,
   listTurns,
@@ -45,7 +37,6 @@ import {
   listWorkspaces,
   runWorkerMigrations,
   setSetting,
-  updateLesson,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import cac from 'cac'
 
@@ -758,11 +749,9 @@ async function startSessionCommand(opts: { context?: string, input?: string, mod
   const skillId = requireText(opts.skill, 'skill')
   const host = createHost(paths)
   const template = host.requireCapabilityTemplateForWorker(runtime.workerId, skillId)
-  const sessionMetadata = host.enrichTemplateMetadata(
-    runtime.workerId,
-    template.id,
-    cliEngineOverrideMetadata(opts),
-  )
+  const sessionMetadata = {
+    ...cliEngineOverrideMetadata(opts),
+  }
   const session = await runtime.createSession({
     workspaceId,
     capabilityTemplateId: template.id,
@@ -776,34 +765,26 @@ async function startSessionCommand(opts: { context?: string, input?: string, mod
     input,
     engineId: 'codex',
     engineCommand: 'codex',
-    metadata: host.enrichTemplateMetadata(
-      runtime.workerId,
-      session.capabilityTemplateId,
-      {
-        ...(session.metadataJson ?? sessionMetadata),
-        executionMode: 'local-cli',
-        ...cliEngineOverrideMetadata(opts),
-      },
-    ),
+    metadata: {
+      ...(session.metadataJson ?? sessionMetadata),
+      executionMode: 'local-cli',
+      ...cliEngineOverrideMetadata(opts),
+    },
   }))
 }
 
 async function sendTurnCommand(opts: { input?: string, model?: string, reasoning?: string, session?: string, worker?: string }): Promise<void> {
-  const paths = await ensureDb()
+  const _paths = await ensureDb()
   const sessionId = requireText(opts.session, 'session')
   const session = getSession(sessionId)
   if (!session)
     throw new Error(`session not found: ${sessionId}`)
   const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
-  const metadata = createHost(paths).enrichTemplateMetadata(
-    session.workerId,
-    session.capabilityTemplateId,
-    {
-      ...(session.metadataJson ?? {}),
-      executionMode: 'local-cli',
-      ...cliEngineOverrideMetadata(opts),
-    },
-  )
+  const metadata = {
+    ...(session.metadataJson ?? {}),
+    executionMode: 'local-cli',
+    ...cliEngineOverrideMetadata(opts),
+  }
   printJson(await runtime.startTurn({
     sessionId,
     input: requireText(opts.input, 'input'),
@@ -843,101 +824,6 @@ async function showFile(filePath: string, opts: { workspace?: string, worker?: s
     throw new Error(`workspace not found: ${workspaceId}`)
   const runtime = await ensureRuntime({ worker: opts.worker ?? workspace.workerId })
   process.stdout.write(await runtime.files(workspaceId).read(filePath))
-}
-
-async function openArtifact(id: string, opts: { worker?: string }): Promise<void> {
-  await ensureDb()
-  const artifact = getArtifact(id)
-  if (!artifact)
-    throw new Error(`artifact not found: ${id}`)
-  const workspace = getWorkspace(artifact.workspaceId)
-  if (!workspace)
-    throw new Error(`workspace not found for artifact: ${id}`)
-  const runtime = await ensureRuntime({ worker: opts.worker ?? workspace.workerId })
-  const fullPath = runtime.files(workspace.id).resolve(artifact.path)
-  Bun.spawn(['open', fullPath])
-  printJson({ opened: fullPath })
-}
-
-async function promoteProfileCommand(opts: {
-  artifact?: string
-  finding?: string | string[]
-  profileMarkdown?: string
-  risk?: string | string[]
-  tag?: string
-  verdict?: string
-  worker?: string
-  workspace?: string
-}): Promise<void> {
-  await ensureDb()
-  const workspaceId = requireText(opts.workspace, 'workspace')
-  const artifactId = requireText(opts.artifact, 'artifact')
-  const workspace = getWorkspace(workspaceId)
-  if (!workspace)
-    throw new Error(`workspace not found: ${workspaceId}`)
-  const artifact = getArtifact(artifactId)
-  if (!artifact || artifact.workspaceId !== workspace.id)
-    throw new Error(`artifact not found for workspace ${workspace.id}: ${artifactId}`)
-  const runtime = await ensureRuntime({ worker: opts.worker ?? workspace.workerId })
-  const artifactMarkdown = await runtime.files(workspace.id).read(artifact.path)
-  const explicitProfileMarkdown = opts.profileMarkdown
-    ? await readFile(path.resolve(opts.profileMarkdown), 'utf8')
-    : undefined
-  const prepared = prepareProfileMarkdownForPromotion({
-    artifactMarkdown,
-    profileMarkdown: explicitProfileMarkdown,
-    requireFencedDraft: !explicitProfileMarkdown,
-  })
-  if (!prepared.ok)
-    throw new Error(`profile promotion rejected: ${formatProfilePromotionIssues(prepared.issues)}`)
-  const profileRevision = await runtime.promoteProfileRevision({
-    artifactId,
-    findingsJson: profilePromotionMessages(opts.finding),
-    profileMarkdown: prepared.profileMarkdown,
-    risksJson: profilePromotionMessages(opts.risk),
-    tagName: opts.tag,
-    verdict: requirePromotionVerdict(opts.verdict),
-    workspaceId: workspace.id,
-  })
-  printJson({ profileRevision, source: prepared.source })
-}
-
-function requirePromotionVerdict(value: string | undefined): Extract<LocalReviewVerdict, 'pass' | 'warn'> {
-  if (!value)
-    return 'pass'
-  if (value === 'pass' || value === 'warn')
-    return value
-  throw new Error('profile promotion verdict must be pass or warn')
-}
-
-function profilePromotionMessages(value: string | string[] | undefined): Array<Record<string, unknown>> | undefined {
-  if (!value)
-    return undefined
-  const items = Array.isArray(value) ? value : [value]
-  return items.map(message => ({ message }))
-}
-
-async function listArtifactsCommand(opts: { workspace?: string }): Promise<void> {
-  await ensureAllWorkers()
-  printJson({ artifacts: listArtifacts(opts.workspace) })
-}
-
-async function listReviewsCommand(opts: { workspace?: string }): Promise<void> {
-  await ensureAllWorkers()
-  printJson({ reviews: listReviews(opts.workspace) })
-}
-
-async function proposeLesson(opts: { review?: string, statement?: string, workspace?: string }): Promise<void> {
-  await ensureAllWorkers()
-  const workspaceId = requireText(opts.workspace, 'workspace')
-  const lesson = createLesson({
-    id: randomUUID(),
-    workspaceId,
-    sourceReviewId: opts.review ?? null,
-    statement: requireText(opts.statement, 'statement'),
-    evidenceJson: opts.review ? [{ reviewId: opts.review }] : [],
-  })
-  printJson({ lesson })
 }
 
 async function listAppsCommand(): Promise<void> {
@@ -1176,7 +1062,7 @@ async function smokeAppCommand(inputPath: string): Promise<void> {
       title: `${manifest.name} Smoke Session`,
       workspaceId: workspace.id,
     })
-    const turn = await runtime.startTurn({
+    const _turn = await runtime.startTurn({
       engineId: 'smoke',
       input: 'Create a reviewable smoke artifact.',
       metadata: { soulAppId: manifest.id },
@@ -1186,15 +1072,13 @@ async function smokeAppCommand(inputPath: string): Promise<void> {
     printJson({
       smoke: {
         appId: manifest.id,
-        artifactCount: turn.artifacts.length,
+        artifactCount: 0,
         hostedStatus: hostedApp.status,
         mounted: 'pass',
         mountedService: mountedService.status,
         mountedServiceHttpStatus: mountedService.httpStatus,
         mountedServiceUrl: mountedService.url,
-        workbenchAction: mountedService.workbenchAction,
-        workbenchSearch: mountedService.workbenchSearch,
-        reviewStatus: turn.review?.verdict ?? null,
+        reviewStatus: null,
         standalone: standalone.status,
         standaloneHttpStatus: standalone.httpStatus,
         standaloneUrl: standalone.url,
@@ -1215,8 +1099,6 @@ interface MountedServiceSmoke {
   status: 'pass' | 'skip'
   stop: () => void
   url: string | null
-  workbenchAction: 'pass' | 'skip'
-  workbenchSearch: 'pass' | 'skip'
 }
 
 interface AppValidationIssue {
@@ -1279,28 +1161,14 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       },
       routePrefix,
     },
-    artifactTypes: [
-      {
-        description: 'Reviewable brief artifact for the starter Soul App.',
-        id: 'brief',
-        name: 'Brief',
-        previewRef: './product/web/artifact-previews/brief-preview.tsx',
-        reviewPolicyRef: './product/reviews/brief.md',
-        schemaRef: './product/artifacts/schemas/brief.schema.json',
-        schemaSha256: sha256Text(scaffoldBriefSchemaText(appId)),
-        version: '0.1.0',
-      },
-    ],
     capabilities: [
       {
-        artifactTypes: ['brief'],
         description: 'Create a source-backed starter brief.',
         id: 'brief',
         name: 'Brief',
         outputKind: 'brief',
         packRefs: [appId],
         promptRef: './product/workflows/brief/prompt.md',
-        reviewRubricRef: './product/workflows/brief/review.md',
         version: '0.1.0',
         workspaceTypes: ['case'],
       },
@@ -1313,7 +1181,7 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       optional: [],
       required: [],
     },
-    description: `${appId} starter Soul App for one vertical workspace, capability, artifact, and review policy.`,
+    description: `${appId} starter Soul App for one vertical workspace and capability.`,
     engineAssets: {
       skills: {
         source: './engine-assets/skills',
@@ -1324,10 +1192,8 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       },
     },
     exports: {
-      artifact: './host-adapter/index.ts',
       connector: './host-adapter/index.ts',
       lifecycle: './host-adapter/index.ts',
-      review: './host-adapter/index.ts',
       runtime: './host-adapter/index.ts',
       ui: './host-adapter/index.ts',
     },
@@ -1337,10 +1203,6 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       timeoutMs: 5000,
     },
     id: appId,
-    memory: {
-      admissionPolicy: 'manual-review',
-      namespace: appId,
-    },
     modes: {
       hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
       standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
@@ -1365,28 +1227,10 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
         target: appId,
       },
       {
-        action: 'write',
-        kind: 'artifact',
-        reason: 'Create reviewable starter artifacts.',
-        target: 'brief',
-      },
-      {
-        action: 'create',
-        kind: 'review',
-        reason: 'Create starter review rubrics and findings.',
-        target: 'brief-review',
-      },
-      {
-        action: 'propose',
-        kind: 'memory',
-        reason: 'Propose reviewed lessons into the app namespace.',
-        target: appId,
-      },
-      {
         action: 'mount',
         kind: 'ui',
-        reason: 'Mount starter workbench contributions.',
-        target: `${appId}-workbench`,
+        reason: 'Mount starter micro-app surfaces.',
+        target: `${appId}-micro-app`,
       },
       {
         action: 'serve',
@@ -1397,7 +1241,7 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
     ],
     protocol: 'soul-app/v1',
     soul: {
-      description: `${titleCase(appId)} vertical Soul for app-scoped workspaces and reviewable artifacts.`,
+      description: `${titleCase(appId)} vertical Soul for app-scoped workspaces.`,
       domain: appId,
       id: appId,
       name: titleCase(appId),
@@ -1423,20 +1267,6 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
           id: 'brief-panel',
           label: 'Brief panel',
           slot: 'panel',
-          surface: {
-            entry: '/surfaces/panels/brief-panel',
-            renderer: 'host-descriptor',
-            requiredPermissions: [`storage:read:${appId}`],
-            scope: 'workspace',
-          },
-        },
-      ],
-      reviewPanels: [
-        {
-          entry: './product/web/panels/brief-review-panel.tsx',
-          id: 'brief-review-panel',
-          label: 'Brief review panel',
-          slot: 'review-panel',
         },
       ],
       routes: [
@@ -1446,44 +1276,13 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
           label: titleCase(appId),
           path: `/${appId}`,
           surface: {
-            entry: '/surfaces/routes/brief-home',
-            renderer: 'host-descriptor',
-            requiredPermissions: [`ui:mount:${appId}-workbench`],
+            entry: '/micro-app/routes/brief-home',
+            renderer: 'micro-app',
+            requiredPermissions: [`ui:mount:${appId}-micro-app`],
             scope: 'app',
           },
         },
       ],
-      workbench: {
-        actions: [
-          {
-            id: 'refresh-briefs',
-            label: 'Refresh',
-            protocolAction: 'briefs.refresh',
-            requiredPermissions: [`storage:read:${appId}`],
-            role: 'refresh',
-          },
-        ],
-        primaryAction: {
-          id: 'create-brief',
-          label: 'New brief',
-          protocolAction: 'briefs.create',
-          requiredPermissions: [`storage:write:${appId}`, 'artifact:write:brief'],
-          role: 'primary',
-        },
-        search: {
-          id: 'brief-search',
-          label: 'Search briefs',
-          placeholder: 'Search briefs',
-          protocolProvider: 'briefs.search',
-          requiredPermissions: [`storage:read:${appId}`],
-        },
-        configuration: {
-          id: 'configure-app',
-          label: 'Configure app',
-          protocolAction: 'configuration.open',
-          requiredPermissions: [`api:serve:${routePrefix}`],
-        },
-      },
       workspaceContext: {
         terminal: {
           cwd: {
@@ -1500,8 +1299,8 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
           label: 'Brief widget',
           slot: 'workspace-widget',
           surface: {
-            entry: '/frames/widgets/brief-widget',
-            renderer: 'sandboxed-frame',
+            entry: '/micro-app/widgets/brief-widget',
+            renderer: 'micro-app',
             scope: 'workspace',
           },
           target: 'case',
@@ -1565,7 +1364,7 @@ async function runStandaloneBrowserSmoke(manifest: SoulAppManifest): Promise<{ h
 async function runMountedServiceSmoke(manifest: SoulAppManifest, rootDir: string | null): Promise<MountedServiceSmoke> {
   const service = manifest.api.localService
   if (!manifest.modes.hostMounted.supported || !service?.command?.length || !rootDir)
-    return { httpStatus: null, status: 'skip', stop: () => {}, url: null, workbenchAction: 'skip', workbenchSearch: 'skip' }
+    return { httpStatus: null, status: 'skip', stop: () => {}, url: null }
 
   const child = spawn(service.command[0]!, service.command.slice(1), {
     cwd: path.resolve(rootDir, service.cwd ?? '.'),
@@ -1586,48 +1385,7 @@ async function runMountedServiceSmoke(manifest: SoulAppManifest, rootDir: string
     stop()
     throw new Error(`Mounted Soul App service healthcheck failed ${res.status}: ${healthUrl}`)
   }
-  const workbenchAction = await runMountedWorkbenchActionSmoke(manifest, url)
-  const workbenchSearch = await runMountedWorkbenchSearchSmoke(manifest, url)
-  return { httpStatus: res.status, status: 'pass', stop, url, workbenchAction, workbenchSearch }
-}
-
-async function runMountedWorkbenchActionSmoke(manifest: SoulAppManifest, baseUrl: string): Promise<'pass' | 'skip'> {
-  const action = manifest.ui.workbench?.primaryAction ?? manifest.ui.workbench?.actions?.[0] ?? manifest.ui.workbench?.configuration
-  if (!action)
-    return 'skip'
-
-  const res = await fetch(new URL('/protocol/actions', baseUrl), {
-    body: JSON.stringify({
-      input: { source: 'app-smoke' },
-      protocolAction: action.protocolAction,
-    }),
-    headers: { 'content-type': 'application/json' },
-    method: 'POST',
-  })
-  if (!res.ok)
-    throw new Error(`Mounted Soul App workbench action smoke failed ${res.status}: ${action.id}`)
-  const body = await res.json() as { ok?: unknown }
-  if (body.ok !== true)
-    throw new Error(`Mounted Soul App workbench action smoke returned non-ok result: ${action.id}`)
-  return 'pass'
-}
-
-async function runMountedWorkbenchSearchSmoke(manifest: SoulAppManifest, baseUrl: string): Promise<'pass' | 'skip'> {
-  const search = manifest.ui.workbench?.search
-  if (!search)
-    return 'skip'
-
-  const url = new URL('/protocol/search', baseUrl)
-  url.searchParams.set('providerId', search.protocolProvider)
-  url.searchParams.set('query', 'smoke')
-  url.searchParams.set('limit', '1')
-  const res = await fetch(url)
-  if (!res.ok)
-    throw new Error(`Mounted Soul App workbench search smoke failed ${res.status}: ${search.id}`)
-  const body = await res.json() as { providerId?: unknown }
-  if (body.providerId !== search.protocolProvider)
-    throw new Error(`Mounted Soul App workbench search smoke returned unexpected provider: ${search.id}`)
-  return 'pass'
+  return { httpStatus: res.status, status: 'pass', stop, url }
 }
 
 async function waitForMountedServiceUrl(child: ChildProcessByStdio<null, Readable, Readable>, stop: () => void): Promise<string> {
@@ -1747,7 +1505,7 @@ function scaffoldReadme(appId: string): string {
     '## Contribution Checklist',
     '',
     '- Keep app code on `@zonease/aiworker-soul-app-sdk`; do not import Host private packages.',
-    '- Put mounted app actions, search, and configuration in `ui.workbench`; do not declare Host header slots.',
+    '- Serve mounted UI from micro-app routes and keep actions/search in app-owned mounted API paths.',
     '- Use `ui.workspaceContext` for Host-owned workspace process context such as a future web terminal.',
     '- Keep storage permissions scoped to this app namespace.',
     '- Add one artifact schema and one review policy for each new artifact type.',
@@ -1801,7 +1559,7 @@ function scaffoldSkill(appId: string): string {
 
 function scaffoldProductWebTs(symbol: string): string {
   return `export const ${symbol} = {
-  renderer: 'host-descriptor',
+  renderer: 'app-owned',
   status: 'scaffold',
 }
 `
@@ -1996,12 +1754,6 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
       if (tokenError)
         return tokenError
 
-      if (url.pathname === '/protocol/actions' && request.method === 'POST')
-        return handleProtocolAction(request)
-
-      if (url.pathname === '/protocol/search' && request.method === 'GET')
-        return handleProtocolSearch(url)
-
       if (url.pathname === '/domain') {
         return Response.json({
           appId: manifest.id,
@@ -2012,36 +1764,25 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
         })
       }
 
-      if (url.pathname === '/surfaces/routes/brief-home' || url.pathname === '/surfaces/panels/brief-panel') {
-        return Response.json({
-          actions: [{ id: 'create-review', label: 'Create review', method: 'POST', target: '/broker/reviews' }],
-          appId: manifest.id,
-          fields: [
-            { label: 'Domain', value: manifest.soul.domain },
-            { label: 'Workspace types', value: manifest.workspaceTypes.map(type => type.name).join(', ') },
-          ],
-          renderer: 'host-descriptor',
-          status: 'ready',
-          title: manifest.name,
-          type: 'aiworker.surface.descriptor.v1',
-        })
-      }
+      if (url.pathname === '/api/capabilities')
+        return Response.json({ capabilities: manifest.capabilities })
 
-      if (url.pathname === '/frames/widgets/brief-widget') {
-        return new Response('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Brief Widget</title></head><body><main><h1>Brief Widget</h1></main></body></html>', {
+      if (url.pathname === '/api/briefs' && request.method === 'POST')
+        return handleCreateBrief(request)
+
+      if (url.pathname === '/api/briefs/search' && request.method === 'GET')
+        return handleBriefSearch(url)
+
+      if (url.pathname === '/micro-app/routes/brief-home') {
+        return new Response(renderBriefMicroAppHtml('Brief Home'), {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
 
-      if (url.pathname === '/broker/permissions') {
-        const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
-        if (!hostUrl)
-          return Response.json({ appId: manifest.id, broker: 'not-configured', permissions: [] })
-        return Response.json({ appId: manifest.id, broker: 'host-owned', permissions: manifest.permissions })
-      }
-
-      if (url.pathname === '/protocol/capabilities') {
-        return Response.json({ capabilities: manifest.capabilities })
+      if (url.pathname === '/micro-app/widgets/brief-widget') {
+        return new Response(renderBriefMicroAppHtml('Brief Widget'), {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
       }
 
       return Response.json({ error: { code: 'NOT_FOUND', message: \`Unknown app route: \${url.pathname}\` } }, { status: 404 })
@@ -2066,60 +1807,60 @@ function verifyMountToken(request: Request): Response | null {
     : Response.json({ error: { code: 'INVALID_MOUNT_TOKEN', message: 'Host mount token is required.' } }, { status: 401 })
 }
 
-interface ProtocolActionBody {
-  input?: Record<string, unknown>
-  protocolAction?: string
+interface CreateBriefBody {
+  title?: string
 }
 
-async function handleProtocolAction(request: Request): Promise<Response> {
-  const body = await request.json().catch(() => ({})) as ProtocolActionBody
-  const input = body.input ?? {}
-
-  if (body.protocolAction === 'briefs.create') {
-    return Response.json({
-      message: 'Starter brief draft created.',
-      ok: true,
-      refresh: true,
-      result: {
-        kind: 'brief',
-        title: typeof input.query === 'string' ? input.query : 'Starter brief',
-      },
-    })
-  }
-
-  if (body.protocolAction === 'briefs.refresh') {
-    return Response.json({ message: 'Starter briefs refreshed.', ok: true, refresh: true })
-  }
-
-  if (body.protocolAction === 'configuration.open') {
-    return Response.json({ message: 'Starter app configuration is handled by the app workbench.', ok: true })
-  }
-
-  return Response.json({ message: \`Unknown protocol action: \${body.protocolAction ?? 'missing'}\`, ok: false }, { status: 404 })
+async function handleCreateBrief(request: Request): Promise<Response> {
+  const body = await request.json().catch(() => ({})) as CreateBriefBody
+  return Response.json({
+    item: {
+      appId: manifest.id,
+      id: 'starter-brief',
+      kind: 'brief',
+      status: 'draft',
+      title: typeof body.title === 'string' && body.title ? body.title : 'Starter brief',
+    },
+  })
 }
 
-function handleProtocolSearch(url: URL): Response {
-  const providerId = url.searchParams.get('providerId') ?? ''
+function handleBriefSearch(url: URL): Response {
   const query = url.searchParams.get('query') ?? ''
-  if (providerId !== 'briefs.search')
-    return Response.json({ error: { code: 'PROVIDER_NOT_FOUND', message: \`Unknown provider: \${providerId}\` } }, { status: 404 })
-
   return Response.json({
     items: [{
       appId: manifest.id,
-      authority: 'soul-app',
       id: 'starter-brief',
       kind: 'brief',
-      openAction: {
-        id: 'create-brief',
-        input: { query },
-      },
       status: 'draft',
       summary: query ? \`Starter brief match for \${query}\` : 'Starter brief workspace item',
       title: query ? \`Brief: \${query}\` : 'Starter brief',
     }],
-    providerId: 'briefs.search',
   })
+}
+
+function renderBriefMicroAppHtml(title: string): string {
+  return [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="utf-8">',
+    \`<title>\${escapeHtml(title)}</title>\`,
+    '</head>',
+    '<body>',
+    \`<main data-soul-app-id="\${escapeHtml(manifest.id)}"><h1>\${escapeHtml(title)}</h1></main>\`,
+    '</body>',
+    '</html>',
+  ].join('')
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char] ?? char))
 }
 `
 }
@@ -2130,7 +1871,7 @@ function scaffoldPrompt(appId: string): string {
     '',
     'Create a concise, source-backed business brief.',
     '',
-    '- Cite evidence references provided by the Host or connector broker.',
+    '- Cite evidence references provided by the workspace context or app-owned API.',
     '- Mark missing facts explicitly.',
     '- Separate summary, risks, and next actions.',
     '',
@@ -2302,13 +2043,6 @@ function manifestAssetRefs(manifest: SoulAppManifest): Array<{ kind: string, pat
     refs.push({ kind: 'engine-assets-skills', path: manifest.engineAssets.skills.source })
   for (const client of manifest.engineAssets.mcpClients ?? [])
     refs.push({ kind: 'engine-assets-mcp-client', path: client.source })
-  for (const type of manifest.artifactTypes) {
-    refs.push({ kind: 'artifact-schema', path: type.schemaRef, sha256: type.schemaSha256 })
-    if (type.previewRef)
-      refs.push({ kind: 'artifact-preview', path: type.previewRef })
-    if (type.reviewPolicyRef)
-      refs.push({ kind: 'review-policy', path: type.reviewPolicyRef })
-  }
   for (const capability of manifest.capabilities) {
     refs.push({ kind: 'capability-prompt', path: capability.promptRef })
     if (capability.reviewRubricRef)
@@ -2328,7 +2062,6 @@ function manifestAssetRefs(manifest: SoulAppManifest): Array<{ kind: string, pat
     ...manifest.ui.routes.map(route => route.entry),
     ...manifest.ui.panels.map(slot => slot.entry),
     ...manifest.ui.artifactPreviews.map(slot => slot.entry),
-    ...manifest.ui.reviewPanels.map(slot => slot.entry),
     ...(manifest.ui.workspaceWidgets ?? []).map(slot => slot.entry),
   ]) {
     if (entry)
@@ -2543,7 +2276,7 @@ function registerCommands(): void {
     printJson({ worker: getWorker(id) })
   })
   cli.command('worker select <id>', 'select default local Soul worker').action(selectWorkerCommand)
-  cli.command('template list', 'list capability templates').option('--soul <id>', 'Soul id').action(async (opts: { soul?: string }) => {
+  cli.command('template list', 'compatibility inspection: list app-declared session templates').option('--soul <id>', 'Soul id').action(async (opts: { soul?: string }) => {
     const paths = await ensureDb()
     const templates = createHost(paths).listCapabilityTemplates(opts.soul)
     printJson({ templates })
@@ -2570,46 +2303,8 @@ function registerCommands(): void {
   cli.command('session show <id>', 'show one session').action(showSession)
   cli.command('turn send', 'send a turn to an existing session').option('--session <id>', 'session id').option('--input <text>', 'turn input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(sendTurnCommand)
 
-  cli.command('files list', 'list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
-  cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)
-
-  cli.command('artifacts list', 'list artifacts').option('--workspace <id>', 'workspace id').action(listArtifactsCommand)
-  cli.command('artifacts show <id>', 'show one artifact').action(async (id: string) => {
-    await ensureAllWorkers()
-    printJson({ artifact: getArtifact(id) })
-  })
-  cli.command('artifacts open <id>', 'open one artifact').option('--worker <id>', 'worker id').action(openArtifact)
-
-  cli.command('profile promote', 'promote a reviewed artifact into the workspace profile README')
-    .option('--workspace <id>', 'workspace id')
-    .option('--artifact <id>', 'artifact id')
-    .option('--worker <id>', 'worker id')
-    .option('--verdict <verdict>', 'review verdict: pass or warn')
-    .option('--profile-markdown <path>', 'explicit reviewed profile markdown file')
-    .option('--finding <text>', 'review finding message')
-    .option('--risk <text>', 'review risk message')
-    .option('--tag <name>', 'optional git tag name')
-    .action(promoteProfileCommand)
-
-  cli.command('review list', 'list reviews').option('--workspace <id>', 'workspace id').action(listReviewsCommand)
-  cli.command('review show <id>', 'show one review').action(async (id: string) => {
-    await ensureAllWorkers()
-    printJson({ review: getReview(id) })
-  })
-
-  cli.command('lessons list', 'list lessons').option('--workspace <id>', 'workspace id').action(async (opts: { workspace?: string }) => {
-    await ensureAllWorkers()
-    printJson({ lessons: listLessons(opts.workspace) })
-  })
-  cli.command('lessons propose', 'propose a lesson').option('--statement <text>', 'lesson statement').option('--review <id>', 'source review id').option('--workspace <id>', 'workspace id').action(proposeLesson)
-  cli.command('lessons accept <id>', 'accept a lesson').action(async (id: string) => {
-    await ensureAllWorkers()
-    printJson({ lesson: updateLesson(id, 'accepted') })
-  })
-  cli.command('lessons reject <id>', 'reject a lesson').action(async (id: string) => {
-    await ensureAllWorkers()
-    printJson({ lesson: updateLesson(id, 'rejected') })
-  })
+  cli.command('files list', 'compatibility inspection: list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
+  cli.command('files show <path>', 'compatibility inspection: print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)
 
   cli.command('settings list', 'list host daemon settings').action(async () => {
     await ensureDb()
@@ -2655,15 +2350,10 @@ const FULL_COMMAND_INDEX = [
   'app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke',
   'soul list',
   'worker create|list|show|select',
-  'template list',
   'workspace create|list|show',
   'session start|list|show',
   'turn send',
-  'files list|show',
-  'artifacts list|show|open',
-  'profile promote',
-  'review list|show',
-  'lessons list|propose|accept|reject',
+  'compatibility inspection: template list; files list|show',
   'settings list',
   'engine select',
   'open',

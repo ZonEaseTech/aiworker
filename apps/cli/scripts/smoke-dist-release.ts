@@ -13,14 +13,9 @@ interface CommandResult {
   stdout: string
 }
 
-interface SoulAppActionResponse {
-  action?: {
-    id?: string
-  }
-  result?: {
-    message?: string
-    ok?: boolean
-  }
+interface SoulAppProtocolActionResponse {
+  message?: string
+  ok?: boolean
 }
 
 async function main(): Promise<number> {
@@ -62,10 +57,10 @@ async function main(): Promise<number> {
     assertJsonIncludes(list.stdout, 'aiworker-hr')
     assertJsonIncludes(souls.stdout, 'aiworker-qa')
     assertJsonIncludes(templates.stdout, 'aiworker-hr.person-profile')
-    await assertMountedAction(port, 'aiworker-hr', 'create-people-profile', 'People profile draft opened by HR app.')
-    await assertMountedAction(port, 'aiworker-qa', 'create-release-gate', 'Release gate draft opened by QA app.')
+    await assertMountedProtocolAction(port, 'aiworker-hr', 'peopleProfiles.create', 'People profile draft opened by HR app.')
+    await assertMountedProtocolAction(port, 'aiworker-qa', 'releaseGates.create', 'Release gate draft opened by QA app.')
 
-    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API, bootstraps official Soul Apps, and invokes mounted actions')
+    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API, bootstraps official Soul Apps, and reaches app-owned mounted APIs')
     return 0
   }
   finally {
@@ -180,27 +175,27 @@ function assertCatalogApps(apps: Array<{ appId: string, status: string }>): void
   }
 }
 
-async function assertMountedAction(port: number, appId: string, actionId: string, expectedMessage: string): Promise<void> {
-  const url = `http://127.0.0.1:${port}/api/local/apps/${appId}/actions/${actionId}`
+async function assertMountedProtocolAction(port: number, appId: string, protocolAction: string, expectedMessage: string): Promise<void> {
+  const url = `http://127.0.0.1:${port}/api/local/apps/${appId}/protocol/actions`
   const res = await fetch(url, {
-    body: JSON.stringify({ input: { source: 'smoke-dist-release' } }),
+    body: JSON.stringify({ input: { source: 'smoke-dist-release' }, protocolAction }),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   })
   const bodyText = await res.text()
   if (!res.ok)
-    throw new Error(`Mounted action failed: POST ${url} -> ${res.status} ${bodyText.slice(0, 500)}`)
+    throw new Error(`Mounted protocol action failed: POST ${url} -> ${res.status} ${bodyText.slice(0, 500)}`)
 
-  let body: SoulAppActionResponse
+  let body: SoulAppProtocolActionResponse
   try {
-    body = JSON.parse(bodyText) as SoulAppActionResponse
+    body = JSON.parse(bodyText) as SoulAppProtocolActionResponse
   }
   catch {
-    throw new Error(`Mounted action returned non-JSON: POST ${url} -> ${bodyText.slice(0, 500)}`)
+    throw new Error(`Mounted protocol action returned non-JSON: POST ${url} -> ${bodyText.slice(0, 500)}`)
   }
 
-  if (body.action?.id !== actionId || body.result?.ok !== true || body.result.message !== expectedMessage)
-    throw new Error(`Mounted action returned unexpected body for ${appId}/${actionId}: ${bodyText.slice(0, 500)}`)
+  if (body.ok !== true || body.message !== expectedMessage)
+    throw new Error(`Mounted protocol action returned unexpected body for ${appId}/${protocolAction}: ${bodyText.slice(0, 500)}`)
 }
 
 function assertJsonIncludes(stdout: string, expected: string): void {

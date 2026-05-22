@@ -5,26 +5,17 @@ import { mkdtempSync } from 'node:fs'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+
 import { defineSoulApp, namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-app-sdk'
 import { afterEach, describe, expect, it } from 'bun:test'
+
 import { createMountedSoulAppTestRuntime, createStandaloneSoulAppRuntime } from './index'
 
 const now = () => '2026-05-12T23:30:00.000Z'
 
 const executor: LocalExecutor = {
-  async invoke(input) {
+  async invoke(_input) {
     return {
-      artifacts: [{
-        content: `# Demo artifact\n\n${input.prompt}`,
-        kind: 'demo-report',
-        path: `artifacts/${input.sessionId}/demo-report.md`,
-        title: 'Demo Report',
-      }],
-      review: {
-        findings: [{ message: 'Demo artifact is ready for human review.' }],
-        risks: [],
-        verdict: 'needs_review',
-      },
       summary: 'Demo app produced one artifact.',
     }
   },
@@ -94,8 +85,8 @@ describe('Soul App runtime harness', () => {
       sessionId: session.id,
     })
 
-    expect(result.artifacts).toHaveLength(1)
-    expect(result.review?.verdict).toBe('needs_review')
+    expect(result.turn).toBeDefined()
+    expect(result.invocation).toBeDefined()
     expect(standalone.snapshot().worker.metadataJson.soulAppId).toBe('demo-soul-app')
   })
 
@@ -146,8 +137,8 @@ describe('Soul App runtime harness', () => {
       sessionId: session.id,
     })
 
-    expect(result.artifacts[0]?.metadataJson.soulAppId).toBe('demo-soul-app')
-    expect(result.review?.findingsJson[0]?.message).toContain('Demo artifact')
+    expect(result.turn).toBeDefined()
+    expect(result.invocation).toBeDefined()
   })
 
   function tempRoot(label: string): string {
@@ -174,13 +165,6 @@ function demoSoulApp(): SoulAppDefinition {
         entry: './src/domain-api.ts',
         routePrefix: '/api/local/apps/demo-soul-app',
       },
-      artifactTypes: [{
-        description: 'Demo report artifact.',
-        id: 'demo-report',
-        name: 'Demo Report',
-        schemaRef: './product/artifacts/schemas/demo-report.schema.json',
-        version: '1.0.0',
-      }],
       capabilities: [{
         artifactTypes: ['demo-report'],
         description: 'Create a demo report.',
@@ -216,10 +200,6 @@ function demoSoulApp(): SoulAppDefinition {
         timeoutMs: 1000,
       },
       id: 'demo-soul-app',
-      memory: {
-        admissionPolicy: 'manual-review',
-        namespace: 'demo-soul-app',
-      },
       modes: {
         hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
         standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
@@ -229,11 +209,9 @@ function demoSoulApp(): SoulAppDefinition {
         refs: [{ id: 'demo-pack', ref: './product/profiles/demo-soul-app/SOUL.md', source: 'embedded', version: '1.0.0' }],
       },
       permissions: [
-        { action: 'write', kind: 'artifact', reason: 'Create demo artifacts.', target: 'demo-report' },
+        { action: 'write', kind: 'storage', reason: 'Create demo artifacts.', target: 'demo-soul-app' },
         { action: 'read', kind: 'storage', reason: 'Read demo records.', target: 'demo-soul-app' },
         { action: 'write', kind: 'storage', reason: 'Write demo records.', target: 'demo-soul-app' },
-        { action: 'create', kind: 'review', reason: 'Create demo review.', target: 'demo-review' },
-        { action: 'propose', kind: 'memory', reason: 'Propose demo lessons.', target: 'demo-soul-app' },
         { action: 'serve', kind: 'api', reason: 'Serve demo API.', target: '/api/local/apps/demo-soul-app' },
       ],
       protocol: 'soul-app/v1',
@@ -251,7 +229,6 @@ function demoSoulApp(): SoulAppDefinition {
       ui: {
         artifactPreviews: [],
         panels: [],
-        reviewPanels: [],
         routes: [{ entry: './product/web/routes/demo-home.tsx', id: 'demo-home', label: 'Demo', path: '/demo' }],
         workspaceWidgets: [],
       },

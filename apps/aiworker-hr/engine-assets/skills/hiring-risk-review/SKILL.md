@@ -1,18 +1,18 @@
 ---
 name: hiring-risk-review
-description: Review HR profile proposals for compliance, privacy, bias, and unsupported claims.
+description: Check HR profile drafts for compliance, privacy, bias, and unsupported claims.
 capabilities:
   - hiring-risk
   - compliance-review
   - privacy-review
 ---
 
-# Hiring Risk Review
+# Hiring Risk Check
 
-Use this skill to produce a hiring risk review artifact for a proposed HR
-artifact before HR product review promotes or references it.
+Use this skill to produce a hiring risk check artifact for an HR artifact before
+the HR product accepts or references it.
 
-## Risk Review Rules
+## Risk Check Rules
 
 - Flag protected-class inference, proxy signals, and unsupported personal
   judgments.
@@ -24,8 +24,8 @@ artifact before HR product review promotes or references it.
 
 ## Output Shape
 
-The verdict is a recommendation for HR product review; it is not the promotion
-operation itself.
+The verdict is a recommendation for HR product acceptance; it is not the
+acceptance operation itself.
 
 Return:
 
@@ -33,4 +33,4 @@ Return:
 2. Blocking findings
 3. Advisory findings
 4. Privacy and evidence retention notes
-5. Required human decision before profile promotion
+5. Required human decision before profile acceptance

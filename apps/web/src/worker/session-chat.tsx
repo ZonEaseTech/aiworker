@@ -1,5 +1,4 @@
 import type {
-  CapabilityTemplate,
   LocalSession,
   LocalSessionEvent,
   LocalTurn,
@@ -7,32 +6,34 @@ import type {
 } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
 import type { messagesFor, SupportedLocale } from '../features/i18n'
+import type { CapabilityTemplate } from '../features/local-workspace/types.compat'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 import type { SessionProgressSummary } from './session-progress'
 import type { SessionTurnDraft } from './session-turn-composer'
 
 import {
-  createSessionTimelineViewModel,
-  IconButton,
-  MessageFlow,
-  MessageRow,
-  normalizeSessionEvents,
-  SessionTimeline,
-  StatusEventPill,
-  summarizeSessionUsage,
-} from '@zonease/aiworker-component'
-import {
-  ArrowDown,
-  ArrowLeft,
-  MessageSquare,
-  PanelRightClose,
-  PanelRightOpen,
-  RefreshCw,
-  Settings,
-} from 'lucide-react'
+  ArrowDown01Icon,
+  ArrowLeft01Icon,
+  Message02Icon,
+  PanelRightCloseIcon,
+  PanelRightOpenIcon,
+  RefreshIcon,
+  Settings02Icon,
+} from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Badge } from '@zonease/aiworker-ui/components/badge'
+import { Button } from '@zonease/aiworker-ui/components/button'
+import { ScrollArea } from '@zonease/aiworker-ui/components/scroll-area'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { displayTemplate, formatRelativeTime, formatStatus } from '../features/i18n'
-import { SessionProgressPanel } from './session-progress-panel'
+import { MessageFlow, MessageRow, StatusEventPill } from '../features/session/message-flow'
+import { SessionTimeline } from '../features/session/session-timeline'
+import {
+  createSessionTimelineViewModel,
+  normalizeSessionEvents,
+  summarizeSessionUsage,
+} from '../features/session/session-view-model'
+import { StudioChromeHeader, StudioEmptyState, StudioTitleBlock } from './components/studio-shell'
 import { SessionTurnComposer } from './session-turn-composer'
 
 type WorkerMessages = ReturnType<typeof messagesFor>
@@ -153,80 +154,104 @@ export function WorkerSessionChat({
   }
 
   return (
-    <section className="worker-chat-pane" aria-label={copy.workspace.sessionDetail}>
-      <header className="worker-chat-header">
-        <div className="worker-chat-title">
-          <span className="kicker">{copy.workspace.selectedWorkspace}</span>
-          <h1>{workspace.name}</h1>
-          <div className="worker-chat-meta">
-            <span>{templateCopy?.name ?? session.capabilityTemplateId}</span>
-            <span>{formatStatus(session.status, locale)}</span>
-            <span>{copy.workspace.updated(formatRelativeTime(session.updatedAt, locale))}</span>
-          </div>
-          <SessionProgressPanel compact className="worker-chat-progress" progress={progress} />
-        </div>
-        <div className="worker-chat-actions">
-          <IconButton aria-label={copy.workspace.backToWorkspace} title={copy.workspace.backToWorkspace} onClick={onBackToWorkspace}>
-            <ArrowLeft aria-hidden="true" size={16} />
-          </IconButton>
-          <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
-            <RefreshCw aria-hidden="true" size={16} />
-          </IconButton>
-          <IconButton aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
-            <Settings aria-hidden="true" size={16} />
-          </IconButton>
-          <IconButton
-            aria-label={detailDrawerOpen ? copy.accessibility.collapseSessionDetail : copy.accessibility.expandSessionDetail}
-            aria-pressed={detailDrawerOpen}
-            className={detailDrawerOpen ? 'session-detail-toggle active' : 'session-detail-toggle'}
-            title={detailDrawerOpen ? copy.accessibility.collapseSessionDetail : copy.accessibility.expandSessionDetail}
-            onClick={onToggleDetailDrawer}
-          >
-            {detailDrawerOpen
-              ? <PanelRightClose aria-hidden="true" size={16} />
-              : <PanelRightOpen aria-hidden="true" size={16} />}
-          </IconButton>
-        </div>
-      </header>
+    <section
+      className="relative flex h-full min-h-0 min-w-0 flex-col transition-colors"
+      data-session-slot="session-chat-pane"
+      data-testid="worker-chat-pane"
+      aria-label={copy.workspace.sessionDetail}
+    >
+      <StudioChromeHeader
+        data-testid="worker-chat-header"
+        actionProps={{ 'className': 'max-md:justify-end', 'data-testid': 'worker-chat-actions' }}
+        actions={(
+          <>
+            <Button type="button" variant="ghost" size="icon" aria-label={copy.workspace.backToWorkspace} title={copy.workspace.backToWorkspace} onClick={onBackToWorkspace}>
+              <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} aria-hidden="true" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
+              <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} aria-hidden="true" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
+              <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} aria-hidden="true" />
+            </Button>
+            <Button
+              aria-label={detailDrawerOpen ? copy.accessibility.collapseSessionDetail : copy.accessibility.expandSessionDetail}
+              aria-pressed={detailDrawerOpen}
+              size="icon"
+              title={detailDrawerOpen ? copy.accessibility.collapseSessionDetail : copy.accessibility.expandSessionDetail}
+              type="button"
+              variant="ghost"
+              onClick={onToggleDetailDrawer}
+            >
+              {detailDrawerOpen
+                ? <HugeiconsIcon icon={PanelRightCloseIcon} strokeWidth={2} aria-hidden="true" />
+                : <HugeiconsIcon icon={PanelRightOpenIcon} strokeWidth={2} aria-hidden="true" />}
+            </Button>
+          </>
+        )}
+        className="min-w-0 max-w-full px-6 py-3 transition-colors max-md:min-h-0 max-md:flex-col max-md:items-stretch max-md:px-4 max-md:py-2.5"
+      >
+        <StudioTitleBlock
+          kicker={copy.workspace.selectedWorkspace}
+          title={workspace.name}
+          meta={(
+            <>
+              <span>{templateCopy?.name ?? session.capabilityTemplateId}</span>
+              <span>{formatStatus(session.status, locale)}</span>
+              <span>{copy.workspace.updated(formatRelativeTime(session.updatedAt, locale))}</span>
+              <Badge variant={progress.tone === 'risk' ? 'destructive' : 'outline'}>
+                {progress.label}
+              </Badge>
+            </>
+          )}
+        />
+      </StudioChromeHeader>
 
-      <div className="worker-chat-log-wrap">
-        <div ref={logRef} className="worker-chat-log" data-testid="worker-chat-log">
-          {timeline.turns.length > 0
-            ? (
-                <SessionTimeline
-                  assistantRoleLabel={copy.workspace.engineRole}
-                  assistantTimestampForTurn={turn => formatStatus(turn.status, locale)}
-                  className="worker-session-timeline"
-                  operatorRoleLabel={copy.workspace.operatorRole}
-                  placeholderForTurn={turn => turn.status === 'running' ? <WaitingPill detail={copy.workspace.engineStarting} /> : null}
-                  timestampForTurn={turn => turn.createdAt ? formatRelativeTime(turn.createdAt, locale) : undefined}
-                  turns={timeline.turns}
-                />
-              )
-            : (
-                <div className="worker-chat-empty">
-                  <MessageSquare aria-hidden="true" size={24} />
-                  <strong>{copy.workspace.noTurns}</strong>
-                  <span>{engineReadiness.detail}</span>
-                </div>
-              )}
-          {turnSubmitting && timeline.turns.every(({ turn }) => turn.status !== 'running')
-            ? <AssistantWaiting detail={engineReadiness.detail} role={copy.workspace.engineRole} />
-            : null}
-        </div>
-
-        {scrolledFromBottom
+      <ScrollArea
+        className="min-h-0 min-w-0 flex-1"
+        overlay={scrolledFromBottom
           ? (
-              <button type="button" className="worker-chat-jump" onClick={jumpToBottom}>
-                <ArrowDown aria-hidden="true" size={14} />
+              <Button type="button" variant="secondary" size="sm" className="absolute right-6 bottom-4" onClick={jumpToBottom}>
+                <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
                 <span>{copy.workspace.latest}</span>
-              </button>
+              </Button>
             )
           : null}
-      </div>
+        viewportClassName="flex min-h-0 min-w-0 scroll-smooth flex-col gap-4 px-6 pt-5 pb-6 transition-all max-md:px-4"
+        viewportProps={{
+          'data-session-slot': 'session-chat-log',
+          'data-testid': 'worker-chat-log',
+        }}
+        viewportRef={logRef}
+        data-session-slot="session-chat-log-frame"
+      >
+        {timeline.turns.length > 0
+          ? (
+              <SessionTimeline
+                assistantRoleLabel={copy.workspace.engineRole}
+                assistantTimestampForTurn={turn => formatStatus(turn.status, locale)}
+                className="min-w-0"
+                operatorRoleLabel={copy.workspace.operatorRole}
+                placeholderForTurn={turn => turn.status === 'running' ? <WaitingPill detail={copy.workspace.engineStarting} /> : null}
+                timestampForTurn={turn => turn.createdAt ? formatRelativeTime(turn.createdAt, locale) : undefined}
+                turns={timeline.turns}
+              />
+            )
+          : (
+              <StudioEmptyState
+                className="min-h-64"
+                icon={<HugeiconsIcon icon={Message02Icon} strokeWidth={2} aria-hidden="true" />}
+                title={copy.workspace.noTurns}
+                detail={engineReadiness.detail}
+              />
+            )}
+        {turnSubmitting && timeline.turns.every(({ turn }) => turn.status !== 'running')
+          ? <AssistantWaiting detail={engineReadiness.detail} role={copy.workspace.engineRole} />
+          : null}
+      </ScrollArea>
 
       <SessionTurnComposer
-        className="worker-composer"
+        className="min-w-0 max-w-full px-6 pt-3 pb-4 max-md:px-4"
         copy={copy}
         engineReadiness={engineReadiness}
         usage={composerUsage}
@@ -269,8 +294,8 @@ function usageMeterValue(inputTokens?: number, outputTokens?: number): number | 
 
 function AssistantWaiting({ detail, role }: { detail: string, role: string }) {
   return (
-    <MessageRow className="session-message assistant" roleLabel={role}>
-      <MessageFlow className="session-assistant-flow">
+    <MessageRow roleLabel={role}>
+      <MessageFlow>
         <WaitingPill detail={detail} />
       </MessageFlow>
     </MessageRow>
@@ -279,6 +304,6 @@ function AssistantWaiting({ detail, role }: { detail: string, role: string }) {
 
 function WaitingPill({ detail }: { detail: string }) {
   return (
-    <StatusEventPill className="session-status-pill" tone="success">{detail}</StatusEventPill>
+    <StatusEventPill tone="success">{detail}</StatusEventPill>
   )
 }

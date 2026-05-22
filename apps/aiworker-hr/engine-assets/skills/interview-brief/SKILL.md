@@ -13,8 +13,8 @@ Use this skill when preparing an interview plan from a Candidate Profile or
 candidate evidence packet.
 
 This skill produces an interview brief artifact for human panels. It can inform
-future People Profile proposals, but it does not directly change accepted
-profile state or make a hiring decision.
+future People Profile drafts, but it does not directly change accepted profile
+state or make a hiring decision.
 
 ## Interview Guidance
 
@@ -32,4 +32,4 @@ Draft:
 3. Questions mapped to role criteria
 4. Scorecard guidance
 5. Risks or missing evidence to verify
-6. Reviewer notes for the human panel
+6. Panel notes for the human owner

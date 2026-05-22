@@ -4,7 +4,7 @@ import type { SoulAppRegistryContext } from './registry'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { discardLegacySoulMetadata } from '@zonease/aiworker-storage-sqlite/worker'
+import { discardLegacySoulMetadata, getSoulApp } from '@zonease/aiworker-storage-sqlite/worker'
 
 import {
   disableSoulApp,
@@ -57,8 +57,8 @@ export async function bootstrapOfficialSoulApps(options: OfficialSoulAppBootstra
   const results: OfficialSoulAppBootstrapResult[] = []
   for (const definition of definitions) {
     const manifestPath = resolveOfficialManifestPath(definition, options)
-    const existing = getHostedSoulApp(definition.id)
-    const wasDisabled = existing?.status === 'disabled'
+    const existingRow = getSoulApp(definition.id)
+    const wasDisabled = existingRow?.status === 'disabled'
     try {
       let app = await installSoulAppFromPath(manifestPath, options)
       if (wasDisabled) {
@@ -85,8 +85,8 @@ export async function bootstrapOfficialSoulApps(options: OfficialSoulAppBootstra
 
       app = enableSoulApp(definition.id, options)
       results.push({
-        action: existing
-          ? existing.status === 'enabled' ? 'refreshed' : 'enabled'
+        action: existingRow
+          ? existingRow.status === 'enabled' ? 'refreshed' : 'enabled'
           : 'installed_enabled',
         app,
         appId: definition.id,
@@ -96,7 +96,7 @@ export async function bootstrapOfficialSoulApps(options: OfficialSoulAppBootstra
     catch (err) {
       results.push({
         action: 'error',
-        app: getHostedSoulApp(definition.id),
+        app: getHostedSoulAppSafely(definition.id),
         appId: definition.id,
         errorMessage: err instanceof Error ? err.message : String(err),
         manifestPath,
@@ -104,6 +104,15 @@ export async function bootstrapOfficialSoulApps(options: OfficialSoulAppBootstra
     }
   }
   return results
+}
+
+function getHostedSoulAppSafely(appId: string): HostedSoulApp | null {
+  try {
+    return getHostedSoulApp(appId)
+  }
+  catch {
+    return null
+  }
 }
 
 export function discardOfficialSoulAppLegacyMetadata(at?: string): OfficialLegacyMetadataDiscardResult {

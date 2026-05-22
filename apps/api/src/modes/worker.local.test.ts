@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +10,7 @@ import {
   createSession,
   createWorkspace,
   initWorkerDb,
+  listWorkerEngineInvocations,
   runWorkerMigrations,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
@@ -51,8 +52,6 @@ describe('local daemon API', () => {
           return {
             summary: 'done',
             artifacts: [{ path: `artifacts/${input.sessionId}/result.md`, title: 'Result', content: `# ${input.prompt}\n` }],
-            review: { verdict: 'pass', findings: [] },
-            lessons: [{ statement: 'Keep evidence attached.', evidence: [{ turnId: input.turnId }] }],
           }
         },
       },
@@ -104,12 +103,11 @@ describe('local daemon API', () => {
   it('bootstraps official apps and rejects legacy built-in Soul ids', async () => {
     const target = await app()
 
-    const soulsBody = await (await target.request('/api/local/souls')).json() as { souls: Array<{ id: string, status: string }> }
-    expect(soulsBody.souls).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'aiworker-hr', status: 'available' }),
-      expect.objectContaining({ id: 'aiworker-qa', status: 'available' }),
+    const appsBody = await (await target.request('/api/local/apps')).json() as { apps: Array<{ appId: string, status: string }> }
+    expect(appsBody.apps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ appId: 'aiworker-hr', status: 'enabled' }),
+      expect.objectContaining({ appId: 'aiworker-qa', status: 'enabled' }),
     ]))
-    expect(soulsBody.souls.some(soul => soul.id === 'hr')).toBe(false)
 
     const legacyRes = await target.request('/api/local/workers', {
       method: 'POST',
@@ -153,11 +151,6 @@ describe('local daemon API', () => {
     expect(disableRes.status).toBe(200)
 
     const restarted = await app()
-    const soulsBody = await (await restarted.request('/api/local/souls')).json() as { souls: Array<{ id: string, status: string }> }
-    expect(soulsBody.souls).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: HR_APP_ID, status: 'coming_soon' }),
-      expect.objectContaining({ id: 'aiworker-qa', status: 'available' }),
-    ]))
     const workerRes = await restarted.request('/api/local/workers', {
       method: 'POST',
       body: JSON.stringify({ id: 'disabled-hr-worker', soulId: HR_APP_ID, name: 'Disabled HR' }),
@@ -167,48 +160,19 @@ describe('local daemon API', () => {
     expect(await workerRes.json()).toMatchObject({ error: { code: 'SOUL_NOT_AVAILABLE' } })
   })
 
-  it('exposes Soul App security review before generic enablement', async () => {
+  it('enables Soul Apps without a Host-owned security review preflight', async () => {
     const target = await app()
     expect((await target.request(`/api/local/apps/${QA_APP_ID}/disable`, { method: 'POST' })).status).toBe(200)
 
     const reviewRes = await target.request(`/api/local/apps/${QA_APP_ID}/security-review`)
-    expect(reviewRes.status).toBe(200)
-    const reviewBody = await reviewRes.json() as {
-      review: {
-        appId: string
-        connectors: { required: Array<{ enabled: boolean, id: string, required: boolean }> }
-        descriptorPermissions: Array<{ id: string, requiredPermissions: string[], surface: string }>
-        manifestPermissions: unknown[]
-        status: string
-        summary: { disabledRequiredConnectorIds: string[], warnings: string[] }
-      }
-    }
-    expect(reviewBody.review.appId).toBe(QA_APP_ID)
-    expect(reviewBody.review.status).toBe('disabled')
-    expect(reviewBody.review.manifestPermissions.length).toBeGreaterThan(0)
-    expect(reviewBody.review.connectors.required).toContainEqual(expect.objectContaining({
-      enabled: false,
-      id: 'ci',
-      required: true,
-    }))
-    expect(reviewBody.review.descriptorPermissions).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'create-release-gate',
-        requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
-        surface: 'workbench.primaryAction',
-      }),
-    ]))
-    expect(reviewBody.review.summary.disabledRequiredConnectorIds).toEqual(['ci'])
-    expect(reviewBody.review.summary.warnings).toContain('Required connectors are not enabled: ci')
+    expect(reviewRes.status).toBe(409)
+    expect(await reviewRes.json()).toMatchObject({ error: { code: 'SOUL_APP_DISABLED' } })
 
     const enableRes = await target.request(`/api/local/apps/${QA_APP_ID}/enable`, { method: 'POST' })
     expect(enableRes.status).toBe(200)
-    const enableBody = await enableRes.json() as { app: { status: string }, review: { appId: string, summary: { disabledRequiredConnectorIds: string[] } } }
+    const enableBody = await enableRes.json() as { app: { status: string }, review?: unknown }
     expect(enableBody.app.status).toBe('enabled')
-    expect(enableBody.review).toMatchObject({
-      appId: QA_APP_ID,
-      summary: { disabledRequiredConnectorIds: ['ci'] },
-    })
+    expect(enableBody).not.toHaveProperty('review')
   })
 
   it('discards legacy HR worker metadata during daemon bootstrap', async () => {
@@ -268,28 +232,246 @@ describe('local daemon API', () => {
     })
     expect(sessionRes.status).toBe(201)
     const sessionBody = await sessionRes.json() as {
-      artifacts: unknown[]
-      lessons: unknown[]
       session: { capabilityTemplateId: string, status: string }
       turn: { status: string }
     }
     expect(sessionBody.session.capabilityTemplateId).toBe(HR_CANDIDATE_SCREEN)
     expect(sessionBody.turn.status).toBe('succeeded')
-    expect(sessionBody.artifacts).toHaveLength(1)
-    expect(sessionBody.lessons).toHaveLength(1)
-
-    const filesRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/files`)
-    const filesBody = await filesRes.json() as { files: Array<{ path: string }> }
-    const filePath = filesBody.files[0]!.path
-    const rawRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/files/raw/${filePath}`)
-    expect(await rawRes.text()).toContain('Prepare a candidate screen.')
-
-    const eventsRes = await target.request('/api/local/events')
-    const eventsBody = await eventsRes.json() as { events: unknown[] }
-    expect(eventsBody.events.length).toBeGreaterThan(0)
+    expect(sessionBody).not.toHaveProperty('lessons')
   })
 
-  it('promotes an approved artifact into the workspace profile README', async () => {
+  it('saves and reads worker overlay assets through worker-scoped routes', async () => {
+    const target = await app()
+    const worker = await createHrWorker(target)
+
+    const saveRes = await target.request(`/api/local/workers/${worker.id}/overlay`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        assets: [{
+          content: '# Interview brief\n',
+          enabled: true,
+          id: 'interview-brief',
+          kind: 'skill',
+          target: 'codex',
+        }],
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(saveRes.status).toBe(200)
+    const savedBody = await saveRes.json() as { overlay: { assets: Array<{ id: string, kind: string, source: string }>, workerId: string } }
+    expect(savedBody.overlay.workerId).toBe(worker.id)
+    expect(savedBody.overlay.assets[0]).toMatchObject({ id: 'interview-brief', kind: 'skill', source: 'overlay' })
+
+    const readRes = await target.request(`/api/local/workers/${worker.id}/overlay`)
+    expect(readRes.status).toBe(200)
+    const readBody = await readRes.json() as { overlay: { assets: Array<{ id: string, kind: string, source: string }>, workerId: string } }
+    expect(readBody.overlay.workerId).toBe(worker.id)
+    expect(readBody.overlay.assets[0]).toMatchObject({ id: 'interview-brief', kind: 'skill', source: 'overlay' })
+  })
+
+  it('explicitly projects worker overlay assets into an existing workspace', async () => {
+    const target = await app()
+    const worker = await createHrWorker(target)
+    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Existing candidate workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+
+    const saveRes = await target.request(`/api/local/workers/${worker.id}/overlay`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        assets: [{
+          content: '# Overlay Candidate Profile\n',
+          enabled: true,
+          id: 'candidate-profile',
+          kind: 'skill',
+          target: 'codex',
+        }],
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(saveRes.status).toBe(200)
+
+    const projectRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/projection`, { method: 'POST' })
+    expect(projectRes.status).toBe(200)
+    const projectBody = await projectRes.json() as { projection: { receipt: { projections: Array<{ source: string, target: string }> }, workspace: { id: string, metadataJson: Record<string, unknown> } } }
+    expect(projectBody.projection.workspace.id).toBe(workspace.id)
+    expect(projectBody.projection.workspace.metadataJson.engineAssetProjection).toMatchObject({
+      projectionManifestPath: '.aiworker/projections.json',
+    })
+    expect(projectBody.projection.receipt.projections).toContainEqual(expect.objectContaining({
+      source: 'worker-overlay',
+      target: '.agents/skills/aiworker-hr-candidate-profile/SKILL.md',
+    }))
+  })
+
+  it('returns not found for invalid worker overlay projection locators', async () => {
+    const target = await app()
+    const worker = await createHrWorker(target)
+    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Projection locator workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+
+    const missingWorkerRes = await target.request(`/api/local/workers/missing-worker/workspaces/${workspace.id}/projection`, { method: 'POST' })
+    expect(missingWorkerRes.status).toBe(404)
+
+    const missingWorkspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces/missing-workspace/projection`, { method: 'POST' })
+    expect(missingWorkspaceRes.status).toBe(404)
+  })
+
+  it('rejects literal MCP secrets in worker overlay assets', async () => {
+    const target = await app()
+    const worker = await createHrWorker(target)
+
+    const res = await target.request(`/api/local/workers/${worker.id}/overlay`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        assets: [{
+          content: 'token = "sk-live-secret"\n',
+          enabled: true,
+          id: 'codex-ats',
+          kind: 'mcp-client',
+          target: 'codex',
+        }],
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(res.status).toBe(422)
+    expect(await res.json()).toMatchObject({
+      error: { code: 'WORKER_OVERLAY_SECRET', message: expect.stringContaining('literal MCP secrets') },
+    })
+  })
+
+  it('runs worker-scoped native engine invocations without session metadata', async () => {
+    const target = await app()
+    const worker = await createHrWorker(target)
+    const cwd = join(dir, 'native-cwd')
+    mkdirSync(cwd, { recursive: true })
+    const command = join(dir, 'native-engine.sh')
+    writeFileSync(command, `#!/usr/bin/env bash
+set -euo pipefail
+printf 'cwd=%s\\n' "$PWD"
+printf 'args=%s\\n' "$*"
+printf 'stdin<<EOF\\n'
+cat
+printf '\\nEOF\\n'
+`)
+    chmodSync(command, 0o755)
+
+    const res = await target.request(`/api/local/workers/${worker.id}/engine/invocations`, {
+      method: 'POST',
+      body: JSON.stringify({
+        args: ['--native-flag', 'value'],
+        cwd,
+        engineCommand: command,
+        engineId: 'native-test',
+        input: 'native payload\n',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(res.status).toBe(201)
+    const body = await res.json() as {
+      invocation: Record<string, unknown> & { cwd: string, exitCode: number, status: string, workerId: string }
+      result: { exitCode: number, status: string, stdout: string }
+    }
+    expect(body.invocation).toMatchObject({
+      cwd: realpathSync(cwd),
+      engineCommand: command,
+      engineId: 'native-test',
+      exitCode: 0,
+      status: 'succeeded',
+      workerId: worker.id,
+    })
+    expect(body.invocation).not.toHaveProperty('workspaceId')
+    expect(body.invocation).not.toHaveProperty('sessionId')
+    expect(body.invocation).not.toHaveProperty('turnId')
+    expect(body.invocation).not.toHaveProperty('prompt')
+    expect(body.invocation).not.toHaveProperty('input')
+    expect(body.result).toMatchObject({ exitCode: 0, status: 'succeeded' })
+    expect(body.result.stdout).toContain(`cwd=${realpathSync(cwd)}`)
+    expect(body.result.stdout).toContain('args=--native-flag value')
+    expect(body.result.stdout).toContain('stdin<<EOF\nnative payload\n\nEOF')
+
+    const rows = listWorkerEngineInvocations(worker.id)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      cwd: realpathSync(cwd),
+      engineCommand: command,
+      engineId: 'native-test',
+      exitCode: 0,
+      status: 'succeeded',
+      workerId: worker.id,
+    })
+    expect(JSON.stringify(rows[0])).not.toContain('native payload')
+  })
+
+  it('streams worker-scoped native engine events without storing raw engine IO', async () => {
+    const target = await app()
+    const worker = await createHrWorker(target)
+    const cwd = join(dir, 'native-stream-cwd')
+    mkdirSync(cwd, { recursive: true })
+    const command = join(dir, 'native-stream-engine.sh')
+    writeFileSync(command, `#!/usr/bin/env bash
+set -euo pipefail
+printf 'stream stdout cwd=%s\\n' "$PWD"
+printf 'stream stderr args=%s\\n' "$*" >&2
+printf 'stdin<<EOF\\n'
+cat
+printf '\\nEOF\\n'
+`)
+    chmodSync(command, 0o755)
+
+    const res = await target.request(`/api/local/workers/${worker.id}/engine/invocations/stream`, {
+      method: 'POST',
+      body: JSON.stringify({
+        args: ['--stream-flag', 'value'],
+        cwd,
+        engineCommand: command,
+        engineId: 'native-stream-test',
+        input: 'stream payload\n',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/event-stream')
+    const body = await res.text()
+    expect(body).toContain('event: status')
+    expect(body).toContain('"status":"started"')
+    expect(body).toContain('event: engine_event')
+    expect(body).toContain('"kind":"stdout"')
+    expect(body).toContain(`stream stdout cwd=${realpathSync(cwd)}`)
+    expect(body).toContain('"kind":"stderr"')
+    expect(body).toContain('stream stderr args=--stream-flag value')
+    expect(body).toContain('"kind":"exit"')
+    expect(body).toContain('event: result')
+    expect(body).toContain('"status":"succeeded"')
+
+    const rows = listWorkerEngineInvocations(worker.id)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      cwd: realpathSync(cwd),
+      engineCommand: command,
+      engineId: 'native-stream-test',
+      exitCode: 0,
+      status: 'succeeded',
+      workerId: worker.id,
+    })
+    expect(JSON.stringify(rows[0])).not.toContain('stream payload')
+    expect(JSON.stringify(rows[0])).not.toContain('stream stdout')
+    expect(JSON.stringify(rows[0])).not.toContain('stream stderr')
+  })
+
+  it('does not expose Host-owned profile promotion, review, or lesson APIs', async () => {
     const target = await app()
     const hrWorker = await createHrWorker(target)
     const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
@@ -297,75 +479,31 @@ describe('local daemon API', () => {
       body: JSON.stringify({ name: 'Profile API workspace', type: 'people-profile' }),
       headers: { 'content-type': 'application/json' },
     })).json() as { workspace: { id: string } }
-    const sessionBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces/${workspaceBody.workspace.id}/sessions`, {
-      method: 'POST',
-      body: JSON.stringify({
-        capabilityTemplateId: HR_CANDIDATE_SCREEN,
-        context: 'Review packet',
-        input: 'Prepare a profile proposal.',
-        title: 'Profile proposal',
-      }),
-      headers: { 'content-type': 'application/json' },
-    })).json() as {
-      artifacts: Array<{ id: string }>
-    }
 
-    const initialProfileRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile`)
-    expect(initialProfileRes.status).toBe(200)
-    expect(await initialProfileRes.text()).toContain('No approved profile revision yet.')
+    const profileRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile`)
+    expect(profileRes.status).toBe(404)
 
     const promoteRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile-revisions`, {
       method: 'POST',
       body: JSON.stringify({
-        artifactId: sessionBody.artifacts[0]!.id,
-        findingsJson: [{ message: 'Approved by HR reviewer.' }],
         profileMarkdown: '# Approved Profile\n\nEvidence-backed update.\n',
-        risksJson: [],
-        verdict: 'pass',
       }),
       headers: { 'content-type': 'application/json' },
     })
-    expect(promoteRes.status).toBe(201)
-    const promoteBody = await promoteRes.json() as {
-      profileRevision: {
-        profilePath: string
-        review: { artifactId: string, verdict: string }
-        reviewPath: string
-      }
-    }
-    expect(promoteBody.profileRevision.profilePath).toBe('README.md')
-    expect(promoteBody.profileRevision.review.verdict).toBe('pass')
-    expect(promoteBody.profileRevision.review.artifactId).toBe(sessionBody.artifacts[0]!.id)
-    expect(promoteBody.profileRevision.reviewPath).toMatch(/^reviews\/.+\.md$/)
+    expect(promoteRes.status).toBe(404)
 
-    const profileRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile`)
-    expect(profileRes.status).toBe(200)
-    expect(await profileRes.text()).toContain('Approved Profile')
-
-    const rejectPromotionRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile-revisions`, {
+    expect((await target.request('/api/local/reviews')).status).toBe(404)
+    expect((await target.request('/api/local/reviews', {
       method: 'POST',
-      body: JSON.stringify({
-        artifactId: sessionBody.artifacts[0]!.id,
-        verdict: 'needs_review',
-      }),
+      body: JSON.stringify({ workspaceId: workspaceBody.workspace.id }),
       headers: { 'content-type': 'application/json' },
-    })
-    expect(rejectPromotionRes.status).toBe(400)
-
-    const invalidDraftPromotionRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile-revisions`, {
+    })).status).toBe(404)
+    expect((await target.request('/api/local/lessons')).status).toBe(404)
+    expect((await target.request('/api/local/lessons', {
       method: 'POST',
-      body: JSON.stringify({
-        artifactId: sessionBody.artifacts[0]!.id,
-        verdict: 'pass',
-      }),
+      body: JSON.stringify({ statement: 'old generic lesson', workspaceId: workspaceBody.workspace.id }),
       headers: { 'content-type': 'application/json' },
-    })
-    expect(invalidDraftPromotionRes.status).toBe(400)
-    expect(await invalidDraftPromotionRes.json()).toMatchObject({
-      error: {
-        code: 'PROFILE_REVISION_REJECTED',
-      },
-    })
+    })).status).toBe(404)
   })
 
   it('mounts enabled Soul App manifests into app, soul, template, worker, and session surfaces', async () => {
@@ -388,19 +526,16 @@ describe('local daemon API', () => {
     const appsBody = await (await target.request('/api/local/apps')).json() as { apps: Array<{ appId: string, status: string }> }
     expect(appsBody.apps).toEqual(expect.arrayContaining([expect.objectContaining({ appId: 'aiworker-hr', status: 'enabled' })]))
 
-    const soulsBody = await (await target.request('/api/local/souls')).json() as { souls: Array<{ id: string, status: string }> }
-    expect(soulsBody.souls).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'aiworker-hr', status: 'available' })]))
-
-    const capabilityId = HR_CANDIDATE_SCREEN
-    const templatesBody = await (await target.request('/api/local/templates?soulId=aiworker-hr')).json() as { templates: Array<{ id: string, soulId: string }> }
-    expect(templatesBody.templates).toEqual(expect.arrayContaining([expect.objectContaining({ id: capabilityId, soulId: 'aiworker-hr' })]))
-
     const workerRes = await target.request('/api/local/workers', {
       method: 'POST',
       body: JSON.stringify({ id: 'mounted-hr-worker', soulId: 'aiworker-hr', name: 'Mounted HR' }),
       headers: { 'content-type': 'application/json' },
     })
     expect(workerRes.status).toBe(201)
+    const capabilityId = HR_CANDIDATE_SCREEN
+    const workerTemplatesBody = await (await target.request('/api/local/workers/mounted-hr-worker/templates')).json() as { templates: Array<{ id: string, soulId: string }> }
+    expect(workerTemplatesBody.templates).toEqual(expect.arrayContaining([expect.objectContaining({ id: capabilityId, soulId: 'aiworker-hr' })]))
+
     const workspaceBody = await (await target.request('/api/local/workers/mounted-hr-worker/workspaces', {
       method: 'POST',
       body: JSON.stringify({ name: 'Mounted HR workspace', type: 'people-profile' }),
@@ -420,7 +555,6 @@ describe('local daemon API', () => {
     expect(sessionRes.status).toBe(201)
     const sessionBody = await sessionRes.json() as { session: { capabilityTemplateId: string, metadataJson: Record<string, unknown> } }
     expect(sessionBody.session.capabilityTemplateId).toBe(capabilityId)
-    expect(sessionBody.session.metadataJson.soulAppId).toBe('aiworker-hr')
 
     const mountedApiRes = await target.request('/api/local/apps/aiworker-hr/domain')
     expect(mountedApiRes.status).toBe(424)
@@ -428,7 +562,7 @@ describe('local daemon API', () => {
 
     const disableRes = await target.request('/api/local/apps/aiworker-hr/disable', { method: 'POST' })
     expect(disableRes.status).toBe(200)
-    const disabledTemplatesBody = await (await target.request('/api/local/templates?soulId=aiworker-hr')).json() as { templates: unknown[] }
+    const disabledTemplatesBody = await (await target.request('/api/local/workers/mounted-hr-worker/templates')).json() as { templates: unknown[] }
     expect(disabledTemplatesBody.templates).toEqual([])
 
     const blockedSessionRes = await target.request(`/api/local/workers/mounted-hr-worker/workspaces/${workspaceBody.workspace.id}/sessions`, {
@@ -466,18 +600,8 @@ describe('local daemon API', () => {
             routePrefix: request.headers.get('x-aiworker-route-prefix'),
           })
         }
-        if (url.pathname === '/surfaces/routes/hr-home') {
-          return Response.json({
-            appId: request.headers.get('x-aiworker-app-id'),
-            context: request.headers.get('x-aiworker-mount-context'),
-            renderer: 'host-descriptor',
-            signature: request.headers.get('x-aiworker-mount-signature'),
-            title: 'HR Mounted Workbench',
-            type: 'aiworker.surface.descriptor.v1',
-          })
-        }
-        if (url.pathname === '/frames/widgets/hr-people-widget') {
-          return new Response('<!doctype html><html><body><h1>HR frame</h1></body></html>', {
+        if (url.pathname === '/micro-app/widgets/hr-people-widget') {
+          return new Response('<!doctype html><html><body><h1>HR micro-app</h1></body></html>', {
             headers: { 'content-type': 'text/html; charset=utf-8' },
           })
         }
@@ -535,26 +659,43 @@ describe('local daemon API', () => {
       expect(mountedApiBody.mountContext).toBeTruthy()
       expect(mountedApiBody.mountSignature).toMatch(/^[a-f0-9]{64}$/)
 
-      const surfaceRes = await target.request('/api/local/apps/aiworker-hr/surfaces/hr-home')
+      const surfaceRes = await target.request('/api/local/apps/aiworker-hr/surfaces/hr-home?theme=light')
       expect(surfaceRes.status).toBe(200)
-      const surfaceBody = await surfaceRes.json() as { context: string | null, renderer: string, signature: string | null, title: string }
-      expect(surfaceBody).toMatchObject({ renderer: 'host-descriptor', title: 'HR Mounted Workbench' })
-      expect(surfaceBody.context).toBeTruthy()
-      expect(surfaceBody.signature).toMatch(/^[a-f0-9]{64}$/)
+      const surfaceBody = await surfaceRes.json() as { microApp: { data: Record<string, unknown>, name: string, url: string }, surface: { renderer: string } }
+      expect(surfaceBody).toMatchObject({
+        microApp: {
+          data: {
+            appId: 'aiworker-hr',
+            mountTokenPresent: true,
+            surfaceId: 'hr-home',
+            theme: 'light',
+          },
+          name: 'aiworker-hr--hr-home',
+          url: '/api/local/apps/aiworker-hr/micro-app/routes/hr-home?theme=light',
+        },
+        surface: { renderer: 'micro-app' },
+      })
+      expect(surfaceBody).not.toHaveProperty('frame')
 
-      const frameRes = await target.request('/api/local/apps/aiworker-hr/surfaces/hr-people-widget')
-      expect(frameRes.status).toBe(200)
-      const frameBody = await frameRes.json() as { frame: { sandbox: string, url: string }, surface: { renderer: string } }
-      expect(frameBody.surface.renderer).toBe('sandboxed-frame')
-      expect(frameBody.frame.sandbox).toBe('allow-scripts allow-forms')
-      expect(frameBody.frame.url).toBe('/api/local/apps/aiworker-hr/frames/widgets/hr-people-widget')
+      const widgetRes = await target.request('/api/local/apps/aiworker-hr/surfaces/hr-people-widget?theme=dark')
+      expect(widgetRes.status).toBe(200)
+      const widgetBody = await widgetRes.json() as { microApp: { data: Record<string, unknown>, name: string, url: string }, surface: { renderer: string } }
+      expect(widgetBody.surface.renderer).toBe('micro-app')
+      expect(widgetBody.microApp.name).toBe('aiworker-hr--hr-people-widget')
+      expect(widgetBody.microApp.url).toBe('/api/local/apps/aiworker-hr/micro-app/widgets/hr-people-widget?theme=dark')
+      expect(widgetBody.microApp.data).toMatchObject({
+        appId: 'aiworker-hr',
+        surfaceId: 'hr-people-widget',
+        surfaceScope: 'workspace',
+        theme: 'dark',
+      })
     }
     finally {
       mountedService.stop()
     }
   })
 
-  it('invokes declared Soul App workbench actions and search through generic Host endpoints', async () => {
+  it('proxies app-owned mounted API paths instead of Host workbench action/search routes', async () => {
     const target = await app()
     let actionMountContext: Record<string, unknown> | null = null
     const mountedService = Bun.serve({
@@ -647,7 +788,7 @@ describe('local daemon API', () => {
         headers: { 'content-type': 'application/json' },
       })).json() as { workspace: { id: string } }
 
-      const actionRes = await target.request('/api/local/apps/aiworker-hr/actions/create-people-profile', {
+      const hostActionRes = await target.request('/api/local/apps/aiworker-hr/actions/create-people-profile', {
         method: 'POST',
         body: JSON.stringify({
           input: { source: 'test' },
@@ -659,18 +800,23 @@ describe('local daemon API', () => {
         }),
         headers: { 'content-type': 'application/json' },
       })
+      expect(hostActionRes.status).not.toBe(200)
+
+      const hostSearchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada&limit=2')
+      expect(hostSearchRes.status).not.toBe(200)
+
+      const actionRes = await target.request(`/api/local/apps/aiworker-hr/protocol/actions?operatorId=operator-local&workerId=${workerBody.worker.id}&workspaceId=${workspaceBody.workspace.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ input: { source: 'test' }, protocolAction: 'peopleProfiles.create' }),
+        headers: { 'content-type': 'application/json' },
+      })
       expect(actionRes.status).toBe(200)
       expect(await actionRes.json()).toMatchObject({
-        action: {
-          id: 'create-people-profile',
-          protocolAction: 'peopleProfiles.create',
-        },
-        result: {
-          message: 'App-owned action result',
-          ok: true,
-          redirectTo: '/hr/people',
-          refresh: true,
-        },
+        message: 'App-owned action result',
+        ok: true,
+        protocolAction: 'peopleProfiles.create',
+        redirectTo: '/hr/people',
+        refresh: true,
       })
       expect(actionMountContext).toMatchObject({
         operatorId: 'operator-local',
@@ -678,7 +824,7 @@ describe('local daemon API', () => {
         workspaceId: workspaceBody.workspace.id,
       })
 
-      const searchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada&limit=2')
+      const searchRes = await target.request('/api/local/apps/aiworker-hr/protocol/search?providerId=peopleProfiles.search&query=ada&limit=2')
       expect(searchRes.status).toBe(200)
       expect(await searchRes.json()).toMatchObject({
         items: [
@@ -698,16 +844,16 @@ describe('local daemon API', () => {
     }
   })
 
-  it('rejects workbench action and search when descriptor permissions are not granted before mounted calls', async () => {
+  it('does not expose Host workbench action and search routes as product API', async () => {
     const target = await app()
-    let protocolCalls = 0
+    const protocolCalls: string[] = []
     const mountedService = Bun.serve({
       fetch(request) {
         const url = new URL(request.url)
         if (url.pathname === '/health')
           return Response.json({ status: 'ok' })
         if (url.pathname === '/protocol/actions' || url.pathname === '/protocol/search') {
-          protocolCalls += 1
+          protocolCalls.push(url.pathname)
           return Response.json({ ok: true })
         }
         return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
@@ -756,42 +902,59 @@ describe('local daemon API', () => {
       expect((await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })).status).toBe(200)
 
       const actionRes = await target.request('/api/local/apps/aiworker-hr/actions/create-people-profile', { method: 'POST' })
-      expect(actionRes.status).toBe(403)
-      expect(await actionRes.json()).toMatchObject({
-        error: { code: 'PERMISSION_DENIED' },
-      })
+      expect(actionRes.status).not.toBe(200)
 
       const searchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada')
-      expect(searchRes.status).toBe(403)
-      expect(await searchRes.json()).toMatchObject({
-        error: { code: 'PERMISSION_DENIED' },
-      })
-      expect(protocolCalls).toBe(0)
+      expect(searchRes.status).not.toBe(200)
+      expect(protocolCalls).toEqual([])
     }
     finally {
       mountedService.stop()
     }
   })
 
-  it('rejects undeclared Soul App workbench actions and search providers', async () => {
+  it('rejects undeclared mounted API paths through the app-owned proxy', async () => {
     const target = await app()
-    await target.request('/api/local/apps/install', {
-      method: 'POST',
-      body: JSON.stringify({ manifest: hrSoulAppManifest }),
-      headers: { 'content-type': 'application/json' },
+    const mountedService = Bun.serve({
+      fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname === '/health')
+          return Response.json({ status: 'ok' })
+        return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
+      },
+      hostname: '127.0.0.1',
+      port: 0,
     })
-    await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })
 
-    const actionRes = await target.request('/api/local/apps/aiworker-hr/actions/delete-all-people', { method: 'POST' })
-    expect(actionRes.status).toBe(404)
-    expect(await actionRes.json()).toMatchObject({ error: { code: 'SOUL_APP_ACTION_NOT_DECLARED' } })
+    try {
+      await target.request('/api/local/apps/install', {
+        method: 'POST',
+        body: JSON.stringify({
+          manifest: {
+            ...hrSoulAppManifest,
+            api: {
+              ...hrSoulAppManifest.api,
+              localService: {
+                baseUrl: `http://127.0.0.1:${mountedService.port}`,
+                healthPath: '/health',
+              },
+            },
+          },
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+      await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })
 
-    const searchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=people.internal&query=ada')
-    expect(searchRes.status).toBe(404)
-    expect(await searchRes.json()).toMatchObject({ error: { code: 'SOUL_APP_SEARCH_NOT_DECLARED' } })
+      const res = await target.request('/api/local/apps/aiworker-hr/actions/delete-all-people', { method: 'POST' })
+      expect(res.status).toBe(404)
+      expect(await res.json()).toMatchObject({ error: { code: 'NOT_FOUND' } })
+    }
+    finally {
+      mountedService.stop()
+    }
   })
 
-  it('rejects action and search invocation for disabled Soul Apps', async () => {
+  it('rejects disabled Soul Apps before proxying app-owned mounted API paths', async () => {
     const target = await app()
     await target.request('/api/local/apps/install', {
       method: 'POST',
@@ -799,13 +962,9 @@ describe('local daemon API', () => {
       headers: { 'content-type': 'application/json' },
     })
 
-    const actionRes = await target.request('/api/local/apps/aiworker-hr/actions/create-people-profile', { method: 'POST' })
-    expect(actionRes.status).toBe(409)
-    expect(await actionRes.json()).toMatchObject({ error: { code: 'SOUL_APP_DISABLED' } })
-
-    const searchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada')
-    expect(searchRes.status).toBe(409)
-    expect(await searchRes.json()).toMatchObject({ error: { code: 'SOUL_APP_DISABLED' } })
+    const res = await target.request('/api/local/apps/aiworker-hr/protocol/actions', { method: 'POST' })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ error: { code: 'SOUL_APP_DISABLED' } })
   })
 
   it('healthchecks declared mounted service base URLs before proxying', async () => {
@@ -920,10 +1079,8 @@ const server = Bun.serve({
     const url = new URL(request.url)
     if (url.pathname === '/health')
       return Response.json({ status: 'ok' })
-    if (url.pathname === '/surfaces/routes/hr-home' || url.pathname === '/surfaces/panels/hr-profile-panel')
-      return Response.json({ renderer: 'host-descriptor', title: url.pathname })
-    if (url.pathname === '/frames/widgets/hr-people-widget')
-      return new Response('<!doctype html><html><body>HR frame</body></html>', { headers: { 'content-type': 'text/html' } })
+    if (url.pathname === '/micro-app/widgets/hr-people-widget')
+      return new Response('<!doctype html><html><body>HR micro-app</body></html>', { headers: { 'content-type': 'text/html' } })
     return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
   },
   hostname: '127.0.0.1',
@@ -956,18 +1113,26 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
 
     const responses = await Promise.all([
       target.request('/api/local/apps/aiworker-hr/surfaces/hr-home'),
-      target.request('/api/local/apps/aiworker-hr/surfaces/hr-profile-panel'),
       target.request('/api/local/apps/aiworker-hr/surfaces/hr-people-widget'),
     ])
 
-    expect(responses.map(response => response.status)).toEqual([200, 200, 200])
+    expect(responses.map(response => response.status)).toEqual([200, 200])
+    expect((await target.request('/api/local/apps/aiworker-hr/surfaces/hr-profile-panel')).status).toBe(404)
     const descriptorBody = await responses[0].json() as Record<string, unknown>
     expect(descriptorBody).toMatchObject({
-      appId: 'aiworker-hr',
-      authority: 'soul-app',
-      cache: { freshness: 'non-authoritative' },
-      renderer: 'host-descriptor',
-      title: '/surfaces/routes/hr-home',
+      microApp: {
+        data: {
+          appId: 'aiworker-hr',
+          mountTokenPresent: true,
+          surfaceId: 'hr-home',
+        },
+        name: 'aiworker-hr--hr-home',
+        url: '/api/local/apps/aiworker-hr/micro-app/routes/hr-home',
+      },
+      surface: {
+        id: 'hr-home',
+        renderer: 'micro-app',
+      },
     })
     expect(descriptorBody).not.toHaveProperty('candidateRisk')
     expect(descriptorBody).not.toHaveProperty('profileCompleteness')
@@ -976,134 +1141,18 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect((await target.request('/api/local/apps/aiworker-hr/disable', { method: 'POST' })).status).toBe(200)
   })
 
-  it('exposes only brokered Soul App storage, connector, audit, and engine-denial routes', async () => {
+  it('does not expose Host broker routes as product API', async () => {
     const target = await app()
-    const settingsBody = await (await target.request('/api/local/settings')).json() as { settings: { connectors: Array<{ enabled: boolean, id: string, name: string, status: string }> } }
-    await target.request('/api/local/settings', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        connectors: settingsBody.settings.connectors.map(connector =>
-          connector.id === 'ats' ? { ...connector, enabled: true, status: 'configured' } : connector,
-        ),
-      }),
-      headers: { 'content-type': 'application/json' },
-    })
-    await target.request('/api/local/apps/install', {
-      method: 'POST',
-      body: JSON.stringify({
-        manifest: {
-          ...hrSoulAppManifest,
-          permissions: [
-            ...hrSoulAppManifest.permissions,
-            { action: 'read', kind: 'search', reason: 'Read app-owned index descriptors.', target: 'aiworker-hr' },
-            { action: 'write', kind: 'search', reason: 'Write app-owned index descriptors.', target: 'aiworker-hr' },
-          ],
-        },
-      }),
-      headers: { 'content-type': 'application/json' },
-    })
-    await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })
-    const workerBody = await (await target.request('/api/local/workers', {
-      method: 'POST',
-      body: JSON.stringify({ id: 'broker-hr-worker', soulId: 'aiworker-hr', name: 'Broker HR' }),
-      headers: { 'content-type': 'application/json' },
-    })).json() as { worker: { id: string } }
-    const workspaceBody = await (await target.request('/api/local/workers/broker-hr-worker/workspaces', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'Broker HR workspace', type: 'people-profile' }),
-      headers: { 'content-type': 'application/json' },
-    })).json() as { workspace: { id: string } }
-    const contextQuery = `workspaceId=${workspaceBody.workspace.id}&workerId=${workerBody.worker.id}&operatorId=operator-local`
 
-    const putRes = await target.request(`/api/local/apps/aiworker-hr/broker/storage/profiles/ada?${contextQuery}`, {
+    const providersRes = await target.request('/api/local/apps/aiworker-hr/broker/providers')
+    expect(providersRes.status).not.toBe(200)
+
+    const storageRes = await target.request('/api/local/apps/aiworker-hr/broker/storage/profiles/ada', {
       method: 'PUT',
-      body: JSON.stringify({ valueJson: { name: 'Ada', status: 'candidate' } }),
+      body: JSON.stringify({ valueJson: { name: 'Ada' } }),
       headers: { 'content-type': 'application/json' },
     })
-    expect(putRes.status).toBe(200)
-    expect(await putRes.json()).toMatchObject({ record: { namespace: 'aiworker-hr', valueJson: { name: 'Ada' } } })
-
-    const deniedStorageRes = await target.request(`/api/local/apps/aiworker-hr/broker/storage/profiles/grace?${contextQuery}`, {
-      method: 'PUT',
-      body: JSON.stringify({ namespace: 'aiworker-qa', valueJson: { name: 'Grace' } }),
-      headers: { 'content-type': 'application/json' },
-    })
-    expect(deniedStorageRes.status).toBe(403)
-    expect(await deniedStorageRes.json()).toMatchObject({ error: { code: 'PERMISSION_DENIED' } })
-
-    const connectorRes = await target.request(`/api/local/apps/aiworker-hr/broker/connectors/ats/evidence?${contextQuery}`, {
-      method: 'POST',
-      body: JSON.stringify({ query: { candidateId: 'cand-1' } }),
-      headers: { 'content-type': 'application/json' },
-    })
-    expect(connectorRes.status).toBe(200)
-    const connectorBody = await connectorRes.json() as { evidence: unknown }
-    expect(connectorBody).toMatchObject({ evidence: { connectorId: 'ats', redacted: true } })
-    expect(JSON.stringify(connectorBody)).not.toContain('token')
-
-    const providersRes = await target.request(`/api/local/apps/aiworker-hr/broker/providers?${contextQuery}`)
-    expect(providersRes.status).toBe(200)
-    const providersBody = await providersRes.json() as {
-      registry: {
-        providers: Array<{ configured: boolean, enabled: boolean, id: string, kind: string, status: string }>
-        summary: { activeCount: number, plannedCount: number }
-      }
-    }
-    expect(providersBody.registry.providers).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'storage.local-sqlite', kind: 'storage', status: 'active' }),
-      expect.objectContaining({ id: 'storage.s3', kind: 'storage', status: 'planned' }),
-      expect.objectContaining({ id: 'storage.gcp-bucket', kind: 'storage', status: 'planned' }),
-      expect.objectContaining({ id: 'audit.local-sqlite', kind: 'audit', status: 'active' }),
-      expect.objectContaining({ id: 'secret.vault-ref', kind: 'secret', status: 'planned' }),
-      expect.objectContaining({ configured: true, enabled: true, id: 'connector.ats', kind: 'connector', status: 'active' }),
-    ]))
-    expect(providersBody.registry.summary.plannedCount).toBe(3)
-    expect(JSON.stringify(providersBody)).not.toContain('token')
-
-    const searchWriteRes = await target.request(`/api/local/apps/aiworker-hr/broker/search/profiles/ada?${contextQuery}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        kind: 'people-profile',
-        reference: { id: 'profile-ada', type: 'profile' },
-        summary: 'Compiler pioneer.',
-        title: 'Ada Lovelace',
-      }),
-      headers: { 'content-type': 'application/json' },
-    })
-    expect(searchWriteRes.status).toBe(200)
-    expect(await searchWriteRes.json()).toMatchObject({
-      item: {
-        authority: 'soul-app',
-        cache: { freshness: 'non-authoritative' },
-        id: 'profiles/ada',
-        title: 'Ada Lovelace',
-      },
-    })
-
-    const searchIndexRes = await target.request(`/api/local/apps/aiworker-hr/broker/search?query=compiler&${contextQuery}`)
-    expect(searchIndexRes.status).toBe(200)
-    expect(await searchIndexRes.json()).toMatchObject({
-      result: {
-        items: [
-          expect.objectContaining({
-            id: 'profiles/ada',
-            reference: { id: 'profile-ada', type: 'profile' },
-          }),
-        ],
-      },
-    })
-
-    const engineRes = await target.request(`/api/local/apps/aiworker-hr/broker/engine/invocations?${contextQuery}`, {
-      method: 'POST',
-      body: JSON.stringify({ prompt: 'call engine directly' }),
-      headers: { 'content-type': 'application/json' },
-    })
-    expect(engineRes.status).toBe(403)
-    expect(await engineRes.json()).toMatchObject({ error: { code: 'ENGINE_OWNED_BY_HOST' } })
-
-    const auditBody = await (await target.request('/api/local/apps/aiworker-hr/broker/audit')).json() as { events: Array<{ decision: string, targetKind: string }> }
-    expect(auditBody.events.map(event => event.targetKind)).toEqual(['storage', 'storage', 'connector', 'search', 'search', 'engine'])
-    expect(auditBody.events.map(event => event.decision)).toEqual(['allowed', 'denied', 'allowed', 'allowed', 'allowed', 'denied'])
+    expect(storageRes.status).not.toBe(200)
   })
 
   it('requires bearer auth only when a workspace token is configured', async () => {
@@ -1115,21 +1164,9 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     })).status).toBe(200)
   })
 
-  it('projects authenticated local identity into broker scope and signed mount context', async () => {
+  it('projects authenticated local identity into signed mount context', async () => {
     const target = await app('local-token-123456')
     const authHeaders = { authorization: 'Bearer local-token-123456' }
-
-    const writeRes = await target.request('/api/local/apps/aiworker-hr/broker/storage/identity/probe?operatorId=spoofed-operator', {
-      method: 'PUT',
-      body: JSON.stringify({ valueJson: { ok: true } }),
-      headers: { ...authHeaders, 'content-type': 'application/json' },
-    })
-    expect(writeRes.status).toBe(200)
-    expect(await writeRes.json()).toMatchObject({
-      record: {
-        operatorId: 'operator-local',
-      },
-    })
 
     const mountedService = Bun.serve({
       fetch(request) {
@@ -1184,7 +1221,6 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
       expect(mountedBody.authorization).toBeNull()
       expect(mountedBody.cookie).toBeNull()
       const mountContext = JSON.parse(Buffer.from(mountedBody.mountContext, 'base64url').toString('utf8')) as {
-        brokerGrants: unknown[]
         identity: { authMethod: string, operatorId: string, providerId: string }
         operatorId: string
       }
@@ -1194,14 +1230,15 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
         operatorId: 'operator-local',
         providerId: 'local-bearer',
       })
-      expect(mountContext.brokerGrants.length).toBeGreaterThan(0)
+      expect(mountContext).not.toHaveProperty('brokerGrants')
+      expect(mountContext).not.toHaveProperty('brokerUrl')
     }
     finally {
       mountedService.stop()
     }
   })
 
-  it('accepts a Host-issued mount token for the owning app broker only', async () => {
+  it('passes a Host-issued mount token only to the mounted app proxy', async () => {
     const target = await app('local-token-123456')
     const authHeaders = { authorization: 'Bearer local-token-123456' }
     const mountedService = Bun.serve({
@@ -1250,7 +1287,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
       const mountedBody = await mountedRes.json() as { mountToken: string | null }
       expect(mountedBody.mountToken).toMatch(/^[a-f0-9-]{36}$/)
 
-      const writeRes = await target.request('/api/local/apps/aiworker-hr/broker/storage/mount-token/probe?operatorId=mounted-app', {
+      const brokerRes = await target.request('/api/local/apps/aiworker-hr/broker/storage/mount-token/probe?operatorId=mounted-app', {
         method: 'PUT',
         body: JSON.stringify({ valueJson: { ok: true } }),
         headers: {
@@ -1258,33 +1295,10 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
           'x-aiworker-mount-token': mountedBody.mountToken ?? '',
         },
       })
-      expect(writeRes.status).toBe(200)
-      expect(await writeRes.json()).toMatchObject({
-        record: {
-          appId: 'aiworker-hr',
-          key: 'mount-token/probe',
-          operatorId: 'mounted-app',
-        },
-      })
+      expect(brokerRes.status).not.toBe(200)
 
       expect((await target.request('/api/local/info', {
         headers: { 'x-aiworker-mount-token': mountedBody.mountToken ?? '' },
-      })).status).toBe(401)
-      expect((await target.request('/api/local/apps/aiworker-qa/broker/storage/mount-token/probe', {
-        method: 'PUT',
-        body: JSON.stringify({ valueJson: { ok: true } }),
-        headers: {
-          'content-type': 'application/json',
-          'x-aiworker-mount-token': mountedBody.mountToken ?? '',
-        },
-      })).status).toBe(401)
-      expect((await target.request('/api/local/apps/aiworker-hr/broker/storage/mount-token/probe', {
-        method: 'PUT',
-        body: JSON.stringify({ valueJson: { ok: true } }),
-        headers: {
-          'content-type': 'application/json',
-          'x-aiworker-mount-token': 'not-the-issued-token',
-        },
       })).status).toBe(401)
     }
     finally {
@@ -1403,7 +1417,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(body).toContain('event: result')
   })
 
-  it('documents only the workspace/session API surface', async () => {
+  it('documents the local Host API surface without retired control routes', async () => {
     const target = await app()
     const doc = await (await target.request('/openapi.json')).json() as { paths: Record<string, unknown> }
     const paths = Object.keys(doc.paths)
@@ -1411,23 +1425,38 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(paths).toContain('/api/local/info')
     expect(paths).toContain('/api/local/apps')
     expect(paths).toContain('/api/local/apps/install')
-    expect(paths).toContain('/api/local/apps/{appId}/security-review')
+    expect(paths).not.toContain('/api/local/apps/{appId}/security-review')
     expect(paths).toContain('/api/local/apps/{appId}/enable')
-    expect(paths).toContain('/api/local/apps/{appId}/actions/{actionId}')
-    expect(paths).toContain('/api/local/apps/{appId}/search')
-    expect(paths).toContain('/api/local/apps/{appId}/broker/providers')
-    expect(paths).toContain('/api/local/apps/{appId}/broker/search')
-    expect(paths).toContain('/api/local/apps/{appId}/broker/search/{itemId}')
+    expect(paths).not.toContain('/api/local/apps/{appId}/actions/{actionId}')
+    expect(paths).not.toContain('/api/local/apps/{appId}/search')
+    expect(paths).toContain('/api/local/apps/{appId}/{path}')
+    expect(paths.some(path => path.includes('/broker/'))).toBe(false)
     expect(paths).toContain('/api/local/workers')
     expect(paths).toContain('/api/local/workers/{workerId}')
+    expect(paths).toContain('/api/local/workers/{workerId}/overlay')
+    expect(paths).toContain('/api/local/workers/{workerId}/engine/invocations')
+    expect(paths).toContain('/api/local/workers/{workerId}/engine/invocations/stream')
     expect(paths).toContain('/api/local/workers/{workerId}/templates')
     expect(paths).toContain('/api/local/souls')
     expect(paths).toContain('/api/local/templates')
+    expect(paths).not.toContain('/api/local/artifacts')
+    expect(paths).not.toContain('/api/local/workers/{workerId}/artifacts')
+    expect(paths).not.toContain('/api/local/workspaces/{workspaceId}/artifacts')
+    expect(paths).not.toContain('/api/local/artifacts/{id}')
+    expect(paths).not.toContain('/api/local/files')
+    expect(paths).not.toContain('/api/local/workers/{workerId}/files')
+    expect(paths).not.toContain('/api/local/workspaces/{workspaceId}/files')
+    expect(paths).not.toContain('/api/local/events')
     expect(paths).toContain('/api/local/workers/{workerId}/workspaces')
+    expect(paths).toContain('/api/local/workers/{workerId}/workspaces/{workspaceId}/projection')
     expect(paths).toContain('/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions')
     expect(paths).toContain('/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions/stream')
-    expect(paths).toContain('/api/local/workspaces/{workspaceId}/profile')
-    expect(paths).toContain('/api/local/workspaces/{workspaceId}/profile-revisions')
+    expect(paths).not.toContain('/api/local/workspaces/{workspaceId}/profile')
+    expect(paths).not.toContain('/api/local/workspaces/{workspaceId}/profile-revisions')
+    expect(paths).not.toContain('/api/local/reviews')
+    expect(paths).not.toContain('/api/local/reviews/{id}')
+    expect(paths).not.toContain('/api/local/lessons')
+    expect(paths).not.toContain('/api/local/lessons/{id}')
     expect(paths).toContain('/api/local/workers/{workerId}/sessions/{sessionId}/messages')
     expect(paths).toContain('/api/local/settings/engines/rescan')
     expect(paths.some(path => path.includes('/runs'))).toBe(false)

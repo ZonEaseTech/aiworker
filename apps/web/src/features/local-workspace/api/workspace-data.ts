@@ -1,23 +1,17 @@
 import type {
-  CapabilityTemplate,
-  LocalArtifact,
-  LocalFile,
-  LocalLesson,
-  LocalReview,
   LocalSession,
-  LocalSessionEvent,
   LocalSettingsConfig,
   LocalTurn,
   LocalWorker,
   LocalWorkspace,
-  VerticalSoul,
 } from '@zonease/aiworker-shared'
-import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppActionResponse, LocalSoulAppActionScope, LocalSoulAppLifecycleResponse, LocalSoulAppSearchResponse, LocalSoulAppSecurityReview, LocalWorkspaceData } from './types'
+import type { CapabilityTemplate, VerticalSoul } from '../types.compat'
+import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppLifecycleResponse, LocalWorkspaceData } from './types'
 
 import { localJson } from '../../../shared/api/local-client'
 
 export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
-  const [info, apps, workers, souls, templates, workspaces, sessions, turns, files, artifacts, reviews, lessons, events, settings] = await Promise.all([
+  const [info, apps, workers, souls, templates, workspaces, sessions, turns, settings] = await Promise.all([
     localJson<LocalInfoResponse>('/api/local/info'),
     localJson<{ apps: LocalHostedSoulApp[] }>('/api/local/apps'),
     localJson<{ workers: LocalWorker[] }>('/api/local/workers'),
@@ -26,11 +20,6 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
     localJson<{ workspaces: LocalWorkspace[] }>('/api/local/workspaces'),
     localJson<{ sessions: LocalSession[] }>('/api/local/sessions'),
     localJson<{ turns: LocalTurn[] }>('/api/local/turns'),
-    localJson<{ files: LocalFile[] }>('/api/local/files'),
-    localJson<{ artifacts: LocalArtifact[] }>('/api/local/artifacts'),
-    localJson<{ reviews: LocalReview[] }>('/api/local/reviews'),
-    localJson<{ lessons: LocalLesson[] }>('/api/local/lessons'),
-    localJson<{ events: LocalSessionEvent[] }>('/api/local/events'),
     localJson<{ settings: LocalSettingsConfig }>('/api/local/settings'),
   ])
   return {
@@ -42,24 +31,29 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
     workspaces: workspaces.workspaces,
     sessions: sessions.sessions,
     turns: turns.turns,
-    files: files.files,
-    artifacts: artifacts.artifacts,
-    reviews: reviews.reviews,
-    lessons: lessons.lessons,
-    events: events.events,
     settings: settings.settings,
   }
 }
 
-export async function resolveMountedSurface<T>(appId: string, surfaceId: string): Promise<T> {
-  return localJson<T>(`/api/local/apps/${appId}/surfaces/${surfaceId}`)
+export interface ResolveMountedSurfaceOptions {
+  sessionId?: string | null
+  theme?: string
+  workerId?: string | null
+  workspaceId?: string | null
 }
 
-export async function invokeSoulAppAction(appId: string, actionId: string, input?: unknown, scope?: LocalSoulAppActionScope): Promise<LocalSoulAppActionResponse> {
-  return localJson<LocalSoulAppActionResponse>(`/api/local/apps/${appId}/actions/${actionId}`, {
-    body: JSON.stringify({ input, scope }),
-    method: 'POST',
-  })
+export async function resolveMountedSurface<T>(appId: string, surfaceId: string, options: ResolveMountedSurfaceOptions = {}): Promise<T> {
+  const params = new URLSearchParams()
+  if (options.workerId)
+    params.set('workerId', options.workerId)
+  if (options.workspaceId)
+    params.set('workspaceId', options.workspaceId)
+  if (options.sessionId)
+    params.set('sessionId', options.sessionId)
+  if (options.theme)
+    params.set('theme', options.theme)
+  const query = params.toString()
+  return localJson<T>(`/api/local/apps/${appId}/surfaces/${surfaceId}${query ? `?${query}` : ''}`)
 }
 
 export async function enableSoulApp(appId: string): Promise<LocalSoulAppLifecycleResponse> {
@@ -68,22 +62,8 @@ export async function enableSoulApp(appId: string): Promise<LocalSoulAppLifecycl
   })
 }
 
-export async function reviewSoulAppSecurity(appId: string): Promise<LocalSoulAppSecurityReview> {
-  return localJson<LocalSoulAppSecurityReview>(`/api/local/apps/${appId}/security-review`)
-}
-
 export async function disableSoulApp(appId: string): Promise<LocalSoulAppLifecycleResponse> {
   return localJson<LocalSoulAppLifecycleResponse>(`/api/local/apps/${appId}/disable`, {
     method: 'POST',
   })
-}
-
-export async function searchSoulApp(appId: string, providerId: string, query: string, limit?: number): Promise<LocalSoulAppSearchResponse> {
-  const params = new URLSearchParams({
-    providerId,
-    query,
-  })
-  if (limit !== undefined)
-    params.set('limit', String(limit))
-  return localJson<LocalSoulAppSearchResponse>(`/api/local/apps/${appId}/search?${params.toString()}`)
 }

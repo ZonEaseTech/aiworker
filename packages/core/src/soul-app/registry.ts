@@ -1,4 +1,4 @@
-import type { CapabilityTemplate, HostedSoulApp, SoulAppHealthStatus, SoulAppInstallSourceKind, SoulAppManifest, SoulAppManifestValidationIssue, VerticalSoul } from '@zonease/aiworker-shared'
+import type { HostedSoulApp, SoulAppHealthStatus, SoulAppInstallSourceKind, SoulAppManifest, SoulAppManifestValidationIssue } from '@zonease/aiworker-shared'
 import type { SoulAppRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { createHash } from 'node:crypto'
@@ -17,6 +17,27 @@ import {
   updateSoulAppLifecycle,
   upsertSoulApp,
 } from '@zonease/aiworker-storage-sqlite/worker'
+
+// -- inlined from deleted shared types --
+interface CapabilityTemplate {
+  description: string
+  id: string
+  inputHints: readonly string[]
+  name: string
+  outputKind: string
+  prompt: string
+  reviewRubric: readonly string[]
+  soulId: string
+}
+
+interface VerticalSoul {
+  defaultTemplates: readonly string[]
+  description: string
+  domain: string
+  id: string
+  name: string
+  status: 'available' | 'coming_soon'
+}
 
 const SEMVER_RE = /^\d+\.\d+\.\d+$/
 const DEFAULT_MANIFEST_FILENAME = 'soul-app.manifest.json'

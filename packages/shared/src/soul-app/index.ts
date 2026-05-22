@@ -8,7 +8,6 @@ export {
   parseSoulAppManifestJson,
   SOUL_APP_PROTOCOL,
   soulAppApiSchema,
-  soulAppArtifactTypeSchema,
   soulAppCapabilitySchema,
   soulAppCompatibilitySchema,
   soulAppConnectorAccessSchema,
@@ -29,8 +28,6 @@ export {
   soulAppMcpClientEngineAssetsSchema,
   soulAppMcpServerEngineAssetsSchema,
   soulAppMcpServerTransportSchema,
-  soulAppMemoryAdmissionPolicySchema,
-  soulAppMemorySchema,
   soulAppModeSchema,
   soulAppMountedSurfaceRendererSchema,
   soulAppMountedSurfaceSchema,
@@ -69,7 +66,6 @@ export {
 } from './manifest'
 export type {
   SoulAppApi,
-  SoulAppArtifactType,
   SoulAppCapability,
   SoulAppCompatibility,
   SoulAppConnectorAccess,
@@ -94,8 +90,6 @@ export type {
   SoulAppMcpClientEngineAssets,
   SoulAppMcpServerEngineAssets,
   SoulAppMcpServerTransport,
-  SoulAppMemory,
-  SoulAppMemoryAdmissionPolicy,
   SoulAppMode,
   SoulAppMountedSurface,
   SoulAppMountedSurfaceRenderer,
@@ -132,8 +126,10 @@ export type {
   SoulAppWorkspaceType,
 } from './manifest'
 export type {
-  SoulAppArtifactProtocol,
-  SoulAppArtifactValidationResult,
+  MountedMicroAppChildEvent,
+  MountedMicroAppHostData,
+} from './micro-app'
+export type {
   SoulAppConnectorProtocol,
   SoulAppEventProtocol,
   SoulAppIntentClassification,
@@ -142,30 +138,11 @@ export type {
   SoulAppProtocolActionResult,
   SoulAppProtocolHandlers,
   SoulAppProtocolResult,
-  SoulAppProtocolViewSummary,
-  SoulAppReviewProtocol,
-  SoulAppReviewRubric,
   SoulAppRuntimeProtocol,
   SoulAppScopedContext,
-  SoulAppSearchRequest,
-  SoulAppSearchResult,
   SoulAppSessionContext,
   SoulAppUiContributionProtocol,
 } from './protocol'
-export {
-  soulAppBrokerProviderKindSchema,
-  soulAppBrokerProviderRegistrySchema,
-  soulAppBrokerProviderRegistrySummarySchema,
-  soulAppBrokerProviderSchema,
-  soulAppBrokerProviderStatusSchema,
-} from './provider'
-export type {
-  SoulAppBrokerProvider,
-  SoulAppBrokerProviderKind,
-  SoulAppBrokerProviderRegistry,
-  SoulAppBrokerProviderRegistrySummary,
-  SoulAppBrokerProviderStatus,
-} from './provider'
 export {
   buildHostedSoulApp,
   hostedSoulAppSchema,

@@ -1,5 +1,4 @@
 import type {
-  SoulAppArtifactValidationResult,
   SoulAppCapability,
   SoulAppDefinition,
   SoulAppProtocolResult,
@@ -21,22 +20,6 @@ export const HR_REFERENCE_APP_BOUNDARY = {
 } as const
 
 export const hrReferenceSoulApp: SoulAppDefinition = defineSoulApp({
-  artifact: {
-    async artifactSchemas() {
-      return hrSoulAppManifest.artifactTypes
-    },
-    async extractMetadata(_context, artifact) {
-      return {
-        appId: hrSoulAppManifest.id,
-        contentRef: artifact.contentRef,
-        kind: artifact.type,
-        lifecycle: artifact.type === 'person-profile' ? 'people-profile' : 'recruiting',
-      }
-    },
-    async validateArtifact(_context, artifact) {
-      return validateArtifactType(artifact.type)
-    },
-  },
   connector: {
     async declareConnectorNeeds() {
       return [
@@ -47,29 +30,6 @@ export const hrReferenceSoulApp: SoulAppDefinition = defineSoulApp({
   },
   lifecycle: lifecycleHandlers('HR reference app ready.'),
   manifest: hrSoulAppManifest,
-  review: {
-    async createReviewRubric(_context, artifactType) {
-      return {
-        checks: [
-          `Artifact type ${artifactType} cites source evidence.`,
-          'Missing candidate or employee facts are explicit.',
-          'Human review notes separate risks, next actions, and memory candidates.',
-        ],
-        policyRef: hrSoulAppManifest.artifactTypes.find(type => type.id === artifactType)?.reviewPolicyRef,
-      }
-    },
-    async proposeMemoryCandidate(context, review) {
-      return {
-        evidence: [{
-          appId: context.appId,
-          artifactId: review.artifactId,
-          reviewId: review.reviewId,
-          source: 'hr-reference-app',
-        }],
-        statement: 'Promote reviewed HR evidence handling guidance into the HR Soul namespace.',
-      }
-    },
-  },
   runtime: {
     async prepareSessionContext(context, input) {
       const capability = resolveHrCapability(input.capabilityId)
@@ -81,7 +41,7 @@ export const hrReferenceSoulApp: SoulAppDefinition = defineSoulApp({
   },
   ui: {
     async artifactTypes() {
-      return hrSoulAppManifest.artifactTypes
+      return manifestJson.artifactTypes
     },
     async capabilities() {
       return hrSoulAppManifest.capabilities
@@ -129,14 +89,6 @@ function sessionContext(context: SoulAppScopedContext, capability: SoulAppCapabi
       'Risk and missing evidence are separated.',
       'Next action is concrete for a human HR reviewer.',
     ],
-  }
-}
-
-function validateArtifactType(type: string): SoulAppArtifactValidationResult {
-  const known = hrSoulAppManifest.artifactTypes.some(item => item.id === type)
-  return {
-    issues: known ? [] : [{ message: `Unknown HR artifact type: ${type}`, severity: 'error' }],
-    ok: known,
   }
 }
 

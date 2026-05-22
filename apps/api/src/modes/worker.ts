@@ -1,6 +1,6 @@
-import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
-import type { HostedSoulApp, LocalSettingsConfig, SoulAppMountedSurface, SoulAppPermission } from '@zonease/aiworker-shared'
-import type { ReviewRow, SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, NativeEngineBridgeResult } from '@zonease/aiworker-core'
+import type { HostedSoulApp, LocalSettingsConfig, MountedMicroAppHostData, SoulAppMountedSurface } from '@zonease/aiworker-shared'
+import type { SessionRow, WorkerEngineInvocationRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import type { Context } from 'hono'
 import type { ChildProcessByStdio } from 'node:child_process'
@@ -17,39 +17,34 @@ import { apiReference } from '@scalar/hono-api-reference'
 import {
   createHostRuntime,
   createLocalBearerAuthProvider,
-  createSoulAppBroker,
+  invokeNativeEngine,
   workerEnv,
 } from '@zonease/aiworker-core'
 import {
   isLoopbackMountedServiceUrl,
   localSettingsConfigSchema,
+  localWorkerOverlaySaveSchema,
 } from '@zonease/aiworker-shared'
 import {
   closeWorkerDb,
-  createLesson,
-  createReview,
-  getArtifact,
-  getReview,
+  createWorkerEngineInvocation,
   getSession,
   getWorker,
   getWorkspace,
   initWorkerDb,
-  listArtifacts,
-  listFiles,
-  listLessons,
-  listReviews,
   listSessionEvents,
   listSessions,
   listSettings,
   listTurns,
+  listWorkerOverlayAssets,
   listWorkers,
   listWorkspaces,
+  nextWorkerEngineInvocationSeq,
   runWorkerMigrations,
   setSetting,
-  updateLesson,
   updateWorkspace,
-  upsertFile,
   upsertWorker,
+  upsertWorkerOverlayAssets,
 } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { errorHandler } from '../shared/middleware/error-handler'
@@ -105,17 +100,22 @@ interface MountedSurfaceContribution {
   target?: string
 }
 
-interface WorkbenchActionDescriptor {
-  id: string
-  protocolAction: string
-  requiredPermissions?: readonly string[]
+interface NativeEngineInvocationRequest {
+  args?: unknown
+  cwd?: string
+  engineCommand?: string | null
+  engineId?: string | null
+  input?: string | null
 }
 
-interface BrokerRequestScope {
-  operatorId?: string
-  sessionId?: string
-  workerId?: string
-  workspaceId?: string
+interface PreparedNativeEngineInvocation {
+  args: string[]
+  command: string
+  cwd: string
+  engineId: string
+  input: string
+  invocationId: string
+  worker: WorkerRow
 }
 
 const MOUNTED_PROXY_TIMEOUT_MS = 10_000
@@ -227,101 +227,20 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return notFound(c, 'Soul App')
     return c.json({ app })
   })
-  app.get('/api/local/apps/:appId/security-review', (c) => {
-    const appId = c.req.param('appId')
-    if (!state.host.getApp(appId))
-      return notFound(c, 'Soul App')
-    return c.json({ review: state.host.reviewAppSecurity(appId) })
-  })
   app.post('/api/local/apps/:appId/enable', (c) => {
     const appId = c.req.param('appId')
     const app = state.host.enableApp(appId)
-    return c.json({ app, catalog: state.host.listCatalog(), review: state.host.reviewAppSecurity(appId) })
+    return c.json({ app, catalog: state.host.listCatalog() })
   })
   app.post('/api/local/apps/:appId/disable', (c) => {
     const appId = c.req.param('appId')
     const app = state.host.disableApp(appId)
     stopMountedSoulAppService(state, appId)
-    return c.json({ app, catalog: state.host.listCatalog(), review: state.host.reviewAppSecurity(appId) })
+    return c.json({ app, catalog: state.host.listCatalog() })
   })
   app.post('/api/local/apps/:appId/healthcheck', c => c.json({ app: state.host.healthcheckApp(c.req.param('appId')) }))
-  app.get('/api/local/apps/:appId/broker/permissions', (c) => {
-    const broker = createSoulAppBroker(brokerContext(c, state))
-    return c.json({ permissions: broker.permissions.list() })
-  })
-  app.get('/api/local/apps/:appId/broker/providers', (c) => {
-    const broker = createSoulAppBroker(brokerContext(c, state))
-    return c.json({ registry: broker.providers.list() })
-  })
-  app.get('/api/local/apps/:appId/broker/search', (c) => {
-    const result = createSoulAppBroker(brokerContext(c, state)).search.query(c.req.query('query') ?? '')
-    return brokerResponse(c, 'result', result)
-  })
-  app.put('/api/local/apps/:appId/broker/search/:itemId{.+}', async (c) => {
-    const body = await c.req.json().catch(() => ({}))
-    const result = createSoulAppBroker(brokerContext(c, state)).search.upsert(c.req.param('itemId'), searchIndexInputFromRecord(body))
-    return brokerResponse(c, 'item', result)
-  })
-  app.get('/api/local/apps/:appId/broker/storage', (c) => {
-    const result = createSoulAppBroker(brokerContext(c, state)).storage.list()
-    return brokerResponse(c, 'records', result)
-  })
-  app.get('/api/local/apps/:appId/broker/storage/:key{.+}', (c) => {
-    const result = createSoulAppBroker(brokerContext(c, state)).storage.get(c.req.param('key'))
-    return brokerResponse(c, 'record', result)
-  })
-  app.put('/api/local/apps/:appId/broker/storage/:key{.+}', async (c) => {
-    const body = await readJson<{ namespace?: string, valueJson?: Record<string, unknown> }>(c.req)
-    const result = createSoulAppBroker(brokerContext(c, state)).storage.put(c.req.param('key'), isRecord(body.valueJson) ? body.valueJson : {}, {
-      namespace: body.namespace,
-    })
-    return brokerResponse(c, 'record', result)
-  })
-  app.post('/api/local/apps/:appId/broker/connectors/:connectorId/evidence', async (c) => {
-    const body = await readJson<{ query?: Record<string, unknown> }>(c.req)
-    const result = createSoulAppBroker(brokerContext(c, state)).connectors.readEvidence(c.req.param('connectorId'), isRecord(body.query) ? body.query : {})
-    return brokerResponse(c, 'evidence', result)
-  })
-  app.get('/api/local/apps/:appId/broker/audit', (c) => {
-    const broker = createSoulAppBroker(brokerContext(c, state))
-    return c.json({ events: broker.audit.list() })
-  })
-  app.post('/api/local/apps/:appId/broker/engine/invocations', async (c) => {
-    const body = await readJson<{ prompt?: string }>(c.req)
-    const result = createSoulAppBroker(brokerContext(c, state)).engine.createInvocation({ prompt: body.prompt ?? '' })
-    return brokerResponse(c, 'invocation', result)
-  })
-  app.post('/api/local/apps/:appId/actions/:actionId', async (c) => {
-    const app = state.host.getApp(c.req.param('appId'))
-    if (!app)
-      return c.json({ error: { code: 'SOUL_APP_NOT_FOUND', message: `Soul App was not found: ${c.req.param('appId')}` } }, 404)
-    if (app.status !== 'enabled')
-      return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-    const action = resolveWorkbenchAction(app, c.req.param('actionId'))
-    if (!action)
-      return c.json({ error: { code: 'SOUL_APP_ACTION_NOT_DECLARED', message: `Soul App action is not declared: ${c.req.param('actionId')}` } }, 404)
-    const body = await readJson<{ input?: Record<string, unknown>, scope?: Record<string, unknown> }>(c.req)
-    const scope = brokerScopeFromRecord(body.scope)
-    const decision = decideDescriptorRequiredPermissions(c, state, action.requiredPermissions, `action ${action.id}`, scope)
-    if (decision)
-      return permissionDecisionResponse(c, decision)
-    return mountedActionResponse(c, state, app, action, isRecord(body.input) ? body.input : {}, scope)
-  })
-  app.get('/api/local/apps/:appId/search', async (c) => {
-    const app = state.host.getApp(c.req.param('appId'))
-    if (!app)
-      return c.json({ error: { code: 'SOUL_APP_NOT_FOUND', message: `Soul App was not found: ${c.req.param('appId')}` } }, 404)
-    if (app.status !== 'enabled')
-      return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-    const providerId = c.req.query('providerId') ?? ''
-    const search = app.manifest.ui.workbench?.search
-    if (!search || search.protocolProvider !== providerId)
-      return c.json({ error: { code: 'SOUL_APP_SEARCH_NOT_DECLARED', message: `Soul App search provider is not declared: ${providerId}` } }, 404)
-    const decision = decideDescriptorRequiredPermissions(c, state, search.requiredPermissions, `search ${search.id}`)
-    if (decision)
-      return permissionDecisionResponse(c, decision)
-    return mountedSearchResponse(c, state, app, search)
-  })
+  app.get('/api/local/souls', c => c.json({ souls: state.host.listSouls() }))
+  app.get('/api/local/templates', c => c.json({ templates: state.host.listCapabilityTemplates() }))
   app.get('/api/local/apps/:appId/surfaces/:surfaceId', async (c) => {
     const app = state.host.getApp(c.req.param('appId'))
     if (!app)
@@ -379,25 +298,58 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     state.runtimes.set(worker.id, runtime)
     return c.json({ worker, snapshot: runtime.snapshot() })
   })
+  app.get('/api/local/workers/:workerId/overlay', (c) => {
+    const worker = requireWorker(c.req.param('workerId'))
+    return c.json({ overlay: workerOverlayResponse(worker.id) })
+  })
+  app.put('/api/local/workers/:workerId/overlay', async (c) => {
+    const worker = requireWorker(c.req.param('workerId'))
+    const parsed = localWorkerOverlaySaveSchema.safeParse(await readJson(c.req))
+    if (!parsed.success) {
+      return c.json({
+        error: {
+          code: 'WORKER_OVERLAY_INVALID',
+          message: 'Invalid worker overlay payload.',
+          issues: parsed.error.issues,
+        },
+      }, 400)
+    }
+    if (parsed.data.assets.some(asset => asset.kind === 'mcp-client' && containsLiteralSecret(asset.content))) {
+      return c.json({
+        error: {
+          code: 'WORKER_OVERLAY_SECRET',
+          message: 'literal MCP secrets are not allowed in worker overlay assets',
+        },
+      }, 422)
+    }
+    upsertWorkerOverlayAssets(worker.id, parsed.data.assets.map(asset => ({
+      content: asset.content,
+      enabled: asset.enabled,
+      id: asset.id,
+      kind: asset.kind,
+      metadataJson: asset.metadataJson,
+      target: asset.target,
+    })))
+    return c.json({ overlay: workerOverlayResponse(worker.id) })
+  })
+  app.post('/api/local/workers/:workerId/engine/invocations', async (c) => {
+    const prepared = await prepareNativeEngineInvocation(c, c.req.param('workerId'))
+    const result = await invokeNativeEngine({
+      args: prepared.args,
+      command: prepared.command,
+      cwd: prepared.cwd,
+      input: prepared.input,
+      invocationId: prepared.invocationId,
+      workerId: prepared.worker.id,
+    })
+    const invocation = persistNativeEngineInvocation(prepared, result)
+    return c.json({ invocation, result }, 201)
+  })
+  app.post('/api/local/workers/:workerId/engine/invocations/stream', async (c) => {
+    const prepared = await prepareNativeEngineInvocation(c, c.req.param('workerId'))
+    return streamNativeEngineInvocation(prepared)
+  })
 
-  app.get('/api/local/souls', c => c.json({ souls: state.host.listSouls() }))
-  app.get('/api/local/souls/:id', (c) => {
-    const soul = state.host.findSoul(c.req.param('id'))
-    if (!soul)
-      return notFound(c, 'soul')
-    return c.json({ soul })
-  })
-  app.get('/api/local/templates', (c) => {
-    const soulId = c.req.query('soulId')
-    const templates = state.host.listCapabilityTemplates(soulId)
-    return c.json({ templates })
-  })
-  app.get('/api/local/templates/:id', (c) => {
-    const template = state.host.listCatalog().templates.find(template => template.id === c.req.param('id'))
-    if (!template)
-      return notFound(c, 'template')
-    return c.json({ template })
-  })
   app.get('/api/local/workers/:workerId/templates', (c) => {
     return c.json({ templates: state.host.listCapabilityTemplatesForWorker(c.req.param('workerId')) })
   })
@@ -432,6 +384,16 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const body = await readJson<Partial<Pick<WorkspaceRow, 'metadataJson' | 'name' | 'sourcePointersJson' | 'status'>>>(c.req)
     return c.json({ workspace: updateWorkspace({ id: workspace.id, ...body }) })
   })
+  app.post('/api/local/workers/:workerId/workspaces/:workspaceId/projection', async (c) => {
+    const workerId = c.req.param('workerId')
+    if (!getWorker(workerId))
+      return notFound(c, 'worker')
+    const workspace = getWorkspace(c.req.param('workspaceId'))
+    if (!workspace || workspace.workerId !== workerId)
+      return notFound(c, 'workspace')
+    const projection = await requireRuntime(state, workerId).reprojectWorkspaceAssets(workspace.id)
+    return c.json({ projection })
+  })
   app.get('/api/local/workspaces/:workspaceId', (c) => {
     const workspace = getWorkspace(c.req.param('workspaceId'))
     if (!workspace)
@@ -442,55 +404,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const body = await readJson<Partial<Pick<WorkspaceRow, 'metadataJson' | 'name' | 'sourcePointersJson' | 'status'>>>(c.req)
     return c.json({ workspace: updateWorkspace({ id: c.req.param('workspaceId'), ...body }) })
   })
-  app.get('/api/local/workspaces/:workspaceId/profile', async (c) => {
-    const workspace = requireWorkspace(c.req.param('workspaceId'))
-    return c.text(await requireRuntime(state, workspace.workerId).files(workspace.id).read('README.md'))
-  })
-  app.post('/api/local/workspaces/:workspaceId/profile-revisions', async (c) => {
-    const workspace = requireWorkspace(c.req.param('workspaceId'))
-    const body = await readJson<{
-      artifactId?: string
-      findingsJson?: Record<string, unknown>[]
-      profileMarkdown?: string
-      risksJson?: Record<string, unknown>[]
-      tagName?: string | null
-      verdict?: ReviewRow['verdict']
-    }>(c.req)
-    const verdict = body.verdict ?? 'pass'
-    if (verdict !== 'pass' && verdict !== 'warn') {
-      return c.json({
-        error: {
-          code: 'PROFILE_REVISION_NOT_APPROVED',
-          message: 'Only pass or warn reviews can promote a profile revision.',
-        },
-      }, 400)
-    }
-    try {
-      const profileRevision = await requireRuntime(state, workspace.workerId).promoteProfileRevision({
-        artifactId: requireString(body.artifactId, 'artifactId'),
-        findingsJson: body.findingsJson ?? [],
-        profileMarkdown: body.profileMarkdown,
-        risksJson: body.risksJson ?? [],
-        tagName: body.tagName,
-        verdict,
-        workspaceId: workspace.id,
-      })
-      return c.json({ profileRevision }, 201)
-    }
-    catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (message.startsWith('Profile promotion rejected:')) {
-        return c.json({
-          error: {
-            code: 'PROFILE_REVISION_REJECTED',
-            message,
-          },
-        }, 400)
-      }
-      throw error
-    }
-  })
-
   app.get('/api/local/sessions', c => c.json({ sessions: listSessions() }))
   app.get('/api/local/turns', c => c.json({ turns: listTurns() }))
   app.get('/api/local/workers/:workerId/workspaces/:workspaceId/sessions', (c) => {
@@ -564,130 +477,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return createSessionMessageResponse(c, state, session, false)
   })
 
-  app.get('/api/local/files', c => c.json({ files: listFiles() }))
-  app.get('/api/local/workers/:workerId/files', (c) => {
-    const worker = requireWorker(c.req.param('workerId'))
-    const workspaceIds = new Set(listWorkspaces(worker.id).map(workspace => workspace.id))
-    return c.json({ files: listFiles().filter(file => workspaceIds.has(file.workspaceId)) })
-  })
-  app.get('/api/local/workers/:workerId/workspaces/:workspaceId/files', (c) => {
-    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
-    return c.json({ files: listFiles(workspace.id) })
-  })
-  app.get('/api/local/workers/:workerId/workspaces/:workspaceId/files/search', (c) => {
-    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
-    const query = c.req.query('q')?.toLowerCase() ?? ''
-    const files = listFiles(workspace.id).filter(file => file.path.toLowerCase().includes(query))
-    return c.json({ files })
-  })
-  app.get('/api/local/workers/:workerId/workspaces/:workspaceId/files/raw/:path{.+}', async (c) => {
-    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
-    return c.text(await requireRuntime(state, workspace.workerId).files(workspace.id).read(c.req.param('path')))
-  })
-  app.put('/api/local/workers/:workerId/workspaces/:workspaceId/files/raw/:path{.+}', async (c) => {
-    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
-    const filePath = c.req.param('path')
-    const entry = await requireRuntime(state, workspace.workerId).files(workspace.id).write({ path: filePath, content: await c.req.text() })
-    const file = upsertFile({
-      id: randomUUID(),
-      workspaceId: workspace.id,
-      path: filePath,
-      kind: entry.kind,
-      size: entry.size,
-      mtime: entry.mtime,
-      hash: entry.hash,
-      source: 'user',
-    })
-    return c.json({ file })
-  })
-  app.get('/api/local/workspaces/:workspaceId/files', (c) => {
-    const workspace = requireWorkspace(c.req.param('workspaceId'))
-    return c.json({ files: listFiles(workspace.id) })
-  })
-  app.get('/api/local/workspaces/:workspaceId/files/search', (c) => {
-    const workspace = requireWorkspace(c.req.param('workspaceId'))
-    const query = c.req.query('q')?.toLowerCase() ?? ''
-    const files = listFiles(workspace.id).filter(file => file.path.toLowerCase().includes(query))
-    return c.json({ files })
-  })
-  app.get('/api/local/workspaces/:workspaceId/files/raw/:path{.+}', async (c) => {
-    const workspace = requireWorkspace(c.req.param('workspaceId'))
-    return c.text(await requireRuntime(state, workspace.workerId).files(workspace.id).read(c.req.param('path')))
-  })
-  app.put('/api/local/workspaces/:workspaceId/files/raw/:path{.+}', async (c) => {
-    const workspace = requireWorkspace(c.req.param('workspaceId'))
-    const filePath = c.req.param('path')
-    const entry = await requireRuntime(state, workspace.workerId).files(workspace.id).write({ path: filePath, content: await c.req.text() })
-    const file = upsertFile({
-      id: randomUUID(),
-      workspaceId: workspace.id,
-      path: filePath,
-      kind: entry.kind,
-      size: entry.size,
-      mtime: entry.mtime,
-      hash: entry.hash,
-      source: 'user',
-    })
-    return c.json({ file })
-  })
-
-  app.get('/api/local/artifacts', c => c.json({ artifacts: listArtifacts() }))
-  app.get('/api/local/workers/:workerId/artifacts', (c) => {
-    const worker = requireWorker(c.req.param('workerId'))
-    const workspaceIds = new Set(listWorkspaces(worker.id).map(workspace => workspace.id))
-    return c.json({ artifacts: listArtifacts().filter(artifact => workspaceIds.has(artifact.workspaceId)) })
-  })
-  app.get('/api/local/workspaces/:workspaceId/artifacts', (c) => {
-    const workspace = requireWorkspace(c.req.param('workspaceId'))
-    return c.json({ artifacts: listArtifacts(workspace.id) })
-  })
-  app.get('/api/local/artifacts/:id', (c) => {
-    const artifact = getArtifact(c.req.param('id'))
-    if (!artifact)
-      return notFound(c, 'artifact')
-    return c.json({ artifact })
-  })
-
-  app.get('/api/local/reviews', c => c.json({ reviews: listReviews() }))
-  app.post('/api/local/reviews', async (c) => {
-    const body = await readJson<Partial<ReviewRow> & { findingsJson?: Record<string, unknown>[], risksJson?: Record<string, unknown>[] }>(c.req)
-    const workspaceId = requireString(body.workspaceId, 'workspaceId')
-    const review = createReview({
-      id: randomUUID(),
-      workspaceId,
-      sessionId: body.sessionId ?? null,
-      turnId: body.turnId ?? null,
-      artifactId: body.artifactId ?? null,
-      verdict: body.verdict ?? 'needs_review',
-      findingsJson: body.findingsJson ?? [],
-      risksJson: body.risksJson ?? [],
-    })
-    return c.json({ review }, 201)
-  })
-  app.get('/api/local/reviews/:id', (c) => {
-    const review = getReview(c.req.param('id'))
-    if (!review)
-      return notFound(c, 'review')
-    return c.json({ review })
-  })
-
-  app.get('/api/local/lessons', c => c.json({ lessons: listLessons() }))
-  app.post('/api/local/lessons', async (c) => {
-    const body = await readJson<{ evidenceJson?: Record<string, unknown>[], sourceReviewId?: string | null, statement?: string, workspaceId?: string }>(c.req)
-    const lesson = createLesson({
-      id: randomUUID(),
-      workspaceId: requireString(body.workspaceId, 'workspaceId'),
-      sourceReviewId: body.sourceReviewId ?? null,
-      statement: requireString(body.statement, 'statement'),
-      evidenceJson: Array.isArray(body.evidenceJson) ? body.evidenceJson : [],
-    })
-    return c.json({ lesson }, 201)
-  })
-  app.patch('/api/local/lessons/:id', async (c) => {
-    const body = await readJson<{ status: 'accepted' | 'proposed' | 'rejected' }>(c.req)
-    return c.json({ lesson: updateLesson(c.req.param('id'), body.status) })
-  })
-
   app.get('/api/local/settings', (c) => {
     const settings = loadLocalSettings()
     return c.json({ settings })
@@ -724,7 +513,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ result: { engineId, message: `${engine.name} responded as ${engine.version ?? engine.path}.`, status: 'pass' } })
   })
 
-  app.get('/api/local/events', c => c.json({ events: listSessionEvents() }))
   app.all('/api/local/apps/:appId/:path{.+}', (c) => {
     const app = state.host.getApp(c.req.param('appId'))
     if (!app)
@@ -740,7 +528,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     info: {
       title: 'AIWorker Local Daemon API',
       version: runtimeVersion,
-      description: 'Vertical Soul workspace API for Soul workers, workspaces, sessions, turns, artifacts, reviews, memory candidates, and settings.',
+      description: 'Local Shell and Engine Bridge API for Soul Apps, Soul workers, workspaces, sessions, artifacts, files, mounted app APIs, native engine invocations, and settings.',
     },
   })
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
@@ -800,6 +588,42 @@ function requireString(value: unknown, field: string): string {
   return value.trim()
 }
 
+function readOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function readStringArray(value: unknown, field: string): string[] {
+  if (value === undefined)
+    return []
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string'))
+    throw new Error(`Invalid field: ${field}`)
+  return value
+}
+
+function workerOverlayResponse(workerId: string) {
+  return {
+    assets: listWorkerOverlayAssets(workerId),
+    workerId,
+  }
+}
+
+function containsLiteralSecret(content: string): boolean {
+  const assignment = /["']?([\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*)["']?\s*[:=]\s*["']([^"'\n]+)["']/gi
+  for (const match of content.matchAll(assignment)) {
+    const value = match[2]?.trim() ?? ''
+    if (value && !isSecretReference(value))
+      return true
+  }
+  return /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}/i.test(content)
+}
+
+function isSecretReference(value: string): boolean {
+  return value.startsWith('$') || value.startsWith('env:') || value.startsWith('secretRef:')
+}
+
 function notFound(c: Context, resource: string) {
   return c.json({ error: { code: 'NOT_FOUND', message: `${resource} not found.` } }, 404)
 }
@@ -857,246 +681,8 @@ function requireTemplateForWorker(state: LocalDaemonState, workerId: string, tem
   return state.host.requireCapabilityTemplateForWorker(workerId, templateId)
 }
 
-function enrichTemplateMetadata(state: LocalDaemonState, workerId: string, templateId: string, metadata: Record<string, unknown>): Record<string, unknown> {
-  return state.host.enrichTemplateMetadata(workerId, templateId, metadata)
-}
-
-function brokerContext(c: Context, state: LocalDaemonState, scope?: BrokerRequestScope) {
-  const settings = loadLocalSettings()
-  return {
-    appId: requireString(c.req.param('appId'), 'appId'),
-    connectorProviders: settings.connectors,
-    enabledConnectorIds: settings.connectors.filter(connector => connector.enabled).map(connector => connector.id),
-    now: state.now,
-    operatorId: requestIdentity(c)?.operatorId ?? scope?.operatorId ?? c.req.query('operatorId'),
-    sessionId: scope?.sessionId ?? c.req.query('sessionId'),
-    workerId: scope?.workerId ?? c.req.query('workerId'),
-    workspaceId: scope?.workspaceId ?? c.req.query('workspaceId'),
-  }
-}
-
-function brokerResponse(c: Context, key: string, result: unknown): Response {
-  if (isBrokerDenied(result)) {
-    const status = result.decision.code === 'app_not_found'
-      ? 404
-      : result.decision.code === 'app_disabled'
-        ? 409
-        : 403
-    return c.json({
-      decision: result.decision,
-      error: {
-        code: result.decision.code.toUpperCase(),
-        message: result.decision.reason,
-      },
-    }, status)
-  }
-  return c.json({ [key]: result })
-}
-
-function searchIndexInputFromRecord(value: unknown) {
-  const record = isRecord(value) ? value : {}
-  return {
-    artifactId: optionalNonEmptyString(record.artifactId),
-    kind: optionalNonEmptyString(record.kind) ?? 'item',
-    reference: searchIndexReferenceFromRecord(record.reference),
-    reviewId: optionalNonEmptyString(record.reviewId),
-    sessionId: optionalNonEmptyString(record.sessionId),
-    summary: optionalNonEmptyString(record.summary),
-    title: optionalNonEmptyString(record.title) ?? 'Untitled',
-    workspaceId: optionalNonEmptyString(record.workspaceId),
-  }
-}
-
-function searchIndexReferenceFromRecord(value: unknown) {
-  if (!isRecord(value))
-    return undefined
-  const id = optionalNonEmptyString(value.id)
-  const type = optionalNonEmptyString(value.type)
-  if (!id || !type)
-    return undefined
-  const url = optionalNonEmptyString(value.url)
-  return {
-    id,
-    type,
-    ...(url ? { url } : {}),
-  }
-}
-
-function resolveWorkbenchAction(app: HostedSoulApp, actionId: string): WorkbenchActionDescriptor | null {
-  const workbench = app.manifest.ui.workbench
-  const actions: WorkbenchActionDescriptor[] = [
-    ...(workbench?.primaryAction ? [workbench.primaryAction] : []),
-    ...(workbench?.actions ?? []),
-    ...(workbench?.configuration ? [workbench.configuration] : []),
-  ]
-  return actions.find(action => action.id === actionId) ?? null
-}
-
-function decideDescriptorRequiredPermissions(
-  c: Context,
-  state: LocalDaemonState,
-  requiredPermissions: readonly string[] | undefined,
-  descriptor: string,
-  scope?: BrokerRequestScope,
-): { allowed: boolean, code: string, reason: string } | null {
-  if (!requiredPermissions?.length)
-    return null
-
-  const broker = createSoulAppBroker(brokerContext(c, state, scope))
-  for (const permissionRef of requiredPermissions) {
-    const parsed = parseRequiredPermission(permissionRef)
-    if (!parsed) {
-      return {
-        allowed: false,
-        code: 'permission_denied',
-        reason: `Invalid required permission for ${descriptor}: ${permissionRef}. Expected kind:action:target.`,
-      }
-    }
-    const decision = broker.permissions.decide(parsed.kind, parsed.action, parsed.target)
-    if (!decision.allowed)
-      return decision
-  }
-
-  return null
-}
-
-function brokerScopeFromRecord(value: unknown): BrokerRequestScope | undefined {
-  if (!isRecord(value))
-    return undefined
-  const scope: BrokerRequestScope = {}
-  const operatorId = optionalNonEmptyString(value.operatorId)
-  const sessionId = optionalNonEmptyString(value.sessionId)
-  const workerId = optionalNonEmptyString(value.workerId)
-  const workspaceId = optionalNonEmptyString(value.workspaceId)
-  if (operatorId)
-    scope.operatorId = operatorId
-  if (sessionId)
-    scope.sessionId = sessionId
-  if (workerId)
-    scope.workerId = workerId
-  if (workspaceId)
-    scope.workspaceId = workspaceId
-  return Object.keys(scope).length > 0 ? scope : undefined
-}
-
-function optionalNonEmptyString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined
-}
-
-function parseRequiredPermission(value: string): Pick<SoulAppPermission, 'action' | 'kind' | 'target'> | null {
-  const first = value.indexOf(':')
-  const second = first >= 0 ? value.indexOf(':', first + 1) : -1
-  if (first <= 0 || second <= first + 1 || second >= value.length - 1)
-    return null
-
-  const kind = value.slice(0, first)
-  const action = value.slice(first + 1, second)
-  const target = value.slice(second + 1)
-  if (!isSoulAppPermissionKind(kind) || !isSoulAppPermissionAction(action))
-    return null
-
-  return { action, kind, target }
-}
-
-function isSoulAppPermissionKind(value: string): value is SoulAppPermission['kind'] {
-  return ['api', 'artifact', 'connector', 'memory', 'review', 'search', 'storage', 'ui'].includes(value)
-}
-
-function isSoulAppPermissionAction(value: string): value is SoulAppPermission['action'] {
-  return ['create', 'mount', 'propose', 'read', 'serve', 'write'].includes(value)
-}
-
-async function mountedActionResponse(
-  c: Context,
-  state: LocalDaemonState,
-  app: HostedSoulApp,
-  action: WorkbenchActionDescriptor,
-  input: Record<string, unknown>,
-  scope?: BrokerRequestScope,
-): Promise<Response> {
-  const service = await mountedSoulAppServiceOrResponse(c, state, app)
-  if (service instanceof Response)
-    return service
-
-  const headers = mountedProxyHeaders(c.req.raw.headers)
-  applyMountedProxyContextHeaders(headers, c, state, app, service, undefined, scope)
-  headers.set('content-type', 'application/json')
-
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), MOUNTED_PROXY_TIMEOUT_MS)
-  try {
-    const res = await fetch(new URL('/protocol/actions', service.baseUrl), {
-      body: JSON.stringify({
-        actionId: action.id,
-        input,
-        protocolAction: action.protocolAction,
-      }),
-      headers,
-      method: 'POST',
-      redirect: 'manual',
-      signal: controller.signal,
-    })
-    if (!res.ok)
-      return c.json({ error: { code: 'SOUL_APP_PROTOCOL_ERROR', message: await res.text() } }, 502)
-    return c.json({
-      action: {
-        id: action.id,
-        protocolAction: action.protocolAction,
-      },
-      result: await res.json(),
-    })
-  }
-  catch (error) {
-    const aborted = controller.signal.aborted
-    return mountedServiceError(c, app, aborted ? 'SOUL_APP_SERVICE_TIMEOUT' : 'SOUL_APP_SERVICE_UNREACHABLE', aborted
-      ? `Mounted Soul App service timed out after ${MOUNTED_PROXY_TIMEOUT_MS}ms.`
-      : error instanceof Error ? error.message : String(error), aborted ? 504 : 502)
-  }
-  finally {
-    clearTimeout(timeout)
-  }
-}
-
-async function mountedSearchResponse(
-  c: Context,
-  state: LocalDaemonState,
-  app: HostedSoulApp,
-  search: NonNullable<NonNullable<HostedSoulApp['manifest']['ui']['workbench']>['search']>,
-): Promise<Response> {
-  const service = await mountedSoulAppServiceOrResponse(c, state, app)
-  if (service instanceof Response)
-    return service
-
-  const sourceUrl = new URL(c.req.url)
-  const targetUrl = new URL('/protocol/search', service.baseUrl)
-  targetUrl.searchParams.set('providerId', search.protocolProvider)
-  targetUrl.searchParams.set('query', sourceUrl.searchParams.get('query') ?? sourceUrl.searchParams.get('q') ?? '')
-  targetUrl.searchParams.set('limit', sourceUrl.searchParams.get('limit') ?? '8')
-  const headers = mountedProxyHeaders(c.req.raw.headers)
-  applyMountedProxyContextHeaders(headers, c, state, app, service)
-
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), MOUNTED_PROXY_TIMEOUT_MS)
-  try {
-    const res = await fetch(targetUrl, {
-      headers,
-      method: 'GET',
-      redirect: 'manual',
-      signal: controller.signal,
-    })
-    if (!res.ok)
-      return c.json({ error: { code: 'SOUL_APP_PROTOCOL_ERROR', message: await res.text() } }, 502)
-    return c.json(await res.json())
-  }
-  catch (error) {
-    const aborted = controller.signal.aborted
-    return mountedServiceError(c, app, aborted ? 'SOUL_APP_SERVICE_TIMEOUT' : 'SOUL_APP_SERVICE_UNREACHABLE', aborted
-      ? `Mounted Soul App service timed out after ${MOUNTED_PROXY_TIMEOUT_MS}ms.`
-      : error instanceof Error ? error.message : String(error), aborted ? 504 : 502)
-  }
-  finally {
-    clearTimeout(timeout)
-  }
+function enrichTemplateMetadata(_state: LocalDaemonState, _workerId: string, _templateId: string, metadata: Record<string, unknown>): Record<string, unknown> {
+  return metadata
 }
 
 async function mountedSurfaceResponse(c: Context, state: LocalDaemonState, app: HostedSoulApp, surfaceId: string): Promise<Response> {
@@ -1104,25 +690,16 @@ async function mountedSurfaceResponse(c: Context, state: LocalDaemonState, app: 
   if (!contribution)
     return c.json({ error: { code: 'SOUL_APP_SURFACE_NOT_FOUND', message: `Mounted surface is not declared: ${surfaceId}` } }, 404)
 
-  if (contribution.surface.renderer === 'trusted-module') {
-    return c.json({
-      error: {
-        code: 'SOUL_APP_SURFACE_RENDERER_DISABLED',
-        message: 'trusted-module surfaces require a future signed first-party module loader.',
-      },
-    }, 422)
-  }
+  if (contribution.surface.renderer === 'micro-app') {
+    const service = await mountedSoulAppServiceOrResponse(c, state, app)
+    if (service instanceof Response)
+      return service
 
-  const mountDecision = decideMountedSurface(c, state, app, contribution)
-  if (!mountDecision.allowed)
-    return permissionDecisionResponse(c, mountDecision)
-
-  if (contribution.surface.renderer === 'sandboxed-frame') {
     const sourceUrl = new URL(c.req.url)
     return c.json({
-      frame: {
-        sandbox: 'allow-scripts allow-forms',
-        title: contribution.label,
+      microApp: {
+        data: mountedMicroAppData(c, state, app, service, contribution),
+        name: `${app.appId}--${contribution.id}`,
         url: `/api/local/apps/${app.appId}${contribution.surface.entry}${sourceUrl.search}`,
       },
       surface: publicMountedSurfaceContribution(contribution),
@@ -1270,27 +847,24 @@ function applyMountedProxyContextHeaders(
   app: HostedSoulApp,
   service: MountedSoulAppService,
   contribution?: MountedSurfaceContribution,
-  scope?: BrokerRequestScope,
 ): void {
   const sourceUrl = new URL(c.req.url)
   const origin = `${sourceUrl.protocol}//${sourceUrl.host}`
   const identity = requestIdentity(c)
-  const operatorId = identity?.operatorId ?? scope?.operatorId ?? c.req.query('operatorId') ?? null
+  const operatorId = identity?.operatorId ?? c.req.query('operatorId') ?? null
   const payload = Buffer.from(JSON.stringify({
     appId: app.appId,
     artifactId: c.req.query('artifactId') ?? null,
-    brokerGrants: app.manifest.permissions,
-    brokerUrl: `${origin}/api/local/apps/${app.appId}/broker`,
     expiresAt: mountContextExpiry(state),
     identity: identity ? publicHostIdentity(identity) : null,
     operatorId,
     permissions: app.manifest.permissions,
     reviewId: c.req.query('reviewId') ?? null,
     routePrefix: app.mountedContribution.apiRoutePrefix,
-    sessionId: scope?.sessionId ?? c.req.query('sessionId') ?? null,
+    sessionId: c.req.query('sessionId') ?? null,
     surface: contribution ? publicMountedSurfaceContribution(contribution) : null,
-    workerId: scope?.workerId ?? c.req.query('workerId') ?? null,
-    workspaceId: scope?.workspaceId ?? c.req.query('workspaceId') ?? null,
+    workerId: c.req.query('workerId') ?? null,
+    workspaceId: c.req.query('workspaceId') ?? null,
   })).toString('base64url')
   const signature = createHmac('sha256', service.mountToken).update(payload).digest('hex')
 
@@ -1321,30 +895,6 @@ function mountContextExpiry(state: LocalDaemonState): string {
   return new Date(base + 5 * 60_000).toISOString()
 }
 
-function decideMountedSurface(c: Context, state: LocalDaemonState, app: HostedSoulApp, contribution: MountedSurfaceContribution) {
-  const target = contribution.surface.requiredPermissions
-    ?.find(permission => permission.startsWith('ui:mount:'))
-    ?.slice('ui:mount:'.length)
-    ?? app.manifest.permissions.find(permission => permission.kind === 'ui' && permission.action === 'mount')?.target
-    ?? contribution.id
-  return createSoulAppBroker(brokerContext(c, state)).permissions.decide('ui', 'mount', target)
-}
-
-function permissionDecisionResponse(c: Context, decision: { allowed: boolean, code: string, reason: string }): Response {
-  const status = decision.code === 'app_not_found'
-    ? 404
-    : decision.code === 'app_disabled'
-      ? 409
-      : 403
-  return c.json({
-    decision,
-    error: {
-      code: decision.code.toUpperCase(),
-      message: decision.reason,
-    },
-  }, status)
-}
-
 function publicMountedSurfaceContribution(contribution: MountedSurfaceContribution) {
   return {
     id: contribution.id,
@@ -1355,6 +905,30 @@ function publicMountedSurfaceContribution(contribution: MountedSurfaceContributi
     requiredPermissions: contribution.surface.requiredPermissions ?? [],
     scope: contribution.surface.scope,
     target: contribution.target ?? null,
+  }
+}
+
+function mountedMicroAppData(
+  c: Context,
+  state: LocalDaemonState,
+  app: HostedSoulApp,
+  service: MountedSoulAppService,
+  contribution: MountedSurfaceContribution,
+): MountedMicroAppHostData {
+  return {
+    appId: app.appId,
+    artifactId: c.req.query('artifactId') ?? null,
+    expiresAt: mountContextExpiry(state),
+    mountTokenPresent: Boolean(service.mountToken),
+    reviewId: c.req.query('reviewId') ?? null,
+    routePrefix: app.mountedContribution.apiRoutePrefix,
+    sessionId: c.req.query('sessionId') ?? null,
+    surfaceId: contribution.id,
+    surfaceKind: contribution.kind,
+    surfaceScope: contribution.surface.scope,
+    theme: c.req.query('theme') ?? null,
+    workerId: c.req.query('workerId') ?? null,
+    workspaceId: c.req.query('workspaceId') ?? null,
   }
 }
 
@@ -1377,13 +951,6 @@ function findMountedSurfaceContribution(app: HostedSoulApp, surfaceId: string): 
     ...app.manifest.ui.artifactPreviews.filter(slot => slot.surface).map(slot => ({
       id: slot.id,
       kind: 'artifact-preview' as const,
-      label: slot.label,
-      surface: slot.surface!,
-      target: slot.target,
-    })),
-    ...app.manifest.ui.reviewPanels.filter(slot => slot.surface).map(slot => ({
-      id: slot.id,
-      kind: 'review-panel' as const,
       label: slot.label,
       surface: slot.surface!,
       target: slot.target,
@@ -1525,12 +1092,6 @@ async function waitForMountedSoulAppUrl(child: ChildProcessByStdio<null, Readabl
   return url
 }
 
-function isBrokerDenied(value: unknown): value is { decision: { allowed: false, code: string, reason: string } } {
-  if (!isRecord(value) || !isRecord(value.decision))
-    return false
-  return value.decision.allowed === false
-}
-
 function selectedEngine(settings: LocalSettingsConfig) {
   return settings.engines.find(engine => engine.id === settings.engineId)
 }
@@ -1549,6 +1110,120 @@ function executionMetadata(settings: LocalSettingsConfig, engine: LocalSettingsC
     engineName: engine?.name ?? null,
     executionMode: settings.executionMode,
   }
+}
+
+async function prepareNativeEngineInvocation(c: Context, workerId: string): Promise<PreparedNativeEngineInvocation> {
+  const worker = requireWorker(workerId)
+  const body = await readJson<NativeEngineInvocationRequest>(c.req)
+  const settings = loadLocalSettings()
+  const engineId = readOptionalString(body.engineId) ?? (settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider)
+  const engine = settings.engines.find(engine => engine.id === engineId)
+  const command = readOptionalString(body.engineCommand) ?? selectedEngineCommand(settings, engine)
+  if (!command)
+    throw new Error('Missing required field: engineCommand')
+  return {
+    args: readStringArray(body.args, 'args'),
+    command,
+    cwd: requireString(body.cwd, 'cwd'),
+    engineId,
+    input: typeof body.input === 'string' ? body.input : '',
+    invocationId: randomUUID(),
+    worker,
+  }
+}
+
+function persistNativeEngineInvocation(
+  prepared: PreparedNativeEngineInvocation,
+  result: NativeEngineBridgeResult,
+): WorkerEngineInvocationRow {
+  return createWorkerEngineInvocation({
+    id: result.invocationId,
+    workerId: prepared.worker.id,
+    seq: nextWorkerEngineInvocationSeq(prepared.worker.id),
+    engineId: prepared.engineId,
+    engineCommand: prepared.command,
+    status: result.status,
+    cwd: result.cwd,
+    exitCode: result.exitCode,
+    signal: result.signal,
+    metadataJson: {
+      bridge: 'native',
+      durationMs: result.durationMs,
+      stderrBytes: Buffer.byteLength(result.stderr, 'utf8'),
+      stdoutBytes: Buffer.byteLength(result.stdout, 'utf8'),
+    },
+    startedAt: result.startedAt,
+    finishedAt: result.finishedAt,
+    at: result.finishedAt,
+  })
+}
+
+function streamNativeEngineInvocation(prepared: PreparedNativeEngineInvocation): Response {
+  const encoder = new TextEncoder()
+  let closed = false
+  let heartbeat: ReturnType<typeof setInterval> | null = null
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const heartbeatFrame = () => {
+        if (!closed)
+          controller.enqueue(encoder.encode(': heartbeat\n\n'))
+      }
+      const send = (event: string, data: unknown, id?: string | number) => {
+        if (closed)
+          return
+        const lines = [
+          id !== undefined ? `id: ${id}` : null,
+          `event: ${event}`,
+          `data: ${JSON.stringify(data)}`,
+          '',
+        ].filter(line => line !== null).join('\n')
+        controller.enqueue(encoder.encode(`${lines}\n`))
+      }
+      send('status', {
+        invocationId: prepared.invocationId,
+        status: 'started',
+        workerId: prepared.worker.id,
+      }, prepared.invocationId)
+      heartbeat = setInterval(heartbeatFrame, 5_000)
+      void invokeNativeEngine({
+        args: prepared.args,
+        command: prepared.command,
+        cwd: prepared.cwd,
+        input: prepared.input,
+        invocationId: prepared.invocationId,
+        onEvent: event => send('engine_event', { invocationId: prepared.invocationId, ...event }, prepared.invocationId),
+        workerId: prepared.worker.id,
+      }).then((result) => {
+        const invocation = persistNativeEngineInvocation(prepared, result)
+        send('result', { invocation, result }, invocation.id)
+      }).catch((error) => {
+        send('error', { invocationId: prepared.invocationId, message: error instanceof Error ? error.message : String(error) }, prepared.invocationId)
+      }).finally(() => {
+        if (heartbeat) {
+          clearInterval(heartbeat)
+          heartbeat = null
+        }
+        if (!closed) {
+          closed = true
+          controller.close()
+        }
+      })
+    },
+    cancel() {
+      closed = true
+      if (heartbeat) {
+        clearInterval(heartbeat)
+        heartbeat = null
+      }
+    },
+  })
+  return new Response(stream, {
+    headers: {
+      'cache-control': 'no-cache',
+      'connection': 'keep-alive',
+      'content-type': 'text/event-stream; charset=utf-8',
+    },
+  })
 }
 
 async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonState, workspace: WorkspaceRow, stream: boolean): Promise<Response> {
@@ -1884,32 +1559,21 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/local/apps', summary: 'List Host Soul Apps', tags: ['apps'] },
     { method: 'post', path: '/api/local/apps/install', summary: 'Install Host Soul App manifest', tags: ['apps'], created: true },
     { method: 'get', path: '/api/local/apps/{appId}', summary: 'Show Host Soul App', tags: ['apps'] },
-    { method: 'get', path: '/api/local/apps/{appId}/security-review', summary: 'Review Soul App permissions before enablement', tags: ['apps'] },
     { method: 'post', path: '/api/local/apps/{appId}/enable', summary: 'Enable Host Soul App', tags: ['apps'], created: true },
     { method: 'post', path: '/api/local/apps/{appId}/disable', summary: 'Disable Host Soul App', tags: ['apps'], created: true },
     { method: 'post', path: '/api/local/apps/{appId}/healthcheck', summary: 'Run Host Soul App static healthcheck', tags: ['apps'], created: true },
-    { method: 'post', path: '/api/local/apps/{appId}/actions/{actionId}', summary: 'Invoke a declared Soul App workbench action', tags: ['apps'], created: true },
-    { method: 'get', path: '/api/local/apps/{appId}/search', summary: 'Search through a declared Soul App provider', tags: ['apps'] },
-    { method: 'get', path: '/api/local/apps/{appId}/broker/permissions', summary: 'List Soul App broker permissions', tags: ['apps'] },
-    { method: 'get', path: '/api/local/apps/{appId}/broker/providers', summary: 'List Host broker providers visible to a Soul App', tags: ['apps'] },
-    { method: 'get', path: '/api/local/apps/{appId}/broker/search', summary: 'Query Soul App broker search index descriptors', tags: ['apps'] },
-    { method: 'put', path: '/api/local/apps/{appId}/broker/search/{itemId}', summary: 'Upsert a Soul App broker search index descriptor', tags: ['apps'] },
-    { method: 'get', path: '/api/local/apps/{appId}/broker/storage', summary: 'List Soul App scoped storage records', tags: ['apps'] },
-    { method: 'get', path: '/api/local/apps/{appId}/broker/storage/{key}', summary: 'Read Soul App scoped storage record', tags: ['apps'] },
-    { method: 'put', path: '/api/local/apps/{appId}/broker/storage/{key}', summary: 'Write Soul App scoped storage record', tags: ['apps'] },
-    { method: 'post', path: '/api/local/apps/{appId}/broker/connectors/{connectorId}/evidence', summary: 'Read brokered connector evidence', tags: ['apps'], created: true },
-    { method: 'get', path: '/api/local/apps/{appId}/broker/audit', summary: 'List Soul App broker audit events', tags: ['apps'] },
-    { method: 'post', path: '/api/local/apps/{appId}/broker/engine/invocations', summary: 'Deny raw Soul App engine invocation attempts', tags: ['apps'], created: true },
+    { method: 'get', path: '/api/local/souls', summary: 'List projected Souls from installed apps', tags: ['catalog'] },
+    { method: 'get', path: '/api/local/templates', summary: 'List projected capability templates from installed apps', tags: ['catalog'] },
     { method: 'get', path: '/api/local/apps/{appId}/surfaces/{surfaceId}', summary: 'Resolve a declared mounted Soul App UI surface', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/{path}', summary: 'Reserved mounted Soul App API namespace', tags: ['apps'] },
     { method: 'get', path: '/api/local/workers', summary: 'List Soul workers', tags: ['workers'] },
     { method: 'post', path: '/api/local/workers', summary: 'Create Soul worker', tags: ['workers'], created: true },
     { method: 'get', path: '/api/local/workers/{workerId}', summary: 'Show Soul worker', tags: ['workers'] },
     { method: 'patch', path: '/api/local/workers/{workerId}', summary: 'Update Soul worker', tags: ['workers'] },
-    { method: 'get', path: '/api/local/souls', summary: 'List vertical Souls', tags: ['souls'] },
-    { method: 'get', path: '/api/local/souls/{id}', summary: 'Show vertical Soul', tags: ['souls'] },
-    { method: 'get', path: '/api/local/templates', summary: 'List capability templates', tags: ['templates'] },
-    { method: 'get', path: '/api/local/templates/{id}', summary: 'Show capability template', tags: ['templates'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/overlay', summary: 'Show worker runtime overlay', tags: ['workers'] },
+    { method: 'put', path: '/api/local/workers/{workerId}/overlay', summary: 'Save worker runtime overlay', tags: ['workers'] },
+    { method: 'post', path: '/api/local/workers/{workerId}/engine/invocations', summary: 'Create worker native engine invocation', tags: ['engine'], created: true },
+    { method: 'post', path: '/api/local/workers/{workerId}/engine/invocations/stream', summary: 'Stream worker native engine invocation', tags: ['engine'], created: true },
     { method: 'get', path: '/api/local/workers/{workerId}/templates', summary: 'List worker capability templates', tags: ['templates'] },
     { method: 'get', path: '/api/local/workers/{workerId}/templates/{templateId}', summary: 'Show worker capability template', tags: ['templates'] },
     { method: 'get', path: '/api/local/workspaces', summary: 'List workspaces', tags: ['workspaces'] },
@@ -1917,10 +1581,9 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'post', path: '/api/local/workers/{workerId}/workspaces', summary: 'Create worker workspace', tags: ['workspaces'], created: true },
     { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}', summary: 'Show worker workspace', tags: ['workspaces'] },
     { method: 'patch', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}', summary: 'Update worker workspace', tags: ['workspaces'] },
+    { method: 'post', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/projection', summary: 'Project worker overlay into workspace', tags: ['workspaces'] },
     { method: 'get', path: '/api/local/workspaces/{workspaceId}', summary: 'Show workspace', tags: ['workspaces'] },
     { method: 'patch', path: '/api/local/workspaces/{workspaceId}', summary: 'Update workspace', tags: ['workspaces'] },
-    { method: 'get', path: '/api/local/workspaces/{workspaceId}/profile', summary: 'Read workspace profile README', tags: ['workspaces'] },
-    { method: 'post', path: '/api/local/workspaces/{workspaceId}/profile-revisions', summary: 'Promote reviewed artifact into workspace profile', tags: ['workspaces'], created: true },
     { method: 'get', path: '/api/local/sessions', summary: 'List sessions', tags: ['sessions'] },
     { method: 'get', path: '/api/local/turns', summary: 'List turns', tags: ['turns'] },
     { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions', summary: 'List worker workspace sessions', tags: ['sessions'] },
@@ -1938,31 +1601,10 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/local/sessions/{sessionId}/events', summary: 'Replay session events', tags: ['events'] },
     { method: 'get', path: '/api/local/sessions/{sessionId}/turns', summary: 'List session turns', tags: ['turns'] },
     { method: 'post', path: '/api/local/sessions/{sessionId}/turns', summary: 'Create session turn', tags: ['turns'], created: true },
-    { method: 'get', path: '/api/local/files', summary: 'List files', tags: ['files'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/files', summary: 'List worker files', tags: ['files'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/files', summary: 'List worker workspace files', tags: ['files'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/files/raw/{path}', summary: 'Read worker workspace file', tags: ['files'] },
-    { method: 'put', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/files/raw/{path}', summary: 'Write worker workspace file', tags: ['files'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/files/search', summary: 'Search worker workspace files', tags: ['files'] },
-    { method: 'get', path: '/api/local/workspaces/{workspaceId}/files', summary: 'List workspace files', tags: ['files'] },
-    { method: 'get', path: '/api/local/workspaces/{workspaceId}/files/raw/{path}', summary: 'Read workspace file', tags: ['files'] },
-    { method: 'put', path: '/api/local/workspaces/{workspaceId}/files/raw/{path}', summary: 'Write workspace file', tags: ['files'] },
-    { method: 'get', path: '/api/local/workspaces/{workspaceId}/files/search', summary: 'Search workspace files', tags: ['files'] },
-    { method: 'get', path: '/api/local/artifacts', summary: 'List artifacts', tags: ['artifacts'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/artifacts', summary: 'List worker artifacts', tags: ['artifacts'] },
-    { method: 'get', path: '/api/local/workspaces/{workspaceId}/artifacts', summary: 'List workspace artifacts', tags: ['artifacts'] },
-    { method: 'get', path: '/api/local/artifacts/{id}', summary: 'Show artifact', tags: ['artifacts'] },
-    { method: 'get', path: '/api/local/reviews', summary: 'List reviews', tags: ['reviews'] },
-    { method: 'post', path: '/api/local/reviews', summary: 'Create review', tags: ['reviews'], created: true },
-    { method: 'get', path: '/api/local/reviews/{id}', summary: 'Show review', tags: ['reviews'] },
-    { method: 'get', path: '/api/local/lessons', summary: 'List lessons', tags: ['lessons'] },
-    { method: 'post', path: '/api/local/lessons', summary: 'Create lesson', tags: ['lessons'], created: true },
-    { method: 'patch', path: '/api/local/lessons/{id}', summary: 'Update lesson', tags: ['lessons'] },
     { method: 'get', path: '/api/local/settings', summary: 'Show settings', tags: ['settings'] },
     { method: 'patch', path: '/api/local/settings', summary: 'Update settings', tags: ['settings'] },
     { method: 'post', path: '/api/local/settings/engines/rescan', summary: 'Rescan engines', tags: ['settings'], created: true },
     { method: 'post', path: '/api/local/settings/engines/test', summary: 'Test engine', tags: ['settings'], created: true },
-    { method: 'get', path: '/api/local/events', summary: 'List session events', tags: ['events'] },
   ]
 
   for (const path of paths) {

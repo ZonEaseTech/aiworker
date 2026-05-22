@@ -21,8 +21,6 @@ export const localSessionEventTypeSchema = z.enum([
   'tool',
   'file_change',
   'artifact',
-  'review',
-  'lesson',
   'error',
   'log',
 ])
@@ -34,20 +32,53 @@ export type LocalFileKind = z.infer<typeof localFileKindSchema>
 export const localFileSourceSchema = z.enum(['user', 'session', 'system'])
 export type LocalFileSource = z.infer<typeof localFileSourceSchema>
 
-export const localArtifactStatusSchema = z.enum(['available', 'missing', 'archived'])
-export type LocalArtifactStatus = z.infer<typeof localArtifactStatusSchema>
-
-export const localReviewVerdictSchema = z.enum(['pass', 'warn', 'fail', 'needs_review'])
-export type LocalReviewVerdict = z.infer<typeof localReviewVerdictSchema>
-
-export const localLessonStatusSchema = z.enum(['proposed', 'accepted', 'rejected'])
-export type LocalLessonStatus = z.infer<typeof localLessonStatusSchema>
-
 export const localJsonObjectSchema = z.record(z.string(), z.unknown())
 export type LocalJsonObject = z.infer<typeof localJsonObjectSchema>
 
 const timestampSchema = z.string().min(1)
 const idSchema = z.string().min(1)
+
+export const localWorkerOverlayAssetKindSchema = z.enum(['entry-file', 'mcp-client', 'skill'])
+export type LocalWorkerOverlayAssetKind = z.infer<typeof localWorkerOverlayAssetKindSchema>
+
+export const localWorkerOverlayAssetSourceSchema = z.enum(['baseline', 'overlay'])
+export type LocalWorkerOverlayAssetSource = z.infer<typeof localWorkerOverlayAssetSourceSchema>
+
+export const localWorkerOverlayAssetSchema = z.object({
+  content: z.string(),
+  enabled: z.boolean(),
+  id: idSchema,
+  kind: localWorkerOverlayAssetKindSchema,
+  metadataJson: localJsonObjectSchema.optional().default({}),
+  source: localWorkerOverlayAssetSourceSchema,
+  target: z.string().min(1),
+  updatedAt: timestampSchema,
+})
+export type LocalWorkerOverlayAsset = z.infer<typeof localWorkerOverlayAssetSchema>
+
+export const localWorkerOverlaySchema = z.object({
+  assets: z.array(localWorkerOverlayAssetSchema),
+  workerId: idSchema,
+})
+export type LocalWorkerOverlay = z.infer<typeof localWorkerOverlaySchema>
+
+export const localWorkerOverlaySaveSchema = z.object({
+  assets: z.array(localWorkerOverlayAssetSchema.omit({ source: true, updatedAt: true }).extend({
+    source: z.literal('overlay').optional().default('overlay'),
+  })),
+})
+export type LocalWorkerOverlaySaveInput = z.infer<typeof localWorkerOverlaySaveSchema>
+
+export const localComposerMentionSchema = z.object({
+  id: idSchema,
+  kind: z.literal('skill'),
+  label: z.string().min(1),
+  range: z.object({
+    end: z.number().int().nonnegative(),
+    start: z.number().int().nonnegative(),
+  }).optional(),
+})
+export type LocalComposerMention = z.infer<typeof localComposerMentionSchema>
 
 export const localWorkerSchema = z.object({
   id: idSchema,
@@ -149,47 +180,6 @@ export const localFileSchema = z.object({
   updatedAt: timestampSchema,
 })
 export type LocalFile = z.infer<typeof localFileSchema>
-
-export const localArtifactSchema = z.object({
-  id: idSchema,
-  workspaceId: idSchema,
-  sessionId: idSchema.nullable(),
-  turnId: idSchema.nullable(),
-  invocationId: idSchema.nullable(),
-  path: z.string().min(1),
-  kind: z.string().min(1),
-  title: z.string().min(1),
-  status: localArtifactStatusSchema,
-  metadataJson: localJsonObjectSchema,
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-})
-export type LocalArtifact = z.infer<typeof localArtifactSchema>
-
-export const localReviewSchema = z.object({
-  id: idSchema,
-  workspaceId: idSchema,
-  sessionId: idSchema.nullable(),
-  turnId: idSchema.nullable(),
-  artifactId: idSchema.nullable(),
-  verdict: localReviewVerdictSchema,
-  findingsJson: z.array(localJsonObjectSchema),
-  risksJson: z.array(localJsonObjectSchema),
-  createdAt: timestampSchema,
-})
-export type LocalReview = z.infer<typeof localReviewSchema>
-
-export const localLessonSchema = z.object({
-  id: idSchema,
-  workspaceId: idSchema,
-  sourceReviewId: idSchema.nullable(),
-  statement: z.string().min(1),
-  evidenceJson: z.array(localJsonObjectSchema),
-  status: localLessonStatusSchema,
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-})
-export type LocalLesson = z.infer<typeof localLessonSchema>
 
 export const localSettingSchema = z.object({
   key: z.string().min(1),

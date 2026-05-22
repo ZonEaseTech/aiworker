@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-19
+> Updated: 2026-05-21
 
 ## Usage
 
@@ -501,3 +501,21 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-145 Session composer attachment deduplication**](BUG-145.md) `P0`
 - [x] [**BUG-146 Split Soul App configuration from Host platform settings**](BUG-146.md) `P0`
 - [x] [**REL-051 发布 aiworker CLI 0.19.0**](REL-051.md) `P0`
+- [x] [**FEAT-105 Shadcn monorepo UI package foundation**](FEAT-105.md) `P0`
+- [x] [**FEAT-106 micro-app Host/Soul mounted UI runtime**](FEAT-106.md) `P0`
+- [x] [**BUG-147 Port migrated HR workbench into the HR Soul App**](BUG-147.md) `P0`
+- [x] [**FEAT-107 HR three-column interactive micro-app**](FEAT-107.md) `P0`
+- [x] [**BUG-148 Consolidate SessionComposer on packages/ui**](BUG-148.md) `P0`
+- [x] [**REFACTOR-084 Remove legacy component package**](REFACTOR-084.md) `P0`
+- [x] [**REFACTOR-085 Feed component retirement guidance back into active docs**](REFACTOR-085.md) `P1`
+- [x] [**REFACTOR-086 Remove internal Host broker permission kernel**](REFACTOR-086.md) `P0`
+- [x] [**REFACTOR-087 Remove Host workbench action and search protocol bridge**](REFACTOR-087.md) `P0`
+- [x] [**REFACTOR-088 Modernize Soul App scaffold around micro-app defaults**](REFACTOR-088.md) `P0`
+- [x] [**REFACTOR-089 Remove official Soul App workbench protocol defaults**](REFACTOR-089.md) `P0`
+- [x] [**REFACTOR-090 Retire Host generic review and lesson product flow**](REFACTOR-090.md) `P0`
+- [x] [**REFACTOR-091 Add worker-scoped native engine bridge spike**](REFACTOR-091.md) `P0`
+- [x] [**REFACTOR-092 Add worker-scoped native invocation metadata**](REFACTOR-092.md) `P0`
+- [x] [**REFACTOR-093 Add worker-scoped native engine invocation API**](REFACTOR-093.md) `P0`
+- [x] [**REFACTOR-094 Add worker-scoped native engine invocation stream**](REFACTOR-094.md) `P0`
+- [x] [**REFACTOR-095 WorkerStudio mounted-first Host shell boundary**](REFACTOR-095.md) `P0`
+- [x] [**BUG-149 HR mounted reading-room layout falls back to one column**](BUG-149.md) `P0`

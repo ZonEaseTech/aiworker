@@ -186,28 +186,10 @@
       "target": "ci"
     },
     {
-      "action": "write",
-      "kind": "artifact",
-      "reason": "Create reviewable QA release artifacts.",
-      "target": "release-gate"
-    },
-    {
-      "action": "create",
-      "kind": "review",
-      "reason": "Create QA review rubrics and findings.",
-      "target": "qa-review"
-    },
-    {
-      "action": "propose",
-      "kind": "memory",
-      "reason": "Propose reviewed QA lessons into the app namespace.",
-      "target": "aiworker-qa"
-    },
-    {
       "action": "mount",
       "kind": "ui",
-      "reason": "Mount QA workbench contributions.",
-      "target": "qa-workbench"
+      "reason": "Mount QA micro-app surfaces.",
+      "target": "qa-micro-app"
     },
     {
       "action": "serve",
@@ -248,23 +230,7 @@
         "entry": "./product/web/panels/release-panel.tsx",
         "id": "qa-release-panel",
         "label": "Release panel",
-        "slot": "panel",
-        "surface": {
-          "entry": "/surfaces/panels/qa-release-panel",
-          "renderer": "host-descriptor",
-          "requiredPermissions": [
-            "storage:read:aiworker-qa"
-          ],
-          "scope": "workspace"
-        }
-      }
-    ],
-    "reviewPanels": [
-      {
-        "entry": "./product/web/panels/review-panel.tsx",
-        "id": "qa-review-panel",
-        "label": "QA review panel",
-        "slot": "review-panel"
+        "slot": "panel"
       }
     ],
     "routes": [
@@ -274,46 +240,15 @@
         "label": "QA",
         "path": "/qa",
         "surface": {
-          "entry": "/surfaces/routes/qa-home",
-          "renderer": "host-descriptor",
+          "entry": "/micro-app/routes/qa-home",
+          "renderer": "micro-app",
           "requiredPermissions": [
-            "ui:mount:qa-workbench"
+            "ui:mount:qa-micro-app"
           ],
           "scope": "app"
         }
       }
     ],
-    "workbench": {
-      "actions": [
-        {
-          "id": "refresh-release",
-          "label": "Refresh",
-          "protocolAction": "release.refresh",
-          "requiredPermissions": ["storage:read:aiworker-qa"],
-          "role": "refresh"
-        }
-      ],
-      "primaryAction": {
-        "id": "create-release-gate",
-        "label": "New release gate",
-        "protocolAction": "releaseGates.create",
-        "requiredPermissions": ["storage:write:aiworker-qa", "search:write:aiworker-qa"],
-        "role": "primary"
-      },
-      "search": {
-        "id": "release-search",
-        "label": "Search releases",
-        "placeholder": "Search releases",
-        "protocolProvider": "releases.search",
-        "requiredPermissions": ["search:read:aiworker-qa"]
-      },
-      "configuration": {
-        "id": "configure-qa",
-        "label": "Configure QA",
-        "protocolAction": "configuration.open",
-        "requiredPermissions": ["api:serve:/api/local/apps/aiworker-qa"]
-      }
-    },
     "workspaceContext": {
       "terminal": {
         "cwd": {
@@ -330,8 +265,8 @@
         "label": "Release widget",
         "slot": "workspace-widget",
         "surface": {
-          "entry": "/frames/widgets/qa-release-widget",
-          "renderer": "sandboxed-frame",
+          "entry": "/micro-app/widgets/qa-release-widget",
+          "renderer": "micro-app",
           "scope": "workspace"
         },
         "target": "release"

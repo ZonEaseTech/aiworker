@@ -1,4 +1,4 @@
-import type { CapabilityTemplate, LocalReviewVerdict, VerticalSoul } from '@zonease/aiworker-shared'
+import type { CapabilityTemplate, VerticalSoul } from '../local-workspace/types.compat'
 import type { BuiltinSoulCopy, BuiltinTemplateCopy, StaticMessages, StatusKey, SupportedLocale } from './types'
 
 import { builtinSoulCopy, builtinTemplateCopy } from './catalog'
@@ -44,10 +44,6 @@ export function displayTemplate(template: CapabilityTemplate, locale: SupportedL
 export function formatStatus(status: string, locale: SupportedLocale): string {
   const messages = messagesByLocale[locale]
   return messages.statuses[status as StatusKey] ?? status.split('_').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
-}
-
-export function formatReviewVerdict(verdict: LocalReviewVerdict, locale: SupportedLocale): string {
-  return formatStatus(verdict, locale)
 }
 
 export function formatRelativeTime(value: string, locale: SupportedLocale): string {

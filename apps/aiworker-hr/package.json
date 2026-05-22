@@ -12,17 +12,21 @@
   "main": "./host-adapter/index.ts",
   "types": "./host-adapter/index.ts",
   "scripts": {
-    "build": "bun build host-adapter/index.ts host-adapter/standalone/standalone.ts host-adapter/mounted/host-mounted.ts --outdir dist --target bun",
-    "dev": "bun host-adapter/standalone/standalone.ts --serve",
-    "serve": "bun host-adapter/mounted/host-mounted.ts",
-    "smoke": "bun ../../apps/cli/src/aiworker.ts app smoke .",
+    "build": "bun run build:styles && bun run build:client && bun build host-adapter/index.ts host-adapter/standalone/standalone.ts host-adapter/mounted/host-mounted.ts --outdir dist --target bun",
+    "build:client": "bun build product/web/people-workbench/client-entry.tsx --outfile dist/web/hr-home-client.js --target browser --format esm --minify",
+    "build:styles": "bunx --bun @tailwindcss/cli -i product/web/styles.css -o dist/web/styles.css --minify && bun scripts/copy-web-fonts.ts",
+    "dev": "bun run build:styles && bun run build:client && bun host-adapter/standalone/standalone.ts --serve",
+    "serve": "bun run build:styles && bun run build:client && bun host-adapter/mounted/host-mounted.ts",
+    "smoke": "bun run build:styles && bun run build:client && bun ../../apps/cli/src/aiworker.ts app smoke .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "validate": "bun ../../apps/cli/src/aiworker.ts app validate ."
   },
   "dependencies": {
-    "@zonease/aiworker-component": "workspace:*",
+    "@hugeicons/core-free-icons": "^4.1.4",
+    "@hugeicons/react": "^1.1.6",
     "@zonease/aiworker-soul-app-sdk": "workspace:*",
+    "@zonease/aiworker-ui": "workspace:*",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

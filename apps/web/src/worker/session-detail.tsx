@@ -1,101 +1,69 @@
 import type {
-  CapabilityTemplate,
-  LocalArtifact,
-  LocalLesson,
-  LocalLessonStatus,
-  LocalReview,
   LocalSession,
   LocalSessionEvent,
   LocalTurn,
   LocalWorkspace,
 } from '@zonease/aiworker-shared'
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import type { messagesFor, SupportedLocale } from '../features/i18n'
+import type { CapabilityTemplate } from '../features/local-workspace/types.compat'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 import type { SessionProgressSummary } from './session-progress'
 import type { SessionTurnDraft } from './session-turn-composer'
 
 import {
-  ArtifactPreviewFrame,
-  normalizeSessionEvents,
-  ReviewPanelShell,
-  SessionDetailPanel,
-  StudioActivityRow,
-  StudioEmptyState,
-  StudioSectionHeader,
-  StudioStatusPill,
-  summarizeSessionUsage,
-} from '@zonease/aiworker-component'
-import { Circle, ClipboardCheck, FileText, MessageSquare, Sparkles, Terminal } from 'lucide-react'
-
+  CircleIcon,
+  File02Icon,
+  Message02Icon,
+  TerminalIcon,
+} from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Badge } from '@zonease/aiworker-ui/components/badge'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@zonease/aiworker-ui/components/collapsible'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@zonease/aiworker-ui/components/item'
+import { cn } from '@zonease/aiworker-ui/lib/utils'
 import { useMemo } from 'react'
 import {
   displayTemplate,
   formatRelativeTime,
-  formatReviewVerdict,
   formatStatus,
 } from '../features/i18n'
+
+import {
+  normalizeSessionEvents,
+  summarizeSessionUsage,
+} from '../features/session/session-view-model'
+import { StudioEmptyState } from './components/studio-shell'
 import { SessionProgressPanel } from './session-progress-panel'
 import { SessionTurnComposer } from './session-turn-composer'
-
-export interface ArtifactPreviewState {
-  artifactId: string | null
-  content: string
-  error: string | null
-  loading: boolean
-}
 
 type WorkerMessages = ReturnType<typeof messagesFor>
 
 export function SessionDetail({
-  artifact,
-  artifactCopy,
-  artifactPreview,
-  artifacts,
   collapsed = false,
   copy,
   engineReadiness,
   events,
-  lessonBusyId,
-  lessons,
   locale,
-  onLessonStatus,
-  onReview,
   onSubmitTurn,
   onTurnInputChange,
   progress,
-  review,
-  reviewSubmitting,
-  reviews,
   session,
-  mode = 'full',
   template,
   turnInput,
   turnSubmitting,
   turns,
   workspace,
 }: {
-  artifact: LocalArtifact | null
-  artifactCopy: { name: string, outputKind: string } | null
-  artifactPreview: ArtifactPreviewState
-  artifacts: LocalArtifact[]
   collapsed?: boolean
   copy: WorkerMessages
   engineReadiness: EngineReadiness
   events: LocalSessionEvent[]
-  lessonBusyId: string | null
-  lessons: LocalLesson[]
   locale: SupportedLocale
-  onLessonStatus: (lesson: LocalLesson, status: LocalLessonStatus) => void
-  onReview: () => void
   onSubmitTurn: (event: FormEvent<HTMLFormElement>, draft?: SessionTurnDraft) => void
   onTurnInputChange: (value: string) => void
   progress: SessionProgressSummary | null
-  review: LocalReview | null
-  reviewSubmitting: boolean
-  reviews: LocalReview[]
   session: LocalSession | null
-  mode?: 'artifact' | 'full'
   template: CapabilityTemplate | null
   turnInput: string
   turnSubmitting: boolean
@@ -119,212 +87,213 @@ export function SessionDetail({
 
   if (collapsed) {
     return (
-      <aside className="artifact-rail session-panel collapsed" aria-hidden="true" />
+      <aside
+        className="w-0 max-w-0 overflow-hidden p-0 opacity-0 pointer-events-none"
+        data-slot="artifact-rail"
+        data-state="collapsed"
+        data-testid="artifact-rail-collapsed"
+        aria-hidden="true"
+      />
     )
   }
 
   return (
-    <aside className="artifact-rail session-panel" aria-label={copy.accessibility.businessArtifactPreview}>
-      <header className="artifact-rail-head">
-        <div className="artifact-rail-title">
-          <MessageSquare aria-hidden="true" size={14} />
-          <strong>{copy.workspace.sessionDetail}</strong>
-        </div>
-      </header>
+    <aside
+      className="relative flex min-h-0 w-80 min-w-0 flex-none flex-col gap-3 overflow-y-auto p-3 transition-all max-md:h-48 max-md:w-full"
+      data-slot="artifact-rail"
+      data-state="expanded"
+      aria-label={copy.accessibility.businessArtifactPreview}
+    >
+      <Item variant="default" size="xs" className="px-0 py-0" data-testid="artifact-rail-heading">
+        <ItemMedia variant="icon" aria-hidden="true">
+          <HugeiconsIcon icon={Message02Icon} strokeWidth={2} data-icon="inline-start" />
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle>{copy.workspace.sessionDetail}</ItemTitle>
+        </ItemContent>
+      </Item>
 
       {workspace && session
         ? (
             <SessionDetailPanel
               summary={(
-                <>
-                  <section className="session-summary">
-                    <div>
-                      <span className="kicker">{copy.workspace.selectedWorkspace}</span>
-                      <h2>{workspace.name}</h2>
-                    </div>
-                    <StudioStatusPill active className="artifact-rail-status-pill" icon={<Circle size={10} />}>
-                      {formatStatus(session.status, locale)}
-                    </StudioStatusPill>
-                  </section>
+                <ItemGroup className="gap-3">
+                  <Item variant="default" size="xs" className="items-start px-0 py-0" data-testid="artifact-rail-summary-heading">
+                    <ItemContent className="min-w-0 gap-0.5">
+                      <ItemDescription>{copy.workspace.selectedWorkspace}</ItemDescription>
+                      <ItemTitle asChild size="base" className="max-w-full">
+                        <h2>{workspace.name}</h2>
+                      </ItemTitle>
+                    </ItemContent>
+                    <ItemActions>
+                      <Badge data-testid="artifact-rail-status" variant="secondary">
+                        <HugeiconsIcon icon={CircleIcon} strokeWidth={2} data-icon="inline-start" aria-hidden="true" />
+                        {formatStatus(session.status, locale)}
+                      </Badge>
+                    </ItemActions>
+                  </Item>
 
-                  <section className="rail-metadata">
-                    <strong>{templateCopy?.name ?? session.capabilityTemplateId}</strong>
-                    <small>{templateCopy?.outputKind ?? session.capabilityTemplateId}</small>
-                    <small>{copy.workspace.updated(formatRelativeTime(session.updatedAt, locale))}</small>
-                  </section>
+                  <Item variant="muted" size="xs">
+                    <ItemContent>
+                      <ItemTitle>{templateCopy?.name ?? session.capabilityTemplateId}</ItemTitle>
+                      <ItemDescription>{templateCopy?.outputKind ?? session.capabilityTemplateId}</ItemDescription>
+                      <ItemDescription>{copy.workspace.updated(formatRelativeTime(session.updatedAt, locale))}</ItemDescription>
+                    </ItemContent>
+                  </Item>
 
-                  {progress ? <SessionProgressPanel compact className="artifact-session-progress" progress={progress} /> : null}
-                </>
+                  {progress ? <SessionProgressPanel compact progress={progress} /> : null}
+                </ItemGroup>
               )}
-              composer={mode === 'full'
-                ? (
-                    <SessionTurnComposer
-                      className="turn-composer"
-                      copy={copy}
-                      description={engineReadiness.detail}
-                      engineReadiness={engineReadiness}
-                      submitting={composerBusy}
-                      title={copy.workspace.continueSession}
-                      usage={composerUsage}
-                      value={turnInput}
-                      variant="compact"
-                      onSubmit={onSubmitTurn}
-                      onValueChange={onTurnInputChange}
-                    />
-                  )
-                : null}
-              artifact={(
-                <ArtifactPreviewFrame
-                  className="artifact-panel"
-                  title={copy.artifact.label}
-                  description={copy.workspace.artifactCount(artifacts.length)}
-                  loading={artifact && artifactPreview.loading ? copy.artifact.loading : false}
-                  error={artifactPreview.error}
-                  empty={artifact ? undefined : progress?.previewDetail ?? copy.artifact.empty}
+              composer={(
+                <SessionTurnComposer
+                  className="min-w-0"
+                  copy={copy}
+                  description={engineReadiness.detail}
+                  engineReadiness={engineReadiness}
+                  submitting={composerBusy}
+                  title={copy.workspace.continueSession}
+                  usage={composerUsage}
+                  value={turnInput}
+                  variant="compact"
+                  onSubmit={onSubmitTurn}
+                  onValueChange={onTurnInputChange}
+                />
+              )}
+              history={(
+                <SessionDetailDisclosure
+                  icon={<HugeiconsIcon icon={Message02Icon} strokeWidth={2} aria-hidden="true" />}
+                  title={copy.workspace.turnHistory}
+                  detail={copy.workspace.turnCount(turns.length)}
                 >
-                  {artifact
+                  {turns.length > 0
                     ? (
-                        <>
-                          <div className="rail-metadata">
-                            <strong>{artifactCopy?.name ?? artifact.title}</strong>
-                            <small>{artifactCopy?.outputKind ?? artifact.kind}</small>
-                            <small>{artifact.path}</small>
-                          </div>
-                          {artifactPreview.loading ? <div className="artifact-preview-state">{copy.artifact.loading}</div> : null}
-                          {artifactPreview.error ? <div className="artifact-preview-state" role="alert">{artifactPreview.error}</div> : null}
-                          {!artifactPreview.loading && !artifactPreview.error
-                            ? <pre className="artifact-preview">{artifactPreview.content}</pre>
-                            : null}
-                        </>
-                      )
-                    : null}
-                </ArtifactPreviewFrame>
-              )}
-              history={mode === 'full'
-                ? (
-                    <details className="session-subpanel compact-details">
-                      <summary className="artifact-section-head">
-                        <span className="artifact-summary-icon" aria-hidden="true">
-                          <MessageSquare size={14} />
-                        </span>
-                        <div>
-                          <strong>{copy.workspace.turnHistory}</strong>
-                          <small>{copy.workspace.turnCount(turns.length)}</small>
-                        </div>
-                      </summary>
-                      {turns.length > 0
-                        ? (
-                            <div className="turn-list">
-                              {turns.map(turn => (
-                                <StudioActivityRow
-                                  key={turn.id}
-                                  className="turn-row"
-                                  title={formatStatus(turn.status, locale)}
-                                  detail={turn.input}
-                                  meta={turn.seq}
-                                >
-                                  {turn.error ? <small className="danger-text">{turn.error}</small> : null}
-                                </StudioActivityRow>
-                              ))}
-                            </div>
-                          )
-                        : <div className="artifact-preview-state">{copy.workspace.noTurns}</div>}
-                    </details>
-                  )
-                : null}
-              review={(
-                <ReviewPanelShell
-                  className="session-subpanel"
-                  title={copy.artifact.review}
-                  description={review ? formatReviewVerdict(review.verdict, locale) : copy.artifact.reviewCount(reviews.length)}
-                  empty={!artifact ? copy.workspace.reviewWaiting : undefined}
-                >
-                  {review
-                    ? (
-                        <div className="review-list">
-                          {reviewItems(review).map(item => <span key={item}>{item}</span>)}
-                        </div>
-                      )
-                    : artifact
-                      ? (
-                          <button type="button" className="ghost review-action" disabled={reviewSubmitting} onClick={onReview}>
-                            <ClipboardCheck aria-hidden="true" size={13} />
-                            <span>{reviewSubmitting ? copy.workspace.requestingReview : copy.workspace.requestReview}</span>
-                          </button>
-                        )
-                      : null}
-                </ReviewPanelShell>
-              )}
-              memory={(
-                <section className="session-subpanel memory-subpanel">
-                  <StudioSectionHeader
-                    className="artifact-section-head"
-                    icon={<Sparkles size={14} />}
-                    title={copy.workspace.memoryCandidates}
-                    description={copy.artifact.memoryCandidates(lessons.length)}
-                  />
-                  {lessons.length > 0
-                    ? (
-                        <div className="memory-list">
-                          {lessons.map(lesson => (
-                            <article key={lesson.id} className="memory-row">
-                              <div>
-                                <strong>{formatLessonStatus(lesson.status, copy)}</strong>
-                                <span>{lesson.statement}</span>
-                              </div>
-                              <div className="memory-actions">
-                                <button type="button" className="ghost" disabled={lessonBusyId === lesson.id || lesson.status === 'accepted'} onClick={() => onLessonStatus(lesson, 'accepted')}>
-                                  {copy.workspace.accept}
-                                </button>
-                                <button type="button" className="ghost" disabled={lessonBusyId === lesson.id || lesson.status === 'rejected'} onClick={() => onLessonStatus(lesson, 'rejected')}>
-                                  {copy.workspace.reject}
-                                </button>
-                              </div>
-                            </article>
+                        <ItemGroup className="gap-2">
+                          {turns.map(turn => (
+                            <StudioActivityRow
+                              key={turn.id}
+                              title={formatStatus(turn.status, locale)}
+                              detail={turn.input}
+                              meta={turn.seq}
+                            >
+                              {turn.error ? <ItemDescription tone="destructive">{turn.error}</ItemDescription> : null}
+                            </StudioActivityRow>
                           ))}
-                        </div>
+                        </ItemGroup>
                       )
-                    : <div className="artifact-preview-state">{copy.workspace.noMemoryCandidates}</div>}
-                </section>
+                    : <Item variant="muted" size="xs"><ItemContent><ItemDescription>{copy.workspace.noTurns}</ItemDescription></ItemContent></Item>}
+                </SessionDetailDisclosure>
               )}
               eventStream={(
-                <details className="session-subpanel compact-details">
-                  <summary className="artifact-section-head">
-                    <span className="artifact-summary-icon" aria-hidden="true">
-                      <Terminal size={14} />
-                    </span>
-                    <div>
-                      <strong>{copy.workspace.eventStream}</strong>
-                      <small>{copy.workspace.eventCount(events.length)}</small>
-                    </div>
-                  </summary>
+                <SessionDetailDisclosure
+                  icon={<HugeiconsIcon icon={TerminalIcon} strokeWidth={2} aria-hidden="true" />}
+                  title={copy.workspace.eventStream}
+                  detail={copy.workspace.eventCount(events.length)}
+                >
                   {recentEvents.length > 0
                     ? (
-                        <div className="event-list">
+                        <ItemGroup className="gap-2">
                           {recentEvents.map(event => (
                             <StudioActivityRow
                               key={event.id}
-                              className="event-row"
                               title={event.type}
                               meta={formatRelativeTime(event.createdAt, locale)}
                             />
                           ))}
-                        </div>
+                        </ItemGroup>
                       )
-                    : <div className="artifact-preview-state">{copy.workspace.noEvents}</div>}
-                </details>
+                    : <Item variant="muted" size="xs"><ItemContent><ItemDescription>{copy.workspace.noEvents}</ItemDescription></ItemContent></Item>}
+                </SessionDetailDisclosure>
               )}
             />
           )
         : (
             <StudioEmptyState
-              className="empty-session-state"
-              icon={<FileText size={22} />}
+              className="min-h-56"
+              icon={<HugeiconsIcon icon={File02Icon} strokeWidth={2} aria-hidden="true" />}
               title={copy.workspace.noSelectionTitle}
               detail={copy.workspace.noSelectionDetail}
             />
           )}
     </aside>
+  )
+}
+
+function SessionDetailPanel({
+  className,
+  composer,
+  eventStream,
+  history,
+  summary,
+}: {
+  className?: string
+  composer?: ReactNode
+  eventStream?: ReactNode
+  history?: ReactNode
+  summary?: ReactNode
+}) {
+  return (
+    <ItemGroup className={cn('gap-3', className)} data-testid="session-detail-panel">
+      {summary ? <section>{summary}</section> : null}
+      {composer ? <section>{composer}</section> : null}
+      {history ? <section>{history}</section> : null}
+      {eventStream ? <section>{eventStream}</section> : null}
+    </ItemGroup>
+  )
+}
+
+function SessionDetailDisclosure({
+  children,
+  detail,
+  icon,
+  title,
+}: {
+  children: ReactNode
+  detail?: ReactNode
+  icon: ReactNode
+  title: ReactNode
+}) {
+  return (
+    <Collapsible data-session-slot="detail-disclosure">
+      <CollapsibleTrigger asChild>
+        <Item asChild variant="muted" size="sm" className="min-w-0 flex-nowrap items-start">
+          <button type="button">
+            <ItemMedia variant="icon">{icon}</ItemMedia>
+            <ItemContent className="min-w-0">
+              <ItemTitle className="max-w-full">{title}</ItemTitle>
+              {detail ? <ItemDescription className="max-w-full">{detail}</ItemDescription> : null}
+            </ItemContent>
+          </button>
+        </Item>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-2 pl-7">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+function StudioActivityRow({
+  children,
+  className,
+  detail,
+  meta,
+  title,
+}: {
+  children?: ReactNode
+  className?: string
+  detail?: ReactNode
+  meta?: ReactNode
+  title: ReactNode
+}) {
+  return (
+    <Item variant="muted" size="xs" className={cn('min-w-0 flex-nowrap items-start justify-between', className)}>
+      <ItemContent>
+        <ItemTitle>{title}</ItemTitle>
+        {detail ? <ItemDescription>{detail}</ItemDescription> : null}
+        {children}
+      </ItemContent>
+      {meta ? <ItemDescription asChild><span>{meta}</span></ItemDescription> : null}
+    </Item>
   )
 }
 
@@ -353,18 +322,4 @@ function usageMeterValue(inputTokens?: number, outputTokens?: number): number | 
   const output = outputTokens ?? 0
   const total = input + output
   return total > 0 ? input / total : undefined
-}
-
-function reviewItems(review: LocalReview): string[] {
-  const findings = review.findingsJson.map(item => String(item.message ?? item.summary ?? JSON.stringify(item)))
-  const risks = review.risksJson.map(item => String(item.message ?? item.summary ?? JSON.stringify(item)))
-  return [...findings, ...risks].filter(Boolean)
-}
-
-function formatLessonStatus(status: LocalLessonStatus, copy: WorkerMessages): string {
-  if (status === 'accepted')
-    return copy.workspace.accepted
-  if (status === 'rejected')
-    return copy.workspace.rejected
-  return copy.workspace.proposed
 }

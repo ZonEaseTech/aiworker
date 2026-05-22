@@ -1,4 +1,4 @@
-# Person Profile Review Rubric
+# Person Profile Acceptance Check
 
 - Evidence references are present.
 - Missing information is explicit.

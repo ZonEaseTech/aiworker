@@ -30,9 +30,21 @@ const registryIds = [
   'SOUL-001',
   'PROTO-001',
   'IMPORT-001',
+  'MOUNT-001',
   'DATA-001',
-  'BROKER-001',
+  'ENGINE-001',
+  'UI-001',
   'DOC-001',
+]
+
+const forbiddenActiveDocPhrases = [
+  '平台 broker',
+  'Host broker provider registry',
+  'generic review/lesson ledger',
+  'Host auth is provider-backed',
+  'generic enablement security review',
+  'storage、connector evidence、secret reference、log、search、audit 等 broker',
+  'grant enforcement',
 ]
 
 for (const file of activeDocs) {
@@ -42,7 +54,10 @@ for (const file of activeDocs) {
 
 const architecture = read('docs/architecture.md')
 requireIncludes('docs/architecture.md', [
+  'AIWorker = Local Shell + Engine Bridge for Soul Apps',
   '## Constraint Registry',
+  'start, shell, locate, mount and bridge',
+  'proposal, broker, review, audit, governance, grant and admission are deprecated Host concepts',
   'scripts/check-doc-contract.ts',
   '`docs/task`, `docs/plan`, `docs/superpowers` and `docs/changelog.md` are audit trail',
 ])
@@ -55,15 +70,21 @@ for (const id of registryIds) {
 requireExact('CLAUDE.md', '@AGENTS.md')
 
 requireIncludes('AGENTS.md', [
+  'Local Shell + Engine Bridge',
+  'start / shell / locate / mount / bridge',
   'Constraint Registry',
   'aiworker-host-dev',
   'aiworker-soul-app-dev',
+  'shadcn',
   'Component Library Preflight',
   'bun run ui:check',
+  '可复用 UI 归入 `packages/ui`',
   '审计轨迹',
 ])
 
 requireIncludes('README.md', [
+  'Local Shell + Engine Bridge',
+  'AIWorker -> Soul App -> workspace -> session -> app-owned work',
   'Constraint Registry',
   '.agents/skills/aiworker-host-dev/SKILL.md',
   '.agents/skills/aiworker-soul-app-dev/SKILL.md',
@@ -81,13 +102,21 @@ forbidIncludes('README.zh-CN.md', [
   'host -> local daemon',
 ])
 
+forbidIncludes('docs/architecture.md', [
+  '`BROKER-001`',
+  '`OPERATOR-001`',
+])
+
 requireIncludes('docs/soul-app-developer.md', [
   'docs/architecture.md#constraint-registry',
   '`SOUL-001`',
   '`PROTO-001`',
   '`IMPORT-001`',
+  '`MOUNT-001`',
   '`DATA-001`',
-  '`BROKER-001`',
+  '`ENGINE-001`',
+  'Official Soul App web surfaces compose shared controls from `packages/ui`',
+  'bun run ui:check',
 ])
 
 requireIncludes('.agents/skills/aiworker-host-dev/SKILL.md', [
@@ -96,11 +125,15 @@ requireIncludes('.agents/skills/aiworker-host-dev/SKILL.md', [
   '`HOST-001`',
   '`PROTO-001`',
   '`IMPORT-001`',
+  '`MOUNT-001`',
   '`DATA-001`',
-  '`BROKER-001`',
+  '`ENGINE-001`',
+  '`UI-001`',
   '`DOC-001`',
+  'shadcn',
   'Component Library Preflight',
-  'componentMigrationQueue',
+  'Use `packages/ui` as the shadcn-managed source',
+  'app-local UI ownership reason',
 ])
 
 requireIncludes('.agents/skills/aiworker-soul-app-dev/SKILL.md', [
@@ -109,9 +142,12 @@ requireIncludes('.agents/skills/aiworker-soul-app-dev/SKILL.md', [
   '`SOUL-001`',
   '`PROTO-001`',
   '`IMPORT-001`',
+  '`MOUNT-001`',
   '`DATA-001`',
-  '`BROKER-001`',
+  '`ENGINE-001`',
   '`DOC-001`',
+  'compose shared chrome and controls from',
+  'bun run ui:check',
 ])
 
 for (const file of activeDocs) {
@@ -119,6 +155,7 @@ for (const file of activeDocs) {
     'GOALS.md',
     'aiworker-validate',
   ])
+  forbidIncludes(file, forbiddenActiveDocPhrases)
 }
 
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }

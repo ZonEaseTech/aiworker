@@ -7,14 +7,17 @@ then reuses the same definition in two modes:
 - standalone: the app owns a small vertical shell and boots an embedded
   AIWorker core runtime for one app-bound worker;
 - Host mounted: AIWorker Host reads the manifest, projects the Soul/capability
-  catalog, mounts declared protocol surfaces, and owns platform capabilities
-  such as engine selection, connector grants and broker scopes. The Soul App
-  still owns artifact, review, profile and lesson/memory semantics.
+  catalog, mounts declared micro-app surfaces, proxies app-owned local API
+  paths, and owns platform capabilities such as engine selection and local
+  session context. The Soul App still owns artifact, review, profile and
+  lesson/memory semantics.
 
-Mounted app actions, search and app configuration belong in `ui.workbench`.
-Workspace process locator intent, such as a future Host-owned web terminal cwd,
-belongs in `ui.workspaceContext`. Host header actions are platform chrome, not
-Soul App slots.
+Mounted app actions, search and app configuration belong inside the micro-app UI
+or app-owned local API. `ui.workbench` may remain as compatibility metadata, but
+Host does not render or invoke it as generic product controls. Workspace process
+locator intent, such as a future Host-owned web terminal cwd, belongs in
+`ui.workspaceContext`. Host header actions are platform chrome, not Soul App
+slots.
 
 ## Minimal Shape
 
@@ -52,23 +55,22 @@ The SDK exposes:
 
 - `defineSoulApp(...)` and `createSoulAppManifest(...)`;
 - protocol handler and manifest types from `@zonease/aiworker-shared`;
-- `createSoulAppClient(...)` for scoped public local API and mounted broker
-  callbacks;
+- `createSoulAppClient(...)` for scoped public local API and mounted app calls;
 - `createSoulAppWebStorage(...)` for scoped first-party browser UI state.
 
 Standalone and Host-mounted harnesses live in
 `@zonease/aiworker-soul-app-runtime`; keep runtime bootstrapping out of the SDK
 package boundary.
 
-Host-side execution of external app UI/API handlers remains gated by the
-manifest protocol, scoped broker grants, and the active architecture contract in
-`docs/architecture.md#constraint-registry`.
+Host-side execution of external app UI/API handlers remains bounded by the
+manifest protocol, declared mounted surfaces, and the active architecture
+contract in `docs/architecture.md#constraint-registry`.
 
 ## Browser UI State
 
-Host broker storage remains the durable path for workspace, session, artifact,
-profile, review and lesson records. Browser Web Storage is only for first-party
-UI state such as filters, drafts and local preferences.
+Soul App workspace storage remains the durable path for app-owned workspace,
+session, artifact, profile, review and lesson records. Browser Web Storage is
+only for first-party UI state such as filters, drafts and local preferences.
 
 Use the scoped helper instead of raw `localStorage` or `sessionStorage`:
 

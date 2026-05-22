@@ -3,6 +3,11 @@
   "type": "module",
   "private": true,
   "license": "MIT",
+  "imports": {
+    "#components/*": "./src/components/*.tsx",
+    "#hooks/*": "./src/hooks/*.ts",
+    "#lib/*": "./src/lib/*.ts"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && bun run check:studio-css",
@@ -17,12 +22,16 @@
     "test:stress": "bun ../../scripts/repeat-command.ts 3 bunx vitest run --testTimeout=15000 src/worker/__tests__/worker-studio.test.tsx"
   },
   "dependencies": {
+    "@hugeicons/core-free-icons": "^4.1.4",
+    "@hugeicons/react": "^1.1.6",
+    "@micro-zoe/micro-app": "^1.0.0-rc.30",
     "@tailwindcss/vite": "^4.2.2",
-    "@zonease/aiworker-component": "workspace:*",
     "@zonease/aiworker-shared": "workspace:*",
-    "lucide-react": "^1.8.0",
+    "@zonease/aiworker-ui": "workspace:*",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.2.2"
   },
   "devDependencies": {

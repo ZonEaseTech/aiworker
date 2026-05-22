@@ -1,0 +1,29 @@
+@import "@zonease/aiworker-ui/styles.css";
+
+@source "./**/*.{ts,tsx}";
+@source "./people-workbench/**/*.{ts,tsx}";
+@source "../../host-adapter/**/*.{ts,tsx}";
+
+@layer components {
+  .hr-reading-room-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @media (min-width: 80rem) {
+    .hr-reading-room-grid[data-left-panel="open"][data-right-panel="open"] {
+      grid-template-columns: minmax(12rem, 0.55fr) minmax(0, 1.85fr) minmax(15rem, 0.72fr);
+    }
+
+    .hr-reading-room-grid[data-left-panel="open"][data-right-panel="closed"] {
+      grid-template-columns: minmax(12rem, 0.55fr) minmax(0, 1.85fr);
+    }
+
+    .hr-reading-room-grid[data-left-panel="closed"][data-right-panel="open"] {
+      grid-template-columns: minmax(0, 1.85fr) minmax(15rem, 0.72fr);
+    }
+
+    .hr-reading-room-grid[data-left-panel="closed"][data-right-panel="closed"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}

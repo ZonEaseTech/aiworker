@@ -9,13 +9,11 @@ import { sql } from 'drizzle-orm'
 
 import {
   appendSessionEvent,
-  artifacts,
   closeWorkerDb,
   createEngineInvocation,
-  createLesson,
-  createReview,
   createSession,
   createTurn,
+  createWorkerEngineInvocation,
   createWorkspace,
   discardLegacySoulMetadata,
   engineInvocations,
@@ -24,21 +22,19 @@ import {
   getSoulApp,
   getWorker,
   getWorkerDb,
+  getWorkerEngineInvocation,
   initWorkerDb,
-  lessons,
-  listArtifacts,
   listEngineInvocations,
   listFiles,
-  listLessons,
-  listReviews,
   listSessionEvents,
   listSessions,
   listSoulApps,
   listTurns,
+  listWorkerEngineInvocations,
+  listWorkerOverlayAssets,
   listWorkers,
   listWorkspaces,
-  registerArtifact,
-  reviews,
+  nextWorkerEngineInvocationSeq,
   runWorkerMigrations,
   sessionEvents,
   sessions,
@@ -47,9 +43,13 @@ import {
   soulApps,
   turns,
   updateSoulAppLifecycle,
+  updateWorkerEngineInvocation,
   upsertFile,
   upsertSoulApp,
   upsertWorker,
+  upsertWorkerOverlayAssets,
+  workerEngineInvocations,
+  workerOverlayAssets,
   workers,
   workspaces,
 } from './index'
@@ -81,21 +81,18 @@ describe('greenfield local worker session schema', () => {
 
     expect(rows).toEqual([
       '__drizzle_migrations',
-      'artifacts',
       'engine_invocations',
       'files',
-      'lessons',
-      'reviews',
       'session_events',
       'sessions',
       'settings',
-      'soul_app_audit_events',
-      'soul_app_storage_records',
       'soul_apps',
       'sqlite_sequence',
       'turns',
       'worker_config',
+      'worker_engine_invocations',
       'worker_identity',
+      'worker_overlay_assets',
       'worker_secrets',
       'workers',
       'workspaces',
@@ -141,7 +138,96 @@ describe('greenfield local worker session schema', () => {
     expect(disabled.disabledAt).toBe('2026-05-12T22:24:00.000Z')
   })
 
-  it('persists the worker -> workspace -> session -> turn -> artifact loop', () => {
+  it('persists worker overlay assets as Host metadata with baseline provenance', () => {
+    const worker = upsertWorker({ id: 'worker-overlay-1', name: 'Recruiting worker', soulId: 'aiworker-hr' })
+
+    upsertWorkerOverlayAssets(worker.id, [{
+      content: '# Interview brief\n',
+      enabled: true,
+      id: 'interview-brief',
+      kind: 'skill',
+      metadataJson: { targetPath: '.agents/skills/aiworker-hr-interview-brief/SKILL.md' },
+      target: 'codex',
+    }])
+
+    const overlay = listWorkerOverlayAssets(worker.id)
+    expect(overlay).toHaveLength(1)
+    expect(overlay[0]).toMatchObject({
+      content: '# Interview brief\n',
+      enabled: true,
+      id: 'interview-brief',
+      kind: 'skill',
+      source: 'overlay',
+      target: 'codex',
+      workerId: worker.id,
+    })
+  })
+
+  it('persists worker-scoped native invocation metadata without session rows', () => {
+    const worker = upsertWorker({
+      id: 'worker-native',
+      soulId: 'hr',
+      name: 'Native Bridge',
+      defaultEngineId: 'codex',
+      at: '2026-05-21T05:18:00.000Z',
+    })
+
+    expect(nextWorkerEngineInvocationSeq(worker.id)).toBe(1)
+    const invocation = createWorkerEngineInvocation({
+      id: 'worker-inv-1',
+      workerId: worker.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      status: 'running',
+      cwd: '/tmp/worker-native',
+      inputRef: 'worker://native/inputs/worker-inv-1',
+      stdoutRef: 'worker://native/logs/worker-inv-1.stdout.log',
+      stderrRef: 'worker://native/logs/worker-inv-1.stderr.log',
+      metadataJson: { runtime: 'native' },
+      startedAt: '2026-05-21T05:19:00.000Z',
+      at: '2026-05-21T05:19:00.000Z',
+    })
+
+    expect(invocation).toMatchObject({
+      cwd: '/tmp/worker-native',
+      engineCommand: 'codex',
+      engineId: 'codex',
+      id: 'worker-inv-1',
+      inputRef: 'worker://native/inputs/worker-inv-1',
+      seq: 1,
+      status: 'running',
+      workerId: worker.id,
+    })
+    expect(invocation).not.toHaveProperty('workspaceId')
+    expect(invocation).not.toHaveProperty('sessionId')
+    expect(invocation).not.toHaveProperty('turnId')
+    expect(invocation).not.toHaveProperty('prompt')
+    expect(invocation).not.toHaveProperty('input')
+    expect(listWorkerEngineInvocations(worker.id)).toEqual([invocation])
+    expect(getWorkerEngineInvocation(invocation.id)).toEqual(invocation)
+    expect(nextWorkerEngineInvocationSeq(worker.id)).toBe(2)
+
+    const finished = updateWorkerEngineInvocation({
+      id: invocation.id,
+      status: 'succeeded',
+      exitCode: 0,
+      signal: null,
+      metadataJson: { runtime: 'native', stdoutBytes: 42 },
+      finishedAt: '2026-05-21T05:20:00.000Z',
+      at: '2026-05-21T05:20:00.000Z',
+    })
+
+    expect(finished).toMatchObject({
+      exitCode: 0,
+      finishedAt: '2026-05-21T05:20:00.000Z',
+      metadataJson: { runtime: 'native', stdoutBytes: 42 },
+      signal: null,
+      status: 'succeeded',
+    })
+  })
+
+  it('persists the worker -> workspace -> session -> turn loop without Host review or lesson rows', () => {
     const worker = upsertWorker({
       id: 'worker-hr',
       soulId: 'hr',
@@ -213,41 +299,6 @@ describe('greenfield local worker session schema', () => {
       at: '2026-05-09T01:05:00.000Z',
     })
     expect(listFiles(workspace.id)).toEqual([file])
-
-    const artifact = registerArtifact({
-      id: 'artifact-1',
-      workspaceId: workspace.id,
-      sessionId: session.id,
-      turnId: turn.id,
-      invocationId: invocation.id,
-      path: file.path,
-      title: 'Candidate review',
-      metadataJson: { fileId: file.id },
-      at: '2026-05-09T01:06:00.000Z',
-    })
-    expect(listArtifacts(workspace.id)).toEqual([artifact])
-    const review = createReview({
-      id: 'review-1',
-      workspaceId: workspace.id,
-      sessionId: session.id,
-      turnId: turn.id,
-      artifactId: artifact.id,
-      verdict: 'warn',
-      findingsJson: [{ message: 'Needs source evidence' }],
-      at: '2026-05-09T01:07:00.000Z',
-    })
-    expect(listReviews(workspace.id)).toEqual([review])
-    const lesson = createLesson({
-      id: 'lesson-1',
-      workspaceId: workspace.id,
-      sourceReviewId: review.id,
-      statement: 'Always cite the candidate packet source.',
-      evidenceJson: [{ reviewId: review.id }],
-      at: '2026-05-09T01:08:00.000Z',
-    })
-
-    expect(lesson.status).toBe('proposed')
-    expect(listLessons(workspace.id)).toEqual([lesson])
     expect(setSetting('engine.default', { engine: 'codex' }).valueJson).toEqual({ engine: 'codex' })
   })
 
@@ -375,11 +426,10 @@ describe('greenfield local worker session schema', () => {
     expect(explain(`SELECT * FROM sessions WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('sessions_workspace_updated_at_idx')
     expect(explain(`SELECT * FROM turns WHERE session_id = 'session-1' ORDER BY seq ASC LIMIT 200`)).toContain('turns_session_seq')
     expect(explain(`SELECT * FROM engine_invocations WHERE status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('engine_invocations_status_updated_at_idx')
+    expect(explain(`SELECT * FROM worker_engine_invocations WHERE worker_id = 'worker-hr' ORDER BY seq DESC LIMIT 20`)).toContain('worker_engine_invocations_worker_seq')
+    expect(explain(`SELECT * FROM worker_engine_invocations WHERE status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('worker_engine_invocations_status_updated_at_idx')
     expect(explain(`SELECT * FROM session_events WHERE session_id = 'session-1' ORDER BY seq ASC LIMIT 200`)).toContain('session_events_session_seq')
     expect(explain(`SELECT * FROM files WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 50`)).toContain('files_workspace_updated_at_idx')
-    expect(explain(`SELECT * FROM artifacts WHERE status = 'available' ORDER BY updated_at DESC LIMIT 50`)).toContain('artifacts_status_updated_at_idx')
-    expect(explain(`SELECT * FROM reviews WHERE workspace_id = 'workspace-1' ORDER BY created_at DESC LIMIT 50`)).toContain('reviews_workspace_created_at_idx')
-    expect(explain(`SELECT * FROM lessons WHERE status = 'proposed' ORDER BY updated_at DESC LIMIT 50`)).toContain('lessons_status_updated_at_idx')
     expect(explain(`SELECT * FROM soul_apps WHERE status = 'enabled' ORDER BY updated_at DESC LIMIT 50`)).toContain('soul_apps_status_updated_at_idx')
   })
 
@@ -389,12 +439,11 @@ describe('greenfield local worker session schema', () => {
     expect(sessions).toBeDefined()
     expect(turns).toBeDefined()
     expect(engineInvocations).toBeDefined()
+    expect(workerEngineInvocations).toBeDefined()
     expect(sessionEvents).toBeDefined()
     expect(files).toBeDefined()
-    expect(artifacts).toBeDefined()
-    expect(reviews).toBeDefined()
-    expect(lessons).toBeDefined()
     expect(soulApps).toBeDefined()
     expect(settings).toBeDefined()
+    expect(workerOverlayAssets).toBeDefined()
   })
 })

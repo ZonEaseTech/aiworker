@@ -1,0 +1,4 @@
+@import "@zonease/aiworker-ui/styles.css";
+
+@source "./**/*.{ts,tsx}";
+@source "../../host-adapter/**/*.{ts,tsx}";

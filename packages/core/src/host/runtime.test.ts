@@ -153,7 +153,7 @@ describe('Host runtime boundary', () => {
     await expect(readFile(path.join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain('"kind": "mcp-client"')
   })
 
-  it('validates worker template ownership and enriches metadata from the Host catalog', async () => {
+  it('validates worker template ownership', async () => {
     const runtime = host()
     await runtime.bootstrapOfficialSoulApps()
     const created = await runtime.createSoulWorker({
@@ -170,26 +170,5 @@ describe('Host runtime boundary', () => {
 
     expect(() => runtime.requireCapabilityTemplateForWorker(created.worker.id, 'aiworker-qa.release-gate'))
       .toThrow('does not belong to worker')
-
-    expect(runtime.enrichTemplateMetadata(created.worker.id, HR_CANDIDATE_SCREEN, { source: 'contract-test' }))
-      .toMatchObject({
-        capabilityTemplateId: HR_CANDIDATE_SCREEN,
-        capabilityPrompt: {
-          content: expect.stringContaining('Use AIWorker HR domain evidence'),
-          ref: './product/workflows/candidate-screen/prompt.md',
-        },
-        capabilityReviewRubric: {
-          content: expect.stringContaining('Candidate Screen Review Rubric'),
-          ref: './product/workflows/candidate-screen/review.md',
-        },
-        inputHints: template.inputHints,
-        outputKind: template.outputKind,
-        reviewRubric: template.reviewRubric,
-        skillName: template.name,
-        soulAppId: HR_APP_ID,
-        soulName: 'AIWorker HR',
-        source: 'contract-test',
-        workerId: 'hr-worker',
-      })
   })
 })

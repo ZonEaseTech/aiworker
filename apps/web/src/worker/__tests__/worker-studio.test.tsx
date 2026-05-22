@@ -1,9 +1,35 @@
-import type { LocalSessionEvent, LocalSettingsConfig, LocalTurn } from '@zonease/aiworker-shared'
+import type { LocalSessionEvent, LocalSettingsConfig, LocalTurn, LocalWorkerOverlayAsset } from '@zonease/aiworker-shared'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { engineIconSrc } from '../../features/settings/model'
 import { WorkerStudio } from '../worker-studio'
+
+const microAppRouteMock = vi.hoisted(() => ({
+  dataListeners: new Map<string, (event: { actionId?: string, appId?: string, input?: unknown, surfaceId?: string, type: string }) => void>(),
+  getMountedMicroAppCurrentRoute: vi.fn(),
+  listeners: new Map<string, (to: { pathname?: string }, from: { pathname?: string }) => void>(),
+  pushMountedMicroAppRoute: vi.fn(),
+  replaceMountedMicroAppRoute: vi.fn(),
+}))
+
+vi.mock('../../lib/micro-app-runtime', async () => {
+  const actual = await vi.importActual<typeof import('../../lib/micro-app-runtime')>('../../lib/micro-app-runtime')
+  return {
+    ...actual,
+    addMountedMicroAppDataListener: vi.fn((appName: string, listener: (event: { actionId?: string, appId?: string, input?: unknown, surfaceId?: string, type: string }) => void) => {
+      microAppRouteMock.dataListeners.set(appName, listener)
+      return () => microAppRouteMock.dataListeners.delete(appName)
+    }),
+    addMountedMicroAppRouteListener: vi.fn(async (appName: string, listener: (to: { pathname?: string }, from: { pathname?: string }) => void) => {
+      microAppRouteMock.listeners.set(appName, listener)
+      return () => microAppRouteMock.listeners.delete(appName)
+    }),
+    getMountedMicroAppCurrentRoute: microAppRouteMock.getMountedMicroAppCurrentRoute,
+    pushMountedMicroAppRoute: microAppRouteMock.pushMountedMicroAppRoute,
+    replaceMountedMicroAppRoute: microAppRouteMock.replaceMountedMicroAppRoute,
+  }
+})
 
 const now = '2026-05-10T00:00:00.000Z'
 const HR_SOUL_ID = 'aiworker-hr'
@@ -16,21 +42,14 @@ const HR_ONBOARDING_PLAN = `${HR_SOUL_ID}.onboarding-plan`
 const HR_OFFBOARDING_SUMMARY = `${HR_SOUL_ID}.offboarding-summary`
 const HR_EVIDENCE_MATRIX = `${HR_SOUL_ID}.evidence-matrix`
 const HR_HIRING_RISK = `${HR_SOUL_ID}.hiring-risk`
-const HR_PROFILE_UPDATE_PROPOSAL = `${HR_SOUL_ID}.profile-update-proposal`
-
-function expandProfileTools(): HTMLElement {
-  const expandButton = screen.queryByRole('button', { name: 'Expand Profile Workbench' })
-  if (expandButton)
-    fireEvent.click(expandButton)
-  return document.querySelector('.hr-profile-tools-panel') as HTMLElement
-}
+const HR_PROFILE_UPDATE_PROPOSAL = `${HR_SOUL_ID}.profile-update-draft`
 
 function openHostSettings() {
   fireEvent.click(screen.getByRole('button', { name: /^Platform settings(?:\s|$)/ }))
 }
 
-async function openProfilePatchReviewFromRail() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Review profile patch' }))
+function selectSettingsTab(tab: HTMLElement) {
+  fireEvent.mouseDown(tab, { button: 0, ctrlKey: false })
 }
 
 const workspace = {
@@ -68,13 +87,13 @@ const templates = [
     soulId: HR_SOUL_ID,
   },
   {
-    description: 'Draft a reviewable candidate profile update.',
+    description: 'Draft an inspectable candidate profile update.',
     id: HR_PROFILE_UPDATE_PROPOSAL,
     inputHints: ['Candidate materials', 'Accepted README baseline'],
-    name: 'Profile Update Proposal',
-    outputKind: 'profile-update-proposal',
-    prompt: 'Draft profile update proposal',
-    reviewRubric: ['Accepted README draft is reviewable.'],
+    name: 'Profile Update Draft',
+    outputKind: 'profile-update-draft',
+    prompt: 'Draft profile update',
+    reviewRubric: ['Accepted README draft is inspectable.'],
     soulId: HR_SOUL_ID,
   },
   {
@@ -240,17 +259,6 @@ const artifactRecord = {
   workspaceId: 'workspace-1',
 }
 
-const lessonRecord = {
-  createdAt: now,
-  evidenceJson: [{ turnId: 'turn-1' }],
-  id: 'lesson-1',
-  sourceReviewId: null,
-  statement: 'Keep hiring evidence attached to the candidate screen.',
-  status: 'proposed',
-  updatedAt: now,
-  workspaceId: 'workspace-1',
-}
-
 const eventRecord = {
   createdAt: now,
   id: 1,
@@ -264,25 +272,14 @@ const eventRecord = {
 
 let currentArtifacts: typeof artifactRecord[]
 let currentEvents: LocalSessionEvent[]
-let currentLessons: typeof lessonRecord[]
-let currentReviews: Array<{
-  artifactId: string | null
-  createdAt: string
-  findingsJson: Array<Record<string, unknown>>
-  id: string
-  risksJson: Array<Record<string, unknown>>
-  sessionId: string | null
-  turnId: string | null
-  verdict: 'needs_review' | 'pass' | 'warn' | 'fail'
-  workspaceId: string
-}>
 let currentSettings: typeof baseSettings
 let currentSessions: typeof sessionRecord[]
 let currentTurns: LocalTurn[]
 let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
-let currentProfiles: Record<string, string>
+let currentWorkerOverlayAssets: LocalWorkerOverlayAsset[]
 let currentArtifactRawContent: string
+let currentArtifactRawStatus: number
 let lastMessageRequestBody: Record<string, unknown> | null
 let lastSessionRequestBody: Record<string, unknown> | null
 let writtenFiles: Array<{ body: string, path: string, workspaceId: string }>
@@ -299,7 +296,16 @@ let currentApps: Array<{
       artifactPreviews?: Array<{ id: string, label: string }>
       panels?: Array<{ id: string, label: string }>
       reviewPanels?: Array<{ id: string, label: string }>
-      routes?: Array<{ id?: string, label: string, path: string, surface?: { renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module' } }>
+      routes?: Array<{
+        id?: string
+        label: string
+        path: string
+        surface?: {
+          entry?: string
+          renderer: 'host-descriptor' | 'micro-app'
+          scope?: 'app' | 'artifact' | 'review' | 'session' | 'workspace'
+        }
+      }>
       workbench?: {
         actions?: Array<{
           id: string
@@ -329,14 +335,14 @@ let currentApps: Array<{
           requiredPermissions?: string[]
         }
       }
-      workspaceWidgets?: Array<{ id: string, label: string, surface?: { renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module' } }>
+      workspaceWidgets?: Array<{ id: string, label: string, surface?: { renderer: 'host-descriptor' | 'micro-app' } }>
     }
   }
   mountedContribution?: {
     apiRoutePrefix: string | null
     artifactPreviewIds: string[]
     descriptorSurfaceIds?: string[]
-    frameSurfaceIds?: string[]
+    microAppSurfaceIds?: string[]
     panelIds: string[]
     reviewPanelIds: string[]
     routePaths: string[]
@@ -390,60 +396,18 @@ function resetSettings() {
   currentSessions = [{ ...sessionRecord }]
   currentTurns = [{ ...turnRecord }]
   currentArtifacts = [{ ...artifactRecord }]
-  currentReviews = []
-  currentLessons = [{ ...lessonRecord }]
   currentEvents = [{ ...eventRecord }]
   currentWorkers = workers.map(worker => ({ ...worker }))
-  currentProfiles = {
-    'workspace-1': [
-      '# Hiring Workspace',
-      '',
-      '## Current Profile Summary',
-      '',
-      'Accepted profile summary.',
-      '',
-      '## Identity And Basics',
-      '',
-      '- Lifecycle: Candidate',
-      '- Target role: Senior Product Manager',
-      '',
-      '## Role Context And Responsibilities',
-      '',
-      'Own product discovery and marketplace growth execution.',
-      '',
-      '## Capabilities And Stack',
-      '',
-      '- SQL analytics',
-      '- Experiment design',
-      '',
-      '## Confirmed Facts',
-      '',
-      '- Completed recruiter screen.',
-      '',
-      '## Evidence Status',
-      '',
-      '| Signal | Status | Source |',
-      '| --- | --- | --- |',
-      '| Product discovery | Supported | Interview notes |',
-      '',
-      '## Risks And Gaps',
-      '',
-      '- Reference check is missing.',
-      '',
-      '## Next HR Actions',
-      '',
-      '- Request reviewer decision.',
-      '',
-      '## Review State',
-      '',
-      'Accepted profile baseline is reviewed.',
-      '',
-      '## Accepted External Sections',
-      '',
-      '- Interview Brief: reviews/interview-brief.md',
-      '',
-    ].join('\n'),
-  }
+  currentWorkerOverlayAssets = [{
+    content: '# Interview Brief\n',
+    enabled: true,
+    id: 'interview-brief',
+    kind: 'skill',
+    metadataJson: {},
+    source: 'overlay',
+    target: 'codex',
+    updatedAt: now,
+  }]
   lastMessageRequestBody = null
   lastSessionRequestBody = null
   writtenFiles = []
@@ -461,6 +425,7 @@ function resetSettings() {
     '```',
     '',
   ].join('\n')
+  currentArtifactRawStatus = 200
   currentApps = []
   deferCreatedSessionStream = false
 }
@@ -510,9 +475,17 @@ function installMatchMedia(initialMatches: boolean) {
 }
 
 beforeEach(() => {
+  microAppRouteMock.dataListeners.clear()
+  microAppRouteMock.listeners.clear()
+  microAppRouteMock.pushMountedMicroAppRoute.mockReset()
+  microAppRouteMock.replaceMountedMicroAppRoute.mockReset()
+  microAppRouteMock.getMountedMicroAppCurrentRoute.mockReset()
+  microAppRouteMock.getMountedMicroAppCurrentRoute.mockResolvedValue(null)
   resetSettings()
   window.history.replaceState(null, '', '/')
   document.documentElement.lang = ''
+  document.documentElement.classList.remove('dark')
+  document.documentElement.style.colorScheme = ''
   installMatchMedia(false)
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -526,45 +499,12 @@ beforeEach(() => {
       return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
     if (url.endsWith('/api/local/apps'))
       return json({ apps: currentApps })
-    if (url.endsWith('/api/local/apps/aiworker-qa/security-review')) {
-      const ciAvailable = currentSettings.connectors.some(connector => connector.id === 'ci')
-      return json({
-        appId: 'aiworker-qa',
-        connectors: {
-          optional: [],
-          required: [{
-            access: ['read'],
-            available: ciAvailable,
-            enabled: currentSettings.connectors.some(connector => connector.id === 'ci' && connector.enabled),
-            id: 'ci',
-            reason: 'Read CI and test evidence through the Host connector broker.',
-            required: true,
-            scopes: ['runs.read'],
-          }],
-        },
-        descriptorPermissions: [],
-        healthStatus: 'pass',
-        manifestPermissions: [],
-        status: 'disabled',
-        summary: {
-          canEnable: ciAvailable,
-          descriptorPermissionCount: 0,
-          disabledRequiredConnectorIds: ciAvailable ? ['ci'] : [],
-          manifestPermissionCount: 0,
-          missingRequiredConnectorIds: ciAvailable ? [] : ['ci'],
-          optionalConnectorCount: 0,
-          requiredConnectorCount: 1,
-          warnings: ciAvailable ? ['Required connectors are not enabled: ci'] : ['Required connectors are not available: ci'],
-        },
-      })
-    }
     if (url.endsWith('/api/local/apps/aiworker-qa/enable') && method === 'POST') {
       const enabled = currentApps.find(app => app.appId === 'aiworker-qa')
       currentApps = currentApps.map(app => app.appId === 'aiworker-qa' ? { ...app, status: 'enabled' } : app)
       return json({
         app: enabled ? { ...enabled, status: 'enabled' } : null,
         catalog: { apps: currentApps, souls, templates },
-        review: { appId: 'aiworker-qa', summary: { disabledRequiredConnectorIds: ['ci'] } },
       })
     }
     if (url.endsWith('/api/local/apps/aiworker-qa/disable') && method === 'POST') {
@@ -573,15 +513,40 @@ beforeEach(() => {
       return json({
         app: disabled ? { ...disabled, status: 'disabled' } : null,
         catalog: { apps: currentApps, souls, templates },
-        review: { appId: 'aiworker-qa', summary: { disabledRequiredConnectorIds: ['ci'] } },
       })
     }
-    if (url.endsWith('/api/local/apps/aiworker-hr/surfaces/hr-home')) {
+    const requestUrl = new URL(url, 'http://local.test')
+    const hrSurfaceMatch = requestUrl.pathname.match(/^\/api\/local\/apps\/aiworker-hr\/surfaces\/([^/]+)$/)
+    if (hrSurfaceMatch) {
+      const surfaceId = hrSurfaceMatch[1]!
+      const hrRoute = currentApps
+        .find(app => app.appId === 'aiworker-hr')
+        ?.manifest
+        .ui
+        ?.routes
+        ?.find(route => route.id === surfaceId)
+      if (hrRoute?.surface?.renderer === 'micro-app') {
+        return json({
+          microApp: {
+            data: {
+              appId: 'aiworker-hr',
+              sessionId: requestUrl.searchParams.get('sessionId') ?? null,
+              surfaceId,
+              workerId: requestUrl.searchParams.get('workerId') ?? null,
+              workspaceId: requestUrl.searchParams.get('workspaceId') ?? null,
+              theme: requestUrl.searchParams.get('theme') ?? null,
+            },
+            name: `aiworker-hr--${surfaceId}`,
+            url: `/api/local/apps/aiworker-hr/micro-app/routes/${surfaceId}${requestUrl.search}`,
+          },
+          surface: { id: surfaceId, kind: 'route', label: hrRoute.label, renderer: 'micro-app', scope: hrRoute.surface.scope ?? null },
+        })
+      }
       return json({
-        actions: [{ id: 'create-profile-review', label: 'Create review' }],
+        actions: [{ id: 'create-profile-draft', label: 'Create profile draft' }],
         fields: [
           { label: 'Domain', value: 'hr-people-ops' },
-          { label: 'Evidence broker', value: 'ats' },
+          { label: 'Source connector', value: 'ats' },
         ],
         status: 'ready',
         title: 'HR Mounted Workbench',
@@ -590,54 +555,21 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/local/apps/aiworker-hr/surfaces/hr-people-widget')) {
       return json({
-        frame: {
-          sandbox: 'allow-scripts allow-forms',
-          title: 'People widget',
-          url: 'about:blank',
+        microApp: {
+          data: {
+            appId: 'aiworker-hr',
+            surfaceId: 'hr-people-widget',
+            theme: null,
+          },
+          name: 'aiworker-hr--hr-people-widget',
+          url: '/api/local/apps/aiworker-hr/micro-app/widgets/hr-people-widget',
         },
-        surface: { id: 'hr-people-widget', kind: 'workspace-widget', label: 'People widget', renderer: 'sandboxed-frame' },
+        surface: { id: 'hr-people-widget', kind: 'workspace-widget', label: 'People widget', renderer: 'micro-app' },
       })
     }
-    if (url.endsWith('/api/local/apps/aiworker-hr/frames/widgets/hr-people-widget')) {
+    if (url.endsWith('/api/local/apps/aiworker-hr/micro-app/widgets/hr-people-widget')) {
       return new Response('<!doctype html><html><body><h1>People widget</h1></body></html>', {
         headers: { 'content-type': 'text/html; charset=utf-8' },
-      })
-    }
-    if (url.endsWith('/api/local/apps/aiworker-hr/actions/create-people-profile') && method === 'POST') {
-      return json({
-        action: { id: 'create-people-profile', protocolAction: 'peopleProfiles.create' },
-        result: { ok: true, message: 'People profile draft created.', refresh: true },
-      })
-    }
-    if (url.endsWith('/api/local/apps/aiworker-hr/actions/toggle-evidence-drawer') && method === 'POST') {
-      return json({
-        action: { id: 'toggle-evidence-drawer', protocolAction: 'drawers.evidence.toggle' },
-        result: { ok: true, message: 'Evidence drawer intent emitted.' },
-      })
-    }
-    if (url.endsWith('/api/local/apps/aiworker-hr/actions/refresh-people') && method === 'POST') {
-      return json({
-        action: { id: 'refresh-people', protocolAction: 'people.refresh' },
-        result: { ok: true, message: 'People data refreshed.', refresh: true },
-      })
-    }
-    if (url.endsWith('/api/local/apps/aiworker-hr/actions/configure-hr') && method === 'POST') {
-      return json({
-        action: { id: 'configure-hr', protocolAction: 'configuration.open' },
-        result: { ok: true, message: 'HR configuration is owned by the HR app.' },
-      })
-    }
-    if (url.endsWith('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada&limit=8')) {
-      return json({
-        providerId: 'peopleProfiles.search',
-        items: [{
-          appId: 'aiworker-hr',
-          authority: 'soul-app',
-          id: 'profile-ada',
-          kind: 'people-profile',
-          summary: 'Staff engineer candidate profile',
-          title: 'Ada Lovelace',
-        }],
       })
     }
     if (url.endsWith('/api/local/workers') && method === 'POST') {
@@ -657,6 +589,54 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/local/workers'))
       return json({ workers: currentWorkers })
+    if (requestUrl.pathname.match(/^\/api\/local\/workers\/[^/]+\/overlay$/)) {
+      const workerId = requestUrl.pathname.split('/')[4]!
+      if (method === 'PUT') {
+        const requestBody = init?.body ? JSON.parse(String(init.body)) as { assets?: LocalWorkerOverlayAsset[] } : {}
+        currentWorkerOverlayAssets = requestBody.assets?.map(asset => ({
+          ...asset,
+          metadataJson: asset.metadataJson ?? {},
+          source: 'overlay',
+          updatedAt: now,
+        })) ?? []
+      }
+      return json({ overlay: { assets: currentWorkerOverlayAssets, workerId } })
+    }
+    const workerProjectionMatch = requestUrl.pathname.match(/^\/api\/local\/workers\/([^/]+)\/workspaces\/([^/]+)\/projection$/)
+    if (workerProjectionMatch && method === 'POST') {
+      const workerId = workerProjectionMatch[1]!
+      const workspaceId = workerProjectionMatch[2]!
+      const workspace = currentWorkspaces.find(item => item.id === workspaceId && item.workerId === workerId)
+      if (!workspace)
+        return json({}, 404)
+      const projected = {
+        ...workspace,
+        metadataJson: {
+          ...workspace.metadataJson,
+          engineAssetProjection: {
+            projectedAt: now,
+            projectionCount: currentWorkerOverlayAssets.filter(asset => asset.enabled).length,
+            projectionManifestPath: '.aiworker/projections.json',
+          },
+        },
+      }
+      currentWorkspaces = currentWorkspaces.map(item => item.id === workspaceId ? projected : item)
+      return json({
+        projection: {
+          receipt: {
+            appId: 'aiworker-hr',
+            generatedAt: now,
+            projections: currentWorkerOverlayAssets.filter(asset => asset.enabled).map(asset => ({
+              kind: asset.kind,
+              source: 'worker-overlay',
+              target: asset.id,
+            })),
+            version: 1,
+          },
+          workspace: projected,
+        },
+      })
+    }
     if (url.endsWith('/api/local/souls'))
       return json({ souls })
     if (url.endsWith('/api/local/templates'))
@@ -665,7 +645,6 @@ beforeEach(() => {
       const body = init?.body ? JSON.parse(String(init.body)) as { name: string } : { name: 'New candidate workspace' }
       const created = { ...workspace, id: 'workspace-created', name: body.name }
       currentWorkspaces = [created, ...currentWorkspaces]
-      currentProfiles[created.id] = `# Current Profile Summary\n\n${created.name} does not have an approved profile revision yet.\n`
       return json({ workspace: created }, 201)
     }
     if (url.endsWith('/api/local/workspaces'))
@@ -721,7 +700,7 @@ beforeEach(() => {
           const write = () => {
             controller.enqueue(encoder.encode(`event: session\ndata: ${JSON.stringify(createdSession)}\n\n`))
             controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify({ ...createdTurn, status: 'running', response: null })}\n\n`))
-            controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [createdArtifact], events: [], files: [], lessons: [], review: null, session: createdSession, turn: createdTurn })}\n\n`))
+            controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [createdArtifact], events: [], files: [], session: createdSession, turn: createdTurn })}\n\n`))
             controller.close()
           }
           if (deferCreatedSessionStream)
@@ -732,15 +711,13 @@ beforeEach(() => {
       }), { headers: { 'content-type': 'text/event-stream' }, status: 201 })
     }
     if ((url.endsWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions') || url.endsWith('/api/local/workspaces/workspace-created/sessions')) && method === 'POST') {
-      const requestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
-      lastSessionRequestBody = requestBody
       const createdSession = { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created', title: 'New candidate workspace' }
       const createdTurn = { ...turnRecord, id: 'turn-created', sessionId: 'session-created' }
       const createdArtifact = { ...artifactRecord, id: 'artifact-created', sessionId: 'session-created', turnId: 'turn-created', workspaceId: 'workspace-created' }
       currentSessions = [createdSession, ...currentSessions]
       currentTurns = [createdTurn, ...currentTurns]
       currentArtifacts = [createdArtifact, ...currentArtifacts]
-      return json({ artifacts: [createdArtifact], events: [], files: [], lessons: [], review: null, session: createdSession, turn: createdTurn }, 201)
+      return json({ artifacts: [createdArtifact], events: [], files: [], session: createdSession, turn: createdTurn }, 201)
     }
     if ((url.endsWith('/api/local/workers/hr-worker/sessions/session-1/messages/stream') || url.endsWith('/api/local/sessions/session-1/turns/stream')) && method === 'POST') {
       lastMessageRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
@@ -767,7 +744,7 @@ beforeEach(() => {
           controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify({ ...nextTurn, status: 'running', response: null })}\n\n`))
           controller.enqueue(encoder.encode(`event: session_event\ndata: ${JSON.stringify(nextEvent)}\n\n`))
           controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify(nextTurn)}\n\n`))
-          controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [], events: currentEvents, files: [], lessons: [], review: null, session: sessionRecord, turn: nextTurn })}\n\n`))
+          controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [], events: currentEvents, files: [], session: sessionRecord, turn: nextTurn })}\n\n`))
           controller.close()
         },
       }), { headers: { 'content-type': 'text/event-stream' }, status: 200 })
@@ -783,7 +760,7 @@ beforeEach(() => {
       }
       currentTurns = [...currentTurns, nextTurn]
       currentEvents = [...currentEvents, { ...eventRecord, id: 2, seq: 1, turnId: 'turn-2' }]
-      return json({ artifacts: [], events: currentEvents, files: [], lessons: [], review: null, session: sessionRecord, turn: nextTurn }, 201)
+      return json({ artifacts: [], events: currentEvents, files: [], session: sessionRecord, turn: nextTurn }, 201)
     }
     if (url.endsWith('/api/local/sessions'))
       return json({ sessions: currentSessions })
@@ -791,79 +768,14 @@ beforeEach(() => {
       return json({ turns: currentTurns })
     if (url.endsWith('/api/local/files'))
       return json({ files: [] })
-    const profileMatch = url.match(/\/api\/local\/workspaces\/([^/]+)\/profile$/)
-    if (profileMatch && method === 'GET') {
-      const workspaceId = profileMatch[1]!
-      const workspaceName = currentWorkspaces.find(item => item.id === workspaceId)?.name ?? 'People Profile'
-      return new Response(currentProfiles[workspaceId] ?? `# Current Profile Summary\n\n${workspaceName} does not have an approved profile revision yet.\n`, {
-        headers: { 'content-type': 'text/plain' },
-      })
-    }
-    const profileRevisionMatch = url.match(/\/api\/local\/workspaces\/([^/]+)\/profile-revisions$/)
-    if (profileRevisionMatch && method === 'POST') {
-      const workspaceId = profileRevisionMatch[1]!
-      const body = init?.body
-        ? JSON.parse(String(init.body)) as {
-          artifactId?: string
-          findingsJson?: Array<Record<string, unknown>>
-          profileMarkdown?: string
-          risksJson?: Array<Record<string, unknown>>
-          verdict?: 'pass' | 'warn'
-        }
-        : {}
-      currentProfiles[workspaceId] = body.profileMarkdown ?? '# Candidate Screen\n\nEvidence summary.\n'
-      const review = {
-        artifactId: body.artifactId ?? 'artifact-1',
-        createdAt: now,
-        findingsJson: body.findingsJson ?? [{ message: 'Approved from HR workbench.' }],
-        id: 'review-profile-1',
-        risksJson: body.risksJson ?? [],
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        verdict: body.verdict ?? 'pass',
-        workspaceId,
-      }
-      currentReviews = [review, ...currentReviews]
-      return json({
-        profileRevision: {
-          git: { hash: 'abc123', status: 'created' },
-          profilePath: 'README.md',
-          review,
-          reviewPath: 'reviews/review-profile-1.md',
-          tag: null,
-        },
-      }, 201)
-    }
     if (url.includes('/api/local/workspaces/') && url.includes('/files/raw/')) {
-      return new Response(currentArtifactRawContent, { headers: { 'content-type': 'text/plain' } })
+      return new Response(currentArtifactRawContent, {
+        headers: { 'content-type': 'text/plain' },
+        status: currentArtifactRawStatus,
+      })
     }
     if (url.endsWith('/api/local/artifacts'))
       return json({ artifacts: currentArtifacts })
-    if (url.endsWith('/api/local/reviews') && method === 'POST') {
-      const body = init?.body ? JSON.parse(String(init.body)) as Partial<(typeof currentReviews)[number]> : {}
-      const review = {
-        artifactId: body.artifactId ?? 'artifact-1',
-        createdAt: now,
-        findingsJson: body.findingsJson ?? [{ message: 'Human review requested from Worker Web.' }],
-        id: 'review-1',
-        risksJson: body.risksJson ?? [],
-        sessionId: body.sessionId ?? 'session-1',
-        turnId: body.turnId ?? 'turn-1',
-        verdict: body.verdict ?? 'needs_review',
-        workspaceId: body.workspaceId ?? 'workspace-1',
-      }
-      currentReviews = [review]
-      return json({ review }, 201)
-    }
-    if (url.endsWith('/api/local/reviews'))
-      return json({ reviews: currentReviews })
-    if (url.endsWith('/api/local/lessons/lesson-1') && method === 'PATCH') {
-      const body = init?.body ? JSON.parse(String(init.body)) as { status: typeof lessonRecord.status } : { status: 'accepted' }
-      currentLessons = currentLessons.map(lesson => lesson.id === 'lesson-1' ? { ...lesson, status: body.status } : lesson)
-      return json({ lesson: currentLessons[0] })
-    }
-    if (url.endsWith('/api/local/lessons'))
-      return json({ lessons: currentLessons })
     if (url.endsWith('/api/local/events'))
       return json({ events: currentEvents })
     if (url.endsWith('/api/local/settings') && method === 'PATCH') {
@@ -888,6 +800,18 @@ beforeEach(() => {
 })
 
 describe('worker studio', () => {
+  it('renders startup load failures through a shadcn alert', async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('local daemon offline'))
+
+    render(<WorkerStudio />)
+
+    const loadFailure = await screen.findByText('local daemon offline')
+    expect(loadFailure.getAttribute('data-slot')).toBe('alert-description')
+    const loadFailureAlert = loadFailure.closest('[data-slot="alert"]')
+    expect(loadFailureAlert).toBeTruthy()
+    expect(loadFailureAlert?.getAttribute('role')).toBe('alert')
+  })
+
   it('skips legacy workers whose Souls are no longer projected', async () => {
     currentWorkers = [
       { createdAt: now, defaultEngineId: 'codex', id: 'devops-worker', metadataJson: {}, name: 'DevOps', soulId: 'devops', status: 'active', updatedAt: now },
@@ -896,10 +820,161 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    expect(await screen.findByTestId('hr-people-workbench')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /HR \(1\)/ })).toBeTruthy()
+    expect(await screen.findByLabelText('Host actions')).toBeTruthy()
+    const switcher = screen.getByTestId('worker-switcher')
+    expect(within(switcher).getByRole('button', { name: 'Switch to HR' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /HR \(1\)/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /DevOps/ })).toBeNull()
     expect(screen.queryByText('Loading Soul workspace...')).toBeNull()
+  })
+
+  it('keeps the Host sidebar to worker switching instead of workspace/session hierarchy', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker')
+    render(<WorkerStudio />)
+
+    const switcher = await screen.findByTestId('worker-switcher')
+    expect(within(switcher).getByRole('button', { name: 'Collapse AIWorker HR' })).toBeTruthy()
+    expect(within(switcher).getByRole('button', { name: 'Collapse AIWorker QA' })).toBeTruthy()
+    expect(within(switcher).getByRole('button', { name: 'Switch to HR' })).toBeTruthy()
+    expect(within(switcher).getByRole('button', { name: 'Switch to QA' })).toBeTruthy()
+    expect(within(switcher).queryByText('Hiring Workspace')).toBeNull()
+    expect(within(switcher).queryByText('Screen candidate')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
+  })
+
+  it('opens a workspace route as an app-owned mounted surface instead of Host session composition', async () => {
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-home',
+            label: 'HR People Workbench',
+            path: '/hr',
+            surface: { renderer: 'micro-app', scope: 'workspace' },
+          }],
+          workspaceWidgets: [],
+        },
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-home'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr'],
+        surfaceIds: ['hr-home'],
+        workspaceWidgetIds: [],
+      },
+      status: 'enabled',
+      version: '0.1.0',
+    }]
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    const microApp = await screen.findByTitle('HR People Workbench')
+    expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
+    expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
+      appId: 'aiworker-hr',
+      sessionId: null,
+      surfaceId: 'hr-home',
+      workerId: 'hr-worker',
+      workspaceId: 'workspace-1',
+    })
+    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
+    expect(screen.queryByText('What do you want to build in Hiring Workspace?')).toBeNull()
+    expect(screen.queryByRole('combobox', { name: /capability|skill|template/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /\$ skill/i })).toBeNull()
+    expect(lastSessionRequestBody).toBeNull()
+  })
+
+  it('opens Worker configuration from the worker row without opening Host settings', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker')
+    render(<WorkerStudio />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure HR' }))
+
+    expect(screen.getByRole('dialog', { name: 'Worker configuration' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: /settings/i })).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Skills' })).toBeTruthy()
+    expect(screen.getByTestId('worker-overlay-asset-list').getAttribute('data-orientation')).toBe('horizontal')
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable interview-brief' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/overlay', expect.objectContaining({
+        body: expect.stringContaining('"enabled":false'),
+        method: 'PUT',
+      }))
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'New asset' }))
+    fireEvent.change(screen.getByLabelText('Overlay asset id'), { target: { value: 'custom-skill' } })
+    fireEvent.change(screen.getByLabelText('Overlay asset target'), { target: { value: 'codex' } })
+    fireEvent.change(screen.getByLabelText('Overlay asset content'), { target: { value: '# Custom Skill\n\nUse with product research.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create asset' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/overlay', expect.objectContaining({
+        body: expect.stringContaining('"id":"custom-skill"'),
+        method: 'PUT',
+      }))
+    })
+    fireEvent.click(await screen.findByRole('button', { name: 'custom-skill' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Validate' }))
+    expect(await screen.findByText('Overlay asset is valid.')).toBeTruthy()
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for custom-skill' }))
+    fireEvent.click(await screen.findByText('Duplicate'))
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/overlay', expect.objectContaining({
+        body: expect.stringContaining('"id":"custom-skill-2"'),
+        method: 'PUT',
+      }))
+    })
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Projection' }), { button: 0, ctrlKey: false })
+    expect(await screen.findByText('Projection receipt')).toBeTruthy()
+    expect(await screen.findByText('custom-skill-2')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Run projection' }))
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-1/projection', expect.objectContaining({
+        method: 'POST',
+      }))
+    })
+    expect(await screen.findByText('Projection updated with 2 items.')).toBeTruthy()
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Skills' }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole('button', { name: 'custom-skill-2' }))
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for custom-skill-2' }))
+    fireEvent.click(await screen.findByText('Delete'))
+
+    await waitFor(() => {
+      const putBodies = vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).endsWith('/api/local/workers/hr-worker/overlay') && init?.method === 'PUT').map(([, init]) => String(init?.body ?? ''))
+      expect(putBodies.at(-1)).not.toContain('"id":"custom-skill-2"')
+    })
+  })
+
+  it('opens configuration for the worker row that owns the hovered more action', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker')
+    render(<WorkerStudio />)
+
+    const switcher = await screen.findByTestId('worker-switcher')
+    fireEvent.click(within(switcher).getByRole('button', { name: 'Configure QA' }))
+
+    expect(screen.getByRole('dialog', { name: 'Worker configuration' })).toBeTruthy()
+    expect(screen.getByText('QA worker overlay')).toBeTruthy()
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers/qa-worker/overlay', expect.objectContaining({
+        headers: {},
+      }))
+    })
+    expect(window.location.pathname).toBe('/workers/hr-worker')
   })
 
   it('falls back to first-run Soul App home when every persisted worker is orphaned', async () => {
@@ -911,386 +986,229 @@ describe('worker studio', () => {
 
     expect(await screen.findByRole('heading', { name: 'Choose a Soul App to start' })).toBeTruthy()
     expect(screen.getByText('No enabled Soul Apps')).toBeTruthy()
+    const firstRunRailTitle = screen.getByText('First run')
+    expect(firstRunRailTitle.closest('[data-slot="item"]')).toBeTruthy()
+    expect(firstRunRailTitle.closest('[data-slot="card"]')).toBeNull()
     expect(screen.queryByText('Loading Soul workspace...')).toBeNull()
   })
 
-  it('renders HR as a specialized workbench without import or work-order entrypoints', async () => {
-    render(<WorkerStudio />)
-
-    expect(await screen.findByLabelText('Host actions')).toBeTruthy()
-    expect(document.documentElement.lang).toBe('en')
-    expect(screen.getByRole('button', { name: 'Hide sidebar' })).toBeTruthy()
-    expect((screen.getByRole('button', { name: 'Open workspace terminal' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('button', { name: 'Open right panel' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'New Soul worker' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Soul Apps' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Hide sidebar' }))
-    expect(document.querySelector('.workspace-sidebar-collapsed')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Show sidebar' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Show sidebar' }))
-    expect(document.querySelector('.workspace-sidebar-collapsed')).toBeNull()
-    expect(screen.getAllByLabelText('Current worker').length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: /HR \(1\)/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /QA \(1\)/ })).toBeTruthy()
-    expect(screen.getAllByText('HR').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('QA').length).toBeGreaterThan(0)
-    expect(await screen.findByTestId('hr-people-workbench')).toBeTruthy()
-    expect(screen.queryByRole('heading', { name: 'People Workbench' })).toBeNull()
-    expect(document.querySelector('.hr-people-header')).toBeNull()
-    expect(screen.queryByText('PEOPLE PROFILE WORKBENCH')).toBeNull()
-    expect(screen.queryByText('Profile Actions')).toBeNull()
-    const profileList = screen.getByLabelText('People Profiles')
-    expect(profileList).toBeTruthy()
-    expect(within(profileList).getByText('People Profiles')).toBeTruthy()
-    expect(within(profileList).getByRole('button', { name: /New profile/ })).toBeTruthy()
-    expect(screen.queryByPlaceholderText('Search people profiles')).toBeNull()
-    expect(screen.getByRole('heading', { name: 'Select a people profile' })).toBeTruthy()
-    expect(screen.queryByLabelText('Current Profile Summary')).toBeNull()
-    expect(document.querySelector('.hr-profile-details')).toBeNull()
-    expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
-    const candidateSectionToggle = screen.getByRole('button', { name: /Candidates/ })
-    expect(candidateSectionToggle.closest('.studio-collapsible-group')).toBeTruthy()
-    expect(profileList.querySelector('.studio-collapsible-group-drawer')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Needs attention/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Hide Profile List' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Expand Profile Tools' })).toBeNull()
-    expect(screen.queryByLabelText('Collapsed Profile Tools')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Open Hiring Workspace profile' }))
-    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
-    expect(within(hrDetails).getByRole('heading', { name: 'Hiring Workspace People Profile' })).toBeTruthy()
-    expect(within(hrDetails).getByRole('button', { name: 'Hide Profile List' })).toBeTruthy()
-    expect(within(hrDetails).getByRole('button', { name: 'Expand Profile Workbench' })).toBeTruthy()
-    expect(await within(hrDetails).findByText('Accepted profile summary.')).toBeTruthy()
-    expect(within(hrDetails).getByText('Identity And Basics')).toBeTruthy()
-    expect(within(hrDetails).getByText('Role Context And Responsibilities')).toBeTruthy()
-    expect(within(hrDetails).getByText('Capabilities And Stack')).toBeTruthy()
-    const profileSourceTags = within(hrDetails).getByLabelText('Profile sources')
-    expect(profileSourceTags.textContent).toContain('Artifact evidence1')
-    expect(profileSourceTags.textContent).toContain('Session context1')
-    expect(profileSourceTags.textContent).toContain('Review records0')
-    expect(await within(hrDetails).findByText('Profile patch ready')).toBeTruthy()
-    expect(within(hrDetails).getByText('10 sections changed')).toBeTruthy()
-    expect(within(hrDetails).getByRole('button', { name: 'Review profile patch' })).toBeTruthy()
-    expect(within(hrDetails).getByRole('button', { name: 'Review profile patch' }).textContent).toBe('Review')
-    expect(within(hrDetails).queryByText('Profile sources')).toBeNull()
-    expect(within(hrDetails).queryByText('Profile Patch')).toBeNull()
-    expect(within(hrDetails).queryByText('Review guardrails')).toBeNull()
-    expect(within(hrDetails).queryByText('View focus')).toBeNull()
-    expect(within(hrDetails).queryByText('Active view')).toBeNull()
-    expect(screen.queryByLabelText('Collapsed Profile Workbench')).toBeNull()
-    expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Profile Workbench' }))
-    const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
-    const profileToolsText = profileTools.textContent ?? ''
-    expect(profileToolsText.indexOf('Recent Sessions')).toBeLessThan(profileToolsText.indexOf('Complete Hiring Workspace candidate profile'))
-    expect(within(profileTools).queryByText('Next Profile Step')).toBeNull()
-    expect(within(profileTools).queryByText('Profile Patch')).toBeNull()
-    expect(within(profileTools).queryByText('Review guardrails')).toBeNull()
-    expect(within(profileTools).queryByText('Artifact evidence')).toBeNull()
-    expect(screen.getAllByRole('button', { name: 'Review profile patch' })).toHaveLength(1)
-    expect(screen.queryByTestId('hr-artifact-markdown-preview')).toBeNull()
-    expect(screen.queryByRole('button', { name: /Summarize profile/ })).toBeNull()
-    expect(within(profileTools).queryByText('Screen candidate')).toBeNull()
-    expect(within(profileTools).queryByText('Active')).toBeNull()
-    expect(within(profileTools).getByRole('button', { name: /Open Evidence organization session/ })).toBeTruthy()
-    expect(screen.queryByText('Capability template (6)')).toBeNull()
-    expect(document.querySelector('.count-pill')).toBeNull()
-    expect(screen.queryByText('Examples')).toBeNull()
-    expect(screen.queryByText('Domain systems')).toBeNull()
-    expect(screen.queryByText(/Import/i)).toBeNull()
-    expect(screen.queryByText(/work order/i)).toBeNull()
-    expect(screen.queryByText(/Open Design/i)).toBeNull()
-    expect(screen.queryByText(/Nexu/i)).toBeNull()
-  })
-
-  it('centers the README profile and promotes a proposed change through review', async () => {
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
-    render(<WorkerStudio />)
-
-    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
-    const currentProfile = await within(hrDetails).findByTestId('hr-current-profile-summary')
-
-    expect(within(currentProfile).getByText('Accepted profile summary.')).toBeTruthy()
-    fireEvent.click(within(hrDetails).getByRole('button', { name: 'Review profile patch' }))
-    const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
-    expect(await within(profilePatchReview).findByText('Profile Patch Review')).toBeTruthy()
-    expect(within(profilePatchReview).getAllByText('Current README').length).toBeGreaterThan(0)
-    expect(within(profilePatchReview).getAllByText('Proposed README').length).toBeGreaterThan(0)
-    expect((await within(profilePatchReview).findAllByText('Reviewed profile summary.')).length).toBeGreaterThan(0)
-
-    fireEvent.click(within(profilePatchReview).getByRole('button', { name: 'Approve into README' }))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-1/profile-revisions', expect.objectContaining({
-        body: expect.stringContaining('"artifactId":"artifact-1"'),
-        method: 'POST',
-      }))
-    })
-    expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-1/profile-revisions', expect.objectContaining({
-      body: expect.stringContaining('"profileMarkdown":"# Accepted Ada Profile\\n\\n## Current Profile Summary\\n\\nReviewed profile summary."'),
-      method: 'POST',
-    }))
-    const updatedProfile = await screen.findByTestId('hr-current-profile-summary')
-    await waitFor(() => {
-      expect(within(updatedProfile).getByText('Reviewed profile summary.')).toBeTruthy()
-    })
-  })
-
-  it('allows approving a whole README proposal when section-level diff is unavailable', async () => {
-    currentProfiles['workspace-1'] = '# Current Profile Summary\n\nNo approved profile revision yet.\n'
-    currentArtifactRawContent = [
-      '# Profile Update Proposal',
-      '',
-      '```aiworker-profile-readme',
-      '# Accepted Ben Profile',
-      '',
-      'Ben has a reviewed profile baseline.',
-      '```',
-      '',
-    ].join('\n')
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
-    render(<WorkerStudio />)
-
-    await screen.findByLabelText('Hiring Workspace People Profile')
-    await openProfilePatchReviewFromRail()
-    const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
-
-    expect((await within(profilePatchReview).findAllByText('Profile README')).length).toBeGreaterThan(0)
-    expect(within(profilePatchReview).getByText('Ben has a reviewed profile baseline.')).toBeTruthy()
-    const approveButton = within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement
-    expect(approveButton.disabled).toBe(false)
-
-    fireEvent.click(approveButton)
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-1/profile-revisions', expect.objectContaining({
-        body: expect.stringContaining('"profileMarkdown":"# Accepted Ben Profile\\n\\nBen has a reviewed profile baseline."'),
-        method: 'POST',
-      }))
-    })
-  })
-
-  it('approves an unfenced person-profile artifact through product-owned README synthesis', async () => {
-    currentProfiles['workspace-1'] = '# Ben\n\nNo accepted HR profile yet.\n'
-    currentArtifactRawContent = [
-      '# Person Profile Snapshot Proposal: Ben',
-      '',
-      'Generated: 2026-05-17 19:35 CST',
-      'Soul worker: AIWorker HR',
-      'Proposal status: Human review required before any accepted profile promotion',
-      '',
-      '## Current Profile Snapshot',
-      '',
-      'This is a profile-bound snapshot proposal for the person target labeled `Ben`.',
-      'The accepted profile surface states that no approved profile revision exists.',
-      '',
-      '## Confirmed Facts',
-      '',
-      '| Claim | Evidence | Confidence |',
-      '| --- | --- | --- |',
-      '| The selected workbench action is `Summarize profile`. | active-context.md:11-18 | High |',
-      '',
-      '## Missing Or Conflicting Evidence',
-      '',
-      '- No approved profile revision exists.',
-      '- No verified lifecycle status is available.',
-      '',
-      '## Human Reviewer Next Actions',
-      '',
-      '1. Confirm whether `Ben` is the correct target profile for this workspace.',
-    ].join('\n')
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
-    render(<WorkerStudio />)
-
-    await screen.findByLabelText('Hiring Workspace People Profile')
-    await openProfilePatchReviewFromRail()
-    const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
-    const approveButton = within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement
-
-    expect(await within(profilePatchReview).findByText('Profile patch ready')).toBeTruthy()
-    expect(approveButton.disabled).toBe(false)
-    fireEvent.click(approveButton)
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-1/profile-revisions', expect.objectContaining({
-        method: 'POST',
-      }))
-    })
-    const promotionCall = vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).endsWith('/api/local/workspaces/workspace-1/profile-revisions') && init?.method === 'POST')
-    const body = JSON.parse(String(promotionCall?.[1]?.body)) as { profileMarkdown?: string }
-    expect(body.profileMarkdown).toContain('# Ben People Profile')
-    expect(body.profileMarkdown).toContain('## Current Profile Summary')
-    expect(body.profileMarkdown).toContain('The selected workbench action')
-    expect(body.profileMarkdown).not.toMatch(/Proposal status|snapshot proposal|no approved profile revision/i)
-  })
-
-  it('shows a profile revision review before approving a proposed change', async () => {
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
-    render(<WorkerStudio />)
-
-    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
-    fireEvent.click(await within(hrDetails).findByRole('button', { name: 'Review profile patch' }))
-    const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
-
-    expect(await within(profilePatchReview).findByText('Profile patch ready')).toBeTruthy()
-    expect(within(profilePatchReview).getByText('Changed sections')).toBeTruthy()
-    expect(within(profilePatchReview).getAllByText('Current README').length).toBeGreaterThan(0)
-    expect(within(profilePatchReview).getByText('Accepted profile summary.')).toBeTruthy()
-    expect(within(profilePatchReview).getAllByText('Proposed README').length).toBeGreaterThan(0)
-    expect((await within(profilePatchReview).findAllByText('Reviewed profile summary.')).length).toBeGreaterThan(0)
-    expect((within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement).disabled).toBe(false)
-  })
-
-  it('does not expose profile revision approval when the artifact has no accepted README draft', async () => {
-    currentArtifactRawContent = '# Profile Update Proposal\n\nNo accepted profile draft yet.\n'
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
-    render(<WorkerStudio />)
-
-    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
-
-    expect(within(hrDetails).queryByRole('button', { name: 'Review profile patch' })).toBeNull()
-    expandProfileTools()
-    const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
-    expect(within(profileTools).queryByText('Profile Patch')).toBeNull()
-    expect(screen.queryByTestId('hr-profile-patch-review')).toBeNull()
-  })
-
-  it('does not show an actionable patch strip when a README proposal has no section changes', async () => {
-    const stableProfileMarkdown = [
-      '# Hiring Workspace',
-      '',
-      '## Current Profile Summary',
-      '',
-      'Accepted profile summary.',
-      '',
-      '## Identity And Basics',
-      '',
-      '- Lifecycle: Candidate',
-      '',
-      '## Role Context And Responsibilities',
-      '',
-      'Own product discovery and marketplace growth execution.',
-      '',
-      '## Review State',
-      '',
-      'Accepted profile baseline is confirmed.',
-      '',
-    ].join('\n')
-    currentProfiles['workspace-1'] = stableProfileMarkdown
-    currentArtifactRawContent = [
-      '# Candidate Screen',
-      '',
-      '```aiworker-profile-readme',
-      stableProfileMarkdown,
-      '```',
-      '',
-    ].join('\n')
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
-    render(<WorkerStudio />)
-
-    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
-
-    await waitFor(() => {
-      expect(within(hrDetails).queryByText('Profile patch ready')).toBeNull()
-    })
-    expect(within(hrDetails).queryByRole('button', { name: 'Review profile patch' })).toBeNull()
-  })
-
-  it('keeps profile details stable while lifecycle list sections are expanded', async () => {
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
-    render(<WorkerStudio />)
-
-    await screen.findByTestId('hr-people-workbench')
-    expect(screen.queryByText('Profile Actions')).toBeNull()
-    const profileTools = expandProfileTools()
-    const profileToolsText = profileTools.textContent ?? ''
-    expect(profileToolsText.indexOf('Recent Sessions')).toBeLessThan(profileToolsText.indexOf('Complete Hiring Workspace candidate profile'))
-    expect(within(profileTools).queryByText('Next Profile Step')).toBeNull()
-    expect(within(profileTools).queryByText('Artifact evidence')).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: /Employees/ }))
-
-    await waitFor(() => {
-      expect(screen.getByText('No profiles in this section.')).toBeTruthy()
-    })
-    const hrDetails = document.querySelector('.hr-profile-details') as HTMLElement
-    expect(within(hrDetails).queryByText('Profile Patch')).toBeNull()
-    expect(within(hrDetails).getByLabelText('Profile sources').textContent).toContain('Artifact evidence1')
-  })
-
-  it('toggles HR side panels from the header controls', async () => {
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
-    render(<WorkerStudio />)
-
-    await screen.findByTestId('hr-people-workbench')
-    expect(document.querySelector('.hr-profile-list-panel')).toBeTruthy()
-    expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
-    expect(document.querySelector('.hr-profile-tools-panel')).toBeNull()
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(true)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Hide Profile List' }))
-    expect(document.querySelector('.hr-profile-list-panel')).toBeNull()
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-list')).toBe(true)
-    expect(screen.getByRole('button', { name: 'Show Profile List' })).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Profile Workbench' }))
-    expect(document.querySelector('.hr-profile-tools-panel')).toBeTruthy()
-    expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(false)
-    expect(screen.getByRole('button', { name: 'Collapse Profile Workbench' })).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show Profile List' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse Profile Workbench' }))
-    expect(document.querySelector('.hr-profile-list-panel')).toBeTruthy()
-    expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
-    expect(document.querySelector('.hr-profile-tools-panel')).toBeNull()
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(true)
-  })
-
-  it('treats needs-review records as pending instead of reviewed in the HR profile loop', async () => {
-    currentReviews = [{
-      artifactId: 'artifact-1',
-      createdAt: now,
-      findingsJson: [{ message: 'External engine artifact generated; human review is required.' }],
-      id: 'review-needs-review',
-      risksJson: [],
-      sessionId: 'session-1',
-      turnId: 'turn-1',
-      verdict: 'needs_review',
-      workspaceId: 'workspace-1',
+  it('renders HR through an app-owned mounted route instead of a Host renderer', async () => {
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-home',
+            label: 'HR People Workbench',
+            path: '/hr',
+            surface: { renderer: 'micro-app' },
+          }],
+          workspaceWidgets: [],
+        },
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-home'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr'],
+        surfaceIds: ['hr-home'],
+        workspaceWidgetIds: [],
+      },
+      status: 'enabled',
+      version: '0.1.0',
     }]
 
     render(<WorkerStudio />)
 
-    const profileCards = await screen.findAllByRole('button', { name: /Open Hiring Workspace profile/ })
-    const profileCard = profileCards.at(0)
-    if (!profileCard) {
-      throw new Error('Expected at least one Hiring Workspace profile card')
-    }
-    expect(profileCard.textContent).toContain('Artifact ready for review')
-    expect(profileCard.textContent).toContain('Request review')
-    expect(profileCard.textContent).not.toContain('reviewed')
+    const hostTopBar = await screen.findByLabelText('Host actions')
+    expect(hostTopBar.getAttribute('data-host-slot')).toBe('host-top-bar')
+    expect(hostTopBar.classList.contains('bg-sidebar')).toBe(true)
+    expect(hostTopBar.classList.contains('text-sidebar-foreground')).toBe(true)
+    const shell = screen.getByTestId('worker-studio-shell')
+    expect(shell.getAttribute('data-slot')).toBe('app-shell')
+    expect(shell.classList.contains('bg-background')).toBe(true)
+    expect(shell.classList.contains('text-foreground')).toBe(true)
+    const shellSidebar = document.querySelector('[data-host-slot="shell-sidebar"]') as HTMLElement
+    expect(shellSidebar).toBeTruthy()
+    expect(shellSidebar.getAttribute('data-slot')).toBe('sidebar-content')
+    expect(shellSidebar.classList.contains('bg-sidebar')).toBe(true)
+    expect(shellSidebar.classList.contains('text-sidebar-foreground')).toBe(true)
+    expect(shellSidebar.querySelector('[data-sidebar="group"][aria-label="Host navigation"]')).toBeTruthy()
+    expect(shellSidebar.querySelector('[data-sidebar="group"][aria-label="Workers"]')).toBeTruthy()
+    expect(shellSidebar.querySelector('[data-sidebar="group"][aria-label="Workspaces"]')).toBeNull()
+    expect(screen.queryByRole('button', { name: /AIWorker HR \(1\)/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /AIWorker QA \(1\)/ })).toBeNull()
+    const microApp = await screen.findByTitle('HR People Workbench')
+    expect(microApp.tagName).toBe('MICRO-APP')
+    expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
+    expect(microApp.getAttribute('name')).toBe('aiworker-hr--hr-home')
+    expect(microApp.getAttribute('baseroute')).toBe('/hr')
+    expect(microApp.getAttribute('router-mode')).toBe('pure')
+    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home')
+    expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
+      appId: 'aiworker-hr',
+      surfaceId: 'hr-home',
+      theme: 'light',
+      workerId: 'hr-worker',
+      workspaceId: 'workspace-1',
+    })
+    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
+    expect(screen.queryByText('Soul App mounted route')).toBeNull()
+    expect(screen.queryByText('HR People Workbench')).toBeNull()
+    expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
+    expect(screen.queryByText('People Profiles')).toBeNull()
+    expect(document.querySelector('[data-host-slot="hr-people-workbench"]')).toBeNull()
   })
 
-  it('shows engine-running status while a session is generating without an artifact', async () => {
-    currentArtifacts = []
-    currentReviews = []
-    currentTurns = [{ ...turnRecord, response: null, status: 'running' }]
-    currentEvents = []
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
+  it('stores mounted HR child route changes per workspace and restores them without remounting', async () => {
+    const secondWorkspace = {
+      ...workspace,
+      id: 'workspace-2',
+      name: 'Second Hiring Workspace',
+      workerId: 'hr-worker',
+    }
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-home',
+            label: 'HR People Workbench',
+            path: '/hr',
+            surface: { renderer: 'micro-app' },
+          }],
+          workspaceWidgets: [],
+        },
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-home'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr'],
+        surfaceIds: ['hr-home'],
+        workspaceWidgetIds: [],
+      },
+      status: 'enabled',
+      version: '0.1.0',
+    }]
+    currentWorkspaces = [workspace, secondWorkspace]
+    microAppRouteMock.getMountedMicroAppCurrentRoute.mockResolvedValue({ pathname: '/hr' })
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
 
     render(<WorkerStudio />)
 
-    expect((await screen.findAllByText('Agent is generating')).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('The agent is generating a reviewable artifact. Streamed events will keep updating.').length).toBeGreaterThan(0)
-    expect(screen.getByText('The preview will unlock after the first artifact enters the index.')).toBeTruthy()
-    const workerComposer = document.querySelector('.worker-composer') as HTMLElement
-    expect(within(workerComposer).getByRole('button', { name: /Sending turn/ }).getAttribute('aria-busy')).toBe('true')
+    const firstMicroApp = await screen.findByTitle('HR People Workbench')
+    expect(firstMicroApp.getAttribute('name')).toBe('aiworker-hr--hr-home')
+
+    await waitFor(() => {
+      expect(microAppRouteMock.listeners.has('aiworker-hr--hr-home')).toBe(true)
+    })
+    microAppRouteMock.listeners.get('aiworker-hr--hr-home')?.(
+      { pathname: '/hr/profiles/profile-ben' },
+      { pathname: '/hr' },
+    )
+
+    act(() => {
+      window.history.pushState(null, '', '/workers/hr-worker/workspaces/workspace-2')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+
+    expect(await screen.findByTitle('HR People Workbench')).toBe(firstMicroApp)
+    expect(firstMicroApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home')
+    await waitFor(() => {
+      expect((firstMicroApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
+        workspaceId: 'workspace-2',
+      })
+    })
+
+    await waitFor(() => {
+      expect(microAppRouteMock.listeners.has('aiworker-hr--hr-home')).toBe(true)
+    })
+    microAppRouteMock.listeners.get('aiworker-hr--hr-home')?.(
+      { pathname: '/hr/profiles/profile-stella' },
+      { pathname: '/hr' },
+    )
+
+    act(() => {
+      window.history.pushState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+
+    expect(await screen.findByTitle('HR People Workbench')).toBe(firstMicroApp)
+    expect(firstMicroApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home')
+    await waitFor(() => {
+      expect((firstMicroApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
+        workspaceId: 'workspace-1',
+      })
+    })
+    await waitFor(() => {
+      expect(microAppRouteMock.replaceMountedMicroAppRoute).toHaveBeenLastCalledWith('aiworker-hr--hr-home', '/hr/profiles/profile-ben')
+    })
+
+    act(() => {
+      window.history.pushState(null, '', '/workers/hr-worker/workspaces/workspace-2')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+
+    expect(await screen.findByTitle('HR People Workbench')).toBe(firstMicroApp)
+    expect(firstMicroApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home')
+    await waitFor(() => {
+      expect((firstMicroApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
+        workspaceId: 'workspace-2',
+      })
+    })
+    await waitFor(() => {
+      expect(microAppRouteMock.replaceMountedMicroAppRoute).toHaveBeenLastCalledWith('aiworker-hr--hr-home', '/hr/profiles/profile-stella')
+    })
   })
 
-  it('distinguishes written artifact files from indexed artifacts', async () => {
+  it('does not reinterpret session engine state when a Soul App owns the mounted route', async () => {
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-session',
+            label: 'HR Session Workbench',
+            path: '/hr/session',
+            surface: { renderer: 'micro-app', scope: 'session' },
+          }],
+          workspaceWidgets: [],
+        },
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-session'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr/session'],
+        surfaceIds: ['hr-session'],
+        workspaceWidgetIds: [],
+      },
+      status: 'enabled',
+      version: '0.1.0',
+    }]
     currentArtifacts = []
-    currentReviews = []
     currentTurns = [{ ...turnRecord, response: null, status: 'running' }]
     currentEvents = [{
       ...eventRecord,
@@ -1309,131 +1227,63 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    expect((await screen.findAllByText('File written, indexing')).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('The engine wrote an artifact file. AIWorker is finalizing the session before it appears in the artifact preview.').length).toBeGreaterThan(0)
-    expect(screen.getByText('The artifact file is written and will appear here after session finalization.')).toBeTruthy()
-  })
-
-  it('renders Codex CLI tool activity as readable session activity with command evidence retained', async () => {
-    currentEvents = [
-      {
-        ...eventRecord,
-        id: 21,
-        payloadJson: {
-          agentEvent: {
-            id: 'codex-tool-1',
-            input: { command: 'rg -n "profile" evidence' },
-            kind: 'tool_use',
-            name: 'Bash',
-          },
-        },
-        seq: 1,
-        type: 'tool',
-      },
-      {
-        ...eventRecord,
-        id: 22,
-        payloadJson: {
-          agentEvent: {
-            content: 'evidence/README.md:1:profile',
-            id: 'codex-tool-1',
-            isError: false,
-            kind: 'tool_result',
-          },
-        },
-        seq: 2,
-        type: 'tool',
-      },
-    ]
-    currentTurns = [{ ...turnRecord, response: null, status: 'succeeded' }]
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
-
-    render(<WorkerStudio />)
-
-    const activityLabel = await screen.findByText('Searched files')
-    expect(activityLabel.closest('summary')?.textContent).not.toContain('Bash')
-    expect(screen.getByText('rg -n "profile" evidence')).toBeTruthy()
-    expect(screen.getByText('evidence/README.md:1:profile')).toBeTruthy()
-  })
-
-  it('shows indexed artifacts as human-review work instead of completed automation', async () => {
-    currentReviews = [{
-      artifactId: 'artifact-1',
-      createdAt: now,
-      findingsJson: [{ message: 'External engine artifact generated; human review is required.' }],
-      id: 'review-needs-review',
-      risksJson: [],
+    const microApp = await screen.findByTitle('HR Session Workbench')
+    expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
+    expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
+      appId: 'aiworker-hr',
       sessionId: 'session-1',
-      turnId: 'turn-1',
-      verdict: 'needs_review',
+      surfaceId: 'hr-session',
+      workerId: 'hr-worker',
       workspaceId: 'workspace-1',
-    }]
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
-
-    render(<WorkerStudio />)
-
-    expect((await screen.findAllByText('Artifact ready for review')).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('The artifact is indexed. Human review is required before lesson or memory promotion.').length).toBeGreaterThan(0)
+    })
+    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/hr-session?workerId=hr-worker&workspaceId=workspace-1&sessionId=session-1&theme=light', expect.objectContaining({ headers: {} }))
+    expect(screen.queryByText('Agent is generating')).toBeNull()
+    expect(screen.queryByText('File written, indexing')).toBeNull()
+    expect(screen.queryByText('Searched files')).toBeNull()
+    expect(screen.queryByText('Artifact ready')).toBeNull()
     expect(screen.queryByText('Review recorded')).toBeNull()
+    expect(document.querySelector('[data-slot="session-composer"]')).toBeNull()
   })
 
-  it('uses the compact icon button primitive for profile and host chrome actions', async () => {
+  it('uses shadcn sidebar menu buttons for host chrome actions', async () => {
     render(<WorkerStudio />)
 
-    await screen.findByTestId('hr-people-workbench')
-    const profileList = screen.getByLabelText('People Profiles')
-    fireEvent.click(screen.getByRole('button', { name: 'Open Hiring Workspace profile' }))
-    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
-    const iconButtons = [
+    await screen.findByLabelText('Host actions')
+    const hostChromeButtons = [
       screen.getByRole('button', { name: 'Hide sidebar' }),
       screen.getByRole('button', { name: 'Open workspace terminal' }),
       screen.getByRole('button', { name: 'Open right panel' }),
-      within(profileList).getByRole('button', { name: 'New profile' }),
-      within(hrDetails).getByRole('button', { name: 'Hide Profile List' }),
-      within(hrDetails).getByRole('button', { name: 'Expand Profile Workbench' }),
-      within(hrDetails).getByRole('button', { name: 'Refresh workspace' }),
-      within(hrDetails).getByRole('button', { name: 'Open platform settings' }),
     ]
 
-    for (const button of iconButtons) {
-      expect(button.classList.contains('icon-button')).toBe(true)
+    for (const button of hostChromeButtons) {
+      expect(button.getAttribute('data-slot')).toBe('sidebar-menu-button')
+      expect(button.getAttribute('data-size')).toBe('sm')
+      expect(button.className).toContain('hover:bg-sidebar-accent')
+      expect(button.classList.contains('icon-button')).toBe(false)
       expect(button.classList.contains('icon-btn')).toBe(false)
+      expect(button.querySelector('svg')).toBeTruthy()
     }
 
     const hostSidebarToggle = screen.getByRole('button', { name: 'Hide sidebar' })
     expect(hostSidebarToggle.getAttribute('aria-pressed')).toBe('true')
-    expect(hostSidebarToggle.querySelector('.lucide-panel-left')).toBeTruthy()
+    expect(hostSidebarToggle.getAttribute('data-active')).toBe('true')
     fireEvent.click(hostSidebarToggle)
     expect(screen.getByRole('button', { name: 'Show sidebar' }).getAttribute('aria-pressed')).toBe('false')
-    expect(screen.getByRole('button', { name: 'Open workspace terminal' }).querySelector('.lucide-panel-bottom')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Open right panel' }).querySelector('.lucide-panel-right')).toBeTruthy()
-    expect(within(hrDetails).getByRole('button', { name: 'Hide Profile List' }).querySelector('.lucide-panel-left')).toBeTruthy()
-    expect(within(hrDetails).getByRole('button', { name: 'Expand Profile Workbench' }).querySelector('.lucide-panel-right')).toBeTruthy()
-    expect(document.querySelector('.lucide-panel-left-open, .lucide-panel-left-close, .lucide-panel-right-open, .lucide-panel-right-close')).toBeNull()
+    expect(document.querySelector('[class*="lucide-"]')).toBeNull()
   })
 
-  it('groups workers by Soul and keeps each category collapsible', async () => {
+  it('keeps the Host sidebar scoped to worker switching', async () => {
     render(<WorkerStudio />)
 
-    await screen.findByTestId('hr-people-workbench')
-    const qaGroupToggle = screen.getByRole('button', { name: /QA \(1\)/ })
-    const qaGroup = qaGroupToggle.closest('.studio-collapsible-group')
-    const visibleOptionTexts = () => screen.getAllByRole('option').map(option => option.textContent ?? '')
-
-    expect(qaGroup).toBeTruthy()
-    expect(qaGroup?.querySelector('.studio-collapsible-group-drawer')).toBeTruthy()
-    expect(qaGroupToggle.getAttribute('aria-expanded')).toBe('true')
-    expect(visibleOptionTexts().includes('QA')).toBe(true)
-
-    fireEvent.click(qaGroupToggle)
-
-    expect(qaGroupToggle.getAttribute('aria-expanded')).toBe('false')
-    expect(visibleOptionTexts().includes('QA')).toBe(false)
-
-    fireEvent.click(qaGroupToggle)
-
-    expect(qaGroupToggle.getAttribute('aria-expanded')).toBe('true')
-    expect(visibleOptionTexts().includes('QA')).toBe(true)
+    await screen.findByLabelText('Host actions')
+    expect(document.querySelector('.worker-list-panel')).toBeNull()
+    const switcher = screen.getByTestId('worker-switcher')
+    expect(within(switcher).getByRole('button', { name: 'Collapse AIWorker HR' })).toBeTruthy()
+    expect(within(switcher).getByRole('button', { name: 'Collapse AIWorker QA' })).toBeTruthy()
+    expect(within(switcher).getByRole('button', { name: 'Switch to HR' })).toBeTruthy()
+    expect(within(switcher).getByRole('button', { name: 'Switch to QA' })).toBeTruthy()
+    expect(within(switcher).queryByText('Hiring Workspace')).toBeNull()
+    expect(within(switcher).queryByRole('button', { name: 'Screen candidate' })).toBeNull()
   })
 
   it('keeps installed Soul Apps out of the worker rail and shows them in Settings', async () => {
@@ -1486,14 +1336,14 @@ describe('worker studio', () => {
                 requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
               },
             },
-            workspaceWidgets: [{ id: 'hr-people-widget', label: 'People widget', surface: { renderer: 'sandboxed-frame' } }],
+            workspaceWidgets: [{ id: 'hr-people-widget', label: 'People widget', surface: { renderer: 'micro-app' } }],
           },
         },
         mountedContribution: {
           apiRoutePrefix: '/api/local/apps/aiworker-hr',
           artifactPreviewIds: ['person-profile-preview'],
           descriptorSurfaceIds: ['hr-home'],
-          frameSurfaceIds: ['hr-people-widget'],
+          microAppSurfaceIds: ['hr-people-widget'],
           panelIds: ['people-panel'],
           reviewPanelIds: ['hr-review'],
           routePaths: ['/hr/people'],
@@ -1590,7 +1440,7 @@ describe('worker studio', () => {
           apiRoutePrefix: '/api/local/apps/aiworker-qa',
           artifactPreviewIds: [],
           descriptorSurfaceIds: [],
-          frameSurfaceIds: [],
+          microAppSurfaceIds: [],
           panelIds: [],
           reviewPanelIds: [],
           routePaths: ['/qa/release'],
@@ -1604,71 +1454,54 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    await screen.findByText('AIWorker HR (1)')
-    await screen.findByTestId('hr-people-workbench')
+    await screen.findByTestId('worker-switcher')
     expect(screen.getByLabelText('Host actions')).toBeTruthy()
     expect(document.querySelectorAll('.entry-header.workspace-header')).toHaveLength(0)
     expect(document.querySelector('.hr-people-header')).toBeNull()
-    const profileList = screen.getByLabelText('People Profiles')
-    expect(screen.queryByPlaceholderText('Search people profiles')).toBeNull()
-    expect(within(profileList).getByRole('button', { name: 'New people profile' })).toBeTruthy()
-    fireEvent.click(within(profileList).getByRole('button', { name: 'New people profile' }))
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/create-people-profile', expect.objectContaining({ method: 'POST' }))
-    })
-    const actionCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/api/local/apps/aiworker-hr/actions/create-people-profile'))
-    const actionBody = JSON.parse(String(actionCall?.[1]?.body)) as Record<string, Record<string, string>>
-    expect(actionBody).toMatchObject({
-      input: { source: 'soul-workbench' },
-      scope: { workerId: 'hr-worker' },
-    })
-    expect(actionBody.input).not.toHaveProperty('workerId')
-    expect(actionBody.input).not.toHaveProperty('workspaceId')
-    const createWorkspaceDialog = await screen.findByRole('dialog', { name: 'Create workspace' })
-    expect(createWorkspaceDialog).toBeTruthy()
-    expect(screen.queryByText('People profile draft created.')).toBeNull()
-    expect(document.querySelector('.shell-action-status')).toBeNull()
-    fireEvent.click(within(createWorkspaceDialog).getAllByRole('button', { name: 'Close dialog' })[0]!)
+    expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
+    expect(screen.queryByText('People Profiles')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Hiring Workspace profile' }))
-    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
-    expect(within(hrDetails).getByRole('button', { name: 'Refresh' })).toBeTruthy()
-    expect(within(hrDetails).getByRole('button', { name: 'Evidence' })).toBeTruthy()
-    expect(within(hrDetails).getByRole('button', { name: 'Configure HR' })).toBeTruthy()
-    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/local/apps/aiworker-hr/search'))).toBe(false)
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(true)
-    fireEvent.click(within(hrDetails).getByRole('button', { name: 'Evidence' }))
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/toggle-evidence-drawer', expect.objectContaining({ method: 'POST' }))
-    })
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(false)
-    fireEvent.click(within(hrDetails).getByRole('button', { name: 'Configure HR' }))
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/configure-hr', expect.objectContaining({ method: 'POST' }))
-    })
-    expect(await screen.findByText('HR configuration is owned by the HR app.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'New people profile' })).toBeNull()
+    expect(screen.queryByPlaceholderText('Search people profiles')).toBeNull()
+    expect(screen.getByPlaceholderText('Search workspaces...')).toBeTruthy()
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/actions/'))).toBe(false)
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/search?providerId='))).toBe(false)
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByText('Soul Apps (2)')).toBeNull()
     expect(screen.queryByText('Enabled · 0.1.0')).toBeNull()
     expect(screen.queryByText('10 permissions')).toBeNull()
     expect(screen.queryByText('API /api/local/apps/aiworker-hr')).toBeNull()
     expect(screen.queryByText('Route People workbench · /hr/people')).toBeNull()
-    expect(screen.queryByText('4 mounted contributions')).toBeNull()
+    expect(screen.queryByText('3 mounted contributions')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Developer details' })).toBeNull()
 
     openHostSettings()
-    const dialog = await screen.findByRole('dialog', { name: 'Platform Settings' })
-    fireEvent.click(within(dialog).getByRole('button', { name: /Soul Apps/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Local Host Settings' })
+    selectSettingsTab(within(dialog).getByRole('tab', { name: /Soul Apps/ }))
 
-    expect(within(dialog).getByRole('heading', { name: 'Soul Apps' })).toBeTruthy()
+    expect(await within(dialog).findByRole('heading', { name: 'Soul Apps' })).toBeTruthy()
     expect(within(dialog).getByText('AIWorker HR')).toBeTruthy()
+    const hrAppCard = within(dialog).getByText('AIWorker HR').closest('[data-slot="card"]')
+    expect(hrAppCard).toBeTruthy()
     expect(within(dialog).getByText('Enabled · 0.1.0')).toBeTruthy()
-    expect(within(dialog).getByText('10 permissions')).toBeTruthy()
-    expect(within(dialog).getByText('4 mounted contributions')).toBeTruthy()
+    const permissionsBadge = within(dialog).getByText('10 access entries')
+    expect(permissionsBadge.getAttribute('data-slot')).toBe('badge')
+    expect(within(dialog).getByText('3 mounted contributions').getAttribute('data-slot')).toBe('badge')
+    const disableHrButton = within(dialog).getByRole('button', { name: 'Disable AIWorker HR' })
+    expect(disableHrButton.getAttribute('data-slot')).toBe('button')
+    expect(disableHrButton.classList.contains('settings-action-button')).toBe(false)
+    expect(disableHrButton.querySelector('span')).toBeNull()
     expect(within(dialog).getByText('API /api/local/apps/aiworker-hr')).toBeTruthy()
     expect(within(dialog).getByText('AIWorker QA')).toBeTruthy()
     expect(within(dialog).getByText('Disabled · 0.1.0')).toBeTruthy()
-    expect(within(dialog).getByText('5 permissions')).toBeTruthy()
+    expect(within(dialog).getByText('5 access entries')).toBeTruthy()
+    const searchPermissionBadges = within(dialog).getAllByText('search:read:aiworker-qa')
+    const qaAppAccess = searchPermissionBadges[0]?.closest('[aria-label="AIWorker QA app access"]')
+    expect(qaAppAccess?.getAttribute('data-slot')).toBe('item-group')
+    expect(within(dialog).getByText('App access').getAttribute('data-slot')).toBe('kbd')
+    expect(within(dialog).getByText('App access').classList.contains('font-mono')).toBe(false)
+    expect(searchPermissionBadges.some(node => node.closest('[data-slot="item-actions"]'))).toBe(true)
+    expect(within(dialog).getByText('ci · not enabled').closest('[data-slot="item-actions"]')).toBeTruthy()
     expect(within(dialog).getAllByText('search:read:aiworker-qa').length).toBeGreaterThan(0)
     expect(within(dialog).getByText('ci · not enabled')).toBeTruthy()
     expect(within(dialog).getAllByText('storage:write:aiworker-qa').length).toBeGreaterThan(0)
@@ -1682,31 +1515,131 @@ describe('worker studio', () => {
     })
   })
 
-  it('blocks Soul App enablement when Host security review cannot enable the app', async () => {
-    currentSettings = {
-      ...currentSettings,
-      connectors: currentSettings.connectors.filter(connector => connector.id !== 'ci'),
-    }
+  it('prefers an app-owned mounted route frame over the Host embedded HR renderer', async () => {
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-home',
+            label: 'HR People Workbench',
+            path: '/hr',
+            surface: { renderer: 'micro-app' },
+          }],
+          workbench: {
+            primaryAction: {
+              id: 'create-people-profile',
+              label: 'New people profile',
+              protocolAction: 'peopleProfiles.create',
+              role: 'primary',
+            },
+          },
+          workspaceWidgets: [],
+        },
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-home'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr'],
+        surfaceIds: ['hr-home'],
+        workspaceWidgetIds: [],
+      },
+      status: 'enabled',
+      version: '0.1.0',
+    }]
+
+    render(<WorkerStudio />)
+
+    const microApp = await screen.findByTitle('HR People Workbench')
+    expect(microApp.tagName).toBe('MICRO-APP')
+    expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
+    expect(microApp.getAttribute('name')).toBe('aiworker-hr--hr-home')
+    expect(microApp.getAttribute('router-mode')).toBe('pure')
+    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home')
+    expect(screen.queryByText('Soul App mounted route')).toBeNull()
+    expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
+    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
+
+    await waitFor(() => {
+      expect(microAppRouteMock.dataListeners.has('aiworker-hr--hr-home')).toBe(true)
+    })
+    vi.mocked(fetch).mockClear()
+    microAppRouteMock.dataListeners.get('aiworker-hr--hr-home')?.({
+      actionId: 'create-people-profile',
+      appId: 'aiworker-hr',
+      input: { source: 'soul-workbench' },
+      surfaceId: 'hr-home',
+      type: 'action',
+    })
+
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/actions/'))).toBe(false)
+    expect(microAppRouteMock.pushMountedMicroAppRoute).not.toHaveBeenCalledWith('aiworker-hr--hr-home', '/hr/profiles/new')
+  })
+
+  it('keeps worker identity in the Host worker switcher without duplicated worker rail labels', async () => {
+    render(<WorkerStudio />)
+
+    await screen.findByLabelText('Host actions')
+    const switcher = screen.getByTestId('worker-switcher')
+    expect(within(switcher).getByRole('button', { name: 'Switch to HR' })).toBeTruthy()
+    expect(within(switcher).getByText('AIWorker HR').getAttribute('data-slot')).toBe('item-title')
+    expect(within(switcher).getAllByText('Soul worker').every(item => item.getAttribute('data-slot') === 'item-description')).toBe(true)
+    expect(within(switcher).getByRole('button', { name: 'Configure HR' })).toBeTruthy()
+    const inactiveMore = within(switcher).getByRole('button', { name: 'Configure QA' })
+    expect(inactiveMore.getAttribute('data-sidebar')).toBe('menu-action')
+    expect(inactiveMore.className).toContain('md:opacity-0')
+    fireEvent.click(within(switcher).getByRole('button', { name: 'Collapse AIWorker QA' }))
+    expect(within(switcher).queryByRole('button', { name: 'Switch to QA' })).toBeNull()
+    expect(screen.queryByRole('option', { name: 'HR' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /AIWorker HR \(1\)/ })).toBeNull()
+    expect(switcher.querySelector('.status-dot')).toBeNull()
+    expect(switcher.querySelector('.worker-list-item-meta')).toBeNull()
+  })
+
+  it('routes directly to a worker and updates capability templates with worker identity', async () => {
+    window.history.replaceState(null, '', '/workers/qa-worker')
+    render(<WorkerStudio />)
+
+    await screen.findByLabelText('Host actions')
+
+    await waitFor(() => {
+      expect(screen.getByText('qa-worker')).toBeTruthy()
+      expect(screen.getAllByText('Release Gate').length).toBeGreaterThan(0)
+      expect(screen.queryByText('candidate-screen')).toBeNull()
+    })
+    expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
+    const capabilityTemplateHeading = screen.getByText('Capability template (1)')
+    expect(capabilityTemplateHeading).toBeTruthy()
+    expect(capabilityTemplateHeading.closest('[data-slot="item-group"]')).toBeTruthy()
+    expect(capabilityTemplateHeading.closest('[data-slot="card"]')).toBeNull()
+    expect(screen.getByTestId('worker-identity-card').getAttribute('data-slot')).toBe('card')
+    expect(document.querySelector('.worker-overview-panel')).toBeNull()
+    const workspaceAvatarButton = screen.getByRole('button', { name: 'Workspace' })
+    expect(workspaceAvatarButton.getAttribute('data-slot')).toBe('button')
+    expect(workspaceAvatarButton.getAttribute('data-size')).toBe('icon')
+    expect(workspaceAvatarButton.querySelector('[data-slot="avatar"]')).toBeTruthy()
+    expect(workspaceAvatarButton.querySelector('[data-slot="avatar-fallback"]')).toBeTruthy()
+  })
+
+  it('keeps Host toolbar focused on workspace controls when apps declare workbench actions', async () => {
+    currentWorkspaces = [{
+      ...workspace,
+      id: 'qa-workspace',
+      name: 'QA Release Workspace',
+      workerId: 'qa-worker',
+    }]
     currentApps = [{
       appId: 'aiworker-qa',
       manifest: {
-        connectors: {
-          optional: [],
-          required: [{
-            access: ['read'],
-            id: 'ci',
-            reason: 'Read CI and test evidence through the Host connector broker.',
-            scopes: ['runs.read'],
-          }],
-        },
         name: 'AIWorker QA',
-        permissions: [
-          { action: 'read', kind: 'storage', reason: 'Read app-scoped QA domain metadata.', target: 'aiworker-qa' },
-          { action: 'write', kind: 'storage', reason: 'Write app-scoped QA domain metadata.', target: 'aiworker-qa' },
-          { action: 'read', kind: 'search', reason: 'Read app-owned QA search descriptors.', target: 'aiworker-qa' },
-          { action: 'write', kind: 'search', reason: 'Publish app-owned QA search descriptors.', target: 'aiworker-qa' },
-          { action: 'read', kind: 'connector', reason: 'Read CI evidence through Host connector broker.', target: 'ci' },
-        ],
         ui: {
           artifactPreviews: [],
           panels: [],
@@ -1728,79 +1661,96 @@ describe('worker studio', () => {
               requiredPermissions: ['search:read:aiworker-qa'],
             },
           },
+          workspaceWidgets: [],
         },
       },
       mountedContribution: {
         apiRoutePrefix: '/api/local/apps/aiworker-qa',
         artifactPreviewIds: [],
         descriptorSurfaceIds: [],
-        frameSurfaceIds: [],
+        microAppSurfaceIds: [],
         panelIds: [],
         reviewPanelIds: [],
         routePaths: ['/qa/release'],
         surfaceIds: [],
+        workbench: {
+          primaryAction: {
+            id: 'create-release-gate',
+            label: 'New release gate',
+            protocolAction: 'releaseGates.create',
+            requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
+            role: 'primary',
+          },
+          search: {
+            id: 'release-search',
+            label: 'Search releases',
+            placeholder: 'Search releases',
+            protocolProvider: 'releases.search',
+            requiredPermissions: ['search:read:aiworker-qa'],
+          },
+        },
         workspaceWidgetIds: [],
       },
-      status: 'disabled',
+      status: 'enabled',
       version: '0.1.0',
     }]
+    window.history.replaceState(null, '', '/workers/qa-worker')
 
     render(<WorkerStudio />)
 
-    await screen.findByTestId('hr-people-workbench')
-    openHostSettings()
-    const dialog = await screen.findByRole('dialog', { name: 'Platform Settings' })
-    fireEvent.click(within(dialog).getByRole('button', { name: /Soul Apps/ }))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enable AIWorker QA' }))
+    await screen.findByLabelText('Host actions')
 
-    await waitFor(() => {
-      const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url))
-      expect(calls).toContain('/api/local/apps/aiworker-qa/security-review')
-      expect(calls).not.toContain('/api/local/apps/aiworker-qa/enable')
-    })
-    expect((await within(dialog).findByRole('alert')).textContent).toContain('Required connectors are not available: ci')
-  })
+    expect(screen.queryByRole('button', { name: 'New release gate' })).toBeNull()
+    expect(screen.queryByPlaceholderText('Search releases')).toBeNull()
 
-  it('keeps worker status as a trailing dot without duplicated item labels', async () => {
-    render(<WorkerStudio />)
-
-    await screen.findByTestId('hr-people-workbench')
-    const hrWorkerOption = screen.getByRole('option', { name: 'HR' })
-
-    expect(hrWorkerOption.textContent?.trim()).toBe('HR')
-    expect(hrWorkerOption.querySelector('.worker-list-item-main + .status-dot')).toBeTruthy()
-    expect(hrWorkerOption.querySelector('.worker-list-item-meta')).toBeNull()
-  })
-
-  it('switches the Soul rail and updates capability templates with worker identity', async () => {
-    render(<WorkerStudio />)
-
-    await screen.findByTestId('hr-people-workbench')
-    const qaWorkerOption = screen.getByRole('option', { name: 'QA' })
-    expect(qaWorkerOption).toBeTruthy()
-    fireEvent.click(qaWorkerOption)
-
-    await waitFor(() => {
-      expect(screen.getByText('qa-worker')).toBeTruthy()
-      expect(screen.getAllByText('Release Gate').length).toBeGreaterThan(0)
-      expect(screen.queryByText('candidate-screen')).toBeNull()
-    })
-    expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
-    expect(screen.getByText('Capability template (1)')).toBeTruthy()
+    const searchInput = screen.getByPlaceholderText('Search workspaces...')
+    expect(searchInput.getAttribute('data-slot')).toBe('input-group-control')
+    expect(searchInput.closest('[data-slot="input-group"]')).toBeTruthy()
+    expect(document.querySelector('.toolbar-search input')).toBeNull()
+    const workspaceCard = screen
+      .getAllByRole('button', { name: /QA Release Workspace/ })
+      .find(item => item.getAttribute('aria-pressed') === 'true')
+    expect(workspaceCard).toBeTruthy()
+    if (!workspaceCard)
+      return
+    expect(workspaceCard.getAttribute('data-slot')).toBe('button')
+    expect(workspaceCard.getAttribute('data-variant')).toBe('secondary')
+    expect(workspaceCard.classList.contains('aria-pressed:border-primary')).toBe(false)
+    expect(workspaceCard.classList.contains('aria-pressed:bg-primary/5')).toBe(false)
+    const workspaceCardIcon = workspaceCard.querySelector('[data-slot="item-media"]') as HTMLElement
+    expect(workspaceCardIcon).toBeTruthy()
+    expect(workspaceCardIcon.classList.contains('rounded-md')).toBe(false)
+    expect(workspaceCardIcon.classList.contains('bg-muted')).toBe(false)
+    const workspaceListHeading = screen.getByText(/Workspaces \(/)
+    expect(workspaceListHeading.getAttribute('data-slot')).toBe('item-title')
+    fireEvent.change(searchInput, { target: { value: 'release workspace' } })
+    expect(screen.getAllByRole('button', { name: /QA Release Workspace/ }).some(item => item.getAttribute('aria-pressed') === 'true')).toBe(true)
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/search?providerId='))).toBe(false)
   })
 
   it('creates a worker from the compact worker list dialog', async () => {
     render(<WorkerStudio />)
 
-    await screen.findByTestId('hr-people-workbench')
-    fireEvent.click(screen.getByRole('button', { name: 'Create worker' }))
+    await screen.findByLabelText('Host actions')
+    fireEvent.click(screen.getByRole('button', { name: 'New Soul worker' }))
 
     const dialog = screen.getByRole('dialog', { name: 'Create worker' })
-    fireEvent.click(within(dialog).getByRole('combobox', { name: 'Soul' }))
-    expect(dialog.querySelector('.studio-select.open')).toBeTruthy()
+    expect(dialog.getAttribute('data-slot')).toBe('dialog-content')
+    const createWorkerButton = within(dialog).getByRole('button', { name: 'Create worker' })
+    expect(createWorkerButton.getAttribute('data-slot')).toBe('button')
+    expect(createWorkerButton.getAttribute('data-variant')).toBe('default')
+    expect(createWorkerButton.querySelector('span')).toBeNull()
+    const soulSelect = within(dialog).getByRole('combobox', { name: 'Soul' })
+    expect(soulSelect.getAttribute('data-slot')).toBe('select-trigger')
+    expect(dialog.querySelector('.studio-select')).toBeNull()
+    const workerNameInput = within(dialog).getByLabelText('Worker name')
+    expect(workerNameInput.getAttribute('data-slot')).toBe('input')
+    expect(workerNameInput.classList.contains('newproj-name')).toBe(false)
+    fireEvent.click(soulSelect)
+    expect(document.querySelector('[data-slot="select-content"]')).toBeTruthy()
     expect(screen.getByRole('listbox', { name: 'Soul' })).toBeTruthy()
     fireEvent.click(screen.getByRole('option', { name: /QA/ }))
-    expect(dialog.querySelector('.studio-select.open')).toBeNull()
+    expect(document.querySelector('[data-slot="select-content"]')).toBeNull()
     fireEvent.change(within(dialog).getByLabelText('Worker name'), { target: { value: 'QA Worker' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create worker' }))
 
@@ -1835,7 +1785,7 @@ describe('worker studio', () => {
           apiRoutePrefix: '/api/local/apps/aiworker-hr',
           artifactPreviewIds: [],
           descriptorSurfaceIds: [],
-          frameSurfaceIds: [],
+          microAppSurfaceIds: [],
           panelIds: [],
           reviewPanelIds: [],
           routePaths: [],
@@ -1861,7 +1811,7 @@ describe('worker studio', () => {
           apiRoutePrefix: '/api/local/apps/aiworker-qa',
           artifactPreviewIds: [],
           descriptorSurfaceIds: [],
-          frameSurfaceIds: [],
+          microAppSurfaceIds: [],
           panelIds: [],
           reviewPanelIds: [],
           routePaths: [],
@@ -1878,8 +1828,14 @@ describe('worker studio', () => {
     expect(await screen.findByText('Choose a Soul App to start')).toBeTruthy()
     expect(screen.getAllByText('AIWorker HR').length).toBeGreaterThan(0)
     expect(screen.getAllByText('AIWorker QA').length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: 'Start AIWorker HR' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Start AIWorker QA' })).toBeTruthy()
+    const startHrButton = screen.getByRole('button', { name: 'Start AIWorker HR' })
+    const startQaButton = screen.getByRole('button', { name: 'Start AIWorker QA' })
+    expect(startHrButton.getAttribute('data-slot')).toBe('button')
+    expect(startQaButton.getAttribute('data-slot')).toBe('button')
+    expect(startHrButton.querySelector('span')).toBeNull()
+    expect(startQaButton.querySelector('span')).toBeNull()
+    expect(startHrButton.closest('[data-slot="card"]')).toBeTruthy()
+    expect(startHrButton.classList.contains('first-run-app-card')).toBe(false)
     expect(screen.queryByText('aiworker-hr · 0 permissions')).toBeNull()
     expect(screen.queryByText('API /api/local/apps/aiworker-hr')).toBeNull()
     expect(screen.queryByRole('listbox', { name: 'Soul catalog' })).toBeNull()
@@ -1899,402 +1855,234 @@ describe('worker studio', () => {
     })
   })
 
-  it('creates a workspace session turn with selected Soul worker and skill metadata', async () => {
-    render(<WorkerStudio />)
-
-    await screen.findByTestId('hr-people-workbench')
-    fireEvent.click(screen.getByRole('button', { name: 'New profile' }))
-    const dialog = screen.getByRole('dialog', { name: 'Create workspace' })
-    fireEvent.change(within(dialog).getByLabelText('Workspace name'), { target: { value: 'New candidate workspace' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create workspace' }))
-
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-created')
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces', expect.objectContaining({
-        body: expect.stringContaining(`"soulId":"${HR_SOUL_ID}"`),
-        method: 'POST',
-      }))
-    })
-
-    expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
-    const profileTools = expandProfileTools()
-    expect(profileTools.querySelector('select.hr-composer-template-select')).toBeNull()
-    expect(profileTools.querySelector('.hr-composer-template-select.studio-select')).toBeTruthy()
-    expect(within(profileTools).getByLabelText('Proposal type').textContent).toContain('Candidate profile draft')
-    fireEvent.click(within(profileTools).getByLabelText('Proposal type'))
-    expect(document.querySelector('.hr-composer-template-select-content')).toBeTruthy()
-    expect(document.querySelector('.hr-composer-template-select-content')?.getAttribute('data-side')).toBe('top')
-    fireEvent.keyDown(within(profileTools).getByLabelText('Proposal type'), { key: 'Escape' })
-    expect(within(profileTools).getByRole('button', { name: /Generate profile draft/ }).textContent).not.toContain('Generate profile draft')
-    fireEvent.change(within(profileTools).getByLabelText('Candidate material'), { target: { value: 'Role and candidate packet.' } })
-    fireEvent.click(within(profileTools).getByRole('button', { name: /Generate profile draft/ }))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions/stream', expect.objectContaining({
-        body: expect.stringContaining(`"capabilityTemplateId":"${HR_PROFILE_UPDATE_PROPOSAL}"`),
-        method: 'POST',
-      }))
-      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-created/sessions/session-created')
-    })
-  })
-
-  it('submits multiple candidate material files with the profile draft session', async () => {
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
-    render(<WorkerStudio />)
-
-    await screen.findByTestId('hr-people-workbench')
-    const profileTools = expandProfileTools()
-    const fileInput = profileTools.querySelector('input.hr-material-file-input') as HTMLInputElement
-    expect(fileInput).toBeTruthy()
-    const fileInputClick = vi.spyOn(fileInput, 'click').mockImplementation(() => {})
-    Object.defineProperty(fileInput, 'value', { configurable: true, value: 'stale-selection', writable: true })
-    fireEvent.click(within(profileTools).getByRole('button', { name: 'Open candidate material file picker' }))
-    expect(fileInput.value).toBe('')
-    expect(fileInputClick).toHaveBeenCalledTimes(1)
-    fileInputClick.mockRestore()
-    const resume = new File(['resume evidence'], 'ada-resume.txt', { type: 'text/plain' })
-    const notes = new File(['interview notes'], 'round-one.md', { type: 'text/markdown' })
-
-    await act(async () => {
-      fireEvent.change(fileInput, { target: { files: [resume] } })
-      fireEvent.paste(within(profileTools).getByLabelText('Candidate material'), {
-        clipboardData: {
-          files: [notes],
-          items: [{ getAsFile: () => notes, kind: 'file' }],
+  it('passes session locator context to app-owned mounted session surfaces without Host turn submission', async () => {
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-session',
+            label: 'HR Session Workbench',
+            path: '/hr/session',
+            surface: { renderer: 'micro-app', scope: 'session' },
+          }],
+          workspaceWidgets: [],
         },
-      })
-    })
-
-    expect(within(profileTools).getByText('ada-resume.txt')).toBeTruthy()
-    expect(within(profileTools).getByText('round-one.md')).toBeTruthy()
-    expect(within(profileTools).getByLabelText('Attached candidate materials').textContent).toContain('2')
-
-    fireEvent.change(within(profileTools).getByLabelText('Candidate material'), { target: { value: 'Use these materials first.' } })
-    fireEvent.click(within(profileTools).getByRole('button', { name: /Generate profile draft/ }))
-
-    await waitFor(() => {
-      expect(writtenFiles).toHaveLength(2)
-      expect(lastSessionRequestBody).not.toBeNull()
-    })
-    expect(writtenFiles.map(file => file.path)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/^evidence\/uploads\/.+\/ada-resume\.txt$/),
-      expect.stringMatching(/^evidence\/uploads\/.+\/round-one\.md$/),
-    ]))
-    expect(writtenFiles[0]?.body).toContain('resume evidence')
-    const metadata = lastSessionRequestBody?.metadata as { attachedMaterials?: Array<{ name: string, path: string }>, materialCount?: number }
-    expect(metadata.materialCount).toBe(2)
-    expect(metadata.attachedMaterials?.map(item => item.name)).toEqual(['ada-resume.txt', 'round-one.md'])
-    expect(String(lastSessionRequestBody?.context)).toContain('Attached candidate material')
-    expect(String(lastSessionRequestBody?.context)).toContain('evidence/uploads/')
-  })
-
-  it('navigates from the HR worker workbench to the created session after a profile action', async () => {
-    window.history.replaceState(null, '', '/workers/hr-worker')
-    render(<WorkerStudio />)
-
-    await screen.findByTestId('hr-people-workbench')
-    fireEvent.click(screen.getByRole('button', { name: 'Open Hiring Workspace profile' }))
-    const profileTools = expandProfileTools()
-    fireEvent.change(within(profileTools).getByLabelText('Candidate material'), { target: { value: 'Target: Hiring Workspace\n\nSummarize profile.' } })
-    fireEvent.click(within(profileTools).getByRole('button', { name: /Generate profile draft/ }))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-1/sessions/stream', expect.objectContaining({
-        body: expect.stringContaining(`"capabilityTemplateId":"${HR_PROFILE_UPDATE_PROPOSAL}"`),
-        method: 'POST',
-      }))
-      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-created-worker-route')
-    })
-  })
-
-  it('does not force navigation back to a streaming session after the operator leaves the workspace route', async () => {
-    deferCreatedSessionStream = true
-    render(<WorkerStudio />)
-
-    await screen.findByTestId('hr-people-workbench')
-    fireEvent.click(screen.getByRole('button', { name: 'New profile' }))
-    const dialog = screen.getByRole('dialog', { name: 'Create workspace' })
-    fireEvent.change(within(dialog).getByLabelText('Workspace name'), { target: { value: 'New candidate workspace' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create workspace' }))
-
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-created')
-    })
-
-    expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
-    const profileTools = expandProfileTools()
-    fireEvent.change(within(profileTools).getByLabelText('Candidate material'), { target: { value: 'Role and candidate packet.' } })
-    fireEvent.click(within(profileTools).getByRole('button', { name: /Generate profile draft/ }))
-    window.history.pushState(null, '', '/workers/qa-worker')
-    window.dispatchEvent(new PopStateEvent('popstate'))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions/stream', expect.objectContaining({ method: 'POST' }))
-    })
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/workers/qa-worker')
-    })
-  })
-
-  it('submits source material files with a follow-up session turn', async () => {
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-session'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr/session'],
+        surfaceIds: ['hr-session'],
+        workspaceWidgetIds: [],
+      },
+      status: 'enabled',
+      version: '0.1.0',
+    }]
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
 
     render(<WorkerStudio />)
 
-    await screen.findByText('AIWorker Engine')
-    const workerComposer = document.querySelector('.worker-composer') as HTMLElement
-    const fileInput = document.querySelector('.worker-chat-pane input[type="file"]') as HTMLInputElement
-    expect(within(workerComposer).getByRole('button', { name: 'Add source material' })).toBeTruthy()
-    expect(fileInput).toBeTruthy()
-
-    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:source-image')
-    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
-    const sourceNotes = new File(['source evidence'], 'source-notes.txt', { type: 'text/plain' })
-    const duplicateSourceNotes = new File(['source evidence'], 'source-notes.txt', { type: 'text/plain' })
-    const sourceImage = new File(['image evidence'], 'source-image.png', { type: 'image/png' })
-    const duplicateSourceImage = new File(['image evidence'], 'source-image.png', { type: 'image/png' })
-    await act(async () => {
-      fireEvent.change(fileInput, { target: { files: [sourceNotes, sourceImage] } })
-      fireEvent.change(fileInput, { target: { files: [duplicateSourceNotes, duplicateSourceImage] } })
-    })
-
-    expect(within(workerComposer).getByText('source-notes.txt')).toBeTruthy()
-    expect(within(workerComposer).getAllByText('source-notes.txt')).toHaveLength(1)
-    expect(within(workerComposer).getAllByRole('button', { name: 'Preview source-image.png' })).toHaveLength(1)
-    fireEvent.change(within(workerComposer).getByLabelText('Follow-up turn'), { target: { value: 'Use the attached source.' } })
-    fireEvent.click(within(workerComposer).getByRole('button', { name: 'Send turn' }))
-
-    await waitFor(() => {
-      expect(writtenFiles).toHaveLength(2)
-      expect(lastMessageRequestBody).not.toBeNull()
-    })
-    expect(writtenFiles[0]).toMatchObject({
-      body: 'source evidence',
+    const microApp = await screen.findByTitle('HR Session Workbench')
+    expect(microApp.getAttribute('name')).toBe('aiworker-hr--hr-session')
+    expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
+      appId: 'aiworker-hr',
+      sessionId: 'session-1',
+      surfaceId: 'hr-session',
+      workerId: 'hr-worker',
       workspaceId: 'workspace-1',
     })
-    expect(writtenFiles.map(file => file.path)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/^evidence\/uploads\/.+\/source-notes\.txt$/),
-      expect.stringMatching(/^evidence\/uploads\/.+\/source-image\.png\.base64\.txt$/),
-    ]))
-    expect(String(lastMessageRequestBody?.input)).toContain('Use the attached source.')
-    expect(String(lastMessageRequestBody?.input)).toContain('Attached source material:')
-    expect(String(lastMessageRequestBody?.input)).toContain('evidence/uploads/')
-    expect(within(workerComposer).queryByText('source-notes.txt')).toBeNull()
-    const metadata = lastMessageRequestBody?.metadata as { attachedMaterials?: Array<{ name: string, path: string }>, materialCount?: number }
-    expect(metadata.materialCount).toBe(2)
-    expect(metadata.attachedMaterials?.map(item => item.name)).toEqual(['source-notes.txt', 'source-image.png'])
-    expect(createObjectURL).toHaveBeenCalledTimes(1)
-    createObjectURL.mockRestore()
-    revokeObjectURL.mockRestore()
+    expect(screen.queryByLabelText('Follow-up turn')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Send turn' })).toBeNull()
+    expect(writtenFiles).toHaveLength(0)
+    expect(lastMessageRequestBody).toBeNull()
   })
 
-  it('continues an existing session and wires review and memory actions', async () => {
-    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
-    currentEvents = [
-      {
-        ...eventRecord,
-        id: 30,
-        payloadJson: { agentEvent: { detail: 'running', kind: 'status', label: 'status' } },
-        seq: 1,
+  it('keeps Host from rendering session detail or artifact preview failures for app-owned mounted sessions', async () => {
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-session',
+            label: 'HR Session Workbench',
+            path: '/hr/session',
+            surface: { renderer: 'micro-app', scope: 'session' },
+          }],
+          workspaceWidgets: [],
+        },
       },
-      {
-        ...eventRecord,
-        id: 31,
-        payloadJson: { agentEvent: { inputTokens: 175170, kind: 'usage', outputTokens: 3446 } },
-        seq: 2,
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-session'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr/session'],
+        surfaceIds: ['hr-session'],
+        workspaceWidgetIds: [],
       },
-      {
-        ...eventRecord,
-        id: 32,
-        payloadJson: { path: 'artifacts/profile-update-proposal.md' },
-        seq: 3,
-        type: 'artifact',
-      },
-      {
-        ...eventRecord,
-        id: 33,
-        payloadJson: { verdict: 'needs_review' },
-        seq: 4,
-        type: 'review',
-      },
-      {
-        ...eventRecord,
-        id: 34,
-        payloadJson: { agentEvent: { detail: 'succeeded', kind: 'status', label: 'status' } },
-        seq: 5,
-      },
-    ]
+      status: 'enabled',
+      version: '0.1.0',
+    }]
+    currentArtifactRawStatus = 500
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
 
     render(<WorkerStudio />)
 
-    await screen.findByTestId('hr-people-workbench')
-    expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
-    expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
-    expandProfileTools()
-    expect(screen.getByText('Complete Hiring Workspace candidate profile')).toBeTruthy()
-    expect(screen.queryByText('Next Profile Step')).toBeNull()
-    expect(screen.getByText('People Profiles')).toBeTruthy()
-    expect(screen.queryByTestId('new-session-panel')).toBeNull()
-    const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
-    fireEvent.click(await within(profileTools).findByRole('button', { name: /Open Evidence organization session/ }))
-
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
-    })
-    expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
-    expect(screen.getAllByLabelText('Current worker').length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: 'New Soul worker' })).toBeTruthy()
-    const hostLocator = screen.getByLabelText('Current Soul worker')
-    expect(within(hostLocator).getByText('AIWorker HR')).toBeTruthy()
-    expect(within(hostLocator).getByText('HR')).toBeTruthy()
-    expect(screen.queryByText('Workspace navigation')).toBeNull()
-    expect(document.querySelector('.workspace-context-card')).toBeNull()
-    expect(screen.queryByText('Workspace sessions')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Back to worker' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Back to workspace' })).toBeTruthy()
-    expect(screen.queryByTestId('new-project-panel')).toBeNull()
-    expect(screen.getByText('Session events')).toBeTruthy()
-    expect(screen.getByText('Memory candidates')).toBeTruthy()
-    expect(document.querySelector('.session-progress-card')).toBeTruthy()
-    expect(document.querySelector('.studio-collapsible-group')).toBeTruthy()
-    expect(document.querySelector('.artifact-preview-frame')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Open artifact settings' })).toBeNull()
-
-    const chatActions = document.querySelector('.worker-chat-actions') as HTMLElement
-    const settingsButton = within(chatActions).getByRole('button', { name: 'Open platform settings' })
-    const drawerToggle = within(chatActions).getByRole('button', { name: 'Collapse session detail' })
-    expect(drawerToggle.getAttribute('aria-pressed')).toBe('true')
-    expect(settingsButton.nextElementSibling).toBe(drawerToggle)
-    expect(drawerToggle.classList.contains('active')).toBe(true)
-    const workerComposer = document.querySelector('.worker-composer') as HTMLElement
-    expect(workerComposer).toBeTruthy()
-    expect(within(workerComposer).queryByRole('button', { name: 'Open settings' })).toBeNull()
-    expect(within(workerComposer).getByRole('button', { name: 'Add source material' })).toBeTruthy()
-    expect(within(workerComposer).getByLabelText('Usage 175,170 input tokens, 3,446 output tokens')).toBeTruthy()
-    expect(within(workerComposer).getByText('175K in / 3.4K out').closest('.session-composer-action-right')).toBeTruthy()
-    const chatLogBeforeFollowUp = screen.getByTestId('worker-chat-log')
-    expect(within(chatLogBeforeFollowUp).getByText('Session running')).toBeTruthy()
-    expect(within(chatLogBeforeFollowUp).getByText('Session output')).toBeTruthy()
-    expect(chatLogBeforeFollowUp.querySelector('.session-status-pill')).toBeNull()
-
-    fireEvent.click(drawerToggle)
-    expect(document.querySelector('.detail-drawer-collapsed')).toBeTruthy()
-    const expandDrawerToggle = within(chatActions).getByRole('button', { name: 'Expand session detail' })
-    expect(expandDrawerToggle.getAttribute('aria-pressed')).toBe('false')
-    expect(expandDrawerToggle.classList.contains('active')).toBe(false)
-    expect(document.querySelector('.session-panel.collapsed')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Expand session detail' })).toBeTruthy()
-    fireEvent.click(expandDrawerToggle)
-    expect(screen.getByText('Session events')).toBeTruthy()
-
-    const chatLog = screen.getByTestId('worker-chat-log')
-    const scrollTo = vi.fn()
-    Object.defineProperty(chatLog, 'clientHeight', { configurable: true, value: 300 })
-    Object.defineProperty(chatLog, 'scrollHeight', { configurable: true, value: 1000 })
-    Object.defineProperty(chatLog, 'scrollTo', { configurable: true, value: scrollTo })
-    Object.defineProperty(chatLog, 'scrollTop', { configurable: true, value: 100, writable: true })
-    fireEvent.scroll(chatLog)
-    fireEvent.click(screen.getByRole('button', { name: 'Latest' }))
-    expect(scrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 1000 })
-
-    fireEvent.change(screen.getByLabelText('Follow-up turn'), { target: { value: 'Add interview risks.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Send turn' }))
-    expect(screen.getByText('Add interview risks.')).toBeTruthy()
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/sessions/session-1/messages/stream', expect.objectContaining({
-        body: expect.stringContaining('Add interview risks.'),
-        method: 'POST',
-      }))
-      expect(screen.getByText('Add interview risks.')).toBeTruthy()
-      expect(screen.getByText('Added interview risks.')).toBeTruthy()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Request review' }))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/reviews', expect.objectContaining({ method: 'POST' }))
-      expect(screen.getByText('Needs review')).toBeTruthy()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/lessons/lesson-1', expect.objectContaining({ method: 'PATCH' }))
-      expect(screen.getByText('Accepted')).toBeTruthy()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Back to workspace' }))
-
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
-    })
-    expect(await screen.findByTestId('hr-people-workbench')).toBeTruthy()
+    expect(await screen.findByTitle('HR Session Workbench')).toBeTruthy()
+    expect(screen.queryByTestId('session-detail-panel')).toBeNull()
+    expect(screen.queryByTestId('artifact-preview-frame')).toBeNull()
+    expect(screen.queryByText('Local file 500: /api/local/workspaces/workspace-1/files/raw/artifacts/session-1/candidate-screen.md')).toBeNull()
   })
 
-  it('keeps an empty workspace route in the Soul workbench without Host workspace navigation', async () => {
-    const otherWorkspace = {
-      ...workspace,
-      id: 'workspace-2',
-      name: 'Offer Workspace',
-      rootPath: '/tmp/offer',
-    }
-    currentWorkspaces = [{ ...workspace }, otherWorkspace]
+  it('keeps workspace routes on app-owned mounted surfaces when a Soul App route exists', async () => {
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-home',
+            label: 'HR People Workbench',
+            path: '/hr',
+            surface: { renderer: 'micro-app' },
+          }],
+          workspaceWidgets: [],
+        },
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-home'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr'],
+        surfaceIds: ['hr-home'],
+        workspaceWidgetIds: [],
+      },
+      status: 'enabled',
+      version: '0.1.0',
+    }]
     currentSessions = []
     currentTurns = []
     currentArtifacts = []
     currentEvents = []
-    currentLessons = []
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
 
     render(<WorkerStudio />)
 
-    expect(await screen.findByLabelText('Host actions')).toBeTruthy()
-    expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
+    expect(await screen.findByTitle('HR People Workbench')).toBeTruthy()
+    expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
     expect(screen.queryByText('Workspace navigation')).toBeNull()
-    expect(document.querySelector('.workspace-context-card')).toBeNull()
-    expect(screen.queryByText('Workspace sessions')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
-    expandProfileTools()
-    expect(screen.getByText('Complete Hiring Workspace candidate profile')).toBeTruthy()
-    expect(screen.queryByText('Next Profile Step')).toBeNull()
-    expect(screen.getByText('People Profiles')).toBeTruthy()
-    expect(screen.queryByTestId('new-session-panel')).toBeNull()
     expect(screen.queryByText('What do you want to build in Hiring Workspace?')).toBeNull()
-    expect(screen.queryByText('No sessions in this workspace yet.')).toBeNull()
-    expect(document.querySelector('.workspace-overview-panel')).toBeNull()
-    expect(document.querySelector('.workspace-session-grid')).toBeNull()
-    expect(document.querySelector('.rail-workspace-list')).toBeNull()
-    expect(screen.queryByTestId('new-project-panel')).toBeNull()
-    expect(screen.queryByLabelText('Soul catalog')).toBeNull()
   })
 
   it('keeps session routes free of Host-level new-session navigation', async () => {
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-session',
+            label: 'HR Session Workbench',
+            path: '/hr/session',
+            surface: { renderer: 'micro-app', scope: 'session' },
+          }],
+          workspaceWidgets: [],
+        },
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-session'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr/session'],
+        surfaceIds: ['hr-session'],
+        workspaceWidgetIds: [],
+      },
+      status: 'enabled',
+      version: '0.1.0',
+    }]
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
 
     render(<WorkerStudio />)
 
-    expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
+    expect(await screen.findByTitle('HR Session Workbench')).toBeTruthy()
     expect(document.querySelector('.workspace-context-card')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Back to workspace' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Back to workspace' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
   })
 
-  it('returns from a selected session route through the Soul worker navigation', async () => {
+  it('keeps a selected session route under the active worker without exposing sessions in Host sidebar', async () => {
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-session',
+            label: 'HR Session Workbench',
+            path: '/hr/session',
+            surface: { renderer: 'micro-app', scope: 'session' },
+          }],
+          workspaceWidgets: [],
+        },
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-session'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr/session'],
+        surfaceIds: ['hr-session'],
+        workspaceWidgetIds: [],
+      },
+      status: 'enabled',
+      version: '0.1.0',
+    }]
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
 
     render(<WorkerStudio />)
 
-    expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
-    const workerRail = screen.getByRole('listbox', { name: 'Current worker' })
-    fireEvent.click(within(workerRail).getByRole('option', { name: 'HR' }))
-
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/workers/hr-worker')
-    })
+    expect(await screen.findByTitle('HR Session Workbench')).toBeTruthy()
+    const switcher = screen.getByTestId('worker-switcher')
+    expect(within(switcher).getByRole('button', { name: 'Switch to HR' })).toBeTruthy()
+    expect(within(switcher).queryByText('Hiring Workspace')).toBeNull()
+    expect(within(switcher).queryByRole('button', { name: 'Screen candidate' })).toBeNull()
+    expect(screen.queryByRole('listbox', { name: 'Current worker' })).toBeNull()
+    expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
   })
 
   it('opens settings, rescans/tests engines, and autosaves settings changes', async () => {
@@ -2309,29 +2097,135 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByLabelText('Host actions')
-    expect(screen.queryByRole('dialog', { name: 'Platform Settings' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Local Host Settings' })).toBeNull()
 
     openHostSettings()
 
-    expect(screen.getByRole('dialog', { name: 'Platform Settings' })).toBeTruthy()
+    const settingsDialog = screen.getByRole('dialog', { name: 'Local Host Settings' })
+    expect(settingsDialog).toBeTruthy()
+    expect(settingsDialog.getAttribute('data-slot')).toBe('dialog-content')
+    expect(document.querySelector('.modal-backdrop')).toBeNull()
+    expect(settingsDialog.querySelector('[data-settings-slot="settings-dialog-actions"]')?.classList.contains('z-10')).toBe(false)
+    const executionTab = within(settingsDialog).getByRole('tab', { name: /Local CLI \/ BYOK/ })
+    expect(executionTab.getAttribute('data-slot')).toBe('tabs-trigger')
+    expect(executionTab.className).toContain('group-data-vertical/tabs:flex-none')
+    expect(executionTab.className).not.toContain('cursor-pointer')
+    expect(executionTab.className).not.toMatch(/(?:^|\s)flex-1(?:\s|$)/)
+    expect(within(executionTab).getByText('Execution').getAttribute('data-slot')).toBe('item-title')
+    expect(within(executionTab).getByText('Local CLI / BYOK').getAttribute('data-slot')).toBe('item-description')
+    const settingsTabs = within(settingsDialog).getByRole('tablist', { name: 'Local Host Settings' })
+    expect(settingsTabs.getAttribute('data-slot')).toBe('tabs-list')
+    expect(settingsTabs.getAttribute('aria-orientation')).toBe('vertical')
+    expect(settingsTabs.className).toContain('max-md:h-52')
+    expect(settingsTabs.className).toContain('max-md:max-h-52')
+    expect(settingsTabs.className).toContain('max-md:overflow-auto')
+    expect(settingsTabs.className).toContain('md:h-auto')
+    expect(settingsTabs.className).toContain('md:max-h-none')
+    expect(settingsTabs.className).toContain('md:overflow-visible')
+    expect(settingsTabs.className).toContain('md:self-start')
+    expect(settingsTabs.className).not.toMatch(/(?:^|\s)overflow-auto(?:\s|$)/)
+    expect(settingsTabs.className).not.toContain('md:max-h-full')
+    expect(settingsTabs.className).not.toContain('md:h-80')
+    expect(settingsTabs.className).not.toContain('md:max-h-80')
+    expect(settingsTabs.className).not.toContain('md:h-full')
+    const settingsTabsRoot = settingsTabs.closest('[data-slot="tabs"]') as HTMLElement
+    expect(settingsTabsRoot.classList.contains('border-t')).toBe(false)
+    expect(settingsTabsRoot.classList.contains('border-border')).toBe(false)
+    expect(settingsTabs.classList.contains('border-b')).toBe(false)
+    expect(settingsTabs.classList.contains('border-r')).toBe(false)
+    expect(settingsTabs.classList.contains('rounded-none')).toBe(false)
+    expect(within(settingsDialog).getByRole('tabpanel').getAttribute('data-slot')).toBe('tabs-content')
     expect(screen.getByText('Local CLI / BYOK')).toBeTruthy()
+    const executionPanel = within(settingsDialog).getByRole('tabpanel')
+    const executionHeading = within(executionPanel).getByText('Local CLI engines')
+    expect(executionHeading.getAttribute('data-slot')).toBe('item-title')
+    expect(executionHeading.closest('[data-slot="item"]')).toBeTruthy()
     expect(screen.queryByText('All changes saved')).toBeNull()
-    const codexIcon = document.querySelector('[data-engine-icon="codex"] .agent-icon-shape') as HTMLElement
+    const executionModeGroup = within(settingsDialog).getByRole('group', { name: 'Execution' })
+    expect(executionModeGroup.getAttribute('data-slot')).toBe('toggle-group')
+    const localCliToggle = within(executionModeGroup).getByRole('radio', { name: /Local CLI/ })
+    expect(localCliToggle.getAttribute('data-slot')).toBe('toggle-group-item')
+    expect(within(localCliToggle).getByText('Local CLI').getAttribute('data-slot')).toBe('item-title')
+    expect(within(localCliToggle).getByText('1 available').getAttribute('data-slot')).toBe('item-description')
+    const codexIcon = document.querySelector('[data-engine-icon="codex"]')
     expect(codexIcon).toBeTruthy()
-    expect(codexIcon.getAttribute('style')).toContain('/engine-icons/openai.svg')
-    const cursorIcon = document.querySelector('[data-engine-icon="cursor"] .agent-icon-shape') as HTMLElement
+    expect(codexIcon?.getAttribute('data-slot')).toBe('item-media')
+    expect(codexIcon?.getAttribute('data-variant')).toBe('icon')
+    expect(codexIcon?.getAttribute('data-engine-icon-src')).toContain('/engine-icons/openai.svg')
+    expect(codexIcon?.className).toContain('size-4')
+    expect(codexIcon?.querySelector('[data-slot="engine-logo"]')).toBeNull()
+    expect(codexIcon?.querySelector('[class]')).toBeNull()
+    expect(codexIcon?.classList.contains('rounded-md')).toBe(false)
+    expect(codexIcon?.classList.contains('ring-1')).toBe(false)
+    const cursorIcon = document.querySelector('[data-engine-icon="cursor"]')
     expect(cursorIcon).toBeTruthy()
-    expect(cursorIcon.getAttribute('style')).toContain('/engine-icons/cursor.svg')
+    expect(cursorIcon?.getAttribute('data-slot')).toBe('item-media')
+    expect(cursorIcon?.getAttribute('data-variant')).toBe('icon')
+    expect(cursorIcon?.getAttribute('data-engine-icon-src')).toContain('/engine-icons/cursor.svg')
+    expect(cursorIcon?.className).toContain('size-4')
+    expect(cursorIcon?.querySelector('[data-slot="engine-logo"]')).toBeNull()
+    expect(cursorIcon?.querySelector('[class]')).toBeNull()
+    expect(cursorIcon?.classList.contains('rounded-md')).toBe(false)
+    expect(cursorIcon?.classList.contains('ring-1')).toBe(false)
+    const codexEngineCard = screen.getByRole('button', { name: /Codex CLI/ })
+    expect(codexEngineCard.getAttribute('data-slot')).toBe('button')
+    expect(codexEngineCard.getAttribute('data-variant')).toBe('secondary')
+    expect(codexEngineCard.className).not.toContain('cursor-pointer')
+    expect(codexEngineCard.className).not.toContain('aria-pressed:bg-secondary')
+    expect(codexEngineCard.classList.contains('aria-pressed:border-primary')).toBe(false)
+    expect(codexEngineCard.classList.contains('aria-pressed:bg-primary/5')).toBe(false)
+    const activeEngineBadge = within(codexEngineCard).getByText('Active')
+    expect(activeEngineBadge.getAttribute('data-slot')).toBe('badge')
+    expect(activeEngineBadge.getAttribute('aria-hidden')).toBe('true')
+    expect(document.querySelector('.status-dot')).toBeNull()
     const testButton = screen.getByRole('button', { name: 'Test' })
     const rescanButton = screen.getByRole('button', { name: 'Rescan' })
-    expect(testButton.classList.contains('settings-action-button')).toBe(true)
-    expect(rescanButton.classList.contains('settings-action-button')).toBe(true)
+    expect(testButton.classList.contains('settings-action-button')).toBe(false)
+    expect(rescanButton.classList.contains('settings-action-button')).toBe(false)
     expect(testButton.classList.contains('icon-btn')).toBe(false)
     expect(rescanButton.classList.contains('icon-btn')).toBe(false)
+    expect(testButton.getAttribute('data-slot')).toBe('button')
+    expect(testButton.getAttribute('data-variant')).toBe('ghost')
+    expect(testButton.className).not.toContain('cursor-pointer')
+    expect(testButton.className).toContain('hover:bg-muted')
+    expect(testButton.querySelector('span')).toBeNull()
+    expect(testButton.closest('[data-slot="item-actions"]')).toBeTruthy()
+    expect(testButton.closest('[data-slot="button-group"]')).toBeNull()
+    expect(rescanButton.getAttribute('data-slot')).toBe('button')
+    expect(rescanButton.getAttribute('data-variant')).toBe('ghost')
+    expect(rescanButton.className).not.toContain('cursor-pointer')
+    expect(rescanButton.className).toContain('hover:bg-muted')
+    expect(rescanButton.querySelector('span')).toBeNull()
+    expect(rescanButton.closest('[data-slot="item-actions"]')).toBeTruthy()
+    expect(rescanButton.closest('[data-slot="button-group"]')).toBeNull()
     fireEvent.click(testButton)
     fireEvent.click(rescanButton)
-    fireEvent.click(screen.getByRole('button', { name: /Language/ }))
-    fireEvent.click(screen.getByRole('button', { name: /简体中文/ }))
+    const engineStatus = await within(settingsDialog).findByText('Codex CLI responded.')
+    expect(engineStatus.getAttribute('data-slot')).toBe('alert-description')
+    const engineStatusAlert = engineStatus.closest('[data-slot="alert"]')
+    expect(engineStatusAlert).toBeTruthy()
+    expect(engineStatusAlert?.getAttribute('role')).toBe('status')
+    selectSettingsTab(within(settingsDialog).getByRole('tab', { name: /Connectors/ }))
+    const atsConnectorSwitch = within(settingsDialog).getByRole('switch', { name: /ATS \/ HRIS/ })
+    const connectorItem = atsConnectorSwitch.closest('[data-slot="item"]') as HTMLElement
+    expect(connectorItem.getAttribute('data-variant')).toBe('muted')
+    expect(atsConnectorSwitch.closest('[data-slot="card"]')).toBeNull()
+    selectSettingsTab(within(settingsDialog).getByRole('tab', { name: /About/ }))
+    const aboutPanel = within(settingsDialog).getByRole('tabpanel')
+    expect(aboutPanel.querySelector('[data-slot="item-group"]')).toBeTruthy()
+    expect(aboutPanel.querySelectorAll('[data-slot="item"]').length).toBeGreaterThanOrEqual(4)
+    const versionFact = within(aboutPanel).getByText('Version').closest('[data-slot="item"]') as HTMLElement
+    expect(versionFact.getAttribute('data-variant')).toBe('muted')
+    expect(within(versionFact).getByText('test')).toBeTruthy()
+    expect(aboutPanel.querySelector('.rounded-md.border.bg-card')).toBeNull()
+    selectSettingsTab(screen.getByRole('tab', { name: /Language/ }))
+    const languageGroup = screen.getByRole('group', { name: 'Language' })
+    expect(languageGroup.getAttribute('data-slot')).toBe('toggle-group')
+    const zhLanguageButton = within(languageGroup).getByRole('radio', { name: /简体中文/ })
+    expect(zhLanguageButton.getAttribute('data-slot')).toBe('toggle-group-item')
+    expect(within(zhLanguageButton).getByText('简体中文').getAttribute('data-slot')).toBe('item-title')
+    expect(within(zhLanguageButton).getByText('Interface').getAttribute('data-slot')).toBe('item-description')
+    fireEvent.click(zhLanguageButton)
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/settings/engines/test', expect.objectContaining({ method: 'POST' }))
@@ -2339,8 +2233,13 @@ describe('worker studio', () => {
       expect(fetch).toHaveBeenCalledWith('/api/local/settings', expect.objectContaining({ method: 'PATCH' }))
       expect(document.documentElement.lang).toBe('zh-CN')
     })
-    expect(screen.getByRole('dialog', { name: '平台设置' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '新建人员档案' })).toBeTruthy()
+    const localizedSettingsDialog = screen.getByRole('dialog', { name: '本地 Host 设置' })
+    expect(localizedSettingsDialog).toBeTruthy()
+    fireEvent.click(within(localizedSettingsDialog).getByRole('button', { name: '关闭本地 Host 设置' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '本地 Host 设置' })).toBeNull()
+    })
+    expect(await screen.findByTestId('worker-switcher')).toBeTruthy()
     expect(screen.queryByText('Create workspace session')).toBeNull()
   })
 
@@ -2350,16 +2249,20 @@ describe('worker studio', () => {
     await screen.findByLabelText('Host actions')
     openHostSettings()
 
-    fireEvent.click(screen.getByRole('button', { name: /Local MCP/ }))
-    const localMcpToggle = screen.getByRole('checkbox', { name: /Local workspace MCP/ }) as HTMLInputElement
+    selectSettingsTab(screen.getByRole('tab', { name: /Local MCP/ }))
+    const localMcpToggle = await screen.findByRole('switch', { name: /Local workspace MCP/ }) as HTMLButtonElement
+    expect(localMcpToggle.getAttribute('data-slot')).toBe('switch')
     expect(localMcpToggle.disabled).toBe(true)
-    expect(localMcpToggle.checked).toBe(false)
+    expect(localMcpToggle.getAttribute('aria-checked')).toBe('false')
+    expect(localMcpToggle.closest('[data-slot="item"]')?.getAttribute('data-variant')).toBe('muted')
+    expect(localMcpToggle.closest('[data-slot="card"]')).toBeNull()
     expect(screen.getByText('Not connected yet. Future workspace binding will decide which sessions expose MCP context.')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /External MCP/ }))
-    const commandInput = screen.getByPlaceholderText('command --arg value') as HTMLInputElement
+    selectSettingsTab(screen.getByRole('tab', { name: /External MCP/ }))
+    const commandInput = await screen.findByPlaceholderText('command --arg value') as HTMLInputElement
+    expect(commandInput.getAttribute('data-slot')).toBe('input')
     expect(commandInput.disabled).toBe(true)
-    expect(screen.getByText('App-owned local MCP servers will be enabled from the workspace binding flow with grants, secret references, and audit.')).toBeTruthy()
+    expect(screen.getByText('App-owned local MCP servers will be enabled from workspace binding with secret references when configured.')).toBeTruthy()
   })
 
   it('maps each local engine to its own icon asset', () => {
@@ -2390,11 +2293,13 @@ describe('worker studio', () => {
     const shell = await screen.findByTestId('worker-studio-shell')
     expect(shell.getAttribute('data-appearance')).toBe('system')
     expect(shell.getAttribute('data-theme')).toBe('light')
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
 
     act(() => media.setMatches(true))
 
     await waitFor(() => {
       expect(screen.getByTestId('worker-studio-shell').getAttribute('data-theme')).toBe('dark')
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
     })
   })
 
@@ -2403,12 +2308,18 @@ describe('worker studio', () => {
 
     await screen.findByTestId('worker-studio-shell')
     openHostSettings()
-    fireEvent.click(screen.getByText('System / light / dark'))
-    fireEvent.click(screen.getByRole('button', { name: /Dark Workspace/ }))
+    const settingsDialog = screen.getByRole('dialog', { name: 'Local Host Settings' })
+    selectSettingsTab(within(settingsDialog).getByRole('tab', { name: /Appearance/ }))
+    const appearanceGroup = await screen.findByRole('group', { name: 'Appearance' })
+    expect(appearanceGroup.getAttribute('data-slot')).toBe('toggle-group')
+    const darkAppearanceButton = within(appearanceGroup).getByRole('radio', { name: /Dark Workspace/ })
+    expect(darkAppearanceButton.getAttribute('data-slot')).toBe('toggle-group-item')
+    fireEvent.click(darkAppearanceButton)
 
     await waitFor(() => {
       expect(screen.getByTestId('worker-studio-shell').getAttribute('data-appearance')).toBe('dark')
       expect(screen.getByTestId('worker-studio-shell').getAttribute('data-theme')).toBe('dark')
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
       expect(fetch).toHaveBeenCalledWith('/api/local/settings', expect.objectContaining({
         body: JSON.stringify({ appearance: 'dark' }),
         method: 'PATCH',

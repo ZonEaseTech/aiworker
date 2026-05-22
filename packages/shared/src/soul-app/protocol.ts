@@ -35,33 +35,6 @@ export interface SoulAppProtocolActionResult {
   refresh?: boolean
 }
 
-export interface SoulAppProtocolViewSummary {
-  appId: string
-  authority: 'soul-app'
-  cache?: {
-    cachedAt: string
-    freshness: 'non-authoritative'
-  }
-  id: string
-  kind: string
-  openAction?: SoulAppProtocolAction
-  permissionRequired?: string
-  status?: string
-  summary?: string
-  title: string
-  updatedAt?: string
-}
-
-export interface SoulAppSearchRequest {
-  limit?: number
-  query: string
-}
-
-export interface SoulAppSearchResult {
-  items: readonly SoulAppProtocolViewSummary[]
-  providerId: string
-}
-
 export interface SoulAppLifecycleProtocol {
   disable: (context: SoulAppScopedContext) => Promise<SoulAppProtocolResult>
   enable: (context: SoulAppScopedContext) => Promise<SoulAppProtocolResult>
@@ -77,7 +50,7 @@ export interface SoulAppIntentClassification {
 }
 
 export interface SoulAppSessionContext {
-  artifactTypes: readonly string[]
+  artifactTypes?: readonly string[]
   capabilityId: string
   contextMarkdown: string
   promptFragments: readonly string[]
@@ -91,32 +64,7 @@ export interface SoulAppRuntimeProtocol {
   resolveCapability: (context: SoulAppScopedContext, input: { capabilityId?: string, intent?: string }) => Promise<SoulAppCapability>
 }
 
-export interface SoulAppArtifactValidationResult {
-  issues: readonly { message: string, path?: string, severity: 'error' | 'warning' }[]
-  ok: boolean
-}
-
-export interface SoulAppArtifactProtocol {
-  artifactSchemas: (context: SoulAppScopedContext) => Promise<readonly SoulAppArtifactType[]>
-  extractMetadata?: (context: SoulAppScopedContext, artifact: { contentRef: string, type: string }) => Promise<Record<string, unknown>>
-  renderPreview?: (context: SoulAppScopedContext, artifact: { artifactId: string, type: string }) => Promise<{ previewRef: string }>
-  validateArtifact: (context: SoulAppScopedContext, artifact: { contentRef: string, type: string }) => Promise<SoulAppArtifactValidationResult>
-}
-
-export interface SoulAppReviewRubric {
-  checks: readonly string[]
-  policyRef?: string
-}
-
-export interface SoulAppReviewProtocol {
-  createReviewRubric: (context: SoulAppScopedContext, artifactType: string) => Promise<SoulAppReviewRubric>
-  evaluateArtifact?: (context: SoulAppScopedContext, artifact: { artifactId: string, type: string }) => Promise<SoulAppArtifactValidationResult>
-  proposeMemoryCandidate?: (context: SoulAppScopedContext, review: { artifactId: string, reviewId: string }) => Promise<{ evidence: readonly Record<string, unknown>[], statement: string }>
-}
-
 export interface SoulAppEventProtocol {
-  onArtifactCreated?: (context: SoulAppScopedContext, event: { artifactId: string, type: string }) => Promise<void>
-  onReviewAccepted?: (context: SoulAppScopedContext, event: { artifactId: string, reviewId: string }) => Promise<void>
   onSessionCreated?: (context: SoulAppScopedContext, event: { sessionId: string }) => Promise<void>
   onTurnCompleted?: (context: SoulAppScopedContext, event: { sessionId: string, turnId: string }) => Promise<void>
 }
@@ -135,15 +83,11 @@ export interface SoulAppUiContributionProtocol {
 }
 
 export interface SoulAppProtocolHandlers {
-  artifact?: SoulAppArtifactProtocol
   connector?: SoulAppConnectorProtocol
   event?: SoulAppEventProtocol
   invokeAction?: (context: SoulAppScopedContext, action: SoulAppProtocolAction) => Promise<SoulAppProtocolActionResult>
   lifecycle?: SoulAppLifecycleProtocol
   manifest: SoulAppManifest
-  review?: SoulAppReviewProtocol
   runtime?: SoulAppRuntimeProtocol
-  search?: (context: SoulAppScopedContext, request: SoulAppSearchRequest) => Promise<SoulAppSearchResult>
   ui?: SoulAppUiContributionProtocol
-  views?: (context: SoulAppScopedContext, input: { kind?: string }) => Promise<readonly SoulAppProtocolViewSummary[]>
 }

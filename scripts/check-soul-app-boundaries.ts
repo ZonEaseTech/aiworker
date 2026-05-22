@@ -17,6 +17,7 @@ interface BoundaryIssue {
 
 const repoRoot = process.cwd()
 const appRoot = path.join(repoRoot, 'apps')
+const completionAudit = process.argv.includes('--completion-audit')
 const hostPrivatePackages = [
   '@zonease/aiworker-api',
   '@zonease/aiworker-cli',
@@ -34,12 +35,12 @@ const hostPrivateRoots = [
   'packages/storage-sqlite',
 ]
 const rawWebStorageMessage = 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.'
-
 const soulApps = discoverSoulApps()
 const issues: BoundaryIssue[] = [
   ...scanSoulAppImports(soulApps),
   ...scanHostImports(soulApps),
   ...scanSoulAppWebStorageUsage(soulApps),
+  ...scanHostEmbeddedSoulRenderers(),
 ]
 
 if (issues.length > 0) {
@@ -47,6 +48,8 @@ if (issues.length > 0) {
     console.error(`${issue.file}: ${issue.message} (${issue.importPath})`)
   process.exitCode = 1
 }
+
+reportHostEmbeddedSoulRendererDebt()
 
 function discoverSoulApps(): SoulAppWorkspace[] {
   if (!existsSync(appRoot))
@@ -153,6 +156,51 @@ function scanSoulAppWebStorageUsage(apps: SoulAppWorkspace[]): BoundaryIssue[] {
     }
   }
   return issues
+}
+
+function scanHostEmbeddedSoulRenderers(): BoundaryIssue[] {
+  return listHostEmbeddedSoulRendererPaths()
+    .map(rendererPath => ({
+      file: rendererPath,
+      importPath: 'host-renderer',
+      message: 'Host Web must not add Soul-specific renderer directories; move domain UI into the owning Soul App product web or mounted surface boundary.',
+    }))
+}
+
+function reportHostEmbeddedSoulRendererDebt(): void {
+  const rendererPaths = listHostEmbeddedSoulRendererPaths()
+  if (rendererPaths.length === 0)
+    return
+
+  if (completionAudit) {
+    console.error('Soul App boundary completion audit blocked by Host-embedded Soul renderer paths:')
+    for (const rendererPath of rendererPaths)
+      console.error(`- ${rendererPath}: move domain UI into the owning Soul App product web or mounted surface boundary.`)
+    process.exit(1)
+  }
+}
+
+function listHostEmbeddedSoulRendererPaths(): string[] {
+  const root = 'apps/web/src/worker/souls'
+  const rootAbs = path.join(repoRoot, root)
+  if (!existsSync(rootAbs))
+    return []
+
+  const results: string[] = []
+  const walk = (relativeDir: string) => {
+    for (const entry of readdirSync(path.join(repoRoot, relativeDir), { withFileTypes: true })) {
+      if (!entry.isDirectory())
+        continue
+      const child = path.join(relativeDir, entry.name).replaceAll('\\', '/')
+      if (child === `${root}/common`)
+        continue
+      if (existsSync(path.join(repoRoot, child, 'index.tsx')))
+        results.push(child)
+      walk(child)
+    }
+  }
+  walk(root)
+  return results.sort()
 }
 
 function listSourceFiles(dir: string): string[] {

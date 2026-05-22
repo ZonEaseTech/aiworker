@@ -22,13 +22,30 @@ export interface EngineAssetSource {
   sourceRoot: string
 }
 
+export interface WorkerOverlayProjectionAsset {
+  content: string
+  enabled: boolean
+  id: string
+  kind: 'entry-file' | 'mcp-client' | 'skill'
+  target: string
+}
+
 export interface EngineAssetProjectionInput {
   appId: string
   engineAssets?: SoulAppEngineAssets
   engineTarget?: SoulAppEngineTarget | null
   now: string
+  preserveUnownedExistingTargets?: boolean
   sourceRoot: string
   variables: Record<string, string>
+  workerOverlayAssets?: WorkerOverlayProjectionAsset[]
+  workspaceRoot: string
+}
+
+type EngineAssetProjectionContext = EngineAssetProjectionInput & {
+  generatedAt: string
+  previousProjectionTargets: ReadonlySet<string> | null
+  sourceRoot: string
   workspaceRoot: string
 }
 
@@ -36,12 +53,16 @@ export async function projectEngineAssetsToWorkspace(input: EngineAssetProjectio
   const sourceRoot = path.resolve(input.sourceRoot)
   const workspaceRoot = path.resolve(input.workspaceRoot)
   const generatedAt = input.now
+  const previousProjectionTargets = input.preserveUnownedExistingTargets
+    ? await readPreviousProjectionTargets(workspaceRoot)
+    : null
   const projections: SoulAppProjectionReceiptEntry[] = []
 
   await mkdir(path.join(workspaceRoot, '.aiworker'), { recursive: true })
-  projections.push(...await projectWorkspaceFiles({ ...input, generatedAt, sourceRoot, workspaceRoot }))
-  projections.push(...await projectNativeSkills({ ...input, generatedAt, sourceRoot, workspaceRoot }))
-  projections.push(...await projectMcpClients({ ...input, generatedAt, sourceRoot, workspaceRoot }))
+  const context = { ...input, generatedAt, previousProjectionTargets, sourceRoot, workspaceRoot }
+  projections.push(...await projectWorkspaceFiles(context))
+  projections.push(...await projectNativeSkills(context))
+  projections.push(...await projectMcpClients(context))
 
   const receipt: SoulAppProjectionReceipt = {
     appId: input.appId,
@@ -67,12 +88,24 @@ export function resolveSoulAppEngineTarget(engineId?: string | null): SoulAppEng
   return null
 }
 
-async function projectWorkspaceFiles(input: EngineAssetProjectionInput & { generatedAt: string, sourceRoot: string, workspaceRoot: string }): Promise<SoulAppProjectionReceiptEntry[]> {
+async function projectWorkspaceFiles(input: EngineAssetProjectionContext): Promise<SoulAppProjectionReceiptEntry[]> {
   const root = path.join(input.sourceRoot, 'engine-assets', 'workspace')
   const files = await listFiles(root)
   const entries: SoulAppProjectionReceiptEntry[] = []
+  const baselineTargets = new Set<string>()
   for (const file of files) {
     const relative = path.relative(root, file).split(path.sep).join('/')
+    baselineTargets.add(relative)
+    const overlay = findOverlay(input.workerOverlayAssets, 'entry-file', relative)
+    if (overlay) {
+      if (overlay.enabled) {
+        const content = renderTemplate(overlay.content, input.variables)
+        const written = await writeProjectedFile(input.workspaceRoot, relative, content, preserveUnownedExistingTarget(input, relative))
+        if (written)
+          entries.push(receiptEntry(input, 'workspace-file', 'worker-overlay', relative, content))
+      }
+      continue
+    }
     const source = path.posix.join('engine-assets', 'workspace', relative)
     const content = renderTemplate(await readFile(file, 'utf8'), input.variables)
     const written = await writeProjectedFile(input.workspaceRoot, relative, content, {
@@ -82,14 +115,24 @@ async function projectWorkspaceFiles(input: EngineAssetProjectionInput & { gener
       continue
     entries.push(receiptEntry(input, 'workspace-file', source, relative, content))
   }
+  for (const asset of input.workerOverlayAssets ?? []) {
+    if (asset.kind !== 'entry-file' || !asset.enabled || baselineTargets.has(asset.id))
+      continue
+    const target = projectableRelativeTarget(asset.id)
+    const content = renderTemplate(asset.content, input.variables)
+    const written = await writeProjectedFile(input.workspaceRoot, target, content, preserveUnownedExistingTarget(input, target))
+    if (written)
+      entries.push(receiptEntry(input, 'workspace-file', 'worker-overlay', target, content))
+  }
   return entries
 }
 
-async function projectNativeSkills(input: EngineAssetProjectionInput & { generatedAt: string, sourceRoot: string, workspaceRoot: string }): Promise<SoulAppProjectionReceiptEntry[]> {
+async function projectNativeSkills(input: EngineAssetProjectionContext): Promise<SoulAppProjectionReceiptEntry[]> {
   const root = path.join(input.sourceRoot, 'engine-assets', 'skills')
   const skillDirs = await readdirOrEmpty(root)
   const entries: SoulAppProjectionReceiptEntry[] = []
   const configuredTargets = new Set<SoulAppEngineTarget>(input.engineAssets?.skills?.targets ?? ['codex', 'claude-code'])
+  const baselineKeys = new Set<string>()
   for (const dirent of skillDirs) {
     if (!dirent.isDirectory() || !SKILL_ID_RE.test(dirent.name))
       continue
@@ -104,6 +147,22 @@ async function projectNativeSkills(input: EngineAssetProjectionInput & { generat
       { engineTarget: 'claude-code' as const, path: path.posix.join('.claude', 'skills', projectionId, SKILL_FILE) },
     ].filter(target => configuredTargets.has(target.engineTarget))
     for (const target of targets) {
+      baselineKeys.add(overlayKey('skill', dirent.name, target.engineTarget))
+      const overlay = findOverlay(input.workerOverlayAssets, 'skill', dirent.name, target.engineTarget)
+      if (overlay) {
+        if (overlay.enabled) {
+          await writeProjectedFile(input.workspaceRoot, target.path, overlay.content)
+          entries.push(receiptEntry(
+            input,
+            'native-skill',
+            'worker-overlay',
+            target.path,
+            overlay.content,
+            target.engineTarget,
+          ))
+        }
+        continue
+      }
       await writeProjectedFile(input.workspaceRoot, target.path, content)
       entries.push(receiptEntry(
         input,
@@ -115,10 +174,19 @@ async function projectNativeSkills(input: EngineAssetProjectionInput & { generat
       ))
     }
   }
+  for (const asset of input.workerOverlayAssets ?? []) {
+    if (asset.kind !== 'skill' || !asset.enabled || !isSoulAppEngineTarget(asset.target))
+      continue
+    if (!configuredTargets.has(asset.target) || baselineKeys.has(overlayKey('skill', asset.id, asset.target)))
+      continue
+    const targetPath = skillProjectionPath(input.appId, asset.id, asset.target)
+    await writeProjectedFile(input.workspaceRoot, targetPath, asset.content)
+    entries.push(receiptEntry(input, 'native-skill', 'worker-overlay', targetPath, asset.content, asset.target))
+  }
   return entries
 }
 
-async function projectMcpClients(input: EngineAssetProjectionInput & { generatedAt: string, sourceRoot: string, workspaceRoot: string }): Promise<SoulAppProjectionReceiptEntry[]> {
+async function projectMcpClients(input: EngineAssetProjectionContext): Promise<SoulAppProjectionReceiptEntry[]> {
   if (!input.engineTarget)
     return []
 
@@ -127,6 +195,17 @@ async function projectMcpClients(input: EngineAssetProjectionInput & { generated
   const entries: SoulAppProjectionReceiptEntry[] = []
 
   for (const client of clients) {
+    const overlay = findMcpOverlay(input.workerOverlayAssets, input.engineTarget)
+    if (overlay) {
+      if (overlay.enabled) {
+        assertNoLiteralMcpSecrets(overlay.content, 'worker-overlay')
+        const written = await writeProjectedFile(input.workspaceRoot, adapter.targetPath, overlay.content, preserveUnownedExistingTarget(input, adapter.targetPath))
+        if (written)
+          entries.push(receiptEntry(input, 'mcp-client', 'worker-overlay', adapter.targetPath, overlay.content, input.engineTarget))
+      }
+      continue
+    }
+
     const sourceDir = appLocalSourcePath(client.source)
     const source = path.posix.join(sourceDir, adapter.sourceFile)
     const file = path.join(input.sourceRoot, ...source.split('/'))
@@ -135,11 +214,43 @@ async function projectMcpClients(input: EngineAssetProjectionInput & { generated
 
     const content = await readFile(file, 'utf8')
     assertNoLiteralMcpSecrets(content, source)
-    await writeProjectedFile(input.workspaceRoot, adapter.targetPath, content)
-    entries.push(receiptEntry(input, 'mcp-client', source, adapter.targetPath, content, input.engineTarget))
+    const written = await writeProjectedFile(input.workspaceRoot, adapter.targetPath, content, preserveUnownedExistingTarget(input, adapter.targetPath))
+    if (written)
+      entries.push(receiptEntry(input, 'mcp-client', source, adapter.targetPath, content, input.engineTarget))
+  }
+
+  const overlay = findMcpOverlay(input.workerOverlayAssets, input.engineTarget)
+  if (overlay?.enabled && clients.length === 0) {
+    assertNoLiteralMcpSecrets(overlay.content, 'worker-overlay')
+    const written = await writeProjectedFile(input.workspaceRoot, adapter.targetPath, overlay.content, preserveUnownedExistingTarget(input, adapter.targetPath))
+    if (written)
+      entries.push(receiptEntry(input, 'mcp-client', 'worker-overlay', adapter.targetPath, overlay.content, input.engineTarget))
   }
 
   return entries
+}
+
+async function readPreviousProjectionTargets(workspaceRoot: string): Promise<ReadonlySet<string>> {
+  try {
+    const raw = await readFile(path.join(workspaceRoot, ...PROJECTION_RECEIPT.split('/')), 'utf8')
+    const receipt = JSON.parse(raw) as { projections?: Array<{ target?: unknown }> }
+    return new Set((receipt.projections ?? []).map(item => item.target).filter((target): target is string => typeof target === 'string' && target.length > 0))
+  }
+  catch (error) {
+    if (isNoEntryError(error) || error instanceof SyntaxError)
+      return new Set()
+    throw error
+  }
+}
+
+function preserveUnownedExistingTarget(input: EngineAssetProjectionContext, target: string): { preserveExisting?: boolean } {
+  if (!input.preserveUnownedExistingTargets || input.previousProjectionTargets?.has(target) || isAiworkerOwnedTarget(input.appId, target))
+    return {}
+  return { preserveExisting: true }
+}
+
+function isAiworkerOwnedTarget(appId: string, target: string): boolean {
+  return target.startsWith(`.agents/skills/${appId}-`) || target.startsWith(`.claude/skills/${appId}-`) || target.startsWith('.aiworker/')
 }
 
 function mcpClientAdapter(engineTarget: SoulAppEngineTarget): { sourceFile: string, targetPath: string } {
@@ -150,6 +261,41 @@ function mcpClientAdapter(engineTarget: SoulAppEngineTarget): { sourceFile: stri
 
 function appLocalSourcePath(source: string): string {
   return source.replace(/^\.\//, '').split('/').filter(Boolean).join('/')
+}
+
+function findOverlay(
+  assets: WorkerOverlayProjectionAsset[] | undefined,
+  kind: WorkerOverlayProjectionAsset['kind'],
+  id: string,
+  target?: string,
+): WorkerOverlayProjectionAsset | null {
+  return assets?.find(asset => asset.kind === kind && asset.id === id && (!target || asset.target === target)) ?? null
+}
+
+function overlayKey(kind: WorkerOverlayProjectionAsset['kind'], id: string, target: string): string {
+  return `${kind}:${target}:${id}`
+}
+
+function findMcpOverlay(assets: WorkerOverlayProjectionAsset[] | undefined, engineTarget: SoulAppEngineTarget): WorkerOverlayProjectionAsset | null {
+  return assets?.find(asset => asset.kind === 'mcp-client' && asset.target === engineTarget) ?? null
+}
+
+function skillProjectionPath(appId: string, skillId: string, engineTarget: SoulAppEngineTarget): string {
+  const projectionId = `${appId}-${skillId}`
+  if (engineTarget === 'codex')
+    return path.posix.join('.agents', 'skills', projectionId, SKILL_FILE)
+  return path.posix.join('.claude', 'skills', projectionId, SKILL_FILE)
+}
+
+function isSoulAppEngineTarget(value: string): value is SoulAppEngineTarget {
+  return value === 'codex' || value === 'claude-code'
+}
+
+function projectableRelativeTarget(target: string): string {
+  const normalized = target.split('/').filter(Boolean).join('/')
+  if (!normalized || path.posix.isAbsolute(normalized) || normalized.split('/').includes('..'))
+    throw new Error(`Worker overlay target must be a relative workspace path: ${target}`)
+  return normalized
 }
 
 function assertNoLiteralMcpSecrets(content: string, source: string): void {

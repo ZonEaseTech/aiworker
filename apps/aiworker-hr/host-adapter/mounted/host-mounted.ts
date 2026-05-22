@@ -1,14 +1,15 @@
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 
-import { createSoulAppClient } from '@zonease/aiworker-soul-app-sdk'
+import { renderToStaticMarkup } from 'react-dom/server'
 
+import { HrHomeRouteSurface } from '../../product/web/routes/hr-route'
+import { HrPeopleWidgetProof } from '../../product/web/widgets/people-widget'
 import { hrReferenceSoulApp, hrSoulAppManifest } from '../index'
+import { renderSoulAppClientScript, renderSoulAppStyleLink, serveSoulAppWebAsset } from '../web-style'
+import { hrChildRouteBridgeScript } from './route-bridge'
 
 interface MountContext {
-  brokerUrl?: string
-  hostUrl?: string
-  mountToken?: string
   operatorId?: string | null
   sessionId?: string | null
   surface?: {
@@ -19,14 +20,39 @@ interface MountContext {
   workspaceId?: string | null
 }
 
-interface BrokerSearchResult {
-  items?: Array<Record<string, unknown>>
+interface PeopleProfileDraftDescriptor {
+  appId: string
+  authority: 'soul-app'
+  id: string
+  kind: 'people-profile'
+  openAction: {
+    id: string
+    input: Record<string, unknown>
+  }
+  sessionId: string | null
+  status: 'draft'
+  summary: string
+  title: string
+  workspaceId: string | null
 }
+
+interface MicroAppHostData {
+  appId: string
+  routePrefix: string
+  theme: 'dark' | 'light'
+  workerId: string | null
+  workspaceId: string | null
+}
+
+const peopleProfileDrafts = new Map<string, PeopleProfileDraftDescriptor>()
 
 export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
   return Bun.serve({
     async fetch(request) {
       const url = new URL(request.url)
+      const assetResponse = await serveSoulAppWebAsset(url)
+      if (assetResponse)
+        return assetResponse
       if (url.pathname === '/health') {
         return Response.json({
           appId: hrSoulAppManifest.id,
@@ -46,39 +72,28 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
           workspaceTypes: hrSoulAppManifest.workspaceTypes.map(type => type.id),
         })
       }
-      if (url.pathname === '/surfaces/routes/hr-home' || url.pathname === '/surfaces/panels/hr-profile-panel') {
-        return Response.json(hrDescriptorSurface(request, url.pathname))
-      }
-      if (url.pathname === '/frames/widgets/hr-people-widget') {
-        return new Response(hrWidgetFrameHtml(request), {
+      if (url.pathname === '/micro-app/routes/hr-home') {
+        return new Response(hrRouteMicroAppHtml(request), {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
-      if (url.pathname === '/protocol/actions' && request.method === 'POST') {
-        const body = await request.json().catch(() => ({})) as Record<string, unknown>
-        return Response.json(await hrProtocolAction(request, String(body.protocolAction ?? '')))
-      }
-      if (url.pathname === '/protocol/search' && request.method === 'GET') {
-        return Response.json(await hrProtocolSearch(request, url))
-      }
-      if (url.pathname === '/broker/permissions') {
-        const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
-        if (!hostUrl)
-          return Response.json({ appId: hrSoulAppManifest.id, broker: 'not-configured', permissions: [] })
-        const client = createSoulAppClient({
-          appId: hrSoulAppManifest.id,
-          baseUrl: hostUrl,
-          mountToken: request.headers.get('x-aiworker-mount-token') ?? undefined,
+      if (url.pathname === '/micro-app/widgets/hr-people-widget') {
+        return new Response(hrWidgetMicroAppHtml(request), {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
         })
-        return Response.json(await client.broker.permissions.list())
       }
-      if (url.pathname === '/protocol/capabilities') {
+      if (url.pathname === '/api/capabilities' && request.method === 'GET') {
         return Response.json({
           capabilities: await hrReferenceSoulApp.ui?.capabilities({
             appId: hrSoulAppManifest.id,
             permissions: hrSoulAppManifest.permissions,
           }),
         })
+      }
+      if (url.pathname === '/api/people-profiles' && request.method === 'POST')
+        return Response.json(await createPeopleProfileDraft(request))
+      if (url.pathname === '/api/people-profiles/search' && request.method === 'GET') {
+        return Response.json(await searchPeopleProfiles(request, url))
       }
       return Response.json({ error: { code: 'NOT_FOUND', message: `Unknown HR app route: ${url.pathname}` } }, { status: 404 })
     },
@@ -102,142 +117,217 @@ function verifyMountToken(request: Request): Response | null {
     : Response.json({ error: { code: 'INVALID_MOUNT_TOKEN', message: 'Host mount token is required.' } }, { status: 401 })
 }
 
-function hrDescriptorSurface(request: Request, pathname: string) {
+function hrRouteMicroAppHtml(request: Request): string {
   const context = readMountContext(request)
-  return {
-    actions: [
-      {
-        id: 'create-profile-review',
-        label: 'Create review',
-        method: 'POST',
-        target: `${context?.brokerUrl ?? '/broker'}/reviews`,
-      },
-    ],
-    appId: hrSoulAppManifest.id,
-    authority: 'soul-app',
-    cache: {
-      freshness: 'non-authoritative',
-    },
-    context: {
-      signed: Boolean(request.headers.get('x-aiworker-mount-signature')),
-      surfaceId: context?.surface?.id ?? null,
-      workspaceId: context?.workspaceId ?? null,
-    },
-    fields: [
-      { label: 'Domain', value: hrSoulAppManifest.soul.domain },
-      { label: 'Workspace types', value: hrSoulAppManifest.workspaceTypes.map(type => type.name).join(', ') },
-      { label: 'Evidence broker', value: hrSoulAppManifest.connectors.required.map(connector => connector.id).join(', ') },
-    ],
-    path: pathname,
-    renderer: 'host-descriptor',
-    status: 'ready',
-    title: pathname.includes('/routes/') ? 'HR Mounted Workbench' : 'People Profile Panel',
-    type: 'aiworker.surface.descriptor.v1',
-  }
-}
-
-function hrWidgetFrameHtml(request: Request): string {
-  const context = readMountContext(request)
+  const surfaceId = context?.surface?.id ?? 'hr-home'
+  const theme = readMicroAppTheme(request)
+  const hostData = microAppHostData(request, theme)
+  const routeMarkup = renderToStaticMarkup(HrHomeRouteSurface({
+    badgeLabel: 'Mounted',
+    description: 'Host-mounted HR app-owned people workbench.',
+  }))
   return [
     '<!doctype html>',
-    '<html lang="en">',
-    '<head><meta charset="utf-8"><title>HR People Widget</title></head>',
-    '<body>',
-    '<main>',
-    '<h1>People Widget</h1>',
-    `<p data-soul-app-id="${hrSoulAppManifest.id}">Mounted HR frame surface</p>`,
-    `<p data-surface-id="${context?.surface?.id ?? 'unknown'}">Scope ${context?.surface?.scope ?? 'workspace'}</p>`,
+    microAppHtmlOpen(theme),
+    `<head><meta charset="utf-8"><title>HR People Workbench</title>${renderSoulAppStyleLink(mountedStyleHref())}</head>`,
+    '<body class="h-full overflow-hidden">',
+    `<main id="aiworker-hr-root" class="h-full min-h-0" data-soul-app-id="${escapeHtmlAttribute(hrSoulAppManifest.id)}" data-surface-id="${escapeHtmlAttribute(surfaceId)}">`,
+    routeMarkup,
     '</main>',
+    renderMicroAppHostDataScript(hostData),
+    `<script>${microAppBridgeScript(hrSoulAppManifest.id, surfaceId, hostData)}</script>`,
+    `<script>${hrChildRouteBridgeScript(hrSoulAppManifest.id, surfaceId)}</script>`,
+    renderSoulAppClientScript(mountedClientHref()),
     '</body>',
     '</html>',
   ].join('')
 }
 
-async function hrProtocolAction(request: Request, protocolAction: string) {
-  if (protocolAction === 'peopleProfiles.create') {
-    const persisted = await persistPeopleProfileDraft(request)
-    if (!persisted.ok)
-      return persisted
-    return {
-      message: 'People profile draft opened by HR app.',
-      ok: true,
-      redirectTo: '/hr/people',
-      refresh: true,
-    }
-  }
-  if (protocolAction === 'people.refresh') {
-    return {
-      message: 'People data refreshed by HR app.',
-      ok: true,
-      refresh: true,
-    }
-  }
-  if (protocolAction === 'drawers.evidence.toggle') {
-    return {
-      message: 'Evidence drawer intent emitted by HR app.',
-      ok: true,
-    }
-  }
-  if (protocolAction === 'configuration.open') {
-    return {
-      message: 'HR configuration is owned by the HR app.',
-      ok: true,
-    }
-  }
+function hrWidgetMicroAppHtml(request: Request): string {
+  const context = readMountContext(request)
+  const scope = context?.surface?.scope ?? 'workspace'
+  const surfaceId = context?.surface?.id ?? 'unknown'
+  const theme = readMicroAppTheme(request)
+  const widgetMarkup = renderToStaticMarkup(HrPeopleWidgetProof({
+    badgeLabel: 'Mounted',
+    description: 'Host-mounted HR People micro-app surface.',
+    detail: `Mounted HR micro-app surface for ${scope} scope.`,
+  }))
+  return [
+    '<!doctype html>',
+    microAppHtmlOpen(theme),
+    `<head><meta charset="utf-8"><title>HR People Widget</title>${renderSoulAppStyleLink(mountedStyleHref())}</head>`,
+    '<body>',
+    `<main data-soul-app-id="${escapeHtmlAttribute(hrSoulAppManifest.id)}" data-surface-id="${escapeHtmlAttribute(surfaceId)}">`,
+    widgetMarkup,
+    '</main>',
+    '<script id="aiworker-micro-app-host-data" type="application/json" data-slot="micro-app-host-data">{}</script>',
+    `<script>${microAppBridgeScript(hrSoulAppManifest.id, surfaceId, {})}</script>`,
+    '</body>',
+    '</html>',
+  ].join('')
+}
+
+function microAppHostData(request: Request, theme: 'dark' | 'light'): MicroAppHostData {
+  const context = readMountContext(request)
+  const url = new URL(request.url)
   return {
-    message: `Unknown HR protocol action: ${protocolAction}`,
-    ok: false,
+    appId: hrSoulAppManifest.id,
+    routePrefix: mountedRoutePrefix(),
+    theme,
+    workerId: context?.workerId ?? url.searchParams.get('workerId'),
+    workspaceId: context?.workspaceId ?? url.searchParams.get('workspaceId'),
+  }
+}
+
+function readMicroAppTheme(request: Request): 'dark' | 'light' {
+  return new URL(request.url).searchParams.get('theme') === 'dark' ? 'dark' : 'light'
+}
+
+function microAppHtmlOpen(theme: 'dark' | 'light'): string {
+  return theme === 'dark'
+    ? '<html lang="en" class="dark h-full" style="color-scheme:dark">'
+    : '<html lang="en" class="h-full" style="color-scheme:light">'
+}
+
+function mountedStyleHref(): string {
+  return `${mountedRoutePrefix()}/styles.css`
+}
+
+function mountedClientHref(): string {
+  return `${mountedRoutePrefix()}/assets/hr-home-client.js`
+}
+
+function mountedRoutePrefix(): string {
+  return `/api/local/apps/${hrSoulAppManifest.id}`
+}
+
+function renderMicroAppHostDataScript(hostData: unknown): string {
+  return `<script id="aiworker-micro-app-host-data" type="application/json" data-slot="micro-app-host-data">${jsonScriptPayload(hostData)}</script>`
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+}
+
+function microAppBridgeScript(appId: string, surfaceId: string, defaultHostData: unknown): string {
+  return `;(() => {
+  const appId = ${jsonScriptValue(appId)};
+  const surfaceId = ${jsonScriptValue(surfaceId)};
+  const defaultHostData = ${jsonScriptPayload(defaultHostData)};
+  window.__AIWORKER_HR_CHILD_ROUTE__ = '/hr';
+  const hostDataElement = document.getElementById('aiworker-micro-app-host-data');
+  const setHostData = (value) => {
+    const data = value && typeof value === 'object' ? { ...defaultHostData, ...value } : defaultHostData;
+    window.__AIWORKER_MICRO_APP_HOST_DATA__ = data;
+    if (hostDataElement)
+      hostDataElement.textContent = JSON.stringify(data);
+    return data;
+  };
+  const dispatch = (payload) => {
+    const api = window.microApp;
+    if (api && typeof api.dispatch === 'function')
+      api.dispatch(payload);
+  };
+  let readyDispatched = false;
+  const dispatchReady = (receivedHostData, data) => {
+    if (readyDispatched)
+      return;
+    readyDispatched = true;
+    dispatch({
+      appId,
+      receivedHostData,
+      surfaceId,
+      theme: data && typeof data.theme === 'string' ? data.theme : null,
+      type: 'ready',
+      workerId: data && typeof data.workerId === 'string' ? data.workerId : null,
+      workspaceId: data && typeof data.workspaceId === 'string' ? data.workspaceId : null,
+    });
+  };
+  let attempts = 0;
+  const bind = () => {
+    const api = window.microApp;
+    if (!api) {
+      attempts += 1;
+      if (attempts <= 30) {
+        window.setTimeout(bind, 16);
+        return;
+      }
+      setHostData(defaultHostData);
+      return;
+    }
+    const receiveHostData = (data) => {
+      const normalized = setHostData(data);
+      dispatchReady(true, normalized);
+    };
+    if (typeof api.addDataListener === 'function')
+      api.addDataListener(receiveHostData, true);
+    if (typeof api.getData === 'function') {
+      const current = api.getData();
+      if (current && typeof current === 'object' && Object.keys(current).length > 0)
+        receiveHostData(current);
+    }
+    if (!readyDispatched) {
+      const normalized = setHostData(defaultHostData);
+      dispatchReady(false, normalized);
+    }
+    window.addEventListener('unload', () => {
+      if (typeof api.removeDataListener === 'function')
+        api.removeDataListener(receiveHostData);
+    }, { once: true });
+  };
+  bind();
+})();`
+}
+
+function jsonScriptValue(value: string): string {
+  return JSON.stringify(value).replaceAll('<', '\\u003C').replaceAll('>', '\\u003E').replaceAll('&', '\\u0026')
+}
+
+function jsonScriptPayload(value: unknown): string {
+  return JSON.stringify(value).replaceAll('<', '\\u003C').replaceAll('>', '\\u003E').replaceAll('&', '\\u0026')
+}
+
+async function createPeopleProfileDraft(request: Request) {
+  const persisted = await persistPeopleProfileDraft(request)
+  if (!persisted.ok)
+    return persisted
+  return {
+    message: 'People profile draft opened by HR app.',
+    ok: true,
+    redirectTo: '/hr/profiles/new',
+    refresh: true,
   }
 }
 
 async function persistPeopleProfileDraft(request: Request): Promise<{ message: string, ok: false } | { ok: true }> {
   const context = readMountContext(request)
-  if (!context?.hostUrl)
-    return { ok: true }
-
-  const draftKey = `drafts/people-profile/${context.workspaceId ?? 'app'}`
-  const workspaceRef = context.workspaceId ?? 'app'
-  const client = createSoulAppClient({
+  const draftKey = peopleProfileDraftKey(context)
+  const workspaceRef = context?.workspaceId ?? 'app'
+  peopleProfileDrafts.set(draftKey, {
     appId: hrSoulAppManifest.id,
-    baseUrl: context.hostUrl,
-    mountToken: context.mountToken,
+    authority: 'soul-app',
+    id: draftKey,
+    kind: 'people-profile',
+    openAction: {
+      id: 'create-people-profile',
+      input: { workspaceId: context?.workspaceId ?? null },
+    },
+    sessionId: context?.sessionId ?? null,
+    status: 'draft',
+    summary: `HR app-owned people profile draft for workspace ${workspaceRef}.`,
+    title: 'People profile draft',
+    workspaceId: context?.workspaceId ?? null,
   })
-  try {
-    await client.broker.storage.put(draftKey, {
-      appId: hrSoulAppManifest.id,
-      kind: 'people-profile',
-      source: 'hr-mounted-action',
-      status: 'draft',
-      workspaceId: context.workspaceId ?? null,
-    }, brokerScope(context))
-    await client.broker.search.upsert(draftKey, {
-      kind: 'people-profile',
-      reference: {
-        id: workspaceRef,
-        type: context.workspaceId ? 'workspace' : 'app',
-      },
-      sessionId: context.sessionId ?? null,
-      summary: `HR app-owned people profile draft for workspace ${workspaceRef}.`,
-      title: 'People profile draft',
-      workspaceId: context.workspaceId ?? null,
-    }, brokerScope(context))
-    return { ok: true }
-  }
-  catch (error) {
-    return {
-      message: error instanceof Error ? error.message : String(error),
-      ok: false,
-    }
-  }
+  return { ok: true }
 }
 
-async function hrProtocolSearch(request: Request, url: URL) {
+async function searchPeopleProfiles(request: Request, url: URL) {
   const query = url.searchParams.get('query') ?? ''
-  const brokerItems = await queryBrokerPeopleProfileSearch(request, query)
-  if (brokerItems?.length) {
+  const appOwnedItems = queryPeopleProfileDrafts(request, query)
+  if (appOwnedItems.length) {
     return {
-      items: brokerItems,
-      providerId: 'peopleProfiles.search',
+      items: appOwnedItems,
     }
   }
 
@@ -255,27 +345,23 @@ async function hrProtocolSearch(request: Request, url: URL) {
       summary: query ? `HR app-owned profile match for ${query}` : 'Open HR profile workspace',
       title: query ? `People profile: ${query}` : 'People profile draft',
     }],
-    providerId: 'peopleProfiles.search',
   }
 }
 
-async function queryBrokerPeopleProfileSearch(request: Request, query: string): Promise<Array<Record<string, unknown>> | null> {
+function queryPeopleProfileDrafts(request: Request, query: string): PeopleProfileDraftDescriptor[] {
   const context = readMountContext(request)
-  if (!context?.hostUrl)
-    return null
-
-  const client = createSoulAppClient({
-    appId: hrSoulAppManifest.id,
-    baseUrl: context.hostUrl,
-    mountToken: context.mountToken,
+  const normalizedQuery = query.trim().toLowerCase()
+  return Array.from(peopleProfileDrafts.values()).filter((item) => {
+    if (context?.workspaceId && item.workspaceId !== context.workspaceId)
+      return false
+    if (!normalizedQuery)
+      return true
+    return [item.id, item.kind, item.summary, item.title].some(value => value.toLowerCase().includes(normalizedQuery))
   })
-  try {
-    const result = await client.broker.search.query(query, brokerScope(context)) as BrokerSearchResult
-    return Array.isArray(result.items) ? result.items : null
-  }
-  catch {
-    return null
-  }
+}
+
+function peopleProfileDraftKey(context: MountContext | null): string {
+  return `drafts/people-profile/${context?.workspaceId ?? 'app'}`
 }
 
 function readMountContext(request: Request): MountContext | null {
@@ -288,9 +374,6 @@ function readMountContext(request: Request): MountContext | null {
       return null
     const surface = isRecord(parsed.surface) ? parsed.surface : null
     return {
-      brokerUrl: typeof parsed.brokerUrl === 'string' ? parsed.brokerUrl : undefined,
-      hostUrl: request.headers.get('x-aiworker-host-url') ?? undefined,
-      mountToken: request.headers.get('x-aiworker-mount-token') ?? undefined,
       operatorId: typeof parsed.operatorId === 'string' ? parsed.operatorId : null,
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       surface: surface
@@ -305,15 +388,6 @@ function readMountContext(request: Request): MountContext | null {
   }
   catch {
     return null
-  }
-}
-
-function brokerScope(context: MountContext) {
-  return {
-    operatorId: context.operatorId ?? undefined,
-    sessionId: context.sessionId ?? undefined,
-    workerId: context.workerId ?? undefined,
-    workspaceId: context.workspaceId ?? undefined,
   }
 }
 

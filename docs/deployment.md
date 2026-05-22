@@ -2,7 +2,7 @@
 
 AIWorker 的当前部署主路径是 **local daemon**：一台 host 运行一个 daemon，daemon 托管
 Host Web Shell、local API、SQLite metadata、Soul App registry、worker/workspace/session
-定位和平台 broker。
+locator、mounted app surfaces 和 engine bridge context。
 
 历史 gateway/fleet、Docker compose gateway、公网 Caddy/aissh 控制面已经不属于当前默认路径。
 
@@ -18,8 +18,8 @@ Host
   -> protocol-exposed views/actions/descriptors
 ```
 
-- Host 是平台定位与能力壳，不解释垂直领域数据。
-- Soul App 拥有领域状态、领域 UI/API、artifact/profile/review/lesson 语义。
+- Host 是 Local Shell + Engine Bridge：负责 start、shell、locate、mount 和 bridge，不解释垂直领域数据。
+- Soul App 拥有领域状态、领域 UI/API、app-owned outputs、confirmation actions 和 app-owned history。
 - Local daemon 监听本机端口并托管 Web/API。
 - 外部 engine 在 operator 的 host/user 环境里运行；AIWorker 不重新实现 tool loop、
   sandbox、approval、profile 或插件生态。

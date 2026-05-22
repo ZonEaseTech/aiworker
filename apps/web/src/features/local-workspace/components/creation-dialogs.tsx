@@ -1,12 +1,82 @@
-import type { VerticalSoul } from '@zonease/aiworker-shared'
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import type { messagesFor, normalizeLocale } from '../../i18n'
+import type { VerticalSoul } from '../types.compat'
 
-import { Button, CreationDialog, Field, FieldGroup, StudioSelect } from '@zonease/aiworker-component'
-import { Plus } from 'lucide-react'
+import { Add01Icon, Cancel01Icon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Button } from '@zonease/aiworker-ui/components/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@zonease/aiworker-ui/components/dialog'
+import { Field, FieldGroup, FieldLabel } from '@zonease/aiworker-ui/components/field'
+import { Input } from '@zonease/aiworker-ui/components/input'
+import { ItemContent, ItemDescription, ItemTitle } from '@zonease/aiworker-ui/components/item'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@zonease/aiworker-ui/components/select'
 import { displaySoul } from '../../i18n'
 
 type WorkerMessages = ReturnType<typeof messagesFor>
+
+function CreateDialogShell({
+  children,
+  closeLabel,
+  description,
+  onClose,
+  open,
+  title,
+}: {
+  children: ReactNode
+  closeLabel: string
+  description: string
+  onClose: () => void
+  open: boolean
+  title: string
+}) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen)
+          onClose()
+      }}
+    >
+      <DialogContent
+        className="sm:max-w-md"
+        showCloseButton={false}
+      >
+        <DialogHeader className="pr-8">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <DialogClose asChild>
+          <Button
+            aria-label={closeLabel}
+            className="absolute top-2 right-2"
+            size="icon-sm"
+            title={closeLabel}
+            type="button"
+            variant="ghost"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
+          </Button>
+        </DialogClose>
+        {children}
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export function CreateWorkerDialog({
   availableSouls,
@@ -32,49 +102,79 @@ export function CreateWorkerDialog({
   workerName: string
 }) {
   return (
-    <CreationDialog
+    <CreateDialogShell
       description={copy.workspace.createWorkerHint}
       open={open}
       title={copy.workspace.createWorker}
-      titleId="create-worker-dialog-title"
       closeLabel={copy.accessibility.closeDialog}
       onClose={onClose}
     >
-      <form className="dialog-form" onSubmit={onSubmit}>
-        <FieldGroup label={copy.create.soul}>
-          <StudioSelect
-            ariaLabel={copy.create.soul}
-            label={copy.create.soul}
-            options={availableSouls.map((soul) => {
-              const soulCopy = displaySoul(soul, locale)
-              return {
-                description: soulCopy.domain,
-                label: soulCopy.name,
-                value: soul.id,
-              }
-            })}
-            value={selectedSoulId}
-            onChange={onSoulChange}
-          />
+      <form onSubmit={onSubmit}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="create-worker-soul">{copy.create.soul}</FieldLabel>
+            <Select
+              disabled={availableSouls.length === 0}
+              value={selectedSoulId}
+              onValueChange={onSoulChange}
+            >
+              <SelectTrigger
+                id="create-worker-soul"
+                aria-label={copy.create.soul}
+                className="w-full"
+              >
+                <SelectValue placeholder={copy.create.soul} />
+              </SelectTrigger>
+              <SelectContent
+                align="start"
+                aria-label={copy.create.soul}
+                position="popper"
+              >
+                <SelectGroup>
+                  {availableSouls.map((soul) => {
+                    const soulCopy = displaySoul(soul, locale)
+
+                    return (
+                      <SelectItem key={soul.id} value={soul.id}>
+                        <ItemContent asChild className="min-w-0 gap-0.5">
+                          <span>
+                            <ItemTitle asChild>
+                              <span>{soulCopy.name}</span>
+                            </ItemTitle>
+                            <ItemDescription asChild>
+                              <span>{soulCopy.domain}</span>
+                            </ItemDescription>
+                          </span>
+                        </ItemContent>
+                      </SelectItem>
+                    )
+                  })}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="create-worker-name">{copy.workspace.workerName}</FieldLabel>
+            <Input
+              id="create-worker-name"
+              aria-label={copy.workspace.workerName}
+              placeholder={copy.workspace.workerName}
+              value={workerName}
+              onChange={event => onNameChange(event.target.value)}
+            />
+          </Field>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="ghost">{copy.accessibility.closeDialog}</Button>
+            </DialogClose>
+            <Button type="submit" disabled={!workerName.trim() || availableSouls.length === 0}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
+              {copy.workspace.createWorker}
+            </Button>
+          </DialogFooter>
         </FieldGroup>
-        <Field label={copy.workspace.workerName}>
-          <input
-            className="newproj-name"
-            aria-label={copy.workspace.workerName}
-            placeholder={copy.workspace.workerName}
-            value={workerName}
-            onChange={event => onNameChange(event.target.value)}
-          />
-        </Field>
-        <div className="dialog-actions">
-          <Button variant="ghost" onClick={onClose}>{copy.accessibility.closeDialog}</Button>
-          <Button variant="primary" type="submit" disabled={!workerName.trim() || availableSouls.length === 0}>
-            <Plus aria-hidden="true" size={13} />
-            <span>{copy.workspace.createWorker}</span>
-          </Button>
-        </div>
       </form>
-    </CreationDialog>
+    </CreateDialogShell>
   )
 }
 
@@ -100,36 +200,45 @@ export function CreateWorkspaceDialog({
   workspaceTitle: string
 }) {
   return (
-    <CreationDialog
+    <CreateDialogShell
       description={copy.workspace.createWorkspaceHint}
       open={open}
       title={copy.workspace.createWorkspace}
-      titleId="create-workspace-dialog-title"
       closeLabel={copy.accessibility.closeDialog}
       onClose={onClose}
     >
-      <form className="dialog-form" onSubmit={onSubmit}>
-        <Field label={copy.workspace.currentWorker}>
-          <input readOnly value={workerLabel} />
-        </Field>
-        <Field label={copy.create.projectName}>
-          <input
-            className="newproj-name"
-            aria-label={copy.create.projectName}
-            data-testid="new-project-name"
-            placeholder={placeholder}
-            value={workspaceTitle}
-            onChange={event => onTitleChange(event.target.value)}
-          />
-        </Field>
-        <div className="dialog-actions">
-          <Button variant="ghost" onClick={onClose}>{copy.accessibility.closeDialog}</Button>
-          <Button variant="primary" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || submitting}>
-            <Plus aria-hidden="true" size={13} />
-            <span>{copy.workspace.createWorkspace}</span>
-          </Button>
-        </div>
+      <form onSubmit={onSubmit}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="create-workspace-worker">{copy.workspace.currentWorker}</FieldLabel>
+            <Input
+              id="create-workspace-worker"
+              readOnly
+              value={workerLabel}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="create-workspace-name">{copy.create.projectName}</FieldLabel>
+            <Input
+              id="create-workspace-name"
+              aria-label={copy.create.projectName}
+              data-testid="new-project-name"
+              placeholder={placeholder}
+              value={workspaceTitle}
+              onChange={event => onTitleChange(event.target.value)}
+            />
+          </Field>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="ghost">{copy.accessibility.closeDialog}</Button>
+            </DialogClose>
+            <Button data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || submitting}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
+              {copy.workspace.createWorkspace}
+            </Button>
+          </DialogFooter>
+        </FieldGroup>
       </form>
-    </CreationDialog>
+    </CreateDialogShell>
   )
 }

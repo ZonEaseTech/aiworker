@@ -1,11 +1,61 @@
-import type { CapabilityTemplate, HostedSoulApp, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-shared'
-import type { CSSProperties } from 'react'
+import type { IconSvgElement } from '@hugeicons/react'
+import type { HostedSoulApp, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-shared'
+import type { CSSProperties, ReactNode } from 'react'
+import type { CapabilityTemplate } from '../../local-workspace/types.compat'
 
-import { ActionCard, Button, Field, NavItemButton, SegmentedControl, SettingsShell } from '@zonease/aiworker-component'
-import { Check, Gauge, Languages, Link, Moon, RefreshCw, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, Terminal, X } from 'lucide-react'
+import {
+  Cancel01Icon,
+  DashboardSpeed02Icon,
+  LanguageCircleIcon,
+  Link02Icon,
+  Moon02Icon,
+  RefreshIcon,
+  Settings02Icon,
+  Shield02Icon,
+  SlidersHorizontalIcon,
+  SparklesIcon,
+  Sun02Icon,
+  TerminalIcon,
+  Tick02Icon,
+} from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
+import { Badge } from '@zonease/aiworker-ui/components/badge'
+import { Button } from '@zonease/aiworker-ui/components/button'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@zonease/aiworker-ui/components/card'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@zonease/aiworker-ui/components/dialog'
+import { Empty, EmptyDescription, EmptyHeader } from '@zonease/aiworker-ui/components/empty'
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from '@zonease/aiworker-ui/components/field'
+import { Input } from '@zonease/aiworker-ui/components/input'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@zonease/aiworker-ui/components/item'
+import { Kbd } from '@zonease/aiworker-ui/components/kbd'
+import { ScrollArea } from '@zonease/aiworker-ui/components/scroll-area'
+import { Switch } from '@zonease/aiworker-ui/components/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@zonease/aiworker-ui/components/tabs'
+import { ToggleGroup, ToggleGroupItem } from '@zonease/aiworker-ui/components/toggle-group'
 import { useEffect, useState } from 'react'
 import { formatRelativeTime, formatStatus, languageLabel, messagesFor, normalizeLocale, supportedLocales } from '../../i18n'
-import { disableSoulApp, enableSoulApp, rescanEngines, reviewSoulAppSecurity, saveSettings, testEngine } from '../../local-workspace/api'
+import { disableSoulApp, enableSoulApp, rescanEngines, saveSettings, testEngine } from '../../local-workspace/api'
 import { engineIconSrc } from '../model'
 
 export type SettingsSection = 'execution' | 'soul-packs' | 'connectors' | 'mcp' | 'external-mcp' | 'language' | 'appearance' | 'about'
@@ -13,17 +63,17 @@ type AutosaveState = 'idle' | 'saving' | 'saved' | 'failed'
 type WorkerMessages = ReturnType<typeof messagesFor>
 
 const settingsSections: Array<{
-  icon: typeof SlidersHorizontal
+  icon: IconSvgElement
   id: SettingsSection
 }> = [
-  { id: 'execution', icon: SlidersHorizontal },
-  { id: 'soul-packs', icon: Sparkles },
-  { id: 'connectors', icon: Link },
-  { id: 'mcp', icon: ShieldCheck },
-  { id: 'external-mcp', icon: Terminal },
-  { id: 'language', icon: Languages },
-  { id: 'appearance', icon: Sun },
-  { id: 'about', icon: Settings },
+  { id: 'execution', icon: SlidersHorizontalIcon },
+  { id: 'soul-packs', icon: SparklesIcon },
+  { id: 'connectors', icon: Link02Icon },
+  { id: 'mcp', icon: Shield02Icon },
+  { id: 'external-mcp', icon: TerminalIcon },
+  { id: 'language', icon: LanguageCircleIcon },
+  { id: 'appearance', icon: Sun02Icon },
+  { id: 'about', icon: Settings02Icon },
 ]
 
 export function SettingsDialog({
@@ -101,105 +151,183 @@ export function SettingsDialog({
     }
   }
 
+  const activeContent = (
+    <>
+      {section === 'execution'
+        ? (
+            <ExecutionSettings
+              copy={copy}
+              engineTest={engineTest}
+              onRescan={() => void handleRescan()}
+              onTest={engineId => void handleTest(engineId)}
+              settings={settings}
+              update={persist}
+            />
+          )
+        : null}
+      {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} settings={settings} templates={templates} onAppsChanged={onAppsChanged} /> : null}
+      {section === 'connectors' ? <ConnectorsSettings copy={copy} settings={settings} update={persist} /> : null}
+      {section === 'mcp' ? <LocalMcpSettings copy={copy} /> : null}
+      {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} /> : null}
+      {section === 'language' ? <LanguageSettings copy={copy} locale={activeLocale} update={persist} /> : null}
+      {section === 'appearance' ? <AppearanceSettings copy={copy} settings={settings} update={persist} /> : null}
+      {section === 'about'
+        ? (
+            <ItemGroup className="gap-3">
+              <SettingsSectionIntro title={settingsCopy.about.title} hint={settingsCopy.about.hint} />
+              <ItemGroup className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <SettingsFact label={settingsCopy.about.version} value={runtimeVersion} />
+                <SettingsFact label={settingsCopy.about.executionMode} value={settings.executionMode} />
+                <SettingsFact label={settingsCopy.about.selectedEngine} value={settings.engineId} />
+                <SettingsFact label={settingsCopy.about.updated} value={formatRelativeTime(settings.updatedAt, activeLocale)} />
+              </ItemGroup>
+            </ItemGroup>
+          )
+        : null}
+    </>
+  )
+
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal modal-settings" role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title" onClick={event => event.stopPropagation()}>
-        <div className="settings-chrome" aria-hidden={false}>
+    <Dialog
+      open
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen)
+          onClose()
+      }}
+    >
+      <DialogContent
+        className="flex h-dvh flex-col gap-0 overflow-hidden p-0 sm:h-5/6 sm:max-w-5xl"
+        showCloseButton={false}
+      >
+        <ItemActions data-settings-slot="settings-dialog-actions" className="absolute top-4 right-4" aria-hidden={false}>
           {autosave !== 'idle'
             ? (
-                <div className={`settings-autosave ${autosaveClass(autosave)}`} role="status" aria-live="polite">
-                  {autosave === 'saving' ? <RefreshCw size={12} className="spin" /> : <Check size={12} />}
-                  <span>{autosaveCopy(autosave, settingsCopy)}</span>
-                </div>
+                <Badge
+                  variant={autosave === 'failed' ? 'destructive' : 'outline'}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {autosave === 'saving'
+                    ? <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} className="animate-spin" />
+                    : <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />}
+                  {autosaveCopy(autosave, settingsCopy)}
+                </Badge>
               )
             : null}
-          <Button variant="close" onClick={onClose} aria-label={copy.accessibility.closeSettings} title={copy.accessibility.closeSettings}>
-            <X size={16} strokeWidth={2} />
-          </Button>
-        </div>
+          <DialogClose asChild>
+            <Button variant="ghost" size="icon" aria-label={copy.accessibility.closeSettings} title={copy.accessibility.closeSettings}>
+              <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} aria-hidden="true" />
+            </Button>
+          </DialogClose>
+        </ItemActions>
 
-        <header className="modal-head">
-          <span className="kicker">{settingsCopy.dialog.kicker}</span>
-          <h2 id="settings-dialog-title">{settingsCopy.dialog.title}</h2>
-          <p className="subtitle">{settingsCopy.dialog.subtitle}</p>
-        </header>
+        <DialogHeader className="px-6 pt-6 pr-20 pb-5">
+          <Badge variant="secondary" className="w-fit">{settingsCopy.dialog.kicker}</Badge>
+          <DialogTitle>{settingsCopy.dialog.title}</DialogTitle>
+          <DialogDescription>{settingsCopy.dialog.subtitle}</DialogDescription>
+        </DialogHeader>
 
-        <SettingsShell
-          className="modal-body"
-          sidebar={(
-            <nav aria-label={settingsCopy.dialog.title}>
-              {settingsSections.map((item) => {
-                const Icon = item.icon
-                const navCopy = settingsNavCopy(settingsCopy.nav, item.id)
-                return (
-                  <NavItemButton
-                    key={item.id}
-                    active={section === item.id}
-                    className="settings-nav-item"
-                    description={navCopy.detail}
-                    icon={<Icon size={18} />}
-                    label={navCopy.title}
-                    onClick={() => setSection(item.id)}
-                  />
-                )
-              })}
-            </nav>
-          )}
-          content={(
-            <>
-              {section === 'execution'
-                ? (
-                    <ExecutionSettings
-                      copy={copy}
-                      engineTest={engineTest}
-                      onRescan={() => void handleRescan()}
-                      onTest={engineId => void handleTest(engineId)}
-                      settings={settings}
-                      update={persist}
-                    />
-                  )
-                : null}
-              {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} settings={settings} templates={templates} onAppsChanged={onAppsChanged} /> : null}
-              {section === 'connectors' ? <ConnectorsSettings copy={copy} settings={settings} update={persist} /> : null}
-              {section === 'mcp' ? <LocalMcpSettings copy={copy} /> : null}
-              {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} /> : null}
-              {section === 'language' ? <LanguageSettings copy={copy} locale={activeLocale} update={persist} /> : null}
-              {section === 'appearance' ? <AppearanceSettings copy={copy} settings={settings} update={persist} /> : null}
-              {section === 'about'
-                ? (
-                    <div className="settings-section">
-                      <div className="section-head">
-                        <div>
-                          <h3>{settingsCopy.about.title}</h3>
-                          <p className="hint">{settingsCopy.about.hint}</p>
-                        </div>
-                      </div>
-                      <dl className="about-grid">
-                        <div>
-                          <dt>{settingsCopy.about.version}</dt>
-                          <dd>{runtimeVersion}</dd>
-                        </div>
-                        <div>
-                          <dt>{settingsCopy.about.executionMode}</dt>
-                          <dd>{settings.executionMode}</dd>
-                        </div>
-                        <div>
-                          <dt>{settingsCopy.about.selectedEngine}</dt>
-                          <dd>{settings.engineId}</dd>
-                        </div>
-                        <div>
-                          <dt>{settingsCopy.about.updated}</dt>
-                          <dd>{formatRelativeTime(settings.updatedAt, activeLocale)}</dd>
-                        </div>
-                      </dl>
-                    </div>
-                  )
-                : null}
-            </>
-          )}
-        />
-      </div>
-    </div>
+        <Tabs
+          orientation="vertical"
+          value={section}
+          className="min-h-0 flex-1 gap-0 max-md:flex-col"
+          onValueChange={value => setSection(value as SettingsSection)}
+        >
+          <TabsList
+            variant="line"
+            aria-label={settingsCopy.dialog.title}
+            className="min-h-0 w-full items-stretch justify-start gap-1 p-3 max-md:h-52 max-md:max-h-52 max-md:overflow-auto md:h-auto md:max-h-none md:w-60 md:flex-none md:flex-col md:self-start md:overflow-visible"
+          >
+            {settingsSections.map((item) => {
+              const icon = item.icon
+              const navCopy = settingsNavCopy(settingsCopy.nav, item.id)
+              return (
+                <TabsTrigger
+                  key={item.id}
+                  value={item.id}
+                  aria-label={`${navCopy.title} ${navCopy.detail}`}
+                  className="h-auto min-w-fit justify-start px-2 py-2 md:w-full"
+                >
+                  <HugeiconsIcon icon={icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
+                  <ItemContent asChild className="min-w-0 gap-0.5">
+                    <span>
+                      <ItemTitle asChild className="max-w-full">
+                        <span>{navCopy.title}</span>
+                      </ItemTitle>
+                      <ItemDescription asChild className="hidden max-w-full md:block">
+                        <span>{navCopy.detail}</span>
+                      </ItemDescription>
+                    </span>
+                  </ItemContent>
+                </TabsTrigger>
+              )
+            })}
+          </TabsList>
+          <TabsContent value={section} className="m-0 min-h-0 overflow-hidden p-0">
+            <ScrollArea className="h-full">
+              <ItemGroup className="gap-4 p-6">
+                {activeContent}
+              </ItemGroup>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function SettingsSectionIntro({
+  actions,
+  hint,
+  title,
+}: {
+  actions?: ReactNode
+  hint?: ReactNode
+  title: ReactNode
+}) {
+  return (
+    <Item variant="default" size="sm" className="items-start px-0 py-0">
+      <ItemContent className="min-w-0 gap-0.5">
+        <ItemTitle role="heading" aria-level={3} size="base" className="max-w-full">{title}</ItemTitle>
+        {hint ? <ItemDescription className="line-clamp-none max-w-prose">{hint}</ItemDescription> : null}
+      </ItemContent>
+      {actions
+        ? (
+            <ItemActions className="shrink-0 max-md:w-full max-md:justify-start">
+              {actions}
+            </ItemActions>
+          )
+        : null}
+    </Item>
+  )
+}
+
+function SettingsFact({ label, value }: { label: string, value: string }) {
+  return (
+    <Item variant="muted" size="sm" className="items-start">
+      <ItemContent className="min-w-0">
+        <ItemDescription>{label}</ItemDescription>
+        <ItemTitle className="max-w-full break-words">{value}</ItemTitle>
+      </ItemContent>
+    </Item>
+  )
+}
+
+function SettingsToggleText({ description, icon, title }: { description: ReactNode, icon?: ReactNode, title: ReactNode }) {
+  return (
+    <ItemContent asChild className="min-w-0 flex-none gap-0.5">
+      <span>
+        <ItemTitle asChild className="max-w-full">
+          <span>
+            {icon}
+            {title}
+          </span>
+        </ItemTitle>
+        <ItemDescription asChild className="max-w-full">
+          <span>{description}</span>
+        </ItemDescription>
+      </span>
+    </ItemContent>
   )
 }
 
@@ -222,35 +350,57 @@ function ExecutionSettings({
   const settingsCopy = copy.settings
   return (
     <>
-      <SegmentedControl
-        ariaLabel={settingsCopy.nav.execution}
+      <ToggleGroup
+        type="single"
+        aria-label={settingsCopy.nav.execution}
+        className="w-full"
+        size="lg"
+        spacing={0}
         value={settings.executionMode}
-        onChange={value => void update({ executionMode: value as LocalSettingsConfig['executionMode'] })}
-        options={[
-          { description: settingsCopy.engine.availableCount(installedCount), label: 'Local CLI', value: 'local-cli' },
-          { description: settings.byok.provider, label: 'BYOK', value: 'byok' },
-        ]}
-      />
+        onValueChange={(value) => {
+          if (value)
+            void update({ executionMode: value as LocalSettingsConfig['executionMode'] })
+        }}
+      >
+        <ToggleGroupItem value="local-cli" className="h-auto min-h-12 flex-1 justify-start px-3 py-2">
+          <SettingsToggleText title="Local CLI" description={settingsCopy.engine.availableCount(installedCount)} />
+        </ToggleGroupItem>
+        <ToggleGroupItem value="byok" className="h-auto min-h-12 flex-1 justify-start px-3 py-2">
+          <SettingsToggleText title="BYOK" description={settings.byok.provider} />
+        </ToggleGroupItem>
+      </ToggleGroup>
 
       {settings.executionMode === 'local-cli'
         ? (
-            <section className="settings-section">
-              <div className="section-head">
-                <div>
-                  <h3>{settingsCopy.engine.title}</h3>
-                  <p className="hint">{settingsCopy.engine.hint}</p>
-                </div>
-                <div className="section-head-actions">
-                  <Button variant="ghost" icon={<Gauge size={13} />} className="settings-action-button settings-test-btn" onClick={() => onTest(settings.engineId)}>
-                    <span>{settingsCopy.engine.test}</span>
-                  </Button>
-                  <Button variant="ghost" icon={<RefreshCw size={13} />} className="settings-action-button settings-rescan-btn" onClick={onRescan}>
-                    <span>{settingsCopy.engine.rescan}</span>
-                  </Button>
-                </div>
-              </div>
+            <ItemGroup className="gap-3">
+              <SettingsSectionIntro
+                title={settingsCopy.engine.title}
+                hint={settingsCopy.engine.hint}
+                actions={(
+                  <ItemActions aria-label={settingsCopy.engine.title}>
+                    <Button
+                      aria-label={settingsCopy.engine.test}
+                      title={settingsCopy.engine.test}
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onTest(settings.engineId)}
+                    >
+                      <HugeiconsIcon icon={DashboardSpeed02Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
+                    </Button>
+                    <Button
+                      aria-label={settingsCopy.engine.rescan}
+                      title={settingsCopy.engine.rescan}
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={onRescan}
+                    >
+                      <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
+                    </Button>
+                  </ItemActions>
+                )}
+              />
 
-              <div className="agent-grid">
+              <ItemGroup className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 {settings.engines.map(engine => (
                   <EngineCard
                     key={engine.id}
@@ -260,33 +410,38 @@ function ExecutionSettings({
                     onSelect={() => void update({ engineId: engine.id })}
                   />
                 ))}
-              </div>
-              {engineTest ? <p className="settings-note" role="status">{engineTest}</p> : null}
-            </section>
+              </ItemGroup>
+              {engineTest
+                ? (
+                    <Alert role="status">
+                      <AlertDescription>{engineTest}</AlertDescription>
+                    </Alert>
+                  )
+                : null}
+            </ItemGroup>
           )
         : (
-            <section className="settings-section">
-              <div className="section-head">
-                <div>
-                  <h3>{settingsCopy.byok.title}</h3>
-                  <p className="hint">{settingsCopy.byok.hint}</p>
-                </div>
-              </div>
-              <div className="settings-field-grid">
-                <Field label={settingsCopy.byok.provider}>
-                  <input value={settings.byok.provider} onChange={event => void update({ byok: { ...settings.byok, provider: event.target.value } })} />
+            <ItemGroup className="gap-3">
+              <SettingsSectionIntro title={settingsCopy.byok.title} hint={settingsCopy.byok.hint} />
+              <FieldGroup className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="settings-byok-provider">{settingsCopy.byok.provider}</FieldLabel>
+                  <Input id="settings-byok-provider" value={settings.byok.provider} onChange={event => void update({ byok: { ...settings.byok, provider: event.target.value } })} />
                 </Field>
-                <Field label={settingsCopy.byok.baseUrl}>
-                  <input value={settings.byok.baseUrl} onChange={event => void update({ byok: { ...settings.byok, baseUrl: event.target.value } })} />
+                <Field>
+                  <FieldLabel htmlFor="settings-byok-base-url">{settingsCopy.byok.baseUrl}</FieldLabel>
+                  <Input id="settings-byok-base-url" value={settings.byok.baseUrl} onChange={event => void update({ byok: { ...settings.byok, baseUrl: event.target.value } })} />
                 </Field>
-                <Field label={settingsCopy.byok.model}>
-                  <input value={settings.byok.model} onChange={event => void update({ byok: { ...settings.byok, model: event.target.value } })} />
+                <Field>
+                  <FieldLabel htmlFor="settings-byok-model">{settingsCopy.byok.model}</FieldLabel>
+                  <Input id="settings-byok-model" value={settings.byok.model} onChange={event => void update({ byok: { ...settings.byok, model: event.target.value } })} />
                 </Field>
-                <Field label={settingsCopy.byok.apiKeyRef}>
-                  <input value={settings.byok.apiKeyRef} onChange={event => void update({ byok: { ...settings.byok, apiKeyRef: event.target.value } })} placeholder="env:OPENAI_API_KEY" />
+                <Field>
+                  <FieldLabel htmlFor="settings-byok-api-key-ref">{settingsCopy.byok.apiKeyRef}</FieldLabel>
+                  <Input id="settings-byok-api-key-ref" value={settings.byok.apiKeyRef} onChange={event => void update({ byok: { ...settings.byok, apiKeyRef: event.target.value } })} placeholder="env:OPENAI_API_KEY" />
                 </Field>
-              </div>
-            </section>
+              </FieldGroup>
+            </ItemGroup>
           )}
     </>
   )
@@ -295,22 +450,64 @@ function ExecutionSettings({
 function EngineCard({ active, copy, engine, onSelect }: { active: boolean, copy: ReturnType<typeof messagesFor>, engine: LocalEngineStatus, onSelect: () => void }) {
   const iconSrc = engineIconSrc(engine.id)
   return (
-    <ActionCard active={active} className={`agent-card${engine.installed ? '' : ' disabled'}`} disabled={!engine.installed} aria-pressed={active} onClick={onSelect}>
-      <span className={`agent-icon ${engine.installed ? 'agent-icon-ready' : 'agent-icon-muted'}`} data-engine-icon={engine.id} aria-hidden="true">
-        {iconSrc
-          ? <span className="agent-icon-shape" style={{ '--engine-icon-url': `url(${iconSrc})` } as CSSProperties} />
-          : <Sparkles size={24} />}
-      </span>
-      <span className="agent-card-body">
-        <span className="agent-card-name">{engine.name}</span>
-        <span className="agent-card-meta">
+    <Button
+      variant={active ? 'secondary' : 'ghost'}
+      size="lg"
+      className="h-auto min-h-16 w-full justify-start gap-3 px-3 py-3 whitespace-normal"
+      disabled={!engine.installed}
+      aria-pressed={active}
+      onClick={onSelect}
+    >
+      <EngineCardIcon engineId={engine.id} iconSrc={iconSrc} installed={engine.installed} />
+      <ItemContent className="min-w-0">
+        <ItemTitle className="max-w-full">{engine.name}</ItemTitle>
+        <ItemDescription className="max-w-full">
           {engine.installed
-            ? <span>{engine.version ?? engine.path ?? engine.command}</span>
-            : <span className="muted">{copy.common.notInstalled}</span>}
-        </span>
-      </span>
-      {engine.installed ? <span className={`status-dot${active ? ' active' : ''}`} aria-hidden="true" /> : null}
-    </ActionCard>
+            ? engine.version ?? engine.path ?? engine.command
+            : copy.common.notInstalled}
+        </ItemDescription>
+      </ItemContent>
+      {engine.installed
+        ? (
+            <Badge aria-hidden="true" className="shrink-0" variant={active ? 'default' : 'secondary'}>
+              {active ? copy.statuses.active : copy.common.available}
+            </Badge>
+          )
+        : null}
+    </Button>
+  )
+}
+
+function EngineCardIcon({ engineId, iconSrc, installed }: { engineId: string, iconSrc: null | string, installed: boolean }) {
+  const maskStyle = iconSrc
+    ? ({
+        WebkitMaskImage: `url(${iconSrc})`,
+        WebkitMaskPosition: 'center',
+        WebkitMaskRepeat: 'no-repeat',
+        WebkitMaskSize: 'contain',
+        backgroundColor: 'currentColor',
+        maskImage: `url(${iconSrc})`,
+        maskPosition: 'center',
+        maskRepeat: 'no-repeat',
+        maskSize: 'contain',
+      } satisfies CSSProperties)
+    : undefined
+
+  return (
+    <ItemMedia
+      variant="icon"
+      className={iconSrc
+        ? installed ? 'size-4' : 'size-4 opacity-60'
+        : installed ? undefined : 'opacity-60'}
+      style={maskStyle}
+      data-engine-icon={engineId}
+      data-engine-icon-src={iconSrc ?? undefined}
+      aria-hidden="true"
+    >
+      {iconSrc
+        ? null
+        : <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} aria-hidden="true" />}
+    </ItemMedia>
   )
 }
 
@@ -342,9 +539,6 @@ function SoulAppsSettings({
         await disableSoulApp(app.appId)
       }
       else {
-        const review = await reviewSoulAppSecurity(app.appId)
-        if (!review.summary.canEnable)
-          throw new Error(securityReviewBlockMessage(review.summary))
         await enableSoulApp(app.appId)
       }
       await onAppsChanged?.()
@@ -358,14 +552,9 @@ function SoulAppsSettings({
   }
 
   return (
-    <div className="settings-section">
-      <div className="section-head">
-        <div>
-          <h3>{soulAppsCopy.title}</h3>
-          <p className="hint">{soulAppsCopy.hint}</p>
-        </div>
-      </div>
-      <div className="settings-card-list">
+    <ItemGroup className="gap-3">
+      <SettingsSectionIntro title={soulAppsCopy.title} hint={soulAppsCopy.hint} />
+      <ItemGroup className="gap-2">
         {apps.length > 0
           ? apps.map((app) => {
               const permissionCount = app.manifest.permissions?.length ?? 0
@@ -382,87 +571,89 @@ function SoulAppsSettings({
               const busy = busyAppId === app.appId
               const actionLabel = app.status === 'enabled' ? soulAppsCopy.disableApp(app.manifest.name) : soulAppsCopy.enableApp(app.manifest.name)
               return (
-                <article key={app.appId} className={`settings-card-row ${app.status === 'enabled' ? '' : 'disabled'}`}>
-                  <div className="settings-card-mainline">
-                    <span>
-                      <strong>{app.manifest.name}</strong>
-                      <span>{`${formatStatus(app.status, locale)} · ${app.version}`}</span>
-                    </span>
-                    <Button
-                      variant="ghost"
-                      className="settings-action-button soul-app-lifecycle-button"
-                      disabled={busy}
-                      onClick={() => void updateLifecycle(app)}
-                    >
-                      <span>{busy ? soulAppsCopy.updating : actionLabel}</span>
-                    </Button>
-                  </div>
-                  <small>{domain}</small>
-                  <div className="settings-card-tags">
-                    <small>{soulAppsCopy.permissionCount(permissionCount)}</small>
-                    <small>{soulAppsCopy.templateCount(templateCount)}</small>
-                    <small>{soulAppsCopy.mountedContributionCount(contributionCount)}</small>
-                  </div>
-                  <div className="settings-review-grid" aria-label={`${app.manifest.name} security review`}>
-                    {permissionLabels.length > 0
-                      ? (
-                          <div className="settings-review-group">
-                            <span>{soulAppsCopy.permissionsTitle}</span>
-                            <div className="settings-card-tags">
-                              {permissionLabels.slice(0, 4).map(label => <small key={label}>{label}</small>)}
-                            </div>
-                          </div>
-                        )
-                      : null}
-                    {connectorRows.length > 0
-                      ? (
-                          <div className="settings-review-group">
-                            <span>{soulAppsCopy.connectorsTitle}</span>
-                            <div className="settings-card-tags">
-                              {connectorRows.map(connector => <small key={connector.id}>{connector.label}</small>)}
-                            </div>
-                          </div>
-                        )
-                      : null}
-                    {descriptorPermissions.length > 0
-                      ? (
-                          <div className="settings-review-group">
-                            <span>{soulAppsCopy.descriptorPermissionsTitle}</span>
-                            <div className="settings-card-tags">
-                              {descriptorPermissions.slice(0, 4).map(label => <small key={label}>{label}</small>)}
-                            </div>
-                          </div>
-                        )
-                      : null}
-                  </div>
-                  {apiRoutePrefix ? <small>{soulAppsCopy.apiRoute(apiRoutePrefix)}</small> : null}
-                </article>
+                <Card key={app.appId} size="sm" className={app.status === 'enabled' ? undefined : 'opacity-70'}>
+                  <CardHeader>
+                    <ItemContent className="min-w-0">
+                      <CardTitle>{app.manifest.name}</CardTitle>
+                      <CardDescription>{`${formatStatus(app.status, locale)} · ${app.version}`}</CardDescription>
+                    </ItemContent>
+                    <CardAction>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void updateLifecycle(app)}
+                      >
+                        {busy ? soulAppsCopy.updating : actionLabel}
+                      </Button>
+                    </CardAction>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    <CardDescription>{domain}</CardDescription>
+                    <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
+                      <Badge variant="outline">{soulAppsCopy.permissionCount(permissionCount)}</Badge>
+                      <Badge variant="outline">{soulAppsCopy.templateCount(templateCount)}</Badge>
+                      <Badge variant="outline">{soulAppsCopy.mountedContributionCount(contributionCount)}</Badge>
+                    </ItemActions>
+                    <ItemGroup className="gap-2" aria-label={`${app.manifest.name} app access`}>
+                      {permissionLabels.length > 0
+                        ? (
+                            <ItemContent className="gap-1.5">
+                              <Kbd className="h-auto w-fit uppercase">{soulAppsCopy.permissionsTitle}</Kbd>
+                              <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
+                                {permissionLabels.slice(0, 4).map(label => <Badge key={label} variant="outline">{label}</Badge>)}
+                              </ItemActions>
+                            </ItemContent>
+                          )
+                        : null}
+                      {connectorRows.length > 0
+                        ? (
+                            <ItemContent className="gap-1.5">
+                              <Kbd className="h-auto w-fit uppercase">{soulAppsCopy.connectorsTitle}</Kbd>
+                              <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
+                                {connectorRows.map(connector => <Badge key={connector.id} variant="outline">{connector.label}</Badge>)}
+                              </ItemActions>
+                            </ItemContent>
+                          )
+                        : null}
+                      {descriptorPermissions.length > 0
+                        ? (
+                            <ItemContent className="gap-1.5">
+                              <Kbd className="h-auto w-fit uppercase">{soulAppsCopy.descriptorPermissionsTitle}</Kbd>
+                              <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
+                                {descriptorPermissions.slice(0, 4).map(label => <Badge key={label} variant="outline">{label}</Badge>)}
+                              </ItemActions>
+                            </ItemContent>
+                          )
+                        : null}
+                    </ItemGroup>
+                    {apiRoutePrefix ? <CardDescription>{soulAppsCopy.apiRoute(apiRoutePrefix)}</CardDescription> : null}
+                  </CardContent>
+                </Card>
               )
             })
           : (
-              <div className="settings-note">{soulAppsCopy.empty}</div>
+              <Empty className="min-h-16 flex-none p-3">
+                <EmptyHeader>
+                  <EmptyDescription>{soulAppsCopy.empty}</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             )}
-      </div>
-      {error ? <p className="settings-note" role="alert">{error}</p> : null}
-    </div>
+      </ItemGroup>
+      {error
+        ? (
+            <Alert variant="destructive" role="alert">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )
+        : null}
+    </ItemGroup>
   )
-}
-
-function securityReviewBlockMessage(summary: {
-  missingRequiredConnectorIds: readonly string[]
-  warnings: readonly string[]
-}): string {
-  if (summary.warnings.length > 0)
-    return summary.warnings.join(' ')
-  if (summary.missingRequiredConnectorIds.length > 0)
-    return `Required connectors are not available: ${summary.missingRequiredConnectorIds.join(', ')}`
-  return 'Host security review does not allow enabling this Soul App.'
 }
 
 function mountedContributionCount(app: HostedSoulApp): number {
   return app.mountedContribution.artifactPreviewIds.length
     + app.mountedContribution.panelIds.length
-    + app.mountedContribution.reviewPanelIds.length
     + app.mountedContribution.workspaceWidgetIds.length
 }
 
@@ -502,8 +693,6 @@ function descriptorPermissionLabels(app: HostedSoulApp): string[] {
     add(panel.surface?.requiredPermissions)
   for (const preview of app.manifest.ui?.artifactPreviews ?? [])
     add(preview.surface?.requiredPermissions)
-  for (const panel of app.manifest.ui?.reviewPanels ?? [])
-    add(panel.surface?.requiredPermissions)
   for (const widget of app.manifest.ui?.workspaceWidgets ?? [])
     add(widget.surface?.requiredPermissions)
   return [...labels]
@@ -512,71 +701,65 @@ function descriptorPermissionLabels(app: HostedSoulApp): string[] {
 function ConnectorsSettings({ copy, settings, update }: { copy: ReturnType<typeof messagesFor>, settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {
   const settingsCopy = copy.settings
   return (
-    <div className="settings-section">
-      <div className="section-head">
-        <div>
-          <h3>{settingsCopy.connectors.title}</h3>
-          <p className="hint">{settingsCopy.connectors.hint}</p>
-        </div>
-      </div>
-      <div className="connector-list">
-        {settings.connectors.map(connector => (
-          <label key={connector.id} className="switch-row">
-            <span>
-              <strong>{connector.name}</strong>
-              <small>{connector.status === 'configured' ? settingsCopy.connectors.configured : settingsCopy.connectors.notConfigured}</small>
-            </span>
-            <input
-              checked={connector.enabled}
-              type="checkbox"
-              onChange={event => void update({
-                connectors: settings.connectors.map(item => item.id === connector.id
-                  ? { ...item, enabled: event.target.checked, status: event.target.checked ? 'configured' : 'not_configured' }
-                  : item),
-              })}
-            />
-          </label>
-        ))}
-      </div>
-    </div>
+    <ItemGroup className="gap-3">
+      <SettingsSectionIntro title={settingsCopy.connectors.title} hint={settingsCopy.connectors.hint} />
+      <ItemGroup className="gap-2">
+        {settings.connectors.map((connector) => {
+          const switchId = `settings-connector-${connector.id}`
+          return (
+            <Item key={connector.id} variant="muted" size="sm">
+              <Field orientation="horizontal">
+                <FieldContent>
+                  <FieldLabel htmlFor={switchId}>{connector.name}</FieldLabel>
+                  <FieldDescription>{connector.status === 'configured' ? settingsCopy.connectors.configured : settingsCopy.connectors.notConfigured}</FieldDescription>
+                </FieldContent>
+                <Switch
+                  id={switchId}
+                  checked={connector.enabled}
+                  onCheckedChange={checked => void update({
+                    connectors: settings.connectors.map(item => item.id === connector.id
+                      ? { ...item, enabled: checked, status: checked ? 'configured' : 'not_configured' }
+                      : item),
+                  })}
+                />
+              </Field>
+            </Item>
+          )
+        })}
+      </ItemGroup>
+    </ItemGroup>
   )
 }
 
 function LocalMcpSettings({ copy }: { copy: ReturnType<typeof messagesFor> }) {
   const settingsCopy = copy.settings
   return (
-    <div className="settings-section">
-      <div className="section-head">
-        <div>
-          <h3>{settingsCopy.localMcp.title}</h3>
-          <p className="hint">{settingsCopy.localMcp.hint}</p>
-        </div>
-      </div>
-      <label className="switch-row settings-disabled-row">
-        <span>
-          <strong>{settingsCopy.localMcp.toggle}</strong>
-          <small>{settingsCopy.localMcp.pending}</small>
-        </span>
-        <input checked={false} disabled type="checkbox" />
-      </label>
-    </div>
+    <ItemGroup className="gap-3">
+      <SettingsSectionIntro title={settingsCopy.localMcp.title} hint={settingsCopy.localMcp.hint} />
+      <Item variant="muted" size="sm" className="opacity-70">
+        <Field orientation="horizontal" data-disabled>
+          <FieldContent>
+            <FieldLabel htmlFor="settings-local-mcp">{settingsCopy.localMcp.toggle}</FieldLabel>
+            <FieldDescription>{settingsCopy.localMcp.pending}</FieldDescription>
+          </FieldContent>
+          <Switch id="settings-local-mcp" checked={false} disabled />
+        </Field>
+      </Item>
+    </ItemGroup>
   )
 }
 
 function ExternalMcpSettings({ copy, settings }: { copy: ReturnType<typeof messagesFor>, settings: LocalSettingsConfig }) {
   const settingsCopy = copy.settings
   return (
-    <div className="settings-section">
-      <div className="section-head">
-        <div>
-          <h3>{settingsCopy.externalMcp.title}</h3>
-          <p className="hint">{settingsCopy.externalMcp.hint}</p>
-        </div>
-      </div>
-      <div className="connector-list">
+    <ItemGroup className="gap-3">
+      <SettingsSectionIntro title={settingsCopy.externalMcp.title} hint={settingsCopy.externalMcp.hint} />
+      <FieldGroup>
         {settings.externalMcpServers.map(server => (
-          <Field key={server.id} label={server.name}>
-            <input
+          <Field key={server.id}>
+            <FieldLabel htmlFor={`settings-external-mcp-${server.id}`}>{server.name}</FieldLabel>
+            <Input
+              id={`settings-external-mcp-${server.id}`}
               disabled
               value={server.command}
               placeholder={settingsCopy.externalMcp.placeholder}
@@ -584,72 +767,67 @@ function ExternalMcpSettings({ copy, settings }: { copy: ReturnType<typeof messa
             />
           </Field>
         ))}
-      </div>
-      <small className="settings-pending-note">{settingsCopy.externalMcp.pending}</small>
-    </div>
+      </FieldGroup>
+      <FieldDescription>{settingsCopy.externalMcp.pending}</FieldDescription>
+    </ItemGroup>
   )
 }
 
 function LanguageSettings({ copy, locale, update }: { copy: ReturnType<typeof messagesFor>, locale: ReturnType<typeof normalizeLocale>, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {
   const settingsCopy = copy.settings
   return (
-    <div className="settings-section">
-      <div className="section-head">
-        <div>
-          <h3>{settingsCopy.language.title}</h3>
-          <p className="hint">{settingsCopy.language.hint}</p>
-        </div>
-      </div>
-      <SegmentedControl
-        ariaLabel={settingsCopy.language.title}
+    <ItemGroup className="gap-3">
+      <SettingsSectionIntro title={settingsCopy.language.title} hint={settingsCopy.language.hint} />
+      <ToggleGroup
+        type="single"
+        aria-label={settingsCopy.language.title}
+        className="w-full flex-wrap justify-start"
+        size="lg"
+        spacing={0}
         value={locale}
-        onChange={language => void update({ language: language as LocalSettingsConfig['language'] })}
-        options={supportedLocales.map(language => ({
-          description: copy.common.interface,
-          label: languageLabel(language, locale),
-          value: language,
-        }))}
-      />
-    </div>
+        onValueChange={(language) => {
+          if (language)
+            void update({ language: language as LocalSettingsConfig['language'] })
+        }}
+      >
+        {supportedLocales.map(language => (
+          <ToggleGroupItem key={language} value={language} className="h-auto min-h-12 min-w-28 flex-col items-start px-3 py-2">
+            <SettingsToggleText title={languageLabel(language, locale)} description={copy.common.interface} />
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </ItemGroup>
   )
 }
 
 function AppearanceSettings({ copy, settings, update }: { copy: ReturnType<typeof messagesFor>, settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {
   const settingsCopy = copy.settings
   return (
-    <div className="settings-section">
-      <div className="section-head">
-        <div>
-          <h3>{settingsCopy.appearance.title}</h3>
-          <p className="hint">{settingsCopy.appearance.hint}</p>
-        </div>
-      </div>
-      <SegmentedControl
-        ariaLabel={settingsCopy.appearance.title}
+    <ItemGroup className="gap-3">
+      <SettingsSectionIntro title={settingsCopy.appearance.title} hint={settingsCopy.appearance.hint} />
+      <ToggleGroup
+        type="single"
+        aria-label={settingsCopy.appearance.title}
+        className="w-full flex-wrap justify-start"
+        size="lg"
+        spacing={0}
         value={settings.appearance}
-        onChange={appearance => void update({ appearance: appearance as LocalSettingsConfig['appearance'] })}
-        options={[
-          { description: copy.common.workspace, label: (
-            <span className="seg-title-inline">
-              <Settings size={14} />
-              {settingsCopy.appearance.system}
-            </span>
-          ), value: 'system' },
-          { description: copy.common.workspace, label: (
-            <span className="seg-title-inline">
-              <Sun size={14} />
-              {settingsCopy.appearance.light}
-            </span>
-          ), value: 'light' },
-          { description: copy.common.workspace, label: (
-            <span className="seg-title-inline">
-              <Moon size={14} />
-              {settingsCopy.appearance.dark}
-            </span>
-          ), value: 'dark' },
-        ]}
-      />
-    </div>
+        onValueChange={(appearance) => {
+          if (appearance)
+            void update({ appearance: appearance as LocalSettingsConfig['appearance'] })
+        }}
+      >
+        <ToggleGroupItem value="system" className="h-auto min-h-12 min-w-28 flex-col items-start px-3 py-2">
+          <SettingsToggleText icon={<HugeiconsIcon icon={Settings02Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />} title={settingsCopy.appearance.system} description={copy.common.workspace} />
+        </ToggleGroupItem>
+        <ToggleGroupItem value="light" className="h-auto min-h-12 min-w-28 flex-col items-start px-3 py-2">
+          <SettingsToggleText icon={<HugeiconsIcon icon={Sun02Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />} title={settingsCopy.appearance.light} description={copy.common.workspace} />
+        </ToggleGroupItem>
+        <ToggleGroupItem value="dark" className="h-auto min-h-12 min-w-28 flex-col items-start px-3 py-2">
+          <SettingsToggleText icon={<HugeiconsIcon icon={Moon02Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />} title={settingsCopy.appearance.dark} description={copy.common.workspace} />
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </ItemGroup>
   )
 }
 
@@ -677,12 +855,4 @@ function autosaveCopy(state: AutosaveState, settingsCopy: WorkerMessages['settin
   if (state === 'failed')
     return settingsCopy.autosave.failed
   return settingsCopy.autosave.saved
-}
-
-function autosaveClass(state: AutosaveState): string {
-  if (state === 'saving')
-    return 'is-saving'
-  if (state === 'failed')
-    return 'is-failed'
-  return 'is-saved'
 }

@@ -1,6 +1,6 @@
 /**
  * `@zonease/aiworker-storage-sqlite` stores Host-local worker, workspace,
- * session, artifact, review, lesson and Soul App metadata in worker.db.
+ * session, artifact and Soul App metadata in worker.db.
  * Business files remain in workspace folders; the DB stores indexes and
  * provenance.
  */

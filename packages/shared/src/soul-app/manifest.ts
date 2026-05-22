@@ -8,7 +8,7 @@ const ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const SEMVER_RE = /^\d+\.\d+\.\d+$/
 const ROUTE_RE = /^\/[a-z0-9][a-z0-9/_:.-]*$/
 const API_PREFIX_RE = /^\/api\/local\/apps\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\/[a-z0-9/_:.-]*)?$/
-const REQUIRED_PERMISSION_RE = /^(storage|connector|artifact|review|memory|ui|api|search):(read|write|create|propose|mount|serve):[^:\s].*$/
+const REQUIRED_PERMISSION_RE = /^(storage|connector|ui|api|search):(read|write|create|propose|mount|serve):[^:\s].*$/
 
 export const soulAppIdSchema = zod.string().min(1).regex(ID_RE, 'Soul App id must be kebab-case')
 export const soulAppVersionSchema = zod.string().regex(SEMVER_RE, 'version must be major.minor.patch')
@@ -55,7 +55,7 @@ export const soulAppPackRefSchema = zod.object({
 export type SoulAppPackRef = z.infer<typeof soulAppPackRefSchema>
 
 export const soulAppCapabilitySchema = zod.object({
-  artifactTypes: zod.array(soulAppIdSchema).min(1).readonly(),
+  artifactTypes: zod.array(soulAppIdSchema).min(1).readonly().optional(),
   description: zod.string().min(1),
   id: soulAppIdSchema,
   name: zod.string().min(1),
@@ -69,7 +69,7 @@ export const soulAppCapabilitySchema = zod.object({
 export type SoulAppCapability = z.infer<typeof soulAppCapabilitySchema>
 
 export const soulAppWorkspaceTypeSchema = zod.object({
-  artifactTypes: zod.array(soulAppIdSchema).min(1).readonly(),
+  artifactTypes: zod.array(soulAppIdSchema).min(1).readonly().optional(),
   defaultCapabilityIds: zod.array(soulAppIdSchema).readonly().optional(),
   description: zod.string().min(1),
   id: soulAppIdSchema,
@@ -77,31 +77,29 @@ export const soulAppWorkspaceTypeSchema = zod.object({
 })
 export type SoulAppWorkspaceType = z.infer<typeof soulAppWorkspaceTypeSchema>
 
-export const soulAppArtifactTypeSchema = zod.object({
-  description: zod.string().min(1),
-  id: soulAppIdSchema,
-  name: zod.string().min(1),
-  previewRef: zod.string().min(1).optional(),
-  reviewPolicyRef: zod.string().min(1).optional(),
-  schemaRef: zod.string().min(1),
-  schemaSha256: zod.string().regex(/^[a-f0-9]{64}$/).optional(),
-  version: soulAppVersionSchema,
-})
-export type SoulAppArtifactType = z.infer<typeof soulAppArtifactTypeSchema>
+export interface SoulAppArtifactType {
+  description: string
+  id: string
+  name: string
+  previewRef?: string
+  reviewPolicyRef?: string
+  schemaRef: string
+  schemaSha256?: string
+  version: string
+}
 
 export const soulAppUiContributionKindSchema = zod.enum([
   'route',
   'panel',
   'workspace-widget',
   'artifact-preview',
-  'review-panel',
 ])
 export type SoulAppUiContributionKind = z.infer<typeof soulAppUiContributionKindSchema>
 
-export const soulAppMountedSurfaceRendererSchema = zod.enum(['host-descriptor', 'sandboxed-frame', 'trusted-module'])
+export const soulAppMountedSurfaceRendererSchema = zod.enum(['host-descriptor', 'micro-app'])
 export type SoulAppMountedSurfaceRenderer = z.infer<typeof soulAppMountedSurfaceRendererSchema>
 
-export const soulAppMountedSurfaceScopeSchema = zod.enum(['app', 'workspace', 'session', 'artifact', 'review'])
+export const soulAppMountedSurfaceScopeSchema = zod.enum(['app', 'workspace', 'session', 'artifact'])
 export type SoulAppMountedSurfaceScope = z.infer<typeof soulAppMountedSurfaceScopeSchema>
 
 export const soulAppRequiredPermissionSchema = zod.string().regex(REQUIRED_PERMISSION_RE, 'requiredPermissions must use kind:action:target')
@@ -291,7 +289,6 @@ export type SoulAppWorkspaceContext = z.infer<typeof soulAppWorkspaceContextSche
 export const soulAppUiSchema = zod.object({
   artifactPreviews: zod.array(soulAppUiSlotSchema).readonly(),
   panels: zod.array(soulAppUiSlotSchema).readonly(),
-  reviewPanels: zod.array(soulAppUiSlotSchema).readonly(),
   routes: zod.array(soulAppUiRouteSchema).readonly(),
   workbench: soulAppWorkbenchSchema.optional(),
   workspaceContext: soulAppWorkspaceContextSchema.optional(),
@@ -343,16 +340,7 @@ export const soulAppConnectorsSchema = zod.object({
 })
 export type SoulAppConnectors = z.infer<typeof soulAppConnectorsSchema>
 
-export const soulAppMemoryAdmissionPolicySchema = zod.enum(['manual-review', 'host-policy', 'disabled'])
-export type SoulAppMemoryAdmissionPolicy = z.infer<typeof soulAppMemoryAdmissionPolicySchema>
-
-export const soulAppMemorySchema = zod.object({
-  admissionPolicy: soulAppMemoryAdmissionPolicySchema,
-  namespace: soulAppIdSchema,
-})
-export type SoulAppMemory = z.infer<typeof soulAppMemorySchema>
-
-export const soulAppPermissionKindSchema = zod.enum(['storage', 'connector', 'artifact', 'review', 'memory', 'ui', 'api', 'search'])
+export const soulAppPermissionKindSchema = zod.enum(['storage', 'connector', 'ui', 'api', 'search'])
 export type SoulAppPermissionKind = z.infer<typeof soulAppPermissionKindSchema>
 
 export const soulAppPermissionActionSchema = zod.enum(['read', 'write', 'create', 'propose', 'mount', 'serve'])
@@ -381,7 +369,6 @@ export const soulAppExportsSchema = zod.object({
   connector: zod.string().min(1).optional(),
   event: zod.string().min(1).optional(),
   lifecycle: zod.string().min(1).optional(),
-  review: zod.string().min(1).optional(),
   runtime: zod.string().min(1).optional(),
   ui: zod.string().min(1).optional(),
 })
@@ -389,7 +376,6 @@ export type SoulAppExports = z.infer<typeof soulAppExportsSchema>
 
 export const soulAppManifestSchema = zod.object({
   api: soulAppApiSchema,
-  artifactTypes: zod.array(soulAppArtifactTypeSchema).min(1).readonly(),
   capabilities: zod.array(soulAppCapabilitySchema).min(1).readonly(),
   compatibility: soulAppCompatibilitySchema,
   connectors: soulAppConnectorsSchema,
@@ -398,7 +384,6 @@ export const soulAppManifestSchema = zod.object({
   exports: soulAppExportsSchema,
   healthcheck: soulAppHealthcheckSchema,
   id: soulAppIdSchema,
-  memory: soulAppMemorySchema,
   modes: zod.object({
     hostMounted: soulAppModeSchema,
     standalone: soulAppModeSchema,
@@ -425,13 +410,11 @@ export const soulAppManifestSchema = zod.object({
 
   ensureUniqueIds(ctx, manifest.capabilities, ['capabilities'])
   ensureUniqueIds(ctx, manifest.workspaceTypes, ['workspaceTypes'])
-  ensureUniqueIds(ctx, manifest.artifactTypes, ['artifactTypes'])
   ensureUniqueIds(ctx, manifest.pack.refs, ['pack', 'refs'])
   ensureUniqueIds(ctx, [
     ...manifest.ui.routes,
     ...manifest.ui.panels,
     ...manifest.ui.artifactPreviews,
-    ...manifest.ui.reviewPanels,
     ...(manifest.ui.workspaceWidgets ?? []),
   ], ['ui'])
 })
@@ -727,8 +710,6 @@ function unsupportedProtocolIssue(input: unknown, supportedProtocols: readonly s
 
 function codeForZodIssue(issue: z.ZodIssue): SoulAppManifestIssueCode {
   const [root] = issue.path
-  if (root === 'artifactTypes')
-    return 'invalid_artifact_schema'
   if (root === 'storage')
     return 'invalid_storage_namespace'
   if (root === 'permissions')
@@ -771,8 +752,6 @@ function hasUiOrApiEntry(manifest: SoulAppManifest): boolean {
     manifest.api.entry
     || manifest.ui.routes.length > 0
     || manifest.ui.panels.length > 0
-    || manifest.ui.artifactPreviews.length > 0
-    || manifest.ui.reviewPanels.length > 0
     || (manifest.ui.workspaceWidgets?.length ?? 0) > 0,
   )
 }
@@ -789,12 +768,10 @@ function unsafePermissionMessage(permission: SoulAppPermission, manifest: SoulAp
 }
 
 function unsafeSurfaceMessage(surface: SoulAppMountedSurface): string | null {
-  if (surface.renderer === 'trusted-module')
-    return 'trusted-module surfaces are reserved for a future signed first-party module loader.'
   if (surface.renderer === 'host-descriptor' && !surface.entry.startsWith('/surfaces/'))
     return 'host-descriptor surfaces must use a /surfaces/* mounted service entry.'
-  if (surface.renderer === 'sandboxed-frame' && !surface.entry.startsWith('/frames/'))
-    return 'sandboxed-frame surfaces must use a /frames/* mounted service entry.'
+  if (surface.renderer === 'micro-app' && !surface.entry.startsWith('/micro-app/'))
+    return 'micro-app surfaces must use a /micro-app/* mounted service entry.'
   return null
 }
 
@@ -827,7 +804,6 @@ function manifestUiContributions(manifest: SoulAppManifest): Array<{
     ...manifest.ui.routes.map((route, index) => ({ path: `ui.routes.${index}`, surface: route.surface })),
     ...manifest.ui.panels.map((slot, index) => ({ path: `ui.panels.${index}`, surface: slot.surface })),
     ...manifest.ui.artifactPreviews.map((slot, index) => ({ path: `ui.artifactPreviews.${index}`, surface: slot.surface })),
-    ...manifest.ui.reviewPanels.map((slot, index) => ({ path: `ui.reviewPanels.${index}`, surface: slot.surface })),
     ...(manifest.ui.workspaceWidgets ?? []).map((slot, index) => ({ path: `ui.workspaceWidgets.${index}`, surface: slot.surface })),
   ]
 }

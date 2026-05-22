@@ -26,8 +26,6 @@ const boot = await bootstrapWorkerApp({
       input.onEvent?.({ kind: 'text', text: 'smoke' })
       return {
         artifacts: [],
-        lessons: [],
-        review: { findings: [], verdict: 'pass' },
         summary: 'smoke',
       }
     },
@@ -57,25 +55,31 @@ try {
   await createWorkerDialog.waitFor({ timeout: 10_000 })
   await assertLocatorWithinViewport(page, createWorkerDialog, 'create worker dialog')
   await createWorkerDialog.getByRole('button', { name: 'Create worker' }).click()
-  await page.getByTestId('hr-people-workbench').waitFor({ timeout: 10_000 })
-  await page.getByRole('button', { name: 'Soul Apps' }).click()
-  const settingsDialog = page.getByRole('dialog', { name: 'Platform Settings' })
+  await page.locator('micro-app[data-slot="soul-app-mounted-micro-app"][router-mode="pure"]').waitFor({ timeout: 10_000 })
+  await page.getByText('Profile patch ready').waitFor({ timeout: 10_000 })
+  await page.getByText('Confirmed Facts').waitFor({ timeout: 10_000 })
+  await assertHrMountedReadingRoomLayout(page, 'desktop')
+  await page.setViewportSize({ height: 900, width: 760 })
+  await assertHrMountedReadingRoomLayout(page, 'narrow')
+  await page.setViewportSize({ height: 900, width: 1280 })
+  await page.getByRole('button', { name: /Platform settings/ }).click()
+  const settingsDialog = page.getByRole('dialog', { name: 'Local Host Settings' })
   await settingsDialog.waitFor({ timeout: 10_000 })
   await assertLocatorWithinViewport(page, settingsDialog, 'settings dialog')
-  await settingsDialog.getByRole('button', { name: /Execution/ }).click()
+  await settingsDialog.getByRole('tab', { name: /Execution/ }).click()
   await assertEngineIconSurface(page)
-  await settingsDialog.getByRole('button', { name: /Soul Apps/ }).click()
+  await settingsDialog.getByRole('tab', { name: /Soul Apps/ }).click()
   await page.getByText('API /api/local/apps/aiworker-hr').waitFor({ timeout: 10_000 })
   await page.getByText('4 mounted contributions').first().waitFor({ timeout: 10_000 })
 
   console.log(JSON.stringify({
     appId: 'aiworker-hr',
     firstRun: 'pass',
-    frameSurface: 'pass',
     host,
+    microAppSurface: 'pass',
+    routeMicroApp: 'pass',
     status: 'pass',
     settings: 'pass',
-    surfaceDescriptor: 'pass',
   }))
 }
 finally {
@@ -105,24 +109,39 @@ async function launchBrowser(): Promise<Awaited<ReturnType<typeof chromium.launc
 }
 
 async function assertMountedSurfaces(host: string): Promise<void> {
-  const descriptor = await fetchJson<{
-    renderer?: string
-    title?: string
-    type?: string
+  const route = await fetchJson<{
+    microApp?: { name?: string, url?: string }
   }>(`${host}/api/local/apps/aiworker-hr/surfaces/hr-home`)
-  if (descriptor.title !== 'HR Mounted Workbench' || descriptor.renderer !== 'host-descriptor' || descriptor.type !== 'aiworker.surface.descriptor.v1')
-    throw new Error('HR mounted descriptor surface did not resolve through the Host API.')
+  if (route.microApp?.name !== 'aiworker-hr--hr-home' || !route.microApp.url)
+    throw new Error('HR mounted route micro-app surface did not resolve through the Host API.')
+
+  const routeMicroApp = await fetch(new URL(route.microApp.url, host))
+  const routeHtml = await routeMicroApp.text()
+  const requiredRouteContent = [
+    'data-slot="hr-profile-list-column"',
+    'data-slot="hr-reading-room-column"',
+    'data-slot="hr-profile-composer-column"',
+    '候选人',
+    '在职员工',
+    '离职归档',
+    '候选人档案草案',
+    'Ben People Profile',
+    'Confirmed Facts',
+    'Primary sources',
+  ]
+  if (!routeMicroApp.ok || requiredRouteContent.some(marker => !routeHtml.includes(marker)))
+    throw new Error(`HR mounted route micro-app content did not load: ${routeMicroApp.status}`)
 
   const widget = await fetchJson<{
-    frame?: { title?: string, url?: string }
+    microApp?: { name?: string, url?: string }
   }>(`${host}/api/local/apps/aiworker-hr/surfaces/hr-people-widget`)
-  if (widget.frame?.title !== 'People widget' || !widget.frame.url)
-    throw new Error('HR mounted frame surface did not resolve through the Host API.')
+  if (widget.microApp?.name !== 'aiworker-hr--hr-people-widget' || !widget.microApp.url)
+    throw new Error('HR mounted micro-app surface did not resolve through the Host API.')
 
-  const frame = await fetch(new URL(widget.frame.url, host))
-  const html = await frame.text()
-  if (!frame.ok || !html.includes('Mounted HR frame surface'))
-    throw new Error(`HR mounted frame content did not load: ${frame.status}`)
+  const microApp = await fetch(new URL(widget.microApp.url, host))
+  const html = await microApp.text()
+  if (!microApp.ok || !html.includes('Mounted HR micro-app surface'))
+    throw new Error(`HR mounted micro-app content did not load: ${microApp.status}`)
 }
 
 async function assertLocatorWithinViewport(page: Page, locator: Locator, name: string): Promise<void> {
@@ -142,14 +161,65 @@ async function assertLocatorWithinViewport(page: Page, locator: Locator, name: s
     throw new Error(`${name} is outside the viewport: ${JSON.stringify({ box, viewport })}`)
 }
 
+async function assertHrMountedReadingRoomLayout(page: Page, mode: 'desktop' | 'narrow'): Promise<void> {
+  const surface = page.locator('[data-slot="hr-route-surface"]').first()
+  await surface.waitFor({ timeout: 10_000 })
+  const state = await surface.evaluate((element) => {
+    const style = getComputedStyle(element)
+    const box = element.getBoundingClientRect()
+    return {
+      box: {
+        height: box.height,
+        width: box.width,
+      },
+      childCount: element.children.length,
+      gridTemplateColumns: style.gridTemplateColumns,
+      leftPanel: element.getAttribute('data-left-panel'),
+      rightPanel: element.getAttribute('data-right-panel'),
+    }
+  })
+  const trackCount = countGridTracks(state.gridTemplateColumns)
+  if (state.childCount !== 3 || state.leftPanel !== 'open' || state.rightPanel !== 'open' || state.box.width <= 0 || state.box.height <= 0)
+    throw new Error(`HR mounted reading room layout is not visible/open in ${mode} mode: ${JSON.stringify(state)}`)
+  if (mode === 'desktop' && trackCount < 3)
+    throw new Error(`HR mounted reading room desktop layout did not resolve to at least 3 grid tracks: ${JSON.stringify({ ...state, trackCount })}`)
+  if (mode === 'narrow' && trackCount !== 1)
+    throw new Error(`HR mounted reading room narrow layout did not resolve to 1 grid track: ${JSON.stringify({ ...state, trackCount })}`)
+}
+
+function countGridTracks(value: string): number {
+  let depth = 0
+  let count = 0
+  let inTrack = false
+  for (const char of value.trim()) {
+    if (char === '(')
+      depth += 1
+    else if (char === ')' && depth > 0)
+      depth -= 1
+
+    if (depth === 0 && /\s/.test(char)) {
+      if (inTrack) {
+        count += 1
+        inTrack = false
+      }
+      continue
+    }
+
+    inTrack = true
+  }
+  return inTrack ? count + 1 : count
+}
+
 async function assertEngineIconSurface(page: Page): Promise<void> {
-  const icon = page.locator('[data-engine-icon="codex"] .agent-icon-shape').first()
+  const icon = page.locator('[data-engine-icon="codex"]').first()
   await icon.waitFor({ timeout: 10_000 })
   const state = await icon.evaluate((element) => {
     const style = getComputedStyle(element)
     const box = element.getBoundingClientRect()
     return {
       background: style.backgroundColor,
+      dataSlot: element.getAttribute('data-slot'),
+      iconSrc: element.getAttribute('data-engine-icon-src'),
       height: box.height,
       maskImage: style.maskImage,
       webkitMaskImage: style.webkitMaskImage,
@@ -158,6 +228,8 @@ async function assertEngineIconSurface(page: Page): Promise<void> {
   })
   if (state.width <= 0 || state.height <= 0)
     throw new Error(`Engine icon has no visible box: ${JSON.stringify(state)}`)
+  if (state.dataSlot !== 'item-media' || !state.iconSrc?.includes('/engine-icons/openai.svg'))
+    throw new Error(`Engine icon does not use the shadcn ItemMedia asset surface: ${JSON.stringify(state)}`)
   if ((!state.maskImage || state.maskImage === 'none') && (!state.webkitMaskImage || state.webkitMaskImage === 'none'))
     throw new Error(`Engine icon mask is missing: ${JSON.stringify(state)}`)
 

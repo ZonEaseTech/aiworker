@@ -118,12 +118,12 @@ self-update.
 - `app enable <id>` changes lifecycle state.
 - `app disable|doctor|permissions <id>` remain advanced lifecycle/security
   commands.
-- `app create <id> --dir <path>` scaffolds a Soul App with `ui.workbench`
-  descriptors and `ui.workspaceContext` for Host-owned workspace process
-  context.
+- `app create <id> --dir <path>` scaffolds a Soul App with micro-app
+  route/widget surfaces, app-owned mounted API paths and `ui.workspaceContext`
+  for Host-owned workspace process context.
 - `app validate <path>` checks manifest, assets and import boundaries.
-- `app smoke <path>` runs standalone, Host-mounted, and declared workbench
-  action/search smoke checks.
+- `app smoke <path>` runs standalone and Host-mounted smoke checks, including
+  mounted-service health for apps that declare a local service command.
 
 Host catalog entries are app-projected. Use app ids such as `aiworker-hr`, not
 legacy built-in ids such as `hr`.
@@ -136,16 +136,16 @@ legacy built-in ids such as `hr`.
 - `session start --workspace <id> --skill <template-id> --input <text>` creates
   a session and first turn.
 - `turn send --session <id> --input <text>` continues an existing session.
-- `template list`, `files list|show`, `artifacts list|show|open`,
-  `profile promote`, `review list|show` and `lessons list|propose|accept|reject`
-  remain callable advanced commands for diagnostics, automation and focused
-  app-owned workflow checks. They are hidden from the default command index
-  because fine-grained agent-operable surfaces should normally go through the
-  local daemon API and manifest/protocol/action/search descriptors.
-- `profile promote --workspace <id> --artifact <id>` promotes a reviewed
-  artifact into the workspace `README.md`. By default the artifact must contain
-  a clean `aiworker-profile-readme` fenced draft; `--profile-markdown <path>`
-  can provide an explicit reviewed markdown file.
+- `template list` and `files list|show` remain compatibility inspection commands
+  for app-declared templates and workspace files. They are available through
+  `aiworker commands --all`, not the default operator surface.
+- Generic `artifacts *`, `profile promote`, `review *` and `lessons *` commands
+  have been removed from the CLI. New operator workflows should go through Soul
+  App mounted UI, app-owned actions or app-owned workspace files; destructive
+  local migrations may drop the retired Host rows.
+- HR profile updates, QA release decisions and similar domain confirmations
+  belong to the owning Soul App. Host CLI should locate worker/workspace/session
+  context and open the app surface instead of promoting generic Host records.
 
 ## Settings And Engines
 

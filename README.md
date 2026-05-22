@@ -1,19 +1,18 @@
 # AIWorker
 
-AIWorker 正在重构为面向 team/org 的 **local-first vertical Soul App host**。
+AIWorker 正在收敛为 **Local Shell + Engine Bridge for Soul Apps**。
 
-它不做另一个 developer engine、admin dashboard 或通用 agent runtime。当前架构以 Host /
-Soul App 双自治为中心：Host 提供本地 daemon、安装启用、鉴权安全、平台设置、能力 broker、
-统一 shell 与协议定位；Soul App 提供垂直领域产品逻辑、standalone 体验、Host mounted 体验、
-领域 UI/API，以及 artifact/profile/review/lesson 的领域语义。
+它不做另一个 developer engine、admin dashboard、治理内核、通用 broker 平台或通用 agent runtime。
+Host 只负责启动 Soul App、提供本地 Web/CLI/daemon 壳、定位 worker/workspace/session、挂载
+app-owned surface，并为 session 准备 cwd/context/engine 调用入口。业务对象、业务输出、
+确认动作和历史记录由 Soul App 自己拥有。
 
 ```text
-Host -> install/enable Soul App -> Soul worker -> workspace -> session
-  -> Soul App exposed views/actions -> business artifact/profile/review/lesson
+AIWorker -> Soul App -> workspace -> session -> app-owned work
 ```
 
 当前架构合同见 `docs/architecture.md`，其中 `Constraint Registry` 是 Host / Soul App /
-protocol / data / broker / documentation 的硬约束源头。旧北极星文档已经移除，避免开发入口
+protocol / data / engine / UI / documentation 的硬约束源头。旧北极星文档已经移除，避免开发入口
 被拆成多套叙事。
 
 ## 文档地图
@@ -28,12 +27,12 @@ protocol / data / broker / documentation 的硬约束源头。旧北极星文档
 
 | 我要修改 | 从这里开始 |
 | --- | --- |
-| Host daemon/API、registry、broker、auth/security、storage metadata | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
-| Host Web Shell、Settings、worker/workspace/session workbench | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md`，前端实现再用 `/pma-web` |
+| Host daemon/API、registry、local enablement、storage metadata | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
+| Host Web Shell、Settings、worker/workspace/session workbench | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md`，前端实现再用 `/pma-web`；shadcn/ui 相关改动再用 `.agents/skills/shadcn/SKILL.md` |
 | CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/cli.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
 | 官方 HR/QA Soul App、manifest、standalone、Host mounted、artifact/profile/review/lesson | `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
 | 新第三方 Soul App | `aiworker app create` + `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
-| Host/Soul App 边界、shared protocol、broker grant | 先读 `docs/architecture.md#constraint-registry`，判断 ownership 后进入 Host 或 Soul App skill |
+| Host/Soul App 边界、shared protocol、manifest-declared adapter/context | 先读 `docs/architecture.md#constraint-registry`，判断 ownership 后进入 Host 或 Soul App skill |
 
 ## 为什么改成这个形态
 
@@ -69,20 +68,21 @@ Host 不 import 垂直 app 内部源码；Soul App 不直接控制 Host engine�
 
 ## Host 的职责
 
-Host 是平台定位与能力壳，负责：
+Host 是本地运行壳和 engine bridge，只负责：
 
-- local daemon API 和 Web shell；
-- Soul App registry、install、enable、disable、route 和 mounted launch；
-- Host auth、安全层、session 安全和 grant enforcement；
-- appearance、language、default engine、local MCP、connector、BYOK、autosave 等横向设置；
-- storage、connector evidence、secret reference、log、search、audit 等 broker；
-- worker/workspace/session locator；
-- Host shell layout 和 optional header contract；
-- app protocol discovery、health、descriptor cache 和平台审计。
+- start：发现、安装、启用、禁用、路由和启动 Soul App；
+- shell：提供 local daemon API、Web shell、CLI 入口和运行 shell 所需的本地设置；
+- locate：维护 Soul worker、workspace、session、selected engine 和本地路径上下文；
+- mount：解析 manifest 声明的 routes、micro-app surfaces、action descriptors 和 app-owned
+  local adapter；
+- bridge：为 session 准备 cwd、context files、selected engine metadata 和 invocation boundary；
+- metadata：保存 installed/enabled app state、workers、workspaces、sessions、routing protocol
+  cache、mounted surface references 和 platform file references。
 
 Host 不负责解释 HR profile、QA release verdict、artifact 内容、review verdict 或 lesson/memory
-的领域意义。它只能消费 Soul App 通过协议和 grant 暴露的 view、action、status、descriptor、
-search、review summary、memory summary 或 audit event。
+的领域意义。它只能消费 Soul App 通过 manifest/protocol 暴露的 route、mounted UI、action
+descriptor、workspace context、session context 或 lightweight UI event；如果 app 没有暴露，
+Host 停止，不取、不猜、不补。
 
 ## Soul App 的职责
 
@@ -177,7 +177,7 @@ packages/
   storage-sqlite/    worker.db schema, migrations and repositories
   fs-layout/         AIWORKER_HOME, worker and workspace path helpers
   shared/            shared schemas, Host/Soul App protocol and utilities
-  component/         shared React UI primitives and patterns
+  ui/                shadcn-managed shared UI primitives and theme variables
   soul-app-sdk/      public SDK for Soul App authors
   soul-app-runtime/  standalone/mounted Soul App runtime harness
 ```
@@ -220,5 +220,5 @@ bun run --filter '@zonease/aiworker-cli' build:bundle
 5. Worker Web 首屏围绕 Soul App、worker、workspace、session 和 app-owned workbench；
 6. Settings 管理 Local CLI / BYOK、engine scan/test、connectors、MCP、language、
    appearance、autosave 和 installed Soul Apps；
-7. Host/Soul protocol 继续收敛 view、action、status、descriptor、broker 和 mount mode；
+7. Host/Soul protocol 继续收敛 route、action descriptor、workspace/session context、event 和 mount mode；
 8. Developer onboarding、验证、发布证据和第三方 app authoring 继续完善。

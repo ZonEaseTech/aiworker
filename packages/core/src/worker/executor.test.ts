@@ -7,7 +7,7 @@ import path from 'node:path'
 
 import { afterEach, describe, expect, it } from 'bun:test'
 
-import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
+import { createExternalEngineExecutor } from './executor'
 
 describe('createExternalEngineExecutor', () => {
   let roots: string[] = []
@@ -51,22 +51,16 @@ describe('createExternalEngineExecutor', () => {
     }
   }
 
-  it('parses Codex JSONL into structured session events and discovers real artifacts', async () => {
+  it('parses Codex JSONL into structured session events', async () => {
     const workspaceRoot = path.join(makeRoot(), 'workspace')
-    await mkdir(path.join(workspaceRoot, 'artifacts', 'session-1'), { recursive: true })
     const command = await makeScript(`
 cat >/dev/null
-cat > artifacts/session-1/turn-1-candidate-screen.md <<'EOF'
-# Candidate Screen
-
-Evidence attached.
-EOF
 printf '%s\\n' '{"type":"thread.started"}'
 printf '%s\\n' '{"type":"turn.started"}'
 printf '%s\\n' '{"type":"item.started","item":{"type":"command_execution","id":"tool-1","command":"printf hi"}}'
 printf '%s\\n' '{"type":"item.completed","item":{"type":"command_execution","id":"tool-1","command":"printf hi","aggregated_output":"hi","exit_code":0}}'
-printf '%s\\n' '{"type":"item.started","item":{"id":"file-1","type":"file_change","changes":[{"path":"artifacts/session-1/turn-1-candidate-screen.md","kind":"add"}],"status":"in_progress"}}'
-printf '%s\\n' '{"type":"item.completed","item":{"id":"file-1","type":"file_change","changes":[{"path":"artifacts/session-1/turn-1-candidate-screen.md","kind":"add"}],"status":"completed"}}'
+printf '%s\\n' '{"type":"item.started","item":{"id":"file-1","type":"file_change","changes":[{"path":"some-file.md","kind":"add"}],"status":"in_progress"}}'
+printf '%s\\n' '{"type":"item.completed","item":{"id":"file-1","type":"file_change","changes":[{"path":"some-file.md","kind":"add"}],"status":"completed"}}'
 printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}'
 printf '%s\\n' '{"type":"turn.completed","usage":{"input_tokens":3,"output_tokens":5}}'
 `)
@@ -75,8 +69,6 @@ printf '%s\\n' '{"type":"turn.completed","usage":{"input_tokens":3,"output_token
     const result = await createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events))
 
     expect(result.summary).toBe('Done.')
-    expect(result.artifacts).toHaveLength(1)
-    expect(result.artifacts?.[0]?.path).toBe('artifacts/session-1/turn-1-candidate-screen.md')
     expect(events.map(event => event.kind)).toContain('tool_use')
     expect(events.map(event => event.kind)).toContain('tool_result')
     expect(events.map(event => event.kind)).toContain('usage')
@@ -99,8 +91,6 @@ printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"
     const result = await createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events))
 
     expect(result.summary).toBe('Plain answer.')
-    expect(result.artifacts).toEqual([])
-    expect(result.review).toBeUndefined()
     expect(events.some(event => event.kind === 'text' && event.text === 'Plain answer.')).toBe(true)
   })
 
@@ -147,44 +137,5 @@ exit 9
 
     await expect(createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events))).rejects.toThrow('exited with code 9')
     expect(events.some(event => event.kind === 'log' && event.stream === 'stderr' && event.chunk.includes('fatal engine error'))).toBe(true)
-  })
-
-  it('carries artifacts written before a failed engine exit for recovery', async () => {
-    const workspaceRoot = path.join(makeRoot(), 'workspace')
-    await mkdir(path.join(workspaceRoot, 'artifacts', 'session-1'), { recursive: true })
-    const command = await makeScript(`
-cat >/dev/null
-cat > artifacts/session-1/turn-1-candidate-screen.md <<'EOF'
-# Candidate Screen
-
-Evidence attached before the engine failed.
-EOF
-printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"Draft written, then capacity failed."}}'
-printf 'selected model is at capacity\\n' >&2
-exit 9
-`)
-    const events: LocalExecutorEvent[] = []
-
-    try {
-      await createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events))
-      throw new Error('expected executor failure')
-    }
-    catch (error) {
-      expect(error).toBeInstanceOf(LocalExecutorFailure)
-      const partial = (error as LocalExecutorFailure).partialResult
-      expect(partial?.artifacts).toHaveLength(1)
-      expect(partial?.artifacts?.[0]).toMatchObject({
-        kind: 'candidate-screen',
-        metadata: {
-          engineExitCode: 9,
-          recoveredAfterFailure: true,
-        },
-        path: 'artifacts/session-1/turn-1-candidate-screen.md',
-        title: 'Candidate Screen',
-      })
-      expect(partial?.review?.verdict).toBe('needs_review')
-      expect(partial?.metadata).toMatchObject({ engineExitCode: 9, recoveredAfterFailure: true })
-    }
-    expect(events.some(event => event.kind === 'status' && event.label === 'artifact_recovered')).toBe(true)
   })
 })

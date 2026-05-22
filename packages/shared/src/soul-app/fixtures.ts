@@ -1,69 +1,15 @@
 import { soulAppManifestSchema } from './manifest'
 
-const HR_PERSON_PROFILE_SCHEMA_HASH = '35c14e3d4c0fe9fd95c87e9bc47a210e21f99bcb1b079aa99a95bb93e820c8ab'
-const HR_CANDIDATE_SCREEN_SCHEMA_HASH = 'e8bd207be63eab23073cd47e41092f1d753c38d609383206e94334dd984b309c'
-const QA_REGRESSION_MATRIX_SCHEMA_HASH = '6a4f3494764431e8785a82865215eabc4c4678dfb4e447eda4d4684f341892a0'
-const QA_RELEASE_GATE_SCHEMA_HASH = '0c953a3453ff235c419600073c70c1f155976f448c4567711b511d83668a09e4'
+const _HR_PERSON_PROFILE_SCHEMA_HASH = '35c14e3d4c0fe9fd95c87e9bc47a210e21f99bcb1b079aa99a95bb93e820c8ab'
+const _HR_CANDIDATE_SCREEN_SCHEMA_HASH = 'e8bd207be63eab23073cd47e41092f1d753c38d609383206e94334dd984b309c'
+const _QA_REGRESSION_MATRIX_SCHEMA_HASH = '6a4f3494764431e8785a82865215eabc4c4678dfb4e447eda4d4684f341892a0'
+const _QA_RELEASE_GATE_SCHEMA_HASH = '0c953a3453ff235c419600073c70c1f155976f448c4567711b511d83668a09e4'
 
 export const hrSoulAppManifest = soulAppManifestSchema.parse({
   api: {
     entry: './host-adapter/api.ts',
     routePrefix: '/api/local/apps/aiworker-hr',
   },
-  artifactTypes: [
-    {
-      description: 'Source-backed HR lifecycle profile.',
-      id: 'person-profile',
-      name: 'Person Profile',
-      previewRef: './product/web/artifact-previews/person-profile-preview.tsx',
-      reviewPolicyRef: './product/reviews/person-profile.md',
-      schemaRef: './product/artifacts/schemas/person-profile.schema.json',
-      schemaSha256: HR_PERSON_PROFILE_SCHEMA_HASH,
-      version: '0.1.0',
-    },
-    {
-      description: 'Role-related candidate screen with missing evidence and risks.',
-      id: 'candidate-screen',
-      name: 'Candidate Screen',
-      previewRef: './product/web/artifact-previews/candidate-screen-preview.tsx',
-      reviewPolicyRef: './product/reviews/candidate-screen.md',
-      schemaRef: './product/artifacts/schemas/candidate-screen.schema.json',
-      schemaSha256: HR_CANDIDATE_SCREEN_SCHEMA_HASH,
-      version: '0.1.0',
-    },
-    {
-      description: 'Source-backed HR evidence coverage matrix with gaps and conflicts.',
-      id: 'evidence-matrix',
-      name: 'Evidence Matrix',
-      reviewPolicyRef: './product/reviews/evidence-matrix.md',
-      schemaRef: './product/artifacts/schemas/evidence-matrix.schema.json',
-      version: '0.1.0',
-    },
-    {
-      description: 'Structured interviewer brief with evidence-backed questions.',
-      id: 'interview-brief',
-      name: 'Interview Brief',
-      reviewPolicyRef: './product/reviews/interview-brief.md',
-      schemaRef: './product/artifacts/schemas/interview-brief.schema.json',
-      version: '0.1.0',
-    },
-    {
-      description: 'Hiring risk review with uncertainty and decision guardrails.',
-      id: 'hiring-risk',
-      name: 'Hiring Risk Review',
-      reviewPolicyRef: './product/reviews/hiring-risk.md',
-      schemaRef: './product/artifacts/schemas/hiring-risk.schema.json',
-      version: '0.1.0',
-    },
-    {
-      description: 'Reviewed proposal for promoting an accepted profile README revision.',
-      id: 'profile-update-proposal',
-      name: 'Profile Update Proposal',
-      reviewPolicyRef: './product/reviews/profile-update-proposal.md',
-      schemaRef: './product/artifacts/schemas/profile-update-proposal.schema.json',
-      version: '0.1.0',
-    },
-  ],
   capabilities: [
     {
       artifactTypes: ['person-profile'],
@@ -126,14 +72,14 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
       workspaceTypes: ['people-profile', 'role-search', 'candidate'],
     },
     {
-      artifactTypes: ['profile-update-proposal'],
-      description: 'Propose a reviewed profile README revision while keeping promotion product-owned.',
-      id: 'profile-update-proposal',
-      name: 'Profile Update Proposal',
-      outputKind: 'profile-update-proposal',
+      artifactTypes: ['profile-update-draft'],
+      description: 'Draft a profile README update while keeping acceptance product-owned.',
+      id: 'profile-update-draft',
+      name: 'Profile Update Draft',
+      outputKind: 'profile-update-draft',
       packRefs: [],
-      promptRef: './product/workflows/profile-update-proposal/prompt.md',
-      reviewRubricRef: './product/workflows/profile-update-proposal/review.md',
+      promptRef: './product/workflows/profile-update-draft/prompt.md',
+      reviewRubricRef: './product/workflows/profile-update-draft/review.md',
       version: '0.1.0',
       workspaceTypes: ['people-profile', 'candidate'],
     },
@@ -171,10 +117,8 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     },
   },
   exports: {
-    artifact: './host-adapter/protocol/artifact.ts',
     connector: './host-adapter/protocol/connectors.ts',
     lifecycle: './host-adapter/protocol/lifecycle.ts',
-    review: './host-adapter/protocol/review.ts',
     runtime: './host-adapter/protocol/runtime.ts',
     ui: './host-adapter/protocol/ui.ts',
   },
@@ -184,10 +128,6 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     timeoutMs: 5000,
   },
   id: 'aiworker-hr',
-  memory: {
-    admissionPolicy: 'manual-review',
-    namespace: 'aiworker-hr',
-  },
   modes: {
     hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
     standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
@@ -230,28 +170,10 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
       target: 'ats',
     },
     {
-      action: 'write',
-      kind: 'artifact',
-      reason: 'Create reviewable HR artifacts.',
-      target: 'person-profile',
-    },
-    {
-      action: 'create',
-      kind: 'review',
-      reason: 'Create HR review rubrics and findings.',
-      target: 'hr-review',
-    },
-    {
-      action: 'propose',
-      kind: 'memory',
-      reason: 'Propose reviewed HR lessons into the app namespace.',
-      target: 'aiworker-hr',
-    },
-    {
       action: 'mount',
       kind: 'ui',
-      reason: 'Mount HR workbench contributions.',
-      target: 'hr-workbench',
+      reason: 'Mount HR micro-app surfaces.',
+      target: 'hr-micro-app',
     },
     {
       action: 'serve',
@@ -290,20 +212,6 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
         id: 'hr-profile-panel',
         label: 'Profile panel',
         slot: 'panel',
-        surface: {
-          entry: '/surfaces/panels/hr-profile-panel',
-          renderer: 'host-descriptor',
-          requiredPermissions: ['storage:read:aiworker-hr'],
-          scope: 'workspace',
-        },
-      },
-    ],
-    reviewPanels: [
-      {
-        entry: './product/web/panels/review-panel.tsx',
-        id: 'hr-review-panel',
-        label: 'HR review panel',
-        slot: 'review-panel',
       },
     ],
     routes: [
@@ -313,51 +221,13 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
         label: 'HR',
         path: '/hr',
         surface: {
-          entry: '/surfaces/routes/hr-home',
-          renderer: 'host-descriptor',
-          requiredPermissions: ['ui:mount:hr-workbench'],
+          entry: '/micro-app/routes/hr-home',
+          renderer: 'micro-app',
+          requiredPermissions: ['ui:mount:hr-micro-app'],
           scope: 'app',
         },
       },
     ],
-    workbench: {
-      actions: [
-        {
-          id: 'refresh-people',
-          label: 'Refresh',
-          protocolAction: 'people.refresh',
-          requiredPermissions: ['storage:read:aiworker-hr'],
-          role: 'refresh',
-        },
-        {
-          id: 'toggle-evidence-drawer',
-          label: 'Evidence',
-          protocolAction: 'drawers.evidence.toggle',
-          requiredPermissions: ['connector:read:ats'],
-          role: 'panel-toggle',
-        },
-      ],
-      primaryAction: {
-        id: 'create-people-profile',
-        label: 'New people profile',
-        protocolAction: 'peopleProfiles.create',
-        requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
-        role: 'primary',
-      },
-      search: {
-        id: 'people-profile-search',
-        label: 'Search people profiles',
-        placeholder: 'Search people profiles',
-        protocolProvider: 'peopleProfiles.search',
-        requiredPermissions: ['search:read:aiworker-hr'],
-      },
-      configuration: {
-        id: 'configure-hr',
-        label: 'Configure HR',
-        protocolAction: 'configuration.open',
-        requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
-      },
-    },
     workspaceContext: {
       terminal: {
         cwd: {
@@ -374,8 +244,8 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
         label: 'People widget',
         slot: 'workspace-widget',
         surface: {
-          entry: '/frames/widgets/hr-people-widget',
-          renderer: 'sandboxed-frame',
+          entry: '/micro-app/widgets/hr-people-widget',
+          renderer: 'micro-app',
           scope: 'workspace',
         },
         target: 'people-profile',
@@ -385,22 +255,22 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
   version: '0.1.0',
   workspaceTypes: [
     {
-      artifactTypes: ['person-profile', 'evidence-matrix', 'hiring-risk', 'profile-update-proposal'],
-      defaultCapabilityIds: ['person-profile', 'profile-update-proposal'],
+      artifactTypes: ['person-profile', 'evidence-matrix', 'hiring-risk', 'profile-update-draft'],
+      defaultCapabilityIds: ['person-profile', 'profile-update-draft'],
       description: 'Profile-centered workspace for one person lifecycle.',
       id: 'people-profile',
       name: 'People Profile',
     },
     {
-      artifactTypes: ['candidate-screen', 'evidence-matrix', 'interview-brief', 'hiring-risk', 'profile-update-proposal'],
-      defaultCapabilityIds: ['candidate-screen', 'profile-update-proposal'],
+      artifactTypes: ['candidate-screen', 'evidence-matrix', 'interview-brief', 'hiring-risk', 'profile-update-draft'],
+      defaultCapabilityIds: ['candidate-screen', 'profile-update-draft'],
       description: 'Recruiting role workspace with candidate evidence and review.',
       id: 'role-search',
       name: 'Role Search',
     },
     {
-      artifactTypes: ['candidate-screen', 'evidence-matrix', 'interview-brief', 'hiring-risk', 'profile-update-proposal'],
-      defaultCapabilityIds: ['candidate-screen', 'profile-update-proposal'],
+      artifactTypes: ['candidate-screen', 'evidence-matrix', 'interview-brief', 'hiring-risk', 'profile-update-draft'],
+      defaultCapabilityIds: ['candidate-screen', 'profile-update-draft'],
       description: 'Focused candidate packet workspace.',
       id: 'candidate',
       name: 'Candidate',
@@ -413,28 +283,6 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     entry: './host-adapter/api.ts',
     routePrefix: '/api/local/apps/aiworker-qa',
   },
-  artifactTypes: [
-    {
-      description: 'Coverage matrix mapped to release risk.',
-      id: 'regression-matrix',
-      name: 'Regression Matrix',
-      previewRef: './product/web/artifact-previews/regression-matrix-preview.tsx',
-      reviewPolicyRef: './product/reviews/regression-matrix.md',
-      schemaRef: './product/artifacts/schemas/regression-matrix.schema.json',
-      schemaSha256: QA_REGRESSION_MATRIX_SCHEMA_HASH,
-      version: '0.1.0',
-    },
-    {
-      description: 'Go/no-go release readiness artifact.',
-      id: 'release-gate',
-      name: 'Release Gate',
-      previewRef: './product/web/artifact-previews/release-gate-preview.tsx',
-      reviewPolicyRef: './product/reviews/release-gate.md',
-      schemaRef: './product/artifacts/schemas/release-gate.schema.json',
-      schemaSha256: QA_RELEASE_GATE_SCHEMA_HASH,
-      version: '0.1.0',
-    },
-  ],
   capabilities: [
     {
       artifactTypes: ['regression-matrix'],
@@ -494,10 +342,8 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     },
   },
   exports: {
-    artifact: './host-adapter/protocol/artifact.ts',
     connector: './host-adapter/protocol/connectors.ts',
     lifecycle: './host-adapter/protocol/lifecycle.ts',
-    review: './host-adapter/protocol/review.ts',
     runtime: './host-adapter/protocol/runtime.ts',
     ui: './host-adapter/protocol/ui.ts',
   },
@@ -507,10 +353,6 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     timeoutMs: 5000,
   },
   id: 'aiworker-qa',
-  memory: {
-    admissionPolicy: 'manual-review',
-    namespace: 'aiworker-qa',
-  },
   modes: {
     hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
     standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
@@ -553,28 +395,10 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
       target: 'ci',
     },
     {
-      action: 'write',
-      kind: 'artifact',
-      reason: 'Create reviewable QA release artifacts.',
-      target: 'release-gate',
-    },
-    {
-      action: 'create',
-      kind: 'review',
-      reason: 'Create QA review rubrics and findings.',
-      target: 'qa-review',
-    },
-    {
-      action: 'propose',
-      kind: 'memory',
-      reason: 'Propose reviewed QA lessons into the app namespace.',
-      target: 'aiworker-qa',
-    },
-    {
       action: 'mount',
       kind: 'ui',
-      reason: 'Mount QA workbench contributions.',
-      target: 'qa-workbench',
+      reason: 'Mount QA micro-app surfaces.',
+      target: 'qa-micro-app',
     },
     {
       action: 'serve',
@@ -613,20 +437,6 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
         id: 'qa-release-panel',
         label: 'Release panel',
         slot: 'panel',
-        surface: {
-          entry: '/surfaces/panels/qa-release-panel',
-          renderer: 'host-descriptor',
-          requiredPermissions: ['storage:read:aiworker-qa'],
-          scope: 'workspace',
-        },
-      },
-    ],
-    reviewPanels: [
-      {
-        entry: './product/web/panels/review-panel.tsx',
-        id: 'qa-review-panel',
-        label: 'QA review panel',
-        slot: 'review-panel',
       },
     ],
     routes: [
@@ -636,44 +446,13 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
         label: 'QA',
         path: '/qa',
         surface: {
-          entry: '/surfaces/routes/qa-home',
-          renderer: 'host-descriptor',
-          requiredPermissions: ['ui:mount:qa-workbench'],
+          entry: '/micro-app/routes/qa-home',
+          renderer: 'micro-app',
+          requiredPermissions: ['ui:mount:qa-micro-app'],
           scope: 'app',
         },
       },
     ],
-    workbench: {
-      actions: [
-        {
-          id: 'refresh-release',
-          label: 'Refresh',
-          protocolAction: 'release.refresh',
-          requiredPermissions: ['storage:read:aiworker-qa'],
-          role: 'refresh',
-        },
-      ],
-      primaryAction: {
-        id: 'create-release-gate',
-        label: 'New release gate',
-        protocolAction: 'releaseGates.create',
-        requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
-        role: 'primary',
-      },
-      search: {
-        id: 'release-search',
-        label: 'Search releases',
-        placeholder: 'Search releases',
-        protocolProvider: 'releases.search',
-        requiredPermissions: ['search:read:aiworker-qa'],
-      },
-      configuration: {
-        id: 'configure-qa',
-        label: 'Configure QA',
-        protocolAction: 'configuration.open',
-        requiredPermissions: ['api:serve:/api/local/apps/aiworker-qa'],
-      },
-    },
     workspaceContext: {
       terminal: {
         cwd: {
@@ -690,8 +469,8 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
         label: 'Release widget',
         slot: 'workspace-widget',
         surface: {
-          entry: '/frames/widgets/qa-release-widget',
-          renderer: 'sandboxed-frame',
+          entry: '/micro-app/widgets/qa-release-widget',
+          renderer: 'micro-app',
           scope: 'workspace',
         },
         target: 'release',

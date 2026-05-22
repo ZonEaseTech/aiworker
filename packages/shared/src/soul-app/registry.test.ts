@@ -40,5 +40,7 @@ describe('Soul App registry projection', () => {
         id: 'hr-workspace-terminal',
       },
     })
+    expect(app.microAppSurfaceIds).toEqual(['hr-home', 'hr-people-widget'])
+    expect(app).not.toHaveProperty('frameSurfaceIds')
   })
 })

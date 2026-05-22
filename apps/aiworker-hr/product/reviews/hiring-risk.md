@@ -1,4 +1,4 @@
-# Hiring Risk Review Policy
+# Hiring Risk Acceptance Policy
 
 - Separate observed evidence from assumptions and uncertainty.
 - Keep decisions and employment commitments human-owned.

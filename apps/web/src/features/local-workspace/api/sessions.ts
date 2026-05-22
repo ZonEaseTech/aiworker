@@ -1,8 +1,5 @@
 import type {
-  LocalArtifact,
   LocalFile,
-  LocalLesson,
-  LocalReview,
   LocalSession,
   LocalSessionEvent,
   LocalTurn,
@@ -27,9 +24,6 @@ export interface SessionTurnResult {
   session: LocalSession
   turn: LocalTurn
   files: LocalFile[]
-  artifacts: LocalArtifact[]
-  review: LocalReview | null
-  lessons: LocalLesson[]
   events: LocalSessionEvent[]
 }
 

@@ -48,19 +48,19 @@
       "version": "0.1.0"
     },
     {
-      "description": "Hiring risk review with uncertainty and decision guardrails.",
+      "description": "Hiring risk check with uncertainty and decision guardrails.",
       "id": "hiring-risk",
-      "name": "Hiring Risk Review",
+      "name": "Hiring Risk Check",
       "reviewPolicyRef": "./product/reviews/hiring-risk.md",
       "schemaRef": "./product/artifacts/schemas/hiring-risk.schema.json",
       "version": "0.1.0"
     },
     {
-      "description": "Reviewed proposal for promoting an accepted profile README revision.",
-      "id": "profile-update-proposal",
-      "name": "Profile Update Proposal",
-      "reviewPolicyRef": "./product/reviews/profile-update-proposal.md",
-      "schemaRef": "./product/artifacts/schemas/profile-update-proposal.schema.json",
+      "description": "README-ready draft for an accepted profile update.",
+      "id": "profile-update-draft",
+      "name": "Profile Update Draft",
+      "reviewPolicyRef": "./product/reviews/profile-update-draft.md",
+      "schemaRef": "./product/artifacts/schemas/profile-update-draft.schema.json",
       "version": "0.1.0"
     }
   ],
@@ -153,15 +153,15 @@
     },
     {
       "artifactTypes": [
-        "profile-update-proposal"
+        "profile-update-draft"
       ],
-      "description": "Propose a reviewed profile README revision while keeping promotion product-owned.",
-      "id": "profile-update-proposal",
-      "name": "Profile Update Proposal",
-      "outputKind": "profile-update-proposal",
+      "description": "Draft a profile README update while keeping acceptance product-owned.",
+      "id": "profile-update-draft",
+      "name": "Profile Update Draft",
+      "outputKind": "profile-update-draft",
       "packRefs": [],
-      "promptRef": "./product/workflows/profile-update-proposal/prompt.md",
-      "reviewRubricRef": "./product/workflows/profile-update-proposal/review.md",
+      "promptRef": "./product/workflows/profile-update-draft/prompt.md",
+      "reviewRubricRef": "./product/workflows/profile-update-draft/review.md",
       "version": "0.1.0",
       "workspaceTypes": [
         "people-profile",
@@ -288,28 +288,10 @@
       "target": "ats"
     },
     {
-      "action": "write",
-      "kind": "artifact",
-      "reason": "Create reviewable HR artifacts.",
-      "target": "person-profile"
-    },
-    {
-      "action": "create",
-      "kind": "review",
-      "reason": "Create HR review rubrics and findings.",
-      "target": "hr-review"
-    },
-    {
-      "action": "propose",
-      "kind": "memory",
-      "reason": "Propose reviewed HR lessons into the app namespace.",
-      "target": "aiworker-hr"
-    },
-    {
       "action": "mount",
       "kind": "ui",
-      "reason": "Mount HR workbench contributions.",
-      "target": "hr-workbench"
+      "reason": "Mount HR micro-app surfaces.",
+      "target": "hr-micro-app"
     },
     {
       "action": "serve",
@@ -350,23 +332,7 @@
         "entry": "./product/web/panels/profile-panel.tsx",
         "id": "hr-profile-panel",
         "label": "Profile panel",
-        "slot": "panel",
-        "surface": {
-          "entry": "/surfaces/panels/hr-profile-panel",
-          "renderer": "host-descriptor",
-          "requiredPermissions": [
-            "storage:read:aiworker-hr"
-          ],
-          "scope": "workspace"
-        }
-      }
-    ],
-    "reviewPanels": [
-      {
-        "entry": "./product/web/panels/review-panel.tsx",
-        "id": "hr-review-panel",
-        "label": "HR review panel",
-        "slot": "review-panel"
+        "slot": "panel"
       }
     ],
     "routes": [
@@ -376,53 +342,15 @@
         "label": "HR",
         "path": "/hr",
         "surface": {
-          "entry": "/surfaces/routes/hr-home",
-          "renderer": "host-descriptor",
+          "entry": "/micro-app/routes/hr-home",
+          "renderer": "micro-app",
           "requiredPermissions": [
-            "ui:mount:hr-workbench"
+            "ui:mount:hr-micro-app"
           ],
           "scope": "app"
         }
       }
     ],
-    "workbench": {
-      "actions": [
-        {
-          "id": "refresh-people",
-          "label": "Refresh",
-          "protocolAction": "people.refresh",
-          "requiredPermissions": ["storage:read:aiworker-hr"],
-          "role": "refresh"
-        },
-        {
-          "id": "toggle-evidence-drawer",
-          "label": "Evidence",
-          "protocolAction": "drawers.evidence.toggle",
-          "requiredPermissions": ["connector:read:ats"],
-          "role": "panel-toggle"
-        }
-      ],
-      "primaryAction": {
-        "id": "create-people-profile",
-        "label": "New people profile",
-        "protocolAction": "peopleProfiles.create",
-        "requiredPermissions": ["storage:write:aiworker-hr", "search:write:aiworker-hr"],
-        "role": "primary"
-      },
-      "search": {
-        "id": "people-profile-search",
-        "label": "Search people profiles",
-        "placeholder": "Search people profiles",
-        "protocolProvider": "peopleProfiles.search",
-        "requiredPermissions": ["search:read:aiworker-hr"]
-      },
-      "configuration": {
-        "id": "configure-hr",
-        "label": "Configure HR",
-        "protocolAction": "configuration.open",
-        "requiredPermissions": ["api:serve:/api/local/apps/aiworker-hr"]
-      }
-    },
     "workspaceContext": {
       "terminal": {
         "cwd": {
@@ -439,8 +367,8 @@
         "label": "People widget",
         "slot": "workspace-widget",
         "surface": {
-          "entry": "/frames/widgets/hr-people-widget",
-          "renderer": "sandboxed-frame",
+          "entry": "/micro-app/widgets/hr-people-widget",
+          "renderer": "micro-app",
           "scope": "workspace"
         },
         "target": "people-profile"
@@ -454,11 +382,11 @@
         "person-profile",
         "evidence-matrix",
         "hiring-risk",
-        "profile-update-proposal"
+        "profile-update-draft"
       ],
       "defaultCapabilityIds": [
         "person-profile",
-        "profile-update-proposal"
+        "profile-update-draft"
       ],
       "description": "Profile-centered workspace for one person lifecycle.",
       "id": "people-profile",
@@ -470,11 +398,11 @@
         "evidence-matrix",
         "interview-brief",
         "hiring-risk",
-        "profile-update-proposal"
+        "profile-update-draft"
       ],
       "defaultCapabilityIds": [
         "candidate-screen",
-        "profile-update-proposal"
+        "profile-update-draft"
       ],
       "description": "Recruiting role workspace with candidate evidence and review.",
       "id": "role-search",
@@ -486,11 +414,11 @@
         "evidence-matrix",
         "interview-brief",
         "hiring-risk",
-        "profile-update-proposal"
+        "profile-update-draft"
       ],
       "defaultCapabilityIds": [
         "candidate-screen",
-        "profile-update-proposal"
+        "profile-update-draft"
       ],
       "description": "Focused candidate packet workspace.",
       "id": "candidate",

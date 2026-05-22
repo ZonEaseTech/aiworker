@@ -1,5 +1,5 @@
-# Person Profile Review Policy
+# Person Profile Acceptance Policy
 
 - Verify source evidence is explicit.
-- Mark missing facts before promotion.
-- Keep human review notes separate from generated summary.
+- Mark missing facts before acceptance.
+- Keep human decision notes separate from generated summary.

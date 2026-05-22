@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { hrSoulAppManifest, namespaceSoulAppCapabilityId, qaSoulAppManifest } from '@zonease/aiworker-shared'
-import { closeWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
+import { closeWorkerDb, initWorkerDb, runWorkerMigrations, upsertSoulApp } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { bootstrapOfficialSoulApps } from './official'
@@ -19,7 +19,6 @@ import {
   listHostSoulCatalog,
   runSoulAppHealthcheck,
 } from './registry'
-import { reviewSoulAppSecurity } from './security-review'
 
 describe('Host Soul App registry', () => {
   let dir: string
@@ -76,7 +75,7 @@ describe('Host Soul App registry', () => {
       namespaceSoulAppCapabilityId('aiworker-hr', 'evidence-matrix'),
       namespaceSoulAppCapabilityId('aiworker-hr', 'interview-brief'),
       namespaceSoulAppCapabilityId('aiworker-hr', 'hiring-risk'),
-      namespaceSoulAppCapabilityId('aiworker-hr', 'profile-update-proposal'),
+      namespaceSoulAppCapabilityId('aiworker-hr', 'profile-update-draft'),
     ]))
     expect(listHostSoulCatalog().souls.some(soul => soul.id === 'hr')).toBe(false)
 
@@ -116,7 +115,7 @@ describe('Host Soul App registry', () => {
     expect(findHostSoul('hr')).toBeUndefined()
     expect(findHostSoul('aiworker-hr')?.defaultTemplates).toEqual([
       namespaceSoulAppCapabilityId('aiworker-hr', 'person-profile'),
-      namespaceSoulAppCapabilityId('aiworker-hr', 'profile-update-proposal'),
+      namespaceSoulAppCapabilityId('aiworker-hr', 'profile-update-draft'),
       namespaceSoulAppCapabilityId('aiworker-hr', 'candidate-screen'),
     ])
     expect(findHostSoul('aiworker-qa')?.defaultTemplates).toEqual([
@@ -148,6 +147,49 @@ describe('Host Soul App registry', () => {
     expect(findHostSoul('aiworker-hr')?.status).toBe('coming_soon')
     expect(listHostCapabilityTemplatesForSoul('aiworker-hr')).toEqual([])
     expect(findHostSoul('aiworker-qa')?.status).toBe('available')
+  })
+
+  it('refreshes stale official app rows before parsing legacy mounted surface renderers', async () => {
+    const legacyManifest = structuredClone(hrSoulAppManifest) as typeof hrSoulAppManifest & Record<string, unknown>
+    legacyManifest.ui.routes![0]!.surface = {
+      entry: '/frames/routes/hr-home',
+      renderer: 'sandboxed-frame' as never,
+      requiredPermissions: ['ui:mount:hr-workbench'],
+      scope: 'app',
+    }
+    legacyManifest.ui.workspaceWidgets![0]!.surface = {
+      entry: '/frames/widgets/hr-people-widget',
+      renderer: 'sandboxed-frame' as never,
+      scope: 'workspace',
+    }
+    upsertSoulApp({
+      id: legacyManifest.id,
+      name: legacyManifest.name,
+      version: legacyManifest.version,
+      protocol: legacyManifest.protocol,
+      soulId: legacyManifest.soul.id,
+      status: 'enabled',
+      sourceKind: 'manifest-path',
+      sourceRef: 'legacy-installed-row',
+      manifestDigest: 'legacy-sandboxed-frame',
+      manifestJson: legacyManifest as never,
+      validationIssuesJson: [],
+      healthStatus: 'pass',
+      healthMessage: 'Legacy row installed before micro-app migration.',
+      at: '2026-05-20T10:40:00.000Z',
+    })
+
+    const results = await bootstrapOfficialSoulApps({
+      availableConnectorIds: ['ats', 'calendar', 'ci', 'issue-tracker'],
+      hostVersion: '0.19.0',
+      now: () => '2026-05-20T10:41:00.000Z',
+    })
+
+    expect(results.find(result => result.appId === 'aiworker-hr')?.action).toBe('refreshed')
+    expect(results.find(result => result.appId === 'aiworker-hr')?.app?.manifest.ui.routes?.[0]?.surface?.renderer).toBe('micro-app')
+    expect(results.find(result => result.appId === 'aiworker-hr')?.app?.mountedContribution.microAppSurfaceIds).toContain('hr-home')
+    expect(results.find(result => result.appId === 'aiworker-hr')?.app).not.toHaveProperty('frameSurfaceIds')
+    expect(findHostSoul('aiworker-hr')?.status).toBe('available')
   })
 
   it('bootstraps official apps from an explicit packaged app root', async () => {
@@ -189,56 +231,5 @@ describe('Host Soul App registry', () => {
     expect(app.healthStatus).toBe('fail')
     expect(app.validationIssues.map(issue => issue.code)).toContain('missing_required_connector')
     expect(listHostedSoulApps()).toHaveLength(1)
-  })
-
-  it('projects a security review from manifest permissions, connectors, and descriptors before enablement', async () => {
-    const manifestPath = path.join(dir, 'soul-app.manifest.json')
-    writeFileSync(manifestPath, JSON.stringify({
-      ...hrSoulAppManifest,
-      ui: {
-        ...hrSoulAppManifest.ui,
-        workbench: {
-          primaryAction: {
-            id: 'create-people-profile',
-            label: 'New people profile',
-            protocolAction: 'peopleProfiles.create',
-            requiredPermissions: ['storage:write:aiworker-hr'],
-            role: 'primary',
-          },
-        },
-      },
-    }))
-
-    const installed = await installSoulAppFromPath(manifestPath, {
-      availableConnectorIds: ['ats', 'calendar'],
-      hostVersion: '0.12.1',
-      now: () => '2026-05-14T02:06:00.000Z',
-    })
-
-    const review = reviewSoulAppSecurity(installed, {
-      availableConnectorIds: ['ats', 'calendar'],
-      enabledConnectorIds: [],
-      hostVersion: '0.12.1',
-    })
-
-    expect(review.appId).toBe('aiworker-hr')
-    expect(review.status).toBe('installed')
-    expect(review.manifestPermissions.length).toBeGreaterThan(0)
-    expect(review.connectors.required).toContainEqual(expect.objectContaining({
-      available: true,
-      enabled: false,
-      id: 'ats',
-      required: true,
-    }))
-    expect(review.descriptorPermissions).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'create-people-profile',
-        requiredPermissions: ['storage:write:aiworker-hr'],
-        surface: 'workbench.primaryAction',
-      }),
-    ]))
-    expect(review.summary.disabledRequiredConnectorIds).toEqual(['ats'])
-    expect(review.summary.descriptorPermissionCount).toBeGreaterThan(0)
-    expect(review.summary.warnings).toContain('Required connectors are not enabled: ats')
   })
 })

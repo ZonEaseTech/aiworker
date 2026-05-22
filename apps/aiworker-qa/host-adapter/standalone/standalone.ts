@@ -1,16 +1,24 @@
 import process from 'node:process'
 
+import { renderToStaticMarkup } from 'react-dom/server'
+
+import { QaReleaseWidgetProof } from '../../product/web/widgets/release-widget'
 import { qaSoulAppManifest } from '../index'
+import { renderSoulAppStyleLink, serveSoulAppStyle } from '../web-style'
 
 export function renderStandaloneHtml(): string {
+  const appMarkup = renderToStaticMarkup(QaReleaseWidgetProof({
+    badgeLabel: 'Standalone',
+    description: qaSoulAppManifest.soul.domain,
+    detail: qaSoulAppManifest.description,
+  }))
   return [
     '<!doctype html>',
     '<html lang="en">',
-    '<head><meta charset="utf-8"><title>AIWorker QA</title></head>',
+    `<head><meta charset="utf-8"><title>AIWorker QA</title>${renderSoulAppStyleLink()}</head>`,
     `<body data-soul-app-id="${qaSoulAppManifest.id}">`,
     '<main>',
-    `<h1>${qaSoulAppManifest.name}</h1>`,
-    `<p>${qaSoulAppManifest.description}</p>`,
+    appMarkup,
     '</main>',
     '</body>',
     '</html>',
@@ -19,8 +27,11 @@ export function renderStandaloneHtml(): string {
 
 export function serveStandalone(port = Number(Bun.env.PORT ?? 0)) {
   return Bun.serve({
-    fetch(request) {
+    async fetch(request) {
       const url = new URL(request.url)
+      const styleResponse = await serveSoulAppStyle(url)
+      if (styleResponse)
+        return styleResponse
       if (url.pathname === '/health') {
         return Response.json({
           appId: qaSoulAppManifest.id,

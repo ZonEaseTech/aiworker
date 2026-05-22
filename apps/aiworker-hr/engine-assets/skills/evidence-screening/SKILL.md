@@ -13,15 +13,15 @@ Use this skill to evaluate resumes, ATS packets, interview notes, employee
 records, or lifecycle touchpoints before they influence a People Profile.
 
 This skill produces an evidence matrix artifact. HR product logic may later
-reference that artifact from a profile update proposal, but the matrix itself is
-supporting material until reviewed.
+reference that artifact from a profile update draft, but the matrix itself is
+supporting material until HR accepts it.
 
 ## Screening Standard
 
 - Tie every positive or negative signal to source evidence.
 - Mark weak, stale, missing, or conflicting evidence explicitly.
 - Separate role-related criteria from unsupported personal judgments.
-- Keep raw sensitive evidence out of durable profile history unless reviewed.
+- Keep raw sensitive evidence out of durable profile history unless accepted by HR.
 - Prefer descriptor references over copying private evidence bodies.
 
 ## Output Shape

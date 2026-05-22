@@ -1,9 +1,9 @@
-import type { LocalReviewVerdict, LocalSessionStatus, LocalTurnStatus } from '@zonease/aiworker-shared'
+import type { LocalSessionStatus, LocalTurnStatus } from '@zonease/aiworker-shared'
 
 export const supportedLocales = ['en', 'zh-CN', 'ja', 'de'] as const
 export type SupportedLocale = typeof supportedLocales[number]
 
-export type StatusKey = LocalSessionStatus | LocalTurnStatus | LocalReviewVerdict | 'draft'
+export type StatusKey = LocalSessionStatus | LocalTurnStatus | 'draft'
 
 export interface StaticMessages {
   accessibility: {
@@ -39,11 +39,8 @@ export interface StaticMessages {
     empty: string
     label: string
     loading: string
-    memoryCandidates: (count: number) => string
     noSession: string
     pending: string
-    review: string
-    reviewCount: (count: number) => string
   }
   common: {
     available: string
@@ -91,8 +88,6 @@ export interface StaticMessages {
     searchPlaceholder: string
   }
   workspace: {
-    accept: string
-    accepted: string
     artifactCount: (count: number) => string
     byokNeedsKey: string
     byokReady: (provider: string, model: string) => string
@@ -128,25 +123,18 @@ export interface StaticMessages {
     followUpInput: string
     followUpPlaceholder: string
     hideDeveloperDetails: string
-    memoryCandidates: string
     mountedContributionsPaused: string
     mountedSlotCount: (count: number) => string
     noEvents: string
-    noMemoryCandidates: string
     noOtherWorkspaces: string
     noSelectionDetail: string
     noSelectionTitle: string
+    noMountedSurface: string
+    noMountedSurfaceDetail: (soulName: string) => string
     noSoulApps: string
     noSoulAppsDetail: string
     noTurns: string
     operatorRole: string
-    proposed: string
-    reject: string
-    rejected: string
-    requestReview: string
-    requestingReview: string
-    reviewRubric: string
-    reviewWaiting: string
     sendTurn: string
     sendingTurn: string
     backToSoulHome: string

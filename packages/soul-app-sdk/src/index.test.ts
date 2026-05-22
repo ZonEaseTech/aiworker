@@ -76,80 +76,9 @@ describe('Soul App SDK authoring boundary', () => {
     expect(calls[1]?.body).toMatchObject({ soulId: 'demo-soul-app' })
   })
 
-  it('scopes broker client calls to Host-owned app broker routes', async () => {
-    const calls: Array<{ body: unknown, path: string }> = []
-    const client = createSoulAppClient({
-      appId: 'demo-soul-app',
-      fetch: async (input, init) => {
-        calls.push({ body: init?.body ? JSON.parse(String(init.body)) : null, path: input })
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { 'content-type': 'application/json' },
-          status: 200,
-        })
-      },
-    })
-
-    await client.broker.permissions.list()
-    await client.broker.providers.list()
-    await client.broker.search.upsert('records/demo', {
-      kind: 'demo-record',
-      reference: { id: 'demo-record-1', type: 'demo-record' },
-      summary: 'Demo descriptor',
-      title: 'Demo record',
-    }, { workspaceId: 'workspace-1' })
-    await client.broker.search.query('demo', { workspaceId: 'workspace-1' })
-    await client.broker.storage.put('records/demo', { ready: true }, { operatorId: 'operator-local', workspaceId: 'workspace-1' })
-    await client.broker.connectors.readEvidence('ats', { candidateId: 'cand-1' }, { sessionId: 'session-1', workspaceId: 'workspace-1' })
-    await client.broker.engine.createInvocation({ prompt: 'raw engine call should be denied by Host' }, { sessionId: 'session-1' })
-    await client.broker.audit.list()
-
-    expect(calls.map(call => call.path)).toEqual([
-      '/api/local/apps/demo-soul-app/broker/permissions',
-      '/api/local/apps/demo-soul-app/broker/providers',
-      '/api/local/apps/demo-soul-app/broker/search/records/demo?workspaceId=workspace-1',
-      '/api/local/apps/demo-soul-app/broker/search?query=demo&workspaceId=workspace-1',
-      '/api/local/apps/demo-soul-app/broker/storage/records/demo?operatorId=operator-local&workspaceId=workspace-1',
-      '/api/local/apps/demo-soul-app/broker/connectors/ats/evidence?sessionId=session-1&workspaceId=workspace-1',
-      '/api/local/apps/demo-soul-app/broker/engine/invocations?sessionId=session-1',
-      '/api/local/apps/demo-soul-app/broker/audit',
-    ])
-    expect(calls[2]?.body).toMatchObject({ title: 'Demo record' })
-    expect(calls[4]?.body).toMatchObject({ valueJson: { ready: true } })
-    expect(calls[5]?.body).toMatchObject({ query: { candidateId: 'cand-1' } })
-  })
-
-  it('sends the mounted app token on broker callbacks without requiring bearer auth', async () => {
-    const calls: Array<{ headers: Record<string, string>, path: string }> = []
-    const client = createSoulAppClient({
-      appId: 'demo-soul-app',
-      fetch: async (input, init) => {
-        calls.push({
-          headers: Object.fromEntries(new Headers(init?.headers).entries()),
-          path: input,
-        })
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { 'content-type': 'application/json' },
-          status: 200,
-        })
-      },
-      mountToken: 'mount-token-123',
-    })
-
-    await client.broker.permissions.list()
-    await client.broker.storage.put('records/demo', { ready: true })
-
-    expect(calls.map(call => call.path)).toEqual([
-      '/api/local/apps/demo-soul-app/broker/permissions',
-      '/api/local/apps/demo-soul-app/broker/storage/records/demo',
-    ])
-    expect(calls[0]?.headers).toMatchObject({
-      'x-aiworker-mount-token': 'mount-token-123',
-    })
-    expect(calls[0]?.headers).not.toHaveProperty('authorization')
-    expect(calls[1]?.headers).toMatchObject({
-      'content-type': 'application/json',
-      'x-aiworker-mount-token': 'mount-token-123',
-    })
+  it('does not expose a Host broker client surface', () => {
+    const client = createSoulAppClient({ appId: 'demo-soul-app' })
+    expect(client).not.toHaveProperty('broker')
   })
 
   it('scopes browser storage keys by app, worker, workspace, and session', () => {
@@ -318,13 +247,6 @@ function demoSoulApp(): SoulAppDefinition {
         entry: './src/domain-api.ts',
         routePrefix: '/api/local/apps/demo-soul-app',
       },
-      artifactTypes: [{
-        description: 'Demo report artifact.',
-        id: 'demo-report',
-        name: 'Demo Report',
-        schemaRef: './product/artifacts/schemas/demo-report.schema.json',
-        version: '1.0.0',
-      }],
       capabilities: [{
         artifactTypes: ['demo-report'],
         description: 'Create a demo report.',
@@ -360,10 +282,6 @@ function demoSoulApp(): SoulAppDefinition {
         timeoutMs: 1000,
       },
       id: 'demo-soul-app',
-      memory: {
-        admissionPolicy: 'manual-review',
-        namespace: 'demo-soul-app',
-      },
       modes: {
         hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
         standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
@@ -412,7 +330,6 @@ function demoSoulApp(): SoulAppDefinition {
           label: 'Demo panel',
           slot: 'panel',
         }],
-        reviewPanels: [],
         routes: [{
           entry: './product/web/routes/demo-route.tsx',
           id: 'demo-route',

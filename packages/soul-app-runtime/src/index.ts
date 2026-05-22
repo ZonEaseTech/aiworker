@@ -4,10 +4,8 @@ import type {
   LocalWorkerRuntime,
 } from '@zonease/aiworker-core'
 import type {
-  CapabilityTemplate,
   HostedSoulApp,
   SoulAppManifest,
-  VerticalSoul,
 } from '@zonease/aiworker-shared'
 import type { SoulAppDefinition } from '@zonease/aiworker-soul-app-sdk'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
@@ -32,12 +30,31 @@ import {
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
 
+// -- inlined from deleted shared types --
+interface CapabilityTemplate {
+  description: string
+  id: string
+  inputHints: readonly string[]
+  name: string
+  outputKind: string
+  prompt: string
+  reviewRubric: readonly string[]
+  soulId: string
+}
+
+interface VerticalSoul {
+  defaultTemplates: readonly string[]
+  description: string
+  domain: string
+  id: string
+  name: string
+  status: 'available' | 'coming_soon'
+}
+
 export type {
   LocalExecutor,
-  LocalExecutorArtifact,
   LocalExecutorInput,
   LocalExecutorResult,
-  LocalExecutorReview,
   LocalWorkerRuntime,
 } from '@zonease/aiworker-core'
 

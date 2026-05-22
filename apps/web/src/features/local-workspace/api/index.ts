@@ -1,17 +1,4 @@
 export {
-  updateLesson,
-} from './lessons'
-export {
-  promoteProfileRevision,
-  readProfile,
-} from './profile-revisions'
-export type {
-  LocalProfileRevision,
-} from './profile-revisions'
-export {
-  createReview,
-} from './reviews'
-export {
   continueSessionTurn,
   continueSessionTurnStream,
   createSessionTurn,
@@ -31,7 +18,14 @@ export {
 export type {
   LocalInfoResponse,
   LocalWorkspaceData,
+  WorkerOverlayResponse,
+  WorkerOverlaySaveBody,
 } from './types'
+export {
+  loadWorkerOverlay,
+  projectWorkerWorkspaceOverlay,
+  saveWorkerOverlay,
+} from './worker-overlays'
 export {
   createWorker,
 } from './workers'
@@ -40,7 +34,6 @@ export {
   enableSoulApp,
   loadLocalWorkspaceData,
   resolveMountedSurface,
-  reviewSoulAppSecurity,
 } from './workspace-data'
 export {
   createWorkspace,

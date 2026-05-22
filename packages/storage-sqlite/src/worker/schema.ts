@@ -22,6 +22,25 @@ export const workers = sqliteTable(
   }),
 )
 
+export const workerOverlayAssets = sqliteTable(
+  'worker_overlay_assets',
+  {
+    workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
+    id: text('id').notNull(),
+    kind: text('kind', { enum: ['entry-file', 'mcp-client', 'skill'] }).notNull(),
+    target: text('target').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    content: text('content').notNull(),
+    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    workerAssetUniqueIdx: uniqueIndex('worker_overlay_assets_worker_kind_target_id_idx').on(table.workerId, table.kind, table.target, table.id),
+    workerKindIdx: index('worker_overlay_assets_worker_kind_idx').on(table.workerId, table.kind),
+  }),
+)
+
 export const workspaces = sqliteTable(
   'workspaces',
   {
@@ -115,6 +134,35 @@ export const engineInvocations = sqliteTable(
   }),
 )
 
+export const workerEngineInvocations = sqliteTable(
+  'worker_engine_invocations',
+  {
+    id: text('id').primaryKey(),
+    workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    engineId: text('engine_id').notNull(),
+    engineCommand: text('engine_command'),
+    status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull().default('queued'),
+    cwd: text('cwd').notNull(),
+    inputRef: text('input_ref'),
+    stdoutRef: text('stdout_ref'),
+    stderrRef: text('stderr_ref'),
+    exitCode: integer('exit_code'),
+    signal: text('signal'),
+    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    startedAt: text('started_at'),
+    finishedAt: text('finished_at'),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    engineUpdatedAtIdx: index('worker_engine_invocations_engine_updated_at_idx').on(table.engineId, table.updatedAt),
+    statusUpdatedAtIdx: index('worker_engine_invocations_status_updated_at_idx').on(table.status, table.updatedAt),
+    workerSeqUniqueIdx: uniqueIndex('worker_engine_invocations_worker_seq_unique_idx').on(table.workerId, table.seq),
+    workerUpdatedAtIdx: index('worker_engine_invocations_worker_updated_at_idx').on(table.workerId, table.updatedAt),
+  }),
+)
+
 export const sessionEvents = sqliteTable(
   'session_events',
   {
@@ -124,7 +172,7 @@ export const sessionEvents = sqliteTable(
     invocationId: text('invocation_id').references(() => engineInvocations.id, { onDelete: 'set null' }),
     seq: integer('seq').notNull(),
     type: text('type', {
-      enum: ['status', 'assistant_delta', 'tool', 'file_change', 'artifact', 'review', 'lesson', 'error', 'log'],
+      enum: ['status', 'assistant_delta', 'tool', 'file_change', 'artifact', 'error', 'log'],
     }).notNull(),
     payloadJson: text('payload_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
     createdAt: text('created_at').notNull().$defaultFn(nowIso),
@@ -157,67 +205,6 @@ export const files = sqliteTable(
   }),
 )
 
-export const artifacts = sqliteTable(
-  'artifacts',
-  {
-    id: text('id').primaryKey(),
-    workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-    sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
-    turnId: text('turn_id').references(() => turns.id, { onDelete: 'set null' }),
-    invocationId: text('invocation_id').references(() => engineInvocations.id, { onDelete: 'set null' }),
-    path: text('path').notNull(),
-    kind: text('kind').notNull().default('file'),
-    title: text('title').notNull(),
-    status: text('status', { enum: ['available', 'missing', 'archived'] }).notNull().default('available'),
-    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
-    createdAt: text('created_at').notNull().$defaultFn(nowIso),
-    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
-  },
-  table => ({
-    sessionUpdatedAtIdx: index('artifacts_session_updated_at_idx').on(table.sessionId, table.updatedAt),
-    statusUpdatedAtIdx: index('artifacts_status_updated_at_idx').on(table.status, table.updatedAt),
-    workspaceUpdatedAtIdx: index('artifacts_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
-  }),
-)
-
-export const reviews = sqliteTable(
-  'reviews',
-  {
-    id: text('id').primaryKey(),
-    workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-    sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
-    turnId: text('turn_id').references(() => turns.id, { onDelete: 'set null' }),
-    artifactId: text('artifact_id').references(() => artifacts.id, { onDelete: 'set null' }),
-    verdict: text('verdict', { enum: ['pass', 'warn', 'fail', 'needs_review'] }).notNull().default('needs_review'),
-    findingsJson: text('findings_json', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull().$defaultFn(() => []),
-    risksJson: text('risks_json', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull().$defaultFn(() => []),
-    createdAt: text('created_at').notNull().$defaultFn(nowIso),
-  },
-  table => ({
-    artifactCreatedAtIdx: index('reviews_artifact_created_at_idx').on(table.artifactId, table.createdAt),
-    sessionCreatedAtIdx: index('reviews_session_created_at_idx').on(table.sessionId, table.createdAt),
-    workspaceCreatedAtIdx: index('reviews_workspace_created_at_idx').on(table.workspaceId, table.createdAt),
-  }),
-)
-
-export const lessons = sqliteTable(
-  'lessons',
-  {
-    id: text('id').primaryKey(),
-    workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-    sourceReviewId: text('source_review_id').references(() => reviews.id, { onDelete: 'set null' }),
-    statement: text('statement').notNull(),
-    evidenceJson: text('evidence_json', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull().$defaultFn(() => []),
-    status: text('status', { enum: ['proposed', 'accepted', 'rejected'] }).notNull().default('proposed'),
-    createdAt: text('created_at').notNull().$defaultFn(nowIso),
-    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
-  },
-  table => ({
-    statusUpdatedAtIdx: index('lessons_status_updated_at_idx').on(table.status, table.updatedAt),
-    workspaceUpdatedAtIdx: index('lessons_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
-  }),
-)
-
 export const soulApps = sqliteTable(
   'soul_apps',
   {
@@ -245,53 +232,6 @@ export const soulApps = sqliteTable(
     digestIdx: index('soul_apps_manifest_digest_idx').on(table.manifestDigest),
     soulIdx: index('soul_apps_soul_idx').on(table.soulId),
     statusUpdatedAtIdx: index('soul_apps_status_updated_at_idx').on(table.status, table.updatedAt),
-  }),
-)
-
-export const soulAppStorageRecords = sqliteTable(
-  'soul_app_storage_records',
-  {
-    id: text('id').primaryKey(),
-    appId: text('app_id').notNull().references(() => soulApps.id, { onDelete: 'cascade' }),
-    namespace: text('namespace').notNull(),
-    key: text('key').notNull(),
-    valueJson: text('value_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
-    workerId: text('worker_id').references(() => workers.id, { onDelete: 'set null' }),
-    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'set null' }),
-    sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
-    operatorId: text('operator_id'),
-    createdAt: text('created_at').notNull().$defaultFn(nowIso),
-    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
-  },
-  table => ({
-    appKeyIdx: uniqueIndex('soul_app_storage_app_key_idx').on(table.appId, table.key),
-    appUpdatedAtIdx: index('soul_app_storage_app_updated_at_idx').on(table.appId, table.updatedAt),
-    namespaceIdx: index('soul_app_storage_namespace_idx').on(table.namespace),
-    workspaceIdx: index('soul_app_storage_workspace_idx').on(table.workspaceId),
-  }),
-)
-
-export const soulAppAuditEvents = sqliteTable(
-  'soul_app_audit_events',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    appId: text('app_id').notNull().references(() => soulApps.id, { onDelete: 'cascade' }),
-    action: text('action').notNull(),
-    targetKind: text('target_kind').notNull(),
-    target: text('target').notNull(),
-    decision: text('decision', { enum: ['allowed', 'denied'] }).notNull(),
-    reason: text('reason').notNull(),
-    workerId: text('worker_id').references(() => workers.id, { onDelete: 'set null' }),
-    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'set null' }),
-    sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
-    operatorId: text('operator_id'),
-    requestJson: text('request_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
-    createdAt: text('created_at').notNull().$defaultFn(nowIso),
-  },
-  table => ({
-    appCreatedAtIdx: index('soul_app_audit_app_created_at_idx').on(table.appId, table.createdAt),
-    contextIdx: index('soul_app_audit_context_idx').on(table.workspaceId, table.sessionId),
-    targetIdx: index('soul_app_audit_target_idx').on(table.targetKind, table.target),
   }),
 )
 

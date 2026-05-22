@@ -1,10 +1,11 @@
-import type { SessionComposerMaterial, SessionComposerUsage } from '@zonease/aiworker-component'
+import type { SessionComposerMaterial, SessionComposerUsage } from '@zonease/aiworker-ui/components/session-composer'
 import type { FormEvent } from 'react'
 import type { messagesFor } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 
-import { createComposerAttachment, formatSessionAttachmentKind, formatSessionAttachmentSize, isSessionAttachmentImage, SessionComposer } from '@zonease/aiworker-component'
-import { Send } from 'lucide-react'
+import { MailSend02Icon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { createComposerAttachment, formatSessionAttachmentKind, formatSessionAttachmentSize, isSessionAttachmentImage, SessionComposer } from '@zonease/aiworker-ui/components/session-composer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 type WorkerMessages = ReturnType<typeof messagesFor>
@@ -159,7 +160,7 @@ export function SessionTurnComposer({
     <>
       <input
         ref={fileInputRef}
-        className="session-composer-file-input"
+        className="sr-only"
         type="file"
         multiple
         aria-hidden="true"
@@ -182,7 +183,7 @@ export function SessionTurnComposer({
         placeholder={copy.workspace.followUpPlaceholder}
         submitAriaLabel={submitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}
         submitDisabled={!engineReadiness.ready}
-        submitIcon={<Send aria-hidden="true" size={14} />}
+        submitIcon={<HugeiconsIcon icon={MailSend02Icon} strokeWidth={2} aria-hidden="true" />}
         submitting={submitting}
         submitTitle={submitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}
         title={title}

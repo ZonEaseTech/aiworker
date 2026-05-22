@@ -15,13 +15,12 @@ export {
   parseNamespacedSoulAppCapabilityId,
 } from '@zonease/aiworker-shared'
 export type {
-  CapabilityTemplate,
   HostedSoulApp,
-  SoulAppArtifactValidationResult,
   SoulAppCapability,
   SoulAppEngineAssets,
   SoulAppEngineTarget,
   SoulAppManifest,
+  SoulAppManifestValidationResult,
   SoulAppMcpClientEngineAssets,
   SoulAppMcpServerEngineAssets,
   SoulAppProjectionReceipt,
@@ -32,7 +31,6 @@ export type {
   SoulAppSessionContext,
   SoulAppSkillEngineAssets,
   SoulAppWorkspaceEngineAssets,
-  VerticalSoul,
 } from '@zonease/aiworker-shared'
 
 export interface SoulAppDefinition extends SoulAppProtocolHandlers {
@@ -69,13 +67,6 @@ export interface SoulAppCreateSessionTurnInput {
   input?: string
   metadata?: Record<string, unknown>
   title: string
-}
-
-export interface SoulAppBrokerContextQuery {
-  operatorId?: string
-  sessionId?: string
-  workerId?: string
-  workspaceId?: string
 }
 
 export interface SoulAppWebStorageOptions {
@@ -184,74 +175,6 @@ export function createSoulAppClient(options: SoulAppClientOptions) {
   }
 
   return {
-    broker: {
-      audit: {
-        list(context?: SoulAppBrokerContextQuery) {
-          return json(`/api/local/apps/${options.appId}/broker/audit${queryString(context)}`)
-        },
-      },
-      connectors: {
-        readEvidence(connectorId: string, query: Record<string, unknown>, context?: SoulAppBrokerContextQuery) {
-          return json(`/api/local/apps/${options.appId}/broker/connectors/${connectorId}/evidence${queryString(context)}`, {
-            body: JSON.stringify({ query }),
-            method: 'POST',
-          })
-        },
-      },
-      engine: {
-        createInvocation(input: { prompt: string }, context?: SoulAppBrokerContextQuery) {
-          return json(`/api/local/apps/${options.appId}/broker/engine/invocations${queryString(context)}`, {
-            body: JSON.stringify(input),
-            method: 'POST',
-          })
-        },
-      },
-      permissions: {
-        list(context?: SoulAppBrokerContextQuery) {
-          return json(`/api/local/apps/${options.appId}/broker/permissions${queryString(context)}`)
-        },
-      },
-      providers: {
-        list(context?: SoulAppBrokerContextQuery) {
-          return json(`/api/local/apps/${options.appId}/broker/providers${queryString(context)}`)
-        },
-      },
-      search: {
-        query(query: string, context?: SoulAppBrokerContextQuery) {
-          return json(`/api/local/apps/${options.appId}/broker/search${queryString(context, { query })}`)
-        },
-        upsert(id: string, input: {
-          artifactId?: string | null
-          kind: string
-          reference?: { id: string, type: string, url?: string }
-          reviewId?: string | null
-          sessionId?: string | null
-          summary?: string | null
-          title: string
-          workspaceId?: string | null
-        }, context?: SoulAppBrokerContextQuery) {
-          return json(`/api/local/apps/${options.appId}/broker/search/${encodeBrokerPath(id)}${queryString(context)}`, {
-            body: JSON.stringify(input),
-            method: 'PUT',
-          })
-        },
-      },
-      storage: {
-        get(key: string, context?: SoulAppBrokerContextQuery) {
-          return json(`/api/local/apps/${options.appId}/broker/storage/${encodeBrokerPath(key)}${queryString(context)}`)
-        },
-        list(context?: SoulAppBrokerContextQuery) {
-          return json(`/api/local/apps/${options.appId}/broker/storage${queryString(context)}`)
-        },
-        put(key: string, valueJson: Record<string, unknown>, context?: SoulAppBrokerContextQuery & { namespace?: string }) {
-          const { namespace, ...ctx } = context ?? {}
-          return json(`/api/local/apps/${options.appId}/broker/storage/${encodeBrokerPath(key)}${queryString(ctx)}`, {
-            body: JSON.stringify({ namespace, valueJson }),
-            method: 'PUT',
-          })
-        },
-      },
-    },
     createSessionTurn(workerId: string, workspaceId: string, input: SoulAppCreateSessionTurnInput) {
       return json(`/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions`, {
         body: JSON.stringify(input),
@@ -386,20 +309,4 @@ function scopedBrowserStoragePrefix(options: SoulAppWebStorageOptions, kind: 'lo
 function globalStorage(name: 'localStorage' | 'sessionStorage'): SoulAppStorageLike | undefined {
   const scope = globalThis as typeof globalThis & Partial<Record<'localStorage' | 'sessionStorage', SoulAppStorageLike>>
   return scope[name]
-}
-
-function encodeBrokerPath(value: string): string {
-  return value.split('/').map(part => encodeURIComponent(part)).join('/')
-}
-
-function queryString(input?: SoulAppBrokerContextQuery, seed: Record<string, string> = {}): string {
-  const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(seed))
-    params.set(key, value)
-  for (const [key, value] of Object.entries(input ?? {})) {
-    if (typeof value === 'string' && value.length > 0)
-      params.set(key, value)
-  }
-  const text = params.toString()
-  return text ? `?${text}` : ''
 }

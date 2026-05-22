@@ -1,10 +1,35 @@
 import type { z } from 'zod'
-import type { CapabilityTemplate, VerticalSoul, VerticalSoulStatus } from '../vertical-soul'
 import type { SoulAppCapability, SoulAppManifest, SoulAppManifestValidationIssue } from './manifest'
 
 import { z as zod } from 'zod'
-import { capabilityTemplateSchema, verticalSoulSchema } from '../vertical-soul'
 import { soulAppManifestSchema, soulAppManifestValidationIssueSchema, soulAppWorkbenchSchema, soulAppWorkspaceContextSchema } from './manifest'
+
+// -- inlined from deleted vertical-soul.ts --
+
+const verticalSoulStatusSchema = zod.enum(['available', 'coming_soon'])
+type VerticalSoulStatus = zod.infer<typeof verticalSoulStatusSchema>
+
+const capabilityTemplateSchema = zod.object({
+  description: zod.string().min(1),
+  id: zod.string().min(1),
+  inputHints: zod.array(zod.string().min(1)).readonly(),
+  name: zod.string().min(1),
+  outputKind: zod.string().min(1),
+  prompt: zod.string().min(1),
+  reviewRubric: zod.array(zod.string().min(1)).readonly(),
+  soulId: zod.string().min(1),
+})
+type CapabilityTemplate = zod.infer<typeof capabilityTemplateSchema>
+
+const verticalSoulSchema = zod.object({
+  defaultTemplates: zod.array(zod.string().min(1)).readonly(),
+  description: zod.string().min(1),
+  domain: zod.string().min(1),
+  id: zod.string().min(1),
+  name: zod.string().min(1),
+  status: verticalSoulStatusSchema,
+})
+type VerticalSoul = zod.infer<typeof verticalSoulSchema>
 
 export const soulAppRegistryStatusSchema = zod.enum(['installed', 'enabled', 'disabled', 'error'])
 export type SoulAppRegistryStatus = z.infer<typeof soulAppRegistryStatusSchema>
@@ -19,9 +44,8 @@ export const soulAppMountedContributionSchema = zod.object({
   apiRoutePrefix: zod.string().min(1).nullable(),
   artifactPreviewIds: zod.array(zod.string().min(1)).readonly(),
   descriptorSurfaceIds: zod.array(zod.string().min(1)).readonly(),
-  frameSurfaceIds: zod.array(zod.string().min(1)).readonly(),
+  microAppSurfaceIds: zod.array(zod.string().min(1)).readonly(),
   panelIds: zod.array(zod.string().min(1)).readonly(),
-  reviewPanelIds: zod.array(zod.string().min(1)).readonly(),
   routePaths: zod.array(zod.string().min(1)).readonly(),
   surfaceIds: zod.array(zod.string().min(1)).readonly(),
   workbench: soulAppWorkbenchSchema.nullable(),
@@ -90,7 +114,7 @@ export function projectSoulAppCapabilityTemplate(manifest: SoulAppManifest, capa
     id: namespaceSoulAppCapabilityId(manifest.id, capability.id),
     inputHints: [
       `Workspace types: ${capability.workspaceTypes.join(', ')}`,
-      `Artifact types: ${capability.artifactTypes.join(', ')}`,
+      `Artifact types: ${capability.artifactTypes?.join(', ') ?? 'none'}`,
       `Prompt ref: ${capability.promptRef}`,
     ],
     name: capability.name,
@@ -102,8 +126,8 @@ export function projectSoulAppCapabilityTemplate(manifest: SoulAppManifest, capa
       'Keep Host runtime, connector, artifact, review, and memory ownership intact.',
     ].join(' '),
     reviewRubric: capability.reviewRubricRef
-      ? [`Review rubric ref: ${capability.reviewRubricRef}`, 'Evidence, missing facts, risks, and human review notes remain explicit.']
-      : ['Evidence, missing facts, risks, and human review notes remain explicit.'],
+      ? [`Acceptance check ref: ${capability.reviewRubricRef}`, 'Evidence, missing facts, risks, and human-owned acceptance notes remain explicit.']
+      : ['Evidence, missing facts, risks, and human-owned acceptance notes remain explicit.'],
     soulId: manifest.id,
   }
 }
@@ -117,16 +141,14 @@ export function mountedContributionForManifest(manifest: SoulAppManifest): SoulA
     ...manifest.ui.routes,
     ...manifest.ui.panels,
     ...manifest.ui.artifactPreviews,
-    ...manifest.ui.reviewPanels,
     ...(manifest.ui.workspaceWidgets ?? []),
   ].filter(item => item.surface)
   return {
     apiRoutePrefix: manifest.api.routePrefix ?? null,
     artifactPreviewIds: manifest.ui.artifactPreviews.map(slot => slot.id),
     descriptorSurfaceIds: surfaces.filter(item => item.surface?.renderer === 'host-descriptor').map(item => item.id),
-    frameSurfaceIds: surfaces.filter(item => item.surface?.renderer === 'sandboxed-frame').map(item => item.id),
+    microAppSurfaceIds: surfaces.filter(item => item.surface?.renderer === 'micro-app').map(item => item.id),
     panelIds: manifest.ui.panels.map(slot => slot.id),
-    reviewPanelIds: manifest.ui.reviewPanels.map(slot => slot.id),
     routePaths: manifest.ui.routes.map(route => route.path),
     surfaceIds: surfaces.map(item => item.id),
     workbench: manifest.ui.workbench ?? null,

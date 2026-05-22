@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-19
+> Updated: 2026-05-21
 
 ## Usage
 
@@ -415,3 +415,21 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-384 Session composer attachment deduplication**](PLAN-384.md) `2026-05-19`
 - [x] [**PLAN-385 Host platform settings and Soul App configuration boundary**](PLAN-385.md) `2026-05-19`
 - [x] [**PLAN-386 CLI 0.19.0 minor release**](PLAN-386.md) `2026-05-19`
+- [x] [**PLAN-387 Shadcn monorepo UI package foundation**](PLAN-387.md) `2026-05-19`
+- [x] [**PLAN-388 micro-app Host/Soul mounted UI runtime**](PLAN-388.md) `2026-05-20`
+- [x] [**PLAN-389 HR app-owned people workbench port**](PLAN-389.md) `2026-05-20`
+- [x] [**PLAN-390 HR three-column interactive micro-app**](PLAN-390.md) `2026-05-20`
+- [x] [**PLAN-391 SessionComposer shared UI consolidation**](PLAN-391.md) `2026-05-21`
+- [x] [**PLAN-392 Remove legacy component package**](PLAN-392.md) `2026-05-21`
+- [x] [**PLAN-393 Component retirement docs and skill feedback**](PLAN-393.md) `2026-05-21`
+- [x] [**PLAN-394 Internal Host broker permission kernel removal**](PLAN-394.md) `2026-05-21`
+- [x] [**PLAN-395 Host workbench action/search bridge removal**](PLAN-395.md) `2026-05-21`
+- [x] [**PLAN-396 Soul App scaffold micro-app defaults**](PLAN-396.md) `2026-05-21`
+- [x] [**PLAN-397 Official Soul App micro-app defaults**](PLAN-397.md) `2026-05-21`
+- [x] [**PLAN-398 Host output metadata boundary**](PLAN-398.md) `2026-05-21`
+- [x] [**PLAN-399 Worker-scoped native engine bridge spike**](PLAN-399.md) `2026-05-21`
+- [x] [**PLAN-400 Worker-scoped native invocation metadata**](PLAN-400.md) `2026-05-21`
+- [x] [**PLAN-401 Worker-scoped native engine invocation API**](PLAN-401.md) `2026-05-21`
+- [x] [**PLAN-402 Worker-scoped native engine invocation stream**](PLAN-402.md) `2026-05-21`
+- [x] [**PLAN-403 WorkerStudio mounted-first Host shell boundary**](PLAN-403.md) `2026-05-21`
+- [x] [**PLAN-404 HR mounted scoped CSS layout fix**](PLAN-404.md) `2026-05-21`

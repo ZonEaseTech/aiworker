@@ -1,25 +1,24 @@
 # AIWorker Agent Guide
 
-AIWorker 当前目标是 **local-first vertical Soul App host**。Host 提供本地 daemon、安装启用、
-鉴权安全、平台设置、能力 broker、统一 shell 与协议定位；Soul App 提供可独立部署的垂直产品，
-并拥有领域状态、领域语义、artifact/profile/review/lesson 的解释权。
+AIWorker 当前目标是 **Local Shell + Engine Bridge for Soul Apps**。Host 只保留
+start / shell / locate / mount / bridge：启动 Soul App、提供本地 Web/CLI/daemon 壳、定位
+worker/workspace/session、挂载 app-owned UI/API，并为 session 准备 cwd/context/engine 调用入口。
 
 默认产品路径：
 
 ```text
-Host -> install/enable Soul App -> Soul worker -> workspace -> session
-  -> Soul App exposed views/actions -> business artifact/profile/review/lesson
+AIWorker -> Soul App -> workspace -> session -> app-owned work
 ```
 
-不要把默认体验拉回 developer-only work order、admin dashboard、远程控制面、治理内核或通用
-agent runtime 平台。
+不要把默认体验拉回 developer-only work order、admin dashboard、远程控制面、治理内核、通用
+agent runtime 平台，或 Host-owned proposal/broker/review/audit/governance/admission 流程。
 
 ## 必读入口
 
 - `docs/architecture.md`：当前唯一架构合同；`Constraint Registry` 是 Host / Soul App /
-  protocol / data / broker / documentation 硬约束源头。
+  protocol / data / engine / UI / documentation 硬约束源头。
 - `.agents/skills/aiworker-host-dev/SKILL.md`：修改 Host platform、local daemon/API、
-  Worker Web Shell、CLI lifecycle、broker、auth/security、shared protocol 或 storage schema
+  Worker Web Shell、CLI lifecycle、thin local adapter、shared protocol 或 storage schema
   前必须读取。
 - `.agents/skills/aiworker-soul-app-dev/SKILL.md`：修改 Soul App、manifest、standalone、
   Host mounted、capability、artifact/review 或 authoring 文档前必须读取。
@@ -33,10 +32,10 @@ agent runtime 平台。
 - CLI 行为或命令文档：`docs/cli.md`。
 - 本地 daemon、打包或 operator 运行路径：`docs/deployment.md`。
 - 外部 engine 安装、登录和 readiness：`docs/executor-engines.md`。
-- Host platform、daemon API、registry、broker、security、storage schema：
+- Host platform、daemon API、registry、local enablement、thin adapter、storage schema：
   `docs/architecture.md` 和 `aiworker-host-dev` skill。
 - Host Web Shell、Settings、workbench：`docs/architecture.md`、`aiworker-host-dev` skill，
-  非平凡前端改动再读取 `/pma-web`。
+  非平凡前端改动再读取 `/pma-web`；shadcn/ui 相关改动再读取 `.agents/skills/shadcn/SKILL.md`。
 - CLI lifecycle、daemon/app/worker/workspace/session 命令：`docs/cli.md` 和
   `aiworker-host-dev` skill。
 - Soul App authoring：`docs/soul-app-developer.md` 和 `aiworker-soul-app-dev` skill。
@@ -65,7 +64,8 @@ agent runtime 平台。
 - `packages/shared`：共享 schema、Host/Soul App protocol 类型与工具。
 - `packages/soul-app-sdk`：Soul App authoring 的公开 SDK。
 - `packages/soul-app-runtime`：standalone 与 Host mounted runtime harness。
-- `packages/component`：共享 UI primitives / patterns。
+- `packages/ui`：shadcn-managed shared UI primitives、theme variables、CLI-owned component output；
+  Host Web 与官方 Soul App web 的唯一共享 UI 来源。
 - `packages/storage-sqlite`：Host metadata schema 与 migration；真实业务产物属于 app/workspace
   命名空间，DB 只存平台 metadata、引用或协议 descriptor。
 - `packages/fs-layout`：`AIWORKER_HOME`、worker home、workspace 与 `.aiworker/` 布局。
@@ -74,12 +74,14 @@ agent runtime 平台。
 
 硬约束以 `docs/architecture.md#constraint-registry` 为准；本段只是 agent 执行时的速查路由。
 
-- Host 是平台定位与能力壳，不是领域数据解释者。
-- Soul App 是领域主权方，拥有 profile 组合、artifact schema/content、review rubric、
-  lesson/memory 语义和 standalone 体验。
-- Host 只能消费 Soul App 通过 manifest/protocol/grant 暴露的 view、action、status、descriptor、
-  search、review summary、memory summary 或 audit event。
+- Host 是本地运行壳和 engine bridge，不是领域数据解释者，也不是通用治理平台。
+- Host 只拥有 start / shell / locate / mount / bridge。
+- Soul App 是领域主权方，拥有业务对象、领域状态、领域 UI/API、app-owned outputs、
+  app-owned confirmation actions、standalone 体验和 Host mounted product surface。
+- Host 只能消费 Soul App 通过 manifest/protocol 暴露的 route、mounted UI、action descriptor、
+  workspace context、session context 或 lightweight UI event。
 - 如果 Soul App 不暴露某个 surface，Host 不取、不猜、不补。
+- proposal、broker、review、audit、governance、grant 和 admission 不再是 Host 产品内核。
 - Workspace/project 是业务作用域，不等同于软件仓库；HR 可以是岗位或候选人池，QA 可以是
   release 或 test suite，DevOps 可以是 service、incident 或 runbook。
 - 外部 engine 负责自己的 tool loop、模型、sandbox、approval、auth/profile、native session
@@ -89,11 +91,12 @@ agent runtime 平台。
 
 ## 数据与 API 规则
 
-- `worker.db` 存 Host metadata：installed apps、workers、workspaces、sessions、engine
-  invocations、protocol cache、grants、platform files/descriptors、Host audit，以及可选的通用
-  review/lesson ledger。
-- 真实业务文件和 artifact 留在 Soul App 的 workspace 文件夹或对象存储命名空间；DB 只存引用、
-  hash、status、source、owner app id 或 protocol descriptor。
+- `worker.db` 只存 Host metadata：installed/enabled apps、workers、workspaces、sessions、
+  engine invocation references、protocol cache needed for routing、mounted surface references
+  和 platform file references。
+- 真实业务文件和 artifact 留在 Soul App 的 workspace 文件夹或对象存储命名空间；generic review
+  rows、lesson ledgers、admission proposals、profile promotion state、grants-as-product-flow 和
+  domain facts 都不是 Host product primitives。
 - Host 不合成 HR profile，不解释 QA release verdict，不把 Soul App 记忆提升规则硬编码进平台。
 - API 文档以代码为准：OpenAPIHono `app.doc('/openapi.json')` + `/docs`。
 - 新增或修改 API 时同步 zod schema、OpenAPI metadata、typed client/proto 和相关测试。
@@ -111,19 +114,32 @@ agent runtime 平台。
   `ui.workspaceContext`，例如让未来 Host-owned web terminal 知道 workspace context；Host
   只能按 descriptor 调用或定位，不解释领域语义。
 - Standalone 模式下 Soul App 拥有自己的完整 shell；Host mounted 模式下 Soul App 适配 Host 壳。
-- 新增或修改 Host Web / Soul App UI 时必须优先从 `packages/component` 查找 primitives、
-  patterns、layout 与 package-owned styles。新增 app-local UI 组件或 CSS 前必须说明缺口：
-  组件库尚无对应 primitive/pattern、该 UI 确实是 Soul App 领域语义，或属于临时迁移步骤。
-  可复用缺口必须补进 `packages/component` 或登记到组件 catalog 的 migration queue；不要默认
-  在 app 内手搓样式。
-- 非平凡 UI proposal 必须包含 `Component Library Preflight`：列出已检查的
-  `packages/component` primitive/pattern、说明为什么不能直接复用、以及是否需要补组件库或登记
-  `componentMigrationQueue`。若新增或修改 app-local CSS/组件，最终验证必须跑 `bun run ui:check`。
+- Host mounted 的 app-owned UI 统一通过 `@micro-zoe/micro-app` 挂载；Host 只提供
+  通用 mount container、theme/context data 与 protocol/thin adapter 入口，不在 `apps/web`
+  内实现 Soul 领域 renderer。
+- 新增或修改 Host Web / Soul App UI 时，从 `packages/ui` 查找 shadcn-managed primitives，
+  并在 app 中组合这些 primitives。可复用 UI 归入 `packages/ui`；领域专属 UI 留在 owning app。
+- 新增 app-local UI 组件或 CSS 前说明归属：shadcn primitive 组合、Soul App 领域语义，
+  或临时迁移步骤。可复用缺口优先通过 `packages/ui` primitives 组合解决。
+- 非平凡 UI 设计或 Superpowers spec/plan 包含 `Component Library Preflight`：列出已检查的
+  `packages/ui` primitive、说明 app-local UI 归属，并在最终验证跑 `bun run ui:check`。
 - 交互组件使用成熟 headless UI；不要手写 focus trap、scroll lock、ARIA 或键盘导航。
-- 视觉值来自根目录 `DESIGN.md`，通过 Tailwind CSS v4 `@theme` 接入；不要新增 hex 字面量或
-  arbitrary value。
+- shadcn-managed primitives 与主题变量由 `packages/ui` 承载，并优先通过官方 shadcn CLI
+  维护。当前视觉约束来自 shadcn theme、semantic tokens、`packages/ui/components.json` 和本文件；
+  历史 PMA/changelog 中的 `DESIGN.md` 只作为审计记录。
+- app/web 与官方 Soul App web 的图标也必须跟随 `packages/ui/components.json` 中的
+  shadcn `iconLibrary`。当前 preset 是 `hugeicons`，所以可见 UI 不再新增 `lucide-react`
+  导入；需要图标时使用 `@hugeicons/core-free-icons` + `HugeiconsIcon`，让 shadcn Button /
+  Item / Badge 等 primitive 接管尺寸、颜色与状态。
+- 视觉值使用 shadcn semantic CSS variables、Tailwind CSS v4 `@theme` 或
+  package-owned tokens；不要在 feature component 中新增 hex 字面量或 arbitrary value。
+- shadcn-first 迁移完成前，不能只用冒烟验证收口；必须运行 `bun run ui:check` 或
+  `bun scripts/check-web-ui-components.ts --all --audit`，并审查 class dimension、framed
+  surface、semantic theme token、custom class、light/dark 截图与可见 radius/border/font
+  干扰。若发现多层边框、异常大圆角、字体/明暗模式不一致或 app-local class 漏网，必须先修复
+  或明确登记为 domain-owned / temporary migration debt，不能标记迁移 goal 完成。
 - 文案用用户能理解的业务对象：Soul App、Soul worker、workspace、session、artifact、profile、
-  review、lesson。仅在开发者/诊断界面暴露 invocation、engine、broker 等底层词汇。
+  review、lesson。仅在开发者/诊断界面暴露 invocation、engine、adapter 等底层词汇。
 
 ## 常用命令
 

@@ -125,41 +125,29 @@ describe('Soul App manifest schema', () => {
   })
 
   it('keeps fixture contributions explicit enough for Host discovery', () => {
-    expect(hrSoulAppManifest.artifactTypes[0]?.schemaSha256).toBe('35c14e3d4c0fe9fd95c87e9bc47a210e21f99bcb1b079aa99a95bb93e820c8ab')
-    expect(hrSoulAppManifest.artifactTypes.map(type => type.id)).toEqual(expect.arrayContaining([
-      'person-profile',
-      'candidate-screen',
-      'evidence-matrix',
-      'interview-brief',
-      'hiring-risk',
-      'profile-update-proposal',
-    ]))
     expect(hrSoulAppManifest.capabilities.map(capability => capability.outputKind)).toEqual(expect.arrayContaining([
       'person-profile',
       'candidate-screen',
       'evidence-matrix',
       'interview-brief',
       'hiring-risk',
-      'profile-update-proposal',
+      'profile-update-draft',
     ]))
     expect(hrSoulAppManifest.capabilities.find(capability => capability.id === 'interview-brief')).toMatchObject({
       artifactTypes: ['interview-brief'],
       promptRef: './product/workflows/interview-brief/prompt.md',
       reviewRubricRef: './product/workflows/interview-brief/review.md',
     })
-    const profileUpdateProposal = hrSoulAppManifest.capabilities.find(capability => capability.id === 'profile-update-proposal')
-    expect(profileUpdateProposal).toMatchObject({
-      artifactTypes: ['profile-update-proposal'],
-      outputKind: 'profile-update-proposal',
+    const profileUpdateDraft = hrSoulAppManifest.capabilities.find(capability => capability.id === 'profile-update-draft')
+    expect(profileUpdateDraft).toMatchObject({
+      artifactTypes: ['profile-update-draft'],
+      outputKind: 'profile-update-draft',
     })
-    expect(profileUpdateProposal?.workspaceTypes).toEqual(expect.arrayContaining(['people-profile', 'candidate']))
+    expect(profileUpdateDraft?.workspaceTypes).toEqual(expect.arrayContaining(['people-profile', 'candidate']))
     expect(hrSoulAppManifest.capabilities[0]?.promptRef).toBe('./product/workflows/person-profile/prompt.md')
     expect(hrSoulAppManifest.capabilities[0]?.reviewRubricRef).toBe('./product/workflows/person-profile/review.md')
-    expect(hrSoulAppManifest.artifactTypes[0]?.schemaRef).toBe('./product/artifacts/schemas/person-profile.schema.json')
-    expect(hrSoulAppManifest.artifactTypes[0]?.previewRef).toBe('./product/web/artifact-previews/person-profile-preview.tsx')
-    expect(hrSoulAppManifest.artifactTypes[0]?.reviewPolicyRef).toBe('./product/reviews/person-profile.md')
     expect(hrSoulAppManifest.pack.refs[0]?.ref).toBe('product/profiles/hr-recruiting/SOUL.md')
-    expect(hrSoulAppManifest.workspaceTypes[0]?.defaultCapabilityIds).toEqual(['person-profile', 'profile-update-proposal'])
+    expect(hrSoulAppManifest.workspaceTypes[0]?.defaultCapabilityIds).toEqual(['person-profile', 'profile-update-draft'])
     expect(hrSoulAppManifest.connectors.required[0]?.scopes).toContain('candidates.read')
     expect(hrSoulAppManifest.permissions).toContainEqual(expect.objectContaining({
       kind: 'api',
@@ -170,15 +158,13 @@ describe('Soul App manifest schema', () => {
       kind: 'search',
       target: 'aiworker-hr',
     }))
-    expect(hrSoulAppManifest.ui.workbench?.primaryAction).toEqual(expect.objectContaining({
-      id: 'create-people-profile',
-      requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
-      role: 'primary',
+    expect(hrSoulAppManifest.permissions).toContainEqual(expect.objectContaining({
+      action: 'mount',
+      kind: 'ui',
+      target: 'hr-micro-app',
     }))
-    expect(hrSoulAppManifest.ui.workbench?.search).toEqual(expect.objectContaining({
-      protocolProvider: 'peopleProfiles.search',
-      requiredPermissions: ['search:read:aiworker-hr'],
-    }))
+    expect(hrSoulAppManifest.ui).not.toHaveProperty('workbench')
+    expect(JSON.stringify(hrSoulAppManifest.ui)).not.toContain('host-descriptor')
     expect(hrSoulAppManifest.ui.workspaceContext?.terminal).toEqual(expect.objectContaining({
       cwd: { source: 'host-workspace-root' },
       id: 'hr-workspace-terminal',
@@ -189,21 +175,38 @@ describe('Soul App manifest schema', () => {
       target: 'person-profile',
     }))
     expect(hrSoulAppManifest.ui.routes[0]?.surface).toMatchObject({
-      entry: '/surfaces/routes/hr-home',
-      renderer: 'host-descriptor',
+      entry: '/micro-app/routes/hr-home',
+      renderer: 'micro-app',
+      requiredPermissions: ['ui:mount:hr-micro-app'],
       scope: 'app',
     })
     expect(hrSoulAppManifest.ui.workspaceWidgets?.[0]?.surface).toMatchObject({
-      entry: '/frames/widgets/hr-people-widget',
-      renderer: 'sandboxed-frame',
+      entry: '/micro-app/widgets/hr-people-widget',
+      renderer: 'micro-app',
       scope: 'workspace',
     })
+    expect(qaSoulAppManifest.ui.workspaceWidgets?.[0]?.surface).toMatchObject({
+      entry: '/micro-app/widgets/qa-release-widget',
+      renderer: 'micro-app',
+      scope: 'workspace',
+    })
+    expect(qaSoulAppManifest.permissions).toContainEqual(expect.objectContaining({
+      action: 'mount',
+      kind: 'ui',
+      target: 'qa-micro-app',
+    }))
+    expect(qaSoulAppManifest.ui).not.toHaveProperty('workbench')
+    expect(JSON.stringify(qaSoulAppManifest.ui)).not.toContain('host-descriptor')
     expect(qaSoulAppManifest.capabilities[0]?.promptRef).toBe('./product/workflows/regression-matrix/prompt.md')
     expect(qaSoulAppManifest.capabilities[0]?.reviewRubricRef).toBe('./product/workflows/regression-matrix/review.md')
-    expect(qaSoulAppManifest.artifactTypes[0]?.schemaRef).toBe('./product/artifacts/schemas/regression-matrix.schema.json')
-    expect(qaSoulAppManifest.artifactTypes[0]?.reviewPolicyRef).toBe('./product/reviews/regression-matrix.md')
     expect(qaSoulAppManifest.pack.refs[0]?.ref).toBe('product/profiles/qa-reviewer/SOUL.md')
     expect(qaSoulAppManifest.ui.routes[0]?.entry).toBe('./product/web/routes/qa-route.tsx')
+    expect(qaSoulAppManifest.ui.routes[0]?.surface).toMatchObject({
+      entry: '/micro-app/routes/qa-home',
+      renderer: 'micro-app',
+      requiredPermissions: ['ui:mount:qa-micro-app'],
+      scope: 'app',
+    })
     expect(hrSoulAppManifest.api.entry).toBe('./host-adapter/api.ts')
     expect(hrSoulAppManifest.exports.runtime).toBe('./host-adapter/protocol/runtime.ts')
     expect(hrSoulAppManifest.modes.hostMounted.entry).toBe('./host-adapter/mounted/host-mounted.ts')
@@ -465,7 +468,6 @@ describe('Soul App manifest schema', () => {
     manifest.ui = {
       artifactPreviews: [],
       panels: [],
-      reviewPanels: [],
       routes: [],
       workspaceWidgets: [],
     }
@@ -479,11 +481,11 @@ describe('Soul App manifest schema', () => {
     expect(result.issues.map(issue => issue.code)).toContain('missing_ui_api_entry')
   })
 
-  it('rejects unsafe mounted surface declarations', () => {
+  it('rejects stale mounted surface renderers', () => {
     const manifest = cloneManifest(hrSoulAppManifest)
     manifest.ui.routes[0]!.surface = {
-      entry: '/modules/hr-home.js',
-      renderer: 'trusted-module',
+      entry: '/frames/routes/hr-home',
+      renderer: 'sandboxed-frame' as never,
       scope: 'app',
     }
 
@@ -494,23 +496,23 @@ describe('Soul App manifest schema', () => {
 
     expect(result.status).toBe('invalid')
     expect(result.issues).toContainEqual(expect.objectContaining({
-      code: 'unsafe_ui_surface',
-      path: 'ui.routes.0.surface',
+      code: 'missing_ui_api_entry',
+      path: 'ui.routes.0.surface.renderer',
     }))
   })
 
-  it('requires descriptor and frame surfaces to use their declared endpoint families', () => {
+  it('requires descriptor and micro-app surfaces to use their declared endpoint families', () => {
     const descriptorManifest = cloneManifest(hrSoulAppManifest)
     descriptorManifest.ui.routes[0]!.surface = {
-      entry: '/frames/routes/hr-home',
+      entry: '/micro-app/routes/hr-home',
       renderer: 'host-descriptor',
       scope: 'app',
     }
 
-    const frameManifest = cloneManifest(hrSoulAppManifest)
-    frameManifest.ui.workspaceWidgets![0]!.surface = {
+    const microAppManifest = cloneManifest(hrSoulAppManifest)
+    microAppManifest.ui.workspaceWidgets![0]!.surface = {
       entry: '/surfaces/widgets/hr-people-widget',
-      renderer: 'sandboxed-frame',
+      renderer: 'micro-app' as never,
       scope: 'workspace',
     }
 
@@ -518,25 +520,10 @@ describe('Soul App manifest schema', () => {
       availableConnectorIds: ['ats'],
       hostVersion: '0.12.1',
     }).issues).toContainEqual(expect.objectContaining({ code: 'unsafe_ui_surface' }))
-    expect(validateSoulAppManifest(frameManifest, {
+    expect(validateSoulAppManifest(microAppManifest, {
       availableConnectorIds: ['ats'],
       hostVersion: '0.12.1',
     }).issues).toContainEqual(expect.objectContaining({ code: 'unsafe_ui_surface' }))
-  })
-
-  it('classifies missing artifact schema refs as artifact schema errors', () => {
-    const manifest = cloneManifest(hrSoulAppManifest) as unknown as {
-      artifactTypes: Array<Record<string, unknown>>
-    }
-    delete manifest.artifactTypes[0]?.schemaRef
-
-    const result = validateSoulAppManifest(manifest, {
-      availableConnectorIds: ['ats'],
-      hostVersion: '0.12.1',
-    })
-
-    expect(result.status).toBe('invalid')
-    expect(result.issues.map(issue => issue.code)).toContain('invalid_artifact_schema')
   })
 
   it('parses JSON without executing app entrypoints', () => {
@@ -549,7 +536,6 @@ describe('Soul App manifest schema', () => {
     if (result.status === 'ok') {
       expect(result.manifest.exports.runtime).toBe('./host-adapter/protocol/runtime.ts')
       expect(result.manifest.modes.hostMounted.entry).toBe('./host-adapter/mounted/host-mounted.ts')
-      expect(result.manifest.artifactTypes[0]?.schemaRef).toBe('./product/artifacts/schemas/person-profile.schema.json')
     }
   })
 

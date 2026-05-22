@@ -18,23 +18,13 @@ import { afterEach, describe, expect, it } from 'bun:test'
 import hrManifestJson from '../soul-app.manifest.json' with { type: 'json' }
 import { HR_REFERENCE_APP_BOUNDARY, hrReferenceSoulApp } from './index'
 import { serveHostMounted } from './mounted/host-mounted'
+import { renderStandaloneHtml, serveStandalone } from './standalone/standalone'
 
 const now = () => '2026-05-13T00:25:00.000Z'
 
 const executor: LocalExecutor = {
-  async invoke(input) {
+  async invoke(_input) {
     return {
-      artifacts: [{
-        content: `# HR profile\n\n${input.prompt}`,
-        kind: 'person-profile',
-        path: `artifacts/${input.sessionId}/person-profile.md`,
-        title: 'HR People Profile',
-      }],
-      review: {
-        findings: [{ message: 'HR artifact requires human review before memory promotion.' }],
-        risks: [],
-        verdict: 'needs_review',
-      },
       summary: 'HR reference app created one people profile artifact.',
     }
   },
@@ -58,13 +48,15 @@ describe('HR reference Soul App', () => {
       expect.objectContaining({ action: 'read', kind: 'search', target: 'aiworker-hr' }),
       expect.objectContaining({ action: 'write', kind: 'search', target: 'aiworker-hr' }),
     ]))
-    expect(hrManifestJson.ui.workbench?.primaryAction?.protocolAction).toBe('peopleProfiles.create')
-    expect(hrManifestJson.ui.workbench?.primaryAction?.requiredPermissions).toContain('storage:write:aiworker-hr')
-    expect(hrManifestJson.ui.workbench?.primaryAction?.requiredPermissions).toContain('search:write:aiworker-hr')
-    expect(hrManifestJson.ui.workbench?.search?.protocolProvider).toBe('peopleProfiles.search')
-    expect(hrManifestJson.ui.workbench?.search?.requiredPermissions).toContain('search:read:aiworker-hr')
-    expect(hrManifestJson.ui.workbench?.configuration?.protocolAction).toBe('configuration.open')
+    expect(Object.hasOwn(hrManifestJson.ui, 'workbench')).toBeFalse()
+    expect(JSON.stringify(hrManifestJson.ui)).not.toContain('host-descriptor')
     expect(hrManifestJson.ui.workspaceContext?.terminal?.cwd).toEqual({ source: 'host-workspace-root' })
+    expect(hrManifestJson.ui.routes.find(route => route.id === 'hr-home')?.surface).toMatchObject({
+      entry: '/micro-app/routes/hr-home',
+      renderer: 'micro-app',
+      requiredPermissions: ['ui:mount:hr-micro-app'],
+      scope: 'app',
+    })
   })
 
   it('requires the Host mount token for mounted service domain routes', async () => {
@@ -81,23 +73,100 @@ describe('HR reference Soul App', () => {
       })
       expect(domainRes.status).toBe(200)
       expect(await domainRes.json()).toMatchObject({ appId: 'aiworker-hr', mounted: true })
-      const surfaceRes = await fetch(`${baseUrl}/surfaces/routes/hr-home`, {
+      const legacyRouteSurfaceRes = await fetch(`${baseUrl}/surfaces/routes/hr-home`, {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
       })
-      expect(surfaceRes.status).toBe(200)
-      expect(await surfaceRes.json()).toMatchObject({
-        authority: 'soul-app',
-        cache: { freshness: 'non-authoritative' },
-        renderer: 'host-descriptor',
-        title: 'HR Mounted Workbench',
-      })
-      const frameRes = await fetch(`${baseUrl}/frames/widgets/hr-people-widget`, {
+      expect(legacyRouteSurfaceRes.status).toBe(404)
+      const legacyPanelSurfaceRes = await fetch(`${baseUrl}/surfaces/panels/hr-profile-panel`, {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
       })
-      expect(frameRes.status).toBe(200)
-      expect(await frameRes.text()).toContain('Mounted HR frame surface')
-      const actionRes = await fetch(`${baseUrl}/protocol/actions`, {
+      expect(legacyPanelSurfaceRes.status).toBe(404)
+      const routeMicroAppRes = await fetch(`${baseUrl}/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(routeMicroAppRes.status).toBe(200)
+      const routeMicroAppHtml = await routeMicroAppRes.text()
+      expect(routeMicroAppHtml).toContain('HR People Workbench')
+      expect(routeMicroAppHtml).toContain('Ben People Profile')
+      expect(routeMicroAppHtml).toContain('Profile patch ready')
+      expect(routeMicroAppHtml).toContain('Confirmed Facts')
+      expect(routeMicroAppHtml).toContain('Primary sources')
+      expect(routeMicroAppHtml).toContain('<link rel="stylesheet" href="/api/local/apps/aiworker-hr/styles.css">')
+      expect(routeMicroAppHtml).toContain('<html lang="en" class="h-full" style="color-scheme:light">')
+      expect(routeMicroAppHtml).toContain('<body class="h-full overflow-hidden">')
+      expect(routeMicroAppHtml).toContain('<main id="aiworker-hr-root" class="h-full min-h-0"')
+      expect(routeMicroAppHtml).toContain('data-slot="card"')
+      expect(routeMicroAppHtml).toContain('data-slot="table"')
+      expect(routeMicroAppHtml).toContain('data-soul-app-id="aiworker-hr"')
+      expect(routeMicroAppHtml).toContain('id="aiworker-micro-app-host-data"')
+      expect(routeMicroAppHtml).toContain('"appId":"aiworker-hr"')
+      expect(routeMicroAppHtml).toContain('"routePrefix":"/api/local/apps/aiworker-hr"')
+      expect(routeMicroAppHtml).toContain('"theme":"light"')
+      expect(routeMicroAppHtml).toContain('"workerId":"hr-worker"')
+      expect(routeMicroAppHtml).toContain('"workspaceId":"workspace-1"')
+      expect(routeMicroAppHtml).toContain('window.microApp')
+      expect(routeMicroAppHtml).toContain('api.addDataListener(receiveHostData, true)')
+      expect(routeMicroAppHtml).toContain('api.dispatch(payload)')
+      expect(routeMicroAppHtml).toContain('<script type="module" src="/api/local/apps/aiworker-hr/assets/hr-home-client.js"></script>')
+      expect(routeMicroAppHtml).toContain('data-slot="hr-profile-list-column"')
+      expect(routeMicroAppHtml).toContain('data-slot="hr-reading-room-column"')
+      expect(routeMicroAppHtml).toContain('data-slot="hr-profile-composer-column"')
+      expect(routeMicroAppHtml).toContain('data-hr-child-route="/hr"')
+      expect(routeMicroAppHtml).toContain('data-hr-route-action="new-profile"')
+      expect(routeMicroAppHtml).toContain('data-hr-profile-id="profile-ben"')
+      expect(routeMicroAppHtml).toContain('target.closest(\'[data-hr-route-path],[data-hr-route-action]\')')
+      expect(routeMicroAppHtml).toContain('window.__AIWORKER_HR_CHILD_ROUTE__')
+      expect(routeMicroAppHtml).toContain('data-hr-route-path="/hr/profiles/profile-ben"')
+      expect(routeMicroAppHtml).toContain('data-layout="reading-room-primary"')
+      expect(routeMicroAppHtml).toContain('hr-reading-room-grid')
+      expect(routeMicroAppHtml).toContain('data-left-panel="open"')
+      expect(routeMicroAppHtml).toContain('data-right-panel="open"')
+      expect(routeMicroAppHtml).not.toContain('xl:grid-cols-[minmax(12rem,0.55fr)_minmax(0,1.85fr)_minmax(15rem,0.72fr)]')
+      expect(routeMicroAppHtml).not.toContain('Host-mounted HR route surface.')
+      const clientRes = await fetch(`${baseUrl}/assets/hr-home-client.js`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect([200, 503]).toContain(clientRes.status)
+      if (clientRes.status === 503) {
+        expect(await clientRes.text()).toContain('Soul App client asset has not been built')
+      }
+      else {
+        expect(clientRes.headers.get('cache-control')).toBe('no-store')
+        expect(clientRes.headers.get('content-type')).toContain('text/javascript')
+      }
+      const darkRouteMicroAppRes = await fetch(`${baseUrl}/micro-app/routes/hr-home?theme=dark`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(darkRouteMicroAppRes.status).toBe(200)
+      const darkRouteMicroAppHtml = await darkRouteMicroAppRes.text()
+      expect(darkRouteMicroAppHtml).toContain('<html lang="en" class="dark h-full" style="color-scheme:dark">')
+      const microAppRes = await fetch(`${baseUrl}/micro-app/widgets/hr-people-widget`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(microAppRes.status).toBe(200)
+      const microAppHtml = await microAppRes.text()
+      expect(microAppHtml).toContain('Mounted HR micro-app surface')
+      expect(microAppHtml).toContain('<link rel="stylesheet" href="/api/local/apps/aiworker-hr/styles.css">')
+      expect(microAppHtml).toContain('id="aiworker-micro-app-host-data"')
+      expect(microAppHtml).toContain('window.microApp')
+      expect(microAppHtml).toContain('data-slot="card"')
+      expect(microAppHtml).toContain('data-slot="item-content"')
+      expect(microAppHtml).not.toContain('<h1>People Widget</h1>')
+      const legacyActionRes = await fetch(`${baseUrl}/protocol/actions`, {
         body: JSON.stringify({ input: {}, protocolAction: 'peopleProfiles.create' }),
+        headers: {
+          'content-type': 'application/json',
+          'x-aiworker-mount-token': 'test-hr-mounted-token',
+        },
+        method: 'POST',
+      })
+      expect(legacyActionRes.status).toBe(404)
+      const legacyCapabilitiesRes = await fetch(`${baseUrl}/protocol/capabilities`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(legacyCapabilitiesRes.status).toBe(404)
+      const actionRes = await fetch(`${baseUrl}/api/people-profiles`, {
+        body: JSON.stringify({ input: {} }),
         headers: {
           'content-type': 'application/json',
           'x-aiworker-mount-token': 'test-hr-mounted-token',
@@ -108,28 +177,30 @@ describe('HR reference Soul App', () => {
       expect(await actionRes.json()).toMatchObject({
         message: 'People profile draft opened by HR app.',
         ok: true,
-        redirectTo: '/hr/people',
+        redirectTo: '/hr/profiles/new',
         refresh: true,
       })
-      const configurationRes = await fetch(`${baseUrl}/protocol/actions`, {
-        body: JSON.stringify({ input: {}, protocolAction: 'configuration.open' }),
-        headers: {
-          'content-type': 'application/json',
-          'x-aiworker-mount-token': 'test-hr-mounted-token',
-        },
-        method: 'POST',
-      })
-      expect(configurationRes.status).toBe(200)
-      expect(await configurationRes.json()).toMatchObject({
-        message: 'HR configuration is owned by the HR app.',
-        ok: true,
-      })
-      const wrongMethodActionRes = await fetch(`${baseUrl}/protocol/actions`, {
+      const wrongMethodActionRes = await fetch(`${baseUrl}/api/people-profiles`, {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
       })
       expect(wrongMethodActionRes.status).toBe(404)
 
-      const searchRes = await fetch(`${baseUrl}/protocol/search?providerId=peopleProfiles.search&query=ada&limit=2`, {
+      const capabilitiesRes = await fetch(`${baseUrl}/api/capabilities`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(capabilitiesRes.status).toBe(200)
+      expect(await capabilitiesRes.json()).toMatchObject({
+        capabilities: expect.arrayContaining([
+          expect.objectContaining({ id: 'person-profile' }),
+        ]),
+      })
+      const wrongMethodCapabilitiesRes = await fetch(`${baseUrl}/api/capabilities`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+        method: 'POST',
+      })
+      expect(wrongMethodCapabilitiesRes.status).toBe(404)
+
+      const searchRes = await fetch(`${baseUrl}/api/people-profiles/search?query=ada&limit=2`, {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
       })
       expect(searchRes.status).toBe(200)
@@ -139,9 +210,12 @@ describe('HR reference Soul App', () => {
           authority: 'soul-app',
           kind: 'people-profile',
         })],
-        providerId: 'peopleProfiles.search',
       })
-      const wrongMethodSearchRes = await fetch(`${baseUrl}/protocol/search`, {
+      const legacySearchRes = await fetch(`${baseUrl}/protocol/search?providerId=peopleProfiles.search&query=ada&limit=2`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(legacySearchRes.status).toBe(404)
+      const wrongMethodSearchRes = await fetch(`${baseUrl}/api/people-profiles/search`, {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
         method: 'POST',
       })
@@ -156,58 +230,9 @@ describe('HR reference Soul App', () => {
     }
   })
 
-  it('persists people profile drafts through Host broker storage when mounted context is present', async () => {
+  it('keeps people profile drafts app-owned in mounted mode', async () => {
     const previousToken = Bun.env.AIWORKER_MOUNT_TOKEN
     Bun.env.AIWORKER_MOUNT_TOKEN = 'test-hr-mounted-token'
-    const storageCalls: Array<{ body: Record<string, unknown>, mountToken: string | null, path: string, search: URLSearchParams }> = []
-    const searchQueryCalls: Array<{ mountToken: string | null, path: string, search: URLSearchParams }> = []
-    const searchUpsertCalls: Array<{ body: Record<string, unknown>, mountToken: string | null, path: string, search: URLSearchParams }> = []
-    const host = Bun.serve({
-      async fetch(request) {
-        const url = new URL(request.url)
-        if (request.method === 'PUT' && url.pathname === '/api/local/apps/aiworker-hr/broker/storage/drafts/people-profile/workspace-hr') {
-          storageCalls.push({
-            body: await request.json() as Record<string, unknown>,
-            mountToken: request.headers.get('x-aiworker-mount-token'),
-            path: url.pathname,
-            search: url.searchParams,
-          })
-          return Response.json({ record: { appId: 'aiworker-hr', key: 'drafts/people-profile/workspace-hr' } })
-        }
-        if (request.method === 'PUT' && url.pathname === '/api/local/apps/aiworker-hr/broker/search/drafts/people-profile/workspace-hr') {
-          searchUpsertCalls.push({
-            body: await request.json() as Record<string, unknown>,
-            mountToken: request.headers.get('x-aiworker-mount-token'),
-            path: url.pathname,
-            search: url.searchParams,
-          })
-          return Response.json({ record: { appId: 'aiworker-hr', id: 'drafts/people-profile/workspace-hr' } })
-        }
-        if (request.method === 'GET' && url.pathname === '/api/local/apps/aiworker-hr/broker/search') {
-          searchQueryCalls.push({
-            mountToken: request.headers.get('x-aiworker-mount-token'),
-            path: url.pathname,
-            search: url.searchParams,
-          })
-          return Response.json({
-            authority: 'soul-app',
-            items: [{
-              appId: 'aiworker-hr',
-              authority: 'soul-app',
-              id: 'drafts/people-profile/workspace-hr',
-              kind: 'people-profile',
-              summary: 'Broker-indexed HR profile descriptor',
-              title: 'Indexed People Profile',
-              workspaceId: 'workspace-hr',
-            }],
-            query: url.searchParams.get('query') ?? '',
-          })
-        }
-        return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
-      },
-      hostname: '127.0.0.1',
-      port: 0,
-    })
     const server = serveHostMounted(0)
     const baseUrl = `http://127.0.0.1:${server.port}`
     const mountContext = Buffer.from(JSON.stringify({
@@ -218,11 +243,10 @@ describe('HR reference Soul App', () => {
     })).toString('base64url')
 
     try {
-      const actionRes = await fetch(`${baseUrl}/protocol/actions`, {
-        body: JSON.stringify({ input: {}, protocolAction: 'peopleProfiles.create' }),
+      const actionRes = await fetch(`${baseUrl}/api/people-profiles`, {
+        body: JSON.stringify({ input: {} }),
         headers: {
           'content-type': 'application/json',
-          'x-aiworker-host-url': `http://127.0.0.1:${host.port}`,
           'x-aiworker-mount-context': mountContext,
           'x-aiworker-mount-token': 'test-hr-mounted-token',
         },
@@ -231,46 +255,9 @@ describe('HR reference Soul App', () => {
 
       expect(actionRes.status).toBe(200)
       expect(await actionRes.json()).toMatchObject({ ok: true, refresh: true })
-      const storageCall = storageCalls[0]
-      expect(storageCall).toBeDefined()
-      expect(storageCall!.mountToken).toBe('test-hr-mounted-token')
-      expect(storageCall!.path).toBe('/api/local/apps/aiworker-hr/broker/storage/drafts/people-profile/workspace-hr')
-      expect(storageCall!.search.get('operatorId')).toBe('operator-local')
-      expect(storageCall!.search.get('sessionId')).toBe('session-hr')
-      expect(storageCall!.search.get('workerId')).toBe('worker-hr')
-      expect(storageCall!.search.get('workspaceId')).toBe('workspace-hr')
-      expect(storageCall!.body).toMatchObject({
-        valueJson: {
-          appId: 'aiworker-hr',
-          kind: 'people-profile',
-          source: 'hr-mounted-action',
-          status: 'draft',
-          workspaceId: 'workspace-hr',
-        },
-      })
-      const searchUpsertCall = searchUpsertCalls[0]
-      expect(searchUpsertCall).toBeDefined()
-      expect(searchUpsertCall!.mountToken).toBe('test-hr-mounted-token')
-      expect(searchUpsertCall!.path).toBe('/api/local/apps/aiworker-hr/broker/search/drafts/people-profile/workspace-hr')
-      expect(searchUpsertCall!.search.get('operatorId')).toBe('operator-local')
-      expect(searchUpsertCall!.search.get('sessionId')).toBe('session-hr')
-      expect(searchUpsertCall!.search.get('workerId')).toBe('worker-hr')
-      expect(searchUpsertCall!.search.get('workspaceId')).toBe('workspace-hr')
-      expect(searchUpsertCall!.body).toMatchObject({
-        kind: 'people-profile',
-        reference: {
-          id: 'workspace-hr',
-          type: 'workspace',
-        },
-        sessionId: 'session-hr',
-        summary: 'HR app-owned people profile draft for workspace workspace-hr.',
-        title: 'People profile draft',
-        workspaceId: 'workspace-hr',
-      })
 
-      const searchRes = await fetch(`${baseUrl}/protocol/search?providerId=peopleProfiles.search&query=ada&limit=2`, {
+      const searchRes = await fetch(`${baseUrl}/api/people-profiles/search?query=people&limit=2`, {
         headers: {
-          'x-aiworker-host-url': `http://127.0.0.1:${host.port}`,
           'x-aiworker-mount-context': mountContext,
           'x-aiworker-mount-token': 'test-hr-mounted-token',
         },
@@ -279,21 +266,12 @@ describe('HR reference Soul App', () => {
       expect(await searchRes.json()).toMatchObject({
         items: [expect.objectContaining({
           id: 'drafts/people-profile/workspace-hr',
-          title: 'Indexed People Profile',
+          title: 'People profile draft',
         })],
-        providerId: 'peopleProfiles.search',
       })
-      const searchQueryCall = searchQueryCalls[0]
-      expect(searchQueryCall).toBeDefined()
-      expect(searchQueryCall!.mountToken).toBe('test-hr-mounted-token')
-      expect(searchQueryCall!.path).toBe('/api/local/apps/aiworker-hr/broker/search')
-      expect(searchQueryCall!.search.get('operatorId')).toBe('operator-local')
-      expect(searchQueryCall!.search.get('query')).toBe('ada')
-      expect(searchQueryCall!.search.get('workspaceId')).toBe('workspace-hr')
     }
     finally {
       server.stop()
-      host.stop()
       if (previousToken === undefined)
         delete Bun.env.AIWORKER_MOUNT_TOKEN
       else
@@ -302,6 +280,35 @@ describe('HR reference Soul App', () => {
   })
 
   it('runs the HR app in standalone and Host-mounted smoke paths', async () => {
+    const standaloneHtml = renderStandaloneHtml()
+    expect(standaloneHtml).toContain('<html lang="en" class="h-full">')
+    expect(standaloneHtml).toContain('<body class="h-full overflow-hidden" data-soul-app-id="aiworker-hr">')
+    expect(standaloneHtml).toContain('<main id="aiworker-hr-root" class="h-full min-h-0">')
+    expect(standaloneHtml).toContain('<link rel="stylesheet" href="/styles.css">')
+    expect(standaloneHtml).toContain('<script id="aiworker-micro-app-host-data" type="application/json" data-slot="micro-app-host-data">{"appId":"aiworker-hr","routePrefix":"standalone://aiworker-hr"}</script>')
+    expect(standaloneHtml).toContain('<script type="module" src="/assets/hr-home-client.js"></script>')
+    expect(standaloneHtml).toContain('data-slot="card"')
+    expect(standaloneHtml).toContain('People Profiles')
+    expect(standaloneHtml).toContain('Current Profile Summary')
+    expect(standaloneHtml).toContain('Confirmed Facts')
+    expect(standaloneHtml).not.toContain(`<h1>${hrManifestJson.name}</h1>`)
+
+    const standaloneServer = serveStandalone(0)
+    try {
+      const clientRes = await fetch(`http://127.0.0.1:${standaloneServer.port}/assets/hr-home-client.js`)
+      expect([200, 503]).toContain(clientRes.status)
+      if (clientRes.status === 503) {
+        expect(await clientRes.text()).toContain('Soul App client asset has not been built')
+      }
+      else {
+        expect(clientRes.headers.get('cache-control')).toBe('no-store')
+        expect(clientRes.headers.get('content-type')).toContain('text/javascript')
+      }
+    }
+    finally {
+      standaloneServer.stop()
+    }
+
     const standaloneRoot = tempRoot('standalone')
     const standalone = await createStandaloneSoulAppRuntime(hrReferenceSoulApp, {
       appHome: standaloneRoot,
@@ -330,8 +337,8 @@ describe('HR reference Soul App', () => {
       metadata: standalone.sessionMetadata(capabilityId),
       sessionId: session.id,
     })
-    expect(result.artifacts[0]?.metadataJson.soulAppId).toBe('aiworker-hr')
-    expect(result.review?.verdict).toBe('needs_review')
+    expect(result.turn.status).toBe('succeeded')
+    expect(result.files).toEqual([])
 
     const mountedRoot = tempRoot('mounted')
     const mounted = await createMountedSoulAppTestRuntime(hrReferenceSoulApp, {

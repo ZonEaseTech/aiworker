@@ -141,60 +141,6 @@ describe('aiworker local CLI', () => {
     process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`
   }
 
-  async function writeFakeCodexArtifactCommand(): Promise<void> {
-    const binDir = path.join(root, 'bin')
-    mkdirSync(binDir, { recursive: true })
-    const commandPath = path.join(binDir, 'codex')
-    await writeFile(commandPath, [
-      '#!/usr/bin/env bash',
-      'set -euo pipefail',
-      'prompt="$(cat)"',
-      'artifact_path="$(printf \'%s\\n\' "$prompt" | sed -n \'s/^- Prefer \\(artifacts\\/[^ ]*\\) for a new .*$/\\1/p\' | head -n 1)"',
-      'if [ -z "$artifact_path" ]; then artifact_path="artifacts/unknown-session/profile-update-proposal.md"; fi',
-      'mkdir -p "$(dirname "$artifact_path")"',
-      'artifact_content="$(printenv FAKE_CODEX_ARTIFACT_CONTENT || true)"',
-      'if [ -z "$artifact_content" ]; then artifact_content="# Empty Artifact"; fi',
-      'printf \'%s\\n\' "$artifact_content" > "$artifact_path"',
-      'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"agent_message","text":"Artifact written."}}\'',
-      '',
-    ].join('\n'))
-    await chmod(commandPath, 0o755)
-    process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`
-  }
-
-  async function createProfilePromotionArtifact(content: string): Promise<{ artifactId: string, rootPath: string, workspaceId: string }> {
-    await writeFakeCodexArtifactCommand()
-    process.env.FAKE_CODEX_ARTIFACT_CONTENT = content
-    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
-    output = ''
-    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
-    output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', 'aiworker-hr'))).toBe(0)
-    output = ''
-    expect(await runCli(argv('workspace', 'create', '--name', 'Ada Profile', '--type', 'people-profile', '--worker', 'hr-recruiting'))).toBe(0)
-    const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
-    output = ''
-    expect(await runCli(argv(
-      'session',
-      'start',
-      '--worker',
-      'hr-recruiting',
-      '--workspace',
-      workspace.id,
-      '--skill',
-      namespaceSoulAppCapabilityId('aiworker-hr', 'profile-update-proposal'),
-      '--title',
-      'Profile Update Proposal',
-      '--context',
-      'Synthetic profile promotion CLI test.',
-      '--input',
-      'Create a profile update proposal.',
-    ))).toBe(0)
-    const result = JSON.parse(output) as { artifacts: Array<{ id: string }> }
-    output = ''
-    return { artifactId: result.artifacts[0]!.id, rootPath: workspace.rootPath, workspaceId: workspace.id }
-  }
-
   async function updateScratchEntries(parentDir: string): Promise<string[]> {
     return (await readdir(parentDir)).filter(entry => entry.startsWith('.aiworker-update-') || entry.startsWith('.aiworker-next-'))
   }
@@ -223,6 +169,11 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('dev')
     expect(output).toContain('daemon start|foreground|status|stop|restart|logs|check')
     expect(output).toContain('app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke')
+    expect(output).toContain('compatibility inspection: template list; files list|show')
+    expect(output).not.toContain('artifacts list|show|open')
+    expect(output).not.toContain('profile promote')
+    expect(output).not.toContain('review list|show')
+    expect(output).not.toContain('lessons list|propose|accept|reject')
   })
 
   it('shows compact top-level help unless all commands are requested', async () => {
@@ -237,6 +188,27 @@ describe('aiworker local CLI', () => {
 
     expect(output).toContain('Commands:')
     expect(output).toContain('app create <id>')
+    expect(output).toContain('compatibility inspection: list app-declared session templates')
+    expect(output).toContain('compatibility inspection: list workspace files')
+    expect(output).toContain('compatibility inspection: print workspace file')
+    expect(output).not.toContain('deprecated compatibility: list app output descriptors')
+    expect(output).not.toContain('deprecated HR compatibility: promote app output into a workspace README')
+    expect(output).not.toContain('artifacts list')
+    expect(output).not.toContain('profile promote')
+  })
+
+  it('rejects removed generic work-object commands', async () => {
+    for (const args of [
+      ['artifacts', 'list'],
+      ['artifacts', 'show', 'artifact-1'],
+      ['profile', 'promote'],
+      ['review', 'list'],
+      ['lessons', 'list'],
+      ['lessons', 'propose'],
+    ]) {
+      output = ''
+      expect(await runCli(argv(...args))).toBe(1)
+    }
   })
 
   it('resolves package-local official apps before source apps', async () => {
@@ -327,7 +299,7 @@ describe('aiworker local CLI', () => {
     await expect(stat(path.join(root, '.aiworker'))).rejects.toThrow()
   })
 
-  it('creates workspace/session command records and lists artifacts with a mocked engine', async () => {
+  it('creates workspace/session command records with a mocked engine', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
@@ -382,165 +354,12 @@ describe('aiworker local CLI', () => {
       'Create the evidence matrix.',
     ))).toBe(0)
     const result = JSON.parse(output) as {
-      invocation: { metadataJson: Record<string, unknown> }
-      session: { id: string, metadataJson: Record<string, unknown> }
+      invocation: { sessionId: string }
+      session: { id: string }
     }
 
-    expect(result.session.metadataJson.capabilityPrompt).toMatchObject({
-      content: expect.stringContaining('Use AIWorker HR domain evidence'),
-      ref: './product/workflows/evidence-matrix/prompt.md',
-    })
-    expect(result.invocation.metadataJson.capabilityReviewRubric).toMatchObject({
-      content: expect.stringContaining('Evidence Matrix Review Rubric'),
-      ref: './product/workflows/evidence-matrix/review.md',
-    })
-    await expect(readFile(
-      path.join(workspace.rootPath, '.aiworker', 'sessions', result.session.id, 'context', 'capability', 'prompt.md'),
-      'utf8',
-    ))
-      .resolves
-      .toContain('Use AIWorker HR domain evidence')
-    await expect(readFile(
-      path.join(workspace.rootPath, '.aiworker', 'sessions', result.session.id, 'context', 'capability', 'review.md'),
-      'utf8',
-    ))
-      .resolves
-      .toContain('Evidence Matrix Review Rubric')
-  })
-
-  it('promotes a fenced profile draft from the CLI without writing proposal notes to README', async () => {
-    const promotion = await createProfilePromotionArtifact([
-      '# Profile Update Proposal',
-      '',
-      'Proposal Notes: approve this draft.',
-      '',
-      '```aiworker-profile-readme',
-      '# Accepted Ada Profile',
-      '',
-      'Reviewed profile summary.',
-      '```',
-    ].join('\n'))
-
-    expect(await runCli(argv(
-      'profile',
-      'promote',
-      '--worker',
-      'hr-recruiting',
-      '--workspace',
-      promotion.workspaceId,
-      '--artifact',
-      promotion.artifactId,
-      '--verdict',
-      'pass',
-      '--finding',
-      'Approved by CLI test.',
-      '--risk',
-      'Open facts stay tracked.',
-    ))).toBe(0)
-    const body = JSON.parse(output) as { profileRevision: { profilePath: string, review: { verdict: string } }, source: string }
-    expect(body.profileRevision.profilePath).toBe('README.md')
-    expect(body.profileRevision.review.verdict).toBe('pass')
-    expect(body.source).toBe('fenced-draft')
-    const readme = await readFile(path.join(promotion.rootPath, 'README.md'), 'utf8')
-    expect(readme).toContain('Accepted Ada Profile')
-    expect(readme).not.toContain('Proposal Notes')
-  })
-
-  it('rejects CLI profile promotion when the artifact is missing a fenced draft', async () => {
-    const promotion = await createProfilePromotionArtifact('# Profile Update Proposal\n\nNo accepted draft yet.')
-
-    expect(await runCli(argv(
-      'profile',
-      'promote',
-      '--worker',
-      'hr-recruiting',
-      '--workspace',
-      promotion.workspaceId,
-      '--artifact',
-      promotion.artifactId,
-      '--verdict',
-      'pass',
-    ))).toBe(1)
-  })
-
-  it('rejects CLI profile promotion when the accepted draft has proposal-state language', async () => {
-    const promotion = await createProfilePromotionArtifact([
-      '```aiworker-profile-readme',
-      '# Accepted Ada Profile',
-      '',
-      '> Accepted People Profile for this HR workspace. Agent outputs remain proposals until review.',
-      '',
-      '## Review State',
-      '',
-      'Accepted profile revision ready for HR review.',
-      '```',
-    ].join('\n'))
-
-    expect(await runCli(argv(
-      'profile',
-      'promote',
-      '--worker',
-      'hr-recruiting',
-      '--workspace',
-      promotion.workspaceId,
-      '--artifact',
-      promotion.artifactId,
-      '--verdict',
-      'pass',
-    ))).toBe(1)
-  })
-
-  it('rejects CLI profile promotion verdicts that cannot approve README writes', async () => {
-    const promotion = await createProfilePromotionArtifact([
-      '```aiworker-profile-readme',
-      '# Accepted Ada Profile',
-      '',
-      'Reviewed profile summary.',
-      '```',
-    ].join('\n'))
-
-    expect(await runCli(argv(
-      'profile',
-      'promote',
-      '--worker',
-      'hr-recruiting',
-      '--workspace',
-      promotion.workspaceId,
-      '--artifact',
-      promotion.artifactId,
-      '--verdict',
-      'needs_review',
-    ))).toBe(1)
-    await expect(readFile(path.join(promotion.rootPath, 'README.md'), 'utf8'))
-      .resolves
-      .toContain('No approved profile revision yet.')
-  })
-
-  it('promotes explicit reviewed markdown from the CLI without requiring an artifact fence', async () => {
-    const promotion = await createProfilePromotionArtifact('# Profile Update Proposal\n\nNo accepted draft yet.')
-    const reviewedPath = path.join(root, 'reviewed-profile.md')
-    await writeFile(reviewedPath, '# Accepted Ada Profile\n\nReviewed from explicit file.\n')
-
-    expect(await runCli(argv(
-      'profile',
-      'promote',
-      '--worker',
-      'hr-recruiting',
-      '--workspace',
-      promotion.workspaceId,
-      '--artifact',
-      promotion.artifactId,
-      '--profile-markdown',
-      reviewedPath,
-      '--verdict',
-      'warn',
-    ))).toBe(0)
-    const body = JSON.parse(output) as { profileRevision: { review: { verdict: string } }, source: string }
-    expect(body.profileRevision.review.verdict).toBe('warn')
-    expect(body.source).toBe('explicit')
-    await expect(readFile(path.join(promotion.rootPath, 'README.md'), 'utf8'))
-      .resolves
-      .toContain('Reviewed from explicit file.')
+    expect(result.session.id).toBeTruthy()
+    expect(result.invocation.sessionId).toBeTruthy()
   })
 
   it('keeps upgrade discoverable only in the full command index', async () => {
@@ -796,52 +615,73 @@ describe('aiworker local CLI', () => {
       dependencies: Record<string, string>
     }
     const scaffoldReadme = await readFile(path.join(appDir, 'README.md'), 'utf8')
+    const scaffoldHostMounted = await readFile(path.join(appDir, 'host-adapter', 'mounted', 'host-mounted.ts'), 'utf8')
+    const scaffoldPrompt = await readFile(path.join(appDir, 'product', 'workflows', 'brief', 'prompt.md'), 'utf8')
     const scaffoldWorkspaceGitignore = await readFile(path.join(appDir, 'engine-assets', 'workspace', '.gitignore'), 'utf8')
     const scaffoldManifest = JSON.parse(await readFile(path.join(appDir, 'soul-app.manifest.json'), 'utf8')) as {
       ui: {
-        workbench?: {
-          actions?: Array<{ id: string, protocolAction: string, role: string }>
-          primaryAction?: { id: string, protocolAction: string, role: string }
-          search?: { id: string, protocolProvider: string }
-          configuration?: { id: string, protocolAction: string }
-        }
+        workbench?: unknown
+        routes?: Array<{
+          id: string
+          surface?: {
+            entry: string
+            renderer: string
+            scope: string
+          }
+        }>
         workspaceContext?: {
           terminal?: {
             cwd?: { source: string }
             id: string
           }
         }
+        workspaceWidgets?: Array<{
+          id: string
+          surface?: {
+            entry: string
+            renderer: string
+            scope: string
+          }
+        }>
       }
     }
     expect(scaffoldPackageJson.dependencies['@zonease/aiworker-soul-app-sdk']).toBe('workspace:*')
-    expect(scaffoldManifest.ui.workbench?.primaryAction).toEqual(expect.objectContaining({
-      id: 'create-brief',
-      protocolAction: 'briefs.create',
-      role: 'primary',
-    }))
-    expect(scaffoldManifest.ui.workbench?.actions).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'refresh-briefs',
-        protocolAction: 'briefs.refresh',
-        role: 'refresh',
+    expect(scaffoldManifest.ui).not.toHaveProperty('workbench')
+    expect(JSON.stringify(scaffoldManifest.ui)).not.toContain('host-descriptor')
+    expect(scaffoldManifest.ui.routes?.[0]).toEqual(expect.objectContaining({
+      id: 'brief-home',
+      surface: expect.objectContaining({
+        entry: '/micro-app/routes/brief-home',
+        renderer: 'micro-app',
+        scope: 'app',
       }),
-    ]))
-    expect(scaffoldManifest.ui.workbench?.search).toEqual(expect.objectContaining({
-      id: 'brief-search',
-      protocolProvider: 'briefs.search',
-    }))
-    expect(scaffoldManifest.ui.workbench?.configuration).toEqual(expect.objectContaining({
-      id: 'configure-app',
-      protocolAction: 'configuration.open',
     }))
     expect(scaffoldManifest.ui.workspaceContext?.terminal).toEqual(expect.objectContaining({
       cwd: { source: 'host-workspace-root' },
       id: 'starter-workspace-terminal',
     }))
+    expect(scaffoldManifest.ui.workspaceWidgets?.[0]).toEqual(expect.objectContaining({
+      id: 'brief-widget',
+      surface: {
+        entry: '/micro-app/widgets/brief-widget',
+        renderer: 'micro-app',
+        scope: 'workspace',
+      },
+    }))
     expect(scaffoldReadme).toContain('source-checkout preview')
-    expect(scaffoldReadme).toContain('ui.workbench')
+    expect(scaffoldReadme).toContain('micro-app')
+    expect(scaffoldReadme).toContain('app-owned mounted API')
+    expect(scaffoldReadme).not.toContain('ui.workbench')
     expect(scaffoldReadme).toContain('ui.workspaceContext')
     expect(scaffoldReadme).toContain('replace `workspace:*` after the SDK is published')
+    expect(scaffoldHostMounted).toContain('/micro-app/routes/brief-home')
+    expect(scaffoldHostMounted).toContain('/api/briefs')
+    expect(scaffoldHostMounted).toContain('/api/briefs/search')
+    expect(scaffoldHostMounted).not.toContain('/protocol/actions')
+    expect(scaffoldHostMounted).not.toContain('/protocol/search')
+    expect(scaffoldHostMounted).not.toContain('/broker/')
+    expect(scaffoldHostMounted).not.toContain('host-descriptor')
+    expect(scaffoldPrompt).not.toContain('broker')
     expect(scaffoldWorkspaceGitignore).toContain('.aiworker/sessions/')
     expect(scaffoldWorkspaceGitignore).toContain('.aiworker/projections.json')
     expect(scaffoldWorkspaceGitignore).toContain('evidence/raw/')
@@ -866,7 +706,6 @@ describe('aiworker local CLI', () => {
     expect(validation.validation.privateImportIssues).toEqual([])
     expect(validation.validation.checkedAssets).toContain('./engine-assets/workspace')
     expect(validation.validation.checkedAssets).toContain('./engine-assets/skills')
-    expect(validation.validation.checkedAssets).toContain('./product/artifacts/schemas/brief.schema.json')
     expect(validation.validation.checkedAssets).toContain('./host-adapter/standalone/standalone.ts')
     expect(validation.validation.checkedAssets).toContain('./host-adapter/mounted/host-mounted.ts')
     expect(validation.validation.checkedAssets).toContain('./host-adapter/index.ts')
@@ -886,13 +725,11 @@ describe('aiworker local CLI', () => {
         standaloneHttpStatus: number
         standaloneUrl: string
         status: string
-        workbenchAction: string
-        workbenchSearch: string
       }
     }
     expect(smoke.smoke).toMatchObject({
       appId: 'demo-soul-app',
-      artifactCount: 1,
+      artifactCount: 0,
       hostedStatus: 'enabled',
       mounted: 'pass',
       mountedService: 'pass',
@@ -900,31 +737,11 @@ describe('aiworker local CLI', () => {
       standalone: 'pass',
       standaloneHttpStatus: 200,
       status: 'pass',
-      workbenchAction: 'pass',
-      workbenchSearch: 'pass',
     })
+    expect(smoke.smoke).not.toHaveProperty('workbenchAction')
+    expect(smoke.smoke).not.toHaveProperty('workbenchSearch')
     expect(smoke.smoke.standaloneUrl).toStartWith('http://127.0.0.1:')
     expect(smoke.smoke.mountedServiceUrl).toStartWith('http://127.0.0.1:')
-  })
-
-  it('fails Soul App validation when an artifact schema hash does not match the file', async () => {
-    const appDir = path.join(root, 'hash-check-app')
-
-    expect(await runCli(argv('app', 'create', 'hash-check-app', '--dir', appDir))).toBe(0)
-    output = ''
-    await writeFile(path.join(appDir, 'product/artifacts/schemas/brief.schema.json'), '{"type":"object","properties":{"tampered":{"type":"string"}}}\n')
-
-    expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
-    const validation = JSON.parse(output) as {
-      validation: {
-        assetIssues: Array<{ code: string, path: string }>
-        status: string
-      }
-    }
-    expect(validation.validation.status).toBe('fail')
-    expect(validation.validation.assetIssues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'asset_hash_mismatch', path: './product/artifacts/schemas/brief.schema.json' }),
-    ]))
   })
 
   it('fails Soul App validation on Host private imports', async () => {

@@ -1,5 +1,954 @@
 # AIWorker Changelog
 
+## 2026-05-21 19:34 [completed] Fixed HR mounted reading-room layout
+
+Restored the HR Soul App reading-room layout when mounted through Host Web
+`micro-app`. The root cause was not a lost child-app viewport: the HR app could
+match the desktop viewport, but its Tailwind arbitrary grid selector did not
+survive the micro-app scoped CSS path, and the fallback `grid-cols-1` utility
+continued to override the app-owned grid.
+
+HR now owns a scoped-safe `hr-reading-room-grid` selector with panel-state data
+attributes for narrow and desktop layouts. Host Web still renders only the
+generic mounted micro-app container, while the mounted smoke now verifies the
+computed desktop three-column and narrow one-column grids in a real browser.
+
+## 2026-05-21 18:31 [completed] Made WorkerStudio mounted-first
+
+Aligned `WorkerStudio` with the current Host boundary. Worker Web now prefers
+declared app-owned `micro-app` routes across worker, workspace and session
+locators, and passes worker/workspace/session ids to the mounted Soul App only
+as narrow context.
+
+The Host-owned workspace session composer, session chat and session detail
+surface are no longer rendered in the default WorkerStudio path. If a Soul App
+does not expose a mounted route for a workspace/session locator, Worker Web
+shows a generic no-mounted-surface fallback instead of starting sessions,
+continuing turns or interpreting app-owned output.
+
+## 2026-05-21 16:36 [completed] Retired Host generic review and lesson flow
+
+Removed Host-owned generic review/lesson product primitives from the active
+local worker path. Worker DB migration `0005_fluffy_jane_foster.sql` drops the
+old `lessons` and `reviews` tables, storage/core/shared exports no longer
+publish generic review or lesson helpers, and runtime/executor session results
+now keep only session, event, file and artifact output references.
+
+The local daemon no longer exposes `/api/local/reviews`,
+`/api/local/lessons` or workspace `profile-revisions` as product APIs, and
+Worker Web no longer fetches or renders generic review/lesson controls in the
+default session surface.
+
+HR People Workbench now owns accepted profile state through workspace
+`README.md` reads/writes. The visible HR update capability has been renamed
+from `profile-update-proposal` to `profile-update-draft`, and active Host/Soul
+copy now uses output, profile draft, acceptance check and README patch language
+instead of generic proposal/review/promotion wording.
+
+## 2026-05-21 13:38 [completed] Added worker-scoped native engine invocation stream
+
+Added `POST /api/local/workers/:workerId/engine/invocations/stream` for the
+native Engine Bridge path. The daemon now streams a worker-scoped native
+invocation over SSE with initial status, native bridge stdout/stderr/status/exit
+events and a final result frame.
+
+The stream route reuses the non-stream native invocation request shape and
+persists only `worker_engine_invocations` metadata after the process exits. Raw
+stdin, stdout and stderr remain in the immediate HTTP/SSE exchange and are not
+stored in Host DB or interpreted as Host-owned product state.
+
+## 2026-05-21 13:02 [completed] Added worker-scoped native engine bridge spike
+
+Added a focused core native bridge primitive for the next Engine Bridge
+migration slice. `invokeNativeEngine` runs a native command in a resolved cwd,
+passes raw stdin through unchanged, streams stdout/stderr/status/exit events
+and returns invocation metadata without requiring workspace, session, turn,
+context-file or output descriptor fields.
+
+The existing workspace/session `LocalExecutor` path remains unchanged. Focused
+TDD tests prove the thin behavior and failure behavior, core worker regression
+tests remain green, and a temporary Codex CLI smoke confirmed the authenticated
+native runtime path can return a fixed marker through the new bridge.
+
+## 2026-05-21 13:18 [completed] Added worker-scoped native invocation metadata
+
+Added a parallel `worker_engine_invocations` metadata table for the native
+Engine Bridge path. The new table references only `workers`, keeps per-worker
+sequence numbers, and stores native runtime status, cwd and input/log refs
+without workspace, session, turn, prompt, raw input or context columns.
+
+Storage repository helpers can now create, update, fetch, list and sequence
+worker native invocation metadata while leaving the existing session-scoped
+`engine_invocations` path unchanged. Drizzle migration generation added the new
+native invocation migration.
+
+## 2026-05-21 13:26 [completed] Added worker-scoped native engine invocation API
+
+Added `POST /api/local/workers/:workerId/engine/invocations` as the first daemon
+API entrypoint for the native Engine Bridge path. The route accepts a worker id,
+cwd, raw input and native command data, invokes the command through
+`invokeNativeEngine`, and stores only `worker_engine_invocations` metadata.
+
+The endpoint does not create workspace, session or turn rows, does not store
+prompt/raw input/context in Host DB, and does not interpret stdout/stderr as
+worker-owned product state. Focused API coverage proves the route executes a
+temporary native command, records worker-level metadata and exposes the new path
+in OpenAPI without restoring retired control routes.
+
+## 2026-05-21 11:43 [completed] Removed official Soul App workbench protocol defaults
+
+Aligned the official HR and QA Soul Apps with the micro-app boundary that now
+backs scaffolded apps. Their reference manifests no longer declare default
+`ui.workbench` descriptors or host-descriptor route/panel surfaces, and their
+mount permissions now target app-owned micro-app surfaces.
+
+The HR and QA mounted services now expose app-owned API paths for create/search
+behavior and capabilities. Old `/surfaces/*`, `/protocol/actions`,
+`/protocol/search` and `/protocol/capabilities` defaults are covered as 404 in
+official app tests. Shared official fixtures, API mounted-surface tests and
+Worker Web tests were updated to follow the same default boundary.
+
+## 2026-05-21 11:07 [completed] Updated Soul App scaffold to micro-app defaults
+
+Aligned `aiworker app create` with the active micro-app boundary. Newly generated
+Soul Apps no longer include default `ui.workbench` descriptors, host-descriptor
+routes, `/protocol/actions`, `/protocol/search` or `/broker/*` handlers. The
+starter manifest now mounts a micro-app route/widget and the generated mounted
+service owns `/api/briefs` style API paths.
+
+`aiworker app smoke` no longer reports workbench action/search smoke fields.
+Active CLI and Soul App authoring docs now describe scaffold defaults as
+micro-app plus app-owned mounted API, with `ui.workbench` left only as
+compatibility metadata for non-default entry modes.
+
+## 2026-05-21 10:08 [completed] Removed Host workbench action/search bridge
+
+Continued the Local Shell + Engine Bridge simplification after the micro-app
+mounted runtime became the active Host/Soul boundary. The daemon no longer
+exposes Host-owned `/api/local/apps/:appId/actions/:actionId` or
+`/api/local/apps/:appId/search` product routes; app-owned mounted API paths
+continue to flow through the generic app proxy.
+
+Worker Web no longer renders manifest-declared workbench actions/search in the
+Host toolbar, and micro-app child data no longer supports Host-dispatched action
+events. Active architecture, Soul App authoring docs, SDK notes and Host/Soul
+skills now state that micro-app plus app-owned mounted APIs replace the old
+hand-rolled workbench protocol bridge.
+
+## 2026-05-21 09:11 [completed] Fed shared UI retirement guidance back into active docs
+
+Followed up the `packages/component` retirement with active documentation and
+AIWorker-owned skill guidance. The docs now describe the positive path for Web
+UI work: check `packages/ui`, compose shadcn-managed primitives, keep
+domain-specific UI in the owning app, and verify non-trivial UI changes with
+`bun run ui:check`.
+
+The update touched root guidance, README, Soul App authoring docs,
+`aiworker-host-dev`, `aiworker-soul-app-dev`, and the docs contract check.
+Generic `pma-web` and `shadcn` skills were intentionally left to their upstream
+authors.
+
+## 2026-05-21 02:40 [completed] Removed the retired component workspace package
+
+Removed the retired `packages/component` workspace package and regenerated the
+lockfile so `@zonease/aiworker-component` is no longer an active workspace
+package. `packages/ui` is now the only shared UI package for Host Web and
+official Soul App web surfaces.
+
+UI governance now treats `@zonease/aiworker-component` as a forbidden retired
+import, not as migration debt. The old migration-queue plumbing and
+`packages/component/src` scanning were removed, and the governance test now
+proves that a temporary Web source file importing the retired package fails the
+check.
+
+Active architecture, root agent guidance and the Host developer skill were
+updated to point to `packages/ui` as the shared UI target. Historical PMA,
+changelog and Superpowers records remain intact as audit trail. Verification
+covered UI governance, docs contract, workspace typecheck, focused HR/QA/Web/UI
+tests, Web build and code-review-graph review.
+
+## 2026-05-21 02:20 [completed] Consolidated active SessionComposer usage on packages/ui
+
+Closed the active SessionComposer duplication without touching the tuned chat
+surface. Host Web workspace and session turn composer wrappers now consume
+`@zonease/aiworker-ui/components/session-composer` directly, and the stale
+app-local composer implementation under `apps/web/src/features/session/` was
+removed after its behavior was covered by shared UI tests.
+
+The HR people workbench profile composer still owns HR-specific candidate
+material semantics, but now passes image preview URLs and labels into the shared
+composer, restoring thumbnail and dialog preview affordances for image
+attachments while revoking object URLs on removal, submit-clear and unmount.
+
+Verification covered focused HR/Web/UI tests, package typechecks, the Web
+build, and the full UI component governance audit. `WorkerSessionChat`, session
+timeline, session view-model and message-flow files were intentionally left
+unchanged.
+
+## 2026-05-20 18:24 [progress] Standardized Host-mounted Soul UI on micro-app
+
+Reset the Host/Soul mounted UI boundary after the shadcn migration exposed an
+architecture drift risk. App-owned mounted UI now uses `renderer: "micro-app"`
+with `/micro-app/*` entries, while Host Web renders a generic `<micro-app>`
+container and keeps HR/QA domain UI inside the owning Soul App packages.
+
+Shared manifest validation rejects stale `sandboxed-frame` renderers, the daemon
+returns a micro-app mount payload after grants and mounted-service readiness,
+Worker Studio passes narrow theme/surface context as micro-app data, and the
+official HR/QA mounted services serve app-owned micro-app HTML. The active
+architecture contract gained `MOUNT-001`; Soul App authoring docs, Host/Soul
+skills, app scaffold code and mounted-surface smoke helpers were updated to
+avoid reintroducing frame-based defaults.
+
+This is an architecture correction and prerequisite for continuing the
+shadcn-first migration, not a full UI migration completion claim.
+
+## 2026-05-20 16:24 [progress] Tightened status feedback onto shadcn Alert surfaces
+
+Continued the shadcn-first migration after a boundary/status audit. The
+historical `apps/web/src/worker/souls` Host renderer tree remains deleted, and
+the current worktree has no active Host-owned HR renderer files on disk.
+
+Status and error feedback that had drifted into raw `ItemDescription` wrappers
+now renders through shadcn `Alert` / `AlertDescription`: Worker Studio startup
+load failures, Settings engine test feedback, Settings Soul App security-block
+errors, and artifact preview file-read failures. The Web UI audit classification
+now explicitly accounts for Settings status callouts, so new shadcn Alert
+surfaces must be justified instead of silently increasing framed chrome.
+
+Verification: focused Web tests first failed because these messages still
+rendered as `data-slot="item-description"`, then passed after the Alert
+migration:
+`bun run --filter '@zonease/aiworker-web' test --
+src/worker/__tests__/worker-studio.test.tsx`. The full UI audit also passed:
+`bun scripts/check-web-ui-components.ts --all --audit`.
+
+This remains a progress checkpoint, not final migration completion.
+
+## 2026-05-20 16:08 [progress] Propagated Host theme and app CSS into mounted Soul App frames
+
+Closed the mounted-frame styling regression found during the shadcn migration
+checkpoint. Worker Studio now resolves the current Host appearance and passes it
+to app-owned mounted route surfaces as `?theme=dark|light`; the HR and QA mounted
+adapters apply that theme on their frame `<html>` element with the matching
+`color-scheme`.
+
+Mounted frame HTML now links app styles through the Host proxy path
+`/api/local/apps/<app-id>/styles.css` instead of the standalone-only
+`/styles.css`, so sandboxed HR/QA frames receive the active shadcn Tailwind
+bundle and font assets while standalone mode keeps `/styles.css`.
+
+Verification: the Web mounted-route tests first failed on the missing theme
+query and then passed; HR and QA mounted adapter tests first failed on missing
+dark frame/style-link behavior and then passed. Focused commands passed:
+`bun run --filter '@zonease/aiworker-web' test --
+src/worker/__tests__/worker-studio.test.tsx`, `bun run --filter
+'@zonease/aiworker-web' typecheck`, `bun run --filter '@zonease/aiworker-hr'
+test -- host-adapter/index.test.ts`, `bun run --filter '@zonease/aiworker-hr'
+typecheck`, `bun run --filter '@zonease/aiworker-qa' test --
+host-adapter/index.test.ts`, `bun run --filter '@zonease/aiworker-qa'
+typecheck`, `bun scripts/check-soul-app-boundaries.ts --completion-audit`, and
+`bun scripts/check-web-ui-components.ts --all --audit`. Browser verification on
+`localhost:5173` produced
+`output/hr-mounted-route-mobile-dark-theme-and-style-propagated.png`; the iframe
+source includes `?theme=dark`, the frame has `class="dark"`, loads
+`/api/local/apps/aiworker-hr/styles.css`, uses the Oxanium shadcn font, and card
+surfaces render with the expected 8px radius.
+
+This remains a progress checkpoint, not final migration completion.
+
+## 2026-05-20 15:40 [progress] Expanded HR mounted route into app-owned profile workbench surface
+
+Continued the shadcn-first migration after the Host/Soul boundary check. The
+HR `hr-home` mounted route now renders a profile-first workbench surface from
+`apps/aiworker-hr/product/web/routes/hr-route.tsx`: a People Profiles list and
+selected profile summary are composed with shadcn `Card`, `Item`, `Badge`, and
+`Button` primitives inside the HR app-owned product web boundary.
+
+The former `apps/web/src/worker/souls` Host renderer path remains deleted and
+empty on disk, and the Host action result for "HR configuration is owned by the
+HR app." is rendered through shadcn `Alert` / `AlertDescription` instead of a
+raw text wrapper. Focused verification: the new HR product web proof test first
+failed on the missing profile-first surface, then passed; `bun run --filter
+'@zonease/aiworker-hr' typecheck`, `bun run --filter '@zonease/aiworker-hr'
+test`, `bun run --filter '@zonease/aiworker-web' typecheck`, `bun run
+--filter '@zonease/aiworker-web' test --
+src/worker/__tests__/worker-studio.test.tsx`, `bun run ui:check`, `bun
+scripts/check-web-ui-components.ts --all --audit`, and `bun
+scripts/check-soul-app-boundaries.ts --completion-audit` passed. Browser
+verification against the active dev daemon confirmed the mounted HR route has
+two shadcn Card surfaces, two ItemGroups, `People Profiles`, `Current Profile
+Summary`, and no top-level Host `hr-people-workbench` nodes.
+
+The UI completion audit also gained a raw native control classification pass:
+remaining raw `<button>` and hidden file-input usage in session/composer paths
+must now be explicitly accepted as shadcn `asChild` trigger semantics or
+visually-hidden file picker plumbing. Unclassified raw controls block the full
+audit instead of hiding behind nearby shadcn imports.
+
+This is a progress checkpoint, not full migration completion. The final goal
+completion gate still requires a full custom style/component scan and fresh
+browser evidence across Host Web and official Soul App web surfaces.
+
+## 2026-05-20 15:12 [progress] Removed Host-embedded HR renderer from Worker Studio
+
+Continued the shadcn-first migration by removing the active Host-owned HR
+renderer path instead of polishing it further. `WorkerStudio` no longer imports
+or selects a specialized Soul renderer registry, the empty shared built-in
+workbench catalog now keeps HR app-owned, and the historical
+`apps/web/src/worker/souls` tree was deleted from Host Web. HR workspace/home
+surfaces now resolve through app-owned mounted frames or generic Host surfaces.
+
+The Web tests were updated to stop asserting Host-owned HR profile UI and now
+cover the app-owned mounted route, generic workbench action feedback through
+shadcn `Alert`, Host chrome, settings, worker rail, and session routes. The
+Soul App boundary and UI completion audits were updated from "known historical
+debt" to "no Host-embedded Soul renderer paths allowed"; both completion audit
+commands now pass for this boundary dimension.
+
+Focused verification: `bun run --filter '@zonease/aiworker-web' typecheck`,
+`bun run --filter '@zonease/aiworker-web' test --
+src/worker/__tests__/worker-studio.test.tsx`, `bun run --filter
+'@zonease/aiworker-shared' typecheck`, `bun run --filter
+'@zonease/aiworker-shared' test -- src/soul-workbench.test.ts`, `bun test
+scripts/check-soul-app-boundaries.test.ts scripts/check-web-ui-components.test.ts`,
+`bun scripts/check-soul-app-boundaries.ts --completion-audit`, and `bun
+scripts/check-web-ui-components.ts --completion-audit` passed. This is still a
+progress checkpoint, not full migration completion; the final full-tree custom
+style/component scan and browser validation remain required.
+
+## 2026-05-20 14:38 [progress] HR mounted route leaves Host-specialized renderer path
+
+Continued the shadcn-first migration by addressing the Host/Soul boundary
+signal directly. HR now declares its `hr-home` route as a `sandboxed-frame`
+mounted surface, the HR mounted service serves an app-owned shadcn route frame
+from `apps/aiworker-hr/product/web`, and Worker Studio prefers that frame over
+the legacy Host-specialized HR renderer when the selected app exposes it.
+
+The live dev state was corrected before browser verification: stale local
+manifest rows still using the old `ui.workbench.settings` contract were
+reinstalled/enabled with current HR/QA manifests, and `bun run dev:host` was
+started because 5173 had no reachable 9217 daemon. Playwright on
+`localhost:5173` confirmed the HR workspace renders one
+`iframe[data-slot="soul-app-mounted-frame"]` at
+`/api/local/apps/aiworker-hr/frames/routes/hr-home`, with
+`hostEmbeddedHrCount=0`; iframe content is `HR People Workbench` using shadcn
+Card and ItemGroup slots. The HR configure action status remains rendered
+through shadcn `Alert` / `AlertDescription` rather than raw wrapper text.
+
+This was superseded by the 15:12 boundary slice, which removed the historical
+Host-embedded HR renderer tree and converted the audits to a no-regression
+gate.
+
+## 2026-05-20 08:32 [progress] Shadcn overlay-rule audit tightening
+
+Continued the shadcn-first migration by scanning for rule gaps not covered by
+the previous class-dimension pass. Settings Dialog no longer carries a manual
+`z-10` overlay layer on its close/autosave action container; generated Dialog
+stacking now owns overlay order. The UI governance audit gained an explicit
+z-index dimension so future app-local `z-*` overlay styling is visible in the
+same report as border/radius/font/dark/arbitrary tokens. `MarkdownPreview`
+also dropped its redundant `text-foreground` class so markdown body color
+inherits from the shadcn surface instead of restating foreground styling.
+
+Focused verification: `bun scripts/check-web-ui-components.ts --all --audit`
+passed with no class-dimension findings and reduced MarkdownPreview visual
+density from 5 to 4 tokens. `MarkdownPreview` focused test, Worker Studio 40/40
+and Web typecheck passed. The Settings execution dialog was re-captured at
+`output/playwright/current-settings-execution-dialog-zfree-dark.png`; runtime
+probe output confirmed `settings-dialog-actions` has no `z-10` and both
+Test/Rescan controls remain shadcn ghost buttons. This is still a progress
+checkpoint, not goal completion.
+
+## 2026-05-20 08:25 [progress] Shadcn arbitrary-layout and dark-mode thinning pass
+
+Continued the active shadcn-first full migration after the latest visual
+intervention. The Host/Soul shell and HR people workbench no longer depend on
+custom arbitrary grid templates for their main columns; both paths now use
+thin flex layout around shadcn primitives. Settings Dialog also moved off
+arbitrary `calc()` / `minmax()` grid sizing and now uses shadcn `Dialog` +
+vertical `Tabs` with standard viewport and width utilities. Remaining `72vh`
+and `440px` arbitrary layout escapes in session/HR preview paths were replaced
+with standard viewport/spacing utilities.
+
+The UI audit script was tightened again: it now reports border/radius/font/dark
+dimensions together with source-level arbitrary utility tokens, while avoiding
+false positives from TypeScript indexed access and array expressions. Current
+`bun scripts/check-web-ui-components.ts --all --audit` output shows no
+class-dimension findings, 0 app-local semantic class tokens, 0 legacy migration
+entries, and the active shadcn theme values from `radix-mira` / `zinc` /
+`hugeicons` / Oxanium / violet primary / amber chart.
+
+Rendered evidence was refreshed against the operator-running `localhost:5173`
+HR profile workspace as
+`output/playwright/current-hr-after-flex-thin-light.png` and
+`output/playwright/current-hr-after-flex-thin-dark.png`, plus the mobile
+dark-mode responsive checkpoint
+`output/playwright/current-hr-after-flex-thin-dark-mobile.png`. The Settings
+execution dialog was also captured at
+`output/playwright/current-settings-execution-dialog-thin-dark.png`, confirming
+the Test/Rescan controls are now icon-only shadcn ghost `Button` actions rather
+than custom text-action chrome. The screenshots show the previous multi-border
+card stack reduced to thin shadcn `Item`, `Alert`, `Table` and `Button`
+composition in both light and dark modes, with the narrow viewport stacking the
+Host sidebar and HR profile list without horizontal overflow. This is still
+not a goal-completion claim; broader rendered-surface review and final
+full-tree acceptance classification remain required.
+
+## 2026-05-20 08:10 [progress] Shadcn thin-style self-check tightening
+
+Continued the active shadcn-first migration in response to the latest visual
+review. `MarkdownPreview` no longer carries a large descendant-selector prose
+class string; headings now render through shadcn `ItemTitle` with `asChild`,
+GFM tables continue to render through shadcn `Table` slots, and the remaining
+markdown typography utilities are explicit content-renderer classes. HR profile
+reading-room and patch-review sections were thinned from `muted` panel blocks
+to default shadcn `Item` composition, reducing the visible stacked-card effect
+in both light and dark mode. Session `MessageFlow` now composes shadcn
+`ItemGroup` / `Item` for the message surface, and several arbitrary
+`overflow-wrap` utility escapes were replaced with standard `break-words`.
+
+The UI audit now reports files with arbitrary utility tokens even when they do
+not also contain border/radius/font/dark tokens, adding the extra self-check
+dimension requested for custom `className` review. Current audit output still
+shows no app-local semantic class tokens and no legacy migration entries, but
+does surface remaining arbitrary layout density in shell/session/settings files;
+this is intentionally not treated as completion.
+
+Verification checkpoint: `bun run --filter '@zonease/aiworker-web' test --
+src/features/session/markdown-preview.test.tsx`, focused Worker Studio tests
+40/40, Web typecheck and `bun scripts/check-web-ui-components.ts --all
+--audit` passed. Browser evidence on the operator-running `localhost:5173`
+was refreshed at `output/playwright/current-hr-dark-after-reading-room-thin.png`
+and `output/playwright/current-hr-light-after-reading-room-thin.png`; the dark
+view shows the HR profile sections without the previous stacked muted panels,
+and the setting was restored to light. Goal completion remains blocked by the
+required broader full-tree custom style/component acceptance scan and rendered
+surface review.
+
+## 2026-05-20 07:52 [progress] Shadcn preset icon-language checkpoint
+
+Aligned Host Web visible icons with the active shadcn preset. `apps/web` no
+longer imports `lucide-react`; session/chat/composer, Settings, Host topbar,
+worker rail, HR profile workbench and local workspace controls now render
+`@hugeicons/core-free-icons` through `HugeiconsIcon`, matching
+`packages/ui/components.json` `iconLibrary=hugeicons` and the generated shadcn
+components in `packages/ui`.
+
+The UI governance check now fails future app/web or official Soul App web TSX
+that reintroduces `lucide-react`, and the architecture/agent constraints now
+state that visible app UI must follow the shadcn preset icon library instead of
+mixing icon families. `apps/web` declares Hugeicons directly and removed its
+Lucide dependency; `packages/ui` also no longer keeps an unused Lucide
+dependency. The same audit pass now scans `*ClassName` string constants, which
+surfaced `MarkdownPreview` prose typography as an explicit accepted residual
+instead of leaving it invisible to the custom-style scan.
+
+Verification checkpoint: Web typecheck passed, `@zonease/aiworker-ui`
+typecheck passed, Worker Studio focused tests passed 40/40, and the grouped
+local workspace/session/markdown/collapsible tests passed 8/8. Web build,
+`bun run ui:check`, `bun run docs:check` and `git diff --check` passed. `bun
+scripts/check-web-ui-components.ts --all --audit` passed with 0 legacy entries,
+0 app-local semantic class tokens and the active `radix-mira` / `zinc` /
+`hugeicons` / Oxanium / violet primary / amber chart theme values; its top
+remaining visual-utility file is now `MarkdownPreview`, explicitly classified
+as content typography because shadcn owns the surrounding `Table` and
+`ScrollArea` structure but does not provide a prose primitive. Playwright
+captured `shadcn-hugeicons-light-0752.png` and
+`shadcn-hugeicons-dark-0752.png`; both reported `lucideClassCount=0`, no
+large-radius samples, no horizontal overflow, and the expected light/dark
+primary token branch. Goal completion remains blocked by the broader
+full-migration acceptance scan and rendered visual review.
+
+## 2026-05-20 06:56 [progress] Host sidebar shadcn structure checkpoint
+
+Moved the Host sidebar internals another step toward shadcn-owned structure
+without rewriting the full shell grid. `WorkerStudioLayout` now wraps sidebar
+content with shadcn `SidebarContent`; Host navigation, the worker-list region
+and the sidebar footer now use shadcn `SidebarGroup`, `SidebarGroupContent`,
+`SidebarMenu`, `SidebarMenuItem` and `SidebarFooter` primitives while keeping
+the existing Host/Soul routing and collapse state intact.
+
+The focused Worker Studio regression now asserts the new sidebar slots:
+`sidebar-content`, Host navigation `sidebar-group`, worker-list
+`sidebar-group`, and `sidebar-footer` with the Host footer marker. This keeps
+future work from drifting back to anonymous app-local sidebar wrappers.
+
+Verification checkpoint: focused Web tests passed in stable groups
+(`creation-dialogs` + local workspace composer 3/3, markdown/collapsible 5/5,
+Worker Studio 40/40). The single 5-file vitest command was observed hanging
+without output again, so it was not counted as passed. Web typecheck, Web
+build, `bun run ui:check`, `bun run docs:check`, `git diff --check` and
+code-review-graph review passed; the build keeps the existing chunk-size
+warning only. `bun scripts/check-web-ui-components.ts --all --audit` still
+reports 0 legacy entries, 0 app-local semantic class tokens and
+`shadcn=4 metadataOnly=9 legacy=0 unclassified=0` for official Soul App
+product web. Fresh 5173 screenshots were captured as
+`shadcn-sidebar-structure-light-desktop-0656.png` and
+`shadcn-sidebar-structure-dark-desktop-0656.png`; both show the sidebar
+structure remaining visually thin in light and dark mode. Goal completion
+remains blocked by the broader full-migration acceptance scan.
+
+## 2026-05-20 06:39 [progress] Shadcn Soul App coverage and dark-token self-check
+
+Extended the shadcn-first migration check from Host Web and HR proof surfaces
+to the QA official Soul App product web surface. QA product web now carries
+direct `@zonease/aiworker-ui` `Card` / `Badge` proof components, React typing
+support and a component-proof test, while metadata-only product web files stay
+explicitly classified instead of silently passing. The audit script now reports
+official Soul App product web coverage as `shadcn=4 metadataOnly=9 legacy=0
+unclassified=0` and fails future runs if a rendered official Soul App product
+web file is legacy or unclassified.
+
+The visible Settings engine Test/Rescan controls were thinned from text action
+buttons to icon-only shadcn ghost `Button` actions with labels supplied through
+`aria-label` / `title`, and their icons now carry the expected shadcn
+`data-icon` marker. `CreateWorkerDialog` / `CreateWorkspaceDialog` also gained
+a focused regression test for shadcn `Dialog`, `Select`, `Input` and `Button`
+slot composition, with the dialog close icon using the same `data-icon`
+contract.
+
+Runtime browser probes on the operator-running `localhost:5173` HR profile
+workspace confirmed the shadcn light and dark branches are active. Light mode
+reported primary `oklch(0.491 0.27 292.581)`, chart token
+`oklch(0.879 0.169 91.605)`, 0 app-local runtime class tokens, 0 slotless
+bordered elements, 0 large non-badge radius samples and 0 horizontal overflow.
+Dark mode reported `.dark`, `color-scheme: dark`, primary
+`oklch(0.432 0.232 292.759)`, dark background/foreground tokens and the same
+0 custom-class / 0 slotless-border / 0 large-radius result. The appearance was
+restored to light afterwards.
+
+Rendered desktop evidence was refreshed at
+`shadcn-hr-active-profile-light-desktop-0658.png` and
+`shadcn-hr-active-profile-dark-desktop-0650.png`; the active profile surface is
+now thin shadcn composition rather than nested custom card chrome.
+
+Verification checkpoint: `bun scripts/check-web-ui-components.ts --all
+--audit` passed with 0 app-local semantic class tokens and the active
+`radix-mira` / `zinc` / `hugeicons` / Oxanium / violet primary / amber chart
+theme values. Focused Web tests passed 48/48, QA and HR product web proof tests
+and typechecks passed, Web typecheck passed, `bun run ui:check`,
+`bun run docs:check`, `git diff --check` and Web build passed. The build keeps
+the existing chunk-size warning only. code-review-graph reports 0 affected
+flows and still lists static test gaps for the proof functions and
+`CreateDialogShell`, which are covered by the direct product-web proof tests
+and the new creation-dialogs slot test. Goal completion remains blocked by the
+larger full-migration acceptance scan and final rendered-surface review; this
+is not a completion claim.
+
+## 2026-05-20 06:25 [progress] Shadcn residual visual utility reduction
+
+Reduced the remaining high-density app-local visual classes after the 06:18
+checkpoint. Shared collapsible triggers, HR profile cards, profile patch
+sections, unknown profile section headings, worker identity rows, session
+composer preview captions and message-flow code blocks no longer carry
+unnecessary `text-left` / `text-right` / `text-sm` / `text-xs` /
+`text-muted-foreground` overrides where shadcn slots or native code/pre
+semantics are sufficient.
+
+Fresh `bun scripts/check-web-ui-components.ts --all --audit` now reports only
+six residual visual-density files: `worker-studio.tsx`, `studio-shell.tsx` and
+`session-detail.tsx` at 2 visual tokens; `settings-dialog.tsx`,
+`profile-details.tsx` and local workspace `session-composer.tsx` at 1 visual
+token. Runtime desktop/mobile Playwright probes on `localhost:5173` still show
+0 app-local semantic class tokens, 0 ring-like card shadows and 0 horizontal
+overflow. Mobile also reports 0 large non-badge/non-scrollbar radius. Desktop's
+only large non-badge radius is the generated shadcn `ScrollArea` thumb.
+
+Verification: focused Web tests passed 46/46; `bun run ui:check`,
+`bun run docs:check` and `git diff --check` passed. Goal completion remains
+blocked because the remaining title/error-state utilities still require final
+classification and broader rendered surface review before the full migration
+can be called complete.
+
+## 2026-05-20 06:18 [progress] Shadcn border and typography thinning checkpoint
+
+Continued the active shadcn-first full migration in response to the visual
+self-check feedback. HR people workbench no longer stacks an outer profile
+list `Card`, outline section triggers and a profile-summary `Card`; the visible
+profile list, summary and collapsible sections now use thinner shadcn `Item` /
+`ItemGroup` / ghost `Button` composition. The Host sidebar worker list also no
+longer adds an extra `Card` ring inside the shell. Settings, session timeline,
+workspace cards, session detail and session composer paths had redundant
+`text-left`, text-size and muted-icon overrides removed where the shadcn slot
+already owns the behavior.
+
+Fresh audit: `bun scripts/check-web-ui-components.ts --all --audit` reports 0
+app-local semantic class tokens, 0 legacy migration entries, no
+class-dimension findings, and active shadcn preset tokens. The class-density
+leaderboard now tops out at 2 visual tokens per file, down from 5 earlier in
+the same migration pass. Browser probe on `localhost:5173` reports
+`ringLikeCount=0`; remaining visible borders are generated shadcn
+`alert` / `button` / `table-row` primitives. Appearance was toggled through
+the actual Settings UI: dark mode applied `.dark`, `color-scheme: dark`, dark
+background/foreground and dark violet primary, then the page was restored to
+light mode. Goal completion remains blocked pending broader final scan,
+mobile/desktop screenshot review and explicit classification of the remaining
+thin visual utilities.
+
+## 2026-05-20 06:05 [progress] Shadcn thin-style self-check tightening
+
+Continued the full shadcn migration as an active, still-incomplete goal. The
+latest pass removed more app-local visual control from Host Web and HR
+workbench paths: shell sidebar divider borders were removed, Settings
+Test/Rescan actions now use plain shadcn `Button` inside `ItemActions` instead
+of a border-merged button group, active workspace/profile/engine cards now use
+shadcn variants instead of `aria-pressed:border-primary bg-primary/5`, and
+redundant `bg-background` / `text-foreground` / `font-mono` app classes were
+removed where the shadcn preset or native element semantics already own them.
+
+The latest `bun scripts/check-web-ui-components.ts --all --audit` reports no
+class dimension findings, 0 app-local semantic class tokens, 0 legacy migration
+entries, and the active `radix-mira` / `zinc` / `hugeicons` / Oxanium / violet
+primary / amber chart shadcn tokens. Runtime browser probes on
+`localhost:5173` report light and dark token branches both active, one visible
+font family (`"Oxanium Variable", sans-serif`), 0 slotless visible borders, 0
+app-specific runtime class prefixes and 0 large non-badge radius. The page was
+restored to light appearance after the dark-mode probe.
+
+Verification: focused Worker Studio, local composer and MarkdownPreview tests
+passed 42/42; Web and UI package typechecks passed; UI package tests passed
+3/3; HR product web component proof passed 4/4. Goal completion remains
+blocked by the class-density leaderboard, now headed by
+`settings-dialog.tsx`, `session-composer.tsx`, `studio-shell.tsx`,
+`worker-studio.tsx`, `session-detail.tsx` and local workspace
+`session-composer.tsx`; these are
+mostly layout/text-size utilities but still require further migration or final
+classification before completion.
+
+## 2026-05-20 05:35 [progress] Shadcn class-dimension thinning checkpoint
+
+Continued the shadcn-first full migration without treating the latest green
+tests as completion. Settings Soul App diagnostics, session detail surfaces,
+shared studio shell pieces, Worker Studio controls, session composer actions,
+HR profile lists, profile reading room and patch-review actions now rely more
+directly on shadcn `ItemGroup`, `ItemContent`, `ItemActions`, `Badge`, `Button`
+and `Empty` slots instead of app-local wrapper borders, button spans and
+manual empty-state frames.
+
+Expanded the completion gate to include a class-dimension audit beyond the
+existing legacy/style checks: remaining native slotless structures, explicit
+border/radius/font/arbitrary utilities, custom semantic class tokens, and
+active shadcn style/base color/radius/font/primary/chart tokens are all
+reported together. This directly covers the visual review concerns around
+multi-layer borders, oversized radius, Test/Rescan styling interference, font
+drift, light/dark adaptation and whether the preset color concepts are visible.
+
+Verification checkpoint: focused Web tests passed for the migrated settings,
+session, composer, generic workbench, first-run, HR profile list, reading room
+and patch-review paths; Web and UI package typechecks passed; UI package tests
+passed; `bun run ui:check` passed. The latest audit still blocks goal
+completion: `studio-shell.tsx`, `settings-dialog.tsx`,
+`session-composer.tsx`, `session-detail.tsx`, `profile-tools-panel.tsx`,
+local-workspace cards/composers, message flow, session chat, session timeline,
+profile details and HR people workbench remain on the custom-style density
+leaderboard and require further shadcn replacement or explicit classification.
+
+## 2026-05-20 05:00 [progress] Shadcn strict self-check and color-token checkpoint
+
+Folded the latest visual audit feedback into the active shadcn migration gate.
+`check-web-ui-components --all --audit` now reports app-local semantic class
+tokens and shadcn theme tokens, not only class density, so future completion
+checks must show the custom class count and the active style/base color/icon
+library/radius/font/primary/chart token state.
+
+Continued thinning visible Host/Soul UI: Host breadcrumbs use shadcn
+`Breadcrumb`, session detail card headers no longer add extra `border-b`, HR
+profile cards/details/tools/patch review headings and shared collapsible group
+headers now use shadcn `ItemTitle` / `ItemDescription`, Settings Test/Rescan
+actions use `ButtonGroup`, and the HR empty profile selection state no longer
+draws a full-panel dashed border.
+
+Playwright found one concrete color-token bug: `Button` variant selectors were
+overriding nested shadcn slot colors, so a primary `Badge` inside a secondary
+button could inherit the wrong foreground. The UI package `Button` now scopes
+those direct span selectors to `span:not([data-slot])`, preserving nested
+shadcn primitive colors.
+
+Verification: Web tests passed 56/56, UI package tests passed 2/2, Web and UI
+typechecks passed, and `check-web-ui-components --all --audit` passed with 0
+legacy entries, 0 custom semantic class tokens and visible shadcn theme tokens.
+Playwright on `localhost:5173` profile-selected light/forced-dark views reported
+0 large non-badge radius, 0 custom class prefixes, 0 raw non-slot border
+utilities, Oxanium plus mono only, and dark primary/background tokens applying.
+Goal completion remains blocked by the class-density leaderboard.
+
+## 2026-05-20 04:40 [progress] Shadcn settings and markdown thin-style checkpoint
+
+Continued the user-requested strict self-check instead of treating the shell
+cleanup as completion. Platform Settings section intros now use shadcn `Item`,
+`ItemTitle`, `ItemDescription` and `ItemActions`; the visible Test/Rescan row is
+inside `ItemActions`, so the buttons are no longer surrounded by a custom raw
+heading/action wrapper.
+
+Shared `StudioSectionHeader` now renders through shadcn `Item` slots and
+session detail uses that shared header for memory candidates. `MarkdownPreview`
+owns the shared markdown/prose class stack, removing the repeated long
+typography selectors from HR profile reading room and patch review surfaces.
+
+Verification: focused red/green tests passed for settings action slots, shared
+section headers, session detail memory headers and MarkdownPreview table slots.
+Web typecheck passed. `check-web-ui-components --all --audit` remains green
+with 0 legacy migration entries and no raw-styled-native findings; class-density
+audit still blocks goal completion, with settings, studio shell, worker studio,
+session detail, session composer and profile tools remaining on the leaderboard.
+Playwright on the operator-running `localhost:5173` desktop, settings dialog
+and mobile views reported Oxanium as the only visible font family, 0 overflow,
+0 large non-badge radius, 0 custom semantic class prefixes, shadcn primary/chart
+tokens present, and Test/Rescan under shadcn `ItemActions`.
+
+## 2026-05-20 04:35 [progress] Shadcn shell header raw-style cleanup
+
+Cleared the remaining raw-styled-native audit findings from the Host Web shell
+instead of accepting them as layout exceptions. `StudioMainFrame`, generic
+Worker Studio fallback headers, session chat chrome, and artifact rail headings
+now use shadcn `CardHeader`, `CardContent` and `Item` slots for
+kicker/title/action structure.
+
+Playwright caught an over-expanded session header after the first conversion:
+embedding the full progress card in the chat header pushed the dark session
+header to 226px. The header now keeps progress as a compact shadcn `Badge`
+while the full `SessionProgressPanel` remains in the artifact rail.
+
+Verification: focused Web tests passed 43/43, Web and UI package typechecks
+passed, UI package tests passed, `ui:check` passed, full `check-web-ui-components
+--all --audit` now reports no raw-styled-native findings, and Web build passed
+with only the existing large chunk warning. Playwright dark session screenshot
+showed the session header at 102px, no overflow, no large non-pill radius, and
+shadcn preset tokens still active.
+
+## 2026-05-20 04:20 [progress] Shadcn profile table and audit-density checkpoint
+
+Treated the HR profile multi-border feedback as a still-blocking migration
+defect. `MarkdownPreview` now renders GFM tables through shadcn `Table`,
+`TableHeader`, `TableRow`, `TableHead` and `TableCell`, removing app-local
+cell-grid borders from HR profile summaries and patch-review markdown. The HR
+profile patch-ready strip now uses shadcn `AlertAction` instead of custom grid
+layout inside `Alert`.
+
+Expanded `check-web-ui-components --all --audit` with a class-density
+dimension that ranks files by visual utility token count. The current audit has
+0 governance failures and 0 legacy migration entries, but still reports 4
+informational raw-styled-native shell/header findings plus the density
+leaderboard. These residuals continue to block goal completion until migrated
+or explicitly classified.
+
+Verification: UI package typecheck/test passed, Web typecheck passed, focused
+Worker Studio + shared collapsible tests passed 42/42, `ui:check` passed, Web
+build passed with only the existing large chunk warning, and Playwright dark HR
+profile screenshots confirmed shadcn table slots with 0px cell borders, max
+non-pill radius within 8px, Oxanium font, and shadcn violet/amber preset tokens
+present.
+
+## 2026-05-20 03:50 [progress] Shadcn visual debt and thin-style checkpoint
+
+Responded to the HR profile screenshot audit by removing the remaining
+app-local visual stylesheet layer from Host Web. `apps/web/src/styles/index.css`
+now only imports Tailwind and `@zonease/aiworker-ui/styles.css`; the
+`shadcn-legacy-bridge.css` token alias layer was removed after confirming no
+runtime consumers of the old `--bg` / `--text` / `--accent` tokens.
+
+Further thinned the visible Host/Soul UI: `SessionTimeline` and
+`SessionDetail` now use shadcn `Collapsible` + `Item` instead of native
+`details` / `summary`; HR profile reading and patch-review sections use
+`ItemGroup` / `Item` instead of stacking many card shells; the HR people layout
+no longer depends on the app-local `--hr-people-columns` variable.
+
+Verification: focused Worker Studio and shared collapsible tests passed 42/42,
+Web and UI package typecheck passed, UI package tests passed, `ui:check` and
+full-tree `check-web-ui-components --all` passed with 0 legacy entries, Web
+build passed without the prior Recharts chart selector warnings, and
+Playwright metrics on `localhost:5173` reported no document overflow, no
+offscreen visible elements, no raw buttons, no native `details` / `summary`,
+no old custom class prefixes, max radius 8px, Oxanium font, and shadcn primary
+/ chart tokens in light and dark modes. The migration goal remains active
+because final completion still requires a repository-wide residual UI
+classification pass.
+
+## 2026-05-20 03:15 [progress] Shadcn session and HR workbench thinning checkpoint
+
+Moved more visible Host/Soul runtime paths away from legacy class-driven UI:
+`SessionComposer`, `SessionTimeline` and `MessageFlow` now compose shadcn
+`Button`, `InputGroup`, `Alert`, `Badge`, `Card`, `Dialog`, `Select` and
+`Spinner` with slot/data attributes instead of legacy
+`.session-composer-*` / `.session-*` visual classes. HR people profile list and
+profile tools side panels now render as shadcn `Card` regions; profile patch
+status and ready strip use shadcn `Alert`.
+
+The full-tree Web UI self-check now reports 13 remaining informational
+custom-style findings, down from 28. These are not cleared for goal completion:
+remaining compatibility CSS, worker overview/list panel classes and
+session-detail artifact/session rail classes still need migration or explicit
+classification as accepted domain UI / temporary debt.
+
+Verification: focused Worker Studio tests passed 40/40, the shared
+collapsible-group test passed, web typecheck/build passed, UI and HR package
+typecheck/test passed, docs check and diff check passed, `ui:check --all`
+passed with 0 legacy migration entries, and browser audit on the
+operator-running `localhost:5173` HR profile workspace reported 0 raw buttons,
+no visible radius above 8.5px, no mono-font buttons, and shadcn light/dark
+token switching for root, shell and dialog. Code-review-graph updated and
+reported risk `0.60` with remaining test-gap advisories, so this remains a
+checkpoint rather than completion.
+
+## 2026-05-20 02:55 [progress] Shadcn local workspace cards checkpoint
+
+Moved additional Host workspace primitives off `@zonease/aiworker-component`:
+`WorkspaceCard` now renders as shadcn `Button`, `WorkerIdentityBlock` renders
+as shadcn `Card`, and `SessionProgressPanel` composes shadcn `Card`, `Badge`
+and `Progress` instead of the legacy `ProgressCard`. HR mounted profile list
+cards now use shadcn `Button` and lifecycle `Badge` metadata while preserving
+HR-owned card content.
+
+Worker Studio tests now assert shadcn metadata for generic mounted workbench
+actions/search, workspace cards, worker identity cards, session header icon
+controls, session progress panels and HR profile list cards.
+
+## 2026-05-20 02:35 [progress] Shadcn Host shell controls checkpoint
+
+Migrated visible Host shell controls to direct shadcn primitives:
+Host topbar icon controls, worker rail create actions, generic mounted
+workbench protocol actions/search, HR mounted profile chrome, and the session
+chat header now use `@zonease/aiworker-ui` `Button` / `InputGroup` instead of
+legacy `IconButton`, `.shell-primary-action` or raw toolbar input markup.
+
+Removed the unused app-local `.icon-button` / `.settings-trigger` /
+`.icon-only` pill-radius CSS. Browser verification on the operator-running
+`localhost:5173` desktop and mobile views reported zero legacy icon buttons,
+zero shell primary actions, zero raw toolbar inputs, zero large-radius visible
+buttons/elements and no horizontal overflow.
+
+## 2026-05-20 02:15 [progress] Shadcn migration contract correction
+
+Corrected the active UI migration contract so `packages/component` is no longer
+treated as a package to improve. `AGENTS.md`, `docs/architecture.md`,
+`aiworker-host-dev` and `ui:check` now state that `packages/ui` is the
+shadcn-managed source of truth, while `@zonease/aiworker-component` is legacy
+migration debt.
+
+`ui:check` no longer imports or validates the old component catalog as the
+target for reusable gaps. It now scans Host Web plus official Soul App product
+web surfaces, recognizes shadcn imports from `@zonease/aiworker-ui`, classifies
+known legacy component consumers in a local migration queue, and blocks
+unapproved changes inside `packages/component/src`.
+
+## 2026-05-20 01:40 [completed] Shadcn Settings internals and HR product web checkpoint
+
+Migrated Host Platform Settings internals from legacy
+`@zonease/aiworker-component` primitives to direct shadcn composition from
+`@zonease/aiworker-ui`: execution mode uses `ToggleGroup`, BYOK fields use
+`Field` / `Input`, engine choices and Soul App diagnostics use `Button` /
+`Card` / `Badge`, and connector/MCP rows use `Switch` with shadcn field/card
+composition.
+
+Removed stale Settings local selectors such as `.settings-action-button`,
+`.settings-card-row`, `.switch-row` and related form/card styling. Host Web now
+loads the temporary legacy component stylesheet as `layer(base)`, so it no
+longer overrides shadcn `data-slot` primitives with old pill-radius button
+rules; `ui:check` guards that app-side compatibility import.
+
+Migrated HR product web proof surfaces to shadcn `Card` / `Badge` directly and
+removed the HR app dependency on `@zonease/aiworker-component`. Playwright
+desktop/mobile Settings screenshots verified no horizontal overflow and
+`legacyPillOnShadcn: 0` after the cascade-layer fix.
+
+## 2026-05-20 01:20 [completed] Shadcn Platform Settings shell migration checkpoint
+
+Migrated the Host Platform Settings shell from the legacy
+`@zonease/aiworker-component` `SettingsShell` / `NavItemButton` / custom modal
+path to direct shadcn primitives from `@zonease/aiworker-ui`: `Dialog`,
+`Tabs`, `ScrollArea` and `Button`. Settings navigation now exposes Radix tab
+semantics with shadcn `data-slot` metadata and no longer renders
+`.modal-backdrop`, `.modal-settings`, `.settings-sidebar` or
+`.settings-nav-item`.
+
+Forwarded `orientation` from the generated shadcn `Tabs` wrapper into Radix so
+the settings shell keeps vertical tab semantics, and updated the Worker Studio
+CSS sentinel list to follow the new settings shell selectors. The stale
+app-local `.icon-btn` override was removed; the remaining empty-state create
+actions now consume shadcn `Button` directly.
+
+Verification covered focused RED/GREEN Worker Studio tests, UI/Web package
+typecheck and tests, UI governance, Web production build with the studio CSS
+sentinel, and desktop/mobile browser smoke on the operator-running
+`localhost:5173` service with zero console errors.
+
+## 2026-05-20 01:05 [completed] Shadcn creation dialogs migration checkpoint
+
+Migrated Host Web create-worker and create-workspace dialogs from the legacy
+`@zonease/aiworker-component` `CreationDialog` / `StudioSelect` / raw input
+path to direct shadcn primitives from `@zonease/aiworker-ui`: `Dialog`,
+`Field`, `Input`, `Select` and `Button`. The app-local `.newproj-name` style is
+removed from this path, and Worker Studio tests now assert shadcn `data-slot`
+metadata for dialog, select and input surfaces.
+
+Added Tailwind v4 `@source` directives to the shared UI stylesheet so apps that
+import `@zonease/aiworker-ui/styles.css` generate utilities for package-owned
+shadcn components. Updated the Web UI governance check to treat
+`@zonease/aiworker-ui` as a shared primitive package alongside
+`@zonease/aiworker-component`.
+
+Browser verification on the operator-running `localhost:5173` service covered
+create worker select behavior, create workspace dialog layout and zero new
+console errors.
+
+## 2026-05-20 00:45 [completed] Shadcn full import and first Host Web direct adoption
+
+Imported the complete shadcn component set into `packages/ui` with the official
+CLI `add --all` flow, using the UI workspace `components.json` so generated
+components, hooks, dependencies and package-local imports remain owned by
+`@zonease/aiworker-ui`. Host Web shadcn info now resolves the full component
+set through `@zonease/aiworker-ui/components/*`.
+
+Started the direct app consumption path by moving visible Host Web settings and
+creation dialog buttons from `@zonease/aiworker-component` to
+`@zonease/aiworker-ui/components/button`. Tests now assert the migrated buttons
+carry shadcn `data-slot` / `data-variant` metadata. `packages/component` remains
+a reference map and business-shell package rather than a shadcn wrapper layer.
+
+Verification covered shadcn project info, UI package typecheck/test, Host Web
+typecheck/test, UI governance and browser checks on the operator-running
+`localhost:5173` service.
+
+## 2026-05-20 00:20 [completed] Shadcn preset, skill and session workflow handoff
+
+Applied the official shadcn preset `b1GeLaG4Q` through the Host Web
+`components.json` entrypoint. The CLI updated the shared `packages/ui` shadcn
+theme to the `radix-mira` / `zinc` / violet preset, refreshed the generated
+button primitive, added the official Oxanium font dependency, and repeatedly
+created the app workspace `apps/web/src/lib/utils.ts` helper. The helper is
+kept as an official CLI-compatible bridge that re-exports the shared UI `cn`
+utility.
+
+Installed the official shadcn skill into `.agents/skills/shadcn` and
+`skills-lock.json` so future shadcn work starts from `shadcn info --json`,
+current `components.json` routing and the official CLI workflow.
+
+This session is now being run by Superpowers at the operator's request, while
+the repository-level PMA skills and project instructions remain installed and
+active. Root `DESIGN.md` was deleted so current UI decisions come from shadcn
+semantic theme variables plus `packages/ui` / `packages/component` ownership.
+Historical PMA records remain as audit trail only.
+
+Verification covered shadcn project info, project skill listing, shared UI and
+Host Web typecheck/tests, HR Soul App typecheck/tests, Web build, root check,
+UI governance, docs contract, browser smoke, diff check and code-review-graph.
+
+## 2026-05-19 23:10 [completed] FEAT-105 / PLAN-387 — Shadcn monorepo UI package foundation
+
+Created the official shadcn/ui monorepo migration foundation. The new
+`@zonease/aiworker-ui` workspace under `packages/ui` owns shadcn-managed
+primitive components, package-local imports, shared package exports and the
+shadcn style entrypoint. Host Web and the UI workspace both have
+`components.json` routing aligned with the official monorepo/package-imports
+model.
+
+The first generated primitive is `button`, added through the official shadcn
+CLI from `apps/web`, which routed it into `packages/ui/src/components`. Host Web
+now imports `@zonease/aiworker-ui/styles.css` before the existing
+`@zonease/aiworker-component` style layer, and the HR Soul App proof test
+imports the generated button plus UI styles to prove Soul App consumption.
+
 ## 2026-05-19 22:25 [completed] REL-051 / PLAN-386 — CLI 0.19.0 minor release
 
 Started the `@zonease/aiworker-cli@0.19.0` minor release after the Session Kit
@@ -8376,3 +9325,508 @@ and `bun run crg:review`. The graph review exited 0 with risk score `0.40` and
 kept advisory test-gap labels for unrelated in-progress worktree symbols plus
 the catalog rule; direct catalog test coverage was added for the governance
 rule.
+
+## 2026-05-20 08:50 [progress]
+
+The shadcn-first UI migration tightened its visual self-check after a user
+review found hidden custom-style residue. `packages/ui` `Item` no longer gives
+the default variant a visible border; only the explicit `outline` variant frames
+rows. This removes the nested-border stack that made HR profile sections look
+like custom cards while preserving an intentional framed-row option.
+
+The Web UI governance audit now reports class-dimension, framed-surface,
+semantic theme-token and shadcn primitive theme-token evidence, and fails if
+the default `Item` base border returns. Session timeline rendering also fixed
+duplicate React keys for repeated tool-output details and tightened log/code
+block width containment so long session output no longer collapses across the
+chat pane.
+
+Verification in this checkpoint: focused `SessionTimeline`, Worker Studio and
+UI `Item` tests passed; Web/UI typechecks passed; `bun scripts/check-web-ui-components.ts --all --audit`
+passed with 0 legacy entries, 0 app-local semantic class tokens and active
+`radix-mira` / `zinc` / `hugeicons` theme evidence. Playwright refreshed light,
+dark and session-log screenshots on `localhost:5173`; new session-tab console
+logs reported 0 errors and 0 warnings. This is still a migration checkpoint,
+not full goal completion.
+
+## 2026-05-20 09:02 [progress]
+
+Continued the shadcn-first thin-style pass after the visual review flagged
+multi-layer borders, Test/Rescan button styling, font drift, custom-class
+residue, dark-mode gaps and weak preset-color evidence.
+
+The checkpoint moved HR profile list/detail scrolling to shadcn `ScrollArea`,
+session timeline/message wrappers to shadcn `ItemGroup` / `ItemContent`, and
+creation dialog form spacing to shadcn `FieldGroup`. It also stopped business
+`data-slot` attributes from overriding shadcn component slots by moving those
+markers to `data-host-slot`, `data-profile-slot` or `data-settings-slot`.
+
+Browser verification caught and fixed one regression from this pass: Radix
+`ScrollArea` should not directly own the top-level HR multi-column workbench
+layout because its internal viewport/content wrapper breaks the visible flex
+layout. That top-level workbench now uses shadcn `ItemGroup` as the thin layout
+container while column/detail scrolling remains shadcn-owned.
+
+Verification in this checkpoint: focused creation-dialog, session-timeline and
+Worker Studio tests passed after the fix; Web typecheck passed; the full UI
+audit reports 0 app-local semantic class tokens, 0 border/radius/font/dark/
+arbitrary slotless native tokens, and active `radix-mira` / `zinc` /
+`hugeicons` / violet / amber preset evidence. Playwright captured light/dark
+HR workbench and Settings/Test/Rescan screenshots on `localhost:5173`. This is
+still a migration checkpoint, not full goal completion.
+
+## 2026-05-20 09:16 [progress]
+
+Continued the shadcn-first thin-style pass by moving residual visual dimensions
+out of app business files and into `packages/ui` primitives. `ItemTitle` now
+owns compact title scale variants, `ItemDescription` owns destructive tone, and
+`BadgeLabel` owns badge text truncation; Host Web usage switched to those APIs
+instead of app-side `text-base`, `text-lg`, `text-destructive` or raw truncation
+spans.
+
+The full UI audit classification was tightened again: stale accepted residuals
+now fail the check, and only markdown artifact prose typography remains
+explicitly accepted as content-level residue. Browser verification on
+`localhost:5173` confirmed the HR workbench remains thin in light/dark mode and
+Settings Test/Rescan are shadcn icon buttons (`variant=ghost`,
+`size=icon-sm`) inside `ItemActions`. This remains a checkpoint; session/chat/
+composer and framed-surface review are still open before full completion.
+
+## 2026-05-20 09:31 [progress]
+
+Addressed the latest visual review blockers in the shadcn-first migration.
+The Host shell sidebar no longer wraps the whole left rail in Radix
+`ScrollArea`; `SidebarContent` owns the flex column, Host navigation and the
+settings footer are fixed-height, and the worker list owns the remaining
+scrollable height. The HR profile tools panel now keeps recent sessions as the
+scrolling region and pins the session composer to a compact bottom block.
+
+The icon-size regression was traced to escaped `[class*='size-']` selectors in
+generated shadcn primitives: Tailwind emitted selectors that did not match
+runtime SVG classes, so visible icons fell back to 24px. The primitives now use
+`[class*=size-]` and `ui:check` fails if quoted icon-size selectors return.
+Browser metrics on `localhost:5173` confirmed topbar/workbench icon buttons at
+28px with 14px SVGs, HR patch indicators at 24px, and the compact HR panel
+composer field at 158px. This remains a checkpoint, not full migration
+completion.
+
+## 2026-05-20 09:45 [progress]
+
+Addressed the surface-boundary feedback without restoring the old multi-border
+look. Host shell now uses shadcn semantic surface tokens for the main canvas
+and left rail (`background` / `foreground`, `sidebar` /
+`sidebar-foreground`), while the HR profile list and detail panels are shadcn
+`Card` surfaces. Profile summary and profile sections use shadcn
+`Item variant="muted"` as the soft inner paper layer.
+
+The full UI audit now treats those four Host shell tokens as accepted semantic
+surface usage and still fails any other residual visual utility without an
+explicit reason. The audit also recognizes scoped native layout markers such
+as `data-host-slot`, `data-session-slot` and `data-profile-slot`; Host shell,
+session chat and HR profile column wrappers now use those scoped slots instead
+of remaining anonymous. Focused Worker Studio and session composer tests
+passed, the full UI audit passed, root lint passed, and Playwright light/dark
+probes on `localhost:5173` confirmed the active theme tokens drive shell/
+sidebar/card/muted backgrounds. This remains a migration checkpoint, not full
+goal completion.
+
+## 2026-05-20 10:35 [progress]
+
+Followed up on the Settings and Host chrome review without adding app-local
+style patches. The root cause was in shared shadcn primitive behavior and
+component selection: `Button`, `TabsTrigger`, `Toggle` and clickable `Item`
+surfaces now expose pointer cursor / accent hover / pressed states from
+`packages/ui`, Settings router tabs are content-height with overflow instead
+of desktop full-height splitting, and engine logos render through shadcn
+`ItemMedia` instead of `Avatar` so the unwanted generated avatar outline is
+gone.
+
+HostTopBar now uses the same `sidebar` / `sidebar-foreground` token pair as
+the left panel because it is Host chrome rather than Soul/workspace content.
+Focused UI and Worker Studio regression tests passed, and Playwright on the
+operator-running `localhost:5173` confirmed Settings tablist height is content
+bounded, tab/Test/Rescan/engine-card cursors compute to `pointer`, and HostTopBar
+background/foreground match the sidebar token values in both light and dark
+mode. This remains a migration checkpoint, not full goal completion.
+
+## 2026-05-20 11:00 [progress]
+
+Tightened the same Settings/Host chrome slice after browser review. The
+Settings router tablist is now a fixed 20rem desktop region with overflow
+scrolling instead of content-height expansion. Pointer cursor behavior moved
+to the shadcn-recommended global base rule in `packages/ui` rather than being
+repeated across every primitive class.
+
+`Button` was brought closer to the generated `radix-mira` state model:
+`aria-pressed` remains semantic, while visual selection comes from explicit
+variants such as `secondary`; this avoids hover/pressed state overlap on engine
+cards and panel toggles. Engine logos now render as current-color mask glyphs
+inside shadcn `ItemMedia variant="icon"`, removing the image/avatar frame look
+and keeping dark-mode color inheritance. Focused UI primitive tests and Worker
+Studio tests passed, and browser verification on `localhost:5173` confirmed
+the fixed Settings router height, pointer cursor behavior, and borderless
+current-color engine glyphs. This remains a migration checkpoint, not full
+goal completion.
+
+## 2026-05-20 11:24 [progress]
+
+Closed the first official Soul App standalone styling gap found by browser
+verification. HR and QA product web now each have a Tailwind CSS v4 entrypoint
+that imports `@zonease/aiworker-ui/styles.css` and scans the app-owned product
+web and host-adapter sources. Their `build`, `dev`, `serve` and `smoke`
+scripts run the official Tailwind CLI before serving or bundling.
+
+Standalone and Host-mounted adapter HTML now links `/styles.css`, and the
+adapter serves both the generated stylesheet and the Oxanium font assets used
+by the shadcn preset. HR standalone browser verification changed from
+unstyled SSR markup (`cssRuleCount=0`, transparent card, zero radius) to styled
+shadcn output (`cssRuleCount=78`, `bg-card`, 8px card radius, Oxanium font).
+HR and QA tests, typechecks, builds and smoke runs passed. This remains a
+migration checkpoint; the session/chat/composer slice is still open before
+full goal completion.
+
+## 2026-05-20 11:29 [progress]
+
+Followed up on Host Settings and shell interaction feedback with shadcn
+primitives rather than app-local hover patches. The Settings router list is now
+an explicit fixed-height scroll region on both mobile and desktop, so it no
+longer visually shares the content panel height.
+
+The Host left rail now uses shadcn `SidebarMenuButton` for primary rail
+actions, worker options and the fixed footer settings action, which moves
+hover/active behavior onto `sidebar-accent` and `data-active` instead of
+generic button `muted` styling. `SidebarMenuButton` also supports Host-managed
+sidebar layouts without requiring the full provider wrapper. Browser
+verification on `localhost:5173` confirmed the Host top bar and left rail share
+the `sidebar` / `sidebar-foreground` token values, Settings tabs compute to a
+320px desktop scroll region, clickable rail items compute to pointer cursors,
+and engine glyph containers have no border, radius or shadow. This remains a
+migration checkpoint, not full goal completion.
+
+## 2026-05-20 11:45 [progress]
+
+Continued the Settings/Host chrome and session composer pass. The Host top bar
+keeps `bg-sidebar text-sidebar-foreground`, and its icon buttons now render as
+shadcn `SidebarMenuButton` controls so hover/active/pressed states come from
+`sidebar-accent` / `data-active` instead of app-local dark-mode hover patches
+or generic `muted` ghost-button hover inside the sidebar-colored chrome.
+
+Session composer actions now follow the official shadcn `InputGroup` pattern:
+attachment, secondary/status and submit controls render through
+`InputGroupButton`, and the attachment count is an inline shadcn `Badge`
+instead of an absolute-positioned badge. Browser verification on the
+operator-running `localhost:5173` confirmed the composer buttons sit inside
+`input-group-addon`, no horizontal overflow is present, the Settings router is
+a 320px desktop scroll region, engine glyphs remain borderless `ItemMedia`
+icons, and enabled click targets compute to `cursor: pointer` through the
+shadcn global base rule. This remains a migration checkpoint, not full goal
+completion.
+
+## 2026-05-20 11:56 [progress]
+
+Continued the session framed-surface thinning pass. Session timeline errors now
+render through shadcn `Alert` / `AlertDescription` instead of a Card shell,
+the artifact rail Request review action uses the primary `Button` variant, and
+the chat “Latest” jump control uses `secondary` instead of an outline button.
+This removes the remaining session-chat outline button and lowers
+`session-detail` framed-surface count without changing session behavior.
+
+Focused SessionTimeline and Worker Studio tests pass, Web typecheck passes, and
+`bun scripts/check-web-ui-components.ts --all --audit` now reports
+`session-detail.tsx` framed surfaces reduced from 5 to 4 with
+`outlineButton=0`; `session-chat.tsx` no longer appears in the framed-surface
+leaderboard. This remains a migration checkpoint, not full goal completion.
+
+## 2026-05-20 11:59 [progress]
+
+Thinned the remaining session composer attachment frame. Attachment chips now
+render as shadcn `Item variant="muted"` rows inside the `InputGroupAddon`
+instead of nested `Card` / `CardContent` shells; image attachments still use
+the same preview dialog and remove action. The focused composer test now proves
+attachment rows are shadcn `Item` slots and not nested in a Card.
+
+Focused composer/timeline/Worker Studio tests pass, Web typecheck passes, and
+the full UI audit now reports `session-composer.tsx` down to `framed=3`,
+`card=0`, `outlineButton=0`, `inputFrame=2`, with 0 app-local semantic class
+tokens. This remains a migration checkpoint, not full goal completion.
+
+## 2026-05-20 12:02 [progress]
+
+Removed the last HR reading-room outline action from the framed-surface audit.
+The profile patch-ready strip keeps shadcn `Alert` / `AlertAction`, but its
+Review action now uses the default shadcn `Button` variant instead of outline.
+This makes the alert's primary review action explicit without reintroducing
+custom borders or local styling.
+
+Focused Worker Studio tests and Web typecheck pass, and the full UI audit no
+longer lists `profile-reading-room.tsx` in the framed-surface leaderboard.
+Playwright on `localhost:5173` confirms the Review action is a 24px-high
+default button inside the alert, computes to pointer cursor, has 6.4px radius,
+and the HR profile page has no horizontal overflow or large-radius samples.
+This remains a migration checkpoint, not full goal completion.
+
+## 2026-05-20 12:06 [progress]
+
+Thinned the HR profile tools recent-session list. Recent session entries now
+render as clickable shadcn `Item variant="muted"` rows instead of outline
+Buttons, preserving native button semantics while moving the visual treatment
+onto the Item primitive. The focused Worker Studio test asserts the recent
+session action is a muted Item slot with shadcn title/description children.
+
+Focused Worker Studio tests and Web typecheck pass, and Playwright on
+`localhost:5173` confirms the recent-session row computes as a pointer,
+6.4px-radius muted Item with no horizontal overflow or large-radius samples.
+This remains a migration checkpoint, not full goal completion.
+
+## 2026-05-20 12:12 [progress]
+
+Corrected the Settings router height regression found in browser inspection.
+The previous fixed `md:h-80` desktop tablist protected against equal-height
+splitting, but it also forced unnecessary 320px scrolling inside a tall dialog.
+The router now follows the generated shadcn vertical Tabs behavior again:
+desktop uses content height (`md:h-fit`) with `md:max-h-full` as the overflow
+guard, so tabs scroll only when their natural height exceeds the dialog content
+area. The Worker Studio regression test now blocks reintroducing fixed
+`md:h-80` / `md:max-h-80` tablist sizing. Playwright on `localhost:5173`
+confirmed a 476px tablist inside a 992px dialog, `scrollHeight ===
+clientHeight`, no fixed-height class residue and no horizontal overflow; the
+evidence screenshot is `settings-dialog-tablist-content-height-dark.png`.
+
+## 2026-05-20 12:20 [progress]
+
+Continued the Settings framed-surface review after the router fix. Connector
+rows and the pending Local MCP row no longer use `Card` / `CardContent` shells;
+they now render as shadcn `Item variant="muted"` rows around `Field` and
+`Switch`. Soul App install entries remain `Card` because they are repeated
+installed app objects with manifest metadata and lifecycle actions. The Worker
+Studio settings tests now prove connector and Local MCP switches are muted
+Items and not nested in Cards.
+
+## 2026-05-20 12:25 [progress]
+
+Normalized the HR profile section patch indicators that had been visibly
+smaller than the surrounding icon buttons. The section-level added/changed
+review actions now render Hugeicons `Add01Icon` / `Edit02Icon` with
+`data-icon="inline-start"` inside the existing shadcn `Button size="icon-sm"`
+instead of raw `+` / `~` text. The Worker Studio test now blocks the text-span
+regression.
+
+## 2026-05-20 12:34 [progress]
+
+Thinned the generic mounted Soul workbench action/search path. Protocol primary
+actions now use shadcn `Button variant="default"`, secondary actions use
+`secondary`, and search results render as clickable shadcn
+`Item variant="muted"` rows instead of outline Buttons. The focused Worker
+Studio test now proves the QA workbench primary action is a default Button and
+search result rows are muted Items with no Card ancestor.
+
+Also tightened the generic empty-workspace composer layout after browser
+inspection showed the composer sitting too low in a large blank canvas. The
+workspace composer content area now starts near the top of the available
+surface instead of vertically centering. Playwright on `localhost:5173`
+confirmed the QA empty-workspace composer heading now starts 40px below its
+content area, has no horizontal overflow, and was captured at
+`qa-empty-workspace-composer-top-aligned-light.png`.
+
+## 2026-05-20 12:44 [progress]
+
+Removed three avoidable Card shells from Host/Soul workspace chrome without
+removing shadcn surface semantics. Session detail Memory candidates now render
+as shadcn `ItemGroup` / `Item` content instead of a nested `Card`; the first-run
+sidebar note uses `Item variant="muted"`; and the worker capability template
+summary uses a muted `Item` soft surface instead of a Card. Product/object
+Cards remain where they represent worker identity, install/app objects,
+artifact preview or review panels.
+
+Focused Worker Studio tests cover these boundaries and the UI audit now reports
+`worker-studio.tsx` at `framed=2/card=1` and `session-detail.tsx` at
+`framed=3/card=2`. Playwright on the operator-running `localhost:5173`
+confirmed the QA capability template surface and HR session Memory candidates
+are not nested in Cards, use shadcn item slots, have zero horizontal overflow,
+and keep light/dark shadcn surface tokens active. This remains a migration
+checkpoint, not full goal completion.
+
+## 2026-05-20 12:52 [progress]
+
+Normalized the HR profile patch-review status markers. The changed/added
+section chips in the patch navigation and section headers no longer render raw
+`+` / `~` text; they now use Hugeicons `Add01Icon` / `Edit02Icon` inside
+shadcn `Badge` with `data-icon="inline-start"` and an `aria-label` carrying the
+status. This keeps the visual status language aligned with the earlier HR
+reading-room section action normalization.
+
+Focused Worker Studio tests now block the raw-symbol regression. Playwright on
+`localhost:5173` opened the profile patch-review surface and confirmed the
+status badges are 20px tall with 10px icons, no raw `+` / `~` text remains in
+the badge slots, horizontal overflow is 0, and both light and forced-dark mode
+render through shadcn tokens. This remains a migration checkpoint, not full
+goal completion.
+
+## 2026-05-20 13:00 [progress]
+
+Thinned the session composer image-attachment preview. Image attachments no
+longer use an outline `Button` thumbnail frame inside the muted attachment row;
+the preview action is now a shadcn `Button variant="ghost"` with the thumbnail
+rendered by `ItemMedia variant="image"`. A browser pass caught that the
+default compact ItemMedia image size collapsed to 24px inside `Item size="xs"`;
+the image attachment row now uses the normal Item size with a 56px thumbnail
+and ordinary Tailwind sizing, avoiding an arbitrary `group-data-*` override.
+
+The focused composer test covers the ghost preview button, ItemMedia image
+slot and no Card ancestor. The full UI audit stayed green with `arbitrary=0`,
+and Playwright on `localhost:5173` injected a disposable image attachment into
+the live session composer, confirming a 56px thumbnail, ghost preview action,
+no Card ancestor and no horizontal overflow. This remains a migration
+checkpoint, not full goal completion.
+
+## 2026-05-20 13:08 [progress]
+
+Fixed the Settings dialog router height regression. The desktop Settings
+tablist no longer inherits the narrow-screen `h-52` / `max-h-52` / local
+scroll behavior; those constraints are now scoped to `max-md`, while desktop
+uses content height with `max-h-none` and `overflow-visible`. This keeps the
+router at its natural shadcn Tabs height instead of compressing inside a tall
+dialog.
+
+Focused Worker Studio coverage now blocks reintroducing unprefixed
+`overflow-auto`, `md:max-h-full` or old fixed desktop height caps on the
+Settings tablist. Playwright on `localhost:5173` confirms the live tablist is
+240px by 476px, `scrollHeight === clientHeight`, `overflowY=visible`, and all
+eight settings routes are visible without a local tablist scroll. This remains
+a migration checkpoint, not full goal completion.
+
+## 2026-05-20 13:14 [progress]
+
+Removed the last raw native class pocket from the Settings engine icon row.
+Engine SVG masks now live on the shadcn `ItemMedia variant="icon"` element
+itself instead of an extra `span[data-slot="engine-logo"]` child with a local
+`size-4` class. The visible engine cards still use the same local SVG assets
+and current-color mask treatment, but the structure is now a thinner shadcn
+composition.
+
+Focused Worker Studio coverage blocks reintroducing the child engine-logo span,
+and `check-web-ui-components --all --audit` now reports
+`settings-dialog.tsx` with `native=0`, `slotless=0` and
+`rawNativeClassName=0`. Playwright on `localhost:5173` confirms Codex and
+Cursor engine icons are 16px `ItemMedia` nodes with no child classed element,
+active `mask-image` / `-webkit-mask-image`, no border, no radius, no shadow and
+no horizontal overflow. This remains a migration checkpoint, not full goal
+completion.
+
+## 2026-05-20 13:21 [progress]
+
+Thinned the creation dialog form composition. Create-worker and
+create-workspace dialogs no longer render `FieldGroup` inside another
+`FieldGroup`; each dialog now uses one shadcn `FieldGroup` for the form stack
+with direct `Field` children and the shadcn `DialogFooter`. This removes a
+stacked form-spacing layer while keeping `Dialog`, `Field`, `Select`, `Input`
+and `Button` ownership intact.
+
+The focused creation-dialog test now blocks nested `FieldGroup` regressions
+for both dialogs. Playwright on `localhost:5173` opened the live
+create-worker dialog and confirmed a single field group, no nested field
+group, compact field/footer spacing, 448px by 256.5px dialog bounds and no
+horizontal overflow. The workspace dialog shares the same component structure
+and is covered by the focused component test. This remains a migration
+checkpoint, not full goal completion.
+
+## 2026-05-20 13:36 [progress]
+
+Tightened the shadcn migration self-check around framed surfaces. The full UI
+audit no longer reports scoped native layout as ambiguous raw native class
+noise: it now separates `scopedNativeClassName` from
+`slotlessNativeClassName`, and `slotlessNativeClassName` must remain zero.
+The framed-surface pass also gained an enforced classification table for every
+remaining shadcn `Card`, `Alert`, input frame and scoped native layout marker
+across Host Web and official Soul App web.
+
+The new focused script test first failed because the audit lacked framed
+classification and still printed `session-detail.tsx` as `rawNativeClassName=2`;
+after the change it passes and proves `session-detail.tsx` is classified as
+two scoped artifact-rail layout markers instead. The fresh full audit reports
+0 app-local semantic class tokens, 0 legacy migration entries, 0
+`slotlessNativeClassName` findings and a complete accepted framed-surface
+classification. This remains a migration checkpoint, not full goal completion.
+
+## 2026-05-20 13:56 [progress]
+
+Checked the long-running shadcn migration for loop and boundary drift risk.
+The active Playwright MCP session was reduced to one target tab before the
+next browser pass. The `apps/web/src/worker/souls/hr/people-workbench` path was
+traced to the pre-existing `0119b0f4` specialized renderer commit, not a new
+shadcn-migration hallucination, but it is now tracked as completion-sensitive
+Host-embedded Soul renderer debt in the full UI audit. The next boundary slice
+must move that HR workbench UI into the HR app product web / mounted surface
+boundary, or explicitly accept it as temporary boundary debt before final goal
+completion.
+
+The HR Configure action status now renders through shadcn `Alert` /
+`AlertDescription` instead of a raw `ItemDescription` status wrapper. Focused
+Worker Studio coverage proves the status text has `data-slot="alert-description"`
+inside `data-slot="alert"` with `role="status"`, and the full audit classifies
+the two Host-displayed Soul App action-result alerts. Playwright on
+`localhost:5173` confirmed the live Configure HR result uses the alert slot,
+keeps generated 8px radius / 1px border treatment and does not introduce
+horizontal overflow.
+
+## 2026-05-20 14:07 [progress]
+
+Promoted the Host-embedded HR renderer finding from visual audit context into
+the active Host/Soul boundary guard. `scripts/check-soul-app-boundaries.ts`
+now rejects any new unregistered Soul-specific renderer path under
+`apps/web/src/worker/souls`, and its `--completion-audit` mode intentionally
+fails while the registered historical HR workbench renderer remains in Host
+Web. The existing normal boundary check still passes for the registered debt,
+so everyday lint is not blocked by the historical path, but final shadcn
+migration closeout is blocked until the HR UI is moved into the HR app product
+web / mounted surface boundary or explicitly accepted as temporary debt.
+
+`docs/architecture.md#constraint-registry` now states the same rule in
+`IMPORT-001`: Host Web must not add Soul-specific renderer directories under
+`apps/web/src/worker/souls`; app-domain UI belongs in the owning Soul App
+product web or mounted surface boundary. Focused script coverage proves the
+completion audit fails with the registered `0119b0f4` HR renderer debt.
+
+## 2026-05-20 21:33 [fixed]
+
+Ported the removed Host HR people workbench into the HR Soul App instead of
+restoring `apps/web/src/worker/souls/hr`. The HR app now owns
+`product/web/people-workbench` domain model, profile README parsing,
+revision-review behavior and the shadcn route surface consumed by standalone
+and Host-mounted `/micro-app/routes/hr-home`.
+
+The mounted route smoke now asserts real HR workbench content
+(`Ben People Profile`, `Request reviewer decision`) instead of proof-card copy.
+`aiworker app validate` passes with `privateImportIssues=[]`, confirming the HR
+app does not import Host Web source or private shared packages. The full UI
+audit reports official Soul App product web `legacy=0 unclassified=0`, custom
+class tokens `0`, and shadcn theme colors active through `packages/ui`.
+
+## 2026-05-20 23:58 [progress]
+
+Started FEAT-107 / PLAN-390 to restore the mature HR profile workbench as an
+app-owned interactive micro-app. The target default desktop layout is Profile
+List, Reading Room, and Recent Sessions plus Composer, with lifecycle groups
+`候选人`, `在职员工`, and `离职归档` visible by default.
+
+## 2026-05-21 09:42 [completed]
+
+Completed FEAT-107 / PLAN-390. The HR Soul App mounted route now boots an
+app-owned interactive client with the restored three-column workbench: Profile
+List, Reading Room, and Recent Sessions plus Composer. The profile list keeps
+`候选人`, `在职员工`, and `离职归档` visible by default, the composer supports
+proposal type selection plus multi-file candidate material uploads under
+`evidence/uploads/`, and session creation uses the existing public local Host
+routes without moving HR profile semantics into Host Web.
+
+The Reading Room now loads selected profile README content, builds profile
+revision review from promotable artifacts, and posts accepted revisions through
+the local profile-revisions route. Host Web's HR-specific default-template
+preference was removed so the Host stays generic while the HR Soul App owns
+the profile proposal defaults.
+
+Verification passed for focused HR tests, HR typecheck, client build,
+validate/smoke, Host Web typecheck/test/build, mounted-surface smoke, browser
+screenshot checks for desktop light/dark/narrow, diff check, and
+code-review-graph. `bun run ui:check` was also run and still fails on the
+existing `packages/component/src/catalog.ts` legacy migration debt.

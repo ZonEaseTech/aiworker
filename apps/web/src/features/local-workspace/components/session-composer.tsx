@@ -1,9 +1,11 @@
-import type { SessionComposerMaterial } from '@zonease/aiworker-component'
-import type { CapabilityTemplate, LocalWorkspace } from '@zonease/aiworker-shared'
+import type { LocalWorkspace } from '@zonease/aiworker-shared'
+import type { SessionComposerMaterial } from '@zonease/aiworker-ui/components/session-composer'
 import type { FormEvent } from 'react'
 import type { messagesFor, normalizeLocale } from '../../i18n'
+import type { CapabilityTemplate } from '../types.compat'
 
-import { createComposerAttachment, formatSessionAttachmentKind, formatSessionAttachmentSize, isSessionAttachmentImage, SessionComposer } from '@zonease/aiworker-component'
+import { ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
+import { createComposerAttachment, formatSessionAttachmentKind, formatSessionAttachmentSize, isSessionAttachmentImage, SessionComposer } from '@zonease/aiworker-ui/components/session-composer'
 import { useEffect, useRef, useState } from 'react'
 import { displayTemplate } from '../../i18n'
 
@@ -23,6 +25,7 @@ interface WorkspaceSessionDraft {
     instruction: string
   }
   materials?: SessionComposerMaterial[]
+  mentions?: Array<{ id: string, kind: 'skill', label: string }>
 }
 
 export function WorkspaceSessionComposer({
@@ -31,7 +34,6 @@ export function WorkspaceSessionComposer({
   locale,
   onContextChange,
   onSubmit,
-  onTemplateChange,
   selectedTemplate,
   submitting,
   templates,
@@ -43,7 +45,6 @@ export function WorkspaceSessionComposer({
   locale: ReturnType<typeof normalizeLocale>
   onContextChange: (value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>, draft?: WorkspaceSessionDraft) => Promise<void> | void
-  onTemplateChange: (value: string) => void
   selectedTemplate: CapabilityTemplate
   submitting: boolean
   templates: CapabilityTemplate[]
@@ -55,6 +56,7 @@ export function WorkspaceSessionComposer({
   const [attachments, setAttachments] = useState<WorkspaceComposerAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const selectedTemplateCopy = displayTemplate(selectedTemplate, locale)
+  const mentionQuery = resolveDollarMention(value)
 
   useEffect(() => {
     attachmentsRef.current = attachments
@@ -127,6 +129,7 @@ export function WorkspaceSessionComposer({
           instruction: 'Use these workspace file paths as source material before producing the requested output.',
         },
         materials,
+        mentions: resolveSkillMentions(value, templates, locale),
       })
       clearAttachments()
     }
@@ -136,11 +139,13 @@ export function WorkspaceSessionComposer({
   }
 
   return (
-    <section className="workspace-session-composer" data-testid="new-session-panel">
-      <h2 className="workspace-composer-title">{copy.workspace.createSessionPrompt(workspace.name)}</h2>
+    <ItemGroup className="mx-auto max-w-4xl items-stretch gap-5" data-testid="new-session-panel">
+      <ItemTitle asChild size="base" className="mx-auto max-w-full">
+        <h2>{copy.workspace.createSessionPrompt(workspace.name)}</h2>
+      </ItemTitle>
       <input
         ref={fileInputRef}
-        className="session-composer-file-input workspace-material-file-input"
+        className="sr-only"
         type="file"
         multiple
         aria-hidden="true"
@@ -164,33 +169,52 @@ export function WorkspaceSessionComposer({
           removeLabel: copy.workspace.removeSourceMaterial(attachment.file.name),
           size: formatSessionAttachmentSize(attachment.file.size),
         }))}
-        className="workspace-composer-box"
+        className="overflow-visible"
         disabledReason={engineReadiness.ready ? undefined : engineReadiness.detail}
         error={attachmentError}
+        mentionOptions={templates.map(template => ({
+          description: template.outputKind,
+          id: template.id,
+          label: displayTemplate(template, locale).name,
+        }))}
+        mentionQuery={mentionQuery}
         onAddAttachmentFiles={addAttachmentFiles}
         onAddAttachments={openFilePicker}
+        onMentionDismiss={() => onContextChange(value.replace(/\$([\w.-]*)$/, ''))}
+        onMentionSelect={option => onContextChange(insertMention(value, option.id))}
         onRemoveAttachment={removeAttachment}
         placeholder={copy.workspace.createSessionPlaceholder}
-        selectedTemplateId={selectedTemplate.id}
         submitAriaLabel={copy.workspace.createSession}
         submitDisabled={!engineReadiness.ready}
         submitting={submitting}
-        templateLabel={copy.create.capabilityTemplate}
-        templateOptions={templates.map((template) => {
-          const templateCopy = displayTemplate(template, locale)
-          return {
-            description: template.outputKind,
-            label: templateCopy.name,
-            value: template.id,
-          }
-        })}
         value={value}
         variant="large"
         onSubmit={handleSubmit}
-        onTemplateChange={onTemplateChange}
         onValueChange={onContextChange}
       />
-      <p className="workspace-composer-hint">{copy.workspace.createSessionHint(selectedTemplateCopy.name)}</p>
-    </section>
+      <ItemDescription asChild className="max-w-full">
+        <p>{copy.workspace.createSessionHint(selectedTemplateCopy.name)}</p>
+      </ItemDescription>
+    </ItemGroup>
   )
+}
+
+function resolveDollarMention(value: string) {
+  const match = value.match(/\$([\w.-]*)$/)
+  return match ? { active: true, query: match[1] ?? '', trigger: '$' as const } : undefined
+}
+
+function insertMention(value: string, id: string): string {
+  return value.replace(/\$([\w.-]*)$/, `$${id} `)
+}
+
+function resolveSkillMentions(value: string, templates: CapabilityTemplate[], locale: ReturnType<typeof normalizeLocale>) {
+  const ids = new Set([...value.matchAll(/\$([\w.-]+)/g)].map(match => match[1]).filter(Boolean))
+  return templates
+    .filter(template => ids.has(template.id))
+    .map(template => ({
+      id: template.id,
+      kind: 'skill' as const,
+      label: displayTemplate(template, locale).name,
+    }))
 }
