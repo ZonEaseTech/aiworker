@@ -20,7 +20,8 @@ This file may explain authoring implications, but must not redefine the Host /
 Soul App contract.
 
 Apply these registry IDs before changing app behavior: `SOUL-001`,
-`PROTO-001`, `IMPORT-001`, `MOUNT-001`, `DATA-001` and `ENGINE-001`.
+`CONFIG-001`, `PROTO-001`, `IMPORT-001`, `MOUNT-001`, `DATA-001` and
+`ENGINE-001`.
 
 Soul Apps must treat human-facing UI/workbench surfaces and external-operator
 protocol/MCP/API/descriptor surfaces as entry modes over the same app-owned
@@ -60,6 +61,13 @@ Mounted HTML should bind to the official micro-app child API:
 events back to Host. App actions and search should run inside the micro-app or
 through app-owned mounted API paths; domain semantics do not belong in the data
 channel.
+
+Soul Apps may expose manifest/protocol descriptors that Host can display as
+generic worker-scoped options or status in Worker Configuration. They must not
+register Host left-panel triggers, header actions, toolbar buttons, Worker
+Configuration slots or Host-rendered domain fields. Workspace/session/domain
+configuration belongs inside Soul-owned micro-app UI or app-owned API; Host may
+pass workspace/session ids only as opaque locator context.
 
 Official Soul App web surfaces compose shared controls from `packages/ui`
 shadcn primitives. Domain-specific profiles, release decisions, accepted state,
@@ -273,6 +281,12 @@ primary action, searchbar, action menu, drawer toggles, refresh and app
 configuration placement are Host-owned chrome. App-owned actions/search/
 configuration belong inside the mounted micro-app UI or app-owned API surface,
 not as Host toolbar placement.
+
+Mounted Soul Apps also must not declare Host left-panel or Worker Configuration
+slots. Host owns the Worker Configuration trigger and dialog shell for each Soul
+worker. Soul-provided descriptors can affect generic worker-scoped options, but
+they do not create Soul/App global settings or workspace/session Host
+configuration.
 
 If a Soul App needs Host process coordination, such as a future web terminal, it
 should expose workspace locator intent through `ui.workspaceContext`. Terminal

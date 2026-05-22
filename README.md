@@ -15,6 +15,12 @@ AIWorker -> Soul App -> workspace -> session -> app-owned work
 protocol / data / engine / UI / documentation 的硬约束源头。旧北极星文档已经移除，避免开发入口
 被拆成多套叙事。
 
+第一原则：Host 是 shell / locator / mount / bridge，不是 Soul App 的上层配置中心。Host-owned
+Worker Configuration 只到 Soul worker 级别；同一 Soul App 的不同 worker 必须彼此隔离。
+workspace/session 只作为不透明 locator/context 传给 mounted Soul surface 或 engine bridge，
+不能成为 Host 配置层。Soul 通过 manifest/protocol descriptor 告知 Host 可泛化消费的选项；
+领域配置 UI、字段和保存逻辑属于 Soul-owned micro-app 或 app-owned API。
+
 ## 文档地图
 
 - `docs/architecture.md`：当前架构合同。
@@ -28,7 +34,7 @@ protocol / data / engine / UI / documentation 的硬约束源头。旧北极星�
 | 我要修改 | 从这里开始 |
 | --- | --- |
 | Host daemon/API、registry、local enablement、storage metadata | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
-| Host Web Shell、Settings、worker/workspace/session workbench | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md`，前端实现再用 `/pma-web`；shadcn/ui 相关改动再用 `.agents/skills/shadcn/SKILL.md` |
+| Host Web Shell、Settings、Worker Configuration、mounted workbench | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md`，前端实现再用 `/pma-web`；shadcn/ui 相关改动再用 `.agents/skills/shadcn/SKILL.md` |
 | CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/cli.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
 | 官方 HR/QA Soul App、manifest、standalone、Host mounted、artifact/profile/review/lesson | `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
 | 新第三方 Soul App | `aiworker app create` + `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
@@ -84,6 +90,11 @@ Host 不负责解释 HR profile、QA release verdict、artifact 内容、review 
 descriptor、workspace context、session context 或 lightweight UI event；如果 app 没有暴露，
 Host 停止，不取、不猜、不补。
 
+Host left panel、header、Worker Configuration trigger/dialog shell 属于 Host-owned chrome。
+Worker Configuration 只保存 worker-scoped Host shell preference、worker overlay/local
+enablement 和 manifest-derived 泛化选项；它不是 Soul/App 全局设置页，也不是 workspace/session
+配置页。需要 workspace/session/domain 配置时，进入 Soul-owned micro-app 或 app-owned API。
+
 ## Soul App 的职责
 
 Soul App 是领域主权方，负责：
@@ -117,8 +128,8 @@ Soul App 是领域主权方，负责：
 - Host 是承载环境，不是垂直产品对象。
 - Local daemon 是唯一的本地控制面，负责 Web/API、SQLite、engine inventory、BYOK、
   connectors、MCP、settings 和 app registry。
-- Worker 绑定一个 Soul App，并拥有该 app 的 capabilities、domain system、review policy 和
-  app-scoped namespaces。
+- Worker 绑定一个 Soul App，并拥有该 worker 的 Host shell preference、capabilities 投影和
+  app-scoped namespaces；同一 Soul App 下不同 worker 的配置彼此隔离。
 - Workspace/project 是某个 worker 下的业务作用域，例如候选人、需求、release、incident 或
   runbook。
 - Session 是 workspace 内持续上下文，也是 engine native session 的绑定点和接管点。

@@ -10,6 +10,14 @@ worker/workspace/session、挂载 app-owned UI/API，并为 session 准备 cwd/c
 AIWorker -> Soul App -> workspace -> session -> app-owned work
 ```
 
+第一原则：Host 是 shell / locator / mount / bridge，不是 Soul App 的上层配置中心。
+Host-owned Worker Configuration 的 trigger、dialog shell 和配置边界只到 **Soul worker**；
+同一 Soul App 下不同 worker 必须彼此隔离。workspace/session 只可作为不透明 locator/context
+传给 mounted Soul surface 或 engine bridge，不能成为 Host 配置层。Soul 如需让 Host 知道
+可选项，只能通过 manifest/protocol descriptor 告知；Host 泛化消费 descriptor，不解释、不保存
+领域配置字段，不允许 Soul 向 Host left panel、header、toolbar 或 Worker Configuration slot 注册
+自定义 UI。
+
 不要把默认体验拉回 developer-only work order、admin dashboard、远程控制面、治理内核、通用
 agent runtime 平台，或 Host-owned proposal/broker/review/audit/governance/admission 流程。
 
@@ -34,7 +42,7 @@ agent runtime 平台，或 Host-owned proposal/broker/review/audit/governance/ad
 - 外部 engine 安装、登录和 readiness：`docs/executor-engines.md`。
 - Host platform、daemon API、registry、local enablement、thin adapter、storage schema：
   `docs/architecture.md` 和 `aiworker-host-dev` skill。
-- Host Web Shell、Settings、workbench：`docs/architecture.md`、`aiworker-host-dev` skill，
+- Host Web Shell、Settings、Worker Configuration、workbench mount：`docs/architecture.md`、`aiworker-host-dev` skill，
   非平凡前端改动再读取 `/pma-web`；shadcn/ui 相关改动再读取 `.agents/skills/shadcn/SKILL.md`。
 - CLI lifecycle、daemon/app/worker/workspace/session 命令：`docs/cli.md` 和
   `aiworker-host-dev` skill。
@@ -57,7 +65,7 @@ agent runtime 平台，或 Host-owned proposal/broker/review/audit/governance/ad
 - `apps/cli`：`aiworker` CLI，本地 daemon lifecycle、Soul App install/enable、worker/workspace/
   session 命令入口。
 - `apps/api`：local daemon API 与 Worker Web 静态托管。
-- `apps/web`：Host Web Shell 与 worker/workspace/session workbench。
+- `apps/web`：Host Web Shell、worker-scoped Worker Configuration、locator chrome 与 mounted surface container。
 - `apps/aiworker-hr`、`apps/aiworker-qa`：官方维护的参考 Soul App；它们必须通过 install/enable
   进入 Host，不得被 Host 内置。
 - `packages/core`：local runtime、Host services、engine adapter 与 protocol 消费侧。
@@ -79,7 +87,13 @@ agent runtime 平台，或 Host-owned proposal/broker/review/audit/governance/ad
 - Soul App 是领域主权方，拥有业务对象、领域状态、领域 UI/API、app-owned outputs、
   app-owned confirmation actions、standalone 体验和 Host mounted product surface。
 - Host 只能消费 Soul App 通过 manifest/protocol 暴露的 route、mounted UI、action descriptor、
-  workspace context、session context 或 lightweight UI event。
+  workspace context、session context 或 lightweight UI event；workspace/session context 仅是
+  不透明 locator/bridge context，不是 Host configuration scope。
+- Host left panel、Host header、Worker Configuration trigger/dialog shell 属于 Host-owned chrome；
+  Soul App 不向这些 Host chrome 注册按钮、slot、renderer 或领域配置字段。
+- Worker Configuration 只保存 worker-scoped Host shell preference、worker overlay/local enablement
+  和 manifest-derived 泛化选项。需要 workspace/session/domain 配置时，进入 Soul-owned micro-app
+  或 app-owned API，由 Soul 自己解释和保存。
 - 如果 Soul App 不暴露某个 surface，Host 不取、不猜、不补。
 - proposal、broker、review、audit、governance、grant 和 admission 不再是 Host 产品内核。
 - Workspace/project 是业务作用域，不等同于软件仓库；HR 可以是岗位或候选人池，QA 可以是
@@ -110,13 +124,16 @@ agent runtime 平台，或 Host-owned proposal/broker/review/audit/governance/ad
   日志页或治理概念陈列。
 - Host 拥有当前 shell layout 与 full-width Host header；header action 是 Host 固化平台 action，
   不再下放给 Soul App 作为 slot 配置。
+- Host left panel 中的 Worker Configuration 入口是 Host 固化平台 action。它针对当前 Soul
+  worker，不针对 Soul App 全局，也不针对 workspace/session 下钻。
 - Soul App 仍可通过 manifest/protocol 暴露 app-owned `ui.workbench` actions/search/settings 与
   `ui.workspaceContext`，例如让未来 Host-owned web terminal 知道 workspace context；Host
   只能按 descriptor 调用或定位，不解释领域语义。
 - Standalone 模式下 Soul App 拥有自己的完整 shell；Host mounted 模式下 Soul App 适配 Host 壳。
 - Host mounted 的 app-owned UI 统一通过 `@micro-zoe/micro-app` 挂载；Host 只提供
   通用 mount container、theme/context data 与 protocol/thin adapter 入口，不在 `apps/web`
-  内实现 Soul 领域 renderer。
+  内实现 Soul 领域 renderer。`universal-workbench` 与领域专属 workbench 都是 Soul-owned
+  micro-app surface；Host 不 import、不特判、不渲染它们。
 - 新增或修改 Host Web / Soul App UI 时，从 `packages/ui` 查找 shadcn-managed primitives，
   并在 app 中组合这些 primitives。可复用 UI 归入 `packages/ui`；领域专属 UI 留在 owning app。
 - 新增 app-local UI 组件或 CSS 前说明归属：shadcn primitive 组合、Soul App 领域语义，

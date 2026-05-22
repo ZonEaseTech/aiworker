@@ -18,9 +18,9 @@ Use this skill for:
 
 - `apps/api`: local daemon API, OpenAPI routes, mounted service proxy, Host
   protocol endpoints, settings, worker/workspace/session API.
-- `apps/web`: Host Web Shell, Settings, Soul App install/enable UX,
-  worker/workspace/session workbench, shell header, drawers, shared Host
-  interaction surfaces.
+- `apps/web`: Host Web Shell, Settings, Worker Configuration, Soul App
+  install/enable UX, locator chrome, mounted container, shell header, drawers
+  and shared Host interaction surfaces.
 - `apps/cli`: daemon lifecycle, dev command, app install/enable/disable,
   worker/workspace/session commands, bundled runtime entrypoints.
 - `packages/core`: Host runtime, Soul App registry, thin local adapter
@@ -46,6 +46,9 @@ IDs before changing Host behavior:
 - `ARCH-001`: keep the default product path centered on AIWorker -> Soul App
   -> workspace -> session -> app-owned work.
 - `HOST-001`: Host owns only start, shell, locate, mount and bridge.
+- `CONFIG-001`: Host-owned Worker Configuration is scoped to one Soul worker;
+  its trigger and dialog shell are Host chrome, while workspace/session ids are
+  opaque locator or bridge context, not Host configuration scopes.
 - `PROTO-001`: Host routes only declared app surfaces and stops when a surface
   is absent.
 - `IMPORT-001`: Host must not import Soul App `src`.
@@ -65,6 +68,15 @@ Practical Host implications:
 
 - If a Soul App does not expose a surface, Host stops instead of fetching,
   inferring or backfilling it.
+- Worker Configuration is Host-owned chrome for the current Soul worker. Do not
+  let Soul Apps register left-panel triggers, header actions, toolbar controls,
+  Worker Configuration slots or Host-rendered domain fields.
+- Worker Configuration may show manifest-derived options/status and save
+  worker-scoped Host shell preferences only. Do not promote those options into
+  Soul/App global settings, workspace settings or session settings.
+- If workspace/session/domain configuration is needed, mount a Soul-owned
+  micro-app surface or proxy an app-owned API path; Host passes opaque locator
+  context and does not interpret or persist domain fields.
 - App-owned mounted UI is rendered through a generic micro-app container; do not
   add Host-local Soul renderer trees to make a surface appear.
 - micro-app replaces the old hand-rolled Host workbench action/search bridge.

@@ -42,6 +42,9 @@ IDs before changing Soul App behavior:
   -> workspace -> session -> app-owned work.
 - `SOUL-001`: Soul App owns domain state, domain meaning, app-owned outputs and
   app-owned confirmation actions.
+- `CONFIG-001`: Soul Apps may expose manifest/protocol descriptors for
+  worker-scoped Host display, but must not register Host chrome or create
+  Host-owned Soul/App/workspace/session configuration fields.
 - `PROTO-001`: app-owned state reaches Host only through declared mounted UI/API
   surfaces, workspace context or session context.
 - `IMPORT-001`: Soul App code must not import Host private packages or sibling
@@ -67,6 +70,10 @@ Practical Soul App implications:
 - Put mounted actions and search inside the micro-app UI or app-owned mounted
   API paths. `ui.workbench` is compatibility metadata, not a request to add Host
   toolbar controls or Host-owned action/search routes.
+- Do not register Host left-panel triggers, header actions, toolbar buttons,
+  Worker Configuration slots or Host-rendered domain fields. Domain,
+  workspace and session configuration must live in Soul-owned micro-app UI or
+  app-owned API.
 - For official Soul App web surfaces, compose shared chrome and controls from
   `packages/ui` shadcn primitives, then keep domain-specific profile, review,
   release or lesson semantics inside the owning app.
@@ -119,6 +126,8 @@ safely.
 7. If Host needs app-owned state, expose a micro-app surface, app-owned mounted
    API path, status or descriptor. If the app does not expose it, Host does not
    fetch, infer or synthesize it.
+   Descriptors may inform generic worker-scoped Host options, but they do not
+   give the app ownership of Host chrome or Host configuration scopes.
 8. For non-trivial code/product changes, follow PMA and keep `docs/task/`,
    `docs/plan/` and `docs/changelog.md` synced when the change has
    project-level impact.
