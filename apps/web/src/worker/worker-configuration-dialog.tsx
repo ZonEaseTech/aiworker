@@ -5,7 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Button } from '@zonease/aiworker-ui/components/button'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@zonease/aiworker-ui/components/dropdown-menu'
 import { Input } from '@zonease/aiworker-ui/components/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
@@ -193,7 +193,7 @@ export function WorkerConfigurationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-dvh flex-col gap-0 overflow-hidden p-0 sm:h-5/6 sm:max-w-5xl">
+      <DialogContent className="flex h-dvh flex-col gap-0 overflow-hidden p-0 sm:h-5/6 sm:max-w-5xl" showCloseButton={false}>
         <div className="relative px-6 pt-6 pr-20 pb-5">
           <Badge variant="secondary" className="w-fit">WORKER OVERLAY</Badge>
           <DialogTitle>Worker configuration</DialogTitle>
@@ -209,6 +209,11 @@ export function WorkerConfigurationDialog({
                 {autosave === 'saving' ? 'Saving' : autosave === 'failed' ? 'Failed' : 'Saved'}
               </Badge>
             ) : null}
+            <DialogClose asChild>
+              <Button variant="ghost" size="icon-sm" aria-label="Close">
+                <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} aria-hidden="true" />
+              </Button>
+            </DialogClose>
           </div>
         </div>
         <Tabs
