@@ -190,6 +190,19 @@ export function WorkerStudio() {
   )
   const selectedMountedWorkbenchRoute = selectedSoulApp?.manifest.ui?.routes?.find(route => route.surface?.renderer === 'micro-app') ?? null
   const showMountedWorkbenchRoute = Boolean(selectedSoulApp && selectedMountedWorkbenchRoute)
+  const workbenchTabs = useMemo(() => {
+    if (!selectedSoulApp?.manifest.ui?.routes || selectedSoulApp.manifest.ui.routes.length <= 1)
+      return []
+    return selectedSoulApp.manifest.ui.routes
+      .filter(r => r.surface?.renderer === 'micro-app')
+      .map(r => ({ id: r.id, label: r.label, path: mountedChildDefaultPath(r.path) }))
+  }, [selectedSoulApp?.manifest.ui?.routes])
+  const [activeMountedRouteId, setActiveMountedRouteId] = useState<string | null>(null)
+  const activeMountedRoute = useMemo(() => {
+    if (!activeMountedRouteId || !selectedSoulApp?.manifest.ui?.routes)
+      return selectedMountedWorkbenchRoute
+    return selectedSoulApp.manifest.ui.routes.find(r => r.id === activeMountedRouteId) ?? selectedMountedWorkbenchRoute
+  }, [activeMountedRouteId, selectedMountedWorkbenchRoute, selectedSoulApp?.manifest.ui?.routes])
   const soulWorkspaces = useMemo(
     () => data?.workspaces.filter(item => item.workerId === selectedWorker?.id) ?? [],
     [data?.workspaces, selectedWorker?.id],
@@ -407,7 +420,12 @@ export function WorkerStudio() {
           <HostTopBar
             sidebarCollapsed={sidebarCollapsed}
             locatorSegments={hostLocatorSegments}
+            workbenchTabs={workbenchTabs}
+            activeTabId={activeMountedRoute?.id ?? null}
             onToggleSidebar={() => setSidebarCollapsed(current => !current)}
+            onSelectTab={(tab) => {
+              setActiveMountedRouteId(tab.id)
+            }}
           />
         )}
         mainLabel={copy.accessibility.soulProjectsAndArtifacts}
@@ -475,7 +493,12 @@ export function WorkerStudio() {
           <HostTopBar
             sidebarCollapsed={sidebarCollapsed}
             locatorSegments={hostLocatorSegments}
+            workbenchTabs={workbenchTabs}
+            activeTabId={activeMountedRoute?.id ?? null}
             onToggleSidebar={() => setSidebarCollapsed(current => !current)}
+            onSelectTab={(tab) => {
+              setActiveMountedRouteId(tab.id)
+            }}
           />
         )}
         dialogs={(
@@ -560,14 +583,15 @@ export function WorkerStudio() {
         )}
         main={(
           <>
-            {showMountedWorkbenchRoute && selectedSoulApp && selectedMountedWorkbenchRoute
+            {showMountedWorkbenchRoute && selectedSoulApp && activeMountedRoute
               ? (
                   <MountedSoulAppRouteSurface
+                    key={activeMountedRoute.id}
                     appId={selectedSoulApp.appId}
                     resolvedTheme={resolvedTheme}
-                    route={selectedMountedWorkbenchRoute}
+                    route={activeMountedRoute}
                     routeMemoryRef={mountedChildRouteMemoryRef}
-                    sessionId={selectedMountedWorkbenchRoute.surface?.scope === 'session' ? selectedSession?.id ?? null : null}
+                    sessionId={activeMountedRoute?.surface?.scope === 'session' ? selectedSession?.id ?? null : null}
                     workerId={selectedWorker.id}
                     workspaceId={selectedWorkspace?.id ?? null}
                   />
@@ -950,13 +974,19 @@ function stableMountedMicroAppUrl(url: string): string {
 }
 
 function HostTopBar({
+  activeTabId,
   locatorSegments,
+  onSelectTab,
   onToggleSidebar,
   sidebarCollapsed,
+  workbenchTabs,
 }: {
+  activeTabId?: string | null
   locatorSegments: string[]
+  onSelectTab?: (tab: { id: string, path: string }) => void
   onToggleSidebar: () => void
   sidebarCollapsed: boolean
+  workbenchTabs?: { id: string, label: string, path: string }[]
 }) {
   const sidebarLabel = sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
   const locatorItems = locatorSegments.map((segment, index) => ({
@@ -995,6 +1025,28 @@ function HostTopBar({
               ))}
             </BreadcrumbList>
           </Breadcrumb>
+          {workbenchTabs && workbenchTabs.length > 1
+            ? (
+                <ItemActions className="min-w-0 gap-0.5 ml-2" role="tablist" aria-label="Workbench tabs">
+                  {workbenchTabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={tab.id === activeTabId}
+                      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                        tab.id === activeTabId
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                      onClick={() => onSelectTab?.(tab)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </ItemActions>
+              )
+            : null}
         </ItemActions>
         <ItemActions className="min-w-0 gap-1" aria-label="Reserved Host panels">
           <SidebarMenuButton
