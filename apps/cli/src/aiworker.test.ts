@@ -609,6 +609,7 @@ describe('aiworker local CLI', () => {
     expect(scaffold.files).toContain('product/profiles/demo-soul-app/SOUL.md')
     expect(scaffold.files).toContain('host-adapter/standalone/standalone.ts')
     expect(scaffold.files).toContain('host-adapter/mounted/host-mounted.ts')
+    expect(scaffold.files).toContain('runtime/universal-workbench.ts')
     await expect(stat(path.join(appDir, 'soul-app.manifest.json'))).resolves.toBeTruthy()
     await expect(stat(path.join(appDir, 'host-adapter/index.ts'))).resolves.toBeTruthy()
     await expect(stat(path.join(appDir, 'host-adapter/standalone/standalone.ts'))).resolves.toBeTruthy()
@@ -651,6 +652,14 @@ describe('aiworker local CLI', () => {
     expect(scaffoldManifest.ui).not.toHaveProperty('workbench')
     expect(JSON.stringify(scaffoldManifest.ui)).not.toContain('host-descriptor')
     expect(scaffoldManifest.ui.routes?.[0]).toEqual(expect.objectContaining({
+      id: 'universal-workbench',
+      surface: expect.objectContaining({
+        entry: '/micro-app/workbench/universal',
+        renderer: 'micro-app',
+        scope: 'app',
+      }),
+    }))
+    expect(scaffoldManifest.ui.routes?.[1]).toEqual(expect.objectContaining({
       id: 'brief-home',
       surface: expect.objectContaining({
         entry: '/micro-app/routes/brief-home',
@@ -676,6 +685,7 @@ describe('aiworker local CLI', () => {
     expect(scaffoldReadme).not.toContain('ui.workbench')
     expect(scaffoldReadme).toContain('ui.workspaceContext')
     expect(scaffoldReadme).toContain('replace `workspace:*` after the SDK is published')
+    expect(scaffoldHostMounted).toContain('/micro-app/workbench/universal')
     expect(scaffoldHostMounted).toContain('/micro-app/routes/brief-home')
     expect(scaffoldHostMounted).toContain('/api/briefs')
     expect(scaffoldHostMounted).toContain('/api/briefs/search')
@@ -711,6 +721,7 @@ describe('aiworker local CLI', () => {
     expect(validation.validation.checkedAssets).toContain('./host-adapter/standalone/standalone.ts')
     expect(validation.validation.checkedAssets).toContain('./host-adapter/mounted/host-mounted.ts')
     expect(validation.validation.checkedAssets).toContain('./host-adapter/index.ts')
+    expect(validation.validation.checkedAssets).toContain('./runtime/universal-workbench.ts')
     output = ''
 
     expect(await runCli(argv('app', 'smoke', appDir))).toBe(0)

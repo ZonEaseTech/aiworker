@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-21
+> Updated: 2026-05-23
 
 ## Usage
 
@@ -433,3 +433,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-402 Worker-scoped native engine invocation stream**](PLAN-402.md) `2026-05-21`
 - [x] [**PLAN-403 WorkerStudio mounted-first Host shell boundary**](PLAN-403.md) `2026-05-21`
 - [x] [**PLAN-404 HR mounted scoped CSS layout fix**](PLAN-404.md) `2026-05-21`
+- [x] [**PLAN-405 Host/Soul micro-app workbench boundary closure**](PLAN-405.md) `2026-05-23`

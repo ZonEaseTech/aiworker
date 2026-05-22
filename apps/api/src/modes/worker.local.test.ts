@@ -844,7 +844,7 @@ printf '\\nEOF\\n'
     }
   })
 
-  it('does not expose Host workbench action and search routes as product API', async () => {
+  it('does not expose Host workbench action, search, or configuration routes as product API', async () => {
     const target = await app()
     const protocolCalls: string[] = []
     const mountedService = Bun.serve({
@@ -852,7 +852,7 @@ printf '\\nEOF\\n'
         const url = new URL(request.url)
         if (url.pathname === '/health')
           return Response.json({ status: 'ok' })
-        if (url.pathname === '/protocol/actions' || url.pathname === '/protocol/search') {
+        if (url.pathname === '/protocol/actions' || url.pathname === '/protocol/search' || url.pathname === '/protocol/configuration') {
           protocolCalls.push(url.pathname)
           return Response.json({ ok: true })
         }
@@ -892,6 +892,12 @@ printf '\\nEOF\\n'
                   protocolProvider: 'peopleProfiles.search',
                   requiredPermissions: ['storage:read:aiworker-qa'],
                 },
+                configuration: {
+                  id: 'configure-hr',
+                  label: 'Configure HR',
+                  protocolAction: 'configuration.open',
+                  requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
+                },
               },
             },
           },
@@ -906,6 +912,9 @@ printf '\\nEOF\\n'
 
       const searchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada')
       expect(searchRes.status).not.toBe(200)
+
+      const configurationRes = await target.request('/api/local/apps/aiworker-hr/configuration/configure-hr', { method: 'POST' })
+      expect(configurationRes.status).not.toBe(200)
       expect(protocolCalls).toEqual([])
     }
     finally {

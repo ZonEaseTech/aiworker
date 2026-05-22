@@ -216,6 +216,17 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     ],
     routes: [
       {
+        entry: './runtime/universal-workbench.ts',
+        id: 'universal-workbench',
+        label: '通用工作台',
+        path: '/workbench/universal',
+        surface: {
+          entry: '/micro-app/workbench/universal',
+          renderer: 'micro-app',
+          scope: 'app',
+        },
+      },
+      {
         entry: './product/web/routes/hr-route.tsx',
         id: 'hr-home',
         label: 'HR',
@@ -441,14 +452,13 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     ],
     routes: [
       {
-        entry: './product/web/routes/qa-route.tsx',
-        id: 'qa-home',
-        label: 'QA',
-        path: '/qa',
+        entry: './runtime/universal-workbench.ts',
+        id: 'universal-workbench',
+        label: '通用工作台',
+        path: '/workbench/universal',
         surface: {
-          entry: '/micro-app/routes/qa-home',
+          entry: '/micro-app/workbench/universal',
           renderer: 'micro-app',
-          requiredPermissions: ['ui:mount:qa-micro-app'],
           scope: 'app',
         },
       },

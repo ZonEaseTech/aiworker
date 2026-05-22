@@ -18,6 +18,7 @@
     "apps/aiworker-custom": {
       "name": "@zonease/aiworker-custom",
       "dependencies": {
+        "@zonease/aiworker-soul-app-runtime": "workspace:*",
         "@zonease/aiworker-soul-app-sdk": "workspace:*",
         "@zonease/aiworker-ui": "workspace:*",
         "react": "^19.1.0",
@@ -27,7 +28,6 @@
         "@types/bun": "^1.2.13",
         "@types/react": "^19.1.2",
         "@types/react-dom": "^19.1.2",
-        "@zonease/aiworker-soul-app-runtime": "workspace:*",
         "typescript": "^5.8.3",
       },
     },
@@ -36,6 +36,7 @@
       "dependencies": {
         "@hugeicons/core-free-icons": "^4.1.4",
         "@hugeicons/react": "^1.1.6",
+        "@zonease/aiworker-soul-app-runtime": "workspace:*",
         "@zonease/aiworker-soul-app-sdk": "workspace:*",
         "@zonease/aiworker-ui": "workspace:*",
         "react": "^19.1.0",
@@ -45,13 +46,13 @@
         "@types/bun": "^1.2.13",
         "@types/react": "^19.1.2",
         "@types/react-dom": "^19.1.2",
-        "@zonease/aiworker-soul-app-runtime": "workspace:*",
         "typescript": "^5.8.3",
       },
     },
     "apps/aiworker-qa": {
       "name": "@zonease/aiworker-qa",
       "dependencies": {
+        "@zonease/aiworker-soul-app-runtime": "workspace:*",
         "@zonease/aiworker-soul-app-sdk": "workspace:*",
         "@zonease/aiworker-ui": "workspace:*",
         "react": "^19.1.0",
@@ -61,7 +62,6 @@
         "@types/bun": "^1.2.13",
         "@types/react": "^19.1.2",
         "@types/react-dom": "^19.1.2",
-        "@zonease/aiworker-soul-app-runtime": "workspace:*",
         "typescript": "^5.8.3",
       },
     },
@@ -111,7 +111,6 @@
         "@micro-zoe/micro-app": "^1.0.0-rc.30",
         "@tailwindcss/vite": "^4.2.2",
         "@zonease/aiworker-shared": "workspace:*",
-        "@zonease/aiworker-soul-app-workbench": "workspace:*",
         "@zonease/aiworker-ui": "workspace:*",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",

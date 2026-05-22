@@ -240,25 +240,16 @@ class ThrowingStorage extends MemoryStorage {
   }
 }
 
-describe('defineSoulApp universal workbench injection', () => {
-  it('injects universal workbench route when manifest has no ui.routes', () => {
+describe('defineSoulApp manifest route ownership', () => {
+  it('does not inject universal workbench routes into app manifests', () => {
     const demo = demoSoulApp()
 
     expect(demo.manifest.ui?.routes).toBeDefined()
-    const universalRoute = demo.manifest.ui!.routes!.find(r => r.id === 'universal-workbench')
-    expect(universalRoute).toBeDefined()
-    expect(universalRoute!.surface!.entry).toBe('/micro-app/workbench/universal')
-    expect(universalRoute!.path).toBe('/workbench/universal')
-    expect(universalRoute!.label).toBe('通用工作台')
+    expect(demo.manifest.ui!.routes!.map(route => route.id)).toEqual(['demo-route'])
+    expect(demo.manifest.ui!.routes!.some(route => route.id === 'universal-workbench')).toBe(false)
   })
 
-  it('injects universal workbench as first route', () => {
-    const demo = demoSoulApp()
-    const routes = demo.manifest.ui!.routes!
-    expect(routes[0]!.id).toBe('universal-workbench')
-  })
-
-  it('does not duplicate universal workbench route when already declared', () => {
+  it('preserves explicit universal workbench route declarations', () => {
     const base = demoSoulApp()
     const app = defineSoulApp({
       ...base,

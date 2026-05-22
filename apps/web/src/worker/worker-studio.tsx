@@ -1,6 +1,5 @@
 import type {
   HostedSoulApp,
-  LocalSessionEvent,
   LocalWorkerOverlayAsset,
   MountedMicroAppChildEvent,
   MountedMicroAppHostData,
@@ -23,7 +22,6 @@ import {
   Settings02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { resolveEngineReadiness, UniversalWorkbenchApp } from '@zonease/aiworker-soul-app-workbench'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Avatar, AvatarFallback } from '@zonease/aiworker-ui/components/avatar'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
@@ -56,7 +54,7 @@ import {
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
-import { continueSessionTurn, createSessionTurn, createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, projectWorkerWorkspaceOverlay, saveWorkerOverlay } from '../features/local-workspace/api'
+import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, projectWorkerWorkspaceOverlay, saveWorkerOverlay } from '../features/local-workspace/api'
 import { resolveMountedSurface } from '../features/local-workspace/api/workspace-data'
 import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard } from '../features/local-workspace/components'
 import {
@@ -96,6 +94,7 @@ interface StudioState {
 type WorkerMessages = ReturnType<typeof messagesFor>
 
 const defaultNewWorkerSoulId = 'aiworker-hr'
+const activeMountedRoutePreferenceKey = 'aiworker:worker-studio:active-mounted-route'
 
 interface OpenMountedChildRouteOptions {
   replace?: boolean
@@ -113,6 +112,10 @@ interface MountedMicroAppSurfaceResponse {
     label: string
     renderer: 'micro-app'
   }
+}
+
+function microAppWorkbenchRoutes(app: HostedSoulApp | null): HostedSoulApp['manifest']['ui']['routes'] {
+  return app?.manifest.ui?.routes?.filter(route => route.surface?.renderer === 'micro-app') ?? []
 }
 
 export function WorkerStudio() {
@@ -133,9 +136,6 @@ export function WorkerStudio() {
   const [workerConfigurationWorkerId, setWorkerConfigurationWorkerId] = useState<string | null>(null)
   const [workerOverlayAssets, setWorkerOverlayAssets] = useState<LocalWorkerOverlayAsset[]>([])
   const [submitting, setSubmitting] = useState(false)
-  const [turnInput, setTurnInput] = useState('')
-  const [turnSubmitting, setTurnSubmitting] = useState(false)
-  const [sessionEvents, setSessionEvents] = useState<LocalSessionEvent[]>([])
   const mountedChildRouteMemoryRef = useRef(new Map<string, string>())
 
   const refresh = useCallback(async () => {
@@ -185,30 +185,61 @@ export function WorkerStudio() {
   const selectedSoul = selectedWorker
     ? data?.souls.find(soul => soul.id === selectedWorker.soulId) ?? null
     : data?.souls.find(soul => soul.id === newWorkerSoulId && soul.status === 'available') ?? data?.souls.find(soul => soul.status === 'available') ?? null
+  const soulAppForWorker = useCallback((worker: typeof selectedWorker) => {
+    if (!worker)
+      return null
+    return data?.apps.find(app => app.appId === worker.soulId || app.projectedSoul?.id === worker.soulId) ?? null
+  }, [data?.apps])
   const selectedSoulApp = useMemo(
-    () => data?.apps.find(app => app.appId === selectedSoul?.id || app.projectedSoul?.id === selectedSoul?.id) ?? null,
-    [data?.apps, selectedSoul?.id],
+    () => soulAppForWorker(selectedWorker),
+    [selectedWorker, soulAppForWorker],
+  )
+  const workerConfigurationSoulApp = useMemo(
+    () => soulAppForWorker(workerConfigurationWorker),
+    [soulAppForWorker, workerConfigurationWorker],
   )
   const templates = useMemo(
     () => data?.templates.filter(template => template.soulId === selectedWorker?.soulId) ?? [],
     [data?.templates, selectedWorker?.soulId],
   )
-  const selectedMountedWorkbenchRoute = selectedSoulApp?.manifest.ui?.routes?.find(route => route.surface?.renderer === 'micro-app') ?? null
+  const selectedMountedRoutes = useMemo(
+    () => microAppWorkbenchRoutes(selectedSoulApp),
+    [selectedSoulApp],
+  )
+  const workerConfigurationMountedRoutes = useMemo(
+    () => microAppWorkbenchRoutes(workerConfigurationSoulApp),
+    [workerConfigurationSoulApp],
+  )
+  const selectedMountedWorkbenchRoute = selectedMountedRoutes[0] ?? null
   const showMountedWorkbenchRoute = Boolean(selectedSoulApp && selectedMountedWorkbenchRoute)
   const workbenchTabs = useMemo(() => {
-    if (!selectedSoulApp?.manifest.ui?.routes || selectedSoulApp.manifest.ui.routes.length <= 1)
+    if (workerConfigurationMountedRoutes.length <= 1)
       return []
-    return selectedSoulApp.manifest.ui.routes
-      .filter(r => r.surface?.renderer === 'micro-app')
+    return workerConfigurationMountedRoutes
       .map(r => ({ id: r.id, label: r.label, path: mountedChildDefaultPath(r.path) }))
-  }, [selectedSoulApp?.manifest.ui?.routes])
-  const [activeMountedTabMap, setActiveMountedTabMap] = useState<Record<string, string>>({})
+  }, [workerConfigurationMountedRoutes])
+  const [activeMountedTabMap, setActiveMountedTabMap] = useState<Record<string, string>>(() => readActiveMountedRoutePreferences())
+  const updateActiveMountedTabMap = useCallback((updater: (current: Record<string, string>) => Record<string, string>) => {
+    setActiveMountedTabMap((current) => {
+      const next = updater(current)
+      persistActiveMountedRoutePreferences(next)
+      return next
+    })
+  }, [])
   const activeMountedRouteId = activeMountedTabMap[selectedWorker?.id ?? ''] ?? null
   const activeMountedRoute = useMemo(() => {
-    if (!activeMountedRouteId || !selectedSoulApp?.manifest.ui?.routes)
+    if (!activeMountedRouteId)
       return selectedMountedWorkbenchRoute
-    return selectedSoulApp.manifest.ui.routes.find(r => r.id === activeMountedRouteId) ?? selectedMountedWorkbenchRoute
-  }, [activeMountedRouteId, selectedMountedWorkbenchRoute, selectedSoulApp?.manifest.ui?.routes])
+    return selectedMountedRoutes.find(r => r.id === activeMountedRouteId) ?? selectedMountedWorkbenchRoute
+  }, [activeMountedRouteId, selectedMountedRoutes, selectedMountedWorkbenchRoute])
+  const workerConfigurationActiveRouteId = useMemo(() => {
+    if (!workerConfigurationWorker)
+      return null
+    const candidate = activeMountedTabMap[workerConfigurationWorker.id]
+    if (candidate && workerConfigurationMountedRoutes.some(route => route.id === candidate))
+      return candidate
+    return workerConfigurationMountedRoutes[0]?.id ?? null
+  }, [activeMountedTabMap, workerConfigurationMountedRoutes, workerConfigurationWorker])
   const soulWorkspaces = useMemo(
     () => data?.workspaces.filter(item => item.workerId === selectedWorker?.id) ?? [],
     [data?.workspaces, selectedWorker?.id],
@@ -241,84 +272,6 @@ export function WorkerStudio() {
     : null
   const selectedSession = routeSession ?? (route.kind === 'workspace' ? null : selectedWorkspace ? sessionForWorkspace(selectedWorkspace, allSessions) : latest(soulSessions))
 
-  const fetchSessionEvents = useCallback(async (sessionId: string) => {
-    if (!selectedWorker?.id)
-      return
-    try {
-      const res = await fetch(`/api/local/workers/${selectedWorker.id}/sessions/${sessionId}/events`)
-      const json = await res.json() as { events: LocalSessionEvent[] }
-      setSessionEvents(json.events ?? [])
-    }
-    catch {
-      setSessionEvents([])
-    }
-  }, [selectedWorker?.id])
-
-  const handleSelectSession = useCallback((sessionId: string | null) => {
-    if (sessionId && selectedWorker?.id) {
-      void fetchSessionEvents(sessionId)
-    }
-    else {
-      setSessionEvents([])
-    }
-  }, [fetchSessionEvents, selectedWorker?.id])
-
-  const handleCreateSession = useCallback(async (workspaceId: string, input: string) => {
-    if (!selectedWorker?.id || !templates.length)
-      return
-    setTurnSubmitting(true)
-    try {
-      const result = await createSessionTurn(workspaceId, {
-        capabilityTemplateId: templates[0]!.id,
-        input,
-        title: input.slice(0, 80),
-      }, selectedWorker.id)
-      setSessionEvents(result.events)
-      await refresh()
-      navigateWorkerRoute({
-        kind: 'session',
-        workerId: selectedWorker.id,
-        workspaceId,
-        sessionId: result.session.id,
-      })
-    }
-    finally {
-      setTurnSubmitting(false)
-      setTurnInput('')
-    }
-  }, [selectedWorker?.id, templates, refresh])
-
-  const handleSubmitTurn = useCallback(async (
-    event: FormEvent<HTMLFormElement>,
-  ) => {
-    event?.preventDefault()
-    if (!selectedWorker?.id || !selectedSession)
-      return
-    setTurnSubmitting(true)
-    try {
-      if (!turnInput.trim())
-        return
-      await continueSessionTurn(selectedSession.id, { input: turnInput.trim() }, selectedWorker.id)
-      await refresh()
-      setTurnInput('')
-    }
-    finally {
-      setTurnSubmitting(false)
-    }
-  }, [selectedWorker?.id, selectedSession?.id, turnInput, refresh])
-
-  useEffect(() => {
-    if (activeMountedRoute?.id !== 'universal-workbench') {
-      setSessionEvents([])
-      setTurnInput('')
-    }
-  }, [activeMountedRoute?.id])
-
-  useEffect(() => {
-    setSessionEvents([])
-    setTurnInput('')
-  }, [selectedWorker?.id])
-
   const enabledSoulApps = useMemo(
     () => data?.apps.filter(app => app.status === 'enabled') ?? [],
     [data?.apps],
@@ -330,10 +283,6 @@ export function WorkerStudio() {
   const systemTheme = useSystemTheme()
   const appearance = data?.settings.appearance ?? 'system'
   const resolvedTheme = resolveTheme(appearance, systemTheme)
-  const engineReadiness = useMemo(
-    () => resolveEngineReadiness(data?.settings ?? null, copy),
-    [data?.settings, copy],
-  )
 
   useEffect(() => {
     document.documentElement.lang = activeLocale
@@ -664,40 +613,18 @@ export function WorkerStudio() {
         main={(
           <>
             {showMountedWorkbenchRoute && selectedSoulApp && activeMountedRoute
-              ? activeMountedRoute.id === 'universal-workbench'
-                ? (
-                    <UniversalWorkbenchApp
-                      engineReadiness={engineReadiness}
-                      events={sessionEvents}
-                      sessions={soulSessions}
-                      turnInput={turnInput}
-                      turnSubmitting={turnSubmitting}
-                      turns={data.turns}
-                      workspace={selectedWorkspace}
-                      workspaces={soulWorkspaces}
-                      onBackToWorkspace={() => {
-                        navigateWorkerRoute({ kind: 'worker', workerId: selectedWorker.id })
-                      }}
-                      onCreateSession={handleCreateSession}
-                      onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
-                      onRefresh={refresh}
-                      onSelectSession={handleSelectSession}
-                      onSubmitTurn={handleSubmitTurn}
-                      onTurnInputChange={setTurnInput}
-                    />
-                  )
-                : (
-                    <MountedSoulAppRouteSurface
-                      key={activeMountedRoute.id}
-                      appId={selectedSoulApp.appId}
-                      resolvedTheme={resolvedTheme}
-                      route={activeMountedRoute}
-                      routeMemoryRef={mountedChildRouteMemoryRef}
-                      sessionId={activeMountedRoute?.surface?.scope === 'session' ? selectedSession?.id ?? null : null}
-                      workerId={selectedWorker.id}
-                      workspaceId={selectedWorkspace?.id ?? null}
-                    />
-                  )
+              ? (
+                  <MountedSoulAppRouteSurface
+                    key={`${selectedWorker.id}:${activeMountedRoute.id}`}
+                    appId={selectedSoulApp.appId}
+                    resolvedTheme={resolvedTheme}
+                    route={activeMountedRoute}
+                    routeMemoryRef={mountedChildRouteMemoryRef}
+                    sessionId={activeMountedRoute?.surface?.scope === 'session' ? selectedSession?.id ?? null : null}
+                    workerId={selectedWorker.id}
+                    workspaceId={selectedWorkspace?.id ?? null}
+                  />
+                )
               : null}
 
             {!showMountedWorkbenchRoute && isWorkspaceContextRoute && selectedWorkspace
@@ -842,7 +769,7 @@ export function WorkerStudio() {
         )}
       />
       <WorkerConfigurationDialog
-        activeWorkbenchTabId={activeMountedRoute?.id ?? null}
+        activeWorkbenchTabId={workerConfigurationActiveRouteId}
         assets={workerOverlayAssets}
         open={workerConfigurationOpen}
         worker={workerConfigurationWorker}
@@ -856,7 +783,7 @@ export function WorkerStudio() {
         onSaveAssets={saveWorkerOverlayAssets}
         onSelectWorkbenchTab={(tab) => {
           if (workerConfigurationWorker)
-            setActiveMountedTabMap(prev => ({ ...prev, [workerConfigurationWorker.id]: tab.id }))
+            updateActiveMountedTabMap(prev => ({ ...prev, [workerConfigurationWorker.id]: tab.id }))
         }}
         projectionWorkspace={selectedWorkspace?.workerId === workerConfigurationWorker?.id ? selectedWorkspace : null}
       />
@@ -1298,6 +1225,38 @@ function soulForApp(app: HostedSoulApp, souls: LocalWorkspaceData['souls']) {
   return souls.find(soul => soul.id === app.appId)
     ?? souls.find(soul => soul.id === app.projectedSoul?.id)
     ?? null
+}
+
+function readActiveMountedRoutePreferences(): Record<string, string> {
+  if (typeof window === 'undefined')
+    return {}
+  try {
+    const raw = window.localStorage.getItem(activeMountedRoutePreferenceKey)
+    if (!raw)
+      return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!isRecord(parsed))
+      return {}
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+  }
+  catch {
+    return {}
+  }
+}
+
+function persistActiveMountedRoutePreferences(preferences: Record<string, string>): void {
+  if (typeof window === 'undefined')
+    return
+  try {
+    window.localStorage.setItem(activeMountedRoutePreferenceKey, JSON.stringify(preferences))
+  }
+  catch {
+    // Shell preferences are best-effort and must not block Host mounting.
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function workerInitials(name: string): string {

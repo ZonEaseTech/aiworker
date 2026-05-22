@@ -174,7 +174,13 @@ describe('Soul App manifest schema', () => {
       slot: 'artifact-preview',
       target: 'person-profile',
     }))
+    expect(hrSoulAppManifest.ui.routes.map(route => route.id)).toEqual(['universal-workbench', 'hr-home'])
     expect(hrSoulAppManifest.ui.routes[0]?.surface).toMatchObject({
+      entry: '/micro-app/workbench/universal',
+      renderer: 'micro-app',
+      scope: 'app',
+    })
+    expect(hrSoulAppManifest.ui.routes[1]?.surface).toMatchObject({
       entry: '/micro-app/routes/hr-home',
       renderer: 'micro-app',
       requiredPermissions: ['ui:mount:hr-micro-app'],
@@ -200,11 +206,11 @@ describe('Soul App manifest schema', () => {
     expect(qaSoulAppManifest.capabilities[0]?.promptRef).toBe('./product/workflows/regression-matrix/prompt.md')
     expect(qaSoulAppManifest.capabilities[0]?.reviewRubricRef).toBe('./product/workflows/regression-matrix/review.md')
     expect(qaSoulAppManifest.pack.refs[0]?.ref).toBe('product/profiles/qa-reviewer/SOUL.md')
-    expect(qaSoulAppManifest.ui.routes[0]?.entry).toBe('./product/web/routes/qa-route.tsx')
+    expect(qaSoulAppManifest.ui.routes.map(route => route.id)).toEqual(['universal-workbench'])
+    expect(qaSoulAppManifest.ui.routes[0]?.entry).toBe('./runtime/universal-workbench.ts')
     expect(qaSoulAppManifest.ui.routes[0]?.surface).toMatchObject({
-      entry: '/micro-app/routes/qa-home',
+      entry: '/micro-app/workbench/universal',
       renderer: 'micro-app',
-      requiredPermissions: ['ui:mount:qa-micro-app'],
       scope: 'app',
     })
     expect(hrSoulAppManifest.api.entry).toBe('./host-adapter/api.ts')

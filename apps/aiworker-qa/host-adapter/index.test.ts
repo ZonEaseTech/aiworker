@@ -55,10 +55,10 @@ describe('QA reference Soul App', () => {
     expect('workbench' in qaManifestJson.ui).toBe(false)
     expect(JSON.stringify(qaManifestJson.ui)).not.toContain('host-descriptor')
     expect(JSON.stringify(qaManifestJson.ui)).not.toContain('/surfaces/')
-    expect(qaManifestJson.ui.routes.find(route => route.id === 'qa-home')?.surface).toMatchObject({
-      entry: '/micro-app/routes/qa-home',
+    expect(qaManifestJson.ui.routes.map(route => route.id)).toEqual(['universal-workbench'])
+    expect(qaManifestJson.ui.routes.find(route => route.id === 'universal-workbench')?.surface).toMatchObject({
+      entry: '/micro-app/workbench/universal',
       renderer: 'micro-app',
-      requiredPermissions: ['ui:mount:qa-micro-app'],
       scope: 'app',
     })
     expect(qaManifestJson.ui.workspaceContext?.terminal?.cwd).toEqual({ source: 'host-workspace-root' })
@@ -78,6 +78,18 @@ describe('QA reference Soul App', () => {
       })
       expect(domainRes.status).toBe(200)
       expect(await domainRes.json()).toMatchObject({ appId: 'aiworker-qa', mounted: true })
+      const declaredMicroAppRoutes = qaManifestJson.ui.routes.filter(route =>
+        route.surface?.renderer === 'micro-app' && route.surface.entry?.startsWith('/micro-app/'),
+      )
+      for (const route of declaredMicroAppRoutes) {
+        const routeRes = await fetch(`${baseUrl}${route.surface.entry}?workerId=qa-worker&workspaceId=workspace-1&theme=light`, {
+          headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+        })
+        expect(routeRes.status).toBe(200)
+        const routeHtml = await routeRes.text()
+        expect(routeHtml).toContain('window.microApp')
+        expect(routeHtml).toContain('"appId":"aiworker-qa"')
+      }
       const oldRouteSurfaceRes = await fetch(`${baseUrl}/surfaces/routes/qa-home`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })
@@ -86,13 +98,13 @@ describe('QA reference Soul App', () => {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })
       expect(oldPanelSurfaceRes.status).toBe(404)
-      const routeMicroAppRes = await fetch(`${baseUrl}/micro-app/routes/qa-home`, {
+      const routeMicroAppRes = await fetch(`${baseUrl}/micro-app/workbench/universal`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })
       expect(routeMicroAppRes.status).toBe(200)
       const routeMicroAppHtml = await routeMicroAppRes.text()
-      expect(routeMicroAppHtml).toContain('QA release readiness is owned inside this Soul App micro-app route.')
-      expect(routeMicroAppHtml).toContain('data-route-id="qa-home"')
+      expect(routeMicroAppHtml).toContain('Universal Workbench')
+      expect(routeMicroAppHtml).toContain('"surfaceId":"universal-workbench"')
       expect(routeMicroAppHtml).toContain('<link rel="stylesheet" href="/api/local/apps/aiworker-qa/styles.css">')
       const microAppRes = await fetch(`${baseUrl}/micro-app/widgets/qa-release-widget`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },

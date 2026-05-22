@@ -235,27 +235,13 @@
     ],
     "routes": [
       {
-        "entry": "./runtime/universal-workbench",
+        "entry": "./runtime/universal-workbench.ts",
         "id": "universal-workbench",
         "label": "通用工作台",
         "path": "/workbench/universal",
         "surface": {
           "entry": "/micro-app/workbench/universal",
           "renderer": "micro-app",
-          "scope": "app"
-        }
-      },
-      {
-        "entry": "./product/web/routes/qa-route.tsx",
-        "id": "qa-home",
-        "label": "QA",
-        "path": "/qa",
-        "surface": {
-          "entry": "/micro-app/routes/qa-home",
-          "renderer": "micro-app",
-          "requiredPermissions": [
-            "ui:mount:qa-micro-app"
-          ],
           "scope": "app"
         }
       }

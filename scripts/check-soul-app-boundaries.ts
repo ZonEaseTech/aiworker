@@ -35,12 +35,14 @@ const hostPrivateRoots = [
   'packages/storage-sqlite',
 ]
 const rawWebStorageMessage = 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.'
+const forbiddenHostWebImports = ['@zonease/aiworker-soul-app-workbench']
 const soulApps = discoverSoulApps()
 const issues: BoundaryIssue[] = [
   ...scanSoulAppImports(soulApps),
   ...scanHostImports(soulApps),
   ...scanSoulAppWebStorageUsage(soulApps),
   ...scanHostEmbeddedSoulRenderers(),
+  ...scanHostWebPackageImports(),
 ]
 
 if (issues.length > 0) {
@@ -165,6 +167,25 @@ function scanHostEmbeddedSoulRenderers(): BoundaryIssue[] {
       importPath: 'host-renderer',
       message: 'Host Web must not add Soul-specific renderer directories; move domain UI into the owning Soul App product web or mounted surface boundary.',
     }))
+}
+
+function scanHostWebPackageImports(): BoundaryIssue[] {
+  const webRoot = path.join(repoRoot, 'apps/web')
+  if (!existsSync(webRoot))
+    return []
+  const issues: BoundaryIssue[] = []
+  for (const file of listSourceFiles(webRoot)) {
+    for (const importPath of importSpecifiers(readFileSync(file, 'utf8'))) {
+      if (forbiddenHostWebImports.includes(packageRoot(importPath))) {
+        issues.push(issue(
+          file,
+          importPath,
+          'Host Web must mount Soul workbench routes through manifest-declared micro-app surfaces instead of importing Soul workbench packages.',
+        ))
+      }
+    }
+  }
+  return issues
 }
 
 function reportHostEmbeddedSoulRendererDebt(): void {

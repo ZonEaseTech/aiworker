@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./universal-workbench-html": {
+      "types": "./src/universal-workbench-html.ts",
+      "import": "./src/universal-workbench-html.ts"
     }
   },
   "main": "./src/index.ts",

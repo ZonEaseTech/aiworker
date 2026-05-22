@@ -9,7 +9,7 @@ import path from 'node:path'
 import { defineSoulApp, namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-app-sdk'
 import { afterEach, describe, expect, it } from 'bun:test'
 
-import { createMountedSoulAppTestRuntime, createStandaloneSoulAppRuntime } from './index'
+import { createMountedSoulAppTestRuntime, createStandaloneSoulAppRuntime, renderUniversalWorkbenchHtml } from './index'
 
 const now = () => '2026-05-12T23:30:00.000Z'
 
@@ -100,6 +100,27 @@ describe('Soul App runtime harness', () => {
     })
 
     expect(standalone.runtime.snapshot().worker.soulId).toBe('demo-soul-app')
+  })
+
+  it('renders the universal workbench as a declared micro-app surface shell', () => {
+    const html = renderUniversalWorkbenchHtml({
+      appId: 'demo-soul-app',
+      appName: 'Demo Soul App',
+      routePrefix: '/api/local/apps/demo-soul-app',
+      surfaceId: 'universal-workbench',
+      theme: 'light',
+    })
+
+    expect(html).toContain('<title>Demo Soul App · Universal Workbench</title>')
+    expect(html).toContain('id="aiworker-micro-app-host-data"')
+    expect(html).toContain('"appId":"demo-soul-app"')
+    expect(html).toContain('"routePrefix":"/api/local/apps/demo-soul-app"')
+    expect(html).toContain('"surfaceId":"universal-workbench"')
+    expect(html).toContain('"theme":"light"')
+    expect(html).toContain('window.microApp')
+    expect(html).toContain('api.addDataListener(receiveHostData, true)')
+    expect(html).toContain('api.dispatch({ type: "ready" })')
+    expect(html).not.toContain('@zonease/aiworker-soul-app-workbench')
   })
 
   it('uses the same SDK definition through mounted Host projection without changing domain logic', async () => {

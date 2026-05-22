@@ -904,6 +904,7 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
   writeScaffoldFile(path.join(targetDir, 'host-adapter/api.ts'), scaffoldApiTs())
   writeScaffoldFile(path.join(targetDir, 'host-adapter/standalone/standalone.ts'), scaffoldStandaloneTs())
   writeScaffoldFile(path.join(targetDir, 'host-adapter/mounted/host-mounted.ts'), scaffoldHostMountedTs())
+  writeScaffoldFile(path.join(targetDir, 'runtime/universal-workbench.ts'), scaffoldUniversalWorkbenchTs())
   writeScaffoldFile(path.join(targetDir, 'product/artifacts/schemas/brief.schema.json'), briefSchemaText)
   writeScaffoldFile(path.join(targetDir, 'product/workflows/brief/prompt.md'), scaffoldPrompt(appId))
   writeScaffoldFile(path.join(targetDir, 'product/workflows/brief/review.md'), scaffoldReview(appId))
@@ -931,6 +932,7 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
       'host-adapter/api.ts',
       'host-adapter/standalone/standalone.ts',
       'host-adapter/mounted/host-mounted.ts',
+      'runtime/universal-workbench.ts',
       'product/artifacts/schemas/brief.schema.json',
       'product/workflows/brief/prompt.md',
       'product/workflows/brief/review.md',
@@ -1271,6 +1273,17 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       ],
       routes: [
         {
+          entry: './runtime/universal-workbench.ts',
+          id: 'universal-workbench',
+          label: 'Universal Workbench',
+          path: '/workbench/universal',
+          surface: {
+            entry: '/micro-app/workbench/universal',
+            renderer: 'micro-app',
+            scope: 'app',
+          },
+        },
+        {
           entry: './product/web/routes/brief-route.tsx',
           id: 'brief-home',
           label: titleCase(appId),
@@ -1557,6 +1570,14 @@ function scaffoldSkill(appId: string): string {
   ].join('\n')
 }
 
+function scaffoldUniversalWorkbenchTs(): string {
+  return [
+    "export const routeId = 'universal-workbench'",
+    "export const renderer = 'micro-app'",
+    '',
+  ].join('\n')
+}
+
 function scaffoldProductWebTs(symbol: string): string {
   return `export const ${symbol} = {
   renderer: 'app-owned',
@@ -1772,6 +1793,12 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
 
       if (url.pathname === '/api/briefs/search' && request.method === 'GET')
         return handleBriefSearch(url)
+
+      if (url.pathname === '/micro-app/workbench/universal') {
+        return new Response(renderBriefMicroAppHtml('Universal Workbench'), {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
+      }
 
       if (url.pathname === '/micro-app/routes/brief-home') {
         return new Response(renderBriefMicroAppHtml('Brief Home'), {

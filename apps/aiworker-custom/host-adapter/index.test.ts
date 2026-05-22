@@ -52,6 +52,12 @@ describe('Custom reference Soul App', () => {
     expect(customManifestJson.capabilities[0]?.id).toBe('explore')
     expect(customManifestJson.connectors.required).toEqual([])
     expect(customManifestJson.connectors.optional).toEqual([])
+    expect(customManifestJson.ui.routes.map(route => route.id)).toEqual(['universal-workbench'])
+    expect(customManifestJson.ui.routes[0]?.surface).toMatchObject({
+      entry: '/micro-app/workbench/universal',
+      renderer: 'micro-app',
+      scope: 'app',
+    })
   })
 
   it('serves standalone HTML with Custom proof component', () => {
@@ -75,6 +81,18 @@ describe('Custom reference Soul App', () => {
       })
       expect(domainRes.status).toBe(200)
       expect(await domainRes.json()).toMatchObject({ appId: 'aiworker-custom', mounted: true, soul: 'custom' })
+      const declaredMicroAppRoutes = customManifestJson.ui.routes.filter(route =>
+        route.surface?.renderer === 'micro-app' && route.surface.entry?.startsWith('/micro-app/'),
+      )
+      for (const route of declaredMicroAppRoutes) {
+        const routeRes = await fetch(`${baseUrl}${route.surface.entry}?workerId=custom-worker&workspaceId=workspace-1&theme=light`, {
+          headers: { 'x-aiworker-mount-token': 'test-custom-mounted-token' },
+        })
+        expect(routeRes.status).toBe(200)
+        const routeHtml = await routeRes.text()
+        expect(routeHtml).toContain('window.microApp')
+        expect(routeHtml).toContain('"appId":"aiworker-custom"')
+      }
       const capabilitiesRes = await fetch(`${baseUrl}/api/capabilities`, {
         headers: { 'x-aiworker-mount-token': 'test-custom-mounted-token' },
       })

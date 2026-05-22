@@ -25,6 +25,7 @@
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.1.4",
     "@hugeicons/react": "^1.1.6",
+    "@zonease/aiworker-soul-app-runtime": "workspace:*",
     "@zonease/aiworker-soul-app-sdk": "workspace:*",
     "@zonease/aiworker-ui": "workspace:*",
     "react": "^19.1.0",
@@ -34,7 +35,6 @@
     "@types/bun": "^1.2.13",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
-    "@zonease/aiworker-soul-app-runtime": "workspace:*",
     "typescript": "^5.8.3"
   }
 }

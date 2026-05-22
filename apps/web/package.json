@@ -27,7 +27,6 @@
     "@micro-zoe/micro-app": "^1.0.0-rc.30",
     "@tailwindcss/vite": "^4.2.2",
     "@zonease/aiworker-shared": "workspace:*",
-    "@zonease/aiworker-soul-app-workbench": "workspace:*",
     "@zonease/aiworker-ui": "workspace:*",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

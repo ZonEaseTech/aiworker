@@ -125,7 +125,7 @@
     "panels": [],
     "routes": [
       {
-        "entry": "./runtime/universal-workbench",
+        "entry": "./runtime/universal-workbench.ts",
         "id": "universal-workbench",
         "label": "通用工作台",
         "path": "/workbench/universal",

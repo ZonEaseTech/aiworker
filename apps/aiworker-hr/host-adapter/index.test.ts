@@ -51,6 +51,12 @@ describe('HR reference Soul App', () => {
     expect(Object.hasOwn(hrManifestJson.ui, 'workbench')).toBeFalse()
     expect(JSON.stringify(hrManifestJson.ui)).not.toContain('host-descriptor')
     expect(hrManifestJson.ui.workspaceContext?.terminal?.cwd).toEqual({ source: 'host-workspace-root' })
+    expect(hrManifestJson.ui.routes.map(route => route.id)).toEqual(['universal-workbench', 'hr-home'])
+    expect(hrManifestJson.ui.routes.find(route => route.id === 'universal-workbench')?.surface).toMatchObject({
+      entry: '/micro-app/workbench/universal',
+      renderer: 'micro-app',
+      scope: 'app',
+    })
     expect(hrManifestJson.ui.routes.find(route => route.id === 'hr-home')?.surface).toMatchObject({
       entry: '/micro-app/routes/hr-home',
       renderer: 'micro-app',
@@ -73,6 +79,18 @@ describe('HR reference Soul App', () => {
       })
       expect(domainRes.status).toBe(200)
       expect(await domainRes.json()).toMatchObject({ appId: 'aiworker-hr', mounted: true })
+      const declaredMicroAppRoutes = hrManifestJson.ui.routes.filter(route =>
+        route.surface?.renderer === 'micro-app' && route.surface.entry?.startsWith('/micro-app/'),
+      )
+      for (const route of declaredMicroAppRoutes) {
+        const routeRes = await fetch(`${baseUrl}${route.surface.entry}?workerId=hr-worker&workspaceId=workspace-1&theme=light`, {
+          headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+        })
+        expect(routeRes.status).toBe(200)
+        const routeHtml = await routeRes.text()
+        expect(routeHtml).toContain('window.microApp')
+        expect(routeHtml).toContain('"appId":"aiworker-hr"')
+      }
       const legacyRouteSurfaceRes = await fetch(`${baseUrl}/surfaces/routes/hr-home`, {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
       })

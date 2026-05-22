@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-21
+> Updated: 2026-05-23
 
 ## Usage
 
@@ -519,3 +519,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-094 Add worker-scoped native engine invocation stream**](REFACTOR-094.md) `P0`
 - [x] [**REFACTOR-095 WorkerStudio mounted-first Host shell boundary**](REFACTOR-095.md) `P0`
 - [x] [**BUG-149 HR mounted reading-room layout falls back to one column**](BUG-149.md) `P0`
+- [x] [**REFACTOR-096 Close Host/Soul micro-app workbench boundary**](REFACTOR-096.md) `P0`

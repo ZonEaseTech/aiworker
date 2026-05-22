@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import process from 'node:process'
 
 import { renderToStaticMarkup } from 'react-dom/server'
+import { renderUniversalWorkbenchHtml } from '@zonease/aiworker-soul-app-runtime/universal-workbench-html'
 
 import { HrHomeRouteSurface } from '../../product/web/routes/hr-route'
 import { HrPeopleWidgetProof } from '../../product/web/widgets/people-widget'
@@ -72,6 +73,11 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
           workspaceTypes: hrSoulAppManifest.workspaceTypes.map(type => type.id),
         })
       }
+      if (url.pathname === '/micro-app/workbench/universal') {
+        return new Response(hrUniversalWorkbenchHtml(request), {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
+      }
       if (url.pathname === '/micro-app/routes/hr-home') {
         return new Response(hrRouteMicroAppHtml(request), {
           headers: { 'content-type': 'text/html; charset=utf-8' },
@@ -99,6 +105,22 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
     },
     hostname: Bun.env.HOST ?? '127.0.0.1',
     port,
+  })
+}
+
+function hrUniversalWorkbenchHtml(request: Request): string {
+  const context = readMountContext(request)
+  const url = new URL(request.url)
+  const theme = readMicroAppTheme(request)
+  return renderUniversalWorkbenchHtml({
+    appId: hrSoulAppManifest.id,
+    appName: hrSoulAppManifest.name,
+    routePrefix: mountedRoutePrefix(),
+    sessionId: context?.sessionId ?? url.searchParams.get('sessionId'),
+    styleHref: mountedStyleHref(),
+    theme,
+    workerId: context?.workerId ?? url.searchParams.get('workerId'),
+    workspaceId: context?.workspaceId ?? url.searchParams.get('workspaceId'),
   })
 }
 

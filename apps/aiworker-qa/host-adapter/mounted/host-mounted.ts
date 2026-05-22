@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import process from 'node:process'
 
 import { renderToStaticMarkup } from 'react-dom/server'
+import { renderUniversalWorkbenchHtml } from '@zonease/aiworker-soul-app-runtime/universal-workbench-html'
 
 import { QaReleaseWidgetProof } from '../../product/web/widgets/release-widget'
 import { qaSoulAppManifest } from '../index'
@@ -68,8 +69,8 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
         return Response.json(await createReleaseGateDraft(request))
       if (url.pathname === '/api/release-gates/search' && request.method === 'GET')
         return Response.json(searchReleaseGates(request, url))
-      if (url.pathname === '/micro-app/routes/qa-home') {
-        return new Response(qaHomeMicroAppHtml(request), {
+      if (url.pathname === '/micro-app/workbench/universal') {
+        return new Response(qaUniversalWorkbenchHtml(request), {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
@@ -88,6 +89,22 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
 if (import.meta.main) {
   const server = serveHostMounted()
   process.stdout.write(`${JSON.stringify({ appId: qaSoulAppManifest.id, mode: 'host-mounted', url: `http://${server.hostname}:${server.port}` })}\n`)
+}
+
+function qaUniversalWorkbenchHtml(request: Request): string {
+  const context = readMountContext(request)
+  const url = new URL(request.url)
+  const theme = readMicroAppTheme(request)
+  return renderUniversalWorkbenchHtml({
+    appId: qaSoulAppManifest.id,
+    appName: qaSoulAppManifest.name,
+    routePrefix: mountedRoutePrefix(),
+    sessionId: context?.sessionId ?? url.searchParams.get('sessionId'),
+    styleHref: mountedStyleHref(),
+    theme,
+    workerId: context?.workerId ?? url.searchParams.get('workerId'),
+    workspaceId: context?.workspaceId ?? url.searchParams.get('workspaceId'),
+  })
 }
 
 function verifyMountToken(request: Request): Response | null {
@@ -123,28 +140,6 @@ function qaWidgetMicroAppHtml(request: Request): string {
   ].join('')
 }
 
-function qaHomeMicroAppHtml(request: Request): string {
-  const context = readMountContext(request)
-  const workspaceRef = context?.workspaceId ?? 'local workspace'
-  const theme = readMicroAppTheme(request)
-  const homeMarkup = renderToStaticMarkup(QaReleaseWidgetProof({
-    badgeLabel: 'QA',
-    description: 'QA release readiness is owned inside this Soul App micro-app route.',
-    detail: `Release gate workspace: ${workspaceRef}.`,
-  }))
-  return [
-    '<!doctype html>',
-    microAppHtmlOpen(theme),
-    `<head><meta charset="utf-8"><title>QA Home</title>${renderSoulAppStyleLink(mountedStyleHref())}</head>`,
-    '<body>',
-    `<main data-soul-app-id="${escapeHtmlAttribute(qaSoulAppManifest.id)}" data-route-id="qa-home">`,
-    homeMarkup,
-    '</main>',
-    '</body>',
-    '</html>',
-  ].join('')
-}
-
 function readMicroAppTheme(request: Request): 'dark' | 'light' {
   return new URL(request.url).searchParams.get('theme') === 'dark' ? 'dark' : 'light'
 }
@@ -156,7 +151,11 @@ function microAppHtmlOpen(theme: 'dark' | 'light'): string {
 }
 
 function mountedStyleHref(): string {
-  return `/api/local/apps/${qaSoulAppManifest.id}/styles.css`
+  return `${mountedRoutePrefix()}/styles.css`
+}
+
+function mountedRoutePrefix(): string {
+  return `/api/local/apps/${qaSoulAppManifest.id}`
 }
 
 function escapeHtmlAttribute(value: string): string {
