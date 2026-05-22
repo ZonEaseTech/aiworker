@@ -12,9 +12,17 @@
       "types": "./src/universal-workbench/index.ts",
       "import": "./src/universal-workbench/index.ts"
     },
-    "./timeline/*": {
-      "types": "./src/universal-workbench/timeline/*.ts",
-      "import": "./src/universal-workbench/timeline/*.ts"
+    "./timeline/session-view-model": {
+      "types": "./src/universal-workbench/timeline/session-view-model.ts",
+      "import": "./src/universal-workbench/timeline/session-view-model.ts"
+    },
+    "./timeline/message-flow": {
+      "types": "./src/universal-workbench/timeline/message-flow.tsx",
+      "import": "./src/universal-workbench/timeline/message-flow.tsx"
+    },
+    "./timeline/engine-readiness": {
+      "types": "./src/universal-workbench/timeline/engine-readiness.ts",
+      "import": "./src/universal-workbench/timeline/engine-readiness.ts"
     }
   },
   "main": "./src/index.ts",
