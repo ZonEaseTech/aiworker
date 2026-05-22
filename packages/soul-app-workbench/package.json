@@ -13,8 +13,8 @@
       "import": "./src/universal-workbench/index.ts"
     },
     "./timeline/*": {
-      "types": "./src/universal-workbench/timeline/*",
-      "import": "./src/universal-workbench/timeline/*"
+      "types": "./src/universal-workbench/timeline/*.ts",
+      "import": "./src/universal-workbench/timeline/*.ts"
     }
   },
   "main": "./src/index.ts",
