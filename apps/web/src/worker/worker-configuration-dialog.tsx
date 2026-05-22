@@ -2,6 +2,7 @@ import type { LocalWorker, LocalWorkerOverlayAsset, LocalWorkerOverlayAssetKind,
 
 import { Cancel01Icon, MoreHorizontalCircle01Icon, RefreshIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
@@ -52,6 +53,7 @@ export function WorkerConfigurationDialog({
   const [createValidation, setCreateValidation] = useState<string | null>(null)
   const [newAsset, setNewAsset] = useState<NewAssetDraft | null>(null)
   const [autosave, setAutosave] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
+  const [autosaveErrorMessage, setAutosaveErrorMessage] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [projecting, setProjecting] = useState(false)
   const [projectionStatus, setProjectionStatus] = useState<string | null>(null)
@@ -65,14 +67,23 @@ export function WorkerConfigurationDialog({
   const effectiveNewAsset = newAsset?.kind === activeCategory ? newAsset : defaultNewAsset
 
   async function saveAsset(nextAsset: LocalWorkerOverlayAsset) {
+    const original = assets.find(item => item.id === nextAsset.id && item.kind === nextAsset.kind)
+    const errors = validateAsset(nextAsset, assets, original)
+    if (errors.length > 0) {
+      setAutosave('failed')
+      setAutosaveErrorMessage(formatValidation(errors))
+      return
+    }
     const stampedAsset = { ...nextAsset, source: 'overlay' as const, updatedAt: new Date().toISOString() }
     setAutosave('saving')
+    setAutosaveErrorMessage(null)
     try {
       await saveAssets(assets.map(asset => asset.id === nextAsset.id && asset.kind === nextAsset.kind ? stampedAsset : asset))
       setAutosave('saved')
     }
-    catch {
+    catch (error) {
       setAutosave('failed')
+      setAutosaveErrorMessage(error instanceof Error ? error.message : 'Save failed')
     }
   }
 
@@ -336,6 +347,13 @@ export function WorkerConfigurationDialog({
                           }
                         }}
                       />
+                      {autosave === 'failed' && autosaveErrorMessage
+                        ? (
+                            <Alert variant="destructive">
+                              <AlertDescription>{autosaveErrorMessage}</AlertDescription>
+                            </Alert>
+                          )
+                        : null}
                     </ItemGroup>
                   )
                 : null}
@@ -416,8 +434,8 @@ function defaultContent(kind: OverlayCategory): string {
   return '# Custom Skill\n\nUse when this worker needs explicit local behavior.\n'
 }
 
-function formatValidation(errors: string[]): string {
-  return errors.length > 0 ? errors.map(error => `- ${error}`).join('\n') : 'Overlay asset is valid.'
+function formatValidation(errors: string[]): string | null {
+  return errors.length > 0 ? errors.map(error => `- ${error}`).join('\n') : null
 }
 
 function nextCopyId(id: string, assets: LocalWorkerOverlayAsset[]): string {
