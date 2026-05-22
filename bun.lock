@@ -15,6 +15,22 @@
         "typescript": "^5.8.3",
       },
     },
+    "apps/aiworker-custom": {
+      "name": "@zonease/aiworker-custom",
+      "dependencies": {
+        "@zonease/aiworker-soul-app-sdk": "workspace:*",
+        "@zonease/aiworker-ui": "workspace:*",
+        "react": "^19.1.0",
+        "react-dom": "^19.1.0",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "@types/react": "^19.1.2",
+        "@types/react-dom": "^19.1.2",
+        "@zonease/aiworker-soul-app-runtime": "workspace:*",
+        "typescript": "^5.8.3",
+      },
+    },
     "apps/aiworker-hr": {
       "name": "@zonease/aiworker-hr",
       "dependencies": {
@@ -153,10 +169,8 @@
     "packages/soul-app-runtime": {
       "name": "@zonease/aiworker-soul-app-runtime",
       "dependencies": {
-        "@zonease/aiworker-core": "workspace:*",
         "@zonease/aiworker-shared": "workspace:*",
         "@zonease/aiworker-soul-app-sdk": "workspace:*",
-        "@zonease/aiworker-storage-sqlite": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
@@ -170,6 +184,23 @@
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "packages/soul-app-workbench": {
+      "name": "@zonease/aiworker-soul-app-workbench",
+      "dependencies": {
+        "@hugeicons/core-free-icons": "^4.1.4",
+        "@hugeicons/react": "^1.1.6",
+        "@zonease/aiworker-shared": "workspace:*",
+        "@zonease/aiworker-ui": "workspace:*",
+        "react": "^19.1.0",
+        "react-dom": "^19.1.0",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "@types/react": "^19.1.2",
+        "@types/react-dom": "^19.1.2",
         "typescript": "^5.8.3",
       },
     },
@@ -816,6 +847,8 @@
 
     "@zonease/aiworker-core": ["@zonease/aiworker-core@workspace:packages/core"],
 
+    "@zonease/aiworker-custom": ["@zonease/aiworker-custom@workspace:apps/aiworker-custom"],
+
     "@zonease/aiworker-fs-layout": ["@zonease/aiworker-fs-layout@workspace:packages/fs-layout"],
 
     "@zonease/aiworker-hr": ["@zonease/aiworker-hr@workspace:apps/aiworker-hr"],
@@ -827,6 +860,8 @@
     "@zonease/aiworker-soul-app-runtime": ["@zonease/aiworker-soul-app-runtime@workspace:packages/soul-app-runtime"],
 
     "@zonease/aiworker-soul-app-sdk": ["@zonease/aiworker-soul-app-sdk@workspace:packages/soul-app-sdk"],
+
+    "@zonease/aiworker-soul-app-workbench": ["@zonease/aiworker-soul-app-workbench@workspace:packages/soul-app-workbench"],
 
     "@zonease/aiworker-storage-sqlite": ["@zonease/aiworker-storage-sqlite@workspace:packages/storage-sqlite"],
 
