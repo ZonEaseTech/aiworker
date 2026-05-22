@@ -22,6 +22,9 @@ Host-to-mounted-UI communication goes through the micro-app runtime only.
   manifest-declared micro-app routes.
 - Keep the workbench switch in Worker Configuration's projection area, scoped to
   the specific Soul worker.
+- Clarify that all Worker Configuration items, not only workbench selection, must
+  obey worker-level scope boundaries unless they explicitly target a narrower
+  workspace/session projection.
 - Preserve HR's domain-specific workbench route while allowing apps such as QA or
   custom to expose only universal workbench without a switch.
 - Add tests and static guardrails so Host cannot re-import or re-render Soul
@@ -32,6 +35,9 @@ Host-to-mounted-UI communication goes through the micro-app runtime only.
 - Do not redesign Host shell navigation.
 - Do not introduce Host-owned action/search/proposal/review workbench controls.
 - Do not make workbench selection a Soul-level or app-level global setting.
+- Do not make any Worker Configuration item a Soul-level or app-level global
+  setting unless the active architecture contract explicitly introduces that
+  scope.
 - Do not make Host interpret HR, QA or custom domain state.
 
 ## Boundary Rules
@@ -94,7 +100,38 @@ It only mounts the worker-selected route.
 Reference apps and scaffolds may explicitly declare the route, but the manifest
 must be the source of truth.
 
-## Worker-Scoped Selection
+## Configuration Scope Hierarchy
+
+Worker Configuration is a Host shell surface for one Soul worker. It is not a
+Soul App global settings surface, not a Soul-level capability editor and not a
+shared domain configuration panel.
+
+Every configuration item shown in Worker Configuration must have an explicit
+scope:
+
+- `worker`: the setting belongs to the current Soul worker and is keyed by worker
+  id. This is the default for Host shell preferences such as active workbench
+  route, worker overlay choices and worker-owned local enablement.
+- `workspace projection`: the action targets the currently selected workspace,
+  but it remains initiated from the current worker's configuration and must not
+  mutate the Soul App manifest or other workers.
+- `session invocation`: the value is passed only as part of a session/engine
+  invocation boundary and is not stored as app-owned domain state by Host.
+- `manifest-derived`: the value is read from the Soul App manifest or protocol
+  descriptor. Host may display it as an option or status, but must not treat it
+  as mutable Host-owned global app configuration.
+
+The same Soul App can have multiple Soul workers. Each worker has its own Worker
+Configuration. A setting changed for one worker must not affect another worker
+that uses the same Soul App unless the user explicitly performs a cross-worker
+operation introduced by a separate design.
+
+Host must not promote worker configuration into Soul-level configuration merely
+because two workers share the same Soul App. Soul App authorship and manifest
+changes belong in the owning app package or authoring workflow, not Worker
+Configuration.
+
+## Worker-Scoped Workbench Selection
 
 The workbench switch remains inside Worker Configuration's projection area. This
 is a worker-level Host shell preference, not a Soul-level or app-level setting.
