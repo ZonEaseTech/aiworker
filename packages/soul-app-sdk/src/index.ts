@@ -123,8 +123,30 @@ export interface SoulAppWebStorageFailure {
   ok: false
 }
 
+const UNIVERSAL_WORKBENCH_ROUTE = {
+  entry: './runtime/universal-workbench',
+  id: 'universal-workbench',
+  label: '通用工作台',
+  path: '/workbench/universal',
+  surface: {
+    entry: '/micro-app/workbench/universal',
+    renderer: 'micro-app' as const,
+    scope: 'app' as const,
+  },
+}
+
 export function defineSoulApp(input: SoulAppProtocolHandlers): SoulAppDefinition {
   const manifest = soulAppManifestSchema.parse(input.manifest)
+
+  const existingRoutes = manifest.ui?.routes ?? []
+  const hasUniversalWorkbench = existingRoutes.some(route => route.id === 'universal-workbench')
+  if (!hasUniversalWorkbench) {
+    manifest.ui = {
+      ...manifest.ui,
+      routes: [UNIVERSAL_WORKBENCH_ROUTE, ...existingRoutes],
+    }
+  }
+
   return {
     ...input,
     manifest,

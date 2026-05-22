@@ -240,6 +240,50 @@ class ThrowingStorage extends MemoryStorage {
   }
 }
 
+describe('defineSoulApp universal workbench injection', () => {
+  it('injects universal workbench route when manifest has no ui.routes', () => {
+    const demo = demoSoulApp()
+
+    expect(demo.manifest.ui?.routes).toBeDefined()
+    const universalRoute = demo.manifest.ui!.routes!.find(r => r.id === 'universal-workbench')
+    expect(universalRoute).toBeDefined()
+    expect(universalRoute!.surface!.entry).toBe('/micro-app/workbench/universal')
+    expect(universalRoute!.path).toBe('/workbench/universal')
+    expect(universalRoute!.label).toBe('通用工作台')
+  })
+
+  it('injects universal workbench as first route', () => {
+    const demo = demoSoulApp()
+    const routes = demo.manifest.ui!.routes!
+    expect(routes[0]!.id).toBe('universal-workbench')
+  })
+
+  it('does not duplicate universal workbench route when already declared', () => {
+    const base = demoSoulApp()
+    const app = defineSoulApp({
+      ...base,
+      manifest: {
+        ...base.manifest,
+        ui: {
+          artifactPreviews: base.manifest.ui!.artifactPreviews,
+          panels: base.manifest.ui!.panels,
+          routes: [{
+            entry: './product/web/routes/universal.tsx',
+            id: 'universal-workbench',
+            label: 'Custom Universal',
+            path: '/custom',
+            surface: { entry: '/micro-app/custom', renderer: 'micro-app' as const, scope: 'app' as const },
+          }],
+        },
+      },
+    })
+
+    const routes = app.manifest.ui!.routes!
+    expect(routes.filter(r => r.id === 'universal-workbench')).toHaveLength(1)
+    expect(routes[0]!.label).toBe('Custom Universal')
+  })
+})
+
 function demoSoulApp(): SoulAppDefinition {
   return defineSoulApp({
     manifest: {
