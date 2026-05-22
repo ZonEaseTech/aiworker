@@ -7,10 +7,18 @@
     },
     "routePrefix": "/api/local/apps/aiworker-custom"
   },
-  "artifactTypes": [],
+  "artifactTypes": [
+    {
+      "description": "Free-form exploration output.",
+      "id": "explore",
+      "name": "Explore",
+      "schemaRef": "./product/artifacts/schemas/explore.schema.json",
+      "version": "0.1.0"
+    }
+  ],
   "capabilities": [
     {
-      "artifactTypes": [],
+      "artifactTypes": ["explore"],
       "description": "Free-form exploration session. No fixed domain constraints. Use Worker Configuration to add skills, MCP clients, and entry files.",
       "id": "explore",
       "name": "Explore",
@@ -64,7 +72,16 @@
     }
   },
   "name": "AIWorker Custom",
-  "pack": { "refs": [] },
+  "pack": {
+    "refs": [
+      {
+        "id": "explore",
+        "ref": "product/workflows/explore/prompt.md",
+        "source": "embedded",
+        "version": "0.1.0"
+      }
+    ]
+  },
   "permissions": [
     {
       "action": "read",
@@ -104,6 +121,9 @@
     "namespace": "aiworker-custom"
   },
   "ui": {
+    "artifactPreviews": [],
+    "panels": [],
+    "routes": [],
     "workspaceContext": {
       "terminal": {
         "cwd": { "source": "host-workspace-root" },
@@ -115,7 +135,7 @@
   "version": "0.1.0",
   "workspaceTypes": [
     {
-      "artifactTypes": [],
+      "artifactTypes": ["explore"],
       "defaultCapabilityIds": ["explore"],
       "description": "Free-form sandbox workspace for exploration and workflow prototyping.",
       "id": "sandbox",
