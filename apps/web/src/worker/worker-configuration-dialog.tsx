@@ -51,7 +51,6 @@ export function WorkerConfigurationDialog({
   const [createOpen, setCreateOpen] = useState(false)
   const [createValidation, setCreateValidation] = useState<string | null>(null)
   const [newAsset, setNewAsset] = useState<NewAssetDraft | null>(null)
-  const [assetValidation, setAssetValidation] = useState<string | null>(null)
   const [autosave, setAutosave] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const [editContent, setEditContent] = useState('')
   const [projecting, setProjecting] = useState(false)
@@ -102,7 +101,6 @@ export function WorkerConfigurationDialog({
     try {
       await saveAssets([...assets, nextAsset])
       setSelectedAssetId(nextAsset.id)
-      setAssetValidation(null)
       setNewAsset(null)
       setCreateOpen(false)
     }
@@ -116,7 +114,6 @@ export function WorkerConfigurationDialog({
     try {
       await saveAssets(assets.filter(item => !(item.kind === asset.kind && item.id === asset.id)))
       setSelectedAssetId(null)
-      setAssetValidation(null)
     }
     finally {
       setSaving(false)
@@ -134,20 +131,14 @@ export function WorkerConfigurationDialog({
     try {
       await saveAssets([...assets, copy])
       setSelectedAssetId(copy.id)
-      setAssetValidation(null)
     }
     finally {
       setSaving(false)
     }
   }
 
-  function runValidation(asset: LocalWorkerOverlayAsset) {
-    setAssetValidation(formatValidation(validateAsset({ ...asset, content: editContent }, assets, asset)))
-  }
-
   function selectAsset(id: string) {
     setSelectedAssetId(id)
-    setAssetValidation(null)
   }
 
   function updateNewAsset(patch: Partial<NewAssetDraft>) {
@@ -216,7 +207,6 @@ export function WorkerConfigurationDialog({
             setTab(value as OverlayTab)
             setCreateOpen(false)
             setCreateValidation(null)
-            setAssetValidation(null)
           }}
         >
           <TabsList>
@@ -321,9 +311,6 @@ export function WorkerConfigurationDialog({
                             aria-label={`Enable ${selectedAsset.id}`}
                             onCheckedChange={checked => void saveAsset({ ...selectedAsset, enabled: checked })}
                           />
-                          <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => runValidation(selectedAsset)}>
-                            Validate
-                          </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${selectedAsset.id}`}>
@@ -339,16 +326,6 @@ export function WorkerConfigurationDialog({
                           </DropdownMenu>
                         </ItemActions>
                       </Item>
-                      {assetValidation
-                        ? (
-                            <Item variant="default">
-                              <ItemContent>
-                                <ItemTitle>Validation</ItemTitle>
-                                <ItemDescription className="line-clamp-none whitespace-pre-wrap">{assetValidation}</ItemDescription>
-                              </ItemContent>
-                            </Item>
-                          )
-                        : null}
                       <Textarea
                         value={editContent}
                         aria-label={`${selectedAsset.id} editor`}

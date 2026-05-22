@@ -926,9 +926,6 @@ describe('worker studio', () => {
       }))
     })
     fireEvent.click(await screen.findByRole('button', { name: 'Edit custom-skill' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Validate' }))
-    expect(await screen.findByText('Overlay asset is valid.')).toBeTruthy()
-
     fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for custom-skill' }))
     fireEvent.click(await screen.findByText('Duplicate'))
     await waitFor(() => {
