@@ -1,0 +1,125 @@
+{
+  "api": {
+    "entry": "./host-adapter/api.ts",
+    "localService": {
+      "command": ["bun", "host-adapter/mounted/host-mounted.ts"],
+      "healthPath": "/health"
+    },
+    "routePrefix": "/api/local/apps/aiworker-custom"
+  },
+  "artifactTypes": [],
+  "capabilities": [
+    {
+      "artifactTypes": [],
+      "description": "Free-form exploration session. No fixed domain constraints. Use Worker Configuration to add skills, MCP clients, and entry files.",
+      "id": "explore",
+      "name": "Explore",
+      "outputKind": "explore",
+      "packRefs": [],
+      "promptRef": "./product/workflows/explore/prompt.md",
+      "reviewRubricRef": "./product/workflows/explore/review.md",
+      "version": "0.1.0",
+      "workspaceTypes": ["sandbox"]
+    }
+  ],
+  "compatibility": {
+    "host": { "minVersion": "0.12.0" },
+    "sdk": { "minVersion": "0.1.0" }
+  },
+  "connectors": {
+    "optional": [],
+    "required": []
+  },
+  "description": "Custom Soul App for free-form exploration, skill overlay, and workflow prototyping.",
+  "engineAssets": {
+    "skills": { "source": "./engine-assets/skills", "targets": ["codex", "claude-code"] },
+    "workspace": { "source": "./engine-assets/workspace" }
+  },
+  "exports": {
+    "artifact": "./host-adapter/protocol/artifact.ts",
+    "connector": "./host-adapter/protocol/connectors.ts",
+    "lifecycle": "./host-adapter/protocol/lifecycle.ts",
+    "review": "./host-adapter/protocol/review.ts",
+    "runtime": "./host-adapter/protocol/runtime.ts",
+    "ui": "./host-adapter/protocol/ui.ts"
+  },
+  "healthcheck": {
+    "kind": "protocol-handler",
+    "ref": "healthcheck",
+    "timeoutMs": 5000
+  },
+  "id": "aiworker-custom",
+  "memory": {
+    "admissionPolicy": "manual-review",
+    "namespace": "aiworker-custom"
+  },
+  "modes": {
+    "hostMounted": {
+      "entry": "./host-adapter/mounted/host-mounted.ts",
+      "supported": true
+    },
+    "standalone": {
+      "entry": "./host-adapter/standalone/standalone.ts",
+      "supported": true
+    }
+  },
+  "name": "AIWorker Custom",
+  "pack": { "refs": [] },
+  "permissions": [
+    {
+      "action": "read",
+      "kind": "storage",
+      "reason": "Read app-scoped custom metadata.",
+      "target": "aiworker-custom"
+    },
+    {
+      "action": "write",
+      "kind": "storage",
+      "reason": "Write app-scoped custom metadata.",
+      "target": "aiworker-custom"
+    },
+    {
+      "action": "mount",
+      "kind": "ui",
+      "reason": "Mount Custom micro-app surfaces.",
+      "target": "custom-micro-app"
+    },
+    {
+      "action": "serve",
+      "kind": "api",
+      "reason": "Serve Custom scoped API routes.",
+      "target": "/api/local/apps/aiworker-custom"
+    }
+  ],
+  "protocol": "soul-app/v1",
+  "soul": {
+    "description": "Custom Soul for free-form exploration, skill overlay, and workflow prototyping.",
+    "domain": "general-exploration",
+    "id": "custom",
+    "name": "Custom",
+    "version": "0.1.0"
+  },
+  "storage": {
+    "migrations": [],
+    "namespace": "aiworker-custom"
+  },
+  "ui": {
+    "workspaceContext": {
+      "terminal": {
+        "cwd": { "source": "host-workspace-root" },
+        "id": "custom-workspace-terminal",
+        "label": "Custom workspace terminal"
+      }
+    }
+  },
+  "version": "0.1.0",
+  "workspaceTypes": [
+    {
+      "artifactTypes": [],
+      "defaultCapabilityIds": ["explore"],
+      "description": "Free-form sandbox workspace for exploration and workflow prototyping.",
+      "id": "sandbox",
+      "name": "Sandbox"
+    }
+  ]
+}
