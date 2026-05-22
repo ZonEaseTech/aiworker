@@ -2,11 +2,13 @@ import type { LocalWorker, LocalWorkerOverlayAsset, LocalWorkerOverlayAssetKind,
 
 import { MoreHorizontalCircle01Icon, RefreshIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@zonease/aiworker-ui/components/dropdown-menu'
 import { Input } from '@zonease/aiworker-ui/components/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
+import { ScrollArea } from '@zonease/aiworker-ui/components/scroll-area'
 import { Switch } from '@zonease/aiworker-ui/components/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@zonease/aiworker-ui/components/tabs'
 import { Textarea } from '@zonease/aiworker-ui/components/textarea'
@@ -188,11 +190,15 @@ export function WorkerConfigurationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
-        <DialogTitle>Worker configuration</DialogTitle>
-        <DialogDescription>{worker ? `${worker.name} worker overlay` : 'Worker overlay'}</DialogDescription>
+      <DialogContent className="flex h-dvh flex-col gap-0 overflow-hidden p-0 sm:h-5/6 sm:max-w-5xl">
+        <div className="px-6 pt-6 pb-5">
+          <Badge variant="secondary" className="w-fit">WORKER OVERLAY</Badge>
+          <DialogTitle>Worker configuration</DialogTitle>
+          <DialogDescription>{worker ? `${worker.name} worker overlay` : 'Worker overlay'}</DialogDescription>
+        </div>
         <Tabs
           value={tab}
+          className="flex flex-1 min-h-0 flex-col gap-0"
           onValueChange={(value) => {
             setTab(value as OverlayTab)
             setCreateOpen(false)
@@ -205,8 +211,10 @@ export function WorkerConfigurationDialog({
             <TabsTrigger value="projection">Projection</TabsTrigger>
           </TabsList>
           {categories.map(item => (
-            <TabsContent key={item.value} value={item.value} className="grid gap-4">
-              <div data-testid="worker-overlay-asset-list" data-orientation="horizontal" className="flex min-w-0 gap-2 overflow-x-auto">
+            <TabsContent key={item.value} value={item.value} className="flex-1 min-h-0 overflow-hidden p-0">
+              <ScrollArea className="h-full">
+                <div className="grid gap-4 p-6">
+                  <div data-testid="worker-overlay-asset-list" data-orientation="horizontal" className="flex min-w-0 gap-2 overflow-x-auto">
                 <Button
                   type="button"
                   variant={createOpen ? 'secondary' : 'ghost'}
@@ -337,9 +345,12 @@ export function WorkerConfigurationDialog({
                     </ItemGroup>
                   )
                 : null}
+                </div>
+              </ScrollArea>
             </TabsContent>
           ))}
-          <TabsContent value="projection">
+          <TabsContent value="projection" className="flex-1 min-h-0 overflow-hidden p-0">
+            <ScrollArea className="h-full">
             <ItemGroup className="gap-2">
               <Item variant="muted">
                 <ItemContent>
@@ -385,6 +396,7 @@ export function WorkerConfigurationDialog({
                     </Item>
                   )}
             </ItemGroup>
+            </ScrollArea>
           </TabsContent>
         </Tabs>
       </DialogContent>
