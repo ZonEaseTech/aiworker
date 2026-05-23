@@ -31,6 +31,24 @@ describe('deriveWorkerStudioLocatorState', () => {
     expect(state.selectedWorker?.id).toBe('hr-worker')
   })
 
+  it('defaults the new-worker Soul selection to the first available Soul when no preference is supplied', () => {
+    const data = createData({
+      souls: [
+        soul({ id: 'soul-a', status: 'available' }),
+        soul({ id: 'soul-b', status: 'available' }),
+      ],
+      workers: [],
+    })
+
+    const state = deriveWorkerStudioLocatorState({
+      data,
+      newWorkerSoulId: null,
+      route: { kind: 'home' },
+    })
+
+    expect(state.selectedSoul?.id).toBe('soul-a')
+  })
+
   it('uses workspace and session routes as opaque locators for worker, workspace, and session selection', () => {
     const data = createData({
       souls: [

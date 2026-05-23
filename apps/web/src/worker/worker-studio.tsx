@@ -44,8 +44,6 @@ interface StudioState {
   loading: boolean
 }
 
-const defaultNewWorkerSoulId = 'aiworker-hr'
-
 type WorkerStudioResolvedLocatorState = Omit<WorkerStudioLocatorState, 'soulSessions' | 'soulWorkspaces'>
 
 const emptyWorkerStudioLocatorState: WorkerStudioResolvedLocatorState = {
@@ -70,7 +68,7 @@ export function WorkerStudio() {
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null)
   const [newWorkerName, setNewWorkerName] = useState('')
-  const [newWorkerSoulId, setNewWorkerSoulId] = useState(defaultNewWorkerSoulId)
+  const [newWorkerSoulId, setNewWorkerSoulId] = useState<string | null>(null)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceTitle, setWorkspaceTitle] = useState('')
   const [query, setQuery] = useState('')
@@ -101,6 +99,13 @@ export function WorkerStudio() {
   }, [refresh])
 
   const data = state.data
+  useEffect(() => {
+    if (newWorkerSoulId)
+      return
+    const firstAvailable = data?.souls.find(soul => soul.status === 'available')
+    if (firstAvailable)
+      setNewWorkerSoulId(firstAvailable.id)
+  }, [data, newWorkerSoulId])
   const activeLocale = normalizeLocale(data?.settings.language)
   const copy = messagesFor(activeLocale)
   const locatorState = useMemo(
@@ -385,7 +390,7 @@ export function WorkerStudio() {
             copy={copy}
             locale={activeLocale}
             open={createWorkerOpen}
-            selectedSoulId={newWorkerSoulId}
+            selectedSoulId={newWorkerSoulId ?? ''}
             workerName={newWorkerName}
             onClose={() => setCreateWorkerOpen(false)}
             onNameChange={setNewWorkerName}
@@ -421,7 +426,7 @@ export function WorkerStudio() {
               copy={copy}
               locale={activeLocale}
               open={createWorkerOpen}
-              selectedSoulId={newWorkerSoulId}
+              selectedSoulId={newWorkerSoulId ?? ''}
               workerName={newWorkerName}
               onClose={() => setCreateWorkerOpen(false)}
               onNameChange={setNewWorkerName}

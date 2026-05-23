@@ -28,11 +28,9 @@ export interface WorkerStudioLocatorState {
   templates: LocalWorkspaceData['templates']
 }
 
-const defaultNewWorkerSoulId = 'aiworker-hr'
-
 export function deriveWorkerStudioLocatorState({
   data,
-  newWorkerSoulId = defaultNewWorkerSoulId,
+  newWorkerSoulId = null,
   query = '',
   route,
   selectedWorkerId = null,
