@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-23 01:24 [completed] Restored interactive universal workbench
+
+Restored the Soul-owned universal workbench as the quick-start,
+composer-centered mounted surface. The root cause was not HR route priority:
+the Host/Soul boundary cleanup correctly moved rendering behind micro-app, but
+the mounted universal HTML helper still served a static bridge-proof card.
+
+`packages/soul-app-workbench` now ships a browser client entry that mounts
+`UniversalWorkbenchApp` inside `/micro-app/workbench/universal`. Official HR,
+QA and Custom Soul Apps build and serve the shared universal client asset and
+wire thin mounted proxy routes for templates, workspaces, sessions and turns.
+Host Web remains a generic mount container and does not import or special-case
+the workbench React package.
+
 ## 2026-05-21 19:34 [completed] Fixed HR mounted reading-room layout
 
 Restored the HR Soul App reading-room layout when mounted through Host Web

@@ -21,6 +21,7 @@ export interface UniversalWorkbenchAppProps {
   engineReadiness: EngineReadiness
   events: LocalSessionEvent[]
   sessions: LocalSession[]
+  selectedSessionId?: string | null
   turnInput: string
   turnSubmitting: boolean
   turns: LocalTurn[]
@@ -39,6 +40,7 @@ export function UniversalWorkbenchApp({
   engineReadiness,
   events,
   sessions,
+  selectedSessionId,
   turnInput,
   turnSubmitting,
   turns,
@@ -52,15 +54,16 @@ export function UniversalWorkbenchApp({
   onSubmitTurn,
   onTurnInputChange,
 }: UniversalWorkbenchAppProps) {
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [internalSelectedSessionId, setInternalSelectedSessionId] = useState<string | null>(null)
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
   const [newSessionInput, setNewSessionInput] = useState('')
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(workspace?.id ?? null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
+  const activeSelectedSessionId = selectedSessionId ?? internalSelectedSessionId
   const selectedSession = useMemo(
-    () => sessions.find(s => s.id === selectedSessionId) ?? null,
-    [sessions, selectedSessionId],
+    () => sessions.find(s => s.id === activeSelectedSessionId) ?? null,
+    [activeSelectedSessionId, sessions],
   )
   const selectedWorkspace = useMemo(
     () => workspaces.find(w => w.id === selectedWorkspaceId) ?? workspace ?? workspaces[0] ?? null,
@@ -139,12 +142,12 @@ export function UniversalWorkbenchApp({
             onCreateSession={() => selectedWorkspace && handleCreateSession(selectedWorkspace.id)}
             onSelectNode={(node) => {
               if (node.kind === 'session') {
-                setSelectedSessionId(node.sessionId ?? null)
+                setInternalSelectedSessionId(node.sessionId ?? null)
                 onSelectSession?.(node.sessionId ?? null)
               }
               else {
                 setSelectedWorkspaceId(node.workspaceId)
-                setSelectedSessionId(null)
+                setInternalSelectedSessionId(null)
                 onSelectSession?.(null)
               }
             }}
@@ -183,7 +186,7 @@ export function UniversalWorkbenchApp({
                 workspace={selectedWorkspace}
                 workspaceName={selectedWorkspace.name}
                 onBackToWorkspace={() => {
-                  setSelectedSessionId(null)
+                  setInternalSelectedSessionId(null)
                   onBackToWorkspace()
                   onSelectSession?.(null)
                 }}

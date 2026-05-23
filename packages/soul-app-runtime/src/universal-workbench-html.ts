@@ -1,6 +1,7 @@
 export function renderUniversalWorkbenchHtml(options: {
   appId: string
   appName: string
+  clientHref?: string
   routePrefix?: string
   sessionId?: string | null
   styleHref?: string
@@ -12,6 +13,7 @@ export function renderUniversalWorkbenchHtml(options: {
   const {
     appId,
     appName,
+    clientHref,
     routePrefix = `/api/local/apps/${appId}`,
     sessionId = null,
     styleHref,
@@ -31,21 +33,17 @@ export function renderUniversalWorkbenchHtml(options: {
   }
   const themeClass = theme === 'dark' ? 'dark h-full' : 'h-full'
   const styleLink = styleHref ? `<link rel="stylesheet" href="${escapeHtmlAttribute(styleHref)}">` : ''
+  const scriptHref = clientHref ?? `${routePrefix}/assets/universal-workbench-client.js`
 
   return [
     '<!doctype html>',
     `<html lang="en" class="${themeClass}" style="color-scheme:${theme}">`,
-    `<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(appName)} · Universal Workbench</title>${styleLink}<style>html,body,#root{height:100%;margin:0}body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:Canvas;color:CanvasText}.universal-workbench{display:grid;min-height:100%;place-items:center;padding:24px}.universal-workbench__panel{max-width:640px;border:1px solid color-mix(in oklab,CanvasText 16%,transparent);border-radius:8px;padding:20px}.universal-workbench__eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.08em;opacity:.65}.universal-workbench__title{margin:8px 0 6px;font-size:24px;line-height:1.2}.universal-workbench__detail{margin:0;opacity:.72;line-height:1.5}</style></head>`,
+    `<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(appName)} · Universal Workbench</title>${styleLink}<style>html,body,#root{height:100%;margin:0}body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:Canvas;color:CanvasText}</style></head>`,
     '<body class="h-full">',
-    `<main id="root" class="universal-workbench" data-soul-app-id="${escapeHtmlAttribute(appId)}" data-surface-id="${escapeHtmlAttribute(surfaceId)}">`,
-    '<section class="universal-workbench__panel" aria-labelledby="universal-workbench-title">',
-    `<div class="universal-workbench__eyebrow">${escapeHtml(appName)}</div>`,
-    '<h1 id="universal-workbench-title" class="universal-workbench__title">Universal Workbench</h1>',
-    '<p class="universal-workbench__detail">This app-owned micro-app surface receives worker, workspace, session, and theme context from the Host mount bridge.</p>',
-    '</section>',
-    '</main>',
+    `<main id="root" class="h-full min-h-0" data-soul-app-id="${escapeHtmlAttribute(appId)}" data-surface-id="${escapeHtmlAttribute(surfaceId)}"></main>`,
     `<script id="aiworker-micro-app-host-data" type="application/json" data-slot="micro-app-host-data">${jsonScriptPayload(hostData)}</script>`,
     `<script>${microAppBridgeScript(hostData)}</script>`,
+    `<script type="module" src="${escapeHtmlAttribute(scriptHref)}"></script>`,
     '</body>',
     '</html>',
   ].join('')

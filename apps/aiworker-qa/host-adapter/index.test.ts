@@ -106,6 +106,15 @@ describe('QA reference Soul App', () => {
       expect(routeMicroAppHtml).toContain('Universal Workbench')
       expect(routeMicroAppHtml).toContain('"surfaceId":"universal-workbench"')
       expect(routeMicroAppHtml).toContain('<link rel="stylesheet" href="/api/local/apps/aiworker-qa/styles.css">')
+      expect(routeMicroAppHtml).toContain('<script type="module" src="/api/local/apps/aiworker-qa/assets/universal-workbench-client.js"></script>')
+      expect(routeMicroAppHtml).not.toContain('This app-owned micro-app surface receives worker, workspace, session, and theme context from the Host mount bridge.')
+      const universalClientRes = await fetch(`${baseUrl}/assets/universal-workbench-client.js`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      })
+      expect(universalClientRes.status).toBe(200)
+      const universalClientJs = await universalClientRes.text()
+      expect(universalClientJs).toContain('/api/workspaces')
+      expect(universalClientJs).toContain('Engine bridge ready')
       const microAppRes = await fetch(`${baseUrl}/micro-app/widgets/qa-release-widget`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })

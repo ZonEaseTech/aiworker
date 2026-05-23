@@ -1,10 +1,11 @@
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 
+import { mountSessionApiProxy } from '@zonease/aiworker-soul-app-runtime'
 import { renderUniversalWorkbenchHtml } from '@zonease/aiworker-soul-app-runtime/universal-workbench-html'
 
 import { customSoulAppManifest } from '../index'
-import { serveSoulAppStyle } from '../web-style'
+import { serveSoulAppWebAsset } from '../web-style'
 
 interface MountContext {
   sessionId?: string | null
@@ -16,9 +17,9 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
   return Bun.serve({
     async fetch(request) {
       const url = new URL(request.url)
-      const styleResponse = await serveSoulAppStyle(url)
-      if (styleResponse)
-        return styleResponse
+      const assetResponse = await serveSoulAppWebAsset(url)
+      if (assetResponse)
+        return assetResponse
       if (url.pathname === '/health') {
         return Response.json({
           appId: customSoulAppManifest.id,
@@ -29,6 +30,9 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
       const tokenError = verifyMountToken(request)
       if (tokenError)
         return tokenError
+      const sessionProxy = mountedSessionProxyResponse(request)
+      if (sessionProxy)
+        return sessionProxy
       if (url.pathname === '/domain') {
         return Response.json({
           appId: customSoulAppManifest.id,
@@ -49,6 +53,20 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
     },
     hostname: Bun.env.HOST ?? '127.0.0.1',
     port,
+  })
+}
+
+function mountedSessionProxyResponse(request: Request): Promise<Response> | null {
+  const context = readMountContext(request)
+  const url = new URL(request.url)
+  const workerId = context?.workerId ?? url.searchParams.get('workerId')
+  const hostApiBaseUrl = request.headers.get('x-aiworker-host-url')
+  if (!hostApiBaseUrl || !workerId)
+    return null
+  return mountSessionApiProxy(request, {
+    hostApiBaseUrl,
+    workerId,
+    workspaceId: context?.workspaceId ?? url.searchParams.get('workspaceId'),
   })
 }
 

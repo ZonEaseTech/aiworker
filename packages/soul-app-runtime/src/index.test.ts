@@ -102,7 +102,7 @@ describe('Soul App runtime harness', () => {
     expect(standalone.runtime.snapshot().worker.soulId).toBe('demo-soul-app')
   })
 
-  it('renders the universal workbench as a declared micro-app surface shell', () => {
+  it('renders the universal workbench as an interactive mounted client shell', () => {
     const html = renderUniversalWorkbenchHtml({
       appId: 'demo-soul-app',
       appName: 'Demo Soul App',
@@ -120,7 +120,9 @@ describe('Soul App runtime harness', () => {
     expect(html).toContain('window.microApp')
     expect(html).toContain('api.addDataListener(receiveHostData, true)')
     expect(html).toContain('api.dispatch({ type: "ready" })')
-    expect(html).not.toContain('@zonease/aiworker-soul-app-workbench')
+    expect(html).toContain('<main id="root"')
+    expect(html).toContain('<script type="module" src="/api/local/apps/demo-soul-app/assets/universal-workbench-client.js"></script>')
+    expect(html).not.toContain('This app-owned micro-app surface receives worker, workspace, session, and theme context from the Host mount bridge.')
   })
 
   it('uses the same SDK definition through mounted Host projection without changing domain logic', async () => {

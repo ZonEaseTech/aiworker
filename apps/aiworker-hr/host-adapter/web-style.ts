@@ -6,6 +6,10 @@ const soulAppClientAssets = new Map([
     contentType: 'text/javascript; charset=utf-8',
     path: new URL('../dist/web/hr-home-client.js', import.meta.url),
   }],
+  ['universal-workbench-client.js', {
+    contentType: 'text/javascript; charset=utf-8',
+    path: new URL('../dist/web/universal-workbench-client.js', import.meta.url),
+  }],
 ])
 const soulAppFontPathPrefix = '/files/'
 const soulAppFontFileNames = new Set([

@@ -288,29 +288,63 @@ export type {
 export function mountSessionApiProxy(request: Request, options: {
   hostApiBaseUrl: string
   workerId: string
-  workspaceId: string
+  workspaceId?: string | null
 }): Promise<Response> | null {
   const url = new URL(request.url)
   const hostApi = options.hostApiBaseUrl.replace(/\/$/, '')
+  const workerId = url.searchParams.get('workerId') ?? options.workerId
+  const workspaceId = url.searchParams.get('workspaceId') ?? options.workspaceId ?? null
 
-  // GET /api/sessions
-  if (url.pathname === '/api/sessions' && request.method === 'GET') {
-    const target = `${hostApi}/api/local/workers/${options.workerId}/workspaces/${options.workspaceId}/sessions`
-    return fetch(target, { headers: request.headers }).then(r =>
-      new Response(r.body, { status: r.status, headers: r.headers })).catch(() => Response.json({ sessions: [] }))
+  if (url.pathname === '/api/templates' && request.method === 'GET') {
+    const target = `${hostApi}/api/local/workers/${workerId}/templates`
+    return proxyJsonRequest(request, target)
   }
 
-  // POST /api/sessions (create)
+  if (url.pathname === '/api/workspaces' && request.method === 'GET') {
+    const target = `${hostApi}/api/local/workers/${workerId}/workspaces`
+    return proxyJsonRequest(request, target)
+  }
+
+  if (url.pathname === '/api/workspaces' && request.method === 'POST') {
+    const target = `${hostApi}/api/local/workers/${workerId}/workspaces`
+    return proxyJsonRequest(request, target)
+  }
+
+  if (url.pathname === '/api/sessions' && request.method === 'GET') {
+    if (!workspaceId)
+      return Promise.resolve(Response.json({ sessions: [] }))
+    const target = `${hostApi}/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions`
+    return proxyJsonRequest(request, target).catch(() => Response.json({ sessions: [] }))
+  }
+
   if (url.pathname === '/api/sessions' && request.method === 'POST') {
-    const target = `${hostApi}/api/local/workers/${options.workerId}/workspaces/${options.workspaceId}/sessions`
-    return fetch(target, {
-      method: 'POST',
-      headers: request.headers,
-      body: request.body,
-    }).then(r => new Response(r.body, { status: r.status, headers: r.headers })).catch(() => new Response(null, { status: 502 }))
+    if (!workspaceId)
+      return Promise.resolve(Response.json({ error: { code: 'WORKSPACE_REQUIRED', message: 'workspaceId is required.' } }, { status: 400 }))
+    const target = `${hostApi}/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions`
+    return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))
+  }
+
+  const sessionMatch = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname)
+  if (sessionMatch && request.method === 'GET') {
+    const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionMatch[1]}`
+    return proxyJsonRequest(request, target)
+  }
+
+  const sessionTurnsMatch = /^\/api\/sessions\/([^/]+)\/turns$/.exec(url.pathname)
+  if (sessionTurnsMatch && request.method === 'POST') {
+    const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionTurnsMatch[1]}/messages`
+    return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))
   }
 
   return null
+}
+
+function proxyJsonRequest(request: Request, target: string): Promise<Response> {
+  return fetch(target, {
+    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+    headers: request.headers,
+    method: request.method,
+  }).then(r => new Response(r.body, { status: r.status, headers: r.headers }))
 }
 
 function sessionMetadata(
