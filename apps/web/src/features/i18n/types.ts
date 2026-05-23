@@ -57,7 +57,7 @@ export interface StaticMessages {
     footer: string
     newProject: string
     projectName: string
-    projectPlaceholders: Record<'default' | 'devops' | 'hr' | 'pm' | 'qa', string>
+    projectPlaceholders: { default: string }
     soul: string
     submit: string
   }

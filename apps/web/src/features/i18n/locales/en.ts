@@ -54,10 +54,6 @@ export const en = {
     projectName: 'Workspace name',
     projectPlaceholders: {
       default: 'Checkout deploy checklist',
-      devops: 'Checkout deploy checklist',
-      hr: 'Mia Chen people profile',
-      pm: 'Payments onboarding PRD',
-      qa: 'Release 1.2 regression gate',
     },
     soul: 'Soul',
     submit: 'Create workspace session',

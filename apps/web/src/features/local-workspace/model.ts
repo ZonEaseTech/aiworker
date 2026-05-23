@@ -44,14 +44,6 @@ export function latest<T extends { updatedAt: string }>(items: T[]): T | null {
   return items.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
 }
 
-export function projectNamePlaceholder(soulId: string, copy: WorkerMessages): string {
-  if (soulId === 'aiworker-hr' || soulId === 'hr')
-    return copy.create.projectPlaceholders.hr
-  if (soulId === 'pm')
-    return copy.create.projectPlaceholders.pm
-  if (soulId === 'aiworker-qa' || soulId === 'qa')
-    return copy.create.projectPlaceholders.qa
-  if (soulId === 'devops')
-    return copy.create.projectPlaceholders.devops
+export function projectNamePlaceholder(_soulId: string, copy: WorkerMessages): string {
   return copy.create.projectPlaceholders.default
 }

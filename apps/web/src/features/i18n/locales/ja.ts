@@ -56,10 +56,6 @@ export const ja = {
     projectName: 'ワークスペース名',
     projectPlaceholders: {
       default: 'チェックアウト配備チェックリスト',
-      devops: 'チェックアウト配備チェックリスト',
-      hr: 'Mia Chen のプロフィール',
-      pm: '決済オンボーディング PRD',
-      qa: 'リリース 1.2 回帰ゲート',
     },
     soul: 'Soul',
     submit: 'ワークスペースセッションを作成',
