@@ -13,10 +13,17 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
 import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/session-composer'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SessionChatView } from './SessionChatView'
 import { SessionDetail } from './SessionDetail'
 import { WorkspaceSessionTree } from './WorkspaceSessionTree'
+
+export interface UniversalWorkbenchCapabilityTemplate {
+  description?: string
+  id: string
+  name?: string
+  outputKind?: string
+}
 
 export interface UniversalWorkbenchCreateSessionDraft {
   input: string
@@ -39,6 +46,7 @@ export interface UniversalWorkbenchAppProps {
   turnInput: string
   turnSubmitting: boolean
   turns: LocalTurn[]
+  templates: readonly UniversalWorkbenchCapabilityTemplate[]
   workspace: LocalWorkspace | null
   workspaces: LocalWorkspace[]
   onBackToWorkspace: () => void
@@ -58,6 +66,7 @@ export function UniversalWorkbenchApp({
   turnInput,
   turnSubmitting,
   turns,
+  templates,
   workspace,
   workspaces,
   onBackToWorkspace,
@@ -71,6 +80,7 @@ export function UniversalWorkbenchApp({
   const [internalSelectedSessionId, setInternalSelectedSessionId] = useState<string | null>(null)
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(workspace?.id ?? null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const activeSelectedSessionId = selectedSessionId ?? internalSelectedSessionId
@@ -94,6 +104,22 @@ export function UniversalWorkbenchApp({
     () => selectedSession ? turns.filter(t => t.sessionId === selectedSession.id) : [],
     [selectedSession, turns],
   )
+  const templateOptions = useMemo(
+    () => templates.map(template => ({
+      description: template.description ?? template.outputKind ?? template.id,
+      label: template.name ?? template.id,
+      value: template.id,
+    })),
+    [templates],
+  )
+
+  useEffect(() => {
+    if (templates.length === 0) {
+      setSelectedTemplateId(undefined)
+      return
+    }
+    setSelectedTemplateId(current => templates.some(template => template.id === current) ? current : undefined)
+  }, [templates])
 
   const treeNodes = useMemo<WorkspaceSessionTreeNode[]>(() => {
     const nodes: WorkspaceSessionTreeNode[] = []
@@ -250,11 +276,17 @@ export function UniversalWorkbenchApp({
                     }}
                     className="w-full max-w-xl"
                     disabled={!engineReadiness.ready}
-                    disabledReason={engineReadiness.ready ? undefined : engineReadiness.detail}
+                    disabledReason={engineReadiness.ready
+                      ? templates.length === 0 ? 'No capability templates are available for this Soul worker.' : undefined
+                      : engineReadiness.detail}
+                    onTemplateChange={setSelectedTemplateId}
                     placeholder="What do you want to work on?"
+                    selectedTemplateId={selectedTemplateId}
                     submitAriaLabel="Start"
-                    submitDisabled={!engineReadiness.ready}
+                    submitDisabled={!engineReadiness.ready || templates.length === 0 || !selectedTemplateId}
                     submitting={turnSubmitting}
+                    templateLabel="Capability/template"
+                    templateOptions={templateOptions}
                     variant="large"
                     onSubmitDraft={draft => handleCreateSession(selectedWorkspace.id, draft)}
                   />

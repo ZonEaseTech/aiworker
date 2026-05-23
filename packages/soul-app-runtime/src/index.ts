@@ -337,6 +337,17 @@ export function mountSessionApiProxy(request: Request, options: {
     return proxyJsonRequest(request, target)
   }
 
+  const sessionEventsMatch = /^\/api\/sessions\/([^/]+)\/events$/.exec(url.pathname)
+  if (sessionEventsMatch && request.method === 'GET') {
+    const params = new URLSearchParams()
+    const after = url.searchParams.get('after')
+    if (after !== null)
+      params.set('after', after)
+    const query = params.size > 0 ? `?${params.toString()}` : ''
+    const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionEventsMatch[1]}/events${query}`
+    return proxyJsonRequest(request, target)
+  }
+
   const sessionTurnsMatch = /^\/api\/sessions\/([^/]+)\/turns$/.exec(url.pathname)
   if (sessionTurnsMatch && request.method === 'POST') {
     const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionTurnsMatch[1]}/messages`

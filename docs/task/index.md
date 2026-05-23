@@ -522,3 +522,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-096 Close Host/Soul micro-app workbench boundary**](REFACTOR-096.md) `P0`
 - [x] [**BUG-150 Universal workbench renders a static placeholder**](BUG-150.md) `P0`
 - [ ] [**TODO-047 Audit API/CLI/shared Host/Soul boundary leftovers**](TODO-047.md) `P2`
+- [x] [**BUG-151 Universal workbench engine readiness false positive**](BUG-151.md) `P0`
+- [x] [**FEAT-108 Universal workbench explicit session template selection**](FEAT-108.md) `P0`

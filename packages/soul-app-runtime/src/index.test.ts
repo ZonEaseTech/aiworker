@@ -180,6 +180,47 @@ describe('Soul App runtime harness', () => {
     }
   })
 
+  it('proxies mounted universal workbench session event replay to the Host worker event endpoint', async () => {
+    const originalFetch = globalThis.fetch
+    const proxiedRequests: Array<{ method: string, url: string }> = []
+    globalThis.fetch = (async (input, init) => {
+      proxiedRequests.push({
+        method: init?.method ?? 'GET',
+        url: String(input),
+      })
+      return Response.json({
+        events: [{
+          createdAt: '2026-05-23T00:00:01.000Z',
+          id: 42,
+          invocationId: null,
+          payloadJson: { message: 'Engine produced a streamed event.' },
+          seq: 2,
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          type: 'assistant_delta',
+        }],
+      })
+    }) as typeof fetch
+
+    try {
+      const response = await mountSessionApiProxy(new Request('http://mounted.local/api/sessions/session-1/events?workerId=worker-1&after=41'), {
+        hostApiBaseUrl: 'http://host.local',
+        workerId: 'fallback-worker',
+      })
+
+      await expect(response?.json()).resolves.toEqual({
+        events: [expect.objectContaining({ id: 42, sessionId: 'session-1' })],
+      })
+      expect(proxiedRequests).toEqual([{
+        method: 'GET',
+        url: 'http://host.local/api/local/workers/worker-1/sessions/session-1/events?after=41',
+      }])
+    }
+    finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it('uses the same SDK definition through mounted Host projection without changing domain logic', async () => {
     const root = tempRoot('mounted')
     const app = demoSoulApp()

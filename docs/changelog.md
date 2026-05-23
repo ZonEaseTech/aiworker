@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-23 [fixed] BUG-151 / PLAN-407 — Universal workbench engine readiness
+
+Fixed the mounted universal workbench engine readiness false positive. The
+browser client no longer passes a hard-coded `ready: true`; it starts in the
+existing loading state, reads Host local `/api/local/settings`, and reuses
+`resolveEngineReadiness(...)` so unconfigured BYOK, unknown selected engines and
+uninstalled local CLI engines disable the create/continue composers with a
+specific detail message. Ready settings now display the real selected
+engine/provider information.
+
+The data source stays inside the generic Host engine bridge/settings boundary:
+Host Web remains a micro-app mount container and does not render or branch on
+the universal workbench.
+
 ## 2026-05-23 [fixed] Verified mounted session composer POST flow
 
 Closed the real browser mounted-flow risk for the reusable session composer.
@@ -9872,3 +9886,16 @@ validate/smoke, Host Web typecheck/test/build, mounted-surface smoke, browser
 screenshot checks for desktop light/dark/narrow, diff check, and
 code-review-graph. `bun run ui:check` was also run and still fails on the
 existing `packages/component/src/catalog.ts` legacy migration debt.
+## 2026-05-23 14:20 [completed]
+
+Completed FEAT-108 / PLAN-408. The universal workbench new-session composer now
+shows an explicit `Capability/template` selector using the shared session
+composer, keeps Start disabled until a template is selected, and sends the
+selected template id as `capabilityTemplateId` to the mounted session API.
+The mounted client no longer silently falls back to `templates[0]` during
+session creation, preserving the Host/Soul boundary: Host remains the mounted
+API bridge while the Soul-owned workbench owns the choice UI.
+
+Verification passed for the focused universal workbench tests, the
+`@zonease/aiworker-soul-app-workbench` package test/typecheck, and the
+`@zonease/aiworker-ui` session composer test/typecheck.

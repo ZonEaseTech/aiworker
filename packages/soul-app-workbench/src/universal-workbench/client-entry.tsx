@@ -1,17 +1,21 @@
 import type {
+  LocalSettingsConfig,
   LocalSession,
   LocalSessionEvent,
   LocalTurn,
   LocalWorkspace,
 } from '@zonease/aiworker-shared'
 import type {
+  UniversalWorkbenchCapabilityTemplate,
   UniversalWorkbenchCreateSessionDraft,
   UniversalWorkbenchSubmitTurnDraft,
 } from './UniversalWorkbenchApp'
+import type { EngineReadiness } from './timeline/engine-readiness'
 
 import { createRoot } from 'react-dom/client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
+import { resolveEngineReadiness } from './timeline/engine-readiness'
 
 interface MountedHostData {
   appId?: string | null
@@ -22,15 +26,20 @@ interface MountedHostData {
   workspaceId?: string | null
 }
 
-interface CapabilityTemplate {
-  id: string
-  name?: string
-}
-
 interface SessionTurnResult {
   events?: LocalSessionEvent[]
   session?: LocalSession
   turn?: LocalTurn
+}
+
+interface UniversalWorkbenchCreateSessionPayload {
+  capabilityTemplateId: string
+  input: string
+  metadata: {
+    materials: UniversalWorkbenchCreateSessionDraft['materials']
+    mentions: UniversalWorkbenchCreateSessionDraft['mentions']
+  }
+  title: string
 }
 
 type SessionTurnStreamFrame =
@@ -42,6 +51,23 @@ type SessionTurnStreamFrame =
   | { data: unknown, event: string }
 
 const MATERIAL_ONLY_DRAFT_INPUT = 'Use the attached source materials.'
+const MOUNTED_ENGINE_READINESS_UNAVAILABLE: EngineReadiness = {
+  detail: 'Unable to load local execution settings.',
+  label: 'Execution settings unavailable',
+  ready: false,
+}
+const SESSION_EVENT_POLL_INTERVAL_MS = 1000
+const UNIVERSAL_WORKBENCH_ENGINE_COPY = {
+  common: { notInstalled: 'Not installed' },
+  workspace: {
+    byokNeedsKey: 'Configure a BYOK provider, model, and API key reference in Settings before starting a session turn.',
+    byokReady: (provider: string, model: string) => `${provider} · ${model} is ready for session turns.`,
+    engineLoading: 'Checking execution settings...',
+    engineMissing: (engineId: string) => `${engineId} is not known in local settings.`,
+    engineNotInstalled: (engineName: string) => `${engineName} is selected but not installed on PATH.`,
+    engineReadyDetail: (engineName: string) => `${engineName} is ready for session turns.`,
+  },
+}
 
 export function resolveUniversalWorkbenchDraftInput(
   draft: Pick<UniversalWorkbenchCreateSessionDraft | UniversalWorkbenchSubmitTurnDraft, 'input' | 'materials'>,
@@ -51,6 +77,43 @@ export function resolveUniversalWorkbenchDraftInput(
     return input
   // Material-only drafts still need neutral text so the native engine bridge can start a turn.
   return (draft.materials?.length ?? 0) > 0 ? MATERIAL_ONLY_DRAFT_INPUT : ''
+}
+
+export function buildUniversalWorkbenchCreateSessionPayload(
+  draft: UniversalWorkbenchCreateSessionDraft,
+  templates: readonly UniversalWorkbenchCapabilityTemplate[],
+): UniversalWorkbenchCreateSessionPayload | null {
+  const template = templates.find(t => t.id === draft.selectedTemplateId)
+  if (!template)
+    return null
+
+  const input = resolveUniversalWorkbenchDraftInput(draft)
+  if (!input)
+    return null
+
+  return {
+    capabilityTemplateId: template.id,
+    input,
+    metadata: {
+      materials: draft.materials ?? [],
+      mentions: draft.mentions ?? [],
+    },
+    title: input.slice(0, 80) || template.name || template.id,
+  }
+}
+
+export function resolveUniversalWorkbenchEngineReadiness(settings: LocalSettingsConfig | null): EngineReadiness {
+  return resolveEngineReadiness(settings, UNIVERSAL_WORKBENCH_ENGINE_COPY)
+}
+
+export async function loadMountedEngineReadiness(): Promise<EngineReadiness> {
+  try {
+    const result = await fetchJson<{ settings: LocalSettingsConfig }>('/api/local/settings')
+    return resolveUniversalWorkbenchEngineReadiness(result.settings)
+  }
+  catch {
+    return MOUNTED_ENGINE_READINESS_UNAVAILABLE
+  }
 }
 
 declare global {
@@ -70,10 +133,12 @@ function UniversalWorkbenchMountedClient() {
   const [sessions, setSessions] = useState<LocalSession[]>([])
   const [turns, setTurns] = useState<LocalTurn[]>([])
   const [events, setEvents] = useState<LocalSessionEvent[]>([])
-  const [templates, setTemplates] = useState<CapabilityTemplate[]>([])
+  const [engineReadiness, setEngineReadiness] = useState(() => resolveUniversalWorkbenchEngineReadiness(null))
+  const [templates, setTemplates] = useState<UniversalWorkbenchCapabilityTemplate[]>([])
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(hostData.sessionId ?? null)
   const [turnInput, setTurnInput] = useState('')
   const [turnSubmitting, setTurnSubmitting] = useState(false)
+  const latestEventIdRef = useRef(0)
 
   const routePrefix = hostData.routePrefix ?? `/api/local/apps/${hostData.appId ?? ''}`
   const workerId = hostData.workerId ?? null
@@ -90,7 +155,7 @@ function UniversalWorkbenchMountedClient() {
       return
     const [workspaceResult, templateResult] = await Promise.all([
       fetchJson<{ workspaces: LocalWorkspace[] }>(`${routePrefix}/api/workspaces?workerId=${encodeURIComponent(workerId)}`),
-      fetchJson<{ templates: CapabilityTemplate[] }>(`${routePrefix}/api/templates?workerId=${encodeURIComponent(workerId)}`).catch(() => ({ templates: [] })),
+      fetchJson<{ templates: UniversalWorkbenchCapabilityTemplate[] }>(`${routePrefix}/api/templates?workerId=${encodeURIComponent(workerId)}`).catch(() => ({ templates: [] })),
     ])
     const nextWorkspaces = workspaceResult.workspaces
     setWorkspaces(nextWorkspaces)
@@ -104,7 +169,7 @@ function UniversalWorkbenchMountedClient() {
     setSessions(nextSessions)
     const nextSelectedSessionId = preferredSessionId ?? selectedSessionId ?? hostData.sessionId ?? nextSessions[0]?.id ?? null
     if (nextSelectedSessionId)
-      await loadSessionDetail(routePrefix, workerId, nextSelectedSessionId, setTurns, setEvents)
+      await loadSessionDetail(routePrefix, workerId, nextSelectedSessionId, setTurns, replaceSessionEvents)
   }, [hostData.sessionId, routePrefix, selectedSessionId, workerId])
 
   useEffect(() => {
@@ -118,30 +183,57 @@ function UniversalWorkbenchMountedClient() {
   }, [refresh])
 
   useEffect(() => {
+    let cancelled = false
+    void loadMountedEngineReadiness().then((nextReadiness) => {
+      if (!cancelled)
+        setEngineReadiness(nextReadiness)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!selectedSessionId || !workerId)
       return
-    void loadSessionDetail(routePrefix, workerId, selectedSessionId, setTurns, setEvents).catch(() => {})
+    void loadSessionDetail(routePrefix, workerId, selectedSessionId, setTurns, replaceSessionEvents).catch(() => {})
+  }, [routePrefix, selectedSessionId, workerId])
+
+  useEffect(() => {
+    if (!selectedSessionId || !workerId)
+      return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const poll = async () => {
+      try {
+        const nextEvents = await loadSessionEvents(routePrefix, workerId, selectedSessionId, latestEventIdRef.current)
+        if (!cancelled && nextEvents.length > 0)
+          appendSessionEvents(nextEvents)
+      }
+      catch {
+        // Best-effort replay keeps the mounted workbench live without taking over Host error policy.
+      }
+      if (!cancelled)
+        timer = setTimeout(poll, SESSION_EVENT_POLL_INTERVAL_MS)
+    }
+
+    timer = setTimeout(poll, SESSION_EVENT_POLL_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      if (timer)
+        clearTimeout(timer)
+    }
   }, [routePrefix, selectedSessionId, workerId])
 
   async function handleCreateSession(targetWorkspaceId: string, draft: UniversalWorkbenchCreateSessionDraft) {
     if (!workerId)
       return
-    const template = templates.find(t => t.id === draft.selectedTemplateId) ?? templates[0]
-    if (!template)
-      return
-    const input = resolveUniversalWorkbenchDraftInput(draft)
-    if (!input)
+    const payload = buildUniversalWorkbenchCreateSessionPayload(draft, templates)
+    if (!payload)
       return
     const response = await fetch(`${routePrefix}/api/sessions/stream?workerId=${encodeURIComponent(workerId)}&workspaceId=${encodeURIComponent(targetWorkspaceId)}`, {
-      body: JSON.stringify({
-        capabilityTemplateId: template.id,
-        input,
-        metadata: {
-          materials: draft.materials ?? [],
-          mentions: draft.mentions ?? [],
-        },
-        title: input.slice(0, 80) || template.name || template.id,
-      }),
+      body: JSON.stringify(payload),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
@@ -149,7 +241,7 @@ function UniversalWorkbenchMountedClient() {
       throw new Error(`Universal workbench API ${response.status}: ${routePrefix}/api/sessions/stream`)
     void consumeSessionTurnStream(response, (frame) => {
       applySessionTurnStreamFrame(frame, {
-        onEvents: nextEvents => setEvents(current => [...current, ...nextEvents]),
+        onEvents: appendSessionEvents,
         onSession: (session) => {
           setSelectedSessionId(session.id)
           setSessions(current => [
@@ -161,7 +253,7 @@ function UniversalWorkbenchMountedClient() {
         onTurn: turn => setTurns(current => upsertTurn(current, turn)),
       })
     }).catch((error) => {
-      setEvents(current => [...current, streamErrorEvent(error)])
+      appendSessionEvents([streamErrorEvent(error)])
     })
   }
 
@@ -198,12 +290,12 @@ function UniversalWorkbenchMountedClient() {
       setTurnInput('')
       void consumeSessionTurnStream(response, (frame) => {
         applySessionTurnStreamFrame(frame, {
-          onEvents: nextEvents => setEvents(current => [...current, ...nextEvents]),
+          onEvents: appendSessionEvents,
           onSession: session => setSessions(current => upsertSession(current, session)),
           onTurn: turn => setTurns(current => upsertTurn(current, turn)),
         })
       }).catch((error) => {
-        setEvents(current => [...current, streamErrorEvent(error)])
+        appendSessionEvents([streamErrorEvent(error)])
       })
     }
     finally {
@@ -213,10 +305,11 @@ function UniversalWorkbenchMountedClient() {
 
   return (
     <UniversalWorkbenchApp
-      engineReadiness={{ detail: 'Engine bridge ready', label: 'Engine bridge', ready: true }}
+      engineReadiness={engineReadiness}
       events={events}
       selectedSessionId={selectedSessionId}
       sessions={sessions}
+      templates={templates}
       turnInput={turnInput}
       turnSubmitting={turnSubmitting}
       turns={turns}
@@ -231,6 +324,19 @@ function UniversalWorkbenchMountedClient() {
       onTurnInputChange={setTurnInput}
     />
   )
+
+  function replaceSessionEvents(nextEvents: LocalSessionEvent[]): void {
+    latestEventIdRef.current = latestSessionEventId(nextEvents, selectedSessionId)
+    setEvents(nextEvents)
+  }
+
+  function appendSessionEvents(nextEvents: LocalSessionEvent[]): void {
+    setEvents((current) => {
+      const merged = mergeSessionEvents(current, nextEvents)
+      latestEventIdRef.current = latestSessionEventId(merged, selectedSessionId)
+      return merged
+    })
+  }
 }
 
 async function consumeSessionTurnStream(response: Response, onFrame: (frame: SessionTurnStreamFrame) => void): Promise<void> {
@@ -340,6 +446,42 @@ function upsertTurn(turns: LocalTurn[], turn: LocalTurn): LocalTurn[] {
     ...turns.filter(item => item.id !== turn.id),
     turn,
   ]
+}
+
+export function mergeSessionEvents(current: LocalSessionEvent[], nextEvents: LocalSessionEvent[]): LocalSessionEvent[] {
+  const seen = new Set(current.map(event => event.id))
+  return [
+    ...current,
+    ...nextEvents.filter((event) => {
+      if (seen.has(event.id))
+        return false
+      seen.add(event.id)
+      return true
+    }),
+  ]
+}
+
+export async function loadSessionEvents(
+  routePrefix: string,
+  workerId: string,
+  sessionId: string,
+  afterEventId: number,
+): Promise<LocalSessionEvent[]> {
+  const params = new URLSearchParams({ workerId })
+  if (afterEventId > 0)
+    params.set('after', String(afterEventId))
+  const result = await fetchJson<{ events: LocalSessionEvent[] }>(
+    `${routePrefix}/api/sessions/${encodeURIComponent(sessionId)}/events?${params.toString()}`,
+  )
+  return result.events
+}
+
+function latestSessionEventId(events: LocalSessionEvent[], sessionId: string | null): number {
+  return events.reduce((max, event) => {
+    if (sessionId && event.sessionId !== sessionId)
+      return max
+    return Math.max(max, event.id)
+  }, 0)
 }
 
 function streamErrorEvent(error: unknown): LocalSessionEvent {

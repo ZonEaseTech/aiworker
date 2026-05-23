@@ -435,3 +435,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-404 HR mounted scoped CSS layout fix**](PLAN-404.md) `2026-05-21`
 - [x] [**PLAN-405 Host/Soul micro-app workbench boundary closure**](PLAN-405.md) `2026-05-23`
 - [x] [**PLAN-406 Restore interactive universal workbench**](PLAN-406.md) `2026-05-23`
+- [x] [**PLAN-407 Universal workbench engine readiness wiring**](PLAN-407.md) `2026-05-23`
+- [x] [**PLAN-408 Universal workbench explicit session template selection**](PLAN-408.md) `2026-05-23`

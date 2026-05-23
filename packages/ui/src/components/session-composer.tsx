@@ -494,7 +494,7 @@ export function SessionComposerActionBar({
   templateOptions = EMPTY_COMPOSER_OPTIONS,
   usage,
 }: SessionComposerActionBarProps) {
-  const templateSelect = selectedTemplateId && onTemplateChange && templateOptions.length > 0
+  const templateSelect = onTemplateChange && templateOptions.length > 0
     ? { onChange: onTemplateChange, value: selectedTemplateId }
     : null
   const selectedTemplateOption = templateSelect
@@ -538,7 +538,7 @@ export function SessionComposerActionBar({
                   className={cn('max-w-full', templateClassName)}
                   size="sm"
                 >
-                  <SelectValue>{selectedTemplateOption?.label}</SelectValue>
+                  <SelectValue>{selectedTemplateOption?.label ?? templateLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent className={templateContentClassName} side="top" data-side="top">
                   <SelectGroup>
