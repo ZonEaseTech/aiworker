@@ -51,6 +51,7 @@ export interface ManagedSessionComposerProps
   extends Omit<SessionComposerProps, ManagedSessionComposerOwnedProps> {
   attachmentLabels: ManagedSessionComposerAttachmentLabels
   defaultValue?: string
+  error?: ReactNode
   onSubmitDraft: (draft: ManagedSessionComposerDraft, event: FormEvent<HTMLFormElement>) => Promise<void> | void
   onValueChange?: (value: string) => void
   value?: string
@@ -159,6 +160,7 @@ export function ManagedSessionComposer({
   attachmentLabels,
   defaultValue,
   disabled = false,
+  error,
   mentionOptions = [],
   mentionQuery,
   onSubmitDraft,
@@ -269,7 +271,7 @@ export function ManagedSessionComposer({
         attachmentTriggerLabel={attachmentLabels.add}
         attachments={composerAttachments}
         disabled={disabled}
-        error={submitError}
+        error={error ?? submitError}
         mentionOptions={mentionOptions}
         mentionQuery={resolvedMentionQuery}
         onAddAttachmentFiles={addManagedFiles}

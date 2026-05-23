@@ -26,7 +26,6 @@ export {
 } from './model'
 
 export type {
-  HrProfileComposerAttachment,
   HrProfileComposerProps,
   HrProfileComposerSubmitInput,
   HrProfileDraftOption,

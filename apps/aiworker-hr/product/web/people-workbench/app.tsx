@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import type { HrProfileComposerAttachment, HrProfileComposerSubmitInput } from './profile-composer'
+import type { HrProfileComposerSubmitInput } from './profile-composer'
 import type { ProfileRevisionReviewState } from './revision-review'
 import type {
   ComposerMaterial,
@@ -24,7 +24,7 @@ import { cn } from '@zonease/aiworker-ui/lib/utils'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { createHrPeopleWorkbenchApi, createProfileUpdateDraftSessionPayload } from './api'
-import { materialFromFile, sanitizeCandidateMaterialPaths } from './attachments'
+import { sanitizeCandidateMaterialPaths } from './attachments'
 import { ProfileComposerColumn } from './columns/profile-composer-column'
 import { ProfileListColumn } from './columns/profile-list-column'
 import { ProfileReadingRoomColumn } from './columns/profile-reading-room-column'
@@ -382,6 +382,7 @@ export function HrPeopleWorkbenchApp({
       const materials = await uploadCandidateMaterials({
         api: localApi,
         attachments: input.attachments,
+        materials: input.materials,
         workspaceId: selectedProfile.id,
       })
       const { session } = await localApi.createProfileUpdateDraftSession(
@@ -831,21 +832,21 @@ function profileArtifactRank(artifact: LocalArtifact): number {
 
 async function uploadCandidateMaterials(input: {
   api: HrLocalApiClient
-  attachments: HrProfileComposerAttachment[]
+  attachments: HrProfileComposerSubmitInput['attachments']
+  materials: HrProfileComposerSubmitInput['materials']
   workspaceId: string
 }): Promise<ComposerMaterial[]> {
   if (input.attachments.length === 0)
     return []
 
-  const materials = sanitizeCandidateMaterialPaths(await Promise.all(
-    input.attachments
-      .filter((attachment): attachment is HrProfileComposerAttachment & { file: File } => Boolean(attachment.file))
-      .map(attachment => materialFromFile(attachment.file)),
-  ))
-  for (const attachment of input.attachments) {
-    if (!attachment.file)
-      throw new Error(`Attached material ${attachment.name} is missing a browser File handle.`)
-  }
+  const materials = sanitizeCandidateMaterialPaths(input.materials.map(material => ({
+    content: material.content,
+    encoding: material.encoding,
+    fileName: material.name,
+    mimeType: material.mimeType,
+    path: material.name,
+    size: material.size,
+  })))
   for (const material of materials) {
     await input.api.writeCandidateMaterial(input.workspaceId, material)
   }

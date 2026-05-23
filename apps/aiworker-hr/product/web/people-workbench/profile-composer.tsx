@@ -1,25 +1,8 @@
-import type { SessionComposerAttachmentItem, SessionComposerOption } from '@zonease/aiworker-ui/components/session-composer'
-import type { FormEvent } from 'react'
-
+import type { ManagedSessionComposerDraft, SessionComposerOption } from '@zonease/aiworker-ui/components/session-composer'
 import type { HrWorkbenchCopy } from './copy'
 
-import { formatSessionAttachmentKind, formatSessionAttachmentSize, isSessionAttachmentImage, SessionComposer } from '@zonease/aiworker-ui/components/session-composer'
-import { useEffect, useMemo, useRef, useState } from 'react'
-
-export interface HrProfileComposerAttachment {
-  file?: File
-  id: string
-  mimeType: string
-  name: string
-  previewUrl?: string
-  size: number
-}
-
-interface HrProfileComposerAttachmentItemLabels {
-  closePreviewLabel: string
-  previewLabel: string
-  removeLabel: string
-}
+import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/session-composer'
+import { useMemo, useState } from 'react'
 
 export interface HrProfileDraftOption {
   label: string
@@ -28,9 +11,15 @@ export interface HrProfileDraftOption {
 }
 
 export interface HrProfileComposerSubmitInput {
-  attachments: HrProfileComposerAttachment[]
+  attachments: Array<{
+    file: File
+    mimeType: string
+    name: string
+    size: number
+  }>
   context: string
   draft: HrProfileDraftOption
+  materials: ManagedSessionComposerDraft['materials']
 }
 
 export const DEFAULT_PROFILE_DRAFT: HrProfileDraftOption = {
@@ -79,175 +68,71 @@ export function HrProfileComposer({
   draftOptions = DEFAULT_DRAFT_OPTIONS,
   submitting = false,
 }: HrProfileComposerProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const attachmentsRef = useRef<HrProfileComposerAttachment[]>([])
   const [context, setContext] = useState('')
   const [draftTemplateId, setDraftTemplateId] = useState(DEFAULT_PROFILE_DRAFT.templateId)
-  const [attachments, setAttachments] = useState<HrProfileComposerAttachment[]>([])
   const [localError, setLocalError] = useState<string | null>(null)
   const selectedDraft = draftOptions.find(option => option.templateId === draftTemplateId) ?? DEFAULT_PROFILE_DRAFT
-  const currentError = errorMessage ?? localError
-  const submitDisabled = disabled || submitting || (!context.trim() && attachments.length === 0)
+  const submitDisabled = disabled || submitting || !profileName
   const templateOptions = useMemo<SessionComposerOption[]>(() => draftOptions.map(option => ({
     description: option.outputKind,
     label: option.label,
     value: option.templateId,
   })), [draftOptions])
-  const attachmentItems = useMemo<SessionComposerAttachmentItem[]>(() => attachments.map(attachment => ({
-    ...createHrProfileComposerAttachmentItem(attachment, {
-      closePreviewLabel: labels.closeCandidateMaterialPreview(attachment.name),
-      previewLabel: labels.previewCandidateMaterial(attachment.name),
-      removeLabel: labels.removeCandidateMaterial(attachment.name),
-    }),
-  })), [attachments, labels])
 
-  useEffect(() => {
-    attachmentsRef.current = attachments
-  }, [attachments])
-
-  useEffect(() => {
-    return () => revokeAttachmentPreviewUrls(attachmentsRef.current)
-  }, [])
-
-  function addFiles(fileList: FileList | readonly File[] | null) {
-    const files = Array.from(fileList ?? [])
-    if (files.length === 0)
-      return
-    setAttachments(current => [
-      ...current,
-      ...files.map(file => ({
-        file,
-        id: attachmentId(file),
-        mimeType: file.type || 'application/octet-stream',
-        name: file.name,
-        previewUrl: createAttachmentPreviewUrl(file),
-        size: file.size,
-      })),
-    ])
-  }
-
-  function removeAttachment(id: string) {
-    setAttachments((current) => {
-      const removed = current.find(attachment => attachment.id === id)
-      revokeAttachmentPreviewUrl(removed)
-      return current.filter(attachment => attachment.id !== id)
-    })
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function handleSubmitDraft(draft: ManagedSessionComposerDraft) {
     setLocalError(null)
     try {
       await onSubmit({
-        attachments,
-        context,
+        attachments: draft.files.map(file => ({
+          file,
+          mimeType: file.type || 'application/octet-stream',
+          name: file.name,
+          size: file.size,
+        })),
+        context: draft.text,
         draft: selectedDraft,
+        materials: draft.materials,
       })
       setContext('')
-      setAttachments((current) => {
-        revokeAttachmentPreviewUrls(current)
-        return []
-      })
     }
     catch (error) {
       setLocalError(error instanceof Error ? error.message : String(error))
+      throw error
     }
   }
 
   return (
-    <>
-      <input
-        ref={fileInputRef}
-        className="sr-only"
-        multiple
-        type="file"
-        aria-hidden="true"
-        aria-label={labels.addCandidateMaterials}
-        tabIndex={-1}
-        onChange={(event) => {
-          addFiles(event.currentTarget.files ?? [])
-          event.currentTarget.value = ''
+    <div data-slot="hr-profile-composer" className="h-full min-h-0">
+      <ManagedSessionComposer
+        ariaLabel={labels.contextLabel}
+        attachmentLabels={{
+          add: labels.openCandidateMaterialPicker,
+          attached: labels.attachedCandidateMaterialsLabel,
+          closePreview: labels.closeCandidateMaterialPreview,
+          materialReadError: labels.materialReadError,
+          preview: labels.previewCandidateMaterial,
+          remove: labels.removeCandidateMaterial,
         }}
+        className={className ?? 'min-h-0'}
+        description={labels.composerSafetyDetail}
+        disabled={disabled || !profileName}
+        disabledReason={profileName ? undefined : labels.selectProfileFirst}
+        error={errorMessage ?? localError}
+        placeholder={profileName ? labels.contextPlaceholder : labels.selectProfileFirst}
+        selectedTemplateId={draftTemplateId}
+        submitAriaLabel={submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}
+        submitDisabled={submitDisabled}
+        submitting={submitting}
+        submitTitle={submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}
+        templateLabel={labels.draftTypeSelectLabel}
+        templateOptions={templateOptions}
+        title={selectedDraft.label}
+        value={context}
+        variant="panel"
+        onSubmitDraft={handleSubmitDraft}
+        onTemplateChange={setDraftTemplateId}
+        onValueChange={setContext}
       />
-      <div data-slot="hr-profile-composer" className="h-full min-h-0">
-        <SessionComposer
-          ariaLabel={labels.contextLabel}
-          attachmentCountLabel={labels.attachedCandidateMaterialsLabel}
-          attachmentTriggerLabel={labels.openCandidateMaterialPicker}
-          attachments={attachmentItems}
-          className={className ?? 'min-h-0'}
-          description={labels.composerSafetyDetail}
-          disabled={disabled}
-          disabledReason={profileName ? undefined : labels.selectProfileFirst}
-          error={currentError}
-          onAddAttachmentFiles={addFiles}
-          onAddAttachments={() => fileInputRef.current?.click()}
-          onRemoveAttachment={removeAttachment}
-          placeholder={profileName ? labels.contextPlaceholder : labels.selectProfileFirst}
-          selectedTemplateId={draftTemplateId}
-          submitAriaLabel={submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}
-          submitDisabled={submitDisabled}
-          submitting={submitting}
-          submitTitle={submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}
-          templateLabel={labels.draftTypeSelectLabel}
-          templateOptions={templateOptions}
-          title={selectedDraft.label}
-          value={context}
-          variant="panel"
-          onSubmit={handleSubmit}
-          onTemplateChange={setDraftTemplateId}
-          onValueChange={setContext}
-        />
-      </div>
-    </>
+    </div>
   )
-}
-
-export function createHrProfileComposerAttachmentItem(
-  attachment: HrProfileComposerAttachment,
-  labels: HrProfileComposerAttachmentItemLabels,
-): SessionComposerAttachmentItem {
-  const image = attachment.file && isSessionAttachmentImage(attachment.file) && attachment.previewUrl
-
-  return {
-    id: attachment.id,
-    kind: attachment.file ? formatSessionAttachmentKind(attachment.file) : attachment.mimeType,
-    closePreviewLabel: labels.closePreviewLabel,
-    mediaType: image ? 'image' : 'file',
-    name: attachment.name,
-    onPreviewLabel: image ? labels.previewLabel : undefined,
-    previewAlt: image ? attachment.name : undefined,
-    previewTitle: image ? attachment.name : undefined,
-    previewUrl: image ? attachment.previewUrl : undefined,
-    removeLabel: labels.removeLabel,
-    size: formatSessionAttachmentSize(attachment.size),
-  }
-}
-
-function attachmentId(file: File): string {
-  const entropy = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  return `${file.name}-${file.size}-${entropy}`
-}
-
-function createAttachmentPreviewUrl(file: File): string | undefined {
-  if (!isSessionAttachmentImage(file))
-    return undefined
-  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function')
-    return undefined
-  return URL.createObjectURL(file)
-}
-
-function revokeAttachmentPreviewUrls(attachments: readonly HrProfileComposerAttachment[]) {
-  for (const attachment of attachments)
-    revokeAttachmentPreviewUrl(attachment)
-}
-
-function revokeAttachmentPreviewUrl(attachment?: HrProfileComposerAttachment) {
-  if (!attachment?.previewUrl)
-    return
-  if (typeof URL === 'undefined' || typeof URL.revokeObjectURL !== 'function')
-    return
-  URL.revokeObjectURL(attachment.previewUrl)
 }

@@ -13,7 +13,6 @@ import {
   sanitizeCandidateMaterialPaths,
 } from './attachments'
 import { normalizeHrWorkbenchHostData } from './host-data'
-import { createHrProfileComposerAttachmentItem } from './profile-composer'
 
 describe('HR people workbench host data', () => {
   it('normalizes mounted host data and only treats explicit dark theme as dark', () => {
@@ -95,31 +94,6 @@ describe('HR people workbench attachments', () => {
         },
       ],
       materialCount: 3,
-    })
-  })
-
-  it('maps image materials to shared composer preview metadata', () => {
-    const imageFile = new File(['image evidence'], 'source-image.png', { type: 'image/png' })
-
-    expect(createHrProfileComposerAttachmentItem({
-      file: imageFile,
-      id: 'source-image',
-      mimeType: imageFile.type,
-      name: imageFile.name,
-      previewUrl: 'blob:source-image',
-      size: imageFile.size,
-    }, {
-      closePreviewLabel: 'Close preview',
-      previewLabel: 'Preview source-image.png',
-      removeLabel: 'Remove source-image.png',
-    })).toMatchObject({
-      id: 'source-image',
-      mediaType: 'image',
-      name: 'source-image.png',
-      onPreviewLabel: 'Preview source-image.png',
-      previewAlt: 'source-image.png',
-      previewTitle: 'source-image.png',
-      previewUrl: 'blob:source-image',
     })
   })
 

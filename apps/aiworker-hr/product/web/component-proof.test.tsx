@@ -122,6 +122,8 @@ describe('HR product web shared component proof', () => {
     expect(html).toContain('data-right-panel="open"')
     expect(html).not.toContain('xl:grid-cols-[minmax(12rem,0.55fr)_minmax(0,1.85fr)_minmax(15rem,0.72fr)]')
     expect(html).toContain('data-slot="hr-profile-composer"')
+    expect(html).toContain('data-slot="session-composer"')
+    expect(html).toContain('data-variant="panel"')
     expect(html).toContain('候选人')
     expect(html).toContain('在职员工')
     expect(html).toContain('离职归档')

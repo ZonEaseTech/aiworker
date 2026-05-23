@@ -390,6 +390,28 @@ describe('sessionComposer', () => {
     expect((screen.getByRole('textbox', { name: 'Session input' }) as HTMLTextAreaElement).value).toBe('Keep this')
   })
 
+  it('renders external managed composer errors', () => {
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        defaultValue="Keep this"
+        error="Profile session failed"
+        onSubmitDraft={vi.fn()}
+        submitAriaLabel="Start"
+      />,
+    )
+
+    expect(screen.getByText('Profile session failed')).toBeTruthy()
+  })
+
   it('guards async managed submit and attachment edits while pending', async () => {
     let resolveSubmit: (() => void) | undefined
     const pendingSubmit = new Promise<void>((resolve) => {
