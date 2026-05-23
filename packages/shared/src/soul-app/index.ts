@@ -66,6 +66,7 @@ export {
 } from './manifest'
 export type {
   SoulAppApi,
+  SoulAppArtifactType,
   SoulAppCapability,
   SoulAppCompatibility,
   SoulAppConnectorAccess,
@@ -130,18 +131,10 @@ export type {
   MountedMicroAppHostData,
 } from './micro-app'
 export type {
-  SoulAppConnectorProtocol,
   SoulAppEventProtocol,
-  SoulAppIntentClassification,
   SoulAppLifecycleProtocol,
-  SoulAppProtocolAction,
-  SoulAppProtocolActionResult,
-  SoulAppProtocolHandlers,
   SoulAppProtocolResult,
-  SoulAppRuntimeProtocol,
   SoulAppScopedContext,
-  SoulAppSessionContext,
-  SoulAppUiContributionProtocol,
 } from './protocol'
 export {
   buildHostedSoulApp,

@@ -2,14 +2,25 @@ import type {
   SoulAppEngineAssets,
   SoulAppManifest,
   SoulAppManifestValidationOptions,
-  SoulAppProtocolHandlers,
 } from '@zonease/aiworker-shared'
+
+import type { SoulAppProtocolHandlers } from './protocol'
 
 import {
   soulAppManifestSchema,
   validateSoulAppManifest,
 } from '@zonease/aiworker-shared'
 
+export type {
+  SoulAppConnectorProtocol,
+  SoulAppIntentClassification,
+  SoulAppProtocolAction,
+  SoulAppProtocolActionResult,
+  SoulAppProtocolHandlers,
+  SoulAppRuntimeProtocol,
+  SoulAppSessionContext,
+  SoulAppUiContributionProtocol,
+} from './protocol'
 export {
   namespaceSoulAppCapabilityId,
   parseNamespacedSoulAppCapabilityId,
@@ -25,10 +36,8 @@ export type {
   SoulAppMcpServerEngineAssets,
   SoulAppProjectionReceipt,
   SoulAppProjectionReceiptEntry,
-  SoulAppProtocolHandlers,
   SoulAppProtocolResult,
   SoulAppScopedContext,
-  SoulAppSessionContext,
   SoulAppSkillEngineAssets,
   SoulAppWorkspaceEngineAssets,
 } from '@zonease/aiworker-shared'
