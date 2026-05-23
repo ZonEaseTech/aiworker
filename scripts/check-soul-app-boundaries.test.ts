@@ -135,4 +135,28 @@ describe('check-soul-app-boundaries', () => {
       rmSync(tempRoot, { force: true, recursive: true })
     }
   })
+
+  test('blocks Soul App imports of the Host fs-layout package', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
+    try {
+      const appDir = join(tempRoot, 'apps/demo-soul')
+      mkdirSync(join(appDir, 'host-adapter'), { recursive: true })
+      writeFileSync(join(appDir, 'soul-app.manifest.json'), JSON.stringify({ id: 'demo-soul' }))
+      writeFileSync(
+        join(appDir, 'host-adapter/bad.ts'),
+        'import { home } from "@zonease/aiworker-fs-layout"\nexport const y = home\n',
+      )
+
+      const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
+        cwd: tempRoot,
+        encoding: 'utf8',
+      })
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('@zonease/aiworker-fs-layout')
+    }
+    finally {
+      rmSync(tempRoot, { force: true, recursive: true })
+    }
+  })
 })

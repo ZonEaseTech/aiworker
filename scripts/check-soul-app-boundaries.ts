@@ -22,6 +22,7 @@ const hostPrivatePackages = [
   '@zonease/aiworker-api',
   '@zonease/aiworker-cli',
   '@zonease/aiworker-core',
+  '@zonease/aiworker-fs-layout',
   '@zonease/aiworker-shared',
   '@zonease/aiworker-storage-sqlite',
   '@zonease/aiworker-web',
@@ -31,6 +32,7 @@ const hostPrivateRoots = [
   'apps/cli',
   'apps/web',
   'packages/core',
+  'packages/fs-layout',
   'packages/shared',
   'packages/storage-sqlite',
 ]
