@@ -296,5 +296,4 @@ export interface BuiltinTemplateCopy {
   inputHints: readonly string[]
   name: string
   outputKind: string
-  reviewRubric: readonly string[]
 }

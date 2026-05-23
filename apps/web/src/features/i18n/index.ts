@@ -1,7 +1,6 @@
 import type { CapabilityTemplate, VerticalSoul } from '../local-workspace/types.compat'
 import type { BuiltinSoulCopy, BuiltinTemplateCopy, StaticMessages, StatusKey, SupportedLocale } from './types'
 
-import { builtinSoulCopy, builtinTemplateCopy } from './catalog'
 import { de, en, ja, zhCN } from './locales'
 import { supportedLocales } from './types'
 
@@ -27,17 +26,16 @@ export function languageLabel(locale: SupportedLocale, activeLocale: SupportedLo
   return messagesByLocale[activeLocale].languageOptions[locale]
 }
 
-export function displaySoul(soul: VerticalSoul, locale: SupportedLocale): BuiltinSoulCopy {
-  return builtinSoulCopy[locale][soul.id] ?? { description: soul.description, domain: soul.domain, name: soul.name }
+export function displaySoul(soul: VerticalSoul, _locale: SupportedLocale): BuiltinSoulCopy {
+  return { description: soul.description, domain: soul.domain, name: soul.name }
 }
 
-export function displayTemplate(template: CapabilityTemplate, locale: SupportedLocale): BuiltinTemplateCopy {
-  return builtinTemplateCopy[locale][template.id] ?? {
+export function displayTemplate(template: CapabilityTemplate, _locale: SupportedLocale): BuiltinTemplateCopy {
+  return {
     description: template.description,
     inputHints: template.inputHints,
     name: template.name,
     outputKind: template.outputKind,
-    reviewRubric: template.reviewRubric,
   }
 }
 
