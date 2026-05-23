@@ -1,13 +1,10 @@
 import type {
   HostedSoulApp,
   LocalWorkerOverlayAsset,
-  MountedMicroAppChildEvent,
-  MountedMicroAppHostData,
 } from '@zonease/aiworker-shared'
-import type { FormEvent, MutableRefObject } from 'react'
+import type { FormEvent } from 'react'
 import type { LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
-import type { ResolvedTheme } from '../features/theme/system-theme'
 import type { WorkerStudioLayoutVariant } from './components/studio-shell'
 
 import {
@@ -55,7 +52,6 @@ import {
   normalizeLocale,
 } from '../features/i18n'
 import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, projectWorkerWorkspaceOverlay, saveWorkerOverlay } from '../features/local-workspace/api'
-import { resolveMountedSurface } from '../features/local-workspace/api/workspace-data'
 import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard } from '../features/local-workspace/components'
 import {
   latest,
@@ -65,23 +61,9 @@ import {
 } from '../features/local-workspace/model'
 import { SettingsDialog } from '../features/settings'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
-import {
-  addMountedMicroAppDataListener,
-  addMountedMicroAppRouteListener,
-  ensureMicroAppStarted,
-  getMountedMicroAppCurrentRoute,
-  pushMountedMicroAppRoute,
-  replaceMountedMicroAppRoute,
-  sendMountedMicroAppData,
-  setMountedMicroAppElementData,
-} from '../lib/micro-app-runtime'
 import { StudioChromeHeader, StudioEmptyState, StudioMainFrame, StudioTitleBlock, WorkerStudioLayout } from './components/studio-shell'
-import {
-  mountedChildDefaultPath,
-  mountedChildPathFromRouteInfo,
-  mountedRouteMemoryKey,
-  normalizeMountedChildPath,
-} from './mounted-child-route'
+import { mountedChildDefaultPath } from './mounted-child-route'
+import { MountedSoulAppRouteSurface } from './studio/mounted-surface'
 import { WorkerConfigurationDialog } from './worker-configuration-dialog'
 import { WorkerSwitcher } from './worker-workbench-tree'
 
@@ -95,24 +77,6 @@ type WorkerMessages = ReturnType<typeof messagesFor>
 
 const defaultNewWorkerSoulId = 'aiworker-hr'
 const activeMountedRoutePreferenceKey = 'aiworker:worker-studio:active-mounted-route'
-
-interface OpenMountedChildRouteOptions {
-  replace?: boolean
-}
-
-interface MountedMicroAppSurfaceResponse {
-  microApp: {
-    data: MountedMicroAppHostData
-    name: string
-    url: string
-  }
-  surface: {
-    id: string
-    kind: string
-    label: string
-    renderer: 'micro-app'
-  }
-}
 
 function microAppWorkbenchRoutes(app: HostedSoulApp | null): HostedSoulApp['manifest']['ui']['routes'] {
   return app?.manifest.ui?.routes?.filter(route => route.surface?.renderer === 'micro-app') ?? []
@@ -789,219 +753,6 @@ export function WorkerStudio() {
       />
     </>
   )
-}
-
-function MountedSoulAppRouteSurface({
-  appId,
-  resolvedTheme,
-  route,
-  routeMemoryRef,
-  sessionId,
-  workerId,
-  workspaceId,
-}: {
-  appId: string
-  resolvedTheme: ResolvedTheme
-  route: HostedSoulApp['manifest']['ui']['routes'][number]
-  routeMemoryRef: MutableRefObject<Map<string, string>>
-  sessionId?: string | null
-  workerId?: string | null
-  workspaceId?: string | null
-}) {
-  const microAppRef = useRef<(HTMLElement & { data?: MountedMicroAppHostData }) | null>(null)
-  const [surface, setSurface] = useState<MountedMicroAppSurfaceResponse | null>(null)
-  const [childError, setChildError] = useState<string | null>(null)
-  const [childReady, setChildReady] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const childBasePath = mountedChildDefaultPath(route.path)
-  const mountedChildRouteMemoryKeyValue = mountedRouteMemoryKey({
-    appId,
-    surfaceId: route.id,
-    workspaceId,
-  })
-  const mountedMicroAppData = useMemo<MountedMicroAppHostData | null>(() => {
-    if (!surface)
-      return null
-    return {
-      ...surface.microApp.data,
-      appId: surface.microApp.data.appId ?? appId,
-      surfaceId: surface.microApp.data.surfaceId ?? route.id,
-      surfaceKind: surface.surface.kind,
-      sessionId: sessionId ?? null,
-      theme: resolvedTheme,
-      workerId: workerId ?? null,
-      workspaceId: workspaceId ?? null,
-    }
-  }, [appId, resolvedTheme, route.id, sessionId, surface, workerId, workspaceId])
-
-  useEffect(() => {
-    ensureMicroAppStarted()
-  }, [])
-
-  const handleMountedMicroAppChildEvent = useCallback((event: MountedMicroAppChildEvent): void => {
-    if (event.type === 'ready') {
-      setChildReady(true)
-      return
-    }
-    if (event.type === 'error') {
-      setChildError(event.message)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!surface || !mountedMicroAppData)
-      return undefined
-    setMountedMicroAppElementData(microAppRef.current, mountedMicroAppData)
-    const stopListening = addMountedMicroAppDataListener(surface.microApp.name, (event) => {
-      if (event.appId && event.appId !== appId)
-        return
-      if (event.surfaceId && event.surfaceId !== surface.surface.id)
-        return
-      handleMountedMicroAppChildEvent(event)
-    }, { autoTrigger: true })
-    sendMountedMicroAppData(surface.microApp.name, mountedMicroAppData, { force: true })
-    return stopListening
-  }, [appId, handleMountedMicroAppChildEvent, mountedMicroAppData, surface])
-
-  useEffect(() => {
-    if (!surface)
-      return undefined
-    let active = true
-    let stopRouteListening: (() => void) | null = null
-
-    void getMountedMicroAppCurrentRoute(surface.microApp.name).then((currentRoute) => {
-      if (!active)
-        return
-      const currentPath = mountedChildPathFromRouteInfo(currentRoute, childBasePath)
-      const rememberedPath = routeMemoryRef.current.get(mountedChildRouteMemoryKeyValue)
-      if (rememberedPath) {
-        if (rememberedPath !== currentPath) {
-          void openMountedChildRoute(
-            surface.microApp.name,
-            routeMemoryRef,
-            mountedChildRouteMemoryKeyValue,
-            childBasePath,
-            rememberedPath,
-            { replace: true },
-          )
-        }
-        return
-      }
-      routeMemoryRef.current.set(mountedChildRouteMemoryKeyValue, childBasePath)
-      if (currentPath !== childBasePath) {
-        void openMountedChildRoute(
-          surface.microApp.name,
-          routeMemoryRef,
-          mountedChildRouteMemoryKeyValue,
-          childBasePath,
-          childBasePath,
-          { replace: true },
-        )
-      }
-    })
-
-    void addMountedMicroAppRouteListener(surface.microApp.name, (to) => {
-      if (!active)
-        return
-      routeMemoryRef.current.set(mountedChildRouteMemoryKeyValue, mountedChildPathFromRouteInfo(to, childBasePath))
-    }).then((cleanup) => {
-      if (!active) {
-        cleanup()
-        return
-      }
-      stopRouteListening = cleanup
-    })
-
-    return () => {
-      active = false
-      stopRouteListening?.()
-    }
-  }, [childBasePath, mountedChildRouteMemoryKeyValue, routeMemoryRef, surface])
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    setChildError(null)
-    resolveMountedSurface<MountedMicroAppSurfaceResponse>(appId, route.id, {
-      sessionId,
-      theme: resolvedTheme,
-      workerId,
-      workspaceId,
-    })
-      .then((response) => {
-        if (!cancelled)
-          setSurface(response)
-      })
-      .catch((caught: unknown) => {
-        if (!cancelled)
-          setError(caught instanceof Error ? caught.message : String(caught))
-      })
-      .finally(() => {
-        if (!cancelled)
-          setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [appId, resolvedTheme, route.id, sessionId, workerId, workspaceId])
-
-  return (
-    <>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-7 py-3 max-md:px-4">
-        {error
-          ? (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )
-          : null}
-        {childError
-          ? (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{childError}</AlertDescription>
-              </Alert>
-            )
-          : null}
-        {loading
-          ? <ItemDescription role="status">Loading mounted Soul App surface...</ItemDescription>
-          : null}
-        {surface
-          ? (
-              <micro-app
-                ref={microAppRef}
-                data-child-ready={childReady ? 'true' : 'false'}
-                data-slot="soul-app-mounted-micro-app"
-                destroy
-                baseroute={childBasePath}
-                name={surface.microApp.name}
-                router-mode="pure"
-                title={surface.surface.label}
-                url={surface.microApp.url}
-                className="min-h-0 w-full flex-1"
-              />
-            )
-          : null}
-      </CardContent>
-    </>
-  )
-}
-
-async function openMountedChildRoute(
-  microAppName: string,
-  routeMemoryRef: MutableRefObject<Map<string, string>>,
-  memoryKey: string,
-  basePath: string,
-  path: string,
-  options: OpenMountedChildRouteOptions = {},
-): Promise<void> {
-  const nextPath = normalizeMountedChildPath(path, basePath)
-  if (options.replace)
-    await replaceMountedMicroAppRoute(microAppName, nextPath)
-  else
-    await pushMountedMicroAppRoute(microAppName, nextPath)
-  routeMemoryRef.current.set(memoryKey, nextPath)
 }
 
 function HostTopBar({
