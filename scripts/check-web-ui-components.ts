@@ -163,12 +163,12 @@ const acceptedResidualVisualUtilities: AcceptedResidualVisualUtility[] = [
     reason: 'Host left rail must use the shadcn foreground pair for bg-sidebar',
   },
   {
-    file: 'apps/web/src/worker/worker-studio.tsx',
+    file: 'apps/web/src/worker/studio/host-chrome.tsx',
     token: 'bg-sidebar',
     reason: 'HostTopBar is Host chrome and must visually align with the shadcn sidebar surface token',
   },
   {
-    file: 'apps/web/src/worker/worker-studio.tsx',
+    file: 'apps/web/src/worker/studio/host-chrome.tsx',
     token: 'text-sidebar-foreground',
     reason: 'HostTopBar must use the shadcn foreground pair for bg-sidebar',
   },
@@ -540,19 +540,19 @@ const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
     reason: 'Worker Configuration uses native wrappers only for dialog layout around shadcn primitives',
   },
   {
-    file: 'apps/web/src/worker/worker-studio.tsx',
+    file: 'apps/web/src/worker/studio/first-run-soul-app-home.tsx',
     category: 'card',
-    reason: 'Soul App install/enable rows are app object cards in Host workbench surfaces',
+    reason: 'first-run Soul App rows are app object cards inside the Host start-worker surface',
   },
   {
-    file: 'apps/web/src/worker/worker-studio.tsx',
+    file: 'apps/web/src/worker/studio/mounted-surface.tsx',
     category: 'alert',
-    reason: 'Host-displayed Soul App action results are protocol status callouts and should use shadcn Alert instead of raw text wrappers',
+    reason: 'generic mounted surface errors are Host bridge status callouts rendered through shadcn Alert',
   },
   {
-    file: 'apps/web/src/worker/worker-studio.tsx',
+    file: 'apps/web/src/worker/studio/workspace-fallback.tsx',
     category: 'input-frame',
-    reason: 'Host workbench search/filter controls use generated shadcn InputGroup frames',
+    reason: 'Host workspace fallback search uses generated shadcn InputGroup frames',
   },
   {
     file: 'apps/web/src/worker/worker-workbench-tree.tsx',
@@ -563,6 +563,11 @@ const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
     file: 'apps/web/src/worker/worker-workbench-tree.tsx',
     category: 'slotless-native-class',
     reason: 'Host workbench tree native wrappers provide non-visual hierarchy layout around shadcn controls',
+  },
+  {
+    file: 'apps/web/src/worker/worker-studio.tsx',
+    category: 'alert',
+    reason: 'Host-displayed Soul App action results are protocol status callouts and should use shadcn Alert instead of raw text wrappers',
   },
 ]
 const acceptedRawNativeControlClassifications: AcceptedRawNativeControlClassification[] = [
