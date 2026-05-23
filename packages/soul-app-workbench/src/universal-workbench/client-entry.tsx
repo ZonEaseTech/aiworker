@@ -33,6 +33,18 @@ interface SessionTurnResult {
   turn?: LocalTurn
 }
 
+const MATERIAL_ONLY_DRAFT_INPUT = 'Use the attached source materials.'
+
+export function resolveUniversalWorkbenchDraftInput(
+  draft: Pick<UniversalWorkbenchCreateSessionDraft | UniversalWorkbenchSubmitTurnDraft, 'input' | 'materials'>,
+): string {
+  const input = draft.input.trim()
+  if (input)
+    return input
+  // Material-only drafts still need neutral text so the native engine bridge can start a turn.
+  return (draft.materials?.length ?? 0) > 0 ? MATERIAL_ONLY_DRAFT_INPUT : ''
+}
+
 declare global {
   interface Window {
     __AIWORKER_MICRO_APP_HOST_DATA__?: MountedHostData
@@ -109,7 +121,9 @@ function UniversalWorkbenchMountedClient() {
     const template = templates.find(t => t.id === draft.selectedTemplateId) ?? templates[0]
     if (!template)
       return
-    const input = draft.input.trim()
+    const input = resolveUniversalWorkbenchDraftInput(draft)
+    if (!input)
+      return
     const result = await fetchJson<SessionTurnResult>(`${routePrefix}/api/sessions?workerId=${encodeURIComponent(workerId)}&workspaceId=${encodeURIComponent(targetWorkspaceId)}`, {
       body: JSON.stringify({
         capabilityTemplateId: template.id,
@@ -149,8 +163,8 @@ function UniversalWorkbenchMountedClient() {
   }
 
   async function handleSubmitTurn(draft: UniversalWorkbenchSubmitTurnDraft) {
-    const input = draft.input.trim()
-    if (!workerId || !selectedSessionId || (!input && (draft.materials?.length ?? 0) === 0))
+    const input = resolveUniversalWorkbenchDraftInput(draft)
+    if (!workerId || !selectedSessionId || !input)
       return
     setTurnSubmitting(true)
     try {
@@ -248,8 +262,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-const rootElement = document.getElementById('root')
-if (rootElement) {
+const rootElement = typeof document === 'undefined' ? null : document.getElementById('root')
+if (rootElement && typeof window !== 'undefined') {
   createRoot(rootElement).render(<UniversalWorkbenchMountedClient />)
   window.microApp?.dispatch?.({ type: 'ready', source: 'universal-workbench-client' })
 }

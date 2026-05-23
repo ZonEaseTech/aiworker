@@ -4,6 +4,7 @@ import { describe, expect, it, mock } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
+import { resolveUniversalWorkbenchDraftInput } from './client-entry'
 
 const vi = { fn: mock }
 
@@ -46,5 +47,20 @@ describe('UniversalWorkbenchApp', () => {
     expect(html).toContain('data-slot="session-composer"')
     expect(html).toContain('What do you want to work on?')
     expect(html).not.toContain('class="flex w-full max-w-xl gap-2"')
+    expect(html).not.toContain('type="button">Start</button>')
+  })
+
+  it('maps material-only create and continue drafts to a generic fallback input', () => {
+    const material = {
+      content: 'source material',
+      encoding: 'utf8' as const,
+      mimeType: 'text/plain',
+      name: 'notes.txt',
+      size: 15,
+    }
+
+    expect(resolveUniversalWorkbenchDraftInput({ input: '  Follow the notes  ', materials: [material] })).toBe('Follow the notes')
+    expect(resolveUniversalWorkbenchDraftInput({ input: '', materials: [material] })).toBe('Use the attached source materials.')
+    expect(resolveUniversalWorkbenchDraftInput({ input: '   ', materials: [] })).toBe('')
   })
 })
