@@ -71,11 +71,13 @@ worker.db 同时存在两套相反契约：
 - 引用式（符合 DATA-001）：`worker_engine_invocations` 用 `input_ref/stdout_ref/stderr_ref`（`packages/storage-sqlite/src/worker/schema.ts:147-149`）；
 - 内联式（违反 DATA-001）：`turns.input/response`（`:95-96`）、`engine_invocations.prompt`（`:120`）、`session_events.payload_json`（`:177`，type 含 `assistant_delta/tool/artifact`）。
 
-写入点在 Host core：`packages/core/src/worker/runtime.ts:239`（`input`）、`:291`（`response: result.summary`）、`:385`（`appendEvent('assistant_delta', { delta, text })`）。即 prompt / 回复 / assistant 流式内容全部进 Host DB，而 DATA-001 要求"Full business content stays in Soul App workspace files"。
+写入点在 Host core：`packages/core/src/worker/runtime.ts:239`（`input`）、`:291`（`response: result.summary`）、`:385`（`appendEvent('assistant_delta', { delta, text })`）。
 
-secret-in-DB：`worker_secrets`（`schema.ts:263-269`）以 `AIWORKER_MASTER_KEY`（64-hex，见 `packages/core/src/test-setup.ts:5-10`）做 AES-GCM 加密，存 `value_enc/nonce/auth_tag`。这与 Isolation/Security 硬约束"Secret 不得写入 DB metadata"字面冲突。
+**更正（2026-05-23 复核 + 用户裁决）**：初稿把上述内联 transcript 判为 DATA-001 违约，过严。复核后认定它是 **Host 对 engine bridge 的合法操作台账**——Host 本地壳的 session 列表/时间线/状态依赖它，DATA-001 本就把 “sessions、engine invocation references” 列为合法 Host metadata。结论：**内联 transcript 非违约，不做 ref 化**；仅 Soul 产出的 artifact 文件留 workspace。此解释写入架构合同（见 `2026-05-23-h3-data-plane-fix-design.md` 的 H3b 决策）。
 
-**裁决（2026-05-23，用户确认）**：架构尚未成型，`worker_secrets` 属当前阶段的过度设计，**直接删除**而非改约束措辞。H3 整改包含一条：移除 `worker_secrets` 表、相关 schema/migration、master-key 加解密路径与读写代码；secret 回到 `.env`/vault/ref 单一路径。这同时消解了 H4 中"解密后 secret 进 env 透传"的叠加风险。
+secret-in-DB：`worker_secrets`（`schema.ts:263-269`）字面冲突于 “Secret 不得写入 DB metadata”。**复核更进一步**：支撑它的 `SecretsVault` 类已在更早的收敛中从 `packages/core` 删除，残留的只是孤儿表/migration、死 `secretRef:` 分支、未接入 CI 的陈旧 smoke 脚本和 test-setup 的 master-key——纯死代码。
+
+**裁决（2026-05-23，用户确认）**：`worker_secrets` 属过度设计，**直接删除**（孤儿清理，零运行时风险）；secret 继续走 `.env`/`env:`/vault-ref 单一路径。这同时消解了 H4 中“解密后 secret 进 env 透传”的叠加风险。H3 整改即 H3a（删孤儿设施）+ 架构合同补注，详见 `docs/superpowers/specs/2026-05-23-h3-data-plane-fix-design.md`。
 
 ## H4 engine env 全量透传（高）
 
