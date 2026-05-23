@@ -620,6 +620,14 @@ export function SessionAttachmentList({
 }) {
   const [previewAttachment, setPreviewAttachment] = useState<SessionComposerAttachmentItem | null>(null)
 
+  useEffect(() => {
+    setPreviewAttachment((current) => {
+      if (!current)
+        return null
+      return attachments.find(attachment => attachment.id === current.id && attachment.previewUrl === current.previewUrl) ?? null
+    })
+  }, [attachments])
+
   if (attachments.length === 0)
     return null
 

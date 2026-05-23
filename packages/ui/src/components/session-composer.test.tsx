@@ -364,6 +364,76 @@ describe('sessionComposer', () => {
     }
   })
 
+  it('clears open image previews when the attachment list is cleared and replaced', async () => {
+    const firstAttachment = {
+      closePreviewLabel: 'Close preview first-image.png',
+      id: 'first-image',
+      kind: 'PNG',
+      mediaType: 'image' as const,
+      name: 'first-image.png',
+      onPreviewLabel: 'Preview first-image.png',
+      previewUrl: 'blob:first-preview',
+      removeLabel: 'Remove first-image.png',
+    }
+    const secondAttachment = {
+      closePreviewLabel: 'Close preview second-image.png',
+      id: 'second-image',
+      kind: 'PNG',
+      mediaType: 'image' as const,
+      name: 'second-image.png',
+      onPreviewLabel: 'Preview second-image.png',
+      previewUrl: 'blob:second-preview',
+      removeLabel: 'Remove second-image.png',
+    }
+
+    const { rerender } = render(
+      <SessionComposer
+        ariaLabel="Session input"
+        attachments={[firstAttachment]}
+        onSubmit={vi.fn()}
+        onValueChange={vi.fn()}
+        submitAriaLabel="Start"
+        value="Draft request"
+        variant="large"
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview first-image.png' }))
+    await screen.findByRole('button', { name: 'Close preview first-image.png' })
+
+    rerender(
+      <SessionComposer
+        ariaLabel="Session input"
+        attachments={[]}
+        onSubmit={vi.fn()}
+        onValueChange={vi.fn()}
+        submitAriaLabel="Start"
+        value="Draft request"
+        variant="large"
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Close preview first-image.png' })).toBeNull()
+    })
+
+    rerender(
+      <SessionComposer
+        ariaLabel="Session input"
+        attachments={[secondAttachment]}
+        onSubmit={vi.fn()}
+        onValueChange={vi.fn()}
+        submitAriaLabel="Start"
+        value="Draft request"
+        variant="large"
+      />,
+    )
+
+    await screen.findByRole('button', { name: 'Preview second-image.png' })
+    expect(screen.queryByRole('button', { name: 'Close preview first-image.png' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Close preview second-image.png' })).toBeNull()
+  })
+
   it('preserves managed draft and shows submit errors', async () => {
     const onSubmitDraft = vi.fn().mockRejectedValue(new Error('Create session failed'))
 
