@@ -2136,7 +2136,7 @@ function scanRawWebStorageUsage(rootDir: string): WebStorageIssue[] {
 }
 
 function appSourceScanDirs(rootDir: string): string[] {
-  return ['host-adapter', 'product', 'src']
+  return ['host-adapter', 'product', 'runtime', 'src']
     .map(dir => path.join(rootDir, dir))
     .filter(dir => existsSync(dir))
 }
