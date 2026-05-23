@@ -565,12 +565,13 @@ export function WorkerStudio() {
         onProjectWorkspaceAssets={projectSelectedWorkspaceOverlay}
         onSaveAssets={saveWorkerOverlayAssets}
         onSelectWorkbenchTab={(tab) => {
-          if (workerConfigurationWorker)
+          if (workerConfigurationWorker) {
             updateActiveMountedTabMap(prev => updateWorkerMountedRoutePreference({
               current: prev,
               routeId: tab.id,
               workerId: workerConfigurationWorker.id,
             }))
+          }
         }}
         projectionWorkspace={selectedWorkspace?.workerId === workerConfigurationWorker?.id ? selectedWorkspace : null}
       />
