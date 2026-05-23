@@ -542,6 +542,24 @@ export async function createWorkerApp(): Promise<{ app: OpenAPIHono, port: numbe
   return { app, port }
 }
 
+/**
+ * daemon 启动时的本地 API 暴露告警。
+ *
+ * - 有 token → null(静默,鉴权已到位)
+ * - 无 token + loopback → 匿名开放提示
+ * - 无 token + 非 loopback → 显著暴露告警
+ *
+ * 此函数为纯函数,便于单测;在 daemon 启动处调用并 console.warn 输出。
+ */
+export function localApiExposureWarning(host: string, token: string | null | undefined): string | null {
+  if (token)
+    return null
+  const loopback = new Set(['127.0.0.1', 'localhost', '::1'])
+  if (!loopback.has(host))
+    return `[aiworker-daemon] AIWORKER_LOCAL_TOKEN 未配置且绑定到非 loopback 地址 ${host}:/api/local/* 将以匿名身份暴露,请配置 token 或改绑 127.0.0.1。`
+  return `[aiworker-daemon] 未配置 AIWORKER_LOCAL_TOKEN:/api/local/* 以本机匿名身份开放,请确保仅绑定 loopback。`
+}
+
 function authenticateMountedBrokerRequest(c: Context, state: LocalDaemonState): boolean {
   const appId = brokerAppIdFromPath(new URL(c.req.url).pathname)
   if (!appId)

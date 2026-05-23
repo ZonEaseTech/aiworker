@@ -688,7 +688,7 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
   if (updateNotice) {
     consola.info(`[aiworker-daemon] update available: ${updateNotice.currentVersion} -> ${updateNotice.targetVersion}; run ${updateNotice.command}`)
   }
-  const { bootstrapWorkerApp } = await import('@zonease/aiworker-api/bootstrap')
+  const { bootstrapWorkerApp, localApiExposureWarning } = await import('@zonease/aiworker-api/bootstrap')
   const { app, port } = await bootstrapWorkerApp({
     officialAppsRoot: resolveCliOfficialAppsRoot(),
     runtimeVersion: packageJson.version,
@@ -701,6 +701,9 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
     idleTimeout: 255,
     port: opts.port ?? port,
   })
+  const exposureWarning = localApiExposureWarning(server.hostname, env.AIWORKER_LOCAL_TOKEN)
+  if (exposureWarning)
+    console.warn(exposureWarning)
   consola.success(`[aiworker-daemon] listening on http://${server.hostname}:${server.port}`)
   await new Promise<void>((resolve) => {
     const keepAlive = setInterval(() => undefined, 60_000)

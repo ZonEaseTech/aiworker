@@ -16,7 +16,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { bootstrapWorkerApp, mountedServiceSpawnEnv } from './worker'
+import { bootstrapWorkerApp, localApiExposureWarning, mountedServiceSpawnEnv } from './worker'
 
 const HR_APP_ID = 'aiworker-hr'
 const QA_APP_ID = 'aiworker-qa'
@@ -1590,5 +1590,39 @@ describe('mountedServiceSpawnEnv', () => {
     expect(env.AIWORKER_LOCAL_TOKEN).toBeUndefined()
     expect(env.AIWORKER_MOUNT_TOKEN).toBe('tok-123')
     expect(env.PORT).toBe('0')
+  })
+})
+
+describe('localApiExposureWarning', () => {
+  it('returns null when token is configured regardless of host', () => {
+    expect(localApiExposureWarning('127.0.0.1', 'some-token')).toBeNull()
+    expect(localApiExposureWarning('0.0.0.0', 'some-token')).toBeNull()
+    expect(localApiExposureWarning('192.168.1.10', 'some-token')).toBeNull()
+  })
+
+  it('returns loopback notice when token is absent and host is loopback', () => {
+    const msg127 = localApiExposureWarning('127.0.0.1', null)
+    expect(msg127).toBeString()
+    expect(msg127).toContain('AIWORKER_LOCAL_TOKEN')
+    expect(msg127).toContain('loopback')
+
+    const msgLocalhost = localApiExposureWarning('localhost', undefined)
+    expect(msgLocalhost).toBeString()
+    expect(msgLocalhost).toContain('AIWORKER_LOCAL_TOKEN')
+
+    const msgIpv6 = localApiExposureWarning('::1', null)
+    expect(msgIpv6).toBeString()
+    expect(msgIpv6).toContain('AIWORKER_LOCAL_TOKEN')
+  })
+
+  it('returns exposure warning when token is absent and host is non-loopback', () => {
+    const msg = localApiExposureWarning('0.0.0.0', null)
+    expect(msg).toBeString()
+    expect(msg).toContain('AIWORKER_LOCAL_TOKEN')
+    expect(msg).toContain('0.0.0.0')
+
+    const msgRemote = localApiExposureWarning('192.168.1.5', undefined)
+    expect(msgRemote).toBeString()
+    expect(msgRemote).toContain('192.168.1.5')
   })
 })
