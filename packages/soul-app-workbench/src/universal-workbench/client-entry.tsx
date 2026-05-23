@@ -1,21 +1,21 @@
 import type {
-  LocalSettingsConfig,
   LocalSession,
   LocalSessionEvent,
+  LocalSettingsConfig,
   LocalTurn,
   LocalWorkspace,
 } from '@zonease/aiworker-shared'
+import type { EngineReadiness } from './timeline/engine-readiness'
 import type {
   UniversalWorkbenchCapabilityTemplate,
   UniversalWorkbenchCreateSessionDraft,
   UniversalWorkbenchSubmitTurnDraft,
 } from './UniversalWorkbenchApp'
-import type { EngineReadiness } from './timeline/engine-readiness'
 
-import { createRoot } from 'react-dom/client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
+import { createRoot } from 'react-dom/client'
 import { resolveEngineReadiness } from './timeline/engine-readiness'
+import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
 
 interface MountedHostData {
   appId?: string | null
@@ -42,13 +42,13 @@ interface UniversalWorkbenchCreateSessionPayload {
   title: string
 }
 
-type SessionTurnStreamFrame =
-  | { data: LocalSession, event: 'session' }
-  | { data: LocalTurn, event: 'turn' }
-  | { data: LocalSessionEvent, event: 'session_event' }
-  | { data: SessionTurnResult, event: 'result' }
-  | { data: { message?: string }, event: 'error' }
-  | { data: unknown, event: string }
+type SessionTurnStreamFrame
+  = | { data: LocalSession, event: 'session' }
+    | { data: LocalTurn, event: 'turn' }
+    | { data: LocalSessionEvent, event: 'session_event' }
+    | { data: SessionTurnResult, event: 'result' }
+    | { data: { message?: string }, event: 'error' }
+    | { data: unknown, event: string }
 
 const MATERIAL_ONLY_DRAFT_INPUT = 'Use the attached source materials.'
 const MOUNTED_ENGINE_READINESS_UNAVAILABLE: EngineReadiness = {

@@ -1,5 +1,5 @@
 import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, NativeEngineBridgeResult } from '@zonease/aiworker-core'
-import type { HostedSoulApp, LocalSettingsConfig, MountedMicroAppHostData, SoulAppMountedSurface } from '@zonease/aiworker-shared'
+import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppMountedSurface } from '@zonease/aiworker-shared'
 import type { SessionRow, WorkerEngineInvocationRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import type { Context } from 'hono'
@@ -27,7 +27,6 @@ import {
   localSettingsConfigSchema,
   localWorkerOverlaySaveSchema,
 } from '@zonease/aiworker-shared'
-import type { LocalWorkerOverlayAsset } from '@zonease/aiworker-shared'
 import {
   closeWorkerDb,
   createWorkerEngineInvocation,
