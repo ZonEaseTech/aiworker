@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-23 [fixed] Verified mounted session composer POST flow
+
+Closed the real browser mounted-flow risk for the reusable session composer.
+The universal workbench mounted client now uses non-module IIFE browser assets
+so `@micro-zoe/micro-app` can execute the Soul-owned client script without
+tripping on ESM `export` syntax.
+
+Mounted universal session creation and follow-up now use Host stream endpoints
+through the Soul App proxy (`/sessions/stream` and `/messages/stream`) so the
+UI receives the session/turn frames before native engine work can exceed the
+mounted service timeout. Browser smoke on the HR mounted universal workbench
+confirmed both new-session and follow-up composer clicks POST through the
+daemon and create the expected local session/turn rows.
+
 ## 2026-05-23 [completed] Cleaned apps/web Host boundary
 
 Cleaned `apps/web` back to the active Host contract. Worker Web no longer keeps

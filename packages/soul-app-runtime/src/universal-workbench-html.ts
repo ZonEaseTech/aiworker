@@ -43,7 +43,7 @@ export function renderUniversalWorkbenchHtml(options: {
     `<main id="root" class="h-full min-h-0" data-soul-app-id="${escapeHtmlAttribute(appId)}" data-surface-id="${escapeHtmlAttribute(surfaceId)}"></main>`,
     `<script id="aiworker-micro-app-host-data" type="application/json" data-slot="micro-app-host-data">${jsonScriptPayload(hostData)}</script>`,
     `<script>${microAppBridgeScript(hostData)}</script>`,
-    `<script type="module" src="${escapeHtmlAttribute(scriptHref)}"></script>`,
+    `<script src="${escapeHtmlAttribute(scriptHref)}"></script>`,
     '</body>',
     '</html>',
   ].join('')

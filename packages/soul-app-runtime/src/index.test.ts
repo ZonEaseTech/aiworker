@@ -9,7 +9,7 @@ import path from 'node:path'
 import { defineSoulApp, namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-app-sdk'
 import { afterEach, describe, expect, it } from 'bun:test'
 
-import { createMountedSoulAppTestRuntime, createStandaloneSoulAppRuntime, renderUniversalWorkbenchHtml } from './index'
+import { createMountedSoulAppTestRuntime, createStandaloneSoulAppRuntime, mountSessionApiProxy, renderUniversalWorkbenchHtml } from './index'
 
 const now = () => '2026-05-12T23:30:00.000Z'
 
@@ -121,8 +121,63 @@ describe('Soul App runtime harness', () => {
     expect(html).toContain('api.addDataListener(receiveHostData, true)')
     expect(html).toContain('api.dispatch({ type: "ready" })')
     expect(html).toContain('<main id="root"')
-    expect(html).toContain('<script type="module" src="/api/local/apps/demo-soul-app/assets/universal-workbench-client.js"></script>')
+    expect(html).toContain('<script src="/api/local/apps/demo-soul-app/assets/universal-workbench-client.js"></script>')
+    expect(html).not.toContain('type="module"')
     expect(html).not.toContain('This app-owned micro-app surface receives worker, workspace, session, and theme context from the Host mount bridge.')
+  })
+
+  it('proxies mounted universal workbench session streams to Host stream endpoints', async () => {
+    const originalFetch = globalThis.fetch
+    const proxiedRequests: Array<{ body: string, method: string, url: string }> = []
+    globalThis.fetch = (async (input, init) => {
+      proxiedRequests.push({
+        body: await new Response(init?.body).text(),
+        method: init?.method ?? 'GET',
+        url: String(input),
+      })
+      return new Response('event: session\ndata: {"id":"session-1"}\n\n', {
+        headers: { 'content-type': 'text/event-stream; charset=utf-8' },
+        status: 200,
+      })
+    }) as typeof fetch
+
+    try {
+      const createResponse = await mountSessionApiProxy(new Request('http://mounted.local/api/sessions/stream?workerId=worker-1&workspaceId=workspace-1', {
+        body: JSON.stringify({ input: 'Start from mounted composer' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      }), {
+        hostApiBaseUrl: 'http://host.local',
+        workerId: 'fallback-worker',
+      })
+
+      const turnResponse = await mountSessionApiProxy(new Request('http://mounted.local/api/sessions/session-1/turns/stream?workerId=worker-1', {
+        body: JSON.stringify({ input: 'Continue from mounted composer' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      }), {
+        hostApiBaseUrl: 'http://host.local',
+        workerId: 'fallback-worker',
+      })
+
+      expect(createResponse?.headers.get('content-type')).toContain('text/event-stream')
+      expect(turnResponse?.headers.get('content-type')).toContain('text/event-stream')
+      expect(proxiedRequests).toEqual([
+        {
+          body: '{"input":"Start from mounted composer"}',
+          method: 'POST',
+          url: 'http://host.local/api/local/workers/worker-1/workspaces/workspace-1/sessions/stream',
+        },
+        {
+          body: '{"input":"Continue from mounted composer"}',
+          method: 'POST',
+          url: 'http://host.local/api/local/workers/worker-1/sessions/session-1/messages/stream',
+        },
+      ])
+    }
+    finally {
+      globalThis.fetch = originalFetch
+    }
   })
 
   it('uses the same SDK definition through mounted Host projection without changing domain logic', async () => {

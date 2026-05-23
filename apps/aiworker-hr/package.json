@@ -13,7 +13,7 @@
   "types": "./host-adapter/index.ts",
   "scripts": {
     "build": "bun run build:styles && bun run build:client && bun build host-adapter/index.ts host-adapter/standalone/standalone.ts host-adapter/mounted/host-mounted.ts --outdir dist --target bun",
-    "build:client": "bun build product/web/people-workbench/client-entry.tsx --outfile dist/web/hr-home-client.js --target browser --format esm --minify && bun build ../../packages/soul-app-workbench/src/universal-workbench/client-entry.tsx --outfile dist/web/universal-workbench-client.js --target browser --format esm --minify",
+    "build:client": "bun build product/web/people-workbench/client-entry.tsx --outfile dist/web/hr-home-client.js --target browser --format iife --minify && bun build ../../packages/soul-app-workbench/src/universal-workbench/client-entry.tsx --outfile dist/web/universal-workbench-client.js --target browser --format iife --minify",
     "build:styles": "bunx --bun @tailwindcss/cli -i product/web/styles.css -o dist/web/styles.css --minify && bun scripts/copy-web-fonts.ts",
     "dev": "bun run build:styles && bun run build:client && bun host-adapter/standalone/standalone.ts --serve",
     "serve": "bun run build:styles && bun run build:client && bun host-adapter/mounted/host-mounted.ts",

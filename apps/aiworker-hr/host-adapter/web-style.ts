@@ -22,7 +22,7 @@ export function renderSoulAppStyleLink(href = soulAppStyleHref): string {
 }
 
 export function renderSoulAppClientScript(href: string): string {
-  return `<script type="module" src="${escapeHtmlAttribute(href)}"></script>`
+  return `<script src="${escapeHtmlAttribute(href)}"></script>`
 }
 
 export async function serveSoulAppWebAsset(url: URL): Promise<Response | null> {

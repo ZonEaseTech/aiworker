@@ -125,7 +125,8 @@ describe('HR reference Soul App', () => {
       expect(routeMicroAppHtml).toContain('window.microApp')
       expect(routeMicroAppHtml).toContain('api.addDataListener(receiveHostData, true)')
       expect(routeMicroAppHtml).toContain('api.dispatch(payload)')
-      expect(routeMicroAppHtml).toContain('<script type="module" src="/api/local/apps/aiworker-hr/assets/hr-home-client.js"></script>')
+      expect(routeMicroAppHtml).toContain('<script src="/api/local/apps/aiworker-hr/assets/hr-home-client.js"></script>')
+      expect(routeMicroAppHtml).not.toContain('type="module"')
       expect(routeMicroAppHtml).toContain('data-slot="hr-profile-list-column"')
       expect(routeMicroAppHtml).toContain('data-slot="hr-reading-room-column"')
       expect(routeMicroAppHtml).toContain('data-slot="hr-profile-composer-column"')
@@ -151,6 +152,7 @@ describe('HR reference Soul App', () => {
       else {
         expect(clientRes.headers.get('cache-control')).toBe('no-store')
         expect(clientRes.headers.get('content-type')).toContain('text/javascript')
+        expect(await clientRes.text()).not.toMatch(/\b(?:export|import)\s*(?:\{|from|\*|default)/)
       }
       const darkRouteMicroAppRes = await fetch(`${baseUrl}/micro-app/routes/hr-home?theme=dark`, {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
@@ -304,7 +306,7 @@ describe('HR reference Soul App', () => {
     expect(standaloneHtml).toContain('<main id="aiworker-hr-root" class="h-full min-h-0">')
     expect(standaloneHtml).toContain('<link rel="stylesheet" href="/styles.css">')
     expect(standaloneHtml).toContain('<script id="aiworker-micro-app-host-data" type="application/json" data-slot="micro-app-host-data">{"appId":"aiworker-hr","routePrefix":"standalone://aiworker-hr"}</script>')
-    expect(standaloneHtml).toContain('<script type="module" src="/assets/hr-home-client.js"></script>')
+    expect(standaloneHtml).toContain('<script src="/assets/hr-home-client.js"></script>')
     expect(standaloneHtml).toContain('data-slot="card"')
     expect(standaloneHtml).toContain('People Profiles')
     expect(standaloneHtml).toContain('Current Profile Summary')

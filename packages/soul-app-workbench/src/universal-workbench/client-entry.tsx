@@ -33,6 +33,14 @@ interface SessionTurnResult {
   turn?: LocalTurn
 }
 
+type SessionTurnStreamFrame =
+  | { data: LocalSession, event: 'session' }
+  | { data: LocalTurn, event: 'turn' }
+  | { data: LocalSessionEvent, event: 'session_event' }
+  | { data: SessionTurnResult, event: 'result' }
+  | { data: { message?: string }, event: 'error' }
+  | { data: unknown, event: string }
+
 const MATERIAL_ONLY_DRAFT_INPUT = 'Use the attached source materials.'
 
 export function resolveUniversalWorkbenchDraftInput(
@@ -124,7 +132,7 @@ function UniversalWorkbenchMountedClient() {
     const input = resolveUniversalWorkbenchDraftInput(draft)
     if (!input)
       return
-    const result = await fetchJson<SessionTurnResult>(`${routePrefix}/api/sessions?workerId=${encodeURIComponent(workerId)}&workspaceId=${encodeURIComponent(targetWorkspaceId)}`, {
+    const response = await fetch(`${routePrefix}/api/sessions/stream?workerId=${encodeURIComponent(workerId)}&workspaceId=${encodeURIComponent(targetWorkspaceId)}`, {
       body: JSON.stringify({
         capabilityTemplateId: template.id,
         input,
@@ -137,18 +145,24 @@ function UniversalWorkbenchMountedClient() {
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
-    if (result.session) {
-      setSelectedSessionId(result.session.id)
-      setSessions(current => [
-        result.session!,
-        ...current.filter(session => session.id !== result.session!.id),
-      ])
-      void refresh(result.session.id).catch(() => {})
-    }
-    if (result.turn)
-      setTurns(current => [...current, result.turn!])
-    if (result.events)
-      setEvents(current => [...current, ...result.events!])
+    if (!response.ok)
+      throw new Error(`Universal workbench API ${response.status}: ${routePrefix}/api/sessions/stream`)
+    void consumeSessionTurnStream(response, (frame) => {
+      applySessionTurnStreamFrame(frame, {
+        onEvents: nextEvents => setEvents(current => [...current, ...nextEvents]),
+        onSession: (session) => {
+          setSelectedSessionId(session.id)
+          setSessions(current => [
+            session,
+            ...current.filter(item => item.id !== session.id),
+          ])
+          void refresh(session.id).catch(() => {})
+        },
+        onTurn: turn => setTurns(current => upsertTurn(current, turn)),
+      })
+    }).catch((error) => {
+      setEvents(current => [...current, streamErrorEvent(error)])
+    })
   }
 
   async function handleCreateWorkspace() {
@@ -168,7 +182,7 @@ function UniversalWorkbenchMountedClient() {
       return
     setTurnSubmitting(true)
     try {
-      const result = await fetchJson<SessionTurnResult>(`${routePrefix}/api/sessions/${encodeURIComponent(selectedSessionId)}/turns?workerId=${encodeURIComponent(workerId)}`, {
+      const response = await fetch(`${routePrefix}/api/sessions/${encodeURIComponent(selectedSessionId)}/turns/stream?workerId=${encodeURIComponent(workerId)}`, {
         body: JSON.stringify({
           input,
           metadata: {
@@ -179,11 +193,18 @@ function UniversalWorkbenchMountedClient() {
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       })
+      if (!response.ok)
+        throw new Error(`Universal workbench API ${response.status}: ${routePrefix}/api/sessions/${selectedSessionId}/turns/stream`)
       setTurnInput('')
-      if (result.turn)
-        setTurns(current => [...current, result.turn!])
-      if (result.events)
-        setEvents(current => [...current, ...result.events!])
+      void consumeSessionTurnStream(response, (frame) => {
+        applySessionTurnStreamFrame(frame, {
+          onEvents: nextEvents => setEvents(current => [...current, ...nextEvents]),
+          onSession: session => setSessions(current => upsertSession(current, session)),
+          onTurn: turn => setTurns(current => upsertTurn(current, turn)),
+        })
+      }).catch((error) => {
+        setEvents(current => [...current, streamErrorEvent(error)])
+      })
     }
     finally {
       setTurnSubmitting(false)
@@ -210,6 +231,131 @@ function UniversalWorkbenchMountedClient() {
       onTurnInputChange={setTurnInput}
     />
   )
+}
+
+async function consumeSessionTurnStream(response: Response, onFrame: (frame: SessionTurnStreamFrame) => void): Promise<void> {
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!contentType.includes('text/event-stream')) {
+    applySessionTurnResult(await response.json() as SessionTurnResult, onFrame)
+    return
+  }
+
+  const body = response.body
+  if (!body) {
+    onFrame({ data: { message: 'Universal workbench stream response was empty.' }, event: 'error' })
+    return
+  }
+
+  const decoder = new TextDecoder()
+  const reader = body.getReader()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done)
+      break
+    buffer += decoder.decode(value, { stream: true })
+    const frames = buffer.split(/\n\n/)
+    buffer = frames.pop() ?? ''
+    for (const frame of frames)
+      dispatchSessionTurnStreamFrame(frame, onFrame)
+  }
+  buffer += decoder.decode()
+  if (buffer.trim())
+    dispatchSessionTurnStreamFrame(buffer, onFrame)
+}
+
+function dispatchSessionTurnStreamFrame(rawFrame: string, onFrame: (frame: SessionTurnStreamFrame) => void): void {
+  let event = 'message'
+  const dataLines: string[] = []
+  for (const line of rawFrame.split(/\r?\n/)) {
+    if (!line || line.startsWith(':'))
+      continue
+    if (line.startsWith('event:')) {
+      event = line.slice('event:'.length).trim()
+      continue
+    }
+    if (line.startsWith('data:'))
+      dataLines.push(line.slice('data:'.length).trimStart())
+  }
+  if (dataLines.length === 0)
+    return
+  const rawData = dataLines.join('\n')
+  try {
+    const data = JSON.parse(rawData) as unknown
+    onFrame({ data, event } as SessionTurnStreamFrame)
+  }
+  catch {
+    onFrame({ data: { message: rawData }, event: 'error' })
+  }
+}
+
+function applySessionTurnResult(result: SessionTurnResult, onFrame: (frame: SessionTurnStreamFrame) => void): void {
+  if (result.session)
+    onFrame({ data: result.session, event: 'session' })
+  if (result.turn)
+    onFrame({ data: result.turn, event: 'turn' })
+  for (const event of result.events ?? [])
+    onFrame({ data: event, event: 'session_event' })
+}
+
+function applySessionTurnStreamFrame(
+  frame: SessionTurnStreamFrame,
+  handlers: {
+    onEvents: (events: LocalSessionEvent[]) => void
+    onSession: (session: LocalSession) => void
+    onTurn: (turn: LocalTurn) => void
+  },
+): void {
+  if (frame.event === 'session' && isRecord(frame.data)) {
+    handlers.onSession(frame.data as LocalSession)
+    return
+  }
+  if (frame.event === 'turn' && isRecord(frame.data)) {
+    handlers.onTurn(frame.data as LocalTurn)
+    return
+  }
+  if (frame.event === 'session_event' && isRecord(frame.data)) {
+    handlers.onEvents([frame.data as LocalSessionEvent])
+    return
+  }
+  if (frame.event === 'result' && isRecord(frame.data)) {
+    applySessionTurnResult(frame.data as SessionTurnResult, (resultFrame) => {
+      applySessionTurnStreamFrame(resultFrame, handlers)
+    })
+    return
+  }
+  if (frame.event === 'error')
+    handlers.onEvents([streamErrorEvent(frame.data)])
+}
+
+function upsertSession(sessions: LocalSession[], session: LocalSession): LocalSession[] {
+  return [
+    session,
+    ...sessions.filter(item => item.id !== session.id),
+  ]
+}
+
+function upsertTurn(turns: LocalTurn[], turn: LocalTurn): LocalTurn[] {
+  return [
+    ...turns.filter(item => item.id !== turn.id),
+    turn,
+  ]
+}
+
+function streamErrorEvent(error: unknown): LocalSessionEvent {
+  const message = isRecord(error) && typeof error.message === 'string'
+    ? error.message
+    : error instanceof Error ? error.message : String(error)
+  return {
+    createdAt: new Date().toISOString(),
+    id: Date.now(),
+    invocationId: null,
+    payloadJson: { message, source: 'universal-workbench-stream' },
+    seq: 0,
+    sessionId: 'universal-workbench-stream',
+    turnId: null,
+    type: 'error',
+  }
 }
 
 async function loadSessionDetail(

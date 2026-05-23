@@ -324,6 +324,13 @@ export function mountSessionApiProxy(request: Request, options: {
     return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))
   }
 
+  if (url.pathname === '/api/sessions/stream' && request.method === 'POST') {
+    if (!workspaceId)
+      return Promise.resolve(Response.json({ error: { code: 'WORKSPACE_REQUIRED', message: 'workspaceId is required.' } }, { status: 400 }))
+    const target = `${hostApi}/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions/stream`
+    return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))
+  }
+
   const sessionMatch = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname)
   if (sessionMatch && request.method === 'GET') {
     const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionMatch[1]}`
@@ -333,6 +340,12 @@ export function mountSessionApiProxy(request: Request, options: {
   const sessionTurnsMatch = /^\/api\/sessions\/([^/]+)\/turns$/.exec(url.pathname)
   if (sessionTurnsMatch && request.method === 'POST') {
     const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionTurnsMatch[1]}/messages`
+    return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))
+  }
+
+  const sessionTurnStreamMatch = /^\/api\/sessions\/([^/]+)\/turns\/stream$/.exec(url.pathname)
+  if (sessionTurnStreamMatch && request.method === 'POST') {
+    const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionTurnStreamMatch[1]}/messages/stream`
     return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))
   }
 
