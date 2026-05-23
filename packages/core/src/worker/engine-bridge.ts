@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
+import { sanitizeEngineEnv } from './engine-env'
 
 export type NativeEngineInvocationStatus = 'failed' | 'running' | 'succeeded'
 
@@ -54,8 +55,7 @@ export async function invokeNativeEngine(input: NativeEngineBridgeInput): Promis
     const child = spawn(input.command, args, {
       cwd,
       env: {
-        // eslint-disable-next-line node/prefer-global/process
-        ...process.env,
+        ...sanitizeEngineEnv(),
         ...(input.env ?? {}),
       },
       stdio: ['pipe', 'pipe', 'pipe'],

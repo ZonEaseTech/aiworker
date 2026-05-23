@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { sanitizeEngineEnv } from './engine-env'
 import { createEngineStreamHandler } from './engine-stream'
 
 export interface LocalExecutorInput {
@@ -205,7 +206,7 @@ async function runLocalCliExecutor(input: LocalExecutorInput): Promise<LocalExec
   const execution = await execCommand(command, args, enginePrompt, 300_000, {
     cwd: input.workspaceRoot,
     env: {
-      ...process.env,
+      ...sanitizeEngineEnv(),
       ...(engine.env ?? {}),
     },
     onStderr: undefined,
@@ -332,7 +333,7 @@ function execCommand(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd ?? process.cwd(),
-      env: options.env ?? process.env,
+      env: options.env ?? sanitizeEngineEnv(),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let stdout = ''
