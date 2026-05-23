@@ -679,7 +679,7 @@ export function SessionAttachmentList({
       <Dialog open={Boolean(previewAttachment?.previewUrl)} onOpenChange={open => !open && setPreviewAttachment(null)}>
         {previewAttachment?.previewUrl
           ? (
-              <DialogContent className="max-w-3xl p-3">
+              <DialogContent className="max-w-3xl p-3" closeButtonLabel={previewAttachment.closePreviewLabel}>
                 <DialogTitle className="sr-only">{previewAttachment.previewTitle ?? previewAttachment.name}</DialogTitle>
                 <DialogDescription className="sr-only">{previewAttachment.name}</DialogDescription>
                 <img className="max-h-dvh w-full object-contain" src={previewAttachment.previewUrl} alt={previewAttachment.previewAlt ?? previewAttachment.name} />

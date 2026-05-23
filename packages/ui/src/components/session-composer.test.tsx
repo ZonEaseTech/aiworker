@@ -320,32 +320,48 @@ describe('sessionComposer', () => {
   })
 
   it('clears managed text and attachments after successful submit', async () => {
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:success-preview')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     const onSubmitDraft = vi.fn()
     const onValueChange = vi.fn()
+    const file = new File(['image'], 'source-image.png', { type: 'image/png' })
 
-    render(
-      <ManagedSessionComposer
-        ariaLabel="Session input"
-        attachmentLabels={{
-          add: 'Add material',
-          attached: 'Attached materials',
-          closePreview: name => `Close preview ${name}`,
-          materialReadError: 'Could not read material',
-          preview: name => `Preview ${name}`,
-          remove: name => `Remove ${name}`,
-        }}
-        defaultValue="Draft request"
-        onSubmitDraft={onSubmitDraft}
-        onValueChange={onValueChange}
-        submitAriaLabel="Start"
-      />,
-    )
+    try {
+      render(
+        <ManagedSessionComposer
+          ariaLabel="Session input"
+          attachmentLabels={{
+            add: 'Add material',
+            attached: 'Attached materials',
+            closePreview: name => `Close preview ${name}`,
+            materialReadError: 'Could not read material',
+            preview: name => `Preview ${name}`,
+            remove: name => `Remove ${name}`,
+          }}
+          defaultValue="Draft request"
+          onSubmitDraft={onSubmitDraft}
+          onValueChange={onValueChange}
+          submitAriaLabel="Start"
+        />,
+      )
 
-    fireEvent.submit(screen.getByRole('form', { name: 'Session input' }))
+      fireEvent.change(screen.getByTestId('managed-session-file-input'), {
+        target: { files: [file] },
+      })
+      await screen.findByRole('button', { name: 'Preview source-image.png' })
 
-    await waitFor(() => expect(onSubmitDraft).toHaveBeenCalledTimes(1))
-    expect(onValueChange).toHaveBeenLastCalledWith('')
-    expect((screen.getByRole('textbox', { name: 'Session input' }) as HTMLTextAreaElement).value).toBe('')
+      fireEvent.submit(screen.getByRole('form', { name: 'Session input' }))
+
+      await waitFor(() => expect(onSubmitDraft).toHaveBeenCalledTimes(1))
+      expect(onValueChange).toHaveBeenLastCalledWith('')
+      expect((screen.getByRole('textbox', { name: 'Session input' }) as HTMLTextAreaElement).value).toBe('')
+      expect(screen.queryByRole('button', { name: 'Preview source-image.png' })).toBeNull()
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:success-preview')
+    }
+    finally {
+      createObjectURL.mockRestore()
+      revokeObjectURL.mockRestore()
+    }
   })
 
   it('preserves managed draft and shows submit errors', async () => {
@@ -435,5 +451,46 @@ describe('sessionComposer', () => {
     expect(revokeObjectURL).toHaveBeenCalledTimes(2)
     createObjectURL.mockRestore()
     revokeObjectURL.mockRestore()
+  })
+
+  it('uses managed close labels for image attachment previews', async () => {
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const file = new File(['image'], 'source-image.png', { type: 'image/png' })
+
+    try {
+      render(
+        <ManagedSessionComposer
+          ariaLabel="Session input"
+          attachmentLabels={{
+            add: 'Add material',
+            attached: 'Attached materials',
+            closePreview: name => `Close preview ${name}`,
+            materialReadError: 'Could not read material',
+            preview: name => `Preview ${name}`,
+            remove: name => `Remove ${name}`,
+          }}
+          defaultValue="Draft request"
+          onSubmitDraft={vi.fn()}
+          submitAriaLabel="Start"
+        />,
+      )
+
+      fireEvent.change(screen.getByTestId('managed-session-file-input'), {
+        target: { files: [file] },
+      })
+      fireEvent.click(await screen.findByRole('button', { name: 'Preview source-image.png' }))
+
+      const closeButton = await screen.findByRole('button', { name: 'Close preview source-image.png' })
+      fireEvent.click(closeButton)
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: 'Close preview source-image.png' })).toBeNull()
+      })
+    }
+    finally {
+      createObjectURL.mockRestore()
+      revokeObjectURL.mockRestore()
+    }
   })
 })

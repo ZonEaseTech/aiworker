@@ -51,9 +51,11 @@ function DialogOverlay({
 function DialogContent({
   className,
   children,
+  closeButtonLabel = 'Close',
   showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  closeButtonLabel?: string
   showCloseButton?: boolean
 }) {
   return (
@@ -76,7 +78,7 @@ function DialogContent({
               size="icon-sm"
             >
               <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{closeButtonLabel}</span>
             </Button>
           </DialogPrimitive.Close>
         )}
