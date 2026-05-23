@@ -222,6 +222,13 @@ Full business content stays in Soul App workspace files or app-owned storage.
 Host does not store domain facts, domain state, business confirmations or
 app-owned history as product primitives.
 
+Session transcript records — turn input, the Host-assembled engine prompt, the
+engine response, assistant deltas and status/tool events stored inline on
+`turns`, `engine_invocations` and `session_events` — are Host operational ledger
+for the local shell's session list, timeline and status. They are platform
+metadata under DATA-001, not Soul domain content. Only Soul-produced artifact
+files stay in the Soul App workspace.
+
 Browser-side storage remains UI preference storage, not a product data boundary:
 
 - Host Web uses Host-owned keys for shell preferences and local status；
@@ -254,6 +261,8 @@ AIWorker product contract.
 - app 之间不共享默认 workspace storage、browser storage key 或 API route。
 - Secret 只能放 `.env`、vault 或 secret reference；不得写入 manifest、generated app config、
   workspace metadata、DB metadata、日志、prompt、review rubric 或 skill 文件。
+- `worker.db` 不存任何加密 secret 表；早先的 `worker_secrets` vault 已移除。engine/BYOK secret
+  只通过 `env:`/`$` 引用解析。
 - Secret 不得写入 browser `localStorage` 或 `sessionStorage`。
 - Host may pass only narrow signed context to mounted app-owned UI。
 - 1.0.0 前允许破坏性收敛，优先保证当前合同清晰，不保留拖累边界的旧 shim。
