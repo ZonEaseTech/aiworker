@@ -334,10 +334,10 @@ describe('greenfield local worker session schema', () => {
     }).id)
 
     // `after` returns only newer events, in seq order.
-    expect(listSessionEvents(session.id, { after: ids[1] }).map(event => event.id)).toEqual([ids[2], ids[3], ids[4]])
+    expect(listSessionEvents(session.id, { after: ids[1] }).map(event => event.id)).toEqual([ids[2]!, ids[3]!, ids[4]!])
     // The limit is applied AFTER the id filter, so a tight window still walks forward past the cursor
     // instead of stalling on the earliest rows (the long-session replay regression).
-    expect(listSessionEvents(session.id, { after: ids[1], limit: 2 }).map(event => event.id)).toEqual([ids[2], ids[3]])
+    expect(listSessionEvents(session.id, { after: ids[1], limit: 2 }).map(event => event.id)).toEqual([ids[2]!, ids[3]!])
     // No cursor returns the full window in seq order.
     expect(listSessionEvents(session.id).map(event => event.id)).toEqual(ids)
   })
