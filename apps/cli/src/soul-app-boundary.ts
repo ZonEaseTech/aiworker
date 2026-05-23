@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 export interface PrivateImportIssue {
@@ -23,10 +23,12 @@ export const HOST_PRIVATE_IMPORT_PREFIXES = [
   '@zonease/aiworker-web',
 ]
 
-const SOUL_APP_PACKAGE_IMPORT_PREFIXES = [
-  '@zonease/aiworker-hr',
-  '@zonease/aiworker-qa',
-]
+const ALLOWED_SHARED_PACKAGES = new Set([
+  '@zonease/aiworker-soul-app-sdk',
+  '@zonease/aiworker-soul-app-runtime',
+  '@zonease/aiworker-soul-app-workbench',
+  '@zonease/aiworker-ui',
+])
 const RAW_WEB_STORAGE_MESSAGE = 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.'
 
 export function scanPrivateImports(rootDir: string): PrivateImportIssue[] {
@@ -68,9 +70,7 @@ export function scanRawWebStorageUsage(rootDir: string): WebStorageIssue[] {
 }
 
 function appSourceScanDirs(rootDir: string): string[] {
-  return ['host-adapter', 'product', 'runtime', 'src']
-    .map(dir => path.join(rootDir, dir))
-    .filter(dir => existsSync(dir))
+  return [rootDir]
 }
 
 function rawWebStorageSymbols(content: string): string[] {
@@ -133,11 +133,16 @@ function importSpecifiers(content: string): string[] {
   return [...new Set(specs)]
 }
 
+function normalizedImport(importPath: string): string {
+  return importPath.replaceAll('\\', '/')
+}
+
 function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean {
   if (HOST_PRIVATE_IMPORT_PREFIXES.some(prefix => importPath === prefix || importPath.startsWith(`${prefix}/`)))
     return true
   if (isSiblingSoulAppImport(rootDir, importPath))
     return true
+  const normalized = normalizedImport(importPath)
   return [
     'apps/api',
     'apps/cli',
@@ -146,19 +151,16 @@ function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean 
     'packages/fs-layout',
     'packages/shared',
     'packages/storage-sqlite',
-  ].some(part => importPath.includes(part))
+  ].some(root => normalized.includes(`${root}/`))
 }
 
 function isSiblingSoulAppImport(rootDir: string, importPath: string): boolean {
-  const appDirName = path.basename(rootDir)
-  const ownPackageName = `@zonease/${appDirName}`
-  if (SOUL_APP_PACKAGE_IMPORT_PREFIXES.some(prefix =>
-    prefix !== ownPackageName && (importPath === prefix || importPath.startsWith(`${prefix}/`)),
-  )) {
+  const ownPackageName = `@zonease/${path.basename(rootDir)}`
+  const normalized = normalizedImport(importPath)
+  const scopeMatch = normalized.match(/^(@zonease\/aiworker-[^/]+)/)
+  if (scopeMatch && scopeMatch[1] !== ownPackageName && !ALLOWED_SHARED_PACKAGES.has(scopeMatch[1]!))
     return true
-  }
-  if (!importPath.includes('apps/aiworker-'))
+  if (!normalized.includes('apps/aiworker-'))
     return false
-  const normalized = importPath.replaceAll('\\\\', '/')
-  return !normalized.includes(`apps/${appDirName}/`)
+  return !normalized.includes(`apps/${path.basename(rootDir)}/`)
 }
