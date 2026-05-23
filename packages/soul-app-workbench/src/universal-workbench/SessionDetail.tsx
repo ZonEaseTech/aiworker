@@ -4,7 +4,8 @@ import type {
   LocalTurn,
   LocalWorkspace,
 } from '@zonease/aiworker-shared'
-import type { FormEvent, ReactNode } from 'react'
+import type { ManagedSessionComposerDraft } from '@zonease/aiworker-ui/components/session-composer'
+import type { ReactNode } from 'react'
 import type { EngineReadiness } from './timeline/engine-readiness'
 
 import {
@@ -18,7 +19,7 @@ import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@zonease/aiworker-ui/components/collapsible'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@zonease/aiworker-ui/components/item'
-import { SessionComposer } from '@zonease/aiworker-ui/components/session-composer'
+import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/session-composer'
 import { cn } from '@zonease/aiworker-ui/lib/utils'
 import { useMemo } from 'react'
 import {
@@ -101,7 +102,7 @@ export function SessionDetail({
   copy: SessionDetailCopy
   engineReadiness: EngineReadiness
   events: LocalSessionEvent[]
-  onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
+  onSubmitTurn: (draft: ManagedSessionComposerDraft) => Promise<void> | void
   onTurnInputChange: (value: string) => void
   progressPanel?: ReactNode
   session: LocalSession | null
@@ -187,8 +188,16 @@ export function SessionDetail({
                 </ItemGroup>
               )}
               composer={(
-                <SessionComposer
+                <ManagedSessionComposer
                   ariaLabel={copy.workspace.followUpInput}
+                  attachmentLabels={{
+                    add: copy.workspace.addSourceMaterials,
+                    attached: copy.workspace.attachedSourceMaterials,
+                    closePreview: name => `${copy.workspace.closeSourceMaterialPreview} ${name}`,
+                    materialReadError: copy.workspace.materialReadError,
+                    preview: copy.workspace.previewSourceMaterial,
+                    remove: copy.workspace.removeSourceMaterial,
+                  }}
                   className="min-w-0"
                   description={engineReadiness.detail}
                   disabled={!engineReadiness.ready}
@@ -202,7 +211,7 @@ export function SessionDetail({
                   usage={composerUsage}
                   value={turnInput}
                   variant="compact"
-                  onSubmit={onSubmitTurn}
+                  onSubmitDraft={onSubmitTurn}
                   onValueChange={onTurnInputChange}
                 />
               )}

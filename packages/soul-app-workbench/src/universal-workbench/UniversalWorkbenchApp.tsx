@@ -4,7 +4,7 @@ import type {
   LocalTurn,
   LocalWorkspace,
 } from '@zonease/aiworker-shared'
-import type { FormEvent } from 'react'
+import type { ManagedSessionComposerDraft } from '@zonease/aiworker-ui/components/session-composer'
 import type { EngineReadiness } from './timeline/engine-readiness'
 import type { WorkspaceSessionTreeNode } from './WorkspaceSessionTree'
 
@@ -12,10 +12,24 @@ import { Add01Icon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
+import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/session-composer'
 import { useMemo, useState } from 'react'
 import { SessionChatView } from './SessionChatView'
 import { SessionDetail } from './SessionDetail'
 import { WorkspaceSessionTree } from './WorkspaceSessionTree'
+
+export interface UniversalWorkbenchCreateSessionDraft {
+  input: string
+  materials?: ManagedSessionComposerDraft['materials']
+  mentions?: ManagedSessionComposerDraft['mentions']
+  selectedTemplateId?: string
+}
+
+export interface UniversalWorkbenchSubmitTurnDraft {
+  input: string
+  materials?: ManagedSessionComposerDraft['materials']
+  mentions?: ManagedSessionComposerDraft['mentions']
+}
 
 export interface UniversalWorkbenchAppProps {
   engineReadiness: EngineReadiness
@@ -28,11 +42,11 @@ export interface UniversalWorkbenchAppProps {
   workspace: LocalWorkspace | null
   workspaces: LocalWorkspace[]
   onBackToWorkspace: () => void
-  onCreateSession: (workspaceId: string, input: string) => Promise<void>
+  onCreateSession: (workspaceId: string, draft: UniversalWorkbenchCreateSessionDraft) => Promise<void>
   onCreateWorkspace: () => void
   onSelectSession?: (sessionId: string | null) => void
   onRefresh: () => void
-  onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
+  onSubmitTurn: (draft: UniversalWorkbenchSubmitTurnDraft) => Promise<void> | void
   onTurnInputChange: (value: string) => void
 }
 
@@ -56,7 +70,6 @@ export function UniversalWorkbenchApp({
 }: UniversalWorkbenchAppProps) {
   const [internalSelectedSessionId, setInternalSelectedSessionId] = useState<string | null>(null)
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
-  const [newSessionInput, setNewSessionInput] = useState('')
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(workspace?.id ?? null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -100,11 +113,27 @@ export function UniversalWorkbenchApp({
     return nodes
   }, [workspaces, sessions])
 
-  async function handleCreateSession(workspaceId: string) {
-    if (!newSessionInput.trim())
+  async function handleCreateSession(workspaceId: string, draft: ManagedSessionComposerDraft) {
+    const input = draft.text.trim()
+    if (!input && draft.materials.length === 0)
       return
-    await onCreateSession(workspaceId, newSessionInput.trim())
-    setNewSessionInput('')
+    await onCreateSession(workspaceId, {
+      input,
+      materials: draft.materials,
+      mentions: draft.mentions,
+      selectedTemplateId: draft.selectedTemplateId,
+    })
+  }
+
+  async function handleSubmitTurn(draft: ManagedSessionComposerDraft) {
+    const input = draft.text.trim()
+    if (!input && draft.materials.length === 0)
+      return
+    await onSubmitTurn({
+      input,
+      materials: draft.materials,
+      mentions: draft.mentions,
+    })
   }
 
   return (
@@ -139,7 +168,13 @@ export function UniversalWorkbenchApp({
           <WorkspaceSessionTree
             nodes={treeNodes}
             selectedNodeId={selectedSession?.id ?? selectedWorkspace?.id ?? null}
-            onCreateSession={() => selectedWorkspace && handleCreateSession(selectedWorkspace.id)}
+            onCreateSession={() => {
+              if (!selectedWorkspace)
+                return
+              setSelectedWorkspaceId(selectedWorkspace.id)
+              setInternalSelectedSessionId(null)
+              onSelectSession?.(null)
+            }}
             onSelectNode={(node) => {
               if (node.kind === 'session') {
                 setInternalSelectedSessionId(node.sessionId ?? null)
@@ -192,7 +227,7 @@ export function UniversalWorkbenchApp({
                 }}
                 onRefresh={onRefresh}
                 onToggleDetailDrawer={() => setDetailDrawerOpen(v => !v)}
-                onSubmitTurn={onSubmitTurn}
+                onSubmitTurn={handleSubmitTurn}
                 onTurnInputChange={onTurnInputChange}
               />
             )
@@ -203,23 +238,26 @@ export function UniversalWorkbenchApp({
                     <h2 className="text-lg font-semibold">{selectedWorkspace.name}</h2>
                     <p className="text-sm text-muted-foreground">Start a new session or select one from the sidebar.</p>
                   </div>
-                  <div className="flex w-full max-w-xl gap-2">
-                    <input
-                      className="flex-1 rounded-md border px-3 py-2 text-sm"
-                      placeholder="What do you want to work on?"
-                      value={newSessionInput}
-                      onChange={e => setNewSessionInput(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleCreateSession(selectedWorkspace.id)}
-                    />
-                    <button
-                      type="button"
-                      className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
-                      onClick={() => handleCreateSession(selectedWorkspace.id)}
-                      disabled={!newSessionInput.trim()}
-                    >
-                      Start
-                    </button>
-                  </div>
+                  <ManagedSessionComposer
+                    ariaLabel="New session input"
+                    attachmentLabels={{
+                      add: 'Add source materials',
+                      attached: 'Attached source materials',
+                      closePreview: name => `Close preview for ${name}`,
+                      materialReadError: 'Failed to read source material.',
+                      preview: (name: string) => `Preview ${name}`,
+                      remove: (name: string) => `Remove ${name}`,
+                    }}
+                    className="w-full max-w-xl"
+                    disabled={!engineReadiness.ready}
+                    disabledReason={engineReadiness.ready ? undefined : engineReadiness.detail}
+                    placeholder="What do you want to work on?"
+                    submitAriaLabel="Start"
+                    submitDisabled={!engineReadiness.ready}
+                    submitting={turnSubmitting}
+                    variant="large"
+                    onSubmitDraft={draft => handleCreateSession(selectedWorkspace.id, draft)}
+                  />
                 </div>
               )
             : workspaces.length === 0
@@ -281,7 +319,7 @@ export function UniversalWorkbenchApp({
         turnSubmitting={turnSubmitting}
         turns={sessionTurns}
         workspace={selectedWorkspace}
-        onSubmitTurn={onSubmitTurn}
+        onSubmitTurn={handleSubmitTurn}
         onTurnInputChange={onTurnInputChange}
       />
     </div>

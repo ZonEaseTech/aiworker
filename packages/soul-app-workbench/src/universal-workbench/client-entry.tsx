@@ -4,7 +4,10 @@ import type {
   LocalTurn,
   LocalWorkspace,
 } from '@zonease/aiworker-shared'
-import type { FormEvent } from 'react'
+import type {
+  UniversalWorkbenchCreateSessionDraft,
+  UniversalWorkbenchSubmitTurnDraft,
+} from './UniversalWorkbenchApp'
 
 import { createRoot } from 'react-dom/client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -100,16 +103,21 @@ function UniversalWorkbenchMountedClient() {
     void loadSessionDetail(routePrefix, workerId, selectedSessionId, setTurns, setEvents).catch(() => {})
   }, [routePrefix, selectedSessionId, workerId])
 
-  async function handleCreateSession(targetWorkspaceId: string, input: string) {
+  async function handleCreateSession(targetWorkspaceId: string, draft: UniversalWorkbenchCreateSessionDraft) {
     if (!workerId)
       return
-    const template = templates[0]
+    const template = templates.find(t => t.id === draft.selectedTemplateId) ?? templates[0]
     if (!template)
       return
+    const input = draft.input.trim()
     const result = await fetchJson<SessionTurnResult>(`${routePrefix}/api/sessions?workerId=${encodeURIComponent(workerId)}&workspaceId=${encodeURIComponent(targetWorkspaceId)}`, {
       body: JSON.stringify({
         capabilityTemplateId: template.id,
         input,
+        metadata: {
+          materials: draft.materials ?? [],
+          mentions: draft.mentions ?? [],
+        },
         title: input.slice(0, 80) || template.name || template.id,
       }),
       headers: { 'content-type': 'application/json' },
@@ -140,14 +148,20 @@ function UniversalWorkbenchMountedClient() {
     setWorkspaces(current => [...current, result.workspace])
   }
 
-  async function handleSubmitTurn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!workerId || !selectedSessionId || !turnInput.trim())
+  async function handleSubmitTurn(draft: UniversalWorkbenchSubmitTurnDraft) {
+    const input = draft.input.trim()
+    if (!workerId || !selectedSessionId || (!input && (draft.materials?.length ?? 0) === 0))
       return
     setTurnSubmitting(true)
     try {
       const result = await fetchJson<SessionTurnResult>(`${routePrefix}/api/sessions/${encodeURIComponent(selectedSessionId)}/turns?workerId=${encodeURIComponent(workerId)}`, {
-        body: JSON.stringify({ input: turnInput.trim() }),
+        body: JSON.stringify({
+          input,
+          metadata: {
+            materials: draft.materials ?? [],
+            mentions: draft.mentions ?? [],
+          },
+        }),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       })
