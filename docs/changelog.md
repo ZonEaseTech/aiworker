@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-23 [completed] Cleaned apps/web Host boundary
+
+Cleaned `apps/web` back to the active Host contract. Worker Web no longer keeps
+old Host-owned session composer, markdown preview, progress, or session turn
+client files. `WorkerStudio` was split into locator, mounted surface, mounted
+route preference, Host chrome, first-run, and workspace fallback modules so the
+main entry remains a shell composition layer.
+
+The completion audit now rejects retired Host Web session product surfaces while
+still allowing `workerId`, `workspaceId`, and `sessionId` as opaque locator or
+mount context. API/CLI/shared follow-up risks remain documented separately:
+global session turn API compatibility, stale `host-descriptor` schema support,
+and scaffold wording that could imply Host-owned workbench behavior.
+
 ## 2026-05-23 01:24 [completed] Restored interactive universal workbench
 
 Restored the Soul-owned universal workbench as the quick-start,
