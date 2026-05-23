@@ -701,7 +701,7 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
     idleTimeout: 255,
     port: opts.port ?? port,
   })
-  const exposureWarning = localApiExposureWarning(server.hostname, env.AIWORKER_LOCAL_TOKEN)
+  const exposureWarning = localApiExposureWarning(server.hostname ?? '127.0.0.1', env.AIWORKER_LOCAL_TOKEN)
   if (exposureWarning)
     console.warn(exposureWarning)
   consola.success(`[aiworker-daemon] listening on http://${server.hostname}:${server.port}`)
@@ -1084,7 +1084,7 @@ async function smokeAppCommand(inputPath: string): Promise<void> {
         capabilityTemplateId: template.id,
         inputHints: template.inputHints,
         outputKind: template.outputKind,
-        reviewRubric: template.reviewRubric,
+        reviewRubricRef: template.reviewRubricRef,
         soulAppId: manifest.id,
         soulName: manifest.soul.name,
       },

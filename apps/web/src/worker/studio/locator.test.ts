@@ -199,8 +199,8 @@ function template(overrides: Partial<LocalWorkspaceData['templates'][number]> = 
     inputHints: [],
     name: 'Profile Template',
     outputKind: 'profile',
-    prompt: 'Profile',
-    reviewRubric: [],
+    promptRef: './product/workflows/profile/prompt.md',
+    reviewRubricRef: null,
     soulId: 'aiworker-hr',
     ...overrides,
   }

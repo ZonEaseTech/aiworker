@@ -16,6 +16,6 @@ export interface CapabilityTemplate {
   soulId: string
   outputKind: string
   inputHints: readonly string[]
-  reviewRubric: readonly string[]
-  prompt?: string
+  promptRef: string
+  reviewRubricRef: string | null
 }
