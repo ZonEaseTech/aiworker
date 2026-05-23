@@ -15,8 +15,8 @@ const capabilityTemplateSchema = zod.object({
   inputHints: zod.array(zod.string().min(1)).readonly(),
   name: zod.string().min(1),
   outputKind: zod.string().min(1),
-  prompt: zod.string().min(1),
-  reviewRubric: zod.array(zod.string().min(1)).readonly(),
+  promptRef: zod.string().min(1),
+  reviewRubricRef: zod.string().min(1).nullable(),
   soulId: zod.string().min(1),
 })
 type CapabilityTemplate = zod.infer<typeof capabilityTemplateSchema>
@@ -115,19 +115,11 @@ export function projectSoulAppCapabilityTemplate(manifest: SoulAppManifest, capa
     inputHints: [
       `Workspace types: ${capability.workspaceTypes.join(', ')}`,
       `Artifact types: ${capability.artifactTypes?.join(', ') ?? 'none'}`,
-      `Prompt ref: ${capability.promptRef}`,
     ],
     name: capability.name,
     outputKind: capability.outputKind,
-    prompt: [
-      `Use the ${manifest.name} Soul App capability ${capability.name}.`,
-      `Use prompt asset ${capability.promptRef}.`,
-      `Produce a ${capability.outputKind} business artifact for the selected ${manifest.soul.name} workspace.`,
-      'Keep Host runtime, connector, artifact, review, and memory ownership intact.',
-    ].join(' '),
-    reviewRubric: capability.reviewRubricRef
-      ? [`Acceptance check ref: ${capability.reviewRubricRef}`, 'Evidence, missing facts, risks, and human-owned acceptance notes remain explicit.']
-      : ['Evidence, missing facts, risks, and human-owned acceptance notes remain explicit.'],
+    promptRef: capability.promptRef,
+    reviewRubricRef: capability.reviewRubricRef ?? null,
     soulId: manifest.id,
   }
 }
