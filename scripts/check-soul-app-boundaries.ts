@@ -36,6 +36,24 @@ const hostPrivateRoots = [
 ]
 const rawWebStorageMessage = 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.'
 const forbiddenHostWebImports = ['@zonease/aiworker-soul-app-workbench']
+const retiredHostWebSurfacePatterns: Array<{ message: string, pattern: RegExp }> = [
+  {
+    message: 'Host Web must not keep WorkspaceSessionComposer; session product UI belongs in Soul-owned mounted surfaces.',
+    pattern: /\bWorkspaceSessionComposer\b/,
+  },
+  {
+    message: 'Host Web must not keep Host-owned session turn clients; turns are started by the engine bridge or Soul-owned mounted UI.',
+    pattern: /\b(?:createSessionTurn|continueSessionTurn)(?:Stream)?\b/,
+  },
+  {
+    message: 'Host Web must not keep Host-owned MarkdownPreview session surfaces.',
+    pattern: /\bMarkdownPreview\b/,
+  },
+  {
+    message: 'Host Web must not keep Host-owned session progress surfaces.',
+    pattern: /\bbuildSessionProgress\b/,
+  },
+]
 const soulApps = discoverSoulApps()
 const issues: BoundaryIssue[] = [
   ...scanSoulAppImports(soulApps),
@@ -43,6 +61,7 @@ const issues: BoundaryIssue[] = [
   ...scanSoulAppWebStorageUsage(soulApps),
   ...scanHostEmbeddedSoulRenderers(),
   ...scanHostWebPackageImports(),
+  ...scanHostWebRetiredProductSurfaces(),
 ]
 
 if (issues.length > 0) {
@@ -183,6 +202,34 @@ function scanHostWebPackageImports(): BoundaryIssue[] {
           'Host Web must mount Soul workbench routes through manifest-declared micro-app surfaces instead of importing Soul workbench packages.',
         ))
       }
+    }
+  }
+  return issues
+}
+
+function scanHostWebRetiredProductSurfaces(): BoundaryIssue[] {
+  if (!completionAudit)
+    return []
+  const webRoot = path.join(repoRoot, 'apps/web')
+  if (!existsSync(webRoot))
+    return []
+  const issues: BoundaryIssue[] = []
+  for (const file of listSourceFiles(webRoot)) {
+    const relative = path.relative(repoRoot, file).replaceAll('\\', '/')
+    if (isTestSourceFile(file))
+      continue
+    if (relative.includes('/features/session/')) {
+      issues.push(issue(file, 'features/session', 'Host Web must not keep retired Host-owned session product feature files.'))
+      continue
+    }
+    if (relative.endsWith('/worker/session-progress.ts')) {
+      issues.push(issue(file, 'session-progress', 'Host Web must not keep retired Host-owned session progress files.'))
+      continue
+    }
+    const content = readFileSync(file, 'utf8')
+    for (const retired of retiredHostWebSurfacePatterns) {
+      if (retired.pattern.test(content))
+        issues.push(issue(file, retired.pattern.source, retired.message))
     }
   }
   return issues
