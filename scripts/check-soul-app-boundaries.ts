@@ -104,6 +104,8 @@ function scanSoulAppImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
   const issues: BoundaryIssue[] = []
   for (const app of apps) {
     for (const file of listSourceFiles(app.codeRoot)) {
+      if (isTestSourceFile(file))
+        continue
       for (const importPath of importSpecifiers(readFileSync(file, 'utf8'))) {
         const siblingPackage = packageNames.get(packageRoot(importPath))
         if (siblingPackage && siblingPackage.name !== app.name) {

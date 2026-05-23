@@ -112,4 +112,27 @@ describe('check-soul-app-boundaries', () => {
       rmSync(tempRoot, { force: true, recursive: true })
     }
   })
+
+  test('exempts Soul App test files from the import boundary', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
+    try {
+      const appDir = join(tempRoot, 'apps/demo-soul')
+      mkdirSync(join(appDir, 'host-adapter'), { recursive: true })
+      writeFileSync(join(appDir, 'soul-app.manifest.json'), JSON.stringify({ id: 'demo-soul' }))
+      writeFileSync(
+        join(appDir, 'host-adapter/api.test.ts'),
+        'import { thing } from "@zonease/aiworker-core"\nexport const y = thing\n',
+      )
+
+      const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
+        cwd: tempRoot,
+        encoding: 'utf8',
+      })
+
+      expect(result.status).toBe(0)
+    }
+    finally {
+      rmSync(tempRoot, { force: true, recursive: true })
+    }
+  })
 })
