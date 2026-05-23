@@ -16,7 +16,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { bootstrapWorkerApp } from './worker'
+import { bootstrapWorkerApp, mountedServiceSpawnEnv } from './worker'
 
 const HR_APP_ID = 'aiworker-hr'
 const QA_APP_ID = 'aiworker-qa'
@@ -1522,3 +1522,13 @@ async function waitForFile(filePath: string): Promise<void> {
   }
   throw new Error(`Timed out waiting for file: ${filePath}`)
 }
+
+describe('mountedServiceSpawnEnv', () => {
+  it('mounted service env drops Host-internal namespaces and injects mount token', () => {
+    process.env.AIWORKER_LOCAL_TOKEN = 'secret'
+    const env = mountedServiceSpawnEnv('tok-123')
+    expect(env.AIWORKER_LOCAL_TOKEN).toBeUndefined()
+    expect(env.AIWORKER_MOUNT_TOKEN).toBe('tok-123')
+    expect(env.PORT).toBe('0')
+  })
+})

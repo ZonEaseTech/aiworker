@@ -18,6 +18,7 @@ import {
   createLocalBearerAuthProvider,
   invokeNativeEngine,
   listBaselineAssets,
+  sanitizeEngineEnv,
   workerEnv,
 } from '@zonease/aiworker-core'
 import {
@@ -1008,6 +1009,10 @@ async function resolveMountedSoulAppService(state: LocalDaemonState, app: Hosted
   }
 }
 
+export function mountedServiceSpawnEnv(mountToken: string): NodeJS.ProcessEnv {
+  return { ...sanitizeEngineEnv(), AIWORKER_MOUNT_TOKEN: mountToken, PORT: '0' }
+}
+
 async function startMountedSoulAppService(state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | null> {
   const service = app.manifest.api.localService
   if (!service)
@@ -1027,7 +1032,7 @@ async function startMountedSoulAppService(state: LocalDaemonState, app: HostedSo
   const mountToken = randomUUID()
   const child = spawn(service.command[0]!, service.command.slice(1), {
     cwd,
-    env: { ...process.env, AIWORKER_MOUNT_TOKEN: mountToken, PORT: '0' },
+    env: mountedServiceSpawnEnv(mountToken),
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   const baseUrl = await waitForMountedSoulAppUrl(child, service.healthPath)
