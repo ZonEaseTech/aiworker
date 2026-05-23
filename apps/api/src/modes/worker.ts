@@ -655,7 +655,7 @@ function containsLiteralSecret(content: string): boolean {
 }
 
 function isSecretReference(value: string): boolean {
-  return value.startsWith('$') || value.startsWith('env:') || value.startsWith('secretRef:')
+  return value.startsWith('$') || value.startsWith('env:')
 }
 
 function notFound(c: Context, resource: string) {

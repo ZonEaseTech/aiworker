@@ -314,7 +314,7 @@ function hasLiteralSecretAssignment(content: string): boolean {
 }
 
 function isSecretReferenceValue(value: string): boolean {
-  return value.startsWith('$') || value.startsWith('env:') || value.startsWith('secretRef:')
+  return value.startsWith('$') || value.startsWith('env:')
 }
 
 function receiptEntry(
