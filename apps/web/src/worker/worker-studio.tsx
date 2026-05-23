@@ -9,11 +9,7 @@ import type { WorkerStudioLayoutVariant } from './components/studio-shell'
 
 import {
   Add01Icon,
-  ArrowRight01Icon,
   File02Icon,
-  PanelBottom,
-  PanelLeftIcon,
-  PanelRightIcon,
   RefreshIcon,
   Search01Icon,
   Settings02Icon,
@@ -22,32 +18,15 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Avatar, AvatarFallback } from '@zonease/aiworker-ui/components/avatar'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@zonease/aiworker-ui/components/breadcrumb'
 import { Button } from '@zonease/aiworker-ui/components/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@zonease/aiworker-ui/components/card'
+import { CardContent } from '@zonease/aiworker-ui/components/card'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@zonease/aiworker-ui/components/input-group'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
-import {
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from '@zonease/aiworker-ui/components/sidebar'
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { navigateWorkerRoute, useWorkerRoute } from '../app/router/worker-route'
 import {
   displaySoul,
   displayTemplate,
-  formatStatus,
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
@@ -63,6 +42,8 @@ import { SettingsDialog } from '../features/settings'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
 import { StudioChromeHeader, StudioEmptyState, StudioMainFrame, StudioTitleBlock, WorkerStudioLayout } from './components/studio-shell'
 import { mountedChildDefaultPath } from './mounted-child-route'
+import { FirstRunSoulAppHome } from './studio/first-run-soul-app-home'
+import { HostSidebarActions, HostSidebarFooter, HostTopBar } from './studio/host-chrome'
 import { MountedSoulAppRouteSurface } from './studio/mounted-surface'
 import { WorkerConfigurationDialog } from './worker-configuration-dialog'
 import { WorkerSwitcher } from './worker-workbench-tree'
@@ -72,8 +53,6 @@ interface StudioState {
   error: string | null
   loading: boolean
 }
-
-type WorkerMessages = ReturnType<typeof messagesFor>
 
 const defaultNewWorkerSoulId = 'aiworker-hr'
 const activeMountedRoutePreferenceKey = 'aiworker:worker-studio:active-mounted-route'
@@ -753,229 +732,6 @@ export function WorkerStudio() {
       />
     </>
   )
-}
-
-function HostTopBar({
-  locatorSegments,
-  onToggleSidebar,
-  sidebarCollapsed,
-}: {
-  locatorSegments: string[]
-  onToggleSidebar: () => void
-  sidebarCollapsed: boolean
-}) {
-  const sidebarLabel = sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
-  const locatorItems = locatorSegments.map((segment, index) => ({
-    key: locatorSegments.slice(0, index + 1).join('/'),
-    segment,
-    showSeparator: index > 0,
-  }))
-
-  return (
-    <ItemActions asChild className="h-10 min-w-0 justify-between gap-3 bg-sidebar px-2.5 text-sidebar-foreground">
-      <header data-slot="host-top-bar" data-host-slot="host-top-bar" aria-label="Host actions">
-        <ItemActions className="min-w-0 gap-2">
-          <SidebarMenuButton
-            aria-label={sidebarLabel}
-            aria-pressed={!sidebarCollapsed}
-            className="size-7 w-7 justify-center p-0"
-            isActive={!sidebarCollapsed}
-            size="sm"
-            title={sidebarLabel}
-            type="button"
-            onClick={onToggleSidebar}
-          >
-            <HugeiconsIcon icon={PanelLeftIcon} strokeWidth={2} aria-hidden="true" />
-          </SidebarMenuButton>
-          <Breadcrumb className="min-w-0 overflow-hidden" aria-label="Current Soul worker">
-            <BreadcrumbList className="min-w-0 flex-nowrap overflow-hidden">
-              {locatorItems.map(item => (
-                <Fragment key={item.key}>
-                  {item.showSeparator ? <BreadcrumbSeparator /> : null}
-                  <BreadcrumbItem className="min-w-0">
-                    <BreadcrumbPage className="truncate">
-                      {item.segment}
-                    </BreadcrumbPage>
-                  </BreadcrumbItem>
-                </Fragment>
-              ))}
-            </BreadcrumbList>
-          </Breadcrumb>
-        </ItemActions>
-        <ItemActions className="min-w-0 gap-1" aria-label="Reserved Host panels">
-          <SidebarMenuButton
-            aria-label="Open workspace terminal"
-            className="size-7 w-7 justify-center p-0"
-            size="sm"
-            title="Workspace terminal"
-            type="button"
-            disabled
-          >
-            <HugeiconsIcon icon={PanelBottom} strokeWidth={2} aria-hidden="true" />
-          </SidebarMenuButton>
-          <SidebarMenuButton
-            aria-label="Open right panel"
-            className="size-7 w-7 justify-center p-0"
-            size="sm"
-            title="Right panel"
-            type="button"
-            disabled
-          >
-            <HugeiconsIcon icon={PanelRightIcon} strokeWidth={2} aria-hidden="true" />
-          </SidebarMenuButton>
-        </ItemActions>
-      </header>
-    </ItemActions>
-  )
-}
-
-function HostSidebarActions({
-  onCreateWorker,
-  onOpenSoulApps,
-}: {
-  onCreateWorker: () => void
-  onOpenSoulApps: () => void
-}) {
-  return (
-    <SidebarGroup className="min-w-0 shrink-0 px-0 py-0" aria-label="Host navigation">
-      <SidebarGroupContent>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton type="button" onClick={onCreateWorker}>
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
-              New Soul worker
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton type="button" disabled>
-              <HugeiconsIcon icon={Search01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
-              Search
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton type="button" onClick={onOpenSoulApps}>
-              <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
-              Soul Apps
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  )
-}
-
-function HostSidebarFooter({
-  onOpenSettings,
-  runtimeVersion,
-}: {
-  onOpenSettings: () => void
-  runtimeVersion: string
-}) {
-  const version = runtimeVersion.startsWith('v') ? runtimeVersion : `v${runtimeVersion}`
-
-  return (
-    <SidebarFooter data-host-slot="host-sidebar-footer" className="mt-auto shrink-0 p-0 pt-3">
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton type="button" className="justify-between" onClick={onOpenSettings}>
-            <ItemContent asChild className="min-w-0 flex-none flex-row items-center gap-2">
-              <span>
-                <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
-                <ItemTitle asChild>
-                  <span>Platform settings</span>
-                </ItemTitle>
-              </span>
-            </ItemContent>
-            <ItemDescription asChild className="max-w-full truncate">
-              <span>{version}</span>
-            </ItemDescription>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
-    </SidebarFooter>
-  )
-}
-
-function FirstRunSoulAppHome({
-  apps,
-  copy,
-  locale,
-  onCreateWorker,
-  onStartApp,
-  souls,
-}: {
-  apps: HostedSoulApp[]
-  copy: WorkerMessages
-  locale: ReturnType<typeof normalizeLocale>
-  onCreateWorker: () => void
-  onStartApp: (app: HostedSoulApp) => void
-  souls: LocalWorkspaceData['souls']
-}) {
-  if (apps.length === 0) {
-    return (
-      <StudioEmptyState
-        icon={<HugeiconsIcon icon={File02Icon} strokeWidth={2} aria-hidden="true" />}
-        title={copy.workspace.noSoulApps}
-        detail={copy.workspace.noSoulAppsDetail}
-        action={(
-          <Button type="button" variant="ghost" size="lg" onClick={onCreateWorker}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
-            {copy.workspace.createWorker}
-          </Button>
-        )}
-      />
-    )
-  }
-
-  return (
-    <ItemGroup className="w-full max-w-6xl gap-4" aria-label={copy.workspace.firstRunTitle}>
-      <ItemDescription className="line-clamp-none max-w-2xl">{copy.workspace.firstRunDetail}</ItemDescription>
-      <ItemGroup className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {apps.map((app) => {
-          const soul = soulForApp(app, souls)
-          const soulCopy = soul ? displaySoul(soul, locale) : null
-          const domain = soulCopy?.domain ?? app.projectedSoul?.domain ?? app.appId
-          const description = soulCopy?.description ?? app.manifest.description
-          return (
-            <Card
-              key={app.appId}
-              size="sm"
-              className="min-h-44"
-            >
-              <CardHeader>
-                <ItemContent className="min-w-0">
-                  <CardTitle>{app.manifest.name}</CardTitle>
-                  <CardDescription>{domain}</CardDescription>
-                </ItemContent>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <CardDescription className="line-clamp-2">{description}</CardDescription>
-              </CardContent>
-              <CardFooter className="justify-between gap-2">
-                <Badge variant="outline">{`${formatStatus(app.status, locale)} · ${app.version}`}</Badge>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label={copy.workspace.startSoulApp(app.manifest.name)}
-                  onClick={() => onStartApp(app)}
-                >
-                  {copy.workspace.startSoulApp(app.manifest.name)}
-                  <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-end" />
-                </Button>
-              </CardFooter>
-            </Card>
-          )
-        })}
-      </ItemGroup>
-    </ItemGroup>
-  )
-}
-
-function soulForApp(app: HostedSoulApp, souls: LocalWorkspaceData['souls']) {
-  return souls.find(soul => soul.id === app.appId)
-    ?? souls.find(soul => soul.id === app.projectedSoul?.id)
-    ?? null
 }
 
 function readActiveMountedRoutePreferences(): Record<string, string> {
