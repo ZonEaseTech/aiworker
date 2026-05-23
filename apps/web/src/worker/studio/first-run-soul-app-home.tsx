@@ -1,4 +1,5 @@
 import type { HostedSoulApp } from '@zonease/aiworker-shared'
+import type { messagesFor, normalizeLocale } from '../../features/i18n'
 import type { LocalWorkspaceData } from '../../features/local-workspace/api/types'
 
 import {
@@ -21,8 +22,6 @@ import { ItemContent, ItemDescription, ItemGroup } from '@zonease/aiworker-ui/co
 import {
   displaySoul,
   formatStatus,
-  type messagesFor,
-  type normalizeLocale,
 } from '../../features/i18n'
 import { StudioEmptyState } from '../components/studio-shell'
 
