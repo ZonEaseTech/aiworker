@@ -51,6 +51,7 @@ export interface ManagedSessionComposerProps
   extends Omit<SessionComposerProps, ManagedSessionComposerOwnedProps> {
   attachmentLabels: ManagedSessionComposerAttachmentLabels
   defaultValue?: string
+  dedupeAttachments?: boolean
   error?: ReactNode
   onSubmitDraft: (draft: ManagedSessionComposerDraft, event: FormEvent<HTMLFormElement>) => Promise<void> | void
   onValueChange?: (value: string) => void
@@ -65,6 +66,7 @@ export interface ManagedSessionComposerAttachment {
 
 export interface UseSessionComposerDraftOptions {
   defaultValue?: string
+  dedupeAttachments?: boolean
   onValueChange?: (value: string) => void
   value?: string
 }
@@ -83,6 +85,7 @@ const TRAILING_MENTION_PATTERN = /(^|\s)\$([\w-]*)$/
 
 export function useSessionComposerDraft({
   defaultValue = '',
+  dedupeAttachments = true,
   onValueChange,
   value,
 }: UseSessionComposerDraftOptions = {}): UseSessionComposerDraftResult {
@@ -111,9 +114,10 @@ export function useSessionComposerDraft({
     const existingKeys = new Set(nextAttachments.map(attachment => attachment.id))
 
     for (const file of files) {
-      const id = getManagedAttachmentKey(file)
-      if (existingKeys.has(id))
+      const attachmentKey = getManagedAttachmentKey(file)
+      if (dedupeAttachments && existingKeys.has(attachmentKey))
         continue
+      const id = dedupeAttachments ? attachmentKey : getUniqueManagedAttachmentKey(attachmentKey, existingKeys)
       existingKeys.add(id)
       nextAttachments.push({
         file,
@@ -123,7 +127,7 @@ export function useSessionComposerDraft({
     }
 
     setAttachments(nextAttachments)
-  }, [setAttachments])
+  }, [dedupeAttachments, setAttachments])
 
   const removeAttachment = useCallback((id: string) => {
     const currentAttachments = attachmentsRef.current
@@ -159,6 +163,7 @@ export function ManagedSessionComposer({
   ariaLabel,
   attachmentLabels,
   defaultValue,
+  dedupeAttachments = true,
   disabled = false,
   error,
   mentionOptions = [],
@@ -175,7 +180,7 @@ export function ManagedSessionComposer({
   const localSubmittingRef = useRef(false)
   const [localSubmitting, setLocalSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ReactNode>(null)
-  const draft = useSessionComposerDraft({ defaultValue, onValueChange, value })
+  const draft = useSessionComposerDraft({ dedupeAttachments, defaultValue, onValueChange, value })
   const composerSubmitting = submitting || localSubmitting
   const attachmentInputDisabled = disabled || composerSubmitting
   const resolvedMentionQuery = mentionQuery ?? deriveSessionMentionQuery(draft.text)
@@ -356,6 +361,19 @@ function resolveSessionMentions(
 
 function getManagedAttachmentKey(file: File): string {
   return `${file.name}:${file.size}:${file.type}`
+}
+
+function getUniqueManagedAttachmentKey(baseKey: string, existingKeys: Set<string>): string {
+  if (!existingKeys.has(baseKey))
+    return baseKey
+
+  let index = 2
+  let nextKey = `${baseKey}:${index}`
+  while (existingKeys.has(nextKey)) {
+    index += 1
+    nextKey = `${baseKey}:${index}`
+  }
+  return nextKey
 }
 
 function createManagedPreviewUrl(file: File): string | undefined {

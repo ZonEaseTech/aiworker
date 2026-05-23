@@ -1,3 +1,4 @@
+import type { SessionComposerMaterial } from '@zonease/aiworker-ui/components/session-composer'
 import type { AttachedMaterialMetadata, ComposerMaterial, ComposerMaterialEncoding } from './types'
 
 const UPLOAD_PREFIX = 'evidence/uploads'
@@ -27,6 +28,17 @@ export function sanitizeCandidateMaterialPaths(materials: readonly ComposerMater
       path,
     }
   })
+}
+
+export function candidateMaterialsFromSessionComposerMaterials(materials: readonly SessionComposerMaterial[]): ComposerMaterial[] {
+  return sanitizeCandidateMaterialPaths(materials.map(material => ({
+    content: material.content,
+    encoding: material.encoding,
+    fileName: material.name,
+    mimeType: material.mimeType,
+    path: material.name,
+    size: material.size,
+  })))
 }
 
 export function buildAttachedMaterialsMetadata(materials: readonly ComposerMaterial[]): {

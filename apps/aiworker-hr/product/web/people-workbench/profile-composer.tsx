@@ -114,6 +114,7 @@ export function HrProfileComposer({
           remove: labels.removeCandidateMaterial,
         }}
         className={className ?? 'min-h-0'}
+        dedupeAttachments={false}
         description={labels.composerSafetyDetail}
         disabled={disabled || !profileName}
         disabledReason={profileName ? undefined : labels.selectProfileFirst}

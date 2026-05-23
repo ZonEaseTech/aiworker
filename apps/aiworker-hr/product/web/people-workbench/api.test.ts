@@ -9,6 +9,7 @@ import {
 import {
   buildAttachedMaterialsMetadata,
   buildReadableSessionContext,
+  candidateMaterialsFromSessionComposerMaterials,
   materialFromFile,
   sanitizeCandidateMaterialPaths,
 } from './attachments'
@@ -119,6 +120,30 @@ describe('HR people workbench attachments', () => {
       profileName: 'Ada Chen',
       userInput: '请补齐候选人背景和证据缺口。',
     })).toContain('- evidence/uploads/ada-resume.txt (Ada Resume.txt, text/plain, utf8, 5 bytes)')
+  })
+
+  it('keeps duplicate managed composer materials and lets HR own upload path dedupe', () => {
+    const materials = candidateMaterialsFromSessionComposerMaterials([
+      {
+        content: 'first',
+        encoding: 'utf8',
+        mimeType: 'text/plain',
+        name: 'same.txt',
+        size: 5,
+      },
+      {
+        content: 'bravo',
+        encoding: 'utf8',
+        mimeType: 'text/plain',
+        name: 'same.txt',
+        size: 5,
+      },
+    ])
+
+    expect(materials.map(material => [material.fileName, material.path, material.content])).toEqual([
+      ['same.txt', 'evidence/uploads/same.txt', 'first'],
+      ['same.txt', 'evidence/uploads/same-2.txt', 'bravo'],
+    ])
   })
 })
 

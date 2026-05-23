@@ -514,6 +514,35 @@ describe('sessionComposer', () => {
     await waitFor(() => expect(screen.getAllByText('same.txt')).toHaveLength(1))
   })
 
+  it('preserves duplicate managed attachments when dedupe is disabled', async () => {
+    const firstFile = new File(['same'], 'same.txt', { type: 'text/plain' })
+    const secondFile = new File(['same'], 'same.txt', { type: 'text/plain' })
+
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        dedupeAttachments={false}
+        defaultValue="Draft request"
+        onSubmitDraft={vi.fn()}
+        submitAriaLabel="Start"
+      />,
+    )
+
+    fireEvent.change(screen.getByTestId('managed-session-file-input'), {
+      target: { files: [firstFile, secondFile] },
+    })
+
+    await waitFor(() => expect(screen.getAllByText('same.txt')).toHaveLength(2))
+  })
+
   it('releases managed image preview URLs on removal and unmount', async () => {
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview')
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})

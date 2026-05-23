@@ -24,7 +24,7 @@ import { cn } from '@zonease/aiworker-ui/lib/utils'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { createHrPeopleWorkbenchApi, createProfileUpdateDraftSessionPayload } from './api'
-import { sanitizeCandidateMaterialPaths } from './attachments'
+import { candidateMaterialsFromSessionComposerMaterials } from './attachments'
 import { ProfileComposerColumn } from './columns/profile-composer-column'
 import { ProfileListColumn } from './columns/profile-list-column'
 import { ProfileReadingRoomColumn } from './columns/profile-reading-room-column'
@@ -839,14 +839,7 @@ async function uploadCandidateMaterials(input: {
   if (input.attachments.length === 0)
     return []
 
-  const materials = sanitizeCandidateMaterialPaths(input.materials.map(material => ({
-    content: material.content,
-    encoding: material.encoding,
-    fileName: material.name,
-    mimeType: material.mimeType,
-    path: material.name,
-    size: material.size,
-  })))
+  const materials = candidateMaterialsFromSessionComposerMaterials(input.materials)
   for (const material of materials) {
     await input.api.writeCandidateMaterial(input.workspaceId, material)
   }
