@@ -60,10 +60,10 @@ export function updateWorkerMountedRoutePreference(input: {
 export function resolveActiveMountedRoute<T extends { id: string }>(input: {
   preferences: Record<string, string>
   routes: readonly T[]
-  workerId: string
+  workerId?: string | null
 }): T | null {
   const fallbackRoute = input.routes[0] ?? null
-  const activeRouteId = input.preferences[input.workerId]
+  const activeRouteId = input.workerId ? input.preferences[input.workerId] : null
 
   if (!activeRouteId)
     return fallbackRoute
