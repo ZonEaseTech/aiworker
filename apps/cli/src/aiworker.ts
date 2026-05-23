@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 import {
   createHostRuntime,
   getWorkerEnv,
+  sanitizeEngineEnv,
 } from '@zonease/aiworker-core'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import {
@@ -1189,9 +1190,13 @@ async function runMountedServiceSmoke(manifest: SoulAppManifest, rootDir: string
   if (!manifest.modes.hostMounted.supported || !service?.command?.length || !rootDir)
     return { httpStatus: null, status: 'skip', stop: () => {}, url: null }
 
+  const resolvedCwd = path.resolve(rootDir, service.cwd ?? '.')
+  const normalizedRoot = path.resolve(rootDir)
+  if (resolvedCwd !== normalizedRoot && !resolvedCwd.startsWith(`${normalizedRoot}${path.sep}`))
+    throw new Error(`Mounted service cwd must stay inside the app root: ${service.cwd}`)
   const child = spawn(service.command[0]!, service.command.slice(1), {
-    cwd: path.resolve(rootDir, service.cwd ?? '.'),
-    env: { ...process.env, PORT: '0' },
+    cwd: resolvedCwd,
+    env: { ...sanitizeEngineEnv(), PORT: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   }) as ChildProcessByStdio<null, Readable, Readable>
   let stopped = false
