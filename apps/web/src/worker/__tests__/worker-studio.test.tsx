@@ -1,5 +1,6 @@
 import type { LocalSessionEvent, LocalSettingsConfig, LocalTurn, LocalWorkerOverlayAsset } from '@zonease/aiworker-shared'
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -444,6 +445,25 @@ function universalRoute(label = 'Universal Workbench') {
     path: '/workbench/universal',
     scope: 'app' as const,
   }
+}
+
+function listWebSourceFiles(relativeDir: string): string[] {
+  const root = path.join(process.cwd(), relativeDir)
+  if (!existsSync(root))
+    return []
+  const files: string[] = []
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.name === 'dist' || entry.name === 'node_modules')
+      continue
+    const fullPath = path.join(root, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...listWebSourceFiles(path.join(relativeDir, entry.name).replaceAll('\\', '/')))
+      continue
+    }
+    if (/\.[cm]?[jt]sx?$/.test(entry.name) && !/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(entry.name))
+      files.push(fullPath)
+  }
+  return files.sort()
 }
 
 function resetSettings() {
@@ -1001,6 +1021,26 @@ describe('worker studio', () => {
     expect(source).not.toContain('UniversalWorkbenchApp')
     expect(source).not.toContain("activeMountedRoute.id === 'universal-workbench'")
     expect(source).not.toContain('activeMountedRoute?.id !== \'universal-workbench\'')
+  })
+
+  it('keeps apps/web free of retired Host-owned session product surfaces', () => {
+    const files = listWebSourceFiles('src')
+    const sources = files.map(file => ({
+      file: path.relative(process.cwd(), file).replaceAll('\\', '/'),
+      source: readFileSync(file, 'utf8'),
+    }))
+
+    expect(sources.some(item => item.file.includes('/features/session/'))).toBe(false)
+    expect(sources.some(item => item.file.endsWith('/worker/session-progress.ts'))).toBe(false)
+    expect(sources.some(item => item.file.endsWith('/features/local-workspace/api/sessions.ts'))).toBe(false)
+    expect(sources.some(item => item.file.endsWith('/features/local-workspace/components/session-composer.tsx'))).toBe(false)
+    for (const item of sources) {
+      expect(item.source).not.toContain('WorkspaceSessionComposer')
+      expect(item.source).not.toContain('createSessionTurn')
+      expect(item.source).not.toContain('continueSessionTurn')
+      expect(item.source).not.toContain('MarkdownPreview')
+      expect(item.source).not.toContain('buildSessionProgress')
+    }
   })
 
   it('opens Worker configuration from the worker row without opening Host settings', async () => {
