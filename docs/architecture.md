@@ -267,12 +267,14 @@ apps/
   web/            Host Web Shell and mounted workbench
   aiworker-hr/    official HR Soul App
   aiworker-qa/    official QA Soul App
+  aiworker-custom/  official general-purpose Soul App
 
 packages/
   core/              local runtime, Host services, app registry and engine adapters
   shared/            shared schemas and Host/Soul App protocol types
   soul-app-sdk/      public SDK for Soul App authors
   soul-app-runtime/  standalone and mounted runtime harness
+  soul-app-workbench/ Soul-owned shared workbench UI surfaces
   ui/                shadcn-managed shared UI primitives and theme variables
   storage-sqlite/    worker.db schema, migrations and repositories
   fs-layout/         AIWORKER_HOME, worker and workspace path helpers
