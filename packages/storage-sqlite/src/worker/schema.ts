@@ -259,13 +259,3 @@ export const workerConfig = sqliteTable('worker_config', {
   updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   updatedBy: text('updated_by', { enum: ['bootstrap', 'api', 'cli'] }),
 })
-
-export const workerSecrets = sqliteTable('worker_secrets', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  key: text('key').notNull().unique(),
-  valueEnc: text('value_enc').notNull(),
-  nonce: text('nonce').notNull(),
-  authTag: text('auth_tag').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(nowIso),
-  updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
-})

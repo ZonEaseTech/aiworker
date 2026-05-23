@@ -93,7 +93,6 @@ describe('greenfield local worker session schema', () => {
       'worker_engine_invocations',
       'worker_identity',
       'worker_overlay_assets',
-      'worker_secrets',
       'workers',
       'workspaces',
     ])
