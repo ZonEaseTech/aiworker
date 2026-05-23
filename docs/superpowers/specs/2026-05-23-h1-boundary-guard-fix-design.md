@@ -15,8 +15,13 @@
 - `scanSoulAppImports`（`:105`）、`scanSoulAppWebStorageUsage`（`:169`）在空列表上循环，对真实代码是 no-op；
 - IMPORT-001 与 raw-web-storage 控制全程失效。
 
-唯一执行点是 `package.json:18` 的 `lint`；`aiworker app validate` 并不跑边界检查（grep 为空），
-故架构合同 IMPORT-001 的"Enforced by ... `aiworker app validate`"措辞不实。
+CI 自动执行点是 `package.json:18` 的 `lint`，而它调用的这个守卫已空转。
+
+**更正（复核）**：初稿曾断言"`aiworker app validate` 不跑边界检查"，系误判（grep 用错关键词）。
+`aiworker app validate` 有独立检查器 `scanPrivateImports`（`apps/cli/src/aiworker.ts:2100`），
+经 `appSourceScanDirs` 扫描 `['host-adapter', 'product', 'src']`，确实在执行 IMPORT-001——
+但其白名单**漏了 `runtime/`**（同类漂移，留作后续小跟进）。故 IMPORT-001 的 Enforced-by 应同时
+保留守卫脚本与 `aiworker app validate`，本设计相应调整文档措辞而非删除 validate。
 
 现有 `check-soul-app-boundaries.test.ts` 是共谋：两条用例分别覆盖 completion-audit 与 Host Web
 import workbench（后者临时造 `apps/web`，触发 `scanHostWebPackageImports`，**不依赖 Soul App 发现**），
@@ -54,8 +59,9 @@ import workbench（后者临时造 `apps/web`，触发 `scanHostWebPackageImport
 
 ### 文档措辞 `docs/architecture.md`
 
-IMPORT-001 行的"Enforced by"改为只列实际执行点：`scripts/check-soul-app-boundaries.ts`
-（经 `lint`）+ 其回归测试；移除不实的 `aiworker app validate`。不扩范围接入 validate。
+IMPORT-001 行的"Enforced by"改为准确列出两个真实执行点：`scripts/check-soul-app-boundaries.ts`
+（经 `lint`）+ 其回归测试，以及 `aiworker app validate`（`scanPrivateImports`）。不在本次接入或
+收敛 validate 白名单（runtime 漏扫留作后续）。
 
 ## H6 顺手清理
 
@@ -73,5 +79,5 @@ IMPORT-001 行的"Enforced by"改为只列实际执行点：`scripts/check-soul-
 
 ## 非目标
 
-- 不接入 `aiworker app validate`（仅改措辞）。
+- 不收敛 `aiworker app validate` 的 `scanPrivateImports` 白名单（`runtime/` 漏扫留作后续小跟进）。
 - 不动 H2/H3/H4——它们各自独立 spec。H1 修好后守卫会自动开始报出 H2 的违规点，由 H2 整改承接。

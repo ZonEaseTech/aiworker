@@ -73,7 +73,7 @@ export function discoverSoulApps(): SoulAppWorkspace[] {
     .filter(app => existsSync(path.join(app.dir, 'soul-app.manifest.json')))
 }
 
-export function countSoulManifests(): number {
+function countSoulManifests(): number {
   if (!existsSync(appRoot))
     return 0
   return readdirSync(appRoot, { withFileTypes: true })
