@@ -71,6 +71,21 @@ export function discoverSoulApps(): SoulAppWorkspace[] {
     .filter(app => existsSync(path.join(app.dir, 'soul-app.manifest.json')))
 }
 
+export function countSoulManifests(): number {
+  if (!existsSync(appRoot))
+    return 0
+  return readdirSync(appRoot, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .filter(entry => existsSync(path.join(appRoot, entry.name, 'soul-app.manifest.json')))
+    .length
+}
+
+export function discoveryTripwireError(manifestCount: number, discoveredCount: number): string | null {
+  if (manifestCount > 0 && discoveredCount === 0)
+    return `Boundary guard found ${manifestCount} Soul App manifest(s) but discovered 0 scannable apps; the guard would scan nothing.`
+  return null
+}
+
 function readPackageName(dir: string): string | null {
   const packagePath = path.join(dir, 'package.json')
   if (!existsSync(packagePath))
@@ -360,6 +375,11 @@ function isInside(filePath: string, dir: string): boolean {
 
 function runChecks(): void {
   const soulApps = discoverSoulApps()
+  const tripwire = discoveryTripwireError(countSoulManifests(), soulApps.length)
+  if (tripwire) {
+    console.error(tripwire)
+    process.exit(1)
+  }
   const issues: BoundaryIssue[] = [
     ...scanSoulAppImports(soulApps),
     ...scanHostImports(soulApps),

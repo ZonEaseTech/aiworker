@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'bun:test'
-import { discoverSoulApps } from './check-soul-app-boundaries'
+import { discoverSoulApps, discoveryTripwireError } from './check-soul-app-boundaries'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -51,6 +51,12 @@ describe('check-soul-app-boundaries', () => {
     expect(names).toContain('aiworker-hr')
     expect(names).toContain('aiworker-qa')
     expect(names).toContain('aiworker-custom')
+  })
+
+  test('tripwire fires when manifests exist but nothing is discovered', () => {
+    expect(discoveryTripwireError(2, 0)).toContain('scan nothing')
+    expect(discoveryTripwireError(2, 2)).toBeNull()
+    expect(discoveryTripwireError(0, 0)).toBeNull()
   })
 
   test('catches a Soul App Host-private import located outside src/', () => {
