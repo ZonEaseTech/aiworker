@@ -532,7 +532,7 @@ export function SessionComposerActionBar({
       <ItemActions data-session-slot="composer-action-main" className="min-w-0 flex-1 justify-end gap-2">
         {templateSelect
           ? (
-              <Select value={templateSelect.value} onValueChange={templateSelect.onChange}>
+              <Select value={templateSelect.value ?? ''} onValueChange={templateSelect.onChange}>
                 <SelectTrigger
                   aria-label={templateLabel}
                   className={cn('max-w-full', templateClassName)}

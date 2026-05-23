@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { Database } from 'bun:sqlite'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 
@@ -726,10 +726,15 @@ export function nextSessionEventSeq(sessionId: string): number {
   return (latest?.seq ?? 0) + 1
 }
 
-export function listSessionEvents(sessionId?: string, limit = 500): SessionEventRow[] {
+export function listSessionEvents(sessionId?: string, options: { after?: number, limit?: number } = {}): SessionEventRow[] {
+  const limit = options.limit ?? 500
   const query = getWorkerDb().select().from(schema.sessionEvents)
-  if (sessionId)
-    return query.where(eq(schema.sessionEvents.sessionId, sessionId)).orderBy(schema.sessionEvents.seq).limit(limit).all()
+  if (sessionId) {
+    const filters = [eq(schema.sessionEvents.sessionId, sessionId)]
+    if (options.after !== undefined && Number.isFinite(options.after) && options.after > 0)
+      filters.push(gt(schema.sessionEvents.id, options.after))
+    return query.where(and(...filters)).orderBy(schema.sessionEvents.seq).limit(limit).all()
+  }
   return query.orderBy(desc(schema.sessionEvents.createdAt)).limit(limit).all()
 }
 

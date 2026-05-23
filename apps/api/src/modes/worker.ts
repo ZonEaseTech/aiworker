@@ -446,7 +446,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/api/local/workers/:workerId/sessions/:sessionId/events', (c) => {
     const session = requireWorkerSession(c.req.param('workerId'), c.req.param('sessionId'))
     const after = Number(c.req.query('after') ?? c.req.header('last-event-id') ?? 0)
-    const events = listSessionEvents(session.id).filter(event => !Number.isFinite(after) || event.id > after)
+    const events = listSessionEvents(session.id, { after: Number.isFinite(after) ? after : 0 })
     return c.json({ events })
   })
   app.get('/api/local/workers/:workerId/sessions/:sessionId/turns', (c) => {
@@ -464,7 +464,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/api/local/sessions/:sessionId/events', (c) => {
     const session = requireSession(c.req.param('sessionId'))
     const after = Number(c.req.query('after') ?? c.req.header('last-event-id') ?? 0)
-    const events = listSessionEvents(session.id).filter(event => !Number.isFinite(after) || event.id > after)
+    const events = listSessionEvents(session.id, { after: Number.isFinite(after) ? after : 0 })
     return c.json({ events })
   })
   app.get('/api/local/sessions/:sessionId/turns', (c) => {

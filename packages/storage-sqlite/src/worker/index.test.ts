@@ -302,6 +302,47 @@ describe('greenfield local worker session schema', () => {
     expect(setSetting('engine.default', { engine: 'codex' }).valueJson).toEqual({ engine: 'codex' })
   })
 
+  it('filters session events by id in SQL before applying the limit so long sessions keep streaming', () => {
+    const worker = upsertWorker({
+      id: 'worker-events',
+      soulId: 'hr',
+      name: 'Events worker',
+      defaultEngineId: 'codex',
+      at: '2026-05-23T00:00:00.000Z',
+    })
+    const workspace = createWorkspace({
+      id: 'workspace-events',
+      workerId: worker.id,
+      name: 'Events workspace',
+      rootPath: '/tmp/events',
+      at: '2026-05-23T00:00:01.000Z',
+    })
+    const session = createSession({
+      id: 'session-events',
+      workerId: worker.id,
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'candidate-screen',
+      title: 'Events session',
+      at: '2026-05-23T00:00:02.000Z',
+    })
+
+    const ids = Array.from({ length: 5 }, (_, index) => appendSessionEvent({
+      sessionId: session.id,
+      seq: index + 1,
+      type: 'assistant_delta',
+      payloadJson: { index: index + 1 },
+      at: `2026-05-23T00:00:${String(10 + index).padStart(2, '0')}.000Z`,
+    }).id)
+
+    // `after` returns only newer events, in seq order.
+    expect(listSessionEvents(session.id, { after: ids[1] }).map(event => event.id)).toEqual([ids[2], ids[3], ids[4]])
+    // The limit is applied AFTER the id filter, so a tight window still walks forward past the cursor
+    // instead of stalling on the earliest rows (the long-session replay regression).
+    expect(listSessionEvents(session.id, { after: ids[1], limit: 2 }).map(event => event.id)).toEqual([ids[2], ids[3]])
+    // No cursor returns the full window in seq order.
+    expect(listSessionEvents(session.id).map(event => event.id)).toEqual(ids)
+  })
+
   it('discards legacy built-in Soul worker metadata and cascaded local records', () => {
     const worker = upsertWorker({
       id: 'legacy-hr-worker',

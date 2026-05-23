@@ -349,6 +349,10 @@ export function mountSessionApiProxy(request: Request, options: {
   }
 
   const sessionTurnsMatch = /^\/api\/sessions\/([^/]+)\/turns$/.exec(url.pathname)
+  if (sessionTurnsMatch && request.method === 'GET') {
+    const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionTurnsMatch[1]}/turns`
+    return proxyJsonRequest(request, target)
+  }
   if (sessionTurnsMatch && request.method === 'POST') {
     const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionTurnsMatch[1]}/messages`
     return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))

@@ -93,12 +93,10 @@ export function UniversalWorkbenchApp({
     [workspaces, selectedWorkspaceId, workspace],
   )
   const workspaceEvents = useMemo(
-    () => events.filter(e =>
-      selectedSession
-        ? e.turnId && turns.some(t => t.id === e.turnId && t.sessionId === selectedSession.id)
-        : false,
-    ),
-    [events, selectedSession, turns],
+    () => selectedSession
+      ? events.filter(e => e.sessionId === selectedSession.id)
+      : [],
+    [events, selectedSession],
   )
   const sessionTurns = useMemo(
     () => selectedSession ? turns.filter(t => t.sessionId === selectedSession.id) : [],
