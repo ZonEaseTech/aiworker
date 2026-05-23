@@ -3,11 +3,11 @@ import type { LocalWorkspace } from '@zonease/aiworker-shared'
 import { describe, expect, it, mock } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
 import {
   buildUniversalWorkbenchCreateSessionPayload,
   resolveUniversalWorkbenchDraftInput,
 } from './client-entry'
+import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
 
 const vi = { fn: mock }
 
@@ -160,5 +160,4 @@ describe('UniversalWorkbenchApp', () => {
       selectedTemplateId: 'aiworker-qa.unknown',
     }, templates)).toBeNull()
   })
-
 })

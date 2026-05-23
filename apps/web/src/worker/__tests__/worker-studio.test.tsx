@@ -1019,7 +1019,7 @@ describe('worker studio', () => {
 
     expect(source).not.toContain('@zonease/aiworker-soul-app-workbench')
     expect(source).not.toContain('UniversalWorkbenchApp')
-    expect(source).not.toContain("activeMountedRoute.id === 'universal-workbench'")
+    expect(source).not.toContain('activeMountedRoute.id === \'universal-workbench\'')
     expect(source).not.toContain('activeMountedRoute?.id !== \'universal-workbench\'')
   })
 

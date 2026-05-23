@@ -1,9 +1,9 @@
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 
-import { renderToStaticMarkup } from 'react-dom/server'
 import { mountSessionApiProxy } from '@zonease/aiworker-soul-app-runtime'
 import { renderUniversalWorkbenchHtml } from '@zonease/aiworker-soul-app-runtime/universal-workbench-html'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 import { HrHomeRouteSurface } from '../../product/web/routes/hr-route'
 import { HrPeopleWidgetProof } from '../../product/web/widgets/people-widget'
