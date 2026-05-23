@@ -7,21 +7,8 @@ import type { LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
 import type { WorkerStudioLayoutVariant } from './components/studio-shell'
 
-import {
-  Add01Icon,
-  File02Icon,
-  RefreshIcon,
-  Search01Icon,
-  Settings02Icon,
-} from '@hugeicons/core-free-icons'
-import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
-import { Avatar, AvatarFallback } from '@zonease/aiworker-ui/components/avatar'
-import { Badge } from '@zonease/aiworker-ui/components/badge'
-import { Button } from '@zonease/aiworker-ui/components/button'
-import { CardContent } from '@zonease/aiworker-ui/components/card'
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@zonease/aiworker-ui/components/input-group'
-import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
+import { Item, ItemContent, ItemDescription, ItemTitle } from '@zonease/aiworker-ui/components/item'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { navigateWorkerRoute, useWorkerRoute } from '../app/router/worker-route'
 import {
@@ -31,20 +18,20 @@ import {
   normalizeLocale,
 } from '../features/i18n'
 import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, projectWorkerWorkspaceOverlay, saveWorkerOverlay } from '../features/local-workspace/api'
-import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard } from '../features/local-workspace/components'
+import { CreateWorkerDialog, CreateWorkspaceDialog } from '../features/local-workspace/components'
 import {
   latest,
   projectNamePlaceholder,
   sessionForWorkspace,
-  turnForSession,
 } from '../features/local-workspace/model'
 import { SettingsDialog } from '../features/settings'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
-import { StudioChromeHeader, StudioEmptyState, StudioMainFrame, StudioTitleBlock, WorkerStudioLayout } from './components/studio-shell'
+import { StudioMainFrame, WorkerStudioLayout } from './components/studio-shell'
 import { mountedChildDefaultPath } from './mounted-child-route'
 import { FirstRunSoulAppHome } from './studio/first-run-soul-app-home'
 import { HostSidebarActions, HostSidebarFooter, HostTopBar } from './studio/host-chrome'
 import { MountedSoulAppRouteSurface } from './studio/mounted-surface'
+import { WorkerHomeFallback, WorkspaceContextNoMountedSurface } from './studio/workspace-fallback'
 import { WorkerConfigurationDialog } from './worker-configuration-dialog'
 import { WorkerSwitcher } from './worker-workbench-tree'
 
@@ -191,7 +178,7 @@ export function WorkerStudio() {
     const workspaceIds = new Set(soulWorkspaces.map(item => item.id))
     return allSessions.filter(session => workspaceIds.has(session.workspaceId))
   }, [allSessions, soulWorkspaces])
-  const filteredProjects = useMemo(() => {
+  const filteredWorkspaces = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return soulWorkspaces.filter((item) => {
       const latestSession = sessionForWorkspace(item, allSessions)
@@ -344,32 +331,6 @@ export function WorkerStudio() {
     finally {
       setSubmitting(false)
     }
-  }
-
-  function renderToolbarSearchInput({
-    ariaLabel,
-    onChange,
-    placeholder,
-    value,
-  }: {
-    ariaLabel: string
-    onChange: (value: string) => void
-    placeholder: string
-    value: string
-  }) {
-    return (
-      <InputGroup className="min-w-36 flex-1 basis-44 md:max-w-70">
-        <InputGroupAddon>
-          <HugeiconsIcon icon={Search01Icon} strokeWidth={2} aria-hidden="true" />
-        </InputGroupAddon>
-        <InputGroupInput
-          aria-label={ariaLabel}
-          placeholder={placeholder}
-          value={value}
-          onChange={event => onChange(event.target.value)}
-        />
-      </InputGroup>
-    )
   }
 
   if (state.loading && !data) {
@@ -572,140 +533,39 @@ export function WorkerStudio() {
 
             {!showMountedWorkbenchRoute && isWorkspaceContextRoute && selectedWorkspace
               ? (
-                  <>
-                    <StudioChromeHeader
-                      actions={(
-                        <>
-                          <Button type="button" variant="ghost" size="icon" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
-                            <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} aria-hidden="true" />
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon" aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
-                            <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} aria-hidden="true" />
-                          </Button>
-                        </>
-                      )}
-                    >
-                      <StudioTitleBlock kicker={copy.workspace.currentWorkspace} title={selectedWorkspace.name} />
-                    </StudioChromeHeader>
-
-                    <CardContent className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-7 py-10 max-md:p-4 max-md:pt-7">
-                      <StudioEmptyState
-                        icon={<HugeiconsIcon icon={File02Icon} strokeWidth={2} aria-hidden="true" />}
-                        title={copy.workspace.noMountedSurface}
-                        detail={copy.workspace.noMountedSurfaceDetail(selectedSoulCopy.name)}
-                      />
-                    </CardContent>
-                  </>
+                  <WorkspaceContextNoMountedSurface
+                    copy={copy}
+                    selectedSoulCopy={selectedSoulCopy}
+                    selectedWorkspace={selectedWorkspace}
+                    onOpenSettings={() => openSettings()}
+                    onRefresh={() => void refresh()}
+                  />
                 )
               : null}
 
             {!showMountedWorkbenchRoute && !(isWorkspaceContextRoute && selectedWorkspace)
               ? (
-                  <>
-                    <StudioChromeHeader
-                      actions={(
-                        <>
-                          <Button type="button" variant="ghost" size="icon" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
-                            <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} aria-hidden="true" />
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon" aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
-                            <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} aria-hidden="true" />
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon" aria-label={copy.accessibility.workspace}>
-                            <Avatar size="sm" aria-hidden="true">
-                              <AvatarFallback>{workerInitials(selectedWorker.name)}</AvatarFallback>
-                            </Avatar>
-                          </Button>
-                        </>
-                      )}
-                    >
-                      <StudioTitleBlock kicker={copy.workspace.currentWorker} title={copy.workspace.workspaceTitle(selectedWorker.name)} />
-                    </StudioChromeHeader>
-
-                    <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-7 py-6 max-md:px-4">
-                      <ItemGroup className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2">
-                        <WorkerIdentityBlock
-                          compact
-                          copy={copy}
-                          locale={activeLocale}
-                          soul={selectedSoul}
-                          soulCopy={selectedSoulCopy}
-                          worker={selectedWorker}
-                        />
-                        <Item variant="muted" size="sm" className="min-w-0 items-start">
-                          <ItemContent className="min-w-0 gap-3">
-                            <ItemTitle>{`${copy.create.capabilityTemplate} (${templates.length})`}</ItemTitle>
-                            <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
-                              {templates.map(template => (
-                                <Badge key={template.id} variant="outline" className="max-w-full truncate">
-                                  {displayTemplate(template, activeLocale).name}
-                                </Badge>
-                              ))}
-                            </ItemActions>
-                          </ItemContent>
-                        </Item>
-                      </ItemGroup>
-
-                      <ItemGroup className="min-h-0 gap-3">
-                        <ItemActions className="flex-wrap justify-between gap-x-2.5 gap-y-2">
-                          <ItemActions className="min-w-0 gap-2">
-                            <ItemTitle>{`${copy.workspace.workspaceList} (${filteredProjects.length})`}</ItemTitle>
-                            <Button
-                              aria-label={copy.workspace.createWorkspace}
-                              size="icon"
-                              title={copy.workspace.createWorkspace}
-                              type="button"
-                              variant="ghost"
-                              onClick={() => setCreateWorkspaceOpen(true)}
-                            >
-                              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
-                            </Button>
-                          </ItemActions>
-
-                          <ItemActions className="min-w-0 flex-1 flex-wrap justify-end gap-2">
-                            {renderToolbarSearchInput({
-                              ariaLabel: copy.accessibility.searchProjects,
-                              onChange: setQuery,
-                              placeholder: copy.projects.searchPlaceholder,
-                              value: query,
-                            })}
-                          </ItemActions>
-                        </ItemActions>
-
-                        <ItemGroup className="grid grid-cols-1 items-stretch gap-3.5 sm:grid-cols-2 2xl:grid-cols-3">
-                          {filteredProjects.length > 0
-                            ? filteredProjects.map(item => (
-                                <WorkspaceCard
-                                  key={item.id}
-                                  active={selectedWorkspace?.id === item.id}
-                                  item={item}
-                                  locale={activeLocale}
-                                  session={sessionForWorkspace(item, allSessions)}
-                                  template={data.templates.find(template => template.id === sessionForWorkspace(item, allSessions)?.capabilityTemplateId)}
-                                  turn={turnForSession(sessionForWorkspace(item, allSessions), data.turns)}
-                                  onSelect={() => {
-                                    setSelectedWorkspaceId(item.id)
-                                    navigateWorkerRoute({ kind: 'workspace', workerId: item.workerId, workspaceId: item.id })
-                                  }}
-                                />
-                              ))
-                            : (
-                                <StudioEmptyState
-                                  icon={<HugeiconsIcon icon={File02Icon} strokeWidth={2} aria-hidden="true" />}
-                                  title={copy.projects.empty.title}
-                                  detail={copy.projects.empty.detail(selectedSoulCopy.name)}
-                                  action={(
-                                    <Button type="button" variant="ghost" size="lg" onClick={() => setCreateWorkspaceOpen(true)}>
-                                      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
-                                      {copy.workspace.createWorkspace}
-                                    </Button>
-                                  )}
-                                />
-                              )}
-                        </ItemGroup>
-                      </ItemGroup>
-                    </CardContent>
-                  </>
+                  <WorkerHomeFallback
+                    allSessions={allSessions}
+                    copy={copy}
+                    data={data}
+                    filteredWorkspaces={filteredWorkspaces}
+                    locale={activeLocale}
+                    query={query}
+                    selectedSoul={selectedSoul}
+                    selectedSoulCopy={selectedSoulCopy}
+                    selectedWorker={selectedWorker}
+                    selectedWorkspace={selectedWorkspace}
+                    templates={templates}
+                    onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+                    onOpenSettings={() => openSettings()}
+                    onRefresh={() => void refresh()}
+                    onSearch={setQuery}
+                    onSelectWorkspace={(workspace) => {
+                      setSelectedWorkspaceId(workspace.id)
+                      navigateWorkerRoute({ kind: 'workspace', workerId: workspace.workerId, workspaceId: workspace.id })
+                    }}
+                  />
                 )
               : null}
           </>
@@ -764,11 +624,4 @@ function persistActiveMountedRoutePreferences(preferences: Record<string, string
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function workerInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean)
-  if (words.length > 1)
-    return words.slice(0, 2).map(word => Array.from(word)[0]).join('').toUpperCase()
-  return Array.from(words[0] ?? 'AI').slice(0, 2).join('').toUpperCase()
 }
