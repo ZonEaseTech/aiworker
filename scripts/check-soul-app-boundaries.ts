@@ -6,7 +6,7 @@ interface SoulAppWorkspace {
   dir: string
   name: string
   packageName: string | null
-  srcDir: string
+  codeRoot: string
 }
 
 interface BoundaryIssue {
@@ -54,25 +54,7 @@ const retiredHostWebSurfacePatterns: Array<{ message: string, pattern: RegExp }>
     pattern: /\bbuildSessionProgress\b/,
   },
 ]
-const soulApps = discoverSoulApps()
-const issues: BoundaryIssue[] = [
-  ...scanSoulAppImports(soulApps),
-  ...scanHostImports(soulApps),
-  ...scanSoulAppWebStorageUsage(soulApps),
-  ...scanHostEmbeddedSoulRenderers(),
-  ...scanHostWebPackageImports(),
-  ...scanHostWebRetiredProductSurfaces(),
-]
-
-if (issues.length > 0) {
-  for (const issue of issues)
-    console.error(`${issue.file}: ${issue.message} (${issue.importPath})`)
-  process.exitCode = 1
-}
-
-reportHostEmbeddedSoulRendererDebt()
-
-function discoverSoulApps(): SoulAppWorkspace[] {
+export function discoverSoulApps(): SoulAppWorkspace[] {
   if (!existsSync(appRoot))
     return []
   return readdirSync(appRoot, { withFileTypes: true })
@@ -83,10 +65,10 @@ function discoverSoulApps(): SoulAppWorkspace[] {
         dir,
         name: entry.name,
         packageName: readPackageName(dir),
-        srcDir: path.join(dir, 'src'),
+        codeRoot: dir,
       }
     })
-    .filter(app => existsSync(path.join(app.dir, 'soul-app.manifest.json')) && existsSync(app.srcDir))
+    .filter(app => existsSync(path.join(app.dir, 'soul-app.manifest.json')))
 }
 
 function readPackageName(dir: string): string | null {
@@ -106,7 +88,7 @@ function scanSoulAppImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
   const packageNames = new Map(apps.map(app => [app.packageName, app]).filter((entry): entry is [string, SoulAppWorkspace] => Boolean(entry[0])))
   const issues: BoundaryIssue[] = []
   for (const app of apps) {
-    for (const file of listSourceFiles(app.srcDir)) {
+    for (const file of listSourceFiles(app.codeRoot)) {
       for (const importPath of importSpecifiers(readFileSync(file, 'utf8'))) {
         const siblingPackage = packageNames.get(packageRoot(importPath))
         if (siblingPackage && siblingPackage.name !== app.name) {
@@ -124,7 +106,7 @@ function scanSoulAppImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
         const resolved = resolveRelativeImport(file, importPath)
         if (!resolved)
           continue
-        const siblingApp = apps.find(candidate => candidate.name !== app.name && isInside(resolved, candidate.srcDir))
+        const siblingApp = apps.find(candidate => candidate.name !== app.name && isInside(resolved, candidate.codeRoot))
         if (siblingApp) {
           issues.push(issue(file, importPath, `Soul App ${app.name} must not import sibling app ${siblingApp.name}.`))
           continue
@@ -153,13 +135,13 @@ function scanHostImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
         continue
       for (const importPath of importSpecifiers(readFileSync(file, 'utf8'))) {
         const normalized = normalizedImport(importPath)
-        if (apps.some(app => normalized.includes(`apps/${app.name}/src/`))) {
-          issues.push(issue(file, importPath, 'Host code must not import Soul App src internals.'))
+        if (apps.some(app => normalized.includes(`apps/${app.name}/`))) {
+          issues.push(issue(file, importPath, 'Host code must not import Soul App internals.'))
           continue
         }
         const resolved = resolveRelativeImport(file, importPath)
-        if (resolved && apps.some(app => isInside(resolved, app.srcDir)))
-          issues.push(issue(file, importPath, 'Host code must not import Soul App src internals.'))
+        if (resolved && apps.some(app => isInside(resolved, app.codeRoot)))
+          issues.push(issue(file, importPath, 'Host code must not import Soul App internals.'))
       }
     }
   }
@@ -169,7 +151,7 @@ function scanHostImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
 function scanSoulAppWebStorageUsage(apps: SoulAppWorkspace[]): BoundaryIssue[] {
   const issues: BoundaryIssue[] = []
   for (const app of apps) {
-    for (const file of listSourceFiles(app.srcDir)) {
+    for (const file of listSourceFiles(app.codeRoot)) {
       if (isTestSourceFile(file))
         continue
       for (const symbol of rawWebStorageSymbols(readFileSync(file, 'utf8')))
@@ -375,3 +357,26 @@ function isInside(filePath: string, dir: string): boolean {
   const relative = path.relative(dir, filePath)
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
 }
+
+function runChecks(): void {
+  const soulApps = discoverSoulApps()
+  const issues: BoundaryIssue[] = [
+    ...scanSoulAppImports(soulApps),
+    ...scanHostImports(soulApps),
+    ...scanSoulAppWebStorageUsage(soulApps),
+    ...scanHostEmbeddedSoulRenderers(),
+    ...scanHostWebPackageImports(),
+    ...scanHostWebRetiredProductSurfaces(),
+  ]
+
+  if (issues.length > 0) {
+    for (const issue of issues)
+      console.error(`${issue.file}: ${issue.message} (${issue.importPath})`)
+    process.exitCode = 1
+  }
+
+  reportHostEmbeddedSoulRendererDebt()
+}
+
+if (import.meta.main)
+  runChecks()
