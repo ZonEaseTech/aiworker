@@ -1,8 +1,27 @@
 # 发版前零信任深审 — 审查章程
 
 > Date: 2026-05-23
-> Status: 执行中
+> Status: 已整改(全部 P0+P1,P2 登记为债务)
 > 基准: 代码 + `docs/architecture.md#constraint-registry`(零信任,不采信 task/plan/changelog closeout)
+> 整改分支: `fix/pre-release-remediation`;实现计划: `docs/superpowers/plans/2026-05-23-pre-release-remediation.md`
+
+## 整改结果(2026-05-23)
+
+全部 P0+P1 已在 `fix/pre-release-remediation` 分支整改完成,最终全量 gate:
+`check`(typecheck+lint)= 0、`test` = 0 fail、`build`/`build:bundle` 成功、web vitest 全绿、
+三 app validate pass、`db:generate:worker` 无漂移。
+
+| 发现 | 整改 | Phase |
+| --- | --- | --- |
+| P0-A 绿灯全红 | storage 索引类型修复、QA 陈旧断言更新(对齐 BUG-151)、`eslint --fix` 清 11 error | 0 |
+| P0-B 子进程裸透传 env | core 导出 `sanitizeEngineEnv`;cli smoke + api mounted spawn 改用它 | 1 |
+| P0-C / P1-G 边界扫描可绕过 | `app validate` 递归扫整个 app root + 路径段匹配 + 动态 sibling 发现(含回归测试) | 2 |
+| P1-E 鉴权 | operatorId 不采信 query(匿名固定 operator-local);无 token 暴露非 loopback 时启动告警(方案 B) | 3 |
+| P1-F 路径穿越 | smoke cwd root 包含校验;fs-layout worker id 净化拒 `../`/绝对路径 | 1/4 |
+| P1-D Host 合成领域文本 | `projectSoulAppCapabilityTemplate` 改透传 `promptRef`/`reviewRubricRef`,去除 Host 捏造 prompt/rubric | 5 |
+| P1-H 协议面过宽 | 领域协议接口从 `packages/shared` 收敛到 `soul-app-sdk`(官方 app 零改动) | 6 |
+
+P2 项(zod/OpenAPI 契约债、死代码、H5 god file、UI 卫生、注释漂移)按报告登记为债务,未纳入本次整改。
 
 ## 目标
 
