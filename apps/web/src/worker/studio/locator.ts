@@ -1,5 +1,5 @@
-import type { LocalWorkspaceData } from '../../features/local-workspace/api/types'
 import type { WorkerRoute } from '../../app/router/worker-route'
+import type { LocalWorkspaceData } from '../../features/local-workspace/api/types'
 
 import { displayTemplate, normalizeLocale } from '../../features/i18n'
 import { latest, sessionForWorkspace } from '../../features/local-workspace/model'
