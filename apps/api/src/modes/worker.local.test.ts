@@ -1247,6 +1247,66 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     }
   })
 
+  it('does not adopt ?operatorId= query param in mount context when request is anonymous', async () => {
+    // 匿名態(token 未設定)で ?operatorId=attacker を渡しても mount context の operatorId は
+    // server 固定値 operator-local になること(クライアントから偽造できないこと)を検証する
+    const target = await app() // no token → anonymous mode
+
+    const mountedService = Bun.serve({
+      fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname === '/health')
+          return Response.json({ status: 'ok' })
+        if (url.pathname === '/domain') {
+          const mountContext = request.headers.get('x-aiworker-mount-context')
+          return Response.json({ mountContext })
+        }
+        return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
+      },
+      hostname: '127.0.0.1',
+      port: 0,
+    })
+
+    try {
+      const installRes = await target.request('/api/local/apps/install', {
+        method: 'POST',
+        body: JSON.stringify({
+          manifest: {
+            ...hrSoulAppManifest,
+            api: {
+              ...hrSoulAppManifest.api,
+              localService: {
+                baseUrl: `http://127.0.0.1:${mountedService.port}`,
+                healthPath: '/health',
+              },
+            },
+          },
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+      expect(installRes.status).toBe(201)
+      expect((await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })).status).toBe(200)
+
+      // 攻撃者が ?operatorId=attacker を付けて匿名リクエストを送る
+      const spoofedRes = await target.request('/api/local/apps/aiworker-hr/domain?operatorId=attacker')
+      expect(spoofedRes.status).toBe(200)
+      const spoofedBody = await spoofedRes.json() as { mountContext: string | null }
+      expect(spoofedBody.mountContext).toBeTruthy()
+      const mountContext = JSON.parse(Buffer.from(spoofedBody.mountContext!, 'base64url').toString('utf8')) as {
+        operatorId: string | null
+        identity: unknown
+      }
+      // operatorId は 'attacker' ではなく server 固定値 'operator-local' でなければならない
+      expect(mountContext.operatorId).toBe('operator-local')
+      expect(mountContext.operatorId).not.toBe('attacker')
+      // 匿名なので identity は null
+      expect(mountContext.identity).toBeNull()
+    }
+    finally {
+      mountedService.stop()
+    }
+  })
+
   it('passes a Host-issued mount token only to the mounted app proxy', async () => {
     const target = await app('local-token-123456')
     const authHeaders = { authorization: 'Bearer local-token-123456' }

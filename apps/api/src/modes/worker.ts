@@ -876,7 +876,7 @@ function applyMountedProxyContextHeaders(
   const sourceUrl = new URL(c.req.url)
   const origin = `${sourceUrl.protocol}//${sourceUrl.host}`
   const identity = requestIdentity(c)
-  const operatorId = identity?.operatorId ?? c.req.query('operatorId') ?? null
+  const operatorId = identity?.operatorId ?? 'operator-local'
   const payload = Buffer.from(JSON.stringify({
     appId: app.appId,
     artifactId: c.req.query('artifactId') ?? null,
