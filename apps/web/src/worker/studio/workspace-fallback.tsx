@@ -21,7 +21,8 @@ type WorkerIdentityBlockProps = Parameters<typeof WorkerIdentityBlock>[0]
 type WorkspaceCardProps = Parameters<typeof WorkspaceCard>[0]
 type LocalWorkspace = WorkspaceCardProps['item']
 type WorkspaceTemplate = NonNullable<WorkspaceCardProps['template']>
-type WorkspaceFallbackData = {
+
+interface WorkspaceFallbackData {
   templates: WorkspaceTemplate[]
   turns: Parameters<typeof turnForSession>[1]
 }
