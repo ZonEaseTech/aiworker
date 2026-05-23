@@ -1,9 +1,9 @@
 import type { CapabilityTemplate, VerticalSoul } from '../local-workspace/types.compat'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { displaySoul, displayTemplate } from './index'
 
 describe('displaySoul/displayTemplate 泛化消费 manifest', () => {
-  test('displaySoul 返回 manifest 投影值，不被 Host catalog 覆盖', () => {
+  it('displaySoul 返回 manifest 投影值，不被 Host catalog 覆盖', () => {
     const soul: VerticalSoul = {
       id: 'aiworker-hr',
       name: 'Manifest HR Name',
@@ -18,7 +18,7 @@ describe('displaySoul/displayTemplate 泛化消费 manifest', () => {
     expect(copy.domain).toBe('manifest-domain')
   })
 
-  test('displayTemplate 返回 manifest 投影值且不含 reviewRubric', () => {
+  it('displayTemplate 返回 manifest 投影值且不含 reviewRubric', () => {
     const template: CapabilityTemplate = {
       id: 'aiworker-hr.person-profile',
       name: 'Manifest Template',
