@@ -214,6 +214,7 @@ export function SessionComposer({
     <form
       data-slot="session-composer"
       data-variant={variant}
+      aria-label={ariaLabel}
       className={cn(
         'flex min-w-0 flex-col gap-2',
         className,
@@ -783,3 +784,16 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(byte)
   return btoa(binary)
 }
+
+export {
+  ManagedSessionComposer,
+  useSessionComposerDraft,
+} from './managed-session-composer'
+export type {
+  ManagedSessionComposerAttachment,
+  ManagedSessionComposerAttachmentLabels,
+  ManagedSessionComposerDraft,
+  ManagedSessionComposerProps,
+  UseSessionComposerDraftOptions,
+  UseSessionComposerDraftResult,
+} from './managed-session-composer'

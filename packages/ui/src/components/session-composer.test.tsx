@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { SessionComposer } from './session-composer'
+import { ManagedSessionComposer, SessionComposer } from './session-composer'
 
 afterEach(() => cleanup())
 
@@ -268,5 +268,172 @@ describe('sessionComposer', () => {
     expect(media?.className).toContain('size-14')
     expect(media?.querySelector('img')?.getAttribute('src')).toBe('blob:source-image')
     expect(previewButton.closest('[data-slot="card"]')).toBeNull()
+  })
+
+  it('submits a neutral managed draft with text, materials, template and mentions', async () => {
+    const onSubmitDraft = vi.fn()
+    const onValueChange = vi.fn()
+    const file = new File(['hello'], 'notes.txt', { type: 'text/plain' })
+
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        mentionOptions={[{ id: 'review-notes', label: 'Review notes' }]}
+        onSubmitDraft={onSubmitDraft}
+        onValueChange={onValueChange}
+        selectedTemplateId="review-template"
+        submitAriaLabel="Start"
+        templateOptions={[{ label: 'Review template', value: 'review-template' }]}
+        value="Use $review-notes"
+        variant="large"
+      />,
+    )
+
+    fireEvent.change(screen.getByTestId('managed-session-file-input'), {
+      target: { files: [file] },
+    })
+    fireEvent.submit(screen.getByRole('form', { name: 'Session input' }))
+
+    await waitFor(() => expect(onSubmitDraft).toHaveBeenCalledTimes(1))
+    const draft = onSubmitDraft.mock.calls[0]?.[0]
+    expect(draft).toMatchObject({
+      text: 'Use $review-notes',
+      selectedTemplateId: 'review-template',
+      mentions: [{ id: 'review-notes', kind: 'skill', label: 'Review notes' }],
+      materials: [{
+        content: 'hello',
+        encoding: 'utf8',
+        mimeType: 'text/plain',
+        name: 'notes.txt',
+        size: file.size,
+      }],
+    })
+    expect(draft.files[0]).toBe(file)
+  })
+
+  it('clears managed text and attachments after successful submit', async () => {
+    const onSubmitDraft = vi.fn()
+    const onValueChange = vi.fn()
+
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        defaultValue="Draft request"
+        onSubmitDraft={onSubmitDraft}
+        onValueChange={onValueChange}
+        submitAriaLabel="Start"
+      />,
+    )
+
+    fireEvent.submit(screen.getByRole('form', { name: 'Session input' }))
+
+    await waitFor(() => expect(onSubmitDraft).toHaveBeenCalledTimes(1))
+    expect(onValueChange).toHaveBeenLastCalledWith('')
+    expect((screen.getByRole('textbox', { name: 'Session input' }) as HTMLTextAreaElement).value).toBe('')
+  })
+
+  it('preserves managed draft and shows submit errors', async () => {
+    const onSubmitDraft = vi.fn().mockRejectedValue(new Error('Create session failed'))
+
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        defaultValue="Keep this"
+        onSubmitDraft={onSubmitDraft}
+        submitAriaLabel="Start"
+      />,
+    )
+
+    fireEvent.submit(screen.getByRole('form', { name: 'Session input' }))
+
+    expect(await screen.findByText('Create session failed')).toBeTruthy()
+    expect((screen.getByRole('textbox', { name: 'Session input' }) as HTMLTextAreaElement).value).toBe('Keep this')
+  })
+
+  it('deduplicates managed attachments by name, size and MIME type', async () => {
+    const file = new File(['same'], 'same.txt', { type: 'text/plain' })
+
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        defaultValue="Draft request"
+        onSubmitDraft={vi.fn()}
+        submitAriaLabel="Start"
+      />,
+    )
+
+    const input = screen.getByTestId('managed-session-file-input')
+    fireEvent.change(input, { target: { files: [file] } })
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await waitFor(() => expect(screen.getAllByText('same.txt')).toHaveLength(1))
+  })
+
+  it('releases managed image preview URLs on removal and unmount', async () => {
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const file = new File(['image'], 'source-image.png', { type: 'image/png' })
+
+    const { unmount } = render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        defaultValue="Draft request"
+        onSubmitDraft={vi.fn()}
+        submitAriaLabel="Start"
+      />,
+    )
+
+    const input = screen.getByTestId('managed-session-file-input')
+    fireEvent.change(input, { target: { files: [file] } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove source-image.png' }))
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:preview')
+
+    fireEvent.change(input, { target: { files: [file] } })
+    await screen.findByRole('button', { name: 'Preview source-image.png' })
+    unmount()
+
+    expect(revokeObjectURL).toHaveBeenCalledTimes(2)
+    createObjectURL.mockRestore()
+    revokeObjectURL.mockRestore()
   })
 })
