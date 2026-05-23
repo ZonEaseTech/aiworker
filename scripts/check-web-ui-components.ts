@@ -143,16 +143,6 @@ const customVisualPropertyPattern = /^\s*(?:background|border(?:-(?:bottom|color
 const hostEmbeddedSoulRendererDebts: HostEmbeddedSoulRendererDebt[] = []
 const acceptedResidualVisualUtilities: AcceptedResidualVisualUtility[] = [
   {
-    file: 'apps/web/src/features/session/markdown-preview.tsx',
-    token: 'text-sm/relaxed',
-    reason: 'markdown artifact body keeps compact prose line-height while shadcn Table and ScrollArea own structure',
-  },
-  {
-    file: 'apps/web/src/features/session/markdown-preview.tsx',
-    token: 'text-xs',
-    reason: 'markdown artifact inline code needs a small prose scale; this remains content typography, not chrome styling',
-  },
-  {
     file: 'apps/web/src/worker/components/studio-shell.tsx',
     token: 'bg-background',
     reason: 'Host shell canvas must bind to the shadcn background surface token',
@@ -181,6 +171,71 @@ const acceptedResidualVisualUtilities: AcceptedResidualVisualUtility[] = [
     file: 'apps/web/src/worker/worker-studio.tsx',
     token: 'text-sidebar-foreground',
     reason: 'HostTopBar must use the shadcn foreground pair for bg-sidebar',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'bg-sidebar',
+    reason: 'Worker Configuration segmented controls bind to the shadcn sidebar token used by Host chrome',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'font-medium',
+    reason: 'Worker Configuration section labels use medium text weight for shell preference hierarchy',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'font-normal',
+    reason: 'Worker Configuration helper copy keeps normal weight inside compact shell controls',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'rounded-md',
+    reason: 'Worker Configuration compact controls stay on the shadcn radius scale',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'shadow-sm\'',
+    reason: 'Worker Configuration selected segment keeps the small shadcn shadow scale',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'text-center',
+    reason: 'Worker Configuration segmented control labels are centered within fixed shell controls',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'text-foreground',
+    reason: 'Worker Configuration active text uses the shadcn foreground token',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'text-foreground\'',
+    reason: 'Worker Configuration selected segment text uses the shadcn foreground token',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'text-sidebar-foreground',
+    reason: 'Worker Configuration active segment text matches Host sidebar foreground tokens',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'text-sidebar-foreground/60',
+    reason: 'Worker Configuration inactive segment text uses muted Host sidebar foreground contrast',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    token: 'text-xs',
+    reason: 'Worker Configuration compact metadata labels use the small shadcn text scale',
+  },
+  {
+    file: 'apps/web/src/worker/worker-workbench-tree.tsx',
+    token: 'font-normal',
+    reason: 'Host workbench tree secondary rows keep normal weight for locator hierarchy',
+  },
+  {
+    file: 'apps/web/src/worker/worker-workbench-tree.tsx',
+    token: 'text-sidebar-foreground/60',
+    reason: 'Host workbench tree metadata uses muted sidebar foreground contrast',
   },
   {
     file: 'apps/aiworker-hr/product/web/people-workbench/app.tsx',
@@ -450,21 +505,6 @@ const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
     reason: 'worker identity is a compact Host object summary surface and is intentionally a shadcn Card',
   },
   {
-    file: 'apps/web/src/features/session/message-flow.tsx',
-    category: 'card',
-    reason: 'tool result output is an object payload surface; shadcn Card provides the single frame around streamed content',
-  },
-  {
-    file: 'apps/web/src/features/session/markdown-preview.tsx',
-    category: 'scoped-native-layout',
-    reason: 'markdown renderer maps prose-only HTML nodes with data-slot markers while tables and headings use shadcn primitives',
-  },
-  {
-    file: 'apps/web/src/features/session/session-timeline.tsx',
-    category: 'alert',
-    reason: 'turn error detail is a destructive status callout and should remain a shadcn Alert',
-  },
-  {
     file: 'apps/web/src/features/settings/components/settings-dialog.tsx',
     category: 'alert',
     reason: 'Settings engine test and Soul App security-block feedback are status callouts and should render through shadcn Alert',
@@ -485,29 +525,19 @@ const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
     reason: 'Host shell viewport uses semantic native layout with data-host-slot markers; shadcn primitives own inner chrome',
   },
   {
-    file: 'apps/web/src/worker/session-chat.tsx',
-    category: 'scoped-native-layout',
-    reason: 'session chat pane uses a scoped native layout marker for the scroll/workbench region, not a visual frame',
-  },
-  {
-    file: 'apps/web/src/worker/session-detail.tsx',
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
     category: 'alert',
-    reason: 'artifact loading/error states are localized callouts and should remain shadcn Alert surfaces',
+    reason: 'Worker Configuration status and validation feedback are Host shell callouts rendered through shadcn Alert',
   },
   {
-    file: 'apps/web/src/worker/session-detail.tsx',
-    category: 'card',
-    reason: 'artifact preview and review panels are right-rail object surfaces and keep one shadcn Card frame each',
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    category: 'input-frame',
+    reason: 'Worker Configuration worker-scoped shell preferences use generated shadcn form frames',
   },
   {
-    file: 'apps/web/src/worker/session-detail.tsx',
-    category: 'scoped-native-layout',
-    reason: 'artifact rail expanded/collapsed states are semantic aside layout markers with data-slot ownership',
-  },
-  {
-    file: 'apps/web/src/worker/session-progress-panel.tsx',
-    category: 'card',
-    reason: 'session progress is a compact status object surface with a single shadcn Card frame',
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    category: 'slotless-native-class',
+    reason: 'Worker Configuration uses native wrappers only for dialog layout around shadcn primitives',
   },
   {
     file: 'apps/web/src/worker/worker-studio.tsx',
@@ -524,37 +554,27 @@ const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
     category: 'input-frame',
     reason: 'Host workbench search/filter controls use generated shadcn InputGroup frames',
   },
+  {
+    file: 'apps/web/src/worker/worker-workbench-tree.tsx',
+    category: 'scoped-native-layout',
+    reason: 'Host workbench tree uses semantic layout markers for locator structure around shadcn rows',
+  },
+  {
+    file: 'apps/web/src/worker/worker-workbench-tree.tsx',
+    category: 'slotless-native-class',
+    reason: 'Host workbench tree native wrappers provide non-visual hierarchy layout around shadcn controls',
+  },
 ]
 const acceptedRawNativeControlClassifications: AcceptedRawNativeControlClassification[] = [
-  {
-    file: 'apps/web/src/features/local-workspace/components/session-composer.tsx',
-    category: 'hidden-file-input',
-    reason: 'workspace session source-material picker is visually controlled by shadcn SessionComposer attachment actions',
-  },
-  {
-    file: 'apps/web/src/features/session/session-timeline.tsx',
-    category: 'as-child-button',
-    reason: 'timeline disclosure triggers use a real button as the shadcn Item asChild target for keyboard semantics',
-  },
-  {
-    file: 'apps/web/src/worker/session-detail.tsx',
-    category: 'as-child-button',
-    reason: 'detail disclosure triggers use a real button as the shadcn Item asChild target for keyboard semantics',
-  },
-  {
-    file: 'apps/web/src/worker/session-turn-composer.tsx',
-    category: 'hidden-file-input',
-    reason: 'follow-up source-material picker is visually controlled by shadcn SessionComposer attachment actions',
-  },
-  {
-    file: 'apps/web/src/worker/worker-studio.tsx',
-    category: 'as-child-button',
-    reason: 'workbench search result rows use shadcn Item asChild with real button semantics',
-  },
   {
     file: 'apps/aiworker-hr/product/web/people-workbench/profile-composer.tsx',
     category: 'hidden-file-input',
     reason: 'HR candidate-material picker is visually controlled by shared shadcn SessionComposer attachment actions',
+  },
+  {
+    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    category: 'raw-button',
+    reason: 'Worker Configuration uses native buttons only for compact Host shell segmented controls with shadcn-compatible state styling',
   },
 ]
 const classDensityEntries: ClassDensityEntry[] = []
