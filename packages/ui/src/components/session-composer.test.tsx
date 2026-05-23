@@ -390,6 +390,81 @@ describe('sessionComposer', () => {
     expect((screen.getByRole('textbox', { name: 'Session input' }) as HTMLTextAreaElement).value).toBe('Keep this')
   })
 
+  it('guards async managed submit and attachment edits while pending', async () => {
+    let resolveSubmit: (() => void) | undefined
+    const pendingSubmit = new Promise<void>((resolve) => {
+      resolveSubmit = resolve
+    })
+    const onSubmitDraft = vi.fn(() => pendingSubmit)
+    const file = new File(['pending'], 'pending.txt', { type: 'text/plain' })
+
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        defaultValue="Start session"
+        onSubmitDraft={onSubmitDraft}
+        submitAriaLabel="Start"
+      />,
+    )
+
+    const form = screen.getByRole('form', { name: 'Session input' })
+    fireEvent.submit(form)
+    fireEvent.submit(form)
+
+    await waitFor(() => expect(onSubmitDraft).toHaveBeenCalledTimes(1))
+    expect((screen.getByRole('textbox', { name: 'Session input' }) as HTMLTextAreaElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Start' }).getAttribute('aria-busy')).toBe('true')
+    expect((screen.getByRole('button', { name: 'Add material' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByTestId('managed-session-file-input') as HTMLInputElement).disabled).toBe(true)
+
+    fireEvent.change(screen.getByTestId('managed-session-file-input'), {
+      target: { files: [file] },
+    })
+    expect(screen.queryByText('pending.txt')).toBeNull()
+
+    resolveSubmit?.()
+    await waitFor(() => expect((screen.getByRole('textbox', { name: 'Session input' }) as HTMLTextAreaElement).value).toBe(''))
+  })
+
+  it('does not add managed files while disabled', () => {
+    const file = new File(['disabled'], 'disabled.txt', { type: 'text/plain' })
+
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        defaultValue="Start session"
+        disabled
+        onSubmitDraft={vi.fn()}
+        submitAriaLabel="Start"
+      />,
+    )
+
+    expect((screen.getByTestId('managed-session-file-input') as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Add material' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByTestId('managed-session-file-input'), {
+      target: { files: [file] },
+    })
+
+    expect(screen.queryByText('disabled.txt')).toBeNull()
+  })
+
   it('deduplicates managed attachments by name, size and MIME type', async () => {
     const file = new File(['same'], 'same.txt', { type: 'text/plain' })
 

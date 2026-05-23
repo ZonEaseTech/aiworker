@@ -170,22 +170,34 @@ export function ManagedSessionComposer({
   ...props
 }: ManagedSessionComposerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const localSubmittingRef = useRef(false)
+  const [localSubmitting, setLocalSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ReactNode>(null)
   const draft = useSessionComposerDraft({ defaultValue, onValueChange, value })
+  const composerSubmitting = submitting || localSubmitting
+  const attachmentInputDisabled = disabled || composerSubmitting
   const resolvedMentionQuery = mentionQuery ?? deriveSessionMentionQuery(draft.text)
   const composerAttachments = useMemo(
     () => draft.attachments.map(attachment => toSessionComposerAttachmentItem(attachment, attachmentLabels)),
     [attachmentLabels, draft.attachments],
   )
 
+  const addManagedFiles = useCallback((files: File[]) => {
+    if (attachmentInputDisabled)
+      return
+    draft.addFiles(files)
+  }, [attachmentInputDisabled, draft])
+
   const handleAddAttachments = useCallback(() => {
+    if (attachmentInputDisabled)
+      return
     fileInputRef.current?.click()
-  }, [])
+  }, [attachmentInputDisabled])
 
   const handleFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    draft.addFiles(Array.from(event.currentTarget.files ?? []))
+    addManagedFiles(Array.from(event.currentTarget.files ?? []))
     event.currentTarget.value = ''
-  }, [draft])
+  }, [addManagedFiles])
 
   const handleMentionSelect = useCallback((option: SessionComposerMentionOption) => {
     draft.setText(insertSessionMention(draft.text, option.id))
@@ -199,9 +211,11 @@ export function ManagedSessionComposer({
     event.preventDefault()
 
     const hasDraftContent = draft.text.trim().length > 0 || draft.files.length > 0
-    if (disabled || submitDisabled || submitting || (!allowSubmitWithoutText && !hasDraftContent))
+    if (disabled || submitDisabled || submitting || localSubmittingRef.current || (!allowSubmitWithoutText && !hasDraftContent))
       return
 
+    localSubmittingRef.current = true
+    setLocalSubmitting(true)
     setSubmitError(null)
 
     try {
@@ -217,6 +231,10 @@ export function ManagedSessionComposer({
     }
     catch (error) {
       setSubmitError(error instanceof Error ? error.message : attachmentLabels.materialReadError)
+    }
+    finally {
+      localSubmittingRef.current = false
+      setLocalSubmitting(false)
     }
   }, [
     allowSubmitWithoutText,
@@ -237,6 +255,7 @@ export function ManagedSessionComposer({
         aria-label={attachmentLabels.add}
         className="sr-only"
         data-testid="managed-session-file-input"
+        disabled={attachmentInputDisabled}
         multiple
         tabIndex={-1}
         type="file"
@@ -253,7 +272,7 @@ export function ManagedSessionComposer({
         error={submitError}
         mentionOptions={mentionOptions}
         mentionQuery={resolvedMentionQuery}
-        onAddAttachmentFiles={draft.addFiles}
+        onAddAttachmentFiles={addManagedFiles}
         onAddAttachments={handleAddAttachments}
         onMentionDismiss={handleMentionDismiss}
         onMentionSelect={handleMentionSelect}
@@ -262,7 +281,7 @@ export function ManagedSessionComposer({
         onValueChange={draft.setText}
         selectedTemplateId={selectedTemplateId}
         submitDisabled={submitDisabled}
-        submitting={submitting}
+        submitting={composerSubmitting}
         value={draft.text}
       />
     </>

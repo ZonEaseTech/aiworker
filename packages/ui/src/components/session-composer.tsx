@@ -126,6 +126,7 @@ export interface SessionComposerProps {
 export interface SessionComposerActionBarProps {
   attachmentCount?: number
   attachmentCountLabel?: string
+  attachmentActionDisabled?: boolean
   attachmentTriggerLabel?: string
   disabled?: boolean
   onAddAttachments?: () => void
@@ -248,7 +249,7 @@ export function SessionComposer({
           mentionQuery={mentionQuery}
           onMentionSelect={onMentionSelect}
         />
-        <SessionAttachmentList attachments={attachments} onRemoveAttachment={onRemoveAttachment} />
+        <SessionAttachmentList attachments={attachments} onRemoveAttachment={onRemoveAttachment} removeDisabled={disabled || submitting} />
         <InputGroupTextarea
           data-session-slot="composer-input"
           aria-label={ariaLabel}
@@ -287,6 +288,7 @@ export function SessionComposer({
         <SessionComposerActionBar
           attachmentCount={attachments.length}
           attachmentCountLabel={attachmentCountLabel}
+          attachmentActionDisabled={disabled || submitting}
           attachmentTriggerLabel={attachmentTriggerLabel}
           disabled={!canSubmit}
           onAddAttachments={onAddAttachments}
@@ -474,6 +476,7 @@ function fileKey(file: File): string {
 export function SessionComposerActionBar({
   attachmentCount = 0,
   attachmentCountLabel,
+  attachmentActionDisabled = false,
   attachmentTriggerLabel,
   disabled = false,
   onAddAttachments,
@@ -508,6 +511,7 @@ export function SessionComposerActionBar({
                 variant="ghost"
                 size={attachmentCount > 0 ? 'sm' : 'icon-sm'}
                 aria-label={attachmentTriggerLabel}
+                disabled={attachmentActionDisabled}
                 title={attachmentTriggerLabel}
                 onClick={onAddAttachments}
               >
@@ -608,9 +612,11 @@ export function SessionComposerActionBar({
 export function SessionAttachmentList({
   attachments,
   onRemoveAttachment,
+  removeDisabled = false,
 }: {
   attachments: SessionComposerAttachmentItem[]
   onRemoveAttachment?: (id: string) => void
+  removeDisabled?: boolean
 }) {
   const [previewAttachment, setPreviewAttachment] = useState<SessionComposerAttachmentItem | null>(null)
 
@@ -665,6 +671,7 @@ export function SessionAttachmentList({
                       variant="ghost"
                       size="icon-xs"
                       aria-label={attachment.removeLabel}
+                      disabled={removeDisabled}
                       title={attachment.removeLabel}
                       onClick={() => onRemoveAttachment(attachment.id)}
                     >
