@@ -6,13 +6,12 @@ import type { Context } from 'hono'
 import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { Buffer } from 'node:buffer'
-import { spawn, spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
-import { mkdir, readFile, stat } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
-import { OpenAPIHono, z } from '@hono/zod-openapi'
+import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import {
   createHostRuntime,
@@ -24,7 +23,6 @@ import {
 import {
   AppError,
   isLoopbackMountedServiceUrl,
-  localSettingsConfigSchema,
   localWorkerOverlaySaveSchema,
 } from '@zonease/aiworker-shared'
 import {
@@ -36,14 +34,12 @@ import {
   initWorkerDb,
   listSessionEvents,
   listSessions,
-  listSettings,
   listTurns,
   listWorkerOverlayAssets,
   listWorkers,
   listWorkspaces,
   nextWorkerEngineInvocationSeq,
   runWorkerMigrations,
-  setSetting,
   updateWorkspace,
   upsertWorker,
   upsertWorkerOverlayAssets,
@@ -51,18 +47,12 @@ import {
 
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
+import { registerLocalOpenApiPaths } from './worker/openapi'
+import { loadLocalSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
+import { serveWorkerWeb, serveWorkerWebAsset } from './worker/web-static'
 
 const DEFAULT_RUNTIME_VERSION = 'dev'
-const LOCAL_SETTINGS_KEY = 'local-settings'
 const REQUEST_IDENTITIES = new WeakMap<Context, HostIdentity>()
-const ENGINE_COMMANDS = [
-  { id: 'codex', name: 'Codex CLI', command: 'codex' },
-  { id: 'claude-code', name: 'Claude Code', command: 'claude' },
-  { id: 'cursor', name: 'Cursor Agent', command: 'cursor-agent' },
-  { id: 'gemini', name: 'Gemini CLI', command: 'gemini' },
-  { id: 'opencode', name: 'OpenCode', command: 'opencode' },
-  { id: 'qwen', name: 'Qwen Code', command: 'qwen' },
-] as const
 
 export interface BootstrapWorkerAppOptions {
   dbPath?: string
@@ -1403,251 +1393,6 @@ function streamSessionTurn(
   })
 }
 
-function loadLocalSettings(): LocalSettingsConfig {
-  const row = listSettings().find(setting => setting.key === LOCAL_SETTINGS_KEY)
-  const parsed = row ? localSettingsConfigSchema.safeParse(row.valueJson) : null
-  if (parsed?.success)
-    return normalizePendingMcpSettings(parsed.data)
-  return saveLocalSettings(defaultLocalSettings())
-}
-
-function saveLocalSettings(settings: LocalSettingsConfig): LocalSettingsConfig {
-  const parsed = localSettingsConfigSchema.parse(normalizePendingMcpSettings(settings))
-  setSetting(LOCAL_SETTINGS_KEY, parsed)
-  return parsed
-}
-
-function normalizePendingMcpSettings(settings: LocalSettingsConfig): LocalSettingsConfig {
-  return {
-    ...settings,
-    externalMcpServers: settings.externalMcpServers.map(server => ({
-      ...server,
-      enabled: false,
-    })),
-    localMcpServer: {
-      ...settings.localMcpServer,
-      enabled: false,
-    },
-  }
-}
-
-function defaultLocalSettings(): LocalSettingsConfig {
-  const engines = scanLocalEngines()
-  const firstInstalled = engines.find(engine => engine.installed)
-  return {
-    appearance: 'system',
-    byok: {
-      apiKeyRef: '',
-      baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-4o',
-      provider: 'openai-compatible',
-    },
-    connectors: [
-      { enabled: false, id: 'ats', name: 'ATS / HRIS', status: 'not_configured' },
-      { enabled: false, id: 'docs', name: 'Docs workspace', status: 'not_configured' },
-      { enabled: false, id: 'issue-tracker', name: 'Issue tracker', status: 'not_configured' },
-      { enabled: false, id: 'ci', name: 'CI / release evidence', status: 'not_configured' },
-      { enabled: false, id: 'cloud', name: 'Cloud account', status: 'not_configured' },
-      { enabled: false, id: 'crm', name: 'CRM', status: 'not_configured' },
-    ],
-    engineId: firstInstalled?.id ?? 'codex',
-    engines,
-    executionMode: firstInstalled ? 'local-cli' : 'byok',
-    externalMcpServers: [
-      { command: '', enabled: false, id: 'team-context', name: 'Team context MCP' },
-      { command: '', enabled: false, id: 'evidence-search', name: 'Evidence search MCP' },
-    ],
-    language: 'en',
-    localMcpServer: {
-      enabled: false,
-      url: 'http://127.0.0.1:4319/mcp',
-    },
-    updatedAt: new Date().toISOString(),
-  }
-}
-
-function scanLocalEngines(): LocalSettingsConfig['engines'] {
-  return ENGINE_COMMANDS.map((engine) => {
-    const found = commandOutput('bash', ['-lc', `command -v ${engine.command}`]).trim()
-    if (!found) {
-      return {
-        command: engine.command,
-        id: engine.id,
-        installed: false,
-        name: engine.name,
-        path: null,
-        version: null,
-      }
-    }
-    const version = commandOutput(found, ['--version']).split('\n')[0]?.trim() || 'installed'
-    return {
-      command: engine.command,
-      id: engine.id,
-      installed: true,
-      name: engine.name,
-      path: found,
-      version,
-    }
-  })
-}
-
-function commandOutput(command: string, args: string[]): string {
-  const result = spawnSync(command, args, { encoding: 'utf8', timeout: 2500 })
-  if (result.status !== 0)
-    return ''
-  return result.stdout.toString()
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-async function serveWorkerWeb(c: Context, webStaticDir?: string): Promise<Response> {
-  const indexPath = safeStaticPath(resolveWorkerWebStaticDir(webStaticDir), 'index.html')
-  try {
-    return new Response(await readFile(indexPath), {
-      headers: { 'content-type': 'text/html; charset=utf-8' },
-    })
-  }
-  catch {
-    return c.text('Worker Web build not found. Run `bun run --filter \'@zonease/aiworker-web\' build` first.', 404)
-  }
-}
-
-async function serveWorkerWebAsset(c: Context, webStaticDir: string | undefined, relativePath: string): Promise<Response> {
-  const root = resolveWorkerWebStaticDir(webStaticDir)
-  const filePath = safeStaticPath(root, relativePath)
-  try {
-    const info = await stat(filePath)
-    if (!info.isFile())
-      return c.text('Not found', 404)
-    return new Response(await readFile(filePath), {
-      headers: { 'content-type': contentTypeFor(filePath) },
-    })
-  }
-  catch {
-    return c.text('Not found', 404)
-  }
-}
-
-function resolveWorkerWebStaticDir(explicitDir?: string): string {
-  if (explicitDir)
-    return path.resolve(explicitDir)
-
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url))
-  return path.resolve(moduleDir, '../../../web/dist/worker')
-}
-
-function safeStaticPath(root: string, relativePath: string): string {
-  const resolvedRoot = path.resolve(root)
-  const target = path.resolve(resolvedRoot, relativePath)
-  if (target !== resolvedRoot && !target.startsWith(`${resolvedRoot}${path.sep}`))
-    throw new Error(`Static path escapes Worker Web root: ${relativePath}`)
-  return target
-}
-
-function contentTypeFor(filePath: string): string {
-  const ext = path.extname(filePath)
-  if (ext === '.css')
-    return 'text/css; charset=utf-8'
-  if (ext === '.js')
-    return 'text/javascript; charset=utf-8'
-  if (ext === '.json' || ext === '.map')
-    return 'application/json; charset=utf-8'
-  if (ext === '.svg')
-    return 'image/svg+xml'
-  if (ext === '.png')
-    return 'image/png'
-  if (ext === '.jpg' || ext === '.jpeg')
-    return 'image/jpeg'
-  if (ext === '.webp')
-    return 'image/webp'
-  if (ext === '.woff2')
-    return 'font/woff2'
-  return 'application/octet-stream'
-}
-
-function registerLocalOpenApiPaths(app: OpenAPIHono): void {
-  const responseSchema = z.object({}).passthrough().openapi('LocalResponse')
-  const okJson = {
-    200: {
-      description: 'OK',
-      content: { 'application/json': { schema: responseSchema } },
-    },
-  } as const
-  const createdJson = {
-    201: {
-      description: 'Created',
-      content: { 'application/json': { schema: responseSchema } },
-    },
-  } as const
-
-  const paths: Array<{
-    method: 'get' | 'post' | 'patch' | 'put'
-    path: string
-    summary: string
-    tags: string[]
-    created?: boolean
-  }> = [
-    { method: 'get', path: '/api/local/info', summary: 'Local daemon info', tags: ['info'] },
-    { method: 'get', path: '/api/local/apps', summary: 'List Host Soul Apps', tags: ['apps'] },
-    { method: 'post', path: '/api/local/apps/install', summary: 'Install Host Soul App manifest', tags: ['apps'], created: true },
-    { method: 'get', path: '/api/local/apps/{appId}', summary: 'Show Host Soul App', tags: ['apps'] },
-    { method: 'post', path: '/api/local/apps/{appId}/enable', summary: 'Enable Host Soul App', tags: ['apps'], created: true },
-    { method: 'post', path: '/api/local/apps/{appId}/disable', summary: 'Disable Host Soul App', tags: ['apps'], created: true },
-    { method: 'post', path: '/api/local/apps/{appId}/healthcheck', summary: 'Run Host Soul App static healthcheck', tags: ['apps'], created: true },
-    { method: 'get', path: '/api/local/souls', summary: 'List projected Souls from installed apps', tags: ['catalog'] },
-    { method: 'get', path: '/api/local/templates', summary: 'List projected capability templates from installed apps', tags: ['catalog'] },
-    { method: 'get', path: '/api/local/apps/{appId}/surfaces/{surfaceId}', summary: 'Resolve a declared mounted Soul App UI surface', tags: ['apps'] },
-    { method: 'get', path: '/api/local/apps/{appId}/{path}', summary: 'Reserved mounted Soul App API namespace', tags: ['apps'] },
-    { method: 'get', path: '/api/local/workers', summary: 'List Soul workers', tags: ['workers'] },
-    { method: 'post', path: '/api/local/workers', summary: 'Create Soul worker', tags: ['workers'], created: true },
-    { method: 'get', path: '/api/local/workers/{workerId}', summary: 'Show Soul worker', tags: ['workers'] },
-    { method: 'patch', path: '/api/local/workers/{workerId}', summary: 'Update Soul worker', tags: ['workers'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/overlay', summary: 'Show worker runtime overlay', tags: ['workers'] },
-    { method: 'put', path: '/api/local/workers/{workerId}/overlay', summary: 'Save worker runtime overlay', tags: ['workers'] },
-    { method: 'post', path: '/api/local/workers/{workerId}/engine/invocations', summary: 'Create worker native engine invocation', tags: ['engine'], created: true },
-    { method: 'post', path: '/api/local/workers/{workerId}/engine/invocations/stream', summary: 'Stream worker native engine invocation', tags: ['engine'], created: true },
-    { method: 'get', path: '/api/local/workers/{workerId}/templates', summary: 'List worker capability templates', tags: ['templates'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/templates/{templateId}', summary: 'Show worker capability template', tags: ['templates'] },
-    { method: 'get', path: '/api/local/workspaces', summary: 'List workspaces', tags: ['workspaces'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/workspaces', summary: 'List worker workspaces', tags: ['workspaces'] },
-    { method: 'post', path: '/api/local/workers/{workerId}/workspaces', summary: 'Create worker workspace', tags: ['workspaces'], created: true },
-    { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}', summary: 'Show worker workspace', tags: ['workspaces'] },
-    { method: 'patch', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}', summary: 'Update worker workspace', tags: ['workspaces'] },
-    { method: 'post', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/projection', summary: 'Project worker overlay into workspace', tags: ['workspaces'] },
-    { method: 'get', path: '/api/local/workspaces/{workspaceId}', summary: 'Show workspace', tags: ['workspaces'] },
-    { method: 'patch', path: '/api/local/workspaces/{workspaceId}', summary: 'Update workspace', tags: ['workspaces'] },
-    { method: 'get', path: '/api/local/sessions', summary: 'List sessions', tags: ['sessions'] },
-    { method: 'get', path: '/api/local/turns', summary: 'List turns', tags: ['turns'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions', summary: 'List worker workspace sessions', tags: ['sessions'] },
-    { method: 'post', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions', summary: 'Create worker workspace session', tags: ['sessions'], created: true },
-    { method: 'post', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions/stream', summary: 'Create worker workspace session with event stream', tags: ['sessions'], created: true },
-    { method: 'get', path: '/api/local/workspaces/{workspaceId}/sessions', summary: 'List workspace sessions', tags: ['sessions'] },
-    { method: 'post', path: '/api/local/workspaces/{workspaceId}/sessions', summary: 'Create workspace session', tags: ['sessions'], created: true },
-    { method: 'post', path: '/api/local/workspaces/{workspaceId}/sessions/stream', summary: 'Create workspace session with event stream', tags: ['sessions'], created: true },
-    { method: 'get', path: '/api/local/sessions/{sessionId}', summary: 'Show session', tags: ['sessions'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/sessions/{sessionId}', summary: 'Show worker session', tags: ['sessions'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/sessions/{sessionId}/events', summary: 'Replay worker session events', tags: ['events'] },
-    { method: 'get', path: '/api/local/workers/{workerId}/sessions/{sessionId}/turns', summary: 'List worker session turns', tags: ['turns'] },
-    { method: 'post', path: '/api/local/workers/{workerId}/sessions/{sessionId}/messages', summary: 'Create worker session message', tags: ['turns'], created: true },
-    { method: 'post', path: '/api/local/workers/{workerId}/sessions/{sessionId}/messages/stream', summary: 'Create worker session message with event stream', tags: ['turns'], created: true },
-    { method: 'get', path: '/api/local/sessions/{sessionId}/events', summary: 'Replay session events', tags: ['events'] },
-    { method: 'get', path: '/api/local/sessions/{sessionId}/turns', summary: 'List session turns', tags: ['turns'] },
-    { method: 'post', path: '/api/local/sessions/{sessionId}/turns', summary: 'Create session turn', tags: ['turns'], created: true },
-    { method: 'get', path: '/api/local/settings', summary: 'Show settings', tags: ['settings'] },
-    { method: 'patch', path: '/api/local/settings', summary: 'Update settings', tags: ['settings'] },
-    { method: 'post', path: '/api/local/settings/engines/rescan', summary: 'Rescan engines', tags: ['settings'], created: true },
-    { method: 'post', path: '/api/local/settings/engines/test', summary: 'Test engine', tags: ['settings'], created: true },
-  ]
-
-  for (const path of paths) {
-    app.openAPIRegistry.registerPath({
-      method: path.method,
-      path: path.path,
-      summary: path.summary,
-      tags: path.tags,
-      responses: path.created ? createdJson : okJson,
-    })
-  }
 }

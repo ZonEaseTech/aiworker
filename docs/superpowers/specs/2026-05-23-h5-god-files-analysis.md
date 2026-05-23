@@ -2,9 +2,29 @@
 
 - 日期：2026-05-23
 - 来源：`docs/superpowers/specs/2026-05-23-zero-trust-boundary-audit-design.md`（H5，中）
-- 状态：**分析与排期建议，非已批准的实现设计**。零信任整改（H1–H4 + 孪生 + H6）已闭环并合并；
-  H5 是纯重构，独立排期，未实现。
+- 状态：**部分已实现**。零信任整改（H1–H4 + 孪生 + H6）已闭环并合并。H5 第一批（两个真
+  god file 的方案 A 保守抽叶子）已按 `docs/superpowers/specs/2026-05-23-h5-god-files-split-design.md`
+  与 `docs/superpowers/plans/2026-05-23-h5-god-files-split.md` 完成于分支 `refactor/h5-god-files-split`：
+  - `apps/cli/src/aiworker.ts` 2481 → 1656：抽出 `apps/cli/src/scaffold.ts`（scaffold 模板）与
+    `apps/cli/src/soul-app-boundary.ts`（Soul App 边界校验器）。
+  - `apps/api/src/modes/worker.ts` 1653 → 1398：抽出 `worker/web-static.ts`、`worker/openapi.ts`、
+    `worker/settings.ts`。
+  - 行为保持验证：CLI 75 pass、API 33 pass、全量 typecheck exit 0、lint 无新增、crg 0 affected flow。
 - 约束基线：无安全/边界约束;目标是可维护性，行为保持。
+
+## 已完成批次遗留的小债项（后续单独 commit 处理，非阻塞）
+
+- `registryContext`（`return { hostVersion: packageJson.version }`）现重复存在于 `apps/cli/src/aiworker.ts`
+  与 `apps/cli/src/scaffold.ts`（scaffold.ts 不能 import aiworker.ts，否则循环依赖）。trivial getter，
+  下次整理 CLI 共享 helper 时合并到一个共享模块。
+- `apps/cli/src/soul-app-boundary.ts` 的 `HOST_PRIVATE_IMPORT_PREFIXES` 被 export（原 aiworker.ts 内为
+  非 export），目前无外部消费方，可恢复为非 export。
+- `apps/cli/src/soul-app-boundary.ts` 与 `scripts/check-soul-app-boundaries.ts` 仍是两套平行实现，
+  `listSourceFiles`/`importSpecifiers`/`isTestSourceFile`/`rawWebStorageSymbols` 近乎逐字重复；模块化后
+  去重路径更清晰。其中 `isSiblingSoulAppImport` 的 `replaceAll('\\\\', '/')` 是预存 bug（应匹配单反斜杠），
+  本批按行为保持原样搬运未改，去重时一并修。
+- `apps/api/src/modes/worker/` 子目录现有三个文件；若 `worker.ts` import 区显得零散，可评估引入
+  `worker/index.ts` barrel。
 
 ## 定性
 
