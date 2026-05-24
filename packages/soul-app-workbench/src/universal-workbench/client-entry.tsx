@@ -21,6 +21,7 @@ interface MountedHostData {
   appId?: string | null
   routePrefix?: string | null
   sessionId?: string | null
+  surfaceId?: string | null
   theme?: string | null
   workerId?: string | null
   workspaceId?: string | null
@@ -291,7 +292,18 @@ function UniversalWorkbenchMountedClient() {
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
-    setWorkspaces(current => [...current, result.workspace])
+    setWorkspaces(current => [
+      result.workspace,
+      ...current.filter(workspace => workspace.id !== result.workspace.id),
+    ])
+    setHostData(current => ({ ...current, workspaceId: result.workspace.id }))
+    window.microApp?.dispatch?.({
+      appId: hostData.appId ?? null,
+      surfaceId: hostData.surfaceId ?? 'universal-workbench',
+      type: 'locator:workspace-selected',
+      workerId,
+      workspaceId: result.workspace.id,
+    })
   }
 
   async function handleSubmitTurn(draft: UniversalWorkbenchSubmitTurnDraft) {

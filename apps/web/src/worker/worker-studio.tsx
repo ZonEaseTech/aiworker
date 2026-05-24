@@ -82,15 +82,24 @@ export function WorkerStudio() {
   const [workerOverlayAssets, setWorkerOverlayAssets] = useState<LocalWorkerOverlayAsset[]>([])
   const [submitting, setSubmitting] = useState(false)
   const mountedChildRouteMemoryRef = useRef(new Map<string, string>())
+  const refreshRequestSeqRef = useRef(0)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<LocalWorkspaceData | null> => {
+    const requestSeq = refreshRequestSeqRef.current + 1
+    refreshRequestSeqRef.current = requestSeq
     setState(current => ({ ...current, loading: true, error: null }))
     try {
       const data = await loadLocalWorkspaceData()
+      if (refreshRequestSeqRef.current !== requestSeq)
+        return null
       setState({ data, error: null, loading: false })
+      return data
     }
     catch (error) {
+      if (refreshRequestSeqRef.current !== requestSeq)
+        return null
       setState({ data: null, error: error instanceof Error ? error.message : String(error), loading: false })
+      return null
     }
   }, [])
 
@@ -138,6 +147,15 @@ export function WorkerStudio() {
     : selectedWorker
   const workerOverlayTarget = workerConfigurationOpen ? workerConfigurationWorker : selectedWorker
   const selectedWorkerOverlayId = workerOverlayTarget?.id ?? null
+  const selectWorkspaceLocator = useCallback(async (workerId: string, workspaceId: string): Promise<void> => {
+    const nextData = await refresh()
+    const selectedWorkspace = nextData?.workspaces.find(workspace => workspace.id === workspaceId && workspace.workerId === workerId)
+    if (!selectedWorkspace)
+      return
+    setSelectedWorkerId(workerId)
+    setSelectedWorkspaceId(selectedWorkspace.id)
+    navigateWorkerRoute({ kind: 'workspace', workerId, workspaceId: selectedWorkspace.id })
+  }, [refresh])
   const soulAppForWorker = useCallback((worker: typeof selectedWorker) => {
     if (!worker)
       return null
@@ -179,6 +197,9 @@ export function WorkerStudio() {
     }),
     [activeMountedTabMap, selectedMountedRoutes, selectedWorker?.id],
   )
+  const mountedWorkspaceId = activeMountedRoute?.surface?.scope === 'app' && !isWorkspaceContextRoute
+    ? null
+    : selectedWorkspace?.id ?? null
   const workerConfigurationActiveRouteId = useMemo(() => {
     if (!workerConfigurationWorker)
       return null
@@ -460,7 +481,7 @@ export function WorkerStudio() {
                         ? { ...current, data: { ...current.data, settings }, loading: false }
                         : current)
                     }}
-                    onAppsChanged={() => refresh()}
+                    onAppsChanged={() => void refresh()}
                   />
                 )
               : null}
@@ -511,7 +532,8 @@ export function WorkerStudio() {
                     routeMemoryRef={mountedChildRouteMemoryRef}
                     sessionId={activeMountedRoute?.surface?.scope === 'session' ? selectedSession?.id ?? null : null}
                     workerId={selectedWorker.id}
-                    workspaceId={selectedWorkspace?.id ?? null}
+                    workspaceId={mountedWorkspaceId}
+                    onSelectWorkspace={(workspaceId) => selectWorkspaceLocator(selectedWorker.id, workspaceId)}
                   />
                 )
               : null}
@@ -546,10 +568,7 @@ export function WorkerStudio() {
                     onOpenSettings={() => openSettings()}
                     onRefresh={() => void refresh()}
                     onSearch={setQuery}
-                    onSelectWorkspace={(workspace) => {
-                      setSelectedWorkspaceId(workspace.id)
-                      navigateWorkerRoute({ kind: 'workspace', workerId: workspace.workerId, workspaceId: workspace.id })
-                    }}
+                    onSelectWorkspace={(workspace) => selectWorkspaceLocator(workspace.workerId, workspace.id)}
                   />
                 )
               : null}

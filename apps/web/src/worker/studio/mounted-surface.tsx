@@ -52,6 +52,7 @@ export function MountedSoulAppRouteSurface({
   route,
   routeMemoryRef,
   sessionId,
+  onSelectWorkspace,
   workerId,
   workspaceId,
 }: {
@@ -60,6 +61,7 @@ export function MountedSoulAppRouteSurface({
   route: HostedSoulApp['manifest']['ui']['routes'][number]
   routeMemoryRef: MutableRefObject<Map<string, string>>
   sessionId?: string | null
+  onSelectWorkspace?: (workspaceId: string) => void
   workerId?: string | null
   workspaceId?: string | null
 }) {
@@ -101,8 +103,13 @@ export function MountedSoulAppRouteSurface({
     }
     if (event.type === 'error') {
       setChildError(event.message)
+      return
     }
-  }, [])
+    if (event.type === 'locator:workspace-selected') {
+      if (event.workerId === workerId)
+        onSelectWorkspace?.(event.workspaceId)
+    }
+  }, [onSelectWorkspace, workerId])
 
   useEffect(() => {
     if (!surface || !mountedMicroAppData)

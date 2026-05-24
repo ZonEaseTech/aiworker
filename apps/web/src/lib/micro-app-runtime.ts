@@ -179,6 +179,19 @@ function normalizeMountedMicroAppChildEvent(data: Record<PropertyKey, unknown>):
         surfaceId: stringOrUndefined(data.surfaceId),
         type: 'resize',
       }
+    case 'locator:workspace-selected': {
+      const workerId = stringOrUndefined(data.workerId)
+      const workspaceId = stringOrUndefined(data.workspaceId)
+      if (!workerId || !workspaceId)
+        return null
+      return {
+        appId: stringOrUndefined(data.appId),
+        surfaceId: stringOrUndefined(data.surfaceId),
+        type: 'locator:workspace-selected',
+        workerId,
+        workspaceId,
+      }
+    }
     default:
       return null
   }

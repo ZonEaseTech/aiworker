@@ -7,8 +7,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { engineIconSrc } from '../../features/settings/model'
 import { WorkerStudio } from '../worker-studio'
 
+type MountedMicroAppTestEvent = {
+  actionId?: string
+  appId?: string
+  input?: unknown
+  surfaceId?: string
+  type: string
+  workerId?: string | null
+  workspaceId?: string | null
+}
+
 const microAppRouteMock = vi.hoisted(() => ({
-  dataListeners: new Map<string, (event: { actionId?: string, appId?: string, input?: unknown, surfaceId?: string, type: string }) => void>(),
+  dataListeners: new Map<string, (event: MountedMicroAppTestEvent) => void>(),
   getMountedMicroAppCurrentRoute: vi.fn(),
   listeners: new Map<string, (to: { pathname?: string }, from: { pathname?: string }) => void>(),
   pushMountedMicroAppRoute: vi.fn(),
@@ -19,7 +29,7 @@ vi.mock('../../lib/micro-app-runtime', async () => {
   const actual = await vi.importActual<typeof import('../../lib/micro-app-runtime')>('../../lib/micro-app-runtime')
   return {
     ...actual,
-    addMountedMicroAppDataListener: vi.fn((appName: string, listener: (event: { actionId?: string, appId?: string, input?: unknown, surfaceId?: string, type: string }) => void) => {
+    addMountedMicroAppDataListener: vi.fn((appName: string, listener: (event: MountedMicroAppTestEvent) => void) => {
       microAppRouteMock.dataListeners.set(appName, listener)
       return () => microAppRouteMock.dataListeners.delete(appName)
     }),
@@ -283,6 +293,7 @@ let currentTemplates: typeof templates
 let currentTurns: LocalTurn[]
 let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
+let workspaceDataResponses: Array<Promise<typeof workspace[]> | typeof workspace[]>
 let currentWorkerOverlayAssets: LocalWorkerOverlayAsset[]
 let currentArtifactRawContent: string
 let currentArtifactRawStatus: number
@@ -476,6 +487,7 @@ function resetSettings() {
     localMcpServer: { ...baseSettings.localMcpServer },
   }
   currentWorkspaces = [{ ...workspace }]
+  workspaceDataResponses = []
   currentSessions = [{ ...sessionRecord }]
   currentSouls = souls.map(soul => ({ ...soul, defaultTemplates: [...soul.defaultTemplates] }))
   currentTemplates = templates.map(template => ({
@@ -516,6 +528,14 @@ function resetSettings() {
   currentArtifactRawStatus = 200
   currentApps = []
   deferCreatedSessionStream = false
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve
+  })
+  return { promise, resolve }
 }
 
 function installMatchMedia(initialMatches: boolean) {
@@ -605,30 +625,32 @@ beforeEach(() => {
       })
     }
     const requestUrl = new URL(url, 'http://local.test')
-    const hrSurfaceMatch = requestUrl.pathname.match(/^\/api\/local\/apps\/aiworker-hr\/surfaces\/([^/]+)$/)
-    if (hrSurfaceMatch) {
-      const surfaceId = hrSurfaceMatch[1]!
-      const hrRoute = currentApps
-        .find(app => app.appId === 'aiworker-hr')
+    const mountedSurfaceMatch = requestUrl.pathname.match(/^\/api\/local\/apps\/([^/]+)\/surfaces\/([^/]+)$/)
+    if (mountedSurfaceMatch) {
+      const appId = mountedSurfaceMatch[1]!
+      const surfaceId = mountedSurfaceMatch[2]!
+      const mountedApp = currentApps
+        .find(app => app.appId === appId)
+      const mountedRoute = mountedApp
         ?.manifest
         .ui
         ?.routes
         ?.find(route => route.id === surfaceId)
-      if (hrRoute?.surface?.renderer === 'micro-app') {
+      if (mountedRoute?.surface?.renderer === 'micro-app') {
         return json({
           microApp: {
             data: {
-              appId: 'aiworker-hr',
+              appId,
               sessionId: requestUrl.searchParams.get('sessionId') ?? null,
               surfaceId,
               workerId: requestUrl.searchParams.get('workerId') ?? null,
               workspaceId: requestUrl.searchParams.get('workspaceId') ?? null,
               theme: requestUrl.searchParams.get('theme') ?? null,
             },
-            name: `aiworker-hr--${surfaceId}`,
-            url: `/api/local/apps/aiworker-hr${hrRoute.surface.entry ?? `/micro-app/routes/${surfaceId}`}${requestUrl.search}`,
+            name: `${appId}--${surfaceId}`,
+            url: `/api/local/apps/${appId}${mountedRoute.surface.entry ?? `/micro-app/routes/${surfaceId}`}${requestUrl.search}`,
           },
-          surface: { id: surfaceId, kind: 'route', label: hrRoute.label, renderer: 'micro-app', scope: hrRoute.surface.scope ?? null },
+          surface: { id: surfaceId, kind: 'route', label: mountedRoute.label, renderer: 'micro-app', scope: mountedRoute.surface.scope ?? null },
         })
       }
       return json({
@@ -737,7 +759,7 @@ beforeEach(() => {
       return json({ workspace: created }, 201)
     }
     if (url.endsWith('/api/local/workspaces'))
-      return json({ workspaces: currentWorkspaces })
+      return json({ workspaces: await (workspaceDataResponses.shift() ?? currentWorkspaces) })
     const workspaceFileWriteMatch = url.match(/\/api\/local\/workspaces\/([^/]+)\/files\/raw\/(.+)$/)
     if (workspaceFileWriteMatch && method === 'PUT') {
       const workspaceId = workspaceFileWriteMatch[1]!
@@ -999,18 +1021,97 @@ describe('worker studio', () => {
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
     expect(microApp.getAttribute('name')).toBe('aiworker-hr--universal-workbench')
     expect(microApp.getAttribute('baseroute')).toBe('/workbench/universal')
-    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/workbench/universal?workerId=hr-worker&workspaceId=workspace-1&theme=light')
+    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/workbench/universal?workerId=hr-worker&theme=light')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
       sessionId: null,
       surfaceId: 'universal-workbench',
       workerId: 'hr-worker',
-      workspaceId: 'workspace-1',
+      workspaceId: null,
     })
-    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/universal-workbench?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
+    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/universal-workbench?workerId=hr-worker&theme=light', expect.objectContaining({ headers: {} }))
     expect(screen.queryByTestId('universal-workbench')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expect(lastSessionRequestBody).toBeNull()
+  })
+
+  it('updates Host workspace locator when a mounted app selects a workspace', async () => {
+    currentWorkers = [
+      { createdAt: now, defaultEngineId: 'codex', id: 'qa-worker', metadataJson: {}, name: 'QA', soulId: QA_SOUL_ID, status: 'active', updatedAt: now },
+    ]
+    currentApps = [
+      mountedRouteApp({
+        appId: 'aiworker-qa',
+        appName: 'AIWorker QA',
+        routes: [universalRoute()],
+      }),
+    ]
+    const qaWorkspace = { ...workspace, id: 'qa-workspace', name: 'QA Workspace', workerId: 'qa-worker', updatedAt: '2026-05-24T06:49:06.848Z' }
+    currentWorkspaces = []
+    const staleForeignWorkspaceRefresh = deferred<typeof workspace[]>()
+    workspaceDataResponses = [[], staleForeignWorkspaceRefresh.promise, [qaWorkspace]]
+    window.history.replaceState(null, '', '/workers/qa-worker')
+    render(<WorkerStudio />)
+
+    const microApp = await screen.findByTitle('Universal Workbench')
+    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-qa/micro-app/workbench/universal?workerId=qa-worker&theme=light')
+
+    await waitFor(() => {
+      expect(microAppRouteMock.dataListeners.has('aiworker-qa--universal-workbench')).toBe(true)
+    })
+    act(() => {
+      microAppRouteMock.dataListeners.get('aiworker-qa--universal-workbench')?.({
+        appId: 'aiworker-qa',
+        surfaceId: 'universal-workbench',
+        type: 'locator:workspace-selected',
+        workerId: 'hr-worker',
+        workspaceId: 'qa-workspace',
+      })
+    })
+    expect(window.location.pathname).toBe('/workers/qa-worker')
+    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-qa/micro-app/workbench/universal?workerId=qa-worker&theme=light')
+
+    act(() => {
+      microAppRouteMock.dataListeners.get('aiworker-qa--universal-workbench')?.({
+        appId: 'aiworker-qa',
+        surfaceId: 'universal-workbench',
+        type: 'locator:workspace-selected',
+        workerId: 'qa-worker',
+        workspaceId: 'workspace-1',
+      })
+    })
+    expect(window.location.pathname).toBe('/workers/qa-worker')
+
+    act(() => {
+      microAppRouteMock.dataListeners.get('aiworker-qa--universal-workbench')?.({
+        appId: 'aiworker-qa',
+        surfaceId: 'universal-workbench',
+        type: 'locator:workspace-selected',
+        workerId: 'qa-worker',
+        workspaceId: 'qa-workspace',
+      })
+    })
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/workers/qa-worker/workspaces/qa-workspace')
+    })
+    await waitFor(() => {
+      expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-qa/micro-app/workbench/universal?workerId=qa-worker&workspaceId=qa-workspace&theme=light')
+    })
+    await waitFor(() => {
+      expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
+        workspaceId: 'qa-workspace',
+      })
+    })
+
+    await act(async () => {
+      staleForeignWorkspaceRefresh.resolve([{ ...workspace, workerId: 'hr-worker' }])
+      await staleForeignWorkspaceRefresh.promise
+    })
+    expect(window.location.pathname).toBe('/workers/qa-worker/workspaces/qa-workspace')
+    await waitFor(() => {
+      expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-qa/micro-app/workbench/universal?workerId=qa-worker&workspaceId=qa-workspace&theme=light')
+    })
   })
 
   it('keeps WorkerStudio free of universal-workbench renderer branches', () => {

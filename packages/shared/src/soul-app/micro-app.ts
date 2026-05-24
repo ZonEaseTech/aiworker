@@ -39,3 +39,10 @@ export type MountedMicroAppChildEvent
     surfaceId?: string
     type: 'resize'
   }
+  | {
+    appId?: string
+    surfaceId?: string
+    type: 'locator:workspace-selected'
+    workerId: string
+    workspaceId: string
+  }
