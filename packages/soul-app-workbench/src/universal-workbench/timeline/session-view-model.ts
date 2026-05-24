@@ -194,10 +194,13 @@ export function createSessionTimelineViewModel(input: {
     turns: input.turns
       .slice()
       .sort((a, b) => a.seq - b.seq)
-      .map(turn => ({
-        events: compactTimelineEvents(eventsByTurn.get(turn.id) ?? fallbackResponseEvents(turn)),
-        turn,
-      })),
+      .map((turn) => {
+        const compacted = compactTimelineEvents(eventsByTurn.get(turn.id) ?? fallbackResponseEvents(turn))
+        return {
+          events: suppressStaleTerminalStatus(compacted, turn),
+          turn,
+        }
+      }),
   }
 }
 
@@ -320,6 +323,19 @@ function fallbackResponseEvents(turn: SessionTimelineTurnInput): SessionTimeline
     }]
   }
   return []
+}
+
+function suppressStaleTerminalStatus(
+  events: SessionTimelineEvent[],
+  turn: SessionTimelineTurnInput,
+): SessionTimelineEvent[] {
+  if (turn.status === 'running')
+    return events
+  return events.filter((event) => {
+    if (event.kind !== 'signal' || event.signalKind !== 'status')
+      return true
+    return event.status === 'failed' || event.status === 'succeeded'
+  })
 }
 
 function isTextLikeFile(file: File): boolean {
@@ -641,7 +657,7 @@ function normalizeSignalStatus(value: string): SessionTimelineActivityStatus | u
     return 'failed'
   if (/\b(?:complete|completed|done|pass|succeed|succeeded|success)\b/u.test(lower))
     return 'succeeded'
-  if (/\b(?:initializing|running|pending|start|starting|streaming)\b/u.test(lower))
+  if (/\b(?:initializing|running|pending|requesting|start|starting|streaming)\b/u.test(lower))
     return 'running'
   return undefined
 }

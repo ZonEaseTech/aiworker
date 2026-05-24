@@ -2,7 +2,7 @@ import type { LocalSessionEvent } from '@zonease/aiworker-shared'
 
 import { describe, expect, it } from 'bun:test'
 
-import { loadSessionEvents, mergeSessionEvents } from './client-entry'
+import { isTerminalSessionStatus, loadSessionEvents, mergeSessionEvents } from './client-entry'
 
 describe('universal workbench mounted session events', () => {
   it('loads incremental session events through the mounted API and merges them without duplicate replay', async () => {
@@ -34,6 +34,16 @@ describe('universal workbench mounted session events', () => {
     finally {
       globalThis.fetch = originalFetch
     }
+  })
+
+  it('detects terminal session statuses used to stop mounted polling', () => {
+    expect(isTerminalSessionStatus('failed')).toBe(true)
+    expect(isTerminalSessionStatus('succeeded')).toBe(true)
+    expect(isTerminalSessionStatus('cancelled')).toBe(true)
+    expect(isTerminalSessionStatus('completed')).toBe(true)
+    expect(isTerminalSessionStatus('active')).toBe(false)
+    expect(isTerminalSessionStatus('running')).toBe(false)
+    expect(isTerminalSessionStatus(null)).toBe(false)
   })
 })
 

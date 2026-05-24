@@ -1,4 +1,4 @@
-import type { LocalWorkspace } from '@zonease/aiworker-shared'
+import type { LocalSession, LocalSessionEvent, LocalTurn, LocalWorkspace } from '@zonease/aiworker-shared'
 
 import { describe, expect, it, mock } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -7,6 +7,7 @@ import {
   buildUniversalWorkbenchCreateSessionPayload,
   resolveUniversalWorkbenchDraftInput,
 } from './client-entry'
+import { createSessionTimelineViewModel, normalizeSessionEvents } from './timeline/session-view-model'
 import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
 
 const vi = { fn: mock }
@@ -160,4 +161,149 @@ describe('UniversalWorkbenchApp', () => {
       selectedTemplateId: 'aiworker-qa.unknown',
     }, templates)).toBeNull()
   })
+
+  it('renders a failed session as recoverable without stale running status or duplicate timeout errors', () => {
+    const workspace = workspaceFixture()
+    const session: LocalSession = {
+      capabilityTemplateId: 'aiworker-hr.person-profile',
+      context: '',
+      createdAt: '2026-05-24T07:03:42.523Z',
+      endedAt: '2026-05-24T07:08:43.533Z',
+      id: 'session-failed',
+      metadataJson: {},
+      startedAt: '2026-05-24T07:03:42.523Z',
+      status: 'failed',
+      title: 'E2E audit task',
+      updatedAt: '2026-05-24T07:08:43.533Z',
+      workerId: 'worker-1',
+      workspaceId: workspace.id,
+    }
+    const timeoutMessage = '/Users/ben/.local/bin/claude exited with code 143: Process exceeded 300000ms and was terminated.'
+    const turn: LocalTurn = {
+      createdAt: '2026-05-24T07:03:42.526Z',
+      error: timeoutMessage,
+      id: 'turn-failed',
+      input: 'Create the Claude artifact.',
+      metadataJson: {},
+      response: 'Claude Code exited with code 143.',
+      seq: 1,
+      sessionId: session.id,
+      status: 'failed',
+      updatedAt: '2026-05-24T07:08:43.533Z',
+    }
+    const events: LocalSessionEvent[] = [
+      sessionEvent({ id: 366, payloadJson: { status: 'running', turnId: turn.id }, seq: 2, type: 'status', turnId: turn.id }),
+      sessionEvent({ id: 369, payloadJson: { agentEvent: { kind: 'status', label: 'requesting' } }, seq: 5, type: 'status', turnId: turn.id }),
+      sessionEvent({ id: 371, payloadJson: { message: timeoutMessage, turnId: turn.id }, seq: 7, type: 'error', turnId: turn.id }),
+    ]
+
+    const html = renderToStaticMarkup(
+      <UniversalWorkbenchApp
+        engineReadiness={{ detail: 'Claude Code is ready for session turns.', label: 'Claude Code', ready: true }}
+        events={events}
+        selectedSessionId={session.id}
+        sessions={[session]}
+        templates={[{ id: 'aiworker-hr.person-profile', name: 'Person Profile' }]}
+        turnInput=""
+        turnSubmitting={false}
+        turns={[turn]}
+        workspace={workspace}
+        workspaces={[workspace]}
+        onBackToWorkspace={vi.fn()}
+        onCreateSession={vi.fn(async () => {})}
+        onCreateWorkspace={vi.fn()}
+        onRefresh={vi.fn()}
+        onSelectSession={vi.fn()}
+        onSubmitTurn={vi.fn()}
+        onTurnInputChange={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('failed')
+    expect(html).not.toContain('Session running')
+    expect(html).not.toContain('Sending...')
+    expect(html).not.toContain('requesting')
+    expect((html.match(/Process exceeded 300000ms/g) ?? [])).toHaveLength(1)
+  })
+
+  it('filters stale non-terminal status signals from terminal turns while preserving terminal status', () => {
+    const staleOnlyEvents = normalizeSessionEvents([
+      sessionEvent({ id: 401, payloadJson: { agentEvent: { kind: 'status', label: 'requesting' } }, seq: 1, type: 'status', turnId: 'turn-stale' }),
+    ], { parser: 'codex-cli' })
+    const failedEvents = normalizeSessionEvents([
+      sessionEvent({ id: 402, payloadJson: { status: 'failed', turnId: 'turn-failed' }, seq: 1, type: 'status', turnId: 'turn-failed' }),
+    ], { parser: 'codex-cli' })
+    const succeededEvents = normalizeSessionEvents([
+      sessionEvent({ id: 403, payloadJson: { status: 'succeeded', turnId: 'turn-succeeded' }, seq: 1, type: 'status', turnId: 'turn-succeeded' }),
+    ], { parser: 'codex-cli' })
+
+    const viewModel = createSessionTimelineViewModel({
+      events: [...staleOnlyEvents, ...failedEvents, ...succeededEvents],
+      turns: [
+        terminalTurn({ id: 'turn-stale', status: 'failed' }),
+        terminalTurn({ id: 'turn-failed', status: 'failed' }),
+        terminalTurn({ id: 'turn-succeeded', status: 'succeeded' }),
+      ],
+    })
+
+    expect(viewModel.turns.find(item => item.turn.id === 'turn-stale')?.events).toEqual([])
+    expect(viewModel.turns.find(item => item.turn.id === 'turn-failed')?.events).toMatchObject([
+      { kind: 'signal', signalKind: 'status', status: 'failed' },
+    ])
+    expect(viewModel.turns.find(item => item.turn.id === 'turn-succeeded')?.events).toMatchObject([
+      { kind: 'signal', signalKind: 'status', status: 'succeeded' },
+    ])
+  })
 })
+
+function workspaceFixture(): LocalWorkspace {
+  return {
+    createdAt: '2026-05-23T00:00:00.000Z',
+    id: 'workspace-1',
+    metadataJson: {},
+    name: 'Universal Workspace',
+    rootPath: '/tmp/aiworker/workspace-1',
+    sourcePointersJson: [],
+    status: 'active',
+    type: 'workspace',
+    updatedAt: '2026-05-23T00:00:00.000Z',
+    workerId: 'worker-1',
+  }
+}
+
+function sessionEvent(input: {
+  id: number
+  payloadJson: Record<string, unknown>
+  seq: number
+  type: LocalSessionEvent['type']
+  turnId: string | null
+}): LocalSessionEvent {
+  return {
+    createdAt: '2026-05-24T07:08:43.534Z',
+    id: input.id,
+    invocationId: 'invocation-1',
+    payloadJson: input.payloadJson,
+    seq: input.seq,
+    sessionId: 'session-failed',
+    turnId: input.turnId,
+    type: input.type,
+  }
+}
+
+function terminalTurn(input: {
+  id: string
+  status: LocalTurn['status']
+}): LocalTurn {
+  return {
+    createdAt: '2026-05-24T07:03:42.526Z',
+    error: null,
+    id: input.id,
+    input: 'Run a terminal turn.',
+    metadataJson: {},
+    response: null,
+    seq: input.id === 'turn-stale' ? 1 : input.id === 'turn-failed' ? 2 : 3,
+    sessionId: 'session-failed',
+    status: input.status,
+    updatedAt: '2026-05-24T07:08:43.533Z',
+  }
+}

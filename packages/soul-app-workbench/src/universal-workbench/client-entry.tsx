@@ -12,7 +12,7 @@ import type {
   UniversalWorkbenchSubmitTurnDraft,
 } from './UniversalWorkbenchApp'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { resolveEngineReadiness } from './timeline/engine-readiness'
 import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
@@ -30,6 +30,12 @@ interface SessionTurnResult {
   events?: LocalSessionEvent[]
   session?: LocalSession
   turn?: LocalTurn
+}
+
+interface SessionDetailResult {
+  events: LocalSessionEvent[]
+  session: LocalSession
+  turns: LocalTurn[]
 }
 
 interface UniversalWorkbenchCreateSessionPayload {
@@ -67,6 +73,10 @@ const UNIVERSAL_WORKBENCH_ENGINE_COPY = {
     engineNotInstalled: (engineName: string) => `${engineName} is selected but not installed on PATH.`,
     engineReadyDetail: (engineName: string) => `${engineName} is ready for session turns.`,
   },
+}
+
+export function isTerminalSessionStatus(status: string | null | undefined): boolean {
+  return status === 'failed' || status === 'succeeded' || status === 'cancelled' || status === 'completed'
 }
 
 export function resolveUniversalWorkbenchDraftInput(
@@ -138,11 +148,6 @@ function UniversalWorkbenchMountedClient() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(hostData.sessionId ?? null)
   const [turnInput, setTurnInput] = useState('')
   const [turnSubmitting, setTurnSubmitting] = useState(false)
-  const eventsRef = useRef<LocalSessionEvent[]>([])
-
-  useEffect(() => {
-    eventsRef.current = events
-  }, [events])
 
   const routePrefix = hostData.routePrefix ?? `/api/local/apps/${hostData.appId ?? ''}`
   const workerId = hostData.workerId ?? null
@@ -153,6 +158,12 @@ function UniversalWorkbenchMountedClient() {
       return workspaces.find(workspace => workspace.id === workspaceId) ?? workspaces[0] ?? null
     return workspaces[0] ?? null
   }, [workspaceId, workspaces])
+
+  const applySessionDetail = useCallback((detail: SessionDetailResult): void => {
+    setSessions(current => upsertSession(current, detail.session))
+    setTurns(detail.turns)
+    setEvents(detail.events)
+  }, [])
 
   const refresh = useCallback(async (preferredSessionId?: string | null) => {
     if (!workerId)
@@ -172,9 +183,11 @@ function UniversalWorkbenchMountedClient() {
     const nextSessions = sessionGroups.flat()
     setSessions(nextSessions)
     const nextSelectedSessionId = preferredSessionId ?? selectedSessionId ?? hostData.sessionId ?? nextSessions[0]?.id ?? null
-    if (nextSelectedSessionId)
-      await loadSessionDetail(routePrefix, workerId, nextSelectedSessionId, setTurns, setEvents)
-  }, [hostData.sessionId, routePrefix, selectedSessionId, workerId])
+    if (nextSelectedSessionId) {
+      const detail = await loadSessionDetail(routePrefix, workerId, nextSelectedSessionId)
+      applySessionDetail(detail)
+    }
+  }, [applySessionDetail, hostData.sessionId, routePrefix, selectedSessionId, workerId])
 
   useEffect(() => {
     window.microApp?.addDataListener?.((data) => {
@@ -201,17 +214,14 @@ function UniversalWorkbenchMountedClient() {
     if (!selectedSessionId || !workerId)
       return
     let cancelled = false
-    void loadSessionDetail(
-      routePrefix,
-      workerId,
-      selectedSessionId,
-      nextTurns => !cancelled && setTurns(nextTurns),
-      nextEvents => !cancelled && setEvents(nextEvents),
-    ).catch(() => {})
+    void loadSessionDetail(routePrefix, workerId, selectedSessionId).then((detail) => {
+      if (!cancelled)
+        applySessionDetail(detail)
+    }).catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [routePrefix, selectedSessionId, workerId])
+  }, [applySessionDetail, routePrefix, selectedSessionId, workerId])
 
   useEffect(() => {
     if (!selectedSessionId || !workerId)
@@ -220,22 +230,17 @@ function UniversalWorkbenchMountedClient() {
     let timer: ReturnType<typeof setTimeout> | undefined
 
     const poll = async () => {
+      let shouldContinuePolling = true
       try {
-        // Derive the replay cursor from the live event list, scoped to this session and to real
-        // (positive) backend ids, so synthetic stream-error events never advance it.
-        const after = latestSessionEventId(eventsRef.current, selectedSessionId)
-        const nextEvents = await loadSessionEvents(routePrefix, workerId, selectedSessionId, after)
-        if (!cancelled && nextEvents.length > 0)
-          appendSessionEvents(nextEvents)
-        // Keep turns in sync so polled events whose turn was created out-of-band still render.
-        const nextTurns = await loadSessionTurns(routePrefix, workerId, selectedSessionId)
+        const detail = await loadSessionDetail(routePrefix, workerId, selectedSessionId)
         if (!cancelled)
-          setTurns(current => mergeTurns(current, nextTurns))
+          applySessionDetail(detail)
+        shouldContinuePolling = !isTerminalSessionStatus(detail.session.status)
       }
       catch {
         // Best-effort replay keeps the mounted workbench live without taking over Host error policy.
       }
-      if (!cancelled)
+      if (!cancelled && shouldContinuePolling)
         timer = setTimeout(poll, SESSION_EVENT_POLL_INTERVAL_MS)
     }
 
@@ -245,7 +250,7 @@ function UniversalWorkbenchMountedClient() {
       if (timer)
         clearTimeout(timer)
     }
-  }, [routePrefix, selectedSessionId, workerId])
+  }, [applySessionDetail, routePrefix, selectedSessionId, workerId])
 
   async function handleCreateSession(targetWorkspaceId: string, draft: UniversalWorkbenchCreateSessionDraft) {
     if (!workerId)
@@ -499,28 +504,6 @@ export async function loadSessionTurns(
   return result.turns
 }
 
-function mergeTurns(current: LocalTurn[], incoming: LocalTurn[]): LocalTurn[] {
-  let changed = false
-  const next = incoming.reduce((acc, turn) => {
-    const existing = acc.find(item => item.id === turn.id)
-    if (existing && existing.updatedAt === turn.updatedAt && existing.status === turn.status)
-      return acc
-    changed = true
-    return upsertTurn(acc, turn)
-  }, current)
-  // Preserve the reference when nothing changed so the 1s turns poll does not force a re-render.
-  return changed ? next : current
-}
-
-function latestSessionEventId(events: LocalSessionEvent[], sessionId: string): number {
-  return events.reduce((max, event) => {
-    // Ignore synthetic stream events (non-positive ids) and other sessions' events.
-    if (event.id <= 0 || event.sessionId !== sessionId)
-      return max
-    return Math.max(max, event.id)
-  }, 0)
-}
-
 // Synthetic client-side stream events use unique decreasing negative ids so they never collide
 // in dedup and never advance the backend replay cursor.
 let lastSyntheticEventId = 0
@@ -546,14 +529,10 @@ async function loadSessionDetail(
   routePrefix: string,
   workerId: string,
   sessionId: string,
-  setTurns: (turns: LocalTurn[]) => void,
-  setEvents: (events: LocalSessionEvent[]) => void,
-): Promise<void> {
-  const detail = await fetchJson<{ events: LocalSessionEvent[], turns: LocalTurn[] }>(
+): Promise<SessionDetailResult> {
+  return await fetchJson<SessionDetailResult>(
     `${routePrefix}/api/sessions/${encodeURIComponent(sessionId)}?workerId=${encodeURIComponent(workerId)}`,
   )
-  setTurns(detail.turns)
-  setEvents(detail.events)
 }
 
 function readInitialHostData(): MountedHostData {
