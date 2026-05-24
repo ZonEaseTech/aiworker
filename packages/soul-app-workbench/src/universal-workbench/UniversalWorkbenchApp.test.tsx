@@ -329,6 +329,36 @@ describe('UniversalWorkbenchApp', () => {
       expect.objectContaining({ kind: 'signal', signalKind: 'status', status: 'succeeded' }),
     ])
   })
+
+  it('preserves running activity and status signals for queued turns', () => {
+    const events = normalizeSessionEvents([
+      sessionEvent({
+        id: 407,
+        payloadJson: {
+          agentEvent: {
+            id: 'tool-queued',
+            input: { command: 'echo queued' },
+            kind: 'tool_use',
+            name: 'shell',
+          },
+        },
+        seq: 1,
+        type: 'status',
+        turnId: 'turn-queued',
+      }),
+      sessionEvent({ id: 408, payloadJson: { status: 'running', turnId: 'turn-queued' }, seq: 2, type: 'status', turnId: 'turn-queued' }),
+    ], { parser: 'codex-cli' })
+
+    const viewModel = createSessionTimelineViewModel({
+      events,
+      turns: [terminalTurn({ id: 'turn-queued', status: 'queued' })],
+    })
+
+    expect(viewModel.turns.find(item => item.turn.id === 'turn-queued')?.events).toEqual([
+      expect.objectContaining({ kind: 'activity', status: 'running' }),
+      expect.objectContaining({ kind: 'signal', signalKind: 'status', status: 'running' }),
+    ])
+  })
 })
 
 function classForSlot(html: string, slot: string): string {

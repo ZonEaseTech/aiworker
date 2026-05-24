@@ -329,7 +329,7 @@ function suppressStaleTerminalStatus(
   events: SessionTimelineEvent[],
   turn: SessionTimelineTurnInput,
 ): SessionTimelineEvent[] {
-  if (turn.status === 'running')
+  if (turn.status !== 'succeeded' && turn.status !== 'failed' && turn.status !== 'cancelled')
     return events
   return events.filter((event) => {
     if (event.kind === 'activity' || event.kind === 'activity_group')
