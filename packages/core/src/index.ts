@@ -70,6 +70,8 @@ export {
 } from './worker/events'
 export {
   createExternalEngineExecutor,
+  DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS,
+  type ExternalEngineExecutorOptions,
   type LocalExecutor,
   LocalExecutorFailure,
   type LocalExecutorInput,

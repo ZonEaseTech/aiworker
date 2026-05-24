@@ -48,6 +48,14 @@ export interface LocalExecutor {
   invoke: (input: LocalExecutorInput) => Promise<LocalExecutorResult>
 }
 
+export const DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS = 300_000
+
+const LOCAL_CLI_ENGINE_KILL_GRACE_MS = 150
+
+export interface ExternalEngineExecutorOptions {
+  timeoutMs?: number
+}
+
 interface LocalEngineBuildArgsInput {
   command: string
   input: LocalExecutorInput
@@ -155,18 +163,18 @@ const localEngineDefinitions: Record<string, LocalEngineDefinition> = {
   },
 }
 
-export function createExternalEngineExecutor(): LocalExecutor {
+export function createExternalEngineExecutor(options: ExternalEngineExecutorOptions = {}): LocalExecutor {
   return {
     async invoke(input) {
       const executionMode = readString(input.metadata?.executionMode, 'local-cli')
       if (executionMode === 'byok')
         return runByokExecutor(input)
-      return runLocalCliExecutor(input)
+      return runLocalCliExecutor(input, options)
     },
   }
 }
 
-async function runLocalCliExecutor(input: LocalExecutorInput): Promise<LocalExecutorResult> {
+async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalEngineExecutorOptions): Promise<LocalExecutorResult> {
   const command = input.engineCommand || input.engineId
   if (!command || command === 'internal')
     throw new Error('Local CLI execution requires an external engine command.')
@@ -193,6 +201,7 @@ async function runLocalCliExecutor(input: LocalExecutorInput): Promise<LocalExec
     model: readString(input.metadata?.model, ''),
     reasoning: readString(input.metadata?.reasoning, ''),
   })
+  const timeoutMs = options.timeoutMs ?? DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS
   let finalMessage = ''
   const parser = engine.parser
     ? createEngineStreamHandler(engine.parser, (event) => {
@@ -203,7 +212,7 @@ async function runLocalCliExecutor(input: LocalExecutorInput): Promise<LocalExec
       })
     : null
 
-  const execution = await execCommand(command, args, enginePrompt, 300_000, {
+  const execution = await execCommand(command, args, enginePrompt, timeoutMs, {
     cwd: input.workspaceRoot,
     env: {
       ...sanitizeEngineEnv(),
@@ -333,16 +342,38 @@ function execCommand(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd ?? process.cwd(),
+      detached: true,
       env: options.env ?? sanitizeEngineEnv(),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let stdout = ''
     let stderr = ''
     let killed = false
+    let killTimer: ReturnType<typeof setTimeout> | undefined
+    const signalChildGroup = (signal: NodeJS.Signals) => {
+      if (child.pid) {
+        try {
+          process.kill(-child.pid, signal)
+          return
+        }
+        catch {
+          // Fall back to signaling the child directly when process groups are unavailable.
+        }
+      }
+      child.kill(signal)
+    }
     const timer = setTimeout(() => {
       killed = true
-      child.kill('SIGTERM')
+      signalChildGroup('SIGTERM')
+      killTimer = setTimeout(() => {
+        signalChildGroup('SIGKILL')
+      }, LOCAL_CLI_ENGINE_KILL_GRACE_MS)
     }, timeoutMs)
+    const clearTimers = () => {
+      clearTimeout(timer)
+      if (killTimer)
+        clearTimeout(killTimer)
+    }
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
     child.stdout.on('data', (chunk) => {
@@ -355,16 +386,16 @@ function execCommand(
     })
     child.stdin.on('error', (error: NodeJS.ErrnoException) => {
       if (error.code !== 'EPIPE') {
-        clearTimeout(timer)
+        clearTimers()
         reject(error)
       }
     })
     child.on('error', (error) => {
-      clearTimeout(timer)
+      clearTimers()
       reject(error)
     })
     child.on('close', (code) => {
-      clearTimeout(timer)
+      clearTimers()
       if (killed)
         stderr += `\nProcess exceeded ${timeoutMs}ms and was terminated.`
       resolve({ code, stdout, stderr })

@@ -234,10 +234,24 @@ describe('LocalWorkerRuntime', () => {
       engineCommand: 'codex',
     })
 
+    expect(result.session.status).toBe('failed')
+    expect(result.session.endedAt).not.toBeNull()
     expect(result.turn.status).toBe('failed')
     expect(result.turn.error).toBe('executor failed')
     expect(result.invocation.status).toBe('failed')
+    expect(result.invocation.error).toBe('executor failed')
     expect(result.events.map(event => event.type)).toEqual(['status', 'status', 'error'])
+    expect(result.events.at(-1)?.payloadJson).toMatchObject({
+      message: 'executor failed',
+      turnId: result.turn.id,
+    })
+
+    const snapshot = workerRuntime.snapshot()
+    expect(snapshot.sessions.find(item => item.id === result.session.id)?.status).toBe('failed')
+    expect(snapshot.invocations.find(item => item.id === result.invocation.id)).toMatchObject({
+      error: 'executor failed',
+      status: 'failed',
+    })
   })
 
   it('materializes simplified session context with cwd, engine, and soul-app files', async () => {
