@@ -551,13 +551,18 @@ export async function createWorkerApp(): Promise<{ app: OpenAPIHono, port: numbe
  *
  * 此函数为纯函数,便于单测;在 daemon 启动处调用并 console.warn 输出。
  */
+function isLoopbackHost(host: string): boolean {
+  if (host === '' || host === 'localhost' || host === '::1' || host === '[::1]')
+    return true
+  return /^127\./.test(host)
+}
+
 export function localApiExposureWarning(host: string, token: string | null | undefined): string | null {
   if (token)
     return null
-  const loopback = new Set(['127.0.0.1', 'localhost', '::1'])
-  if (!loopback.has(host))
-    return `[aiworker-daemon] AIWORKER_LOCAL_TOKEN 未配置且绑定到非 loopback 地址 ${host}:/api/local/* 将以匿名身份暴露,请配置 token 或改绑 127.0.0.1。`
-  return `[aiworker-daemon] 未配置 AIWORKER_LOCAL_TOKEN:/api/local/* 以本机匿名身份开放,请确保仅绑定 loopback。`
+  if (isLoopbackHost(host))
+    return `[aiworker-daemon] 未配置 AIWORKER_LOCAL_TOKEN:/api/local/* 以本机匿名身份开放,请确保仅绑定 loopback。`
+  return `[aiworker-daemon] AIWORKER_LOCAL_TOKEN 未配置且绑定到非 loopback 地址 ${host}:/api/local/* 将以匿名身份暴露,请配置 token 或改绑 127.0.0.1。`
 }
 
 function authenticateMountedBrokerRequest(c: Context, state: LocalDaemonState): boolean {

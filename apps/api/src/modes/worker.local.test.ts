@@ -1624,6 +1624,24 @@ describe('localApiExposureWarning', () => {
     expect(msgIpv6).toContain('AIWORKER_LOCAL_TOKEN')
   })
 
+  it('returns loopback notice for 127.0.0.x subnet addresses (not exposure warning)', () => {
+    const msg = localApiExposureWarning('127.0.0.2', null)
+    expect(msg).toBeString()
+    expect(msg).not.toContain('暴露')
+    expect(msg).toContain('AIWORKER_LOCAL_TOKEN')
+
+    const msg127net = localApiExposureWarning('127.1.2.3', null)
+    expect(msg127net).toBeString()
+    expect(msg127net).not.toContain('暴露')
+  })
+
+  it('returns loopback notice for [::1] bracketed IPv6 loopback', () => {
+    const msg = localApiExposureWarning('[::1]', null)
+    expect(msg).toBeString()
+    expect(msg).not.toContain('暴露')
+    expect(msg).toContain('AIWORKER_LOCAL_TOKEN')
+  })
+
   it('returns exposure warning when token is absent and host is non-loopback', () => {
     const msg = localApiExposureWarning('0.0.0.0', null)
     expect(msg).toBeString()
