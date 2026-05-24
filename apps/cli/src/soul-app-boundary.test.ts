@@ -48,4 +48,41 @@ describe('scanPrivateImports', () => {
     })
     expect(scanPrivateImports(root)).toEqual([])
   })
+
+  // #3: ownPackageName は package.json の name を読む(ディレクトリ名ではなく)
+  it('does not flag self-imports when package.json name differs from directory name', () => {
+    // ディレクトリ名は mkdtempSync が生成するランダム名だが package.json に @zonease/aiworker-hr を宣言
+    const root = makeApp({
+      'package.json': JSON.stringify({ name: '@zonease/aiworker-hr' }),
+      'src/x.ts': `import { x } from '@zonease/aiworker-hr'\n`,
+    })
+    // 自身パッケージの import → 誤検知しないこと
+    expect(scanPrivateImports(root)).toEqual([])
+  })
+
+  // #4: @scope パッケージは path-root 部分文字列ヒューリスティックを通さない
+  it('does not flag third-party scoped packages whose path contains a host root substring', () => {
+    const root = makeApp({
+      'src/x.ts': `import x from '@acme/packages/shared/types'\n`,
+    })
+    // @acme/packages/shared/types は packages/shared/ を含むが scoped なので誤検知しない
+    expect(scanPrivateImports(root)).toEqual([])
+  })
+
+  // #6: scanPrivateImports はテストファイルをスキップする
+  it('does not flag Host-private imports in test source files', () => {
+    const root = makeApp({
+      'src/x.test.ts': `import { createRuntimeForWorker } from '@zonease/aiworker-core'\n`,
+    })
+    // テストファイルはスキップ → 報告なし
+    expect(scanPrivateImports(root)).toEqual([])
+  })
+
+  it('still flags Host-private imports in non-test source files (regression)', () => {
+    const root = makeApp({
+      'src/x.ts': `import { createRuntimeForWorker } from '@zonease/aiworker-core'\n`,
+    })
+    const issues = scanPrivateImports(root)
+    expect(issues.some(issue => issue.importPath === '@zonease/aiworker-core')).toBe(true)
+  })
 })

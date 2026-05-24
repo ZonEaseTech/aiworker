@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 export interface PrivateImportIssue {
@@ -35,6 +35,9 @@ export function scanPrivateImports(rootDir: string): PrivateImportIssue[] {
   const issues: PrivateImportIssue[] = []
   for (const sourceDir of appSourceScanDirs(rootDir)) {
     for (const file of listSourceFiles(sourceDir)) {
+      // #6: テストファイルをスキップ(CI gate の scanSoulAppImports と同じ挙動)
+      if (isTestSourceFile(file))
+        continue
       const content = readFileSync(file, 'utf8')
       for (const importPath of importSpecifiers(content)) {
         if (!isForbiddenSoulAppImport(rootDir, importPath))
@@ -142,20 +145,45 @@ function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean 
     return true
   if (isSiblingSoulAppImport(rootDir, importPath))
     return true
-  const normalized = normalizedImport(importPath)
-  return [
-    'apps/api',
-    'apps/cli',
-    'apps/web',
-    'packages/core',
-    'packages/fs-layout',
-    'packages/shared',
-    'packages/storage-sqlite',
-  ].some(root => normalized.includes(`${root}/`))
+  // #4: @scope パッケージは HOST_PRIVATE_IMPORT_PREFIXES / sibling 判定で処理済み。
+  // path-root 部分文字列ヒューリスティックは非 @scope import(相対パス等)にのみ適用し、
+  // @acme/packages/shared/types のような第三者 scoped パッケージの誤検知を防ぐ。
+  if (!importPath.startsWith('@')) {
+    const normalized = normalizedImport(importPath)
+    if ([
+      'apps/api',
+      'apps/cli',
+      'apps/web',
+      'packages/core',
+      'packages/fs-layout',
+      'packages/shared',
+      'packages/storage-sqlite',
+    ].some(root => normalized.includes(`${root}/`)))
+      return true
+  }
+  return false
+}
+
+// #3: package.json の name フィールドを読む(CI gate の readPackageName と同じ戦略)
+// 読み取れない場合は @zonease/<dirname> にフォールバック
+function readOwnPackageName(rootDir: string): string {
+  const packagePath = path.join(rootDir, 'package.json')
+  if (existsSync(packagePath)) {
+    try {
+      const parsed = JSON.parse(readFileSync(packagePath, 'utf8')) as { name?: unknown }
+      if (typeof parsed.name === 'string' && parsed.name.length > 0)
+        return parsed.name
+    }
+    catch {
+      // フォールバックへ
+    }
+  }
+  return `@zonease/${path.basename(rootDir)}`
 }
 
 function isSiblingSoulAppImport(rootDir: string, importPath: string): boolean {
-  const ownPackageName = `@zonease/${path.basename(rootDir)}`
+  // #3: ディレクトリ名ではなく package.json の name で自身を判定
+  const ownPackageName = readOwnPackageName(rootDir)
   const normalized = normalizedImport(importPath)
   const scopeMatch = normalized.match(/^(@zonease\/aiworker-[^/]+)/)
   if (scopeMatch && scopeMatch[1] !== ownPackageName && !ALLOWED_SHARED_PACKAGES.has(scopeMatch[1]!))
