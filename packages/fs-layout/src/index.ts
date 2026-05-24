@@ -99,8 +99,14 @@ export function resolveAiworkerHome(opts: ResolveScopeOptions = {}): string {
 }
 
 function assertSafeWorkerId(workerId: string): string {
-  // 只允许 [A-Za-z0-9_] 开头，后接 [A-Za-z0-9_.-]*；拒绝空串、含 / 或绝对路径
-  if (!/^\w[\w.-]*$/.test(workerId) || workerId === '.' || workerId === '..')
+  // [A-Za-z0-9_] 始まり、後続は [A-Za-z0-9_.-]*
+  // 拒绝: 空串、含 /、绝对路径、尾随 . 或 -、连续 .. (Windows FS 目录碰撞)
+  if (
+    !/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(workerId)
+    || workerId.endsWith('.')
+    || workerId.endsWith('-')
+    || workerId.includes('..')
+  )
     throw new Error(`Invalid worker id: ${JSON.stringify(workerId)}`)
   return workerId
 }
