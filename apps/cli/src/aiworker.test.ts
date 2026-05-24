@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { sanitizeEngineEnv } from '@zonease/aiworker-core'
+import { soulAppServiceEnv } from '@zonease/aiworker-core'
 import { hrSoulAppManifest, namespaceSoulAppCapabilityId } from '@zonease/aiworker-shared'
 import {
   closeWorkerDb,
@@ -836,11 +836,12 @@ describe('aiworker local CLI', () => {
   })
 })
 
-describe('sanitizeEngineEnv (smoke spawn env)', () => {
-  it('sanitizeEngineEnv strips Host-internal namespaces used by smoke spawn', () => {
-    const cleaned = sanitizeEngineEnv({ AIWORKER_LOCAL_TOKEN: 's', WORKER_DB_PATH: '/x', PATH: '/usr/bin' })
+describe('soulAppServiceEnv (smoke spawn env)', () => {
+  it('soulAppServiceEnv allowlist strips LLM/cloud/Host-internal keys and keeps basic system env', () => {
+    const cleaned = soulAppServiceEnv({ AIWORKER_LOCAL_TOKEN: 's', WORKER_DB_PATH: '/x', PATH: '/usr/bin', OPENAI_API_KEY: 'k' })
     expect(cleaned.AIWORKER_LOCAL_TOKEN).toBeUndefined()
     expect(cleaned.WORKER_DB_PATH).toBeUndefined()
+    expect(cleaned.OPENAI_API_KEY).toBeUndefined()
     expect(cleaned.PATH).toBe('/usr/bin')
   })
 })

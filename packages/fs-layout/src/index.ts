@@ -99,9 +99,16 @@ export function resolveAiworkerHome(opts: ResolveScopeOptions = {}): string {
 }
 
 function assertSafeWorkerId(workerId: string): string {
-  // 只允许 [A-Za-z0-9_] 开头，后接 [A-Za-z0-9_.-]*；拒绝空串、含 / 或绝对路径
-  if (!/^\w[\w.-]*$/.test(workerId) || workerId === '.' || workerId === '..')
+  // 首字符为 \w,后续仅允许 \w 与 . -;并拒绝空串、含 /、绝对路径、
+  // 尾随 . 或 -、连续 ..(避免 Windows 文件系统剥尾点导致目录碰撞)
+  if (
+    !/^\w[\w.-]*$/.test(workerId)
+    || workerId.endsWith('.')
+    || workerId.endsWith('-')
+    || workerId.includes('..')
+  ) {
     throw new Error(`Invalid worker id: ${JSON.stringify(workerId)}`)
+  }
   return workerId
 }
 

@@ -157,7 +157,7 @@ describe('LocalWorkerRuntime', () => {
       title: 'Screen candidate',
       metadata: {
         outputKind: 'candidate-screen',
-        reviewRubric: ['Evidence references are present.'],
+        reviewRubricRef: 'product/workflows/sample/review.md',
         skillName: 'Candidate Screen',
       },
     })

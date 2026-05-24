@@ -152,11 +152,16 @@ describe('worker workspace roots', () => {
     expect(() => resolveWorkerHome('/abs/path')).toThrow()
     expect(() => resolveWorkerHome('a/b')).toThrow()
     expect(() => resolveWorkerHome('')).toThrow()
+    // #7: 尾随ドット・連続ドットは Windows FS の衝突を招くので拒否
+    expect(() => resolveWorkerHome('build.')).toThrow()
+    expect(() => resolveWorkerHome('a..b')).toThrow()
   })
 
   it('accepts a well-formed worker id', () => {
     process.env.AIWORKER_HOME = '/tmp/aiworker-home'
     expect(resolveWorkerHome('hr-worker').endsWith(path.join('workers', 'hr-worker'))).toBe(true)
+    // #7: 中間のドット・アンダースコアは合法
+    expect(resolveWorkerHome('my.worker_1').endsWith(path.join('workers', 'my.worker_1'))).toBe(true)
   })
 
   it('initializes only the workspace root for a worker', async () => {
