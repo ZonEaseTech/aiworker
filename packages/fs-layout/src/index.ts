@@ -98,8 +98,15 @@ export function resolveAiworkerHome(opts: ResolveScopeOptions = {}): string {
   return resolveAiworkerScope(opts).home
 }
 
+function assertSafeWorkerId(workerId: string): string {
+  // 只允许 [A-Za-z0-9_] 开头，后接 [A-Za-z0-9_.-]*；拒绝空串、含 / 或绝对路径
+  if (!/^\w[\w.-]*$/.test(workerId) || workerId === '.' || workerId === '..')
+    throw new Error(`Invalid worker id: ${JSON.stringify(workerId)}`)
+  return workerId
+}
+
 export function resolveWorkerHome(workerId: string): string {
-  return path.join(resolveAiworkerHome(), 'workers', workerId)
+  return path.join(resolveAiworkerHome(), 'workers', assertSafeWorkerId(workerId))
 }
 
 export function resolveWorkspacesRoot(workerId: string): string {

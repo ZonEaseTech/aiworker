@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 import {
   createHostRuntime,
   getWorkerEnv,
+  sanitizeEngineEnv,
 } from '@zonease/aiworker-core'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import {
@@ -687,7 +688,7 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
   if (updateNotice) {
     consola.info(`[aiworker-daemon] update available: ${updateNotice.currentVersion} -> ${updateNotice.targetVersion}; run ${updateNotice.command}`)
   }
-  const { bootstrapWorkerApp } = await import('@zonease/aiworker-api/bootstrap')
+  const { bootstrapWorkerApp, localApiExposureWarning } = await import('@zonease/aiworker-api/bootstrap')
   const { app, port } = await bootstrapWorkerApp({
     officialAppsRoot: resolveCliOfficialAppsRoot(),
     runtimeVersion: packageJson.version,
@@ -700,6 +701,9 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
     idleTimeout: 255,
     port: opts.port ?? port,
   })
+  const exposureWarning = localApiExposureWarning(server.hostname ?? '127.0.0.1', env.AIWORKER_LOCAL_TOKEN)
+  if (exposureWarning)
+    console.warn(exposureWarning)
   consola.success(`[aiworker-daemon] listening on http://${server.hostname}:${server.port}`)
   await new Promise<void>((resolve) => {
     const keepAlive = setInterval(() => undefined, 60_000)
@@ -1080,7 +1084,7 @@ async function smokeAppCommand(inputPath: string): Promise<void> {
         capabilityTemplateId: template.id,
         inputHints: template.inputHints,
         outputKind: template.outputKind,
-        reviewRubric: template.reviewRubric,
+        reviewRubricRef: template.reviewRubricRef,
         soulAppId: manifest.id,
         soulName: manifest.soul.name,
       },
@@ -1189,9 +1193,13 @@ async function runMountedServiceSmoke(manifest: SoulAppManifest, rootDir: string
   if (!manifest.modes.hostMounted.supported || !service?.command?.length || !rootDir)
     return { httpStatus: null, status: 'skip', stop: () => {}, url: null }
 
+  const resolvedCwd = path.resolve(rootDir, service.cwd ?? '.')
+  const normalizedRoot = path.resolve(rootDir)
+  if (resolvedCwd !== normalizedRoot && !resolvedCwd.startsWith(`${normalizedRoot}${path.sep}`))
+    throw new Error(`Mounted service cwd must stay inside the app root: ${service.cwd}`)
   const child = spawn(service.command[0]!, service.command.slice(1), {
-    cwd: path.resolve(rootDir, service.cwd ?? '.'),
-    env: { ...process.env, PORT: '0' },
+    cwd: resolvedCwd,
+    env: { ...sanitizeEngineEnv(), PORT: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   }) as ChildProcessByStdio<null, Readable, Readable>
   let stopped = false

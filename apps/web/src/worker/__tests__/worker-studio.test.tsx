@@ -86,8 +86,8 @@ const templates = [
     inputHints: ['Person context', 'Lifecycle stage'],
     name: 'Person Profile',
     outputKind: 'person-profile',
-    prompt: 'Summarize profile',
-    reviewRubric: ['Evidence is grounded.'],
+    promptRef: './product/workflows/person-profile/prompt.md',
+    reviewRubricRef: './product/workflows/person-profile/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -96,8 +96,8 @@ const templates = [
     inputHints: ['Candidate materials', 'Accepted README baseline'],
     name: 'Profile Update Draft',
     outputKind: 'profile-update-draft',
-    prompt: 'Draft profile update',
-    reviewRubric: ['Accepted README draft is inspectable.'],
+    promptRef: './product/workflows/profile-update-draft/prompt.md',
+    reviewRubricRef: './product/workflows/profile-update-draft/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -106,8 +106,8 @@ const templates = [
     inputHints: ['Person profile', 'Open questions'],
     name: 'Lifecycle Next Step',
     outputKind: 'lifecycle-next-step',
-    prompt: 'Prepare next step',
-    reviewRubric: ['Next action is concrete.'],
+    promptRef: './product/workflows/lifecycle-next-step/prompt.md',
+    reviewRubricRef: null,
     soulId: HR_SOUL_ID,
   },
   {
@@ -116,8 +116,8 @@ const templates = [
     inputHints: ['Role', 'Signals'],
     name: 'Role Rubric',
     outputKind: 'role-rubric',
-    prompt: 'Build role rubric',
-    reviewRubric: ['Criteria are role-related.'],
+    promptRef: './product/workflows/role-rubric/prompt.md',
+    reviewRubricRef: null,
     soulId: HR_SOUL_ID,
   },
   {
@@ -126,8 +126,8 @@ const templates = [
     inputHints: ['Role', 'Candidate packet'],
     name: 'Candidate Screen',
     outputKind: 'candidate-screen',
-    prompt: 'Screen candidate',
-    reviewRubric: ['Evidence is grounded.'],
+    promptRef: './product/workflows/candidate-screen/prompt.md',
+    reviewRubricRef: './product/workflows/candidate-screen/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -136,8 +136,8 @@ const templates = [
     inputHints: ['Candidate packet', 'Rubric'],
     name: 'Interview Brief',
     outputKind: 'interview-brief',
-    prompt: 'Draft interview brief',
-    reviewRubric: ['Questions are evidence-backed.'],
+    promptRef: './product/workflows/interview-brief/prompt.md',
+    reviewRubricRef: './product/workflows/interview-brief/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -146,8 +146,8 @@ const templates = [
     inputHints: ['Employee profile', 'Role expectations'],
     name: 'Onboarding Plan',
     outputKind: 'onboarding-plan',
-    prompt: 'Draft onboarding plan',
-    reviewRubric: ['Owners and risks are explicit.'],
+    promptRef: './product/workflows/onboarding-plan/prompt.md',
+    reviewRubricRef: null,
     soulId: HR_SOUL_ID,
   },
   {
@@ -156,8 +156,8 @@ const templates = [
     inputHints: ['Departing employee context', 'Handoff notes'],
     name: 'Offboarding Summary',
     outputKind: 'offboarding-summary',
-    prompt: 'Prepare offboarding summary',
-    reviewRubric: ['Sensitive details are minimized.'],
+    promptRef: './product/workflows/offboarding-summary/prompt.md',
+    reviewRubricRef: null,
     soulId: HR_SOUL_ID,
   },
   {
@@ -166,8 +166,8 @@ const templates = [
     inputHints: ['Role rubric', 'Candidate packets'],
     name: 'Evidence Matrix',
     outputKind: 'evidence-matrix',
-    prompt: 'Build evidence matrix',
-    reviewRubric: ['Missing signals are visible.'],
+    promptRef: './product/workflows/evidence-matrix/prompt.md',
+    reviewRubricRef: './product/workflows/evidence-matrix/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -176,8 +176,8 @@ const templates = [
     inputHints: ['Evidence matrix', 'Interview notes'],
     name: 'Roundup Packet',
     outputKind: 'roundup-packet',
-    prompt: 'Draft roundup packet',
-    reviewRubric: ['Decision remains human-owned.'],
+    promptRef: './product/workflows/roundup-packet/prompt.md',
+    reviewRubricRef: null,
     soulId: HR_SOUL_ID,
   },
   {
@@ -186,8 +186,8 @@ const templates = [
     inputHints: ['Artifact', 'Policy'],
     name: 'Hiring Risk',
     outputKind: 'hiring-risk',
-    prompt: 'Check hiring risk',
-    reviewRubric: ['Protected-class inference is absent.'],
+    promptRef: './product/workflows/hiring-risk/prompt.md',
+    reviewRubricRef: './product/workflows/hiring-risk/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -196,8 +196,8 @@ const templates = [
     inputHints: ['Test evidence', 'Known defects'],
     name: 'Release Gate',
     outputKind: 'release-gate',
-    prompt: 'Summarize release gate',
-    reviewRubric: ['Recommendation is explicit.'],
+    promptRef: './product/workflows/release-gate/prompt.md',
+    reviewRubricRef: './product/workflows/release-gate/review.md',
     soulId: QA_SOUL_ID,
   },
 ]
@@ -481,7 +481,6 @@ function resetSettings() {
   currentTemplates = templates.map(template => ({
     ...template,
     inputHints: [...template.inputHints],
-    reviewRubric: [...template.reviewRubric],
   }))
   currentTurns = [{ ...turnRecord }]
   currentArtifacts = [{ ...artifactRecord }]
@@ -1019,7 +1018,7 @@ describe('worker studio', () => {
 
     expect(source).not.toContain('@zonease/aiworker-soul-app-workbench')
     expect(source).not.toContain('UniversalWorkbenchApp')
-    expect(source).not.toContain("activeMountedRoute.id === 'universal-workbench'")
+    expect(source).not.toContain('activeMountedRoute.id === \'universal-workbench\'')
     expect(source).not.toContain('activeMountedRoute?.id !== \'universal-workbench\'')
   })
 
@@ -1139,8 +1138,8 @@ describe('worker studio', () => {
         inputHints: ['Workspace context'],
         name: 'Explore',
         outputKind: 'custom-exploration',
-        prompt: 'Explore the workspace',
-        reviewRubric: ['Findings are grounded.'],
+        promptRef: './product/workflows/explore/prompt.md',
+        reviewRubricRef: null,
         soulId: CUSTOM_SOUL_ID,
       },
     ]

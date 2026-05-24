@@ -147,6 +147,18 @@ describe('worker workspace roots', () => {
     expect(resolveWorkspacesRoot('hr-worker')).toBe('/tmp/aiworker-home/workers/hr-worker/workspaces')
   })
 
+  it('rejects worker ids that escape the home root', () => {
+    expect(() => resolveWorkerHome('../../etc')).toThrow()
+    expect(() => resolveWorkerHome('/abs/path')).toThrow()
+    expect(() => resolveWorkerHome('a/b')).toThrow()
+    expect(() => resolveWorkerHome('')).toThrow()
+  })
+
+  it('accepts a well-formed worker id', () => {
+    process.env.AIWORKER_HOME = '/tmp/aiworker-home'
+    expect(resolveWorkerHome('hr-worker').endsWith(path.join('workers', 'hr-worker'))).toBe(true)
+  })
+
   it('initializes only the workspace root for a worker', async () => {
     const tmp = await makeTmpDir()
     try {

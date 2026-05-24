@@ -37,8 +37,8 @@ interface CapabilityTemplate {
   inputHints: readonly string[]
   name: string
   outputKind: string
-  prompt: string
-  reviewRubric: readonly string[]
+  promptRef: string
+  reviewRubricRef: string | null
   soulId: string
 }
 
@@ -385,7 +385,7 @@ function sessionMetadata(
     capabilityTemplateId,
     inputHints: template?.inputHints ?? [],
     outputKind: template?.outputKind ?? 'business-artifact',
-    reviewRubric: template?.reviewRubric ?? [],
+    reviewRubricRef: template?.reviewRubricRef ?? null,
     skillName: template?.name ?? capabilityTemplateId,
     soulAppId: app.manifest.id,
     soulName: app.manifest.soul.name,

@@ -3,8 +3,8 @@ import type { LocalSettingsConfig, LocalWorkspace } from '@zonease/aiworker-shar
 import { describe, expect, it, mock } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
 import { loadMountedEngineReadiness } from './client-entry'
+import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
 
 const vi = { fn: mock }
 

@@ -25,8 +25,8 @@ interface CapabilityTemplate {
   inputHints: readonly string[]
   name: string
   outputKind: string
-  prompt: string
-  reviewRubric: readonly string[]
+  promptRef: string
+  reviewRubricRef: string | null
   soulId: string
 }
 

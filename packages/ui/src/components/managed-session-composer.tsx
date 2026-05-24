@@ -1,12 +1,5 @@
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 
-import {
-  createComposerAttachment,
-  formatSessionAttachmentKind,
-  formatSessionAttachmentSize,
-  isSessionAttachmentImage,
-  SessionComposer,
-} from './session-composer'
 import type {
   SessionComposerAttachmentItem,
   SessionComposerMaterial,
@@ -15,20 +8,27 @@ import type {
   SessionComposerProps,
 } from './session-composer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createComposerAttachment,
+  formatSessionAttachmentKind,
+  formatSessionAttachmentSize,
+  isSessionAttachmentImage,
+  SessionComposer,
+} from './session-composer'
 
-type ManagedSessionComposerOwnedProps =
-  | 'attachmentCountLabel'
-  | 'attachmentTriggerLabel'
-  | 'attachments'
-  | 'error'
-  | 'onAddAttachmentFiles'
-  | 'onAddAttachments'
-  | 'onMentionDismiss'
-  | 'onMentionSelect'
-  | 'onRemoveAttachment'
-  | 'onSubmit'
-  | 'onValueChange'
-  | 'value'
+type ManagedSessionComposerOwnedProps
+  = | 'attachmentCountLabel'
+    | 'attachmentTriggerLabel'
+    | 'attachments'
+    | 'error'
+    | 'onAddAttachmentFiles'
+    | 'onAddAttachments'
+    | 'onMentionDismiss'
+    | 'onMentionSelect'
+    | 'onRemoveAttachment'
+    | 'onSubmit'
+    | 'onValueChange'
+    | 'value'
 
 export interface ManagedSessionComposerDraft {
   text: string

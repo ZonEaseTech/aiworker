@@ -18,7 +18,7 @@ describe('displaySoul/displayTemplate 泛化消费 manifest', () => {
     expect(copy.domain).toBe('manifest-domain')
   })
 
-  it('displayTemplate 返回 manifest 投影值且不含 reviewRubric', () => {
+  it('displayTemplate 返回 manifest 投影值且不含 reviewRubricRef', () => {
     const template: CapabilityTemplate = {
       id: 'aiworker-hr.person-profile',
       name: 'Manifest Template',
@@ -26,12 +26,12 @@ describe('displaySoul/displayTemplate 泛化消费 manifest', () => {
       soulId: 'aiworker-hr',
       outputKind: 'person-profile',
       inputHints: ['a'],
-      reviewRubric: ['secret rubric'],
-      prompt: '',
+      promptRef: './product/workflows/person-profile/prompt.md',
+      reviewRubricRef: './product/workflows/person-profile/review.md',
     }
     const copy = displayTemplate(template, 'en')
     expect(copy.name).toBe('Manifest Template')
     expect(copy.description).toBe('Manifest tdesc')
-    expect('reviewRubric' in copy).toBe(false)
+    expect('reviewRubricRef' in copy).toBe(false)
   })
 })
