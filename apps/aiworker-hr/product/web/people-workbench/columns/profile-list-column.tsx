@@ -46,6 +46,7 @@ export function ProfileListColumn({
 }: ProfileListColumnProps) {
   const sections = buildRouteProfileSections(profiles)
   const showProfileFilter = totalProfileCount > 5 || profileQuery.trim().length > 0
+  const profileBoardDescription = formatProfileBoardDescription(labels, profiles.length)
   const [collapsedSections, setCollapsedSections] = useState<Set<PersonLifecycle>>(() => new Set())
 
   return (
@@ -54,11 +55,7 @@ export function ProfileListColumn({
         <CardHeader>
           <div className="min-w-0">
             <CardTitle>Profile List</CardTitle>
-            <CardDescription>
-              {labels.profileBoardTitle}
-              {' · '}
-              {labels.profileBoardDetail(profiles.length)}
-            </CardDescription>
+            <CardDescription>{profileBoardDescription}</CardDescription>
           </div>
           <CardAction>
             <Button
@@ -148,6 +145,13 @@ function toggleCollapsedProfileSection(
       next.add(sectionId)
     return next
   })
+}
+
+export function formatProfileBoardDescription(
+  labels: Pick<HrWorkbenchCopy, 'profileBoardDetail' | 'profileBoardTitle'>,
+  visibleProfileCount: number,
+): string {
+  return `${labels.profileBoardTitle} · ${labels.profileBoardDetail(visibleProfileCount)}`
 }
 
 export function buildRouteProfileSections(profiles: HrRouteProfile[]): LifecycleColumnSection[] {
