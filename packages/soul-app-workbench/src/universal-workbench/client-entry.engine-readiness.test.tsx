@@ -1,4 +1,4 @@
-import type { LocalSettingsConfig, LocalWorkspace } from '@zonease/aiworker-shared'
+import type { LocalWorkspace } from '@zonease/aiworker-shared'
 
 import { describe, expect, it, mock } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -15,18 +15,16 @@ describe('universal workbench mounted engine readiness', () => {
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       requestedUrls.push(String(input))
       return Response.json({
-        settings: localSettings({
-          engineId: 'codex',
-          engines: [{
-            command: 'codex',
-            id: 'codex',
-            installed: false,
-            name: 'Codex CLI',
-            path: null,
-            version: null,
-          }],
-          executionMode: 'local-cli',
-        }),
+        engineId: 'codex',
+        engines: [{
+          command: 'codex',
+          id: 'codex',
+          installed: false,
+          name: 'Codex CLI',
+          path: null,
+          version: null,
+        }],
+        executionMode: 'local-cli',
       })
     }) as unknown as typeof fetch
 
@@ -36,7 +34,7 @@ describe('universal workbench mounted engine readiness', () => {
         label: 'Codex CLI · Not installed',
         ready: false,
       })
-      expect(requestedUrls).toEqual(['/api/local/settings'])
+      expect(requestedUrls).toEqual(['/api/local/settings/engines'])
     }
     finally {
       globalThis.fetch = originalFetch
@@ -46,18 +44,16 @@ describe('universal workbench mounted engine readiness', () => {
   it('surfaces the real selected engine details when Host settings are ready', async () => {
     const originalFetch = globalThis.fetch
     globalThis.fetch = (async () => Response.json({
-      settings: localSettings({
-        engineId: 'codex',
-        engines: [{
-          command: 'codex',
-          id: 'codex',
-          installed: true,
-          name: 'Codex CLI',
-          path: '/usr/local/bin/codex',
-          version: 'codex 1.0.0',
-        }],
-        executionMode: 'local-cli',
-      }),
+      engineId: 'codex',
+      engines: [{
+        command: 'codex',
+        id: 'codex',
+        installed: true,
+        name: 'Codex CLI',
+        path: '/usr/local/bin/codex',
+        version: 'codex 1.0.0',
+      }],
+      executionMode: 'local-cli',
     })) as unknown as typeof fetch
 
     try {
@@ -75,15 +71,14 @@ describe('universal workbench mounted engine readiness', () => {
   it('keeps readiness false when BYOK execution is not configured', async () => {
     const originalFetch = globalThis.fetch
     globalThis.fetch = (async () => Response.json({
-      settings: {
-        ...localSettings({ engineId: 'codex', engines: [], executionMode: 'byok' }),
-        byok: {
-          apiKeyRef: '',
-          baseUrl: 'https://api.openai.com/v1',
-          model: 'gpt-4o',
-          provider: 'openai-compatible',
-        },
+      byok: {
+        apiKeyRefPresent: false,
+        model: 'gpt-4o',
+        provider: 'openai-compatible',
       },
+      engineId: 'codex',
+      engines: [],
+      executionMode: 'byok',
     })) as unknown as typeof fetch
 
     try {
@@ -141,28 +136,5 @@ function workspaceFixture(): LocalWorkspace {
     type: 'workspace',
     updatedAt: '2026-05-23T00:00:00.000Z',
     workerId: 'worker-1',
-  }
-}
-
-function localSettings(input: Pick<LocalSettingsConfig, 'engineId' | 'engines' | 'executionMode'>): LocalSettingsConfig {
-  return {
-    appearance: 'system',
-    byok: {
-      apiKeyRef: '',
-      baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-4o',
-      provider: 'openai-compatible',
-    },
-    connectors: [],
-    engineId: input.engineId,
-    engines: input.engines,
-    executionMode: input.executionMode,
-    externalMcpServers: [],
-    language: 'en',
-    localMcpServer: {
-      enabled: false,
-      url: 'http://127.0.0.1:4319/mcp',
-    },
-    updatedAt: '2026-05-23T00:00:00.000Z',
   }
 }

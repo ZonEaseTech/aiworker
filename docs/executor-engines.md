@@ -13,7 +13,8 @@ workbench readiness 使用。它包含：
 
 - 上次发现的 binary path/version；
 - 当前选择的 `engineId`；
-- 当前选择的 `executionMode`。
+- 当前选择的 `executionMode`；
+- BYOK 的非 secret 投影：`provider`、`model` 和 `apiKeyRefPresent`。
 
 该 endpoint 是只读 metadata surface，不 spawn CLI，不读取 secret 内容，也不保证 engine
 最终会加载哪些 host/user 级 plugin、MCP、skill 或 native session。`ready` 表示持久化的本地

@@ -1,4 +1,4 @@
-import type { LocalSettingsConfig } from '@zonease/aiworker-shared'
+import type { LocalEngineReadinessSettings, LocalSettingsConfig } from '@zonease/aiworker-shared'
 import { spawnSync } from 'node:child_process'
 import { localSettingsConfigSchema } from '@zonease/aiworker-shared'
 import { getSetting, listSettings, setSetting } from '@zonease/aiworker-storage-sqlite/worker'
@@ -31,17 +31,27 @@ export function loadLocalSettings(): LocalSettingsConfig {
   return saveLocalSettings(defaultLocalSettings())
 }
 
-export function readLocalEngineSettings(): Pick<LocalSettingsConfig, 'engineId' | 'engines' | 'executionMode'> {
+export function readLocalEngineSettings(): LocalEngineReadinessSettings {
   const row = getSetting(LOCAL_SETTINGS_KEY)
   const parsed = row ? localSettingsConfigSchema.safeParse(row.valueJson) : null
   if (parsed?.success) {
     return {
+      byok: {
+        apiKeyRefPresent: parsed.data.byok.apiKeyRef.trim().length > 0,
+        model: parsed.data.byok.model,
+        provider: parsed.data.byok.provider,
+      },
       engineId: parsed.data.engineId,
       engines: parsed.data.engines,
       executionMode: parsed.data.executionMode,
     }
   }
   return {
+    byok: {
+      apiKeyRefPresent: false,
+      model: 'gpt-4o',
+      provider: 'openai-compatible',
+    },
     engineId: 'codex',
     engines: [],
     executionMode: 'byok',

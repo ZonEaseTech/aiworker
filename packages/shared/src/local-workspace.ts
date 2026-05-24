@@ -235,3 +235,15 @@ export const localSettingsConfigSchema = z.object({
   updatedAt: timestampSchema,
 })
 export type LocalSettingsConfig = z.infer<typeof localSettingsConfigSchema>
+
+export const localEngineReadinessSettingsSchema = z.object({
+  byok: z.object({
+    apiKeyRefPresent: z.boolean(),
+    model: z.string(),
+    provider: z.string(),
+  }),
+  engineId: z.string().min(1),
+  engines: z.array(localEngineStatusSchema),
+  executionMode: localExecutionModeSchema,
+})
+export type LocalEngineReadinessSettings = z.infer<typeof localEngineReadinessSettingsSchema>

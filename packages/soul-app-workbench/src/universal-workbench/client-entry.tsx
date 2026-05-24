@@ -1,7 +1,7 @@
 import type {
+  LocalEngineReadinessSettings,
   LocalSession,
   LocalSessionEvent,
-  LocalSettingsConfig,
   LocalTurn,
   LocalWorkspace,
 } from '@zonease/aiworker-shared'
@@ -113,14 +113,14 @@ export function buildUniversalWorkbenchCreateSessionPayload(
   }
 }
 
-export function resolveUniversalWorkbenchEngineReadiness(settings: LocalSettingsConfig | null): EngineReadiness {
+export function resolveUniversalWorkbenchEngineReadiness(settings: LocalEngineReadinessSettings | null): EngineReadiness {
   return resolveEngineReadiness(settings, UNIVERSAL_WORKBENCH_ENGINE_COPY)
 }
 
 export async function loadMountedEngineReadiness(): Promise<EngineReadiness> {
   try {
-    const result = await fetchJson<{ settings: LocalSettingsConfig }>('/api/local/settings')
-    return resolveUniversalWorkbenchEngineReadiness(result.settings)
+    const settings = await fetchJson<LocalEngineReadinessSettings>('/api/local/settings/engines')
+    return resolveUniversalWorkbenchEngineReadiness(settings)
   }
   catch {
     return MOUNTED_ENGINE_READINESS_UNAVAILABLE

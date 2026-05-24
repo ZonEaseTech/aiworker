@@ -14,9 +14,11 @@ Worker Configuration no longer exposes workspace projection scope; it remains a
 worker-scoped Host shell surface for overlay/local enablement and declared
 workbench route preference. The local daemon now serves
 `GET /api/local/settings/engines` as a read-only non-secret engine status
-projection aligned with docs and OpenAPI. The mounted-surfaces smoke now follows
-the current first-run path by switching HR's worker-scoped workbench route
-through Worker Configuration before asserting the HR route surface.
+projection aligned with docs and OpenAPI; mounted workbench readiness now uses
+that narrow endpoint instead of the full settings surface. The mounted-surfaces
+smoke now follows the current first-run path by switching HR's worker-scoped
+workbench route through Worker Configuration before asserting the HR route
+surface.
 
 ## 2026-05-23 [fixed] BUG-151 / PLAN-407 — Universal workbench engine readiness
 

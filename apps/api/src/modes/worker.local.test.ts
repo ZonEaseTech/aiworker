@@ -1539,7 +1539,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
 
     const settingsRes = await target.request('/api/local/settings')
     expect(settingsRes.status).toBe(200)
-    const initial = await settingsRes.json() as { settings: { engineId: string, engines: Array<{ id: string }>, executionMode: string, externalMcpServers: Array<{ enabled: boolean }>, localMcpServer: { enabled: boolean } } }
+    const initial = await settingsRes.json() as { settings: { byok: { apiKeyRef: string, model: string, provider: string }, engineId: string, engines: Array<{ id: string }>, executionMode: string, externalMcpServers: Array<{ enabled: boolean }>, localMcpServer: { enabled: boolean } } }
     expect(['local-cli', 'byok']).toContain(initial.settings.executionMode)
     expect(initial.settings.engines.some(engine => engine.id === 'workspace-template')).toBe(false)
     expect(initial.settings.localMcpServer.enabled).toBe(false)
@@ -1547,8 +1547,15 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
 
     const enginesRes = await target.request('/api/local/settings/engines')
     expect(enginesRes.status).toBe(200)
-    const enginesBody = await enginesRes.json() as { engineId: string, engines: Array<{ id: string }>, executionMode: string }
-    expect(Object.keys(enginesBody).sort()).toEqual(['engineId', 'engines', 'executionMode'])
+    const enginesBody = await enginesRes.json() as { byok: { apiKeyRef?: string, apiKeyRefPresent: boolean, model: string, provider: string }, engineId: string, engines: Array<{ id: string }>, executionMode: string }
+    expect(Object.keys(enginesBody).sort()).toEqual(['byok', 'engineId', 'engines', 'executionMode'])
+    expect(Object.keys(enginesBody.byok).sort()).toEqual(['apiKeyRefPresent', 'model', 'provider'])
+    expect(enginesBody.byok).not.toHaveProperty('apiKeyRef')
+    expect(enginesBody.byok).toEqual({
+      apiKeyRefPresent: initial.settings.byok.apiKeyRef.trim().length > 0,
+      model: initial.settings.byok.model,
+      provider: initial.settings.byok.provider,
+    })
     expect(enginesBody.engineId).toBe(initial.settings.engineId)
     expect(enginesBody.executionMode).toBe(initial.settings.executionMode)
     expect(enginesBody.engines.map(engine => engine.id)).toEqual(initial.settings.engines.map(engine => engine.id))
@@ -1560,6 +1567,22 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     })
     expect(patchRes.status).toBe(200)
     expect((await patchRes.json() as { settings: { language: string } }).settings.language).toBe('zh-CN')
+
+    const byokPatchRes = await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ byok: { apiKeyRef: 'env:OPENAI_API_KEY', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4.1', provider: 'openai-compatible' } }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(byokPatchRes.status).toBe(200)
+    const patchedEnginesRes = await target.request('/api/local/settings/engines')
+    expect(patchedEnginesRes.status).toBe(200)
+    const patchedEnginesBody = await patchedEnginesRes.json() as { byok: { apiKeyRef?: string, apiKeyRefPresent: boolean, model: string, provider: string } }
+    expect(patchedEnginesBody.byok).toEqual({
+      apiKeyRefPresent: true,
+      model: 'gpt-4.1',
+      provider: 'openai-compatible',
+    })
+    expect(patchedEnginesBody.byok).not.toHaveProperty('apiKeyRef')
 
     const mcpPatchRes = await target.request('/api/local/settings', {
       method: 'PATCH',
@@ -1589,8 +1612,13 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
 
     const enginesRes = await target.request('/api/local/settings/engines')
     expect(enginesRes.status).toBe(200)
-    const enginesBody = await enginesRes.json() as { engineId: string, engines: Array<{ id: string }>, executionMode: string }
-    expect(Object.keys(enginesBody).sort()).toEqual(['engineId', 'engines', 'executionMode'])
+    const enginesBody = await enginesRes.json() as { byok: { apiKeyRefPresent: boolean, model: string, provider: string }, engineId: string, engines: Array<{ id: string }>, executionMode: string }
+    expect(Object.keys(enginesBody).sort()).toEqual(['byok', 'engineId', 'engines', 'executionMode'])
+    expect(enginesBody.byok).toEqual({
+      apiKeyRefPresent: false,
+      model: 'gpt-4o',
+      provider: 'openai-compatible',
+    })
     expect(enginesBody.engineId).toBe('codex')
     expect(enginesBody.engines).toEqual([])
     expect(enginesBody.executionMode).toBe('byok')
