@@ -13,6 +13,51 @@ import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
 const vi = { fn: mock }
 
 describe('UniversalWorkbenchApp', () => {
+  it('server-renders selected sessions with narrow-safe workbench structure', () => {
+    const workspace = workspaceFixture()
+    const session: LocalSession = {
+      capabilityTemplateId: 'aiworker-qa.evidence-review',
+      context: '',
+      createdAt: '2026-05-24T07:03:42.523Z',
+      endedAt: null,
+      id: 'session-selected',
+      metadataJson: {},
+      startedAt: '2026-05-24T07:03:42.523Z',
+      status: 'running',
+      title: 'Review the release evidence',
+      updatedAt: '2026-05-24T07:03:42.523Z',
+      workerId: 'worker-1',
+      workspaceId: workspace.id,
+    }
+
+    const html = renderToStaticMarkup(
+      <UniversalWorkbenchApp
+        engineReadiness={{ detail: 'Engine bridge ready', label: 'Engine bridge', ready: true }}
+        events={[]}
+        selectedSessionId={session.id}
+        sessions={[session]}
+        templates={[{ id: 'aiworker-qa.evidence-review', name: 'Evidence Review' }]}
+        turnInput=""
+        turnSubmitting={false}
+        turns={[]}
+        workspace={workspace}
+        workspaces={[workspace]}
+        onBackToWorkspace={vi.fn()}
+        onCreateSession={vi.fn(async () => {})}
+        onCreateWorkspace={vi.fn()}
+        onRefresh={vi.fn()}
+        onSelectSession={vi.fn()}
+        onSubmitTurn={vi.fn()}
+        onTurnInputChange={vi.fn()}
+      />,
+    )
+
+    expect(classForSlot(html, 'universal-workbench')).toContain('max-md:flex-col')
+    expect(classForSlot(html, 'workbench-sidebar')).toContain('max-md:w-full')
+    expect(html).toContain('data-slot="workbench-main"')
+    expect(classForSlot(html, 'artifact-rail')).toContain('max-md:flex-none')
+  })
+
   it('renders the managed session composer for a selected workspace without raw new-session form markup', () => {
     const workspace: LocalWorkspace = {
       createdAt: '2026-05-23T00:00:00.000Z',
@@ -255,6 +300,12 @@ describe('UniversalWorkbenchApp', () => {
     ])
   })
 })
+
+function classForSlot(html: string, slot: string): string {
+  const match = html.match(new RegExp(`<[^>]*class="([^"]*)"[^>]*data-slot="${slot}"`))
+  expect(match?.[1]).toBeDefined()
+  return match?.[1] ?? ''
+}
 
 function workspaceFixture(): LocalWorkspace {
   return {

@@ -161,9 +161,9 @@ export function UniversalWorkbenchApp({
   }
 
   return (
-    <div className="flex h-full min-h-0" data-slot="universal-workbench">
+    <div className="flex h-full min-h-0 min-w-0 max-md:flex-col" data-slot="universal-workbench">
       {!sidebarCollapsed && (
-        <aside className="w-56 min-w-0 flex-shrink-0 overflow-y-auto border-r p-3" data-slot="workbench-sidebar">
+        <aside className="w-56 min-w-0 flex-shrink-0 overflow-y-auto border-r p-3 max-md:max-h-52 max-md:w-full max-md:flex-none max-md:border-r-0 max-md:border-b" data-slot="workbench-sidebar">
           <div className="mb-3 flex items-center justify-between gap-1">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Workspaces</span>
             <div className="flex items-center gap-0.5">
@@ -214,7 +214,7 @@ export function UniversalWorkbenchApp({
         </aside>
       )}
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col" data-slot="workbench-main">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col max-md:w-full" data-slot="workbench-main">
         {sidebarCollapsed && (
           <div className="px-3 pt-3">
             <Button

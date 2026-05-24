@@ -131,7 +131,7 @@ export function SessionDetail({
   if (collapsed) {
     return (
       <aside
-        className="w-0 max-w-0 overflow-hidden p-0 opacity-0 pointer-events-none"
+        className="w-0 max-w-0 overflow-hidden p-0 opacity-0 pointer-events-none max-md:flex-none"
         data-slot="artifact-rail"
         data-state="collapsed"
         data-testid="artifact-rail-collapsed"
@@ -142,7 +142,7 @@ export function SessionDetail({
 
   return (
     <aside
-      className="relative flex min-h-0 w-80 min-w-0 flex-none flex-col gap-3 overflow-y-auto p-3 transition-all max-md:h-48 max-md:w-full"
+      className="relative flex min-h-0 w-80 min-w-0 flex-none flex-col gap-3 overflow-y-auto p-3 transition-all max-md:max-h-64 max-md:w-full max-md:flex-none"
       data-slot="artifact-rail"
       data-state="expanded"
       aria-label={copy.accessibility.businessArtifactPreview}
