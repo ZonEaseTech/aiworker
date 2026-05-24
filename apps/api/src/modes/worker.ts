@@ -49,6 +49,19 @@ import {
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
 import { registerLocalOpenApiPaths } from './worker/openapi'
+import {
+  createSessionBodySchema,
+  createSessionMessageBodySchema,
+  createWorkerBodySchema,
+  createWorkspaceBodySchema,
+  installAppBodySchema,
+  nativeEngineInvocationBodySchema,
+  parseJsonBody,
+  patchSettingsBodySchema,
+  patchWorkerBodySchema,
+  patchWorkspaceBodySchema,
+  testEngineBodySchema,
+} from './worker/schemas'
 import { loadLocalSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
 import { serveWorkerWeb, serveWorkerWebAsset } from './worker/web-static'
 
@@ -91,14 +104,6 @@ interface MountedSurfaceContribution {
   path?: string
   surface: SoulAppMountedSurface
   target?: string
-}
-
-interface NativeEngineInvocationRequest {
-  args?: unknown
-  cwd?: string
-  engineCommand?: string | null
-  engineId?: string | null
-  input?: string | null
 }
 
 interface PreparedNativeEngineInvocation {
@@ -204,11 +209,14 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
 
   app.get('/api/local/apps', c => c.json({ apps: state.host.listApps() }))
   app.post('/api/local/apps/install', async (c) => {
-    const body = await readJson<{ manifest?: unknown, manifestPath?: string }>(c.req)
-    const app = typeof body.manifestPath === 'string' && body.manifestPath.trim()
-      ? await state.host.installAppFromPath(body.manifestPath)
+    const result = await parseJsonBody(c, installAppBodySchema, 'INSTALL_APP_INVALID')
+    if (!result.ok)
+      return result.response
+    const { manifest, manifestPath } = result.data
+    const app = typeof manifestPath === 'string' && manifestPath.trim()
+      ? await state.host.installAppFromPath(manifestPath)
       : state.host.installAppManifest({
-          manifest: body.manifest,
+          manifest,
           sourceKind: 'inline',
           sourceRef: 'api:inline',
         })
@@ -245,19 +253,15 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
 
   app.get('/api/local/workers', c => c.json({ workers: listWorkers() }))
   app.post('/api/local/workers', async (c) => {
-    const body = await readJson<{
-      defaultEngineId?: string | null
-      id?: string
-      metadata?: Record<string, unknown>
-      name?: string
-      soulId?: string
-    }>(c.req)
+    const result = await parseJsonBody(c, createWorkerBodySchema, 'CREATE_WORKER_INVALID')
+    if (!result.ok)
+      return result.response
     const created = await state.host.createSoulWorker({
-      defaultEngineId: body.defaultEngineId,
-      id: body.id,
-      metadata: body.metadata,
-      name: requireString(body.name, 'name'),
-      soulId: requireString(body.soulId, 'soulId'),
+      defaultEngineId: result.data.defaultEngineId,
+      id: result.data.id,
+      metadata: result.data.metadata,
+      name: result.data.name,
+      soulId: result.data.soulId,
     })
     state.runtimes.set(created.worker.id, created.runtime)
     return c.json({ worker: created.worker, snapshot: created.snapshot }, 201)
@@ -272,19 +276,16 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const existing = getWorker(c.req.param('workerId'))
     if (!existing)
       return notFound(c, 'worker')
-    const body = await readJson<{
-      defaultEngineId?: string | null
-      metadata?: Record<string, unknown>
-      name?: string
-      status?: WorkerRow['status']
-    }>(c.req)
+    const result = await parseJsonBody(c, patchWorkerBodySchema, 'PATCH_WORKER_INVALID')
+    if (!result.ok)
+      return result.response
     const worker = upsertWorker({
       id: existing.id,
       soulId: existing.soulId,
-      name: body.name ?? existing.name,
-      status: body.status ?? existing.status,
-      defaultEngineId: body.defaultEngineId ?? existing.defaultEngineId,
-      metadataJson: body.metadata ?? existing.metadataJson,
+      name: result.data.name ?? existing.name,
+      status: result.data.status ?? existing.status,
+      defaultEngineId: result.data.defaultEngineId ?? existing.defaultEngineId,
+      metadataJson: result.data.metadata ?? existing.metadataJson,
     })
     const runtime = state.host.createRuntimeForWorker(worker)
     await runtime.init()
@@ -297,7 +298,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.put('/api/local/workers/:workerId/overlay', async (c) => {
     const worker = requireWorker(c.req.param('workerId'))
-    const parsed = localWorkerOverlaySaveSchema.safeParse(await readJson(c.req))
+    const parsed = localWorkerOverlaySaveSchema.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) {
       return c.json({
         error: {
@@ -327,6 +328,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.post('/api/local/workers/:workerId/engine/invocations', async (c) => {
     const prepared = await prepareNativeEngineInvocation(c, c.req.param('workerId'))
+    if (prepared instanceof Response)
+      return prepared
     const result = await invokeNativeEngine({
       args: prepared.args,
       command: prepared.command,
@@ -340,6 +343,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.post('/api/local/workers/:workerId/engine/invocations/stream', async (c) => {
     const prepared = await prepareNativeEngineInvocation(c, c.req.param('workerId'))
+    if (prepared instanceof Response)
+      return prepared
     return streamNativeEngineInvocation(prepared)
   })
 
@@ -359,12 +364,14 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.post('/api/local/workers/:workerId/workspaces', async (c) => {
     const runtime = requireRuntime(state, c.req.param('workerId'))
-    const body = await readJson<{ metadata?: Record<string, unknown>, name?: string, sourcePointers?: Record<string, unknown>[], type?: string }>(c.req)
+    const result = await parseJsonBody(c, createWorkspaceBodySchema, 'CREATE_WORKSPACE_INVALID')
+    if (!result.ok)
+      return result.response
     const workspace = await runtime.createWorkspace({
-      name: requireString(body.name, 'name'),
-      type: body.type ?? 'workspace',
-      sourcePointers: body.sourcePointers ?? [],
-      metadata: body.metadata ?? {},
+      name: result.data.name,
+      type: result.data.type ?? 'workspace',
+      sourcePointers: result.data.sourcePointers ?? [],
+      metadata: result.data.metadata ?? {},
     })
     return c.json({ workspace }, 201)
   })
@@ -374,8 +381,10 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.patch('/api/local/workers/:workerId/workspaces/:workspaceId', async (c) => {
     const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
-    const body = await readJson<Partial<Pick<WorkspaceRow, 'metadataJson' | 'name' | 'sourcePointersJson' | 'status'>>>(c.req)
-    return c.json({ workspace: updateWorkspace({ id: workspace.id, ...body }) })
+    const result = await parseJsonBody(c, patchWorkspaceBodySchema, 'PATCH_WORKSPACE_INVALID')
+    if (!result.ok)
+      return result.response
+    return c.json({ workspace: updateWorkspace({ id: workspace.id, ...result.data }) })
   })
   app.post('/api/local/workers/:workerId/workspaces/:workspaceId/projection', async (c) => {
     const workerId = c.req.param('workerId')
@@ -394,8 +403,10 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ workspace })
   })
   app.patch('/api/local/workspaces/:workspaceId', async (c) => {
-    const body = await readJson<Partial<Pick<WorkspaceRow, 'metadataJson' | 'name' | 'sourcePointersJson' | 'status'>>>(c.req)
-    return c.json({ workspace: updateWorkspace({ id: c.req.param('workspaceId'), ...body }) })
+    const result = await parseJsonBody(c, patchWorkspaceBodySchema, 'PATCH_WORKSPACE_INVALID')
+    if (!result.ok)
+      return result.response
+    return c.json({ workspace: updateWorkspace({ id: c.req.param('workspaceId'), ...result.data }) })
   })
   app.get('/api/local/sessions', c => c.json({ sessions: listSessions() }))
   app.get('/api/local/turns', c => c.json({ turns: listTurns() }))
@@ -475,7 +486,10 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ settings })
   })
   app.patch('/api/local/settings', async (c) => {
-    const patch = await readJson<Partial<LocalSettingsConfig>>(c.req)
+    const result = await parseJsonBody(c, patchSettingsBodySchema, 'PATCH_SETTINGS_INVALID')
+    if (!result.ok)
+      return result.response
+    const patch = result.data
     const current = loadLocalSettings()
     const settings = saveLocalSettings({
       ...current,
@@ -495,9 +509,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ engines: settings.engines, settings })
   })
   app.post('/api/local/settings/engines/test', async (c) => {
-    const body = await readJson<{ engineId?: string }>(c.req)
+    const result = await parseJsonBody(c, testEngineBodySchema, 'TEST_ENGINE_INVALID')
+    if (!result.ok)
+      return result.response
     const settings = loadLocalSettings()
-    const engineId = body.engineId ?? settings.engineId
+    const engineId = result.data.engineId ?? settings.engineId
     const engine = settings.engines.find(engine => engine.id === engineId)
     if (!engine)
       return c.json({ result: { engineId, message: 'Engine is not known in local settings.', status: 'fail' } }, 404)
@@ -592,31 +608,6 @@ function secureStringEqual(actual: string, expected: string): boolean {
   const actualBytes = Buffer.from(actual)
   const expectedBytes = Buffer.from(expected)
   return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes)
-}
-
-async function readJson<T>(request: { json: () => Promise<unknown> }): Promise<T> {
-  return await request.json().catch(() => ({})) as T
-}
-
-function requireString(value: unknown, field: string): string {
-  if (typeof value !== 'string' || value.trim().length === 0)
-    throw AppError.badRequest(`Missing required field: ${field}`)
-  return value.trim()
-}
-
-function readOptionalString(value: unknown): string | null {
-  if (typeof value !== 'string')
-    return null
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
-function readStringArray(value: unknown, field: string): string[] {
-  if (value === undefined)
-    return []
-  if (!Array.isArray(value) || value.some(item => typeof item !== 'string'))
-    throw AppError.badRequest(`Invalid field: ${field}`)
-  return value
 }
 
 async function workerOverlayResponse(state: LocalDaemonState, workerId: string) {
@@ -1164,21 +1155,26 @@ function executionMetadata(settings: LocalSettingsConfig, engine: LocalSettingsC
   }
 }
 
-async function prepareNativeEngineInvocation(c: Context, workerId: string): Promise<PreparedNativeEngineInvocation> {
+async function prepareNativeEngineInvocation(c: Context, workerId: string): Promise<PreparedNativeEngineInvocation | Response> {
   const worker = requireWorker(workerId)
-  const body = await readJson<NativeEngineInvocationRequest>(c.req)
+  const result = await parseJsonBody(c, nativeEngineInvocationBodySchema, 'NATIVE_ENGINE_INVOCATION_INVALID')
+  if (!result.ok)
+    return result.response
+  const body = result.data
   const settings = loadLocalSettings()
-  const engineId = readOptionalString(body.engineId) ?? (settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider)
+  const engineId = (body.engineId != null && body.engineId.trim().length > 0 ? body.engineId.trim() : null)
+    ?? (settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider)
   const engine = settings.engines.find(engine => engine.id === engineId)
-  const command = readOptionalString(body.engineCommand) ?? selectedEngineCommand(settings, engine)
+  const engineCommandFromBody = (body.engineCommand != null && body.engineCommand.trim().length > 0 ? body.engineCommand.trim() : null)
+  const command = engineCommandFromBody ?? selectedEngineCommand(settings, engine)
   if (!command)
     throw new Error('Missing required field: engineCommand')
   return {
-    args: readStringArray(body.args, 'args'),
+    args: body.args ?? [],
     command,
-    cwd: requireString(body.cwd, 'cwd'),
+    cwd: body.cwd,
     engineId,
-    input: typeof body.input === 'string' ? body.input : '',
+    input: body.input ?? '',
     invocationId: randomUUID(),
     worker,
   }
@@ -1280,23 +1276,20 @@ function streamNativeEngineInvocation(prepared: PreparedNativeEngineInvocation):
 
 async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonState, workspace: WorkspaceRow, stream: boolean): Promise<Response> {
   const runtime = requireRuntime(state, workspace.workerId)
-  const body = await readJson<{
-    capabilityTemplateId?: string
-    context?: string
-    input?: string
-    metadata?: Record<string, unknown>
-    title?: string
-  }>(c.req)
+  const result = await parseJsonBody(c, createSessionBodySchema, 'CREATE_SESSION_INVALID')
+  if (!result.ok)
+    return result.response
+  const body = result.data
   const template = requireTemplateForWorker(state, workspace.workerId, body.capabilityTemplateId)
   const metadata = enrichTemplateMetadata(state, workspace.workerId, template.id, body.metadata ?? {})
   const session = await runtime.createSession({
     workspaceId: workspace.id,
     capabilityTemplateId: template.id,
-    title: requireString(body.title, 'title'),
+    title: body.title,
     context: body.context ?? '',
     metadata,
   })
-  if (typeof body.input !== 'string' || body.input.trim().length === 0)
+  if (!body.input || body.input.trim().length === 0)
     return c.json({ session }, 201)
   const settings = loadLocalSettings()
   const engine = selectedEngine(settings)
@@ -1316,17 +1309,18 @@ async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonStat
 
 async function createSessionMessageResponse(c: Context, state: LocalDaemonState, session: SessionRow, stream: boolean): Promise<Response> {
   const runtime = requireRuntime(state, session.workerId)
-  const body = await readJson<{ input?: string, metadata?: Record<string, unknown> }>(c.req)
-  const input = requireString(body.input, 'input')
+  const result = await parseJsonBody(c, createSessionMessageBodySchema, 'CREATE_SESSION_MESSAGE_INVALID')
+  if (!result.ok)
+    return result.response
   const settings = loadLocalSettings()
   const engine = selectedEngine(settings)
   const turnInput = {
     engineCommand: selectedEngineCommand(settings, engine),
     engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
-    input,
+    input: result.data.input,
     metadata: {
       ...enrichTemplateMetadata(state, session.workerId, session.capabilityTemplateId, session.metadataJson ?? {}),
-      ...(body.metadata ?? {}),
+      ...(result.data.metadata ?? {}),
       ...executionMetadata(settings, engine),
     },
   }

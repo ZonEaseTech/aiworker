@@ -1572,6 +1572,103 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     })
     expect([200, 404]).toContain(testRes.status)
   })
+
+  it('rejects write routes with missing required fields with 400', async () => {
+    const target = await app()
+
+    // POST /api/local/workers — name/soulId 必填
+    const missingNameRes = await target.request('/api/local/workers', {
+      method: 'POST',
+      body: JSON.stringify({ soulId: HR_APP_ID }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(missingNameRes.status).toBe(400)
+    expect(await missingNameRes.json()).toMatchObject({ error: { code: 'CREATE_WORKER_INVALID' } })
+
+    const missingSoulIdRes = await target.request('/api/local/workers', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'HR Worker' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(missingSoulIdRes.status).toBe(400)
+    expect(await missingSoulIdRes.json()).toMatchObject({ error: { code: 'CREATE_WORKER_INVALID' } })
+
+    // POST /api/local/workers — 合法 body 正常通过
+    const validWorkerRes = await target.request('/api/local/workers', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'HR Worker', soulId: HR_APP_ID }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(validWorkerRes.status).toBe(201)
+    const validWorker = (await validWorkerRes.json() as { worker: { id: string } }).worker
+
+    // POST /api/local/workers/:workerId/workspaces — name 必填
+    const missingWorkspaceNameRes = await target.request(`/api/local/workers/${validWorker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ type: 'people-profile' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(missingWorkspaceNameRes.status).toBe(400)
+    expect(await missingWorkspaceNameRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_INVALID' } })
+
+    // POST /api/local/workers/:workerId/workspaces — 合法 body 正常通过
+    const validWorkspaceRes = await target.request(`/api/local/workers/${validWorker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Test workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(validWorkspaceRes.status).toBe(201)
+    const validWorkspace = (await validWorkspaceRes.json() as { workspace: { id: string } }).workspace
+
+    // POST /api/local/workers/:workerId/workspaces/:workspaceId/sessions — title 必填
+    const missingTitleRes = await target.request(`/api/local/workers/${validWorker.id}/workspaces/${validWorkspace.id}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({ context: 'ctx' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(missingTitleRes.status).toBe(400)
+    expect(await missingTitleRes.json()).toMatchObject({ error: { code: 'CREATE_SESSION_INVALID' } })
+
+    // POST session/messages — input 必填
+    const sessionRes = await target.request(`/api/local/workers/${validWorker.id}/workspaces/${validWorkspace.id}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Test session', capabilityTemplateId: HR_CANDIDATE_SCREEN }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(sessionRes.status).toBe(201)
+    const session = (await sessionRes.json() as { session: { id: string } }).session
+
+    const missingInputRes = await target.request(`/api/local/workers/${validWorker.id}/sessions/${session.id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ metadata: {} }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(missingInputRes.status).toBe(400)
+    expect(await missingInputRes.json()).toMatchObject({ error: { code: 'CREATE_SESSION_MESSAGE_INVALID' } })
+
+    // engine invocation — cwd 必填
+    const missingCwdRes = await target.request(`/api/local/workers/${validWorker.id}/engine/invocations`, {
+      method: 'POST',
+      body: JSON.stringify({ engineCommand: 'echo', input: 'hi' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(missingCwdRes.status).toBe(400)
+    expect(await missingCwdRes.json()).toMatchObject({ error: { code: 'NATIVE_ENGINE_INVOCATION_INVALID' } })
+  })
+
+  it('accepts extra fields silently (strip, not strict) for write routes', async () => {
+    const target = await app()
+
+    // 多余字段 extraField 应被 strip，不影响正常响应
+    const res = await target.request('/api/local/workers', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'HR Worker Extra', soulId: HR_APP_ID, extraField: 'should-be-ignored' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(res.status).toBe(201)
+    const body = await res.json() as { worker: Record<string, unknown> }
+    expect(body.worker).not.toHaveProperty('extraField')
+  })
 })
 
 async function waitForFile(filePath: string): Promise<void> {
