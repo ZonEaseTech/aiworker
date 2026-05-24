@@ -1153,6 +1153,10 @@ describe('worker studio', () => {
     expect(screen.queryByRole('dialog', { name: /settings/i })).toBeNull()
     expect(screen.getByRole('button', { name: 'Toggle Skills' })).toBeTruthy()
     expect(screen.getByTestId('worker-overlay-asset-list').getAttribute('data-orientation')).toBe('vertical')
+    const workerConfigBody = screen.getByTestId('worker-configuration-body')
+    expect(workerConfigBody.className).toContain('max-md:flex-col')
+    expect(screen.getByTestId('worker-overlay-sidebar').className).toContain('max-md:w-full')
+    expect(screen.getByTestId('worker-overlay-editor-panel').className).toContain('max-md:w-full')
 
     fireEvent.click(screen.getAllByRole('switch', { name: 'Enable interview-brief' })[0]!)
 

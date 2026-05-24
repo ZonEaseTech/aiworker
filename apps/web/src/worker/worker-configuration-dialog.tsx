@@ -314,8 +314,8 @@ export function WorkerConfigurationDialog({
           <DialogTitle>Worker configuration</DialogTitle>
           <DialogDescription>{worker ? `${worker.name} worker overlay` : 'Worker overlay'}</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-1 min-h-0">
-          <div className="flex w-80 shrink-0 flex-col min-h-0 bg-sidebar text-sidebar-foreground">
+        <div data-testid="worker-configuration-body" className="flex flex-1 min-h-0 max-md:flex-col">
+          <div data-testid="worker-overlay-sidebar" className="flex w-80 shrink-0 flex-col min-h-0 bg-sidebar text-sidebar-foreground max-md:max-h-64 max-md:w-full max-md:flex-none">
             <div className="shrink-0 px-3 pt-4 pb-2">
               <SidebarGroupLabel className="h-auto px-2 py-0 text-xs">Overlay assets</SidebarGroupLabel>
             </div>
@@ -431,7 +431,7 @@ export function WorkerConfigurationDialog({
             </ScrollArea>
             <div data-testid="worker-overlay-asset-list" data-orientation="vertical" className="hidden" />
           </div>
-          <div className="flex-1 min-w-0">
+          <div data-testid="worker-overlay-editor-panel" className="flex-1 min-w-0 max-md:w-full">
             <ScrollArea className="h-full">
               <div className="p-6">
                 {createOpen
