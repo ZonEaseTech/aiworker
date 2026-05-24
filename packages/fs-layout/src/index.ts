@@ -99,8 +99,8 @@ export function resolveAiworkerHome(opts: ResolveScopeOptions = {}): string {
 }
 
 function assertSafeWorkerId(workerId: string): string {
-  // \w 始まり、後続は \w と . - の組み合わせ
-  // 拒绝: 空串、含 /、绝对路径、尾随 . 或 -、连续 .. (Windows FS 目录碰撞)
+  // 首字符为 \w,后续仅允许 \w 与 . -;并拒绝空串、含 /、绝对路径、
+  // 尾随 . 或 -、连续 ..(避免 Windows 文件系统剥尾点导致目录碰撞)
   if (
     !/^\w[\w.-]*$/.test(workerId)
     || workerId.endsWith('.')

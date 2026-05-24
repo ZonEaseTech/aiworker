@@ -35,7 +35,7 @@ export function scanPrivateImports(rootDir: string): PrivateImportIssue[] {
   const issues: PrivateImportIssue[] = []
   for (const sourceDir of appSourceScanDirs(rootDir)) {
     for (const file of listSourceFiles(sourceDir)) {
-      // #6: テストファイルをスキップ(CI gate の scanSoulAppImports と同じ挙動)
+      // 跳过测试文件(与 CI gate 的 scanSoulAppImports 行为一致)
       if (isTestSourceFile(file))
         continue
       const content = readFileSync(file, 'utf8')
