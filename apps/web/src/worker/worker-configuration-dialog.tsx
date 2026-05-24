@@ -1,4 +1,4 @@
-import type { LocalWorker, LocalWorkerOverlayAsset, LocalWorkerOverlayAssetKind, LocalWorkspace, SoulAppProjectionReceipt } from '@zonease/aiworker-shared'
+import type { LocalWorker, LocalWorkerOverlayAsset, LocalWorkerOverlayAssetKind } from '@zonease/aiworker-shared'
 
 import { Cancel01Icon, MoreHorizontalCircle01Icon, RefreshIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -35,22 +35,18 @@ export function WorkerConfigurationDialog({
   activeWorkbenchTabId,
   assets,
   onOpenChange,
-  onProjectWorkspaceAssets,
   onSaveAssets,
   onSelectWorkbenchTab,
   open,
-  projectionWorkspace,
   worker,
   workbenchTabs,
 }: {
   activeWorkbenchTabId?: string | null
   assets: LocalWorkerOverlayAsset[]
   onOpenChange: (open: boolean) => void
-  onProjectWorkspaceAssets?: () => Promise<SoulAppProjectionReceipt | null> | SoulAppProjectionReceipt | null
   onSaveAssets: (assets: LocalWorkerOverlayAsset[]) => Promise<void> | void
   onSelectWorkbenchTab?: (tab: { id: string, path: string }) => void
   open: boolean
-  projectionWorkspace?: LocalWorkspace | null
   worker: LocalWorker | null
   workbenchTabs?: { id: string, label: string, path: string }[]
 }) {
@@ -62,10 +58,8 @@ export function WorkerConfigurationDialog({
   const [autosave, setAutosave] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const [autosaveErrorMessage, setAutosaveErrorMessage] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
-  const [projecting, setProjecting] = useState(false)
-  const [projectionStatus, setProjectionStatus] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [selectedPanel, setSelectedPanel] = useState<null | 'projection'>(null)
+  const [selectedPanel, setSelectedPanel] = useState<null | 'workbench'>(null)
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
   const displayAssets = useMemo(() => {
     if (assets.length === 0)
@@ -98,7 +92,7 @@ export function WorkerConfigurationDialog({
     }
     return map
   }, [assets])
-  const selectedAsset = selectedPanel === 'projection' ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
+  const selectedAsset = selectedPanel === 'workbench' ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
   const selectedAssetKey = selectedAsset ? `${selectedAsset.kind}:${selectedAsset.id}` : null
   const defaultNewAsset = useMemo(() => activeCategory ? createDefaultAssetDraft(activeCategory, assets) : null, [activeCategory, assets])
   const effectiveNewAsset = newAsset?.kind === activeCategory ? newAsset : defaultNewAsset
@@ -274,23 +268,6 @@ export function WorkerConfigurationDialog({
     setCreateValidation(null)
   }
 
-  async function projectWorkspaceAssets() {
-    if (!onProjectWorkspaceAssets || !projectionWorkspace)
-      return
-    setProjecting(true)
-    setProjectionStatus(null)
-    try {
-      const receipt = await onProjectWorkspaceAssets()
-      setProjectionStatus(`Projection updated${receipt ? ` with ${receipt.projections.length} item${receipt.projections.length === 1 ? '' : 's'}` : ''}.`)
-    }
-    catch (error) {
-      setProjectionStatus(error instanceof Error ? error.message : String(error))
-    }
-    finally {
-      setProjecting(false)
-    }
-  }
-
   useEffect(() => {
     if (autosave !== 'saved')
       return undefined
@@ -303,6 +280,11 @@ export function WorkerConfigurationDialog({
   useEffect(() => {
     setEditContent(selectedAsset?.content ?? '')
   }, [selectedAssetKey])
+
+  useEffect(() => {
+    if (selectedPanel === 'workbench' && (!workbenchTabs || workbenchTabs.length <= 1))
+      setSelectedPanel(null)
+  }, [selectedPanel, workbenchTabs])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -421,26 +403,30 @@ export function WorkerConfigurationDialog({
                     </CollapsibleGroup>
                   )
                 })}
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      isActive={selectedPanel === 'projection'}
-                      size="lg"
-                      className="h-11 items-start py-1.5"
-                      onClick={() => {
-                        setSelectedPanel('projection')
-                        setSelectedAssetId(null)
-                      }}
-                    >
-                      <span className="flex min-w-0 flex-col gap-0.5">
-                        <span className="truncate">Projection</span>
-                        <span className="truncate font-normal text-sidebar-foreground/60">
-                          {projectionWorkspace ? `Workspace: ${projectionWorkspace.name}` : 'No workspace selected'}
-                        </span>
-                      </span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
+                {workbenchTabs && workbenchTabs.length > 1
+                  ? (
+                      <SidebarMenu>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton
+                            isActive={selectedPanel === 'workbench'}
+                            size="lg"
+                            className="h-11 items-start py-1.5"
+                            onClick={() => {
+                              setSelectedPanel('workbench')
+                              setSelectedAssetId(null)
+                            }}
+                          >
+                            <span className="flex min-w-0 flex-col gap-0.5">
+                              <span className="truncate">Workbench</span>
+                              <span className="truncate font-normal text-sidebar-foreground/60">
+                                Worker route preference
+                              </span>
+                            </span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      </SidebarMenu>
+                    )
+                  : null}
               </SidebarGroup>
             </ScrollArea>
             <div data-testid="worker-overlay-asset-list" data-orientation="vertical" className="hidden" />
@@ -482,16 +468,14 @@ export function WorkerConfigurationDialog({
                           : null}
                       </ItemGroup>
                     )
-                  : selectedPanel === 'projection'
+                  : selectedPanel === 'workbench'
                     ? (
                         <ItemGroup className="gap-3">
                           <Item variant="muted">
                             <ItemContent className="grid min-w-0 gap-3">
-                              <ItemTitle>Projection</ItemTitle>
+                              <ItemTitle>Workbench</ItemTitle>
                               <ItemDescription>
-                                {projectionWorkspace
-                                  ? `Target workspace: ${projectionWorkspace.name}`
-                                  : 'No workspace selected. Select a workspace in the main view to enable projection.'}
+                                Choose the declared mounted route used by this Soul worker.
                               </ItemDescription>
                             </ItemContent>
                           </Item>
@@ -499,9 +483,9 @@ export function WorkerConfigurationDialog({
                             ? (
                                 <Item variant="default">
                                   <ItemContent className="grid min-w-0 gap-2">
-                                    <ItemTitle>Workbench tabs</ItemTitle>
-                                    <ItemDescription>Choose which workbench tab is active for this worker.</ItemDescription>
-                                    <ItemActions className="gap-0.5" role="tablist" aria-label="Workbench tabs">
+                                    <ItemTitle>Workbench route</ItemTitle>
+                                    <ItemDescription>This preference is stored for this worker only.</ItemDescription>
+                                    <ItemActions className="gap-0.5" role="tablist" aria-label="Workbench routes">
                                       {workbenchTabs.map(tab => (
                                         <button
                                           key={tab.id}
@@ -519,35 +503,6 @@ export function WorkerConfigurationDialog({
                                         </button>
                                       ))}
                                     </ItemActions>
-                                  </ItemContent>
-                                </Item>
-                              )
-                            : null}
-                          <Item variant="default">
-                            <ItemContent className="grid min-w-0 gap-2">
-                              <ItemTitle>Run projection</ItemTitle>
-                              <ItemDescription>
-                                Project workspace assets from the selected Soul App into this worker&apos;s overlay.
-                              </ItemDescription>
-                              <ItemActions>
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  size="sm"
-                                  disabled={!projectionWorkspace || !onProjectWorkspaceAssets || projecting}
-                                  onClick={() => void projectWorkspaceAssets()}
-                                >
-                                  <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
-                                  Run projection
-                                </Button>
-                              </ItemActions>
-                            </ItemContent>
-                          </Item>
-                          {projectionStatus
-                            ? (
-                                <Item variant="default">
-                                  <ItemContent>
-                                    <ItemDescription>{projectionStatus}</ItemDescription>
                                   </ItemContent>
                                 </Item>
                               )

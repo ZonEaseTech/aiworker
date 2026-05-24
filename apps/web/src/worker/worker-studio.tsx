@@ -17,7 +17,7 @@ import {
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
-import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, projectWorkerWorkspaceOverlay, saveWorkerOverlay } from '../features/local-workspace/api'
+import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, saveWorkerOverlay } from '../features/local-workspace/api'
 import { CreateWorkerDialog, CreateWorkspaceDialog } from '../features/local-workspace/components'
 import { projectNamePlaceholder } from '../features/local-workspace/model'
 import { SettingsDialog } from '../features/settings'
@@ -271,22 +271,6 @@ export function WorkerStudio() {
       })),
     })
     setWorkerOverlayAssets(result.overlay.assets)
-  }
-
-  async function projectSelectedWorkspaceOverlay() {
-    if (!workerConfigurationWorker || !selectedWorkspace || selectedWorkspace.workerId !== workerConfigurationWorker.id)
-      return null
-    const result = await projectWorkerWorkspaceOverlay(workerConfigurationWorker.id, selectedWorkspace.id)
-    setState(current => current.data
-      ? {
-          ...current,
-          data: {
-            ...current.data,
-            workspaces: current.data.workspaces.map(workspace => workspace.id === result.projection.workspace.id ? result.projection.workspace : workspace),
-          },
-        }
-      : current)
-    return result.projection.receipt
   }
 
   function startSoulApp(app: HostedSoulApp) {
@@ -586,7 +570,6 @@ export function WorkerStudio() {
           if (!open)
             setWorkerConfigurationWorkerId(null)
         }}
-        onProjectWorkspaceAssets={projectSelectedWorkspaceOverlay}
         onSaveAssets={saveWorkerOverlayAssets}
         onSelectWorkbenchTab={(tab) => {
           if (workerConfigurationWorker) {
@@ -597,7 +580,6 @@ export function WorkerStudio() {
             }))
           }
         }}
-        projectionWorkspace={selectedWorkspace?.workerId === workerConfigurationWorker?.id ? selectedWorkspace : null}
       />
     </>
   )

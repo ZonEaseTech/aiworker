@@ -1184,15 +1184,6 @@ describe('worker studio', () => {
       }))
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /^Projection/ }))
-    expect(await screen.findByRole('button', { name: 'Run projection' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Run projection' }))
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-1/projection', expect.objectContaining({
-        method: 'POST',
-      }))
-    })
-    expect(await screen.findByText('Projection updated with 4 items.')).toBeTruthy()
     fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for custom-skill-2' }))
     fireEvent.click(await screen.findByText('Delete'))
 
@@ -1200,6 +1191,20 @@ describe('worker studio', () => {
       const putBodies = vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).endsWith('/api/local/workers/hr-worker/overlay') && init?.method === 'PUT').map(([, init]) => String(init?.body ?? ''))
       expect(putBodies.at(-1)).not.toContain('"id":"custom-skill-2"')
     })
+  })
+
+  it('keeps Worker configuration scoped away from workspace projection', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure HR' }))
+    const dialog = screen.getByRole('dialog', { name: 'Worker configuration' })
+
+    expect(within(dialog).queryByText('Projection')).toBeNull()
+    expect(within(dialog).queryByText(/Workspace:/)).toBeNull()
+    expect(within(dialog).queryByText('No workspace selected')).toBeNull()
+    expect(within(dialog).queryByRole('button', { name: 'Run projection' })).toBeNull()
+    expect(within(dialog).getByRole('button', { name: 'Toggle Skills' })).toBeTruthy()
   })
 
   it('opens configuration for the worker row that owns the hovered more action', async () => {
@@ -1273,20 +1278,20 @@ describe('worker studio', () => {
 
     const switcher = await screen.findByTestId('worker-switcher')
     fireEvent.click(within(switcher).getByRole('button', { name: 'Configure HR' }))
-    fireEvent.click(screen.getByRole('button', { name: /^Projection/ }))
-    expect(screen.getByRole('tablist', { name: 'Workbench tabs' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Workbench/ }))
+    expect(screen.getByRole('tablist', { name: 'Workbench routes' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'Universal Workbench' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'HR People Workbench' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
     fireEvent.click(within(switcher).getByRole('button', { name: 'Configure QA' }))
-    fireEvent.click(screen.getByRole('button', { name: /^Projection/ }))
-    expect(screen.queryByRole('tablist', { name: 'Workbench tabs' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Workbench/ })).toBeNull()
+    expect(screen.queryByRole('tablist', { name: 'Workbench routes' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
     fireEvent.click(within(switcher).getByRole('button', { name: 'Configure Custom' }))
-    fireEvent.click(screen.getByRole('button', { name: /^Projection/ }))
-    expect(screen.queryByRole('tablist', { name: 'Workbench tabs' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Workbench/ })).toBeNull()
+    expect(screen.queryByRole('tablist', { name: 'Workbench routes' })).toBeNull()
   })
 
   it('keeps active workbench route selection scoped to each worker', async () => {
@@ -1310,13 +1315,13 @@ describe('worker studio', () => {
 
     const switcher = await screen.findByTestId('worker-switcher')
     fireEvent.click(within(switcher).getByRole('button', { name: 'Configure HR Primary' }))
-    fireEvent.click(screen.getByRole('button', { name: /^Projection/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Workbench/ }))
     fireEvent.click(screen.getByRole('tab', { name: 'HR People Workbench' }))
     await screen.findByTitle('HR People Workbench')
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
     fireEvent.click(within(switcher).getByRole('button', { name: 'Configure HR Secondary' }))
-    fireEvent.click(screen.getByRole('button', { name: /^Projection/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Workbench/ }))
 
     expect(screen.getByRole('tab', { name: 'Universal Workbench' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tab', { name: 'HR People Workbench' }).getAttribute('aria-selected')).toBe('false')
