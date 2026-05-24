@@ -332,6 +332,8 @@ function suppressStaleTerminalStatus(
   if (turn.status === 'running')
     return events
   return events.filter((event) => {
+    if (event.kind === 'activity' || event.kind === 'activity_group')
+      return event.status === 'failed' || event.status === 'succeeded'
     if (event.kind !== 'signal' || event.signalKind !== 'status')
       return true
     return event.status === 'failed' || event.status === 'succeeded'

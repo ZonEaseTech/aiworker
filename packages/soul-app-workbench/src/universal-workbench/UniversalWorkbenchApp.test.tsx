@@ -299,6 +299,36 @@ describe('UniversalWorkbenchApp', () => {
       { kind: 'signal', signalKind: 'status', status: 'succeeded' },
     ])
   })
+
+  it('filters stale running activity from succeeded terminal turns while preserving succeeded status', () => {
+    const events = normalizeSessionEvents([
+      sessionEvent({
+        id: 404,
+        payloadJson: {
+          agentEvent: {
+            id: 'tool-echo',
+            input: { command: 'echo done' },
+            kind: 'tool_use',
+            name: 'shell',
+          },
+        },
+        seq: 1,
+        type: 'status',
+        turnId: 'turn-succeeded',
+      }),
+      sessionEvent({ id: 405, payloadJson: { status: 'running', turnId: 'turn-succeeded' }, seq: 2, type: 'status', turnId: 'turn-succeeded' }),
+      sessionEvent({ id: 406, payloadJson: { status: 'succeeded', turnId: 'turn-succeeded' }, seq: 3, type: 'status', turnId: 'turn-succeeded' }),
+    ], { parser: 'codex-cli' })
+
+    const viewModel = createSessionTimelineViewModel({
+      events,
+      turns: [terminalTurn({ id: 'turn-succeeded', status: 'succeeded' })],
+    })
+
+    expect(viewModel.turns.find(item => item.turn.id === 'turn-succeeded')?.events).toEqual([
+      expect.objectContaining({ kind: 'signal', signalKind: 'status', status: 'succeeded' }),
+    ])
+  })
 })
 
 function classForSlot(html: string, slot: string): string {
