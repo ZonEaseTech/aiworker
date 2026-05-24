@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-24
+> Updated: 2026-05-25
 
 ## Usage
 
@@ -528,3 +528,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-153 Mounted QA universal workbench misses selected workspace locator**](BUG-153.md) `P2`
 - [x] [**BUG-154 Worker Configuration leaks workspace projection scope**](BUG-154.md) `P2`
 - [x] [**BUG-155 Local settings engines endpoint returns 404**](BUG-155.md) `P2`
+- [x] [**BUG-156 Real E2E P2 regression repair batch**](BUG-156.md) `P2`

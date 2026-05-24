@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-24
+> Updated: 2026-05-25
 
 ## Usage
 
@@ -441,3 +441,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-410 Mounted workspace locator propagation**](PLAN-410.md) `2026-05-24`
 - [x] [**PLAN-411 Worker Configuration boundary cleanup**](PLAN-411.md) `2026-05-24`
 - [x] [**PLAN-412 Local settings engines endpoint contract**](PLAN-412.md) `2026-05-24`
+- [x] [**PLAN-413 Real E2E P2 regression repair batch**](PLAN-413.md) `2026-05-25`

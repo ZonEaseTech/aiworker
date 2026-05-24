@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-25 [fixed] Real E2E P2 repair batch
+
+Closed the four P2 findings from `tmp/real-e2e-regression-2026-05-24/`.
+The HR app-owned mounted route now renders hydration-stable profile board text,
+the Soul-owned universal workbench stacks workspace/session/detail areas at
+390px, Worker Configuration stacks its worker-scoped overlay editor below the
+asset list on narrow screens, and terminal succeeded turns no longer show stale
+historical `Session running` / `running` chips.
+
+The fixes stay inside the owning boundaries: HR product UI remains in the HR
+Soul App, universal workbench behavior remains in `packages/soul-app-workbench`,
+and Worker Configuration remains Host-owned worker chrome rather than a
+workspace/session configuration surface.
+
+Verification covered focused HR/workbench/Web tests, UI governance, Host/Soul
+boundary audit, official HR/QA mounted client rebuilds, desktop and 390px
+Playwright browser regression, and code-review-graph.
+
 ## 2026-05-24 [fixed] Real E2E audit repair batch
 
 Repaired the blocking findings from `tmp/real-e2e-audit-2026-05-24/`.
