@@ -23,7 +23,7 @@ describe('UniversalWorkbenchApp', () => {
       id: 'session-selected',
       metadataJson: {},
       startedAt: '2026-05-24T07:03:42.523Z',
-      status: 'running',
+      status: 'active',
       title: 'Review the release evidence',
       updatedAt: '2026-05-24T07:03:42.523Z',
       workerId: 'worker-1',
