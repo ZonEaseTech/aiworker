@@ -61,7 +61,7 @@ export {
   type NativeEngineBridgeResult,
   type NativeEngineInvocationStatus,
 } from './worker/engine-bridge'
-export { sanitizeEngineEnv } from './worker/engine-env'
+export { sanitizeEngineEnv, soulAppServiceEnv } from './worker/engine-env'
 export {
   type LocalWorkerEvent,
   LocalWorkerEventBus,

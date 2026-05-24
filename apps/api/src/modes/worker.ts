@@ -18,7 +18,7 @@ import {
   createLocalBearerAuthProvider,
   invokeNativeEngine,
   listBaselineAssets,
-  sanitizeEngineEnv,
+  soulAppServiceEnv,
   workerEnv,
 } from '@zonease/aiworker-core'
 import {
@@ -1028,7 +1028,7 @@ async function resolveMountedSoulAppService(state: LocalDaemonState, app: Hosted
 }
 
 export function mountedServiceSpawnEnv(mountToken: string): NodeJS.ProcessEnv {
-  return { ...sanitizeEngineEnv(), AIWORKER_MOUNT_TOKEN: mountToken, PORT: '0' }
+  return { ...soulAppServiceEnv(), AIWORKER_MOUNT_TOKEN: mountToken, PORT: '0' }
 }
 
 async function startMountedSoulAppService(state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | null> {

@@ -1591,6 +1591,15 @@ describe('mountedServiceSpawnEnv', () => {
     expect(env.AIWORKER_MOUNT_TOKEN).toBe('tok-123')
     expect(env.PORT).toBe('0')
   })
+
+  it('mounted service env drops LLM/cloud credentials (allowlist only)', () => {
+    process.env.OPENAI_API_KEY = 'x'
+    process.env.ANTHROPIC_API_KEY = 'y'
+    const env = mountedServiceSpawnEnv('tok-456')
+    expect(env.OPENAI_API_KEY).toBeUndefined()
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
+    expect(env.AIWORKER_MOUNT_TOKEN).toBe('tok-456')
+  })
 })
 
 describe('localApiExposureWarning', () => {

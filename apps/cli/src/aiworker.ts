@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 import {
   createHostRuntime,
   getWorkerEnv,
-  sanitizeEngineEnv,
+  soulAppServiceEnv,
 } from '@zonease/aiworker-core'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import {
@@ -1199,7 +1199,7 @@ async function runMountedServiceSmoke(manifest: SoulAppManifest, rootDir: string
     throw new Error(`Mounted service cwd must stay inside the app root: ${service.cwd}`)
   const child = spawn(service.command[0]!, service.command.slice(1), {
     cwd: resolvedCwd,
-    env: { ...sanitizeEngineEnv(), PORT: '0' },
+    env: { ...soulAppServiceEnv(), PORT: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   }) as ChildProcessByStdio<null, Readable, Readable>
   let stopped = false
