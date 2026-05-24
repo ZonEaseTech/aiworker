@@ -158,8 +158,9 @@ function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean 
       'packages/fs-layout',
       'packages/shared',
       'packages/storage-sqlite',
-    ].some(root => normalized.includes(`${root}/`)))
+    ].some(root => normalized.includes(`${root}/`))) {
       return true
+    }
   }
   return false
 }
