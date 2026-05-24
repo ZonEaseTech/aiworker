@@ -524,7 +524,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**TODO-047 Audit API/CLI/shared Host/Soul boundary leftovers**](TODO-047.md) `P2`
 - [x] [**BUG-151 Universal workbench engine readiness false positive**](BUG-151.md) `P0`
 - [x] [**FEAT-108 Universal workbench explicit session template selection**](FEAT-108.md) `P0`
-- [-] [**BUG-152 Web Claude Code session failure remains running and blocks follow-up**](BUG-152.md) `P1`
-- [-] [**BUG-153 Mounted QA universal workbench misses selected workspace locator**](BUG-153.md) `P2`
-- [-] [**BUG-154 Worker Configuration leaks workspace projection scope**](BUG-154.md) `P2`
-- [-] [**BUG-155 Local settings engines endpoint returns 404**](BUG-155.md) `P2`
+- [x] [**BUG-152 Web Claude Code session failure remains running and blocks follow-up**](BUG-152.md) `P1`
+- [x] [**BUG-153 Mounted QA universal workbench misses selected workspace locator**](BUG-153.md) `P2`
+- [x] [**BUG-154 Worker Configuration leaks workspace projection scope**](BUG-154.md) `P2`
+- [x] [**BUG-155 Local settings engines endpoint returns 404**](BUG-155.md) `P2`

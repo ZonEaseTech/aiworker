@@ -1,6 +1,6 @@
 # PLAN-409 Web Claude Code failed-session recovery
 
-- **status**: approved
+- **status**: completed
 - **createdAt**: 2026-05-24
 - **approvedAt**: 2026-05-24
 - **relatedTask**: BUG-152
@@ -19,3 +19,10 @@
 - `bun test --timeout=30000 packages/core/src/worker/runtime.test.ts`
 - `bun run --filter '@zonease/aiworker-soul-app-workbench' test`
 - `bun run --filter '@zonease/aiworker-soul-app-workbench' typecheck`
+
+## Verification Result
+
+- Passed: `bun test packages/core/src/worker/executor.test.ts`
+- Passed: `bun test --timeout=30000 packages/core/src/worker/runtime.test.ts`
+- Passed: `bun run --filter '@zonease/aiworker-soul-app-workbench' test`
+- Passed: `bun run --filter '@zonease/aiworker-soul-app-workbench' typecheck`

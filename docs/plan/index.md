@@ -437,7 +437,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-406 Restore interactive universal workbench**](PLAN-406.md) `2026-05-23`
 - [x] [**PLAN-407 Universal workbench engine readiness wiring**](PLAN-407.md) `2026-05-23`
 - [x] [**PLAN-408 Universal workbench explicit session template selection**](PLAN-408.md) `2026-05-23`
-- [-] [**PLAN-409 Web Claude Code failed-session recovery**](PLAN-409.md) `2026-05-24`
-- [-] [**PLAN-410 Mounted workspace locator propagation**](PLAN-410.md) `2026-05-24`
-- [-] [**PLAN-411 Worker Configuration boundary cleanup**](PLAN-411.md) `2026-05-24`
-- [-] [**PLAN-412 Local settings engines endpoint contract**](PLAN-412.md) `2026-05-24`
+- [x] [**PLAN-409 Web Claude Code failed-session recovery**](PLAN-409.md) `2026-05-24`
+- [x] [**PLAN-410 Mounted workspace locator propagation**](PLAN-410.md) `2026-05-24`
+- [x] [**PLAN-411 Worker Configuration boundary cleanup**](PLAN-411.md) `2026-05-24`
+- [x] [**PLAN-412 Local settings engines endpoint contract**](PLAN-412.md) `2026-05-24`

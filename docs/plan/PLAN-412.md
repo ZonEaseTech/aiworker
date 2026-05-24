@@ -1,6 +1,6 @@
 # PLAN-412 Local settings engines endpoint contract
 
-- **status**: approved
+- **status**: completed
 - **createdAt**: 2026-05-24
 - **approvedAt**: 2026-05-24
 - **relatedTask**: BUG-155
@@ -16,3 +16,9 @@
 
 - `bun run --filter '@zonease/aiworker-api' test src/modes/worker.local.test.ts`
 - `git diff --check`
+
+## Verification Result
+
+- Passed: `bun run --filter '@zonease/aiworker-api' test src/modes/worker.local.test.ts`
+- Passed: `curl -fsS http://127.0.0.1:9327/api/local/settings/engines | jq '{engineId, executionMode, engineCount: (.engines | length)}'`
+- Passed: `git diff --check`

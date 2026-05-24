@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-24 [fixed] Real E2E audit repair batch
+
+Repaired the blocking findings from `tmp/real-e2e-audit-2026-05-24/`.
+Mounted universal workbench sessions now refresh failed terminal state, avoid
+stale running/requesting status, avoid duplicate timeout errors, and recover
+the follow-up composer when engine readiness is true. Mounted Soul App workspace
+selection now flows back to Host as an opaque locator, so selected workspace
+context reaches the micro-app URL and host data without Host interpreting
+domain state.
+
+Worker Configuration no longer exposes workspace projection scope; it remains a
+worker-scoped Host shell surface for overlay/local enablement and declared
+workbench route preference. The local daemon now serves
+`GET /api/local/settings/engines` as a read-only non-secret engine status
+projection aligned with docs and OpenAPI. The mounted-surfaces smoke now follows
+the current first-run path by switching HR's worker-scoped workbench route
+through Worker Configuration before asserting the HR route surface.
+
 ## 2026-05-23 [fixed] BUG-151 / PLAN-407 — Universal workbench engine readiness
 
 Fixed the mounted universal workbench engine readiness false positive. The
