@@ -10,6 +10,7 @@ import {
   createSession,
   createWorkspace,
   initWorkerDb,
+  listSettings,
   listWorkerEngineInvocations,
   runWorkerMigrations,
   upsertWorker,
@@ -1527,6 +1528,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(paths).not.toContain('/api/local/lessons')
     expect(paths).not.toContain('/api/local/lessons/{id}')
     expect(paths).toContain('/api/local/workers/{workerId}/sessions/{sessionId}/messages')
+    expect(paths).toContain('/api/local/settings/engines')
     expect(paths).toContain('/api/local/settings/engines/rescan')
     expect(paths.some(path => path.includes('/runs'))).toBe(false)
     expect(paths.some(path => path.startsWith('/api/worker'))).toBe(false)
@@ -1542,6 +1544,14 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(initial.settings.engines.some(engine => engine.id === 'workspace-template')).toBe(false)
     expect(initial.settings.localMcpServer.enabled).toBe(false)
     expect(initial.settings.externalMcpServers.every(server => !server.enabled)).toBe(true)
+
+    const enginesRes = await target.request('/api/local/settings/engines')
+    expect(enginesRes.status).toBe(200)
+    const enginesBody = await enginesRes.json() as { engineId: string, engines: Array<{ id: string }>, executionMode: string }
+    expect(Object.keys(enginesBody).sort()).toEqual(['engineId', 'engines', 'executionMode'])
+    expect(enginesBody.engineId).toBe(initial.settings.engineId)
+    expect(enginesBody.executionMode).toBe(initial.settings.executionMode)
+    expect(enginesBody.engines.map(engine => engine.id)).toEqual(initial.settings.engines.map(engine => engine.id))
 
     const patchRes = await target.request('/api/local/settings', {
       method: 'PATCH',
@@ -1571,6 +1581,20 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
       headers: { 'content-type': 'application/json' },
     })
     expect([200, 404]).toContain(testRes.status)
+  })
+
+  it('returns settings/engines readiness without creating local settings on a fresh DB', async () => {
+    const target = await app()
+    expect(listSettings().some(setting => setting.key === 'local-settings')).toBe(false)
+
+    const enginesRes = await target.request('/api/local/settings/engines')
+    expect(enginesRes.status).toBe(200)
+    const enginesBody = await enginesRes.json() as { engineId: string, engines: Array<{ id: string }>, executionMode: string }
+    expect(Object.keys(enginesBody).sort()).toEqual(['engineId', 'engines', 'executionMode'])
+    expect(enginesBody.engineId).toBe('codex')
+    expect(enginesBody.engines).toEqual([])
+    expect(enginesBody.executionMode).toBe('byok')
+    expect(listSettings().some(setting => setting.key === 'local-settings')).toBe(false)
   })
 
   it('rejects write routes with missing required fields with 400', async () => {

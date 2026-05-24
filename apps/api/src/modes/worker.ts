@@ -62,7 +62,7 @@ import {
   patchWorkspaceBodySchema,
   testEngineBodySchema,
 } from './worker/schemas'
-import { loadLocalSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
+import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
 import { serveWorkerWeb, serveWorkerWebAsset } from './worker/web-static'
 
 const DEFAULT_RUNTIME_VERSION = 'dev'
@@ -152,7 +152,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     now: options.now,
     officialAppsRoot: options.officialAppsRoot,
     registryContext: () => {
-      const settings = loadLocalSettings()
+      const settings = readLocalConnectorSettings()
       return {
         availableConnectorIds: settings.connectors.map(connector => connector.id),
         enabledConnectorIds: settings.connectors.filter(connector => connector.enabled).map(connector => connector.id),
@@ -484,6 +484,14 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/api/local/settings', (c) => {
     const settings = loadLocalSettings()
     return c.json({ settings })
+  })
+  app.get('/api/local/settings/engines', (c) => {
+    const settings = readLocalEngineSettings()
+    return c.json({
+      engineId: settings.engineId,
+      engines: settings.engines,
+      executionMode: settings.executionMode,
+    })
   })
   app.patch('/api/local/settings', async (c) => {
     const result = await parseJsonBody(c, patchSettingsBodySchema, 'PATCH_SETTINGS_INVALID')

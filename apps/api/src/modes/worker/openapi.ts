@@ -70,6 +70,7 @@ export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/local/sessions/{sessionId}/turns', summary: 'List session turns', tags: ['turns'] },
     { method: 'post', path: '/api/local/sessions/{sessionId}/turns', summary: 'Create session turn', tags: ['turns'], created: true },
     { method: 'get', path: '/api/local/settings', summary: 'Show settings', tags: ['settings'] },
+    { method: 'get', path: '/api/local/settings/engines', summary: 'Show local engine readiness settings', tags: ['settings'] },
     { method: 'patch', path: '/api/local/settings', summary: 'Update settings', tags: ['settings'] },
     { method: 'post', path: '/api/local/settings/engines/rescan', summary: 'Rescan engines', tags: ['settings'], created: true },
     { method: 'post', path: '/api/local/settings/engines/test', summary: 'Test engine', tags: ['settings'], created: true },
