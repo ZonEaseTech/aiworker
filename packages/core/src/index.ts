@@ -83,6 +83,15 @@ export {
   LocalWorkspaceFiles,
 } from './worker/files'
 export {
+  LOCAL_ENGINE_DEFINITIONS,
+  type LocalEngineDefinition,
+  LocalEngineResolutionError,
+  type ResolvedLocalCliEngine,
+  resolveLocalCliEngine,
+  scanLocalEngines,
+  scanLocalEnginesFromCommands,
+} from './worker/local-engine-resolver'
+export {
   type CreateLocalSessionInput,
   createLocalWorkerRuntime,
   type CreateLocalWorkspaceInput,
