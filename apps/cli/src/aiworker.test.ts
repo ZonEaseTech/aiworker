@@ -478,8 +478,9 @@ describe('aiworker local CLI', () => {
       engineId: 'opencode',
       executionMode: 'local-cli',
     })
-    expect(String(explicit.session.metadataJson.engineCommand)).toMatch(/\/opencode$/)
-    expect(explicit.invocation.engineCommand).toBe(explicit.session.metadataJson.engineCommand)
+    const explicitMetadataEngineCommand = explicit.session.metadataJson.engineCommand
+    expect(String(explicitMetadataEngineCommand)).toMatch(/\/opencode$/)
+    expect(explicit.invocation.engineCommand).toBe(explicitMetadataEngineCommand as string)
     expect(explicit.invocation.engineId).toBe('opencode')
   })
 
