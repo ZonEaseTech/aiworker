@@ -13,9 +13,36 @@ import {
   materialFromFile,
   sanitizeCandidateMaterialPaths,
 } from './attachments'
-import { normalizeHrWorkbenchHostData } from './host-data'
+import { applyHrWorkbenchDocumentTheme, normalizeHrWorkbenchHostData } from './host-data'
 
 describe('HR people workbench host data', () => {
+  it('syncs the mounted document theme when host data changes after mount', () => {
+    const classes = new Set<string>(['dark'])
+    const target = {
+      documentElement: {
+        classList: {
+          toggle: (name: string, force?: boolean) => {
+            if (force)
+              classes.add(name)
+            else
+              classes.delete(name)
+          },
+        },
+        style: {
+          colorScheme: 'dark',
+        },
+      },
+    }
+
+    expect(applyHrWorkbenchDocumentTheme('light', target)).toBe('light')
+    expect(classes.has('dark')).toBe(false)
+    expect(target.documentElement.style.colorScheme).toBe('light')
+
+    expect(applyHrWorkbenchDocumentTheme('dark', target)).toBe('dark')
+    expect(classes.has('dark')).toBe(true)
+    expect(target.documentElement.style.colorScheme).toBe('dark')
+  })
+
   it('normalizes mounted host data and only treats explicit dark theme as dark', () => {
     expect(normalizeHrWorkbenchHostData({
       hostData: {

@@ -128,14 +128,26 @@ describe('aiworker local CLI', () => {
   }
 
   async function writeFakeCodexCommand(): Promise<void> {
+    await writeFakeEngineCommand('codex', [
+      'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}\'',
+    ])
+  }
+
+  async function writeFakeOpenCodeCommand(): Promise<void> {
+    await writeFakeEngineCommand('opencode', [
+      'printf \'%s\\n\' \'{"type":"text","part":{"text":"Done."}}\'',
+    ])
+  }
+
+  async function writeFakeEngineCommand(command: string, body: string[]): Promise<void> {
     const binDir = path.join(root, 'bin')
     mkdirSync(binDir, { recursive: true })
-    const commandPath = path.join(binDir, 'codex')
+    const commandPath = path.join(binDir, command)
     await writeFile(commandPath, [
       '#!/usr/bin/env bash',
       'set -euo pipefail',
       'cat >/dev/null',
-      'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}\'',
+      ...body,
       '',
     ].join('\n'))
     await chmod(commandPath, 0o755)
@@ -361,6 +373,108 @@ describe('aiworker local CLI', () => {
 
     expect(result.session.id).toBeTruthy()
     expect(result.invocation.sessionId).toBeTruthy()
+  })
+
+  it('freezes CLI engine choice for new sessions without changing existing sessions', async () => {
+    await writeFakeOpenCodeCommand()
+
+    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-recruiting'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
+    output = ''
+
+    expect(await runCli(argv('engine', 'select', 'opencode'))).toBe(0)
+    output = ''
+    expect(await runCli(argv(
+      'session',
+      'start',
+      '--worker',
+      'hr-recruiting',
+      '--workspace',
+      workspace.id,
+      '--skill',
+      namespaceSoulAppCapabilityId('aiworker-hr', 'evidence-matrix'),
+      '--title',
+      'Evidence Matrix',
+      '--input',
+      'Create the evidence matrix.',
+    ))).toBe(0)
+    const started = JSON.parse(output) as {
+      invocation: { engineCommand: string | null, engineId: string }
+      session: { id: string, metadataJson: Record<string, unknown> }
+    }
+    expect(started.session.metadataJson).toMatchObject({
+      engineCommand: 'opencode',
+      engineId: 'opencode',
+      executionMode: 'local-cli',
+    })
+    expect(started.invocation).toMatchObject({
+      engineCommand: 'opencode',
+      engineId: 'opencode',
+    })
+    output = ''
+
+    expect(await runCli(argv('engine', 'select', 'codex'))).toBe(0)
+    output = ''
+    expect(await runCli(argv(
+      'turn',
+      'send',
+      '--worker',
+      'hr-recruiting',
+      '--session',
+      started.session.id,
+      '--input',
+      'Continue after changing the selected engine.',
+    ))).toBe(0)
+    const continued = JSON.parse(output) as {
+      invocation: { engineCommand: string | null, engineId: string }
+      turn: { metadataJson: Record<string, unknown> }
+    }
+    expect(continued.invocation).toMatchObject({
+      engineCommand: 'opencode',
+      engineId: 'opencode',
+    })
+    expect(continued.turn.metadataJson).toMatchObject({
+      engineCommand: 'opencode',
+      engineId: 'opencode',
+      executionMode: 'local-cli',
+    })
+    output = ''
+
+    expect(await runCli(argv(
+      'session',
+      'start',
+      '--worker',
+      'hr-recruiting',
+      '--workspace',
+      workspace.id,
+      '--skill',
+      namespaceSoulAppCapabilityId('aiworker-hr', 'evidence-matrix'),
+      '--title',
+      'Explicit Engine Matrix',
+      '--input',
+      'Create another evidence matrix.',
+      '--engine',
+      'opencode',
+    ))).toBe(0)
+    const explicit = JSON.parse(output) as {
+      invocation: { engineCommand: string | null, engineId: string }
+      session: { metadataJson: Record<string, unknown> }
+    }
+    expect(explicit.session.metadataJson).toMatchObject({
+      engineCommand: 'opencode',
+      engineId: 'opencode',
+      executionMode: 'local-cli',
+    })
+    expect(explicit.invocation).toMatchObject({
+      engineCommand: 'opencode',
+      engineId: 'opencode',
+    })
   })
 
   it('keeps upgrade discoverable only in the full command index', async () => {

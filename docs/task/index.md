@@ -530,3 +530,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-155 Local settings engines endpoint returns 404**](BUG-155.md) `P2`
 - [x] [**BUG-156 Real E2E P2 regression repair batch**](BUG-156.md) `P2`
 - [x] [**BUG-157 Real E2E P2/P3 repair batch**](BUG-157.md) `P2`
+- [x] [**BUG-158 Real E2E round4 residual repair**](BUG-158.md) `P2`

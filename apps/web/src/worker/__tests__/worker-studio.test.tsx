@@ -1035,6 +1035,60 @@ describe('worker studio', () => {
     expect(lastSessionRequestBody).toBeNull()
   })
 
+  it('passes the resolved dark Host theme to mounted route URL and micro-app data', async () => {
+    currentSettings = { ...currentSettings, appearance: 'dark' }
+    currentApps = [
+      mountedRouteApp({
+        appId: 'aiworker-hr',
+        appName: 'AIWorker HR',
+        routes: [universalRoute()],
+      }),
+    ]
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+
+    render(<WorkerStudio />)
+
+    const microApp = await screen.findByTitle('Universal Workbench')
+    expect(screen.getByTestId('worker-studio-shell').getAttribute('data-theme')).toBe('dark')
+    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/workbench/universal?workerId=hr-worker&workspaceId=workspace-1&theme=dark')
+    expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
+      appId: 'aiworker-hr',
+      surfaceId: 'universal-workbench',
+      theme: 'dark',
+      workerId: 'hr-worker',
+      workspaceId: 'workspace-1',
+    })
+    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/universal-workbench?workerId=hr-worker&workspaceId=workspace-1&theme=dark', expect.objectContaining({ headers: {} }))
+  })
+
+  it('updates mounted route theme data when Host appearance changes without reloading', async () => {
+    currentApps = [
+      mountedRouteApp({
+        appId: 'aiworker-hr',
+        appName: 'AIWorker HR',
+        routes: [universalRoute()],
+      }),
+    ]
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+
+    render(<WorkerStudio />)
+
+    const microApp = await screen.findByTitle('Universal Workbench') as HTMLElement & { data?: Record<string, unknown> }
+    expect(microApp.data).toMatchObject({ theme: 'light' })
+
+    openHostSettings()
+    const settingsDialog = screen.getByRole('dialog', { name: 'Local Host Settings' })
+    selectSettingsTab(within(settingsDialog).getByRole('tab', { name: /Appearance/ }))
+    const appearanceGroup = await screen.findByRole('group', { name: 'Appearance' })
+    fireEvent.click(within(appearanceGroup).getByRole('radio', { name: /Dark Workspace/ }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-studio-shell').getAttribute('data-theme')).toBe('dark')
+      expect(microApp.data).toMatchObject({ theme: 'dark' })
+      expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/workbench/universal?workerId=hr-worker&workspaceId=workspace-1&theme=dark')
+    })
+  })
+
   it('updates Host workspace locator when a mounted app selects a workspace', async () => {
     currentWorkers = [
       { createdAt: now, defaultEngineId: 'codex', id: 'qa-worker', metadataJson: {}, name: 'QA', soulId: QA_SOUL_ID, status: 'active', updatedAt: now },

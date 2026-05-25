@@ -182,6 +182,12 @@ function selectedWorkerId(): string | null {
   return value && typeof value.workerId === 'string' ? value.workerId : null
 }
 
+function selectedCliEngineId(): string {
+  const setting = listSettings().find(setting => setting.key === 'engine.default')
+  const value = setting?.valueJson
+  return value && typeof value.engine === 'string' && value.engine.trim().length > 0 ? value.engine.trim() : 'codex'
+}
+
 function registryContext() {
   return { hostVersion: packageJson.version }
 }
@@ -766,7 +772,7 @@ async function listWorkspaceCommand(opts: { worker?: string }): Promise<void> {
   printJson({ workspaces: listWorkspaces(runtime.workerId) })
 }
 
-async function startSessionCommand(opts: { context?: string, input?: string, model?: string, reasoning?: string, skill?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
+async function startSessionCommand(opts: { context?: string, engine?: string, input?: string, model?: string, reasoning?: string, skill?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
   const paths = await ensureDb()
   const runtime = await ensureRuntime({ worker: opts.worker })
   const workspaceId = requireText(opts.workspace, 'workspace')
@@ -776,7 +782,11 @@ async function startSessionCommand(opts: { context?: string, input?: string, mod
   const skillId = requireText(opts.skill, 'skill')
   const host = createHost(paths)
   const template = host.requireCapabilityTemplateForWorker(runtime.workerId, skillId)
+  const selectedEngineId = opts.engine?.trim() || selectedCliEngineId()
   const sessionMetadata = {
+    engineCommand: selectedEngineId,
+    engineId: selectedEngineId,
+    executionMode: 'local-cli',
     ...cliEngineOverrideMetadata(opts),
   }
   const session = await runtime.createSession({
@@ -790,11 +800,10 @@ async function startSessionCommand(opts: { context?: string, input?: string, mod
   printJson(await runtime.startTurn({
     sessionId: session.id,
     input,
-    engineId: 'codex',
-    engineCommand: 'codex',
+    engineId: selectedEngineId,
+    engineCommand: selectedEngineId,
     metadata: {
       ...(session.metadataJson ?? sessionMetadata),
-      executionMode: 'local-cli',
       ...cliEngineOverrideMetadata(opts),
     },
   }))
@@ -807,16 +816,16 @@ async function sendTurnCommand(opts: { input?: string, model?: string, reasoning
   if (!session)
     throw new Error(`session not found: ${sessionId}`)
   const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
+  const selectedEngineId = selectedCliEngineId()
   const metadata = {
     ...(session.metadataJson ?? {}),
-    executionMode: 'local-cli',
     ...cliEngineOverrideMetadata(opts),
   }
   printJson(await runtime.startTurn({
     sessionId,
     input: requireText(opts.input, 'input'),
-    engineId: 'codex',
-    engineCommand: 'codex',
+    engineId: selectedEngineId,
+    engineCommand: selectedEngineId,
     metadata,
   }))
 }
@@ -1505,6 +1514,7 @@ function registerCommands(): void {
     .option('--title <text>', 'session title')
     .option('--context <text>', 'session context')
     .option('--input <text>', 'turn input')
+    .option('--engine <id>', 'engine id for this new session')
     .option('--model <id>', 'Codex model override')
     .option('--reasoning <effort>', 'Codex reasoning effort override')
     .option('--worker <id>', 'worker id')

@@ -243,6 +243,70 @@ describe('local daemon API', () => {
     expect(sessionBody).not.toHaveProperty('lessons')
   })
 
+  it('freezes selected engine settings at session creation and keeps continuations immutable', async () => {
+    const target = await app()
+    const hrWorker = await createHrWorker(target)
+    const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Hiring engine workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as { workspace: { id: string } }
+
+    expect(await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ engineId: 'claude-code', executionMode: 'local-cli' }),
+      headers: { 'content-type': 'application/json' },
+    })).toMatchObject({ status: 200 })
+
+    const sessionRes = await target.request(`/api/local/workers/${hrWorker.id}/workspaces/${workspaceBody.workspace.id}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        input: 'Prepare a candidate screen with the selected engine.',
+        title: 'Screen candidate',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(sessionRes.status).toBe(201)
+    const sessionBody = await sessionRes.json() as {
+      invocation: { engineCommand: string | null, engineId: string }
+      session: { id: string, metadataJson: Record<string, unknown> }
+      turn: { metadataJson: Record<string, unknown> }
+    }
+    expect(sessionBody.session.metadataJson).toMatchObject({
+      engineId: 'claude-code',
+      executionMode: 'local-cli',
+    })
+    expect(typeof sessionBody.session.metadataJson.engineCommand).toBe('string')
+    const frozenEngineCommand = sessionBody.session.metadataJson.engineCommand as string
+    expect(sessionBody.invocation.engineCommand).toBe(frozenEngineCommand)
+    expect(sessionBody.invocation.engineId).toBe('claude-code')
+
+    expect(await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ engineId: 'codex', executionMode: 'local-cli' }),
+      headers: { 'content-type': 'application/json' },
+    })).toMatchObject({ status: 200 })
+
+    const continuationRes = await target.request(`/api/local/workers/${hrWorker.id}/sessions/${sessionBody.session.id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ input: 'Continue after changing global engine settings.' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(continuationRes.status).toBe(201)
+    const continuationBody = await continuationRes.json() as {
+      invocation: { engineCommand: string | null, engineId: string }
+      turn: { metadataJson: Record<string, unknown> }
+    }
+    expect(continuationBody.invocation.engineCommand).toBe(frozenEngineCommand)
+    expect(continuationBody.invocation.engineId).toBe('claude-code')
+    expect(continuationBody.turn.metadataJson).toMatchObject({
+      engineId: 'claude-code',
+      executionMode: 'local-cli',
+    })
+    expect(continuationBody.turn.metadataJson.engineCommand).toBe(frozenEngineCommand)
+  })
+
   it('saves and reads worker overlay assets through worker-scoped routes', async () => {
     const target = await app()
     const worker = await createHrWorker(target)

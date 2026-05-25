@@ -27,6 +27,17 @@ interface MountedHostData {
   workspaceId?: string | null
 }
 
+interface MountedDocumentThemeTarget {
+  documentElement: {
+    classList: {
+      toggle: (token: string, force?: boolean) => boolean | void
+    }
+    style: {
+      colorScheme: string
+    }
+  }
+}
+
 interface SessionTurnResult {
   events?: LocalSessionEvent[]
   session?: LocalSession
@@ -94,6 +105,24 @@ export function shouldRefreshRecoveredSession(
   return recoverySessionId !== null && (latestSelectedSessionId === null || recoverySessionId === latestSelectedSessionId)
 }
 
+export function mountedSessionContextKey(input: {
+  routePrefix: string
+  sessionId: string | null
+  workerId: string | null
+  workspaceId: string | null
+}): string | null {
+  if (!input.workerId || !input.sessionId)
+    return null
+  return [input.routePrefix, input.workerId, input.workspaceId ?? '', input.sessionId].join('::')
+}
+
+export function shouldApplyMountedSessionDetail(
+  expectedContextKey: string | null,
+  latestContextKey: string | null,
+): boolean {
+  return expectedContextKey !== null && expectedContextKey === latestContextKey
+}
+
 export async function recoverSessionTurnStreamFailure(
   error: unknown,
   streamedSessionId: string | null,
@@ -155,6 +184,16 @@ export async function loadMountedEngineReadiness(): Promise<EngineReadiness> {
   }
 }
 
+export function applyMountedDocumentTheme(
+  theme: string | null | undefined,
+  target: MountedDocumentThemeTarget = document,
+): 'dark' | 'light' {
+  const resolvedTheme = theme === 'dark' ? 'dark' : 'light'
+  target.documentElement.classList.toggle('dark', resolvedTheme === 'dark')
+  target.documentElement.style.colorScheme = resolvedTheme
+  return resolvedTheme
+}
+
 declare global {
   interface Window {
     __AIWORKER_MICRO_APP_HOST_DATA__?: MountedHostData
@@ -176,12 +215,19 @@ function UniversalWorkbenchMountedClient() {
   const [templates, setTemplates] = useState<UniversalWorkbenchCapabilityTemplate[]>([])
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(hostData.sessionId ?? null)
   const latestSelectedSessionIdRef = useRef<string | null>(hostData.sessionId ?? null)
+  const latestSelectedSessionContextKeyRef = useRef<string | null>(null)
   const [turnInput, setTurnInput] = useState('')
   const [turnSubmitting, setTurnSubmitting] = useState(false)
 
   const routePrefix = hostData.routePrefix ?? `/api/local/apps/${hostData.appId ?? ''}`
   const workerId = hostData.workerId ?? null
   const workspaceId = hostData.workspaceId ?? null
+  const selectedSessionContextKey = mountedSessionContextKey({
+    routePrefix,
+    sessionId: selectedSessionId,
+    workerId,
+    workspaceId,
+  })
 
   const selectedWorkspace = useMemo(() => {
     if (workspaceId)
@@ -200,8 +246,8 @@ function UniversalWorkbenchMountedClient() {
     setEvents(detail.events)
   }, [])
 
-  const applySelectedSessionDetail = useCallback((detail: SessionDetailResult, expectedSessionId: string): void => {
-    if (!shouldRefreshRecoveredSession(expectedSessionId, latestSelectedSessionIdRef.current))
+  const applySelectedSessionDetail = useCallback((detail: SessionDetailResult, expectedContextKey: string | null): void => {
+    if (!shouldApplyMountedSessionDetail(expectedContextKey, latestSelectedSessionContextKeyRef.current))
       return
     applySessionDetail(detail)
   }, [applySessionDetail])
@@ -225,16 +271,34 @@ function UniversalWorkbenchMountedClient() {
     setSessions(nextSessions)
     const nextSelectedSessionId = preferredSessionId ?? latestSelectedSessionIdRef.current ?? hostData.sessionId ?? nextSessions[0]?.id ?? null
     if (nextSelectedSessionId) {
+      const expectedContextKey = mountedSessionContextKey({
+        routePrefix,
+        sessionId: nextSelectedSessionId,
+        workerId,
+        workspaceId,
+      })
       const detail = await loadSessionDetail(routePrefix, workerId, nextSelectedSessionId)
-      applySelectedSessionDetail(detail, nextSelectedSessionId)
+      applySelectedSessionDetail(detail, expectedContextKey)
     }
-  }, [applySelectedSessionDetail, hostData.sessionId, routePrefix, workerId])
+  }, [applySelectedSessionDetail, hostData.sessionId, routePrefix, workerId, workspaceId])
+
+  useEffect(() => {
+    latestSelectedSessionContextKeyRef.current = selectedSessionContextKey
+  }, [selectedSessionContextKey])
 
   useEffect(() => {
     window.microApp?.addDataListener?.((data) => {
-      setHostData(current => ({ ...current, ...data }))
+      setHostData((current) => {
+        const nextData = { ...current, ...data }
+        window.__AIWORKER_MICRO_APP_HOST_DATA__ = nextData
+        return nextData
+      })
     }, true)
   }, [])
+
+  useEffect(() => {
+    applyMountedDocumentTheme(hostData.theme)
+  }, [hostData.theme])
 
   useEffect(() => {
     void refresh().catch(() => {})
@@ -255,27 +319,29 @@ function UniversalWorkbenchMountedClient() {
     if (!selectedSessionId || !workerId)
       return
     let cancelled = false
+    const expectedContextKey = selectedSessionContextKey
     void loadSessionDetail(routePrefix, workerId, selectedSessionId).then((detail) => {
       if (!cancelled)
-        applySelectedSessionDetail(detail, selectedSessionId)
+        applySelectedSessionDetail(detail, expectedContextKey)
     }).catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [applySelectedSessionDetail, routePrefix, selectedSessionId, workerId])
+  }, [applySelectedSessionDetail, routePrefix, selectedSessionContextKey, selectedSessionId, workerId])
 
   useEffect(() => {
     if (!selectedSessionId || !workerId)
       return
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | undefined
+    const expectedContextKey = selectedSessionContextKey
 
     const poll = async () => {
       let shouldContinuePolling = true
       try {
         const detail = await loadSessionDetail(routePrefix, workerId, selectedSessionId)
         if (!cancelled)
-          applySelectedSessionDetail(detail, selectedSessionId)
+          applySelectedSessionDetail(detail, expectedContextKey)
         shouldContinuePolling = !isTerminalSessionStatus(detail.session.status)
       }
       catch {
@@ -291,7 +357,7 @@ function UniversalWorkbenchMountedClient() {
       if (timer)
         clearTimeout(timer)
     }
-  }, [applySelectedSessionDetail, routePrefix, selectedSessionId, workerId])
+  }, [applySelectedSessionDetail, routePrefix, selectedSessionContextKey, selectedSessionId, workerId])
 
   async function handleCreateSession(targetWorkspaceId: string, draft: UniversalWorkbenchCreateSessionDraft) {
     if (!workerId)

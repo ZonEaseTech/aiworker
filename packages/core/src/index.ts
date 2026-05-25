@@ -83,6 +83,14 @@ export {
   LocalWorkspaceFiles,
 } from './worker/files'
 export {
+  freezeSessionEngineMetadata,
+  readFrozenSessionEngine,
+  resolveFrozenSessionEngine,
+  type FrozenSessionEngine,
+  type LatestInvocationEngine,
+  type ResolvedSessionEngine,
+} from './worker/session-engine'
+export {
   type CreateLocalSessionInput,
   createLocalWorkerRuntime,
   type CreateLocalWorkspaceInput,

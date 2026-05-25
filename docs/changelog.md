@@ -1,5 +1,31 @@
 # AIWorker Changelog
 
+## 2026-05-25 [fixed] BUG-158 / PLAN-415 — Real E2E round4 residual repair
+
+Closed the current-HEAD residuals from
+`tmp/real-e2e-audit-2026-05-25-round4/` without reopening the already completed
+BUG-157 / PLAN-414 repair batch.
+
+Session engine selection now has a clear boundary: CLI `engine select` and
+`session start --engine <id>` affect only newly created sessions, API/Web
+session creation freezes the current Host execution settings before the first
+turn, and continuation turns reuse the frozen session engine even when Host
+preferences change. Legacy sessions fall back to the latest invocation using
+only invocation-owned metadata or explicit legacy inference, so current turn
+settings cannot silently rewrite the session engine. Runtime prompts now include
+the Host current date as context without mutating transcript or artifacts.
+
+Mounted universal workbench polling is scoped by route prefix, worker,
+workspace and session, preventing stale locator responses from writing back into
+the current mounted surface. Host dark appearance now reaches mounted route
+surface resolution, micro-app data, micro-app URL, initial HTML chrome and the
+mounted child document after appearance changes without requiring a reload.
+
+Verification covered focused Core/API/CLI/Web/Soul runtime/Soul workbench tests,
+typechecks, Web build, UI governance, official HR/QA mounted client/style
+rebuilds, and Playwright browser evidence under
+`tmp/real-e2e-round4-residual-repair-2026-05-25/`.
+
 ## 2026-05-25 [fixed] Real E2E P2/P3 repair batch
 
 Closed the five P2 findings and one P3 finding from

@@ -29,7 +29,7 @@ import { ProfileComposerColumn } from './columns/profile-composer-column'
 import { ProfileListColumn } from './columns/profile-list-column'
 import { ProfileReadingRoomColumn } from './columns/profile-reading-room-column'
 import { getHrPeopleWorkbenchCopy } from './copy'
-import { normalizeHrWorkbenchHostData, readHrWorkbenchHostData } from './host-data'
+import { applyHrWorkbenchDocumentTheme, normalizeHrWorkbenchHostData, readHrWorkbenchHostData } from './host-data'
 import { buildPersonProfiles, buildProfileListSections } from './model'
 import { parseHrProfileReadme } from './profile-readme'
 import { buildProfileRevisionReview } from './revision-review'
@@ -741,6 +741,10 @@ function useHostData(initialHostData: HrMicroAppHostData | undefined): [HrMicroA
         api.removeDataListener(receiveHostData)
     }
   }, [])
+
+  useEffect(() => {
+    applyHrWorkbenchDocumentTheme(hostData.theme)
+  }, [hostData.theme])
 
   return [hostData, setHostData]
 }

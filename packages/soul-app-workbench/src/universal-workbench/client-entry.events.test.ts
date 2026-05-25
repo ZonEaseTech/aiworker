@@ -4,16 +4,46 @@ import { describe, expect, it } from 'bun:test'
 
 import {
   applySessionTurnStreamFrame,
+  applyMountedDocumentTheme,
   consumeSessionTurnStream,
   isTerminalSessionStatus,
   loadSessionEvents,
   mergeSessionEvents,
+  mountedSessionContextKey,
   recoverSessionTurnStreamFailure,
   resolveStreamRecoverySessionId,
+  shouldApplyMountedSessionDetail,
   shouldRefreshRecoveredSession,
 } from './client-entry'
 
 describe('universal workbench mounted session events', () => {
+  it('syncs the mounted document theme when host data changes after mount', () => {
+    const classes = new Set<string>(['dark'])
+    const target = {
+      documentElement: {
+        classList: {
+          toggle: (name: string, force?: boolean) => {
+            if (force)
+              classes.add(name)
+            else
+              classes.delete(name)
+          },
+        },
+        style: {
+          colorScheme: 'dark',
+        },
+      },
+    }
+
+    expect(applyMountedDocumentTheme('system', target)).toBe('light')
+    expect(classes.has('dark')).toBe(false)
+    expect(target.documentElement.style.colorScheme).toBe('light')
+
+    expect(applyMountedDocumentTheme('dark', target)).toBe('dark')
+    expect(classes.has('dark')).toBe(true)
+    expect(target.documentElement.style.colorScheme).toBe('dark')
+  })
+
   it('loads incremental session events through the mounted API and merges them without duplicate replay', async () => {
     const originalFetch = globalThis.fetch
     const requestedUrls: string[] = []
@@ -95,6 +125,26 @@ describe('universal workbench mounted session events', () => {
     expect(shouldRefreshRecoveredSession('session-recovered', null)).toBe(true)
     expect(shouldRefreshRecoveredSession('session-recovered', 'session-recovered')).toBe(true)
     expect(shouldRefreshRecoveredSession('session-recovered', 'session-other')).toBe(false)
+  })
+
+  it('rejects stale mounted session detail when locator context changes', () => {
+    const firstContext = mountedSessionContextKey({
+      routePrefix: '/mounted',
+      sessionId: 'session-1',
+      workerId: 'worker-1',
+      workspaceId: 'workspace-1',
+    })
+    const nextWorkspaceContext = mountedSessionContextKey({
+      routePrefix: '/mounted',
+      sessionId: 'session-1',
+      workerId: 'worker-1',
+      workspaceId: 'workspace-2',
+    })
+
+    expect(firstContext).not.toBe(nextWorkspaceContext)
+    expect(shouldApplyMountedSessionDetail(firstContext, firstContext)).toBe(true)
+    expect(shouldApplyMountedSessionDetail(firstContext, nextWorkspaceContext)).toBe(false)
+    expect(shouldApplyMountedSessionDetail(null, nextWorkspaceContext)).toBe(false)
   })
 
   it('records stream errors and refreshes the fallback session when session creation fails before a response exists', async () => {
