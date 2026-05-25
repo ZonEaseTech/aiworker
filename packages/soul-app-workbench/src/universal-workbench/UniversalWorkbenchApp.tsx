@@ -174,7 +174,7 @@ export function UniversalWorkbenchApp({
   return (
     <div className="flex h-full min-h-0 min-w-0 max-md:flex-col" data-slot="universal-workbench">
       {!sidebarCollapsed && (
-        <aside className="w-56 min-w-0 flex-shrink-0 overflow-y-auto border-r p-3 max-md:max-h-52 max-md:w-full max-md:flex-none max-md:border-r-0 max-md:border-b" data-slot="workbench-sidebar">
+        <aside className="w-56 max-w-56 min-w-0 basis-56 flex-shrink-0 overflow-y-auto border-r p-3 max-md:max-h-52 max-md:w-full max-md:max-w-none max-md:basis-auto max-md:flex-none max-md:border-r-0 max-md:border-b" data-slot="workbench-sidebar">
           <div className="mb-3 flex items-center justify-between gap-1">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Workspaces</span>
             <div className="flex items-center gap-0.5">
