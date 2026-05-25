@@ -215,6 +215,41 @@ describe('UniversalWorkbenchApp', () => {
     expect(html).toContain('Capability/template')
   })
 
+  it('renders the default capability label in the new session composer', () => {
+    const workspace = workspaceFixture()
+
+    const html = renderToStaticMarkup(
+      <UniversalWorkbenchApp
+        engineReadiness={{ detail: 'Engine bridge ready', label: 'Engine bridge', ready: true }}
+        events={[]}
+        selectedSessionId={null}
+        sessions={[]}
+        templates={[{
+          description: 'Create a source-backed people profile snapshot.',
+          id: 'aiworker-hr.person-profile',
+          name: 'Person Profile',
+          outputKind: 'business-artifact',
+        }]}
+        turnInput=""
+        turnSubmitting={false}
+        turns={[]}
+        workspace={workspace}
+        workspaces={[workspace]}
+        onBackToWorkspace={vi.fn()}
+        onCreateSession={vi.fn(async () => {})}
+        onCreateWorkspace={vi.fn()}
+        onRefresh={vi.fn()}
+        onSelectSession={vi.fn()}
+        onSubmitTurn={vi.fn()}
+        onTurnInputChange={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('Person Profile')
+    expect(html).toContain('aria-label="Start"')
+    expect(html).not.toContain('aria-label="Start" disabled=""')
+  })
+
   it('defaults the composer template selection to the first available capability while preserving valid choices', () => {
     const templates = [
       { id: 'aiworker-qa.evidence-review', name: 'Evidence Review' },

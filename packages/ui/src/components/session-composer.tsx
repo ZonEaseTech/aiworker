@@ -6,7 +6,7 @@ import { Button } from '#components/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#components/dialog'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from '#components/input-group'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '#components/item'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '#components/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from '#components/select'
 import { Spinner } from '#components/spinner'
 import { cn } from '#lib/utils'
 import {
@@ -538,7 +538,9 @@ export function SessionComposerActionBar({
                   className={cn('max-w-full', templateClassName)}
                   size="sm"
                 >
-                  <SelectValue>{selectedTemplateOption?.label ?? templateLabel}</SelectValue>
+                  <span data-slot="select-value" className="flex min-w-0 items-center gap-1.5 truncate">
+                    {selectedTemplateOption?.label ?? templateLabel}
+                  </span>
                 </SelectTrigger>
                 <SelectContent className={templateContentClassName} side="top" data-side="top">
                   <SelectGroup>
