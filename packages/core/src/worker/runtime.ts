@@ -291,7 +291,13 @@ export class LocalWorkerRuntime {
         response: result.summary,
         at: this.#now(),
       })
-      const currentSession = updateSession({ id: session.id, status: 'active', at: this.#now() })
+      const finishedAt = this.#now()
+      const currentSession = updateSession({
+        id: session.id,
+        status: 'completed',
+        endedAt: finishedAt,
+        at: finishedAt,
+      })
       this.appendEvent(session.id, 'status', { status: 'succeeded', turnId: turn.id }, turn.id, invocation.id)
       this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'succeeded', turn: finishedTurn }, at: this.#now() })
       return {

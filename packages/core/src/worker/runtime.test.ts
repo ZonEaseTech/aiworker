@@ -118,6 +118,8 @@ describe('LocalWorkerRuntime', () => {
 
     expect(result.turn.status).toBe('succeeded')
     expect(result.invocation.status).toBe('succeeded')
+    expect(result.session.status).toBe('completed')
+    expect(result.session.endedAt).not.toBeNull()
     expect(result.files).toHaveLength(0)
     expect(result.events.map(event => event.type)).toEqual(['status', 'status', 'status'])
 
@@ -125,6 +127,8 @@ describe('LocalWorkerRuntime', () => {
     expect(snapshot.worker.soulId).toBe('hr')
     expect(snapshot.workspaces).toHaveLength(1)
     expect(snapshot.sessions[0]?.capabilityTemplateId).toBe('candidate-screen')
+    expect(snapshot.sessions[0]?.status).toBe('completed')
+    expect(snapshot.sessions[0]?.endedAt).not.toBeNull()
     expect(snapshot.turns[0]?.status).toBe('succeeded')
     expect(snapshot.invocations[0]?.metadataJson).toMatchObject({ outputKind: 'candidate-screen' })
     expect(snapshot).not.toHaveProperty('reviews')

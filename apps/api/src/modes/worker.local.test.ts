@@ -233,10 +233,12 @@ describe('local daemon API', () => {
     })
     expect(sessionRes.status).toBe(201)
     const sessionBody = await sessionRes.json() as {
-      session: { capabilityTemplateId: string, status: string }
+      session: { capabilityTemplateId: string, endedAt: string | null, status: string }
       turn: { status: string }
     }
     expect(sessionBody.session.capabilityTemplateId).toBe(HR_CANDIDATE_SCREEN)
+    expect(sessionBody.session.status).toBe('completed')
+    expect(sessionBody.session.endedAt).not.toBeNull()
     expect(sessionBody.turn.status).toBe('succeeded')
     expect(sessionBody).not.toHaveProperty('lessons')
   })
@@ -1485,6 +1487,19 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(body.indexOf('event: session')).toBeLessThan(body.indexOf('event: turn'))
     expect(body).toContain('event: session_event')
     expect(body).toContain('event: result')
+
+    const resultFrame = body.split('\n\n').find(frame => frame.startsWith('event: result\n'))
+    if (!resultFrame) {
+      throw new Error(`Expected result SSE frame in body:\n${body}`)
+    }
+    const resultData = resultFrame
+      .split('\n')
+      .filter(line => line.startsWith('data:'))
+      .map(line => line.slice('data:'.length).trimStart())
+      .join('\n')
+    const result = JSON.parse(resultData) as { session: { endedAt: string | null, status: string } }
+    expect(result.session.status).toBe('completed')
+    expect(result.session.endedAt).not.toBeNull()
   })
 
   it('documents the local Host API surface without retired control routes', async () => {
