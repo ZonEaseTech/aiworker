@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-25 [fixed] Real E2E P2/P3 repair batch
+
+Closed the five P2 findings and one P3 finding from
+`tmp/real-e2e-audit-2026-05-25/`.
+
+Successful one-turn sessions now finish the top-level session record with
+`status=completed` and `endedAt`. Mounted universal workbench stream failures
+recover by refreshing the created or selected session without retrying create
+POST. The universal composer now treats the first declared capability template
+as the effective default, so direct prompt entry enables Start in the mounted
+browser path.
+
+Host Web now disambiguates duplicate worker names with stable Host id/date
+metadata and accessible labels, while Worker Configuration keeps its
+worker-scoped editor reachable at 390px. The HR people workbench no longer
+boots through the retired `/api/local/artifacts` route; it keeps HR artifacts
+app-owned and starts from workspaces, sessions and profile README files.
+
+Verification covered focused Core/API/workbench/Web/HR tests, Web build, UI
+governance, Host/Soul boundary completion audit, official HR/QA mounted client
+rebuilds, Playwright browser evidence under
+`tmp/real-e2e-p2-p3-repair-2026-05-25/`, and code-review-graph.
+
 ## 2026-05-25 [fixed] Real E2E P2 repair batch
 
 Closed the four P2 findings from `tmp/real-e2e-regression-2026-05-24/`.

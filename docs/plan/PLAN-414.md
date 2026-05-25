@@ -1,6 +1,6 @@
 # PLAN-414 Real E2E P2/P3 repair batch
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-25
 - **approvedAt**: 2026-05-25
 - **relatedTask**: BUG-157
@@ -64,3 +64,13 @@ The approved design groups the six findings from `tmp/real-e2e-audit-2026-05-25/
 - `bun run crg:update`
 - `bun run crg:review`
 - `git diff --check`
+
+## Result
+
+Completed as one boundary-scoped repair batch. The final implementation keeps
+session lifecycle in Core/API, mounted stream recovery and composer default
+state in the Soul-owned universal workbench, Host worker chrome/layout fixes in
+`apps/web`, and HR legacy artifact cleanup inside the HR Soul App.
+
+Browser evidence is recorded under
+`tmp/real-e2e-p2-p3-repair-2026-05-25/`.
