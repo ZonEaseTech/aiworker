@@ -1,5 +1,12 @@
 # AIWorker Changelog
 
+## 2026-05-26 [fixed] BUG-160 / PLAN-417 — Real E2E round5 repair and harness hardening
+
+- Fixed CLI/API local engine resolution so `claude-code` remains the engine id while the invocation command resolves to the installed `claude` executable.
+- Fixed universal composer default capability visibility/readiness so HR mounted sessions can start without reopening the capability dropdown.
+- Added Playwright mounted-surface evidence capture with desktop/390px screenshots, console logs and theme diagnostics.
+- Verification evidence is under `tmp/real-e2e-round5-repair-2026-05-26/`.
+
 ## 2026-05-25 [fixed] BUG-158 / PLAN-415 — Real E2E round4 residual repair
 
 Closed the current-HEAD residuals from

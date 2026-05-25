@@ -1,8 +1,9 @@
 # PLAN-417 Real E2E round5 repair and harness hardening
 
-- **status**: pending
-- **owner**: unassigned
+- **status**: completed
+- **owner**: Codex
 - **createdAt**: 2026-05-26
+- **completedAt**: 2026-05-26
 - **relatedTask**: BUG-160
 - **superpowersSpec**: docs/superpowers/specs/2026-05-26-real-e2e-round5-repair-harness-design.md
 - **superpowersPlan**: docs/superpowers/plans/2026-05-26-real-e2e-round5-repair-harness.md
@@ -50,3 +51,7 @@ E2E harness。
 - `bun run crg:update`
 - `bun run crg:review`
 - `git diff --check`
+
+## Completion Summary
+
+Focused Core/API/CLI/UI/Soul workbench/Web verification passed, including the shared local engine resolution path and HR composer default capability readiness. Governance checks passed through `bun run ui:check` and the Host/Soul completion audit. Official HR/QA mounted client bundles were rebuilt before browser evidence capture. Playwright evidence under `tmp/real-e2e-round5-repair-2026-05-26/browser/` covers desktop and 390px mounted diagnostics plus manual HR composer readiness for worker `e2e-hr-claude-20260525`.
