@@ -136,6 +136,7 @@ export const nativeEngineInvocationBodySchema = z.object({
 export const createSessionBodySchema = z.object({
   capabilityTemplateId: z.string().optional(),
   context: z.string().optional(),
+  engineId: z.string().nullable().optional(),
   input: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   title: z.string().trim().min(1),

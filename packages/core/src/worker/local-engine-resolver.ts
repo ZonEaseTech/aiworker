@@ -1,5 +1,6 @@
 import type { LocalEngineStatus } from '@zonease/aiworker-shared'
 import { spawnSync } from 'node:child_process'
+import process from 'node:process'
 
 export interface LocalEngineDefinition {
   command: string
@@ -84,6 +85,12 @@ export function resolveLocalCliEngine(input: {
   }
   const engine = input.engines.find(candidate => candidate.id === definition.id)
     ?? scanLocalEnginesFromCommands([definition], () => null)[0]
+  if (!engine) {
+    throw new LocalEngineResolutionError(
+      `Unknown local engine: ${engineId}. Select one of: ${LOCAL_ENGINE_DEFINITIONS.map(item => item.id).join(', ')}.`,
+      'unknown-engine',
+    )
+  }
   if (!engine.installed) {
     throw new LocalEngineResolutionError(
       `Selected local engine is not installed: ${engine.name}. Run engine readiness rescan after installing ${engine.command}.`,
@@ -106,7 +113,7 @@ export function resolveLocalCliEngine(input: {
 }
 
 function commandOutput(command: string, args: string[]): string {
-  const result = spawnSync(command, args, { encoding: 'utf8', timeout: 2500 })
+  const result = spawnSync(command, args, { encoding: 'utf8', env: process.env, timeout: 2500 })
   if (result.status !== 0)
     return ''
   return result.stdout.toString()
