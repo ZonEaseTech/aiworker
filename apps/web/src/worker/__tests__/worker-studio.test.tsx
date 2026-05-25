@@ -1159,7 +1159,10 @@ describe('worker studio', () => {
     expect(workerOverlaySidebar.className).toContain('max-md:w-full')
     expect(workerOverlaySidebar.className).toContain('max-md:flex-none')
     expect(workerOverlaySidebar.className).toContain('max-md:max-h-64')
-    expect(screen.getByTestId('worker-overlay-editor-panel').className).toContain('max-md:w-full')
+    const workerOverlayEditorPanel = screen.getByTestId('worker-overlay-editor-panel')
+    expect(workerOverlayEditorPanel.className).toContain('max-md:w-full')
+    expect(workerOverlayEditorPanel.className).toContain('max-md:flex-none')
+    expect(workerOverlayEditorPanel.className).toContain('max-md:min-w-0')
 
     fireEvent.click(screen.getAllByRole('switch', { name: 'Enable interview-brief' })[0]!)
 
@@ -1959,6 +1962,65 @@ describe('worker studio', () => {
     expect(screen.queryByRole('button', { name: /AIWorker HR \(1\)/ })).toBeNull()
     expect(switcher.querySelector('.status-dot')).toBeNull()
     expect(switcher.querySelector('.worker-list-item-meta')).toBeNull()
+  })
+
+  it('disambiguates duplicate worker names with stable ids in the Host worker switcher', async () => {
+    currentWorkers = [
+      { createdAt: '2026-05-24T06:49:06.848Z', defaultEngineId: 'codex', id: 'e2e-hr-codex-20260524', metadataJson: {}, name: 'e2e-hr-codex', soulId: HR_SOUL_ID, status: 'active', updatedAt: now },
+      { createdAt: '2026-05-25T06:49:06.848Z', defaultEngineId: 'codex', id: 'e2e-hr-codex-20260525', metadataJson: {}, name: 'e2e-hr-codex', soulId: HR_SOUL_ID, status: 'active', updatedAt: now },
+    ]
+    currentWorkspaces = [
+      { ...workspace, id: 'workspace-20260524', workerId: 'e2e-hr-codex-20260524' },
+      { ...workspace, id: 'workspace-20260525', workerId: 'e2e-hr-codex-20260525' },
+    ]
+    currentApps = [{
+      appId: 'aiworker-hr',
+      manifest: {
+        name: 'AIWorker HR',
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [{
+            id: 'hr-home',
+            label: 'HR People Workbench',
+            path: '/hr',
+            surface: { entry: '/micro-app/routes/hr-home', renderer: 'micro-app', scope: 'workspace' },
+          }],
+          workspaceWidgets: [],
+        },
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-hr',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        microAppSurfaceIds: ['hr-home'],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/hr'],
+        surfaceIds: ['hr-home'],
+        workspaceWidgetIds: [],
+      },
+      status: 'enabled',
+      version: '0.1.0',
+    }]
+
+    render(<WorkerStudio />)
+
+    const switcher = await screen.findByTestId('worker-switcher')
+    expect(within(switcher).getByRole('button', { name: 'Switch to e2e-hr-codex (e2e-hr-codex-20260524)' })).toBeTruthy()
+    const secondWorkerButton = within(switcher).getByRole('button', { name: 'Switch to e2e-hr-codex (e2e-hr-codex-20260525)' })
+    expect(within(switcher).getByText('id e2e-hr-c...0524 / 2026-05-24').getAttribute('data-slot')).toBe('item-description')
+    expect(within(switcher).getByText('id e2e-hr-c...0525 / 2026-05-25').getAttribute('data-slot')).toBe('item-description')
+
+    fireEvent.click(secondWorkerButton)
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/workers/e2e-hr-codex-20260525')
+    })
+    const microApp = await screen.findByTitle('HR People Workbench')
+    expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
+    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home?workerId=e2e-hr-codex-20260525&workspaceId=workspace-20260525&theme=light')
   })
 
   it('routes directly to a worker and updates capability templates with worker identity', async () => {

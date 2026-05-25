@@ -6,6 +6,21 @@ import { CollapsibleGroup } from '@zonease/aiworker-ui/components/collapsible-gr
 import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '@zonease/aiworker-ui/components/sidebar'
 import { useMemo, useState } from 'react'
 
+export function shortWorkerId(workerId: string): string {
+  if (workerId.length <= 14)
+    return workerId
+  return `${workerId.slice(0, 8)}...${workerId.slice(-4)}`
+}
+
+export function workerIdentityDetail(worker: LocalWorker, hasDuplicateName: boolean): string {
+  if (!hasDuplicateName)
+    return 'Soul worker'
+  const createdDate = worker.createdAt.slice(0, 10)
+  return createdDate
+    ? `id ${shortWorkerId(worker.id)} / ${createdDate}`
+    : `id ${shortWorkerId(worker.id)}`
+}
+
 export function WorkerSwitcher({
   emptyWorkerLabel = 'No workers yet.',
   onConfigureWorker,
@@ -36,6 +51,12 @@ export function WorkerSwitcher({
     }
     return groups
   }, [soulNameForWorker, workers])
+  const workerNameCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const worker of workers)
+      counts.set(worker.name, (counts.get(worker.name) ?? 0) + 1)
+    return counts
+  }, [workers])
   const toggleSoulGroup = (soulId: string) => {
     setCollapsedSoulIds((current) => {
       const next = new Set(current)
@@ -68,13 +89,16 @@ export function WorkerSwitcher({
                     <SidebarMenu aria-label={`${group.name} workers`}>
                       {group.workers.map((worker) => {
                         const active = worker.id === selectedWorkerId
+                        const hasDuplicateName = (workerNameCounts.get(worker.name) ?? 0) > 1
+                        const identityDetail = workerIdentityDetail(worker, hasDuplicateName)
+                        const workerActionName = hasDuplicateName ? `${worker.name} (${worker.id})` : worker.name
                         return (
                           <SidebarMenuItem key={worker.id}>
                             <SidebarMenuButton
                               type="button"
                               size="lg"
                               isActive={active}
-                              aria-label={`Switch to ${worker.name}`}
+                              aria-label={`Switch to ${workerActionName}`}
                               aria-pressed={active}
                               className="h-11 items-start py-1.5"
                               onClick={() => onSelectWorker(worker)}
@@ -82,14 +106,14 @@ export function WorkerSwitcher({
                               <HugeiconsIcon icon={BotIcon} strokeWidth={2} aria-hidden="true" />
                               <span className="flex min-w-0 flex-col gap-0.5">
                                 <span className="truncate">{worker.name}</span>
-                                <span data-slot="item-description" className="truncate font-normal text-sidebar-foreground/60">Soul worker</span>
+                                <span data-slot="item-description" className="truncate font-normal text-sidebar-foreground/60">{identityDetail}</span>
                               </span>
                             </SidebarMenuButton>
                             <SidebarMenuAction
                               type="button"
                               showOnHover
-                              aria-label={`Configure ${worker.name}`}
-                              title={`Configure ${worker.name}`}
+                              aria-label={`Configure ${workerActionName}`}
+                              title={`Configure ${workerActionName}`}
                               onClick={() => onConfigureWorker(worker)}
                             >
                               <HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} aria-hidden="true" />

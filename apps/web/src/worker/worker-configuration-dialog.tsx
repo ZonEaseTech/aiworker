@@ -431,7 +431,7 @@ export function WorkerConfigurationDialog({
             </ScrollArea>
             <div data-testid="worker-overlay-asset-list" data-orientation="vertical" className="hidden" />
           </div>
-          <div data-testid="worker-overlay-editor-panel" className="flex-1 min-w-0 max-md:w-full">
+          <div data-testid="worker-overlay-editor-panel" className="flex min-w-0 flex-1 flex-col max-md:w-full max-md:flex-none max-md:min-w-0">
             <ScrollArea className="h-full">
               <div className="p-6">
                 {createOpen
