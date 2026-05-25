@@ -532,3 +532,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-157 Real E2E P2/P3 repair batch**](BUG-157.md) `P2`
 - [x] [**BUG-158 Real E2E round4 residual repair**](BUG-158.md) `P2`
 - [x] [**BUG-159 Mounted app stylesheet overrides Host dark theme**](BUG-159.md) `P1`
+- [ ] [**BUG-160 Real E2E round5 repair and harness hardening**](BUG-160.md) `P1`

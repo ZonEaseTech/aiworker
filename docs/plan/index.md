@@ -445,3 +445,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-414 Real E2E P2/P3 repair batch**](PLAN-414.md) `2026-05-25`
 - [x] [**PLAN-415 Real E2E round4 residual repair**](PLAN-415.md) `2026-05-25`
 - [x] [**PLAN-416 Mounted stylesheet dark theme isolation repair**](PLAN-416.md) `2026-05-26`
+- [ ] [**PLAN-417 Real E2E round5 repair and harness hardening**](PLAN-417.md) `2026-05-26`
