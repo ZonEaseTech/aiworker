@@ -12,7 +12,7 @@ import type {
   UniversalWorkbenchSubmitTurnDraft,
 } from './UniversalWorkbenchApp'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { resolveEngineReadiness } from './timeline/engine-readiness'
 import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
@@ -49,7 +49,7 @@ interface UniversalWorkbenchCreateSessionPayload {
   title: string
 }
 
-type SessionTurnStreamFrame
+export type SessionTurnStreamFrame
   = | { data: LocalSession, event: 'session' }
     | { data: LocalTurn, event: 'turn' }
     | { data: LocalSessionEvent, event: 'session_event' }
@@ -78,6 +78,34 @@ const UNIVERSAL_WORKBENCH_ENGINE_COPY = {
 
 export function isTerminalSessionStatus(status: string | null | undefined): boolean {
   return status === 'failed' || status === 'succeeded' || status === 'cancelled' || status === 'completed'
+}
+
+export function resolveStreamRecoverySessionId(
+  streamedSessionId: string | null,
+  selectedSessionId: string | null,
+): string | null {
+  return streamedSessionId ?? selectedSessionId ?? null
+}
+
+export function shouldRefreshRecoveredSession(
+  recoverySessionId: string | null,
+  latestSelectedSessionId: string | null,
+): boolean {
+  return recoverySessionId !== null && (latestSelectedSessionId === null || recoverySessionId === latestSelectedSessionId)
+}
+
+export async function recoverSessionTurnStreamFailure(
+  error: unknown,
+  streamedSessionId: string | null,
+  selectedSessionId: string | null,
+  appendSessionEvents: (events: LocalSessionEvent[]) => void,
+  refresh: (preferredSessionId?: string | null) => Promise<void>,
+  latestSelectedSessionId: string | null = selectedSessionId,
+): Promise<void> {
+  appendSessionEvents([streamErrorEvent(error)])
+  const recoverySessionId = resolveStreamRecoverySessionId(streamedSessionId, selectedSessionId)
+  if (shouldRefreshRecoveredSession(recoverySessionId, latestSelectedSessionId))
+    await refresh(recoverySessionId).catch(() => {})
 }
 
 export function resolveUniversalWorkbenchDraftInput(
@@ -147,6 +175,7 @@ function UniversalWorkbenchMountedClient() {
   const [engineReadiness, setEngineReadiness] = useState(() => resolveUniversalWorkbenchEngineReadiness(null))
   const [templates, setTemplates] = useState<UniversalWorkbenchCapabilityTemplate[]>([])
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(hostData.sessionId ?? null)
+  const latestSelectedSessionIdRef = useRef<string | null>(hostData.sessionId ?? null)
   const [turnInput, setTurnInput] = useState('')
   const [turnSubmitting, setTurnSubmitting] = useState(false)
 
@@ -160,11 +189,22 @@ function UniversalWorkbenchMountedClient() {
     return workspaces[0] ?? null
   }, [workspaceId, workspaces])
 
+  const selectSession = useCallback((sessionId: string | null): void => {
+    latestSelectedSessionIdRef.current = sessionId
+    setSelectedSessionId(sessionId)
+  }, [])
+
   const applySessionDetail = useCallback((detail: SessionDetailResult): void => {
     setSessions(current => upsertSession(current, detail.session))
     setTurns(detail.turns)
     setEvents(detail.events)
   }, [])
+
+  const applySelectedSessionDetail = useCallback((detail: SessionDetailResult, expectedSessionId: string): void => {
+    if (!shouldRefreshRecoveredSession(expectedSessionId, latestSelectedSessionIdRef.current))
+      return
+    applySessionDetail(detail)
+  }, [applySessionDetail])
 
   const refresh = useCallback(async (preferredSessionId?: string | null) => {
     if (!workerId)
@@ -183,12 +223,12 @@ function UniversalWorkbenchMountedClient() {
     ))
     const nextSessions = sessionGroups.flat()
     setSessions(nextSessions)
-    const nextSelectedSessionId = preferredSessionId ?? selectedSessionId ?? hostData.sessionId ?? nextSessions[0]?.id ?? null
+    const nextSelectedSessionId = preferredSessionId ?? latestSelectedSessionIdRef.current ?? hostData.sessionId ?? nextSessions[0]?.id ?? null
     if (nextSelectedSessionId) {
       const detail = await loadSessionDetail(routePrefix, workerId, nextSelectedSessionId)
-      applySessionDetail(detail)
+      applySelectedSessionDetail(detail, nextSelectedSessionId)
     }
-  }, [applySessionDetail, hostData.sessionId, routePrefix, selectedSessionId, workerId])
+  }, [applySelectedSessionDetail, hostData.sessionId, routePrefix, workerId])
 
   useEffect(() => {
     window.microApp?.addDataListener?.((data) => {
@@ -217,12 +257,12 @@ function UniversalWorkbenchMountedClient() {
     let cancelled = false
     void loadSessionDetail(routePrefix, workerId, selectedSessionId).then((detail) => {
       if (!cancelled)
-        applySessionDetail(detail)
+        applySelectedSessionDetail(detail, selectedSessionId)
     }).catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [applySessionDetail, routePrefix, selectedSessionId, workerId])
+  }, [applySelectedSessionDetail, routePrefix, selectedSessionId, workerId])
 
   useEffect(() => {
     if (!selectedSessionId || !workerId)
@@ -235,7 +275,7 @@ function UniversalWorkbenchMountedClient() {
       try {
         const detail = await loadSessionDetail(routePrefix, workerId, selectedSessionId)
         if (!cancelled)
-          applySessionDetail(detail)
+          applySelectedSessionDetail(detail, selectedSessionId)
         shouldContinuePolling = !isTerminalSessionStatus(detail.session.status)
       }
       catch {
@@ -251,7 +291,7 @@ function UniversalWorkbenchMountedClient() {
       if (timer)
         clearTimeout(timer)
     }
-  }, [applySessionDetail, routePrefix, selectedSessionId, workerId])
+  }, [applySelectedSessionDetail, routePrefix, selectedSessionId, workerId])
 
   async function handleCreateSession(targetWorkspaceId: string, draft: UniversalWorkbenchCreateSessionDraft) {
     if (!workerId)
@@ -259,18 +299,36 @@ function UniversalWorkbenchMountedClient() {
     const payload = buildUniversalWorkbenchCreateSessionPayload(draft, templates)
     if (!payload)
       return
-    const response = await fetch(`${routePrefix}/api/sessions/stream?workerId=${encodeURIComponent(workerId)}&workspaceId=${encodeURIComponent(targetWorkspaceId)}`, {
-      body: JSON.stringify(payload),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    if (!response.ok)
-      throw new Error(`Universal workbench API ${response.status}: ${routePrefix}/api/sessions/stream`)
+    let streamedSessionId: string | null = null
+    let response: Response
+    try {
+      response = await fetch(`${routePrefix}/api/sessions/stream?workerId=${encodeURIComponent(workerId)}&workspaceId=${encodeURIComponent(targetWorkspaceId)}`, {
+        body: JSON.stringify(payload),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      })
+      if (!response.ok) {
+        await recoverSessionTurnStreamFailure(
+          new Error(`Universal workbench API ${response.status}: ${routePrefix}/api/sessions/stream`),
+          streamedSessionId,
+          selectedSessionId,
+          appendSessionEvents,
+          refresh,
+          latestSelectedSessionIdRef.current,
+        )
+        return
+      }
+    }
+    catch (error) {
+      await recoverSessionTurnStreamFailure(error, streamedSessionId, selectedSessionId, appendSessionEvents, refresh, latestSelectedSessionIdRef.current)
+      return
+    }
     void consumeSessionTurnStream(response, (frame) => {
       applySessionTurnStreamFrame(frame, {
         onEvents: appendSessionEvents,
         onSession: (session) => {
-          setSelectedSessionId(session.id)
+          streamedSessionId = session.id
+          selectSession(session.id)
           setSessions(current => [
             session,
             ...current.filter(item => item.id !== session.id),
@@ -280,7 +338,7 @@ function UniversalWorkbenchMountedClient() {
         onTurn: turn => setTurns(current => upsertTurn(current, turn)),
       })
     }).catch((error) => {
-      appendSessionEvents([streamErrorEvent(error)])
+      void recoverSessionTurnStreamFailure(error, streamedSessionId, selectedSessionId, appendSessionEvents, refresh, latestSelectedSessionIdRef.current)
     })
   }
 
@@ -353,11 +411,11 @@ function UniversalWorkbenchMountedClient() {
       turns={turns}
       workspace={selectedWorkspace}
       workspaces={workspaces}
-      onBackToWorkspace={() => setSelectedSessionId(null)}
+      onBackToWorkspace={() => selectSession(null)}
       onCreateSession={handleCreateSession}
       onCreateWorkspace={handleCreateWorkspace}
       onRefresh={() => void refresh()}
-      onSelectSession={setSelectedSessionId}
+      onSelectSession={selectSession}
       onSubmitTurn={handleSubmitTurn}
       onTurnInputChange={setTurnInput}
     />
@@ -368,7 +426,7 @@ function UniversalWorkbenchMountedClient() {
   }
 }
 
-async function consumeSessionTurnStream(response: Response, onFrame: (frame: SessionTurnStreamFrame) => void): Promise<void> {
+export async function consumeSessionTurnStream(response: Response, onFrame: (frame: SessionTurnStreamFrame) => void): Promise<void> {
   const contentType = response.headers.get('content-type') ?? ''
   if (!contentType.includes('text/event-stream')) {
     applySessionTurnResult(await response.json() as SessionTurnResult, onFrame)
@@ -433,7 +491,7 @@ function applySessionTurnResult(result: SessionTurnResult, onFrame: (frame: Sess
     onFrame({ data: event, event: 'session_event' })
 }
 
-function applySessionTurnStreamFrame(
+export function applySessionTurnStreamFrame(
   frame: SessionTurnStreamFrame,
   handlers: {
     onEvents: (events: LocalSessionEvent[]) => void
