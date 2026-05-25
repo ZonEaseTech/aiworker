@@ -1,7 +1,8 @@
 # PLAN-414 Real E2E P2/P3 repair batch
 
-- **status**: pending
+- **status**: implementing
 - **createdAt**: 2026-05-25
+- **approvedAt**: 2026-05-25
 - **relatedTask**: BUG-157
 - **superpowersSpec**: docs/superpowers/specs/2026-05-25-real-e2e-p2-p3-repair-design.md
 - **superpowersPlan**: docs/superpowers/plans/2026-05-25-real-e2e-p2-p3-repair.md
