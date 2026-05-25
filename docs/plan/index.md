@@ -442,3 +442,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-411 Worker Configuration boundary cleanup**](PLAN-411.md) `2026-05-24`
 - [x] [**PLAN-412 Local settings engines endpoint contract**](PLAN-412.md) `2026-05-24`
 - [x] [**PLAN-413 Real E2E P2 regression repair batch**](PLAN-413.md) `2026-05-25`
+- [ ] [**PLAN-414 Real E2E P2/P3 repair batch**](PLAN-414.md) `2026-05-25`
