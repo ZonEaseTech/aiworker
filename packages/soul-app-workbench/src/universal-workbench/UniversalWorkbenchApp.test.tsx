@@ -8,7 +8,7 @@ import {
   resolveUniversalWorkbenchDraftInput,
 } from './client-entry'
 import { createSessionTimelineViewModel, normalizeSessionEvents } from './timeline/session-view-model'
-import { UniversalWorkbenchApp } from './UniversalWorkbenchApp'
+import { resolveDefaultTemplateId, UniversalWorkbenchApp } from './UniversalWorkbenchApp'
 
 const vi = { fn: mock }
 
@@ -150,6 +150,18 @@ describe('UniversalWorkbenchApp', () => {
     )
 
     expect(html).toContain('Capability/template')
+  })
+
+  it('defaults the composer template selection to the first available capability while preserving valid choices', () => {
+    const templates = [
+      { id: 'aiworker-qa.evidence-review', name: 'Evidence Review' },
+      { id: 'aiworker-qa.release-gate', name: 'Release Gate' },
+    ]
+
+    expect(resolveDefaultTemplateId(undefined, templates)).toBe('aiworker-qa.evidence-review')
+    expect(resolveDefaultTemplateId('aiworker-qa.unknown', templates)).toBe('aiworker-qa.evidence-review')
+    expect(resolveDefaultTemplateId('aiworker-qa.release-gate', templates)).toBe('aiworker-qa.release-gate')
+    expect(resolveDefaultTemplateId('aiworker-qa.release-gate', [])).toBeUndefined()
   })
 
   it('maps material-only create and continue drafts to a generic fallback input', () => {
