@@ -149,7 +149,7 @@ function qaWidgetMicroAppHtml(request: Request): string {
     '<!doctype html>',
     microAppHtmlOpen(theme),
     `<head><meta charset="utf-8"><title>QA Release Widget</title>${renderSoulAppStyleLink(mountedStyleHref())}</head>`,
-    '<body>',
+    microAppBodyOpen(theme),
     `<main data-soul-app-id="${escapeHtmlAttribute(qaSoulAppManifest.id)}" data-surface-id="${escapeHtmlAttribute(surfaceId)}">`,
     widgetMarkup,
     '</main>',
@@ -166,6 +166,10 @@ function microAppHtmlOpen(theme: 'dark' | 'light'): string {
   return theme === 'dark'
     ? '<html lang="en" class="dark" style="color-scheme:dark">'
     : '<html lang="en" style="color-scheme:light">'
+}
+
+function microAppBodyOpen(theme: 'dark' | 'light'): string {
+  return theme === 'dark' ? '<body class="dark">' : '<body>'
 }
 
 function mountedStyleHref(): string {

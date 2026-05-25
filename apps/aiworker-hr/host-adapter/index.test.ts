@@ -160,6 +160,7 @@ describe('HR reference Soul App', () => {
       expect(darkRouteMicroAppRes.status).toBe(200)
       const darkRouteMicroAppHtml = await darkRouteMicroAppRes.text()
       expect(darkRouteMicroAppHtml).toContain('<html lang="en" class="dark h-full" style="color-scheme:dark">')
+      expect(darkRouteMicroAppHtml).toContain('<body class="dark h-full overflow-hidden">')
       const microAppRes = await fetch(`${baseUrl}/micro-app/widgets/hr-people-widget`, {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
       })

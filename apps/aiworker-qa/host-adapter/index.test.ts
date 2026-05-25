@@ -135,6 +135,7 @@ describe('QA reference Soul App', () => {
       expect(darkMicroAppRes.status).toBe(200)
       const darkMicroAppHtml = await darkMicroAppRes.text()
       expect(darkMicroAppHtml).toContain('<html lang="en" class="dark" style="color-scheme:dark">')
+      expect(darkMicroAppHtml).toContain('<body class="dark">')
       const capabilitiesRes = await fetch(`${baseUrl}/api/capabilities`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })

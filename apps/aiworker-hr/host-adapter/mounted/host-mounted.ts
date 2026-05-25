@@ -170,7 +170,7 @@ function hrRouteMicroAppHtml(request: Request): string {
     '<!doctype html>',
     microAppHtmlOpen(theme),
     `<head><meta charset="utf-8"><title>HR People Workbench</title>${renderSoulAppStyleLink(mountedStyleHref())}</head>`,
-    '<body class="h-full overflow-hidden">',
+    microAppBodyOpen(theme, 'h-full overflow-hidden'),
     `<main id="aiworker-hr-root" class="h-full min-h-0" data-soul-app-id="${escapeHtmlAttribute(hrSoulAppManifest.id)}" data-surface-id="${escapeHtmlAttribute(surfaceId)}">`,
     routeMarkup,
     '</main>',
@@ -197,7 +197,7 @@ function hrWidgetMicroAppHtml(request: Request): string {
     '<!doctype html>',
     microAppHtmlOpen(theme),
     `<head><meta charset="utf-8"><title>HR People Widget</title>${renderSoulAppStyleLink(mountedStyleHref())}</head>`,
-    '<body>',
+    microAppBodyOpen(theme),
     `<main data-soul-app-id="${escapeHtmlAttribute(hrSoulAppManifest.id)}" data-surface-id="${escapeHtmlAttribute(surfaceId)}">`,
     widgetMarkup,
     '</main>',
@@ -228,6 +228,11 @@ function microAppHtmlOpen(theme: 'dark' | 'light'): string {
   return theme === 'dark'
     ? '<html lang="en" class="dark h-full" style="color-scheme:dark">'
     : '<html lang="en" class="h-full" style="color-scheme:light">'
+}
+
+function microAppBodyOpen(theme: 'dark' | 'light', base = ''): string {
+  const className = [theme === 'dark' ? 'dark' : '', base].filter(Boolean).join(' ')
+  return className ? `<body class="${className}">` : '<body>'
 }
 
 function mountedStyleHref(): string {

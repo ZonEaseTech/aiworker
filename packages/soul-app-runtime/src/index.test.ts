@@ -137,6 +137,7 @@ describe('Soul App runtime harness', () => {
     })
 
     expect(html).toContain('<html lang="en" class="dark h-full" style="color-scheme:dark">')
+    expect(html).toContain('<body class="dark h-full">')
     expect(html).toContain('"theme":"dark"')
     expect(html).toContain('"workerId":"worker-1"')
     expect(html).toContain('"workspaceId":"workspace-1"')
