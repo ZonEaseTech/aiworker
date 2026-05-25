@@ -58,6 +58,69 @@ describe('UniversalWorkbenchApp', () => {
     expect(classForSlot(html, 'artifact-rail')).toContain('max-md:flex-none')
   })
 
+  it('keeps long workspace and session names inside the fixed sidebar', () => {
+    const longWorkspaceName = 'Workspace-' + 'Alpha'.repeat(24)
+    const longSessionLabel = 'aiworker-qa.' + 'evidence-review-'.repeat(16)
+    const workspace = {
+      ...workspaceFixture(),
+      name: longWorkspaceName,
+    }
+    const session: LocalSession = {
+      capabilityTemplateId: longSessionLabel,
+      context: '',
+      createdAt: '2026-05-26T00:00:00.000Z',
+      endedAt: null,
+      id: 'session-long-label',
+      metadataJson: {},
+      startedAt: '2026-05-26T00:00:00.000Z',
+      status: 'active',
+      title: 'Review the release evidence',
+      updatedAt: '2026-05-26T00:00:00.000Z',
+      workerId: 'worker-1',
+      workspaceId: workspace.id,
+    }
+
+    const html = renderToStaticMarkup(
+      <UniversalWorkbenchApp
+        engineReadiness={{ detail: 'Engine bridge ready', label: 'Engine bridge', ready: true }}
+        events={[]}
+        selectedSessionId={null}
+        sessions={[session]}
+        templates={[{ id: longSessionLabel, name: 'Evidence Review' }]}
+        turnInput=""
+        turnSubmitting={false}
+        turns={[]}
+        workspace={workspace}
+        workspaces={[workspace]}
+        onBackToWorkspace={vi.fn()}
+        onCreateSession={vi.fn(async () => {})}
+        onCreateWorkspace={vi.fn()}
+        onRefresh={vi.fn()}
+        onSelectSession={vi.fn()}
+        onSubmitTurn={vi.fn()}
+        onTurnInputChange={vi.fn()}
+      />,
+    )
+
+    const sidebarClass = classForSlot(html, 'workbench-sidebar')
+    expectClassToken(sidebarClass, 'w-56')
+    expectClassToken(sidebarClass, 'basis-56')
+    expectClassToken(sidebarClass, 'max-w-56')
+    expectClassToken(sidebarClass, 'max-md:w-full')
+    expectClassToken(sidebarClass, 'max-md:max-w-none')
+    expectClassToken(sidebarClass, 'max-md:basis-auto')
+    expect(html).toContain(`title="${longWorkspaceName}"`)
+    expect(html).toContain(`title="${longSessionLabel}"`)
+
+    const itemTitleClasses = classesForSlot(html, 'item-title')
+    expect(itemTitleClasses.length).toBeGreaterThanOrEqual(2)
+    for (const classes of itemTitleClasses) {
+      expectClassToken(classes, 'w-full')
+      expectClassToken(classes, 'min-w-0')
+      expectClassToken(classes, 'truncate')
+    }
+  })
+
   it('renders the managed session composer for a selected workspace without raw new-session form markup', () => {
     const workspace: LocalWorkspace = {
       createdAt: '2026-05-23T00:00:00.000Z',
@@ -374,9 +437,27 @@ describe('UniversalWorkbenchApp', () => {
 })
 
 function classForSlot(html: string, slot: string): string {
-  const match = html.match(new RegExp(`<[^>]*class="([^"]*)"[^>]*data-slot="${slot}"`))
-  expect(match?.[1]).toBeDefined()
-  return match?.[1] ?? ''
+  const match = classesForSlot(html, slot)[0]
+  expect(match).toBeDefined()
+  return match ?? ''
+}
+
+function classesForSlot(html: string, slot: string): string[] {
+  const escapedSlot = escapeRegExp(slot)
+  return Array.from(html.matchAll(new RegExp(`<[^>]*\\bdata-slot="${escapedSlot}"[^>]*>`, 'g')))
+    .map(match => match[0].match(/\bclass="([^"]*)"/)?.[1] ?? '')
+}
+
+function expectClassToken(classes: string, token: string): void {
+  expect(classTokens(classes)).toContain(token)
+}
+
+function classTokens(classes: string): string[] {
+  return classes.split(/\s+/).filter(Boolean)
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function workspaceFixture(): LocalWorkspace {
