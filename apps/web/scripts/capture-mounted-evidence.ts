@@ -5,6 +5,7 @@ import process from 'node:process'
 import { chromium, type Browser, type Page } from 'playwright'
 
 interface CliOptions {
+  allowMissingMounted: boolean
   label: string
   out: string
   url: string
@@ -21,25 +22,35 @@ await mkdir(options.out, { recursive: true })
 let browser: Browser | null = null
 try {
   browser = await chromium.launch({ args: ['--no-sandbox'], headless: true })
+  const missingMountedViewports: string[] = []
   for (const viewport of viewports) {
     const page = await browser.newPage({
       colorScheme: viewport.name === 'desktop' ? 'light' : 'dark',
       viewport,
     })
-    const consoleMessages: Array<{ text: string, type: string }> = []
-    page.on('console', message => consoleMessages.push({ type: message.type(), text: message.text() }))
-    await page.goto(options.url, { waitUntil: 'networkidle' })
-    await page.locator('micro-app').first().waitFor({ timeout: 15_000 }).catch(() => undefined)
-    const diagnostics = await collectDiagnostics(page)
-    const prefix = `${options.label}-${viewport.name}`
-    await page.screenshot({ fullPage: true, path: path.join(options.out, `${prefix}.png`) })
-    await writeFile(path.join(options.out, `${prefix}.json`), `${JSON.stringify({
-      consoleMessages,
-      diagnostics,
-      url: page.url(),
-      viewport,
-    }, null, 2)}\n`)
-    await page.close()
+    try {
+      const consoleMessages: Array<{ text: string, type: string }> = []
+      page.on('console', message => consoleMessages.push({ type: message.type(), text: message.text() }))
+      await page.goto(options.url, { waitUntil: 'networkidle' })
+      await page.locator('micro-app').first().waitFor({ timeout: 15_000 }).catch(() => undefined)
+      const diagnostics = await collectDiagnostics(page)
+      if (!options.allowMissingMounted && diagnostics.mounted.length === 0)
+        missingMountedViewports.push(viewport.name)
+      const prefix = `${options.label}-${viewport.name}`
+      await page.screenshot({ fullPage: true, path: path.join(options.out, `${prefix}.png`) })
+      await writeFile(path.join(options.out, `${prefix}.json`), `${JSON.stringify({
+        consoleMessages,
+        diagnostics,
+        url: page.url(),
+        viewport,
+      }, null, 2)}\n`)
+    }
+    finally {
+      await page.close().catch(() => undefined)
+    }
+  }
+  if (missingMountedViewports.length > 0) {
+    throw new Error(`No mounted micro-app diagnostics found for viewport(s): ${missingMountedViewports.join(', ')}. Use --allow-missing-mounted to capture an intentionally unmounted page.`)
   }
 }
 finally {
@@ -50,10 +61,11 @@ function parseArgs(args: string[]): CliOptions {
   const out = readFlag(args, '--out')
   const url = readFlag(args, '--url')
   const label = readFlag(args, '--label') ?? 'mounted-surface'
+  const allowMissingMounted = args.includes('--allow-missing-mounted')
   if (!out || !url) {
     printUsage()
   }
-  return { label, out, url }
+  return { allowMissingMounted, label, out, url }
 }
 
 function readFlag(args: string[], name: string): string | undefined {
@@ -67,7 +79,7 @@ function readFlag(args: string[], name: string): string | undefined {
 }
 
 function printUsage(): never {
-  console.error('Usage: bun apps/web/scripts/capture-mounted-evidence.ts --url <url> --out <dir> --label <name>')
+  console.error('Usage: bun apps/web/scripts/capture-mounted-evidence.ts --url <url> --out <dir> --label <name> [--allow-missing-mounted]')
   process.exit(2)
 }
 
