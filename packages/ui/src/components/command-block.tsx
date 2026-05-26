@@ -34,8 +34,13 @@ export function CommandBlock({
     if (!navigator.clipboard)
       return
 
-    await navigator.clipboard.writeText(command)
-    setCopied(true)
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopied(true)
+    }
+    catch {
+      setCopied(false)
+    }
   }
 
   return (
