@@ -10,39 +10,19 @@ interface Issue {
 const repoRoot = process.cwd()
 const issues: Issue[] = []
 
-const activeDocs = [
-  'AGENTS.md',
-  'CLAUDE.md',
-  'README.md',
-  'README.zh-CN.md',
+const canonicalDocs = [
   'docs/architecture.md',
-  'docs/cli.md',
-  'docs/deployment.md',
-  'docs/executor-engines.md',
-  'docs/soul-app-developer.md',
-  '.agents/skills/aiworker-host-dev/SKILL.md',
-  '.agents/skills/aiworker-soul-app-dev/SKILL.md',
+  'docs/protocol.md',
+  'docs/runtime.md',
+  'docs/soul-authoring.md',
+  'docs/testing.md',
 ]
 
-const registryIds = [
-  'ARCH-001',
-  'HOST-001',
-  'SOUL-001',
-  'CONFIG-001',
-  'PROTO-001',
-  'IMPORT-001',
-  'MOUNT-001',
-  'DATA-001',
-  'ENGINE-001',
-  'UI-001',
-  'DOC-001',
-]
+const activeDocs = ['AGENTS.md', ...canonicalDocs]
 
 const forbiddenActiveDocPhrases = [
   'Host auth is provider-backed',
-  'broker',
   'admission',
-  'governance',
   'grant enforcement',
   'gateway',
   'fleet',
@@ -58,132 +38,69 @@ for (const file of activeDocs) {
     issues.push({ file, message: 'active documentation file is missing' })
 }
 
-const architecture = read('docs/architecture.md')
 requireIncludes('docs/architecture.md', [
-  'AIWorker = Local Shell + Engine Bridge for Soul Apps',
-  '## Constraint Registry',
-  'start, shell, locate, mount and bridge',
-  'Host 不拥有领域工作流',
-  'scripts/check-doc-contract.ts',
-  '`docs/task`, `docs/plan`, `docs/superpowers` and `docs/changelog.md` are audit trail',
+  'Host is shell / locator / mount / bridge',
+  'CLI-first',
+  'descriptor-only',
+  'packages/core and packages/shared disappear',
+  'apps/api` migrates to `packages/host-daemon',
+  '`souls/aiworker-freeform` is the only strong v1 acceptance Soul',
 ])
-
-for (const id of registryIds) {
-  if (!architecture.includes(`\`${id}\``))
-    issues.push({ file: 'docs/architecture.md', message: `missing registry id ${id}` })
-}
-
-requireExact('CLAUDE.md', '@AGENTS.md')
 
 requireIncludes('AGENTS.md', [
-  'Local Shell + Engine Bridge',
-  'start / shell / locate / mount / bridge',
-  'Constraint Registry',
-  'Worker Configuration',
+  'canonical docs',
+  'Superpowers',
+  'Host is shell / locator / mount / bridge',
+  'CLI-first',
+  'descriptor-only',
+  'POST /api/sessions/:sessionId/invocations',
+  'Author-owned native MCP files may contain literal secrets',
+  'shadcn',
+])
+requireMaxLines('AGENTS.md', 90)
+
+forbidIncludes('AGENTS.md', [
+  'docs/plan',
+  'docs/task',
   'aiworker-host-dev',
   'aiworker-soul-app-dev',
-  'shadcn',
-  'Component Library Preflight',
-  'bun run ui:check',
-  '可复用 UI 归入 `packages/ui`',
-  '审计轨迹',
+  'PMA requirement',
 ])
 
-requireIncludes('README.md', [
-  'Local Shell + Engine Bridge',
-  'AIWorker -> Soul App -> workspace -> session -> app-owned work',
-  'Constraint Registry',
-  'Worker Configuration',
-  '.agents/skills/aiworker-host-dev/SKILL.md',
-  '.agents/skills/aiworker-soul-app-dev/SKILL.md',
+requireIncludes('docs/protocol.md', [
+  'dist/soul.descriptor.json',
+  'router-mode="search"',
+  'POST   /api/sessions/:sessionId/invocations',
+  'These are broker routes, not business product APIs.',
+])
+forbidIncludes('docs/protocol.md', [
+  'host-adapter',
+  'source exports',
 ])
 
-requireIncludes('README.zh-CN.md', [
-  '当前中文入口只保留指针',
-  'docs/architecture.md#constraint-registry',
+requireIncludes('docs/runtime.md', [
+  'session lifecycle: active | archived | deleted',
+  'execution/process state belongs to engine_invocations',
+  'POST /api/sessions/:sessionId/invocations',
+  'B+ structured native engine bridge',
+  'Author-owned native MCP files may contain literal secrets',
 ])
 
-forbidIncludes('README.zh-CN.md', [
-  'turn',
-  'durable org memory',
-  'embedded AIWorker core runtime',
-  'host -> local daemon',
+requireIncludes('docs/soul-authoring.md', [
+  'souls/*',
+  'soul.config.ts',
+  'packages/soul-workbench',
+  'author-owned native MCP files may contain literal secrets',
+  '`souls/aiworker-freeform` is the v1 acceptance Soul',
 ])
 
-forbidIncludes('docs/architecture.md', [
-  '`BROKER-001`',
-  '`OPERATOR-001`',
+requireIncludes('docs/testing.md', [
+  'bun run test:contracts',
+  'Contract tests are the primary guardrail',
+  'The v1 browser proof is Freeform-only',
 ])
 
-requireIncludes('docs/soul-app-developer.md', [
-  '# Soul App Developer Quickstart (Frozen)',
-  'This file is a frozen quickstart during product shaping.',
-  'It is not an architecture contract.',
-  'The only active Host/Soul App contract is `docs/architecture.md#constraint-registry`.',
-  'Do not expand Host/Soul boundary, descriptor, MCP, provider, permission, review, memory, Worker Configuration or configuration semantics here.',
-  'aiworker app create <app-id> --dir <target-dir>',
-  'aiworker app validate <target-dir>',
-  'aiworker app smoke <target-dir>',
-  'soul-app.manifest.json',
-  'engine-assets/',
-  'product/',
-  'host-adapter/',
-])
-requireMaxLines('docs/soul-app-developer.md', 80)
-forbidIncludes('docs/soul-app-developer.md', [
-  '## Agent Workflow',
-  '## Engine Assets Projection',
-  '## MCP Client',
-  '## MCP Client And Server Declarations',
-  '## Smoke',
-  '## Design Boundary',
-  '## Contribution Checklist',
-  'generic worker-scoped options',
-  'Host can display',
-  'MCP plumbing',
-  'permission hints',
-  'review verdict',
-  'memory promotion',
-])
-
-requireIncludes('.agents/skills/aiworker-host-dev/SKILL.md', [
-  'docs/architecture.md#constraint-registry',
-  'This skill is a route helper, not a parallel architecture contract.',
-  'Read these registry IDs in `docs/architecture.md` before Host changes:',
-  '`ARCH-001`',
-  '`HOST-001`',
-  '`CONFIG-001`',
-  '`PROTO-001`',
-  '`IMPORT-001`',
-  '`MOUNT-001`',
-  '`DATA-001`',
-  '`ENGINE-001`',
-  '`UI-001`',
-  '`DOC-001`',
-  'Use `aiworker-soul-app-dev` when the change belongs to app-owned domain work.',
-  'bun run docs:check',
-  'bun run crg:update',
-])
-
-requireIncludes('.agents/skills/aiworker-soul-app-dev/SKILL.md', [
-  'docs/architecture.md#constraint-registry',
-  'This skill is a route helper, not a parallel architecture contract.',
-  'Read `docs/soul-app-developer.md` only as a frozen quickstart for commands and package shape.',
-  '`ARCH-001`',
-  '`SOUL-001`',
-  '`CONFIG-001`',
-  '`PROTO-001`',
-  '`IMPORT-001`',
-  '`MOUNT-001`',
-  '`DATA-001`',
-  '`ENGINE-001`',
-  '`DOC-001`',
-  'Use `aiworker-host-dev` when the change belongs to Host platform behavior.',
-  'aiworker app validate <app-path>',
-  'aiworker app smoke <app-path>',
-])
-
-for (const file of activeDocs) {
+for (const file of canonicalDocs) {
   forbidIncludes(file, [
     'GOALS.md',
     'aiworker-validate',
@@ -191,7 +108,14 @@ for (const file of activeDocs) {
   forbidIncludes(file, forbiddenActiveDocPhrases)
 }
 
-const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
+const packageJson = JSON.parse(read('package.json')) as {
+  scripts?: Record<string, string>
+  workspaces?: string[]
+}
+if (!packageJson.workspaces?.includes('souls/*'))
+  issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
+if (packageJson.scripts?.['test:contracts'] !== 'bun test tests/architecture/refactor-contract.test.ts')
+  issues.push({ file: 'package.json', message: 'test:contracts must run the refactor contract test' })
 if (packageJson.scripts?.['docs:check'] !== 'bun scripts/check-doc-contract.ts')
   issues.push({ file: 'package.json', message: 'docs:check must run scripts/check-doc-contract.ts' })
 if (packageJson.scripts?.['ui:check'] !== 'bun scripts/check-web-ui-components.ts')
@@ -207,7 +131,7 @@ if (issues.length > 0) {
   process.exit(1)
 }
 
-console.log(`docs contract ok (${activeDocs.length} active files, ${registryIds.length} registry ids)`)
+console.log(`docs contract ok (${activeDocs.length} active files, ${canonicalDocs.length} canonical docs)`)
 
 function abs(file: string): string {
   return path.join(repoRoot, file)
@@ -218,12 +142,6 @@ function read(file: string): string {
   if (!existsSync(filePath))
     return ''
   return readFileSync(filePath, 'utf8')
-}
-
-function requireExact(file: string, expected: string): void {
-  const actual = read(file).trim()
-  if (actual !== expected)
-    issues.push({ file, message: `expected exact content ${JSON.stringify(expected)}` })
 }
 
 function requireIncludes(file: string, needles: string[]): void {
