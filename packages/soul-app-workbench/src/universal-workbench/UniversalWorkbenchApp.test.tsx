@@ -96,6 +96,9 @@ describe('UniversalWorkbenchApp', () => {
 
     expect(html).toContain('data-slot="session-composer"')
     expect(html).toContain('What do you want to work on?')
+    expect(classForSlot(html, 'empty-workspace-composer-state')).toContain('justify-center')
+    expect(html).toContain('class="flex min-w-0 flex-col gap-2 w-full max-w-3xl"')
+    expect(html).not.toContain('w-full max-w-xl')
     expect(html).not.toContain('class="flex w-full max-w-xl gap-2"')
     expect(html).not.toContain('type="button">Start</button>')
   })

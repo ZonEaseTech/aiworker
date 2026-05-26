@@ -268,7 +268,7 @@ export function UniversalWorkbenchApp({
             )
           : selectedWorkspace
             ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6">
+                <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-4 p-6" data-slot="empty-workspace-composer-state">
                   <div className="text-center">
                     <h2 className="text-lg font-semibold">{selectedWorkspace.name}</h2>
                     <p className="text-sm text-muted-foreground">Start a new session or select one from the sidebar.</p>
@@ -283,7 +283,7 @@ export function UniversalWorkbenchApp({
                       preview: (name: string) => `Preview ${name}`,
                       remove: (name: string) => `Remove ${name}`,
                     }}
-                    className="w-full max-w-xl"
+                    className="w-full max-w-3xl"
                     disabled={!engineReadiness.ready}
                     disabledReason={engineReadiness.ready
                       ? templates.length === 0 ? 'No capability templates are available for this Soul worker.' : undefined
