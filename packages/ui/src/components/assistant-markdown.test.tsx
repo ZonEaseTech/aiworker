@@ -57,6 +57,16 @@ describe('AssistantMarkdown', () => {
     expect(repairStreamingMarkdown('2 * 3 = 6', true)).toBe('2 * 3 = 6')
     expect(repairStreamingMarkdown('* first', true)).toBe('* first')
     expect(repairStreamingMarkdown('Use * as wildcard', true)).toBe('Use * as wildcard')
+    expect(repairStreamingMarkdown('Use foo* wildcard', true)).toBe('Use foo* wildcard')
+    expect(repairStreamingMarkdown('Use *.ts wildcard', true)).toBe('Use *.ts wildcard')
+    expect(repairStreamingMarkdown('glob *.ts', true)).toBe('glob *.ts')
     expect(repairStreamingMarkdown('*italic', true)).toBe('*italic*')
+  })
+
+  it('does not render suffix wildcard asterisks as italic markdown', () => {
+    const { container } = render(<AssistantMarkdown markdown="Use foo* wildcard" />)
+
+    expect(screen.getByText('Use foo* wildcard')).toBeTruthy()
+    expect(container.querySelector('em')).toBeNull()
   })
 })

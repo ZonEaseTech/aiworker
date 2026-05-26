@@ -46,8 +46,7 @@ export function repairStreamingMarkdown(markdown: string, streaming: boolean): s
   if (strongCount % 2 === 1)
     repaired = `${repaired}**`
 
-  const emphasisCount = countItalicDelimiters(withoutFences)
-  if (emphasisCount % 2 === 1)
+  if (hasUnclosedItalicOpener(withoutFences))
     repaired = `${repaired}*`
 
   return repaired
@@ -218,23 +217,37 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
   return nodes
 }
 
-function countItalicDelimiters(text: string): number {
-  let count = 0
-
+function hasUnclosedItalicOpener(text: string): boolean {
   for (let index = 0; index < text.length; index += 1) {
-    if (text[index] !== '*')
+    if (!isItalicOpener(text, index))
       continue
 
-    const previous = text[index - 1]
-    const next = text[index + 1]
-    if (previous === '*' || next === '*')
-      continue
-
-    const canOpen = Boolean(next && !/\s/.test(next))
-    const canClose = Boolean(previous && !/\s/.test(previous))
-    if (canOpen || canClose)
-      count += 1
+    const nextCloser = text.slice(index + 1).search(/\S\*(?!\*)/)
+    if (nextCloser === -1)
+      return true
   }
 
-  return count
+  return false
+}
+
+function isItalicOpener(text: string, index: number): boolean {
+  if (text[index] !== '*')
+    return false
+
+  const previous = text[index - 1]
+  const next = text[index + 1]
+  if (previous === '*' || next === '*')
+    return false
+
+  if (!next || /\s/.test(next))
+    return false
+
+  if (!isEmphasisContentStart(next))
+    return false
+
+  return !previous || /\s|[([{"']/.test(previous)
+}
+
+function isEmphasisContentStart(value: string): boolean {
+  return !/[\s!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~-]/.test(value)
 }
