@@ -1,5 +1,5 @@
 import type { Context } from 'hono'
-import { AppError } from '@zonease/aiworker-shared'
+import { AppError } from '@zonease/aiworker-soul-protocol'
 import consola from 'consola'
 
 export function errorHandler(err: Error, c: Context) {

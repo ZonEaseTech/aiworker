@@ -1,7 +1,7 @@
 import { access, chmod, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { OFFICIAL_SOUL_APPS } from '@zonease/aiworker-core'
+import { OFFICIAL_SOUL_APPS } from '@zonease/aiworker-host-runtime'
 
 const cliDir = resolve(import.meta.dirname, '..')
 const repoRoot = resolve(cliDir, '..', '..')
@@ -11,8 +11,7 @@ const binShimDst = resolve(distDir, 'aiworker.js')
 
 const officialApps = OFFICIAL_SOUL_APPS.map(app => app.id)
 const officialAppsDst = resolve(distDir, 'official-apps')
-const publishedMountedEntrypoint = 'dist/mounted/host-mounted.js'
-const publishedStandaloneEntrypoint = 'dist/standalone/standalone.js'
+const publishedDescriptor = 'dist/soul.descriptor.json'
 
 export async function buildPublishManifest(): Promise<void> {
   const pkg = JSON.parse(await readFile(resolve(cliDir, 'package.json'), 'utf8'))
@@ -63,8 +62,8 @@ export async function buildPublishManifest(): Promise<void> {
   await access(resolve(workerWebSrc, 'index.html'))
   await copyDir(workerWebSrc, resolve(webDistDst, 'worker'))
 
-  // 把官方维护的 Soul App 发布资源拷到 dist/official-apps/，让 npm-installed
-  // CLI 能通过正常 manifest registry 安装/启用它们，无需访问源码仓库路径。
+  // 把官方维护的 Soul descriptor 发布资源拷到 dist/official-apps/，让 npm-installed
+  // CLI 能通过 descriptor registry 安装/启用它们，无需访问源码仓库路径。
   await rm(officialAppsDst, { recursive: true, force: true })
   for (const appId of officialApps)
     await copyOfficialApp(appId)
@@ -85,13 +84,12 @@ export async function copyDir(src: string, dst: string, options: { skip?: (entry
   }
 }
 
-export async function copyOfficialApp(appId: string, options: { appsRoot?: string, officialAppsRoot?: string } = {}): Promise<void> {
-  const appSrc = resolve(options.appsRoot ?? resolve(repoRoot, 'apps'), appId)
+export async function copyOfficialApp(appId: string, options: { officialAppsRoot?: string, soulsRoot?: string } = {}): Promise<void> {
+  const appSrc = resolve(options.soulsRoot ?? resolve(repoRoot, 'souls'), appId)
   const appDst = resolve(options.officialAppsRoot ?? officialAppsDst, appId)
-  await copyDir(appSrc, appDst, { skip: shouldSkipOfficialAppResource })
-  await patchOfficialAppManifest(resolve(appDst, 'soul-app.manifest.json'))
-  await access(resolve(appDst, publishedMountedEntrypoint))
-  await access(resolve(appDst, publishedStandaloneEntrypoint))
+  await rm(appDst, { recursive: true, force: true })
+  await copyDir(resolve(appSrc, 'dist'), resolve(appDst, 'dist'), { skip: shouldSkipOfficialAppResource })
+  await access(resolve(appDst, publishedDescriptor))
 }
 
 export function shouldSkipOfficialAppResource(entryName: string, srcPath = ''): boolean {
@@ -101,25 +99,7 @@ export function shouldSkipOfficialAppResource(entryName: string, srcPath = ''): 
     || entryName.endsWith('.spec.tsx')
     || entryName.endsWith('.test.ts')
     || entryName.endsWith('.test.tsx')
-    || normalizedSrcPath.endsWith('/dist/host-mounted.js')
-    || normalizedSrcPath.endsWith('/dist/standalone.js')
-}
-
-export async function patchOfficialAppManifest(manifestPath: string): Promise<void> {
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-    api?: { localService?: { command?: string[] } }
-    modes?: {
-      hostMounted?: { entry?: string }
-      standalone?: { entry?: string }
-    }
-  }
-  if (manifest.api?.localService)
-    manifest.api.localService.command = ['bun', publishedMountedEntrypoint]
-  if (manifest.modes?.hostMounted)
-    manifest.modes.hostMounted.entry = `./${publishedMountedEntrypoint}`
-  if (manifest.modes?.standalone)
-    manifest.modes.standalone.entry = `./${publishedStandaloneEntrypoint}`
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+    || normalizedSrcPath.includes('/host-adapter/')
 }
 
 if (import.meta.main)

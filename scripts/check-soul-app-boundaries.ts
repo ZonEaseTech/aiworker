@@ -16,28 +16,40 @@ interface BoundaryIssue {
 }
 
 const repoRoot = process.cwd()
-const appRoot = path.join(repoRoot, 'apps')
+const soulRoot = path.join(repoRoot, 'souls')
 const completionAudit = process.argv.includes('--completion-audit')
 const hostPrivatePackages = [
   '@zonease/aiworker-cli',
-  '@zonease/aiworker-core',
+  '@zonease/aiworker-host-runtime',
   '@zonease/aiworker-fs-layout',
   '@zonease/aiworker-host-daemon',
-  '@zonease/aiworker-shared',
+  '@zonease/aiworker-soul-protocol',
   '@zonease/aiworker-storage-sqlite',
   '@zonease/aiworker-web',
+]
+const forbiddenLegacyPackages = [
+  '@zonease/aiworker-api',
+  '@zonease/aiworker-core',
+  '@zonease/aiworker-shared',
+  '@zonease/aiworker-soul-app-workbench',
 ]
 const hostPrivateRoots = [
   'apps/cli',
   'apps/web',
-  'packages/core',
   'packages/fs-layout',
   'packages/host-daemon',
-  'packages/shared',
+  'packages/host-runtime',
+  'packages/soul-protocol',
   'packages/storage-sqlite',
 ]
+const forbiddenLegacyRoots = [
+  'apps/api',
+  'packages/core',
+  'packages/shared',
+  'packages/soul-app-workbench',
+]
 const rawWebStorageMessage = 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.'
-const forbiddenHostWebImports = ['@zonease/aiworker-soul-app-workbench']
+const forbiddenLegacyHostWebImports = ['@zonease/aiworker-soul-app-workbench']
 const retiredHostWebSurfacePatterns: Array<{ message: string, pattern: RegExp }> = [
   {
     message: 'Host Web must not keep WorkspaceSessionComposer; session product UI belongs in Soul-owned mounted surfaces.',
@@ -57,12 +69,12 @@ const retiredHostWebSurfacePatterns: Array<{ message: string, pattern: RegExp }>
   },
 ]
 export function discoverSoulApps(): SoulAppWorkspace[] {
-  if (!existsSync(appRoot))
+  if (!existsSync(soulRoot))
     return []
-  return readdirSync(appRoot, { withFileTypes: true })
+  return readdirSync(soulRoot, { withFileTypes: true })
     .filter(entry => entry.isDirectory())
     .map((entry) => {
-      const dir = path.join(appRoot, entry.name)
+      const dir = path.join(soulRoot, entry.name)
       return {
         dir,
         name: entry.name,
@@ -70,22 +82,27 @@ export function discoverSoulApps(): SoulAppWorkspace[] {
         codeRoot: dir,
       }
     })
-    .filter(app => existsSync(path.join(app.dir, 'soul-app.manifest.json')))
+    .filter(app => hasSoulDeclaration(app.dir))
 }
 
-function countSoulManifests(): number {
-  if (!existsSync(appRoot))
+function countSoulDeclarations(): number {
+  if (!existsSync(soulRoot))
     return 0
-  return readdirSync(appRoot, { withFileTypes: true })
+  return readdirSync(soulRoot, { withFileTypes: true })
     .filter(entry => entry.isDirectory())
-    .filter(entry => existsSync(path.join(appRoot, entry.name, 'soul-app.manifest.json')))
+    .filter(entry => hasSoulDeclaration(path.join(soulRoot, entry.name)))
     .length
 }
 
 export function discoveryTripwireError(manifestCount: number, discoveredCount: number): string | null {
   if (manifestCount > 0 && discoveredCount === 0)
-    return `Boundary guard found ${manifestCount} Soul App manifest(s) but discovered 0 scannable apps; the guard would scan nothing.`
+    return `Boundary guard found ${manifestCount} Soul declaration(s) but discovered 0 scannable apps; the guard would scan nothing.`
   return null
+}
+
+function hasSoulDeclaration(dir: string): boolean {
+  return existsSync(path.join(dir, 'soul.config.ts'))
+    || existsSync(path.join(dir, 'dist/soul.descriptor.json'))
 }
 
 function readPackageName(dir: string): string | null {
@@ -118,8 +135,16 @@ function scanSoulAppImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
           issues.push(issue(file, importPath, 'Soul App code must use the Soul App SDK instead of Host private packages.'))
           continue
         }
+        if (forbiddenLegacyPackages.some(prefix => importPath === prefix || importPath.startsWith(`${prefix}/`))) {
+          issues.push(issue(file, importPath, 'Soul App code must not import retired legacy Host packages or the retired Soul App workbench.'))
+          continue
+        }
         if (hostPrivateRoots.some(root => normalizedImport(importPath).includes(`${root}/`))) {
           issues.push(issue(file, importPath, 'Soul App code must not import Host app or package internals.'))
+          continue
+        }
+        if (forbiddenLegacyRoots.some(root => normalizedImport(importPath).includes(`${root}/`))) {
+          issues.push(issue(file, importPath, 'Soul App code must not import retired legacy Host app or package paths.'))
           continue
         }
         const resolved = resolveRelativeImport(file, importPath)
@@ -133,6 +158,9 @@ function scanSoulAppImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
         const hostRoot = hostPrivateRoots.find(root => isInside(resolved, path.join(repoRoot, root)))
         if (hostRoot)
           issues.push(issue(file, importPath, `Soul App ${app.name} must not import Host internals under ${hostRoot}.`))
+        const legacyRoot = forbiddenLegacyRoots.find(root => isInside(resolved, path.join(repoRoot, root)))
+        if (legacyRoot)
+          issues.push(issue(file, importPath, `Soul App ${app.name} must not import retired legacy path ${legacyRoot}.`))
       }
     }
   }
@@ -153,7 +181,7 @@ function scanHostImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
         continue
       for (const importPath of importSpecifiers(readFileSync(file, 'utf8'))) {
         const normalized = normalizedImport(importPath)
-        if (apps.some(app => normalized.includes(`apps/${app.name}/`))) {
+        if (apps.some(app => normalized.includes(`souls/${app.name}/`))) {
           issues.push(issue(file, importPath, 'Host code must not import Soul App internals.'))
           continue
         }
@@ -195,11 +223,11 @@ function scanHostWebPackageImports(): BoundaryIssue[] {
   const issues: BoundaryIssue[] = []
   for (const file of listSourceFiles(webRoot)) {
     for (const importPath of importSpecifiers(readFileSync(file, 'utf8'))) {
-      if (forbiddenHostWebImports.includes(packageRoot(importPath))) {
+      if (forbiddenLegacyHostWebImports.includes(packageRoot(importPath))) {
         issues.push(issue(
           file,
           importPath,
-          'Host Web must mount Soul workbench routes through manifest-declared micro-app surfaces instead of importing Soul workbench packages.',
+          'Host Web must mount Soul workbench routes through descriptor-declared micro-app surfaces instead of importing the retired Soul App workbench package.',
         ))
       }
     }
@@ -378,7 +406,7 @@ function isInside(filePath: string, dir: string): boolean {
 
 function runChecks(): void {
   const soulApps = discoverSoulApps()
-  const tripwire = discoveryTripwireError(countSoulManifests(), soulApps.length)
+  const tripwire = discoveryTripwireError(countSoulDeclarations(), soulApps.length)
   if (tripwire) {
     console.error(tripwire)
     process.exit(1)

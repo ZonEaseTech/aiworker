@@ -22,8 +22,6 @@ describe('check-web-ui-components audit output', () => {
     expect(result.stdout).toContain('apps/web/src/worker/studio/workspace-fallback.tsx: input-frame x1')
     expect(result.stdout).toContain('apps/web/src/worker/worker-configuration-dialog.tsx: slotless-native-class x18')
     expect(result.stdout).toContain('apps/web/src/worker/worker-workbench-tree.tsx: scoped-native-layout x1')
-    expect(result.stdout).toContain('apps/aiworker-hr/product/web/people-workbench/app.tsx: input-frame x3')
-    expect(result.stdout).toContain('apps/aiworker-hr/product/web/people-workbench/surface.tsx: scoped-native-layout x1')
     expect(result.stdout).toContain('web UI raw native control classification (accepted, enforced):')
     expect(result.stdout).toContain('darkSelector=:root.dark')
     expect(result.stdout).toContain('apps/web/src/worker/worker-configuration-dialog.tsx: raw-button x2')

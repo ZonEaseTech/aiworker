@@ -1,4 +1,4 @@
-import type { LocalWorker } from '@zonease/aiworker-shared'
+import type { LocalWorker } from '@zonease/aiworker-soul-protocol'
 import type { displaySoul, messagesFor, normalizeLocale } from '../../i18n'
 import type { VerticalSoul } from '../types.compat'
 

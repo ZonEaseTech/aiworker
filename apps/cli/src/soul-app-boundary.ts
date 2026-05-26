@@ -15,20 +15,45 @@ export interface WebStorageIssue {
 
 export const HOST_PRIVATE_IMPORT_PREFIXES = [
   '@zonease/aiworker-cli',
-  '@zonease/aiworker-core',
+  '@zonease/aiworker-host-runtime',
   '@zonease/aiworker-fs-layout',
   '@zonease/aiworker-host-daemon',
-  '@zonease/aiworker-shared',
+  '@zonease/aiworker-soul-protocol',
   '@zonease/aiworker-storage-sqlite',
   '@zonease/aiworker-web',
+]
+
+const FORBIDDEN_LEGACY_IMPORT_PREFIXES = [
+  '@zonease/aiworker-api',
+  '@zonease/aiworker-core',
+  '@zonease/aiworker-shared',
+  '@zonease/aiworker-soul-app-workbench',
 ]
 
 const ALLOWED_SHARED_PACKAGES = new Set([
   '@zonease/aiworker-soul-app-sdk',
   '@zonease/aiworker-soul-app-runtime',
-  '@zonease/aiworker-soul-app-workbench',
+  '@zonease/aiworker-soul-workbench',
   '@zonease/aiworker-ui',
 ])
+
+const CURRENT_HOST_PRIVATE_ROOTS = [
+  'apps/cli',
+  'apps/web',
+  'packages/fs-layout',
+  'packages/host-daemon',
+  'packages/host-runtime',
+  'packages/soul-protocol',
+  'packages/storage-sqlite',
+]
+
+const FORBIDDEN_LEGACY_ROOTS = [
+  'apps/api',
+  'packages/core',
+  'packages/shared',
+  'packages/soul-app-workbench',
+]
+
 const RAW_WEB_STORAGE_MESSAGE = 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.'
 
 export function scanPrivateImports(rootDir: string): PrivateImportIssue[] {
@@ -143,6 +168,8 @@ function normalizedImport(importPath: string): string {
 function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean {
   if (HOST_PRIVATE_IMPORT_PREFIXES.some(prefix => importPath === prefix || importPath.startsWith(`${prefix}/`)))
     return true
+  if (FORBIDDEN_LEGACY_IMPORT_PREFIXES.some(prefix => importPath === prefix || importPath.startsWith(`${prefix}/`)))
+    return true
   if (isSiblingSoulAppImport(rootDir, importPath))
     return true
   // #4: @scope パッケージは HOST_PRIVATE_IMPORT_PREFIXES / sibling 判定で処理済み。
@@ -150,15 +177,7 @@ function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean 
   // @acme/packages/shared/types のような第三者 scoped パッケージの誤検知を防ぐ。
   if (!importPath.startsWith('@')) {
     const normalized = normalizedImport(importPath)
-    if ([
-      'apps/cli',
-      'apps/web',
-      'packages/core',
-      'packages/fs-layout',
-      'packages/host-daemon',
-      'packages/shared',
-      'packages/storage-sqlite',
-    ].some(root => normalized.includes(`${root}/`))) {
+    if ([...CURRENT_HOST_PRIVATE_ROOTS, ...FORBIDDEN_LEGACY_ROOTS].some(root => normalized.includes(`${root}/`))) {
       return true
     }
   }
@@ -189,7 +208,9 @@ function isSiblingSoulAppImport(rootDir: string, importPath: string): boolean {
   const scopeMatch = normalized.match(/^(@zonease\/aiworker-[^/]+)/)
   if (scopeMatch && scopeMatch[1] !== ownPackageName && !ALLOWED_SHARED_PACKAGES.has(scopeMatch[1]!))
     return true
-  if (!normalized.includes('apps/aiworker-'))
-    return false
-  return !normalized.includes(`apps/${path.basename(rootDir)}/`)
+  if (normalized.includes('souls/aiworker-'))
+    return !normalized.includes(`souls/${path.basename(rootDir)}/`)
+  if (normalized.includes('apps/aiworker-'))
+    return true
+  return false
 }

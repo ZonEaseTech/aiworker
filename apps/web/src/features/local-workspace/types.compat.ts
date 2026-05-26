@@ -1,4 +1,4 @@
-/** Local compat types for types removed from @zonease/aiworker-shared in the Thin Shell migration. */
+/** Local compat types for types removed from @zonease/aiworker-soul-protocol in the Thin Shell migration. */
 
 export interface VerticalSoul {
   id: string

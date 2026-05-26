@@ -5,7 +5,7 @@ import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { copyDir, copyOfficialApp, patchOfficialAppManifest, shouldSkipOfficialAppResource } from './build-publish-manifest'
+import { copyDir, copyOfficialApp, shouldSkipOfficialAppResource } from './build-publish-manifest'
 
 describe('CLI publish manifest builder', () => {
   let root: string
@@ -33,64 +33,48 @@ describe('CLI publish manifest builder', () => {
     await expect(stat(path.join(dst, 'nested', 'example.spec.tsx'))).rejects.toThrow()
   })
 
-  it('patches official app manifests to execute bundled dist entrypoints', async () => {
-    const manifestPath = path.join(root, 'soul-app.manifest.json')
-    await writeFile(manifestPath, JSON.stringify({
-      api: {
-        localService: { command: ['bun', 'host-adapter/mounted/host-mounted.ts'] },
-      },
-      modes: {
-        hostMounted: { entry: './host-adapter/mounted/host-mounted.ts' },
-        standalone: { entry: './host-adapter/standalone/standalone.ts' },
-      },
-    }))
-
-    await patchOfficialAppManifest(manifestPath)
-
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-      api: { localService: { command: string[] } }
-      modes: { hostMounted: { entry: string }, standalone: { entry: string } }
-    }
-    expect(manifest.api.localService.command).toEqual(['bun', 'dist/mounted/host-mounted.js'])
-    expect(manifest.modes.hostMounted.entry).toBe('./dist/mounted/host-mounted.js')
-    expect(manifest.modes.standalone.entry).toBe('./dist/standalone/standalone.js')
-  })
-
-  it('copies an official app resource tree without copied tests', async () => {
-    const appsRoot = path.join(root, 'apps')
+  it('copies a descriptor-only official Soul dist tree without source hooks or tests', async () => {
+    const soulsRoot = path.join(root, 'souls')
     const officialAppsRoot = path.join(root, 'dist', 'official-apps')
-    const appRoot = path.join(appsRoot, 'aiworker-demo')
-    mkdirSync(path.join(appRoot, 'dist', 'mounted'), { recursive: true })
-    mkdirSync(path.join(appRoot, 'dist', 'standalone'), { recursive: true })
-    mkdirSync(path.join(appRoot, 'host-adapter', 'mounted'), { recursive: true })
-    await writeFile(path.join(appRoot, 'soul-app.manifest.json'), JSON.stringify({
-      api: {
-        localService: { command: ['bun', 'host-adapter/mounted/host-mounted.ts'] },
+    const appRoot = path.join(soulsRoot, 'aiworker-demo')
+    mkdirSync(path.join(appRoot, 'dist', 'engine-assets', 'workspace'), { recursive: true })
+    mkdirSync(path.join(appRoot, 'dist', 'host-adapter'), { recursive: true })
+    await writeFile(path.join(appRoot, 'dist', 'soul.descriptor.json'), JSON.stringify({
+      capabilities: [],
+      compatibility: {},
+      configuration: {},
+      engine: {
+        workspaceAssets: { source: 'dist/engine-assets/workspace' },
       },
-      modes: {
-        hostMounted: { entry: './host-adapter/mounted/host-mounted.ts' },
-        standalone: { entry: './host-adapter/standalone/standalone.ts' },
+      extensions: {},
+      external: {},
+      health: {},
+      identity: {
+        appId: 'aiworker-demo',
+        name: 'Demo',
+        soulId: 'demo',
+        version: '0.1.0',
+      },
+      protocol: 'soul/v1',
+      workbench: {
+        entry: 'dist/web/workbench/index.html',
+        router: { mode: 'search' },
+        type: 'micro-app',
       },
     }))
-    await writeFile(path.join(appRoot, 'host-adapter', 'mounted', 'host-mounted.ts'), 'export {}\n')
-    await writeFile(path.join(appRoot, 'host-adapter', 'mounted', 'host-mounted.test.ts'), 'throw new Error("not shipped")\n')
-    await writeFile(path.join(appRoot, 'dist', 'host-mounted.js'), 'console.log("legacy mounted")\n')
-    await writeFile(path.join(appRoot, 'dist', 'mounted', 'host-mounted.js'), 'console.log("mounted")\n')
-    await writeFile(path.join(appRoot, 'dist', 'standalone.js'), 'console.log("legacy standalone")\n')
-    await writeFile(path.join(appRoot, 'dist', 'standalone', 'standalone.js'), 'console.log("standalone")\n')
+    await writeFile(path.join(appRoot, 'dist', 'engine-assets', 'workspace', 'AGENTS.md'), '# Demo\n')
+    await writeFile(path.join(appRoot, 'dist', 'engine-assets', 'workspace', 'AGENTS.test.ts'), 'throw new Error("not shipped")\n')
+    await writeFile(path.join(appRoot, 'dist', 'host-adapter', 'legacy.js'), 'throw new Error("not shipped")\n')
 
-    await copyOfficialApp('aiworker-demo', { appsRoot, officialAppsRoot })
+    await copyOfficialApp('aiworker-demo', { officialAppsRoot, soulsRoot })
 
-    const copiedManifestPath = path.join(officialAppsRoot, 'aiworker-demo', 'soul-app.manifest.json')
-    const copiedManifest = JSON.parse(await readFile(copiedManifestPath, 'utf8')) as {
-      api: { localService: { command: string[] } }
+    const copiedDescriptorPath = path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'soul.descriptor.json')
+    const copiedDescriptor = JSON.parse(await readFile(copiedDescriptorPath, 'utf8')) as {
+      protocol: string
     }
-    expect(copiedManifest.api.localService.command).toEqual(['bun', 'dist/mounted/host-mounted.js'])
-    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'host-mounted.js'))).rejects.toThrow()
-    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'mounted', 'host-mounted.js'))).resolves.toBeTruthy()
-    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'standalone.js'))).rejects.toThrow()
-    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'standalone', 'standalone.js'))).resolves.toBeTruthy()
-    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'host-adapter', 'mounted', 'host-mounted.ts'))).resolves.toBeTruthy()
-    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'host-adapter', 'mounted', 'host-mounted.test.ts'))).rejects.toThrow()
+    expect(copiedDescriptor.protocol).toBe('soul/v1')
+    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'engine-assets', 'workspace', 'AGENTS.md'))).resolves.toBeTruthy()
+    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'engine-assets', 'workspace', 'AGENTS.test.ts'))).rejects.toThrow()
+    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'host-adapter', 'legacy.js'))).rejects.toThrow()
   })
 })

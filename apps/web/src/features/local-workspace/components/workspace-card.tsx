@@ -1,4 +1,4 @@
-import type { LocalSession, LocalTurn, LocalWorkspace } from '@zonease/aiworker-shared'
+import type { LocalSession, LocalTurn, LocalWorkspace } from '@zonease/aiworker-soul-protocol'
 import type { normalizeLocale } from '../../i18n'
 import type { CapabilityTemplate } from '../types.compat'
 

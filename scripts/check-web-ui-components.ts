@@ -14,11 +14,6 @@ interface ProductWebSurfaceEntry {
   status: 'legacy' | 'metadata-only' | 'shadcn' | 'unclassified'
 }
 
-interface SoulAppWebAdapterEntry {
-  file: string
-  status: 'metadata-only' | 'raw-html' | 'shadcn-ssr'
-}
-
 interface ClassDensityEntry {
   classNameCount: number
   file: string
@@ -237,263 +232,8 @@ const acceptedResidualVisualUtilities: AcceptedResidualVisualUtility[] = [
     token: 'text-sidebar-foreground/60',
     reason: 'Host workbench tree metadata uses muted sidebar foreground contrast',
   },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/app.tsx',
-    token: 'bg-card',
-    reason: 'HR create-profile dialog preview card binds to the shadcn card surface token',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/app.tsx',
-    token: 'text-card-foreground',
-    reason: 'HR create-profile dialog preview card uses the matching shadcn card foreground token',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/app.tsx',
-    token: 'ring-1',
-    reason: 'HR create-profile dialog preview card uses a subtle tokenized ring instead of a second Card frame',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/app.tsx',
-    token: 'ring-foreground/10',
-    reason: 'HR create-profile dialog preview card uses a low-contrast semantic foreground ring',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/app.tsx',
-    token: 'rounded-lg',
-    reason: 'HR create-profile dialog preview card keeps the shadcn radius scale inside the 8px product limit',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'bg-muted/20',
-    reason: 'HR empty recent-session placeholder uses a muted semantic background inside the domain column',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'bg-transparent',
-    reason: 'HR composer column card removes extra fill so the Host-mounted shell owns the page canvas',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'border',
-    reason: 'HR empty recent-session placeholder uses a dashed semantic border to signal no object rows',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'border-border/60',
-    reason: 'HR composer column divider uses a soft shadcn border token for the app-owned workbench split',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'border-border/70',
-    reason: 'HR empty recent-session placeholder uses a slightly stronger semantic border than the column divider',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'border-dashed',
-    reason: 'HR empty recent-session placeholder uses dashed border styling for empty-state affordance',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'border-l',
-    reason: 'HR composer column uses a single left divider in the three-column workbench layout',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'ring-0',
-    reason: 'HR composer column disables Card ring noise because the column divider owns separation',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'rounded-md',
-    reason: 'HR empty recent-session placeholder stays on the shadcn radius scale',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'rounded-none',
-    reason: 'HR composer column removes Card rounding when mounted as an edge-to-edge workbench pane',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    token: 'text-center',
-    reason: 'HR empty recent-session placeholder centers its empty-state copy inside the muted block',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'bg-muted/20',
-    reason: 'HR empty profile-list placeholder uses a muted semantic background inside the domain column',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'bg-transparent',
-    reason: 'HR profile list column card removes extra fill so the Host-mounted shell owns the page canvas',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'border',
-    reason: 'HR empty profile-list placeholder uses a dashed semantic border to signal no object rows',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'border-border/60',
-    reason: 'HR profile list column divider uses a soft shadcn border token for the app-owned workbench split',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'border-border/70',
-    reason: 'HR empty profile-list placeholder uses a slightly stronger semantic border than the column divider',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'border-dashed',
-    reason: 'HR empty profile-list placeholder uses dashed border styling for empty-state affordance',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'border-r',
-    reason: 'HR profile list column uses a single right divider in the three-column workbench layout',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'ring-0',
-    reason: 'HR profile list column disables Card ring noise because the column divider owns separation',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'rounded-md',
-    reason: 'HR empty profile-list placeholder stays on the shadcn radius scale',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'rounded-none',
-    reason: 'HR profile list column removes Card rounding when mounted as an edge-to-edge workbench pane',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'text-center',
-    reason: 'HR empty profile-list placeholder centers its empty-state copy inside the muted block',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'text-left',
-    reason: 'HR profile row button text aligns with list scanning expectations',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    token: 'text-right',
-    reason: 'HR profile row metadata aligns to the row edge for quick comparison',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-reading-room-column.tsx',
-    token: 'bg-background/45',
-    reason: 'HR profile patch strip uses a subtle semantic background while preserving the selected profile surface',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-reading-room-column.tsx',
-    token: 'ring-0',
-    reason: 'HR reading room disables Card ring noise because the selected profile surface owns the frame',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-reading-room-column.tsx',
-    token: 'rounded-none',
-    reason: 'HR reading room removes Card rounding when mounted as the center workbench pane',
-  },
 ]
 const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
-  {
-    file: 'apps/aiworker-hr/product/web/panels/profile-panel.tsx',
-    category: 'card',
-    reason: 'official HR product panel is a rendered Soul App object surface and should expose shadcn Card metadata',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/surface.tsx',
-    category: 'scoped-native-layout',
-    reason: 'HR app-owned workbench uses one semantic section marker to place shadcn Card columns without Host-owned HR layout CSS',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/app.tsx',
-    category: 'input-frame',
-    reason: 'HR app-owned create-profile dialog and workbench filters use generated shadcn form frames',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/app.tsx',
-    category: 'outline-button',
-    reason: 'HR app-owned create-profile dialog uses an outline cancel action beside the primary submit action',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/app.tsx',
-    category: 'scoped-native-layout',
-    reason: 'HR app-owned workbench root uses a semantic layout marker while columns compose shadcn primitives',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    category: 'card',
-    reason: 'HR composer column is a domain workbench pane framed by one shadcn Card',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    category: 'scoped-native-layout',
-    reason: 'HR composer column uses scoped native layout markers for pane regions around shadcn content',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-composer-column.tsx',
-    category: 'slotless-native-class',
-    reason: 'HR recent-session list uses one non-visual overflow wrapper around shadcn ItemGroup rows',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    category: 'card',
-    reason: 'HR profile list column is a domain workbench pane framed by one shadcn Card',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    category: 'input-frame',
-    reason: 'HR profile list filter is a domain search field using a generated shadcn input frame',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    category: 'scoped-native-layout',
-    reason: 'HR profile list column uses scoped native layout markers for the domain list region',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-list-column.tsx',
-    category: 'slotless-native-class',
-    reason: 'HR profile list scroll wrapper is non-visual overflow layout around shadcn button rows',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-reading-room-column.tsx',
-    category: 'alert',
-    reason: 'HR profile reading room uses shadcn Alert for profile patch status callouts',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-reading-room-column.tsx',
-    category: 'card',
-    reason: 'HR profile reading room uses one shadcn Card for the selected profile surface',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/columns/profile-reading-room-column.tsx',
-    category: 'scoped-native-layout',
-    reason: 'HR profile reading room uses scoped native section markers for app-owned profile sections',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/people-workbench/profile-composer.tsx',
-    category: 'scoped-native-layout',
-    reason: 'HR profile composer wrapper owns only the domain pane mount marker around the shared shadcn SessionComposer',
-  },
-  {
-    file: 'apps/aiworker-hr/product/web/widgets/people-widget.tsx',
-    category: 'card',
-    reason: 'official HR product widget is a compact shadcn Card proof surface for standalone and mounted rendering',
-  },
-  {
-    file: 'apps/aiworker-qa/product/web/panels/release-panel.tsx',
-    category: 'card',
-    reason: 'official QA product panel is a rendered Soul App object surface and should expose shadcn Card metadata',
-  },
-  {
-    file: 'apps/aiworker-qa/product/web/widgets/release-widget.tsx',
-    category: 'card',
-    reason: 'official QA product widget is a compact shadcn Card proof surface for standalone and mounted rendering',
-  },
   {
     file: 'apps/web/src/features/local-workspace/components/creation-dialogs.tsx',
     category: 'input-frame',
@@ -583,7 +323,6 @@ const classDimensionEntries: ClassDimensionEntry[] = []
 const residualVisualUtilityEntries: ResidualVisualUtilityEntry[] = []
 const rawNativeControlEntries: RawNativeControlEntry[] = []
 const productWebSurfaceEntries: ProductWebSurfaceEntry[] = []
-const soulAppWebAdapterEntries: SoulAppWebAdapterEntry[] = []
 const surfaceCompositionEntries: SurfaceCompositionEntry[] = []
 const themeTokenEntries: ThemeTokenEntry[] = []
 
@@ -600,8 +339,6 @@ function main(): void {
       checkWebTsxFile(file)
     if (isUiCssFile(file))
       checkWebCssFile(file)
-    if (customAudit && isOfficialSoulWebAdapterFile(file))
-      recordSoulAppWebAdapterSurface(file, read(file))
   }
 
   if (issues.length > 0) {
@@ -658,7 +395,6 @@ function main(): void {
 
   if (customAudit) {
     reportProductWebSurfaceCoverage()
-    reportSoulAppWebAdapterCoverage()
     reportSurfaceComposition()
     reportSurfaceCompositionClassification()
     reportRawNativeControlClassification()
@@ -801,39 +537,6 @@ function reportProductWebSurfaceCoverage(): void {
   if (unclassified.length > 0) {
     console.error('web UI official Soul App product web audit has unclassified or legacy surfaces:')
     for (const entry of unclassified)
-      console.error(`- ${entry.file}: ${entry.status}`)
-    process.exit(1)
-  }
-}
-
-function recordSoulAppWebAdapterSurface(file: string, content: string): void {
-  if (!isOfficialSoulWebAdapterFile(file))
-    return
-
-  const emitsHtml = content.includes('<!doctype html>') || content.includes('<main>') || content.includes('<h1>') || content.includes('<p')
-  const usesShadcnSsr = content.includes('renderToStaticMarkup') && content.includes('/product/web/')
-  const status: SoulAppWebAdapterEntry['status'] = usesShadcnSsr
-    ? 'shadcn-ssr'
-    : emitsHtml
-      ? 'raw-html'
-      : 'metadata-only'
-  soulAppWebAdapterEntries.push({ file, status })
-}
-
-function reportSoulAppWebAdapterCoverage(): void {
-  if (soulAppWebAdapterEntries.length === 0)
-    return
-
-  const counts = new Map<SoulAppWebAdapterEntry['status'], number>()
-  for (const entry of soulAppWebAdapterEntries)
-    counts.set(entry.status, (counts.get(entry.status) ?? 0) + 1)
-
-  console.log(`web UI official Soul App adapter web audit: shadcnSsr=${counts.get('shadcn-ssr') ?? 0} metadataOnly=${counts.get('metadata-only') ?? 0} rawHtml=${counts.get('raw-html') ?? 0}`)
-
-  const rawHtml = soulAppWebAdapterEntries.filter(entry => entry.status === 'raw-html')
-  if (rawHtml.length > 0) {
-    console.error('web UI official Soul App adapter web audit has raw HTML surfaces:')
-    for (const entry of rawHtml)
       console.error(`- ${entry.file}: ${entry.status}`)
     process.exit(1)
   }
@@ -1409,18 +1112,14 @@ function customUiClassTokens(values: string[], keywordPattern: RegExp): string[]
 
 function listChangedFiles(): string[] {
   return unique([
-    ...gitLines(['diff', '--name-only', '--diff-filter=ACMR', 'HEAD', '--', 'apps/web/src', 'apps/aiworker-hr/product/web', 'apps/aiworker-hr/host-adapter', 'apps/aiworker-qa/product/web', 'apps/aiworker-qa/host-adapter']),
-    ...gitLines(['ls-files', '--others', '--exclude-standard', '--', 'apps/web/src', 'apps/aiworker-hr/product/web', 'apps/aiworker-hr/host-adapter', 'apps/aiworker-qa/product/web', 'apps/aiworker-qa/host-adapter']),
+    ...gitLines(['diff', '--name-only', '--diff-filter=ACMR', 'HEAD', '--', 'apps/web/src']),
+    ...gitLines(['ls-files', '--others', '--exclude-standard', '--', 'apps/web/src']),
   ]).filter(file => isRelevantFile(file))
 }
 
 function listAllUiFiles(): string[] {
   return [
     ...listFiles('apps/web/src'),
-    ...listFiles('apps/aiworker-hr/product/web'),
-    ...listFiles('apps/aiworker-hr/host-adapter'),
-    ...listFiles('apps/aiworker-qa/product/web'),
-    ...listFiles('apps/aiworker-qa/host-adapter'),
   ].filter(file => isRelevantFile(file))
 }
 
@@ -1467,7 +1166,7 @@ function abs(file: string): string {
 }
 
 function isRelevantFile(file: string): boolean {
-  return isUiTsxFile(file) || isUiCssFile(file) || isOfficialSoulWebAdapterFile(file)
+  return isUiTsxFile(file) || isUiCssFile(file)
 }
 
 function isUiTsxFile(file: string): boolean {
@@ -1480,17 +1179,11 @@ function isUiCssFile(file: string): boolean {
 
 function isUiFile(file: string): boolean {
   return file.startsWith('apps/web/src/')
-    || file.startsWith('apps/aiworker-hr/product/web/')
-    || file.startsWith('apps/aiworker-qa/product/web/')
 }
 
 function isOfficialSoulProductWebFile(file: string): boolean {
-  return file.startsWith('apps/aiworker-hr/product/web/')
-    || file.startsWith('apps/aiworker-qa/product/web/')
-}
-
-function isOfficialSoulWebAdapterFile(file: string): boolean {
-  return /apps\/aiworker-(?:hr|qa)\/host-adapter\/(?:mounted|standalone)\/[^/]+\.ts$/.test(file)
+  return file.startsWith('souls/')
+    && file.includes('/product/web/')
 }
 
 function isMetadataOnlyProductWebFile(content: string): boolean {

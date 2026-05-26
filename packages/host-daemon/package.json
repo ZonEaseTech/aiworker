@@ -24,10 +24,8 @@
   "dependencies": {
     "@hono/zod-openapi": "^0.19.6",
     "@scalar/hono-api-reference": "^0.5.180",
-    "@zonease/aiworker-core": "workspace:*",
     "@zonease/aiworker-fs-layout": "workspace:*",
     "@zonease/aiworker-host-runtime": "workspace:*",
-    "@zonease/aiworker-shared": "workspace:*",
     "@zonease/aiworker-soul-protocol": "workspace:*",
     "@zonease/aiworker-storage-sqlite": "workspace:*",
     "consola": "^3.4.2",

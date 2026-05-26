@@ -52,6 +52,27 @@ describe('target package ownership', () => {
     expect(existsSync(join(repoRoot, 'packages/shared-v2'))).toBe(false)
   })
 
+  test('retired package buckets and old source adapters are gone', () => {
+    for (const path of [
+      'apps/api',
+      'apps/aiworker-hr',
+      'apps/aiworker-qa',
+      'packages/core',
+      'packages/shared',
+      'packages/soul-app-workbench',
+    ]) {
+      expect(existsSync(join(repoRoot, path)), `${path} should be removed in the destructive refactor`).toBe(false)
+    }
+
+    for (const path of [
+      'apps/aiworker-hr/host-adapter',
+      'apps/aiworker-qa/host-adapter',
+      'apps/aiworker-custom',
+    ]) {
+      expect(existsSync(join(repoRoot, path)), `${path} should not remain as Host adapter/source export authority`).toBe(false)
+    }
+  })
+
   test('local daemon lives in the final host-daemon package', () => {
     expect(existsSync(join(repoRoot, 'apps/api'))).toBe(false)
 

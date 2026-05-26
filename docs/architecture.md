@@ -54,8 +54,6 @@ apps/
 
 souls/
   aiworker-freeform/
-  aiworker-qa/
-  aiworker-hr/
 
 packages/
   host-runtime/
@@ -72,8 +70,11 @@ packages/
 ```
 
 `apps/*` are runnable product shells. `souls/*` are descriptor-producing Soul App
-product packages. `packages/*` own reusable protocol, runtime, daemon, storage,
-projection, engine bridge, SDK, workbench, filesystem, and UI capabilities.
+product packages. For v1 strong acceptance, Freeform is the only shipped Soul;
+retired HR/QA app-local source trees stay deleted until they are re-authored as
+descriptor-producing `souls/*` packages. `packages/*` own reusable protocol,
+runtime, daemon, storage, projection, engine bridge, SDK, workbench, filesystem,
+and UI capabilities.
 
 `packages/core and packages/shared disappear` as broad buckets. Do not create
 `core-v2`, `shared-v2`, or any replacement dumping ground.

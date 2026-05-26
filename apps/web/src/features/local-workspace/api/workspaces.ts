@@ -1,4 +1,4 @@
-import type { LocalFile, LocalWorkspace } from '@zonease/aiworker-shared'
+import type { LocalFile, LocalWorkspace } from '@zonease/aiworker-soul-protocol'
 
 import { localJson, localText } from '../../../shared/api/local-client'
 

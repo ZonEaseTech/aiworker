@@ -13,11 +13,6 @@ interface CommandResult {
   stdout: string
 }
 
-interface SoulAppMountedActionResponse {
-  message?: string
-  ok?: boolean
-}
-
 async function main(): Promise<number> {
   const cli = resolve(import.meta.dirname, '..', 'dist', 'aiworker.js')
   if (!existsSync(cli))
@@ -53,17 +48,13 @@ async function main(): Promise<number> {
     await assertCli(cli, ['app', 'bootstrap', 'official'], { env, label: 'app bootstrap official' })
     const list = await assertCli(cli, ['app', 'list'], { env, label: 'app list' })
     const souls = await assertCli(cli, ['soul', 'list'], { env, label: 'soul list' })
-    const templates = await assertCli(cli, ['template', 'list', '--soul', 'aiworker-hr'], { env, label: 'template list' })
-    assertJsonIncludes(list.stdout, 'aiworker-hr')
-    assertJsonIncludes(souls.stdout, 'aiworker-qa')
-    assertJsonIncludes(templates.stdout, 'aiworker-hr.person-profile')
-    await assertMountedAppAssets(port, 'aiworker-hr', ['hr-home-client.js', 'universal-workbench-client.js'])
-    await assertMountedAppAssets(port, 'aiworker-qa', ['universal-workbench-client.js'])
-    await assertMountedAppAssets(port, 'aiworker-custom', ['universal-workbench-client.js'])
-    await assertMountedAppAction(port, 'aiworker-hr', '/api/people-profiles', 'People profile draft opened by HR app.')
-    await assertMountedAppAction(port, 'aiworker-qa', '/api/release-gates', 'Release gate draft opened by QA app.')
+    const templates = await assertCli(cli, ['template', 'list', '--soul', 'aiworker-freeform'], { env, label: 'template list' })
+    assertJsonIncludes(list.stdout, 'aiworker-freeform')
+    assertJsonIncludes(souls.stdout, 'aiworker-freeform')
+    assertJsonIncludes(templates.stdout, 'aiworker-freeform.default')
+    await assertWorkbenchMountRequiresLocator(port)
 
-    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API, bootstraps official Soul Apps, and reaches app-owned mounted APIs')
+    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API and bootstraps the descriptor-only Freeform Soul')
     return 0
   }
   finally {
@@ -169,66 +160,18 @@ async function assertDaemonRuntimeVersion(port: number, expectedVersion: string)
 }
 
 function assertCatalogApps(apps: Array<{ appId: string, status: string }>): void {
-  for (const appId of ['aiworker-hr', 'aiworker-qa', 'aiworker-custom']) {
-    const app = apps.find(item => item.appId === appId)
-    if (!app)
-      throw new Error(`Catalog is missing ${appId}: ${JSON.stringify(apps)}`)
-    if (app.status !== 'enabled')
-      throw new Error(`${appId} should be enabled, got ${app.status}`)
-  }
+  const app = apps.find(item => item.appId === 'aiworker-freeform')
+  if (!app)
+    throw new Error(`Catalog is missing aiworker-freeform: ${JSON.stringify(apps)}`)
+  if (app.status !== 'enabled')
+    throw new Error(`aiworker-freeform should be enabled, got ${app.status}`)
 }
 
-async function assertMountedAppAction(port: number, appId: string, appPath: string, expectedMessage: string): Promise<void> {
-  const url = `http://127.0.0.1:${port}/api/local/apps/${appId}${appPath}`
-  const res = await fetch(url, {
-    body: JSON.stringify({ input: { source: 'smoke-dist-release' } }),
-    headers: { 'content-type': 'application/json' },
-    method: 'POST',
-  })
-  const bodyText = await res.text()
-  if (!res.ok)
-    throw new Error(`Mounted app action failed: POST ${url} -> ${res.status} ${bodyText.slice(0, 500)}`)
-
-  let body: SoulAppMountedActionResponse
-  try {
-    body = JSON.parse(bodyText) as SoulAppMountedActionResponse
-  }
-  catch {
-    throw new Error(`Mounted app action returned non-JSON: POST ${url} -> ${bodyText.slice(0, 500)}`)
-  }
-
-  if (body.ok !== true || body.message !== expectedMessage)
-    throw new Error(`Mounted app action returned unexpected body for ${appId}${appPath}: ${bodyText.slice(0, 500)}`)
-}
-
-async function assertMountedAppAssets(port: number, appId: string, clientAssets: string[]): Promise<void> {
-  const styleUrl = `http://127.0.0.1:${port}/api/local/apps/${appId}/styles.css`
-  const styleRes = await fetch(styleUrl)
-  if (!styleRes.ok)
-    throw new Error(`Mounted app stylesheet failed: ${styleUrl} -> ${styleRes.status} ${await styleRes.text()}`)
-  if (!styleRes.headers.get('content-type')?.includes('text/css'))
-    throw new Error(`Mounted app stylesheet content-type mismatch for ${styleUrl}: ${styleRes.headers.get('content-type')}`)
-
-  for (const fontName of ['oxanium-latin-ext-wght-normal.woff2', 'oxanium-latin-wght-normal.woff2']) {
-    const fontUrl = `http://127.0.0.1:${port}/api/local/apps/${appId}/files/${fontName}`
-    const fontRes = await fetch(fontUrl)
-    if (!fontRes.ok)
-      throw new Error(`Mounted app font asset failed: ${fontUrl} -> ${fontRes.status} ${await fontRes.text()}`)
-    if (!fontRes.headers.get('content-type')?.includes('font/woff2'))
-      throw new Error(`Mounted app font asset content-type mismatch for ${fontUrl}: ${fontRes.headers.get('content-type')}`)
-  }
-
-  for (const assetName of clientAssets) {
-    const assetUrl = `http://127.0.0.1:${port}/api/local/apps/${appId}/assets/${assetName}`
-    const assetRes = await fetch(assetUrl)
-    const body = await assetRes.text()
-    if (!assetRes.ok)
-      throw new Error(`Mounted app client asset failed: ${assetUrl} -> ${assetRes.status} ${body.slice(0, 500)}`)
-    if (!assetRes.headers.get('content-type')?.includes('text/javascript'))
-      throw new Error(`Mounted app client asset content-type mismatch for ${assetUrl}: ${assetRes.headers.get('content-type')}`)
-    if (/\b(?:export|import)\s*(?:\{|from|\*|default)/.test(body))
-      throw new Error(`Mounted app client asset must be IIFE-compatible, found module syntax in ${assetUrl}`)
-  }
+async function assertWorkbenchMountRequiresLocator(port: number): Promise<void> {
+  const res = await fetch(`http://127.0.0.1:${port}/api/mount/workbench`)
+  const body = await res.text()
+  if (res.status !== 400 || !body.includes('MOUNT_CONTEXT_INVALID'))
+    throw new Error(`Workbench mount should require locator context, got ${res.status}: ${body.slice(0, 500)}`)
 }
 
 function assertJsonIncludes(stdout: string, expected: string): void {

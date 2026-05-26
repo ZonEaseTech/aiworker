@@ -7,7 +7,7 @@ import type {
   LocalWorkerOverlay,
   LocalWorkspace,
   SoulAppProjectionReceipt,
-} from '@zonease/aiworker-shared'
+} from '@zonease/aiworker-soul-protocol'
 import type { CapabilityTemplate, VerticalSoul } from '../types.compat'
 
 export interface LocalSoulAppWorkspaceContext {

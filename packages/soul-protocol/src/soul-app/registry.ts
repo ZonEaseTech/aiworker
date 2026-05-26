@@ -1,0 +1,184 @@
+import type { z } from 'zod'
+import type { SoulDescriptorV1 } from '..'
+import type { SoulAppCapability, SoulAppManifest, SoulAppManifestValidationIssue } from './manifest'
+
+import { z as zod } from 'zod'
+import { soulAppManifestSchema, soulAppManifestValidationIssueSchema, soulAppWorkbenchSchema, soulAppWorkspaceContextSchema } from './manifest'
+
+// -- inlined from deleted vertical-soul.ts --
+
+const verticalSoulStatusSchema = zod.enum(['available', 'coming_soon'])
+type VerticalSoulStatus = zod.infer<typeof verticalSoulStatusSchema>
+
+const capabilityTemplateSchema = zod.object({
+  description: zod.string().min(1),
+  id: zod.string().min(1),
+  inputHints: zod.array(zod.string().min(1)).readonly(),
+  name: zod.string().min(1),
+  outputKind: zod.string().min(1),
+  promptRef: zod.string().min(1),
+  reviewRubricRef: zod.string().min(1).nullable(),
+  soulId: zod.string().min(1),
+})
+type CapabilityTemplate = zod.infer<typeof capabilityTemplateSchema>
+
+const verticalSoulSchema = zod.object({
+  defaultTemplates: zod.array(zod.string().min(1)).readonly(),
+  description: zod.string().min(1),
+  domain: zod.string().min(1),
+  id: zod.string().min(1),
+  name: zod.string().min(1),
+  status: verticalSoulStatusSchema,
+})
+type VerticalSoul = zod.infer<typeof verticalSoulSchema>
+
+export const soulAppRegistryStatusSchema = zod.enum(['installed', 'enabled', 'disabled', 'error'])
+export type SoulAppRegistryStatus = z.infer<typeof soulAppRegistryStatusSchema>
+
+export const soulAppInstallSourceKindSchema = zod.enum(['descriptor-path', 'inline'])
+export type SoulAppInstallSourceKind = z.infer<typeof soulAppInstallSourceKindSchema>
+
+export const soulAppHealthStatusSchema = zod.enum(['unknown', 'pass', 'warn', 'fail'])
+export type SoulAppHealthStatus = z.infer<typeof soulAppHealthStatusSchema>
+
+export const soulAppMountedContributionSchema = zod.object({
+  apiRoutePrefix: zod.string().min(1).nullable(),
+  artifactPreviewIds: zod.array(zod.string().min(1)).readonly(),
+  descriptorSurfaceIds: zod.array(zod.string().min(1)).readonly(),
+  microAppSurfaceIds: zod.array(zod.string().min(1)).readonly(),
+  panelIds: zod.array(zod.string().min(1)).readonly(),
+  routePaths: zod.array(zod.string().min(1)).readonly(),
+  surfaceIds: zod.array(zod.string().min(1)).readonly(),
+  workbench: soulAppWorkbenchSchema.nullable(),
+  workspaceContext: soulAppWorkspaceContextSchema.nullable(),
+  workspaceWidgetIds: zod.array(zod.string().min(1)).readonly(),
+})
+export type SoulAppMountedContribution = z.infer<typeof soulAppMountedContributionSchema>
+
+export const hostedSoulAppSchema = zod.object({
+  appId: zod.string().min(1),
+  descriptor: zod.custom<SoulDescriptorV1>(),
+  descriptorDigest: zod.string().min(1),
+  healthMessage: zod.string().nullable(),
+  healthStatus: soulAppHealthStatusSchema,
+  manifest: soulAppManifestSchema,
+  manifestDigest: zod.string().min(1),
+  mountedContribution: soulAppMountedContributionSchema,
+  projectedCapabilities: zod.array(capabilityTemplateSchema).readonly(),
+  projectedSoul: verticalSoulSchema,
+  sourceKind: soulAppInstallSourceKindSchema,
+  sourceRef: zod.string().min(1),
+  status: soulAppRegistryStatusSchema,
+  validationIssues: zod.array(soulAppManifestValidationIssueSchema).readonly(),
+  version: zod.string().min(1),
+})
+export type HostedSoulApp = z.infer<typeof hostedSoulAppSchema>
+
+export function namespaceSoulAppCapabilityId(appId: string, capabilityId: string): string {
+  return `${appId}.${capabilityId}`
+}
+
+export function parseNamespacedSoulAppCapabilityId(id: string): { appId: string, capabilityId: string } | null {
+  const index = id.indexOf('.')
+  if (index <= 0 || index >= id.length - 1)
+    return null
+  return { appId: id.slice(0, index), capabilityId: id.slice(index + 1) }
+}
+
+export function projectSoulAppSoul(manifest: SoulAppManifest, status: VerticalSoulStatus = 'available'): VerticalSoul {
+  return {
+    defaultTemplates: projectSoulAppDefaultTemplates(manifest),
+    description: manifest.description,
+    domain: manifest.soul.domain,
+    id: manifest.id,
+    name: manifest.name,
+    status,
+  }
+}
+
+export function projectSoulAppDefaultTemplates(manifest: SoulAppManifest): string[] {
+  const seen = new Set<string>()
+  const templates: string[] = []
+  for (const type of manifest.workspaceTypes) {
+    for (const id of type.defaultCapabilityIds ?? []) {
+      const namespacedId = namespaceSoulAppCapabilityId(manifest.id, id)
+      if (seen.has(namespacedId))
+        continue
+      seen.add(namespacedId)
+      templates.push(namespacedId)
+    }
+  }
+  return templates
+}
+
+export function projectSoulAppCapabilityTemplate(manifest: SoulAppManifest, capability: SoulAppCapability): CapabilityTemplate {
+  return {
+    description: capability.description,
+    id: namespaceSoulAppCapabilityId(manifest.id, capability.id),
+    inputHints: [
+      `Workspace types: ${capability.workspaceTypes.join(', ')}`,
+      `Artifact types: ${capability.artifactTypes?.join(', ') ?? 'none'}`,
+    ],
+    name: capability.name,
+    outputKind: capability.outputKind,
+    promptRef: capability.promptRef,
+    reviewRubricRef: capability.reviewRubricRef ?? null,
+    soulId: manifest.id,
+  }
+}
+
+export function projectSoulAppCapabilityTemplates(manifest: SoulAppManifest): CapabilityTemplate[] {
+  return manifest.capabilities.map(capability => projectSoulAppCapabilityTemplate(manifest, capability))
+}
+
+export function mountedContributionForManifest(manifest: SoulAppManifest): SoulAppMountedContribution {
+  const surfaces = [
+    ...manifest.ui.routes,
+    ...manifest.ui.panels,
+    ...manifest.ui.artifactPreviews,
+    ...(manifest.ui.workspaceWidgets ?? []),
+  ].filter(item => item.surface)
+  return {
+    apiRoutePrefix: manifest.api.routePrefix ?? null,
+    artifactPreviewIds: manifest.ui.artifactPreviews.map(slot => slot.id),
+    descriptorSurfaceIds: surfaces.filter(item => item.surface?.renderer === 'host-descriptor').map(item => item.id),
+    microAppSurfaceIds: surfaces.filter(item => item.surface?.renderer === 'micro-app').map(item => item.id),
+    panelIds: manifest.ui.panels.map(slot => slot.id),
+    routePaths: manifest.ui.routes.map(route => route.path),
+    surfaceIds: surfaces.map(item => item.id),
+    workbench: manifest.ui.workbench ?? null,
+    workspaceContext: manifest.ui.workspaceContext ?? null,
+    workspaceWidgetIds: (manifest.ui.workspaceWidgets ?? []).map(slot => slot.id),
+  }
+}
+
+export function buildHostedSoulApp(input: {
+  descriptor?: SoulDescriptorV1
+  descriptorDigest?: string
+  healthMessage?: string | null
+  healthStatus?: SoulAppHealthStatus
+  manifest: SoulAppManifest
+  manifestDigest: string
+  sourceKind: SoulAppInstallSourceKind
+  sourceRef: string
+  status: SoulAppRegistryStatus
+  validationIssues?: readonly SoulAppManifestValidationIssue[]
+}): HostedSoulApp {
+  return hostedSoulAppSchema.parse({
+    appId: input.manifest.id,
+    descriptor: input.descriptor ?? {},
+    descriptorDigest: input.descriptorDigest ?? input.manifestDigest,
+    healthMessage: input.healthMessage ?? null,
+    healthStatus: input.healthStatus ?? 'unknown',
+    manifest: input.manifest,
+    manifestDigest: input.manifestDigest,
+    mountedContribution: mountedContributionForManifest(input.manifest),
+    projectedCapabilities: projectSoulAppCapabilityTemplates(input.manifest),
+    projectedSoul: projectSoulAppSoul(input.manifest, input.status === 'enabled' ? 'available' : 'coming_soon'),
+    sourceKind: input.sourceKind,
+    sourceRef: input.sourceRef,
+    status: input.status,
+    validationIssues: input.validationIssues ?? [],
+    version: input.manifest.version,
+  })
+}

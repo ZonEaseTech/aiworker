@@ -1,4 +1,4 @@
-import type { LocalWorker } from '@zonease/aiworker-shared'
+import type { LocalWorker } from '@zonease/aiworker-soul-protocol'
 
 import { BotIcon, MoreHorizontalCircle01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'

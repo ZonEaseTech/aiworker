@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { hrSoulAppManifest } from '@zonease/aiworker-shared'
+import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
@@ -54,6 +54,34 @@ import {
   workspaces,
 } from './index'
 
+const freeformDescriptor = parseSoulDescriptorV1({
+  api: null,
+  capabilities: [{
+    id: 'default',
+    name: 'Freeform Session',
+    prompt: { ref: 'dist/product/capabilities/default/prompt.md', type: 'packaged-file' },
+  }],
+  compatibility: { host: '>=1.0.0' },
+  configuration: {},
+  engine: {
+    workspaceAssets: { source: 'dist/engine-assets/workspace' },
+  },
+  extensions: {},
+  external: {},
+  health: { ready: true },
+  identity: {
+    appId: 'aiworker-freeform',
+    name: 'AIWorker Freeform',
+    soulId: 'freeform',
+    version: '0.1.0',
+  },
+  protocol: 'soul/v1',
+  workbench: {
+    entry: 'dist/web/workbench/index.html',
+    type: 'micro-app',
+  },
+})
+
 describe('greenfield local worker session schema', () => {
   let dir: string
 
@@ -98,28 +126,28 @@ describe('greenfield local worker session schema', () => {
 
   it('persists Host Soul App registry lifecycle state', () => {
     const installed = upsertSoulApp({
-      id: hrSoulAppManifest.id,
-      name: hrSoulAppManifest.name,
-      version: hrSoulAppManifest.version,
-      protocol: hrSoulAppManifest.protocol,
-      soulId: hrSoulAppManifest.soul.id,
+      id: freeformDescriptor.identity.appId as string,
+      name: freeformDescriptor.identity.name as string,
+      version: freeformDescriptor.identity.version as string,
+      protocol: freeformDescriptor.protocol,
+      soulId: freeformDescriptor.identity.soulId as string,
       sourceKind: 'inline',
       sourceRef: 'test:inline',
       manifestDigest: 'digest-1',
-      manifestJson: hrSoulAppManifest,
+      manifestJson: freeformDescriptor,
       at: '2026-05-12T22:22:00.000Z',
     })
 
     expect(installed.status).toBe('installed')
     expect(installed.healthStatus).toBe('unknown')
-    expect(getSoulApp(hrSoulAppManifest.id)?.manifestJson.id).toBe(hrSoulAppManifest.id)
+    expect(getSoulApp('aiworker-freeform')?.manifestJson.identity.appId).toBe('aiworker-freeform')
     expect(listSoulApps()).toHaveLength(1)
 
     const enabled = updateSoulAppLifecycle({
-      id: hrSoulAppManifest.id,
+      id: 'aiworker-freeform',
       status: 'enabled',
       healthStatus: 'pass',
-      healthMessage: 'Static manifest validation passed.',
+      healthMessage: 'Static descriptor validation passed.',
       lastHealthcheckAt: '2026-05-12T22:23:00.000Z',
       at: '2026-05-12T22:23:00.000Z',
     })
@@ -127,7 +155,7 @@ describe('greenfield local worker session schema', () => {
     expect(enabled.healthStatus).toBe('pass')
 
     const disabled = updateSoulAppLifecycle({
-      id: hrSoulAppManifest.id,
+      id: 'aiworker-freeform',
       status: 'disabled',
       at: '2026-05-12T22:24:00.000Z',
     })
@@ -136,14 +164,14 @@ describe('greenfield local worker session schema', () => {
   })
 
   it('persists worker overlay assets as Host metadata with baseline provenance', () => {
-    const worker = upsertWorker({ id: 'worker-overlay-1', name: 'Recruiting worker', soulId: 'aiworker-hr' })
+    const worker = upsertWorker({ id: 'worker-overlay-1', name: 'Descriptor worker', soulId: 'demo-soul-app' })
 
     upsertWorkerOverlayAssets(worker.id, [{
       checksum: 'sha256:test',
       enabled: true,
       id: 'interview-brief',
       kind: 'skill',
-      metadataJson: { targetPath: '.agents/skills/aiworker-hr-interview-brief/SKILL.md' },
+      metadataJson: { targetPath: '.agents/skills/demo-soul-app-interview-brief/SKILL.md' },
       sourceRef: 'descriptor://engine/skills/interview-brief',
       target: 'codex',
     }])

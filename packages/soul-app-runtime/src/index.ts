@@ -2,12 +2,13 @@ import type {
   HostSoulCatalog,
   LocalExecutor,
   LocalWorkerRuntime,
-} from '@zonease/aiworker-core'
+} from '@zonease/aiworker-host-runtime'
 import type {
   HostedSoulApp,
-  SoulAppManifest,
-} from '@zonease/aiworker-shared'
-import type { SoulAppDefinition } from '@zonease/aiworker-soul-app-sdk'
+  SoulAppEngineAssets,
+  SoulAppEngineTarget,
+  SoulDescriptorV1,
+} from '@zonease/aiworker-soul-protocol'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { mkdirSync } from 'node:fs'
@@ -15,14 +16,10 @@ import path from 'node:path'
 import {
   createLocalWorkerRuntime,
   enableSoulApp,
-  installSoulAppManifest,
+  installSoulDescriptor,
   listHostSoulCatalog,
-} from '@zonease/aiworker-core'
-import {
-  projectSoulAppCapabilityTemplates,
-  projectSoulAppDefaultTemplates,
-  projectSoulAppSoul,
-} from '@zonease/aiworker-shared'
+} from '@zonease/aiworker-host-runtime'
+import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
 import {
   closeWorkerDb,
   initWorkerDb,
@@ -30,7 +27,8 @@ import {
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
 
-// -- inlined from deleted shared types --
+export { renderUniversalWorkbenchHtml } from './universal-workbench-html'
+
 interface CapabilityTemplate {
   description: string
   id: string
@@ -42,22 +40,9 @@ interface CapabilityTemplate {
   soulId: string
 }
 
-interface VerticalSoul {
-  defaultTemplates: readonly string[]
-  description: string
-  domain: string
-  id: string
-  name: string
-  status: 'available' | 'coming_soon'
-}
-
-export { renderUniversalWorkbenchHtml } from './universal-workbench-html'
-
 export interface StandaloneSoulAppRuntimeOptions {
+  appDistRoot?: string
   appHome: string
-  appSourceRoot?: string
-  availableConnectorIds?: readonly string[]
-  enabledConnectorIds?: readonly string[]
   executor?: LocalExecutor
   hostVersion?: string
   migrationsFolder?: string
@@ -67,10 +52,8 @@ export interface StandaloneSoulAppRuntimeOptions {
 }
 
 export interface MountedSoulAppTestRuntimeOptions {
-  appSourceRoot?: string
-  availableConnectorIds?: readonly string[]
+  appDistRoot?: string
   dbPath: string
-  enabledConnectorIds?: readonly string[]
   executor?: LocalExecutor
   hostVersion?: string
   migrationsFolder?: string
@@ -81,8 +64,8 @@ export interface MountedSoulAppTestRuntimeOptions {
 }
 
 export interface SoulAppRuntimeHarness {
-  app: SoulAppDefinition
   catalog: HostSoulCatalog
+  descriptor: SoulDescriptorV1
   dispose: () => void
   hostedApp: HostedSoulApp
   runtime: LocalWorkerRuntime
@@ -100,31 +83,30 @@ export interface SoulAppRuntimeWorkerSnapshot {
 }
 
 export async function createStandaloneSoulAppRuntime(
-  app: SoulAppDefinition,
+  descriptor: SoulDescriptorV1,
   options: StandaloneSoulAppRuntimeOptions,
 ): Promise<SoulAppRuntimeHarness> {
   const dbPath = path.join(options.appHome, 'worker.db')
   const workersRoot = path.join(options.appHome, 'workers')
+  const identity = descriptorIdentity(descriptor)
   bootstrapDb(dbPath, options.migrationsFolder)
-  const hostedApp = installAndEnable(app.manifest, {
-    availableConnectorIds: options.availableConnectorIds,
-    enabledConnectorIds: options.enabledConnectorIds,
+  const hostedApp = installAndEnable(descriptor, {
     hostVersion: options.hostVersion,
     now: options.now,
-    sourceRef: 'standalone:inline',
+    sourceRef: 'standalone:inline-descriptor',
   })
-  const { runtime, worker } = await createRuntimeForApp({
-    app,
-    appSourceRoot: options.appSourceRoot,
+  const { runtime, worker } = await createRuntimeForDescriptor({
+    descriptor,
+    appDistRoot: options.appDistRoot,
     executor: options.executor,
     now: options.now,
-    workerId: options.workerId ?? `${app.manifest.id}-worker`,
-    workerName: options.workerName ?? app.manifest.name,
+    workerId: options.workerId ?? `${identity.appId}-worker`,
+    workerName: options.workerName ?? identity.name,
     workersRoot,
   })
   return harness({
-    app,
     catalog: scopedCatalog(hostedApp),
+    descriptor,
     hostedApp,
     runtime,
     worker,
@@ -132,29 +114,28 @@ export async function createStandaloneSoulAppRuntime(
 }
 
 export async function createMountedSoulAppTestRuntime(
-  app: SoulAppDefinition,
+  descriptor: SoulDescriptorV1,
   options: MountedSoulAppTestRuntimeOptions,
 ): Promise<SoulAppRuntimeHarness> {
+  const identity = descriptorIdentity(descriptor)
   bootstrapDb(options.dbPath, options.migrationsFolder)
-  const hostedApp = installAndEnable(app.manifest, {
-    availableConnectorIds: options.availableConnectorIds,
-    enabledConnectorIds: options.enabledConnectorIds,
+  const hostedApp = installAndEnable(descriptor, {
     hostVersion: options.hostVersion,
     now: options.now,
-    sourceRef: 'mounted-test:inline',
+    sourceRef: 'mounted-test:inline-descriptor',
   })
-  const { runtime, worker } = await createRuntimeForApp({
-    app,
-    appSourceRoot: options.appSourceRoot,
+  const { runtime, worker } = await createRuntimeForDescriptor({
+    descriptor,
+    appDistRoot: options.appDistRoot,
     executor: options.executor,
     now: options.now,
-    workerId: options.workerId ?? `${app.manifest.id}-worker`,
-    workerName: options.workerName ?? app.manifest.name,
+    workerId: options.workerId ?? `${identity.appId}-worker`,
+    workerName: options.workerName ?? identity.name,
     workersRoot: options.workersRoot,
   })
   return harness({
-    app,
     catalog: listHostSoulCatalog(),
+    descriptor,
     hostedApp,
     runtime,
     worker,
@@ -169,62 +150,58 @@ function bootstrapDb(dbPath: string, migrationsFolder?: string): void {
 }
 
 function installAndEnable(
-  manifest: SoulAppManifest,
+  descriptor: SoulDescriptorV1,
   options: {
-    availableConnectorIds?: readonly string[]
-    enabledConnectorIds?: readonly string[]
     hostVersion?: string
     now?: () => string
     sourceRef: string
   },
 ): HostedSoulApp {
-  installSoulAppManifest({
-    manifest,
+  installSoulDescriptor({
+    descriptor,
     sourceKind: 'inline',
     sourceRef: options.sourceRef,
   }, {
-    availableConnectorIds: options.availableConnectorIds,
-    enabledConnectorIds: options.enabledConnectorIds,
     hostVersion: options.hostVersion,
     now: options.now,
   })
-  return enableSoulApp(manifest.id, {
-    availableConnectorIds: options.availableConnectorIds,
-    enabledConnectorIds: options.enabledConnectorIds,
+  return enableSoulApp(descriptorIdentity(descriptor).appId, {
     hostVersion: options.hostVersion,
     now: options.now,
   })
 }
 
-async function createRuntimeForApp(input: {
-  app: SoulAppDefinition
-  appSourceRoot?: string
+async function createRuntimeForDescriptor(input: {
+  appDistRoot?: string
+  descriptor: SoulDescriptorV1
   executor?: LocalExecutor
   now?: () => string
   workerId: string
   workerName: string
   workersRoot: string
 }): Promise<{ runtime: LocalWorkerRuntime, worker: SoulAppRuntimeWorkerSnapshot }> {
+  const descriptor = input.descriptor
+  const identity = descriptorIdentity(descriptor)
+  const capabilities = descriptorCapabilities(descriptor)
   const worker = upsertWorker({
     id: input.workerId,
-    soulId: input.app.manifest.id,
+    soulId: identity.appId,
     name: input.workerName,
-    defaultEngineId: 'codex',
+    defaultEngineId: descriptorDefaultEngine(descriptor),
     metadataJson: {
-      defaultTemplates: projectSoulAppDefaultTemplates(input.app.manifest),
-      description: input.app.manifest.description,
-      domainSoulId: input.app.manifest.soul.id,
-      domain: input.app.manifest.soul.domain,
-      soulAppId: input.app.manifest.id,
+      defaultTemplates: capabilities.map(capability => namespaceSoulAppCapabilityId(identity.appId, capability.id)),
+      description: identity.description,
+      domainSoulId: identity.soulId,
+      soulAppId: identity.appId,
     },
     at: input.now?.(),
   })
   const runtime = createLocalWorkerRuntime({
-    engineAssetSource: input.appSourceRoot
+    engineAssetSource: input.appDistRoot
       ? {
-          appId: input.app.manifest.id,
-          engineAssets: input.app.manifest.engineAssets,
-          sourceRoot: input.appSourceRoot,
+          appId: identity.appId,
+          engineAssets: engineAssetsForDescriptor(descriptor),
+          sourceRoot: input.appDistRoot,
         }
       : null,
     executor: input.executor,
@@ -245,9 +222,76 @@ async function createRuntimeForApp(input: {
   }
 }
 
+function engineAssetsForDescriptor(descriptor: SoulDescriptorV1): SoulAppEngineAssets {
+  const mcpClients = Object.entries(descriptor.engine.mcp?.targets ?? {})
+    .flatMap(([target, entry]) => {
+      if (!isSoulAppEngineTarget(target))
+        return []
+      return [{
+        source: stripDistPrefix(path.posix.dirname(entry.file)),
+        target,
+      }]
+    })
+  return {
+    workspace: {
+      source: stripDistPrefix(descriptor.engine.workspaceAssets?.source ?? 'dist/engine-assets/workspace'),
+    },
+    ...(descriptor.engine.skills
+      ? {
+          skills: {
+            source: stripDistPrefix(descriptor.engine.skills.source),
+            targets: ['codex', 'claude-code'],
+          },
+        }
+      : {}),
+    ...(mcpClients.length > 0 ? { mcpClients } : {}),
+  }
+}
+
+function stripDistPrefix(value: string): string {
+  return value.replace(/^dist\//, '')
+}
+
+function descriptorIdentity(descriptor: SoulDescriptorV1): { appId: string, description: string, name: string, soulId: string } {
+  const identity = descriptor.identity as Record<string, unknown>
+  const appId = requireDescriptorString(identity.appId, 'identity.appId')
+  const name = requireDescriptorString(identity.name, 'identity.name')
+  const soulId = requireDescriptorString(identity.soulId, 'identity.soulId')
+  return {
+    appId,
+    description: typeof identity.description === 'string' ? identity.description : name,
+    name,
+    soulId,
+  }
+}
+
+function descriptorDefaultEngine(descriptor: SoulDescriptorV1): string {
+  const configuration = descriptor.configuration as { defaults?: { engine?: unknown } }
+  return typeof configuration.defaults?.engine === 'string' ? configuration.defaults.engine : 'codex'
+}
+
+function descriptorCapabilities(descriptor: SoulDescriptorV1): Array<{ id: string }> {
+  return descriptor.capabilities.map((capability, index) => {
+    if (!capability || typeof capability !== 'object')
+      throw new Error(`descriptor capability must be an object: capabilities.${index}`)
+    const id = (capability as { id?: unknown }).id
+    return { id: requireDescriptorString(id, `capabilities.${index}.id`) }
+  })
+}
+
+function requireDescriptorString(value: unknown, pathLabel: string): string {
+  if (typeof value !== 'string' || value.length === 0)
+    throw new Error(`descriptor ${pathLabel} must be a non-empty string`)
+  return value
+}
+
+function isSoulAppEngineTarget(value: string): value is SoulAppEngineTarget {
+  return value === 'codex' || value === 'claude-code'
+}
+
 function harness(input: {
-  app: SoulAppDefinition
   catalog: HostSoulCatalog
+  descriptor: SoulDescriptorV1
   hostedApp: HostedSoulApp
   runtime: LocalWorkerRuntime
   worker: SoulAppRuntimeWorkerSnapshot
@@ -255,7 +299,7 @@ function harness(input: {
   return {
     ...input,
     dispose: closeWorkerDb,
-    sessionMetadata: capabilityTemplateId => sessionMetadata(input.app, input.catalog.templates, capabilityTemplateId),
+    sessionMetadata: capabilityTemplateId => sessionMetadata(input.descriptor, input.catalog.templates, capabilityTemplateId),
     snapshot: () => input.runtime.snapshot(),
   }
 }
@@ -273,8 +317,8 @@ function publicWorkerSnapshot(worker: WorkerRow): SoulAppRuntimeWorkerSnapshot {
 function scopedCatalog(app: HostedSoulApp): HostSoulCatalog {
   return {
     apps: [app],
-    souls: [projectSoulAppSoul(app.manifest, 'available') as VerticalSoul],
-    templates: projectSoulAppCapabilityTemplates(app.manifest) as CapabilityTemplate[],
+    souls: [app.projectedSoul],
+    templates: [...app.projectedCapabilities],
   }
 }
 
@@ -283,7 +327,7 @@ export type {
   LocalExecutorInput,
   LocalExecutorResult,
   LocalWorkerRuntime,
-} from '@zonease/aiworker-core'
+} from '@zonease/aiworker-host-runtime'
 
 export function mountSessionApiProxy(request: Request, options: {
   hostApiBaseUrl: string
@@ -295,47 +339,32 @@ export function mountSessionApiProxy(request: Request, options: {
   const workerId = url.searchParams.get('workerId') ?? options.workerId
   const workspaceId = url.searchParams.get('workspaceId') ?? options.workspaceId ?? null
 
-  if (url.pathname === '/api/templates' && request.method === 'GET') {
-    const target = `${hostApi}/api/local/workers/${workerId}/templates`
-    return proxyJsonRequest(request, target)
-  }
+  if (url.pathname === '/api/templates' && request.method === 'GET')
+    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/templates`)
 
-  if (url.pathname === '/api/workspaces' && request.method === 'GET') {
-    const target = `${hostApi}/api/local/workers/${workerId}/workspaces`
-    return proxyJsonRequest(request, target)
-  }
+  if (url.pathname === '/api/workspaces' && request.method === 'GET')
+    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/workspaces`)
 
-  if (url.pathname === '/api/workspaces' && request.method === 'POST') {
-    const target = `${hostApi}/api/local/workers/${workerId}/workspaces`
-    return proxyJsonRequest(request, target)
-  }
+  if (url.pathname === '/api/workspaces' && request.method === 'POST')
+    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/workspaces`)
 
   if (url.pathname === '/api/sessions' && request.method === 'GET') {
     if (!workspaceId)
       return Promise.resolve(Response.json({ sessions: [] }))
-    const target = `${hostApi}/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions`
-    return proxyJsonRequest(request, target).catch(() => Response.json({ sessions: [] }))
+    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions`)
+      .catch(() => Response.json({ sessions: [] }))
   }
 
   if (url.pathname === '/api/sessions' && request.method === 'POST') {
     if (!workspaceId)
       return Promise.resolve(Response.json({ error: { code: 'WORKSPACE_REQUIRED', message: 'workspaceId is required.' } }, { status: 400 }))
-    const target = `${hostApi}/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions`
-    return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))
-  }
-
-  if (url.pathname === '/api/sessions/stream' && request.method === 'POST') {
-    if (!workspaceId)
-      return Promise.resolve(Response.json({ error: { code: 'WORKSPACE_REQUIRED', message: 'workspaceId is required.' } }, { status: 400 }))
-    const target = `${hostApi}/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions/stream`
-    return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))
+    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions`)
+      .catch(() => new Response(null, { status: 502 }))
   }
 
   const sessionMatch = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname)
-  if (sessionMatch && request.method === 'GET') {
-    const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionMatch[1]}`
-    return proxyJsonRequest(request, target)
-  }
+  if (sessionMatch && request.method === 'GET')
+    return proxyJsonRequest(request, `${hostApi}/api/sessions/${sessionMatch[1]}`)
 
   const sessionEventsMatch = /^\/api\/sessions\/([^/]+)\/events$/.exec(url.pathname)
   if (sessionEventsMatch && request.method === 'GET') {
@@ -344,24 +373,17 @@ export function mountSessionApiProxy(request: Request, options: {
     if (after !== null)
       params.set('after', after)
     const query = params.size > 0 ? `?${params.toString()}` : ''
-    const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionEventsMatch[1]}/events${query}`
-    return proxyJsonRequest(request, target)
+    return proxyJsonRequest(request, `${hostApi}/api/local/sessions/${sessionEventsMatch[1]}/events${query}`)
   }
 
   const sessionTurnsMatch = /^\/api\/sessions\/([^/]+)\/turns$/.exec(url.pathname)
-  if (sessionTurnsMatch && request.method === 'GET') {
-    const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionTurnsMatch[1]}/turns`
-    return proxyJsonRequest(request, target)
-  }
-  if (sessionTurnsMatch && request.method === 'POST') {
-    const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionTurnsMatch[1]}/messages`
-    return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))
-  }
+  if (sessionTurnsMatch && request.method === 'GET')
+    return proxyJsonRequest(request, `${hostApi}/api/local/sessions/${sessionTurnsMatch[1]}/turns`)
 
-  const sessionTurnStreamMatch = /^\/api\/sessions\/([^/]+)\/turns\/stream$/.exec(url.pathname)
-  if (sessionTurnStreamMatch && request.method === 'POST') {
-    const target = `${hostApi}/api/local/workers/${workerId}/sessions/${sessionTurnStreamMatch[1]}/messages/stream`
-    return proxyJsonRequest(request, target).catch(() => new Response(null, { status: 502 }))
+  const sessionInvocationsMatch = /^\/api\/sessions\/([^/]+)\/invocations$/.exec(url.pathname)
+  if (sessionInvocationsMatch && request.method === 'POST') {
+    return proxyJsonRequest(request, `${hostApi}/api/sessions/${sessionInvocationsMatch[1]}/invocations`)
+      .catch(() => new Response(null, { status: 502 }))
   }
 
   return null
@@ -376,18 +398,19 @@ function proxyJsonRequest(request: Request, target: string): Promise<Response> {
 }
 
 function sessionMetadata(
-  app: SoulAppDefinition,
+  descriptor: SoulDescriptorV1,
   templates: readonly CapabilityTemplate[],
   capabilityTemplateId: string,
 ): Record<string, unknown> {
   const template = templates.find(item => item.id === capabilityTemplateId)
+  const identity = descriptorIdentity(descriptor)
   return {
     capabilityTemplateId,
     inputHints: template?.inputHints ?? [],
-    outputKind: template?.outputKind ?? 'business-artifact',
+    outputKind: template?.outputKind ?? 'session',
     reviewRubricRef: template?.reviewRubricRef ?? null,
     skillName: template?.name ?? capabilityTemplateId,
-    soulAppId: app.manifest.id,
-    soulName: app.manifest.soul.name,
+    soulAppId: identity.appId,
+    soulName: identity.name,
   }
 }

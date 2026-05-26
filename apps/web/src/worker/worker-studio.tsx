@@ -1,7 +1,7 @@
 import type {
   HostedSoulApp,
   LocalWorkerOverlayAsset,
-} from '@zonease/aiworker-shared'
+} from '@zonease/aiworker-soul-protocol'
 import type { FormEvent } from 'react'
 import type { LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'

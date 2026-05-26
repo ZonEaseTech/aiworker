@@ -35,11 +35,7 @@ for (const app of apps) {
 '
 }
 
-run_cli app install apps/aiworker-hr/soul-app.manifest.json
-run_cli app enable aiworker-hr
-
-run_cli app install apps/aiworker-qa/soul-app.manifest.json
-run_cli app enable aiworker-qa
+run_cli app bootstrap official
 
 echo "[dev:apps] enabled apps:"
 bun apps/cli/src/aiworker.ts app list | format_apps

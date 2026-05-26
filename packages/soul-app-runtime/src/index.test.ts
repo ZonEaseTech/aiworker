@@ -1,4 +1,4 @@
-import type { SoulAppDefinition } from '@zonease/aiworker-soul-app-sdk'
+import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 import type { LocalExecutor } from './index'
 
 import { mkdtempSync } from 'node:fs'
@@ -6,7 +6,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { defineSoulApp, namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-app-sdk'
+import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
 import { afterEach, describe, expect, it } from 'bun:test'
 
 import { createMountedSoulAppTestRuntime, createStandaloneSoulAppRuntime, mountSessionApiProxy, renderUniversalWorkbenchHtml } from './index'
@@ -14,14 +14,14 @@ import { createMountedSoulAppTestRuntime, createStandaloneSoulAppRuntime, mountS
 const now = () => '2026-05-12T23:30:00.000Z'
 
 const executor: LocalExecutor = {
-  async invoke(_input) {
+  async invoke() {
     return {
-      summary: 'Demo app produced one artifact.',
+      summary: 'Descriptor Soul produced one invocation.',
     }
   },
 }
 
-describe('Soul App runtime harness', () => {
+describe('descriptor Soul runtime harness', () => {
   let roots: string[] = []
 
   afterEach(async () => {
@@ -30,251 +30,127 @@ describe('Soul App runtime harness', () => {
     roots = []
   })
 
-  it('runs one SDK-defined app in standalone mode without Host catalog leakage', async () => {
+  it('runs one descriptor-defined Soul in standalone mode without Host catalog leakage', async () => {
     const root = tempRoot('standalone')
-    const appRoot = path.join(root, 'app')
-    await writeDemoEngineAssets(appRoot)
-    const app = demoSoulApp()
+    const distRoot = path.join(root, 'dist')
+    await writeDemoEngineAssets(distRoot)
+    const descriptor = demoDescriptor()
 
-    const standalone = await createStandaloneSoulAppRuntime(app, {
+    const standalone = await createStandaloneSoulAppRuntime(descriptor, {
+      appDistRoot: distRoot,
       appHome: root,
-      appSourceRoot: appRoot,
       executor,
-      hostVersion: '0.12.1',
+      hostVersion: '1.0.0',
       now,
       workerId: 'demo-worker',
       workerName: 'Demo Worker',
     })
 
-    expect(standalone.app.manifest.id).toBe('demo-soul-app')
+    const capabilityId = namespaceSoulAppCapabilityId('demo-soul-app', 'default')
+    expect(standalone.descriptor.identity.appId).toBe('demo-soul-app')
     expect(standalone.catalog.apps.map(item => item.appId)).toEqual(['demo-soul-app'])
     expect(standalone.catalog.souls.map(item => item.id)).toEqual(['demo-soul-app'])
-    expect(standalone.catalog.templates.map(item => item.id)).toEqual([
-      namespaceSoulAppCapabilityId('demo-soul-app', 'demo-report'),
-    ])
+    expect(standalone.catalog.templates.map(item => item.id)).toEqual([capabilityId])
     expect(standalone.worker).toEqual({
       defaultEngineId: 'codex',
       id: 'demo-worker',
       metadata: expect.objectContaining({
-        defaultTemplates: [namespaceSoulAppCapabilityId('demo-soul-app', 'demo-report')],
-        domainSoulId: 'demo-soul',
+        defaultTemplates: [capabilityId],
+        domainSoulId: 'demo',
         soulAppId: 'demo-soul-app',
       }),
       name: 'Demo Worker',
       soulId: 'demo-soul-app',
     })
-    expect(standalone.worker).not.toHaveProperty('metadataJson')
-    expect(standalone.snapshot().worker.soulId).toBe('demo-soul-app')
-    expect(standalone.snapshot().worker.metadataJson.domainSoulId).toBe('demo-soul')
 
-    const workspace = await standalone.runtime.createWorkspace({ name: 'Standalone workspace', type: 'demo-workspace' })
-    await expect(readFile(path.join(workspace.rootPath, 'README.md'), 'utf8')).resolves.toContain('# Standalone workspace')
-    await expect(readFile(path.join(workspace.rootPath, '.agents', 'skills', 'demo-soul-app-demo-report', 'SKILL.md'), 'utf8')).resolves.toContain('Demo Report Skill')
+    const workspace = await standalone.runtime.createWorkspace({ name: 'Standalone workspace', type: 'workspace' })
+    await expect(readFile(path.join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('# Standalone workspace')
+    await expect(readFile(path.join(workspace.rootPath, '.agents', 'skills', 'demo-soul-app-default', 'SKILL.md'), 'utf8')).resolves.toContain('Default Skill')
     await expect(readFile(path.join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain('workspace-file')
+
     const session = await standalone.runtime.createSession({
-      capabilityTemplateId: standalone.catalog.templates[0]!.id,
+      capabilityTemplateId: capabilityId,
       context: 'Standalone context',
-      metadata: standalone.sessionMetadata(standalone.catalog.templates[0]!.id),
+      metadata: standalone.sessionMetadata(capabilityId),
       title: 'Standalone session',
       workspaceId: workspace.id,
     })
     const result = await standalone.runtime.startTurn({
       engineId: 'test',
       input: 'Create standalone artifact.',
-      metadata: standalone.sessionMetadata(standalone.catalog.templates[0]!.id),
+      metadata: standalone.sessionMetadata(capabilityId),
       sessionId: session.id,
     })
 
     expect(result.turn).toBeDefined()
     expect(result.invocation).toBeDefined()
-    expect(standalone.snapshot().worker.metadataJson.soulAppId).toBe('demo-soul-app')
+    expect(result.session.status).toBe('active')
   })
 
-  it('creates the standalone app home when it does not exist yet', async () => {
-    const root = path.join(tempRoot('standalone-missing-home'), 'nested', 'app-home')
-    const standalone = await createStandaloneSoulAppRuntime(demoSoulApp(), {
-      appHome: root,
+  it('creates a mounted descriptor test runtime', async () => {
+    const root = tempRoot('mounted')
+    const distRoot = path.join(root, 'dist')
+    await writeDemoEngineAssets(distRoot)
+    const mounted = await createMountedSoulAppTestRuntime(demoDescriptor(), {
+      appDistRoot: distRoot,
+      dbPath: path.join(root, 'worker.db'),
       executor,
-      hostVersion: '0.12.1',
+      hostVersion: '1.0.0',
       now,
+      workerId: 'mounted-worker',
+      workerName: 'Mounted Worker',
+      workersRoot: path.join(root, 'workers'),
     })
 
-    expect(standalone.runtime.snapshot().worker.soulId).toBe('demo-soul-app')
+    expect(mounted.catalog.apps.map(app => app.appId)).toEqual(['demo-soul-app'])
+    expect(mounted.worker.soulId).toBe('demo-soul-app')
   })
 
-  it('renders the universal workbench as an interactive mounted client shell', () => {
+  it('renders the universal workbench with public descriptor route prefix', () => {
     const html = renderUniversalWorkbenchHtml({
       appId: 'demo-soul-app',
       appName: 'Demo Soul App',
-      routePrefix: '/api/local/apps/demo-soul-app',
-      surfaceId: 'universal-workbench',
+      surfaceId: 'workbench',
       theme: 'light',
     })
 
     expect(html).toContain('<title>Demo Soul App · Universal Workbench</title>')
     expect(html).toContain('id="aiworker-micro-app-host-data"')
     expect(html).toContain('"appId":"demo-soul-app"')
-    expect(html).toContain('"routePrefix":"/api/local/apps/demo-soul-app"')
-    expect(html).toContain('"surfaceId":"universal-workbench"')
+    expect(html).toContain('"routePrefix":"/api/apps/demo-soul-app"')
+    expect(html).toContain('"surfaceId":"workbench"')
     expect(html).toContain('"theme":"light"')
     expect(html).toContain('window.microApp')
-    expect(html).toContain('api.addDataListener(receiveHostData, true)')
-    expect(html).toContain('api.dispatch({ type: "ready" })')
-    expect(html).toContain('<main id="root"')
-    expect(html).toContain('<script src="/api/local/apps/demo-soul-app/assets/universal-workbench-client.js"></script>')
-    expect(html).not.toContain('type="module"')
-    expect(html).not.toContain('This app-owned micro-app surface receives worker, workspace, session, and theme context from the Host mount bridge.')
   })
 
-  it('renders dark universal workbench theme into html chrome and host data', () => {
-    const html = renderUniversalWorkbenchHtml({
-      appId: 'demo-soul-app',
-      appName: 'Demo Soul App',
-      routePrefix: '/api/local/apps/demo-soul-app',
-      theme: 'dark',
-      workerId: 'worker-1',
-      workspaceId: 'workspace-1',
-    })
-
-    expect(html).toContain('<html lang="en" class="dark h-full" style="color-scheme:dark">')
-    expect(html).toContain('<body class="dark h-full">')
-    expect(html).toContain('"theme":"dark"')
-    expect(html).toContain('"workerId":"worker-1"')
-    expect(html).toContain('"workspaceId":"workspace-1"')
-  })
-
-  it('proxies mounted universal workbench session streams to Host stream endpoints', async () => {
+  it('maps mounted follow-up calls to the session-level invocation API', async () => {
+    const calls: Array<{ method: string, url: string }> = []
     const originalFetch = globalThis.fetch
-    const proxiedRequests: Array<{ body: string, method: string, url: string }> = []
-    globalThis.fetch = (async (input, init) => {
-      proxiedRequests.push({
-        body: await new Response(init?.body).text(),
-        method: init?.method ?? 'GET',
-        url: String(input),
-      })
-      return new Response('event: session\ndata: {"id":"session-1"}\n\n', {
-        headers: { 'content-type': 'text/event-stream; charset=utf-8' },
-        status: 200,
-      })
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ method: init?.method ?? 'GET', url: String(url) })
+      return Response.json({ ok: true })
     }) as typeof fetch
-
     try {
-      const createResponse = await mountSessionApiProxy(new Request('http://mounted.local/api/sessions/stream?workerId=worker-1&workspaceId=workspace-1', {
-        body: JSON.stringify({ input: 'Start from mounted composer' }),
+      const response = await mountSessionApiProxy(new Request('http://soul.test/api/sessions/session-1/invocations', {
+        body: JSON.stringify({ input: 'Continue.' }),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       }), {
-        hostApiBaseUrl: 'http://host.local',
-        workerId: 'fallback-worker',
+        hostApiBaseUrl: 'http://host.test',
+        workerId: 'worker-1',
       })
 
-      const turnResponse = await mountSessionApiProxy(new Request('http://mounted.local/api/sessions/session-1/turns/stream?workerId=worker-1', {
-        body: JSON.stringify({ input: 'Continue from mounted composer' }),
-        headers: { 'content-type': 'application/json' },
-        method: 'POST',
-      }), {
-        hostApiBaseUrl: 'http://host.local',
-        workerId: 'fallback-worker',
-      })
-
-      expect(createResponse?.headers.get('content-type')).toContain('text/event-stream')
-      expect(turnResponse?.headers.get('content-type')).toContain('text/event-stream')
-      expect(proxiedRequests).toEqual([
-        {
-          body: '{"input":"Start from mounted composer"}',
-          method: 'POST',
-          url: 'http://host.local/api/local/workers/worker-1/workspaces/workspace-1/sessions/stream',
-        },
-        {
-          body: '{"input":"Continue from mounted composer"}',
-          method: 'POST',
-          url: 'http://host.local/api/local/workers/worker-1/sessions/session-1/messages/stream',
-        },
-      ])
+      expect(response).not.toBeNull()
+      expect(await response!.json()).toEqual({ ok: true })
+      expect(calls).toEqual([{ method: 'POST', url: 'http://host.test/api/sessions/session-1/invocations' }])
+      expect(mountSessionApiProxy(new Request('http://soul.test/api/sessions/session-1/turns', { method: 'POST' }), {
+        hostApiBaseUrl: 'http://host.test',
+        workerId: 'worker-1',
+      })).toBeNull()
     }
     finally {
       globalThis.fetch = originalFetch
     }
-  })
-
-  it('proxies mounted universal workbench session event replay to the Host worker event endpoint', async () => {
-    const originalFetch = globalThis.fetch
-    const proxiedRequests: Array<{ method: string, url: string }> = []
-    globalThis.fetch = (async (input, init) => {
-      proxiedRequests.push({
-        method: init?.method ?? 'GET',
-        url: String(input),
-      })
-      return Response.json({
-        events: [{
-          createdAt: '2026-05-23T00:00:01.000Z',
-          id: 42,
-          invocationId: null,
-          payloadJson: { message: 'Engine produced a streamed event.' },
-          seq: 2,
-          sessionId: 'session-1',
-          turnId: 'turn-1',
-          type: 'assistant_delta',
-        }],
-      })
-    }) as typeof fetch
-
-    try {
-      const response = await mountSessionApiProxy(new Request('http://mounted.local/api/sessions/session-1/events?workerId=worker-1&after=41'), {
-        hostApiBaseUrl: 'http://host.local',
-        workerId: 'fallback-worker',
-      })
-
-      await expect(response?.json()).resolves.toEqual({
-        events: [expect.objectContaining({ id: 42, sessionId: 'session-1' })],
-      })
-      expect(proxiedRequests).toEqual([{
-        method: 'GET',
-        url: 'http://host.local/api/local/workers/worker-1/sessions/session-1/events?after=41',
-      }])
-    }
-    finally {
-      globalThis.fetch = originalFetch
-    }
-  })
-
-  it('uses the same SDK definition through mounted Host projection without changing domain logic', async () => {
-    const root = tempRoot('mounted')
-    const app = demoSoulApp()
-
-    const mounted = await createMountedSoulAppTestRuntime(app, {
-      dbPath: path.join(root, 'worker.db'),
-      executor,
-      hostVersion: '0.12.1',
-      now,
-      workerId: 'mounted-demo-worker',
-      workerName: 'Mounted Demo Worker',
-      workersRoot: path.join(root, 'workers'),
-    })
-
-    const capabilityId = namespaceSoulAppCapabilityId('demo-soul-app', 'demo-report')
-    expect(mounted.hostedApp.appId).toBe(app.manifest.id)
-    expect(mounted.catalog.templates.map(item => item.id)).toContain(capabilityId)
-    expect(mounted.runtime.snapshot().worker.soulId).toBe(app.manifest.id)
-    expect(mounted.runtime.snapshot().worker.metadataJson.domainSoulId).toBe(app.manifest.soul.id)
-
-    const workspace = await mounted.runtime.createWorkspace({ name: 'Mounted workspace', type: 'demo-workspace' })
-    const session = await mounted.runtime.createSession({
-      capabilityTemplateId: capabilityId,
-      context: 'Mounted context',
-      metadata: mounted.sessionMetadata(capabilityId),
-      title: 'Mounted session',
-      workspaceId: workspace.id,
-    })
-    const result = await mounted.runtime.startTurn({
-      engineId: 'test',
-      input: 'Create mounted artifact.',
-      metadata: mounted.sessionMetadata(capabilityId),
-      sessionId: session.id,
-    })
-
-    expect(result.turn).toBeDefined()
-    expect(result.invocation).toBeDefined()
   })
 
   function tempRoot(label: string): string {
@@ -284,121 +160,65 @@ describe('Soul App runtime harness', () => {
   }
 })
 
-async function writeDemoEngineAssets(appRoot: string): Promise<void> {
-  await mkdir(path.join(appRoot, 'engine-assets', 'workspace'), { recursive: true })
-  await mkdir(path.join(appRoot, 'engine-assets', 'skills', 'demo-report'), { recursive: true })
-  await writeFile(path.join(appRoot, 'engine-assets', 'workspace', 'README.md'), '# {{workspaceName}}\n')
-  await writeFile(path.join(appRoot, 'engine-assets', 'workspace', 'AGENTS.md'), '# {{workerName}}\n')
-  await writeFile(path.join(appRoot, 'engine-assets', 'workspace', 'CLAUDE.md'), '@AGENTS.md\n')
-  await writeFile(path.join(appRoot, 'engine-assets', 'workspace', '.gitignore'), '.aiworker/projections.json\n')
-  await writeFile(path.join(appRoot, 'engine-assets', 'skills', 'demo-report', 'SKILL.md'), '# Demo Report Skill\n')
+async function writeDemoEngineAssets(distRoot: string): Promise<void> {
+  await mkdir(path.join(distRoot, 'engine-assets', 'workspace'), { recursive: true })
+  await mkdir(path.join(distRoot, 'engine-assets', 'skills', 'default'), { recursive: true })
+  await writeFile(path.join(distRoot, 'engine-assets', 'workspace', 'AGENTS.md'), '# {{workspaceName}}\n')
+  await writeFile(path.join(distRoot, 'engine-assets', 'skills', 'default', 'SKILL.md'), '# Default Skill\n')
 }
 
-function demoSoulApp(): SoulAppDefinition {
-  return defineSoulApp({
-    manifest: {
-      api: {
-        entry: './src/domain-api.ts',
-        routePrefix: '/api/local/apps/demo-soul-app',
+function demoDescriptor(): SoulDescriptorV1 {
+  return {
+    api: null,
+    capabilities: [{
+      id: 'default',
+      name: 'Default',
+      prompt: {
+        ref: 'dist/product/capabilities/default/prompt.md',
+        type: 'packaged-file',
       },
-      capabilities: [{
-        artifactTypes: ['demo-report'],
-        description: 'Create a demo report.',
-        id: 'demo-report',
-        name: 'Demo Report',
-        outputKind: 'demo-report',
-        promptRef: './product/workflows/demo-report/prompt.md',
-        version: '1.0.0',
-        workspaceTypes: ['demo-workspace'],
-      }],
-      compatibility: {
-        host: { minVersion: '0.12.0' },
-        sdk: { minVersion: '0.1.0' },
+      purpose: 'Create a default descriptor-backed session.',
+    }],
+    compatibility: {
+      engines: ['codex', 'claude-code'],
+      host: '>=1.0.0',
+      sdk: '>=1.0.0',
+    },
+    configuration: {
+      defaults: { engine: 'codex' },
+      features: {
+        engine: true,
+        mcp: false,
+        skills: true,
+        workbench: true,
+        workspaceAssets: true,
       },
-      connectors: { optional: [], required: [] },
-      description: 'Demo Soul App for SDK boundary tests.',
-      engineAssets: {
-        skills: {
-          source: './engine-assets/skills',
-          targets: ['codex', 'claude-code'],
-        },
-        workspace: {
-          source: './engine-assets/workspace',
-        },
-      },
-      exports: {
-        runtime: './host-adapter/index.ts',
-        ui: './host-adapter/index.ts',
-      },
-      healthcheck: {
-        kind: 'protocol-handler',
-        ref: './src/healthcheck.ts',
-        timeoutMs: 1000,
-      },
-      id: 'demo-soul-app',
-      modes: {
-        hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
-        standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
-      },
+      scope: 'worker',
+      version: '1',
+    },
+    engine: {
+      skills: { source: 'dist/engine-assets/skills' },
+      workspaceAssets: { source: 'dist/engine-assets/workspace' },
+    },
+    extensions: {},
+    external: {},
+    health: {
+      ready: true,
+      type: 'static',
+    },
+    identity: {
+      appId: 'demo-soul-app',
+      description: 'Demo descriptor Soul.',
       name: 'Demo Soul App',
-      pack: {
-        refs: [{ id: 'demo-pack', ref: './product/profiles/demo-soul-app/SOUL.md', source: 'embedded', version: '1.0.0' }],
-      },
-      permissions: [
-        { action: 'write', kind: 'storage', reason: 'Create demo artifacts.', target: 'demo-soul-app' },
-        { action: 'read', kind: 'storage', reason: 'Read demo records.', target: 'demo-soul-app' },
-        { action: 'write', kind: 'storage', reason: 'Write demo records.', target: 'demo-soul-app' },
-        { action: 'serve', kind: 'api', reason: 'Serve demo API.', target: '/api/local/apps/demo-soul-app' },
-      ],
-      protocol: 'soul-app/v1',
-      soul: {
-        description: 'Demo vertical Soul.',
-        domain: 'demo',
-        id: 'demo-soul',
-        name: 'Demo',
-        version: '1.0.0',
-      },
-      storage: {
-        migrations: [],
-        namespace: 'demo-soul-app',
-      },
-      ui: {
-        artifactPreviews: [],
-        panels: [],
-        routes: [{ entry: './product/web/routes/demo-home.tsx', id: 'demo-home', label: 'Demo', path: '/demo' }],
-        workspaceWidgets: [],
-      },
-      version: '1.0.0',
-      workspaceTypes: [{
-        artifactTypes: ['demo-report'],
-        defaultCapabilityIds: ['demo-report'],
-        description: 'Demo workspace.',
-        id: 'demo-workspace',
-        name: 'Demo Workspace',
-      }, {
-        artifactTypes: ['demo-report'],
-        defaultCapabilityIds: ['demo-report'],
-        description: 'Demo duplicate-default workspace.',
-        id: 'demo-workspace-duplicate-default',
-        name: 'Demo Duplicate Default Workspace',
-      }],
+      soulId: 'demo',
+      version: '0.1.0',
     },
-    lifecycle: {
-      async disable() {
-        return { message: 'disabled', ok: true }
-      },
-      async enable() {
-        return { message: 'enabled', ok: true }
-      },
-      async healthcheck() {
-        return { message: `ready at ${now()}`, ok: true }
-      },
-      async install() {
-        return { message: 'installed', ok: true }
-      },
-      async upgrade() {
-        return { message: 'upgraded', ok: true }
-      },
+    protocol: 'soul/v1',
+    workbench: {
+      entry: 'dist/web/workbench/index.html',
+      mode: 'sdk-common',
+      router: { mode: 'search' },
+      type: 'micro-app',
     },
-  })
+  }
 }

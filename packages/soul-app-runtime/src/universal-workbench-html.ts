@@ -14,7 +14,7 @@ export function renderUniversalWorkbenchHtml(options: {
     appId,
     appName,
     clientHref,
-    routePrefix = `/api/local/apps/${appId}`,
+    routePrefix = `/api/apps/${appId}`,
     sessionId = null,
     styleHref,
     surfaceId = 'universal-workbench',

@@ -20,7 +20,8 @@
     "@zonease/aiworker-engine-projection": "workspace:*",
     "@zonease/aiworker-fs-layout": "workspace:*",
     "@zonease/aiworker-soul-protocol": "workspace:*",
-    "@zonease/aiworker-storage-sqlite": "workspace:*"
+    "@zonease/aiworker-storage-sqlite": "workspace:*",
+    "zod": "^3.24.4"
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",

@@ -4,7 +4,7 @@ import type {
   LocalTurn,
   LocalWorker,
   LocalWorkspace,
-} from '@zonease/aiworker-shared'
+} from '@zonease/aiworker-soul-protocol'
 import type { CapabilityTemplate, VerticalSoul } from '../types.compat'
 import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppLifecycleResponse, LocalWorkspaceData } from './types'
 

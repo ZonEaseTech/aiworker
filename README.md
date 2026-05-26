@@ -56,19 +56,19 @@ AIWorker 的主要价值在更需要组织沉淀的垂直职能：
 
 ## Soul App 模型
 
-Soul App 是可独立部署、也可挂载到 AIWorker Host 的垂直产品单元。例如 `aiworker-hr`
-可以作为 HR-first 本地应用独立运行，也可以被 Host 挂载，与 `aiworker-qa` 等其他 Soul App
-共存在同一个 local daemon 中。
+Soul App 是可独立部署、也可挂载到 AIWorker Host 的垂直产品单元。v1 强验收只保留
+`aiworker-freeform`：它通过 `dist/soul.descriptor.json` 进入 Host，由 Host 提供 locator、
+mount 和 engine bridge。
 
 ```text
 Standalone:
-aiworker-hr -> app-local runtime/settings/storage -> HR workspace/session
+aiworker-freeform -> descriptor-owned assets -> workspace/session
 
 Host mounted:
-aiworker-host -> app registry -> manifest/protocol -> aiworker-hr / aiworker-qa
+aiworker-host -> descriptor registry -> mounted workbench / engine bridge
 ```
 
-两种模式应复用同一份 manifest、domain logic、artifact schema、review policy 和权限声明。
+两种模式应复用同一份 descriptor、domain logic、artifact schema、review policy 和权限声明。
 Host 不 import 垂直 app 内部源码；Soul App 不直接控制 Host engine、connector、secret、DB 或
 全局 memory。
 
@@ -178,19 +178,20 @@ scan/test、connectors、MCP、language、appearance、autosave 和 Soul App 管
 
 ```text
 apps/
-  api/            local daemon API and Worker Web host
   cli/            aiworker CLI and packaged local daemon entry
   web/            Host Web Shell and worker workbench
-  aiworker-hr/    official HR Soul App
-  aiworker-qa/    official QA Soul App
+souls/
+  aiworker-freeform/ v1 strong-acceptance descriptor Soul
 packages/
-  core/              local runtime, Host services and engine adapters
+  host-runtime/      Host locator/runtime orchestration
+  host-daemon/       local daemon API and Worker Web host
+  soul-protocol/     descriptor and shared Host/Soul protocol
   storage-sqlite/    worker.db schema, migrations and repositories
   fs-layout/         AIWORKER_HOME, worker and workspace path helpers
-  shared/            shared schemas, Host/Soul App protocol and utilities
   ui/                shadcn-managed shared UI primitives and theme variables
   soul-app-sdk/      public SDK for Soul App authors
   soul-app-runtime/  standalone/mounted Soul App runtime harness
+  soul-workbench/    SDK common workbench modules
 ```
 
 ## 开发命令
@@ -214,8 +215,8 @@ bun run build
 聚焦命令：
 
 ```bash
-bun run --filter '@zonease/aiworker-core' test
-bun run --filter '@zonease/aiworker-api' build
+bun run --filter '@zonease/aiworker-host-runtime' test
+bun run --filter '@zonease/aiworker-host-daemon' build
 bun run --filter '@zonease/aiworker-web' build
 bun run --filter '@zonease/aiworker-cli' build:bundle
 ```

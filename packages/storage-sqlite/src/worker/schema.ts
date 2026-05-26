@@ -1,4 +1,4 @@
-import type { SoulAppHealthStatus, SoulAppInstallSourceKind, SoulAppManifest, SoulAppManifestValidationIssue, SoulAppRegistryStatus } from '@zonease/aiworker-shared'
+import type { SoulAppHealthStatus, SoulAppInstallSourceKind, SoulAppManifestValidationIssue, SoulAppRegistryStatus, SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
@@ -173,10 +173,10 @@ export const soulApps = sqliteTable(
     protocol: text('protocol').notNull(),
     soulId: text('soul_id').notNull(),
     status: text('status', { enum: ['installed', 'enabled', 'disabled', 'error'] }).$type<SoulAppRegistryStatus>().notNull().default('installed'),
-    sourceKind: text('source_kind', { enum: ['manifest-path', 'inline'] }).$type<SoulAppInstallSourceKind>().notNull(),
+    sourceKind: text('source_kind', { enum: ['descriptor-path', 'inline'] }).$type<SoulAppInstallSourceKind>().notNull(),
     sourceRef: text('source_ref').notNull(),
     manifestDigest: text('manifest_digest').notNull(),
-    manifestJson: text('manifest_json', { mode: 'json' }).$type<SoulAppManifest>().notNull(),
+    manifestJson: text('manifest_json', { mode: 'json' }).$type<SoulDescriptorV1>().notNull(),
     validationIssuesJson: text('validation_issues_json', { mode: 'json' }).$type<SoulAppManifestValidationIssue[]>().notNull().$defaultFn(() => []),
     healthStatus: text('health_status', { enum: ['unknown', 'pass', 'warn', 'fail'] }).$type<SoulAppHealthStatus>().notNull().default('unknown'),
     healthMessage: text('health_message'),

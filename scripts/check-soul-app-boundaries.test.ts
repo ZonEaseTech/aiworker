@@ -20,7 +20,7 @@ describe('check-soul-app-boundaries', () => {
     expect(result.stderr).not.toContain('apps/web/src/worker/souls')
   })
 
-  test('blocks Host Web imports of the shared workbench package', () => {
+  test('blocks Host Web imports of the retired shared workbench package', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
     try {
       const sourceDir = join(tempRoot, 'apps/web/src/worker')
@@ -46,11 +46,10 @@ describe('check-soul-app-boundaries', () => {
     }
   })
 
-  test('discovers official Soul apps that live outside src/', () => {
+  test('discovers the Freeform v1 Soul from souls/', () => {
     const names = discoverSoulApps().map(app => app.name)
-    expect(names).toContain('aiworker-hr')
-    expect(names).toContain('aiworker-qa')
-    expect(names).toContain('aiworker-custom')
+    expect(names).toContain('aiworker-freeform')
+    expect(names).not.toContain('aiworker-custom')
   })
 
   test('tripwire fires when manifests exist but nothing is discovered', () => {
@@ -62,13 +61,13 @@ describe('check-soul-app-boundaries', () => {
   test('catches a Soul App Host-private import located outside src/', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
     try {
-      const appDir = join(tempRoot, 'apps/demo-soul')
-      mkdirSync(join(appDir, 'host-adapter'), { recursive: true })
-      writeFileSync(join(appDir, 'soul-app.manifest.json'), JSON.stringify({ id: 'demo-soul' }))
+      const appDir = join(tempRoot, 'souls/demo-soul')
+      mkdirSync(join(appDir, 'product/capabilities/default'), { recursive: true })
+      writeFileSync(join(appDir, 'soul.config.ts'), 'export default {}\n')
       writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: '@demo/soul' }))
       writeFileSync(
-        join(appDir, 'host-adapter/bad.ts'),
-        'import { thing } from "@zonease/aiworker-core"\nexport const y = thing\n',
+        join(appDir, 'product/capabilities/default/bad.ts'),
+        'import { thing } from "@zonease/aiworker-host-runtime"\nexport const y = thing\n',
       )
 
       const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
@@ -77,8 +76,8 @@ describe('check-soul-app-boundaries', () => {
       })
 
       expect(result.status).not.toBe(0)
-      expect(result.stderr).toContain('apps/demo-soul/host-adapter/bad.ts')
-      expect(result.stderr).toContain('@zonease/aiworker-core')
+      expect(result.stderr).toContain('souls/demo-soul/product/capabilities/default/bad.ts')
+      expect(result.stderr).toContain('@zonease/aiworker-host-runtime')
     }
     finally {
       rmSync(tempRoot, { force: true, recursive: true })
@@ -88,16 +87,16 @@ describe('check-soul-app-boundaries', () => {
   test('catches Host code importing Soul internals outside src/', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
     try {
-      const appDir = join(tempRoot, 'apps/demo-soul')
-      mkdirSync(join(appDir, 'host-adapter'), { recursive: true })
-      writeFileSync(join(appDir, 'soul-app.manifest.json'), JSON.stringify({ id: 'demo-soul' }))
-      writeFileSync(join(appDir, 'host-adapter/api.ts'), 'export const api = 1\n')
+      const appDir = join(tempRoot, 'souls/demo-soul')
+      mkdirSync(join(appDir, 'product/api'), { recursive: true })
+      writeFileSync(join(appDir, 'soul.config.ts'), 'export default {}\n')
+      writeFileSync(join(appDir, 'product/api/index.ts'), 'export const api = 1\n')
 
       const webDir = join(tempRoot, 'apps/web/src')
       mkdirSync(webDir, { recursive: true })
       writeFileSync(
         join(webDir, 'bad.ts'),
-        'import { api } from "../../demo-soul/host-adapter/api"\nexport const z = api\n',
+        'import { api } from "../../../souls/demo-soul/product/api"\nexport const z = api\n',
       )
 
       const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
@@ -116,12 +115,12 @@ describe('check-soul-app-boundaries', () => {
   test('exempts Soul App test files from the import boundary', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
     try {
-      const appDir = join(tempRoot, 'apps/demo-soul')
-      mkdirSync(join(appDir, 'host-adapter'), { recursive: true })
-      writeFileSync(join(appDir, 'soul-app.manifest.json'), JSON.stringify({ id: 'demo-soul' }))
+      const appDir = join(tempRoot, 'souls/demo-soul')
+      mkdirSync(join(appDir, 'product/api'), { recursive: true })
+      writeFileSync(join(appDir, 'soul.config.ts'), 'export default {}\n')
       writeFileSync(
-        join(appDir, 'host-adapter/api.test.ts'),
-        'import { thing } from "@zonease/aiworker-core"\nexport const y = thing\n',
+        join(appDir, 'product/api/index.test.ts'),
+        'import { thing } from "@zonease/aiworker-host-runtime"\nexport const y = thing\n',
       )
 
       const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
@@ -139,11 +138,11 @@ describe('check-soul-app-boundaries', () => {
   test('blocks Soul App imports of the Host fs-layout package', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
     try {
-      const appDir = join(tempRoot, 'apps/demo-soul')
-      mkdirSync(join(appDir, 'host-adapter'), { recursive: true })
-      writeFileSync(join(appDir, 'soul-app.manifest.json'), JSON.stringify({ id: 'demo-soul' }))
+      const appDir = join(tempRoot, 'souls/demo-soul')
+      mkdirSync(join(appDir, 'product/api'), { recursive: true })
+      writeFileSync(join(appDir, 'soul.config.ts'), 'export default {}\n')
       writeFileSync(
-        join(appDir, 'host-adapter/bad.ts'),
+        join(appDir, 'product/api/bad.ts'),
         'import { home } from "@zonease/aiworker-fs-layout"\nexport const y = home\n',
       )
 

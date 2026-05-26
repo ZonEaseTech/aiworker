@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { soulAppServiceEnv } from '@zonease/aiworker-core'
-import { hrSoulAppManifest, namespaceSoulAppCapabilityId } from '@zonease/aiworker-shared'
+import { soulAppServiceEnv } from '@zonease/aiworker-host-runtime'
+import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
 import {
   closeWorkerDb,
   createSession,
@@ -63,6 +63,13 @@ describe('aiworker local CLI', () => {
 
   function argv(...args: string[]): string[] {
     return ['/usr/bin/bun', '/repo/apps/cli/src/aiworker.ts', ...args]
+  }
+
+  const FREEFORM_APP_ID = 'aiworker-freeform'
+  const FREEFORM_CAPABILITY_ID = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'default')
+
+  function freeformDescriptorPath(): string {
+    return path.resolve(import.meta.dir, '..', '..', '..', 'souls', FREEFORM_APP_ID, 'dist', 'soul.descriptor.json')
   }
 
   function seedLegacyHrMetadata() {
@@ -235,11 +242,11 @@ describe('aiworker local CLI', () => {
     }
   })
 
-  it('resolves package-local official apps before source apps', async () => {
+  it('resolves package-local official descriptor apps before source apps', async () => {
     const moduleDir = path.join(root, 'dist')
     const officialAppsRoot = path.join(moduleDir, 'official-apps')
-    mkdirSync(path.join(officialAppsRoot, 'aiworker-hr'), { recursive: true })
-    await writeFile(path.join(officialAppsRoot, 'aiworker-hr', 'soul-app.manifest.json'), '{}')
+    mkdirSync(path.join(officialAppsRoot, FREEFORM_APP_ID, 'dist'), { recursive: true })
+    await writeFile(path.join(officialAppsRoot, FREEFORM_APP_ID, 'dist', 'soul.descriptor.json'), '{}')
 
     expect(resolveCliOfficialAppsRoot(moduleDir)).toBe(officialAppsRoot)
   })
@@ -327,16 +334,16 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', 'aiworker-hr'))).toBe(0)
-    expect((JSON.parse(output) as { worker: { id: string, soulId: string } }).worker).toMatchObject({ id: 'hr-recruiting', soulId: 'aiworker-hr' })
+    expect(await runCli(argv('worker', 'create', '--id', 'freeform-worker', '--name', 'Freeform Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect((JSON.parse(output) as { worker: { id: string, soulId: string } }).worker).toMatchObject({ id: 'freeform-worker', soulId: FREEFORM_APP_ID })
     output = ''
 
-    expect(await runCli(argv('worker', 'select', 'hr-recruiting'))).toBe(0)
+    expect(await runCli(argv('worker', 'select', 'freeform-worker'))).toBe(0)
     expect(output).toContain('selected-worker')
     output = ''
 
-    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'people-profile', '--worker', 'hr-recruiting'))).toBe(0)
-    expect((JSON.parse(output) as { workspace: { id: string, type: string } }).workspace).toMatchObject({ type: 'people-profile' })
+    expect(await runCli(argv('workspace', 'create', '--name', 'Scratch', '--type', 'freeform', '--worker', 'freeform-worker'))).toBe(0)
+    expect((JSON.parse(output) as { workspace: { id: string, type: string } }).workspace).toMatchObject({ type: 'freeform' })
     output = ''
 
     expect(await runCli(argv('commands'))).toBe(0)
@@ -351,11 +358,11 @@ describe('aiworker local CLI', () => {
   it('materializes app-authored capability assets for the first session turn', async () => {
     await writeFakeCodexCommand()
 
-    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
     output = ''
-    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-recruiting'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -369,7 +376,7 @@ describe('aiworker local CLI', () => {
       '--workspace',
       workspace.id,
       '--skill',
-      namespaceSoulAppCapabilityId('aiworker-hr', 'evidence-matrix'),
+      FREEFORM_CAPABILITY_ID,
       '--title',
       'Evidence Matrix',
       '--context',
@@ -389,11 +396,11 @@ describe('aiworker local CLI', () => {
   it('freezes CLI engine choice for new sessions without changing existing sessions', async () => {
     await writeFakeOpenCodeCommand()
 
-    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
     output = ''
-    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-recruiting'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -409,7 +416,7 @@ describe('aiworker local CLI', () => {
       '--workspace',
       workspace.id,
       '--skill',
-      namespaceSoulAppCapabilityId('aiworker-hr', 'evidence-matrix'),
+      FREEFORM_CAPABILITY_ID,
       '--title',
       'Evidence Matrix',
       '--input',
@@ -462,7 +469,7 @@ describe('aiworker local CLI', () => {
       '--workspace',
       workspace.id,
       '--skill',
-      namespaceSoulAppCapabilityId('aiworker-hr', 'evidence-matrix'),
+      FREEFORM_CAPABILITY_ID,
       '--title',
       'Explicit Engine Matrix',
       '--input',
@@ -487,11 +494,11 @@ describe('aiworker local CLI', () => {
   it('resolves claude-code selected engine to the installed claude command', async () => {
     await writeFakeClaudeCommand()
 
-    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
     output = ''
-    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-claude', '--name', 'HR Claude', '--soul', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-claude', '--name', 'HR Claude', '--soul', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-claude'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -507,7 +514,7 @@ describe('aiworker local CLI', () => {
       '--workspace',
       workspace.id,
       '--skill',
-      namespaceSoulAppCapabilityId('aiworker-hr', 'person-profile'),
+      FREEFORM_CAPABILITY_ID,
       '--title',
       'Claude profile',
       '--input',
@@ -527,11 +534,11 @@ describe('aiworker local CLI', () => {
   it('uses frozen CLI engine metadata when the selected engine becomes unavailable', async () => {
     await writeFakeOpenCodeCommand()
 
-    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
     output = ''
-    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-frozen', '--name', 'HR Frozen', '--soul', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-frozen', '--name', 'HR Frozen', '--soul', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-frozen'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -547,7 +554,7 @@ describe('aiworker local CLI', () => {
       '--workspace',
       workspace.id,
       '--skill',
-      namespaceSoulAppCapabilityId('aiworker-hr', 'evidence-matrix'),
+      FREEFORM_CAPABILITY_ID,
       '--title',
       'Frozen engine',
       '--input',
@@ -592,11 +599,11 @@ describe('aiworker local CLI', () => {
     await writeFakeClaudeCommand()
     await writeFakeOpenCodeCommand()
 
-    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
     output = ''
-    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-legacy-engine', '--name', 'HR Legacy Engine', '--soul', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-legacy-engine', '--name', 'HR Legacy Engine', '--soul', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-legacy-engine'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -610,7 +617,7 @@ describe('aiworker local CLI', () => {
       id: 'legacy-engine-session',
       workerId: 'hr-legacy-engine',
       workspaceId: workspace.id,
-      capabilityTemplateId: namespaceSoulAppCapabilityId('aiworker-hr', 'person-profile'),
+      capabilityTemplateId: FREEFORM_CAPABILITY_ID,
       title: 'Legacy engine session',
       metadataJson: {
         engineId: 'claude-code',
@@ -808,27 +815,23 @@ describe('aiworker local CLI', () => {
     }
     expect(body.bootstrap.status).toBe('pass')
     expect(body.bootstrap.results.map(result => [result.appId, result.action])).toEqual([
-      ['aiworker-hr', 'installed_enabled'],
-      ['aiworker-qa', 'installed_enabled'],
-      ['aiworker-custom', 'installed_enabled'],
+      [FREEFORM_APP_ID, 'installed_enabled'],
     ])
     expect(body.catalog.souls).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'aiworker-hr', status: 'available' }),
-      expect.objectContaining({ id: 'aiworker-qa', status: 'available' }),
-      expect.objectContaining({ id: 'aiworker-custom', status: 'available' }),
+      expect.objectContaining({ id: FREEFORM_APP_ID, status: 'available' }),
     ]))
     expect(body.catalog.souls.some(soul => soul.id === 'hr')).toBe(false)
     output = ''
 
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
-    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed', 'refreshed', 'refreshed'])
+    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed'])
     output = ''
 
     expect(await runCli(argv('worker', 'create', '--id', 'legacy-hr', '--name', 'Legacy HR', '--soul', 'hr'))).toBe(1)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'official-hr', '--name', 'Official HR', '--soul', 'aiworker-hr'))).toBe(0)
-    expect((JSON.parse(output) as { worker: { soulId: string } }).worker.soulId).toBe('aiworker-hr')
+    expect(await runCli(argv('worker', 'create', '--id', 'official-freeform', '--name', 'Official Freeform', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect((JSON.parse(output) as { worker: { soulId: string } }).worker.soulId).toBe(FREEFORM_APP_ID)
   })
 
   it('discards legacy HR metadata during official app bootstrap', async () => {
@@ -842,142 +845,132 @@ describe('aiworker local CLI', () => {
       catalog: { souls: Array<{ id: string }> }
     }
     expect(body.bootstrap.legacyMetadataDiscard).toMatchObject({ workersDeleted: 1 })
-    expect(body.catalog.souls.map(soul => soul.id)).toContain('aiworker-hr')
+    expect(body.catalog.souls.map(soul => soul.id)).toContain(FREEFORM_APP_ID)
     output = ''
 
     expect(await runCli(argv('worker', 'show', 'legacy-hr-worker'))).toBe(0)
     expect((JSON.parse(output) as { worker: null }).worker).toBeNull()
   })
 
-  it('installs, enables, lists, and disables local Soul App manifests', async () => {
-    const manifestPath = path.join(root, 'aiworker-hr.manifest.json')
-    await writeFile(manifestPath, JSON.stringify(hrSoulAppManifest))
+  it('installs, enables, lists, and disables local Soul descriptors', async () => {
+    const descriptorPath = freeformDescriptorPath()
 
-    expect(await runCli(argv('app', 'install', manifestPath))).toBe(0)
-    expect((JSON.parse(output) as { app: { appId: string, status: string } }).app).toMatchObject({ appId: 'aiworker-hr', status: 'installed' })
+    expect(await runCli(argv('app', 'install', descriptorPath))).toBe(0)
+    expect((JSON.parse(output) as { app: { appId: string, status: string } }).app).toMatchObject({ appId: FREEFORM_APP_ID, status: 'installed' })
     output = ''
 
-    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     expect((JSON.parse(output) as { app: { healthStatus: string, status: string } }).app).toMatchObject({ healthStatus: 'pass', status: 'enabled' })
     output = ''
 
     expect(await runCli(argv('soul', 'list'))).toBe(0)
-    expect((JSON.parse(output) as { souls: Array<{ id: string, status: string }> }).souls).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'aiworker-hr', status: 'available' })]))
+    expect((JSON.parse(output) as { souls: Array<{ id: string, status: string }> }).souls).toEqual(expect.arrayContaining([expect.objectContaining({ id: FREEFORM_APP_ID, status: 'available' })]))
     output = ''
 
-    expect(await runCli(argv('template', 'list', '--soul', 'aiworker-hr'))).toBe(0)
-    const capabilityId = namespaceSoulAppCapabilityId('aiworker-hr', 'candidate-screen')
+    expect(await runCli(argv('template', 'list', '--soul', FREEFORM_APP_ID))).toBe(0)
+    const capabilityId = FREEFORM_CAPABILITY_ID
     expect((JSON.parse(output) as { templates: Array<{ id: string }> }).templates.map(template => template.id)).toContain(capabilityId)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'mounted-hr', '--name', 'Mounted HR', '--soul', 'aiworker-hr'))).toBe(0)
-    expect((JSON.parse(output) as { worker: { metadata: Record<string, unknown>, soulId: string } }).worker.soulId).toBe('aiworker-hr')
+    expect(await runCli(argv('worker', 'create', '--id', 'mounted-hr', '--name', 'Mounted HR', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect((JSON.parse(output) as { worker: { metadata: Record<string, unknown>, soulId: string } }).worker.soulId).toBe(FREEFORM_APP_ID)
     output = ''
 
-    expect(await runCli(argv('app', 'disable', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('app', 'disable', FREEFORM_APP_ID))).toBe(0)
     expect((JSON.parse(output) as { app: { status: string } }).app.status).toBe('disabled')
     output = ''
 
-    expect(await runCli(argv('template', 'list', '--soul', 'aiworker-hr'))).toBe(0)
+    expect(await runCli(argv('template', 'list', '--soul', FREEFORM_APP_ID))).toBe(0)
     expect((JSON.parse(output) as { templates: unknown[] }).templates).toEqual([])
   })
 
-  it('scaffolds, validates, and smokes a minimal Soul App', async () => {
+  it('scaffolds, validates, and smokes a descriptor-only SDK Soul App', async () => {
     const appDir = path.join(root, 'demo-soul-app')
 
     expect(await runCli(argv('app', 'create', 'demo-soul-app', '--dir', appDir))).toBe(0)
-    const scaffold = JSON.parse(output) as { appId: string, files: string[], path: string }
-    expect(scaffold).toMatchObject({ appId: 'demo-soul-app', path: appDir })
-    expect(scaffold.files).toContain('soul-app.manifest.json')
-    expect(scaffold.files).toContain('engine-assets/workspace/AGENTS.md')
-    expect(scaffold.files).toContain('engine-assets/skills/brief/SKILL.md')
-    expect(scaffold.files).toContain('product/profiles/demo-soul-app/SOUL.md')
-    expect(scaffold.files).toContain('host-adapter/standalone/standalone.ts')
-    expect(scaffold.files).toContain('host-adapter/mounted/host-mounted.ts')
-    expect(scaffold.files).toContain('runtime/universal-workbench.ts')
-    await expect(stat(path.join(appDir, 'soul-app.manifest.json'))).resolves.toBeTruthy()
-    await expect(stat(path.join(appDir, 'host-adapter/index.ts'))).resolves.toBeTruthy()
-    await expect(stat(path.join(appDir, 'host-adapter/standalone/standalone.ts'))).resolves.toBeTruthy()
-    await expect(stat(path.join(appDir, 'host-adapter/mounted/host-mounted.ts'))).resolves.toBeTruthy()
+    const scaffold = JSON.parse(output) as { appId: string, descriptorPath: string, files: string[], path: string }
+    const descriptorPath = path.join(appDir, 'dist', 'soul.descriptor.json')
+    expect(scaffold).toMatchObject({ appId: 'demo-soul-app', descriptorPath, path: appDir })
+    expect(scaffold.files).toContain('soul.config.ts')
+    expect(scaffold.files).toContain('product/capabilities/default/prompt.md')
+    expect(scaffold.files).toContain('engine/workspace/AGENTS.md')
+    expect(scaffold.files).toContain('engine/skills/default/SKILL.md')
+    expect(scaffold.files).toContain('engine/mcp/codex/config.toml')
+    expect(scaffold.files).toContain('engine/mcp/claude-code/.mcp.json')
+    expect(scaffold.files).toContain('scripts/build.ts')
+    expect(scaffold.files).toContain('scripts/validate.ts')
+    expect(scaffold.files).toContain('dist/soul.descriptor.json')
+    expect(scaffold.files).not.toContain('soul-app.manifest.json')
+    expect(scaffold.files.some(file => file.startsWith('host-adapter/'))).toBe(false)
+    await expect(stat(path.join(appDir, 'soul.config.ts'))).resolves.toBeTruthy()
+    await expect(stat(descriptorPath)).resolves.toBeTruthy()
+    await expect(stat(path.join(appDir, 'soul-app.manifest.json'))).rejects.toThrow()
+    await expect(stat(path.join(appDir, 'host-adapter'))).rejects.toThrow()
     const scaffoldPackageJson = JSON.parse(await readFile(path.join(appDir, 'package.json'), 'utf8')) as {
       dependencies: Record<string, string>
+      scripts: Record<string, string>
+    }
+    const scaffoldTsconfig = JSON.parse(await readFile(path.join(appDir, 'tsconfig.json'), 'utf8')) as {
+      include: string[]
     }
     const scaffoldReadme = await readFile(path.join(appDir, 'README.md'), 'utf8')
-    const scaffoldHostMounted = await readFile(path.join(appDir, 'host-adapter', 'mounted', 'host-mounted.ts'), 'utf8')
-    const scaffoldPrompt = await readFile(path.join(appDir, 'product', 'workflows', 'brief', 'prompt.md'), 'utf8')
-    const scaffoldWorkspaceGitignore = await readFile(path.join(appDir, 'engine-assets', 'workspace', '.gitignore'), 'utf8')
-    const scaffoldManifest = JSON.parse(await readFile(path.join(appDir, 'soul-app.manifest.json'), 'utf8')) as {
-      ui: {
-        workbench?: unknown
-        routes?: Array<{
-          id: string
-          surface?: {
-            entry: string
-            renderer: string
-            scope: string
-          }
-        }>
-        workspaceContext?: {
-          terminal?: {
-            cwd?: { source: string }
-            id: string
-          }
-        }
-        workspaceWidgets?: Array<{
-          id: string
-          surface?: {
-            entry: string
-            renderer: string
-            scope: string
-          }
-        }>
+    const scaffoldSoulConfig = await readFile(path.join(appDir, 'soul.config.ts'), 'utf8')
+    const scaffoldPrompt = await readFile(path.join(appDir, 'product', 'capabilities', 'default', 'prompt.md'), 'utf8')
+    const scaffoldWorkspaceGitignore = await readFile(path.join(appDir, 'engine', 'workspace', '.gitignore'), 'utf8')
+    const descriptor = JSON.parse(await readFile(descriptorPath, 'utf8')) as {
+      capabilities: Array<{ id: string, prompt: { ref: string, type: string } }>
+      engine: {
+        mcp?: { targets?: Record<string, { file: string }> }
+        skills?: { source: string }
+        workspaceAssets?: { source: string }
       }
+      identity: { appId: string, name: string, soulId: string, version: string }
+      protocol: string
+      workbench: { entry: string, router: { mode: string }, type: string }
     }
     expect(scaffoldPackageJson.dependencies['@zonease/aiworker-soul-app-sdk']).toBe('workspace:*')
-    expect(scaffoldManifest.ui).not.toHaveProperty('workbench')
-    expect(JSON.stringify(scaffoldManifest.ui)).not.toContain('host-descriptor')
-    expect(scaffoldManifest.ui.routes?.[0]).toEqual(expect.objectContaining({
-      id: 'universal-workbench',
-      surface: expect.objectContaining({
-        entry: '/micro-app/workbench/universal',
-        renderer: 'micro-app',
-        scope: 'app',
-      }),
-    }))
-    expect(scaffoldManifest.ui.routes?.[1]).toEqual(expect.objectContaining({
-      id: 'brief-home',
-      surface: expect.objectContaining({
-        entry: '/micro-app/routes/brief-home',
-        renderer: 'micro-app',
-        scope: 'app',
-      }),
-    }))
-    expect(scaffoldManifest.ui.workspaceContext?.terminal).toEqual(expect.objectContaining({
-      cwd: { source: 'host-workspace-root' },
-      id: 'starter-workspace-terminal',
-    }))
-    expect(scaffoldManifest.ui.workspaceWidgets?.[0]).toEqual(expect.objectContaining({
-      id: 'brief-widget',
-      surface: {
-        entry: '/micro-app/widgets/brief-widget',
-        renderer: 'micro-app',
-        scope: 'workspace',
+    expect(scaffoldPackageJson.scripts.build).toBe('bun scripts/build.ts')
+    expect(scaffoldPackageJson.scripts.validate).toBe('bun scripts/validate.ts')
+    expect(scaffoldTsconfig.include).toEqual(['soul.config.ts', 'scripts/**/*.ts'])
+    expect(scaffoldSoulConfig).toContain('defineSoul')
+    expect(scaffoldSoulConfig).toContain('id: \'demo-soul-app\'')
+    expect(scaffoldSoulConfig).not.toContain('host-adapter')
+    expect(descriptor).toMatchObject({
+      capabilities: [{
+        id: 'default',
+        prompt: {
+          ref: 'dist/product/capabilities/default/prompt.md',
+          type: 'packaged-file',
+        },
+      }],
+      identity: {
+        appId: 'demo-soul-app',
+        name: 'Demo Soul App',
+        soulId: 'demo-soul-app',
+        version: '0.1.0',
       },
-    }))
-    expect(scaffoldReadme).toContain('source-checkout preview')
-    expect(scaffoldReadme).toContain('micro-app')
-    expect(scaffoldReadme).toContain('app-owned mounted API')
-    expect(scaffoldReadme).not.toContain('ui.workbench')
-    expect(scaffoldReadme).toContain('ui.workspaceContext')
-    expect(scaffoldReadme).toContain('replace `workspace:*` after the SDK is published')
-    expect(scaffoldHostMounted).toContain('/micro-app/workbench/universal')
-    expect(scaffoldHostMounted).toContain('/micro-app/routes/brief-home')
-    expect(scaffoldHostMounted).toContain('/api/briefs')
-    expect(scaffoldHostMounted).toContain('/api/briefs/search')
-    expect(scaffoldHostMounted).not.toContain('/protocol/actions')
-    expect(scaffoldHostMounted).not.toContain('/protocol/search')
-    expect(scaffoldHostMounted).not.toContain('/broker/')
-    expect(scaffoldHostMounted).not.toContain('host-descriptor')
+      protocol: 'soul/v1',
+      workbench: {
+        entry: 'dist/web/workbench/index.html',
+        router: { mode: 'search' },
+        type: 'micro-app',
+      },
+    })
+    expect(descriptor.engine).toMatchObject({
+      mcp: {
+        targets: {
+          'claude-code': { file: 'dist/engine-assets/mcp/claude-code/.mcp.json' },
+          'codex': { file: 'dist/engine-assets/mcp/codex/config.toml' },
+        },
+      },
+      skills: { source: 'dist/engine-assets/skills' },
+      workspaceAssets: { source: 'dist/engine-assets/workspace' },
+    })
+    expect(scaffoldReadme).toContain('descriptor-only')
+    expect(scaffoldReadme).toContain('soul.config.ts')
+    expect(scaffoldReadme).toContain('dist/soul.descriptor.json')
+    expect(scaffoldReadme).not.toContain('soul-app.manifest.json')
+    expect(scaffoldReadme).not.toContain('host-adapter')
     expect(scaffoldPrompt).not.toContain('broker')
     expect(scaffoldWorkspaceGitignore).toContain('.aiworker/sessions/')
     expect(scaffoldWorkspaceGitignore).toContain('.aiworker/projections.json')
@@ -992,130 +985,156 @@ describe('aiworker local CLI', () => {
     const validation = JSON.parse(output) as {
       validation: {
         appId: string
-        assetIssues: unknown[]
-        checkedAssets: string[]
-        privateImportIssues: unknown[]
+        descriptorIssues: unknown[]
+        descriptorPath: string
+        sdkIssues: unknown[]
+        source: string
         status: string
       }
     }
-    expect(validation.validation).toMatchObject({ appId: 'demo-soul-app', status: 'pass' })
-    expect(validation.validation.assetIssues).toEqual([])
-    expect(validation.validation.privateImportIssues).toEqual([])
-    expect(validation.validation.checkedAssets).toContain('./engine-assets/workspace')
-    expect(validation.validation.checkedAssets).toContain('./engine-assets/skills')
-    expect(validation.validation.checkedAssets).toContain('./host-adapter/standalone/standalone.ts')
-    expect(validation.validation.checkedAssets).toContain('./host-adapter/mounted/host-mounted.ts')
-    expect(validation.validation.checkedAssets).toContain('./host-adapter/index.ts')
-    expect(validation.validation.checkedAssets).toContain('./runtime/universal-workbench.ts')
+    expect(validation.validation).toMatchObject({
+      appId: 'demo-soul-app',
+      descriptorPath,
+      source: 'directory',
+      status: 'pass',
+    })
+    expect(validation.validation.descriptorIssues).toEqual([])
+    expect(validation.validation.sdkIssues).toEqual([])
+    output = ''
+
+    expect(await runCli(argv('app', 'validate', descriptorPath))).toBe(0)
+    const descriptorValidation = JSON.parse(output) as {
+      validation: {
+        appId: string
+        descriptorIssues: unknown[]
+        descriptorPath: string
+        sdkIssues: unknown[]
+        source: string
+        status: string
+      }
+    }
+    expect(descriptorValidation.validation).toMatchObject({
+      appId: 'demo-soul-app',
+      descriptorPath,
+      source: 'descriptor',
+      status: 'pass',
+    })
+    expect(descriptorValidation.validation.descriptorIssues).toEqual([])
+    expect(descriptorValidation.validation.sdkIssues).toEqual([])
     output = ''
 
     expect(await runCli(argv('app', 'smoke', appDir))).toBe(0)
     const smoke = JSON.parse(output) as {
       smoke: {
         appId: string
-        artifactCount: number
-        hostedStatus: string
-        mounted: string
-        mountedService: string
-        mountedServiceHttpStatus: number
-        mountedServiceUrl: string
-        standalone: string
-        standaloneHttpStatus: number
-        standaloneUrl: string
+        descriptorPath: string
+        descriptorStatus: string
+        engineAssets: string
+        sdkValidation: string
         status: string
+        workbench: string
       }
     }
     expect(smoke.smoke).toMatchObject({
       appId: 'demo-soul-app',
-      artifactCount: 0,
-      hostedStatus: 'enabled',
-      mounted: 'pass',
-      mountedService: 'pass',
-      mountedServiceHttpStatus: 200,
-      standalone: 'pass',
-      standaloneHttpStatus: 200,
+      descriptorPath,
+      descriptorStatus: 'pass',
+      engineAssets: 'pass',
+      sdkValidation: 'valid',
       status: 'pass',
+      workbench: 'pass',
     })
-    expect(smoke.smoke).not.toHaveProperty('workbenchAction')
-    expect(smoke.smoke).not.toHaveProperty('workbenchSearch')
-    expect(smoke.smoke.standaloneUrl).toStartWith('http://127.0.0.1:')
-    expect(smoke.smoke.mountedServiceUrl).toStartWith('http://127.0.0.1:')
+    expect(smoke.smoke).not.toHaveProperty('standalone')
+    expect(smoke.smoke).not.toHaveProperty('mountedService')
   })
 
-  it('fails Soul App validation on Host private imports', async () => {
-    const appDir = path.join(root, 'private-import-app')
-
-    expect(await runCli(argv('app', 'create', 'private-import-app', '--dir', appDir))).toBe(0)
-    output = ''
-    await writeFile(path.join(appDir, 'host-adapter/private.ts'), 'import { createLocalWorkerRuntime } from \'@zonease/aiworker-core\'\n')
-
-    expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
-    const validation = JSON.parse(output) as {
-      validation: {
-        privateImportIssues: Array<{ file: string, importPath: string, message: string }>
-        status: string
-      }
-    }
-    expect(validation.validation.status).toBe('fail')
-    expect(validation.validation.privateImportIssues).toEqual([{
-      file: 'host-adapter/private.ts',
-      importPath: '@zonease/aiworker-core',
-      message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
-    }])
-  })
-
-  it('fails Soul App validation on sibling app imports', async () => {
-    const appDir = path.join(root, 'sibling-import-app')
-
-    expect(await runCli(argv('app', 'create', 'sibling-import-app', '--dir', appDir))).toBe(0)
-    output = ''
-    await writeFile(path.join(appDir, 'host-adapter/private.ts'), 'import { hrReferenceSoulApp } from \'@zonease/aiworker-hr\'\n')
-
-    expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
-    const validation = JSON.parse(output) as {
-      validation: {
-        privateImportIssues: Array<{ file: string, importPath: string, message: string }>
-        status: string
-      }
-    }
-    expect(validation.validation.status).toBe('fail')
-    expect(validation.validation.privateImportIssues).toEqual([{
-      file: 'host-adapter/private.ts',
-      importPath: '@zonease/aiworker-hr',
-      message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
-    }])
-  })
-
-  it('fails Soul App validation on raw browser storage usage', async () => {
-    const appDir = path.join(root, 'raw-storage-app')
-
-    expect(await runCli(argv('app', 'create', 'raw-storage-app', '--dir', appDir))).toBe(0)
-    output = ''
-    await writeFile(path.join(appDir, 'product/web/routes/raw-storage.ts'), [
-      'localStorage.setItem("theme", "dark")',
-      'window.sessionStorage.clear()',
-      '',
-    ].join('\n'))
-
-    expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
-    const validation = JSON.parse(output) as {
-      validation: {
-        status: string
-        webStorageIssues: Array<{ file: string, message: string, symbol: string }>
-      }
-    }
-    expect(validation.validation.status).toBe('fail')
-    expect(validation.validation.webStorageIssues).toEqual([
-      {
-        file: 'product/web/routes/raw-storage.ts',
-        message: 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.',
-        symbol: 'localStorage',
+  it('fails descriptor validation on source hook paths', async () => {
+    const descriptorPath = path.join(root, 'bad-soul.descriptor.json')
+    await writeFile(descriptorPath, JSON.stringify({
+      api: {
+        entry: 'dist/../host-adapter/api.js',
+        mount: '/api/apps/bad-soul',
+        type: 'local-service',
       },
-      {
-        file: 'product/web/routes/raw-storage.ts',
-        message: 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.',
-        symbol: 'window.sessionStorage.clear',
+      capabilities: [],
+      compatibility: {},
+      configuration: {},
+      engine: {},
+      extensions: {},
+      external: {},
+      health: {},
+      identity: {
+        appId: 'bad-soul',
+        name: 'Bad Soul',
+        soulId: 'bad-soul',
+        version: '0.1.0',
       },
+      protocol: 'soul/v1',
+      workbench: {
+        entry: 'dist/../host-adapter/workbench.html',
+        router: { mode: 'search' },
+        type: 'micro-app',
+      },
+    }))
+
+    expect(await runCli(argv('app', 'validate', descriptorPath))).toBe(1)
+    const validation = JSON.parse(output) as {
+      validation: {
+        descriptorIssues: Array<{ code: string, message: string, path: string }>
+        status: string
+      }
+    }
+    expect(validation.validation.status).toBe('fail')
+    expect(validation.validation.descriptorIssues).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'invalid_descriptor',
+        path: 'workbench.entry',
+      }),
+      expect.objectContaining({
+        code: 'invalid_descriptor',
+        path: 'api.entry',
+      }),
+    ]))
+  })
+
+  it('fails SDK Soul validation when authoring files are missing', async () => {
+    const appDir = path.join(root, 'missing-sdk-soul')
+    mkdirSync(appDir, { recursive: true })
+
+    expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
+    const validation = JSON.parse(output) as {
+      validation: {
+        sdkIssues: Array<{ code: string, path: string }>
+        status: string
+      }
+    }
+    expect(validation.validation.status).toBe('fail')
+    expect(validation.validation.sdkIssues.map(issue => [issue.code, issue.path])).toEqual(expect.arrayContaining([
+      ['missing_config', 'soul.config.ts'],
+      ['missing_capability', 'product/capabilities'],
+    ]))
+  })
+
+  it('fails SDK Soul validation on invalid native MCP JSON', async () => {
+    const appDir = path.join(root, 'invalid-mcp-app')
+
+    expect(await runCli(argv('app', 'create', 'invalid-mcp-app', '--dir', appDir))).toBe(0)
+    output = ''
+    await writeFile(path.join(appDir, 'engine', 'mcp', 'claude-code', '.mcp.json'), '{')
+
+    expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
+    const validation = JSON.parse(output) as {
+      validation: {
+        sdkIssues: Array<{ code: string, path: string }>
+        status: string
+      }
+    }
+    expect(validation.validation.status).toBe('fail')
+    expect(validation.validation.sdkIssues).toEqual([
+      expect.objectContaining({
+        code: 'invalid_mcp_json',
+        path: 'engine/mcp/claude-code/.mcp.json',
+      }),
     ])
   })
 })

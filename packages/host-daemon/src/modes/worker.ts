@@ -1,5 +1,5 @@
-import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, NativeEngineBridgeResult } from '@zonease/aiworker-core'
-import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppMountedSurface } from '@zonease/aiworker-shared'
+import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, NativeEngineBridgeResult } from '@zonease/aiworker-host-runtime'
+import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppMountedSurface } from '@zonease/aiworker-soul-protocol'
 import type { SessionRow, WorkerEngineInvocationRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import type { Context } from 'hono'
@@ -22,12 +22,12 @@ import {
   resolveLocalCliEngine,
   soulAppServiceEnv,
   workerEnv,
-} from '@zonease/aiworker-core'
+} from '@zonease/aiworker-host-runtime'
 import {
   AppError,
   isLoopbackMountedServiceUrl,
   localWorkerOverlaySaveSchema,
-} from '@zonease/aiworker-shared'
+} from '@zonease/aiworker-soul-protocol'
 import {
   closeWorkerDb,
   createWorkerEngineInvocation,
@@ -225,11 +225,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const result = await parseJsonBody(c, installAppBodySchema, 'INSTALL_APP_INVALID')
     if (!result.ok)
       return result.response
-    const { manifest, manifestPath } = result.data
-    const app = typeof manifestPath === 'string' && manifestPath.trim()
-      ? await state.host.installAppFromPath(manifestPath)
-      : state.host.installAppManifest({
-          manifest,
+    const { descriptor, descriptorPath } = result.data
+    const app = typeof descriptorPath === 'string' && descriptorPath.trim()
+      ? await state.host.installAppFromPath(descriptorPath)
+      : state.host.installAppDescriptor({
+          descriptor,
           sourceKind: 'inline',
           sourceRef: 'api:inline',
         })
@@ -268,11 +268,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const result = await parseJsonBody(c, installAppBodySchema, 'INSTALL_APP_INVALID')
     if (!result.ok)
       return result.response
-    const { manifest, manifestPath } = result.data
-    const app = typeof manifestPath === 'string' && manifestPath.trim()
-      ? await state.host.installAppFromPath(manifestPath)
-      : state.host.installAppManifest({
-          manifest,
+    const { descriptor, descriptorPath } = result.data
+    const app = typeof descriptorPath === 'string' && descriptorPath.trim()
+      ? await state.host.installAppFromPath(descriptorPath)
+      : state.host.installAppDescriptor({
+          descriptor,
           sourceKind: 'inline',
           sourceRef: 'api:inline',
         })
@@ -1474,7 +1474,7 @@ function stopMountedSoulAppService(state: LocalDaemonState, appId: string): void
 }
 
 function mountedSoulAppCwd(app: HostedSoulApp): string {
-  if (app.sourceKind === 'manifest-path')
+  if (app.sourceKind === 'descriptor-path')
     return path.dirname(app.sourceRef)
   return process.cwd()
 }

@@ -23,7 +23,7 @@
     "db:generate": "bun run db:generate:worker"
   },
   "dependencies": {
-    "@zonease/aiworker-shared": "workspace:*",
+    "@zonease/aiworker-soul-protocol": "workspace:*",
     "drizzle-orm": "^0.44.1"
   },
   "devDependencies": {
