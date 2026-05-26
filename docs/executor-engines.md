@@ -49,7 +49,7 @@ aiworker daemon foreground --host 127.0.0.1 --port 9217
 - `cli`：执行 operator 配置的任意命令。
 
 Secret 应放在 `.env`、系统 keychain、vault/ref 或外部 engine 自己的配置里，不要写入
-worker.db metadata、workspace 文件、manifest、prompt、review rubric 或日志。
+worker.db metadata、workspace 文件、descriptor、prompt、review rubric 或日志。
 
 ## Claude Code <a id="claude-code"></a>
 

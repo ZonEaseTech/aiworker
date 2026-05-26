@@ -1,4 +1,4 @@
-# Soul App Developer Quickstart (Frozen)
+# Soul App Developer Quickstart (Descriptor V1)
 
 This file is a frozen quickstart during product shaping.
 It is not an architecture contract.
@@ -27,11 +27,11 @@ aiworker app smoke <target-dir>
 ## Package Shape
 
 ```text
-apps/<app-id>/
-  soul-app.manifest.json
+souls/<app-id>/
+  soul.config.ts
   engine-assets/
   product/
-  host-adapter/
+  dist/soul.descriptor.json
 ```
 
 Use `.agents/skills/aiworker-soul-app-dev/SKILL.md` for route selection before

@@ -43,7 +43,7 @@ npx @zonease/aiworker-cli daemon start --host 127.0.0.1 --port 9217
 `AIWORKER_HOME=<path>`；如果只想替换 DB 文件，设置 `WORKER_DB_PATH=<path>`。
 
 Preview 包应能从 package-local 资源启动 Host Web/API、迁移 worker DB，并 bootstrap 官方
-HR/QA Soul App；Host auth、1.0 发布承诺和独立 SDK/runtime npm 发布不属于这个 gate。
+Freeform Soul descriptor；Host auth、1.0 发布承诺和独立 SDK/runtime npm 发布不属于这个 gate。
 
 ## Command Index
 
@@ -111,21 +111,21 @@ self-update.
 
 ## Soul Apps
 
-- `app bootstrap official` installs/enables the official HR/QA Soul Apps through
+- `app bootstrap official` installs/enables the official Freeform Soul through
   the normal app lifecycle.
-- `app install <manifest>` registers a local Soul App manifest.
+- `app install <descriptor>` registers a built `dist/soul.descriptor.json`.
 - `app enable <id>` changes lifecycle state.
 - `app disable|doctor|permissions <id>` remain advanced lifecycle/security
   commands.
 - `app create <id> --dir <path>` scaffolds a Soul App with micro-app
   route/widget surfaces, app-owned mounted API paths and `ui.workspaceContext`
   for Host-owned workspace process context.
-- `app validate <path>` checks manifest, assets and import boundaries.
-- `app smoke <path>` runs standalone and Host-mounted smoke checks, including
-  mounted-service health for apps that declare a local service command.
+- `app validate <path>` checks descriptor, assets and import boundaries.
+- `app smoke <path>` runs descriptor-only asset checks; it is not the release
+  acceptance gate for mounted/browser behavior.
 
-Host catalog entries are app-projected. Use app ids such as `aiworker-hr`, not
-legacy built-in ids such as `hr`.
+Host catalog entries are app-projected. v1 strong acceptance uses
+`aiworker-freeform`; legacy built-in ids such as `hr` are rejected.
 
 ## Work Objects
 

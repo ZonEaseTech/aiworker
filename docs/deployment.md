@@ -72,12 +72,12 @@ AIWORKER_HOME=~/.aiworker \
 - `aiworker.js` / `aiworker-bun.js`；
 - `drizzle/worker` migrations；
 - `web/worker` static bundle；
-- `official-apps/aiworker-hr` 与 `official-apps/aiworker-qa` release resources；
+- `official-apps/aiworker-freeform/dist/soul.descriptor.json` 与 built resources；
 - package README。
 
 `0.x` npm preview package 需要在 CLI package 目录内自带 Worker Web static assets、worker DB
 migrations 和官方 first-party Soul App release resources。它不应要求 source checkout 才能服务
-`/` 或 bootstrap HR/QA。
+`/` 或 bootstrap Freeform。
 
 Standalone GitHub release bundle upgrades require matching `.sha256` assets.
 When checksums are missing, AIWorker reports the target release and refuses
@@ -109,15 +109,15 @@ started daemon processes require a manual restart after upgrade.
 
 ## Official Soul Apps
 
-Host 不内置垂直 Soul 源码。官方维护的 Soul Apps 位于 `apps/`，通过正常 install/enable
-lifecycle 快捷 bootstrap：
+Host 不内置垂直 Soul 源码。官方维护的 v1 Soul 位于 `souls/aiworker-freeform`，通过正常
+install/enable lifecycle 快捷 bootstrap：
 
 ```bash
 aiworker app bootstrap official
 aiworker app list
 ```
 
-daemon 启动时会安装/启用官方 HR/QA Soul Apps，除非 operator 显式 disable。Host catalog 只投影
+daemon 启动时会安装/启用官方 Freeform Soul，除非 operator 显式 disable。Host catalog 只投影
 已安装且 enabled 的 Soul Apps。
 
 ## Engine Auth

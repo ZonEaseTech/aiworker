@@ -18,7 +18,7 @@ protocol / data / engine / UI / documentation 的硬约束源头。旧北极星�
 第一原则：Host 是 shell / locator / mount / bridge，不是 Soul App 的上层配置中心。Host-owned
 Worker Configuration 只到 Soul worker 级别；同一 Soul App 的不同 worker 必须彼此隔离。
 workspace/session 只作为不透明 locator/context 传给 mounted Soul surface 或 engine bridge，
-不能成为 Host 配置层。Soul 通过 manifest/protocol descriptor 告知 Host 可泛化消费的选项；
+不能成为 Host 配置层。Soul 通过 protocol descriptor 告知 Host 可泛化消费的选项；
 领域配置 UI、字段和保存逻辑属于 Soul-owned micro-app 或 app-owned API。
 
 ## 文档地图
@@ -36,9 +36,9 @@ workspace/session 只作为不透明 locator/context 传给 mounted Soul surface
 | Host daemon/API、registry、local enablement、storage metadata | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
 | Host Web Shell、Settings、Worker Configuration、mounted workbench | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md`，前端实现再用 `/pma-web`；shadcn/ui 相关改动再用 `.agents/skills/shadcn/SKILL.md` |
 | CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/cli.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
-| 官方 HR/QA Soul App、manifest、standalone、Host mounted、artifact/profile/review/lesson | `docs/architecture.md#constraint-registry` + `.agents/skills/aiworker-soul-app-dev/SKILL.md`；命令速查见 `docs/soul-app-developer.md` |
+| 官方 Freeform Soul、descriptor、standalone、Host mounted、artifact/profile/review/lesson | `docs/architecture.md#constraint-registry` + `.agents/skills/aiworker-soul-app-dev/SKILL.md`；命令速查见 `docs/soul-app-developer.md` |
 | 新第三方 Soul App | `docs/architecture.md#constraint-registry` + `.agents/skills/aiworker-soul-app-dev/SKILL.md`；创建命令用 `aiworker app create`，目录/命令速查见 `docs/soul-app-developer.md` |
-| Host/Soul App 边界、shared protocol、manifest-declared adapter/context | 先读 `docs/architecture.md#constraint-registry`，判断 ownership 后进入 Host 或 Soul App skill |
+| Host/Soul App 边界、shared protocol、descriptor-declared route/context | 先读 `docs/architecture.md#constraint-registry`，判断 ownership 后进入 Host 或 Soul App skill |
 
 ## 为什么改成这个形态
 
@@ -48,9 +48,9 @@ repo report、handoff、risk audit 等 supporting workflows。
 
 AIWorker 的主要价值在更需要组织沉淀的垂直职能：
 
-- HR：candidate screen、interview brief、role rubric、people profile、hiring risk；
+- People ops：candidate screen、interview brief、role rubric、people profile、hiring risk；
 - PM：PRD、decision record、roadmap slice、status report；
-- QA：test plan、regression matrix、defect evidence、release gate；
+- Quality：test plan、regression matrix、defect evidence、release gate；
 - DevOps：deployment checklist、incident review、runbook update、capacity summary；
 - finance/legal/ops：各自领域的审查、模板化输出、证据链和复用经验。
 
@@ -79,20 +79,20 @@ Host 是本地运行壳和 engine bridge，只负责：
 - start：发现、安装、启用、禁用、路由和启动 Soul App；
 - shell：提供 local daemon API、Web shell、CLI 入口和运行 shell 所需的本地设置；
 - locate：维护 Soul worker、workspace、session、selected engine 和本地路径上下文；
-- mount：解析 manifest 声明的 routes、micro-app surfaces、action descriptors 和 app-owned
-  local adapter；
+- mount：解析 descriptor 声明的 routes、micro-app surfaces、action descriptors 和 app-owned
+  API mount；
 - bridge：为 session 准备 cwd、context files、selected engine metadata 和 invocation boundary；
 - metadata：保存 installed/enabled app state、workers、workspaces、sessions、routing protocol
   cache、mounted surface references 和 platform file references。
 
-Host 不负责解释 HR profile、QA release verdict、artifact 内容、review verdict 或 lesson/memory
-的领域意义。它只能消费 Soul App 通过 manifest/protocol 暴露的 route、mounted UI、action
+Host 不负责解释 people profile、release verdict、artifact 内容、review verdict 或 lesson/memory
+的领域意义。它只能消费 Soul App 通过 descriptor/protocol 暴露的 route、mounted UI、action
 descriptor、workspace context、session context 或 lightweight UI event；如果 app 没有暴露，
 Host 停止，不取、不猜、不补。
 
 Host left panel、header、Worker Configuration trigger/dialog shell 属于 Host-owned chrome。
 Worker Configuration 只保存 worker-scoped Host shell preference、worker overlay/local
-enablement 和 manifest-derived 泛化选项；它不是 Soul/App 全局设置页，也不是 workspace/session
+enablement 和 descriptor-derived 泛化选项；它不是 Soul/App 全局设置页，也不是 workspace/session
 配置页。需要 workspace/session/domain 配置时，进入 Soul-owned micro-app 或 app-owned API。
 
 ## Soul App 的职责
@@ -110,8 +110,8 @@ Soul App 是领域主权方，负责：
 - standalone shell；
 - Host mounted service entrypoints。
 
-例如 HR People Profile 应由 HR App 从候选人 artifact、面试 evidence、人工 review 和业务规则
-组合而成。Host 可以定位并展示 HR App 暴露的 profile view，但不应该知道 profile 如何合成。
+例如 People Profile 应由 owning Soul App 从候选人 artifact、面试 evidence、人工 review 和业务规则
+组合而成。Host 可以定位并展示 Soul App 暴露的 profile view，但不应该知道 profile 如何合成。
 
 ## 基础设施模型
 
@@ -154,8 +154,8 @@ bunx @zonease/aiworker-cli daemon start --port 9217
 npx @zonease/aiworker-cli daemon start --port 9217
 ```
 
-这是 `0.x preview`：Host Web/API 启动、worker DB migrations，以及官方 HR/QA Soul App
-bootstrap 需要能从 npm package 直接工作。HR/QA 业务 workflow、第三方 Soul App authoring、
+这是 `0.x preview`：Host Web/API 启动、worker DB migrations，以及官方 Freeform Soul
+bootstrap 需要能从 npm package 直接工作。领域业务 workflow、第三方 Soul App authoring、
 standalone SDK/runtime npm publication 仍是 preview surface，不是 1.0 承诺。
 
 Source checkout 调试也走同一个 daemon；先构建一次 Web 静态资源，然后以前台 daemon 托管 Web/API：
@@ -228,7 +228,7 @@ bun run --filter '@zonease/aiworker-cli' build:bundle
 1. 架构入口收敛为 `AGENTS.md` + `docs/architecture.md`；
 2. Host 作为平台定位、能力壳、安装启用、安全设置和 shell contract；
 3. Soul App 作为 app-level standalone + Host mounted 垂直产品；
-4. 官方 HR/QA Soul App 通过快捷 install/enable 进入 Host，而不是被 Host 内置；
+4. 官方 Freeform Soul 通过快捷 install/enable 进入 Host，而不是被 Host 内置；
 5. Worker Web 首屏围绕 Soul App、worker、workspace、session 和 app-owned workbench；
 6. Settings 管理 Local CLI / BYOK、engine scan/test、connectors、MCP、language、
    appearance、autosave 和 installed Soul Apps；
