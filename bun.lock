@@ -15,22 +15,6 @@
         "typescript": "^5.8.3",
       },
     },
-    "apps/aiworker-custom": {
-      "name": "@zonease/aiworker-custom",
-      "dependencies": {
-        "@zonease/aiworker-soul-app-runtime": "workspace:*",
-        "@zonease/aiworker-soul-app-sdk": "workspace:*",
-        "@zonease/aiworker-ui": "workspace:*",
-        "react": "^19.1.0",
-        "react-dom": "^19.1.0",
-      },
-      "devDependencies": {
-        "@types/bun": "^1.2.13",
-        "@types/react": "^19.1.2",
-        "@types/react-dom": "^19.1.2",
-        "typescript": "^5.8.3",
-      },
-    },
     "apps/aiworker-hr": {
       "name": "@zonease/aiworker-hr",
       "dependencies": {
@@ -216,7 +200,7 @@
     "packages/soul-app-sdk": {
       "name": "@zonease/aiworker-soul-app-sdk",
       "dependencies": {
-        "@zonease/aiworker-shared": "workspace:*",
+        "@zonease/aiworker-soul-protocol": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
@@ -310,6 +294,16 @@
         "react-dom": "^19.1.0",
         "typescript": "^5.8.3",
         "vitest": "4",
+      },
+    },
+    "souls/aiworker-freeform": {
+      "name": "@zonease/aiworker-freeform",
+      "dependencies": {
+        "@zonease/aiworker-soul-app-sdk": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
       },
     },
   },
@@ -904,11 +898,11 @@
 
     "@zonease/aiworker-core": ["@zonease/aiworker-core@workspace:packages/core"],
 
-    "@zonease/aiworker-custom": ["@zonease/aiworker-custom@workspace:apps/aiworker-custom"],
-
     "@zonease/aiworker-engine-bridge": ["@zonease/aiworker-engine-bridge@workspace:packages/engine-bridge"],
 
     "@zonease/aiworker-engine-projection": ["@zonease/aiworker-engine-projection@workspace:packages/engine-projection"],
+
+    "@zonease/aiworker-freeform": ["@zonease/aiworker-freeform@workspace:souls/aiworker-freeform"],
 
     "@zonease/aiworker-fs-layout": ["@zonease/aiworker-fs-layout@workspace:packages/fs-layout"],
 

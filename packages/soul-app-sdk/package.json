@@ -16,7 +16,7 @@
     "test": "bun test --timeout=30000"
   },
   "dependencies": {
-    "@zonease/aiworker-shared": "workspace:*"
+    "@zonease/aiworker-soul-protocol": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",
