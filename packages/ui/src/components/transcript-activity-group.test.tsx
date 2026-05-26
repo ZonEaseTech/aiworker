@@ -6,7 +6,7 @@ import { TranscriptActivityGroup } from './transcript-activity-group'
 
 afterEach(() => cleanup())
 
-describe('TranscriptActivityGroup', () => {
+describe('transcript activity group', () => {
   it('collapses successful activity details by default', () => {
     render(
       <TranscriptActivityGroup

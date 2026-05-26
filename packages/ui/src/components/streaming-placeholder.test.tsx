@@ -6,7 +6,7 @@ import { StreamingPlaceholder } from './streaming-placeholder'
 
 afterEach(() => cleanup())
 
-describe('StreamingPlaceholder', () => {
+describe('streaming placeholder', () => {
   it('renders a stable polite loading placeholder', () => {
     render(<StreamingPlaceholder label="Preparing response" />)
 

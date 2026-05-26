@@ -1,13 +1,15 @@
 import { access, chmod, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
+import { OFFICIAL_SOUL_APPS } from '@zonease/aiworker-core'
+
 const cliDir = resolve(import.meta.dirname, '..')
 const repoRoot = resolve(cliDir, '..', '..')
 const distDir = resolve(cliDir, 'dist')
 const binShimSrc = resolve(cliDir, 'scripts/aiworker-bin-shim.sh')
 const binShimDst = resolve(distDir, 'aiworker.js')
 
-const officialApps = ['aiworker-hr', 'aiworker-qa'] as const
+const officialApps = OFFICIAL_SOUL_APPS.map(app => app.id)
 const officialAppsDst = resolve(distDir, 'official-apps')
 const publishedMountedEntrypoint = 'dist/mounted/host-mounted.js'
 const publishedStandaloneEntrypoint = 'dist/standalone/standalone.js'

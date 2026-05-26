@@ -6,7 +6,7 @@ import { ChatThread } from './chat-thread'
 
 afterEach(() => cleanup())
 
-describe('ChatThread', () => {
+describe('chat thread', () => {
   it('renders generic turn items without owning product semantics', () => {
     render(
       <ChatThread

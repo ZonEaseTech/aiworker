@@ -8,11 +8,11 @@ export interface AssistantMarkdownProps {
   streaming?: boolean
 }
 
-type MarkdownBlock =
-  | { code: string, kind: 'code', language?: string }
-  | { items: string[], kind: 'ordered-list' | 'unordered-list' }
-  | { kind: 'paragraph', text: string }
-  | { kind: 'quote', text: string }
+type MarkdownBlock
+  = | { code: string, kind: 'code', language?: string }
+    | { items: string[], kind: 'ordered-list' | 'unordered-list' }
+    | { kind: 'paragraph', text: string }
+    | { kind: 'quote', text: string }
 
 export function AssistantMarkdown({ className, markdown, streaming = false }: AssistantMarkdownProps) {
   const repaired = repairStreamingMarkdown(markdown, streaming)
@@ -332,7 +332,7 @@ function isStrongOpener(text: string, index: number): boolean {
   if (!isEmphasisContentStart(next))
     return false
 
-  return !previous || /\s|[([{"']/.test(previous)
+  return !previous || /[\s([{"']/.test(previous)
 }
 
 function isItalicOpener(text: string, index: number): boolean {
@@ -350,7 +350,7 @@ function isItalicOpener(text: string, index: number): boolean {
   if (!isEmphasisContentStart(next))
     return false
 
-  return !previous || /\s|[([{"']/.test(previous)
+  return !previous || /[\s([{"']/.test(previous)
 }
 
 function isEmphasisContentStart(value: string): boolean {

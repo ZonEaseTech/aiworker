@@ -6,7 +6,7 @@ import { AssistantMarkdown, repairStreamingMarkdown } from './assistant-markdown
 
 afterEach(() => cleanup())
 
-describe('AssistantMarkdown', () => {
+describe('assistant markdown', () => {
   it('renders common assistant markdown syntax', () => {
     render(
       <AssistantMarkdown

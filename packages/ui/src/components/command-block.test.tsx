@@ -17,7 +17,7 @@ function setClipboard(clipboard: { writeText: (text: string) => Promise<void> } 
   })
 }
 
-describe('CommandBlock', () => {
+describe('command block', () => {
   it('renders command metadata and code surfaces', () => {
     render(<CommandBlock command="bun test" language="bash" output="ok" status="running" title="Run tests" />)
 

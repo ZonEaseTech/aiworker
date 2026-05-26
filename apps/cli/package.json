@@ -1,7 +1,7 @@
 {
   "name": "@zonease/aiworker-cli",
   "type": "module",
-  "version": "0.19.0",
+  "version": "0.19.1",
   "description": "AIWorker CLI — local Host and vertical Soul workspace runtime",
   "license": "MIT",
   "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
@@ -27,7 +27,7 @@
     "test": "bun test --timeout=15000",
     "test:stress": "bun test --timeout=15000 --rerun-each=3 src/commands/worker/init.integration.test.ts src/commands/worker/sessions.test.ts",
     "build": "bun run --filter '@zonease/aiworker-web' build && bun run build:bundle",
-    "build:bundle": "bun run --filter '@zonease/aiworker-hr' build && bun run --filter '@zonease/aiworker-qa' build && bun build --target=bun --minify --outfile=dist/aiworker-bun.js src/aiworker.ts && bun scripts/build-publish-manifest.ts",
+    "build:bundle": "bun run --filter '@zonease/aiworker-hr' build && bun run --filter '@zonease/aiworker-qa' build && bun run --filter '@zonease/aiworker-custom' build && bun build --target=bun --minify --outfile=dist/aiworker-bun.js src/aiworker.ts && bun scripts/build-publish-manifest.ts",
     "prepublishOnly": "bun run build",
     "smoke:dist-release": "bun scripts/smoke-dist-release.ts"
   },

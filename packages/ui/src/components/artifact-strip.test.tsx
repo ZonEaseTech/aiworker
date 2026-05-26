@@ -6,7 +6,7 @@ import { ArtifactStrip } from './artifact-strip'
 
 afterEach(() => cleanup())
 
-describe('ArtifactStrip', () => {
+describe('artifact strip', () => {
   it('renders generic artifact references without nested cards', () => {
     const { container } = render(
       <ArtifactStrip

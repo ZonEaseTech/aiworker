@@ -31,14 +31,14 @@ export interface TranscriptActivityModel {
   title: ReactNode
 }
 
-export type TranscriptItemModel =
-  | { body: ReactNode, id: string, kind: 'user-message' }
-  | { id: string, kind: 'assistant-markdown', markdown: string, streaming?: boolean }
-  | { activities: TranscriptActivityModel[], defaultCollapsed?: boolean, id: string, kind: 'activity-group', summary: ReactNode }
-  | ({ id: string, kind: 'command' } & TranscriptCommandModel)
-  | { artifacts: TranscriptArtifactModel[], id: string, kind: 'artifact-strip' }
-  | { body: ReactNode, id: string, kind: 'status', tone?: TranscriptTone }
-  | { id: string, kind: 'custom', node: ReactNode }
+export type TranscriptItemModel
+  = | { body: ReactNode, id: string, kind: 'user-message' }
+    | { id: string, kind: 'assistant-markdown', markdown: string, streaming?: boolean }
+    | { activities: TranscriptActivityModel[], defaultCollapsed?: boolean, id: string, kind: 'activity-group', summary: ReactNode }
+    | ({ id: string, kind: 'command' } & TranscriptCommandModel)
+    | { artifacts: TranscriptArtifactModel[], id: string, kind: 'artifact-strip' }
+    | { body: ReactNode, id: string, kind: 'status', tone?: TranscriptTone }
+    | { id: string, kind: 'custom', node: ReactNode }
 
 export interface TranscriptTurnModel {
   collapsed?: boolean
