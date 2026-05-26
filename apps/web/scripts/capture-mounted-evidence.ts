@@ -1,8 +1,10 @@
+import type { Browser, Page } from 'playwright'
+
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
-import { chromium, type Browser, type Page } from 'playwright'
+import { chromium } from 'playwright'
 
 interface CliOptions {
   allowMissingMounted: boolean
