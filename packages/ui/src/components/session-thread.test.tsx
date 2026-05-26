@@ -40,4 +40,19 @@ describe('sessionThread', () => {
     expect(screen.getByText('Interview brief')).toBeTruthy()
     expect(container.querySelector('[data-session-slot="artifact-card"]')?.closest('[data-slot="card"] [data-slot="card"]')).toBeNull()
   })
+
+  it('keeps legacy SessionThread as a compatibility surface', () => {
+    const { container } = render(
+      <SessionThread
+        ariaLabel="Legacy session thread"
+        messages={[
+          { body: 'Legacy body', id: 'legacy-user', kind: 'user', title: 'User' },
+        ]}
+      />,
+    )
+
+    expect(screen.getByRole('log', { name: 'Legacy session thread' })).toBeTruthy()
+    expect(screen.getByText('Legacy body')).toBeTruthy()
+    expect(container.querySelector('[data-session-slot="session-thread"]')).toBeTruthy()
+  })
 })
