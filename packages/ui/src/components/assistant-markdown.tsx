@@ -207,7 +207,7 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
       const closeIndex = text.indexOf('`', index + 1)
       if (closeIndex > index + 1) {
         flushText()
-        nodes.push(<code key={`${keyPrefix}-code-${index}`} className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.85em]">{text.slice(index + 1, closeIndex)}</code>)
+        nodes.push(<code key={`${keyPrefix}-code-${index}`} className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">{text.slice(index + 1, closeIndex)}</code>)
         index = closeIndex + 1
         continue
       }
