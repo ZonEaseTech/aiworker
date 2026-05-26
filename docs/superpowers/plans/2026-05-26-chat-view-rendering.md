@@ -507,7 +507,7 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
       nodes.push(<a key={`${keyPrefix}-link-${match.index}`} href={match[3]} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-primary">{match[2]}</a>)
     }
     else if (match[4]) {
-      nodes.push(<code key={`${keyPrefix}-code-${match.index}`} className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.85em]">{match[4]}</code>)
+      nodes.push(<code key={`${keyPrefix}-code-${match.index}`} className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">{match[4]}</code>)
     }
     else if (match[5]) {
       nodes.push(<strong key={`${keyPrefix}-strong-${match.index}`} className="font-semibold">{match[5]}</strong>)
