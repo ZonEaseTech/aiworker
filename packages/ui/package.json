@@ -14,6 +14,10 @@
       "import": "./src/styles/globals.css",
       "default": "./src/styles/globals.css"
     },
+    "./components/transcript-types": {
+      "types": "./src/components/transcript-types.ts",
+      "import": "./src/components/transcript-types.ts"
+    },
     "./components/*": {
       "types": "./src/components/*.tsx",
       "import": "./src/components/*.tsx"
