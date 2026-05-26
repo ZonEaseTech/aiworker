@@ -86,7 +86,7 @@
     },
     "apps/cli": {
       "name": "@zonease/aiworker-cli",
-      "version": "0.19.0",
+      "version": "0.19.3",
       "bin": {
         "aiworker": "./dist/aiworker.js",
       },
@@ -148,8 +148,51 @@
         "typescript": "^5.8.3",
       },
     },
+    "packages/engine-bridge": {
+      "name": "@zonease/aiworker-engine-bridge",
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "packages/engine-projection": {
+      "name": "@zonease/aiworker-engine-projection",
+      "dependencies": {
+        "@zonease/aiworker-fs-layout": "workspace:*",
+        "@zonease/aiworker-soul-protocol": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
     "packages/fs-layout": {
       "name": "@zonease/aiworker-fs-layout",
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "packages/host-daemon": {
+      "name": "@zonease/aiworker-host-daemon",
+      "dependencies": {
+        "@zonease/aiworker-host-runtime": "workspace:*",
+        "@zonease/aiworker-soul-protocol": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "packages/host-runtime": {
+      "name": "@zonease/aiworker-host-runtime",
+      "dependencies": {
+        "@zonease/aiworker-engine-bridge": "workspace:*",
+        "@zonease/aiworker-engine-projection": "workspace:*",
+        "@zonease/aiworker-fs-layout": "workspace:*",
+        "@zonease/aiworker-soul-protocol": "workspace:*",
+        "@zonease/aiworker-storage-sqlite": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "^1.2.13",
         "typescript": "^5.8.3",
@@ -203,6 +246,29 @@
         "@types/react": "^19.1.2",
         "@types/react-dom": "^19.1.2",
         "react-dom": "^19.1.0",
+        "typescript": "^5.8.3",
+      },
+    },
+    "packages/soul-protocol": {
+      "name": "@zonease/aiworker-soul-protocol",
+      "dependencies": {
+        "zod": "^3.24.4",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "packages/soul-workbench": {
+      "name": "@zonease/aiworker-soul-workbench",
+      "dependencies": {
+        "@zonease/aiworker-soul-protocol": "workspace:*",
+        "@zonease/aiworker-ui": "workspace:*",
+        "react": "^19.1.0",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "@types/react": "^19.1.2",
         "typescript": "^5.8.3",
       },
     },
@@ -851,7 +917,15 @@
 
     "@zonease/aiworker-custom": ["@zonease/aiworker-custom@workspace:apps/aiworker-custom"],
 
+    "@zonease/aiworker-engine-bridge": ["@zonease/aiworker-engine-bridge@workspace:packages/engine-bridge"],
+
+    "@zonease/aiworker-engine-projection": ["@zonease/aiworker-engine-projection@workspace:packages/engine-projection"],
+
     "@zonease/aiworker-fs-layout": ["@zonease/aiworker-fs-layout@workspace:packages/fs-layout"],
+
+    "@zonease/aiworker-host-daemon": ["@zonease/aiworker-host-daemon@workspace:packages/host-daemon"],
+
+    "@zonease/aiworker-host-runtime": ["@zonease/aiworker-host-runtime@workspace:packages/host-runtime"],
 
     "@zonease/aiworker-hr": ["@zonease/aiworker-hr@workspace:apps/aiworker-hr"],
 
@@ -864,6 +938,10 @@
     "@zonease/aiworker-soul-app-sdk": ["@zonease/aiworker-soul-app-sdk@workspace:packages/soul-app-sdk"],
 
     "@zonease/aiworker-soul-app-workbench": ["@zonease/aiworker-soul-app-workbench@workspace:packages/soul-app-workbench"],
+
+    "@zonease/aiworker-soul-protocol": ["@zonease/aiworker-soul-protocol@workspace:packages/soul-protocol"],
+
+    "@zonease/aiworker-soul-workbench": ["@zonease/aiworker-soul-workbench@workspace:packages/soul-workbench"],
 
     "@zonease/aiworker-storage-sqlite": ["@zonease/aiworker-storage-sqlite@workspace:packages/storage-sqlite"],
 

@@ -114,7 +114,7 @@ const packageJson = JSON.parse(read('package.json')) as {
 }
 if (!packageJson.workspaces?.includes('souls/*'))
   issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
-if (packageJson.scripts?.['test:contracts'] !== 'bun test tests/architecture/refactor-contract.test.ts')
+if (packageJson.scripts?.['test:contracts'] !== 'bun test tests/architecture')
   issues.push({ file: 'package.json', message: 'test:contracts must run the refactor contract test' })
 if (packageJson.scripts?.['docs:check'] !== 'bun scripts/check-doc-contract.ts')
   issues.push({ file: 'package.json', message: 'docs:check must run scripts/check-doc-contract.ts' })
