@@ -64,6 +64,20 @@
       "when": 1779828479800,
       "tag": "0008_breezy_moira_mactaggert",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1779829464973,
+      "tag": "0009_strong_black_crow",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1779830535954,
+      "tag": "0010_slimy_puppet_master",
+      "breakpoints": true
     }
   ]
 }

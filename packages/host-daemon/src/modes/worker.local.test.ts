@@ -311,7 +311,7 @@ describe('local daemon API', () => {
     })
     expect(invocationRes.status).toBe(201)
     const invocationBody = await invocationRes.json() as {
-      invocation: { id: string, sessionId: string, status: string, turnId: null | string }
+      invocation: { id: string, sessionId: string, status: string }
       session: { endedAt: string | null, id: string, status: string }
     }
 
@@ -319,7 +319,7 @@ describe('local daemon API', () => {
     expect(invocationBody.session.status).toBe('active')
     expect(invocationBody.session.endedAt).toBeNull()
     expect(invocationBody.invocation.sessionId).toBe(sessionBody.session.id)
-    expect(invocationBody.invocation.turnId).toBeNull()
+    expect(invocationBody.invocation).not.toHaveProperty('turnId')
     expect(invocationBody.invocation.status).toBe('succeeded')
     expect(invocationBody).not.toHaveProperty('turn')
 
@@ -329,7 +329,6 @@ describe('local daemon API', () => {
       invocation: {
         id: invocationBody.invocation.id,
         sessionId: sessionBody.session.id,
-        turnId: null,
       },
     })
 
@@ -352,10 +351,10 @@ describe('local daemon API', () => {
     })
     expect(brokerInvocationRes.status).toBe(201)
     const brokerInvocationBody = await brokerInvocationRes.json() as {
-      invocation: { sessionId: string, status: string, turnId: null | string }
+      invocation: { sessionId: string, status: string }
     }
     expect(brokerInvocationBody.invocation.sessionId).toBe(sessionBody.session.id)
-    expect(brokerInvocationBody.invocation.turnId).toBeNull()
+    expect(brokerInvocationBody.invocation).not.toHaveProperty('turnId')
     expect(brokerInvocationBody.invocation.status).toBe('succeeded')
 
     const turnsBody = await (await target.request(`/api/local/sessions/${sessionBody.session.id}/turns`)).json() as { turns: unknown[] }
@@ -375,7 +374,13 @@ describe('local daemon API', () => {
 
     const configRes = await target.request(`/api/workers/${workerBody.worker.id}/config/engine-selection`, {
       method: 'PUT',
-      body: JSON.stringify({ descriptor: { engineId: 'codex' } }),
+      body: JSON.stringify({
+        enabled: true,
+        kind: 'engine-selection',
+        options: { engineId: 'codex' },
+        sourceRef: 'descriptor://engine/codex',
+        target: 'codex',
+      }),
       headers: { 'content-type': 'application/json' },
     })
     expect(configRes.status).toBe(200)
@@ -383,14 +388,26 @@ describe('local daemon API', () => {
       config: {
         archived: false,
         configKey: 'engine-selection',
-        value: { descriptor: { engineId: 'codex' } },
+        value: {
+          enabled: true,
+          kind: 'engine-selection',
+          options: { engineId: 'codex' },
+          sourceRef: 'descriptor://engine/codex',
+          target: 'codex',
+        },
         workerId: workerBody.worker.id,
       },
     })
 
     const secretConfigRes = await target.request(`/api/workers/${workerBody.worker.id}/config/native-mcp`, {
       method: 'PATCH',
-      body: JSON.stringify({ descriptor: { apiKey: 'sk-literal-secret' } }),
+      body: JSON.stringify({
+        enabled: true,
+        kind: 'mcp-overlay',
+        options: { apiKey: 'sk-literal-secret' },
+        sourceRef: 'descriptor://engine/mcp/native',
+        target: 'codex',
+      }),
       headers: { 'content-type': 'application/json' },
     })
     expect(secretConfigRes.status).toBe(422)
@@ -670,10 +687,11 @@ describe('local daemon API', () => {
       method: 'PUT',
       body: JSON.stringify({
         assets: [{
-          content: '# Interview brief\n',
+          checksum: 'sha256:interview-brief',
           enabled: true,
           id: 'interview-brief',
           kind: 'skill',
+          sourceRef: 'descriptor://engine/skills/interview-brief',
           target: 'codex',
         }],
       }),
@@ -684,6 +702,7 @@ describe('local daemon API', () => {
     const savedBody = await saveRes.json() as { overlay: { assets: Array<{ id: string, kind: string, source: string }>, workerId: string } }
     expect(savedBody.overlay.workerId).toBe(worker.id)
     expect(savedBody.overlay.assets[0]).toMatchObject({ id: 'interview-brief', kind: 'skill', source: 'overlay' })
+    expect(savedBody.overlay.assets[0]).not.toHaveProperty('content')
 
     const readRes = await target.request(`/api/local/workers/${worker.id}/overlay`)
     expect(readRes.status).toBe(200)
@@ -707,10 +726,11 @@ describe('local daemon API', () => {
       method: 'PUT',
       body: JSON.stringify({
         assets: [{
-          content: '# Overlay Candidate Profile\n',
+          checksum: 'sha256:candidate-profile',
           enabled: true,
           id: 'candidate-profile',
           kind: 'skill',
+          sourceRef: 'descriptor://engine/skills/candidate-profile',
           target: 'codex',
         }],
       }),
@@ -726,7 +746,7 @@ describe('local daemon API', () => {
       projectionManifestPath: '.aiworker/projections.json',
     })
     expect(projectBody.projection.receipt.projections).toContainEqual(expect.objectContaining({
-      source: 'worker-overlay',
+      source: 'engine-assets/skills/candidate-profile/SKILL.md',
       target: '.agents/skills/aiworker-hr-candidate-profile/SKILL.md',
     }))
   })
@@ -756,6 +776,31 @@ describe('local daemon API', () => {
       method: 'PUT',
       body: JSON.stringify({
         assets: [{
+          enabled: true,
+          id: 'codex-ats',
+          kind: 'mcp-client',
+          optionsJson: { token: 'sk-live-secret' },
+          sourceRef: 'descriptor://engine/mcp/codex-ats',
+          target: 'codex',
+        }],
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(res.status).toBe(422)
+    expect(await res.json()).toMatchObject({
+      error: { code: 'WORKER_OVERLAY_SECRET', message: expect.stringContaining('literal secrets') },
+    })
+  })
+
+  it('rejects raw content fields in worker overlay assets', async () => {
+    const target = await app()
+    const worker = await createHrWorker(target)
+
+    const res = await target.request(`/api/local/workers/${worker.id}/overlay`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        assets: [{
           content: 'token = "sk-live-secret"\n',
           enabled: true,
           id: 'codex-ats',
@@ -766,10 +811,7 @@ describe('local daemon API', () => {
       headers: { 'content-type': 'application/json' },
     })
 
-    expect(res.status).toBe(422)
-    expect(await res.json()).toMatchObject({
-      error: { code: 'WORKER_OVERLAY_SECRET', message: expect.stringContaining('literal MCP secrets') },
-    })
+    expect(res.status).toBe(400)
   })
 
   it('runs worker-scoped native engine invocations without session metadata', async () => {

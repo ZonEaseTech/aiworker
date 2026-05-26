@@ -394,13 +394,16 @@ export async function listBaselineAssets(source: EngineAssetSource): Promise<Loc
   const workspaceRoot = path.join(sourceRoot, 'engine-assets', 'workspace')
   for (const file of await listFiles(workspaceRoot)) {
     const id = path.relative(workspaceRoot, file).split(path.sep).join('/')
+    const content = await readFile(file, 'utf8')
     assets.push({
-      content: await readFile(file, 'utf8'),
+      checksum: contentChecksum(content),
       enabled: true,
       id,
       kind: 'entry-file',
       metadataJson: {},
+      optionsJson: {},
       source: 'baseline',
+      sourceRef: path.posix.join('engine-assets', 'workspace', id),
       target: 'workspace',
       updatedAt: now,
     })
@@ -414,14 +417,17 @@ export async function listBaselineAssets(source: EngineAssetSource): Promise<Loc
     if (!await isFile(file))
       continue
     const configuredTargets = source.engineAssets?.skills?.targets ?? ['codex', 'claude-code'] as SoulAppEngineTarget[]
+    const content = await readFile(file, 'utf8')
     for (const target of configuredTargets) {
       assets.push({
-        content: await readFile(file, 'utf8'),
+        checksum: contentChecksum(content),
         enabled: true,
         id: dirent.name,
         kind: 'skill',
         metadataJson: {},
+        optionsJson: {},
         source: 'baseline',
+        sourceRef: path.posix.join('engine-assets', 'skills', dirent.name, SKILL_FILE),
         target,
         updatedAt: now,
       })
@@ -436,19 +442,26 @@ export async function listBaselineAssets(source: EngineAssetSource): Promise<Loc
     const file = path.join(sourceRoot, ...relativePath.split('/'))
     if (!await isFile(file))
       continue
+    const content = await readFile(file, 'utf8')
     assets.push({
-      content: await readFile(file, 'utf8'),
+      checksum: contentChecksum(content),
       enabled: true,
       id: client.target,
       kind: 'mcp-client',
       metadataJson: {},
+      optionsJson: {},
       source: 'baseline',
+      sourceRef: relativePath,
       target: client.target,
       updatedAt: now,
     })
   }
 
   return assets
+}
+
+function contentChecksum(content: string): string {
+  return `sha256:${createHash('sha256').update(content).digest('hex')}`
 }
 
 function isNoEntryError(error: unknown): boolean {

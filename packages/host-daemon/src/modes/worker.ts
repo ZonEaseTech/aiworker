@@ -31,6 +31,7 @@ import {
 import {
   closeWorkerDb,
   createWorkerEngineInvocation,
+  deleteWorkerConfigValue,
   getEngineInvocation,
   getSession,
   getWorker,
@@ -48,6 +49,7 @@ import {
   updateSession,
   updateWorkspace,
   upsertWorker,
+  upsertWorkerConfigValue,
   upsertWorkerOverlayAssets,
 } from '@zonease/aiworker-storage-sqlite/worker'
 
@@ -440,20 +442,22 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
         },
       }, 400)
     }
-    if (parsed.data.assets.some(asset => asset.kind === 'mcp-client' && containsLiteralSecret(asset.content))) {
+    if (parsed.data.assets.some(asset => containsLiteralSecret(JSON.stringify(asset)))) {
       return c.json({
         error: {
           code: 'WORKER_OVERLAY_SECRET',
-          message: 'literal MCP secrets are not allowed in worker overlay assets',
+          message: 'literal secrets are not allowed in worker overlay descriptors',
         },
       }, 422)
     }
     upsertWorkerOverlayAssets(worker.id, parsed.data.assets.map(asset => ({
-      content: asset.content,
+      checksum: asset.checksum,
       enabled: asset.enabled,
       id: asset.id,
       kind: asset.kind,
       metadataJson: asset.metadataJson,
+      optionsJson: asset.optionsJson,
+      sourceRef: asset.sourceRef,
       target: asset.target,
     })))
     return c.json({ overlay: await workerOverlayResponse(state, worker.id) })
@@ -902,13 +906,15 @@ function secureStringEqual(actual: string, expected: string): boolean {
 }
 
 async function workerOverlayResponse(state: LocalDaemonState, workerId: string) {
-  const overlayAssets = listWorkerOverlayAssets(workerId).map(({ content, enabled, id, kind, metadataJson, source, target, updatedAt }) => ({
-    content,
+  const overlayAssets = listWorkerOverlayAssets(workerId).map(({ checksum, enabled, id, kind, metadataJson, optionsJson, source, sourceRef, target, updatedAt }) => ({
+    checksum,
     enabled,
     id,
     kind,
     metadataJson: metadataJson as Record<string, unknown>,
+    optionsJson: optionsJson as Record<string, unknown>,
     source,
+    sourceRef,
     target,
     updatedAt,
   }))
@@ -945,6 +951,7 @@ async function workerConfigMutationResponse(c: Context, _state: LocalDaemonState
   const configKey = String(c.req.param('configKey') ?? '')
   const updatedAt = new Date().toISOString()
   if (archived) {
+    deleteWorkerConfigValue(worker.id, configKey)
     return c.json({
       config: {
         archived: true,
@@ -968,13 +975,35 @@ async function workerConfigMutationResponse(c: Context, _state: LocalDaemonState
       },
     }, 422)
   }
+  let saved
+  try {
+    saved = upsertWorkerConfigValue({
+      configKey,
+      configValueJson: {
+        ...result.data,
+        updatedAt: readString(result.data.updatedAt, updatedAt),
+        updatedBy: readString(result.data.updatedBy, 'web'),
+      },
+      source: 'web',
+      workerId: worker.id,
+      at: updatedAt,
+    })
+  }
+  catch (error) {
+    return c.json({
+      error: {
+        code: 'WORKER_CONFIG_INVALID',
+        message: error instanceof Error ? error.message : 'Invalid Host worker config descriptor.',
+      },
+    }, 422)
+  }
 
   return c.json({
     config: {
       archived: false,
       configKey,
-      updatedAt,
-      value: result.data,
+      updatedAt: saved.updatedAt,
+      value: saved.configValueJson,
       workerId: worker.id,
     },
   })
@@ -991,7 +1020,11 @@ function containsLiteralSecret(content: string): boolean {
 }
 
 function isSecretReference(value: string): boolean {
-  return value.startsWith('$') || value.startsWith('env:')
+  return value.trim().length === 0 || value.startsWith('$') || value.startsWith('env:')
+}
+
+function readString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
 }
 
 function notFound(c: Context, resource: string) {

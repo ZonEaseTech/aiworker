@@ -12,8 +12,11 @@ export type LocalSessionStatus = z.infer<typeof localSessionStatusSchema>
 export const localTurnStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled'])
 export type LocalTurnStatus = z.infer<typeof localTurnStatusSchema>
 
-export const localEngineInvocationStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled'])
+export const localEngineInvocationStatusSchema = z.enum(['queued', 'starting', 'running', 'succeeded', 'failed', 'cancelled', 'lost'])
 export type LocalEngineInvocationStatus = z.infer<typeof localEngineInvocationStatusSchema>
+
+export const localEngineProcessStateSchema = z.enum(['not_spawned', 'spawned', 'exited', 'killed', 'lost'])
+export type LocalEngineProcessState = z.infer<typeof localEngineProcessStateSchema>
 
 export const localSessionEventTypeSchema = z.enum([
   'status',
@@ -45,12 +48,14 @@ export const localWorkerOverlayAssetSourceSchema = z.enum(['baseline', 'overlay'
 export type LocalWorkerOverlayAssetSource = z.infer<typeof localWorkerOverlayAssetSourceSchema>
 
 export const localWorkerOverlayAssetSchema = z.object({
-  content: z.string(),
+  checksum: z.string().nullable().optional().default(null),
   enabled: z.boolean(),
   id: idSchema,
   kind: localWorkerOverlayAssetKindSchema,
   metadataJson: localJsonObjectSchema.optional().default({}),
+  optionsJson: localJsonObjectSchema.optional().default({}),
   source: localWorkerOverlayAssetSourceSchema,
+  sourceRef: z.string().min(1),
   target: z.string().min(1),
   updatedAt: timestampSchema,
 })
@@ -139,12 +144,17 @@ export type LocalTurn = z.infer<typeof localTurnSchema>
 export const localEngineInvocationSchema = z.object({
   id: idSchema,
   sessionId: idSchema,
-  turnId: idSchema.nullable(),
   seq: z.number().int().positive(),
   engineId: z.string().min(1),
   engineCommand: z.string().nullable(),
   status: localEngineInvocationStatusSchema,
-  prompt: z.string().min(1),
+  processState: localEngineProcessStateSchema,
+  projectionReceiptId: z.string().nullable(),
+  externalSessionRef: z.string().nullable(),
+  rawLogRef: z.string().nullable(),
+  eventLogRef: z.string().nullable(),
+  failureCode: z.string().nullable(),
+  inputRef: z.string().min(1),
   summary: z.string().nullable(),
   error: z.string().nullable(),
   metadataJson: localJsonObjectSchema,

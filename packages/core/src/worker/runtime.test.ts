@@ -188,7 +188,7 @@ describe('LocalWorkerRuntime', () => {
     expect(result.session.status).toBe('active')
     expect(result.session.endedAt).toBeNull()
     expect(result.files).toHaveLength(0)
-    expect(result.events.map(event => event.type)).toEqual(['status', 'status', 'status'])
+    expect(result.events.map(event => event.type)).toEqual(['status', 'status'])
 
     const snapshot = workerRuntime.snapshot()
     expect(snapshot.worker.soulId).toBe('hr')
@@ -242,7 +242,7 @@ describe('LocalWorkerRuntime', () => {
     expect(result.session.status).toBe('active')
     expect(result.session.endedAt).toBeNull()
     expect(result.invocation.status).toBe('succeeded')
-    expect(result.invocation.turnId).toBeNull()
+    expect(result.invocation).not.toHaveProperty('turnId')
     expect(result.events.map(event => event.turnId)).toEqual([null, null])
     expect(result.events.map(event => event.invocationId)).toEqual([
       result.invocation.id,
@@ -252,7 +252,8 @@ describe('LocalWorkerRuntime', () => {
     const snapshot = workerRuntime.snapshot()
     expect(snapshot.turns).toEqual([])
     expect(snapshot.sessions[0]).toMatchObject({ endedAt: null, status: 'active' })
-    expect(snapshot.invocations[0]).toMatchObject({ status: 'succeeded', turnId: null })
+    expect(snapshot.invocations[0]).toMatchObject({ status: 'succeeded' })
+    expect(snapshot.invocations[0]).not.toHaveProperty('turnId')
   })
 
   it('freezes the session engine and date context across continuation turns', async () => {
@@ -335,7 +336,7 @@ describe('LocalWorkerRuntime', () => {
       metadataJson: {},
       at: now(),
     })
-    const legacyTurn = createTurn({
+    createTurn({
       id: 'legacy-turn',
       input: 'Legacy turn',
       sessionId: session.id,
@@ -348,10 +349,9 @@ describe('LocalWorkerRuntime', () => {
       engineCommand: null,
       engineId: 'openai',
       metadataJson: {},
-      prompt: 'Legacy prompt',
+      inputRef: 'aiworker://sessions/session-legacy/turns/legacy-turn/input',
       sessionId: session.id,
       status: 'succeeded',
-      turnId: legacyTurn.id,
       seq: 1,
       at: now(),
     })
@@ -489,7 +489,7 @@ describe('LocalWorkerRuntime', () => {
     expect(result.turn.error).toBe('executor failed')
     expect(result.invocation.status).toBe('failed')
     expect(result.invocation.error).toBe('executor failed')
-    expect(result.events.map(event => event.type)).toEqual(['status', 'status', 'error'])
+    expect(result.events.map(event => event.type)).toEqual(['status', 'error'])
     expect(result.events.at(-1)?.payloadJson).toMatchObject({
       message: 'executor failed',
       turnId: result.turn.id,
@@ -551,7 +551,7 @@ describe('LocalWorkerRuntime', () => {
     expect(talentRuntime.snapshot().workspaces.map(workspace => workspace.id)).toEqual([talentWorkspace.id])
   })
 
-  it('projects worker overlay skills over the Soul App baseline for new workspaces and explicit reprojects', async () => {
+  it('keeps worker overlay descriptors out of Host-owned projection content', async () => {
     const appRoot = join(dir, 'apps', 'aiworker-hr-overlay-skill')
     await writeProfileEngineAssets(appRoot)
     await mkdir(join(appRoot, 'engine-assets', 'skills', 'interview-brief'), { recursive: true })
@@ -570,10 +570,11 @@ describe('LocalWorkerRuntime', () => {
       .toContain('Baseline Interview Brief')
 
     upsertWorkerOverlayAssets(workerRuntime.workerId, [{
-      content: '# Overlay Interview Brief\n',
+      checksum: 'sha256:overlay',
       enabled: true,
       id: 'interview-brief',
       kind: 'skill',
+      sourceRef: 'descriptor://engine/skills/interview-brief',
       target: 'codex',
     }])
 
@@ -585,9 +586,9 @@ describe('LocalWorkerRuntime', () => {
     const reprojected = await workerRuntime.reprojectWorkspaceAssets(existingWorkspace.id)
     await expect(readFile(join(existingWorkspace.rootPath, '.agents', 'skills', 'aiworker-hr-interview-brief', 'SKILL.md'), 'utf8'))
       .resolves
-      .toContain('Overlay Interview Brief')
+      .toContain('Baseline Interview Brief')
     expect(reprojected.receipt?.projections).toContainEqual(expect.objectContaining({
-      source: 'worker-overlay',
+      source: 'engine-assets/skills/interview-brief/SKILL.md',
       target: '.agents/skills/aiworker-hr-interview-brief/SKILL.md',
     }))
     expect(reprojected.workspace.metadataJson.engineAssetProjection).toMatchObject({
@@ -597,12 +598,12 @@ describe('LocalWorkerRuntime', () => {
     const newWorkspace = await workerRuntime.createWorkspace({ name: 'New candidate pool' })
     await expect(readFile(join(newWorkspace.rootPath, '.agents', 'skills', 'aiworker-hr-interview-brief', 'SKILL.md'), 'utf8'))
       .resolves
-      .toContain('Overlay Interview Brief')
+      .toContain('Baseline Interview Brief')
     const receipt = JSON.parse(await readFile(join(newWorkspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
       projections: Array<{ source: string, target: string }>
     }
     expect(receipt.projections).toContainEqual(expect.objectContaining({
-      source: 'worker-overlay',
+      source: 'engine-assets/skills/interview-brief/SKILL.md',
       target: '.agents/skills/aiworker-hr-interview-brief/SKILL.md',
     }))
   })

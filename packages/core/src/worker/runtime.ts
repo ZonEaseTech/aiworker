@@ -28,7 +28,6 @@ import {
   listSessionEvents,
   listSessions,
   listTurns,
-  listWorkerOverlayAssets,
   listWorkspaces,
   nextEngineInvocationSeq,
   nextSessionEventSeq,
@@ -239,7 +238,6 @@ export class LocalWorkerRuntime {
       at: this.#now(),
     })
     await this.materializeSessionContext(workspace, session, sessionMetadata)
-    this.appendEvent(session.id, 'status', { status: 'active' })
     this.bus.emit({ kind: 'session', workspaceId: workspace.id, sessionId: session.id, payload: { status: 'active' }, at: this.#now() })
     return session
   }
@@ -278,14 +276,14 @@ export class LocalWorkerRuntime {
       at: this.#now(),
     })
     const prompt = this.buildInvocationPrompt(session, turn, metadata)
+    const invocationId = randomUUID()
     const invocation = createEngineInvocation({
-      id: randomUUID(),
+      id: invocationId,
       sessionId: session.id,
-      turnId: turn.id,
       seq: nextEngineInvocationSeq(session.id),
       engineId: sessionEngine.engineId,
       engineCommand: sessionEngine.engineCommand,
-      prompt,
+      inputRef: `aiworker://sessions/${session.id}/turns/${turn.id}/input`,
       status: 'running',
       metadataJson: metadata,
       startedAt: this.#now(),
@@ -395,13 +393,14 @@ export class LocalWorkerRuntime {
       workspaceId: workspace.id,
     }
     const prompt = this.buildInvocationPromptFromRequest(session, input.input, metadata)
+    const invocationId = randomUUID()
     const invocation = createEngineInvocation({
-      id: randomUUID(),
+      id: invocationId,
       sessionId: session.id,
       seq: nextEngineInvocationSeq(session.id),
       engineId: sessionEngine.engineId,
       engineCommand: sessionEngine.engineCommand,
-      prompt,
+      inputRef: `aiworker://sessions/${session.id}/invocations/${invocationId}/input`,
       status: 'running',
       metadataJson: metadata,
       startedAt: this.#now(),
@@ -503,7 +502,7 @@ export class LocalWorkerRuntime {
     return { files: [] }
   }
 
-  private appendAgentEvent(sessionId: string, event: LocalExecutorEvent, turnId?: string | null, invocationId?: string | null): SessionEventRow {
+  private appendAgentEvent(sessionId: string, event: LocalExecutorEvent, turnId: string | null, invocationId: string): SessionEventRow {
     if (event.kind === 'text') {
       return this.appendEvent(sessionId, 'assistant_delta', { agentEvent: event, delta: event.text, text: event.text }, turnId, invocationId)
     }
@@ -516,11 +515,11 @@ export class LocalWorkerRuntime {
     return this.appendEvent(sessionId, event.kind === 'status' || event.kind === 'usage' ? 'status' : 'log', { agentEvent: event }, turnId, invocationId)
   }
 
-  private appendEvent(sessionId: string, type: SessionEventRow['type'], payloadJson: Record<string, unknown>, turnId?: string | null, invocationId?: string | null): SessionEventRow {
+  private appendEvent(sessionId: string, type: SessionEventRow['type'], payloadJson: Record<string, unknown>, turnId: string | null, invocationId: string): SessionEventRow {
     const row = appendSessionEvent({
       sessionId,
       turnId: turnId ?? null,
-      invocationId: invocationId ?? null,
+      invocationId,
       seq: nextSessionEventSeq(sessionId),
       type,
       payloadJson,
@@ -530,7 +529,7 @@ export class LocalWorkerRuntime {
     if (session) {
       this.bus.emit({
         at: row.createdAt,
-        invocationId: invocationId ?? undefined,
+        invocationId,
         kind: 'event',
         payload: { event: row },
         sessionId,
@@ -686,15 +685,7 @@ export class LocalWorkerRuntime {
             workerName: this.#workerInput.name,
             workspaceName: input.name,
           },
-          workerOverlayAssets: input.projectWorkerOverlayAssets
-            ? listWorkerOverlayAssets(this.workerId).map(asset => ({
-                content: asset.content,
-                enabled: asset.enabled,
-                id: asset.id,
-                kind: asset.kind,
-                target: asset.target,
-              }))
-            : [],
+          workerOverlayAssets: [],
           workspaceRoot: input.rootPath,
         })
       : null

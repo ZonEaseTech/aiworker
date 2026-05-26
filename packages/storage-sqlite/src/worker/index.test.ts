@@ -9,6 +9,7 @@ import { sql } from 'drizzle-orm'
 
 import {
   appendSessionEvent,
+  bridgeEvents,
   closeWorkerDb,
   createEngineInvocation,
   createSession,
@@ -37,20 +38,18 @@ import {
   nextEngineInvocationSeq,
   nextWorkerEngineInvocationSeq,
   runWorkerMigrations,
-  sessionEvents,
   sessions,
   setSetting,
   settings,
   soulApps,
-  turns,
   updateSoulAppLifecycle,
   updateWorkerEngineInvocation,
   upsertFile,
   upsertSoulApp,
   upsertWorker,
   upsertWorkerOverlayAssets,
+  workerConfig,
   workerEngineInvocations,
-  workerOverlayAssets,
   workers,
   workspaces,
 } from './index'
@@ -82,18 +81,16 @@ describe('greenfield local worker session schema', () => {
 
     expect(rows).toEqual([
       '__drizzle_migrations',
+      'bridge_events',
       'engine_invocations',
       'files',
-      'session_events',
       'sessions',
       'settings',
       'soul_apps',
       'sqlite_sequence',
-      'turns',
       'worker_config',
       'worker_engine_invocations',
       'worker_identity',
-      'worker_overlay_assets',
       'workers',
       'workspaces',
     ])
@@ -142,25 +139,28 @@ describe('greenfield local worker session schema', () => {
     const worker = upsertWorker({ id: 'worker-overlay-1', name: 'Recruiting worker', soulId: 'aiworker-hr' })
 
     upsertWorkerOverlayAssets(worker.id, [{
-      content: '# Interview brief\n',
+      checksum: 'sha256:test',
       enabled: true,
       id: 'interview-brief',
       kind: 'skill',
       metadataJson: { targetPath: '.agents/skills/aiworker-hr-interview-brief/SKILL.md' },
+      sourceRef: 'descriptor://engine/skills/interview-brief',
       target: 'codex',
     }])
 
     const overlay = listWorkerOverlayAssets(worker.id)
     expect(overlay).toHaveLength(1)
     expect(overlay[0]).toMatchObject({
-      content: '# Interview brief\n',
+      checksum: 'sha256:test',
       enabled: true,
       id: 'interview-brief',
       kind: 'skill',
       source: 'overlay',
+      sourceRef: 'descriptor://engine/skills/interview-brief',
       target: 'codex',
       workerId: worker.id,
     })
+    expect(overlay[0]).not.toHaveProperty('content')
   })
 
   it('persists worker-scoped native invocation metadata without session rows', () => {
@@ -270,14 +270,19 @@ describe('greenfield local worker session schema', () => {
     const invocation = createEngineInvocation({
       id: 'inv-1',
       sessionId: session.id,
-      turnId: turn.id,
       seq: 1,
       engineId: 'codex',
       engineCommand: 'codex',
-      prompt: 'Prompt',
+      inputRef: 'aiworker://sessions/session-1/turns/turn-1/input',
       status: 'running',
       at: '2026-05-09T01:04:00.000Z',
     })
+    expect(invocation).toMatchObject({
+      inputRef: 'aiworker://sessions/session-1/turns/turn-1/input',
+      processState: 'not_spawned',
+    })
+    expect(invocation).not.toHaveProperty('turnId')
+    expect(invocation).not.toHaveProperty('prompt')
     expect(listEngineInvocations(session.id)).toEqual([invocation])
     appendSessionEvent({
       sessionId: session.id,
@@ -332,7 +337,7 @@ describe('greenfield local worker session schema', () => {
       seq: nextEngineInvocationSeq(session.id),
       engineId: 'codex',
       engineCommand: 'codex',
-      prompt: 'Run the session invocation.',
+      inputRef: 'aiworker://sessions/session-invocation-only/invocations/invocation-only-1/input',
       status: 'running',
       at: '2026-05-27T01:03:00.000Z',
     })
@@ -345,7 +350,12 @@ describe('greenfield local worker session schema', () => {
       at: '2026-05-27T01:03:01.000Z',
     })
 
-    expect(invocation.turnId).toBeNull()
+    expect(invocation).toMatchObject({
+      inputRef: 'aiworker://sessions/session-invocation-only/invocations/invocation-only-1/input',
+      processState: 'not_spawned',
+    })
+    expect(invocation).not.toHaveProperty('turnId')
+    expect(invocation).not.toHaveProperty('prompt')
     expect(listTurns(session.id)).toEqual([])
     expect(listEngineInvocations(session.id)).toEqual([invocation])
     expect(listSessionEvents(session.id)[0]).toMatchObject({
@@ -377,8 +387,18 @@ describe('greenfield local worker session schema', () => {
       title: 'Events session',
       at: '2026-05-23T00:00:02.000Z',
     })
+    const invocation = createEngineInvocation({
+      id: 'events-invocation-1',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      inputRef: 'aiworker://sessions/session-events/invocations/events-invocation-1/input',
+      status: 'running',
+      at: '2026-05-23T00:00:03.000Z',
+    })
 
     const ids = Array.from({ length: 5 }, (_, index) => appendSessionEvent({
+      invocationId: invocation.id,
       sessionId: session.id,
       seq: index + 1,
       type: 'assistant_delta',
@@ -517,11 +537,10 @@ describe('greenfield local worker session schema', () => {
     expect(explain(`SELECT * FROM workers WHERE status = 'active' ORDER BY updated_at DESC LIMIT 20`)).toContain('workers_status_updated_at_idx')
     expect(explain(`SELECT * FROM workspaces WHERE worker_id = 'worker-hr' ORDER BY updated_at DESC LIMIT 20`)).toContain('workspaces_worker_updated_at_idx')
     expect(explain(`SELECT * FROM sessions WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('sessions_workspace_updated_at_idx')
-    expect(explain(`SELECT * FROM turns WHERE session_id = 'session-1' ORDER BY seq ASC LIMIT 200`)).toContain('turns_session_seq')
-    expect(explain(`SELECT * FROM engine_invocations WHERE status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('engine_invocations_status_updated_at_idx')
+    expect(explain(`SELECT * FROM engine_invocations WHERE invocation_status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('engine_invocations_status_updated_at_idx')
     expect(explain(`SELECT * FROM worker_engine_invocations WHERE worker_id = 'worker-hr' ORDER BY seq DESC LIMIT 20`)).toContain('worker_engine_invocations_worker_seq')
     expect(explain(`SELECT * FROM worker_engine_invocations WHERE status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('worker_engine_invocations_status_updated_at_idx')
-    expect(explain(`SELECT * FROM session_events WHERE session_id = 'session-1' ORDER BY seq ASC LIMIT 200`)).toContain('session_events_session_seq')
+    expect(explain(`SELECT * FROM bridge_events WHERE invocation_id = 'inv-1' ORDER BY created_at ASC LIMIT 200`)).toContain('bridge_events_invocation_created_at_idx')
     expect(explain(`SELECT * FROM files WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 50`)).toContain('files_workspace_updated_at_idx')
     expect(explain(`SELECT * FROM soul_apps WHERE status = 'enabled' ORDER BY updated_at DESC LIMIT 50`)).toContain('soul_apps_status_updated_at_idx')
   })
@@ -530,13 +549,12 @@ describe('greenfield local worker session schema', () => {
     expect(workers).toBeDefined()
     expect(workspaces).toBeDefined()
     expect(sessions).toBeDefined()
-    expect(turns).toBeDefined()
     expect(engineInvocations).toBeDefined()
     expect(workerEngineInvocations).toBeDefined()
-    expect(sessionEvents).toBeDefined()
+    expect(bridgeEvents).toBeDefined()
     expect(files).toBeDefined()
     expect(soulApps).toBeDefined()
     expect(settings).toBeDefined()
-    expect(workerOverlayAssets).toBeDefined()
+    expect(workerConfig).toBeDefined()
   })
 })

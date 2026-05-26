@@ -22,25 +22,6 @@ export const workers = sqliteTable(
   }),
 )
 
-export const workerOverlayAssets = sqliteTable(
-  'worker_overlay_assets',
-  {
-    workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
-    id: text('id').notNull(),
-    kind: text('kind', { enum: ['entry-file', 'mcp-client', 'skill'] }).notNull(),
-    target: text('target').notNull(),
-    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-    content: text('content').notNull(),
-    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
-    createdAt: text('created_at').notNull().$defaultFn(nowIso),
-    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
-  },
-  table => ({
-    workerAssetUniqueIdx: uniqueIndex('worker_overlay_assets_worker_kind_target_id_idx').on(table.workerId, table.kind, table.target, table.id),
-    workerKindIdx: index('worker_overlay_assets_worker_kind_idx').on(table.workerId, table.kind),
-  }),
-)
-
 export const workspaces = sqliteTable(
   'workspaces',
   {
@@ -86,38 +67,22 @@ export const sessions = sqliteTable(
   }),
 )
 
-export const turns = sqliteTable(
-  'turns',
-  {
-    id: text('id').primaryKey(),
-    sessionId: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
-    seq: integer('seq').notNull(),
-    input: text('input').notNull(),
-    response: text('response'),
-    status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull().default('queued'),
-    error: text('error'),
-    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
-    createdAt: text('created_at').notNull().$defaultFn(nowIso),
-    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
-  },
-  table => ({
-    sessionSeqIdx: index('turns_session_seq_idx').on(table.sessionId, table.seq),
-    sessionSeqUniqueIdx: uniqueIndex('turns_session_seq_unique_idx').on(table.sessionId, table.seq),
-    statusUpdatedAtIdx: index('turns_status_updated_at_idx').on(table.status, table.updatedAt),
-  }),
-)
-
 export const engineInvocations = sqliteTable(
   'engine_invocations',
   {
     id: text('id').primaryKey(),
     sessionId: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
-    turnId: text('turn_id').references(() => turns.id, { onDelete: 'set null' }),
     seq: integer('seq').notNull(),
     engineId: text('engine_id').notNull(),
     engineCommand: text('engine_command'),
-    status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull().default('queued'),
-    prompt: text('prompt').notNull(),
+    status: text('invocation_status', { enum: ['queued', 'starting', 'running', 'succeeded', 'failed', 'cancelled', 'lost'] }).notNull().default('queued'),
+    processState: text('process_state', { enum: ['not_spawned', 'spawned', 'exited', 'killed', 'lost'] }).notNull().default('not_spawned'),
+    projectionReceiptId: text('projection_receipt_id'),
+    externalSessionRef: text('external_session_ref'),
+    rawLogRef: text('raw_log_ref'),
+    eventLogRef: text('event_log_ref'),
+    failureCode: text('failure_code'),
+    inputRef: text('input_ref').notNull(),
     summary: text('summary'),
     error: text('error'),
     metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
@@ -130,7 +95,6 @@ export const engineInvocations = sqliteTable(
     engineUpdatedAtIdx: index('engine_invocations_engine_updated_at_idx').on(table.engineId, table.updatedAt),
     sessionSeqIdx: index('engine_invocations_session_seq_idx').on(table.sessionId, table.seq),
     statusUpdatedAtIdx: index('engine_invocations_status_updated_at_idx').on(table.status, table.updatedAt),
-    turnIdx: index('engine_invocations_turn_idx').on(table.turnId),
   }),
 )
 
@@ -163,24 +127,19 @@ export const workerEngineInvocations = sqliteTable(
   }),
 )
 
-export const sessionEvents = sqliteTable(
-  'session_events',
+export const bridgeEvents = sqliteTable(
+  'bridge_events',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    sessionId: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
-    turnId: text('turn_id').references(() => turns.id, { onDelete: 'set null' }),
-    invocationId: text('invocation_id').references(() => engineInvocations.id, { onDelete: 'set null' }),
-    seq: integer('seq').notNull(),
-    type: text('type', {
-      enum: ['status', 'assistant_delta', 'tool', 'file_change', 'artifact', 'error', 'log'],
+    id: integer('event_id').primaryKey({ autoIncrement: true }),
+    invocationId: text('invocation_id').notNull().references(() => engineInvocations.id, { onDelete: 'cascade' }),
+    eventType: text('event_type', {
+      enum: ['invocation.status', 'engine.output', 'engine.tool', 'process.event', 'diagnostic', 'error'],
     }).notNull(),
-    payloadJson: text('payload_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    eventJson: text('event_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
     createdAt: text('created_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    sessionCreatedAtIdx: index('session_events_session_created_at_idx').on(table.sessionId, table.createdAt),
-    sessionSeqIdx: index('session_events_session_seq_idx').on(table.sessionId, table.seq),
-    sessionSeqUniqueIdx: uniqueIndex('session_events_session_seq_unique_idx').on(table.sessionId, table.seq),
+    invocationCreatedAtIdx: index('bridge_events_invocation_created_at_idx').on(table.invocationId, table.createdAt),
   }),
 )
 
@@ -253,9 +212,12 @@ export const workerIdentity = sqliteTable('worker_identity', {
 })
 
 export const workerConfig = sqliteTable('worker_config', {
-  pk: text('pk').primaryKey().default('default'),
-  configJson: text('config_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
-  version: integer('version').notNull().default(1),
+  workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
+  configKey: text('config_key').notNull(),
+  configValueJson: text('config_value_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+  source: text('source', { enum: ['app-owned-api', 'bootstrap', 'cli', 'descriptor', 'migration', 'web'] }).notNull().default('cli'),
+  createdAt: text('created_at').notNull().$defaultFn(nowIso),
   updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
-  updatedBy: text('updated_by', { enum: ['bootstrap', 'api', 'cli'] }),
-})
+}, table => ({
+  workerConfigUniqueIdx: uniqueIndex('worker_config_worker_key_idx').on(table.workerId, table.configKey),
+}))

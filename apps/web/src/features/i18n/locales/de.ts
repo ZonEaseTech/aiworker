@@ -283,8 +283,9 @@ export const de = {
   },
   statuses: {
     active: 'Aktiv',
+    archived: 'Archiviert',
     cancelled: 'Abgebrochen',
-    completed: 'Abgeschlossen',
+    deleted: 'Geloescht',
     draft: 'Entwurf',
     failed: 'Fehlgeschlagen',
     queued: 'In Warteschlange',

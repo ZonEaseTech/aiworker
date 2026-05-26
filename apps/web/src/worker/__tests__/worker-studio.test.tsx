@@ -499,12 +499,14 @@ function resetSettings() {
   currentEvents = [{ ...eventRecord }]
   currentWorkers = workers.map(worker => ({ ...worker }))
   currentWorkerOverlayAssets = [{
-    content: '# Interview Brief\n',
+    checksum: 'sha256:interview-brief',
     enabled: true,
     id: 'interview-brief',
     kind: 'skill',
     metadataJson: {},
+    optionsJson: {},
     source: 'overlay',
+    sourceRef: 'descriptor://engine/skills/interview-brief',
     target: 'codex',
     updatedAt: now,
   }]
@@ -1230,7 +1232,7 @@ describe('worker studio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New skill' }))
     fireEvent.change(screen.getByLabelText('Overlay asset id'), { target: { value: 'custom-skill' } })
     fireEvent.change(screen.getByLabelText('Overlay asset target'), { target: { value: 'codex' } })
-    fireEvent.change(screen.getByLabelText('Overlay asset content'), { target: { value: '# Custom Skill\n\nUse with product research.' } })
+    fireEvent.change(screen.getByLabelText('Overlay asset source reference'), { target: { value: 'descriptor://engine/skills/custom-skill' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create asset' }))
 
     await waitFor(() => {

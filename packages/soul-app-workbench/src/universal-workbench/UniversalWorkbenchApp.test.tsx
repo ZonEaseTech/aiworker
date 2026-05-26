@@ -330,7 +330,7 @@ describe('UniversalWorkbenchApp', () => {
       id: 'session-failed',
       metadataJson: {},
       startedAt: '2026-05-24T07:03:42.523Z',
-      status: 'failed',
+      status: 'active',
       title: 'E2E audit task',
       updatedAt: '2026-05-24T07:08:43.533Z',
       workerId: 'worker-1',

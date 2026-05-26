@@ -13,7 +13,6 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle }
 import { ScrollArea } from '@zonease/aiworker-ui/components/scroll-area'
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '@zonease/aiworker-ui/components/sidebar'
 import { Switch } from '@zonease/aiworker-ui/components/switch'
-import { Textarea } from '@zonease/aiworker-ui/components/textarea'
 import { useEffect, useMemo, useState } from 'react'
 
 type OverlayCategory = LocalWorkerOverlayAssetKind
@@ -25,9 +24,9 @@ const categories: { label: string, value: OverlayCategory }[] = [
 ]
 
 interface NewAssetDraft {
-  content: string
   id: string
   kind: OverlayCategory
+  sourceRef: string
   target: string
 }
 
@@ -57,7 +56,6 @@ export function WorkerConfigurationDialog({
   const [newAsset, setNewAsset] = useState<NewAssetDraft | null>(null)
   const [autosave, setAutosave] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const [autosaveErrorMessage, setAutosaveErrorMessage] = useState<string | null>(null)
-  const [editContent, setEditContent] = useState('')
   const [saving, setSaving] = useState(false)
   const [selectedPanel, setSelectedPanel] = useState<null | 'workbench'>(null)
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
@@ -93,7 +91,6 @@ export function WorkerConfigurationDialog({
     return map
   }, [assets])
   const selectedAsset = selectedPanel === 'workbench' ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
-  const selectedAssetKey = selectedAsset ? `${selectedAsset.kind}:${selectedAsset.id}` : null
   const defaultNewAsset = useMemo(() => activeCategory ? createDefaultAssetDraft(activeCategory, assets) : null, [activeCategory, assets])
   const effectiveNewAsset = newAsset?.kind === activeCategory ? newAsset : defaultNewAsset
 
@@ -128,12 +125,14 @@ export function WorkerConfigurationDialog({
         return
       }
       const stampedAssets: LocalWorkerOverlayAsset[] = targets.map(target => ({
-        content: nextAsset.content,
+        checksum: nextAsset.checksum,
         enabled: false,
         id: nextAsset.id,
         kind: nextAsset.kind,
         metadataJson: {},
+        optionsJson: {},
         source: 'overlay' as const,
+        sourceRef: nextAsset.sourceRef,
         target,
         updatedAt: new Date().toISOString(),
       }))
@@ -195,12 +194,14 @@ export function WorkerConfigurationDialog({
     const targets = createTargets(activeCategory, effectiveNewAsset.target)
     const now = new Date().toISOString()
     const nextAssets: LocalWorkerOverlayAsset[] = targets.map(target => ({
-      content: effectiveNewAsset.content,
+      checksum: null,
       enabled: true,
       id: effectiveNewAsset.id.trim(),
       kind: activeCategory,
       metadataJson: {},
+      optionsJson: {},
       source: 'overlay' as const,
+      sourceRef: effectiveNewAsset.sourceRef.trim(),
       target,
       updatedAt: now,
     }))
@@ -276,10 +277,6 @@ export function WorkerConfigurationDialog({
     }, 1600)
     return () => window.clearTimeout(timeout)
   }, [autosave])
-
-  useEffect(() => {
-    setEditContent(selectedAsset?.content ?? '')
-  }, [selectedAssetKey])
 
   useEffect(() => {
     if (selectedPanel === 'workbench' && (!workbenchTabs || workbenchTabs.length <= 1))
@@ -448,7 +445,7 @@ export function WorkerConfigurationDialog({
                               <Input aria-label="Overlay asset id" value={effectiveNewAsset?.id ?? ''} onChange={event => updateNewAsset({ id: event.currentTarget.value })} />
                               <Input aria-label="Overlay asset target" value={effectiveNewAsset?.target ?? ''} onChange={event => updateNewAsset({ target: event.currentTarget.value })} />
                             </div>
-                            <Textarea aria-label="Overlay asset content" value={effectiveNewAsset?.content ?? ''} onChange={event => updateNewAsset({ content: event.currentTarget.value })} />
+                            <Input aria-label="Overlay asset source reference" value={effectiveNewAsset?.sourceRef ?? ''} onChange={event => updateNewAsset({ sourceRef: event.currentTarget.value })} />
                           </ItemContent>
                           <ItemActions>
                             <Button type="button" variant="secondary" disabled={saving} onClick={() => void createAsset()}>
@@ -537,19 +534,22 @@ export function WorkerConfigurationDialog({
                                 />
                               </div>
                             </div>
-                            <Textarea
-                              value={editContent}
-                              aria-label={`${selectedAsset.id} editor`}
-                              readOnly={selectedAsset.source === 'baseline'}
-                              onChange={event => setEditContent(event.currentTarget.value)}
-                              onBlur={() => {
-                                if (selectedAsset.source === 'baseline')
-                                  return
-                                if (editContent !== (selectedAsset?.content ?? '')) {
-                                  void saveAsset({ ...selectedAsset, content: editContent })
-                                }
-                              }}
-                            />
+                            <Item variant="muted">
+                              <ItemContent className="grid min-w-0 gap-1">
+                                <ItemTitle>Source reference</ItemTitle>
+                                <ItemDescription className="line-clamp-none break-all">{selectedAsset.sourceRef}</ItemDescription>
+                              </ItemContent>
+                            </Item>
+                            {selectedAsset.checksum
+                              ? (
+                                  <Item variant="default">
+                                    <ItemContent className="grid min-w-0 gap-1">
+                                      <ItemTitle>Checksum</ItemTitle>
+                                      <ItemDescription className="line-clamp-none break-all">{selectedAsset.checksum}</ItemDescription>
+                                    </ItemContent>
+                                  </Item>
+                                )
+                              : null}
                             {autosave === 'failed' && autosaveErrorMessage
                               ? (
                                   <Alert variant="destructive">
@@ -576,19 +576,19 @@ export function WorkerConfigurationDialog({
 function createDefaultAssetDraft(kind: OverlayCategory, assets: LocalWorkerOverlayAsset[] = []): NewAssetDraft {
   const base = kind === 'entry-file' ? 'AGENTS.md' : kind === 'mcp-client' ? 'team-context' : 'custom-skill'
   return {
-    content: defaultContent(kind),
     id: nextCopyId(base, assets),
     kind,
+    sourceRef: defaultSourceRef(kind, base),
     target: kind === 'entry-file' ? 'workspace' : 'codex',
   }
 }
 
-function defaultContent(kind: OverlayCategory): string {
+function defaultSourceRef(kind: OverlayCategory, id: string): string {
   if (kind === 'entry-file')
-    return '# Worker entry\n'
+    return `descriptor://engine/workspace/${id}`
   if (kind === 'mcp-client')
-    return '{\n  "command": "",\n  "args": []\n}\n'
-  return '# Custom Skill\n\nUse when this worker needs explicit local behavior.\n'
+    return `descriptor://engine/mcp/${id}`
+  return `descriptor://engine/skills/${id}`
 }
 
 function formatValidation(errors: string[]): string | null {
@@ -613,11 +613,11 @@ function validateAsset(asset: LocalWorkerOverlayAsset, assets: LocalWorkerOverla
     errors.push('Asset id is required.')
   if (!asset.target.trim())
     errors.push('Target is required.')
-  if (!asset.content.trim())
-    errors.push('Content is required.')
+  if (!asset.sourceRef.trim())
+    errors.push('Source reference is required.')
   if (assets.some(item => item !== original && item.kind === asset.kind && item.id === asset.id))
     errors.push('Another asset with this kind and id already exists.')
-  if (/(?:api[_-]?key|token|secret)\s*[:=]\s*["']?[^"'\s]+/i.test(asset.content) || /sk-[a-z0-9]{15,}/i.test(asset.content))
-    errors.push('Content appears to contain a literal secret. Use a secret reference instead.')
+  if (/(?:api[_-]?key|token|secret)\s*[:=]\s*["']?[^"'\s]+/i.test(asset.sourceRef) || /sk-[a-z0-9]{15,}/i.test(asset.sourceRef))
+    errors.push('Source reference appears to contain a literal secret.')
   return errors
 }

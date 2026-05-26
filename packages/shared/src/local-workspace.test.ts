@@ -13,29 +13,32 @@ describe('local worker overlay schema', () => {
     const parsed = localWorkerOverlaySchema.parse({
       assets: [
         {
-          content: '# Interview brief\n',
+          checksum: 'sha256:skill',
           enabled: true,
           id: 'interview-brief',
           kind: 'skill',
           source: 'overlay',
+          sourceRef: 'descriptor://engine/skills/interview-brief',
           target: 'codex',
           updatedAt: '2026-05-21T00:00:00.000Z',
         },
         {
-          content: '[mcp_servers.ats]\ncommand = "uvx"\n',
+          checksum: 'sha256:mcp',
           enabled: false,
           id: 'codex-ats',
           kind: 'mcp-client',
           source: 'overlay',
+          sourceRef: 'descriptor://engine/mcp/codex-ats',
           target: 'codex',
           updatedAt: '2026-05-21T00:00:00.000Z',
         },
         {
-          content: '# Worker Instructions\n',
+          checksum: 'sha256:entry',
           enabled: true,
           id: 'AGENTS.md',
           kind: 'entry-file',
           source: 'overlay',
+          sourceRef: 'descriptor://engine/workspace/AGENTS.md',
           target: 'workspace',
           updatedAt: '2026-05-21T00:00:00.000Z',
         },
@@ -48,27 +51,30 @@ describe('local worker overlay schema', () => {
 
   it('defaults worker overlay asset metadata to an empty object', () => {
     const parsed = localWorkerOverlayAssetSchema.parse({
-      content: '# Interview brief\n',
+      checksum: 'sha256:skill',
       enabled: true,
       id: 'interview-brief',
       kind: 'skill',
       source: 'overlay',
+      sourceRef: 'descriptor://engine/skills/interview-brief',
       target: 'codex',
       updatedAt: '2026-05-21T00:00:00.000Z',
     })
 
     expect(parsed.metadataJson).toEqual({})
+    expect(parsed).not.toHaveProperty('content')
   })
 
   it('defaults parsed overlay asset metadata inside a worker overlay', () => {
     const parsed = localWorkerOverlaySchema.parse({
       assets: [
         {
-          content: '# Worker Instructions\n',
+          checksum: 'sha256:entry',
           enabled: true,
           id: 'AGENTS.md',
           kind: 'entry-file',
           source: 'overlay',
+          sourceRef: 'descriptor://engine/workspace/AGENTS.md',
           target: 'workspace',
           updatedAt: '2026-05-21T00:00:00.000Z',
         },
@@ -83,11 +89,12 @@ describe('local worker overlay schema', () => {
     const parsed = localWorkerOverlaySaveSchema.parse({
       assets: [
         {
-          content: '# Interview brief\n',
+          checksum: 'sha256:skill',
           enabled: true,
           id: 'interview-brief',
           kind: 'skill',
           metadataJson: {},
+          sourceRef: 'descriptor://engine/skills/interview-brief',
           target: 'codex',
         },
       ],
@@ -100,12 +107,13 @@ describe('local worker overlay schema', () => {
     expect(() => localWorkerOverlaySaveSchema.parse({
       assets: [
         {
-          content: '# Interview brief\n',
+          checksum: 'sha256:skill',
           enabled: true,
           id: 'interview-brief',
           kind: 'skill',
           metadataJson: {},
           source: 'baseline',
+          sourceRef: 'descriptor://engine/skills/interview-brief',
           target: 'codex',
         },
       ],
@@ -130,12 +138,17 @@ describe('local worker overlay schema', () => {
     const parsed = localEngineInvocationSchema.parse({
       id: 'invocation-1',
       sessionId: 'session-1',
-      turnId: null,
       seq: 1,
       engineId: 'codex',
       engineCommand: 'codex',
       status: 'succeeded',
-      prompt: 'Invocation request',
+      processState: 'exited',
+      projectionReceiptId: null,
+      externalSessionRef: 'codex://thread/thread-1',
+      rawLogRef: 'aiworker://logs/invocation-1/raw.log',
+      eventLogRef: 'aiworker://logs/invocation-1/events.ndjson',
+      failureCode: null,
+      inputRef: 'aiworker://sessions/session-1/invocations/invocation-1/input',
       summary: 'done',
       error: null,
       metadataJson: {},
@@ -145,6 +158,7 @@ describe('local worker overlay schema', () => {
       updatedAt: '2026-05-21T00:00:01.000Z',
     })
 
-    expect(parsed.turnId).toBeNull()
+    expect(parsed).not.toHaveProperty('turnId')
+    expect(parsed).not.toHaveProperty('prompt')
   })
 })

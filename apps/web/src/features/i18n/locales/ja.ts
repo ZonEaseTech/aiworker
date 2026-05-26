@@ -283,8 +283,9 @@ export const ja = {
   },
   statuses: {
     active: 'アクティブ',
+    archived: 'アーカイブ済み',
     cancelled: 'キャンセル済み',
-    completed: '完了',
+    deleted: '削除済み',
     draft: '下書き',
     failed: '失敗',
     queued: '待機中',

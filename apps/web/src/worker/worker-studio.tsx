@@ -262,11 +262,13 @@ export function WorkerStudio() {
     const overlayOnly = assets.filter(asset => asset.source !== 'baseline')
     const result = await saveWorkerOverlay(workerOverlayTarget.id, {
       assets: overlayOnly.map(asset => ({
-        content: asset.content,
+        checksum: asset.checksum,
         enabled: asset.enabled,
         id: asset.id,
         kind: asset.kind,
         metadataJson: asset.metadataJson,
+        optionsJson: asset.optionsJson,
+        sourceRef: asset.sourceRef,
         target: asset.target,
       })),
     })

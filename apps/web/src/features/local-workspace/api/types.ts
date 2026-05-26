@@ -65,11 +65,13 @@ export interface WorkerWorkspaceProjectionResponse {
 
 export interface WorkerOverlaySaveBody {
   assets: Array<{
-    content: string
+    checksum?: null | string
     enabled: boolean
     id: string
     kind: 'entry-file' | 'mcp-client' | 'skill'
     metadataJson?: Record<string, unknown>
+    optionsJson?: Record<string, unknown>
+    sourceRef: string
     target: string
   }>
 }

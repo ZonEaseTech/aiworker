@@ -283,8 +283,9 @@ export const zhCN = {
   },
   statuses: {
     active: '活跃',
+    archived: '已归档',
     cancelled: '已取消',
-    completed: '已完成',
+    deleted: '已删除',
     draft: '草稿',
     failed: '失败',
     queued: '排队中',

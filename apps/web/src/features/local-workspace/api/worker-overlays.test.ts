@@ -18,10 +18,11 @@ describe('worker overlay API', () => {
 
     await saveWorkerOverlay('worker-1', {
       assets: [{
-        content: '# Skill\n',
+        checksum: 'sha256:skill',
         enabled: true,
         id: 'brief',
         kind: 'skill',
+        sourceRef: 'descriptor://engine/skills/brief',
         target: 'codex',
       }],
     })

@@ -286,8 +286,9 @@ export const en = {
   },
   statuses: {
     active: 'Active',
+    archived: 'Archived',
     cancelled: 'Cancelled',
-    completed: 'Completed',
+    deleted: 'Deleted',
     draft: 'Draft',
     failed: 'Failed',
     queued: 'Queued',
