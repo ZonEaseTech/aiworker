@@ -1,6 +1,6 @@
 # PLAN-418 Universal workbench empty composer layout
 
-- **status**: approved
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-26
 - **relatedTask**: BUG-161
