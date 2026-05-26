@@ -78,9 +78,9 @@ describe('AssistantMarkdown', () => {
   })
 
   it('does not render globstar wildcards as bold markdown', () => {
-    const { container } = render(<AssistantMarkdown markdown="glob **/*.ts" />)
+    const { container } = render(<AssistantMarkdown markdown="glob **/*.ts and **/node_modules/** and **/dist/**" />)
 
-    expect(screen.getByText('glob **/*.ts')).toBeTruthy()
+    expect(screen.getByText('glob **/*.ts and **/node_modules/** and **/dist/**')).toBeTruthy()
     expect(container.querySelector('strong')).toBeNull()
   })
 })

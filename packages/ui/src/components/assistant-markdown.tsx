@@ -174,46 +174,121 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
 
 function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = []
-  const pattern = /(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|(^|[^*])\*([^\s*][^*\n]*?\S)\*(?!\*))/g
-  let lastIndex = 0
-  let match: RegExpExecArray | null
+  let buffer = ''
+  let index = 0
 
-  while ((match = pattern.exec(text))) {
-    if (match.index > lastIndex)
-      nodes.push(text.slice(lastIndex, match.index))
+  function flushText() {
+    if (!buffer)
+      return
+    nodes.push(buffer)
+    buffer = ''
+  }
 
-    if (match[2] && match[3]) {
+  while (index < text.length) {
+    const link = matchLinkAt(text, index)
+    if (link) {
+      flushText()
       nodes.push(
         <a
-          key={`${keyPrefix}-link-${match.index}`}
-          href={match[3]}
+          key={`${keyPrefix}-link-${index}`}
+          href={link.href}
           target="_blank"
           rel="noreferrer"
           className="underline underline-offset-4 hover:text-primary"
         >
-          {match[2]}
+          {link.label}
         </a>,
       )
-    }
-    else if (match[4]) {
-      nodes.push(<code key={`${keyPrefix}-code-${match.index}`} className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.85em]">{match[4]}</code>)
-    }
-    else if (match[5]) {
-      nodes.push(<strong key={`${keyPrefix}-strong-${match.index}`} className="font-semibold">{match[5]}</strong>)
-    }
-    else if (match[7]) {
-      if (match[6])
-        nodes.push(match[6])
-      nodes.push(<em key={`${keyPrefix}-em-${match.index}`}>{match[7]}</em>)
+      index = link.end
+      continue
     }
 
-    lastIndex = pattern.lastIndex
+    if (text[index] === '`') {
+      const closeIndex = text.indexOf('`', index + 1)
+      if (closeIndex > index + 1) {
+        flushText()
+        nodes.push(<code key={`${keyPrefix}-code-${index}`} className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.85em]">{text.slice(index + 1, closeIndex)}</code>)
+        index = closeIndex + 1
+        continue
+      }
+    }
+
+    if (isStrongOpener(text, index)) {
+      const closeIndex = findStrongCloser(text, index + 2)
+      if (closeIndex !== -1) {
+        flushText()
+        nodes.push(<strong key={`${keyPrefix}-strong-${index}`} className="font-semibold">{text.slice(index + 2, closeIndex)}</strong>)
+        index = closeIndex + 2
+        continue
+      }
+    }
+
+    if (isItalicOpener(text, index)) {
+      const closeIndex = findItalicCloser(text, index + 1)
+      if (closeIndex !== -1) {
+        flushText()
+        nodes.push(<em key={`${keyPrefix}-em-${index}`}>{text.slice(index + 1, closeIndex)}</em>)
+        index = closeIndex + 1
+        continue
+      }
+    }
+
+    buffer += text[index]
+    index += 1
   }
 
-  if (lastIndex < text.length)
-    nodes.push(text.slice(lastIndex))
+  flushText()
 
   return nodes
+}
+
+function matchLinkAt(text: string, index: number): { end: number, href: string, label: string } | null {
+  if (text[index] !== '[')
+    return null
+
+  const labelEnd = text.indexOf(']', index + 1)
+  if (labelEnd <= index + 1 || text[labelEnd + 1] !== '(')
+    return null
+
+  const hrefEnd = text.indexOf(')', labelEnd + 2)
+  if (hrefEnd === -1)
+    return null
+
+  const href = text.slice(labelEnd + 2, hrefEnd)
+  if (!/^https?:\/\/[^\s)]+$/.test(href))
+    return null
+
+  return {
+    end: hrefEnd + 1,
+    href,
+    label: text.slice(index + 1, labelEnd),
+  }
+}
+
+function findStrongCloser(text: string, fromIndex: number): number {
+  for (let index = fromIndex; index < text.length - 1; index += 1) {
+    if (text[index] !== '*' || text[index + 1] !== '*')
+      continue
+
+    const previous = text[index - 1]
+    if (previous && previous !== '*' && !/\s/.test(previous) && text[index + 2] !== '*')
+      return index
+  }
+
+  return -1
+}
+
+function findItalicCloser(text: string, fromIndex: number): number {
+  for (let index = fromIndex; index < text.length; index += 1) {
+    if (text[index] !== '*')
+      continue
+
+    const previous = text[index - 1]
+    if (previous && previous !== '*' && !/\s/.test(previous) && text[index + 1] !== '*')
+      return index
+  }
+
+  return -1
 }
 
 function hasUnclosedItalicOpener(text: string): boolean {
