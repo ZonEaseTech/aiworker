@@ -46,7 +46,7 @@ export function repairStreamingMarkdown(markdown: string, streaming: boolean): s
   if (strongCount % 2 === 1)
     repaired = `${repaired}**`
 
-  const emphasisCount = countSingleAsterisks(withoutFences)
+  const emphasisCount = countItalicDelimiters(withoutFences)
   if (emphasisCount % 2 === 1)
     repaired = `${repaired}*`
 
@@ -176,7 +176,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
 
 function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = []
-  const pattern = /(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*)/g
+  const pattern = /(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|(^|[^*])\*([^\s*][^*\n]*?\S)\*(?!\*))/g
   let lastIndex = 0
   let match: RegExpExecArray | null
 
@@ -203,8 +203,10 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
     else if (match[5]) {
       nodes.push(<strong key={`${keyPrefix}-strong-${match.index}`} className="font-semibold">{match[5]}</strong>)
     }
-    else if (match[6]) {
-      nodes.push(<em key={`${keyPrefix}-em-${match.index}`}>{match[6]}</em>)
+    else if (match[7]) {
+      if (match[6])
+        nodes.push(match[6])
+      nodes.push(<em key={`${keyPrefix}-em-${match.index}`}>{match[7]}</em>)
     }
 
     lastIndex = pattern.lastIndex
@@ -216,6 +218,23 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
   return nodes
 }
 
-function countSingleAsterisks(text: string): number {
-  return [...text.matchAll(/(^|[^*])\*([^*]|$)/g)].length
+function countItalicDelimiters(text: string): number {
+  let count = 0
+
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== '*')
+      continue
+
+    const previous = text[index - 1]
+    const next = text[index + 1]
+    if (previous === '*' || next === '*')
+      continue
+
+    const canOpen = Boolean(next && !/\s/.test(next))
+    const canClose = Boolean(previous && !/\s/.test(previous))
+    if (canOpen || canClose)
+      count += 1
+  }
+
+  return count
 }

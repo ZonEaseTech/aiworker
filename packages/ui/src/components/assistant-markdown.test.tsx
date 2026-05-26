@@ -45,4 +45,18 @@ describe('AssistantMarkdown', () => {
     expect(repairStreamingMarkdown('*italic', true)).toBe('*italic*')
     expect(repairStreamingMarkdown('`inline', true)).toBe('`inline`')
   })
+
+  it('does not treat whitespace-delimited asterisks as italic markdown', () => {
+    const { container } = render(<AssistantMarkdown markdown="2 * 3 = 6 * 1" />)
+
+    expect(screen.getByText('2 * 3 = 6 * 1')).toBeTruthy()
+    expect(container.querySelector('em')).toBeNull()
+  })
+
+  it('does not repair ordinary single asterisks while streaming', () => {
+    expect(repairStreamingMarkdown('2 * 3 = 6', true)).toBe('2 * 3 = 6')
+    expect(repairStreamingMarkdown('* first', true)).toBe('* first')
+    expect(repairStreamingMarkdown('Use * as wildcard', true)).toBe('Use * as wildcard')
+    expect(repairStreamingMarkdown('*italic', true)).toBe('*italic*')
+  })
 })
