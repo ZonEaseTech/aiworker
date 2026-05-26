@@ -31,6 +31,40 @@ describe('ArtifactStrip', () => {
     expect(container.querySelector('[data-transcript-slot="artifact-strip"] [data-slot="card"] [data-slot="card"]')).toBeNull()
   })
 
+  it('renders safe absolute and relative artifact links', () => {
+    render(
+      <ArtifactStrip
+        artifacts={[
+          { href: 'https://example.test/report', id: 'absolute', title: 'Absolute' },
+          { href: 'report.md', id: 'file', title: 'File' },
+          { href: '#section', id: 'hash', title: 'Hash' },
+          { href: '../report.md', id: 'parent', title: 'Parent' },
+        ]}
+      />,
+    )
+
+    expect(screen.getByRole('link', { name: 'Absolute' }).getAttribute('href')).toBe('https://example.test/report')
+    expect(screen.getByRole('link', { name: 'File' }).getAttribute('href')).toBe('report.md')
+    expect(screen.getByRole('link', { name: 'Hash' }).getAttribute('href')).toBe('#section')
+    expect(screen.getByRole('link', { name: 'Parent' }).getAttribute('href')).toBe('../report.md')
+  })
+
+  it('renders unsafe artifact hrefs as plain title text', () => {
+    render(
+      <ArtifactStrip
+        artifacts={[
+          { href: 'javascript:alert(1)', id: 'unsafe', title: 'Unsafe' },
+          { href: 'data:text/html,hello', id: 'data', title: 'Data' },
+        ]}
+      />,
+    )
+
+    expect(screen.getByText('Unsafe')).toBeTruthy()
+    expect(screen.getByText('Data')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Unsafe' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Data' })).toBeNull()
+  })
+
   it('returns null for empty artifact references', () => {
     const { container } = render(<ArtifactStrip artifacts={[]} />)
 

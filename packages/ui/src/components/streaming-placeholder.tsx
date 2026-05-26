@@ -4,18 +4,19 @@ import { Skeleton } from '#components/skeleton'
 import { cn } from '#lib/utils'
 
 export interface StreamingPlaceholderProps {
+  ariaLabel?: string
   className?: string
   label: ReactNode
 }
 
-export function StreamingPlaceholder({ className, label }: StreamingPlaceholderProps) {
-  const ariaLabel = typeof label === 'string' ? label : 'Response is loading'
+export function StreamingPlaceholder({ ariaLabel, className, label }: StreamingPlaceholderProps) {
+  const statusLabel = ariaLabel ?? (typeof label === 'string' ? label : undefined)
 
   return (
     <div
       data-transcript-slot="streaming-placeholder"
       role="status"
-      aria-label={ariaLabel}
+      aria-label={statusLabel}
       aria-live="polite"
       className={cn('min-h-20 rounded-md border border-dashed border-border bg-muted/20 p-3', className)}
     >

@@ -9,39 +9,69 @@ export interface ArtifactStripProps {
   className?: string
 }
 
+function normalizeArtifactHref(href: string | undefined) {
+  if (!href)
+    return undefined
+
+  const value = href.trim()
+
+  if (!value)
+    return undefined
+
+  try {
+    const url = new URL(value, 'https://aiworker.local')
+    const hasProtocol = /^[a-z][a-z0-9+.-]*:/i.test(value)
+
+    if (!hasProtocol)
+      return value
+
+    if (url.protocol === 'http:' || url.protocol === 'https:')
+      return value
+  }
+  catch {
+    return undefined
+  }
+
+  return undefined
+}
+
 export function ArtifactStrip({ artifacts, className }: ArtifactStripProps) {
   if (artifacts.length === 0)
     return null
 
   return (
     <ItemGroup data-transcript-slot="artifact-strip" className={cn('grid gap-2 sm:grid-cols-2', className)}>
-      {artifacts.map(artifact => (
-        <Item
-          key={artifact.id}
-          data-transcript-slot="artifact-reference"
-          role="listitem"
-          variant="muted"
-          size="sm"
-          className="min-w-0"
-        >
-          <ItemContent className="min-w-0">
-            <ItemTitle className="max-w-full">
-              {artifact.href ? <a href={artifact.href}>{artifact.title}</a> : artifact.title}
-            </ItemTitle>
-            {artifact.description
-              ? <ItemDescription className="max-w-full line-clamp-none">{artifact.description}</ItemDescription>
+      {artifacts.map((artifact) => {
+        const href = normalizeArtifactHref(artifact.href)
+
+        return (
+          <Item
+            key={artifact.id}
+            data-transcript-slot="artifact-reference"
+            role="listitem"
+            variant="muted"
+            size="sm"
+            className="min-w-0"
+          >
+            <ItemContent className="min-w-0">
+              <ItemTitle className="max-w-full">
+                {href ? <a href={href}>{artifact.title}</a> : artifact.title}
+              </ItemTitle>
+              {artifact.description
+                ? <ItemDescription className="max-w-full line-clamp-none">{artifact.description}</ItemDescription>
+                : null}
+            </ItemContent>
+            {artifact.status
+              ? (
+                  <Badge variant="outline">
+                    <BadgeLabel>{artifact.status}</BadgeLabel>
+                  </Badge>
+                )
               : null}
-          </ItemContent>
-          {artifact.status
-            ? (
-                <Badge variant="outline">
-                  <BadgeLabel>{artifact.status}</BadgeLabel>
-                </Badge>
-              )
-            : null}
-          {artifact.action ? <ItemActions>{artifact.action}</ItemActions> : null}
-        </Item>
-      ))}
+            {artifact.action ? <ItemActions>{artifact.action}</ItemActions> : null}
+          </Item>
+        )
+      })}
     </ItemGroup>
   )
 }

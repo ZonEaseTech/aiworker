@@ -16,4 +16,20 @@ describe('StreamingPlaceholder', () => {
     expect(screen.getByText('Preparing response')).toBeTruthy()
     expect(status.closest('[data-transcript-slot="streaming-placeholder"]')).toBeTruthy()
   })
+
+  it('uses explicit aria label for non-string visible labels', () => {
+    render(<StreamingPlaceholder ariaLabel="Preparing rich response" label={<span>Preparing rich response</span>} />)
+
+    const status = screen.getByRole('status', { name: 'Preparing rich response' })
+    expect(status.getAttribute('aria-label')).toBe('Preparing rich response')
+    expect(screen.getByText('Preparing rich response')).toBeTruthy()
+  })
+
+  it('does not set a fixed aria label for non-string visible labels', () => {
+    render(<StreamingPlaceholder label={<span>Preparing visible response</span>} />)
+
+    const status = screen.getByRole('status')
+    expect(status.getAttribute('aria-label')).toBeNull()
+    expect(screen.getByText('Preparing visible response')).toBeTruthy()
+  })
 })
