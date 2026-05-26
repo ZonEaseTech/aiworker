@@ -86,6 +86,9 @@ describe('SDK descriptor build conventions', () => {
     ])
     expect(existsSync(join(rootDir, 'dist/soul.descriptor.json'))).toBe(true)
     expect(existsSync(join(rootDir, 'dist/web/workbench/index.html'))).toBe(true)
+    const commonWorkbench = readFileSync(join(rootDir, 'dist/web/workbench/index.html'), 'utf8')
+    expect(commonWorkbench).toContain('data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events"')
+    expect(commonWorkbench).toContain('Bridge event refs')
     expect(existsSync(join(rootDir, 'dist/engine-assets/skills/freeform-session/SKILL.md'))).toBe(true)
   })
 

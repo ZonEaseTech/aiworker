@@ -6,16 +6,36 @@
   <title>AIWorker Soul Workbench</title>
 </head>
 <body>
-  <main data-aiworker-common-workbench="true">
-    <section data-module="worker-configuration-summary"></section>
-    <section data-module="engine-target-readiness"></section>
-    <section data-module="skills-overlay-summary"></section>
-    <section data-module="mcp-overlay-summary"></section>
-    <section data-module="entry-workspace-files-summary"></section>
-    <section data-module="session-controls"></section>
-    <section data-module="bridge-event-stream"></section>
-    <section data-module="projection-receipt-status"></section>
-    <section data-module="archive-controls"></section>
+  <main data-aiworker-common-workbench="true" data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events">
+    <h1>AIWorker Common Workbench</h1>
+    <section data-module="worker-configuration-summary">
+      <h2>Worker configuration summary</h2>
+    </section>
+    <section data-module="engine-target-readiness">
+      <h2>Engine target readiness</h2>
+    </section>
+    <section data-module="skills-overlay-summary">
+      <h2>Skills overlay summary</h2>
+    </section>
+    <section data-module="mcp-overlay-summary">
+      <h2>MCP overlay summary</h2>
+    </section>
+    <section data-module="entry-workspace-files-summary">
+      <h2>Entry workspace files summary</h2>
+    </section>
+    <section data-module="session-controls">
+      <h2>Session controls</h2>
+    </section>
+    <section data-module="bridge-event-stream">
+      <h2>Bridge event refs</h2>
+      <p>engine_invocations / engine invocation events</p>
+    </section>
+    <section data-module="projection-receipt-status">
+      <h2>Projection receipt status</h2>
+    </section>
+    <section data-module="archive-controls">
+      <h2>Archive controls</h2>
+    </section>
   </main>
 </body>
 </html>

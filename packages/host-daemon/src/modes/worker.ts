@@ -752,16 +752,41 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
 
   app.get('/api/mount/workbench', async (c) => {
-    const appId = c.req.query('appId')
-    const surfaceId = c.req.query('surfaceId')
-    if (!appId || !surfaceId)
-      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: 'appId and surfaceId are required until descriptor workbench resolution lands.' } }, 400)
-    const app = state.host.getApp(appId)
+    const workerId = c.req.query('workerId')
+    const workspaceId = c.req.query('workspaceId')
+    const sessionId = c.req.query('sessionId')
+    if (!workerId || !workspaceId || !sessionId)
+      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: 'workerId, workspaceId, and sessionId are required.' } }, 400)
+    const worker = requireWorker(workerId)
+    const workspace = requireWorkerWorkspace(worker.id, workspaceId)
+    const session = requireWorkerSession(worker.id, sessionId)
+    if (session.workspaceId !== workspace.id)
+      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} does not belong to workspace ${workspace.id}` } }, 400)
+    const app = state.host.getApp(worker.soulId)
     if (!app)
       return notFound(c, 'Soul App')
     if (app.status !== 'enabled')
       return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-    return mountedSurfaceResponse(c, state, app, surfaceId)
+    const workbenchEntries = findWorkbenchMountContributions(app)
+    if (workbenchEntries.length === 0)
+      return c.json({ error: { code: 'WORKBENCH_ENTRY_NOT_FOUND', message: `Soul App does not declare a mounted workbench entry: ${app.appId}` } }, 404)
+    if (workbenchEntries.length > 1)
+      return c.json({ error: { code: 'WORKBENCH_ENTRY_AMBIGUOUS', message: `Soul App declares multiple mounted workbench entries: ${app.appId}` } }, 409)
+    const contribution = workbenchEntries[0]!
+    return c.json({
+      locator: {
+        sessionId: session.id,
+        workerId: worker.id,
+        workspaceId: workspace.id,
+      },
+      mount: {
+        appId: app.appId,
+        entry: `${appOwnedApiRoutePrefix(app)}${contribution.surface.entry}`,
+        surfaceId: contribution.id,
+        type: contribution.surface.renderer,
+      },
+      routerMode: 'search',
+    })
   })
 
   app.get('/api/local/settings', (c) => {
@@ -1371,6 +1396,22 @@ function findMountedSurfaceContribution(app: HostedSoulApp, surfaceId: string): 
     })),
   ]
   return contributions.find(contribution => contribution.id === surfaceId) ?? null
+}
+
+function findWorkbenchMountContributions(app: HostedSoulApp): MountedSurfaceContribution[] {
+  return app.manifest.ui.routes
+    .filter(route => route.surface?.renderer === 'micro-app' && isWorkbenchMountEntry(route.surface.entry))
+    .map(route => ({
+      id: route.id,
+      kind: 'route' as const,
+      label: route.label,
+      path: route.path,
+      surface: route.surface!,
+    }))
+}
+
+function isWorkbenchMountEntry(surfaceEntry: string): boolean {
+  return surfaceEntry === '/micro-app/workbench' || surfaceEntry.startsWith('/micro-app/workbench/')
 }
 
 async function resolveMountedSoulAppService(state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | null> {

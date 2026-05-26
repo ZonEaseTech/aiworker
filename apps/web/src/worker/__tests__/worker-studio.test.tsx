@@ -992,6 +992,7 @@ describe('worker studio', () => {
 
     const microApp = await screen.findByTitle('HR People Workbench')
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
+    expect(microApp.getAttribute('router-mode')).toBe('search')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
       sessionId: null,
@@ -1023,6 +1024,7 @@ describe('worker studio', () => {
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
     expect(microApp.getAttribute('name')).toBe('aiworker-hr--universal-workbench')
     expect(microApp.getAttribute('baseroute')).toBe('/workbench/universal')
+    expect(microApp.getAttribute('router-mode')).toBe('search')
     expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/workbench/universal?workerId=hr-worker&theme=light')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
@@ -1466,7 +1468,7 @@ describe('worker studio', () => {
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
     expect(microApp.getAttribute('name')).toBe('aiworker-hr--hr-home')
     expect(microApp.getAttribute('baseroute')).toBe('/hr')
-    expect(microApp.getAttribute('router-mode')).toBe('pure')
+    expect(microApp.getAttribute('router-mode')).toBe('search')
     expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
@@ -1652,6 +1654,8 @@ describe('worker studio', () => {
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',
     })
+    expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).not.toHaveProperty('turns')
+    expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).not.toHaveProperty('engineStatus')
     expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/hr-session?workerId=hr-worker&workspaceId=workspace-1&sessionId=session-1&theme=light', expect.objectContaining({ headers: {} }))
     expect(screen.queryByText('Agent is generating')).toBeNull()
     expect(screen.queryByText('File written, indexing')).toBeNull()
@@ -1978,7 +1982,7 @@ describe('worker studio', () => {
     expect(microApp.tagName).toBe('MICRO-APP')
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
     expect(microApp.getAttribute('name')).toBe('aiworker-hr--hr-home')
-    expect(microApp.getAttribute('router-mode')).toBe('pure')
+    expect(microApp.getAttribute('router-mode')).toBe('search')
     expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light')
     expect(screen.queryByText('Soul App mounted route')).toBeNull()
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()

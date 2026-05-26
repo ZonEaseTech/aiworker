@@ -238,7 +238,7 @@ export function MountedSoulAppRouteSurface({
                 destroy
                 baseroute={childBasePath}
                 name={surface.microApp.name}
-                router-mode="pure"
+                router-mode="search"
                 title={surface.surface.label}
                 url={surface.microApp.url}
                 className="min-h-0 w-full flex-1"

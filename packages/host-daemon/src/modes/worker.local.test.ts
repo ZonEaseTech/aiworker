@@ -361,6 +361,53 @@ describe('local daemon API', () => {
     expect(turnsBody.turns).toEqual([])
   })
 
+  it('resolves one descriptor workbench mount from locator context only', async () => {
+    const target = await app()
+    const worker = await createHrWorker(target)
+    const workspaceBody = await (await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Mounted workbench workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as { workspace: { id: string } }
+    const sessionBody = await (await target.request(`/api/local/workers/${worker.id}/workspaces/${workspaceBody.workspace.id}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        title: 'Mounted workbench session',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as { session: { id: string } }
+
+    const res = await target.request(`/api/mount/workbench?workerId=${worker.id}&workspaceId=${workspaceBody.workspace.id}&sessionId=${sessionBody.session.id}`)
+    expect(res.status).toBe(200)
+    const body = await res.json() as Record<string, unknown>
+
+    expect(Object.keys(body).sort()).toEqual(['locator', 'mount', 'routerMode'])
+    expect(Object.keys(body.locator as Record<string, unknown>).sort()).toEqual(['sessionId', 'workerId', 'workspaceId'])
+    expect(Object.keys(body.mount as Record<string, unknown>).sort()).toEqual(['appId', 'entry', 'surfaceId', 'type'])
+    expect(body).toMatchObject({
+      locator: {
+        sessionId: sessionBody.session.id,
+        workerId: worker.id,
+        workspaceId: workspaceBody.workspace.id,
+      },
+      mount: {
+        appId: HR_APP_ID,
+        entry: '/api/apps/aiworker-hr/micro-app/workbench/universal',
+        surfaceId: 'universal-workbench',
+        type: 'micro-app',
+      },
+      routerMode: 'search',
+    })
+    expect(JSON.stringify(body)).not.toContain('./runtime/universal-workbench.ts')
+    expect(body).not.toHaveProperty('descriptor')
+    expect(body).not.toHaveProperty('manifest')
+    expect(body).not.toHaveProperty('surface')
+    expect(body).not.toHaveProperty('workbench')
+    expect(body).not.toHaveProperty('turn')
+    expect(body).not.toHaveProperty('messages')
+  })
+
   it('serves canonical broker management routes as concrete handlers', async () => {
     const target = await app()
 
