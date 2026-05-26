@@ -19,6 +19,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
+          registry-url: https://registry.npmjs.org
 
       - uses: oven-sh/setup-bun@v2
 
@@ -37,8 +38,8 @@ jobs:
       - name: Publish to npm
         working-directory: apps/cli/dist
         env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: bun publish --access public
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
       - name: Compile single-file binaries
         run: |
