@@ -1,14 +1,23 @@
 const soulAppStyleHref = '/styles.css'
-const soulAppStylePath = new URL('../dist/web/styles.css', import.meta.url)
+const soulAppStylePaths = [
+  new URL('../web/styles.css', import.meta.url),
+  new URL('../dist/web/styles.css', import.meta.url),
+]
 const soulAppAssetPathPrefix = '/assets/'
 const soulAppClientAssets = new Map([
   ['hr-home-client.js', {
     contentType: 'text/javascript; charset=utf-8',
-    path: new URL('../dist/web/hr-home-client.js', import.meta.url),
+    paths: [
+      new URL('../web/hr-home-client.js', import.meta.url),
+      new URL('../dist/web/hr-home-client.js', import.meta.url),
+    ],
   }],
   ['universal-workbench-client.js', {
     contentType: 'text/javascript; charset=utf-8',
-    path: new URL('../dist/web/universal-workbench-client.js', import.meta.url),
+    paths: [
+      new URL('../web/universal-workbench-client.js', import.meta.url),
+      new URL('../dist/web/universal-workbench-client.js', import.meta.url),
+    ],
   }],
 ])
 const soulAppFontPathPrefix = '/files/'
@@ -38,8 +47,8 @@ export async function serveSoulAppWebAsset(url: URL): Promise<Response | null> {
   if (!asset)
     return null
 
-  const file = Bun.file(asset.path)
-  if (!(await file.exists())) {
+  const file = await firstExistingFile(asset.paths)
+  if (!file) {
     return new Response('Soul App client asset has not been built. Run bun run build:client.', {
       headers: { 'content-type': 'text/plain; charset=utf-8' },
       status: 503,
@@ -61,8 +70,8 @@ export async function serveSoulAppStyle(url: URL): Promise<Response | null> {
   if (url.pathname !== soulAppStyleHref)
     return null
 
-  const file = Bun.file(soulAppStylePath)
-  if (!(await file.exists())) {
+  const file = await firstExistingFile(soulAppStylePaths)
+  if (!file) {
     return new Response('Soul App stylesheet has not been built. Run bun run build:styles.', {
       headers: { 'content-type': 'text/plain; charset=utf-8' },
       status: 503,
@@ -82,8 +91,11 @@ async function serveSoulAppFont(url: URL): Promise<Response | null> {
   if (!soulAppFontFileNames.has(fontFileName))
     return null
 
-  const file = Bun.file(new URL(`../node_modules/@zonease/aiworker-ui/node_modules/@fontsource-variable/oxanium/files/${fontFileName}`, import.meta.url))
-  if (!(await file.exists()))
+  const file = await firstExistingFile([
+    new URL(`../web/files/${fontFileName}`, import.meta.url),
+    new URL(`../dist/web/files/${fontFileName}`, import.meta.url),
+  ])
+  if (!file)
     return new Response('Soul App font asset is missing.', { status: 404 })
 
   return new Response(file, {
@@ -92,6 +104,15 @@ async function serveSoulAppFont(url: URL): Promise<Response | null> {
       'content-type': 'font/woff2',
     },
   })
+}
+
+async function firstExistingFile(paths: URL[]) {
+  for (const path of paths) {
+    const file = Bun.file(path)
+    if (await file.exists())
+      return file
+  }
+  return null
 }
 
 function escapeHtmlAttribute(value: string): string {

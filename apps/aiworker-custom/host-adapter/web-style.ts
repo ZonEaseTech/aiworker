@@ -1,10 +1,16 @@
 const soulAppStyleHref = '/styles.css'
-const soulAppStylePath = new URL('../dist/web/styles.css', import.meta.url)
+const soulAppStylePaths = [
+  new URL('../web/styles.css', import.meta.url),
+  new URL('../dist/web/styles.css', import.meta.url),
+]
 const soulAppAssetPathPrefix = '/assets/'
 const soulAppClientAssets = new Map([
   ['universal-workbench-client.js', {
     contentType: 'text/javascript; charset=utf-8',
-    path: new URL('../dist/web/universal-workbench-client.js', import.meta.url),
+    paths: [
+      new URL('../web/universal-workbench-client.js', import.meta.url),
+      new URL('../dist/web/universal-workbench-client.js', import.meta.url),
+    ],
   }],
 ])
 
@@ -25,8 +31,8 @@ export async function serveSoulAppWebAsset(url: URL): Promise<Response | null> {
   if (!asset)
     return null
 
-  const file = Bun.file(asset.path)
-  if (!(await file.exists())) {
+  const file = await firstExistingFile(asset.paths)
+  if (!file) {
     return new Response('Soul App client asset has not been built. Run bun run build:client.', {
       headers: { 'content-type': 'text/plain; charset=utf-8' },
       status: 503,
@@ -45,8 +51,8 @@ export async function serveSoulAppStyle(url: URL): Promise<Response | null> {
   if (url.pathname !== soulAppStyleHref)
     return null
 
-  const file = Bun.file(soulAppStylePath)
-  if (!(await file.exists())) {
+  const file = await firstExistingFile(soulAppStylePaths)
+  if (!file) {
     return new Response('Soul App stylesheet has not been built. Run bun run build:styles.', {
       headers: { 'content-type': 'text/plain; charset=utf-8' },
       status: 503,
@@ -59,6 +65,15 @@ export async function serveSoulAppStyle(url: URL): Promise<Response | null> {
       'content-type': 'text/css; charset=utf-8',
     },
   })
+}
+
+async function firstExistingFile(paths: URL[]) {
+  for (const path of paths) {
+    const file = Bun.file(path)
+    if (await file.exists())
+      return file
+  }
+  return null
 }
 
 function escapeHtmlAttribute(value: string): string {

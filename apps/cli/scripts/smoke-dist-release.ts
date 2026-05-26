@@ -57,6 +57,9 @@ async function main(): Promise<number> {
     assertJsonIncludes(list.stdout, 'aiworker-hr')
     assertJsonIncludes(souls.stdout, 'aiworker-qa')
     assertJsonIncludes(templates.stdout, 'aiworker-hr.person-profile')
+    await assertMountedAppAssets(port, 'aiworker-hr', ['hr-home-client.js', 'universal-workbench-client.js'])
+    await assertMountedAppAssets(port, 'aiworker-qa', ['universal-workbench-client.js'])
+    await assertMountedAppAssets(port, 'aiworker-custom', ['universal-workbench-client.js'])
     await assertMountedAppAction(port, 'aiworker-hr', '/api/people-profiles', 'People profile draft opened by HR app.')
     await assertMountedAppAction(port, 'aiworker-qa', '/api/release-gates', 'Release gate draft opened by QA app.')
 
@@ -196,6 +199,27 @@ async function assertMountedAppAction(port: number, appId: string, appPath: stri
 
   if (body.ok !== true || body.message !== expectedMessage)
     throw new Error(`Mounted app action returned unexpected body for ${appId}${appPath}: ${bodyText.slice(0, 500)}`)
+}
+
+async function assertMountedAppAssets(port: number, appId: string, clientAssets: string[]): Promise<void> {
+  const styleUrl = `http://127.0.0.1:${port}/api/local/apps/${appId}/styles.css`
+  const styleRes = await fetch(styleUrl)
+  if (!styleRes.ok)
+    throw new Error(`Mounted app stylesheet failed: ${styleUrl} -> ${styleRes.status} ${await styleRes.text()}`)
+  if (!styleRes.headers.get('content-type')?.includes('text/css'))
+    throw new Error(`Mounted app stylesheet content-type mismatch for ${styleUrl}: ${styleRes.headers.get('content-type')}`)
+
+  for (const assetName of clientAssets) {
+    const assetUrl = `http://127.0.0.1:${port}/api/local/apps/${appId}/assets/${assetName}`
+    const assetRes = await fetch(assetUrl)
+    const body = await assetRes.text()
+    if (!assetRes.ok)
+      throw new Error(`Mounted app client asset failed: ${assetUrl} -> ${assetRes.status} ${body.slice(0, 500)}`)
+    if (!assetRes.headers.get('content-type')?.includes('text/javascript'))
+      throw new Error(`Mounted app client asset content-type mismatch for ${assetUrl}: ${assetRes.headers.get('content-type')}`)
+    if (/\b(?:export|import)\s*(?:\{|from|\*|default)/.test(body))
+      throw new Error(`Mounted app client asset must be IIFE-compatible, found module syntax in ${assetUrl}`)
+  }
 }
 
 function assertJsonIncludes(stdout: string, expected: string): void {
