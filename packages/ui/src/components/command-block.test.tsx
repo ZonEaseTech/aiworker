@@ -101,4 +101,17 @@ describe('CommandBlock', () => {
     expect(screen.getByTestId('command-output').textContent).toBe('failed')
     expect(screen.getByTestId('command-output').closest('[data-transcript-command-status="failed"]')).toBeTruthy()
   })
+
+  it('expands failed command output after a live status rerender', () => {
+    const { rerender } = render(
+      <CommandBlock command="bun test" defaultExpanded={false} output="still running" status="running" />,
+    )
+
+    expect(screen.queryByText('still running')).toBeNull()
+
+    rerender(<CommandBlock command="bun test" defaultExpanded={false} output="failed output" status="failed" />)
+
+    expect(screen.getByText('failed output')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Collapse command output' }).getAttribute('aria-expanded')).toBe('true')
+  })
 })

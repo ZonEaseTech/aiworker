@@ -4,7 +4,7 @@ import type { TranscriptActivityStatus } from './transcript-types'
 import { Badge, BadgeLabel } from '#components/badge'
 import { Button } from '#components/button'
 import { cn } from '#lib/utils'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export interface CommandBlockProps {
   className?: string
@@ -29,6 +29,11 @@ export function CommandBlock({
   const [expanded, setExpanded] = useState(status === 'failed' ? true : defaultExpanded)
   const [wrapped, setWrapped] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (status === 'failed' && hasOutput)
+      setExpanded(true)
+  }, [hasOutput, status])
 
   async function copyCommand() {
     if (!navigator.clipboard)
