@@ -40,7 +40,7 @@ describe('TranscriptActivityGroup', () => {
   })
 
   it('keeps failed activity details visible', () => {
-    render(
+    const { container } = render(
       <TranscriptActivityGroup
         activities={[{ description: 'lint failed', id: 'lint', status: 'failed', title: 'Run lint' }]}
         defaultCollapsed
@@ -52,5 +52,56 @@ describe('TranscriptActivityGroup', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByText('lint failed')).toBeTruthy()
     expect(screen.getByText('failed')).toBeTruthy()
+    expect(container.querySelector('[data-transcript-activity-status="failed"]')).toBeTruthy()
+  })
+
+  it('opens collapsed activity details when a failure arrives after render', () => {
+    const { rerender } = render(
+      <TranscriptActivityGroup
+        activities={[{ description: 'lint running', id: 'lint', status: 'running', title: 'Run lint' }]}
+        defaultCollapsed
+        summary="Ran 1 command"
+      />,
+    )
+
+    const trigger = screen.getByRole('button', { name: 'Toggle activity details' })
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+
+    rerender(
+      <TranscriptActivityGroup
+        activities={[{ description: 'lint failed after retry', id: 'lint', status: 'failed', title: 'Run lint' }]}
+        defaultCollapsed
+        summary="Ran 1 command"
+      />,
+    )
+
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByText('lint failed after retry')).toBeTruthy()
+  })
+
+  it('treats a failed nested command as a failed activity', () => {
+    const { container } = render(
+      <TranscriptActivityGroup
+        activities={[
+          {
+            command: {
+              command: 'bun run lint',
+              output: 'lint failed',
+              status: 'failed',
+            },
+            id: 'lint',
+            title: 'Run lint',
+          },
+        ]}
+        defaultCollapsed
+        summary="Ran 1 command"
+      />,
+    )
+
+    const trigger = screen.getByRole('button', { name: 'Toggle activity details' })
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getAllByText('failed').length).toBeGreaterThan(0)
+    expect(screen.getByText('lint failed')).toBeTruthy()
+    expect(container.querySelector('[data-transcript-activity-status="failed"]')).toBeTruthy()
   })
 })

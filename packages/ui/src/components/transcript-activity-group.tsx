@@ -6,7 +6,7 @@ import { Button } from '#components/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '#components/collapsible'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '#components/item'
 import { cn } from '#lib/utils'
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 
 import { CommandBlock } from './command-block'
 
@@ -17,15 +17,24 @@ export interface TranscriptActivityGroupProps {
   summary: ReactNode
 }
 
+function isFailedActivity(activity: TranscriptActivityModel) {
+  return activity.status === 'failed' || activity.command?.status === 'failed'
+}
+
 export function TranscriptActivityGroup({
   activities,
   className,
   defaultCollapsed = true,
   summary,
 }: TranscriptActivityGroupProps) {
-  const hasFailedActivity = activities.some(activity => activity.status === 'failed')
+  const hasFailedActivity = activities.some(isFailedActivity)
   const [open, setOpen] = useState(hasFailedActivity || !defaultCollapsed)
   const contentId = useId()
+
+  useEffect(() => {
+    if (hasFailedActivity)
+      setOpen(true)
+  }, [hasFailedActivity])
 
   return (
     <Collapsible
@@ -53,49 +62,54 @@ export function TranscriptActivityGroup({
 
       <CollapsibleContent id={contentId} className="border-t border-border p-2">
         <ItemGroup className="gap-2">
-          {activities.map(activity => (
-            <Item
-              key={activity.id}
-              data-transcript-slot="activity"
-              data-transcript-activity-status={activity.status}
-              variant="default"
-              size="sm"
-              className={cn('min-w-0', activity.status === 'failed' && 'bg-destructive/5')}
-            >
-              <ItemContent className="min-w-0 gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <ItemTitle className="min-w-0 flex-1 truncate">
-                    {activity.title}
-                  </ItemTitle>
-                  {activity.status
+          {activities.map((activity) => {
+            const failed = isFailedActivity(activity)
+            const status = failed ? 'failed' : activity.status
+
+            return (
+              <Item
+                key={activity.id}
+                data-transcript-slot="activity"
+                data-transcript-activity-status={status}
+                variant="default"
+                size="sm"
+                className={cn('min-w-0', failed && 'bg-destructive/5')}
+              >
+                <ItemContent className="min-w-0 gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <ItemTitle className="min-w-0 flex-1 truncate">
+                      {activity.title}
+                    </ItemTitle>
+                    {status
+                      ? (
+                          <Badge variant={failed ? 'destructive' : 'outline'}>
+                            <BadgeLabel>{status}</BadgeLabel>
+                          </Badge>
+                        )
+                      : null}
+                    {activity.meta ? <span className="text-xs text-muted-foreground">{activity.meta}</span> : null}
+                  </div>
+
+                  {activity.description
                     ? (
-                        <Badge variant={activity.status === 'failed' ? 'destructive' : 'outline'}>
-                          <BadgeLabel>{activity.status}</BadgeLabel>
-                        </Badge>
+                        <ItemDescription
+                          tone={failed ? 'destructive' : 'default'}
+                          className="max-w-full line-clamp-none"
+                        >
+                          {activity.description}
+                        </ItemDescription>
                       )
                     : null}
-                  {activity.meta ? <span className="text-xs text-muted-foreground">{activity.meta}</span> : null}
-                </div>
-
-                {activity.description
-                  ? (
-                      <ItemDescription
-                        tone={activity.status === 'failed' ? 'destructive' : 'default'}
-                        className="max-w-full line-clamp-none"
-                      >
-                        {activity.description}
-                      </ItemDescription>
-                    )
-                  : null}
-                {activity.command
-                  ? <CommandBlock {...activity.command} status={activity.command.status ?? activity.status} />
-                  : null}
-                {activity.detail
-                  ? <div className="text-xs/relaxed text-muted-foreground">{activity.detail}</div>
-                  : null}
-              </ItemContent>
-            </Item>
-          ))}
+                  {activity.command
+                    ? <CommandBlock {...activity.command} status={activity.command.status ?? activity.status} />
+                    : null}
+                  {activity.detail
+                    ? <div className="text-xs/relaxed text-muted-foreground">{activity.detail}</div>
+                    : null}
+                </ItemContent>
+              </Item>
+            )
+          })}
         </ItemGroup>
       </CollapsibleContent>
     </Collapsible>
