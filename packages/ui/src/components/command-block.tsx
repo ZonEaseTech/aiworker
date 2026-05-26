@@ -41,7 +41,7 @@ export function CommandBlock({
   return (
     <figure
       data-transcript-slot="command-block"
-      data-command-status={status}
+      data-transcript-command-status={status}
       className={cn(
         'min-w-0 overflow-hidden rounded-md border border-border bg-muted/30 text-xs/relaxed',
         status === 'failed' && 'border-destructive/40 bg-destructive/5',
@@ -92,7 +92,7 @@ export function CommandBlock({
 
       <pre
         data-testid="command-command"
-        data-wrapped={wrapped ? 'true' : 'false'}
+        data-transcript-wrapped={wrapped ? 'true' : 'false'}
         className={cn(
           'overflow-x-auto p-3 font-mono text-foreground',
           wrapped ? 'whitespace-pre-wrap break-words' : 'whitespace-pre',
@@ -106,7 +106,7 @@ export function CommandBlock({
         ? (
             <pre
               data-testid="command-output"
-              data-wrapped={wrapped ? 'true' : 'false'}
+              data-transcript-wrapped={wrapped ? 'true' : 'false'}
               className={cn(
                 'max-h-72 overflow-auto border-t border-border p-3 font-mono text-muted-foreground',
                 status === 'failed' && 'text-foreground',

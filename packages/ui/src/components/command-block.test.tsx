@@ -51,8 +51,8 @@ describe('CommandBlock', () => {
     expect(writeText).toHaveBeenCalledWith('rg SessionThread packages/ui')
 
     fireEvent.click(screen.getByRole('button', { name: 'Wrap command output' }))
-    expect(screen.getByTestId('command-command').getAttribute('data-wrapped')).toBe('true')
-    expect(screen.getByTestId('command-output').getAttribute('data-wrapped')).toBe('true')
+    expect(screen.getByTestId('command-command').getAttribute('data-transcript-wrapped')).toBe('true')
+    expect(screen.getByTestId('command-output').getAttribute('data-transcript-wrapped')).toBe('true')
   })
 
   it('marks failed commands while keeping output evidence visible', () => {
@@ -60,6 +60,6 @@ describe('CommandBlock', () => {
 
     expect(screen.getAllByText('failed').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByTestId('command-output').textContent).toBe('failed')
-    expect(screen.getByTestId('command-output').closest('[data-command-status="failed"]')).toBeTruthy()
+    expect(screen.getByTestId('command-output').closest('[data-transcript-command-status="failed"]')).toBeTruthy()
   })
 })
