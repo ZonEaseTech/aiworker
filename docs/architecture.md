@@ -84,15 +84,16 @@ Soul App 内。
 ## Constraint Registry
 
 This registry is the normative source for active Host / Soul App constraints.
-Thin layers such as `AGENTS.md`, README files, skills and authoring guides may
-route agents to these IDs, but must not redefine them as separate contracts.
+Thin layers such as AGENTS.md, README files and route skills may route agents to
+these IDs. Frozen quick-reference docs may link here, but must not redefine them
+as separate contracts.
 
 | ID | Rule | Owner | Enforced by | Thin references |
 | --- | --- | --- | --- | --- |
 | `ARCH-001` | The default product path is `AIWorker -> Soul App -> workspace -> session -> app-owned work`. Do not route default work back to developer-only work orders, admin dashboards, generic agent runtime platforms or Host-owned domain workflows. | Architecture | `scripts/check-doc-contract.ts`, active entrypoint review, product-path tests when UI changes | `AGENTS.md`, `README.md`, route skills |
 | `HOST-001` | Host owns only start, shell, locate, mount and bridge. Host must not own domain meaning, business output lifecycle, cross-Soul orchestration, app-owned history, domain confirmation semantics or engine-native tool loops. | Host | Host API/core/Web/CLI tests, code-review-graph when code changes | `aiworker-host-dev`, `AGENTS.md` |
-| `SOUL-001` | Soul App owns domain state, domain UI/API, app-owned outputs, app-owned confirmation actions, standalone product experience and mounted product surface. | Soul App | `aiworker app validate`, `aiworker app smoke`, app package tests | `aiworker-soul-app-dev`, `docs/soul-app-developer.md` |
-| `CONFIG-001` | Host-owned Worker Configuration is scoped to one Soul worker. Its trigger and dialog shell are Host chrome, not Soul-registered UI. Soul Apps may expose manifest/protocol descriptors that Host displays as generic worker-scoped options/status, but workspace/session ids are opaque locator or bridge context only and must not become Host configuration scopes. Domain, workspace and session configuration belongs in Soul-owned micro-app UI or app-owned API. | Host + Soul boundary | Worker Web tests, docs contract, boundary review, code-review-graph when code changes | `AGENTS.md`, Host and Soul App skills, `docs/soul-app-developer.md` |
+| `SOUL-001` | Soul App owns domain state, domain UI/API, app-owned outputs, app-owned confirmation actions, standalone product experience and mounted product surface. | Soul App | `aiworker app validate`, `aiworker app smoke`, app package tests | `aiworker-soul-app-dev` |
+| `CONFIG-001` | Host-owned Worker Configuration is scoped to one Soul worker. Its trigger and dialog shell are Host chrome, not Soul-registered UI. Soul Apps may expose manifest/protocol descriptors that Host displays as generic worker-scoped options/status, but workspace/session ids are opaque locator or bridge context only and must not become Host configuration scopes. Domain, workspace and session configuration belongs in Soul-owned micro-app UI or app-owned API. | Host + Soul boundary | Worker Web tests, docs contract, boundary review, code-review-graph when code changes | `AGENTS.md`, Host and Soul App skills |
 | `PROTO-001` | Host may route only manifest-declared routes, mounted UI/API paths, workspace context and session context. Workspace/session ids are opaque locator or bridge context, not Host configuration scopes. If a surface is not declared, Host stops instead of fetching, inferring, synthesizing or translating app behavior. Host must not translate workbench action/search descriptors into Host product APIs. | Shared boundary | manifest/protocol schema tests, mounted API tests | Host and Soul App skills |
 | `IMPORT-001` | Soul App production code must not import Host private packages or sibling app `src`; Host code must not import Soul App `src`. Public SDK, runtime harnesses, manifests, mount descriptors and shared fixtures are the allowed boundary objects. | Shared boundary | `scripts/check-soul-app-boundaries.ts` (via `lint`) and its tests, plus `aiworker app validate` (`scanPrivateImports`) | Host and Soul App skills |
 | `MOUNT-001` | Host-mounted app-owned UI uses `@micro-zoe/micro-app` as the standard runtime. Universal workbench, domain workbench and configuration surfaces are all Soul-owned `micro-app` surfaces when mounted; Host resolves declared surfaces into mount payloads, proxies app-owned mounted API paths, and passes narrow context data. Soul Apps serve `/micro-app/*` HTML and dispatch only lightweight lifecycle UI events such as ready, error or resize. | Shared boundary | manifest tests, mounted API tests, Worker Web tests, app validate/smoke | Host and Soul App skills |
@@ -100,6 +101,9 @@ route agents to these IDs, but must not redefine them as separate contracts.
 | `ENGINE-001` | Host is an engine bridge. It prepares cwd, context files, selected engine metadata and invocation boundaries. External engines own model behavior, tool loop, sandbox, approval, native session, auth profile, plugins and memory. | Host + engine boundary | CLI/API/session tests, engine adapter tests | CLI docs, deployment docs, route skills |
 | `UI-001` | Host Web and official Soul App web UI are shadcn-first. `packages/ui` is the shadcn-managed primitive, theme and preset-icon source; app UI must follow the active shadcn `iconLibrary`. Host Web must not surface Host-owned domain panels as the default product experience. | Host + Soul App UI | `scripts/check-web-ui-components.ts`, focused Web/Soul App tests, Playwright visual checks | `AGENTS.md`, Host and Soul App skills, shadcn skill |
 | `DOC-001` | Active normative docs are `AGENTS.md` and this architecture file. `docs/task`, `docs/plan`, `docs/superpowers` and `docs/changelog.md` are audit trail; they cannot override the active contract. | Documentation | `scripts/check-doc-contract.ts`, PMA closeout review | `AGENTS.md`, README, skills |
+
+`docs/soul-app-developer.md` is a frozen command and package-shape quickstart
+only; it is not a boundary reference for registry constraints.
 
 ## 系统拓扑
 
