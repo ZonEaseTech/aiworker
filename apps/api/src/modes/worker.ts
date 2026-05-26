@@ -62,7 +62,7 @@ import {
   patchWorkspaceBodySchema,
   testEngineBodySchema,
 } from './worker/schemas'
-import { loadLocalSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
+import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
 import { serveWorkerWeb, serveWorkerWebAsset } from './worker/web-static'
 
 const DEFAULT_RUNTIME_VERSION = 'dev'
@@ -152,7 +152,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     now: options.now,
     officialAppsRoot: options.officialAppsRoot,
     registryContext: () => {
-      const settings = loadLocalSettings()
+      const settings = readLocalConnectorSettings()
       return {
         availableConnectorIds: settings.connectors.map(connector => connector.id),
         enabledConnectorIds: settings.connectors.filter(connector => connector.enabled).map(connector => connector.id),
@@ -484,6 +484,10 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/api/local/settings', (c) => {
     const settings = loadLocalSettings()
     return c.json({ settings })
+  })
+  app.get('/api/local/settings/engines', (c) => {
+    const settings = readLocalEngineSettings()
+    return c.json(settings)
   })
   app.patch('/api/local/settings', async (c) => {
     const result = await parseJsonBody(c, patchSettingsBodySchema, 'PATCH_SETTINGS_INVALID')
@@ -1146,10 +1150,11 @@ function selectedEngineCommand(settings: LocalSettingsConfig, engine: LocalSetti
 }
 
 function executionMetadata(settings: LocalSettingsConfig, engine: LocalSettingsConfig['engines'][number] | undefined): Record<string, unknown> {
+  const engineId = settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider
   return {
     byok: settings.byok,
-    engineCommand: engine?.command ?? null,
-    engineId: settings.engineId,
+    engineCommand: selectedEngineCommand(settings, engine),
+    engineId,
     engineName: engine?.name ?? null,
     executionMode: settings.executionMode,
   }
@@ -1281,7 +1286,12 @@ async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonStat
     return result.response
   const body = result.data
   const template = requireTemplateForWorker(state, workspace.workerId, body.capabilityTemplateId)
-  const metadata = enrichTemplateMetadata(state, workspace.workerId, template.id, body.metadata ?? {})
+  const settings = loadLocalSettings()
+  const engine = selectedEngine(settings)
+  const metadata = enrichTemplateMetadata(state, workspace.workerId, template.id, {
+    ...(body.metadata ?? {}),
+    ...executionMetadata(settings, engine),
+  })
   const session = await runtime.createSession({
     workspaceId: workspace.id,
     capabilityTemplateId: template.id,
@@ -1291,8 +1301,6 @@ async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonStat
   })
   if (!body.input || body.input.trim().length === 0)
     return c.json({ session }, 201)
-  const settings = loadLocalSettings()
-  const engine = selectedEngine(settings)
   const turnInput = {
     engineCommand: selectedEngineCommand(settings, engine),
     engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,

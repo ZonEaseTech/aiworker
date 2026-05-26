@@ -32,6 +32,7 @@ export function renderUniversalWorkbenchHtml(options: {
     workspaceId,
   }
   const themeClass = theme === 'dark' ? 'dark h-full' : 'h-full'
+  const bodyClass = theme === 'dark' ? 'dark h-full' : 'h-full'
   const styleLink = styleHref ? `<link rel="stylesheet" href="${escapeHtmlAttribute(styleHref)}">` : ''
   const scriptHref = clientHref ?? `${routePrefix}/assets/universal-workbench-client.js`
 
@@ -39,7 +40,7 @@ export function renderUniversalWorkbenchHtml(options: {
     '<!doctype html>',
     `<html lang="en" class="${themeClass}" style="color-scheme:${theme}">`,
     `<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(appName)} · Universal Workbench</title>${styleLink}<style>html,body,#root{height:100%;margin:0}body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:Canvas;color:CanvasText}</style></head>`,
-    '<body class="h-full">',
+    `<body class="${bodyClass}">`,
     `<main id="root" class="h-full min-h-0" data-soul-app-id="${escapeHtmlAttribute(appId)}" data-surface-id="${escapeHtmlAttribute(surfaceId)}"></main>`,
     `<script id="aiworker-micro-app-host-data" type="application/json" data-slot="micro-app-host-data">${jsonScriptPayload(hostData)}</script>`,
     `<script>${microAppBridgeScript(hostData)}</script>`,

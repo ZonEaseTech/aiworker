@@ -1,5 +1,92 @@
 # AIWorker Changelog
 
+## 2026-05-25 [fixed] BUG-158 / PLAN-415 — Real E2E round4 residual repair
+
+Closed the current-HEAD residuals from
+`tmp/real-e2e-audit-2026-05-25-round4/` without reopening the already completed
+BUG-157 / PLAN-414 repair batch.
+
+Session engine selection now has a clear boundary: CLI `engine select` and
+`session start --engine <id>` affect only newly created sessions, API/Web
+session creation freezes the current Host execution settings before the first
+turn, and continuation turns reuse the frozen session engine even when Host
+preferences change. Legacy sessions fall back to the latest invocation using
+only invocation-owned metadata or explicit legacy inference, so current turn
+settings cannot silently rewrite the session engine. Runtime prompts now include
+the Host current date as context without mutating transcript or artifacts.
+
+Mounted universal workbench polling is scoped by route prefix, worker,
+workspace and session, preventing stale locator responses from writing back into
+the current mounted surface. Host dark appearance now reaches mounted route
+surface resolution, micro-app data, micro-app URL, initial HTML chrome and the
+mounted child document after appearance changes without requiring a reload.
+
+Verification covered focused Core/API/CLI/Web/Soul runtime/Soul workbench tests,
+typechecks, Web build, UI governance, official HR/QA mounted client/style
+rebuilds, and Playwright browser evidence under
+`tmp/real-e2e-round4-residual-repair-2026-05-25/`.
+
+## 2026-05-25 [fixed] Real E2E P2/P3 repair batch
+
+Closed the five P2 findings and one P3 finding from
+`tmp/real-e2e-audit-2026-05-25/`.
+
+Successful one-turn sessions now finish the top-level session record with
+`status=completed` and `endedAt`. Mounted universal workbench stream failures
+recover by refreshing the created or selected session without retrying create
+POST. The universal composer now treats the first declared capability template
+as the effective default, so direct prompt entry enables Start in the mounted
+browser path.
+
+Host Web now disambiguates duplicate worker names with stable Host id/date
+metadata and accessible labels, while Worker Configuration keeps its
+worker-scoped editor reachable at 390px. The HR people workbench no longer
+boots through the retired `/api/local/artifacts` route; it keeps HR artifacts
+app-owned and starts from workspaces, sessions and profile README files.
+
+Verification covered focused Core/API/workbench/Web/HR tests, Web build, UI
+governance, Host/Soul boundary completion audit, official HR/QA mounted client
+rebuilds, Playwright browser evidence under
+`tmp/real-e2e-p2-p3-repair-2026-05-25/`, and code-review-graph.
+
+## 2026-05-25 [fixed] Real E2E P2 repair batch
+
+Closed the four P2 findings from `tmp/real-e2e-regression-2026-05-24/`.
+The HR app-owned mounted route now renders hydration-stable profile board text,
+the Soul-owned universal workbench stacks workspace/session/detail areas at
+390px, Worker Configuration stacks its worker-scoped overlay editor below the
+asset list on narrow screens, and terminal succeeded turns no longer show stale
+historical `Session running` / `running` chips.
+
+The fixes stay inside the owning boundaries: HR product UI remains in the HR
+Soul App, universal workbench behavior remains in `packages/soul-app-workbench`,
+and Worker Configuration remains Host-owned worker chrome rather than a
+workspace/session configuration surface.
+
+Verification covered focused HR/workbench/Web tests, UI governance, Host/Soul
+boundary audit, official HR/QA mounted client rebuilds, desktop and 390px
+Playwright browser regression, and code-review-graph.
+
+## 2026-05-24 [fixed] Real E2E audit repair batch
+
+Repaired the blocking findings from `tmp/real-e2e-audit-2026-05-24/`.
+Mounted universal workbench sessions now refresh failed terminal state, avoid
+stale running/requesting status, avoid duplicate timeout errors, and recover
+the follow-up composer when engine readiness is true. Mounted Soul App workspace
+selection now flows back to Host as an opaque locator, so selected workspace
+context reaches the micro-app URL and host data without Host interpreting
+domain state.
+
+Worker Configuration no longer exposes workspace projection scope; it remains a
+worker-scoped Host shell surface for overlay/local enablement and declared
+workbench route preference. The local daemon now serves
+`GET /api/local/settings/engines` as a read-only non-secret engine status
+projection aligned with docs and OpenAPI; mounted workbench readiness now uses
+that narrow endpoint instead of the full settings surface. The mounted-surfaces
+smoke now follows the current first-run path by switching HR's worker-scoped
+workbench route through Worker Configuration before asserting the HR route
+surface.
+
 ## 2026-05-23 [fixed] BUG-151 / PLAN-407 — Universal workbench engine readiness
 
 Fixed the mounted universal workbench engine readiness false positive. The

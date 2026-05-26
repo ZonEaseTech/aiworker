@@ -4,7 +4,6 @@ import type {
   HrPeopleWorkbenchApiOptions,
   HrWorkbenchData,
   HrWorkbenchFetch,
-  LocalArtifact,
   LocalFile,
   LocalSession,
   LocalWorkspace,
@@ -31,13 +30,12 @@ export function createHrPeopleWorkbenchApi(options: HrPeopleWorkbenchApiOptions 
       })
     },
     async loadWorkbenchData(scope = {}) {
-      const [workspacesBody, sessionsBody, artifactsBody] = await Promise.all([
+      const [workspacesBody, sessionsBody] = await Promise.all([
         localJson<{ workspaces: LocalWorkspace[] }>(fetcher, `${localPrefix}/workspaces`),
         localJson<{ sessions: LocalSession[] }>(fetcher, `${localPrefix}/sessions`),
-        localJson<{ artifacts: LocalArtifact[] }>(fetcher, `${localPrefix}/artifacts`),
       ])
       const filtered = filterWorkbenchData({
-        artifacts: artifactsBody.artifacts,
+        artifacts: [],
         profileReadmes: {},
         sessions: sessionsBody.sessions,
         workspaces: workspacesBody.workspaces,

@@ -70,6 +70,8 @@ export {
 } from './worker/events'
 export {
   createExternalEngineExecutor,
+  DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS,
+  type ExternalEngineExecutorOptions,
   type LocalExecutor,
   LocalExecutorFailure,
   type LocalExecutorInput,
@@ -91,3 +93,11 @@ export {
   type StartLocalTurnInput,
   type WorkspaceAssetProjectionResult,
 } from './worker/runtime'
+export {
+  freezeSessionEngineMetadata,
+  type FrozenSessionEngine,
+  type LatestInvocationEngine,
+  readFrozenSessionEngine,
+  type ResolvedSessionEngine,
+  resolveFrozenSessionEngine,
+} from './worker/session-engine'

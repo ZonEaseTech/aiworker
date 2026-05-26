@@ -1,7 +1,7 @@
 import type {
+  LocalEngineReadinessSettings,
   LocalSession,
   LocalSessionEvent,
-  LocalSettingsConfig,
   LocalTurn,
   LocalWorkspace,
 } from '@zonease/aiworker-shared'
@@ -21,15 +21,33 @@ interface MountedHostData {
   appId?: string | null
   routePrefix?: string | null
   sessionId?: string | null
+  surfaceId?: string | null
   theme?: string | null
   workerId?: string | null
   workspaceId?: string | null
+}
+
+interface MountedDocumentThemeTarget {
+  documentElement: {
+    classList: {
+      toggle: (token: string, force?: boolean) => boolean | void
+    }
+    style: {
+      colorScheme: string
+    }
+  }
 }
 
 interface SessionTurnResult {
   events?: LocalSessionEvent[]
   session?: LocalSession
   turn?: LocalTurn
+}
+
+interface SessionDetailResult {
+  events: LocalSessionEvent[]
+  session: LocalSession
+  turns: LocalTurn[]
 }
 
 interface UniversalWorkbenchCreateSessionPayload {
@@ -42,7 +60,7 @@ interface UniversalWorkbenchCreateSessionPayload {
   title: string
 }
 
-type SessionTurnStreamFrame
+export type SessionTurnStreamFrame
   = | { data: LocalSession, event: 'session' }
     | { data: LocalTurn, event: 'turn' }
     | { data: LocalSessionEvent, event: 'session_event' }
@@ -67,6 +85,56 @@ const UNIVERSAL_WORKBENCH_ENGINE_COPY = {
     engineNotInstalled: (engineName: string) => `${engineName} is selected but not installed on PATH.`,
     engineReadyDetail: (engineName: string) => `${engineName} is ready for session turns.`,
   },
+}
+
+export function isTerminalSessionStatus(status: string | null | undefined): boolean {
+  return status === 'failed' || status === 'succeeded' || status === 'cancelled' || status === 'completed'
+}
+
+export function resolveStreamRecoverySessionId(
+  streamedSessionId: string | null,
+  selectedSessionId: string | null,
+): string | null {
+  return streamedSessionId ?? selectedSessionId ?? null
+}
+
+export function shouldRefreshRecoveredSession(
+  recoverySessionId: string | null,
+  latestSelectedSessionId: string | null,
+): boolean {
+  return recoverySessionId !== null && (latestSelectedSessionId === null || recoverySessionId === latestSelectedSessionId)
+}
+
+export function mountedSessionContextKey(input: {
+  routePrefix: string
+  sessionId: string | null
+  workerId: string | null
+  workspaceId: string | null
+}): string | null {
+  if (!input.workerId || !input.sessionId)
+    return null
+  return [input.routePrefix, input.workerId, input.workspaceId ?? '', input.sessionId].join('::')
+}
+
+export function shouldApplyMountedSessionDetail(
+  expectedContextKey: string | null,
+  latestContextKey: string | null,
+): boolean {
+  return expectedContextKey !== null && expectedContextKey === latestContextKey
+}
+
+export async function recoverSessionTurnStreamFailure(
+  error: unknown,
+  streamedSessionId: string | null,
+  selectedSessionId: string | null,
+  appendSessionEvents: (events: LocalSessionEvent[]) => void,
+  refresh: (preferredSessionId?: string | null) => Promise<void>,
+  latestSelectedSessionId: string | null = selectedSessionId,
+): Promise<void> {
+  appendSessionEvents([streamErrorEvent(error)])
+  const recoverySessionId = resolveStreamRecoverySessionId(streamedSessionId, selectedSessionId)
+  if (shouldRefreshRecoveredSession(recoverySessionId, latestSelectedSessionId))
+    await refresh(recoverySessionId).catch(() => {})
 }
 
 export function resolveUniversalWorkbenchDraftInput(
@@ -102,18 +170,28 @@ export function buildUniversalWorkbenchCreateSessionPayload(
   }
 }
 
-export function resolveUniversalWorkbenchEngineReadiness(settings: LocalSettingsConfig | null): EngineReadiness {
+export function resolveUniversalWorkbenchEngineReadiness(settings: LocalEngineReadinessSettings | null): EngineReadiness {
   return resolveEngineReadiness(settings, UNIVERSAL_WORKBENCH_ENGINE_COPY)
 }
 
 export async function loadMountedEngineReadiness(): Promise<EngineReadiness> {
   try {
-    const result = await fetchJson<{ settings: LocalSettingsConfig }>('/api/local/settings')
-    return resolveUniversalWorkbenchEngineReadiness(result.settings)
+    const settings = await fetchJson<LocalEngineReadinessSettings>('/api/local/settings/engines')
+    return resolveUniversalWorkbenchEngineReadiness(settings)
   }
   catch {
     return MOUNTED_ENGINE_READINESS_UNAVAILABLE
   }
+}
+
+export function applyMountedDocumentTheme(
+  theme: string | null | undefined,
+  target: MountedDocumentThemeTarget = document,
+): 'dark' | 'light' {
+  const resolvedTheme = theme === 'dark' ? 'dark' : 'light'
+  target.documentElement.classList.toggle('dark', resolvedTheme === 'dark')
+  target.documentElement.style.colorScheme = resolvedTheme
+  return resolvedTheme
 }
 
 declare global {
@@ -136,23 +214,43 @@ function UniversalWorkbenchMountedClient() {
   const [engineReadiness, setEngineReadiness] = useState(() => resolveUniversalWorkbenchEngineReadiness(null))
   const [templates, setTemplates] = useState<UniversalWorkbenchCapabilityTemplate[]>([])
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(hostData.sessionId ?? null)
+  const latestSelectedSessionIdRef = useRef<string | null>(hostData.sessionId ?? null)
+  const latestSelectedSessionContextKeyRef = useRef<string | null>(null)
   const [turnInput, setTurnInput] = useState('')
   const [turnSubmitting, setTurnSubmitting] = useState(false)
-  const eventsRef = useRef<LocalSessionEvent[]>([])
-
-  useEffect(() => {
-    eventsRef.current = events
-  }, [events])
 
   const routePrefix = hostData.routePrefix ?? `/api/local/apps/${hostData.appId ?? ''}`
   const workerId = hostData.workerId ?? null
   const workspaceId = hostData.workspaceId ?? null
+  const selectedSessionContextKey = mountedSessionContextKey({
+    routePrefix,
+    sessionId: selectedSessionId,
+    workerId,
+    workspaceId,
+  })
 
   const selectedWorkspace = useMemo(() => {
     if (workspaceId)
       return workspaces.find(workspace => workspace.id === workspaceId) ?? workspaces[0] ?? null
     return workspaces[0] ?? null
   }, [workspaceId, workspaces])
+
+  const selectSession = useCallback((sessionId: string | null): void => {
+    latestSelectedSessionIdRef.current = sessionId
+    setSelectedSessionId(sessionId)
+  }, [])
+
+  const applySessionDetail = useCallback((detail: SessionDetailResult): void => {
+    setSessions(current => upsertSession(current, detail.session))
+    setTurns(detail.turns)
+    setEvents(detail.events)
+  }, [])
+
+  const applySelectedSessionDetail = useCallback((detail: SessionDetailResult, expectedContextKey: string | null): void => {
+    if (!shouldApplyMountedSessionDetail(expectedContextKey, latestSelectedSessionContextKeyRef.current))
+      return
+    applySessionDetail(detail)
+  }, [applySessionDetail])
 
   const refresh = useCallback(async (preferredSessionId?: string | null) => {
     if (!workerId)
@@ -171,16 +269,36 @@ function UniversalWorkbenchMountedClient() {
     ))
     const nextSessions = sessionGroups.flat()
     setSessions(nextSessions)
-    const nextSelectedSessionId = preferredSessionId ?? selectedSessionId ?? hostData.sessionId ?? nextSessions[0]?.id ?? null
-    if (nextSelectedSessionId)
-      await loadSessionDetail(routePrefix, workerId, nextSelectedSessionId, setTurns, setEvents)
-  }, [hostData.sessionId, routePrefix, selectedSessionId, workerId])
+    const nextSelectedSessionId = preferredSessionId ?? latestSelectedSessionIdRef.current ?? hostData.sessionId ?? nextSessions[0]?.id ?? null
+    if (nextSelectedSessionId) {
+      const expectedContextKey = mountedSessionContextKey({
+        routePrefix,
+        sessionId: nextSelectedSessionId,
+        workerId,
+        workspaceId,
+      })
+      const detail = await loadSessionDetail(routePrefix, workerId, nextSelectedSessionId)
+      applySelectedSessionDetail(detail, expectedContextKey)
+    }
+  }, [applySelectedSessionDetail, hostData.sessionId, routePrefix, workerId, workspaceId])
+
+  useEffect(() => {
+    latestSelectedSessionContextKeyRef.current = selectedSessionContextKey
+  }, [selectedSessionContextKey])
 
   useEffect(() => {
     window.microApp?.addDataListener?.((data) => {
-      setHostData(current => ({ ...current, ...data }))
+      setHostData((current) => {
+        const nextData = { ...current, ...data }
+        window.__AIWORKER_MICRO_APP_HOST_DATA__ = nextData
+        return nextData
+      })
     }, true)
   }, [])
+
+  useEffect(() => {
+    applyMountedDocumentTheme(hostData.theme)
+  }, [hostData.theme])
 
   useEffect(() => {
     void refresh().catch(() => {})
@@ -201,41 +319,35 @@ function UniversalWorkbenchMountedClient() {
     if (!selectedSessionId || !workerId)
       return
     let cancelled = false
-    void loadSessionDetail(
-      routePrefix,
-      workerId,
-      selectedSessionId,
-      nextTurns => !cancelled && setTurns(nextTurns),
-      nextEvents => !cancelled && setEvents(nextEvents),
-    ).catch(() => {})
+    const expectedContextKey = selectedSessionContextKey
+    void loadSessionDetail(routePrefix, workerId, selectedSessionId).then((detail) => {
+      if (!cancelled)
+        applySelectedSessionDetail(detail, expectedContextKey)
+    }).catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [routePrefix, selectedSessionId, workerId])
+  }, [applySelectedSessionDetail, routePrefix, selectedSessionContextKey, selectedSessionId, workerId])
 
   useEffect(() => {
     if (!selectedSessionId || !workerId)
       return
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | undefined
+    const expectedContextKey = selectedSessionContextKey
 
     const poll = async () => {
+      let shouldContinuePolling = true
       try {
-        // Derive the replay cursor from the live event list, scoped to this session and to real
-        // (positive) backend ids, so synthetic stream-error events never advance it.
-        const after = latestSessionEventId(eventsRef.current, selectedSessionId)
-        const nextEvents = await loadSessionEvents(routePrefix, workerId, selectedSessionId, after)
-        if (!cancelled && nextEvents.length > 0)
-          appendSessionEvents(nextEvents)
-        // Keep turns in sync so polled events whose turn was created out-of-band still render.
-        const nextTurns = await loadSessionTurns(routePrefix, workerId, selectedSessionId)
+        const detail = await loadSessionDetail(routePrefix, workerId, selectedSessionId)
         if (!cancelled)
-          setTurns(current => mergeTurns(current, nextTurns))
+          applySelectedSessionDetail(detail, expectedContextKey)
+        shouldContinuePolling = !isTerminalSessionStatus(detail.session.status)
       }
       catch {
         // Best-effort replay keeps the mounted workbench live without taking over Host error policy.
       }
-      if (!cancelled)
+      if (!cancelled && shouldContinuePolling)
         timer = setTimeout(poll, SESSION_EVENT_POLL_INTERVAL_MS)
     }
 
@@ -245,7 +357,7 @@ function UniversalWorkbenchMountedClient() {
       if (timer)
         clearTimeout(timer)
     }
-  }, [routePrefix, selectedSessionId, workerId])
+  }, [applySelectedSessionDetail, routePrefix, selectedSessionContextKey, selectedSessionId, workerId])
 
   async function handleCreateSession(targetWorkspaceId: string, draft: UniversalWorkbenchCreateSessionDraft) {
     if (!workerId)
@@ -253,18 +365,36 @@ function UniversalWorkbenchMountedClient() {
     const payload = buildUniversalWorkbenchCreateSessionPayload(draft, templates)
     if (!payload)
       return
-    const response = await fetch(`${routePrefix}/api/sessions/stream?workerId=${encodeURIComponent(workerId)}&workspaceId=${encodeURIComponent(targetWorkspaceId)}`, {
-      body: JSON.stringify(payload),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    if (!response.ok)
-      throw new Error(`Universal workbench API ${response.status}: ${routePrefix}/api/sessions/stream`)
+    let streamedSessionId: string | null = null
+    let response: Response
+    try {
+      response = await fetch(`${routePrefix}/api/sessions/stream?workerId=${encodeURIComponent(workerId)}&workspaceId=${encodeURIComponent(targetWorkspaceId)}`, {
+        body: JSON.stringify(payload),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      })
+      if (!response.ok) {
+        await recoverSessionTurnStreamFailure(
+          new Error(`Universal workbench API ${response.status}: ${routePrefix}/api/sessions/stream`),
+          streamedSessionId,
+          selectedSessionId,
+          appendSessionEvents,
+          refresh,
+          latestSelectedSessionIdRef.current,
+        )
+        return
+      }
+    }
+    catch (error) {
+      await recoverSessionTurnStreamFailure(error, streamedSessionId, selectedSessionId, appendSessionEvents, refresh, latestSelectedSessionIdRef.current)
+      return
+    }
     void consumeSessionTurnStream(response, (frame) => {
       applySessionTurnStreamFrame(frame, {
         onEvents: appendSessionEvents,
         onSession: (session) => {
-          setSelectedSessionId(session.id)
+          streamedSessionId = session.id
+          selectSession(session.id)
           setSessions(current => [
             session,
             ...current.filter(item => item.id !== session.id),
@@ -274,7 +404,7 @@ function UniversalWorkbenchMountedClient() {
         onTurn: turn => setTurns(current => upsertTurn(current, turn)),
       })
     }).catch((error) => {
-      appendSessionEvents([streamErrorEvent(error)])
+      void recoverSessionTurnStreamFailure(error, streamedSessionId, selectedSessionId, appendSessionEvents, refresh, latestSelectedSessionIdRef.current)
     })
   }
 
@@ -286,7 +416,18 @@ function UniversalWorkbenchMountedClient() {
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
-    setWorkspaces(current => [...current, result.workspace])
+    setWorkspaces(current => [
+      result.workspace,
+      ...current.filter(workspace => workspace.id !== result.workspace.id),
+    ])
+    setHostData(current => ({ ...current, workspaceId: result.workspace.id }))
+    window.microApp?.dispatch?.({
+      appId: hostData.appId ?? null,
+      surfaceId: hostData.surfaceId ?? 'universal-workbench',
+      type: 'locator:workspace-selected',
+      workerId,
+      workspaceId: result.workspace.id,
+    })
   }
 
   async function handleSubmitTurn(draft: UniversalWorkbenchSubmitTurnDraft) {
@@ -336,11 +477,11 @@ function UniversalWorkbenchMountedClient() {
       turns={turns}
       workspace={selectedWorkspace}
       workspaces={workspaces}
-      onBackToWorkspace={() => setSelectedSessionId(null)}
+      onBackToWorkspace={() => selectSession(null)}
       onCreateSession={handleCreateSession}
       onCreateWorkspace={handleCreateWorkspace}
       onRefresh={() => void refresh()}
-      onSelectSession={setSelectedSessionId}
+      onSelectSession={selectSession}
       onSubmitTurn={handleSubmitTurn}
       onTurnInputChange={setTurnInput}
     />
@@ -351,7 +492,7 @@ function UniversalWorkbenchMountedClient() {
   }
 }
 
-async function consumeSessionTurnStream(response: Response, onFrame: (frame: SessionTurnStreamFrame) => void): Promise<void> {
+export async function consumeSessionTurnStream(response: Response, onFrame: (frame: SessionTurnStreamFrame) => void): Promise<void> {
   const contentType = response.headers.get('content-type') ?? ''
   if (!contentType.includes('text/event-stream')) {
     applySessionTurnResult(await response.json() as SessionTurnResult, onFrame)
@@ -416,7 +557,7 @@ function applySessionTurnResult(result: SessionTurnResult, onFrame: (frame: Sess
     onFrame({ data: event, event: 'session_event' })
 }
 
-function applySessionTurnStreamFrame(
+export function applySessionTurnStreamFrame(
   frame: SessionTurnStreamFrame,
   handlers: {
     onEvents: (events: LocalSessionEvent[]) => void
@@ -499,28 +640,6 @@ export async function loadSessionTurns(
   return result.turns
 }
 
-function mergeTurns(current: LocalTurn[], incoming: LocalTurn[]): LocalTurn[] {
-  let changed = false
-  const next = incoming.reduce((acc, turn) => {
-    const existing = acc.find(item => item.id === turn.id)
-    if (existing && existing.updatedAt === turn.updatedAt && existing.status === turn.status)
-      return acc
-    changed = true
-    return upsertTurn(acc, turn)
-  }, current)
-  // Preserve the reference when nothing changed so the 1s turns poll does not force a re-render.
-  return changed ? next : current
-}
-
-function latestSessionEventId(events: LocalSessionEvent[], sessionId: string): number {
-  return events.reduce((max, event) => {
-    // Ignore synthetic stream events (non-positive ids) and other sessions' events.
-    if (event.id <= 0 || event.sessionId !== sessionId)
-      return max
-    return Math.max(max, event.id)
-  }, 0)
-}
-
 // Synthetic client-side stream events use unique decreasing negative ids so they never collide
 // in dedup and never advance the backend replay cursor.
 let lastSyntheticEventId = 0
@@ -546,14 +665,10 @@ async function loadSessionDetail(
   routePrefix: string,
   workerId: string,
   sessionId: string,
-  setTurns: (turns: LocalTurn[]) => void,
-  setEvents: (events: LocalSessionEvent[]) => void,
-): Promise<void> {
-  const detail = await fetchJson<{ events: LocalSessionEvent[], turns: LocalTurn[] }>(
+): Promise<SessionDetailResult> {
+  return await fetchJson<SessionDetailResult>(
     `${routePrefix}/api/sessions/${encodeURIComponent(sessionId)}?workerId=${encodeURIComponent(workerId)}`,
   )
-  setTurns(detail.turns)
-  setEvents(detail.events)
 }
 
 function readInitialHostData(): MountedHostData {

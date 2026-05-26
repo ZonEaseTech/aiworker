@@ -1,4 +1,4 @@
-import type { SoulAppProjectionReceipt } from '@zonease/aiworker-shared'
+import type { LocalExecutionMode, SoulAppProjectionReceipt } from '@zonease/aiworker-shared'
 import type {
   EngineInvocationRow,
   FileRow,
@@ -10,6 +10,7 @@ import type {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import type { EngineAssetSource } from './engine-assets'
 import type { LocalExecutor, LocalExecutorEvent, LocalExecutorResult } from './executor'
+import type { FrozenSessionEngine } from './session-engine'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -42,6 +43,13 @@ import { engineAssetProjectionReceiptPath, projectEngineAssetsToWorkspace, resol
 import { LocalWorkerEventBus } from './events'
 import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
 import { LocalWorkspaceFiles } from './files'
+import {
+  freezeSessionEngineMetadata,
+
+  inferLatestInvocationEngine,
+  readFrozenSessionEngine,
+  resolveFrozenSessionEngine,
+} from './session-engine'
 
 export interface LocalWorkerRuntimeOptions {
   worker: {
@@ -202,6 +210,7 @@ export class LocalWorkerRuntime {
 
   async createSession(input: CreateLocalSessionInput): Promise<SessionRow> {
     const workspace = this.requireWorkspace(input.workspaceId)
+    const sessionMetadata = freezeSessionEngineMetadata(input.metadata ?? {}, this.requestedSessionEngine(input.metadata ?? {}))
     const session = createSession({
       id: randomUUID(),
       workerId: this.workerId,
@@ -210,11 +219,11 @@ export class LocalWorkerRuntime {
       title: input.title,
       context: input.context ?? '',
       status: 'active',
-      metadataJson: input.metadata ?? {},
+      metadataJson: sessionMetadata,
       startedAt: this.#now(),
       at: this.#now(),
     })
-    await this.materializeSessionContext(workspace, session, input.metadata ?? {})
+    await this.materializeSessionContext(workspace, session, sessionMetadata)
     this.appendEvent(session.id, 'status', { status: 'active' })
     this.bus.emit({ kind: 'session', workspaceId: workspace.id, sessionId: session.id, payload: { status: 'active' }, at: this.#now() })
     return session
@@ -223,9 +232,21 @@ export class LocalWorkerRuntime {
   async startTurn(input: StartLocalTurnInput): Promise<LocalTurnStartResult> {
     const session = this.requireSession(input.sessionId)
     const workspace = this.requireWorkspace(session.workspaceId)
+    const sessionEngine = this.resolveSessionEngine(session, input)
+    const frozenSessionMetadata = freezeSessionEngineMetadata(session.metadataJson ?? {}, sessionEngine)
+    const currentSession = sessionEngine.source === 'session'
+      ? session
+      : updateSession({
+          id: session.id,
+          metadataJson: frozenSessionMetadata,
+          at: this.#now(),
+        })
     const metadata = {
-      ...(session.metadataJson ?? {}),
+      ...(currentSession.metadataJson ?? {}),
       ...(input.metadata ?? {}),
+      engineCommand: sessionEngine.engineCommand,
+      engineId: sessionEngine.engineId,
+      executionMode: sessionEngine.executionMode,
       capabilityTemplateId: session.capabilityTemplateId,
       sessionId: session.id,
       workerId: this.workerId,
@@ -247,8 +268,8 @@ export class LocalWorkerRuntime {
       sessionId: session.id,
       turnId: turn.id,
       seq: nextEngineInvocationSeq(session.id),
-      engineId: input.engineId,
-      engineCommand: input.engineCommand ?? null,
+      engineId: sessionEngine.engineId,
+      engineCommand: sessionEngine.engineCommand,
       prompt,
       status: 'running',
       metadataJson: metadata,
@@ -261,8 +282,8 @@ export class LocalWorkerRuntime {
     try {
       const invocationRoot = await this.ensureInvocationRoot(workspace, session, invocation)
       const result = await this.#executor.invoke({
-        engineCommand: input.engineCommand ?? null,
-        engineId: input.engineId,
+        engineCommand: sessionEngine.engineCommand,
+        engineId: sessionEngine.engineId,
         invocationId: invocation.id,
         invocationRoot,
         onEvent: event => this.appendAgentEvent(session.id, event, turn.id, invocation.id),
@@ -291,7 +312,13 @@ export class LocalWorkerRuntime {
         response: result.summary,
         at: this.#now(),
       })
-      const currentSession = updateSession({ id: session.id, status: 'active', at: this.#now() })
+      const finishedAt = this.#now()
+      const currentSession = updateSession({
+        id: session.id,
+        status: 'completed',
+        endedAt: finishedAt,
+        at: finishedAt,
+      })
       this.appendEvent(session.id, 'status', { status: 'succeeded', turnId: turn.id }, turn.id, invocation.id)
       this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'succeeded', turn: finishedTurn }, at: this.#now() })
       return {
@@ -421,6 +448,7 @@ export class LocalWorkerRuntime {
   private buildInvocationPrompt(session: SessionRow, turn: TurnRow, metadata: Record<string, unknown>): string {
     const mentions = explicitMentionLines(metadata.mentions)
     const lines = [
+      `Current date: ${this.#now().slice(0, 10)}`,
       `Soul worker: ${this.#workerInput.name}`,
       `Soul id: ${this.#workerInput.soulId}`,
       `Workspace session: ${session.title}`,
@@ -438,13 +466,16 @@ export class LocalWorkerRuntime {
     return lines.join('\n')
   }
 
-  private async materializeSessionContext(workspace: WorkspaceRow, session: SessionRow, _metadata: Record<string, unknown>): Promise<void> {
+  private async materializeSessionContext(workspace: WorkspaceRow, session: SessionRow, metadata: Record<string, unknown>): Promise<void> {
     const files = new LocalWorkspaceFiles(workspace.rootPath)
     const sessionRoot = path.posix.join('.aiworker', 'sessions', session.id)
+    const sessionEngine = readFrozenSessionEngine(metadata)
     await mkdir(files.resolve(path.posix.join(sessionRoot, 'context')), { recursive: true })
     await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'cwd.txt')), workspace.rootPath, 'utf8')
     await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'engine.json')), JSON.stringify({
-      engineId: this.#workerInput.defaultEngineId,
+      engineCommand: sessionEngine?.engineCommand ?? null,
+      engineId: sessionEngine?.engineId ?? this.#workerInput.defaultEngineId ?? 'codex',
+      executionMode: sessionEngine?.executionMode ?? 'local-cli',
       soulId: this.#workerInput.soulId,
     }, null, 2), 'utf8')
     await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'soul-app.json')), JSON.stringify({
@@ -481,6 +512,46 @@ export class LocalWorkerRuntime {
     if (!session || session.workerId !== this.workerId)
       throw new Error(`Session not found for worker ${this.workerId}: ${id}`)
     return session
+  }
+
+  private requestedSessionEngine(metadata: Record<string, unknown>): FrozenSessionEngine {
+    return {
+      engineCommand: readNullableString(metadata.engineCommand),
+      engineId: readString(metadata.engineId, this.#workerInput.defaultEngineId ?? 'codex'),
+      executionMode: readExecutionMode(metadata.executionMode),
+    }
+  }
+
+  private requestedTurnEngine(input: StartLocalTurnInput): FrozenSessionEngine {
+    return {
+      engineCommand: input.engineCommand ?? null,
+      engineId: input.engineId,
+      executionMode: readExecutionMode(input.metadata?.executionMode),
+    }
+  }
+
+  private latestInvocationEngine(sessionId: string) {
+    const latestInvocation = listEngineInvocations(sessionId, 1)[0]
+    return inferLatestInvocationEngine(latestInvocation
+      ? {
+          engineCommand: latestInvocation.engineCommand,
+          engineId: latestInvocation.engineId,
+          metadata: latestInvocation.metadataJson,
+        }
+      : {
+          engineCommand: null,
+          engineId: null,
+          metadata: null,
+        })
+  }
+
+  private resolveSessionEngine(session: SessionRow, input: StartLocalTurnInput) {
+    const requested = this.requestedTurnEngine(input)
+    return resolveFrozenSessionEngine({
+      latestInvocation: this.latestInvocationEngine(session.id),
+      requested,
+      sessionMetadata: session.metadataJson,
+    })
   }
 
   private async repairWorkspaceLayouts(): Promise<void> {
@@ -533,6 +604,14 @@ export function createLocalWorkerRuntime(options: LocalWorkerRuntimeOptions): Lo
 
 function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
+}
+
+function readExecutionMode(value: unknown, fallback: LocalExecutionMode = 'local-cli'): LocalExecutionMode {
+  return value === 'local-cli' || value === 'byok' ? value : fallback
+}
+
+function readNullableString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
 function explicitMentionLines(value: unknown): string[] {

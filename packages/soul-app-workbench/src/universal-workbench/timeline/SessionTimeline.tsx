@@ -74,7 +74,9 @@ export function SessionTimeline({
                     {renderEvent?.(event) ?? <DefaultSessionEvent event={event} toolResult={event.kind === 'tool_use' ? toolResults.get(event.toolUseId) : undefined} />}
                   </Fragment>
                 ))}
-                {item.turn.error ? <DefaultSessionEvent event={{ id: `error-${item.turn.id}`, kind: 'error', message: item.turn.error, turnId: item.turn.id }} /> : null}
+                {shouldRenderTurnErrorFallback(item.events, item.turn.error)
+                  ? <DefaultSessionEvent event={{ id: `error-${item.turn.id}`, kind: 'error', message: item.turn.error!, turnId: item.turn.id }} />
+                  : null}
               </MessageFlow>
             </MessageRow>
           </ItemGroup>
@@ -378,6 +380,13 @@ function collectToolResults(events: SessionTimelineEvent[]): Map<string, Extract
       results.set(event.toolUseId, event)
   }
   return results
+}
+
+function shouldRenderTurnErrorFallback(events: SessionTimelineEvent[], error: string | null | undefined): boolean {
+  const normalized = error?.trim()
+  if (!normalized)
+    return false
+  return !events.some(event => event.kind === 'error' && event.message.trim() === normalized)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

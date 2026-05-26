@@ -8,14 +8,17 @@ Host 只做 readiness 探测与 best-effort 配置透传，不拥有 engine 登�
 
 ## Readiness Probe
 
-`GET /api/local/settings/engines` 只做只读探测：
+`GET /api/local/settings/engines` 返回持久化的本地 engine status，供 Settings 与 mounted
+workbench readiness 使用。它包含：
 
-- CLI 是否在 `PATH`；
-- 常见 auth 文件是否存在；
-- HTTP/MCP/任意命令类 engine 是否有可用配置。
+- 上次发现的 binary path/version；
+- 当前选择的 `engineId`；
+- 当前选择的 `executionMode`；
+- BYOK 的非 secret 投影：`provider`、`model` 和 `apiKeyRefPresent`。
 
-探测不读取 secret 内容，不 spawn CLI，也不保证 engine 最终会加载哪些 host/user 级插件或
-MCP server。`ready` 表示本地探测命中，不表示 AIWorker 已接管该 engine。
+该 endpoint 是只读 metadata surface，不 spawn CLI，不读取 secret 内容，也不保证 engine
+最终会加载哪些 host/user 级 plugin、MCP、skill 或 native session。`ready` 表示持久化的本地
+状态命中，不表示 AIWorker 已接管该 engine。
 
 ## Local Auth Recipes
 

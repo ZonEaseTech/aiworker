@@ -7,7 +7,7 @@ import path from 'node:path'
 
 import { afterEach, describe, expect, it } from 'bun:test'
 
-import { createExternalEngineExecutor } from './executor'
+import { createExternalEngineExecutor, DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS } from './executor'
 
 describe('createExternalEngineExecutor', () => {
   let roots: string[] = []
@@ -137,5 +137,23 @@ exit 9
 
     await expect(createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events))).rejects.toThrow('exited with code 9')
     expect(events.some(event => event.kind === 'log' && event.stream === 'stderr' && event.chunk.includes('fatal engine error'))).toBe(true)
+  })
+
+  it('terminates local CLI engines after the configured hard timeout', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+exec perl -e '$SIG{TERM}=sub{}; select undef,undef,undef,0.01 while 1'
+`)
+
+    await expect(
+      createExternalEngineExecutor({ timeoutMs: 250 }).invoke(baseInput(command, workspaceRoot)),
+    ).rejects.toThrow('Process exceeded 250ms and was terminated.')
+
+    await expect(
+      readFile(path.join(workspaceRoot, '.aiworker', 'sessions', 'session-1', 'invocations', '0001', 'stderr.log'), 'utf8'),
+    ).resolves.toContain('Process exceeded 250ms and was terminated.')
+    expect(DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS).toBe(300_000)
   })
 })

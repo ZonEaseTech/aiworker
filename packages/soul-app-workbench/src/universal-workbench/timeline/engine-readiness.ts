@@ -1,4 +1,4 @@
-import type { LocalSettingsConfig } from '@zonease/aiworker-shared'
+import type { LocalEngineReadinessSettings, LocalSettingsConfig } from '@zonease/aiworker-shared'
 
 export interface EngineReadiness {
   detail: string
@@ -18,11 +18,16 @@ interface WorkerMessages {
   }
 }
 
-export function resolveEngineReadiness(settings: LocalSettingsConfig | null, copy: WorkerMessages): EngineReadiness {
+type EngineReadinessSettings = LocalEngineReadinessSettings | LocalSettingsConfig
+
+export function resolveEngineReadiness(settings: EngineReadinessSettings | null, copy: WorkerMessages): EngineReadiness {
   if (!settings)
     return { detail: copy.workspace.engineLoading, label: copy.workspace.engineLoading, ready: false }
   if (settings.executionMode === 'byok') {
-    const configured = settings.byok.provider.trim().length > 0 && settings.byok.model.trim().length > 0 && settings.byok.apiKeyRef.trim().length > 0
+    const apiKeyRefPresent = 'apiKeyRefPresent' in settings.byok
+      ? settings.byok.apiKeyRefPresent
+      : settings.byok.apiKeyRef.trim().length > 0
+    const configured = settings.byok.provider.trim().length > 0 && settings.byok.model.trim().length > 0 && apiKeyRefPresent
     return {
       detail: configured ? copy.workspace.byokReady(settings.byok.provider, settings.byok.model) : copy.workspace.byokNeedsKey,
       label: `${settings.byok.provider} · ${settings.byok.model}`,

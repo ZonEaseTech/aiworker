@@ -126,6 +126,23 @@ describe('Soul App runtime harness', () => {
     expect(html).not.toContain('This app-owned micro-app surface receives worker, workspace, session, and theme context from the Host mount bridge.')
   })
 
+  it('renders dark universal workbench theme into html chrome and host data', () => {
+    const html = renderUniversalWorkbenchHtml({
+      appId: 'demo-soul-app',
+      appName: 'Demo Soul App',
+      routePrefix: '/api/local/apps/demo-soul-app',
+      theme: 'dark',
+      workerId: 'worker-1',
+      workspaceId: 'workspace-1',
+    })
+
+    expect(html).toContain('<html lang="en" class="dark h-full" style="color-scheme:dark">')
+    expect(html).toContain('<body class="dark h-full">')
+    expect(html).toContain('"theme":"dark"')
+    expect(html).toContain('"workerId":"worker-1"')
+    expect(html).toContain('"workspaceId":"workspace-1"')
+  })
+
   it('proxies mounted universal workbench session streams to Host stream endpoints', async () => {
     const originalFetch = globalThis.fetch
     const proxiedRequests: Array<{ body: string, method: string, url: string }> = []

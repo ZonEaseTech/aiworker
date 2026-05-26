@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-23
+> Updated: 2026-05-25
 
 ## Usage
 
@@ -437,3 +437,12 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-406 Restore interactive universal workbench**](PLAN-406.md) `2026-05-23`
 - [x] [**PLAN-407 Universal workbench engine readiness wiring**](PLAN-407.md) `2026-05-23`
 - [x] [**PLAN-408 Universal workbench explicit session template selection**](PLAN-408.md) `2026-05-23`
+- [x] [**PLAN-409 Web Claude Code failed-session recovery**](PLAN-409.md) `2026-05-24`
+- [x] [**PLAN-410 Mounted workspace locator propagation**](PLAN-410.md) `2026-05-24`
+- [x] [**PLAN-411 Worker Configuration boundary cleanup**](PLAN-411.md) `2026-05-24`
+- [x] [**PLAN-412 Local settings engines endpoint contract**](PLAN-412.md) `2026-05-24`
+- [x] [**PLAN-413 Real E2E P2 regression repair batch**](PLAN-413.md) `2026-05-25`
+- [x] [**PLAN-414 Real E2E P2/P3 repair batch**](PLAN-414.md) `2026-05-25`
+- [x] [**PLAN-415 Real E2E round4 residual repair**](PLAN-415.md) `2026-05-25`
+- [x] [**PLAN-416 Mounted stylesheet dark theme isolation repair**](PLAN-416.md) `2026-05-26`
+- [ ] [**PLAN-417 Real E2E round5 repair and harness hardening**](PLAN-417.md) `2026-05-26`

@@ -56,6 +56,7 @@ try {
   await assertLocatorWithinViewport(page, createWorkerDialog, 'create worker dialog')
   await createWorkerDialog.getByRole('button', { name: 'Create worker' }).click()
   await page.locator('micro-app[data-slot="soul-app-mounted-micro-app"][router-mode="pure"]').waitFor({ timeout: 10_000 })
+  await selectHrRouteThroughWorkerConfiguration(page)
   await page.getByText('Profile patch ready').waitFor({ timeout: 10_000 })
   await page.getByText('Confirmed Facts').waitFor({ timeout: 10_000 })
   await assertHrMountedReadingRoomLayout(page, 'desktop')
@@ -70,7 +71,7 @@ try {
   await assertEngineIconSurface(page)
   await settingsDialog.getByRole('tab', { name: /Soul Apps/ }).click()
   await page.getByText('API /api/local/apps/aiworker-hr').waitFor({ timeout: 10_000 })
-  await page.getByText('4 mounted contributions').first().waitFor({ timeout: 10_000 })
+  await page.getByText('3 mounted contributions').first().waitFor({ timeout: 10_000 })
 
   console.log(JSON.stringify({
     appId: 'aiworker-hr',
@@ -185,6 +186,20 @@ async function assertHrMountedReadingRoomLayout(page: Page, mode: 'desktop' | 'n
     throw new Error(`HR mounted reading room desktop layout did not resolve to at least 3 grid tracks: ${JSON.stringify({ ...state, trackCount })}`)
   if (mode === 'narrow' && trackCount !== 1)
     throw new Error(`HR mounted reading room narrow layout did not resolve to 1 grid track: ${JSON.stringify({ ...state, trackCount })}`)
+}
+
+async function selectHrRouteThroughWorkerConfiguration(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /^Configure / }).first().click()
+  const workerConfigDialog = page.getByRole('dialog', { name: 'Worker configuration' })
+  await workerConfigDialog.waitFor({ timeout: 10_000 })
+  await assertLocatorWithinViewport(page, workerConfigDialog, 'worker configuration dialog')
+  await workerConfigDialog.getByRole('button', { name: /^Workbench/ }).click()
+  await workerConfigDialog.getByRole('tab', { name: 'HR' }).click()
+  await page.waitForFunction(() => {
+    const microApp = document.querySelector('micro-app[data-slot="soul-app-mounted-micro-app"][router-mode="pure"]')
+    return microApp?.getAttribute('url')?.includes('/micro-app/routes/hr-home') ?? false
+  }, undefined, { timeout: 10_000 })
+  await workerConfigDialog.getByRole('button', { name: 'Close' }).click()
 }
 
 function countGridTracks(value: string): number {

@@ -2,9 +2,11 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { describe, expect, it } from 'bun:test'
-import { renderToStaticMarkup } from 'react-dom/server'
+import { renderToStaticMarkup, renderToString } from 'react-dom/server'
 
 import { HrProfilePanelProof } from './panels/profile-panel'
+import { formatProfileBoardDescription } from './people-workbench/columns/profile-list-column'
+import { getHrPeopleWorkbenchCopy } from './people-workbench/copy'
 import { HrHomeRouteSurface } from './routes/hr-route'
 import { HrPeopleWidgetProof } from './widgets/people-widget'
 import '@zonease/aiworker-ui/styles.css'
@@ -105,7 +107,19 @@ describe('HR product web shared component proof', () => {
 
   it('renders the HR people workbench as three visible columns by default', () => {
     const html = renderToStaticMarkup(<HrHomeRouteSurface />)
+    const hydratedHtml = renderToString(<HrHomeRouteSurface />)
+    const labels = getHrPeopleWorkbenchCopy('en')
+    const profileListColumnSource = readFileSync(
+      new URL('./people-workbench/columns/profile-list-column.tsx', import.meta.url),
+      'utf8',
+    )
 
+    expect(formatProfileBoardDescription(labels, 2)).toBe('People Profiles · 2 visible profiles')
+    expect(html).toContain('People Profiles · 2 visible profiles')
+    expect(hydratedHtml).not.toContain('<!-- --> · <!-- -->')
+    expect(profileListColumnSource).toContain(
+      'const profileBoardDescription = formatProfileBoardDescription(labels, profiles.length)',
+    )
     expect(html).toContain('data-slot="hr-profile-list-column"')
     expect(html).toContain('data-slot="hr-reading-room-column"')
     expect(html).toContain('data-slot="hr-profile-composer-column"')

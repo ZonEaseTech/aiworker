@@ -58,6 +58,17 @@ export interface UniversalWorkbenchAppProps {
   onTurnInputChange: (value: string) => void
 }
 
+export function resolveDefaultTemplateId(
+  current: string | undefined,
+  templates: readonly UniversalWorkbenchCapabilityTemplate[],
+): string | undefined {
+  if (templates.length === 0)
+    return undefined
+  return templates.some(template => template.id === current)
+    ? current
+    : templates[0]?.id
+}
+
 export function UniversalWorkbenchApp({
   engineReadiness,
   events,
@@ -80,7 +91,7 @@ export function UniversalWorkbenchApp({
   const [internalSelectedSessionId, setInternalSelectedSessionId] = useState<string | null>(null)
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(workspace?.id ?? null)
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(() => resolveDefaultTemplateId(undefined, templates))
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const activeSelectedSessionId = selectedSessionId ?? internalSelectedSessionId
@@ -110,13 +121,13 @@ export function UniversalWorkbenchApp({
     })),
     [templates],
   )
+  const effectiveSelectedTemplateId = useMemo(
+    () => resolveDefaultTemplateId(selectedTemplateId, templates),
+    [selectedTemplateId, templates],
+  )
 
   useEffect(() => {
-    if (templates.length === 0) {
-      setSelectedTemplateId(undefined)
-      return
-    }
-    setSelectedTemplateId(current => templates.some(template => template.id === current) ? current : undefined)
+    setSelectedTemplateId(current => resolveDefaultTemplateId(current, templates))
   }, [templates])
 
   const treeNodes = useMemo<WorkspaceSessionTreeNode[]>(() => {
@@ -161,9 +172,9 @@ export function UniversalWorkbenchApp({
   }
 
   return (
-    <div className="flex h-full min-h-0" data-slot="universal-workbench">
+    <div className="flex h-full min-h-0 min-w-0 max-md:flex-col" data-slot="universal-workbench">
       {!sidebarCollapsed && (
-        <aside className="w-56 min-w-0 flex-shrink-0 overflow-y-auto border-r p-3" data-slot="workbench-sidebar">
+        <aside className="w-56 max-w-56 min-w-0 basis-56 flex-shrink-0 overflow-y-auto border-r p-3 max-md:max-h-52 max-md:w-full max-md:max-w-none max-md:basis-auto max-md:flex-none max-md:border-r-0 max-md:border-b" data-slot="workbench-sidebar">
           <div className="mb-3 flex items-center justify-between gap-1">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Workspaces</span>
             <div className="flex items-center gap-0.5">
@@ -214,7 +225,7 @@ export function UniversalWorkbenchApp({
         </aside>
       )}
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col" data-slot="workbench-main">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col max-md:w-full" data-slot="workbench-main">
         {sidebarCollapsed && (
           <div className="px-3 pt-3">
             <Button
@@ -279,9 +290,9 @@ export function UniversalWorkbenchApp({
                       : engineReadiness.detail}
                     onTemplateChange={setSelectedTemplateId}
                     placeholder="What do you want to work on?"
-                    selectedTemplateId={selectedTemplateId}
+                    selectedTemplateId={effectiveSelectedTemplateId}
                     submitAriaLabel="Start"
-                    submitDisabled={!engineReadiness.ready || templates.length === 0 || !selectedTemplateId}
+                    submitDisabled={!engineReadiness.ready || templates.length === 0 || !effectiveSelectedTemplateId}
                     submitting={turnSubmitting}
                     templateLabel="Capability/template"
                     templateOptions={templateOptions}

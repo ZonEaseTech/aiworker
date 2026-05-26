@@ -6,10 +6,15 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { closeWorkerDb, initWorkerDb, runWorkerMigrations, upsertWorkerOverlayAssets } from '@zonease/aiworker-storage-sqlite/worker'
+import { closeWorkerDb, createEngineInvocation, createTurn, initWorkerDb, runWorkerMigrations, updateSession, upsertWorkerOverlayAssets } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { LocalWorkerRuntime } from './runtime'
+import {
+  freezeSessionEngineMetadata,
+  readFrozenSessionEngine,
+  resolveFrozenSessionEngine,
+} from './session-engine'
 
 describe('LocalWorkerRuntime', () => {
   let dir: string
@@ -84,6 +89,68 @@ describe('LocalWorkerRuntime', () => {
     })
   }
 
+  describe('session engine metadata helpers', () => {
+    it('session engine metadata helpers freezes and reads session engine metadata', () => {
+      const metadata = freezeSessionEngineMetadata({}, {
+        engineCommand: 'claude',
+        engineId: 'claude-code',
+        executionMode: 'local-cli',
+      })
+
+      expect(metadata).toMatchObject({
+        engineCommand: 'claude',
+        engineId: 'claude-code',
+        executionMode: 'local-cli',
+      })
+      expect(readFrozenSessionEngine(metadata)).toEqual({
+        engineCommand: 'claude',
+        engineId: 'claude-code',
+        executionMode: 'local-cli',
+      })
+    })
+
+    it('session engine metadata helpers keeps the existing session engine immutable over a new preference', () => {
+      expect(resolveFrozenSessionEngine({
+        latestInvocation: null,
+        requested: { engineCommand: 'codex', engineId: 'codex', executionMode: 'local-cli' },
+        sessionMetadata: { engineCommand: 'claude', engineId: 'claude-code', executionMode: 'local-cli' },
+      })).toEqual({
+        engineCommand: 'claude',
+        engineId: 'claude-code',
+        executionMode: 'local-cli',
+        source: 'session',
+      })
+    })
+
+    it('session engine metadata helpers falls back to the latest invocation for legacy sessions', () => {
+      expect(resolveFrozenSessionEngine({
+        latestInvocation: { engineCommand: null, engineId: 'openai', executionMode: 'byok' },
+        requested: { engineCommand: 'codex', engineId: 'codex', executionMode: 'local-cli' },
+        sessionMetadata: {},
+      })).toEqual({
+        engineCommand: null,
+        engineId: 'openai',
+        executionMode: 'byok',
+        source: 'latest-invocation',
+      })
+    })
+
+    it('session engine metadata helpers ignores partial or invalid frozen metadata and falls back to the latest invocation', () => {
+      expect(readFrozenSessionEngine({ engineId: 'codex' })).toBeNull()
+
+      expect(resolveFrozenSessionEngine({
+        latestInvocation: { engineCommand: 'claude', engineId: 'claude-code', executionMode: 'local-cli' },
+        requested: { engineCommand: 'codex', engineId: 'codex', executionMode: 'local-cli' },
+        sessionMetadata: { engineId: 'bad-engine', executionMode: 'invalid' },
+      })).toEqual({
+        engineCommand: 'claude',
+        engineId: 'claude-code',
+        executionMode: 'local-cli',
+        source: 'latest-invocation',
+      })
+    })
+  })
+
   it('runs the workspace session loop from turn to completion', async () => {
     const workerRuntime = runtime({
       async invoke(input) {
@@ -118,6 +185,8 @@ describe('LocalWorkerRuntime', () => {
 
     expect(result.turn.status).toBe('succeeded')
     expect(result.invocation.status).toBe('succeeded')
+    expect(result.session.status).toBe('completed')
+    expect(result.session.endedAt).not.toBeNull()
     expect(result.files).toHaveLength(0)
     expect(result.events.map(event => event.type)).toEqual(['status', 'status', 'status'])
 
@@ -125,10 +194,137 @@ describe('LocalWorkerRuntime', () => {
     expect(snapshot.worker.soulId).toBe('hr')
     expect(snapshot.workspaces).toHaveLength(1)
     expect(snapshot.sessions[0]?.capabilityTemplateId).toBe('candidate-screen')
+    expect(snapshot.sessions[0]?.status).toBe('completed')
+    expect(snapshot.sessions[0]?.endedAt).not.toBeNull()
     expect(snapshot.turns[0]?.status).toBe('succeeded')
     expect(snapshot.invocations[0]?.metadataJson).toMatchObject({ outputKind: 'candidate-screen' })
     expect(snapshot).not.toHaveProperty('reviews')
     expect(snapshot).not.toHaveProperty('lessons')
+  })
+
+  it('freezes the session engine and date context across continuation turns', async () => {
+    const engineInputs: Array<{ engineCommand: string | null, engineId: string, prompt: string }> = []
+    const workerRuntime = runtime({
+      async invoke(input) {
+        engineInputs.push({
+          engineCommand: input.engineCommand ?? null,
+          engineId: input.engineId,
+          prompt: input.prompt ?? '',
+        })
+        return { summary: `Finished ${input.turnId}` }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Hiring Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'candidate-screen',
+      title: 'Screen candidate',
+      metadata: {
+        engineCommand: 'codex',
+        engineId: 'codex',
+        executionMode: 'local-cli',
+      },
+    })
+
+    await workerRuntime.startTurn({
+      sessionId: session.id,
+      input: 'Prepare the screen.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+      metadata: { executionMode: 'local-cli' },
+    })
+    const continuation = await workerRuntime.startTurn({
+      sessionId: session.id,
+      input: 'Continue with the newly selected engine.',
+      engineId: 'claude-code',
+      engineCommand: 'claude',
+      metadata: { executionMode: 'local-cli' },
+    })
+
+    expect(engineInputs).toEqual([
+      expect.objectContaining({ engineCommand: 'codex', engineId: 'codex' }),
+      expect.objectContaining({ engineCommand: 'codex', engineId: 'codex' }),
+    ])
+    expect(engineInputs[0]?.prompt).toContain('Current date: 2026-05-09')
+    expect(continuation.invocation).toMatchObject({
+      engineCommand: 'codex',
+      engineId: 'codex',
+    })
+    expect(continuation.turn.metadataJson).toMatchObject({
+      engineCommand: 'codex',
+      engineId: 'codex',
+      executionMode: 'local-cli',
+    })
+  })
+
+  it('infers legacy latest invocation execution mode without using the current turn preference', async () => {
+    const engineInputs: Array<{ engineCommand: string | null, engineId: string, executionMode: unknown }> = []
+    const workerRuntime = runtime({
+      async invoke(input) {
+        engineInputs.push({
+          engineCommand: input.engineCommand ?? null,
+          engineId: input.engineId,
+          executionMode: input.metadata?.executionMode,
+        })
+        return { summary: `Finished ${input.turnId}` }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Legacy BYOK Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'candidate-screen',
+      title: 'Legacy BYOK session',
+    })
+    updateSession({
+      id: session.id,
+      metadataJson: {},
+      at: now(),
+    })
+    const legacyTurn = createTurn({
+      id: 'legacy-turn',
+      input: 'Legacy turn',
+      sessionId: session.id,
+      status: 'succeeded',
+      at: now(),
+      seq: 1,
+    })
+    createEngineInvocation({
+      id: 'legacy-invocation',
+      engineCommand: null,
+      engineId: 'openai',
+      metadataJson: {},
+      prompt: 'Legacy prompt',
+      sessionId: session.id,
+      status: 'succeeded',
+      turnId: legacyTurn.id,
+      seq: 1,
+      at: now(),
+    })
+
+    const continuation = await workerRuntime.startTurn({
+      engineCommand: 'codex',
+      engineId: 'codex',
+      input: 'Continue after changing local CLI preference.',
+      metadata: { executionMode: 'local-cli' },
+      sessionId: session.id,
+    })
+
+    expect(engineInputs).toEqual([{
+      engineCommand: null,
+      engineId: 'openai',
+      executionMode: 'byok',
+    }])
+    expect(continuation.invocation).toMatchObject({
+      engineCommand: null,
+      engineId: 'openai',
+    })
+    expect(continuation.turn.metadataJson).toMatchObject({
+      engineCommand: null,
+      engineId: 'openai',
+      executionMode: 'byok',
+    })
   })
 
   it('carries session template metadata into continuation turn prompts and artifacts', async () => {
@@ -234,10 +430,24 @@ describe('LocalWorkerRuntime', () => {
       engineCommand: 'codex',
     })
 
+    expect(result.session.status).toBe('failed')
+    expect(result.session.endedAt).not.toBeNull()
     expect(result.turn.status).toBe('failed')
     expect(result.turn.error).toBe('executor failed')
     expect(result.invocation.status).toBe('failed')
+    expect(result.invocation.error).toBe('executor failed')
     expect(result.events.map(event => event.type)).toEqual(['status', 'status', 'error'])
+    expect(result.events.at(-1)?.payloadJson).toMatchObject({
+      message: 'executor failed',
+      turnId: result.turn.id,
+    })
+
+    const snapshot = workerRuntime.snapshot()
+    expect(snapshot.sessions.find(item => item.id === result.session.id)?.status).toBe('failed')
+    expect(snapshot.invocations.find(item => item.id === result.invocation.id)).toMatchObject({
+      error: 'executor failed',
+      status: 'failed',
+    })
   })
 
   it('materializes simplified session context with cwd, engine, and soul-app files', async () => {

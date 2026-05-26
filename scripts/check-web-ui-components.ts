@@ -572,11 +572,6 @@ const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
 ]
 const acceptedRawNativeControlClassifications: AcceptedRawNativeControlClassification[] = [
   {
-    file: 'apps/aiworker-hr/product/web/people-workbench/profile-composer.tsx',
-    category: 'hidden-file-input',
-    reason: 'HR candidate-material picker is visually controlled by shared shadcn SessionComposer attachment actions',
-  },
-  {
     file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
     category: 'raw-button',
     reason: 'Worker Configuration uses native buttons only for compact Host shell segmented controls with shadcn-compatible state styling',
@@ -1249,12 +1244,25 @@ function shadcnThemeAuditLine(): string {
   const css = read(cssPath)
   const theme = cssBlock(css, '@theme inline')
   const root = cssBlock(css, ':root')
-  const dark = cssBlock(css, '.dark')
+  const dark = cssBlock(css, ':root.dark')
+  if (!dark) {
+    issues.push({
+      file: cssPath,
+      message: 'dark theme variables must live under :root.dark so later mounted micro-app :root styles cannot override Host dark tokens',
+    })
+  }
+  if (/\n\.dark\s*\{/.test(css)) {
+    issues.push({
+      file: cssPath,
+      message: 'do not define dark theme variables with bare .dark; use :root.dark for mounted micro-app CSS isolation',
+    })
+  }
   return [
     'web UI shadcn theme audit:',
     `style=${config.style ?? 'unknown'}`,
     `baseColor=${config.tailwind?.baseColor ?? 'unknown'}`,
     `iconLibrary=${config.iconLibrary ?? 'unknown'}`,
+    `darkSelector=${dark ? ':root.dark' : 'missing'}`,
     `radius=${cssVariable(root, '--radius') ?? 'missing'}`,
     `font=${cssVariable(theme, '--font-sans') ?? 'missing'}`,
     `primary=${cssVariable(root, '--primary') ?? 'missing'}`,

@@ -13,9 +13,36 @@ import {
   materialFromFile,
   sanitizeCandidateMaterialPaths,
 } from './attachments'
-import { normalizeHrWorkbenchHostData } from './host-data'
+import { applyHrWorkbenchDocumentTheme, normalizeHrWorkbenchHostData } from './host-data'
 
 describe('HR people workbench host data', () => {
+  it('syncs the mounted document theme when host data changes after mount', () => {
+    const classes = new Set<string>(['dark'])
+    const target = {
+      documentElement: {
+        classList: {
+          toggle: (name: string, force?: boolean) => {
+            if (force)
+              classes.add(name)
+            else
+              classes.delete(name)
+          },
+        },
+        style: {
+          colorScheme: 'dark',
+        },
+      },
+    }
+
+    expect(applyHrWorkbenchDocumentTheme('light', target)).toBe('light')
+    expect(classes.has('dark')).toBe(false)
+    expect(target.documentElement.style.colorScheme).toBe('light')
+
+    expect(applyHrWorkbenchDocumentTheme('dark', target)).toBe('dark')
+    expect(classes.has('dark')).toBe(true)
+    expect(target.documentElement.style.colorScheme).toBe('dark')
+  })
+
   it('normalizes mounted host data and only treats explicit dark theme as dark', () => {
     expect(normalizeHrWorkbenchHostData({
       hostData: {
@@ -160,8 +187,6 @@ describe('HR people workbench API helper', () => {
             return Response.json({ workspaces: [{ id: 'workspace-1', workerId: 'worker-1' }, { id: 'workspace-2', workerId: 'worker-2' }] })
           if (url.endsWith('/sessions'))
             return Response.json({ sessions: [{ id: 'session-1', workspaceId: 'workspace-1' }, { id: 'session-2', workspaceId: 'workspace-2' }] })
-          if (url.endsWith('/artifacts'))
-            return Response.json({ artifacts: [{ id: 'artifact-1', workspaceId: 'workspace-1' }] })
           if (url.endsWith('/workspaces/workspace-1/files/raw/README.md'))
             return new Response('# Ada Chen People Profile')
           return Response.json({})
@@ -174,12 +199,11 @@ describe('HR people workbench API helper', () => {
       expect(requests).toEqual([
         'GET /api/local/workspaces',
         'GET /api/local/sessions',
-        'GET /api/local/artifacts',
         'GET /api/local/workspaces/workspace-1/files/raw/README.md',
       ])
       expect(data.workspaces.map(workspace => workspace.id)).toEqual(['workspace-1'])
       expect(data.sessions.map(session => session.id)).toEqual(['session-1'])
-      expect(data.artifacts.map(artifact => artifact.id)).toEqual(['artifact-1'])
+      expect(data.artifacts).toEqual([])
       expect(data.profileReadmes['workspace-1']).toBe('# Ada Chen People Profile')
     })
   })

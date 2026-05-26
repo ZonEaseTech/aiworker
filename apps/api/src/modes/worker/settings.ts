@@ -1,7 +1,7 @@
-import type { LocalSettingsConfig } from '@zonease/aiworker-shared'
+import type { LocalEngineReadinessSettings, LocalSettingsConfig } from '@zonease/aiworker-shared'
 import { spawnSync } from 'node:child_process'
 import { localSettingsConfigSchema } from '@zonease/aiworker-shared'
-import { listSettings, setSetting } from '@zonease/aiworker-storage-sqlite/worker'
+import { getSetting, listSettings, setSetting } from '@zonease/aiworker-storage-sqlite/worker'
 
 export const LOCAL_SETTINGS_KEY = 'local-settings'
 
@@ -14,12 +14,61 @@ const ENGINE_COMMANDS = [
   { id: 'qwen', name: 'Qwen Code', command: 'qwen' },
 ] as const
 
+const DEFAULT_CONNECTORS: LocalSettingsConfig['connectors'] = [
+  { enabled: false, id: 'ats', name: 'ATS / HRIS', status: 'not_configured' },
+  { enabled: false, id: 'docs', name: 'Docs workspace', status: 'not_configured' },
+  { enabled: false, id: 'issue-tracker', name: 'Issue tracker', status: 'not_configured' },
+  { enabled: false, id: 'ci', name: 'CI / release evidence', status: 'not_configured' },
+  { enabled: false, id: 'cloud', name: 'Cloud account', status: 'not_configured' },
+  { enabled: false, id: 'crm', name: 'CRM', status: 'not_configured' },
+]
+
 export function loadLocalSettings(): LocalSettingsConfig {
   const row = listSettings().find(setting => setting.key === LOCAL_SETTINGS_KEY)
   const parsed = row ? localSettingsConfigSchema.safeParse(row.valueJson) : null
   if (parsed?.success)
     return normalizePendingMcpSettings(parsed.data)
   return saveLocalSettings(defaultLocalSettings())
+}
+
+export function readLocalEngineSettings(): LocalEngineReadinessSettings {
+  const row = getSetting(LOCAL_SETTINGS_KEY)
+  const parsed = row ? localSettingsConfigSchema.safeParse(row.valueJson) : null
+  if (parsed?.success) {
+    return {
+      byok: {
+        apiKeyRefPresent: parsed.data.byok.apiKeyRef.trim().length > 0,
+        model: parsed.data.byok.model,
+        provider: parsed.data.byok.provider,
+      },
+      engineId: parsed.data.engineId,
+      engines: parsed.data.engines,
+      executionMode: parsed.data.executionMode,
+    }
+  }
+  return {
+    byok: {
+      apiKeyRefPresent: false,
+      model: 'gpt-4o',
+      provider: 'openai-compatible',
+    },
+    engineId: 'codex',
+    engines: [],
+    executionMode: 'byok',
+  }
+}
+
+export function readLocalConnectorSettings(): Pick<LocalSettingsConfig, 'connectors'> {
+  const row = getSetting(LOCAL_SETTINGS_KEY)
+  const parsed = row ? localSettingsConfigSchema.safeParse(row.valueJson) : null
+  if (parsed?.success) {
+    return {
+      connectors: parsed.data.connectors,
+    }
+  }
+  return {
+    connectors: defaultConnectors(),
+  }
 }
 
 export function saveLocalSettings(settings: LocalSettingsConfig): LocalSettingsConfig {
@@ -53,14 +102,7 @@ function defaultLocalSettings(): LocalSettingsConfig {
       model: 'gpt-4o',
       provider: 'openai-compatible',
     },
-    connectors: [
-      { enabled: false, id: 'ats', name: 'ATS / HRIS', status: 'not_configured' },
-      { enabled: false, id: 'docs', name: 'Docs workspace', status: 'not_configured' },
-      { enabled: false, id: 'issue-tracker', name: 'Issue tracker', status: 'not_configured' },
-      { enabled: false, id: 'ci', name: 'CI / release evidence', status: 'not_configured' },
-      { enabled: false, id: 'cloud', name: 'Cloud account', status: 'not_configured' },
-      { enabled: false, id: 'crm', name: 'CRM', status: 'not_configured' },
-    ],
+    connectors: defaultConnectors(),
     engineId: firstInstalled?.id ?? 'codex',
     engines,
     executionMode: firstInstalled ? 'local-cli' : 'byok',
@@ -75,6 +117,10 @@ function defaultLocalSettings(): LocalSettingsConfig {
     },
     updatedAt: new Date().toISOString(),
   }
+}
+
+function defaultConnectors(): LocalSettingsConfig['connectors'] {
+  return DEFAULT_CONNECTORS.map(connector => ({ ...connector }))
 }
 
 export function scanLocalEngines(): LocalSettingsConfig['engines'] {

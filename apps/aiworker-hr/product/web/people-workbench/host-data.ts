@@ -19,6 +19,17 @@ export interface ReadHrWorkbenchHostDataOptions {
   }) | null
 }
 
+interface HrWorkbenchDocumentThemeTarget {
+  documentElement: {
+    classList: {
+      toggle: (token: string, force?: boolean) => boolean | void
+    }
+    style: {
+      colorScheme: string
+    }
+  }
+}
+
 export function normalizeHrWorkbenchHostData(input: NormalizeHrWorkbenchHostDataInput = {}): HrWorkbenchHostData {
   const hostData = isRecord(input.hostData) ? input.hostData : {}
   const query = new URLSearchParams((input.search ?? '').replace(/^\?/, ''))
@@ -37,6 +48,15 @@ export function normalizeHrWorkbenchHostData(input: NormalizeHrWorkbenchHostData
     workerId: normalizedString(hostData.workerId) ?? normalizedString(query.get('workerId')),
     workspaceId: normalizedString(hostData.workspaceId) ?? normalizedString(query.get('workspaceId')),
   }
+}
+
+export function applyHrWorkbenchDocumentTheme(
+  theme: HrWorkbenchTheme,
+  target: HrWorkbenchDocumentThemeTarget = document,
+): HrWorkbenchTheme {
+  target.documentElement.classList.toggle('dark', theme === 'dark')
+  target.documentElement.style.colorScheme = theme
+  return theme
 }
 
 export function readHrWorkbenchHostData(options: ReadHrWorkbenchHostDataOptions = {}): HrWorkbenchHostData {

@@ -47,13 +47,14 @@ export function WorkspaceSessionTree({
             asChild
             variant="muted"
             size="xs"
-            className="min-w-0 cursor-pointer"
+            className="w-full min-w-0 cursor-pointer overflow-hidden text-left"
             data-selected={selectedNodeId === ws.id ? 'true' : undefined}
+            title={ws.label}
             onClick={() => onSelectNode({ id: ws.id, kind: 'workspace', label: ws.label, workspaceId: ws.id })}
           >
             <button type="button">
-              <ItemContent className="min-w-0">
-                <ItemTitle className="truncate text-xs font-semibold uppercase tracking-wide">{ws.label}</ItemTitle>
+              <ItemContent className="w-full min-w-0 overflow-hidden">
+                <ItemTitle className="w-full min-w-0 max-w-full truncate text-xs font-semibold uppercase tracking-wide">{ws.label}</ItemTitle>
               </ItemContent>
             </button>
           </Item>
@@ -63,14 +64,17 @@ export function WorkspaceSessionTree({
               asChild
               variant="default"
               size="xs"
-              className="min-w-0 cursor-pointer pl-4"
+              className="w-full min-w-0 cursor-pointer overflow-hidden pl-4 text-left"
               data-selected={selectedNodeId === session.id ? 'true' : undefined}
+              title={session.label}
               onClick={() => onSelectNode(session)}
             >
               <button type="button">
-                <ItemContent className="min-w-0 gap-0.5">
-                  <ItemTitle className="truncate text-sm">{session.label}</ItemTitle>
-                  {session.detail ? <ItemDescription className="truncate text-xs">{session.detail}</ItemDescription> : null}
+                <ItemContent className="w-full min-w-0 gap-0.5 overflow-hidden">
+                  <ItemTitle className="w-full min-w-0 max-w-full truncate text-sm">{session.label}</ItemTitle>
+                  {session.detail
+                    ? <ItemDescription className="w-full min-w-0 max-w-full truncate text-xs" title={session.detail}>{session.detail}</ItemDescription>
+                    : null}
                 </ItemContent>
               </button>
             </Item>
@@ -79,14 +83,14 @@ export function WorkspaceSessionTree({
             asChild
             variant="muted"
             size="xs"
-            className="min-w-0 cursor-pointer pl-4"
+            className="w-full min-w-0 cursor-pointer overflow-hidden pl-4 text-left"
             onClick={onCreateSession}
           >
             <button type="button">
-              <ItemContent className="min-w-0">
-                <ItemDescription className="flex items-center gap-1 text-xs">
-                  <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
-                  New Session
+              <ItemContent className="w-full min-w-0 overflow-hidden">
+                <ItemDescription className="flex w-full min-w-0 max-w-full items-center gap-1 text-xs">
+                  <HugeiconsIcon className="shrink-0" icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
+                  <span className="min-w-0 truncate">New Session</span>
                 </ItemDescription>
               </ItemContent>
             </button>

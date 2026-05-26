@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-23
+> Updated: 2026-05-25
 
 ## Usage
 
@@ -524,3 +524,12 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**TODO-047 Audit API/CLI/shared Host/Soul boundary leftovers**](TODO-047.md) `P2`
 - [x] [**BUG-151 Universal workbench engine readiness false positive**](BUG-151.md) `P0`
 - [x] [**FEAT-108 Universal workbench explicit session template selection**](FEAT-108.md) `P0`
+- [x] [**BUG-152 Web Claude Code session failure remains running and blocks follow-up**](BUG-152.md) `P1`
+- [x] [**BUG-153 Mounted QA universal workbench misses selected workspace locator**](BUG-153.md) `P2`
+- [x] [**BUG-154 Worker Configuration leaks workspace projection scope**](BUG-154.md) `P2`
+- [x] [**BUG-155 Local settings engines endpoint returns 404**](BUG-155.md) `P2`
+- [x] [**BUG-156 Real E2E P2 regression repair batch**](BUG-156.md) `P2`
+- [x] [**BUG-157 Real E2E P2/P3 repair batch**](BUG-157.md) `P2`
+- [x] [**BUG-158 Real E2E round4 residual repair**](BUG-158.md) `P2`
+- [x] [**BUG-159 Mounted app stylesheet overrides Host dark theme**](BUG-159.md) `P1`
+- [ ] [**BUG-160 Real E2E round5 repair and harness hardening**](BUG-160.md) `P1`

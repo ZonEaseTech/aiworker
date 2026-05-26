@@ -10,6 +10,7 @@ import {
   createSession,
   createWorkspace,
   initWorkerDb,
+  listSettings,
   listWorkerEngineInvocations,
   runWorkerMigrations,
   upsertWorker,
@@ -232,12 +233,78 @@ describe('local daemon API', () => {
     })
     expect(sessionRes.status).toBe(201)
     const sessionBody = await sessionRes.json() as {
-      session: { capabilityTemplateId: string, status: string }
+      session: { capabilityTemplateId: string, endedAt: string | null, status: string }
       turn: { status: string }
     }
     expect(sessionBody.session.capabilityTemplateId).toBe(HR_CANDIDATE_SCREEN)
+    expect(sessionBody.session.status).toBe('completed')
+    expect(sessionBody.session.endedAt).not.toBeNull()
     expect(sessionBody.turn.status).toBe('succeeded')
     expect(sessionBody).not.toHaveProperty('lessons')
+  })
+
+  it('freezes selected engine settings at session creation and keeps continuations immutable', async () => {
+    const target = await app()
+    const hrWorker = await createHrWorker(target)
+    const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Hiring engine workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as { workspace: { id: string } }
+
+    expect(await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ engineId: 'claude-code', executionMode: 'local-cli' }),
+      headers: { 'content-type': 'application/json' },
+    })).toMatchObject({ status: 200 })
+
+    const sessionRes = await target.request(`/api/local/workers/${hrWorker.id}/workspaces/${workspaceBody.workspace.id}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        input: 'Prepare a candidate screen with the selected engine.',
+        title: 'Screen candidate',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(sessionRes.status).toBe(201)
+    const sessionBody = await sessionRes.json() as {
+      invocation: { engineCommand: string | null, engineId: string }
+      session: { id: string, metadataJson: Record<string, unknown> }
+      turn: { metadataJson: Record<string, unknown> }
+    }
+    expect(sessionBody.session.metadataJson).toMatchObject({
+      engineId: 'claude-code',
+      executionMode: 'local-cli',
+    })
+    expect(typeof sessionBody.session.metadataJson.engineCommand).toBe('string')
+    const frozenEngineCommand = sessionBody.session.metadataJson.engineCommand as string
+    expect(sessionBody.invocation.engineCommand).toBe(frozenEngineCommand)
+    expect(sessionBody.invocation.engineId).toBe('claude-code')
+
+    expect(await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ engineId: 'codex', executionMode: 'local-cli' }),
+      headers: { 'content-type': 'application/json' },
+    })).toMatchObject({ status: 200 })
+
+    const continuationRes = await target.request(`/api/local/workers/${hrWorker.id}/sessions/${sessionBody.session.id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ input: 'Continue after changing global engine settings.' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(continuationRes.status).toBe(201)
+    const continuationBody = await continuationRes.json() as {
+      invocation: { engineCommand: string | null, engineId: string }
+      turn: { metadataJson: Record<string, unknown> }
+    }
+    expect(continuationBody.invocation.engineCommand).toBe(frozenEngineCommand)
+    expect(continuationBody.invocation.engineId).toBe('claude-code')
+    expect(continuationBody.turn.metadataJson).toMatchObject({
+      engineId: 'claude-code',
+      executionMode: 'local-cli',
+    })
+    expect(continuationBody.turn.metadataJson.engineCommand).toBe(frozenEngineCommand)
   })
 
   it('saves and reads worker overlay assets through worker-scoped routes', async () => {
@@ -1484,6 +1551,19 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(body.indexOf('event: session')).toBeLessThan(body.indexOf('event: turn'))
     expect(body).toContain('event: session_event')
     expect(body).toContain('event: result')
+
+    const resultFrame = body.split('\n\n').find(frame => frame.startsWith('event: result\n'))
+    if (!resultFrame) {
+      throw new Error(`Expected result SSE frame in body:\n${body}`)
+    }
+    const resultData = resultFrame
+      .split('\n')
+      .filter(line => line.startsWith('data:'))
+      .map(line => line.slice('data:'.length).trimStart())
+      .join('\n')
+    const result = JSON.parse(resultData) as { session: { endedAt: string | null, status: string } }
+    expect(result.session.status).toBe('completed')
+    expect(result.session.endedAt).not.toBeNull()
   })
 
   it('documents the local Host API surface without retired control routes', async () => {
@@ -1527,6 +1607,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(paths).not.toContain('/api/local/lessons')
     expect(paths).not.toContain('/api/local/lessons/{id}')
     expect(paths).toContain('/api/local/workers/{workerId}/sessions/{sessionId}/messages')
+    expect(paths).toContain('/api/local/settings/engines')
     expect(paths).toContain('/api/local/settings/engines/rescan')
     expect(paths.some(path => path.includes('/runs'))).toBe(false)
     expect(paths.some(path => path.startsWith('/api/worker'))).toBe(false)
@@ -1537,11 +1618,26 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
 
     const settingsRes = await target.request('/api/local/settings')
     expect(settingsRes.status).toBe(200)
-    const initial = await settingsRes.json() as { settings: { engineId: string, engines: Array<{ id: string }>, executionMode: string, externalMcpServers: Array<{ enabled: boolean }>, localMcpServer: { enabled: boolean } } }
+    const initial = await settingsRes.json() as { settings: { byok: { apiKeyRef: string, model: string, provider: string }, engineId: string, engines: Array<{ id: string }>, executionMode: string, externalMcpServers: Array<{ enabled: boolean }>, localMcpServer: { enabled: boolean } } }
     expect(['local-cli', 'byok']).toContain(initial.settings.executionMode)
     expect(initial.settings.engines.some(engine => engine.id === 'workspace-template')).toBe(false)
     expect(initial.settings.localMcpServer.enabled).toBe(false)
     expect(initial.settings.externalMcpServers.every(server => !server.enabled)).toBe(true)
+
+    const enginesRes = await target.request('/api/local/settings/engines')
+    expect(enginesRes.status).toBe(200)
+    const enginesBody = await enginesRes.json() as { byok: { apiKeyRef?: string, apiKeyRefPresent: boolean, model: string, provider: string }, engineId: string, engines: Array<{ id: string }>, executionMode: string }
+    expect(Object.keys(enginesBody).sort()).toEqual(['byok', 'engineId', 'engines', 'executionMode'])
+    expect(Object.keys(enginesBody.byok).sort()).toEqual(['apiKeyRefPresent', 'model', 'provider'])
+    expect(enginesBody.byok).not.toHaveProperty('apiKeyRef')
+    expect(enginesBody.byok).toEqual({
+      apiKeyRefPresent: initial.settings.byok.apiKeyRef.trim().length > 0,
+      model: initial.settings.byok.model,
+      provider: initial.settings.byok.provider,
+    })
+    expect(enginesBody.engineId).toBe(initial.settings.engineId)
+    expect(enginesBody.executionMode).toBe(initial.settings.executionMode)
+    expect(enginesBody.engines.map(engine => engine.id)).toEqual(initial.settings.engines.map(engine => engine.id))
 
     const patchRes = await target.request('/api/local/settings', {
       method: 'PATCH',
@@ -1550,6 +1646,22 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     })
     expect(patchRes.status).toBe(200)
     expect((await patchRes.json() as { settings: { language: string } }).settings.language).toBe('zh-CN')
+
+    const byokPatchRes = await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ byok: { apiKeyRef: 'env:OPENAI_API_KEY', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4.1', provider: 'openai-compatible' } }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(byokPatchRes.status).toBe(200)
+    const patchedEnginesRes = await target.request('/api/local/settings/engines')
+    expect(patchedEnginesRes.status).toBe(200)
+    const patchedEnginesBody = await patchedEnginesRes.json() as { byok: { apiKeyRef?: string, apiKeyRefPresent: boolean, model: string, provider: string } }
+    expect(patchedEnginesBody.byok).toEqual({
+      apiKeyRefPresent: true,
+      model: 'gpt-4.1',
+      provider: 'openai-compatible',
+    })
+    expect(patchedEnginesBody.byok).not.toHaveProperty('apiKeyRef')
 
     const mcpPatchRes = await target.request('/api/local/settings', {
       method: 'PATCH',
@@ -1571,6 +1683,25 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
       headers: { 'content-type': 'application/json' },
     })
     expect([200, 404]).toContain(testRes.status)
+  })
+
+  it('returns settings/engines readiness without creating local settings on a fresh DB', async () => {
+    const target = await app()
+    expect(listSettings().some(setting => setting.key === 'local-settings')).toBe(false)
+
+    const enginesRes = await target.request('/api/local/settings/engines')
+    expect(enginesRes.status).toBe(200)
+    const enginesBody = await enginesRes.json() as { byok: { apiKeyRefPresent: boolean, model: string, provider: string }, engineId: string, engines: Array<{ id: string }>, executionMode: string }
+    expect(Object.keys(enginesBody).sort()).toEqual(['byok', 'engineId', 'engines', 'executionMode'])
+    expect(enginesBody.byok).toEqual({
+      apiKeyRefPresent: false,
+      model: 'gpt-4o',
+      provider: 'openai-compatible',
+    })
+    expect(enginesBody.engineId).toBe('codex')
+    expect(enginesBody.engines).toEqual([])
+    expect(enginesBody.executionMode).toBe('byok')
+    expect(listSettings().some(setting => setting.key === 'local-settings')).toBe(false)
   })
 
   it('rejects write routes with missing required fields with 400', async () => {

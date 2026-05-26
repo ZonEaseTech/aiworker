@@ -230,16 +230,13 @@ function ProfilePatchStrip({
   const changedSectionCount = revisionReview?.status && revisionReview.status !== 'empty'
     ? revisionReview.changedSectionCount
     : reviewCount
+  const profilePatchReviewDescription = `${labels.profilePatchChangedSections(changedSectionCount)} · ${labels.profilePatchStripDetail('Person Profile')}`
 
   return (
     <Item variant="muted" size="sm">
       <ItemContent className="min-w-0">
         <ItemTitle>{labels.profilePatchReadyTitle}</ItemTitle>
-        <ItemDescription>
-          {labels.profilePatchChangedSections(changedSectionCount)}
-          {' · '}
-          {labels.profilePatchStripDetail('Person Profile')}
-        </ItemDescription>
+        <ItemDescription>{profilePatchReviewDescription}</ItemDescription>
       </ItemContent>
       <ItemActions>
         {reviewCount > 0 ? <Badge variant="secondary">{labels.sourceCards(0, 0, reviewCount)[2]?.count ?? reviewCount}</Badge> : null}
