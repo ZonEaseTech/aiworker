@@ -71,7 +71,7 @@ export const sessions = sqliteTable(
     capabilityTemplateId: text('capability_template_id').notNull(),
     title: text('title').notNull(),
     context: text('context').notNull().default(''),
-    status: text('status', { enum: ['active', 'completed', 'failed', 'cancelled'] }).notNull().default('active'),
+    status: text('status', { enum: ['active', 'archived', 'deleted'] }).notNull().default('active'),
     metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
     startedAt: text('started_at'),
     endedAt: text('ended_at'),
@@ -112,7 +112,7 @@ export const engineInvocations = sqliteTable(
   {
     id: text('id').primaryKey(),
     sessionId: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
-    turnId: text('turn_id').notNull().references(() => turns.id, { onDelete: 'cascade' }),
+    turnId: text('turn_id').references(() => turns.id, { onDelete: 'set null' }),
     seq: integer('seq').notNull(),
     engineId: text('engine_id').notNull(),
     engineCommand: text('engine_command'),

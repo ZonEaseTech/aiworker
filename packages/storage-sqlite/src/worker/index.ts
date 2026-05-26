@@ -189,7 +189,7 @@ export interface UpdateTurnInput {
 export interface CreateEngineInvocationInput {
   id: string
   sessionId: string
-  turnId: string
+  turnId?: string | null
   seq: number
   engineId: string
   engineCommand?: string | null
@@ -566,7 +566,7 @@ export function createEngineInvocation(input: CreateEngineInvocationInput): Engi
   getWorkerDb().insert(schema.engineInvocations).values({
     id: input.id,
     sessionId: input.sessionId,
-    turnId: input.turnId,
+    turnId: input.turnId ?? null,
     seq: input.seq,
     engineId: input.engineId,
     engineCommand: input.engineCommand ?? null,

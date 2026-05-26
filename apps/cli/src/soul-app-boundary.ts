@@ -14,10 +14,10 @@ export interface WebStorageIssue {
 }
 
 export const HOST_PRIVATE_IMPORT_PREFIXES = [
-  '@zonease/aiworker-api',
   '@zonease/aiworker-cli',
   '@zonease/aiworker-core',
   '@zonease/aiworker-fs-layout',
+  '@zonease/aiworker-host-daemon',
   '@zonease/aiworker-shared',
   '@zonease/aiworker-storage-sqlite',
   '@zonease/aiworker-web',
@@ -151,11 +151,11 @@ function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean 
   if (!importPath.startsWith('@')) {
     const normalized = normalizedImport(importPath)
     if ([
-      'apps/api',
       'apps/cli',
       'apps/web',
       'packages/core',
       'packages/fs-layout',
+      'packages/host-daemon',
       'packages/shared',
       'packages/storage-sqlite',
     ].some(root => normalized.includes(`${root}/`))) {

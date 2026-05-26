@@ -31,6 +31,7 @@ import {
 import {
   closeWorkerDb,
   createWorkerEngineInvocation,
+  getEngineInvocation,
   getSession,
   getWorker,
   getWorkspace,
@@ -43,6 +44,7 @@ import {
   listWorkspaces,
   nextWorkerEngineInvocationSeq,
   runWorkerMigrations,
+  updateEngineInvocation,
   updateSession,
   updateWorkspace,
   upsertWorker,
@@ -53,17 +55,23 @@ import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
 import { registerLocalOpenApiPaths } from './worker/openapi'
 import {
+  createBrokerEngineInvocationBodySchema,
+  createBrokerSessionBodySchema,
   createSessionBodySchema,
   createSessionMessageBodySchema,
   createWorkerBodySchema,
   createWorkspaceBodySchema,
+  createWorkspaceLocatorBodySchema,
   installAppBodySchema,
   nativeEngineInvocationBodySchema,
   parseJsonBody,
+  patchSessionBodySchema,
   patchSettingsBodySchema,
   patchWorkerBodySchema,
   patchWorkspaceBodySchema,
+  projectionRefreshBodySchema,
   testEngineBodySchema,
+  workerConfigValueBodySchema,
 } from './worker/schemas'
 import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
 import { serveWorkerWeb, serveWorkerWebAsset } from './worker/web-static'
@@ -184,7 +192,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const app = new OpenAPIHono()
   app.use(requestLogger)
   app.onError(errorHandler)
-  app.use('/api/local/*', async (c, next) => {
+  app.use('/api/*', async (c, next) => {
     if (authenticateMountedBrokerRequest(c, state))
       return next()
     const result = state.authProvider.authenticate({ authorization: c.req.header('authorization') })
@@ -253,9 +261,61 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
     return mountedSurfaceResponse(c, state, app, c.req.param('surfaceId'))
   })
+  app.get('/api/app-installation/apps', c => c.json({ apps: state.host.listApps() }))
+  app.post('/api/app-installation/install', async (c) => {
+    const result = await parseJsonBody(c, installAppBodySchema, 'INSTALL_APP_INVALID')
+    if (!result.ok)
+      return result.response
+    const { manifest, manifestPath } = result.data
+    const app = typeof manifestPath === 'string' && manifestPath.trim()
+      ? await state.host.installAppFromPath(manifestPath)
+      : state.host.installAppManifest({
+          manifest,
+          sourceKind: 'inline',
+          sourceRef: 'api:inline',
+        })
+    return c.json({ app, catalog: state.host.listCatalog() }, 201)
+  })
+  app.get('/api/app-installation/apps/:appId', (c) => {
+    const app = state.host.getApp(c.req.param('appId'))
+    if (!app)
+      return notFound(c, 'Soul App')
+    return c.json({ app })
+  })
+  app.post('/api/app-installation/apps/:appId/enable', (c) => {
+    const app = state.host.enableApp(c.req.param('appId'))
+    return c.json({ app, catalog: state.host.listCatalog() })
+  })
+  app.post('/api/app-installation/apps/:appId/archive', (c) => {
+    const appId = c.req.param('appId')
+    const app = state.host.disableApp(appId)
+    stopMountedSoulAppService(state, appId)
+    return c.json({ app, catalog: state.host.listCatalog() })
+  })
+  app.delete('/api/app-installation/apps/:appId', (c) => {
+    const appId = c.req.param('appId')
+    const app = state.host.disableApp(appId)
+    stopMountedSoulAppService(state, appId)
+    return c.json({ app, catalog: state.host.listCatalog() })
+  })
 
   app.get('/api/local/workers', c => c.json({ workers: listWorkers() }))
   app.post('/api/local/workers', async (c) => {
+    const result = await parseJsonBody(c, createWorkerBodySchema, 'CREATE_WORKER_INVALID')
+    if (!result.ok)
+      return result.response
+    const created = await state.host.createSoulWorker({
+      defaultEngineId: result.data.defaultEngineId,
+      id: result.data.id,
+      metadata: result.data.metadata,
+      name: result.data.name,
+      soulId: result.data.soulId,
+    })
+    state.runtimes.set(created.worker.id, created.runtime)
+    return c.json({ worker: created.worker, snapshot: created.snapshot }, 201)
+  })
+  app.get('/api/workers', c => c.json({ workers: listWorkers() }))
+  app.post('/api/workers', async (c) => {
     const result = await parseJsonBody(c, createWorkerBodySchema, 'CREATE_WORKER_INVALID')
     if (!result.ok)
       return result.response
@@ -294,6 +354,75 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     await runtime.init()
     state.runtimes.set(worker.id, runtime)
     return c.json({ worker, snapshot: runtime.snapshot() })
+  })
+  app.get('/api/workers/:workerId', (c) => {
+    const worker = getWorker(c.req.param('workerId'))
+    if (!worker)
+      return notFound(c, 'worker')
+    return c.json({ worker, snapshot: requireRuntime(state, worker.id).snapshot() })
+  })
+  app.patch('/api/workers/:workerId', async (c) => {
+    const existing = getWorker(c.req.param('workerId'))
+    if (!existing)
+      return notFound(c, 'worker')
+    const result = await parseJsonBody(c, patchWorkerBodySchema, 'PATCH_WORKER_INVALID')
+    if (!result.ok)
+      return result.response
+    const worker = upsertWorker({
+      id: existing.id,
+      soulId: existing.soulId,
+      name: result.data.name ?? existing.name,
+      status: result.data.status ?? existing.status,
+      defaultEngineId: result.data.defaultEngineId ?? existing.defaultEngineId,
+      metadataJson: result.data.metadata ?? existing.metadataJson,
+    })
+    const runtime = state.host.createRuntimeForWorker(worker)
+    await runtime.init()
+    state.runtimes.set(worker.id, runtime)
+    return c.json({ worker, snapshot: runtime.snapshot() })
+  })
+  app.post('/api/workers/:workerId/archive', async (c) => {
+    const existing = getWorker(c.req.param('workerId'))
+    if (!existing)
+      return notFound(c, 'worker')
+    const worker = upsertWorker({
+      id: existing.id,
+      soulId: existing.soulId,
+      name: existing.name,
+      status: 'disabled',
+      defaultEngineId: existing.defaultEngineId,
+      metadataJson: existing.metadataJson,
+    })
+    state.runtimes.delete(worker.id)
+    return c.json({ worker })
+  })
+  app.delete('/api/workers/:workerId', async (c) => {
+    const existing = getWorker(c.req.param('workerId'))
+    if (!existing)
+      return notFound(c, 'worker')
+    const worker = upsertWorker({
+      id: existing.id,
+      soulId: existing.soulId,
+      name: existing.name,
+      status: 'disabled',
+      defaultEngineId: existing.defaultEngineId,
+      metadataJson: existing.metadataJson,
+    })
+    state.runtimes.delete(worker.id)
+    return c.json({ worker })
+  })
+  app.get('/api/workers/:workerId/config', async (c) => {
+    const worker = requireWorker(c.req.param('workerId'))
+    return c.json({ config: await workerOverlayResponse(state, worker.id), workerId: worker.id })
+  })
+  app.put('/api/workers/:workerId/config/:configKey', async (c) => {
+    return workerConfigMutationResponse(c, state, false)
+  })
+  app.patch('/api/workers/:workerId/config/:configKey', async (c) => {
+    return workerConfigMutationResponse(c, state, false)
+  })
+  app.post('/api/workers/:workerId/config/:configKey/archive', async (c) => {
+    return workerConfigMutationResponse(c, state, true)
   })
   app.get('/api/local/workers/:workerId/overlay', async (c) => {
     const worker = requireWorker(c.req.param('workerId'))
@@ -360,6 +489,41 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
 
   app.get('/api/local/workspaces', c => c.json({ workspaces: listWorkspaces() }))
+  app.get('/api/workspace-locators', c => c.json({ workspaces: listWorkspaces() }))
+  app.post('/api/workspace-locators', async (c) => {
+    const result = await parseJsonBody(c, createWorkspaceLocatorBodySchema, 'CREATE_WORKSPACE_LOCATOR_INVALID')
+    if (!result.ok)
+      return result.response
+    const runtime = requireRuntime(state, result.data.workerId)
+    const workspace = await runtime.createWorkspace({
+      name: result.data.name,
+      type: result.data.type ?? 'workspace',
+      sourcePointers: result.data.sourcePointers ?? [],
+      metadata: {
+        ...(result.data.metadata ?? {}),
+        requestedRootPath: result.data.rootPath,
+      },
+    })
+    return c.json({ workspace }, 201)
+  })
+  app.get('/api/workspace-locators/:workspaceId', (c) => {
+    const workspace = getWorkspace(c.req.param('workspaceId'))
+    if (!workspace)
+      return notFound(c, 'workspace')
+    return c.json({ workspace })
+  })
+  app.patch('/api/workspace-locators/:workspaceId', async (c) => {
+    const result = await parseJsonBody(c, patchWorkspaceBodySchema, 'PATCH_WORKSPACE_LOCATOR_INVALID')
+    if (!result.ok)
+      return result.response
+    return c.json({ workspace: updateWorkspace({ id: c.req.param('workspaceId'), ...result.data }) })
+  })
+  app.post('/api/workspace-locators/:workspaceId/archive', (c) => {
+    return c.json({ workspace: updateWorkspace({ id: c.req.param('workspaceId'), status: 'archived' }) })
+  })
+  app.delete('/api/workspace-locators/:workspaceId', (c) => {
+    return c.json({ workspace: updateWorkspace({ id: c.req.param('workspaceId'), status: 'archived' }) })
+  })
   app.get('/api/local/workers/:workerId/workspaces', (c) => {
     const workerId = c.req.param('workerId')
     requireRuntime(state, workerId)
@@ -412,6 +576,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ workspace: updateWorkspace({ id: c.req.param('workspaceId'), ...result.data }) })
   })
   app.get('/api/local/sessions', c => c.json({ sessions: listSessions() }))
+  app.get('/api/sessions', c => c.json({ sessions: listSessions() }))
   app.get('/api/local/turns', c => c.json({ turns: listTurns() }))
   app.get('/api/local/workers/:workerId/workspaces/:workspaceId/sessions', (c) => {
     const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
@@ -437,11 +602,45 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const workspace = requireWorkspace(c.req.param('workspaceId'))
     return createWorkspaceSessionResponse(c, state, workspace, true)
   })
+  app.post('/api/sessions', async (c) => {
+    const result = await parseJsonBody(c, createBrokerSessionBodySchema, 'CREATE_SESSION_INVALID')
+    if (!result.ok)
+      return result.response
+    const workspace = requireWorkerWorkspace(result.data.workerId, result.data.workspaceId)
+    return createWorkspaceSessionFromBody(c, state, workspace, result.data, false)
+  })
   app.get('/api/local/sessions/:sessionId', (c) => {
     const session = getSession(c.req.param('sessionId'))
     if (!session)
       return notFound(c, 'session')
     return c.json({ session, turns: listTurns(session.id), events: listSessionEvents(session.id) })
+  })
+  app.get('/api/sessions/:sessionId', (c) => {
+    const session = getSession(c.req.param('sessionId'))
+    if (!session)
+      return notFound(c, 'session')
+    return c.json({ session, events: listSessionEvents(session.id) })
+  })
+  app.patch('/api/sessions/:sessionId', async (c) => {
+    const session = requireSession(c.req.param('sessionId'))
+    const result = await parseJsonBody(c, patchSessionBodySchema, 'PATCH_SESSION_INVALID')
+    if (!result.ok)
+      return result.response
+    return c.json({ session: updateSession({
+      id: session.id,
+      context: result.data.context,
+      metadataJson: result.data.metadata ? { ...(session.metadataJson ?? {}), ...result.data.metadata } : undefined,
+      status: result.data.status,
+      title: result.data.title,
+    }) })
+  })
+  app.post('/api/sessions/:sessionId/archive', (c) => {
+    const session = requireSession(c.req.param('sessionId'))
+    return c.json({ session: updateSession({ id: session.id, status: 'archived' }) })
+  })
+  app.delete('/api/sessions/:sessionId', (c) => {
+    const session = requireSession(c.req.param('sessionId'))
+    return c.json({ session: updateSession({ id: session.id, status: 'deleted' }) })
   })
   app.get('/api/local/workers/:workerId/sessions/:sessionId', (c) => {
     const session = requireWorkerSession(c.req.param('workerId'), c.req.param('sessionId'))
@@ -482,6 +681,83 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.post('/api/local/sessions/:sessionId/turns', async (c) => {
     const session = requireSession(c.req.param('sessionId'))
     return createSessionMessageResponse(c, state, session, false)
+  })
+  app.post('/api/sessions/:sessionId/invocations', async (c) => {
+    const session = requireSession(c.req.param('sessionId'))
+    return createSessionInvocationResponse(c, state, session)
+  })
+
+  app.post('/api/engine/invocations', async (c) => {
+    const result = await parseJsonBody(c, createBrokerEngineInvocationBodySchema, 'CREATE_ENGINE_INVOCATION_INVALID')
+    if (!result.ok)
+      return result.response
+    const session = requireSession(result.data.sessionId)
+    return createSessionInvocationFromBody(c, state, session, result.data)
+  })
+  app.get('/api/engine/invocations/:invocationId', (c) => {
+    const invocation = getEngineInvocation(c.req.param('invocationId'))
+    if (!invocation)
+      return notFound(c, 'engine invocation')
+    return c.json({ invocation })
+  })
+  app.get('/api/engine/invocations/:invocationId/events', (c) => {
+    const invocation = getEngineInvocation(c.req.param('invocationId'))
+    if (!invocation)
+      return notFound(c, 'engine invocation')
+    const events = listSessionEvents(invocation.sessionId).filter(event => event.invocationId === invocation.id)
+    return c.json({ events, invocationId: invocation.id })
+  })
+  app.post('/api/engine/invocations/:invocationId/cancel', (c) => {
+    const invocation = getEngineInvocation(c.req.param('invocationId'))
+    if (!invocation)
+      return notFound(c, 'engine invocation')
+    if (invocation.status !== 'queued' && invocation.status !== 'running')
+      return c.json({ invocation })
+    return c.json({ invocation: updateEngineInvocation({
+      id: invocation.id,
+      finishedAt: new Date().toISOString(),
+      status: 'cancelled',
+    }) })
+  })
+
+  app.get('/api/engine/targets', (c) => {
+    const settings = readLocalEngineSettings()
+    return c.json(settings)
+  })
+  app.get('/api/engine/targets/:target/readiness', (c) => {
+    const settings = readLocalEngineSettings()
+    const target = settings.engines.find(engine => engine.id === c.req.param('target'))
+    if (!target)
+      return c.json({ error: { code: 'ENGINE_TARGET_NOT_FOUND', message: 'Engine target not found.' } }, 404)
+    return c.json({ target })
+  })
+
+  app.post('/api/projections/:target/refresh', async (c) => {
+    const result = await parseJsonBody(c, projectionRefreshBodySchema, 'REFRESH_PROJECTION_INVALID')
+    if (!result.ok)
+      return result.response
+    const workspace = requireWorkerWorkspace(result.data.workerId, result.data.workspaceId)
+    const projection = await requireRuntime(state, workspace.workerId).reprojectWorkspaceAssets(workspace.id)
+    return c.json({ projection, target: c.req.param('target') })
+  })
+  app.get('/api/projections/receipts/:receiptId', (c) => {
+    return c.json({ receipt: null, receiptId: c.req.param('receiptId'), status: 'not_found' })
+  })
+  app.post('/api/projections/receipts/:receiptId/cleanup', (c) => {
+    return c.json({ cleaned: false, receiptId: c.req.param('receiptId'), status: 'not_found' })
+  })
+
+  app.get('/api/mount/workbench', async (c) => {
+    const appId = c.req.query('appId')
+    const surfaceId = c.req.query('surfaceId')
+    if (!appId || !surfaceId)
+      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: 'appId and surfaceId are required until descriptor workbench resolution lands.' } }, 400)
+    const app = state.host.getApp(appId)
+    if (!app)
+      return notFound(c, 'Soul App')
+    if (app.status !== 'enabled')
+      return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
+    return mountedSurfaceResponse(c, state, app, surfaceId)
   })
 
   app.get('/api/local/settings', (c) => {
@@ -537,6 +813,14 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
     return proxyMountedSoulAppApi(c, state, app)
   })
+  app.all('/api/apps/:appId/:path{.+}', (c) => {
+    const app = state.host.getApp(c.req.param('appId'))
+    if (!app)
+      return notFound(c, 'Soul App')
+    if (app.status !== 'enabled')
+      return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
+    return proxyMountedSoulAppApi(c, state, app)
+  })
 
   registerLocalOpenApiPaths(app)
   app.doc('/openapi.json', {
@@ -584,8 +868,8 @@ export function localApiExposureWarning(host: string, token: string | null | und
   if (token)
     return null
   if (isLoopbackHost(host))
-    return `[aiworker-daemon] 未配置 AIWORKER_LOCAL_TOKEN:/api/local/* 以本机匿名身份开放,请确保仅绑定 loopback。`
-  return `[aiworker-daemon] AIWORKER_LOCAL_TOKEN 未配置且绑定到非 loopback 地址 ${host}:/api/local/* 将以匿名身份暴露,请配置 token 或改绑 127.0.0.1。`
+    return `[aiworker-daemon] 未配置 AIWORKER_LOCAL_TOKEN:/api/* 以本机匿名身份开放,请确保仅绑定 loopback。`
+  return `[aiworker-daemon] AIWORKER_LOCAL_TOKEN 未配置且绑定到非 loopback 地址 ${host}:/api/* 将以匿名身份暴露,请配置 token 或改绑 127.0.0.1。`
 }
 
 function authenticateMountedBrokerRequest(c: Context, state: LocalDaemonState): boolean {
@@ -600,7 +884,7 @@ function authenticateMountedBrokerRequest(c: Context, state: LocalDaemonState): 
 }
 
 function brokerAppIdFromPath(pathname: string): string | null {
-  const match = /^\/api\/local\/apps\/([^/]+)\/broker(?:\/|$)/.exec(pathname)
+  const match = /^\/api\/(?:local\/)?apps\/([^/]+)\/broker(?:\/|$)/.exec(pathname)
   if (!match?.[1])
     return null
   try {
@@ -654,6 +938,46 @@ async function workerOverlayResponse(state: LocalDaemonState, workerId: string) 
     }
   }
   return { assets: merged, workerId }
+}
+
+async function workerConfigMutationResponse(c: Context, _state: LocalDaemonState, archived: boolean): Promise<Response> {
+  const worker = requireWorker(String(c.req.param('workerId') ?? ''))
+  const configKey = String(c.req.param('configKey') ?? '')
+  const updatedAt = new Date().toISOString()
+  if (archived) {
+    return c.json({
+      config: {
+        archived: true,
+        configKey,
+        updatedAt,
+        value: null,
+        workerId: worker.id,
+      },
+    })
+  }
+
+  const result = await parseJsonBody(c, workerConfigValueBodySchema, 'WORKER_CONFIG_VALUE_INVALID')
+  if (!result.ok)
+    return result.response
+  const serialized = JSON.stringify(result.data)
+  if (containsLiteralSecret(serialized)) {
+    return c.json({
+      error: {
+        code: 'WORKER_CONFIG_SECRET',
+        message: 'literal secrets are not allowed in Host worker config descriptors',
+      },
+    }, 422)
+  }
+
+  return c.json({
+    config: {
+      archived: false,
+      configKey,
+      updatedAt,
+      value: result.data,
+      workerId: worker.id,
+    },
+  })
 }
 
 function containsLiteralSecret(content: string): boolean {
@@ -746,7 +1070,7 @@ async function mountedSurfaceResponse(c: Context, state: LocalDaemonState, app: 
       microApp: {
         data: mountedMicroAppData(c, state, app, service, contribution),
         name: `${app.appId}--${contribution.id}`,
-        url: `/api/local/apps/${app.appId}${contribution.surface.entry}${sourceUrl.search}`,
+        url: `${appOwnedApiRoutePrefix(app)}${contribution.surface.entry}${sourceUrl.search}`,
       },
       surface: publicMountedSurfaceContribution(contribution),
     })
@@ -847,7 +1171,7 @@ async function proxyMountedSoulAppApi(c: Context, state: LocalDaemonState, app: 
           ? `Mounted Soul App service timed out after ${MOUNTED_PROXY_TIMEOUT_MS}ms.`
           : error instanceof Error ? error.message : String(error),
       },
-      routePrefix: app.mountedContribution.apiRoutePrefix,
+      routePrefix: appOwnedApiRoutePrefix(app),
     }, aborted ? 504 : 502)
   }
   finally {
@@ -866,6 +1190,10 @@ function mountedProxyHeaders(source: Headers): Headers {
   return headers
 }
 
+function appOwnedApiRoutePrefix(app: HostedSoulApp): string {
+  return `/api/apps/${app.appId}`
+}
+
 async function mountedSoulAppServiceOrResponse(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | Response> {
   try {
     const service = await resolveMountedSoulAppService(state, app)
@@ -882,7 +1210,7 @@ function mountedServiceError(c: Context, app: HostedSoulApp, code: string, messa
   const responseStatus = status === 424 ? 424 : status === 504 ? 504 : 502
   return c.json({
     error: { code, message },
-    routePrefix: app.mountedContribution.apiRoutePrefix,
+    routePrefix: appOwnedApiRoutePrefix(app),
   }, responseStatus)
 }
 
@@ -906,7 +1234,7 @@ function applyMountedProxyContextHeaders(
     operatorId,
     permissions: app.manifest.permissions,
     reviewId: c.req.query('reviewId') ?? null,
-    routePrefix: app.mountedContribution.apiRoutePrefix,
+    routePrefix: appOwnedApiRoutePrefix(app),
     sessionId: c.req.query('sessionId') ?? null,
     surface: contribution ? publicMountedSurfaceContribution(contribution) : null,
     workerId: c.req.query('workerId') ?? null,
@@ -919,7 +1247,7 @@ function applyMountedProxyContextHeaders(
   headers.set('x-aiworker-mount-context', payload)
   headers.set('x-aiworker-mount-signature', signature)
   headers.set('x-aiworker-mount-token', service.mountToken)
-  headers.set('x-aiworker-route-prefix', app.mountedContribution.apiRoutePrefix ?? '')
+  headers.set('x-aiworker-route-prefix', appOwnedApiRoutePrefix(app))
 }
 
 function requestIdentity(c: Context): HostIdentity | null {
@@ -967,7 +1295,7 @@ function mountedMicroAppData(
     expiresAt: mountContextExpiry(state),
     mountTokenPresent: Boolean(service.mountToken),
     reviewId: c.req.query('reviewId') ?? null,
-    routePrefix: app.mountedContribution.apiRoutePrefix,
+    routePrefix: appOwnedApiRoutePrefix(app),
     sessionId: c.req.query('sessionId') ?? null,
     surfaceId: contribution.id,
     surfaceKind: contribution.kind,
@@ -1328,11 +1656,27 @@ function streamNativeEngineInvocation(prepared: PreparedNativeEngineInvocation):
 }
 
 async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonState, workspace: WorkspaceRow, stream: boolean): Promise<Response> {
-  const runtime = requireRuntime(state, workspace.workerId)
   const result = await parseJsonBody(c, createSessionBodySchema, 'CREATE_SESSION_INVALID')
   if (!result.ok)
     return result.response
-  const body = result.data
+  return createWorkspaceSessionFromBody(c, state, workspace, result.data, stream)
+}
+
+async function createWorkspaceSessionFromBody(
+  c: Context,
+  state: LocalDaemonState,
+  workspace: WorkspaceRow,
+  body: {
+    capabilityTemplateId?: string
+    context?: string
+    engineId?: null | string
+    input?: string
+    metadata?: Record<string, unknown>
+    title: string
+  },
+  stream: boolean,
+): Promise<Response> {
+  const runtime = requireRuntime(state, workspace.workerId)
   const template = requireTemplateForWorker(state, workspace.workerId, body.capabilityTemplateId)
   const settings = loadLocalSettings()
   const execution = resolvedExecutionMetadata(settings, body.engineId)
@@ -1391,6 +1735,68 @@ async function createSessionMessageResponse(c: Context, state: LocalDaemonState,
   if (stream)
     return streamSessionTurn(runtime, currentSession, turnInput)
   return c.json(await runtime.startTurn({ ...turnInput, sessionId: currentSession.id }), 201)
+}
+
+async function createSessionInvocationResponse(c: Context, state: LocalDaemonState, session: SessionRow): Promise<Response> {
+  const result = await parseJsonBody(c, createSessionMessageBodySchema, 'CREATE_SESSION_INVOCATION_INVALID')
+  if (!result.ok)
+    return result.response
+  return createSessionInvocationFromBody(c, state, session, result.data)
+}
+
+async function createSessionInvocationFromBody(
+  c: Context,
+  state: LocalDaemonState,
+  session: SessionRow,
+  body: {
+    engineCommand?: null | string
+    engineId?: null | string
+    input: string
+    metadata?: Record<string, unknown>
+  },
+): Promise<Response> {
+  const runtime = requireRuntime(state, session.workerId)
+  const settings = loadLocalSettings()
+  const engineCommand = typeof body.engineCommand === 'string' && body.engineCommand.trim().length > 0 ? body.engineCommand.trim() : null
+  const execution = engineCommand
+    ? {
+        byok: settings.byok,
+        engineCommand,
+        engineId: body.engineId?.trim() || (settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider),
+        engineName: null,
+        executionMode: 'local-cli',
+      }
+    : body.engineId
+      ? resolvedExecutionMetadata(settings, body.engineId)
+      : sessionExecutionMetadata(session, settings)
+  const currentSession = session.metadataJson?.executionMode === 'local-cli'
+    && typeof session.metadataJson?.engineCommand !== 'string'
+    && typeof execution.engineCommand === 'string'
+    ? updateSession({
+        id: session.id,
+        metadataJson: {
+          ...(session.metadataJson ?? {}),
+          ...execution,
+        },
+      })
+    : session
+  const turnInput = {
+    engineCommand: typeof execution.engineCommand === 'string' ? execution.engineCommand : null,
+    engineId: String(execution.engineId),
+    input: body.input,
+    metadata: {
+      ...enrichTemplateMetadata(state, currentSession.workerId, currentSession.capabilityTemplateId, currentSession.metadataJson ?? {}),
+      ...(body.metadata ?? {}),
+      ...execution,
+    },
+  }
+  const invocationResult = await runtime.startInvocation({ ...turnInput, sessionId: currentSession.id })
+  return c.json({
+    events: invocationResult.events,
+    files: invocationResult.files,
+    invocation: invocationResult.invocation,
+    session: invocationResult.session,
+  }, 201)
 }
 
 function streamSessionTurn(

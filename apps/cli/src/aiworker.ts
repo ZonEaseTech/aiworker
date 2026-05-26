@@ -721,7 +721,7 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
   if (updateNotice) {
     consola.info(`[aiworker-daemon] update available: ${updateNotice.currentVersion} -> ${updateNotice.targetVersion}; run ${updateNotice.command}`)
   }
-  const { bootstrapWorkerApp, localApiExposureWarning } = await import('@zonease/aiworker-api/bootstrap')
+  const { bootstrapWorkerApp, localApiExposureWarning } = await import('@zonease/aiworker-host-daemon/bootstrap')
   const { app, port } = await bootstrapWorkerApp({
     officialAppsRoot: resolveCliOfficialAppsRoot(),
     runtimeVersion: packageJson.version,

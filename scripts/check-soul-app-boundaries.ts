@@ -19,20 +19,20 @@ const repoRoot = process.cwd()
 const appRoot = path.join(repoRoot, 'apps')
 const completionAudit = process.argv.includes('--completion-audit')
 const hostPrivatePackages = [
-  '@zonease/aiworker-api',
   '@zonease/aiworker-cli',
   '@zonease/aiworker-core',
   '@zonease/aiworker-fs-layout',
+  '@zonease/aiworker-host-daemon',
   '@zonease/aiworker-shared',
   '@zonease/aiworker-storage-sqlite',
   '@zonease/aiworker-web',
 ]
 const hostPrivateRoots = [
-  'apps/api',
   'apps/cli',
   'apps/web',
   'packages/core',
   'packages/fs-layout',
+  'packages/host-daemon',
   'packages/shared',
   'packages/storage-sqlite',
 ]
@@ -141,7 +141,6 @@ function scanSoulAppImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
 
 function scanHostImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
   const hostRoots = [
-    path.join(repoRoot, 'apps/api'),
     path.join(repoRoot, 'apps/cli'),
     path.join(repoRoot, 'apps/web'),
     path.join(repoRoot, 'packages'),

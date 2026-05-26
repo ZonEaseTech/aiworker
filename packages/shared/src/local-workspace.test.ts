@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 
 import {
   localComposerMentionSchema,
+  localEngineInvocationSchema,
   localWorkerOverlayAssetSchema,
   localWorkerOverlaySaveSchema,
   localWorkerOverlaySchema,
@@ -123,5 +124,27 @@ describe('local worker overlay schema', () => {
     })
 
     expect(parsed.range).toEqual({ end: 16, start: 0 })
+  })
+
+  it('accepts session-level engine invocations without turn rows', () => {
+    const parsed = localEngineInvocationSchema.parse({
+      id: 'invocation-1',
+      sessionId: 'session-1',
+      turnId: null,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      status: 'succeeded',
+      prompt: 'Invocation request',
+      summary: 'done',
+      error: null,
+      metadataJson: {},
+      startedAt: '2026-05-21T00:00:00.000Z',
+      finishedAt: '2026-05-21T00:00:01.000Z',
+      createdAt: '2026-05-21T00:00:00.000Z',
+      updatedAt: '2026-05-21T00:00:01.000Z',
+    })
+
+    expect(parsed.turnId).toBeNull()
   })
 })

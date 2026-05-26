@@ -34,6 +34,7 @@ import {
   listWorkerOverlayAssets,
   listWorkers,
   listWorkspaces,
+  nextEngineInvocationSeq,
   nextWorkerEngineInvocationSeq,
   runWorkerMigrations,
   sessionEvents,
@@ -299,6 +300,58 @@ describe('greenfield local worker session schema', () => {
     })
     expect(listFiles(workspace.id)).toEqual([file])
     expect(setSetting('engine.default', { engine: 'codex' }).valueJson).toEqual({ engine: 'codex' })
+  })
+
+  it('persists session-level engine invocations without turn execution rows', () => {
+    const worker = upsertWorker({
+      id: 'worker-invocation-only',
+      soulId: 'freeform',
+      name: 'Freeform',
+      defaultEngineId: 'codex',
+      at: '2026-05-27T01:00:00.000Z',
+    })
+    const workspace = createWorkspace({
+      id: 'workspace-invocation-only',
+      workerId: worker.id,
+      name: 'Invocation workspace',
+      rootPath: '/tmp/invocation-only',
+      at: '2026-05-27T01:01:00.000Z',
+    })
+    const session = createSession({
+      id: 'session-invocation-only',
+      workerId: worker.id,
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'default',
+      title: 'Invocation-only session',
+      at: '2026-05-27T01:02:00.000Z',
+    })
+
+    const invocation = createEngineInvocation({
+      id: 'invocation-only-1',
+      sessionId: session.id,
+      seq: nextEngineInvocationSeq(session.id),
+      engineId: 'codex',
+      engineCommand: 'codex',
+      prompt: 'Run the session invocation.',
+      status: 'running',
+      at: '2026-05-27T01:03:00.000Z',
+    })
+    appendSessionEvent({
+      sessionId: session.id,
+      invocationId: invocation.id,
+      seq: 1,
+      type: 'status',
+      payloadJson: { invocationId: invocation.id, status: 'running' },
+      at: '2026-05-27T01:03:01.000Z',
+    })
+
+    expect(invocation.turnId).toBeNull()
+    expect(listTurns(session.id)).toEqual([])
+    expect(listEngineInvocations(session.id)).toEqual([invocation])
+    expect(listSessionEvents(session.id)[0]).toMatchObject({
+      invocationId: invocation.id,
+      turnId: null,
+    })
   })
 
   it('filters session events by id in SQL before applying the limit so long sessions keep streaming', () => {

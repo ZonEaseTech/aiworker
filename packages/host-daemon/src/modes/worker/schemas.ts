@@ -79,6 +79,11 @@ export const createWorkspaceBodySchema = z.object({
   type: z.string().optional(),
 })
 
+export const createWorkspaceLocatorBodySchema = createWorkspaceBodySchema.extend({
+  rootPath: z.string().trim().min(1),
+  workerId: z.string().trim().min(1),
+})
+
 // ---------------------------------------------------------------------------
 // PATCH /api/local/workers/:workerId/workspaces/:workspaceId
 // PATCH /api/local/workspaces/:workspaceId
@@ -142,6 +147,11 @@ export const createSessionBodySchema = z.object({
   title: z.string().trim().min(1),
 })
 
+export const createBrokerSessionBodySchema = createSessionBodySchema.extend({
+  workerId: z.string().trim().min(1),
+  workspaceId: z.string().trim().min(1),
+})
+
 // ---------------------------------------------------------------------------
 // POST /api/local/workers/:workerId/sessions/:sessionId/messages[/stream]
 // POST /api/local/sessions/:sessionId/turns[/stream]
@@ -153,3 +163,23 @@ export const createSessionMessageBodySchema = z.object({
   input: z.string().trim().min(1),
   metadata: z.record(z.string(), z.unknown()).optional(),
 })
+
+export const createBrokerEngineInvocationBodySchema = createSessionMessageBodySchema.extend({
+  engineCommand: z.string().nullable().optional(),
+  engineId: z.string().nullable().optional(),
+  sessionId: z.string().trim().min(1),
+})
+
+export const patchSessionBodySchema = z.object({
+  context: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  status: z.enum(['active', 'archived', 'deleted']).optional(),
+  title: z.string().trim().min(1).optional(),
+})
+
+export const projectionRefreshBodySchema = z.object({
+  workerId: z.string().trim().min(1),
+  workspaceId: z.string().trim().min(1),
+})
+
+export const workerConfigValueBodySchema = z.record(z.string(), z.unknown())

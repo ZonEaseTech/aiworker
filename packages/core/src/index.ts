@@ -95,10 +95,12 @@ export {
   type CreateLocalSessionInput,
   createLocalWorkerRuntime,
   type CreateLocalWorkspaceInput,
+  type LocalInvocationStartResult,
   type LocalTurnStartResult,
   LocalWorkerRuntime,
   type LocalWorkerRuntimeOptions,
   type LocalWorkerSnapshot,
+  type StartLocalInvocationInput,
   type StartLocalTurnInput,
   type WorkspaceAssetProjectionResult,
 } from './worker/runtime'

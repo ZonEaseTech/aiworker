@@ -13,7 +13,7 @@ export type EngineKind = 'http' | 'mcp' | 'cli' | 'claude-code' | 'acp' | 'codex
  * - `not-found`      PATH 未命中 CLI（对于 http / mcp / cli 不适用 —— 它们恒为 ready）
  *
  * 探测只读文件元数据，不读取内容、不 spawn CLI，因此绝不会把 secret 暴露到
- * 响应或日志中。详见 `apps/api/src/worker/executor/availability.ts`。
+ * 响应或日志中。详见 `packages/host-daemon/src/modes/worker/settings.ts`。
  */
 export type EngineAvailabilityStatus = 'ready' | 'login-required' | 'not-found'
 

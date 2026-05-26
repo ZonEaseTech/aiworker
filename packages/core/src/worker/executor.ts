@@ -16,7 +16,7 @@ export interface LocalExecutorInput {
   onEvent?: (event: LocalExecutorEvent) => void
   prompt: string
   sessionId: string
-  turnId: string
+  turnId?: string | null
   workspaceId: string
   workspaceRoot: string
   metadata?: Record<string, unknown>

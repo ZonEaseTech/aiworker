@@ -19,7 +19,7 @@
     "lint": "eslint . && bun scripts/check-soul-app-boundaries.ts && bun run ui:check && bun run docs:check",
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
-    "build": "bun run --filter '@zonease/aiworker-api' build && bun run --filter '@zonease/aiworker-web' build && bun run --filter '@zonease/aiworker-cli' build:bundle",
+    "build": "bun run --filter '@zonease/aiworker-host-daemon' build && bun run --filter '@zonease/aiworker-web' build && bun run --filter '@zonease/aiworker-cli' build:bundle",
     "web:smoke:mounted-surfaces": "bun apps/web/scripts/smoke-mounted-surfaces.ts",
     "web:e2e:capture-mounted-evidence": "bun apps/web/scripts/capture-mounted-evidence.ts",
     "test:contracts": "bun test tests/architecture",

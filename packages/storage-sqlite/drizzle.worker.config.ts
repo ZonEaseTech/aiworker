@@ -5,6 +5,6 @@ export default defineConfig({
   out: './drizzle/worker',
   dialect: 'sqlite',
   dbCredentials: {
-    url: '../../apps/api/data/worker.db',
+    url: '../../packages/host-daemon/data/worker.db',
   },
 })

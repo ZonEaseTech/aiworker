@@ -33,9 +33,9 @@
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",
-    "@zonease/aiworker-api": "workspace:*",
     "@zonease/aiworker-core": "workspace:*",
     "@zonease/aiworker-fs-layout": "workspace:*",
+    "@zonease/aiworker-host-daemon": "workspace:*",
     "@zonease/aiworker-shared": "workspace:*",
     "@zonease/aiworker-storage-sqlite": "workspace:*",
     "cac": "^6.7.14",

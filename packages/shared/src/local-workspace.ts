@@ -6,7 +6,7 @@ export type LocalWorkerStatus = z.infer<typeof localWorkerStatusSchema>
 export const localWorkspaceStatusSchema = z.enum(['active', 'archived'])
 export type LocalWorkspaceStatus = z.infer<typeof localWorkspaceStatusSchema>
 
-export const localSessionStatusSchema = z.enum(['active', 'completed', 'failed', 'cancelled'])
+export const localSessionStatusSchema = z.enum(['active', 'archived', 'deleted'])
 export type LocalSessionStatus = z.infer<typeof localSessionStatusSchema>
 
 export const localTurnStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled'])
@@ -139,7 +139,7 @@ export type LocalTurn = z.infer<typeof localTurnSchema>
 export const localEngineInvocationSchema = z.object({
   id: idSchema,
   sessionId: idSchema,
-  turnId: idSchema,
+  turnId: idSchema.nullable(),
   seq: z.number().int().positive(),
   engineId: z.string().min(1),
   engineCommand: z.string().nullable(),

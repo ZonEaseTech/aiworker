@@ -185,8 +185,8 @@ describe('LocalWorkerRuntime', () => {
 
     expect(result.turn.status).toBe('succeeded')
     expect(result.invocation.status).toBe('succeeded')
-    expect(result.session.status).toBe('completed')
-    expect(result.session.endedAt).not.toBeNull()
+    expect(result.session.status).toBe('active')
+    expect(result.session.endedAt).toBeNull()
     expect(result.files).toHaveLength(0)
     expect(result.events.map(event => event.type)).toEqual(['status', 'status', 'status'])
 
@@ -194,12 +194,65 @@ describe('LocalWorkerRuntime', () => {
     expect(snapshot.worker.soulId).toBe('hr')
     expect(snapshot.workspaces).toHaveLength(1)
     expect(snapshot.sessions[0]?.capabilityTemplateId).toBe('candidate-screen')
-    expect(snapshot.sessions[0]?.status).toBe('completed')
-    expect(snapshot.sessions[0]?.endedAt).not.toBeNull()
+    expect(snapshot.sessions[0]?.status).toBe('active')
+    expect(snapshot.sessions[0]?.endedAt).toBeNull()
     expect(snapshot.turns[0]?.status).toBe('succeeded')
     expect(snapshot.invocations[0]?.metadataJson).toMatchObject({ outputKind: 'candidate-screen' })
     expect(snapshot).not.toHaveProperty('reviews')
     expect(snapshot).not.toHaveProperty('lessons')
+  })
+
+  it('runs session-level engine invocations without creating turn execution rows', async () => {
+    const executorInputs: Array<{ prompt: string, turnId: null | string | undefined }> = []
+    const workerRuntime = runtime({
+      async invoke(input) {
+        executorInputs.push({ prompt: input.prompt, turnId: input.turnId })
+        return { summary: `Finished ${input.sessionId}` }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({
+      name: 'Invocation Workspace',
+    })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'freeform',
+      title: 'Session-level invocation',
+      context: 'Use only session-level bridge state.',
+      metadata: {
+        outputKind: 'freeform',
+      },
+    })
+
+    const result = await workerRuntime.startInvocation({
+      sessionId: session.id,
+      input: 'Continue through a session-level invocation.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+      metadata: {
+        outputKind: 'freeform',
+      },
+    })
+
+    expect('turn' in result).toBe(false)
+    expect(executorInputs).toEqual([{
+      prompt: expect.stringContaining('Invocation request:'),
+      turnId: null,
+    }])
+    expect(result.session.status).toBe('active')
+    expect(result.session.endedAt).toBeNull()
+    expect(result.invocation.status).toBe('succeeded')
+    expect(result.invocation.turnId).toBeNull()
+    expect(result.events.map(event => event.turnId)).toEqual([null, null])
+    expect(result.events.map(event => event.invocationId)).toEqual([
+      result.invocation.id,
+      result.invocation.id,
+    ])
+
+    const snapshot = workerRuntime.snapshot()
+    expect(snapshot.turns).toEqual([])
+    expect(snapshot.sessions[0]).toMatchObject({ endedAt: null, status: 'active' })
+    expect(snapshot.invocations[0]).toMatchObject({ status: 'succeeded', turnId: null })
   })
 
   it('freezes the session engine and date context across continuation turns', async () => {
@@ -430,8 +483,8 @@ describe('LocalWorkerRuntime', () => {
       engineCommand: 'codex',
     })
 
-    expect(result.session.status).toBe('failed')
-    expect(result.session.endedAt).not.toBeNull()
+    expect(result.session.status).toBe('active')
+    expect(result.session.endedAt).toBeNull()
     expect(result.turn.status).toBe('failed')
     expect(result.turn.error).toBe('executor failed')
     expect(result.invocation.status).toBe('failed')
@@ -443,7 +496,7 @@ describe('LocalWorkerRuntime', () => {
     })
 
     const snapshot = workerRuntime.snapshot()
-    expect(snapshot.sessions.find(item => item.id === result.session.id)?.status).toBe('failed')
+    expect(snapshot.sessions.find(item => item.id === result.session.id)?.status).toBe('active')
     expect(snapshot.invocations.find(item => item.id === result.invocation.id)).toMatchObject({
       error: 'executor failed',
       status: 'failed',

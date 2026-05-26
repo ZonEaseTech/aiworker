@@ -57,6 +57,13 @@
       "when": 1779532503134,
       "tag": "0007_red_mentallo",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1779828479800,
+      "tag": "0008_breezy_moira_mactaggert",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ const repoRoot = join(import.meta.dir, '..', '..')
 
 interface PackageJson {
   name?: string
+  scripts?: Record<string, string>
   dependencies?: Record<string, string>
   devDependencies?: Record<string, string>
 }
@@ -49,5 +50,17 @@ describe('target package ownership', () => {
   test('broad replacement buckets are not introduced', () => {
     expect(existsSync(join(repoRoot, 'packages/core-v2'))).toBe(false)
     expect(existsSync(join(repoRoot, 'packages/shared-v2'))).toBe(false)
+  })
+
+  test('local daemon lives in the final host-daemon package', () => {
+    expect(existsSync(join(repoRoot, 'apps/api'))).toBe(false)
+
+    const rootPackage = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as PackageJson
+    const cliPackage = JSON.parse(readFileSync(join(repoRoot, 'apps/cli/package.json'), 'utf8')) as PackageJson
+
+    expect(rootPackage.scripts?.build).toContain('@zonease/aiworker-host-daemon')
+    expect(rootPackage.scripts?.build).not.toContain('@zonease/aiworker-api')
+    expect(cliPackage.devDependencies ?? {}).toHaveProperty('@zonease/aiworker-host-daemon')
+    expect(cliPackage.devDependencies ?? {}).not.toHaveProperty('@zonease/aiworker-api')
   })
 })

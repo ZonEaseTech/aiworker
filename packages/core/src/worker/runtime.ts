@@ -88,9 +88,24 @@ export interface StartLocalTurnInput {
   metadata?: Record<string, unknown>
 }
 
+export interface StartLocalInvocationInput {
+  sessionId: string
+  input: string
+  engineId: string
+  engineCommand?: string | null
+  metadata?: Record<string, unknown>
+}
+
 export interface LocalTurnStartResult {
   session: SessionRow
   turn: TurnRow
+  invocation: EngineInvocationRow
+  events: SessionEventRow[]
+  files: FileRow[]
+}
+
+export interface LocalInvocationStartResult {
+  session: SessionRow
   invocation: EngineInvocationRow
   events: SessionEventRow[]
   files: FileRow[]
@@ -312,13 +327,6 @@ export class LocalWorkerRuntime {
         response: result.summary,
         at: this.#now(),
       })
-      const finishedAt = this.#now()
-      const currentSession = updateSession({
-        id: session.id,
-        status: 'completed',
-        endedAt: finishedAt,
-        at: finishedAt,
-      })
       this.appendEvent(session.id, 'status', { status: 'succeeded', turnId: turn.id }, turn.id, invocation.id)
       this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'succeeded', turn: finishedTurn }, at: this.#now() })
       return {
@@ -351,20 +359,108 @@ export class LocalWorkerRuntime {
         error: message,
         at: this.#now(),
       })
-      const failedSession = updateSession({
-        id: session.id,
-        status: 'failed',
-        endedAt: this.#now(),
-        at: this.#now(),
-      })
       this.appendEvent(session.id, 'error', { message, turnId: turn.id }, turn.id, invocation.id)
       this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'failed', turn: failedTurn }, at: this.#now() })
       return {
-        session: failedSession,
+        session: currentSession,
         turn: failedTurn,
         invocation: failedInvocation,
         events: listSessionEvents(session.id),
         ...recoveredOutput,
+      }
+    }
+  }
+
+  async startInvocation(input: StartLocalInvocationInput): Promise<LocalInvocationStartResult> {
+    const session = this.requireSession(input.sessionId)
+    const workspace = this.requireWorkspace(session.workspaceId)
+    const sessionEngine = this.resolveSessionEngine(session, input)
+    const frozenSessionMetadata = freezeSessionEngineMetadata(session.metadataJson ?? {}, sessionEngine)
+    const currentSession = sessionEngine.source === 'session'
+      ? session
+      : updateSession({
+          id: session.id,
+          metadataJson: frozenSessionMetadata,
+          at: this.#now(),
+        })
+    const metadata = {
+      ...(currentSession.metadataJson ?? {}),
+      ...(input.metadata ?? {}),
+      engineCommand: sessionEngine.engineCommand,
+      engineId: sessionEngine.engineId,
+      executionMode: sessionEngine.executionMode,
+      capabilityTemplateId: session.capabilityTemplateId,
+      sessionId: session.id,
+      workerId: this.workerId,
+      workspaceId: workspace.id,
+    }
+    const prompt = this.buildInvocationPromptFromRequest(session, input.input, metadata)
+    const invocation = createEngineInvocation({
+      id: randomUUID(),
+      sessionId: session.id,
+      seq: nextEngineInvocationSeq(session.id),
+      engineId: sessionEngine.engineId,
+      engineCommand: sessionEngine.engineCommand,
+      prompt,
+      status: 'running',
+      metadataJson: metadata,
+      startedAt: this.#now(),
+      at: this.#now(),
+    })
+    this.appendEvent(session.id, 'status', { invocationId: invocation.id, status: 'running' }, null, invocation.id)
+    this.bus.emit({ kind: 'event', workspaceId: workspace.id, sessionId: session.id, invocationId: invocation.id, payload: { invocation, status: 'running' }, at: this.#now() })
+
+    try {
+      const invocationRoot = await this.ensureInvocationRoot(workspace, session, invocation)
+      const result = await this.#executor.invoke({
+        engineCommand: sessionEngine.engineCommand,
+        engineId: sessionEngine.engineId,
+        invocationId: invocation.id,
+        invocationRoot,
+        onEvent: event => this.appendAgentEvent(session.id, event, null, invocation.id),
+        prompt,
+        sessionId: session.id,
+        turnId: null,
+        workspaceId: workspace.id,
+        workspaceRoot: workspace.rootPath,
+        metadata,
+      })
+      const finishedInvocation = updateEngineInvocation({
+        id: invocation.id,
+        status: 'succeeded',
+        summary: result.summary,
+        metadataJson: { ...metadata, ...(result.metadata ?? {}) },
+        finishedAt: this.#now(),
+        at: this.#now(),
+      })
+      this.appendEvent(session.id, 'status', { invocationId: invocation.id, status: 'succeeded' }, null, invocation.id)
+      this.bus.emit({ kind: 'event', workspaceId: workspace.id, sessionId: session.id, invocationId: invocation.id, payload: { invocation: finishedInvocation, status: 'succeeded' }, at: this.#now() })
+      return {
+        session: currentSession,
+        invocation: finishedInvocation,
+        events: listSessionEvents(session.id).filter(event => event.invocationId === invocation.id),
+        files: [],
+      }
+    }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const recoveredMetadata = error instanceof LocalExecutorFailure ? error.partialResult?.metadata ?? {} : {}
+      const failedInvocation = updateEngineInvocation({
+        id: invocation.id,
+        status: 'failed',
+        error: message,
+        metadataJson: { ...metadata, ...recoveredMetadata },
+        summary: error instanceof LocalExecutorFailure ? error.partialResult?.summary ?? null : null,
+        finishedAt: this.#now(),
+        at: this.#now(),
+      })
+      this.appendEvent(session.id, 'error', { invocationId: invocation.id, message }, null, invocation.id)
+      this.bus.emit({ kind: 'event', workspaceId: workspace.id, sessionId: session.id, invocationId: invocation.id, payload: { invocation: failedInvocation, status: 'failed' }, at: this.#now() })
+      return {
+        session: currentSession,
+        invocation: failedInvocation,
+        events: listSessionEvents(session.id).filter(event => event.invocationId === invocation.id),
+        files: [],
       }
     }
   }
@@ -446,6 +542,14 @@ export class LocalWorkerRuntime {
   }
 
   private buildInvocationPrompt(session: SessionRow, turn: TurnRow, metadata: Record<string, unknown>): string {
+    return this.buildSessionPrompt(session, 'Turn request:', turn.input, metadata)
+  }
+
+  private buildInvocationPromptFromRequest(session: SessionRow, request: string, metadata: Record<string, unknown>): string {
+    return this.buildSessionPrompt(session, 'Invocation request:', request, metadata)
+  }
+
+  private buildSessionPrompt(session: SessionRow, requestLabel: string, request: string, metadata: Record<string, unknown>): string {
     const mentions = explicitMentionLines(metadata.mentions)
     const lines = [
       `Current date: ${this.#now().slice(0, 10)}`,
@@ -460,8 +564,8 @@ export class LocalWorkerRuntime {
       '',
       ...mentions,
       ...(mentions.length > 0 ? [''] : []),
-      'Turn request:',
-      turn.input.trim(),
+      requestLabel,
+      request.trim(),
     ]
     return lines.join('\n')
   }

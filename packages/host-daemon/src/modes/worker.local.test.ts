@@ -262,10 +262,239 @@ describe('local daemon API', () => {
       turn: { status: string }
     }
     expect(sessionBody.session.capabilityTemplateId).toBe(HR_CANDIDATE_SCREEN)
-    expect(sessionBody.session.status).toBe('completed')
-    expect(sessionBody.session.endedAt).not.toBeNull()
+    expect(sessionBody.session.status).toBe('active')
+    expect(sessionBody.session.endedAt).toBeNull()
     expect(sessionBody.turn.status).toBe('succeeded')
     expect(sessionBody).not.toHaveProperty('lessons')
+  })
+
+  it('creates follow-up work through the session-level invocations route', async () => {
+    const target = await app()
+
+    const workerRes = await target.request('/api/workers', {
+      method: 'POST',
+      body: JSON.stringify({ id: 'canonical-hr-worker', soulId: HR_APP_ID, name: 'Canonical HR' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(workerRes.status).toBe(201)
+    const workerBody = await workerRes.json() as { worker: { id: string } }
+
+    const workspaceRes = await target.request('/api/workspace-locators', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Invocation workspace',
+        rootPath: join(dir, 'external-workspace'),
+        workerId: workerBody.worker.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspaceBody = await workspaceRes.json() as { workspace: { id: string } }
+
+    const sessionRes = await target.request('/api/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        title: 'Session-level invocation',
+        workerId: workerBody.worker.id,
+        workspaceId: workspaceBody.workspace.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(sessionRes.status).toBe(201)
+    const sessionBody = await sessionRes.json() as { session: { id: string } }
+
+    const invocationRes = await target.request(`/api/sessions/${sessionBody.session.id}/invocations`, {
+      method: 'POST',
+      body: JSON.stringify({ input: 'Continue through the broker invocation route.' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(invocationRes.status).toBe(201)
+    const invocationBody = await invocationRes.json() as {
+      invocation: { id: string, sessionId: string, status: string, turnId: null | string }
+      session: { endedAt: string | null, id: string, status: string }
+    }
+
+    expect(invocationBody.session.id).toBe(sessionBody.session.id)
+    expect(invocationBody.session.status).toBe('active')
+    expect(invocationBody.session.endedAt).toBeNull()
+    expect(invocationBody.invocation.sessionId).toBe(sessionBody.session.id)
+    expect(invocationBody.invocation.turnId).toBeNull()
+    expect(invocationBody.invocation.status).toBe('succeeded')
+    expect(invocationBody).not.toHaveProperty('turn')
+
+    const engineInvocationRes = await target.request(`/api/engine/invocations/${invocationBody.invocation.id}`)
+    expect(engineInvocationRes.status).toBe(200)
+    expect(await engineInvocationRes.json()).toMatchObject({
+      invocation: {
+        id: invocationBody.invocation.id,
+        sessionId: sessionBody.session.id,
+        turnId: null,
+      },
+    })
+
+    const invocationEventsRes = await target.request(`/api/engine/invocations/${invocationBody.invocation.id}/events`)
+    expect(invocationEventsRes.status).toBe(200)
+    const invocationEventsBody = await invocationEventsRes.json() as {
+      events: Array<{ invocationId: string, turnId: null | string }>
+    }
+    expect(invocationEventsBody.events.length).toBeGreaterThan(0)
+    expect(invocationEventsBody.events.every(event => event.invocationId === invocationBody.invocation.id)).toBe(true)
+    expect(invocationEventsBody.events.every(event => event.turnId === null)).toBe(true)
+
+    const brokerInvocationRes = await target.request('/api/engine/invocations', {
+      method: 'POST',
+      body: JSON.stringify({
+        input: 'Continue through the engine broker route.',
+        sessionId: sessionBody.session.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(brokerInvocationRes.status).toBe(201)
+    const brokerInvocationBody = await brokerInvocationRes.json() as {
+      invocation: { sessionId: string, status: string, turnId: null | string }
+    }
+    expect(brokerInvocationBody.invocation.sessionId).toBe(sessionBody.session.id)
+    expect(brokerInvocationBody.invocation.turnId).toBeNull()
+    expect(brokerInvocationBody.invocation.status).toBe('succeeded')
+
+    const turnsBody = await (await target.request(`/api/local/sessions/${sessionBody.session.id}/turns`)).json() as { turns: unknown[] }
+    expect(turnsBody.turns).toEqual([])
+  })
+
+  it('serves canonical broker management routes as concrete handlers', async () => {
+    const target = await app()
+
+    const workerRes = await target.request('/api/workers', {
+      method: 'POST',
+      body: JSON.stringify({ id: 'canonical-management-worker', soulId: HR_APP_ID, name: 'Canonical Management HR' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(workerRes.status).toBe(201)
+    const workerBody = await workerRes.json() as { worker: { id: string } }
+
+    const configRes = await target.request(`/api/workers/${workerBody.worker.id}/config/engine-selection`, {
+      method: 'PUT',
+      body: JSON.stringify({ descriptor: { engineId: 'codex' } }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(configRes.status).toBe(200)
+    expect(await configRes.json()).toMatchObject({
+      config: {
+        archived: false,
+        configKey: 'engine-selection',
+        value: { descriptor: { engineId: 'codex' } },
+        workerId: workerBody.worker.id,
+      },
+    })
+
+    const secretConfigRes = await target.request(`/api/workers/${workerBody.worker.id}/config/native-mcp`, {
+      method: 'PATCH',
+      body: JSON.stringify({ descriptor: { apiKey: 'sk-literal-secret' } }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(secretConfigRes.status).toBe(422)
+
+    const archivedConfigRes = await target.request(`/api/workers/${workerBody.worker.id}/config/engine-selection/archive`, {
+      method: 'POST',
+    })
+    expect(archivedConfigRes.status).toBe(200)
+    expect(await archivedConfigRes.json()).toMatchObject({
+      config: {
+        archived: true,
+        configKey: 'engine-selection',
+        value: null,
+        workerId: workerBody.worker.id,
+      },
+    })
+
+    const workspaceRes = await target.request('/api/workspace-locators', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Canonical management workspace',
+        rootPath: join(dir, 'canonical-management-workspace'),
+        workerId: workerBody.worker.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspaceBody = await workspaceRes.json() as { workspace: { id: string } }
+
+    const sessionRes = await target.request('/api/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        title: 'Canonical management session',
+        workerId: workerBody.worker.id,
+        workspaceId: workspaceBody.workspace.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(sessionRes.status).toBe(201)
+    const sessionBody = await sessionRes.json() as { session: { id: string } }
+
+    const patchSessionRes = await target.request(`/api/sessions/${sessionBody.session.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        context: 'Updated context',
+        metadata: { descriptorOnly: true },
+        status: 'active',
+        title: 'Updated canonical management session',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(patchSessionRes.status).toBe(200)
+    expect(await patchSessionRes.json()).toMatchObject({
+      session: {
+        context: 'Updated context',
+        metadataJson: { descriptorOnly: true },
+        status: 'active',
+        title: 'Updated canonical management session',
+      },
+    })
+
+    const projectionRes = await target.request('/api/projections/freeform/refresh', {
+      method: 'POST',
+      body: JSON.stringify({
+        workerId: workerBody.worker.id,
+        workspaceId: workspaceBody.workspace.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(projectionRes.status).toBe(200)
+    expect(await projectionRes.json()).toMatchObject({
+      target: 'freeform',
+    })
+
+    const receiptRes = await target.request('/api/projections/receipts/missing-receipt')
+    expect(receiptRes.status).toBe(200)
+    expect(await receiptRes.json()).toEqual({
+      receipt: null,
+      receiptId: 'missing-receipt',
+      status: 'not_found',
+    })
+
+    const cleanupRes = await target.request('/api/projections/receipts/missing-receipt/cleanup', {
+      method: 'POST',
+    })
+    expect(cleanupRes.status).toBe(200)
+    expect(await cleanupRes.json()).toEqual({
+      cleaned: false,
+      receiptId: 'missing-receipt',
+      status: 'not_found',
+    })
+
+    const archiveSessionRes = await target.request(`/api/sessions/${sessionBody.session.id}/archive`, {
+      method: 'POST',
+    })
+    expect(archiveSessionRes.status).toBe(200)
+    expect(await archiveSessionRes.json()).toMatchObject({ session: { status: 'archived' } })
+
+    const deleteSessionRes = await target.request(`/api/sessions/${sessionBody.session.id}`, {
+      method: 'DELETE',
+    })
+    expect(deleteSessionRes.status).toBe(200)
+    expect(await deleteSessionRes.json()).toMatchObject({ session: { status: 'deleted' } })
   })
 
   it('freezes selected engine settings at session creation and keeps continuations immutable', async () => {
@@ -942,7 +1171,7 @@ printf '\\nEOF\\n'
         cookie: null,
         forwardedHost: null,
         mounted: true,
-        routePrefix: '/api/local/apps/aiworker-hr',
+        routePrefix: '/api/apps/aiworker-hr',
       })
       expect(mountedApiBody.mountToken).toMatch(/^[a-f0-9-]{36}$/)
       expect(mountedApiBody.mountContext).toBeTruthy()
@@ -960,7 +1189,7 @@ printf '\\nEOF\\n'
             theme: 'light',
           },
           name: 'aiworker-hr--hr-home',
-          url: '/api/local/apps/aiworker-hr/micro-app/routes/hr-home?theme=light',
+          url: '/api/apps/aiworker-hr/micro-app/routes/hr-home?theme=light',
         },
         surface: { renderer: 'micro-app' },
       })
@@ -971,7 +1200,7 @@ printf '\\nEOF\\n'
       const widgetBody = await widgetRes.json() as { microApp: { data: Record<string, unknown>, name: string, url: string }, surface: { renderer: string } }
       expect(widgetBody.surface.renderer).toBe('micro-app')
       expect(widgetBody.microApp.name).toBe('aiworker-hr--hr-people-widget')
-      expect(widgetBody.microApp.url).toBe('/api/local/apps/aiworker-hr/micro-app/widgets/hr-people-widget?theme=dark')
+      expect(widgetBody.microApp.url).toBe('/api/apps/aiworker-hr/micro-app/widgets/hr-people-widget?theme=dark')
       expect(widgetBody.microApp.data).toMatchObject({
         appId: 'aiworker-hr',
         surfaceId: 'hr-people-widget',
@@ -1425,7 +1654,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
           surfaceId: 'hr-home',
         },
         name: 'aiworker-hr--hr-home',
-        url: '/api/local/apps/aiworker-hr/micro-app/routes/hr-home',
+        url: '/api/apps/aiworker-hr/micro-app/routes/hr-home',
       },
       surface: {
         id: 'hr-home',
@@ -1784,8 +2013,8 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
       .map(line => line.slice('data:'.length).trimStart())
       .join('\n')
     const result = JSON.parse(resultData) as { session: { endedAt: string | null, status: string } }
-    expect(result.session.status).toBe('completed')
-    expect(result.session.endedAt).not.toBeNull()
+    expect(result.session.status).toBe('active')
+    expect(result.session.endedAt).toBeNull()
   })
 
   it('documents the local Host API surface without retired control routes', async () => {
@@ -1793,46 +2022,37 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     const doc = await (await target.request('/openapi.json')).json() as { paths: Record<string, unknown> }
     const paths = Object.keys(doc.paths)
 
-    expect(paths).toContain('/api/local/info')
-    expect(paths).toContain('/api/local/apps')
-    expect(paths).toContain('/api/local/apps/install')
-    expect(paths).not.toContain('/api/local/apps/{appId}/security-review')
-    expect(paths).toContain('/api/local/apps/{appId}/enable')
-    expect(paths).not.toContain('/api/local/apps/{appId}/actions/{actionId}')
-    expect(paths).not.toContain('/api/local/apps/{appId}/search')
-    expect(paths).toContain('/api/local/apps/{appId}/{path}')
+    expect(paths).toContain('/api/app-installation/install')
+    expect(paths).toContain('/api/app-installation/apps')
+    expect(paths).toContain('/api/app-installation/apps/{appId}/enable')
+    expect(paths).toContain('/api/workers')
+    expect(paths).toContain('/api/workers/{workerId}')
+    expect(paths).toContain('/api/workers/{workerId}/config')
+    expect(paths).toContain('/api/workspace-locators')
+    expect(paths).toContain('/api/workspace-locators/{workspaceId}')
+    expect(paths).toContain('/api/sessions')
+    expect(paths).toContain('/api/sessions/{sessionId}')
+    expect(paths).toContain('/api/sessions/{sessionId}/invocations')
+    expect(paths).toContain('/api/engine/targets')
+    expect(paths).toContain('/api/engine/targets/{target}/readiness')
+    expect(paths).toContain('/api/engine/invocations')
+    expect(paths).toContain('/api/projections/{target}/refresh')
+    expect(paths).toContain('/api/projections/receipts/{receiptId}')
+    expect(paths).toContain('/api/mount/workbench')
+    expect(paths).toContain('/api/apps/{appId}/{path}')
+    expect(paths).not.toContain('/api/local/apps/{appId}/{path}')
+    expect(paths.some(path => path.startsWith('/api/local/'))).toBe(false)
+    expect(paths).not.toContain('/api/apps/{appId}/security-review')
+    expect(paths).not.toContain('/api/apps/{appId}/actions/{actionId}')
+    expect(paths).not.toContain('/api/apps/{appId}/search')
     expect(paths.some(path => path.includes('/broker/'))).toBe(false)
-    expect(paths).toContain('/api/local/workers')
-    expect(paths).toContain('/api/local/workers/{workerId}')
-    expect(paths).toContain('/api/local/workers/{workerId}/overlay')
-    expect(paths).toContain('/api/local/workers/{workerId}/engine/invocations')
-    expect(paths).toContain('/api/local/workers/{workerId}/engine/invocations/stream')
-    expect(paths).toContain('/api/local/workers/{workerId}/templates')
-    expect(paths).toContain('/api/local/souls')
-    expect(paths).toContain('/api/local/templates')
-    expect(paths).not.toContain('/api/local/artifacts')
-    expect(paths).not.toContain('/api/local/workers/{workerId}/artifacts')
-    expect(paths).not.toContain('/api/local/workspaces/{workspaceId}/artifacts')
-    expect(paths).not.toContain('/api/local/artifacts/{id}')
-    expect(paths).not.toContain('/api/local/files')
-    expect(paths).not.toContain('/api/local/workers/{workerId}/files')
-    expect(paths).not.toContain('/api/local/workspaces/{workspaceId}/files')
-    expect(paths).not.toContain('/api/local/events')
-    expect(paths).toContain('/api/local/workers/{workerId}/workspaces')
-    expect(paths).toContain('/api/local/workers/{workerId}/workspaces/{workspaceId}/projection')
-    expect(paths).toContain('/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions')
-    expect(paths).toContain('/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions/stream')
-    expect(paths).not.toContain('/api/local/workspaces/{workspaceId}/profile')
-    expect(paths).not.toContain('/api/local/workspaces/{workspaceId}/profile-revisions')
-    expect(paths).not.toContain('/api/local/reviews')
-    expect(paths).not.toContain('/api/local/reviews/{id}')
-    expect(paths).not.toContain('/api/local/lessons')
-    expect(paths).not.toContain('/api/local/lessons/{id}')
-    expect(paths).toContain('/api/local/workers/{workerId}/sessions/{sessionId}/messages')
-    expect(paths).toContain('/api/local/settings/engines')
-    expect(paths).toContain('/api/local/settings/engines/rescan')
+    expect(paths).not.toContain('/api/artifacts')
+    expect(paths).not.toContain('/api/files')
+    expect(paths).not.toContain('/api/events')
+    expect(paths).not.toContain('/api/reviews')
+    expect(paths).not.toContain('/api/lessons')
     expect(paths.some(path => path.includes('/runs'))).toBe(false)
-    expect(paths.some(path => path.startsWith('/api/worker'))).toBe(false)
+    expect(paths.some(path => path.startsWith('/api/worker/'))).toBe(false)
   })
 
   it('persists settings and supports engine rescan/test actions', async () => {
