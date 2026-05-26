@@ -55,14 +55,23 @@ describe('ArtifactStrip', () => {
         artifacts={[
           { href: 'javascript:alert(1)', id: 'unsafe', title: 'Unsafe' },
           { href: 'data:text/html,hello', id: 'data', title: 'Data' },
+          { href: 'java\nscript:alert(1)', id: 'newline-script', title: 'Newline script' },
+          { href: 'java\tscript:alert(1)', id: 'tab-script', title: 'Tab script' },
+          { href: 'data\n:text/html,<svg>', id: 'newline-data', title: 'Newline data' },
         ]}
       />,
     )
 
     expect(screen.getByText('Unsafe')).toBeTruthy()
     expect(screen.getByText('Data')).toBeTruthy()
+    expect(screen.getByText('Newline script')).toBeTruthy()
+    expect(screen.getByText('Tab script')).toBeTruthy()
+    expect(screen.getByText('Newline data')).toBeTruthy()
     expect(screen.queryByRole('link', { name: 'Unsafe' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Data' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Newline script' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Tab script' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Newline data' })).toBeNull()
   })
 
   it('returns null for empty artifact references', () => {

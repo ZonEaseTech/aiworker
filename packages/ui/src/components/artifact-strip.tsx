@@ -20,10 +20,6 @@ function normalizeArtifactHref(href: string | undefined) {
 
   try {
     const url = new URL(value, 'https://aiworker.local')
-    const hasProtocol = /^[a-z][a-z0-9+.-]*:/i.test(value)
-
-    if (!hasProtocol)
-      return value
 
     if (url.protocol === 'http:' || url.protocol === 'https:')
       return value
