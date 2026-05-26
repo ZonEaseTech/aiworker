@@ -1,8 +1,9 @@
 # PLAN-418 Generic chat view rendering primitives
 
-- **status**: approved
+- **status**: completed
 - **owner**: Codex
 - **createdAt**: 2026-05-26
+- **completedAt**: 2026-05-26
 - **relatedTask**: TODO-048
 - **superpowersSpec**: docs/superpowers/specs/2026-05-26-chat-view-rendering-design.md
 - **superpowersPlan**: docs/superpowers/plans/2026-05-26-chat-view-rendering.md
@@ -30,3 +31,11 @@ AIWorker boundary intact.
 - `bun run crg:update`
 - `bun run crg:review`
 - `git diff --check`
+
+## Completion Summary
+
+Generic chat/transcript rendering primitives were added under `packages/ui`.
+The components render generic view models for turns, activity groups, command
+blocks, assistant markdown, streaming placeholders and artifact references
+without owning workspace/session/chat product semantics. Legacy `SessionThread`
+compatibility remains intact.

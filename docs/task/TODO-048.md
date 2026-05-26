@@ -1,9 +1,10 @@
 # TODO-048 Build generic chat view rendering primitives
 
-- **status**: in-progress
+- **status**: completed
 - **priority**: P2
 - **owner**: Codex
 - **createdAt**: 2026-05-26
+- **completedAt**: 2026-05-26
 - **relatesTo**: packages/ui
 
 ## Context
