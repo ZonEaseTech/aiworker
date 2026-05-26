@@ -534,3 +534,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-159 Mounted app stylesheet overrides Host dark theme**](BUG-159.md) `P1`
 - [x] [**BUG-160 Real E2E round5 repair and harness hardening**](BUG-160.md) `P1`
 - [x] [**BUG-161 Universal workbench empty composer spans main width**](BUG-161.md) `P2`
+- [x] [**TODO-048 Build generic chat view rendering primitives**](TODO-048.md) `P2`

@@ -447,3 +447,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-416 Mounted stylesheet dark theme isolation repair**](PLAN-416.md) `2026-05-26`
 - [x] [**PLAN-417 Real E2E round5 repair and harness hardening**](PLAN-417.md) `2026-05-26`
 - [x] [**PLAN-418 Universal workbench empty composer layout**](PLAN-418.md) `2026-05-26`
+- [x] [**PLAN-419 Generic chat view rendering primitives**](PLAN-419.md) `2026-05-26`
