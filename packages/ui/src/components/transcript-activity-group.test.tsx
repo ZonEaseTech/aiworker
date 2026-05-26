@@ -53,6 +53,7 @@ describe('TranscriptActivityGroup', () => {
     expect(screen.getByText('lint failed')).toBeTruthy()
     expect(screen.getByText('failed')).toBeTruthy()
     expect(container.querySelector('[data-transcript-activity-status="failed"]')).toBeTruthy()
+    expect(container.querySelector('[data-slot="item-description"][data-tone="destructive"]')).toBeTruthy()
   })
 
   it('opens collapsed activity details when a failure arrives after render', () => {
