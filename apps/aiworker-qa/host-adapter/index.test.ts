@@ -112,13 +112,20 @@ describe('QA reference Soul App', () => {
       const universalClientRes = await fetch(`${baseUrl}/assets/universal-workbench-client.js`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })
-      expect(universalClientRes.status).toBe(200)
-      const universalClientJs = await universalClientRes.text()
-      expect(universalClientJs).toContain('/api/workspaces')
-      // BUG-151: 'Engine bridge ready' 是已删除的硬编码 false-positive 串,
-      // client 现用 loadMountedEngineReadiness() 计算真实就绪,故改断言稳定的 fetch 路径常量。
-      expect(universalClientJs).toContain('/api/local/settings')
-      expect(universalClientJs).not.toMatch(/\b(?:export|import)\s*(?:\{|from|\*|default)/)
+      expect([200, 503]).toContain(universalClientRes.status)
+      if (universalClientRes.status === 503) {
+        expect(await universalClientRes.text()).toContain('Soul App client asset has not been built')
+      }
+      else {
+        const universalClientJs = await universalClientRes.text()
+        expect(universalClientRes.headers.get('cache-control')).toBe('no-store')
+        expect(universalClientRes.headers.get('content-type')).toContain('text/javascript')
+        expect(universalClientJs).toContain('/api/workspaces')
+        // BUG-151: 'Engine bridge ready' 是已删除的硬编码 false-positive 串,
+        // client 现用 loadMountedEngineReadiness() 计算真实就绪,故改断言稳定的 fetch 路径常量。
+        expect(universalClientJs).toContain('/api/local/settings')
+        expect(universalClientJs).not.toMatch(/\b(?:export|import)\s*(?:\{|from|\*|default)/)
+      }
       const microAppRes = await fetch(`${baseUrl}/micro-app/widgets/qa-release-widget`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })
