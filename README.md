@@ -27,7 +27,7 @@ workspace/session 只作为不透明 locator/context 传给 mounted Soul surface
 - `docs/cli.md`：当前 CLI 命令参考。
 - `docs/deployment.md`：local daemon、packaged CLI 和 operator 运行手册。
 - `docs/executor-engines.md`：外部 engine 安装、登录和 readiness 说明。
-- `docs/soul-app-developer.md`：Soul App authoring workflow。
+- `docs/soul-app-developer.md`：冻结的 Soul App 命令与目录速查，不是架构合同。
 
 ## Developer Route
 
@@ -36,8 +36,8 @@ workspace/session 只作为不透明 locator/context 传给 mounted Soul surface
 | Host daemon/API、registry、local enablement、storage metadata | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
 | Host Web Shell、Settings、Worker Configuration、mounted workbench | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md`，前端实现再用 `/pma-web`；shadcn/ui 相关改动再用 `.agents/skills/shadcn/SKILL.md` |
 | CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/cli.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
-| 官方 HR/QA Soul App、manifest、standalone、Host mounted、artifact/profile/review/lesson | `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
-| 新第三方 Soul App | `aiworker app create` + `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
+| 官方 HR/QA Soul App、manifest、standalone、Host mounted、artifact/profile/review/lesson | `docs/architecture.md#constraint-registry` + `.agents/skills/aiworker-soul-app-dev/SKILL.md`；命令速查见 `docs/soul-app-developer.md` |
+| 新第三方 Soul App | `docs/architecture.md#constraint-registry` + `.agents/skills/aiworker-soul-app-dev/SKILL.md`；创建命令用 `aiworker app create`，目录/命令速查见 `docs/soul-app-developer.md` |
 | Host/Soul App 边界、shared protocol、manifest-declared adapter/context | 先读 `docs/architecture.md#constraint-registry`，判断 ownership 后进入 Host 或 Soul App skill |
 
 ## 为什么改成这个形态

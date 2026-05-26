@@ -116,20 +116,40 @@ forbidIncludes('docs/architecture.md', [
 ])
 
 requireIncludes('docs/soul-app-developer.md', [
-  'docs/architecture.md#constraint-registry',
-  '`SOUL-001`',
-  '`CONFIG-001`',
-  '`PROTO-001`',
-  '`IMPORT-001`',
-  '`MOUNT-001`',
-  '`DATA-001`',
-  '`ENGINE-001`',
-  'Official Soul App web surfaces compose shared controls from `packages/ui`',
-  'bun run ui:check',
+  '# Soul App Developer Quickstart (Frozen)',
+  'This file is a frozen quickstart during product shaping.',
+  'It is not an architecture contract.',
+  'The only active Host/Soul App contract is `docs/architecture.md#constraint-registry`.',
+  'Do not expand Host/Soul boundary, descriptor, MCP, provider, permission, review, memory, Worker Configuration or configuration semantics here.',
+  'aiworker app create <app-id> --dir <target-dir>',
+  'aiworker app validate <target-dir>',
+  'aiworker app smoke <target-dir>',
+  'soul-app.manifest.json',
+  'engine-assets/',
+  'product/',
+  'host-adapter/',
+])
+requireMaxLines('docs/soul-app-developer.md', 80)
+forbidIncludes('docs/soul-app-developer.md', [
+  '## Agent Workflow',
+  '## Engine Assets Projection',
+  '## MCP Client',
+  '## MCP Client And Server Declarations',
+  '## Smoke',
+  '## Design Boundary',
+  '## Contribution Checklist',
+  'generic worker-scoped options',
+  'Host can display',
+  'MCP plumbing',
+  'permission hints',
+  'review verdict',
+  'memory promotion',
 ])
 
 requireIncludes('.agents/skills/aiworker-host-dev/SKILL.md', [
   'docs/architecture.md#constraint-registry',
+  'This skill is a route helper, not a parallel architecture contract.',
+  'Read these registry IDs in `docs/architecture.md` before Host changes:',
   '`ARCH-001`',
   '`HOST-001`',
   '`CONFIG-001`',
@@ -140,14 +160,15 @@ requireIncludes('.agents/skills/aiworker-host-dev/SKILL.md', [
   '`ENGINE-001`',
   '`UI-001`',
   '`DOC-001`',
-  'shadcn',
-  'Component Library Preflight',
-  'Use `packages/ui` as the shadcn-managed source',
-  'app-local UI ownership reason',
+  'Use `aiworker-soul-app-dev` when the change belongs to app-owned domain work.',
+  'bun run docs:check',
+  'bun run crg:update',
 ])
 
 requireIncludes('.agents/skills/aiworker-soul-app-dev/SKILL.md', [
   'docs/architecture.md#constraint-registry',
+  'This skill is a route helper, not a parallel architecture contract.',
+  'Read `docs/soul-app-developer.md` only as a frozen quickstart for commands and package shape.',
   '`ARCH-001`',
   '`SOUL-001`',
   '`CONFIG-001`',
@@ -157,8 +178,9 @@ requireIncludes('.agents/skills/aiworker-soul-app-dev/SKILL.md', [
   '`DATA-001`',
   '`ENGINE-001`',
   '`DOC-001`',
-  'compose shared chrome and controls from',
-  'bun run ui:check',
+  'Use `aiworker-host-dev` when the change belongs to Host platform behavior.',
+  'aiworker app validate <app-path>',
+  'aiworker app smoke <app-path>',
 ])
 
 for (const file of activeDocs) {
@@ -210,6 +232,13 @@ function requireIncludes(file: string, needles: string[]): void {
     if (!content.includes(needle))
       issues.push({ file, message: `missing required text ${JSON.stringify(needle)}` })
   }
+}
+
+function requireMaxLines(file: string, maxLines: number): void {
+  const content = read(file).trimEnd()
+  const lineCount = content.length === 0 ? 0 : content.split(/\r?\n/).length
+  if (lineCount > maxLines)
+    issues.push({ file, message: `expected at most ${maxLines} lines, found ${lineCount}` })
 }
 
 function forbidIncludes(file: string, needles: string[]): void {

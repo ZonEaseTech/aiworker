@@ -46,7 +46,8 @@ Host-owned Worker Configuration 的 trigger、dialog shell 和配置边界只到
   非平凡前端改动再读取 `/pma-web`；shadcn/ui 相关改动再读取 `.agents/skills/shadcn/SKILL.md`。
 - CLI lifecycle、daemon/app/worker/workspace/session 命令：`docs/cli.md` 和
   `aiworker-host-dev` skill。
-- Soul App authoring：`docs/soul-app-developer.md` 和 `aiworker-soul-app-dev` skill。
+- Soul App authoring：先读 `docs/architecture.md#constraint-registry` 和
+  `aiworker-soul-app-dev` skill；`docs/soul-app-developer.md` 只是冻结的命令与目录速查。
 - 历史 PMA、changelog、Superpowers spec/plan 只作为审计轨迹；不能覆盖当前架构合同。
 
 ## 工作方式
