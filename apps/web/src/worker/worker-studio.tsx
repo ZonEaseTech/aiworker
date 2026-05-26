@@ -517,7 +517,7 @@ export function WorkerStudio() {
                     sessionId={activeMountedRoute?.surface?.scope === 'session' ? selectedSession?.id ?? null : null}
                     workerId={selectedWorker.id}
                     workspaceId={mountedWorkspaceId}
-                    onSelectWorkspace={(workspaceId) => selectWorkspaceLocator(selectedWorker.id, workspaceId)}
+                    onSelectWorkspace={workspaceId => selectWorkspaceLocator(selectedWorker.id, workspaceId)}
                   />
                 )
               : null}
@@ -552,7 +552,7 @@ export function WorkerStudio() {
                     onOpenSettings={() => openSettings()}
                     onRefresh={() => void refresh()}
                     onSearch={setQuery}
-                    onSelectWorkspace={(workspace) => selectWorkspaceLocator(workspace.workerId, workspace.id)}
+                    onSelectWorkspace={workspace => selectWorkspaceLocator(workspace.workerId, workspace.id)}
                   />
                 )
               : null}

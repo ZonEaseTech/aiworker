@@ -59,8 +59,8 @@ describe('UniversalWorkbenchApp', () => {
   })
 
   it('keeps long workspace and session names inside the fixed sidebar', () => {
-    const longWorkspaceName = 'Workspace-' + 'Alpha'.repeat(24)
-    const longSessionLabel = 'aiworker-qa.' + 'evidence-review-'.repeat(16)
+    const longWorkspaceName = `Workspace-${'Alpha'.repeat(24)}`
+    const longSessionLabel = `aiworker-qa.${'evidence-review-'.repeat(16)}`
     const workspace = {
       ...workspaceFixture(),
       name: longWorkspaceName,
