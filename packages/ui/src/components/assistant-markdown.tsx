@@ -20,7 +20,7 @@ export function AssistantMarkdown({ className, markdown, streaming = false }: As
 
   return (
     <div
-      data-chat-slot="assistant-markdown"
+      data-transcript-slot="assistant-markdown"
       className={cn('min-w-0 space-y-3 text-sm/relaxed text-foreground', className)}
     >
       {blocks.map((block, index) => renderBlock(block, index))}
@@ -132,7 +132,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
     return (
       <figure
         key={`code-${index}`}
-        data-chat-slot="assistant-code-block"
+        data-transcript-slot="assistant-code-block"
         data-testid="assistant-code-block"
         className="overflow-hidden rounded-md border border-border bg-muted/40"
       >
