@@ -366,7 +366,7 @@ export function AssistantMarkdown({ className, markdown, streaming = false }: As
   const blocks = parseMarkdownBlocks(repaired)
 
   return (
-    <div data-chat-slot="assistant-markdown" className={cn('min-w-0 space-y-3 text-sm/relaxed text-foreground', className)}>
+    <div data-transcript-slot="assistant-markdown" className={cn('min-w-0 space-y-3 text-sm/relaxed text-foreground', className)}>
       {blocks.map((block, index) => renderBlock(block, index))}
     </div>
   )
@@ -474,7 +474,7 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
 function renderBlock(block: MarkdownBlock, index: number): ReactNode {
   if (block.kind === 'code') {
     return (
-      <figure key={`code-${index}`} data-chat-slot="assistant-code-block" data-testid="assistant-code-block" className="overflow-hidden rounded-md border border-border bg-muted/40">
+      <figure key={`code-${index}`} data-transcript-slot="assistant-code-block" data-testid="assistant-code-block" className="overflow-hidden rounded-md border border-border bg-muted/40">
         {block.language ? <figcaption className="border-b border-border px-3 py-1.5 text-xs text-muted-foreground">{block.language}</figcaption> : null}
         <pre className="overflow-x-auto p-3 text-xs/relaxed" dir="ltr"><code>{block.code}</code></pre>
       </figure>
@@ -668,7 +668,7 @@ export function CommandBlock({
 
   return (
     <figure
-      data-chat-slot="command-block"
+      data-transcript-slot="command-block"
       data-command-status={status}
       className={cn(
         'min-w-0 overflow-hidden rounded-md border border-border bg-muted/30 text-xs/relaxed',
@@ -783,7 +783,7 @@ describe('ArtifactStrip', () => {
     expect(screen.getByText('Browser evidence')).toBeTruthy()
     expect(screen.getByText('available')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open' })).toBeTruthy()
-    expect(container.querySelector('[data-chat-slot="artifact-strip"] [data-slot="card"] [data-slot="card"]')).toBeNull()
+    expect(container.querySelector('[data-transcript-slot="artifact-strip"] [data-slot="card"] [data-slot="card"]')).toBeNull()
   })
 })
 ```
@@ -842,9 +842,9 @@ export function ArtifactStrip({ artifacts, className }: ArtifactStripProps) {
     return null
 
   return (
-    <ItemGroup data-chat-slot="artifact-strip" className={cn('grid gap-2 sm:grid-cols-2', className)}>
+    <ItemGroup data-transcript-slot="artifact-strip" className={cn('grid gap-2 sm:grid-cols-2', className)}>
       {artifacts.map(artifact => (
-        <Item key={artifact.id} data-chat-slot="artifact-reference" variant="muted" size="sm" className="min-w-0">
+        <Item key={artifact.id} data-transcript-slot="artifact-reference" variant="muted" size="sm" className="min-w-0">
           <ItemContent className="min-w-0">
             <ItemTitle className="max-w-full">{artifact.href ? <a href={artifact.href}>{artifact.title}</a> : artifact.title}</ItemTitle>
             {artifact.description ? <ItemDescription className="max-w-full line-clamp-none">{artifact.description}</ItemDescription> : null}
@@ -878,7 +878,7 @@ export function StreamingPlaceholder({ className, label }: StreamingPlaceholderP
 
   return (
     <div
-      data-chat-slot="streaming-placeholder"
+      data-transcript-slot="streaming-placeholder"
       role="status"
       aria-label={ariaLabel}
       aria-live="polite"
@@ -1015,7 +1015,7 @@ export function TranscriptActivityGroup({
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      data-chat-slot="activity-group"
+      data-transcript-slot="activity-group"
       className={cn('min-w-0 rounded-md border border-border bg-muted/20', className)}
     >
       <CollapsibleTrigger asChild>
@@ -1211,7 +1211,7 @@ export interface ChatThreadProps {
 
 export function ChatThread({ ariaLabel, className, onTurnCollapsedChange, turns }: ChatThreadProps) {
   return (
-    <ItemGroup data-chat-slot="chat-thread" role="log" aria-label={ariaLabel} className={cn('min-w-0 gap-3', className)}>
+    <ItemGroup data-transcript-slot="chat-thread" role="log" aria-label={ariaLabel} className={cn('min-w-0 gap-3', className)}>
       {turns.map(turn => (
         <TranscriptTurn key={turn.id} onCollapsedChange={onTurnCollapsedChange} turn={turn} />
       ))}
@@ -1229,7 +1229,7 @@ export function TranscriptTurn({ onCollapsedChange, turn }: TranscriptTurnProps)
   const title = turn.title ?? 'Turn'
 
   return (
-    <section data-chat-slot="transcript-turn" data-collapsed={turn.collapsed ? 'true' : undefined} className="min-w-0 rounded-md border border-border bg-background">
+    <section data-transcript-slot="transcript-turn" data-collapsed={turn.collapsed ? 'true' : undefined} className="min-w-0 rounded-md border border-border bg-background">
       <header className="flex min-w-0 items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2">
         <div className="min-w-0">
           <h3 className="truncate text-xs/relaxed font-medium">{title}</h3>
@@ -1266,7 +1266,7 @@ export function TranscriptTurn({ onCollapsedChange, turn }: TranscriptTurnProps)
 
 function TranscriptItem({ item }: { item: TranscriptItemModel }) {
   if (item.kind === 'user-message')
-    return <Item data-chat-slot="user-message" variant="muted" className="min-w-0"><ItemContent><ItemDescription className="max-w-full line-clamp-none text-foreground">{item.body}</ItemDescription></ItemContent></Item>
+    return <Item data-transcript-slot="user-message" variant="muted" className="min-w-0"><ItemContent><ItemDescription className="max-w-full line-clamp-none text-foreground">{item.body}</ItemDescription></ItemContent></Item>
 
   if (item.kind === 'assistant-markdown')
     return item.streaming && !item.markdown.trim() ? <StreamingPlaceholder label="Preparing response" /> : <AssistantMarkdown markdown={item.markdown} streaming={item.streaming} />
@@ -1281,9 +1281,9 @@ function TranscriptItem({ item }: { item: TranscriptItemModel }) {
     return <ArtifactStrip artifacts={item.artifacts} />
 
   if (item.kind === 'status')
-    return <Item data-chat-slot="status-message" variant="muted" className={cn('min-w-0', item.tone === 'danger' && 'bg-destructive/5')}><ItemContent><ItemDescription className="max-w-full line-clamp-none">{item.body}</ItemDescription></ItemContent></Item>
+    return <Item data-transcript-slot="status-message" variant="muted" className={cn('min-w-0', item.tone === 'danger' && 'bg-destructive/5')}><ItemContent><ItemDescription className="max-w-full line-clamp-none">{item.body}</ItemDescription></ItemContent></Item>
 
-  return <div data-chat-slot="custom-item" className="min-w-0">{item.node}</div>
+  return <div data-transcript-slot="custom-item" className="min-w-0">{item.node}</div>
 }
 
 function createDefaultTurnSummary(turn: TranscriptTurnModel): ReactNode {

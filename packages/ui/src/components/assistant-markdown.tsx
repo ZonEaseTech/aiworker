@@ -42,8 +42,7 @@ export function repairStreamingMarkdown(markdown: string, streaming: boolean): s
   if (inlineBacktickCount % 2 === 1)
     repaired = `${repaired}\``
 
-  const strongCount = (withoutFences.match(/\*\*/g) ?? []).length
-  if (strongCount % 2 === 1)
+  if (hasUnclosedStrongOpener(withoutFences))
     repaired = `${repaired}**`
 
   if (hasUnclosedItalicOpener(withoutFences))
@@ -228,6 +227,37 @@ function hasUnclosedItalicOpener(text: string): boolean {
   }
 
   return false
+}
+
+function hasUnclosedStrongOpener(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    if (!isStrongOpener(text, index))
+      continue
+
+    const nextCloser = text.slice(index + 2).search(/\S\*\*(?!\*)/)
+    if (nextCloser === -1)
+      return true
+  }
+
+  return false
+}
+
+function isStrongOpener(text: string, index: number): boolean {
+  if (text[index] !== '*' || text[index + 1] !== '*')
+    return false
+
+  const previous = text[index - 1]
+  const next = text[index + 2]
+  if (previous === '*' || next === '*')
+    return false
+
+  if (!next || /\s/.test(next))
+    return false
+
+  if (!isEmphasisContentStart(next))
+    return false
+
+  return !previous || /\s|[([{"']/.test(previous)
 }
 
 function isItalicOpener(text: string, index: number): boolean {

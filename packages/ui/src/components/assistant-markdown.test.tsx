@@ -63,10 +63,24 @@ describe('AssistantMarkdown', () => {
     expect(repairStreamingMarkdown('*italic', true)).toBe('*italic*')
   })
 
+  it('does not repair globstar wildcards as bold markdown while streaming', () => {
+    expect(repairStreamingMarkdown('glob **/*.ts', true)).toBe('glob **/*.ts')
+    expect(repairStreamingMarkdown('src/**', true)).toBe('src/**')
+    expect(repairStreamingMarkdown('**/*.{ts,tsx}', true)).toBe('**/*.{ts,tsx}')
+    expect(repairStreamingMarkdown('**bold', true)).toBe('**bold**')
+  })
+
   it('does not render suffix wildcard asterisks as italic markdown', () => {
     const { container } = render(<AssistantMarkdown markdown="Use foo* wildcard" />)
 
     expect(screen.getByText('Use foo* wildcard')).toBeTruthy()
     expect(container.querySelector('em')).toBeNull()
+  })
+
+  it('does not render globstar wildcards as bold markdown', () => {
+    const { container } = render(<AssistantMarkdown markdown="glob **/*.ts" />)
+
+    expect(screen.getByText('glob **/*.ts')).toBeTruthy()
+    expect(container.querySelector('strong')).toBeNull()
   })
 })
