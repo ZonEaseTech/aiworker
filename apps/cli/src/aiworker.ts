@@ -18,6 +18,9 @@ import { fileURLToPath } from 'node:url'
 import {
   createHostRuntime,
   getWorkerEnv,
+  readFrozenSessionEngine,
+  resolveLocalCliEngine,
+  scanLocalEngines,
   soulAppServiceEnv,
 } from '@zonease/aiworker-core'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
@@ -39,6 +42,7 @@ import {
   listWorkspaces,
   runWorkerMigrations,
   setSetting,
+  updateSession,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import cac from 'cac'
 
@@ -186,6 +190,29 @@ function selectedCliEngineId(): string {
   const setting = listSettings().find(setting => setting.key === 'engine.default')
   const value = setting?.valueJson
   return value && typeof value.engine === 'string' && value.engine.trim().length > 0 ? value.engine.trim() : 'codex'
+}
+
+function resolveCliEngineMetadata(engineId: string): { engineCommand: string, engineId: string, engineName: string, executionMode: 'local-cli' } {
+  return resolveLocalCliEngine({
+    engineId,
+    engines: scanLocalEngines(),
+  })
+}
+
+function resolveTurnEngineMetadata(sessionMetadata: Record<string, unknown> | null | undefined): { engineCommand: string, engineId: string, executionMode: 'local-cli' } {
+  const frozen = readFrozenSessionEngine(sessionMetadata)
+  if (frozen?.executionMode === 'local-cli') {
+    if (frozen.engineCommand) {
+      return {
+        engineCommand: frozen.engineCommand,
+        engineId: frozen.engineId,
+        executionMode: 'local-cli',
+      }
+    }
+    return resolveCliEngineMetadata(frozen.engineId)
+  }
+  const selectedEngineId = selectedCliEngineId()
+  return resolveCliEngineMetadata(selectedEngineId)
 }
 
 function registryContext() {
@@ -783,10 +810,8 @@ async function startSessionCommand(opts: { context?: string, engine?: string, in
   const host = createHost(paths)
   const template = host.requireCapabilityTemplateForWorker(runtime.workerId, skillId)
   const selectedEngineId = opts.engine?.trim() || selectedCliEngineId()
-  const sessionMetadata = {
-    engineCommand: selectedEngineId,
-    engineId: selectedEngineId,
-    executionMode: 'local-cli',
+  const engineMetadata = {
+    ...resolveCliEngineMetadata(selectedEngineId),
     ...cliEngineOverrideMetadata(opts),
   }
   const session = await runtime.createSession({
@@ -794,16 +819,16 @@ async function startSessionCommand(opts: { context?: string, engine?: string, in
     capabilityTemplateId: template.id,
     title: requireText(opts.title, 'title'),
     context: opts.context ?? '',
-    metadata: sessionMetadata,
+    metadata: engineMetadata,
   })
   const input = requireText(opts.input, 'input')
   printJson(await runtime.startTurn({
     sessionId: session.id,
     input,
-    engineId: selectedEngineId,
-    engineCommand: selectedEngineId,
+    engineId: engineMetadata.engineId,
+    engineCommand: engineMetadata.engineCommand,
     metadata: {
-      ...(session.metadataJson ?? sessionMetadata),
+      ...(session.metadataJson ?? engineMetadata),
       ...cliEngineOverrideMetadata(opts),
     },
   }))
@@ -816,16 +841,26 @@ async function sendTurnCommand(opts: { input?: string, model?: string, reasoning
   if (!session)
     throw new Error(`session not found: ${sessionId}`)
   const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
-  const selectedEngineId = selectedCliEngineId()
+  const engineMetadata = resolveTurnEngineMetadata(session.metadataJson)
+  const frozen = readFrozenSessionEngine(session.metadataJson)
+  const currentSession = frozen?.executionMode === 'local-cli' && frozen.engineCommand !== engineMetadata.engineCommand
+    ? updateSession({
+        id: session.id,
+        metadataJson: {
+          ...(session.metadataJson ?? {}),
+          ...engineMetadata,
+        },
+      })
+    : session
   const metadata = {
-    ...(session.metadataJson ?? {}),
+    ...(currentSession.metadataJson ?? {}),
     ...cliEngineOverrideMetadata(opts),
   }
   printJson(await runtime.startTurn({
     sessionId,
     input: requireText(opts.input, 'input'),
-    engineId: selectedEngineId,
-    engineCommand: selectedEngineId,
+    engineId: engineMetadata.engineId,
+    engineCommand: engineMetadata.engineCommand,
     metadata,
   }))
 }

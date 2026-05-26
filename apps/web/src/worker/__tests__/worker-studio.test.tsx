@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { engineIconSrc } from '../../features/settings/model'
 import { WorkerStudio } from '../worker-studio'
 
-type MountedMicroAppTestEvent = {
+interface MountedMicroAppTestEvent {
   actionId?: string
   appId?: string
   input?: unknown

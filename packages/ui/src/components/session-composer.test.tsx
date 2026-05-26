@@ -319,6 +319,46 @@ describe('sessionComposer', () => {
     expect(draft.files[0]).toBe(file)
   })
 
+  it('shows the controlled selected template label and submits its id', async () => {
+    const onSubmitDraft = vi.fn()
+
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        defaultValue="Create the profile"
+        onSubmitDraft={onSubmitDraft}
+        onTemplateChange={vi.fn()}
+        selectedTemplateId="aiworker-hr.person-profile"
+        submitAriaLabel="Start"
+        templateLabel="Capability/template"
+        templateOptions={[{
+          description: 'Create a source-backed people profile snapshot.',
+          label: 'Person Profile',
+          value: 'aiworker-hr.person-profile',
+        }]}
+      />,
+    )
+
+    expect(screen.getByRole('combobox', { name: 'Capability/template' }).textContent).toContain('Person Profile')
+    expect((screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement).disabled).toBe(false)
+
+    fireEvent.submit(screen.getByRole('form', { name: 'Session input' }))
+
+    await waitFor(() => expect(onSubmitDraft).toHaveBeenCalledTimes(1))
+    expect(onSubmitDraft.mock.calls[0]?.[0]).toMatchObject({
+      selectedTemplateId: 'aiworker-hr.person-profile',
+      text: 'Create the profile',
+    })
+  })
+
   it('clears managed text and attachments after successful submit', async () => {
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:success-preview')
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})

@@ -25,14 +25,20 @@ const HR_CANDIDATE_SCREEN = namespaceSoulAppCapabilityId(HR_APP_ID, 'candidate-s
 
 describe('local daemon API', () => {
   let dir: string
+  let originalPath: string | undefined
 
   beforeEach(() => {
     closeWorkerDb()
+    originalPath = process.env.PATH
     dir = mkdtempSync(join(tmpdir(), 'aiworker-workspace-api-'))
   })
 
   afterEach(async () => {
     closeWorkerDb()
+    if (originalPath == null)
+      delete process.env.PATH
+    else
+      process.env.PATH = originalPath
     await rm(dir, { recursive: true, force: true })
   })
 
@@ -68,6 +74,25 @@ describe('local daemon API', () => {
     })
     expect(res.status).toBe(201)
     return (await res.json() as { worker: { id: string, soulId: string } }).worker
+  }
+
+  function writeFakeEngineCommand(command: string): string {
+    const binDir = join(dir, 'bin')
+    mkdirSync(binDir, { recursive: true })
+    const commandPath = join(binDir, command)
+    writeFileSync(commandPath, [
+      '#!/usr/bin/env bash',
+      'if [ "$1" = "--version" ]; then',
+      `  echo "${command} test 1.0"`,
+      '  exit 0',
+      'fi',
+      'cat >/dev/null',
+      'printf \'%s\\n\' \'{"type":"assistant","message":{"id":"msg-1","content":[{"type":"text","text":"Done."}]}}\'',
+      '',
+    ].join('\n'))
+    chmodSync(commandPath, 0o755)
+    process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`
+    return commandPath
   }
 
   function seedLegacyHrMetadata() {
@@ -244,6 +269,7 @@ describe('local daemon API', () => {
   })
 
   it('freezes selected engine settings at session creation and keeps continuations immutable', async () => {
+    const claudePath = writeFakeEngineCommand('claude')
     const target = await app()
     const hrWorker = await createHrWorker(target)
     const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
@@ -254,7 +280,13 @@ describe('local daemon API', () => {
 
     expect(await target.request('/api/local/settings', {
       method: 'PATCH',
-      body: JSON.stringify({ engineId: 'claude-code', executionMode: 'local-cli' }),
+      body: JSON.stringify({
+        engineId: 'codex',
+        engines: [
+          { command: 'claude', id: 'claude-code', installed: true, name: 'Claude Code', path: claudePath, version: 'claude test 1.0' },
+        ],
+        executionMode: 'local-cli',
+      }),
       headers: { 'content-type': 'application/json' },
     })).toMatchObject({ status: 200 })
 
@@ -262,6 +294,7 @@ describe('local daemon API', () => {
       method: 'POST',
       body: JSON.stringify({
         capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        engineId: 'claude-code',
         input: 'Prepare a candidate screen with the selected engine.',
         title: 'Screen candidate',
       }),
@@ -279,6 +312,7 @@ describe('local daemon API', () => {
     })
     expect(typeof sessionBody.session.metadataJson.engineCommand).toBe('string')
     const frozenEngineCommand = sessionBody.session.metadataJson.engineCommand as string
+    expect(frozenEngineCommand).toBe(claudePath)
     expect(sessionBody.invocation.engineCommand).toBe(frozenEngineCommand)
     expect(sessionBody.invocation.engineId).toBe('claude-code')
 
@@ -305,6 +339,98 @@ describe('local daemon API', () => {
       executionMode: 'local-cli',
     })
     expect(continuationBody.turn.metadataJson.engineCommand).toBe(frozenEngineCommand)
+  })
+
+  it('rejects unavailable selected local engines before executor invocation', async () => {
+    const target = await app()
+    const hrWorker = await createHrWorker(target)
+    const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Unavailable engine workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as { workspace: { id: string } }
+
+    expect(await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        engineId: 'claude-code',
+        engines: [
+          { command: 'claude', id: 'claude-code', installed: false, name: 'Claude Code', path: null, version: null },
+        ],
+        executionMode: 'local-cli',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })).toMatchObject({ status: 200 })
+
+    const res = await target.request(`/api/local/workers/${hrWorker.id}/workspaces/${workspaceBody.workspace.id}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        input: 'This should fail before executor invocation.',
+        title: 'Unavailable engine',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(res.status).toBe(400)
+    expect(await res.text()).toContain('Selected local engine is not installed: Claude Code')
+  })
+
+  it('resolves legacy frozen local engine metadata before continuing sessions', async () => {
+    const claudePath = writeFakeEngineCommand('claude')
+    const opencodePath = writeFakeEngineCommand('opencode')
+    const target = await app()
+    const hrWorker = await createHrWorker(target)
+    const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Legacy frozen engine workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as { workspace: { id: string } }
+
+    createSession({
+      id: 'legacy-frozen-engine-session',
+      workerId: hrWorker.id,
+      workspaceId: workspaceBody.workspace.id,
+      capabilityTemplateId: HR_CANDIDATE_SCREEN,
+      title: 'Legacy frozen engine',
+      metadataJson: {
+        engineId: 'claude-code',
+        executionMode: 'local-cli',
+      },
+      at: '2026-05-25T12:00:00.000Z',
+    })
+
+    expect(await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        engineId: 'opencode',
+        engines: [
+          { command: 'claude', id: 'claude-code', installed: true, name: 'Claude Code', path: claudePath, version: 'claude test 1.0' },
+          { command: 'opencode', id: 'opencode', installed: true, name: 'OpenCode', path: opencodePath, version: 'opencode test 1.0' },
+        ],
+        executionMode: 'local-cli',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })).toMatchObject({ status: 200 })
+
+    const continuationRes = await target.request(`/api/local/workers/${hrWorker.id}/sessions/legacy-frozen-engine-session/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ input: 'Continue with the legacy frozen engine.' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(continuationRes.status).toBe(201)
+    const continuationBody = await continuationRes.json() as {
+      invocation: { engineCommand: string | null, engineId: string }
+      turn: { metadataJson: Record<string, unknown> }
+    }
+    expect(continuationBody.invocation.engineCommand).toBe(claudePath)
+    expect(continuationBody.invocation.engineCommand).not.toBe(opencodePath)
+    expect(continuationBody.invocation.engineId).toBe('claude-code')
+    expect(continuationBody.turn.metadataJson).toMatchObject({
+      engineCommand: claudePath,
+      engineId: 'claude-code',
+      executionMode: 'local-cli',
+    })
   })
 
   it('saves and reads worker overlay assets through worker-scoped routes', async () => {
@@ -479,6 +605,102 @@ printf '\\nEOF\\n'
       workerId: worker.id,
     })
     expect(JSON.stringify(rows[0])).not.toContain('native payload')
+
+    expect(await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        executionMode: 'byok',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })).toMatchObject({ status: 200 })
+
+    const defaultEngineRes = await target.request(`/api/local/workers/${worker.id}/engine/invocations`, {
+      method: 'POST',
+      body: JSON.stringify({
+        cwd,
+        engineCommand: command,
+        input: 'native payload with default engine id\n',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(defaultEngineRes.status).toBe(201)
+    const defaultEngineBody = await defaultEngineRes.json() as {
+      invocation: { engineCommand: string, engineId: string, status: string }
+    }
+    expect(defaultEngineBody.invocation).toMatchObject({
+      engineCommand: command,
+      engineId: 'openai-compatible',
+      status: 'succeeded',
+    })
+
+    const updatedRows = listWorkerEngineInvocations(worker.id)
+    expect(updatedRows).toHaveLength(2)
+    const defaultEngineRow = updatedRows.find(row => row.engineId === 'openai-compatible')
+    expect(defaultEngineRow).toMatchObject({
+      engineCommand: command,
+      engineId: 'openai-compatible',
+      status: 'succeeded',
+    })
+    expect(JSON.stringify(defaultEngineRow)).not.toContain('native payload with default engine id')
+  })
+
+  it('resolves worker-scoped native engine invocations without explicit commands', async () => {
+    const claudePath = writeFakeEngineCommand('claude')
+    const target = await app()
+    const worker = await createHrWorker(target)
+    const cwd = join(dir, 'native-resolved-cwd')
+    mkdirSync(cwd, { recursive: true })
+
+    expect(await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        engineId: 'claude-code',
+        engines: [
+          { command: 'claude', id: 'claude-code', installed: true, name: 'Claude Code', path: claudePath, version: 'claude test 1.0' },
+        ],
+        executionMode: 'local-cli',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })).toMatchObject({ status: 200 })
+
+    const res = await target.request(`/api/local/workers/${worker.id}/engine/invocations`, {
+      method: 'POST',
+      body: JSON.stringify({
+        args: ['--resolved-native'],
+        cwd,
+        engineId: 'claude-code',
+        input: 'resolved native payload\n',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(res.status).toBe(201)
+    const body = await res.json() as {
+      invocation: Record<string, unknown> & { cwd: string, engineCommand: string, engineId: string, exitCode: number, status: string, workerId: string }
+      result: { exitCode: number, status: string, stdout: string }
+    }
+    expect(body.invocation).toMatchObject({
+      cwd: realpathSync(cwd),
+      engineCommand: claudePath,
+      engineId: 'claude-code',
+      exitCode: 0,
+      status: 'succeeded',
+      workerId: worker.id,
+    })
+    expect(body.result).toMatchObject({ exitCode: 0, status: 'succeeded' })
+    expect(body.result.stdout).toContain('"text":"Done."')
+
+    const rows = listWorkerEngineInvocations(worker.id)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      cwd: realpathSync(cwd),
+      engineCommand: claudePath,
+      engineId: 'claude-code',
+      exitCode: 0,
+      status: 'succeeded',
+      workerId: worker.id,
+    })
+    expect(JSON.stringify(rows[0])).not.toContain('resolved native payload')
   })
 
   it('streams worker-scoped native engine events without storing raw engine IO', async () => {

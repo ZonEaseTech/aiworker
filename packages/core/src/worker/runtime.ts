@@ -10,6 +10,7 @@ import type {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import type { EngineAssetSource } from './engine-assets'
 import type { LocalExecutor, LocalExecutorEvent, LocalExecutorResult } from './executor'
+import type { FrozenSessionEngine } from './session-engine'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -44,10 +45,10 @@ import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
 import { LocalWorkspaceFiles } from './files'
 import {
   freezeSessionEngineMetadata,
+
   inferLatestInvocationEngine,
   readFrozenSessionEngine,
   resolveFrozenSessionEngine,
-  type FrozenSessionEngine,
 } from './session-engine'
 
 export interface LocalWorkerRuntimeOptions {

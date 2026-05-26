@@ -83,13 +83,14 @@ export {
   LocalWorkspaceFiles,
 } from './worker/files'
 export {
-  freezeSessionEngineMetadata,
-  readFrozenSessionEngine,
-  resolveFrozenSessionEngine,
-  type FrozenSessionEngine,
-  type LatestInvocationEngine,
-  type ResolvedSessionEngine,
-} from './worker/session-engine'
+  LOCAL_ENGINE_DEFINITIONS,
+  type LocalEngineDefinition,
+  LocalEngineResolutionError,
+  type ResolvedLocalCliEngine,
+  resolveLocalCliEngine,
+  scanLocalEngines,
+  scanLocalEnginesFromCommands,
+} from './worker/local-engine-resolver'
 export {
   type CreateLocalSessionInput,
   createLocalWorkerRuntime,
@@ -101,3 +102,11 @@ export {
   type StartLocalTurnInput,
   type WorkspaceAssetProjectionResult,
 } from './worker/runtime'
+export {
+  freezeSessionEngineMetadata,
+  type FrozenSessionEngine,
+  type LatestInvocationEngine,
+  readFrozenSessionEngine,
+  type ResolvedSessionEngine,
+  resolveFrozenSessionEngine,
+} from './worker/session-engine'

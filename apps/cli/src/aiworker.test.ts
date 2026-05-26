@@ -32,11 +32,13 @@ describe('aiworker local CLI', () => {
   const originalEnv = { ...process.env }
   const originalFetch = globalThis.fetch
   const originalWrite = process.stdout.write
+  let fakeEngineCommandPaths: string[] = []
   let root: string
   let output = ''
 
   beforeEach(async () => {
     closeWorkerDb()
+    fakeEngineCommandPaths = []
     output = ''
     root = await mkdtemp(path.join(tmpdir(), 'aiworker-cli-'))
     process.env.AIWORKER_HOME = path.join(root, 'home')
@@ -55,6 +57,7 @@ describe('aiworker local CLI', () => {
     Object.assign(process.env, originalEnv)
     globalThis.fetch = originalFetch
     process.stdout.write = originalWrite
+    await Promise.all(fakeEngineCommandPaths.map(commandPath => rm(commandPath, { force: true })))
     await rm(root, { recursive: true, force: true })
   })
 
@@ -139,6 +142,13 @@ describe('aiworker local CLI', () => {
     ])
   }
 
+  async function writeFakeClaudeCommand(): Promise<void> {
+    await writeFakeEngineCommand('claude', [
+      'printf \'%s\\n\' \'{"type":"assistant","message":{"id":"msg-1","content":[{"type":"text","text":"Done."}]}}\'',
+      'printf \'%s\\n\' \'{"type":"result","usage":{"input_tokens":1,"output_tokens":1}}\'',
+    ])
+  }
+
   async function writeFakeEngineCommand(command: string, body: string[]): Promise<void> {
     const binDir = path.join(root, 'bin')
     mkdirSync(binDir, { recursive: true })
@@ -151,6 +161,7 @@ describe('aiworker local CLI', () => {
       '',
     ].join('\n'))
     await chmod(commandPath, 0o755)
+    fakeEngineCommandPaths.push(commandPath)
     process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`
   }
 
@@ -409,14 +420,13 @@ describe('aiworker local CLI', () => {
       session: { id: string, metadataJson: Record<string, unknown> }
     }
     expect(started.session.metadataJson).toMatchObject({
-      engineCommand: 'opencode',
       engineId: 'opencode',
       executionMode: 'local-cli',
     })
-    expect(started.invocation).toMatchObject({
-      engineCommand: 'opencode',
-      engineId: 'opencode',
-    })
+    expect(String(started.session.metadataJson.engineCommand)).toMatch(/\/opencode$/)
+    const frozenEngineCommand = started.session.metadataJson.engineCommand as string
+    expect(started.invocation.engineCommand).toBe(frozenEngineCommand)
+    expect(started.invocation.engineId).toBe('opencode')
     output = ''
 
     expect(await runCli(argv('engine', 'select', 'codex'))).toBe(0)
@@ -435,15 +445,13 @@ describe('aiworker local CLI', () => {
       invocation: { engineCommand: string | null, engineId: string }
       turn: { metadataJson: Record<string, unknown> }
     }
-    expect(continued.invocation).toMatchObject({
-      engineCommand: 'opencode',
-      engineId: 'opencode',
-    })
+    expect(continued.invocation.engineCommand).toBe(frozenEngineCommand)
+    expect(continued.invocation.engineId).toBe('opencode')
     expect(continued.turn.metadataJson).toMatchObject({
-      engineCommand: 'opencode',
       engineId: 'opencode',
       executionMode: 'local-cli',
     })
+    expect(continued.turn.metadataJson.engineCommand).toBe(frozenEngineCommand)
     output = ''
 
     expect(await runCli(argv(
@@ -467,14 +475,176 @@ describe('aiworker local CLI', () => {
       session: { metadataJson: Record<string, unknown> }
     }
     expect(explicit.session.metadataJson).toMatchObject({
-      engineCommand: 'opencode',
       engineId: 'opencode',
       executionMode: 'local-cli',
     })
-    expect(explicit.invocation).toMatchObject({
-      engineCommand: 'opencode',
+    const explicitMetadataEngineCommand = explicit.session.metadataJson.engineCommand
+    expect(String(explicitMetadataEngineCommand)).toMatch(/\/opencode$/)
+    expect(explicit.invocation.engineCommand).toBe(explicitMetadataEngineCommand as string)
+    expect(explicit.invocation.engineId).toBe('opencode')
+  })
+
+  it('resolves claude-code selected engine to the installed claude command', async () => {
+    await writeFakeClaudeCommand()
+
+    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-claude', '--name', 'HR Claude', '--soul', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-claude'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
+    output = ''
+
+    expect(await runCli(argv('engine', 'select', 'claude-code'))).toBe(0)
+    output = ''
+    expect(await runCli(argv(
+      'session',
+      'start',
+      '--worker',
+      'hr-claude',
+      '--workspace',
+      workspace.id,
+      '--skill',
+      namespaceSoulAppCapabilityId('aiworker-hr', 'person-profile'),
+      '--title',
+      'Claude profile',
+      '--input',
+      'Create a short profile summary.',
+    ))).toBe(0)
+
+    const started = JSON.parse(output) as {
+      invocation: { engineCommand: string | null, engineId: string }
+      session: { metadataJson: Record<string, unknown> }
+    }
+    expect(started.session.metadataJson.engineId).toBe('claude-code')
+    expect(String(started.session.metadataJson.engineCommand)).toMatch(/\/claude$/)
+    expect(started.invocation.engineId).toBe('claude-code')
+    expect(String(started.invocation.engineCommand)).toMatch(/\/claude$/)
+  })
+
+  it('uses frozen CLI engine metadata when the selected engine becomes unavailable', async () => {
+    await writeFakeOpenCodeCommand()
+
+    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-frozen', '--name', 'HR Frozen', '--soul', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-frozen'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
+    output = ''
+
+    expect(await runCli(argv('engine', 'select', 'opencode'))).toBe(0)
+    output = ''
+    expect(await runCli(argv(
+      'session',
+      'start',
+      '--worker',
+      'hr-frozen',
+      '--workspace',
+      workspace.id,
+      '--skill',
+      namespaceSoulAppCapabilityId('aiworker-hr', 'evidence-matrix'),
+      '--title',
+      'Frozen engine',
+      '--input',
+      'Start with OpenCode.',
+    ))).toBe(0)
+    const started = JSON.parse(output) as {
+      invocation: { engineCommand: string | null, engineId: string }
+      session: { id: string, metadataJson: Record<string, unknown> }
+    }
+    expect(started.session.metadataJson.engineId).toBe('opencode')
+    expect(String(started.session.metadataJson.engineCommand)).toMatch(/\/opencode$/)
+    const frozenEngineCommand = started.session.metadataJson.engineCommand as string
+    expect(started.invocation.engineCommand).toBe(frozenEngineCommand)
+    output = ''
+
+    expect(await runCli(argv('engine', 'select', 'qwen'))).toBe(0)
+    output = ''
+    expect(await runCli(argv(
+      'turn',
+      'send',
+      '--worker',
+      'hr-frozen',
+      '--session',
+      started.session.id,
+      '--input',
+      'Continue after selecting an unavailable engine.',
+    ))).toBe(0)
+    const continued = JSON.parse(output) as {
+      invocation: { engineCommand: string | null, engineId: string }
+      turn: { metadataJson: Record<string, unknown> }
+    }
+    expect(continued.invocation.engineCommand).toBe(frozenEngineCommand)
+    expect(continued.invocation.engineId).toBe('opencode')
+    expect(continued.turn.metadataJson).toMatchObject({
       engineId: 'opencode',
+      executionMode: 'local-cli',
     })
+    expect(continued.turn.metadataJson.engineCommand).toBe(frozenEngineCommand)
+  })
+
+  it('resolves legacy frozen local engine metadata without switching to the selected engine', async () => {
+    await writeFakeClaudeCommand()
+    await writeFakeOpenCodeCommand()
+
+    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-legacy-engine', '--name', 'HR Legacy Engine', '--soul', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-legacy-engine'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
+    output = ''
+
+    closeWorkerDb()
+    mkdirSync(path.dirname(process.env.WORKER_DB_PATH!), { recursive: true })
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    runWorkerMigrations()
+    createSession({
+      id: 'legacy-engine-session',
+      workerId: 'hr-legacy-engine',
+      workspaceId: workspace.id,
+      capabilityTemplateId: namespaceSoulAppCapabilityId('aiworker-hr', 'person-profile'),
+      title: 'Legacy engine session',
+      metadataJson: {
+        engineId: 'claude-code',
+        executionMode: 'local-cli',
+      },
+      at: '2026-05-25T12:00:00.000Z',
+    })
+    closeWorkerDb()
+
+    expect(await runCli(argv('engine', 'select', 'opencode'))).toBe(0)
+    output = ''
+    expect(await runCli(argv(
+      'turn',
+      'send',
+      '--worker',
+      'hr-legacy-engine',
+      '--session',
+      'legacy-engine-session',
+      '--input',
+      'Continue a legacy Claude Code session.',
+    ))).toBe(0)
+
+    const continued = JSON.parse(output) as {
+      invocation: { engineCommand: string | null, engineId: string, status: string }
+      turn: { metadataJson: Record<string, unknown>, status: string }
+    }
+    expect(continued.invocation.engineId).toBe('claude-code')
+    expect(String(continued.invocation.engineCommand)).toMatch(/\/claude$/)
+    expect(continued.invocation.status).toBe('succeeded')
+    expect(continued.turn.metadataJson).toMatchObject({
+      engineId: 'claude-code',
+      executionMode: 'local-cli',
+    })
+    expect(String(continued.turn.metadataJson.engineCommand)).toMatch(/\/claude$/)
   })
 
   it('keeps upgrade discoverable only in the full command index', async () => {

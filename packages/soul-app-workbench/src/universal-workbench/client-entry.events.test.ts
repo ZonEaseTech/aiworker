@@ -3,8 +3,8 @@ import type { LocalSession, LocalSessionEvent } from '@zonease/aiworker-shared'
 import { describe, expect, it } from 'bun:test'
 
 import {
-  applySessionTurnStreamFrame,
   applyMountedDocumentTheme,
+  applySessionTurnStreamFrame,
   consumeSessionTurnStream,
   isTerminalSessionStatus,
   loadSessionEvents,

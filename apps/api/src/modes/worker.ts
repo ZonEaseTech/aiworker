@@ -18,6 +18,8 @@ import {
   createLocalBearerAuthProvider,
   invokeNativeEngine,
   listBaselineAssets,
+  LocalEngineResolutionError,
+  resolveLocalCliEngine,
   soulAppServiceEnv,
   workerEnv,
 } from '@zonease/aiworker-core'
@@ -41,6 +43,7 @@ import {
   listWorkspaces,
   nextWorkerEngineInvocationSeq,
   runWorkerMigrations,
+  updateSession,
   updateWorkspace,
   upsertWorker,
   upsertWorkerOverlayAssets,
@@ -1139,24 +1142,66 @@ async function waitForMountedSoulAppUrl(child: ChildProcessByStdio<null, Readabl
   return url
 }
 
-function selectedEngine(settings: LocalSettingsConfig) {
-  return settings.engines.find(engine => engine.id === settings.engineId)
+function resolvedExecutionMetadata(settings: LocalSettingsConfig, engineIdOverride?: string | null): Record<string, unknown> {
+  if (settings.executionMode !== 'local-cli') {
+    return {
+      byok: settings.byok,
+      engineCommand: null,
+      engineId: settings.byok.provider,
+      engineName: null,
+      executionMode: 'byok',
+    }
+  }
+  return resolvedLocalCliExecutionMetadata(settings, engineIdOverride?.trim() || settings.engineId)
 }
 
-function selectedEngineCommand(settings: LocalSettingsConfig, engine: LocalSettingsConfig['engines'][number] | undefined): string | null {
-  if (settings.executionMode !== 'local-cli')
-    return null
-  return engine?.path ?? engine?.command ?? settings.engineId
-}
-
-function executionMetadata(settings: LocalSettingsConfig, engine: LocalSettingsConfig['engines'][number] | undefined): Record<string, unknown> {
-  const engineId = settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider
+function resolvedLocalCliExecutionMetadata(settings: LocalSettingsConfig, engineId: string, engineNameOverride?: string | null): Record<string, unknown> {
+  let resolved: ReturnType<typeof resolveLocalCliEngine>
+  try {
+    resolved = resolveLocalCliEngine({
+      engineId,
+      engines: settings.engines,
+    })
+  }
+  catch (error) {
+    if (error instanceof LocalEngineResolutionError)
+      throw AppError.badRequest(error.message, 'LOCAL_ENGINE_UNAVAILABLE')
+    throw error
+  }
   return {
     byok: settings.byok,
-    engineCommand: selectedEngineCommand(settings, engine),
+    engineCommand: resolved.engineCommand,
+    engineId: resolved.engineId,
+    engineName: engineNameOverride?.trim() || resolved.engineName,
+    executionMode: resolved.executionMode,
+  }
+}
+
+function sessionExecutionMetadata(session: SessionRow, settings: LocalSettingsConfig): Record<string, unknown> {
+  const metadata = session.metadataJson
+  const engineId = typeof metadata?.engineId === 'string' && metadata.engineId.trim().length > 0 ? metadata.engineId : null
+  const executionMode = metadata?.executionMode === 'local-cli' || metadata?.executionMode === 'byok' ? metadata.executionMode : null
+  if (!engineId || !executionMode)
+    return resolvedExecutionMetadata(settings)
+  const engineName = typeof metadata?.engineName === 'string' ? metadata.engineName : null
+  if (executionMode === 'local-cli') {
+    const engineCommand = typeof metadata?.engineCommand === 'string' && metadata.engineCommand.trim().length > 0 ? metadata.engineCommand : null
+    if (!engineCommand)
+      return resolvedLocalCliExecutionMetadata(settings, engineId, engineName)
+    return {
+      byok: settings.byok,
+      engineCommand,
+      engineId,
+      engineName,
+      executionMode,
+    }
+  }
+  return {
+    byok: settings.byok,
+    engineCommand: typeof metadata?.engineCommand === 'string' ? metadata.engineCommand : null,
     engineId,
-    engineName: engine?.name ?? null,
-    executionMode: settings.executionMode,
+    engineName,
+    executionMode,
   }
 }
 
@@ -1167,13 +1212,16 @@ async function prepareNativeEngineInvocation(c: Context, workerId: string): Prom
     return result.response
   const body = result.data
   const settings = loadLocalSettings()
-  const engineId = (body.engineId != null && body.engineId.trim().length > 0 ? body.engineId.trim() : null)
-    ?? (settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider)
-  const engine = settings.engines.find(engine => engine.id === engineId)
   const engineCommandFromBody = (body.engineCommand != null && body.engineCommand.trim().length > 0 ? body.engineCommand.trim() : null)
-  const command = engineCommandFromBody ?? selectedEngineCommand(settings, engine)
+  const execution = engineCommandFromBody
+    ? null
+    : resolvedExecutionMetadata(settings, body.engineId)
+  const command = engineCommandFromBody ?? (typeof execution?.engineCommand === 'string' ? execution.engineCommand : null)
   if (!command)
     throw new Error('Missing required field: engineCommand')
+  const engineId = engineCommandFromBody
+    ? (body.engineId?.trim() || (settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider))
+    : String(execution?.engineId)
   return {
     args: body.args ?? [],
     command,
@@ -1287,10 +1335,10 @@ async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonStat
   const body = result.data
   const template = requireTemplateForWorker(state, workspace.workerId, body.capabilityTemplateId)
   const settings = loadLocalSettings()
-  const engine = selectedEngine(settings)
+  const execution = resolvedExecutionMetadata(settings, body.engineId)
   const metadata = enrichTemplateMetadata(state, workspace.workerId, template.id, {
     ...(body.metadata ?? {}),
-    ...executionMetadata(settings, engine),
+    ...execution,
   })
   const session = await runtime.createSession({
     workspaceId: workspace.id,
@@ -1302,13 +1350,10 @@ async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonStat
   if (!body.input || body.input.trim().length === 0)
     return c.json({ session }, 201)
   const turnInput = {
-    engineCommand: selectedEngineCommand(settings, engine),
-    engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
+    engineCommand: typeof execution.engineCommand === 'string' ? execution.engineCommand : null,
+    engineId: String(execution.engineId),
     input: body.input,
-    metadata: {
-      ...metadata,
-      ...executionMetadata(settings, engine),
-    },
+    metadata,
   }
   if (stream)
     return streamSessionTurn(runtime, session, turnInput, [{ event: 'session', data: session, id: session.id }])
@@ -1321,20 +1366,31 @@ async function createSessionMessageResponse(c: Context, state: LocalDaemonState,
   if (!result.ok)
     return result.response
   const settings = loadLocalSettings()
-  const engine = selectedEngine(settings)
+  const execution = sessionExecutionMetadata(session, settings)
+  const currentSession = session.metadataJson?.executionMode === 'local-cli'
+    && typeof session.metadataJson?.engineCommand !== 'string'
+    && typeof execution.engineCommand === 'string'
+    ? updateSession({
+        id: session.id,
+        metadataJson: {
+          ...(session.metadataJson ?? {}),
+          ...execution,
+        },
+      })
+    : session
   const turnInput = {
-    engineCommand: selectedEngineCommand(settings, engine),
-    engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
+    engineCommand: typeof execution.engineCommand === 'string' ? execution.engineCommand : null,
+    engineId: String(execution.engineId),
     input: result.data.input,
     metadata: {
-      ...enrichTemplateMetadata(state, session.workerId, session.capabilityTemplateId, session.metadataJson ?? {}),
+      ...enrichTemplateMetadata(state, currentSession.workerId, currentSession.capabilityTemplateId, currentSession.metadataJson ?? {}),
       ...(result.data.metadata ?? {}),
-      ...executionMetadata(settings, engine),
+      ...execution,
     },
   }
   if (stream)
-    return streamSessionTurn(runtime, session, turnInput)
-  return c.json(await runtime.startTurn({ ...turnInput, sessionId: session.id }), 201)
+    return streamSessionTurn(runtime, currentSession, turnInput)
+  return c.json(await runtime.startTurn({ ...turnInput, sessionId: currentSession.id }), 201)
 }
 
 function streamSessionTurn(
