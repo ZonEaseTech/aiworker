@@ -23,6 +23,7 @@
     "web:smoke:mounted-surfaces": "bun apps/web/scripts/smoke-mounted-surfaces.ts",
     "web:e2e:capture-mounted-evidence": "bun apps/web/scripts/capture-mounted-evidence.ts",
     "test:contracts": "bun test tests/architecture",
+    "test:protocol": "bun run --filter '@zonease/aiworker-soul-protocol' test",
     "ui:check": "bun scripts/check-web-ui-components.ts",
     "docs:check": "bun scripts/check-doc-contract.ts",
     "check": "bun run typecheck && bun run lint",
