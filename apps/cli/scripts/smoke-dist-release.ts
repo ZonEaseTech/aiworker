@@ -209,6 +209,15 @@ async function assertMountedAppAssets(port: number, appId: string, clientAssets:
   if (!styleRes.headers.get('content-type')?.includes('text/css'))
     throw new Error(`Mounted app stylesheet content-type mismatch for ${styleUrl}: ${styleRes.headers.get('content-type')}`)
 
+  for (const fontName of ['oxanium-latin-ext-wght-normal.woff2', 'oxanium-latin-wght-normal.woff2']) {
+    const fontUrl = `http://127.0.0.1:${port}/api/local/apps/${appId}/files/${fontName}`
+    const fontRes = await fetch(fontUrl)
+    if (!fontRes.ok)
+      throw new Error(`Mounted app font asset failed: ${fontUrl} -> ${fontRes.status} ${await fontRes.text()}`)
+    if (!fontRes.headers.get('content-type')?.includes('font/woff2'))
+      throw new Error(`Mounted app font asset content-type mismatch for ${fontUrl}: ${fontRes.headers.get('content-type')}`)
+  }
+
   for (const assetName of clientAssets) {
     const assetUrl = `http://127.0.0.1:${port}/api/local/apps/${appId}/assets/${assetName}`
     const assetRes = await fetch(assetUrl)
