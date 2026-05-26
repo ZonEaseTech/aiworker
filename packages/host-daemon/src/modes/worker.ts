@@ -8,7 +8,7 @@ import type { Readable } from 'node:stream'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { OpenAPIHono } from '@hono/zod-openapi'
@@ -1119,10 +1119,9 @@ async function mountedSurfaceResponse(c: Context, state: LocalDaemonState, app: 
     return c.json({ error: { code: 'SOUL_APP_SURFACE_NOT_FOUND', message: `Mounted surface is not declared: ${surfaceId}` } }, 404)
 
   if (contribution.surface.renderer === 'micro-app') {
-    const service = await mountedSoulAppServiceOrResponse(c, state, app)
+    const service = await resolveMountedSoulAppServiceOrResponse(c, state, app)
     if (service instanceof Response)
       return service
-
     const sourceUrl = new URL(c.req.url)
     return c.json({
       microApp: {
@@ -1191,6 +1190,10 @@ async function mountedSurfaceResponse(c: Context, state: LocalDaemonState, app: 
 }
 
 async function proxyMountedSoulAppApi(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<Response> {
+  const staticResponse = await descriptorMountedAssetResponse(c, app)
+  if (staticResponse)
+    return staticResponse
+
   const service = await mountedSoulAppServiceOrResponse(c, state, app)
   if (service instanceof Response)
     return service
@@ -1253,11 +1256,20 @@ function appOwnedApiRoutePrefix(app: HostedSoulApp): string {
 }
 
 async function mountedSoulAppServiceOrResponse(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | Response> {
+  const service = await resolveMountedSoulAppServiceOrResponse(c, state, app)
+  if (service instanceof Response)
+    return service
+  if (service)
+    return service
+  return mountedServiceError(c, app, 'SOUL_APP_SERVICE_NOT_CONFIGURED', `Soul App does not declare a mounted local service: ${app.appId}`, 424)
+}
+
+async function resolveMountedSoulAppServiceOrResponse(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | Response | null> {
   try {
     const service = await resolveMountedSoulAppService(state, app)
     if (service)
       return service
-    return mountedServiceError(c, app, 'SOUL_APP_SERVICE_NOT_CONFIGURED', `Soul App does not declare a mounted local service: ${app.appId}`, 424)
+    return null
   }
   catch (error) {
     return mountedServiceError(c, app, 'SOUL_APP_SERVICE_UNREACHABLE', error instanceof Error ? error.message : String(error), 502)
@@ -1344,14 +1356,14 @@ function mountedMicroAppData(
   c: Context,
   state: LocalDaemonState,
   app: HostedSoulApp,
-  service: MountedSoulAppService,
+  service: MountedSoulAppService | null,
   contribution: MountedSurfaceContribution,
 ): MountedMicroAppHostData {
   return {
     appId: app.appId,
     artifactId: c.req.query('artifactId') ?? null,
     expiresAt: mountContextExpiry(state),
-    mountTokenPresent: Boolean(service.mountToken),
+    mountTokenPresent: Boolean(service?.mountToken),
     reviewId: c.req.query('reviewId') ?? null,
     routePrefix: appOwnedApiRoutePrefix(app),
     sessionId: c.req.query('sessionId') ?? null,
@@ -1362,6 +1374,67 @@ function mountedMicroAppData(
     workerId: c.req.query('workerId') ?? null,
     workspaceId: c.req.query('workspaceId') ?? null,
   }
+}
+
+async function descriptorMountedAssetResponse(c: Context, app: HostedSoulApp): Promise<Response | null> {
+  if (app.sourceKind !== 'descriptor-path')
+    return null
+
+  const sourceUrl = new URL(c.req.url)
+  const appPrefix = `/api/apps/${app.appId}/`
+  const relativeRequestPath = decodeURIComponent(sourceUrl.pathname.slice(appPrefix.length))
+  const contribution = findWorkbenchMountContributions(app)
+    .find(entry => relativeRequestPath === entry.surface.entry.replace(/^\//, ''))
+  if (!contribution)
+    return null
+
+  const workbenchEntry = app.descriptor?.workbench?.entry
+  if (typeof workbenchEntry !== 'string' || workbenchEntry.length === 0)
+    return null
+
+  const descriptorRoot = path.dirname(app.sourceRef)
+  const descriptorAssetPath = workbenchEntry.replace(/^dist\//, '')
+  const resolvedAsset = path.resolve(descriptorRoot, descriptorAssetPath)
+  const resolvedRoot = path.resolve(descriptorRoot)
+  if (!isPathInside(resolvedAsset, resolvedRoot)) {
+    return new Response(JSON.stringify({ error: { code: 'DESCRIPTOR_ASSET_PATH_INVALID', message: 'Descriptor mounted asset escapes descriptor root.' } }), {
+      headers: { 'content-type': 'application/json' },
+      status: 400,
+    })
+  }
+
+  try {
+    const body = await readFile(resolvedAsset)
+    return new Response(body, {
+      headers: { 'content-type': contentTypeForMountedAsset(resolvedAsset) },
+    })
+  }
+  catch {
+    return new Response(JSON.stringify({ error: { code: 'DESCRIPTOR_ASSET_NOT_FOUND', message: `Descriptor mounted asset not found: ${contribution.id}` } }), {
+      headers: { 'content-type': 'application/json' },
+      status: 404,
+    })
+  }
+}
+
+function isPathInside(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+function contentTypeForMountedAsset(filePath: string): string {
+  const extension = path.extname(filePath).toLowerCase()
+  if (extension === '.html')
+    return 'text/html; charset=utf-8'
+  if (extension === '.css')
+    return 'text/css; charset=utf-8'
+  if (extension === '.js')
+    return 'text/javascript; charset=utf-8'
+  if (extension === '.json')
+    return 'application/json'
+  if (extension === '.svg')
+    return 'image/svg+xml'
+  return 'application/octet-stream'
 }
 
 function findMountedSurfaceContribution(app: HostedSoulApp, surfaceId: string): MountedSurfaceContribution | null {

@@ -307,6 +307,28 @@ describe('local daemon API', () => {
       },
       routerMode: 'search',
     })
+
+    const surfaceRes = await target.request(`/api/local/apps/${FREEFORM_APP_ID}/surfaces/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&theme=light`)
+    expect(surfaceRes.status).toBe(200)
+    const surface = await surfaceRes.json() as {
+      microApp: {
+        data: { mountTokenPresent: boolean, workerId: string, workspaceId: string }
+        url: string
+      }
+    }
+    expect(surface.microApp).toMatchObject({
+      data: {
+        mountTokenPresent: false,
+        workerId: worker.id,
+        workspaceId: workspace.id,
+      },
+      url: `/api/apps/${FREEFORM_APP_ID}/micro-app/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&theme=light`,
+    })
+
+    const htmlRes = await target.request(`/api/apps/${FREEFORM_APP_ID}/micro-app/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&theme=light`)
+    expect(htmlRes.status).toBe(200)
+    expect(htmlRes.headers.get('content-type')).toContain('text/html')
+    expect(await htmlRes.text()).toContain('data-aiworker-common-workbench="true"')
   })
 
   it('saves worker overlay assets as metadata and rejects literal secrets', async () => {
