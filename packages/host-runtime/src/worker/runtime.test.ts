@@ -1147,6 +1147,75 @@ describe('LocalWorkerRuntime', () => {
     })
   })
 
+  it('records bridge redaction pipeline failures without leaking diagnostics', async () => {
+    const workerRuntime = new LocalWorkerRuntime({
+      worker: {
+        id: 'worker-demo',
+        soulId: 'demo-soul',
+        name: 'Demo',
+        defaultEngineId: 'codex',
+      },
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
+      now,
+      executor: {
+        async invoke() {
+          throw new Error('executor fallback should not run when engine bridge is configured')
+        },
+      },
+      engineBridge: {
+        adapters: [{
+          target: 'codex',
+          async cancel() {
+            return {}
+          },
+          async discover() {
+            return { callable: true, installed: true, target: 'codex' }
+          },
+          async followUp() {
+            return {}
+          },
+          normalize() {
+            return []
+          },
+          async start(_request: Record<string, unknown>, sink: EngineEventSink) {
+            sink.raw({ data: 'token=sk-runtime-redaction-secret', stream: 'stdout' })
+            return { summary: 'should not be trusted after redaction failure' }
+          },
+        }],
+        rawChunkStore: {
+          async append() {
+            throw new Error('raw chunk store failed token=sk-runtime-redaction-secret')
+          },
+        },
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Redaction Failure Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Redaction failure session',
+    })
+
+    const result = await workerRuntime.startInvocation({
+      sessionId: session.id,
+      input: 'Trigger redaction failure.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(JSON.stringify(result)).not.toContain('sk-runtime-redaction-secret')
+    expect(result.invocation).toMatchObject({
+      failureCode: 'BRIDGE_REDACTION_FAILED',
+      status: 'failed',
+    })
+    expect(result.invocation.error).toContain('[REDACTED]')
+    expect(result.events.at(-1)?.payloadJson).toMatchObject({
+      failureCode: 'BRIDGE_REDACTION_FAILED',
+      message: expect.stringContaining('[REDACTED]'),
+    })
+  })
+
   it('redacts native engine success diagnostics before persisting invocation state', async () => {
     const workerRuntime = runtime({
       async invoke() {
