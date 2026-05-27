@@ -55,7 +55,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@zonease/aiworker-ui/c
 import { ToggleGroup, ToggleGroupItem } from '@zonease/aiworker-ui/components/toggle-group'
 import { useEffect, useState } from 'react'
 import { formatRelativeTime, formatStatus, languageLabel, messagesFor, normalizeLocale, supportedLocales } from '../../i18n'
-import { disableSoulApp, enableSoulApp, rescanEngines, saveSettings, testEngine } from '../../local-workspace/api'
+import { archiveSoulApp, enableSoulApp, rescanEngines, saveSettings, testEngine } from '../../local-workspace/api'
 import { engineIconSrc } from '../model'
 
 export type SettingsSection = 'execution' | 'soul-packs' | 'connectors' | 'mcp' | 'external-mcp' | 'language' | 'appearance' | 'about'
@@ -534,7 +534,7 @@ function SoulAppsSettings({
     setError(null)
     try {
       if (app.status === 'enabled') {
-        await disableSoulApp(app.appId)
+        await archiveSoulApp(app.appId)
       }
       else {
         await enableSoulApp(app.appId)

@@ -516,7 +516,7 @@ beforeEach(() => {
         catalog: { apps: currentApps, capabilities: currentCapabilities, souls: currentSouls },
       })
     }
-    if (url.endsWith('/api/local/apps/aiworker-demo-release/disable') && method === 'POST') {
+    if (url.endsWith('/api/app-installation/apps/aiworker-demo-release/archive') && method === 'POST') {
       const disabled = currentApps.find(app => app.appId === 'aiworker-demo-release')
       currentApps = currentApps.map(app => app.appId === 'aiworker-demo-release' ? { ...app, status: 'disabled' } : app)
       return json({

@@ -59,8 +59,8 @@ export async function enableSoulApp(appId: string): Promise<LocalSoulAppLifecycl
   })
 }
 
-export async function disableSoulApp(appId: string): Promise<LocalSoulAppLifecycleResponse> {
-  return localJson<LocalSoulAppLifecycleResponse>(`/api/local/apps/${appId}/disable`, {
+export async function archiveSoulApp(appId: string): Promise<LocalSoulAppLifecycleResponse> {
+  return localJson<LocalSoulAppLifecycleResponse>(`/api/app-installation/apps/${appId}/archive`, {
     method: 'POST',
   })
 }

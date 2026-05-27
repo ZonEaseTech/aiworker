@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadLocalWorkspaceData } from './workspace-data'
+import { archiveSoulApp, loadLocalWorkspaceData } from './workspace-data'
 
 const responses: Record<string, unknown> = {
   '/api/local/apps': { apps: [] },
@@ -49,5 +49,16 @@ describe('loadLocalWorkspaceData', () => {
     expect(data).not.toHaveProperty('turns')
     expect(data).not.toHaveProperty('templates')
     expect(data.capabilities.map(capability => capability.id)).toEqual(['aiworker-freeform.default'])
+  })
+
+  it('archives Soul Apps through the app-installation broker route', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ app: { appId: 'aiworker-freeform', status: 'disabled' } }), {
+      headers: { 'content-type': 'application/json' },
+      status: 200,
+    }))
+
+    await archiveSoulApp('aiworker-freeform')
+
+    expect(fetch).toHaveBeenCalledWith('/api/app-installation/apps/aiworker-freeform/archive', expect.objectContaining({ method: 'POST' }))
   })
 })

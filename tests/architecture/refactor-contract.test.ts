@@ -430,6 +430,31 @@ describe('destructive refactor contract bootstrap', () => {
     expect(cliTest).toContain('argv(\'app\', \'archive\'')
   })
 
+  test('daemon and Web app lifecycle surfaces use archive without disable alias', () => {
+    const sources = [
+      'packages/host-daemon/src/modes/worker.ts',
+      'packages/host-daemon/src/modes/worker.local.test.ts',
+      'apps/web/src/features/local-workspace/api/workspace-data.ts',
+      'apps/web/src/features/settings/components/settings-dialog.tsx',
+      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
+    ].map(path => [path, readRepoFile(path)] as const)
+    const forbidden = [
+      '/api/local/apps/:appId/disable',
+      ['/api/local/apps/', '{appId}/disable'].join('$'),
+      '/api/local/apps/aiworker-demo-release/disable',
+      '/api/local/apps/demo-api/disable',
+      'disableSoulApp',
+    ]
+
+    const findings = sources.flatMap(([path, source]) =>
+      forbidden
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`),
+    )
+
+    expect(findings, 'daemon and Web should expose app archive lifecycle without retired disable aliases').toEqual([])
+  })
+
   test('CLI session start selects a capability without the retired skill option', () => {
     const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
     const cliTests = [

@@ -262,8 +262,11 @@ describe('local daemon API', () => {
 
   it('does not re-enable disabled official apps on daemon restart', async () => {
     const target = await app()
-    const disableRes = await target.request(`/api/local/apps/${FREEFORM_APP_ID}/disable`, { method: 'POST' })
-    expect(disableRes.status).toBe(200)
+    const disableAliasRes = await target.request(`/api/local/apps/${FREEFORM_APP_ID}/disable`, { method: 'POST' })
+    expect(disableAliasRes.status).toBe(404)
+
+    const archiveRes = await target.request(`/api/app-installation/apps/${FREEFORM_APP_ID}/archive`, { method: 'POST' })
+    expect(archiveRes.status).toBe(200)
 
     const restarted = await app()
     const workerRes = await restarted.request('/api/local/workers', {
@@ -918,8 +921,8 @@ describe('local daemon API', () => {
   it('rejects descriptor workbench mount when the worker Soul App is disabled', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)
-    const disableRes = await target.request(`/api/local/apps/${FREEFORM_APP_ID}/disable`, { method: 'POST' })
-    expect(disableRes.status).toBe(200)
+    const archiveRes = await target.request(`/api/app-installation/apps/${FREEFORM_APP_ID}/archive`, { method: 'POST' })
+    expect(archiveRes.status).toBe(200)
 
     const res = await target.request(`/api/mount/workbench?workerId=${worker.id}`)
 
@@ -1512,7 +1515,7 @@ describe('local daemon API', () => {
     const hostAction = await target.request('/api/local/apps/demo-api/actions/create-profile', { method: 'POST' })
     expect(hostAction.status).toBe(404)
 
-    await target.request('/api/local/apps/demo-api/disable', { method: 'POST' })
+    await target.request('/api/app-installation/apps/demo-api/archive', { method: 'POST' })
   })
 
   it('redacts mounted app-owned API startup diagnostics before returning broker errors', async () => {

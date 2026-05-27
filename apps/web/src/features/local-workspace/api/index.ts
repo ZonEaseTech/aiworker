@@ -18,7 +18,7 @@ export {
   createWorker,
 } from './workers'
 export {
-  disableSoulApp,
+  archiveSoulApp,
   enableSoulApp,
   loadLocalWorkspaceData,
   resolveMountedWorkbench,

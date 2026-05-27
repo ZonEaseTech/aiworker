@@ -245,12 +245,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const app = state.host.enableApp(appId)
     return c.json({ app, catalog: state.host.listCatalog() })
   })
-  app.post('/api/local/apps/:appId/disable', (c) => {
-    const appId = c.req.param('appId')
-    const app = state.host.disableApp(appId)
-    stopMountedSoulAppService(state, appId)
-    return c.json({ app, catalog: state.host.listCatalog() })
-  })
   app.post('/api/local/apps/:appId/healthcheck', c => c.json({ app: state.host.healthcheckApp(c.req.param('appId')) }))
   app.get('/api/local/souls', c => c.json({ souls: state.host.listSouls() }))
   app.get('/api/local/capabilities', c => c.json({ capabilities: state.host.listCapabilities() }))
@@ -898,6 +892,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
 
   app.all('/api/local/apps/:appId/:path{.+}', (c) => {
+    if (isReservedLocalAppLifecyclePath(c.req.param('path')))
+      return notFound(c, 'route')
     const app = state.host.getApp(c.req.param('appId'))
     if (!app)
       return notFound(c, 'Soul App')
@@ -1259,6 +1255,16 @@ function requireCapabilityForWorker(state: LocalDaemonState, workerId: string, c
 
 function enrichCapabilityMetadata(_state: LocalDaemonState, _workerId: string, _capabilityId: string, metadata: Record<string, unknown>): Record<string, unknown> {
   return metadata
+}
+
+function isReservedLocalAppLifecyclePath(pathValue: string | undefined): boolean {
+  const action = pathValue?.split('/')[0]
+  return action === 'archive'
+    || action === 'delete'
+    || action === 'disable'
+    || action === 'enable'
+    || action === 'healthcheck'
+    || action === 'install'
 }
 
 function proxyMountedSoulAppApiRoute(c: Context, state: LocalDaemonState): Promise<Response> | Response {
