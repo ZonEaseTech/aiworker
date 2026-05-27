@@ -1152,6 +1152,28 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'descriptor workbench routes must not be derived from legacy manifest.ui projection').toEqual([])
   })
 
+  test('Web worker tests use generic descriptor fixtures instead of retired HR and QA app ids', () => {
+    const webWorkerTestSources = [
+      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
+      'apps/web/src/worker/studio/locator.test.ts',
+    ]
+    const retiredFixtureSnippets = [
+      'aiworker-hr',
+      'aiworker-qa',
+      'AIWorker HR',
+      'AIWorker QA',
+    ]
+
+    const findings = webWorkerTestSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return retiredFixtureSnippets
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'Web Host tests should use generic descriptor fixtures, not old app-local product identities').toEqual([])
+  })
+
   test('active protocol/runtime/daemon/web/test source no longer exposes legacy Soul manifest compatibility', () => {
     const activeSources = [
       ...listSourceFiles('packages'),
