@@ -30,15 +30,15 @@ describe('micro-app-runtime route helpers', () => {
       start: vi.fn(),
     })
 
-    await pushMountedMicroAppRoute('aiworker-hr--hr-home', '/hr/profiles/profile-ben')
-    await replaceMountedMicroAppRoute('aiworker-hr--hr-home', '/hr')
+    await pushMountedMicroAppRoute('aiworker-demo-people--workbench', '/workbench/items/item-ben')
+    await replaceMountedMicroAppRoute('aiworker-demo-people--workbench', '/workbench')
 
-    expect(push).toHaveBeenCalledWith({ name: 'aiworker-hr--hr-home', path: '/hr/profiles/profile-ben' })
-    expect(replace).toHaveBeenCalledWith({ name: 'aiworker-hr--hr-home', path: '/hr' })
+    expect(push).toHaveBeenCalledWith({ name: 'aiworker-demo-people--workbench', path: '/workbench/items/item-ben' })
+    expect(replace).toHaveBeenCalledWith({ name: 'aiworker-demo-people--workbench', path: '/workbench' })
   })
 
   it('returns the current route for one mounted child app', async () => {
-    const get = vi.fn().mockReturnValue({ pathname: '/hr/profiles/profile-ben', search: '?tab=summary' })
+    const get = vi.fn().mockReturnValue({ pathname: '/workbench/items/item-ben', search: '?tab=summary' })
     setMicroAppRuntimeForTest({
       addDataListener: vi.fn(),
       forceSetData: vi.fn(),
@@ -53,17 +53,17 @@ describe('micro-app-runtime route helpers', () => {
       start: vi.fn(),
     })
 
-    await expect(getMountedMicroAppCurrentRoute('aiworker-hr--hr-home')).resolves.toEqual({
-      pathname: '/hr/profiles/profile-ben',
+    await expect(getMountedMicroAppCurrentRoute('aiworker-demo-people--workbench')).resolves.toEqual({
+      pathname: '/workbench/items/item-ben',
       search: '?tab=summary',
     })
-    expect(get).toHaveBeenCalledWith('aiworker-hr--hr-home')
+    expect(get).toHaveBeenCalledWith('aiworker-demo-people--workbench')
   })
 
   it('binds route afterEach for the target app and returns cleanup', async () => {
     const cleanup = vi.fn()
     const afterEach = vi.fn().mockImplementation((listeners) => {
-      listeners['aiworker-hr--hr-home']({ pathname: '/hr/profiles/profile-stella' }, { pathname: '/hr' })
+      listeners['aiworker-demo-people--workbench']({ pathname: '/workbench/items/item-stella' }, { pathname: '/workbench' })
       return cleanup
     })
     const listener = vi.fn()
@@ -81,13 +81,13 @@ describe('micro-app-runtime route helpers', () => {
       start: vi.fn(),
     })
 
-    const stop = await addMountedMicroAppRouteListener('aiworker-hr--hr-home', listener)
+    const stop = await addMountedMicroAppRouteListener('aiworker-demo-people--workbench', listener)
     stop()
 
     expect(afterEach).toHaveBeenCalledWith({
-      'aiworker-hr--hr-home': expect.any(Function),
+      'aiworker-demo-people--workbench': expect.any(Function),
     })
-    expect(listener).toHaveBeenCalledWith({ pathname: '/hr/profiles/profile-stella' }, { pathname: '/hr' })
+    expect(listener).toHaveBeenCalledWith({ pathname: '/workbench/items/item-stella' }, { pathname: '/workbench' })
     expect(cleanup).toHaveBeenCalled()
   })
 })

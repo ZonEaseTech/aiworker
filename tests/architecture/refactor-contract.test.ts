@@ -1214,6 +1214,21 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'mounted child route tests should prove generic mounted routing without HR route fixtures').toEqual([])
   })
 
+  test('micro-app runtime tests use generic workbench routes instead of retired HR routes', () => {
+    const source = readRepoFile('apps/web/src/lib/micro-app-runtime.test.ts')
+    const retiredRouteSnippets = [
+      'aiworker-hr',
+      'hr-home',
+      '\'/hr',
+    ]
+
+    const findings = retiredRouteSnippets
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `apps/web/src/lib/micro-app-runtime.test.ts: ${snippet}`)
+
+    expect(findings, 'micro-app runtime tests should prove generic route plumbing without HR route fixtures').toEqual([])
+  })
+
   test('Web worker tests use generic descriptor fixtures instead of retired HR and QA app ids', () => {
     const webWorkerTestSources = [
       'apps/web/src/worker/__tests__/worker-studio.test.tsx',
