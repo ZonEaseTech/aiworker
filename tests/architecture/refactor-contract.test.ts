@@ -418,6 +418,19 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'native engine prompt copy should not reintroduce retired template language').toEqual([])
   })
 
+  test('engine bridge contract tests use generic capability descriptor refs', () => {
+    const source = readRepoFile('packages/engine-bridge/src/bridge-contract.test.ts')
+    const forbidden = [
+      'capability/hr-review',
+    ]
+
+    const findings = forbidden
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `packages/engine-bridge/src/bridge-contract.test.ts: ${snippet}`)
+
+    expect(findings, 'engine bridge tests should keep capability refs opaque and non-domain-specific').toEqual([])
+  })
+
   test('local broker capability routes do not preserve retired template route aliases', () => {
     const activeSources = [
       'packages/host-daemon/src/modes/worker.ts',

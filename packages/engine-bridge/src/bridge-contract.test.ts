@@ -299,7 +299,7 @@ describe('engine-bridge start invocation contract', () => {
     const { adapter, engineBridge } = createContractHarness({ projectionReceiptState })
 
     await expect(engineBridge.startInvocation({
-      capabilityDescriptorRef: 'capability/hr-review',
+      capabilityDescriptorRef: 'capability/default-task',
       cwd: '/workspace',
       engineTarget: 'codex',
       input: { body: 'start' },
@@ -316,7 +316,7 @@ describe('engine-bridge start invocation contract', () => {
     const { engineBridge, storedBridgeEvents, storedRawChunks } = createContractHarness()
 
     const result = await engineBridge.startInvocation({
-      capabilityDescriptorRef: 'capability/hr-review',
+      capabilityDescriptorRef: 'capability/default-task',
       cwd: '/workspace',
       engineTarget: 'codex',
       input: { body: 'start' },
@@ -338,7 +338,7 @@ describe('engine-bridge start invocation contract', () => {
 
     try {
       await engineBridge.startInvocation({
-        capabilityDescriptorRef: 'capability/hr-review',
+        capabilityDescriptorRef: 'capability/default-task',
         cwd: '/workspace',
         engineTarget: 'codex',
         input: { body: 'start' },
@@ -361,7 +361,7 @@ describe('engine-bridge start invocation contract', () => {
 
     try {
       await engineBridge.startInvocation({
-        capabilityDescriptorRef: 'capability/hr-review',
+        capabilityDescriptorRef: 'capability/default-task',
         cwd: '/workspace',
         engineTarget: 'codex',
         input: { body: 'start' },
