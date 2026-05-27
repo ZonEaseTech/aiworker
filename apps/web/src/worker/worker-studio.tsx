@@ -62,15 +62,13 @@ const emptyWorkerStudioLocatorState: WorkerStudioResolvedLocatorState = {
 function descriptorWorkbenchRoutes(app: HostedSoulApp | null): MountedWorkbenchRoute[] {
   if (!app?.descriptor?.workbench || app.descriptor.workbench.type !== 'micro-app')
     return []
-  const identity = app.descriptor.identity as { name?: unknown } | undefined
-  const name = typeof identity?.name === 'string' && identity.name.length > 0 ? identity.name : app.appId
   return [{
-    id: 'workbench',
-    label: `${name} Workbench`,
-    path: '/workbench',
+    id: app.mountedWorkbench.id,
+    label: `${app.name} Workbench`,
+    path: app.mountedWorkbench.path,
     surface: {
-      renderer: 'micro-app',
-      scope: 'app',
+      renderer: app.mountedWorkbench.renderer,
+      scope: app.mountedWorkbench.scope,
     },
   }]
 }
@@ -296,7 +294,7 @@ export function WorkerStudio() {
     const soul = data.souls.find(item => item.id === soulId)
     const soulCopy = soul ? displaySoul(soul, activeLocale) : null
     setNewWorkerSoulId(soulId)
-    setNewWorkerName(soulCopy?.name ?? app.manifest.name)
+    setNewWorkerName(soulCopy?.name ?? app.name)
     setCreateWorkerOpen(true)
   }
 

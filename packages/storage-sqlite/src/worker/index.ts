@@ -379,8 +379,8 @@ export interface UpsertSoulAppInput {
   status?: SoulAppRow['status']
   sourceKind: SoulAppRow['sourceKind']
   sourceRef: string
-  manifestDigest: string
-  manifestJson: SoulAppRow['manifestJson']
+  descriptorDigest: string
+  descriptorJson: SoulAppRow['descriptorJson']
   validationIssuesJson?: SoulAppRow['validationIssuesJson']
   healthStatus?: SoulAppRow['healthStatus']
   healthMessage?: string | null
@@ -954,7 +954,7 @@ export function upsertSoulApp(input: UpsertSoulAppInput): SoulAppRow {
   const status = input.status ?? existing?.status ?? 'installed'
   const enabledAt = input.enabledAt ?? (status === 'enabled' ? existing?.enabledAt ?? now : existing?.enabledAt ?? null)
   const disabledAt = input.disabledAt ?? (status === 'disabled' ? now : existing?.disabledAt ?? null)
-  assertNoLiteralSecrets(input.manifestJson, 'soul_apps.manifestJson')
+  assertNoLiteralSecrets(input.descriptorJson, 'soul_apps.descriptorJson')
   assertNoLiteralSecrets(input.validationIssuesJson ?? [], 'soul_apps.validationIssuesJson')
   if (!existing) {
     getWorkerDb().insert(schema.soulApps).values({
@@ -966,8 +966,8 @@ export function upsertSoulApp(input: UpsertSoulAppInput): SoulAppRow {
       status,
       sourceKind: input.sourceKind,
       sourceRef: input.sourceRef,
-      manifestDigest: input.manifestDigest,
-      manifestJson: input.manifestJson,
+      descriptorDigest: input.descriptorDigest,
+      descriptorJson: input.descriptorJson,
       validationIssuesJson: input.validationIssuesJson ?? [],
       healthStatus: input.healthStatus ?? 'unknown',
       healthMessage: input.healthMessage ?? null,
@@ -988,8 +988,8 @@ export function upsertSoulApp(input: UpsertSoulAppInput): SoulAppRow {
       status,
       sourceKind: input.sourceKind,
       sourceRef: input.sourceRef,
-      manifestDigest: input.manifestDigest,
-      manifestJson: input.manifestJson,
+      descriptorDigest: input.descriptorDigest,
+      descriptorJson: input.descriptorJson,
       validationIssuesJson: input.validationIssuesJson ?? existing.validationIssuesJson,
       healthStatus: input.healthStatus ?? existing.healthStatus,
       healthMessage: Object.hasOwn(input, 'healthMessage') ? input.healthMessage ?? null : existing.healthMessage,

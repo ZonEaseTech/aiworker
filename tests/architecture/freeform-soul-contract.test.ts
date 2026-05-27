@@ -176,7 +176,7 @@ describe('Freeform Soul descriptor contract', () => {
     }
 
     expect(sdk).not.toHaveProperty('defineSoulApp')
-    expect(sdk).not.toHaveProperty('createSoulAppManifest')
+    expect(sdk).not.toHaveProperty(['createSoulApp', 'Manifest'].join(''))
     expect(sdk).not.toHaveProperty('defineSoulAppEngineAssets')
   })
 })

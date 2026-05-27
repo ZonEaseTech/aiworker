@@ -557,24 +557,19 @@ function SoulAppsSettings({
       <ItemGroup className="gap-2">
         {apps.length > 0
           ? apps.map((app) => {
-              const permissionCount = app.manifest.permissions?.length ?? 0
-              const contributionCount = mountedContributionCount(app)
+              const permissionCount = app.permissions.length
+              const workbenchCount = app.mountedWorkbench ? 1 : 0
               const templateCount = templates.filter(template => template.soulId === app.appId || template.soulId === app.projectedSoul?.id).length
-              const apiRoutePrefix = app.mountedContribution.apiRoutePrefix
-              const domain = app.projectedSoul?.domain ?? app.manifest.soul?.domain ?? app.appId
-              const permissionLabels = (app.manifest.permissions ?? []).map(permissionLabel).filter(isString)
-              const connectorRows = (app.manifest.connectors?.required ?? []).map(connector => ({
-                id: connector.id,
-                label: soulAppsCopy.connectorStatus(connector.id, connectorStatus(connector.id, settings, soulAppsCopy)),
-              }))
-              const descriptorPermissions = descriptorPermissionLabels(app)
+              const apiRoutePrefix = app.api.routePrefix
+              const domain = app.projectedSoul?.domain ?? app.soulId ?? app.appId
+              const permissionLabels = app.permissions.map(permissionLabel).filter(isString)
               const busy = busyAppId === app.appId
-              const actionLabel = app.status === 'enabled' ? soulAppsCopy.disableApp(app.manifest.name) : soulAppsCopy.enableApp(app.manifest.name)
+              const actionLabel = app.status === 'enabled' ? soulAppsCopy.disableApp(app.name) : soulAppsCopy.enableApp(app.name)
               return (
                 <Card key={app.appId} size="sm" className={app.status === 'enabled' ? undefined : 'opacity-70'}>
                   <CardHeader>
                     <ItemContent className="min-w-0">
-                      <CardTitle>{app.manifest.name}</CardTitle>
+                      <CardTitle>{app.name}</CardTitle>
                       <CardDescription>{`${formatStatus(app.status, locale)} · ${app.version}`}</CardDescription>
                     </ItemContent>
                     <CardAction>
@@ -593,9 +588,9 @@ function SoulAppsSettings({
                     <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
                       <Badge variant="outline">{soulAppsCopy.permissionCount(permissionCount)}</Badge>
                       <Badge variant="outline">{soulAppsCopy.templateCount(templateCount)}</Badge>
-                      <Badge variant="outline">{soulAppsCopy.mountedContributionCount(contributionCount)}</Badge>
+                      <Badge variant="outline">{soulAppsCopy.mountedContributionCount(workbenchCount)}</Badge>
                     </ItemActions>
-                    <ItemGroup className="gap-2" aria-label={`${app.manifest.name} app access`}>
+                    <ItemGroup className="gap-2" aria-label={`${app.name} app access`}>
                       {permissionLabels.length > 0
                         ? (
                             <ItemContent className="gap-1.5">
@@ -606,22 +601,12 @@ function SoulAppsSettings({
                             </ItemContent>
                           )
                         : null}
-                      {connectorRows.length > 0
-                        ? (
-                            <ItemContent className="gap-1.5">
-                              <Kbd className="h-auto w-fit uppercase">{soulAppsCopy.connectorsTitle}</Kbd>
-                              <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
-                                {connectorRows.map(connector => <Badge key={connector.id} variant="outline">{connector.label}</Badge>)}
-                              </ItemActions>
-                            </ItemContent>
-                          )
-                        : null}
-                      {descriptorPermissions.length > 0
+                      {app.projectedCapabilities.length > 0
                         ? (
                             <ItemContent className="gap-1.5">
                               <Kbd className="h-auto w-fit uppercase">{soulAppsCopy.descriptorPermissionsTitle}</Kbd>
                               <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
-                                {descriptorPermissions.slice(0, 4).map(label => <Badge key={label} variant="outline">{label}</Badge>)}
+                                {app.projectedCapabilities.slice(0, 4).map(capability => <Badge key={capability.id} variant="outline">{capability.name}</Badge>)}
                               </ItemActions>
                             </ItemContent>
                           )
@@ -651,13 +636,7 @@ function SoulAppsSettings({
   )
 }
 
-function mountedContributionCount(app: HostedSoulApp): number {
-  return app.mountedContribution.artifactPreviewIds.length
-    + app.mountedContribution.panelIds.length
-    + app.mountedContribution.workspaceWidgetIds.length
-}
-
-function permissionLabel(permission: HostedSoulApp['manifest']['permissions'][number]): string | null {
+function permissionLabel(permission: HostedSoulApp['permissions'][number]): string | null {
   if (!permission.kind || !permission.action || !permission.target)
     return null
   return `${permission.kind}:${permission.action}:${permission.target}`
@@ -665,28 +644,6 @@ function permissionLabel(permission: HostedSoulApp['manifest']['permissions'][nu
 
 function isString(value: string | null): value is string {
   return typeof value === 'string'
-}
-
-function connectorStatus(connectorId: string, settings: LocalSettingsConfig, copy: ReturnType<typeof messagesFor>['settings']['soulPacks']): string {
-  const connector = settings.connectors.find(item => item.id === connectorId)
-  if (!connector)
-    return copy.unavailableConnector
-  return connector.enabled ? copy.enabledConnector : copy.disabledConnector
-}
-
-function descriptorPermissionLabels(app: HostedSoulApp): string[] {
-  const labels = new Set<string>()
-  const add = (permissions?: readonly string[]) => {
-    for (const permission of permissions ?? [])
-      labels.add(permission)
-  }
-  const workbench = app.mountedContribution.workbench
-  add(workbench?.primaryAction?.requiredPermissions)
-  for (const action of workbench?.actions ?? [])
-    add(action.requiredPermissions)
-  add(workbench?.search?.requiredPermissions)
-  add(workbench?.configuration?.requiredPermissions)
-  return [...labels]
 }
 
 function ConnectorsSettings({ copy, settings, update }: { copy: ReturnType<typeof messagesFor>, settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {

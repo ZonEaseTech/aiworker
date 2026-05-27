@@ -20,6 +20,33 @@ function latestNumberedFile(dir: string, suffix: string): string {
   return join(dir, files.at(-1)!)
 }
 
+function listSourceFiles(dir: string): string[] {
+  const root = join(repoRoot, dir)
+  if (!existsSync(root))
+    return []
+
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const rel = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      if ([
+        'node_modules',
+        'dist',
+        'coverage',
+        'tmp',
+        'drizzle',
+      ].includes(entry.name)) {
+        return []
+      }
+      return listSourceFiles(rel)
+    }
+    if (!/\.(ts|tsx)$/.test(entry.name))
+      return []
+    if (rel === 'tests/architecture/refactor-contract.test.ts')
+      return []
+    return [rel]
+  })
+}
+
 describe('destructive refactor contract bootstrap', () => {
   test('canonical docs are promoted as the only architecture authority set', () => {
     const canonicalDocs = [
@@ -165,5 +192,42 @@ describe('destructive refactor contract bootstrap', () => {
       .map(snippet => `descriptorWorkbenchRoutes: ${snippet}`)
 
     expect(findings, 'descriptor workbench routes must not be derived from legacy manifest.ui projection').toEqual([])
+  })
+
+  test('active protocol/runtime/daemon/web/test source no longer exposes legacy Soul manifest compatibility', () => {
+    const activeSources = [
+      ...listSourceFiles('packages'),
+      ...listSourceFiles('apps'),
+      ...listSourceFiles('tests'),
+    ]
+    const forbiddenExactSnippets = [
+      'SoulAppManifest',
+      'soulAppManifestSchema',
+      'runtimeManifestForDescriptor',
+      'mountedContributionForManifest',
+      'descriptorSurfaceIds',
+      'host-descriptor',
+    ]
+    const forbiddenPropertyPatterns = [
+      /\.\s*manifest\b/,
+      /\.\s*mountedContribution\b/,
+    ]
+
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      const exact = forbiddenExactSnippets
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`)
+      const properties = source.split(/\r?\n/).flatMap((line, index) => {
+        if (line.includes('soul-app.manifest.json'))
+          return []
+        return forbiddenPropertyPatterns
+          .filter(pattern => pattern.test(line))
+          .map(pattern => `${path}:${index + 1}: ${pattern.source}`)
+      })
+      return [...exact, ...properties]
+    })
+
+    expect(findings, 'descriptor-only active code must not expose the legacy SoulAppManifest compatibility layer').toEqual([])
   })
 })

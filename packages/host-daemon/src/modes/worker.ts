@@ -1145,7 +1145,7 @@ function mountedProxyHeaders(source: Headers): Headers {
 }
 
 function appOwnedApiRoutePrefix(app: HostedSoulApp): string {
-  return `/api/apps/${app.appId}`
+  return app.api.routePrefix ?? `/api/apps/${app.appId}`
 }
 
 async function mountedSoulAppServiceOrResponse(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | Response> {
@@ -1195,7 +1195,7 @@ function applyMountedProxyContextHeaders(
     expiresAt: mountContextExpiry(state),
     identity: identity ? publicHostIdentity(identity) : null,
     operatorId,
-    permissions: app.manifest.permissions,
+    permissions: app.permissions,
     reviewId: c.req.query('reviewId') ?? null,
     routePrefix: appOwnedApiRoutePrefix(app),
     sessionId: c.req.query('sessionId') ?? null,
@@ -1334,14 +1334,14 @@ function descriptorWorkbenchContribution(app: HostedSoulApp): MountedSurfaceCont
     return null
 
   return {
-    id: 'workbench',
+    id: app.mountedWorkbench.id,
     kind: 'route',
     label: 'Workbench',
-    path: '/workbench',
+    path: app.mountedWorkbench.path,
     surface: {
-      entry: '/micro-app/workbench',
-      renderer: 'micro-app',
-      scope: 'app',
+      entry: app.mountedWorkbench.entry,
+      renderer: app.mountedWorkbench.renderer,
+      scope: app.mountedWorkbench.scope,
     },
   }
 }
@@ -1369,17 +1369,9 @@ export function mountedServiceSpawnEnv(mountToken: string): NodeJS.ProcessEnv {
 }
 
 async function startMountedSoulAppService(state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | null> {
-  const service = app.manifest.api.localService
+  const service = app.api.localService
   if (!service)
     return null
-  if (service.baseUrl) {
-    if (!isLoopbackMountedServiceUrl(service.baseUrl))
-      throw new Error(`Mounted Soul App service URL must be loopback HTTP: ${service.baseUrl}`)
-    await healthcheckMountedSoulAppUrl(service.baseUrl, service.healthPath)
-    const mounted = { baseUrl: service.baseUrl, mountToken: randomUUID() }
-    state.mountedAppServices.set(app.appId, mounted)
-    return mounted
-  }
   if (!service.command?.length)
     return null
 

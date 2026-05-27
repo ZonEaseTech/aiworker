@@ -10,29 +10,12 @@ import type {
 } from '@zonease/aiworker-soul-protocol'
 import type { CapabilityTemplate, VerticalSoul } from '../types.compat'
 
-export interface LocalSoulAppWorkspaceContext {
-  terminal?: {
-    cwd: {
-      protocolProvider?: string
-      source: 'host-workspace-root' | 'app-workspace-path' | 'protocol-resolver'
-      subpath?: string
-    }
-    id: string
-    label: string
-    requiredPermissions?: readonly string[]
-  }
-}
-
 export interface LocalSoulAppLifecycleResponse {
   app: LocalHostedSoulApp
   catalog?: unknown
 }
 
-export type LocalHostedSoulApp = HostedSoulApp & {
-  mountedContribution: HostedSoulApp['mountedContribution'] & {
-    workspaceContext?: LocalSoulAppWorkspaceContext | null
-  }
-}
+export type LocalHostedSoulApp = HostedSoulApp
 
 export interface LocalInfoResponse {
   runtimeVersion: string

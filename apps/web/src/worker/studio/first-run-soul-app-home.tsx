@@ -66,7 +66,7 @@ export function FirstRunSoulAppHome({
           const soul = soulForApp(app, souls)
           const soulCopy = soul ? displaySoul(soul, locale) : null
           const domain = soulCopy?.domain ?? app.projectedSoul?.domain ?? app.appId
-          const description = soulCopy?.description ?? app.manifest.description
+          const description = soulCopy?.description ?? app.description
           return (
             <Card
               key={app.appId}
@@ -75,7 +75,7 @@ export function FirstRunSoulAppHome({
             >
               <CardHeader>
                 <ItemContent className="min-w-0">
-                  <CardTitle>{app.manifest.name}</CardTitle>
+                  <CardTitle>{app.name}</CardTitle>
                   <CardDescription>{domain}</CardDescription>
                 </ItemContent>
               </CardHeader>
@@ -88,10 +88,10 @@ export function FirstRunSoulAppHome({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  aria-label={copy.workspace.startSoulApp(app.manifest.name)}
+                  aria-label={copy.workspace.startSoulApp(app.name)}
                   onClick={() => onStartApp(app)}
                 >
-                  {copy.workspace.startSoulApp(app.manifest.name)}
+                  {copy.workspace.startSoulApp(app.name)}
                   <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-end" />
                 </Button>
               </CardFooter>

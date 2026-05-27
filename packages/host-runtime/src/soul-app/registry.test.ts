@@ -90,6 +90,21 @@ describe('Host Soul descriptor registry', () => {
     expect(installed.status).toBe('installed')
     expect(installed.appId).toBe(FREEFORM_APP_ID)
     expect(installed.descriptor).toMatchObject({ protocol: 'soul/v1' })
+    expect(installed).not.toHaveProperty('manifest')
+    expect(installed).not.toHaveProperty('mountedContribution')
+    expect(installed).toMatchObject({
+      description: 'Open-ended Soul for freeform local work.',
+      mountedWorkbench: {
+        entry: '/micro-app/workbench',
+        id: 'workbench',
+        path: '/workbench',
+        renderer: 'micro-app',
+        scope: 'app',
+      },
+      name: 'AIWorker Freeform',
+      soulId: 'freeform',
+      version: '0.1.0',
+    })
     expect(listHostedSoulApps()).toHaveLength(1)
     expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
 

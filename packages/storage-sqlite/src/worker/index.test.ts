@@ -126,15 +126,21 @@ describe('greenfield local worker session schema', () => {
       soulId: freeformDescriptor.identity.soulId as string,
       sourceKind: 'inline',
       sourceRef: 'test:inline',
-      manifestDigest: 'digest-1',
-      manifestJson: freeformDescriptor,
+      descriptorDigest: 'digest-1',
+      descriptorJson: freeformDescriptor,
       at: '2026-05-12T22:22:00.000Z',
     })
 
     expect(installed.status).toBe('installed')
     expect(installed.healthStatus).toBe('unknown')
-    expect(getSoulApp('aiworker-freeform')?.manifestJson.identity.appId).toBe('aiworker-freeform')
+    expect(getSoulApp('aiworker-freeform')?.descriptorJson.identity.appId).toBe('aiworker-freeform')
+    expect(getSoulApp('aiworker-freeform')?.descriptorDigest).toBe('digest-1')
     expect(listSoulApps()).toHaveLength(1)
+
+    const physicalColumns = getWorkerDb()
+      .all<{ name: string }>(sql.raw('PRAGMA table_info("soul_apps")'))
+      .map(row => row.name)
+    expect(physicalColumns).toEqual(expect.arrayContaining(['manifest_json', 'manifest_digest']))
 
     const enabled = updateSoulAppLifecycle({
       id: 'aiworker-freeform',

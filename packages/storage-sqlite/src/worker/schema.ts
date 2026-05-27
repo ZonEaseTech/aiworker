@@ -1,4 +1,4 @@
-import type { SoulAppHealthStatus, SoulAppInstallSourceKind, SoulAppManifestValidationIssue, SoulAppRegistryStatus, SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
+import type { SoulAppHealthStatus, SoulAppInstallSourceKind, SoulAppRegistryStatus, SoulDescriptorValidationIssue, SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
@@ -146,9 +146,9 @@ export const soulApps = sqliteTable(
     status: text('status', { enum: ['installed', 'enabled', 'disabled', 'error'] }).$type<SoulAppRegistryStatus>().notNull().default('installed'),
     sourceKind: text('source_kind', { enum: ['descriptor-path', 'inline'] }).$type<SoulAppInstallSourceKind>().notNull(),
     sourceRef: text('source_ref').notNull(),
-    manifestDigest: text('manifest_digest').notNull(),
-    manifestJson: text('manifest_json', { mode: 'json' }).$type<SoulDescriptorV1>().notNull(),
-    validationIssuesJson: text('validation_issues_json', { mode: 'json' }).$type<SoulAppManifestValidationIssue[]>().notNull().$defaultFn(() => []),
+    descriptorDigest: text('manifest_digest').notNull(),
+    descriptorJson: text('manifest_json', { mode: 'json' }).$type<SoulDescriptorV1>().notNull(),
+    validationIssuesJson: text('validation_issues_json', { mode: 'json' }).$type<SoulDescriptorValidationIssue[]>().notNull().$defaultFn(() => []),
     healthStatus: text('health_status', { enum: ['unknown', 'pass', 'warn', 'fail'] }).$type<SoulAppHealthStatus>().notNull().default('unknown'),
     healthMessage: text('health_message'),
     installedAt: text('installed_at').notNull().$defaultFn(nowIso),
@@ -159,7 +159,7 @@ export const soulApps = sqliteTable(
     updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    digestIdx: index('soul_apps_manifest_digest_idx').on(table.manifestDigest),
+    digestIdx: index('soul_apps_manifest_digest_idx').on(table.descriptorDigest),
     soulIdx: index('soul_apps_soul_idx').on(table.soulId),
     statusUpdatedAtIdx: index('soul_apps_status_updated_at_idx').on(table.status, table.updatedAt),
   }),

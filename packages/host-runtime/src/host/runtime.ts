@@ -231,7 +231,7 @@ export class HostRuntime {
       return null
     return {
       appId: app.appId,
-      engineAssets: app.manifest.engineAssets,
+      engineAssets: app.engineAssets,
       sourceRoot: path.dirname(app.sourceRef),
     }
   }

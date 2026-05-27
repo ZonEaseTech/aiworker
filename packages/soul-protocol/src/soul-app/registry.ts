@@ -1,11 +1,13 @@
 import type { z } from 'zod'
 import type { SoulDescriptorV1 } from '..'
-import type { SoulAppCapability, SoulAppManifest, SoulAppManifestValidationIssue } from './manifest'
+import type {
+  SoulAppEngineAssets,
+  SoulAppEngineTarget,
+  SoulAppPermission,
+} from './manifest'
 
+import path from 'node:path'
 import { z as zod } from 'zod'
-import { soulAppManifestSchema, soulAppManifestValidationIssueSchema, soulAppWorkbenchSchema, soulAppWorkspaceContextSchema } from './manifest'
-
-// -- inlined from deleted vertical-soul.ts --
 
 const verticalSoulStatusSchema = zod.enum(['available', 'coming_soon'])
 type VerticalSoulStatus = zod.infer<typeof verticalSoulStatusSchema>
@@ -41,35 +43,72 @@ export type SoulAppInstallSourceKind = z.infer<typeof soulAppInstallSourceKindSc
 export const soulAppHealthStatusSchema = zod.enum(['unknown', 'pass', 'warn', 'fail'])
 export type SoulAppHealthStatus = z.infer<typeof soulAppHealthStatusSchema>
 
-export const soulAppMountedContributionSchema = zod.object({
-  apiRoutePrefix: zod.string().min(1).nullable(),
-  artifactPreviewIds: zod.array(zod.string().min(1)).readonly(),
-  descriptorSurfaceIds: zod.array(zod.string().min(1)).readonly(),
-  microAppSurfaceIds: zod.array(zod.string().min(1)).readonly(),
-  panelIds: zod.array(zod.string().min(1)).readonly(),
-  routePaths: zod.array(zod.string().min(1)).readonly(),
-  surfaceIds: zod.array(zod.string().min(1)).readonly(),
-  workbench: soulAppWorkbenchSchema.nullable(),
-  workspaceContext: soulAppWorkspaceContextSchema.nullable(),
-  workspaceWidgetIds: zod.array(zod.string().min(1)).readonly(),
+export const soulDescriptorValidationIssueCodeSchema = zod.enum([
+  'invalid_descriptor',
+  'unsupported_protocol',
+  'incompatible_host_version',
+  'unsafe_local_service_url',
+  'unsafe_engine_asset_source',
+  'missing_ui_api_entry',
+  'namespace_collision',
+])
+export type SoulDescriptorValidationIssueCode = z.infer<typeof soulDescriptorValidationIssueCodeSchema>
+
+export const soulDescriptorValidationIssueSeveritySchema = zod.enum(['warning', 'error'])
+export type SoulDescriptorValidationIssueSeverity = z.infer<typeof soulDescriptorValidationIssueSeveritySchema>
+
+export const soulDescriptorValidationIssueSchema = zod.object({
+  code: soulDescriptorValidationIssueCodeSchema,
+  message: zod.string().min(1),
+  path: zod.string().min(1).optional(),
+  severity: soulDescriptorValidationIssueSeveritySchema,
 })
-export type SoulAppMountedContribution = z.infer<typeof soulAppMountedContributionSchema>
+export type SoulDescriptorValidationIssue = z.infer<typeof soulDescriptorValidationIssueSchema>
+
+const soulAppPermissionSchema = zod.object({
+  action: zod.enum(['read', 'write', 'create', 'propose', 'mount', 'serve']),
+  kind: zod.enum(['storage', 'connector', 'ui', 'api', 'search']),
+  reason: zod.string().min(1),
+  target: zod.string().min(1),
+})
+
+const hostedSoulAppApiSchema = zod.object({
+  localService: zod.object({
+    command: zod.array(zod.string().min(1)).min(1).readonly(),
+    healthPath: zod.string().min(1),
+  }).nullable(),
+  routePrefix: zod.string().min(1).nullable(),
+})
+export type HostedSoulAppApi = z.infer<typeof hostedSoulAppApiSchema>
+
+export const mountedWorkbenchSchema = zod.object({
+  entry: zod.literal('/micro-app/workbench'),
+  id: zod.literal('workbench'),
+  path: zod.literal('/workbench'),
+  renderer: zod.literal('micro-app'),
+  scope: zod.literal('app'),
+})
+export type MountedWorkbench = z.infer<typeof mountedWorkbenchSchema>
 
 export const hostedSoulAppSchema = zod.object({
+  api: hostedSoulAppApiSchema,
   appId: zod.string().min(1),
+  description: zod.string().min(1),
   descriptor: zod.custom<SoulDescriptorV1>(),
   descriptorDigest: zod.string().min(1),
+  engineAssets: zod.custom<SoulAppEngineAssets>(),
   healthMessage: zod.string().nullable(),
   healthStatus: soulAppHealthStatusSchema,
-  manifest: soulAppManifestSchema,
-  manifestDigest: zod.string().min(1),
-  mountedContribution: soulAppMountedContributionSchema,
+  mountedWorkbench: mountedWorkbenchSchema,
+  name: zod.string().min(1),
+  permissions: zod.array(soulAppPermissionSchema).readonly(),
   projectedCapabilities: zod.array(capabilityTemplateSchema).readonly(),
   projectedSoul: verticalSoulSchema,
+  soulId: zod.string().min(1),
   sourceKind: soulAppInstallSourceKindSchema,
   sourceRef: zod.string().min(1),
   status: soulAppRegistryStatusSchema,
-  validationIssues: zod.array(soulAppManifestValidationIssueSchema).readonly(),
+  validationIssues: zod.array(soulDescriptorValidationIssueSchema).readonly(),
   version: zod.string().min(1),
 })
 export type HostedSoulApp = z.infer<typeof hostedSoulAppSchema>
@@ -85,100 +124,180 @@ export function parseNamespacedSoulAppCapabilityId(id: string): { appId: string,
   return { appId: id.slice(0, index), capabilityId: id.slice(index + 1) }
 }
 
-export function projectSoulAppSoul(manifest: SoulAppManifest, status: VerticalSoulStatus = 'available'): VerticalSoul {
+export function projectSoulAppSoul(descriptor: SoulDescriptorV1, status: VerticalSoulStatus = 'available'): VerticalSoul {
+  const identity = descriptorIdentity(descriptor)
   return {
-    defaultTemplates: projectSoulAppDefaultTemplates(manifest),
-    description: manifest.description,
-    domain: manifest.soul.domain,
-    id: manifest.id,
-    name: manifest.name,
+    defaultTemplates: projectSoulAppDefaultTemplates(descriptor),
+    description: identity.description,
+    domain: identity.soulId,
+    id: identity.appId,
+    name: identity.name,
     status,
   }
 }
 
-export function projectSoulAppDefaultTemplates(manifest: SoulAppManifest): string[] {
-  const seen = new Set<string>()
-  const templates: string[] = []
-  for (const type of manifest.workspaceTypes) {
-    for (const id of type.defaultCapabilityIds ?? []) {
-      const namespacedId = namespaceSoulAppCapabilityId(manifest.id, id)
-      if (seen.has(namespacedId))
-        continue
-      seen.add(namespacedId)
-      templates.push(namespacedId)
-    }
-  }
-  return templates
+export function projectSoulAppDefaultTemplates(descriptor: SoulDescriptorV1): string[] {
+  const identity = descriptorIdentity(descriptor)
+  return descriptor.capabilities
+    .map(capability => capabilityRecord(capability))
+    .map(capability => namespaceSoulAppCapabilityId(identity.appId, capability.id))
 }
 
-export function projectSoulAppCapabilityTemplate(manifest: SoulAppManifest, capability: SoulAppCapability): CapabilityTemplate {
+export function projectSoulAppCapabilityTemplate(descriptor: SoulDescriptorV1, capability: unknown): CapabilityTemplate {
+  const identity = descriptorIdentity(descriptor)
+  const record = capabilityRecord(capability)
   return {
-    description: capability.description,
-    id: namespaceSoulAppCapabilityId(manifest.id, capability.id),
-    inputHints: [
-      `Workspace types: ${capability.workspaceTypes.join(', ')}`,
-      `Artifact types: ${capability.artifactTypes?.join(', ') ?? 'none'}`,
-    ],
-    name: capability.name,
-    outputKind: capability.outputKind,
-    promptRef: capability.promptRef,
-    reviewRubricRef: capability.reviewRubricRef ?? null,
-    soulId: manifest.id,
+    description: record.description,
+    id: namespaceSoulAppCapabilityId(identity.appId, record.id),
+    inputHints: ['Workspace locator is owned by the Soul App.'],
+    name: record.name,
+    outputKind: 'session',
+    promptRef: record.promptRef,
+    reviewRubricRef: null,
+    soulId: identity.appId,
   }
 }
 
-export function projectSoulAppCapabilityTemplates(manifest: SoulAppManifest): CapabilityTemplate[] {
-  return manifest.capabilities.map(capability => projectSoulAppCapabilityTemplate(manifest, capability))
-}
-
-export function mountedContributionForManifest(manifest: SoulAppManifest): SoulAppMountedContribution {
-  const surfaces = [
-    ...manifest.ui.routes,
-    ...manifest.ui.panels,
-    ...manifest.ui.artifactPreviews,
-    ...(manifest.ui.workspaceWidgets ?? []),
-  ].filter(item => item.surface)
-  return {
-    apiRoutePrefix: manifest.api.routePrefix ?? null,
-    artifactPreviewIds: manifest.ui.artifactPreviews.map(slot => slot.id),
-    descriptorSurfaceIds: surfaces.filter(item => item.surface?.renderer === 'host-descriptor').map(item => item.id),
-    microAppSurfaceIds: surfaces.filter(item => item.surface?.renderer === 'micro-app').map(item => item.id),
-    panelIds: manifest.ui.panels.map(slot => slot.id),
-    routePaths: manifest.ui.routes.map(route => route.path),
-    surfaceIds: surfaces.map(item => item.id),
-    workbench: manifest.ui.workbench ?? null,
-    workspaceContext: manifest.ui.workspaceContext ?? null,
-    workspaceWidgetIds: (manifest.ui.workspaceWidgets ?? []).map(slot => slot.id),
-  }
+export function projectSoulAppCapabilityTemplates(descriptor: SoulDescriptorV1): CapabilityTemplate[] {
+  return descriptor.capabilities.map(capability => projectSoulAppCapabilityTemplate(descriptor, capability))
 }
 
 export function buildHostedSoulApp(input: {
-  descriptor?: SoulDescriptorV1
-  descriptorDigest?: string
+  descriptor: SoulDescriptorV1
+  descriptorDigest: string
   healthMessage?: string | null
   healthStatus?: SoulAppHealthStatus
-  manifest: SoulAppManifest
-  manifestDigest: string
   sourceKind: SoulAppInstallSourceKind
   sourceRef: string
   status: SoulAppRegistryStatus
-  validationIssues?: readonly SoulAppManifestValidationIssue[]
+  validationIssues?: readonly SoulDescriptorValidationIssue[]
 }): HostedSoulApp {
+  const identity = descriptorIdentity(input.descriptor)
   return hostedSoulAppSchema.parse({
-    appId: input.manifest.id,
-    descriptor: input.descriptor ?? {},
-    descriptorDigest: input.descriptorDigest ?? input.manifestDigest,
+    api: apiForDescriptor(input.descriptor),
+    appId: identity.appId,
+    description: identity.description,
+    descriptor: input.descriptor,
+    descriptorDigest: input.descriptorDigest,
+    engineAssets: engineAssetsForDescriptor(input.descriptor),
     healthMessage: input.healthMessage ?? null,
     healthStatus: input.healthStatus ?? 'unknown',
-    manifest: input.manifest,
-    manifestDigest: input.manifestDigest,
-    mountedContribution: mountedContributionForManifest(input.manifest),
-    projectedCapabilities: projectSoulAppCapabilityTemplates(input.manifest),
-    projectedSoul: projectSoulAppSoul(input.manifest, input.status === 'enabled' ? 'available' : 'coming_soon'),
+    mountedWorkbench: {
+      entry: '/micro-app/workbench',
+      id: 'workbench',
+      path: '/workbench',
+      renderer: 'micro-app',
+      scope: 'app',
+    },
+    name: identity.name,
+    permissions: permissionsForDescriptor(input.descriptor),
+    projectedCapabilities: projectSoulAppCapabilityTemplates(input.descriptor),
+    projectedSoul: projectSoulAppSoul(input.descriptor, input.status === 'enabled' ? 'available' : 'coming_soon'),
+    soulId: identity.soulId,
     sourceKind: input.sourceKind,
     sourceRef: input.sourceRef,
     status: input.status,
     validationIssues: input.validationIssues ?? [],
-    version: input.manifest.version,
+    version: identity.version,
   })
+}
+
+function descriptorIdentity(descriptor: SoulDescriptorV1): {
+  appId: string
+  description: string
+  name: string
+  soulId: string
+  version: string
+} {
+  return {
+    appId: String(descriptor.identity.appId),
+    description: String(descriptor.identity.description ?? descriptor.identity.name),
+    name: String(descriptor.identity.name),
+    soulId: String(descriptor.identity.soulId),
+    version: String(descriptor.identity.version),
+  }
+}
+
+function capabilityRecord(capability: unknown): {
+  description: string
+  id: string
+  name: string
+  promptRef: string
+} {
+  const record = capability && typeof capability === 'object' ? capability as Record<string, unknown> : {}
+  const id = typeof record.id === 'string' && record.id.trim().length > 0 ? record.id : 'default'
+  const name = typeof record.name === 'string' && record.name.trim().length > 0 ? record.name : id
+  const prompt = record.prompt && typeof record.prompt === 'object' ? record.prompt as Record<string, unknown> : {}
+  return {
+    description: typeof record.purpose === 'string' && record.purpose.trim().length > 0 ? record.purpose : name,
+    id,
+    name,
+    promptRef: typeof prompt.ref === 'string' && prompt.ref.trim().length > 0 ? prompt.ref : `dist/product/capabilities/${id}/prompt.md`,
+  }
+}
+
+function apiForDescriptor(descriptor: SoulDescriptorV1): HostedSoulAppApi {
+  const identity = descriptorIdentity(descriptor)
+  if (!descriptor.api) {
+    return {
+      localService: null,
+      routePrefix: null,
+    }
+  }
+  return {
+    localService: {
+      command: ['bun', descriptor.api.entry.replace(/^dist\//, '')],
+      healthPath: '/health',
+    },
+    routePrefix: descriptor.api.mount ?? `/api/apps/${identity.appId}`,
+  }
+}
+
+function permissionsForDescriptor(descriptor: SoulDescriptorV1): SoulAppPermission[] {
+  const identity = descriptorIdentity(descriptor)
+  const permissions: SoulAppPermission[] = [{
+    action: 'mount',
+    kind: 'ui',
+    reason: 'Mount the descriptor-declared Soul workbench.',
+    target: `${identity.appId}-workbench`,
+  }]
+  if (descriptor.api) {
+    permissions.push({
+      action: 'serve',
+      kind: 'api',
+      reason: 'Serve the descriptor-declared app-owned API.',
+      target: descriptor.api.mount ?? `/api/apps/${identity.appId}`,
+    })
+  }
+  return permissions
+}
+
+function engineAssetsForDescriptor(descriptor: SoulDescriptorV1): SoulAppEngineAssets {
+  const mcpClients = Object.entries(descriptor.engine.mcp?.targets ?? {})
+    .flatMap(([target, entry]) => {
+      if (!isSoulAppEngineTarget(target))
+        return []
+      return [{
+        source: path.posix.dirname(entry.file.replace(/^dist\//, '')),
+        target,
+      }]
+    })
+  return {
+    workspace: {
+      source: descriptor.engine.workspaceAssets?.source.replace(/^dist\//, '') ?? 'engine-assets/workspace',
+    },
+    ...(descriptor.engine.skills
+      ? {
+          skills: {
+            source: descriptor.engine.skills.source.replace(/^dist\//, ''),
+            targets: ['codex', 'claude-code'],
+          },
+        }
+      : {}),
+    ...(mcpClients.length > 0 ? { mcpClients } : {}),
+  }
+}
+
+function isSoulAppEngineTarget(value: string): value is SoulAppEngineTarget {
+  return value === 'codex' || value === 'claude-code'
 }

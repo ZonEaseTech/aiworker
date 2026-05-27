@@ -1,4 +1,4 @@
-import type { LocalSessionEvent, LocalSettingsConfig, LocalTurn, LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-protocol'
+import type { HostedSoulApp, LocalSessionEvent, LocalSettingsConfig, LocalTurn, LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-protocol'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -300,118 +300,99 @@ let currentArtifactRawStatus: number
 let lastMessageRequestBody: Record<string, unknown> | null
 let lastSessionRequestBody: Record<string, unknown> | null
 let writtenFiles: Array<{ body: string, path: string, workspaceId: string }>
-let currentApps: Array<{
-  appId: string
-  manifest: {
-    connectors?: {
-      optional: Array<{ access: string[], id: string, reason: string, scopes: string[] }>
-      required: Array<{ access: string[], id: string, reason: string, scopes: string[] }>
-    }
-    permissions?: unknown[]
-    name: string
-    ui?: {
-      artifactPreviews?: Array<{ id: string, label: string }>
-      panels?: Array<{ id: string, label: string }>
-      reviewPanels?: Array<{ id: string, label: string }>
-      routes?: Array<{
-        id?: string
-        label: string
-        path: string
-        surface?: {
-          entry?: string
-          renderer: 'micro-app'
-          scope?: 'app' | 'artifact' | 'review' | 'session' | 'workspace'
-        }
-      }>
-      workbench?: {
-        actions?: Array<{
-          id: string
-          label: string
-          protocolAction: string
-          requiredPermissions?: string[]
-          role: 'action' | 'panel-toggle' | 'refresh'
-        }>
-        primaryAction?: {
-          id: string
-          label: string
-          protocolAction: string
-          requiredPermissions?: string[]
-          role: 'primary'
-        }
-        search?: {
-          id: string
-          label: string
-          placeholder: string
-          protocolProvider: string
-          requiredPermissions?: string[]
-        }
-        configuration?: {
-          id: string
-          label: string
-          protocolAction: string
-          requiredPermissions?: string[]
-        }
-      }
-      workspaceWidgets?: Array<{ id: string, label: string, surface?: { renderer: 'micro-app' } }>
-    }
-  }
-  descriptor?: {
-    identity?: {
-      name?: string
-    }
-    workbench?: {
-      type: 'micro-app'
-    }
-  }
-  mountedContribution?: {
-    apiRoutePrefix: string | null
-    artifactPreviewIds: string[]
-    descriptorSurfaceIds?: string[]
-    microAppSurfaceIds?: string[]
-    panelIds: string[]
-    reviewPanelIds: string[]
-    routePaths: string[]
-    surfaceIds?: string[]
-    workbench?: {
-      actions?: Array<{
-        id: string
-        label: string
-        protocolAction: string
-        requiredPermissions?: string[]
-        role: 'action' | 'panel-toggle' | 'refresh'
-      }>
-      primaryAction?: {
-        id: string
-        label: string
-        protocolAction: string
-        requiredPermissions?: string[]
-        role: 'primary'
-      }
-      search?: {
-        id: string
-        label: string
-        placeholder: string
-        protocolProvider: string
-        requiredPermissions?: string[]
-      }
-      configuration?: {
-        id: string
-        label: string
-        protocolAction: string
-        requiredPermissions?: string[]
-      }
-    } | null
-    workspaceWidgetIds: string[]
-  }
-  status: string
-  version: string
-}>
+let currentApps: HostedSoulApp[]
 let deferCreatedSessionStream: boolean
+
+function hostedApp({
+  appId,
+  appName,
+  permissions = [],
+  status = 'enabled',
+}: {
+  appId: string
+  appName: string
+  permissions?: HostedSoulApp['permissions']
+  status?: HostedSoulApp['status']
+}): HostedSoulApp {
+  return {
+    api: {
+      localService: null,
+      routePrefix: `/api/apps/${appId}`,
+    },
+    appId,
+    description: `${appName} descriptor`,
+    descriptor: {
+      api: null,
+      capabilities: [{
+        id: 'default',
+        name: `${appName} Default`,
+        prompt: { ref: 'dist/product/capabilities/default/prompt.md', type: 'packaged-file' },
+      }],
+      compatibility: { host: '>=1.0.0' },
+      configuration: {},
+      engine: {},
+      extensions: {},
+      external: {},
+      health: { ready: true },
+      identity: {
+        appId,
+        name: appName,
+        soulId: appId.replace(/^aiworker-/, ''),
+        version: '0.1.0',
+      },
+      protocol: 'soul/v1',
+      workbench: {
+        entry: 'dist/web/workbench/index.html',
+        mode: 'sdk-common',
+        router: { mode: 'search' },
+        type: 'micro-app',
+      },
+    },
+    descriptorDigest: `${appId}-digest`,
+    engineAssets: {
+      workspace: { source: 'engine-assets/workspace' },
+    },
+    healthMessage: null,
+    healthStatus: 'unknown',
+    mountedWorkbench: {
+      entry: '/micro-app/workbench',
+      id: 'workbench',
+      path: '/workbench',
+      renderer: 'micro-app',
+      scope: 'app',
+    },
+    name: appName,
+    permissions,
+    projectedCapabilities: [{
+      description: `${appName} default capability`,
+      id: `${appId}.default`,
+      inputHints: [],
+      name: `${appName} Default`,
+      outputKind: 'session',
+      promptRef: 'dist/product/capabilities/default/prompt.md',
+      reviewRubricRef: null,
+      soulId: appId,
+    }],
+    projectedSoul: {
+      defaultTemplates: [`${appId}.default`],
+      description: `${appName} descriptor`,
+      domain: appId.replace(/^aiworker-/, ''),
+      id: appId,
+      name: appName,
+      status: status === 'enabled' ? 'available' : 'coming_soon',
+    },
+    soulId: appId.replace(/^aiworker-/, ''),
+    sourceKind: 'descriptor-path',
+    sourceRef: `/tmp/${appId}/dist/soul.descriptor.json`,
+    status,
+    validationIssues: [],
+    version: '0.1.0',
+  }
+}
 
 function mountedRouteApp({
   appId,
   appName,
-  routes,
 }: {
   appId: string
   appName: string
@@ -422,64 +403,8 @@ function mountedRouteApp({
     path: string
     scope?: 'app' | 'artifact' | 'review' | 'session' | 'workspace'
   }>
-}): typeof currentApps[number] {
-  return {
-    appId,
-    descriptor: {
-      identity: {
-        name: appName,
-      },
-      workbench: {
-        type: 'micro-app',
-      },
-    },
-    manifest: {
-      name: appName,
-      ui: {
-        artifactPreviews: [],
-        panels: [],
-        reviewPanels: [],
-        routes: routes.map(route => ({
-          id: route.id,
-          label: route.label,
-          path: route.path,
-          surface: { entry: route.entry, renderer: 'micro-app', scope: route.scope },
-        })),
-        workspaceWidgets: [],
-      },
-    },
-    mountedContribution: {
-      apiRoutePrefix: `/api/apps/${appId}`,
-      artifactPreviewIds: [],
-      descriptorSurfaceIds: [],
-      microAppSurfaceIds: routes.map(route => route.id),
-      panelIds: [],
-      reviewPanelIds: [],
-      routePaths: routes.map(route => route.path),
-      surfaceIds: routes.map(route => route.id),
-      workspaceWidgetIds: [],
-    },
-    status: 'enabled',
-    version: '0.1.0',
-  }
-}
-
-function appWithDescriptorWorkbench(app: typeof currentApps[number]): typeof currentApps[number] {
-  if (app.descriptor?.workbench?.type === 'micro-app')
-    return app
-  if ((app.mountedContribution?.microAppSurfaceIds?.length ?? 0) === 0)
-    return app
-  return {
-    ...app,
-    descriptor: {
-      identity: {
-        name: app.manifest.name,
-      },
-      workbench: {
-        type: 'micro-app',
-      },
-    },
-  }
+}): HostedSoulApp {
+  return hostedApp({ appId, appName })
 }
 
 function universalRoute(label = 'Universal Workbench') {
@@ -643,7 +568,7 @@ beforeEach(() => {
     if (url.endsWith('/api/local/info'))
       return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
     if (url.endsWith('/api/local/apps'))
-      return json({ apps: currentApps.map(appWithDescriptorWorkbench) })
+      return json({ apps: currentApps })
     if (url.endsWith('/api/local/apps/aiworker-qa/enable') && method === 'POST') {
       const enabled = currentApps.find(app => app.appId === 'aiworker-qa')
       currentApps = currentApps.map(app => app.appId === 'aiworker-qa' ? { ...app, status: 'enabled' } : app)
@@ -664,9 +589,9 @@ beforeEach(() => {
     if (requestUrl.pathname === '/api/mount/workbench') {
       const workerId = requestUrl.searchParams.get('workerId')
       const worker = currentWorkers.find(item => item.id === workerId)
-      const mountedApp = currentApps.map(appWithDescriptorWorkbench)
+      const mountedApp = currentApps
         .find(app => app.appId === worker?.soulId || app.appId === worker?.id || app.appId === HR_SOUL_ID)
-        ?? currentApps.map(appWithDescriptorWorkbench).find(app => app.descriptor?.workbench?.type === 'micro-app')
+        ?? currentApps.find(app => app.descriptor?.workbench?.type === 'micro-app')
       const surfaceId = 'workbench'
       const routePath = '/workbench'
       const appId = mountedApp?.appId ?? HR_SOUL_ID
@@ -981,37 +906,7 @@ describe('worker studio', () => {
   })
 
   it('opens a workspace route as an app-owned mounted surface instead of Host session composition', async () => {
-    currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-home',
-            label: 'HR People Workbench',
-            path: '/hr',
-            surface: { renderer: 'micro-app', scope: 'workspace' },
-          }],
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-home'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr'],
-        surfaceIds: ['hr-home'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
@@ -1033,20 +928,11 @@ describe('worker studio', () => {
   })
 
   it('renders descriptor workbench through the micro-app mount path without legacy route projection', async () => {
-    const staleLegacyProjection = mountedRouteApp({
+    currentApps = [mountedRouteApp({
       appId: 'aiworker-hr',
       appName: 'AIWorker HR',
       routes: [universalRoute()],
-    })
-    const staleMountedContribution = staleLegacyProjection.mountedContribution!
-    currentApps = [{
-      ...staleLegacyProjection,
-      mountedContribution: {
-        ...staleMountedContribution,
-        microAppSurfaceIds: [],
-        routePaths: ['/legacy-workbench'],
-      },
-    }]
+    })]
     window.history.replaceState(null, '', '/workers/hr-worker')
 
     render(<WorkerStudio />)
@@ -1439,37 +1325,7 @@ describe('worker studio', () => {
   })
 
   it('renders HR through an app-owned mounted route instead of a Host renderer', async () => {
-    currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-home',
-            label: 'HR People Workbench',
-            path: '/hr',
-            surface: { renderer: 'micro-app' },
-          }],
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-home'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr'],
-        surfaceIds: ['hr-home'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
 
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
@@ -1522,35 +1378,7 @@ describe('worker studio', () => {
       workerId: 'hr-worker',
     }
     currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-home',
-            label: 'HR People Workbench',
-            path: '/hr',
-            surface: { renderer: 'micro-app' },
-          }],
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-home'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr'],
-        surfaceIds: ['hr-home'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
+      ...hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' }),
     }]
     currentWorkspaces = [workspace, secondWorkspace]
     microAppRouteMock.getMountedMicroAppCurrentRoute.mockResolvedValue({ pathname: '/workbench' })
@@ -1624,37 +1452,7 @@ describe('worker studio', () => {
   })
 
   it('does not reinterpret session engine state when a Soul App owns the mounted route', async () => {
-    currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-session',
-            label: 'HR Session Workbench',
-            path: '/hr/session',
-            surface: { renderer: 'micro-app', scope: 'session' },
-          }],
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-session'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr/session'],
-        surfaceIds: ['hr-session'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
     currentArtifacts = []
     currentTurns = [{ ...turnRecord, response: null, status: 'running' }]
     currentEvents = [{
@@ -1737,168 +1535,28 @@ describe('worker studio', () => {
 
   it('keeps installed Soul Apps out of the worker rail and shows them in Settings', async () => {
     currentApps = [
-      {
+      hostedApp({
         appId: 'aiworker-hr',
-        manifest: {
-          name: 'AIWorker HR',
-          permissions: Array.from({ length: 10 }, (_, index) => ({ id: `perm-${index}` })),
-          ui: {
-            artifactPreviews: [{ id: 'person-profile-preview', label: 'Person profile preview' }],
-            panels: [{ id: 'people-panel', label: 'People panel' }],
-            reviewPanels: [{ id: 'hr-review', label: 'HR review' }],
-            routes: [{ id: 'hr-home', label: 'People workbench', path: '/hr/people', surface: { renderer: 'micro-app' } }],
-            workbench: {
-              actions: [
-                {
-                  id: 'refresh-people',
-                  label: 'Refresh',
-                  protocolAction: 'people.refresh',
-                  requiredPermissions: ['storage:read:aiworker-hr'],
-                  role: 'refresh',
-                },
-                {
-                  id: 'toggle-evidence-drawer',
-                  label: 'Evidence',
-                  protocolAction: 'drawers.evidence.toggle',
-                  requiredPermissions: ['connector:read:ats'],
-                  role: 'panel-toggle',
-                },
-              ],
-              primaryAction: {
-                id: 'create-people-profile',
-                label: 'New people profile',
-                protocolAction: 'peopleProfiles.create',
-                requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
-                role: 'primary',
-              },
-              search: {
-                id: 'people-profile-search',
-                label: 'Search people profiles',
-                placeholder: 'Search people profiles',
-                protocolProvider: 'peopleProfiles.search',
-                requiredPermissions: ['search:read:aiworker-hr'],
-              },
-              configuration: {
-                id: 'configure-hr',
-                label: 'Configure HR',
-                protocolAction: 'configuration.open',
-                requiredPermissions: ['api:serve:/api/apps/aiworker-hr'],
-              },
-            },
-            workspaceWidgets: [{ id: 'hr-people-widget', label: 'People widget', surface: { renderer: 'micro-app' } }],
-          },
-        },
-        mountedContribution: {
-          apiRoutePrefix: '/api/apps/aiworker-hr',
-          artifactPreviewIds: ['person-profile-preview'],
-          descriptorSurfaceIds: ['hr-home'],
-          microAppSurfaceIds: ['hr-home'],
-          panelIds: ['people-panel'],
-          reviewPanelIds: ['hr-review'],
-          routePaths: ['/hr/people'],
-          surfaceIds: ['hr-home', 'hr-people-widget'],
-          workbench: {
-            actions: [
-              {
-                id: 'refresh-people',
-                label: 'Refresh',
-                protocolAction: 'people.refresh',
-                requiredPermissions: ['storage:read:aiworker-hr'],
-                role: 'refresh',
-              },
-              {
-                id: 'toggle-evidence-drawer',
-                label: 'Evidence',
-                protocolAction: 'drawers.evidence.toggle',
-                requiredPermissions: ['connector:read:ats'],
-                role: 'panel-toggle',
-              },
-            ],
-            primaryAction: {
-              id: 'create-people-profile',
-              label: 'New people profile',
-              protocolAction: 'peopleProfiles.create',
-              requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
-              role: 'primary',
-            },
-            search: {
-              id: 'people-profile-search',
-              label: 'Search people profiles',
-              placeholder: 'Search people profiles',
-              protocolProvider: 'peopleProfiles.search',
-              requiredPermissions: ['search:read:aiworker-hr'],
-            },
-            configuration: {
-              id: 'configure-hr',
-              label: 'Configure HR',
-              protocolAction: 'configuration.open',
-              requiredPermissions: ['api:serve:/api/apps/aiworker-hr'],
-            },
-          },
-          workspaceWidgetIds: ['people-widget'],
-        },
-        status: 'enabled',
-        version: '0.1.0',
-      },
-      {
+        appName: 'AIWorker HR',
+        permissions: Array.from({ length: 10 }, (_, index) => ({
+          action: index % 2 === 0 ? 'read' : 'write',
+          kind: 'storage',
+          reason: 'Access HR app-owned data.',
+          target: `aiworker-hr-${index}`,
+        })),
+      }),
+      hostedApp({
         appId: 'aiworker-qa',
-        manifest: {
-          connectors: {
-            optional: [],
-            required: [
-              {
-                access: ['read'],
-                id: 'ci',
-                reason: 'Read CI and test evidence through the Host connector broker.',
-                scopes: ['runs.read'],
-              },
-            ],
-          },
-          name: 'AIWorker QA',
-          permissions: [
-            { action: 'read', kind: 'storage', reason: 'Read app-scoped QA domain metadata.', target: 'aiworker-qa' },
-            { action: 'write', kind: 'storage', reason: 'Write app-scoped QA domain metadata.', target: 'aiworker-qa' },
-            { action: 'read', kind: 'search', reason: 'Read app-owned QA search descriptors.', target: 'aiworker-qa' },
-            { action: 'write', kind: 'search', reason: 'Publish app-owned QA search descriptors.', target: 'aiworker-qa' },
-            { action: 'read', kind: 'connector', reason: 'Read CI evidence through Host connector broker.', target: 'ci' },
-          ],
-          ui: {
-            artifactPreviews: [],
-            panels: [],
-            reviewPanels: [],
-            routes: [],
-            workbench: {
-              primaryAction: {
-                id: 'create-release-gate',
-                label: 'New release gate',
-                protocolAction: 'releaseGates.create',
-                requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
-                role: 'primary',
-              },
-              search: {
-                id: 'release-search',
-                label: 'Search releases',
-                placeholder: 'Search releases',
-                protocolProvider: 'releases.search',
-                requiredPermissions: ['search:read:aiworker-qa'],
-              },
-            },
-          },
-        },
-        mountedContribution: {
-          apiRoutePrefix: '/api/apps/aiworker-qa',
-          artifactPreviewIds: [],
-          descriptorSurfaceIds: [],
-          microAppSurfaceIds: [],
-          panelIds: [],
-          reviewPanelIds: [],
-          routePaths: ['/qa/release'],
-          surfaceIds: [],
-          workspaceWidgetIds: [],
-        },
+        appName: 'AIWorker QA',
+        permissions: [
+          { action: 'read', kind: 'storage', reason: 'Read app-scoped QA domain metadata.', target: 'aiworker-qa' },
+          { action: 'write', kind: 'storage', reason: 'Write app-scoped QA domain metadata.', target: 'aiworker-qa' },
+          { action: 'read', kind: 'search', reason: 'Read app-owned QA search descriptors.', target: 'aiworker-qa' },
+          { action: 'write', kind: 'search', reason: 'Publish app-owned QA search descriptors.', target: 'aiworker-qa' },
+          { action: 'read', kind: 'connector', reason: 'Read CI evidence through Host connector broker.', target: 'ci' },
+        ],
         status: 'disabled',
-        version: '0.1.0',
-      },
+      }),
     ]
 
     render(<WorkerStudio />)
@@ -1936,7 +1594,7 @@ describe('worker studio', () => {
     expect(within(dialog).getByText('Enabled · 0.1.0')).toBeTruthy()
     const permissionsBadge = within(dialog).getByText('10 access entries')
     expect(permissionsBadge.getAttribute('data-slot')).toBe('badge')
-    expect(within(dialog).getByText('3 mounted contributions').getAttribute('data-slot')).toBe('badge')
+    expect(within(dialog).getAllByText('1 mounted contribution').some(item => item.getAttribute('data-slot') === 'badge')).toBe(true)
     const disableHrButton = within(dialog).getByRole('button', { name: 'Disable AIWorker HR' })
     expect(disableHrButton.getAttribute('data-slot')).toBe('button')
     expect(disableHrButton.classList.contains('settings-action-button')).toBe(false)
@@ -1948,12 +1606,11 @@ describe('worker studio', () => {
     const searchPermissionBadges = within(dialog).getAllByText('search:read:aiworker-qa')
     const qaAppAccess = searchPermissionBadges[0]?.closest('[aria-label="AIWorker QA app access"]')
     expect(qaAppAccess?.getAttribute('data-slot')).toBe('item-group')
-    expect(within(dialog).getByText('App access').getAttribute('data-slot')).toBe('kbd')
-    expect(within(dialog).getByText('App access').classList.contains('font-mono')).toBe(false)
+    const appAccessLabels = within(dialog).getAllByText('App access')
+    expect(appAccessLabels.some(label => label.getAttribute('data-slot') === 'kbd')).toBe(true)
+    expect(appAccessLabels.every(label => !label.classList.contains('font-mono'))).toBe(true)
     expect(searchPermissionBadges.some(node => node.closest('[data-slot="item-actions"]'))).toBe(true)
-    expect(within(dialog).getByText('ci · not enabled').closest('[data-slot="item-actions"]')).toBeTruthy()
     expect(within(dialog).getAllByText('search:read:aiworker-qa').length).toBeGreaterThan(0)
-    expect(within(dialog).getByText('ci · not enabled')).toBeTruthy()
     expect(within(dialog).getAllByText('storage:write:aiworker-qa').length).toBeGreaterThan(0)
     expect(within(dialog).getAllByText('search:write:aiworker-qa').length).toBeGreaterThan(0)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Enable AIWorker QA' }))
@@ -1966,45 +1623,7 @@ describe('worker studio', () => {
   })
 
   it('prefers an app-owned mounted route frame over the Host embedded HR renderer', async () => {
-    currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-home',
-            label: 'HR People Workbench',
-            path: '/hr',
-            surface: { renderer: 'micro-app' },
-          }],
-          workbench: {
-            primaryAction: {
-              id: 'create-people-profile',
-              label: 'New people profile',
-              protocolAction: 'peopleProfiles.create',
-              role: 'primary',
-            },
-          },
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-home'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr'],
-        surfaceIds: ['hr-home'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
 
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
@@ -2064,37 +1683,7 @@ describe('worker studio', () => {
       { ...workspace, id: 'workspace-20260524', workerId: 'e2e-hr-codex-20260524' },
       { ...workspace, id: 'workspace-20260525', workerId: 'e2e-hr-codex-20260525' },
     ]
-    currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-home',
-            label: 'HR People Workbench',
-            path: '/hr',
-            surface: { entry: '/micro-app/routes/hr-home', renderer: 'micro-app', scope: 'workspace' },
-          }],
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-home'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr'],
-        surfaceIds: ['hr-home'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
 
     render(<WorkerStudio />)
 
@@ -2146,64 +1735,7 @@ describe('worker studio', () => {
       name: 'QA Release Workspace',
       workerId: 'qa-worker',
     }]
-    currentApps = [{
-      appId: 'aiworker-qa',
-      manifest: {
-        name: 'AIWorker QA',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [],
-          workbench: {
-            primaryAction: {
-              id: 'create-release-gate',
-              label: 'New release gate',
-              protocolAction: 'releaseGates.create',
-              requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
-              role: 'primary',
-            },
-            search: {
-              id: 'release-search',
-              label: 'Search releases',
-              placeholder: 'Search releases',
-              protocolProvider: 'releases.search',
-              requiredPermissions: ['search:read:aiworker-qa'],
-            },
-          },
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-qa',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: [],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/qa/release'],
-        surfaceIds: [],
-        workbench: {
-          primaryAction: {
-            id: 'create-release-gate',
-            label: 'New release gate',
-            protocolAction: 'releaseGates.create',
-            requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
-            role: 'primary',
-          },
-          search: {
-            id: 'release-search',
-            label: 'Search releases',
-            placeholder: 'Search releases',
-            protocolProvider: 'releases.search',
-            requiredPermissions: ['search:read:aiworker-qa'],
-          },
-        },
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-qa', appName: 'AIWorker QA' })]
     window.history.replaceState(null, '', '/workers/qa-worker')
 
     render(<WorkerStudio />)
@@ -2213,28 +1745,10 @@ describe('worker studio', () => {
     expect(screen.queryByRole('button', { name: 'New release gate' })).toBeNull()
     expect(screen.queryByPlaceholderText('Search releases')).toBeNull()
 
-    const searchInput = screen.getByPlaceholderText('Search workspaces...')
-    expect(searchInput.getAttribute('data-slot')).toBe('input-group-control')
-    expect(searchInput.closest('[data-slot="input-group"]')).toBeTruthy()
+    expect(screen.queryByPlaceholderText('Search workspaces...')).toBeNull()
     expect(document.querySelector('.toolbar-search input')).toBeNull()
-    const workspaceCard = screen
-      .getAllByRole('button', { name: /QA Release Workspace/ })
-      .find(item => item.getAttribute('aria-pressed') === 'true')
-    expect(workspaceCard).toBeTruthy()
-    if (!workspaceCard)
-      return
-    expect(workspaceCard.getAttribute('data-slot')).toBe('button')
-    expect(workspaceCard.getAttribute('data-variant')).toBe('secondary')
-    expect(workspaceCard.classList.contains('aria-pressed:border-primary')).toBe(false)
-    expect(workspaceCard.classList.contains('aria-pressed:bg-primary/5')).toBe(false)
-    const workspaceCardIcon = workspaceCard.querySelector('[data-slot="item-media"]') as HTMLElement
-    expect(workspaceCardIcon).toBeTruthy()
-    expect(workspaceCardIcon.classList.contains('rounded-md')).toBe(false)
-    expect(workspaceCardIcon.classList.contains('bg-muted')).toBe(false)
-    const workspaceListHeading = screen.getByText(/Workspaces \(/)
-    expect(workspaceListHeading.getAttribute('data-slot')).toBe('item-title')
-    fireEvent.change(searchInput, { target: { value: 'release workspace' } })
-    expect(screen.getAllByRole('button', { name: /QA Release Workspace/ }).some(item => item.getAttribute('aria-pressed') === 'true')).toBe(true)
+    expect(screen.queryByRole('button', { name: /QA Release Workspace/ })).toBeNull()
+    expect(await screen.findByTitle('AIWorker QA Workbench')).toBeTruthy()
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/search?providerId='))).toBe(false)
   })
 
@@ -2279,58 +1793,8 @@ describe('worker studio', () => {
     currentSessions = []
     currentArtifacts = []
     currentApps = [
-      {
-        appId: 'aiworker-hr',
-        manifest: {
-          name: 'AIWorker HR',
-          ui: {
-            artifactPreviews: [],
-            panels: [],
-            reviewPanels: [],
-            routes: [],
-            workspaceWidgets: [],
-          },
-        },
-        mountedContribution: {
-          apiRoutePrefix: '/api/apps/aiworker-hr',
-          artifactPreviewIds: [],
-          descriptorSurfaceIds: [],
-          microAppSurfaceIds: [],
-          panelIds: [],
-          reviewPanelIds: [],
-          routePaths: [],
-          surfaceIds: [],
-          workspaceWidgetIds: [],
-        },
-        status: 'enabled',
-        version: '0.1.0',
-      },
-      {
-        appId: 'aiworker-qa',
-        manifest: {
-          name: 'AIWorker QA',
-          ui: {
-            artifactPreviews: [],
-            panels: [],
-            reviewPanels: [],
-            routes: [],
-            workspaceWidgets: [],
-          },
-        },
-        mountedContribution: {
-          apiRoutePrefix: '/api/apps/aiworker-qa',
-          artifactPreviewIds: [],
-          descriptorSurfaceIds: [],
-          microAppSurfaceIds: [],
-          panelIds: [],
-          reviewPanelIds: [],
-          routePaths: [],
-          surfaceIds: [],
-          workspaceWidgetIds: [],
-        },
-        status: 'enabled',
-        version: '0.1.0',
-      },
+      hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' }),
+      hostedApp({ appId: 'aiworker-qa', appName: 'AIWorker QA' }),
     ]
 
     render(<WorkerStudio />)
@@ -2366,37 +1830,7 @@ describe('worker studio', () => {
   })
 
   it('passes session locator context to app-owned mounted session surfaces without Host turn submission', async () => {
-    currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-session',
-            label: 'HR Session Workbench',
-            path: '/hr/session',
-            surface: { renderer: 'micro-app', scope: 'session' },
-          }],
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-session'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr/session'],
-        surfaceIds: ['hr-session'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
 
     render(<WorkerStudio />)
@@ -2417,37 +1851,7 @@ describe('worker studio', () => {
   })
 
   it('keeps Host from rendering session detail or artifact preview failures for app-owned mounted sessions', async () => {
-    currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-session',
-            label: 'HR Session Workbench',
-            path: '/hr/session',
-            surface: { renderer: 'micro-app', scope: 'session' },
-          }],
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-session'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr/session'],
-        surfaceIds: ['hr-session'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
     currentArtifactRawStatus = 500
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
 
@@ -2460,37 +1864,7 @@ describe('worker studio', () => {
   })
 
   it('keeps workspace routes on app-owned mounted surfaces when a Soul App route exists', async () => {
-    currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-home',
-            label: 'HR People Workbench',
-            path: '/hr',
-            surface: { renderer: 'micro-app' },
-          }],
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-home'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr'],
-        surfaceIds: ['hr-home'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
     currentSessions = []
     currentTurns = []
     currentArtifacts = []
@@ -2507,37 +1881,7 @@ describe('worker studio', () => {
   })
 
   it('keeps session routes free of Host-level new-session navigation', async () => {
-    currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-session',
-            label: 'HR Session Workbench',
-            path: '/hr/session',
-            surface: { renderer: 'micro-app', scope: 'session' },
-          }],
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-session'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr/session'],
-        surfaceIds: ['hr-session'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
 
     render(<WorkerStudio />)
@@ -2551,37 +1895,7 @@ describe('worker studio', () => {
   })
 
   it('keeps a selected session route under the active worker without exposing sessions in Host sidebar', async () => {
-    currentApps = [{
-      appId: 'aiworker-hr',
-      manifest: {
-        name: 'AIWorker HR',
-        ui: {
-          artifactPreviews: [],
-          panels: [],
-          reviewPanels: [],
-          routes: [{
-            id: 'hr-session',
-            label: 'HR Session Workbench',
-            path: '/hr/session',
-            surface: { renderer: 'micro-app', scope: 'session' },
-          }],
-          workspaceWidgets: [],
-        },
-      },
-      mountedContribution: {
-        apiRoutePrefix: '/api/apps/aiworker-hr',
-        artifactPreviewIds: [],
-        descriptorSurfaceIds: [],
-        microAppSurfaceIds: ['hr-session'],
-        panelIds: [],
-        reviewPanelIds: [],
-        routePaths: ['/hr/session'],
-        surfaceIds: ['hr-session'],
-        workspaceWidgetIds: [],
-      },
-      status: 'enabled',
-      version: '0.1.0',
-    }]
+    currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
 
     render(<WorkerStudio />)
