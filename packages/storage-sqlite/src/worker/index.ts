@@ -33,7 +33,7 @@ let db: ReturnType<typeof createDb> | null = null
 const LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|token=[^\s"']+|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["'][^"'\n]+["']/gi
 const REDACTED_LITERAL_SECRET_RE = /Bearer\s+\[REDACTED\]|sk-\[REDACTED\]|token=\[REDACTED\]|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["']\[REDACTED\]["']/i
 const NATIVE_MCP_FILE_RE = /(?:^|\n)\s*\[mcp_servers(?:\.|\])|["']mcpServers["']\s*:/i
-const SOUL_OWNED_CONFIG_PAYLOAD_KEY_RE = /^(?:artifactBody|artifactContent|artifactJson|artifactPayload|businessActionState|candidate|candidateId|confirmationState|entryFileBody|entryFileContent|profile|profileRecord|review|reviewId|reviewRecord|skillBody|skillMarkdown)$/i
+const SOUL_OWNED_PAYLOAD_KEY_RE = /^(?:artifact|artifactBody|artifactContent|artifactJson|artifactPayload|artifactRecord|businessActionState|candidate|candidateBody|candidateContent|candidateId|candidateJson|candidatePayload|candidateRecord|confirmationState|content|contentBody|contentJson|contentPayload|entryFileBody|entryFileContent|history|historyEntries|historyJson|profile|profileBody|profileContent|profileId|profileJson|profilePayload|profileRecord|prompt|promptBody|promptContent|promptText|review|reviewBody|reviewContent|reviewId|reviewJson|reviewPayload|reviewRecord|skillBody|skillMarkdown)$/i
 
 function createDb(dbPath: string) {
   const sqlite = new Database(dbPath, { create: true })
@@ -113,17 +113,17 @@ function assertNoFullNativeMcpFiles(value: unknown, context: string): void {
     assertNoFullNativeMcpFiles(nested, `${context}.${key}`)
 }
 
-function assertNoSoulOwnedConfigPayloads(value: unknown, context: string): void {
+function assertNoSoulOwnedPayloads(value: unknown, context: string, label = 'Soul-owned payloads'): void {
   if (!value || typeof value !== 'object')
     return
   if (Array.isArray(value)) {
-    value.forEach((item, index) => assertNoSoulOwnedConfigPayloads(item, `${context}[${index}]`))
+    value.forEach((item, index) => assertNoSoulOwnedPayloads(item, `${context}[${index}]`, label))
     return
   }
   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    if (SOUL_OWNED_CONFIG_PAYLOAD_KEY_RE.test(key))
-      throw new Error(`Soul-owned config payloads are not allowed in Host metadata: ${context}.${key}`)
-    assertNoSoulOwnedConfigPayloads(nested, `${context}.${key}`)
+    if (SOUL_OWNED_PAYLOAD_KEY_RE.test(key))
+      throw new Error(`${label} are not allowed in Host metadata: ${context}.${key}`)
+    assertNoSoulOwnedPayloads(nested, `${context}.${key}`, label)
   }
 }
 
@@ -158,7 +158,7 @@ function normalizeWorkerConfigEnvelope(
   const parsed = localWorkerConfigValueInputSchema.safeParse(value)
   if (!parsed.success)
     throw workerConfigEnvelopeError(parsed.error, context)
-  assertNoSoulOwnedConfigPayloads(parsed.data.options, `${context}.options`)
+  assertNoSoulOwnedPayloads(parsed.data.options, `${context}.options`, 'Soul-owned config payloads')
 
   const normalized = {
     ...parsed.data,
@@ -441,8 +441,10 @@ export interface DiscardLegacySoulMetadataResult {
 export function upsertWorker(input: UpsertWorkerInput): WorkerRow {
   const now = input.at ?? new Date().toISOString()
   const existing = getWorker(input.id)
-  if (input.metadataJson)
+  if (input.metadataJson) {
     assertNoLiteralSecrets(input.metadataJson, 'workers.metadataJson')
+    assertNoSoulOwnedPayloads(input.metadataJson, 'workers.metadataJson')
+  }
   if (!existing) {
     getWorkerDb().insert(schema.workers).values({
       id: input.id,
@@ -556,6 +558,8 @@ export function createWorkspace(input: CreateWorkspaceInput): WorkspaceRow {
   const now = input.at ?? new Date().toISOString()
   assertNoLiteralSecrets(input.sourcePointersJson ?? [], 'workspaces.sourcePointersJson')
   assertNoLiteralSecrets(input.metadataJson ?? {}, 'workspaces.metadataJson')
+  assertNoSoulOwnedPayloads(input.sourcePointersJson ?? [], 'workspaces.sourcePointersJson')
+  assertNoSoulOwnedPayloads(input.metadataJson ?? {}, 'workspaces.metadataJson')
   getWorkerDb().insert(schema.workspaces).values({
     id: input.id,
     workerId: input.workerId,
@@ -581,8 +585,12 @@ export function updateWorkspace(input: UpdateWorkspaceInput): WorkspaceRow {
     throw new Error(`Workspace not found: ${input.id}`)
   if (input.sourcePointersJson)
     assertNoLiteralSecrets(input.sourcePointersJson, 'workspaces.sourcePointersJson')
-  if (input.metadataJson)
+  if (input.metadataJson) {
     assertNoLiteralSecrets(input.metadataJson, 'workspaces.metadataJson')
+    assertNoSoulOwnedPayloads(input.metadataJson, 'workspaces.metadataJson')
+  }
+  if (input.sourcePointersJson)
+    assertNoSoulOwnedPayloads(input.sourcePointersJson, 'workspaces.sourcePointersJson')
   getWorkerDb().update(schema.workspaces).set({
     metadataJson: input.metadataJson ?? existing.metadataJson,
     name: input.name ?? existing.name,
@@ -619,6 +627,7 @@ export function listWorkspaces(workerId?: string, limit = 200): WorkspaceRow[] {
 export function createSession(input: CreateSessionInput): SessionRow {
   const now = input.at ?? new Date().toISOString()
   assertNoLiteralSecrets(input.metadataJson ?? {}, 'sessions.metadataJson')
+  assertNoSoulOwnedPayloads(input.metadataJson ?? {}, 'sessions.metadataJson')
   getWorkerDb().insert(schema.sessions).values({
     id: input.id,
     workerId: input.workerId,
@@ -644,8 +653,10 @@ export function updateSession(input: UpdateSessionInput): SessionRow {
   const existing = getSession(input.id)
   if (!existing)
     throw new Error(`Session not found: ${input.id}`)
-  if (input.metadataJson)
+  if (input.metadataJson) {
     assertNoLiteralSecrets(input.metadataJson, 'sessions.metadataJson')
+    assertNoSoulOwnedPayloads(input.metadataJson, 'sessions.metadataJson')
+  }
   const has = (key: keyof UpdateSessionInput) => Object.hasOwn(input, key)
   getWorkerDb().update(schema.sessions).set({
     context: input.context ?? existing.context,
@@ -722,6 +733,7 @@ export function createEngineInvocation(input: CreateEngineInvocationInput): Engi
     summary: input.summary,
   }, 'engine_invocations')
   assertNoLiteralSecrets(input.metadataJson ?? {}, 'engine_invocations.metadataJson')
+  assertNoSoulOwnedPayloads(input.metadataJson ?? {}, 'engine_invocations.metadataJson')
   getWorkerDb().insert(schema.engineInvocations).values({
     id: input.id,
     sessionId: input.sessionId,
@@ -765,8 +777,10 @@ export function updateEngineInvocation(input: UpdateEngineInvocationInput): Engi
     rawLogRef: has('rawLogRef') ? input.rawLogRef : null,
     summary: has('summary') ? input.summary : null,
   }, 'engine_invocations')
-  if (input.metadataJson)
+  if (input.metadataJson) {
     assertNoLiteralSecrets(input.metadataJson, 'engine_invocations.metadataJson')
+    assertNoSoulOwnedPayloads(input.metadataJson, 'engine_invocations.metadataJson')
+  }
   getWorkerDb().update(schema.engineInvocations).set({
     eventLogRef: has('eventLogRef') ? input.eventLogRef ?? null : existing.eventLogRef,
     error: has('error') ? input.error ?? null : existing.error,

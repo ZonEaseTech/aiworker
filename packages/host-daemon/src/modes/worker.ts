@@ -1201,7 +1201,8 @@ function hostMetadataValidationResponse(c: Context, code: string, error: unknown
 function isHostMetadataValidationError(error: unknown): boolean {
   return error instanceof Error
     && (error.message.startsWith('Literal secrets are not allowed in Host metadata:')
-      || error.message.startsWith('Full native MCP files are not allowed in Host metadata:'))
+      || error.message.startsWith('Full native MCP files are not allowed in Host metadata:')
+      || error.message.startsWith('Soul-owned payloads are not allowed in Host metadata:'))
 }
 
 function requireRuntime(state: LocalDaemonState, workerId: string): LocalWorkerRuntime {

@@ -1108,6 +1108,65 @@ describe('local daemon API', () => {
     expect(await engineInvocationMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_ENGINE_INVOCATION_INVALID' } })
   })
 
+  it('rejects Soul-owned payloads in broker metadata write bodies', async () => {
+    const target = await app()
+
+    const workerMetadataRes = await target.request('/api/local/workers', {
+      body: JSON.stringify({
+        metadata: {
+          reviewRecord: { decision: 'approved' },
+        },
+        name: 'Domain Payload Worker',
+        soulId: FREEFORM_APP_ID,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workerMetadataRes.status).toBe(422)
+    expect(await workerMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKER_INVALID' } })
+
+    const worker = await createFreeformWorker(target, 'domain-payload-guard-worker')
+    const workspaceMetadataRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({
+        metadata: {
+          artifactContent: '# Generated report\n',
+        },
+        name: 'Domain Payload Workspace',
+        type: 'workspace',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceMetadataRes.status).toBe(422)
+    expect(await workspaceMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_INVALID' } })
+
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+    const sessionMetadataRes = await target.request(`/api/sessions/${session.id}`, {
+      body: JSON.stringify({
+        metadata: {
+          promptText: 'Summarize the business artifact.',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(sessionMetadataRes.status).toBe(422)
+    expect(await sessionMetadataRes.json()).toMatchObject({ error: { code: 'PATCH_SESSION_INVALID' } })
+
+    const invocationMetadataRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({
+        input: 'Continue with invalid domain metadata.',
+        metadata: {
+          candidateId: 'candidate-1',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(invocationMetadataRes.status).toBe(422)
+    expect(await invocationMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_SESSION_INVOCATION_INVALID' } })
+  })
+
   it('stores worker config envelopes with secret references but rejects literal secrets', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)

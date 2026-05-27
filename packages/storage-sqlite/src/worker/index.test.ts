@@ -533,6 +533,44 @@ describe('greenfield local worker session schema', () => {
         },
       }),
     ).toThrow('Full native MCP files are not allowed in Host metadata: workspaces.metadataJson.configToml')
+    expect(() =>
+      upsertWorker({
+        id: 'worker-domain-metadata',
+        soulId: 'demo-soul-app',
+        name: 'Domain metadata worker',
+        metadataJson: { reviewRecord: { decision: 'approved' } },
+      }),
+    ).toThrow('Soul-owned payloads are not allowed in Host metadata: workers.metadataJson.reviewRecord')
+    expect(() =>
+      createWorkspace({
+        id: 'workspace-domain-metadata',
+        workerId: worker.id,
+        name: 'Domain metadata workspace',
+        rootPath: '/tmp/domain-metadata-workspace',
+        metadataJson: { artifactContent: '# Generated report\n' },
+      }),
+    ).toThrow('Soul-owned payloads are not allowed in Host metadata: workspaces.metadataJson.artifactContent')
+    expect(() =>
+      createSession({
+        id: 'session-domain-metadata',
+        workerId: worker.id,
+        workspaceId: workspace.id,
+        capabilityId: 'default',
+        title: 'Domain metadata session',
+        metadataJson: { promptText: 'Summarize the business artifact.' },
+      }),
+    ).toThrow('Soul-owned payloads are not allowed in Host metadata: sessions.metadataJson.promptText')
+    expect(() =>
+      createEngineInvocation({
+        id: 'invocation-domain-metadata',
+        sessionId: session.id,
+        seq: 2,
+        engineId: 'codex',
+        engineCommand: 'codex',
+        inputRef: 'aiworker://sessions/session-engine-diagnostics-secret/invocations/invocation-domain-metadata/input',
+        metadataJson: { candidateId: 'candidate-1' },
+      }),
+    ).toThrow('Soul-owned payloads are not allowed in Host metadata: engine_invocations.metadataJson.candidateId')
 
     const invocation = createEngineInvocation({
       id: 'invocation-diagnostic-safe',
