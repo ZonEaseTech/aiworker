@@ -756,7 +756,7 @@ beforeEach(() => {
       currentWorkspaces = [created, ...currentWorkspaces]
       return json({ workspace: created }, 201)
     }
-    if (url.endsWith('/api/local/workspaces'))
+    if (url.endsWith('/api/workspace-locators'))
       return json({ workspaces: await (workspaceDataResponses.shift() ?? currentWorkspaces) })
     const workspaceFileWriteMatch = url.match(/\/api\/local\/workspaces\/([^/]+)\/files\/raw\/(.+)$/)
     if (workspaceFileWriteMatch && method === 'PUT') {

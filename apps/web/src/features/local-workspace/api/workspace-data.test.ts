@@ -19,7 +19,7 @@ const responses: Record<string, unknown> = {
     }],
   },
   '/api/workers': { workers: [] },
-  '/api/local/workspaces': { workspaces: [] },
+  '/api/workspace-locators': { workspaces: [] },
 }
 
 describe('loadLocalWorkspaceData', () => {
@@ -47,8 +47,10 @@ describe('loadLocalWorkspaceData', () => {
     expect(paths).not.toContain('/api/local/templates')
     expect(paths).not.toContain('/api/local/apps')
     expect(paths).not.toContain('/api/local/workers')
+    expect(paths).not.toContain('/api/local/workspaces')
     expect(paths).toContain('/api/app-installation/apps')
     expect(paths).toContain('/api/workers')
+    expect(paths).toContain('/api/workspace-locators')
     expect(paths).toContain('/api/local/capabilities')
     expect(data).not.toHaveProperty('turns')
     expect(data).not.toHaveProperty('templates')
