@@ -506,6 +506,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const result = await parseJsonBody(c, createWorkspaceLocatorBodySchema, 'CREATE_WORKSPACE_LOCATOR_INVALID')
     if (!result.ok)
       return result.response
+    const unavailableApp = unavailableSoulAppResponse(c, state, result.data.workerId)
+    if (unavailableApp)
+      return unavailableApp
     const runtime = requireRuntime(state, result.data.workerId)
     let workspace
     try {
@@ -566,7 +569,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ workspaces: listWorkspaces(workerId) })
   })
   app.post('/api/local/workers/:workerId/workspaces', async (c) => {
-    const runtime = requireRuntime(state, c.req.param('workerId'))
+    const workerId = c.req.param('workerId')
+    const unavailableApp = unavailableSoulAppResponse(c, state, workerId)
+    if (unavailableApp)
+      return unavailableApp
+    const runtime = requireRuntime(state, workerId)
     const result = await parseJsonBody(c, createWorkspaceBodySchema, 'CREATE_WORKSPACE_INVALID')
     if (!result.ok)
       return result.response
@@ -613,6 +620,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const workspace = getWorkspace(c.req.param('workspaceId'))
     if (!workspace || workspace.workerId !== workerId)
       return notFound(c, 'workspace')
+    const unavailableApp = unavailableSoulAppResponse(c, state, workerId)
+    if (unavailableApp)
+      return unavailableApp
     const projection = await requireRuntime(state, workerId).reprojectWorkspaceAssets(workspace.id)
     return c.json({ projection })
   })
@@ -776,6 +786,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     if (!result.ok)
       return result.response
     const workspace = requireWorkerWorkspace(result.data.workerId, result.data.workspaceId)
+    const unavailableApp = unavailableSoulAppResponse(c, state, workspace.workerId)
+    if (unavailableApp)
+      return unavailableApp
     const projection = await requireRuntime(state, workspace.workerId).reprojectWorkspaceAssets(workspace.id, { engineTarget: target })
     return c.json({ projection, target })
   })

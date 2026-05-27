@@ -1044,6 +1044,59 @@ describe('local daemon API', () => {
     const archiveRes = await target.request(`/api/app-installation/apps/${FREEFORM_APP_ID}/archive`, { method: 'POST' })
     expect(archiveRes.status).toBe(200)
 
+    const workerWorkspaceCreateRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'Blocked worker workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workerWorkspaceCreateRes.status).toBe(409)
+    expect(await workerWorkspaceCreateRes.json()).toMatchObject({
+      error: {
+        code: 'SOUL_APP_DISABLED',
+        message: `Soul App is not enabled: ${FREEFORM_APP_ID}`,
+      },
+    })
+
+    const brokerWorkspaceCreateRes = await target.request('/api/workspace-locators', {
+      body: JSON.stringify({
+        name: 'Blocked broker workspace',
+        rootPath: join(dir, 'blocked-broker-workspace'),
+        type: 'workspace',
+        workerId: worker.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(brokerWorkspaceCreateRes.status).toBe(409)
+    expect(await brokerWorkspaceCreateRes.json()).toMatchObject({
+      error: {
+        code: 'SOUL_APP_DISABLED',
+        message: `Soul App is not enabled: ${FREEFORM_APP_ID}`,
+      },
+    })
+
+    const projectionRes = await target.request('/api/projections/codex/refresh', {
+      body: JSON.stringify({ workerId: worker.id, workspaceId: workspace.id }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(projectionRes.status).toBe(409)
+    expect(await projectionRes.json()).toMatchObject({
+      error: {
+        code: 'SOUL_APP_DISABLED',
+        message: `Soul App is not enabled: ${FREEFORM_APP_ID}`,
+      },
+    })
+
+    const localProjectionRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/projection`, { method: 'POST' })
+    expect(localProjectionRes.status).toBe(409)
+    expect(await localProjectionRes.json()).toMatchObject({
+      error: {
+        code: 'SOUL_APP_DISABLED',
+        message: `Soul App is not enabled: ${FREEFORM_APP_ID}`,
+      },
+    })
+
     const sessionCreateRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
       body: JSON.stringify({
         capabilityId: FREEFORM_CAPABILITY,
