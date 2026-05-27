@@ -750,7 +750,7 @@ beforeEach(() => {
       return json({ souls: currentSouls })
     if (url.endsWith('/api/local/capabilities'))
       return json({ capabilities: currentCapabilities })
-    if (url.endsWith('/api/local/workers/people-worker/workspaces') && method === 'POST') {
+    if (url.endsWith('/api/workspace-locators') && method === 'POST') {
       const body = init?.body ? JSON.parse(String(init.body)) as { name: string } : { name: 'New candidate workspace' }
       const created = { ...workspace, id: 'workspace-created', name: body.name }
       currentWorkspaces = [created, ...currentWorkspaces]

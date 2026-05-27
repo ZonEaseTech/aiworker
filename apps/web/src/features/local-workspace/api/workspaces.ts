@@ -8,7 +8,7 @@ export function createWorkspace(workerId: string, input: {
   sourcePointers?: Record<string, unknown>[]
   type?: string
 }): Promise<{ workspace: LocalWorkspace }> {
-  return localJson(`/api/local/workers/${workerId}/workspaces`, { method: 'POST', body: JSON.stringify(input) })
+  return localJson('/api/workspace-locators', { method: 'POST', body: JSON.stringify({ workerId, ...input }) })
 }
 
 export function readFile(workspaceId: string, path: string): Promise<string> {
