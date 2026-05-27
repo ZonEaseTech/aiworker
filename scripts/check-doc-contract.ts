@@ -235,6 +235,14 @@ for (const command of releaseGateCommands) {
   if (!packageJson.scripts?.[scriptName])
     issues.push({ file: 'package.json', message: `Current Release Gates references missing root script: ${scriptName}` })
 }
+for (const testPath of documentedTestingPaths()) {
+  for (const finding of documentedTestingCoverageFindings(testPath, packageJson)) {
+    issues.push({
+      file: 'docs/testing.md',
+      message: finding,
+    })
+  }
+}
 if (!packageJson.workspaces?.includes('souls/*'))
   issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
 const testContractsScript = packageJson.scripts?.['test:contracts'] ?? ''
@@ -374,6 +382,57 @@ function documentedReleaseGateCommands(): string[] {
     .slice(firstFenceIndex + 1, closeFenceIndex)
     .map(line => line.trim())
     .filter(Boolean)
+}
+
+function documentedTestingCoverageFindings(testPath: string, rootPackageJson: { scripts?: Record<string, string> }): string[] {
+  const scripts = rootPackageJson.scripts ?? {}
+  const findings: string[] = []
+
+  if (testPath.startsWith('tests/architecture/')) {
+    if (!scripts['test:contracts']?.includes('tests/architecture'))
+      findings.push(`listed architecture test is not covered by test:contracts: ${testPath}`)
+    return findings
+  }
+
+  if (testPath === 'scripts/check-soul-app-boundaries.test.ts') {
+    if (!scripts['test:contracts']?.includes(testPath))
+      findings.push(`listed boundary test is not covered by test:contracts: ${testPath}`)
+    return findings
+  }
+
+  if (testPath.startsWith('tests/browser/')) {
+    if (!scripts['test:browser:freeform']?.includes(testPath))
+      findings.push(`listed browser proof is not covered by test:browser:freeform: ${testPath}`)
+    return findings
+  }
+
+  if (testPath === 'apps/cli/src/freeform-golden-path.test.ts' || testPath === 'apps/cli/src/aiworker.test.ts') {
+    if (!scripts['test:cli']?.includes(testPath))
+      findings.push(`listed CLI proof is not covered by test:cli: ${testPath}`)
+  }
+
+  if (testPath.startsWith('packages/soul-protocol/') && !scripts['test:protocol']?.includes('@zonease/aiworker-soul-protocol'))
+    findings.push(`listed protocol test is not covered by test:protocol: ${testPath}`)
+
+  const workspaceRoot = testPath.match(/^(?:apps|packages|souls)\/[^/]+/)?.[0]
+  if (workspaceRoot) {
+    if (scripts.test !== 'bun run --filter \'*\' test')
+      findings.push(`listed workspace test is not covered by the root test release gate: ${testPath}`)
+
+    const packageJsonPath = `${workspaceRoot}/package.json`
+    if (!existsSync(abs(packageJsonPath))) {
+      findings.push(`listed workspace test has no package.json for root test coverage: ${testPath}`)
+      return findings
+    }
+
+    const workspacePackageJson = JSON.parse(read(packageJsonPath)) as { scripts?: Record<string, string> }
+    if (!workspacePackageJson.scripts?.test)
+      findings.push(`listed workspace test package has no test script for root test coverage: ${testPath}`)
+    return findings
+  }
+
+  findings.push(`listed test file is not covered by a current release gate: ${testPath}`)
+  return findings
 }
 
 function requireScriptBefore(scriptName: string, script: string, before: string, after: string): void {
