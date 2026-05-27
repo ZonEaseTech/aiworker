@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { archiveSoulApp, enableSoulApp, loadLocalWorkspaceData } from './workspace-data'
 
 const responses: Record<string, unknown> = {
-  '/api/local/apps': { apps: [] },
+  '/api/app-installation/apps': { apps: [] },
   '/api/local/info': { runtimeVersion: 'test', startedAt: '2026-05-09T00:00:00.000Z', workers: [] },
   '/api/local/sessions': { sessions: [] },
   '/api/local/settings': { settings: { language: 'en' } },
@@ -45,6 +45,8 @@ describe('loadLocalWorkspaceData', () => {
 
     expect(paths).not.toContain('/api/local/turns')
     expect(paths).not.toContain('/api/local/templates')
+    expect(paths).not.toContain('/api/local/apps')
+    expect(paths).toContain('/api/app-installation/apps')
     expect(paths).toContain('/api/local/capabilities')
     expect(data).not.toHaveProperty('turns')
     expect(data).not.toHaveProperty('templates')

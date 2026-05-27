@@ -582,7 +582,7 @@ beforeEach(() => {
 
     if (url.endsWith('/api/local/info'))
       return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
-    if (url.endsWith('/api/local/apps'))
+    if (url.endsWith('/api/app-installation/apps'))
       return json({ apps: currentApps })
     if (url.endsWith('/api/app-installation/apps/aiworker-demo-release/enable') && method === 'POST') {
       const enabled = currentApps.find(app => app.appId === 'aiworker-demo-release')

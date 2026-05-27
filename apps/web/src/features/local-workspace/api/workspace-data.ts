@@ -12,7 +12,7 @@ import { localJson } from '../../../shared/api/local-client'
 export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
   const [info, apps, workers, souls, capabilities, workspaces, sessions, settings] = await Promise.all([
     localJson<LocalInfoResponse>('/api/local/info'),
-    localJson<{ apps: LocalHostedSoulApp[] }>('/api/local/apps'),
+    localJson<{ apps: LocalHostedSoulApp[] }>('/api/app-installation/apps'),
     localJson<{ workers: LocalWorker[] }>('/api/local/workers'),
     localJson<{ souls: VerticalSoul[] }>('/api/local/souls'),
     localJson<{ capabilities: WorkspaceCapability[] }>('/api/local/capabilities'),
