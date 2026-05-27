@@ -792,6 +792,7 @@ describe('destructive refactor contract bootstrap', () => {
       'HR Talent',
       'soulId: \'hr\'',
       '"soulId": "hr"',
+      'Hiring Workspace',
     ]
 
     const findings = retiredWorkerSnippets

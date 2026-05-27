@@ -161,7 +161,7 @@ describe('LocalWorkerRuntime', () => {
     })
     await workerRuntime.init()
     const workspace = await workerRuntime.createWorkspace({
-      name: 'Hiring Workspace',
+      name: 'Demo Workspace',
     })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
@@ -619,7 +619,7 @@ describe('LocalWorkerRuntime', () => {
       },
     })
     await workerRuntime.init()
-    const workspace = await workerRuntime.createWorkspace({ name: 'Hiring Workspace' })
+    const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
       capabilityId: 'candidate-screen',
@@ -741,7 +741,7 @@ describe('LocalWorkerRuntime', () => {
       },
     })
     await workerRuntime.init()
-    const workspace = await workerRuntime.createWorkspace({ name: 'Hiring Workspace' })
+    const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
       capabilityId: 'candidate-screen',
@@ -842,7 +842,7 @@ describe('LocalWorkerRuntime', () => {
       },
     })
     await workerRuntime.init()
-    const workspace = await workerRuntime.createWorkspace({ name: 'Hiring Workspace' })
+    const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
       capabilityId: 'candidate-screen',
@@ -1421,7 +1421,7 @@ describe('LocalWorkerRuntime', () => {
       },
     })
     await workerRuntime.init()
-    const workspace = await workerRuntime.createWorkspace({ name: 'Hiring Workspace' })
+    const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
       capabilityId: 'demo-soul-app.interview-brief',
