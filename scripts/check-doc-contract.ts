@@ -207,6 +207,34 @@ const packageJson = JSON.parse(read('package.json')) as {
   scripts?: Record<string, string>
   workspaces?: string[]
 }
+const expectedReleaseGateCommands = [
+  'bun run docs:check',
+  'bun run test:contracts',
+  'bun run test:protocol',
+  'bun run test:cli',
+  'bun run test:browser:freeform',
+  'bun run typecheck',
+  'bun run lint',
+  'bun run build',
+  'bun run test',
+  'bun run check',
+]
+const releaseGateCommands = documentedReleaseGateCommands()
+if (JSON.stringify(releaseGateCommands) !== JSON.stringify(expectedReleaseGateCommands)) {
+  issues.push({
+    file: 'docs/testing.md',
+    message: `Current Release Gates must list exactly: ${expectedReleaseGateCommands.join(', ')}`,
+  })
+}
+for (const command of releaseGateCommands) {
+  const scriptName = command.match(/^bun run ([\w:-]+)$/)?.[1]
+  if (!scriptName) {
+    issues.push({ file: 'docs/testing.md', message: `Current Release Gates command is not a root bun script: ${command}` })
+    continue
+  }
+  if (!packageJson.scripts?.[scriptName])
+    issues.push({ file: 'package.json', message: `Current Release Gates references missing root script: ${scriptName}` })
+}
 if (!packageJson.workspaces?.includes('souls/*'))
   issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
 const testContractsScript = packageJson.scripts?.['test:contracts'] ?? ''
@@ -326,6 +354,26 @@ function documentedTestingPaths(): string[] {
   }
 
   return [...new Set(paths)].sort()
+}
+
+function documentedReleaseGateCommands(): string[] {
+  const lines = read('docs/testing.md').split(/\r?\n/)
+  const headingIndex = lines.findIndex(line => line.trim() === '## Current Release Gates')
+  if (headingIndex === -1)
+    return []
+
+  const firstFenceIndex = lines.findIndex((line, index) => index > headingIndex && line.startsWith('```'))
+  if (firstFenceIndex === -1)
+    return []
+
+  const closeFenceIndex = lines.findIndex((line, index) => index > firstFenceIndex && line.startsWith('```'))
+  if (closeFenceIndex === -1)
+    return []
+
+  return lines
+    .slice(firstFenceIndex + 1, closeFenceIndex)
+    .map(line => line.trim())
+    .filter(Boolean)
 }
 
 function requireScriptBefore(scriptName: string, script: string, before: string, after: string): void {
