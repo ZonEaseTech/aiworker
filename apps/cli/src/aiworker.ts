@@ -939,7 +939,9 @@ function workerConfigValueResponse(
 }
 
 async function createWorkspaceCommand(opts: { name?: string, type?: string, worker?: string }): Promise<void> {
+  const paths = await ensureDb()
   const runtime = await ensureRuntime({ worker: opts.worker })
+  requireEnabledSoulAppForWorker(createHost(paths), runtime.workerId)
   printJson({ workspace: await runtime.createWorkspace({ name: requireText(opts.name, 'name'), type: opts.type }) })
 }
 

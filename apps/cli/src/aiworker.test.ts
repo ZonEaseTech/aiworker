@@ -534,6 +534,10 @@ describe('aiworker local CLI', () => {
     output = ''
     errorOutput = ''
 
+    expect(await runCli(argv('workspace', 'create', '--name', 'Blocked after app archive', '--type', 'freeform', '--worker', 'archive-app-cli-worker'))).toBe(1)
+    expect(errorOutput).toContain(`Soul App is not enabled: ${FREEFORM_APP_ID}`)
+    errorOutput = ''
+
     expect(await runCli(argv(
       'session',
       'start',
