@@ -1123,6 +1123,20 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'CLI positive fixtures should not encode retired HR domain worker/workspace names').toEqual([])
   })
 
+  test('governance kernel harness matrix uses neutral soul ids', () => {
+    const source = readRepoFile('scripts/governance-kernel-harness.ts')
+    const forbidden = [
+      'hr-recruiting',
+      'qa-reviewer',
+    ]
+
+    const findings = forbidden
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `scripts/governance-kernel-harness.ts: ${snippet}`)
+
+    expect(findings, 'governance harness matrix should not preserve retired HR/QA fixture ids').toEqual([])
+  })
+
   test('CLI follow-up command surface uses session invocation language only', () => {
     const cli = readRepoFile('apps/cli/src/aiworker.ts')
     const forbidden = [

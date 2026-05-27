@@ -340,7 +340,7 @@ function matrixPairs(matrix: MatrixName): PairSpec[] {
   ]
   if (matrix === 'compact')
     return compact
-  const souls = ['developer', 'hr-recruiting', 'finance-ops', 'qa-reviewer', 'general-assistant']
+  const souls = ['developer', 'research-assistant', 'finance-ops', 'quality-reviewer', 'general-assistant']
   return souls.flatMap(soul => [
     { engine: 'codex' as const, soul },
     { engine: 'claude-code' as const, soul },
