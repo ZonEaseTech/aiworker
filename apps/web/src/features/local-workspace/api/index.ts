@@ -12,7 +12,6 @@ export type {
   WorkerConfigSource,
   WorkerConfigValueResponse,
   WorkerOverlayResponse,
-  WorkerOverlaySaveBody,
 } from './types'
 export {
   archiveWorkerConfigValue,
@@ -23,7 +22,6 @@ export { saveWorkerOverlayConfigValues } from './worker-overlay-config'
 export {
   loadWorkerOverlay,
   projectWorkerWorkspaceOverlay,
-  saveWorkerOverlay,
 } from './worker-overlays'
 export {
   createWorker,

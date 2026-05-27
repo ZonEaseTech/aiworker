@@ -80,16 +80,3 @@ export interface WorkerConfigSaveBody {
   updatedAt?: string
   updatedBy?: LocalWorkerConfigUpdatedBy
 }
-
-export interface WorkerOverlaySaveBody {
-  assets: Array<{
-    checksum?: null | string
-    enabled: boolean
-    id: string
-    kind: 'entry-file' | 'mcp-client' | 'skill'
-    metadataJson?: Record<string, unknown>
-    optionsJson?: Record<string, unknown>
-    sourceRef: string
-    target: string
-  }>
-}
