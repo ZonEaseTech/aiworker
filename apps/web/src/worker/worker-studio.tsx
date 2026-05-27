@@ -18,7 +18,7 @@ import {
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
-import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, saveWorkerOverlay } from '../features/local-workspace/api'
+import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, saveWorkerOverlayConfigValues } from '../features/local-workspace/api'
 import { CreateWorkerDialog, CreateWorkspaceDialog } from '../features/local-workspace/components'
 import { projectNamePlaceholder } from '../features/local-workspace/model'
 import { SettingsDialog } from '../features/settings'
@@ -269,20 +269,11 @@ export function WorkerStudio() {
   async function saveWorkerOverlayAssets(assets: LocalWorkerOverlayAsset[]) {
     if (!workerOverlayTarget)
       return
+    const previousOverlayAssets = workerOverlayAssets.filter(asset => asset.source !== 'baseline')
     setWorkerOverlayAssets(assets)
     const overlayOnly = assets.filter(asset => asset.source !== 'baseline')
-    const result = await saveWorkerOverlay(workerOverlayTarget.id, {
-      assets: overlayOnly.map(asset => ({
-        checksum: asset.checksum,
-        enabled: asset.enabled,
-        id: asset.id,
-        kind: asset.kind,
-        metadataJson: asset.metadataJson,
-        optionsJson: asset.optionsJson,
-        sourceRef: asset.sourceRef,
-        target: asset.target,
-      })),
-    })
+    await saveWorkerOverlayConfigValues(workerOverlayTarget.id, previousOverlayAssets, overlayOnly)
+    const result = await loadWorkerOverlay(workerOverlayTarget.id)
     setWorkerOverlayAssets(result.overlay.assets)
   }
 

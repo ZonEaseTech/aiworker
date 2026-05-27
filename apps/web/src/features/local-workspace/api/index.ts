@@ -19,6 +19,7 @@ export {
   loadWorkerConfig,
   saveWorkerConfigValue,
 } from './worker-config'
+export { saveWorkerOverlayConfigValues } from './worker-overlay-config'
 export {
   loadWorkerOverlay,
   projectWorkerWorkspaceOverlay,

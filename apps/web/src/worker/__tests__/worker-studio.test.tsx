@@ -430,6 +430,82 @@ function resetSettings() {
   currentApps = []
 }
 
+function workerOverlayConfigKeyForTest(asset: LocalWorkerOverlayAsset): string {
+  const kind = asset.kind === 'entry-file'
+    ? 'entry-file-overlay'
+    : asset.kind === 'mcp-client' ? 'mcp-overlay' : 'skill-overlay'
+  return `${kind}:${asset.id}`
+}
+
+function legacyWorkerOverlayConfigKeyForTest(asset: LocalWorkerOverlayAsset): string {
+  return `overlay:${encodeURIComponent(asset.kind)}:${encodeURIComponent(asset.target)}:${encodeURIComponent(asset.id)}`
+}
+
+function workerOverlayAssetsFromConfigForTest(configKey: string, body: Record<string, unknown>): LocalWorkerOverlayAsset[] {
+  const kind = body.kind === 'entry-file-overlay'
+    ? 'entry-file'
+    : body.kind === 'mcp-overlay' ? 'mcp-client' : body.kind === 'skill-overlay' ? 'skill' : null
+  if (!kind)
+    return []
+
+  const options = readObjectForTest(body.options)
+  const id = overlayIdFromConfigForTest(configKey, kind, options)
+  if (!id)
+    return []
+
+  const sourceRef = readStringForTest(body.sourceRef) ?? readStringForTest(options.replaces) ?? ''
+  return overlayTargetsFromConfigForTest(kind, body.target).map(target => ({
+    checksum: readStringForTest(body.checksum),
+    enabled: body.enabled !== false,
+    id,
+    kind,
+    metadataJson: readObjectForTest(options.metadataJson),
+    optionsJson: readObjectForTest(options.optionsJson),
+    source: 'overlay',
+    sourceRef,
+    target,
+    updatedAt: now,
+  }))
+}
+
+function overlayIdFromConfigForTest(configKey: string, kind: LocalWorkerOverlayAsset['kind'], options: Record<string, unknown>): string | null {
+  if (kind === 'entry-file')
+    return readStringForTest(options.targetPath) ?? configKeyIdForTest(configKey)
+  if (kind === 'skill')
+    return skillIdFromRefForTest(readStringForTest(options.replaces)) ?? configKeyIdForTest(configKey)
+  return configKeyIdForTest(configKey)
+}
+
+function overlayTargetsFromConfigForTest(kind: LocalWorkerOverlayAsset['kind'], target: unknown): string[] {
+  if (kind === 'entry-file')
+    return ['workspace']
+  if (target === 'codex' || target === 'claude-code')
+    return [target]
+  if (kind === 'skill' && target === 'all')
+    return ['codex', 'claude-code']
+  return []
+}
+
+function configKeyIdForTest(configKey: string): string | null {
+  const separatorIndex = configKey.indexOf(':')
+  if (separatorIndex < 0)
+    return null
+  return configKey.slice(separatorIndex + 1) || null
+}
+
+function skillIdFromRefForTest(ref: string | null): string | null {
+  const prefix = 'descriptor://engine/skills/'
+  return ref?.startsWith(prefix) ? ref.slice(prefix.length).replace(/\/SKILL\.md$/, '') : null
+}
+
+function readObjectForTest(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function readStringForTest(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((nextResolve) => {
@@ -591,6 +667,46 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/local/workers'))
       return json({ workers: currentWorkers })
+    const workerConfigMatch = requestUrl.pathname.match(/^\/api\/workers\/([^/]+)\/config\/([^/]+)(?:\/archive)?$/)
+    if (workerConfigMatch) {
+      const workerId = decodeURIComponent(workerConfigMatch[1]!)
+      const configKey = decodeURIComponent(workerConfigMatch[2]!)
+      const archive = requestUrl.pathname.endsWith('/archive')
+      if (archive && method === 'POST') {
+        currentWorkerOverlayAssets = currentWorkerOverlayAssets.filter((asset) => {
+          return workerOverlayConfigKeyForTest(asset) !== configKey && legacyWorkerOverlayConfigKeyForTest(asset) !== configKey
+        })
+        return json({
+          config: {
+            archived: true,
+            configKey,
+            updatedAt: now,
+            value: null,
+            workerId,
+          },
+        })
+      }
+      if (method === 'PUT' || method === 'PATCH') {
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
+        const nextAssets = workerOverlayAssetsFromConfigForTest(configKey, body)
+        currentWorkerOverlayAssets = [
+          ...currentWorkerOverlayAssets.filter((asset) => {
+            return workerOverlayConfigKeyForTest(asset) !== configKey && legacyWorkerOverlayConfigKeyForTest(asset) !== configKey
+          }),
+          ...nextAssets,
+        ]
+        return json({
+          config: {
+            archived: false,
+            configKey,
+            source: 'web',
+            updatedAt: now,
+            value: body,
+            workerId,
+          },
+        })
+      }
+    }
     if (requestUrl.pathname.match(/^\/api\/local\/workers\/[^/]+\/overlay$/)) {
       const workerId = requestUrl.pathname.split('/')[4]!
       if (method === 'PUT') {
@@ -997,7 +1113,7 @@ describe('worker studio', () => {
     fireEvent.click(screen.getAllByRole('switch', { name: 'Enable interview-brief' })[0]!)
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers/people-worker/overlay', expect.objectContaining({
+      expect(fetch).toHaveBeenCalledWith('/api/workers/people-worker/config/skill-overlay%3Ainterview-brief', expect.objectContaining({
         body: expect.stringContaining('"enabled":false'),
         method: 'PUT',
       }))
@@ -1010,16 +1126,16 @@ describe('worker studio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create asset' }))
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers/people-worker/overlay', expect.objectContaining({
-        body: expect.stringContaining('"id":"custom-skill"'),
+      expect(fetch).toHaveBeenCalledWith('/api/workers/people-worker/config/skill-overlay%3Acustom-skill', expect.objectContaining({
+        body: expect.stringContaining('"sourceRef":"descriptor://engine/skills/custom-skill"'),
         method: 'PUT',
       }))
     })
     fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for custom-skill' }))
     fireEvent.click(await screen.findByText('Duplicate'))
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers/people-worker/overlay', expect.objectContaining({
-        body: expect.stringContaining('"id":"custom-skill-2"'),
+      expect(fetch).toHaveBeenCalledWith('/api/workers/people-worker/config/skill-overlay%3Acustom-skill-2', expect.objectContaining({
+        body: expect.stringContaining('"sourceRef":"descriptor://engine/skills/custom-skill"'),
         method: 'PUT',
       }))
     })
@@ -1028,8 +1144,9 @@ describe('worker studio', () => {
     fireEvent.click(await screen.findByText('Delete'))
 
     await waitFor(() => {
-      const putBodies = vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).endsWith('/api/local/workers/people-worker/overlay') && init?.method === 'PUT').map(([, init]) => String(init?.body ?? ''))
-      expect(putBodies.at(-1)).not.toContain('"id":"custom-skill-2"')
+      expect(fetch).toHaveBeenCalledWith('/api/workers/people-worker/config/skill-overlay%3Acustom-skill-2/archive', expect.objectContaining({
+        method: 'POST',
+      }))
     })
   })
 
