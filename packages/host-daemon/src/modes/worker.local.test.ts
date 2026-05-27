@@ -498,6 +498,13 @@ describe('local daemon API', () => {
   it('archives worker metadata with archived status', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'archive-worker')
+    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'Archived Worker Existing Workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
 
     const archiveRes = await target.request(`/api/workers/${worker.id}/archive`, { method: 'POST' })
 
@@ -518,6 +525,19 @@ describe('local daemon API', () => {
     })
     expect(blockedWorkspaceRes.status).toBe(400)
     expect(await blockedWorkspaceRes.json()).toMatchObject({
+      error: {
+        code: 'WORKER_ARCHIVED',
+        message: `Worker ${worker.id} is archived and cannot start new work.`,
+      },
+    })
+
+    const blockedProjectionRes = await target.request('/api/projections/codex/refresh', {
+      body: JSON.stringify({ workerId: worker.id, workspaceId: workspace.id }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(blockedProjectionRes.status).toBe(400)
+    expect(await blockedProjectionRes.json()).toMatchObject({
       error: {
         code: 'WORKER_ARCHIVED',
         message: `Worker ${worker.id} is archived and cannot start new work.`,

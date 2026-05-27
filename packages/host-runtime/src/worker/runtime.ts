@@ -231,6 +231,7 @@ export class LocalWorkerRuntime {
   }
 
   async reprojectWorkspaceAssets(workspaceId: string, input: { engineTarget?: SoulAppEngineTarget | null } = {}): Promise<WorkspaceAssetProjectionResult> {
+    this.requireActiveWorker()
     const workspace = this.requireWorkspace(workspaceId)
     const layout = await this.prepareWorkspaceLayout({
       engineTarget: input.engineTarget,

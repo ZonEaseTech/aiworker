@@ -186,6 +186,9 @@ describe('LocalWorkerRuntime', () => {
     }))
       .rejects
       .toThrow('Worker worker-demo is archived and cannot start new work.')
+    await expect(workerRuntime.reprojectWorkspaceAssets(workspace.id))
+      .rejects
+      .toThrow('Worker worker-demo is archived and cannot start new work.')
     await expect(workerRuntime.startInvocation({
       sessionId: session.id,
       input: 'Continue archived worker work.',
