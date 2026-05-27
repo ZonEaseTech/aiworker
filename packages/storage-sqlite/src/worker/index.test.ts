@@ -44,7 +44,6 @@ import {
   upsertSoulApp,
   upsertWorker,
   upsertWorkerConfigValue,
-  upsertWorkerOverlayAssets,
   workerConfig,
   workers,
   workspaces,
@@ -180,46 +179,6 @@ describe('greenfield local worker session schema', () => {
 
     expect(getWorker('legacy-disabled-worker')?.status).toBe('archived')
     expect(getWorker('legacy-paused-worker')?.status).toBe('archived')
-  })
-
-  it('persists worker overlay assets as Host metadata with baseline provenance', () => {
-    const worker = upsertWorker({ id: 'worker-overlay-1', name: 'Descriptor worker', soulId: 'demo-soul-app' })
-
-    upsertWorkerOverlayAssets(worker.id, [{
-      checksum: 'sha256:test',
-      enabled: true,
-      id: 'interview-brief',
-      kind: 'skill',
-      metadataJson: { targetPath: '.agents/skills/demo-soul-app-interview-brief/SKILL.md' },
-      sourceRef: 'descriptor://engine/skills/interview-brief',
-      target: 'codex',
-    }])
-
-    const overlay = listWorkerOverlayAssets(worker.id)
-    expect(overlay).toHaveLength(1)
-    expect(overlay[0]).toMatchObject({
-      checksum: 'sha256:test',
-      enabled: true,
-      id: 'interview-brief',
-      kind: 'skill',
-      source: 'overlay',
-      sourceRef: 'descriptor://engine/skills/interview-brief',
-      target: 'codex',
-      workerId: worker.id,
-    })
-    expect(overlay[0]).not.toHaveProperty('content')
-    expect(() =>
-      upsertWorkerOverlayAssets(worker.id, [{
-        enabled: true,
-        id: 'embedded-mcp-file',
-        kind: 'mcp-client',
-        optionsJson: {
-          configToml: '[mcp_servers.local]\ncommand = "node"\n',
-        },
-        sourceRef: 'descriptor://engine/mcp/codex',
-        target: 'codex',
-      }]),
-    ).toThrow('Full native MCP files are not allowed in Host metadata')
   })
 
   it('persists worker config envelopes and rejects malformed Host metadata', () => {
@@ -473,6 +432,7 @@ describe('greenfield local worker session schema', () => {
       }),
     ]))
     expect(listWorkerOverlayAssets(worker.id)).toHaveLength(4)
+    expect(listWorkerOverlayAssets(worker.id)[0]).not.toHaveProperty('content')
   })
 
   it('persists the worker -> workspace -> session -> invocation loop without Host review or lesson rows', () => {

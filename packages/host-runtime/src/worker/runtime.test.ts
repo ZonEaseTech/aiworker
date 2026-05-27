@@ -7,7 +7,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getEngineInvocation, getWorkerConfigValue, initWorkerDb, listSessionEvents, runWorkerMigrations, updateSession, updateWorkspace, upsertWorker, upsertWorkerConfigValue, upsertWorkerOverlayAssets } from '@zonease/aiworker-storage-sqlite/worker'
+import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getEngineInvocation, getWorkerConfigValue, initWorkerDb, listSessionEvents, runWorkerMigrations, updateSession, updateWorkspace, upsertWorker, upsertWorkerConfigValue } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { LocalExecutorFailure } from './executor'
@@ -1859,15 +1859,22 @@ describe('LocalWorkerRuntime', () => {
       .resolves
       .toContain('Baseline Interview Brief')
 
-    upsertWorkerOverlayAssets(workerRuntime.workerId, [{
-      checksum: 'sha256:overlay',
-      enabled: true,
-      id: 'interview-brief',
-      kind: 'skill',
-      sourceRef: 'descriptor://engine/skills/overlay-brief',
-      target: 'codex',
-    }])
-    expect(JSON.stringify(getWorkerConfigValue(workerRuntime.workerId, 'overlay:skill:codex:interview-brief'))).not.toContain('Overlay Interview Brief')
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'skill-overlay:interview-brief',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:overlay',
+        enabled: true,
+        kind: 'skill-overlay',
+        options: {
+          replaces: 'descriptor://engine/skills/interview-brief',
+        },
+        sourceRef: 'descriptor://engine/skills/overlay-brief',
+        target: 'codex',
+      },
+    })
+    expect(JSON.stringify(getWorkerConfigValue(workerRuntime.workerId, 'skill-overlay:interview-brief'))).not.toContain('Overlay Interview Brief')
 
     await workerRuntime.init()
     await expect(readFile(join(existingWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-interview-brief', 'SKILL.md'), 'utf8'))
@@ -2075,14 +2082,21 @@ describe('LocalWorkerRuntime', () => {
 
     await workerRuntime.init()
     const workspace = await workerRuntime.createWorkspace({ name: 'Escaping overlay workspace' })
-    upsertWorkerOverlayAssets(workerRuntime.workerId, [{
-      checksum: 'sha256:outside',
-      enabled: true,
-      id: 'candidate-profile',
-      kind: 'skill',
-      sourceRef: 'descriptor://engine/skills/../../../outside-secret',
-      target: 'codex',
-    }])
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'skill-overlay:candidate-profile',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:outside',
+        enabled: true,
+        kind: 'skill-overlay',
+        options: {
+          replaces: 'descriptor://engine/skills/candidate-profile',
+        },
+        sourceRef: 'descriptor://engine/skills/../../../outside-secret',
+        target: 'codex',
+      },
+    })
 
     await expect(workerRuntime.reprojectWorkspaceAssets(workspace.id))
       .rejects
@@ -2103,14 +2117,18 @@ describe('LocalWorkerRuntime', () => {
     })
 
     await workerRuntime.init()
-    upsertWorkerOverlayAssets(workerRuntime.workerId, [{
-      checksum: 'sha256:canonical-mcp',
-      enabled: true,
-      id: 'codex',
-      kind: 'mcp-client',
-      sourceRef: 'descriptor://engine/mcp/codex',
-      target: 'codex',
-    }])
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'mcp-overlay:codex',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:canonical-mcp',
+        enabled: true,
+        kind: 'mcp-overlay',
+        sourceRef: 'descriptor://engine/mcp/codex',
+        target: 'codex',
+      },
+    })
     const workspace = await workerRuntime.createWorkspace({ name: 'Canonical MCP overlay workspace' })
 
     await expect(readFile(join(workspace.rootPath, '.codex', 'config.toml'), 'utf8'))

@@ -197,26 +197,6 @@ function defaultWorkerConfigUpdatedBy(source: WorkerConfigRow['source'] | undefi
   return 'cli'
 }
 
-function workerConfigOverlayKind(kind: WorkerOverlayAssetInput['kind']): 'entry-file-overlay' | 'mcp-overlay' | 'skill-overlay' {
-  if (kind === 'entry-file')
-    return 'entry-file-overlay'
-  if (kind === 'mcp-client')
-    return 'mcp-overlay'
-  return 'skill-overlay'
-}
-
-function workerConfigTargetForOverlay(asset: Pick<WorkerOverlayAssetInput, 'kind' | 'target'>): 'all' | 'claude-code' | 'codex' | 'none' {
-  if (asset.kind === 'entry-file')
-    return 'all'
-  if (asset.target === 'codex' || asset.target === 'claude-code')
-    return asset.target
-  return 'none'
-}
-
-function workerOverlayConfigKey(asset: Pick<WorkerOverlayAssetInput, 'id' | 'kind' | 'target'>): string {
-  return `overlay:${encodeURIComponent(asset.kind)}:${encodeURIComponent(asset.target)}:${encodeURIComponent(asset.id)}`
-}
-
 function isWorkerOverlayKind(value: unknown): value is WorkerOverlayAssetRow['kind'] {
   return value === 'entry-file' || value === 'mcp-client' || value === 'skill'
 }
@@ -345,17 +325,6 @@ export interface UpsertWorkerInput {
   defaultEngineId?: string | null
   metadataJson?: Record<string, unknown>
   at?: string
-}
-
-export interface WorkerOverlayAssetInput {
-  checksum?: string | null
-  enabled: boolean
-  id: string
-  kind: 'entry-file' | 'mcp-client' | 'skill'
-  metadataJson?: Record<string, unknown>
-  optionsJson?: Record<string, unknown>
-  sourceRef: string
-  target: string
 }
 
 export interface CreateWorkspaceInput {
@@ -623,42 +592,6 @@ function standardWorkerConfigOverlayAssets(row: WorkerConfigRow): (WorkerOverlay
     updatedAt: row.updatedAt,
     workerId: row.workerId,
   }))
-}
-
-export function upsertWorkerOverlayAssets(workerId: string, assets: WorkerOverlayAssetInput[], at = new Date().toISOString()): void {
-  for (const asset of assets) {
-    if (!asset.sourceRef.trim())
-      throw new Error(`Worker overlay sourceRef is required: ${asset.id}`)
-    if (asset.metadataJson)
-      assertNoLiteralSecrets(asset.metadataJson, `worker_config.${asset.id}.metadataJson`)
-    if (asset.optionsJson)
-      assertNoLiteralSecrets(asset.optionsJson, `worker_config.${asset.id}.optionsJson`)
-  }
-  getWorkerDb().run(sql`DELETE FROM worker_config WHERE worker_id = ${workerId} AND config_key LIKE ${'overlay:%'}`)
-  for (const asset of assets) {
-    upsertWorkerConfigValue({
-      workerId,
-      configKey: workerOverlayConfigKey(asset),
-      configValueJson: {
-        checksum: asset.checksum ?? null,
-        enabled: asset.enabled,
-        kind: workerConfigOverlayKind(asset.kind),
-        options: {
-          metadataJson: asset.metadataJson ?? {},
-          optionsJson: asset.optionsJson ?? {},
-          overlayId: asset.id,
-          overlayKind: asset.kind,
-          overlayTarget: asset.target,
-        },
-        sourceRef: asset.sourceRef,
-        target: workerConfigTargetForOverlay(asset),
-        updatedAt: at,
-        updatedBy: 'cli',
-      },
-      source: 'cli',
-      at,
-    })
-  }
 }
 
 export function createWorkspace(input: CreateWorkspaceInput): WorkspaceRow {

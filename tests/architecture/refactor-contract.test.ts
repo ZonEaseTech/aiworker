@@ -1217,6 +1217,21 @@ describe('destructive refactor contract bootstrap', () => {
     expect(storage).toContain('listEngineInvocations')
   })
 
+  test('worker storage API does not expose legacy overlay write helpers', () => {
+    const storage = readRepoFile('packages/storage-sqlite/src/worker/index.ts')
+    const forbidden = [
+      'WorkerOverlayAssetInput',
+      'upsertWorkerOverlayAssets',
+      'workerOverlayConfigKey',
+    ]
+    const findings = forbidden
+      .filter(snippet => storage.includes(snippet))
+      .map(snippet => `packages/storage-sqlite/src/worker/index.ts: ${snippet}`)
+
+    expect(findings, 'worker overlay writes must use standard worker_config envelopes').toEqual([])
+    expect(storage).toContain('upsertWorkerConfigValue')
+  })
+
   test('storage legacy discard fixtures use capability wording for custom capability ids', () => {
     const storageTest = readRepoFile('packages/storage-sqlite/src/worker/index.test.ts')
     const forbidden = [
