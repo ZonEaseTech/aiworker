@@ -1435,14 +1435,14 @@ describe('worker studio', () => {
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
-      sessionId: null,
+      sessionId: 'session-1',
       surfaceId: 'workbench',
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',
     })
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).not.toHaveProperty('turns')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).not.toHaveProperty('engineStatus')
-    expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
+    expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&workspaceId=workspace-1&sessionId=session-1&theme=light', expect.objectContaining({ headers: {} }))
     expect(screen.queryByText('Agent is generating')).toBeNull()
     expect(screen.queryByText('File written, indexing')).toBeNull()
     expect(screen.queryByText('Searched files')).toBeNull()
@@ -1798,7 +1798,7 @@ describe('worker studio', () => {
     expect(microApp.getAttribute('name')).toBe('aiworker-hr--workbench')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
-      sessionId: null,
+      sessionId: 'session-1',
       surfaceId: 'workbench',
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',

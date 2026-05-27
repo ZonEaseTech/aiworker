@@ -2,8 +2,8 @@ import type {
   HostedSoulApp,
   SoulAppHealthStatus,
   SoulAppInstallSourceKind,
-  SoulDescriptorValidationIssue,
   SoulDescriptorV1,
+  SoulDescriptorValidationIssue,
 } from '@zonease/aiworker-soul-protocol'
 import type { SoulAppRow } from '@zonease/aiworker-storage-sqlite/worker'
 

@@ -179,6 +179,7 @@ describe('aiworker local CLI', () => {
   it('preprocesses multi-word local commands', () => {
     expect(preprocessArgv(argv('workspace', 'create', '--name', 'T')).slice(2, 3)).toEqual(['workspace create'])
     expect(preprocessArgv(argv('session', 'start', '--input', 'P')).slice(2, 3)).toEqual(['session start'])
+    expect(preprocessArgv(argv('session', 'invoke', '--input', 'P')).slice(2, 3)).toEqual(['session invoke'])
     expect(preprocessArgv(argv('worker', 'create', '--name', 'HR')).slice(2, 3)).toEqual(['worker create'])
     expect(preprocessArgv(argv('daemon', 'restart')).slice(2, 3)).toEqual(['daemon restart'])
   })
@@ -351,7 +352,7 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('app list|show|install|enable|bootstrap')
     expect(output).toContain('worker create|list|select')
     expect(output).toContain('workspace create|list')
-    expect(output).toContain('session start|list|show')
+    expect(output).toContain('session start|invoke|list|show')
     expect(output).not.toContain('run start')
   })
 

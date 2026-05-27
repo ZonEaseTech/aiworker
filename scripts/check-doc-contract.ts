@@ -126,6 +126,7 @@ requireIncludes('docs/testing.md', [
   'bun run test:contracts',
   'Contract tests are the primary guardrail',
   'The v1 browser proof is Freeform-only',
+  'tests/browser/freeform-cli-golden-path.spec.ts',
 ])
 
 for (const file of canonicalDocs) {
@@ -146,6 +147,30 @@ if (packageJson.scripts?.['test:contracts'] !== 'bun test tests/architecture')
   issues.push({ file: 'package.json', message: 'test:contracts must run the refactor contract test' })
 if (packageJson.scripts?.['test:protocol'] !== 'bun run --filter \'@zonease/aiworker-soul-protocol\' test')
   issues.push({ file: 'package.json', message: 'test:protocol must run the soul-protocol package test' })
+const testCliScript = packageJson.scripts?.['test:cli'] ?? ''
+const testBrowserFreeformScript = packageJson.scripts?.['test:browser:freeform'] ?? ''
+const freeformBuildScript = 'bun run --filter \'@zonease/aiworker-freeform\' build'
+const webBuildScript = 'bun run --filter \'@zonease/aiworker-web\' build'
+const browserFreeformProofs = [
+  'tests/browser/freeform-cli-golden-path.spec.ts',
+  'tests/browser/freeform-mounted-workbench.spec.ts',
+]
+if (!testCliScript.includes('apps/cli/src/freeform-golden-path.test.ts'))
+  issues.push({ file: 'package.json', message: 'test:cli must include the Freeform CLI golden path test' })
+if (!testCliScript.includes(freeformBuildScript))
+  issues.push({ file: 'package.json', message: 'test:cli must rebuild the Freeform Soul App before CLI golden path tests' })
+if (!testBrowserFreeformScript.includes(freeformBuildScript))
+  issues.push({ file: 'package.json', message: 'test:browser:freeform must rebuild the Freeform Soul App before browser proofs' })
+if (!testBrowserFreeformScript.includes(webBuildScript))
+  issues.push({ file: 'package.json', message: 'test:browser:freeform must rebuild Host Web before browser proofs' })
+for (const proof of browserFreeformProofs) {
+  requireScriptBefore('test:browser:freeform', testBrowserFreeformScript, freeformBuildScript, proof)
+  requireScriptBefore('test:browser:freeform', testBrowserFreeformScript, webBuildScript, proof)
+}
+if (!testBrowserFreeformScript.includes('tests/browser/freeform-cli-golden-path.spec.ts'))
+  issues.push({ file: 'package.json', message: 'test:browser:freeform must include the Freeform CLI browser golden path proof' })
+if (!testBrowserFreeformScript.includes('tests/browser/freeform-mounted-workbench.spec.ts'))
+  issues.push({ file: 'package.json', message: 'test:browser:freeform must include the mounted workbench browser proof' })
 if (packageJson.scripts?.['docs:check'] !== 'bun scripts/check-doc-contract.ts')
   issues.push({ file: 'package.json', message: 'docs:check must run scripts/check-doc-contract.ts' })
 if (packageJson.scripts?.['ui:check'] !== 'bun scripts/check-web-ui-components.ts')
@@ -199,4 +224,13 @@ function forbidIncludes(file: string, needles: string[]): void {
     if (content.includes(needle))
       issues.push({ file, message: `contains forbidden active-route text ${JSON.stringify(needle)}` })
   }
+}
+
+function requireScriptBefore(scriptName: string, script: string, before: string, after: string): void {
+  const beforeIndex = script.indexOf(before)
+  const afterIndex = script.indexOf(after)
+  if (beforeIndex === -1 || afterIndex === -1)
+    return
+  if (beforeIndex > afterIndex)
+    issues.push({ file: 'package.json', message: `${scriptName} must run ${before} before ${after}` })
 }

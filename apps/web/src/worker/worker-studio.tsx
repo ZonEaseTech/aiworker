@@ -7,6 +7,7 @@ import type { LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
 import type { WorkerStudioLayoutVariant } from './components/studio-shell'
 import type { WorkerStudioLocatorState } from './studio/locator'
+import type { MountedWorkbenchRoute } from './studio/mounted-surface'
 
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Item, ItemContent, ItemDescription, ItemTitle } from '@zonease/aiworker-ui/components/item'
@@ -33,7 +34,7 @@ import {
   resolveActiveMountedRoute,
   updateWorkerMountedRoutePreference,
 } from './studio/mounted-route-preferences'
-import { MountedSoulAppRouteSurface, type MountedWorkbenchRoute } from './studio/mounted-surface'
+import { MountedSoulAppRouteSurface } from './studio/mounted-surface'
 import { WorkerHomeFallback, WorkspaceContextNoMountedSurface } from './studio/workspace-fallback'
 import { WorkerConfigurationDialog } from './worker-configuration-dialog'
 import { WorkerSwitcher } from './worker-workbench-tree'
@@ -526,7 +527,7 @@ export function WorkerStudio() {
                     resolvedTheme={resolvedTheme}
                     route={activeMountedRoute}
                     routeMemoryRef={mountedChildRouteMemoryRef}
-                    sessionId={activeMountedRoute.surface.scope === 'session' ? selectedSession?.id ?? null : null}
+                    sessionId={route.kind === 'session' ? selectedSession?.id ?? null : null}
                     workerId={selectedWorker.id}
                     workspaceId={mountedWorkspaceId}
                     onSelectWorkspace={workspaceId => selectWorkspaceLocator(selectedWorker.id, workspaceId)}

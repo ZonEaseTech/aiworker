@@ -1,10 +1,10 @@
 export type {
   SoulAppEngineAssets,
   SoulAppEngineTarget,
+  SoulAppMountedSurfaceScope,
   SoulAppPermission,
   SoulAppPermissionAction,
   SoulAppPermissionKind,
-  SoulAppMountedSurfaceScope,
   SoulAppProjectionReceipt,
   SoulAppProjectionReceiptEntry,
 } from './manifest'
@@ -32,17 +32,17 @@ export {
   projectSoulAppCapabilityTemplates,
   projectSoulAppDefaultTemplates,
   projectSoulAppSoul,
-  soulDescriptorValidationIssueSchema,
   soulAppHealthStatusSchema,
   soulAppInstallSourceKindSchema,
   soulAppRegistryStatusSchema,
+  soulDescriptorValidationIssueSchema,
 } from './registry'
 export type {
   HostedSoulApp,
   HostedSoulAppApi,
   MountedWorkbench,
-  SoulDescriptorValidationIssue,
   SoulAppHealthStatus,
   SoulAppInstallSourceKind,
   SoulAppRegistryStatus,
+  SoulDescriptorValidationIssue,
 } from './registry'

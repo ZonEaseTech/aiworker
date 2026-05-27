@@ -90,6 +90,23 @@ interface RuntimeOptions {
   worker?: string
 }
 
+interface SessionContinuationCommandOptions {
+  input?: string
+  model?: string
+  reasoning?: string
+  session?: string
+  worker?: string
+}
+
+interface SessionContinuationContext {
+  engineCommand: string
+  engineId: string
+  input: string
+  metadata: Record<string, unknown>
+  runtime: LocalWorkerRuntime
+  sessionId: string
+}
+
 interface DaemonStartResult {
   logFile: string
   pid: number
@@ -832,8 +849,8 @@ async function startSessionCommand(opts: { context?: string, engine?: string, in
   }))
 }
 
-async function sendTurnCommand(opts: { input?: string, model?: string, reasoning?: string, session?: string, worker?: string }): Promise<void> {
-  const _paths = await ensureDb()
+async function resolveSessionContinuationContext(opts: SessionContinuationCommandOptions): Promise<SessionContinuationContext> {
+  await ensureDb()
   const sessionId = requireText(opts.session, 'session')
   const session = getSession(sessionId)
   if (!session)
@@ -854,12 +871,35 @@ async function sendTurnCommand(opts: { input?: string, model?: string, reasoning
     ...(currentSession.metadataJson ?? {}),
     ...cliEngineOverrideMetadata(opts),
   }
-  printJson(await runtime.startTurn({
-    sessionId,
-    input: requireText(opts.input, 'input'),
-    engineId: engineMetadata.engineId,
+  return {
     engineCommand: engineMetadata.engineCommand,
+    engineId: engineMetadata.engineId,
+    input: requireText(opts.input, 'input'),
     metadata,
+    runtime,
+    sessionId,
+  }
+}
+
+async function sendTurnCommand(opts: SessionContinuationCommandOptions): Promise<void> {
+  const continuation = await resolveSessionContinuationContext(opts)
+  printJson(await continuation.runtime.startTurn({
+    sessionId: continuation.sessionId,
+    input: continuation.input,
+    engineId: continuation.engineId,
+    engineCommand: continuation.engineCommand,
+    metadata: continuation.metadata,
+  }))
+}
+
+async function invokeSessionCommand(opts: SessionContinuationCommandOptions): Promise<void> {
+  const continuation = await resolveSessionContinuationContext(opts)
+  printJson(await continuation.runtime.startInvocation({
+    sessionId: continuation.sessionId,
+    input: continuation.input,
+    engineId: continuation.engineId,
+    engineCommand: continuation.engineCommand,
+    metadata: continuation.metadata,
   }))
 }
 
@@ -1339,6 +1379,7 @@ function registerCommands(): void {
     .action(startSessionCommand)
   cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').action(listSessionCommand)
   cli.command('session show <id>', 'show one session').action(showSession)
+  cli.command('session invoke', 'create a session-level engine invocation').option('--session <id>', 'session id').option('--input <text>', 'invocation input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(invokeSessionCommand)
   cli.command('turn send', 'send a turn to an existing session').option('--session <id>', 'session id').option('--input <text>', 'turn input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(sendTurnCommand)
 
   cli.command('files list', 'compatibility inspection: list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
@@ -1373,8 +1414,7 @@ const OPERATOR_COMMAND_INDEX = [
   'app list|show|install|enable|bootstrap',
   'worker create|list|select',
   'workspace create|list',
-  'session start|list|show',
-  'turn send',
+  'session start|invoke|list|show',
   '',
   'Run `aiworker commands --all` for authoring, diagnostics and compatibility commands.',
 ]
@@ -1389,9 +1429,8 @@ const FULL_COMMAND_INDEX = [
   'soul list',
   'worker create|list|show|select',
   'workspace create|list|show',
-  'session start|list|show',
-  'turn send',
-  'compatibility inspection: template list; files list|show',
+  'session start|invoke|list|show',
+  'compatibility inspection: template list; files list|show; turn send',
   'settings list',
   'engine select',
   'open',

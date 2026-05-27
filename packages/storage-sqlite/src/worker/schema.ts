@@ -1,4 +1,4 @@
-import type { SoulAppHealthStatus, SoulAppInstallSourceKind, SoulAppRegistryStatus, SoulDescriptorValidationIssue, SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
+import type { SoulAppHealthStatus, SoulAppInstallSourceKind, SoulAppRegistryStatus, SoulDescriptorV1, SoulDescriptorValidationIssue } from '@zonease/aiworker-soul-protocol'
 
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 

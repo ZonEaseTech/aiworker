@@ -72,6 +72,7 @@ CLI and browser tests:
 
 ```text
 apps/cli/src/freeform-golden-path.test.ts
+tests/browser/freeform-cli-golden-path.spec.ts
 tests/browser/freeform-mounted-workbench.spec.ts
 ```
 

@@ -165,7 +165,7 @@ export function SettingsDialog({
             />
           )
         : null}
-      {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} settings={settings} templates={templates} onAppsChanged={onAppsChanged} /> : null}
+      {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} templates={templates} onAppsChanged={onAppsChanged} /> : null}
       {section === 'connectors' ? <ConnectorsSettings copy={copy} settings={settings} update={persist} /> : null}
       {section === 'mcp' ? <LocalMcpSettings copy={copy} /> : null}
       {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} /> : null}
@@ -516,14 +516,12 @@ function SoulAppsSettings({
   copy,
   locale,
   onAppsChanged,
-  settings,
   templates,
 }: {
   apps: HostedSoulApp[]
   copy: ReturnType<typeof messagesFor>
   locale: ReturnType<typeof normalizeLocale>
   onAppsChanged?: () => Promise<void> | void
-  settings: LocalSettingsConfig
   templates: CapabilityTemplate[]
 }) {
   const settingsCopy = copy.settings

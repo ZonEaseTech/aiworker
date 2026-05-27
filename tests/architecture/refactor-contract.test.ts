@@ -39,7 +39,7 @@ function listSourceFiles(dir: string): string[] {
       }
       return listSourceFiles(rel)
     }
-    if (!/\.(ts|tsx)$/.test(entry.name))
+    if (!/\.(?:ts|tsx)$/.test(entry.name))
       return []
     if (rel === 'tests/architecture/refactor-contract.test.ts')
       return []
@@ -186,6 +186,33 @@ describe('destructive refactor contract bootstrap', () => {
     expect(authoring).toContain('author-owned native MCP files may contain literal secrets')
   })
 
+  test('Freeform v1 has CLI-first and browser golden path gates', () => {
+    const rootPackage = JSON.parse(readRepoFile('package.json')) as {
+      scripts?: Record<string, string>
+    }
+    const browserFreeformScript = rootPackage.scripts?.['test:browser:freeform'] ?? ''
+    const freeformBuildScript = 'bun run --filter \'@zonease/aiworker-freeform\' build'
+    const webBuildScript = 'bun run --filter \'@zonease/aiworker-web\' build'
+    const browserProofs = [
+      'tests/browser/freeform-cli-golden-path.spec.ts',
+      'tests/browser/freeform-mounted-workbench.spec.ts',
+    ]
+
+    expect(existsSync(join(repoRoot, 'apps/cli/src/freeform-golden-path.test.ts'))).toBe(true)
+    expect(existsSync(join(repoRoot, 'tests/browser/freeform-cli-golden-path.spec.ts'))).toBe(true)
+    expect(existsSync(join(repoRoot, 'tests/browser/freeform-mounted-workbench.spec.ts'))).toBe(true)
+    expect(rootPackage.scripts?.['test:cli']).toContain('bun run --filter \'@zonease/aiworker-freeform\' build')
+    expect(rootPackage.scripts?.['test:cli']).toContain('apps/cli/src/freeform-golden-path.test.ts')
+    expect(rootPackage.scripts?.['test:browser:freeform']).toContain(freeformBuildScript)
+    expect(rootPackage.scripts?.['test:browser:freeform']).toContain(webBuildScript)
+    expect(rootPackage.scripts?.['test:browser:freeform']).toContain('tests/browser/freeform-cli-golden-path.spec.ts')
+    expect(rootPackage.scripts?.['test:browser:freeform']).toContain('tests/browser/freeform-mounted-workbench.spec.ts')
+    for (const proof of browserProofs) {
+      expect(browserFreeformScript.indexOf(freeformBuildScript)).toBeLessThan(browserFreeformScript.indexOf(proof))
+      expect(browserFreeformScript.indexOf(webBuildScript)).toBeLessThan(browserFreeformScript.indexOf(proof))
+    }
+  })
+
   test('package guardrails reject broad replacement buckets', () => {
     expect(existsSync(join(repoRoot, 'packages/core-v2'))).toBe(false)
     expect(existsSync(join(repoRoot, 'packages/shared-v2'))).toBe(false)
@@ -201,7 +228,7 @@ describe('destructive refactor contract bootstrap', () => {
     ]
     const forbiddenSnippets = [
       '/api/local/apps/:appId/surfaces/:surfaceId',
-      '/api/local/apps/${appId}/surfaces/${surfaceId}',
+      '/api/local/apps/$' + '{appId}/surfaces/$' + '{surfaceId}',
       'mountedSurfaceResponse',
       'findMountedSurfaceContribution',
       'findWorkbenchMountContributions',
@@ -221,7 +248,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('WorkerStudio derives production workbench routes from descriptor v1 only', () => {
     const source = readRepoFile('apps/web/src/worker/worker-studio.tsx')
-    const match = source.match(/function descriptorWorkbenchRoutes[\s\S]*?\n}\n/)
+    const match = source.match(/function descriptorWorkbenchRoutes[\s\S]*?\n\}\n/)
     expect(match, 'descriptorWorkbenchRoutes should stay a small explicit descriptor adapter').not.toBeNull()
 
     const routeAdapter = match![0]
