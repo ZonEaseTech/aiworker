@@ -152,6 +152,21 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
     }
   }
 
+  function assertWorkspaceInvocationContext(request: Record<string, unknown>): void {
+    if (!readString(request.workspaceLocatorId, '')) {
+      throw bridgeFailure(
+        'WORKSPACE_LOCATOR_MISSING',
+        'Workspace locator id is required before native engine invocation.',
+      )
+    }
+    if (!readString(request.cwd, '')) {
+      throw bridgeFailure(
+        'WORKSPACE_ROOT_MISSING',
+        'Workspace root cwd is required before native engine invocation.',
+      )
+    }
+  }
+
   function eventPipeline(): { flush: () => Promise<void>, sink: EngineEventSink } {
     const pendingWrites: Promise<unknown>[] = []
     return {
@@ -219,6 +234,7 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
     },
 
     async followUp(request) {
+      assertWorkspaceInvocationContext(request)
       await assertProjectionUsable(request)
       const adapter = adapterFor(readEngineTarget(request))
       const availability = await discoverAdapter(adapter)
@@ -313,6 +329,7 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
     },
 
     async startInvocation(request) {
+      assertWorkspaceInvocationContext(request)
       await assertProjectionUsable(request)
       const adapter = adapterFor(readEngineTarget(request))
       const pipeline = eventPipeline()

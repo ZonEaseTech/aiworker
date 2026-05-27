@@ -293,6 +293,27 @@ describe('engine-bridge B+ adapter contract exports', () => {
 
 describe('engine-bridge start invocation contract', () => {
   test.each([
+    ['workspace locator id', { workspaceLocatorId: undefined }, 'WORKSPACE_LOCATOR_MISSING'],
+    ['workspace root cwd', { cwd: undefined }, 'WORKSPACE_ROOT_MISSING'],
+  ] as const)('rejects missing %s before adapter spawn', async (_label, override, expectedCode) => {
+    const { adapter, engineBridge } = createContractHarness()
+
+    await expect(engineBridge.startInvocation({
+      capabilityDescriptorRef: 'capability/default-task',
+      cwd: '/workspace',
+      engineTarget: 'codex',
+      input: { body: 'start' },
+      invocationId: 'invocation-start',
+      projectionReceiptId: 'projection-receipt-1',
+      sessionId: 'session-1',
+      workerId: 'worker-1',
+      workspaceLocatorId: 'workspace-1',
+      ...override,
+    })).rejects.toMatchObject({ code: expectedCode })
+    expect(adapter.start).not.toHaveBeenCalled()
+  })
+
+  test.each([
     ['missing', 'PROJECTION_RECEIPT_MISSING'],
     ['stale', 'PROJECTION_RECEIPT_STALE'],
   ] as const)('rejects %s projection receipt before adapter spawn', async (projectionReceiptState, expectedCode) => {
@@ -416,9 +437,11 @@ describe('engine-bridge start invocation contract', () => {
 
     try {
       await engineBridge.startInvocation({
+        cwd: '/workspace',
         engineTarget: 'codex',
         invocationId: 'invocation-start',
         projectionReceiptId: 'projection-receipt-1',
+        workspaceLocatorId: 'workspace-1',
       })
       throw new Error('expected startInvocation to fail')
     }
@@ -432,6 +455,30 @@ describe('engine-bridge start invocation contract', () => {
 })
 
 describe('engine-bridge follow-up native resume contract', () => {
+  test.each([
+    ['workspace locator id', { workspaceLocatorId: undefined }, 'WORKSPACE_LOCATOR_MISSING'],
+    ['workspace root cwd', { cwd: undefined }, 'WORKSPACE_ROOT_MISSING'],
+  ] as const)('rejects missing %s before adapter follow-up', async (_label, override, expectedCode) => {
+    const { adapter, engineBridge } = createContractHarness({
+      latestExternalSessionRef: { id: 'native-thread-1', target: 'codex' },
+      supportsNativeResume: true,
+    })
+
+    await expect(engineBridge.followUp({
+      cwd: '/workspace',
+      engineTarget: 'codex',
+      input: { body: 'continue' },
+      invocationId: 'invocation-follow-up',
+      projectionReceiptId: 'projection-receipt-1',
+      sessionId: 'session-1',
+      workerId: 'worker-1',
+      workspaceLocatorId: 'workspace-1',
+      ...override,
+    })).rejects.toMatchObject({ code: expectedCode })
+    expect(adapter.start).not.toHaveBeenCalled()
+    expect(adapter.followUp).not.toHaveBeenCalled()
+  })
+
   test('requires latest external session ref for native-resume adapters and never falls back to adapter.start', async () => {
     const { adapter, engineBridge } = createContractHarness({
       latestExternalSessionRef: undefined,
