@@ -476,6 +476,62 @@ describe('local daemon API', () => {
     await expect(readFile(join(requestedRootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Freeform')
   })
 
+  it('archives workspace locator metadata and blocks new workspace work', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'archive-workspace-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+
+    const archiveRes = await target.request(`/api/workspace-locators/${workspace.id}/archive`, { method: 'POST' })
+
+    expect(archiveRes.status).toBe(200)
+    expect(await archiveRes.json()).toMatchObject({
+      workspace: { id: workspace.id, status: 'archived' },
+    })
+
+    const blockedSessionRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+      body: JSON.stringify({
+        capabilityId: FREEFORM_CAPABILITY,
+        input: 'Start after workspace archive.',
+        title: 'Blocked archived workspace session',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(blockedSessionRes.status).toBe(400)
+    expect(await blockedSessionRes.json()).toMatchObject({
+      error: {
+        code: 'WORKSPACE_ARCHIVED',
+        message: `Workspace ${workspace.id} is archived and cannot start new work.`,
+      },
+    })
+
+    const blockedProjectionRes = await target.request('/api/projections/codex/refresh', {
+      body: JSON.stringify({ workerId: worker.id, workspaceId: workspace.id }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(blockedProjectionRes.status).toBe(400)
+    expect(await blockedProjectionRes.json()).toMatchObject({
+      error: {
+        code: 'WORKSPACE_ARCHIVED',
+        message: `Workspace ${workspace.id} is archived and cannot start new work.`,
+      },
+    })
+
+    const blockedInvocationRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Continue after workspace archive.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(blockedInvocationRes.status).toBe(400)
+    expect(await blockedInvocationRes.json()).toMatchObject({
+      error: {
+        code: 'WORKSPACE_ARCHIVED',
+        message: `Workspace ${workspace.id} is archived and cannot start new work.`,
+      },
+    })
+  })
+
   it('hard-deletes workspace locator metadata while preserving app-owned workspace files', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'delete-workspace-worker')

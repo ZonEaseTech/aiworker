@@ -7,7 +7,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getWorkerConfigValue, initWorkerDb, runWorkerMigrations, updateSession, upsertWorker, upsertWorkerOverlayAssets } from '@zonease/aiworker-storage-sqlite/worker'
+import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getWorkerConfigValue, initWorkerDb, runWorkerMigrations, updateSession, updateWorkspace, upsertWorker, upsertWorkerOverlayAssets } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { LocalExecutorFailure } from './executor'
@@ -197,6 +197,43 @@ describe('LocalWorkerRuntime', () => {
     }))
       .rejects
       .toThrow('Worker worker-demo is archived and cannot start new work.')
+  })
+
+  it('rejects new work on archived workspaces while preserving existing metadata', async () => {
+    const workerRuntime = runtime({
+      async invoke(input) {
+        return { summary: `Should not run ${input.invocationId}` }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Archived Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Existing workspace session',
+      metadata: { outputKind: 'freeform' },
+    })
+
+    updateWorkspace({ id: workspace.id, status: 'archived' })
+
+    await expect(workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Blocked workspace session',
+    }))
+      .rejects
+      .toThrow(`Workspace ${workspace.id} is archived and cannot start new work.`)
+    await expect(workerRuntime.reprojectWorkspaceAssets(workspace.id))
+      .rejects
+      .toThrow(`Workspace ${workspace.id} is archived and cannot start new work.`)
+    await expect(workerRuntime.startInvocation({
+      sessionId: session.id,
+      input: 'Continue archived workspace work.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    }))
+      .rejects
+      .toThrow(`Workspace ${workspace.id} is archived and cannot start new work.`)
   })
 
   it('runs the workspace session loop from invocation to completion', async () => {

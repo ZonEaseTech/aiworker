@@ -232,7 +232,7 @@ export class LocalWorkerRuntime {
 
   async reprojectWorkspaceAssets(workspaceId: string, input: { engineTarget?: SoulAppEngineTarget | null } = {}): Promise<WorkspaceAssetProjectionResult> {
     this.requireActiveWorker()
-    const workspace = this.requireWorkspace(workspaceId)
+    const workspace = this.requireActiveWorkspace(workspaceId)
     const layout = await this.prepareWorkspaceLayout({
       engineTarget: input.engineTarget,
       name: workspace.name,
@@ -299,7 +299,7 @@ export class LocalWorkerRuntime {
 
   async createSession(input: CreateLocalSessionInput): Promise<SessionRow> {
     this.requireActiveWorker()
-    const workspace = this.requireWorkspace(input.workspaceId)
+    const workspace = this.requireActiveWorkspace(input.workspaceId)
     const sessionMetadata = freezeSessionEngineMetadata(input.metadata ?? {}, this.requestedSessionEngine(input.metadata ?? {}))
     const session = createSession({
       id: randomUUID(),
@@ -320,7 +320,7 @@ export class LocalWorkerRuntime {
   async startInvocation(input: StartLocalInvocationInput): Promise<LocalInvocationStartResult> {
     this.requireActiveWorker()
     const session = this.requireSession(input.sessionId)
-    const workspace = this.requireWorkspace(session.workspaceId)
+    const workspace = this.requireActiveWorkspace(session.workspaceId)
     const sessionEngine = this.resolveSessionEngine(session, input)
     const frozenSessionMetadata = freezeSessionEngineMetadata(session.metadataJson ?? {}, sessionEngine)
     const currentSession = sessionEngine.source === 'session'
@@ -776,6 +776,13 @@ export class LocalWorkerRuntime {
     const workspace = getWorkspace(id)
     if (!workspace || workspace.workerId !== this.workerId)
       throw new Error(`Workspace not found for worker ${this.workerId}: ${id}`)
+    return workspace
+  }
+
+  private requireActiveWorkspace(id: string): WorkspaceRow {
+    const workspace = this.requireWorkspace(id)
+    if (workspace.status === 'archived')
+      throw AppError.badRequest(`Workspace ${id} is archived and cannot start new work.`, 'WORKSPACE_ARCHIVED')
     return workspace
   }
 
