@@ -70,8 +70,8 @@ const workspace = {
   createdAt: now,
   id: 'workspace-1',
   workerId: 'people-worker',
-  name: 'Hiring Workspace',
-  rootPath: '/tmp/hiring',
+  name: 'Demo Workspace',
+  rootPath: '/tmp/demo-workspace',
   type: 'workspace',
   status: 'active',
   sourcePointersJson: [],
@@ -758,7 +758,7 @@ describe('worker studio', () => {
     expect(within(switcher).getByRole('button', { name: 'Collapse Demo Release' })).toBeTruthy()
     expect(within(switcher).getByRole('button', { name: 'Switch to HR' })).toBeTruthy()
     expect(within(switcher).getByRole('button', { name: 'Switch to QA' })).toBeTruthy()
-    expect(within(switcher).queryByText('Hiring Workspace')).toBeNull()
+    expect(within(switcher).queryByText('Demo Workspace')).toBeNull()
     expect(within(switcher).queryByText('Screen candidate')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
   })
@@ -779,7 +779,7 @@ describe('worker studio', () => {
       workspaceId: 'workspace-1',
     })
     expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=people-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
-    expect(screen.queryByText('What do you want to build in Hiring Workspace?')).toBeNull()
+    expect(screen.queryByText('What do you want to build in Demo Workspace?')).toBeNull()
     expect(screen.queryByRole('combobox', { name: /capability|skill|template/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /\$ skill/i })).toBeNull()
     expect(lastSessionRequestBody).toBeNull()
@@ -1216,7 +1216,7 @@ describe('worker studio', () => {
     const secondWorkspace = {
       ...workspace,
       id: 'workspace-2',
-      name: 'Second Hiring Workspace',
+      name: 'Second Demo Workspace',
       workerId: 'people-worker',
     }
     currentApps = [{
@@ -1301,7 +1301,7 @@ describe('worker studio', () => {
       id: 12,
       payloadJson: {
         agentEvent: {
-          detail: 'add /tmp/hiring/artifacts/session-1/candidate-screen.md (completed)',
+          detail: 'add /tmp/demo-workspace/artifacts/session-1/candidate-screen.md (completed)',
           kind: 'status',
           label: 'file_change',
         },
@@ -1370,7 +1370,7 @@ describe('worker studio', () => {
     expect(within(switcher).getByRole('button', { name: 'Collapse Demo Release' })).toBeTruthy()
     expect(within(switcher).getByRole('button', { name: 'Switch to HR' })).toBeTruthy()
     expect(within(switcher).getByRole('button', { name: 'Switch to QA' })).toBeTruthy()
-    expect(within(switcher).queryByText('Hiring Workspace')).toBeNull()
+    expect(within(switcher).queryByText('Demo Workspace')).toBeNull()
     expect(within(switcher).queryByRole('button', { name: 'Screen candidate' })).toBeNull()
   })
 
@@ -1717,7 +1717,7 @@ describe('worker studio', () => {
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
     expect(screen.queryByText('Workspace navigation')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
-    expect(screen.queryByText('What do you want to build in Hiring Workspace?')).toBeNull()
+    expect(screen.queryByText('What do you want to build in Demo Workspace?')).toBeNull()
   })
 
   it('keeps session routes free of Host-level new-session navigation', async () => {
@@ -1743,7 +1743,7 @@ describe('worker studio', () => {
     expect(await screen.findByTitle('Demo People Workbench')).toBeTruthy()
     const switcher = screen.getByTestId('worker-switcher')
     expect(within(switcher).getByRole('button', { name: 'Switch to HR' })).toBeTruthy()
-    expect(within(switcher).queryByText('Hiring Workspace')).toBeNull()
+    expect(within(switcher).queryByText('Demo Workspace')).toBeNull()
     expect(within(switcher).queryByRole('button', { name: 'Screen candidate' })).toBeNull()
     expect(screen.queryByRole('listbox', { name: 'Current worker' })).toBeNull()
     expect(window.location.pathname).toBe('/workers/people-worker/workspaces/workspace-1/sessions/session-1')

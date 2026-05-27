@@ -1389,6 +1389,21 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'locator tests should keep workspace names product-neutral').toEqual([])
   })
 
+  test('WorkerStudio tests use neutral workspace fixture names', () => {
+    const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const retiredWorkspaceSnippets = [
+      'Hiring Workspace',
+      'Second Hiring Workspace',
+      '/tmp/hiring',
+    ]
+
+    const findings = retiredWorkspaceSnippets
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+
+    expect(findings, 'WorkerStudio tests should keep workspace names product-neutral').toEqual([])
+  })
+
   test('shared SessionComposer uses neutral selector terminology instead of retired template ids', () => {
     const sharedComposerSources = [
       'packages/ui/src/components/session-composer.tsx',
