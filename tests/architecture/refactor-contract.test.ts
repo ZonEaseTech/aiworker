@@ -1,11 +1,23 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 
 function readRepoFile(path: string): string {
   return readFileSync(join(repoRoot, path), 'utf8')
+}
+
+function listNumberedFiles(dir: string, suffix: string): string[] {
+  return readdirSync(join(repoRoot, dir))
+    .filter(file => /^\d+_/.test(file) && file.endsWith(suffix))
+    .sort((left, right) => left.localeCompare(right, 'en', { numeric: true }))
+}
+
+function latestNumberedFile(dir: string, suffix: string): string {
+  const files = listNumberedFiles(dir, suffix)
+  expect(files.length, `${dir} should contain generated ${suffix} files`).toBeGreaterThan(0)
+  return join(dir, files.at(-1)!)
 }
 
 describe('destructive refactor contract bootstrap', () => {
@@ -60,6 +72,33 @@ describe('destructive refactor contract bootstrap', () => {
     expect(runtime).toContain('session lifecycle: active | archived | deleted')
     expect(runtime).toContain('execution/process state belongs to engine_invocations')
     expect(runtime).toContain('POST /api/sessions/:sessionId/invocations')
+  })
+
+  test('worker-scoped engine invocation storage and APIs stay removed from current surfaces', () => {
+    const currentSources = [
+      'packages/storage-sqlite/src/worker/schema.ts',
+      latestNumberedFile('packages/storage-sqlite/drizzle/worker/meta', '_snapshot.json'),
+      'packages/host-daemon/src/modes/worker.ts',
+      'packages/host-daemon/src/modes/worker/openapi.ts',
+      'packages/host-daemon/src/modes/worker/schemas.ts',
+    ]
+    const forbiddenPatterns = [
+      new RegExp(['worker', 'engine', 'invocations'].join('_')),
+      new RegExp(['worker', 'Engine', 'Invocations'].join('')),
+      new RegExp(['/api/local/workers', ':workerId', 'engine/invocations'].join('/')),
+      new RegExp(['create', 'Worker', 'Engine', 'Invocation'].join('')),
+      new RegExp(['list', 'Worker', 'Engine', 'Invocations'].join('')),
+      new RegExp(['next', 'Worker', 'Engine', 'Invocation', 'Seq'].join('')),
+    ]
+
+    const findings = currentSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbiddenPatterns
+        .filter(pattern => pattern.test(source))
+        .map(pattern => `${basename(path)}: ${pattern.source}`)
+    })
+
+    expect(findings, 'engine execution state must be session-scoped via engine_invocations').toEqual([])
   })
 
   test('protocol and authoring contracts stay descriptor-only and native-MCP based', () => {

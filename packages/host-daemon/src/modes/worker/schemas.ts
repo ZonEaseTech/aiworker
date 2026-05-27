@@ -114,23 +114,6 @@ export const testEngineBodySchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
-// 引擎调用 POST /api/local/workers/:workerId/engine/invocations[/stream]
-// 对应 NativeEngineInvocationRequest 接口
-// cwd 被 requireString 强制：必填
-// args 被 readStringArray 消费：string[] 可选
-// engineCommand/engineId 被 readOptionalString 消费：nullable optional
-// input 直接 typeof body.input === 'string'：optional
-// ---------------------------------------------------------------------------
-
-export const nativeEngineInvocationBodySchema = z.object({
-  args: z.array(z.string()).optional(),
-  cwd: z.string().trim().min(1),
-  engineCommand: z.string().nullable().optional(),
-  engineId: z.string().nullable().optional(),
-  input: z.string().optional(),
-})
-
-// ---------------------------------------------------------------------------
 // POST /api/local/workers/:workerId/workspaces/:workspaceId/sessions[/stream]
 // POST /api/local/workspaces/:workspaceId/sessions[/stream]
 // 对应 createWorkspaceSessionResponse 内的 body：

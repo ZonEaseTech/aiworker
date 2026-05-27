@@ -1,6 +1,6 @@
-import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, NativeEngineBridgeResult } from '@zonease/aiworker-host-runtime'
+import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-host-runtime'
 import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppMountedSurface } from '@zonease/aiworker-soul-protocol'
-import type { SessionRow, WorkerEngineInvocationRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import type { Context } from 'hono'
 import type { ChildProcessByStdio } from 'node:child_process'
@@ -16,7 +16,6 @@ import { apiReference } from '@scalar/hono-api-reference'
 import {
   createHostRuntime,
   createLocalBearerAuthProvider,
-  invokeNativeEngine,
   listBaselineAssets,
   LocalEngineResolutionError,
   resolveLocalCliEngine,
@@ -30,7 +29,6 @@ import {
 } from '@zonease/aiworker-soul-protocol'
 import {
   closeWorkerDb,
-  createWorkerEngineInvocation,
   deleteWorkerConfigValue,
   getEngineInvocation,
   getSession,
@@ -43,7 +41,6 @@ import {
   listWorkerOverlayAssets,
   listWorkers,
   listWorkspaces,
-  nextWorkerEngineInvocationSeq,
   runWorkerMigrations,
   updateEngineInvocation,
   updateSession,
@@ -65,7 +62,6 @@ import {
   createWorkspaceBodySchema,
   createWorkspaceLocatorBodySchema,
   installAppBodySchema,
-  nativeEngineInvocationBodySchema,
   parseJsonBody,
   patchSessionBodySchema,
   patchSettingsBodySchema,
@@ -117,16 +113,6 @@ interface MountedSurfaceContribution {
   path?: string
   surface: SoulAppMountedSurface
   target?: string
-}
-
-interface PreparedNativeEngineInvocation {
-  args: string[]
-  command: string
-  cwd: string
-  engineId: string
-  input: string
-  invocationId: string
-  worker: WorkerRow
 }
 
 const MOUNTED_PROXY_TIMEOUT_MS = 10_000
@@ -462,28 +448,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     })))
     return c.json({ overlay: await workerOverlayResponse(state, worker.id) })
   })
-  app.post('/api/local/workers/:workerId/engine/invocations', async (c) => {
-    const prepared = await prepareNativeEngineInvocation(c, c.req.param('workerId'))
-    if (prepared instanceof Response)
-      return prepared
-    const result = await invokeNativeEngine({
-      args: prepared.args,
-      command: prepared.command,
-      cwd: prepared.cwd,
-      input: prepared.input,
-      invocationId: prepared.invocationId,
-      workerId: prepared.worker.id,
-    })
-    const invocation = persistNativeEngineInvocation(prepared, result)
-    return c.json({ invocation, result }, 201)
-  })
-  app.post('/api/local/workers/:workerId/engine/invocations/stream', async (c) => {
-    const prepared = await prepareNativeEngineInvocation(c, c.req.param('workerId'))
-    if (prepared instanceof Response)
-      return prepared
-    return streamNativeEngineInvocation(prepared)
-  })
-
   app.get('/api/local/workers/:workerId/templates', (c) => {
     return c.json({ templates: state.host.listCapabilityTemplatesForWorker(c.req.param('workerId')) })
   })
@@ -1678,128 +1642,6 @@ function sessionExecutionMetadata(session: SessionRow, settings: LocalSettingsCo
     engineName,
     executionMode,
   }
-}
-
-async function prepareNativeEngineInvocation(c: Context, workerId: string): Promise<PreparedNativeEngineInvocation | Response> {
-  const worker = requireWorker(workerId)
-  const result = await parseJsonBody(c, nativeEngineInvocationBodySchema, 'NATIVE_ENGINE_INVOCATION_INVALID')
-  if (!result.ok)
-    return result.response
-  const body = result.data
-  const settings = loadLocalSettings()
-  const engineCommandFromBody = (body.engineCommand != null && body.engineCommand.trim().length > 0 ? body.engineCommand.trim() : null)
-  const execution = engineCommandFromBody
-    ? null
-    : resolvedExecutionMetadata(settings, body.engineId)
-  const command = engineCommandFromBody ?? (typeof execution?.engineCommand === 'string' ? execution.engineCommand : null)
-  if (!command)
-    throw new Error('Missing required field: engineCommand')
-  const engineId = engineCommandFromBody
-    ? (body.engineId?.trim() || (settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider))
-    : String(execution?.engineId)
-  return {
-    args: body.args ?? [],
-    command,
-    cwd: body.cwd,
-    engineId,
-    input: body.input ?? '',
-    invocationId: randomUUID(),
-    worker,
-  }
-}
-
-function persistNativeEngineInvocation(
-  prepared: PreparedNativeEngineInvocation,
-  result: NativeEngineBridgeResult,
-): WorkerEngineInvocationRow {
-  return createWorkerEngineInvocation({
-    id: result.invocationId,
-    workerId: prepared.worker.id,
-    seq: nextWorkerEngineInvocationSeq(prepared.worker.id),
-    engineId: prepared.engineId,
-    engineCommand: prepared.command,
-    status: result.status,
-    cwd: result.cwd,
-    exitCode: result.exitCode,
-    signal: result.signal,
-    metadataJson: {
-      bridge: 'native',
-      durationMs: result.durationMs,
-      stderrBytes: Buffer.byteLength(result.stderr, 'utf8'),
-      stdoutBytes: Buffer.byteLength(result.stdout, 'utf8'),
-    },
-    startedAt: result.startedAt,
-    finishedAt: result.finishedAt,
-    at: result.finishedAt,
-  })
-}
-
-function streamNativeEngineInvocation(prepared: PreparedNativeEngineInvocation): Response {
-  const encoder = new TextEncoder()
-  let closed = false
-  let heartbeat: ReturnType<typeof setInterval> | null = null
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      const heartbeatFrame = () => {
-        if (!closed)
-          controller.enqueue(encoder.encode(': heartbeat\n\n'))
-      }
-      const send = (event: string, data: unknown, id?: string | number) => {
-        if (closed)
-          return
-        const lines = [
-          id !== undefined ? `id: ${id}` : null,
-          `event: ${event}`,
-          `data: ${JSON.stringify(data)}`,
-          '',
-        ].filter(line => line !== null).join('\n')
-        controller.enqueue(encoder.encode(`${lines}\n`))
-      }
-      send('status', {
-        invocationId: prepared.invocationId,
-        status: 'started',
-        workerId: prepared.worker.id,
-      }, prepared.invocationId)
-      heartbeat = setInterval(heartbeatFrame, 5_000)
-      void invokeNativeEngine({
-        args: prepared.args,
-        command: prepared.command,
-        cwd: prepared.cwd,
-        input: prepared.input,
-        invocationId: prepared.invocationId,
-        onEvent: event => send('engine_event', { invocationId: prepared.invocationId, ...event }, prepared.invocationId),
-        workerId: prepared.worker.id,
-      }).then((result) => {
-        const invocation = persistNativeEngineInvocation(prepared, result)
-        send('result', { invocation, result }, invocation.id)
-      }).catch((error) => {
-        send('error', { invocationId: prepared.invocationId, message: error instanceof Error ? error.message : String(error) }, prepared.invocationId)
-      }).finally(() => {
-        if (heartbeat) {
-          clearInterval(heartbeat)
-          heartbeat = null
-        }
-        if (!closed) {
-          closed = true
-          controller.close()
-        }
-      })
-    },
-    cancel() {
-      closed = true
-      if (heartbeat) {
-        clearInterval(heartbeat)
-        heartbeat = null
-      }
-    },
-  })
-  return new Response(stream, {
-    headers: {
-      'cache-control': 'no-cache',
-      'connection': 'keep-alive',
-      'content-type': 'text/event-stream; charset=utf-8',
-    },
-  })
 }
 
 async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonState, workspace: WorkspaceRow, stream: boolean): Promise<Response> {

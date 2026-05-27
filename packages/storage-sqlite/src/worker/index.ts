@@ -183,7 +183,6 @@ export type WorkerRow = typeof schema.workers.$inferSelect
 export type WorkspaceRow = typeof schema.workspaces.$inferSelect
 export type SessionRow = typeof schema.sessions.$inferSelect
 export type EngineInvocationRow = typeof schema.engineInvocations.$inferSelect
-export type WorkerEngineInvocationRow = typeof schema.workerEngineInvocations.$inferSelect
 export type BridgeEventRow = typeof schema.bridgeEvents.$inferSelect
 export type FileRow = typeof schema.files.$inferSelect
 export type SoulAppRow = typeof schema.soulApps.$inferSelect
@@ -335,39 +334,6 @@ export interface UpdateEngineInvocationInput {
   failureCode?: string | null
   summary?: string | null
   error?: string | null
-  metadataJson?: Record<string, unknown>
-  startedAt?: string | null
-  finishedAt?: string | null
-  at?: string
-}
-
-export interface CreateWorkerEngineInvocationInput {
-  id: string
-  workerId: string
-  seq: number
-  engineId: string
-  engineCommand?: string | null
-  status?: WorkerEngineInvocationRow['status']
-  cwd: string
-  inputRef?: string | null
-  stdoutRef?: string | null
-  stderrRef?: string | null
-  exitCode?: number | null
-  signal?: string | null
-  metadataJson?: Record<string, unknown>
-  startedAt?: string | null
-  finishedAt?: string | null
-  at?: string
-}
-
-export interface UpdateWorkerEngineInvocationInput {
-  id: string
-  status?: WorkerEngineInvocationRow['status']
-  inputRef?: string | null
-  stdoutRef?: string | null
-  stderrRef?: string | null
-  exitCode?: number | null
-  signal?: string | null
   metadataJson?: Record<string, unknown>
   startedAt?: string | null
   finishedAt?: string | null
@@ -811,80 +777,6 @@ export function nextEngineInvocationSeq(sessionId: string): number {
     .from(schema.engineInvocations)
     .where(eq(schema.engineInvocations.sessionId, sessionId))
     .orderBy(desc(schema.engineInvocations.seq))
-    .limit(1)
-    .get()
-  return (latest?.seq ?? 0) + 1
-}
-
-export function createWorkerEngineInvocation(input: CreateWorkerEngineInvocationInput): WorkerEngineInvocationRow {
-  const now = input.at ?? new Date().toISOString()
-  assertNoLiteralSecrets(input.metadataJson ?? {}, 'worker_engine_invocations.metadataJson')
-  getWorkerDb().insert(schema.workerEngineInvocations).values({
-    id: input.id,
-    workerId: input.workerId,
-    seq: input.seq,
-    engineId: input.engineId,
-    engineCommand: input.engineCommand ?? null,
-    status: input.status ?? 'queued',
-    cwd: input.cwd,
-    inputRef: input.inputRef ?? null,
-    stdoutRef: input.stdoutRef ?? null,
-    stderrRef: input.stderrRef ?? null,
-    exitCode: input.exitCode ?? null,
-    signal: input.signal ?? null,
-    metadataJson: input.metadataJson ?? {},
-    startedAt: input.startedAt ?? null,
-    finishedAt: input.finishedAt ?? null,
-    createdAt: now,
-    updatedAt: now,
-  }).run()
-  return getWorkerEngineInvocation(input.id)!
-}
-
-export function getWorkerEngineInvocation(id: string): WorkerEngineInvocationRow | null {
-  return getWorkerDb().select().from(schema.workerEngineInvocations).where(eq(schema.workerEngineInvocations.id, id)).get() ?? null
-}
-
-export function updateWorkerEngineInvocation(input: UpdateWorkerEngineInvocationInput): WorkerEngineInvocationRow {
-  const existing = getWorkerEngineInvocation(input.id)
-  if (!existing)
-    throw new Error(`Worker engine invocation not found: ${input.id}`)
-  const has = (key: keyof UpdateWorkerEngineInvocationInput) => Object.hasOwn(input, key)
-  if (input.metadataJson)
-    assertNoLiteralSecrets(input.metadataJson, 'worker_engine_invocations.metadataJson')
-  getWorkerDb().update(schema.workerEngineInvocations).set({
-    exitCode: has('exitCode') ? input.exitCode ?? null : existing.exitCode,
-    finishedAt: has('finishedAt') ? input.finishedAt ?? null : existing.finishedAt,
-    inputRef: has('inputRef') ? input.inputRef ?? null : existing.inputRef,
-    metadataJson: input.metadataJson ?? existing.metadataJson,
-    signal: has('signal') ? input.signal ?? null : existing.signal,
-    startedAt: has('startedAt') ? input.startedAt ?? null : existing.startedAt,
-    status: input.status ?? existing.status,
-    stderrRef: has('stderrRef') ? input.stderrRef ?? null : existing.stderrRef,
-    stdoutRef: has('stdoutRef') ? input.stdoutRef ?? null : existing.stdoutRef,
-    updatedAt: input.at ?? new Date().toISOString(),
-  }).where(eq(schema.workerEngineInvocations.id, input.id)).run()
-  return getWorkerEngineInvocation(input.id)!
-}
-
-export function listWorkerEngineInvocations(workerId?: string, limit = 200): WorkerEngineInvocationRow[] {
-  const query = getWorkerDb().select().from(schema.workerEngineInvocations)
-  if (workerId) {
-    return query
-      .where(eq(schema.workerEngineInvocations.workerId, workerId))
-      .orderBy(desc(schema.workerEngineInvocations.updatedAt))
-      .limit(limit)
-      .all()
-  }
-  return query.orderBy(desc(schema.workerEngineInvocations.updatedAt)).limit(limit).all()
-}
-
-export function nextWorkerEngineInvocationSeq(workerId: string): number {
-  const latest = getWorkerDb()
-    .select({ seq: schema.workerEngineInvocations.seq })
-    .from(schema.workerEngineInvocations)
-    .where(eq(schema.workerEngineInvocations.workerId, workerId))
-    .orderBy(desc(schema.workerEngineInvocations.seq))
     .limit(1)
     .get()
   return (latest?.seq ?? 0) + 1

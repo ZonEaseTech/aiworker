@@ -14,7 +14,6 @@ import {
   createEngineInvocation,
   createSession,
   createTurn,
-  createWorkerEngineInvocation,
   createWorkspace,
   discardLegacySoulMetadata,
   engineInvocations,
@@ -23,7 +22,6 @@ import {
   getSoulApp,
   getWorker,
   getWorkerDb,
-  getWorkerEngineInvocation,
   initWorkerDb,
   listEngineInvocations,
   listFiles,
@@ -31,25 +29,21 @@ import {
   listSessions,
   listSoulApps,
   listTurns,
-  listWorkerEngineInvocations,
   listWorkerOverlayAssets,
   listWorkers,
   listWorkspaces,
   nextEngineInvocationSeq,
-  nextWorkerEngineInvocationSeq,
   runWorkerMigrations,
   sessions,
   setSetting,
   settings,
   soulApps,
   updateSoulAppLifecycle,
-  updateWorkerEngineInvocation,
   upsertFile,
   upsertSoulApp,
   upsertWorker,
   upsertWorkerOverlayAssets,
   workerConfig,
-  workerEngineInvocations,
   workers,
   workspaces,
 } from './index'
@@ -117,7 +111,6 @@ describe('greenfield local worker session schema', () => {
       'soul_apps',
       'sqlite_sequence',
       'worker_config',
-      'worker_engine_invocations',
       'worker_identity',
       'workers',
       'workspaces',
@@ -189,70 +182,6 @@ describe('greenfield local worker session schema', () => {
       workerId: worker.id,
     })
     expect(overlay[0]).not.toHaveProperty('content')
-  })
-
-  it('persists worker-scoped native invocation metadata without session rows', () => {
-    const worker = upsertWorker({
-      id: 'worker-native',
-      soulId: 'hr',
-      name: 'Native Bridge',
-      defaultEngineId: 'codex',
-      at: '2026-05-21T05:18:00.000Z',
-    })
-
-    expect(nextWorkerEngineInvocationSeq(worker.id)).toBe(1)
-    const invocation = createWorkerEngineInvocation({
-      id: 'worker-inv-1',
-      workerId: worker.id,
-      seq: 1,
-      engineId: 'codex',
-      engineCommand: 'codex',
-      status: 'running',
-      cwd: '/tmp/worker-native',
-      inputRef: 'worker://native/inputs/worker-inv-1',
-      stdoutRef: 'worker://native/logs/worker-inv-1.stdout.log',
-      stderrRef: 'worker://native/logs/worker-inv-1.stderr.log',
-      metadataJson: { runtime: 'native' },
-      startedAt: '2026-05-21T05:19:00.000Z',
-      at: '2026-05-21T05:19:00.000Z',
-    })
-
-    expect(invocation).toMatchObject({
-      cwd: '/tmp/worker-native',
-      engineCommand: 'codex',
-      engineId: 'codex',
-      id: 'worker-inv-1',
-      inputRef: 'worker://native/inputs/worker-inv-1',
-      seq: 1,
-      status: 'running',
-      workerId: worker.id,
-    })
-    expect(invocation).not.toHaveProperty('workspaceId')
-    expect(invocation).not.toHaveProperty('sessionId')
-    expect(invocation).not.toHaveProperty('turnId')
-    expect(invocation).not.toHaveProperty('prompt')
-    expect(invocation).not.toHaveProperty('input')
-    expect(listWorkerEngineInvocations(worker.id)).toEqual([invocation])
-    expect(getWorkerEngineInvocation(invocation.id)).toEqual(invocation)
-    expect(nextWorkerEngineInvocationSeq(worker.id)).toBe(2)
-
-    const finished = updateWorkerEngineInvocation({
-      id: invocation.id,
-      status: 'succeeded',
-      exitCode: 0,
-      signal: null,
-      metadataJson: { runtime: 'native', stdoutBytes: 42 },
-      finishedAt: '2026-05-21T05:20:00.000Z',
-      at: '2026-05-21T05:20:00.000Z',
-    })
-
-    expect(finished).toMatchObject({
-      exitCode: 0,
-      finishedAt: '2026-05-21T05:20:00.000Z',
-      metadataJson: { runtime: 'native', stdoutBytes: 42 },
-      signal: null,
-      status: 'succeeded',
-    })
   })
 
   it('persists the worker -> workspace -> session -> turn loop without Host review or lesson rows', () => {
@@ -566,8 +495,6 @@ describe('greenfield local worker session schema', () => {
     expect(explain(`SELECT * FROM workspaces WHERE worker_id = 'worker-hr' ORDER BY updated_at DESC LIMIT 20`)).toContain('workspaces_worker_updated_at_idx')
     expect(explain(`SELECT * FROM sessions WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('sessions_workspace_updated_at_idx')
     expect(explain(`SELECT * FROM engine_invocations WHERE invocation_status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('engine_invocations_status_updated_at_idx')
-    expect(explain(`SELECT * FROM worker_engine_invocations WHERE worker_id = 'worker-hr' ORDER BY seq DESC LIMIT 20`)).toContain('worker_engine_invocations_worker_seq')
-    expect(explain(`SELECT * FROM worker_engine_invocations WHERE status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('worker_engine_invocations_status_updated_at_idx')
     expect(explain(`SELECT * FROM bridge_events WHERE invocation_id = 'inv-1' ORDER BY created_at ASC LIMIT 200`)).toContain('bridge_events_invocation_created_at_idx')
     expect(explain(`SELECT * FROM files WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 50`)).toContain('files_workspace_updated_at_idx')
     expect(explain(`SELECT * FROM soul_apps WHERE status = 'enabled' ORDER BY updated_at DESC LIMIT 50`)).toContain('soul_apps_status_updated_at_idx')
@@ -578,7 +505,6 @@ describe('greenfield local worker session schema', () => {
     expect(workspaces).toBeDefined()
     expect(sessions).toBeDefined()
     expect(engineInvocations).toBeDefined()
-    expect(workerEngineInvocations).toBeDefined()
     expect(bridgeEvents).toBeDefined()
     expect(files).toBeDefined()
     expect(soulApps).toBeDefined()

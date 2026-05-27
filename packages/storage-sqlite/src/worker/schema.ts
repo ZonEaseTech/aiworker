@@ -98,35 +98,6 @@ export const engineInvocations = sqliteTable(
   }),
 )
 
-export const workerEngineInvocations = sqliteTable(
-  'worker_engine_invocations',
-  {
-    id: text('id').primaryKey(),
-    workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
-    seq: integer('seq').notNull(),
-    engineId: text('engine_id').notNull(),
-    engineCommand: text('engine_command'),
-    status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull().default('queued'),
-    cwd: text('cwd').notNull(),
-    inputRef: text('input_ref'),
-    stdoutRef: text('stdout_ref'),
-    stderrRef: text('stderr_ref'),
-    exitCode: integer('exit_code'),
-    signal: text('signal'),
-    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
-    startedAt: text('started_at'),
-    finishedAt: text('finished_at'),
-    createdAt: text('created_at').notNull().$defaultFn(nowIso),
-    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
-  },
-  table => ({
-    engineUpdatedAtIdx: index('worker_engine_invocations_engine_updated_at_idx').on(table.engineId, table.updatedAt),
-    statusUpdatedAtIdx: index('worker_engine_invocations_status_updated_at_idx').on(table.status, table.updatedAt),
-    workerSeqUniqueIdx: uniqueIndex('worker_engine_invocations_worker_seq_unique_idx').on(table.workerId, table.seq),
-    workerUpdatedAtIdx: index('worker_engine_invocations_worker_updated_at_idx').on(table.workerId, table.updatedAt),
-  }),
-)
-
 export const bridgeEvents = sqliteTable(
   'bridge_events',
   {

@@ -10,7 +10,6 @@ import {
   createWorkspace,
   initWorkerDb,
   listSettings,
-  listWorkerEngineInvocations,
   runWorkerMigrations,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
@@ -284,6 +283,18 @@ describe('local daemon API', () => {
     expect(followUpBody.invocation.processState).toBe('not_spawned')
     expect(followUpBody.session.status).toBe('active')
     expect(followUpBody.events.length).toBeGreaterThan(0)
+
+    const brokerRes = await target.request('/api/engine/invocations', {
+      body: JSON.stringify({ input: 'Continue through the broker.', sessionId: session.id }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(brokerRes.status).toBe(201)
+    const brokerBody = await brokerRes.json() as { invocation: { sessionId: string, status: string } }
+    expect(brokerBody.invocation).toMatchObject({
+      sessionId: session.id,
+      status: 'succeeded',
+    })
   })
 
   it('resolves one descriptor workbench mount from locator context only', async () => {
@@ -373,30 +384,6 @@ describe('local daemon API', () => {
     expect(await secretRes.json()).toMatchObject({ error: { code: 'WORKER_OVERLAY_SECRET' } })
   })
 
-  it('runs worker-scoped native engine invocations without session rows', async () => {
-    const target = await app()
-    const worker = await createFreeformWorker(target)
-    const cwd = join(dir, 'native-cwd')
-    mkdirSync(cwd, { recursive: true })
-
-    const res = await target.request(`/api/local/workers/${worker.id}/engine/invocations`, {
-      body: JSON.stringify({
-        args: ['-lc', 'cat >/dev/null; echo native-ok'],
-        cwd,
-        engineCommand: 'bash',
-        engineId: 'codex',
-        input: 'hello',
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(res.status).toBe(201)
-    const body = await res.json() as { invocation: { status: string, workerId: string }, result: { stdout: string } }
-    expect(body.invocation).toMatchObject({ status: 'succeeded', workerId: worker.id })
-    expect(body.result.stdout).toContain('native-ok')
-    expect(listWorkerEngineInvocations(worker.id)).toHaveLength(1)
-  })
-
   it('proxies descriptor-declared app-owned API without exposing Host workbench action routes', async () => {
     const target = await app()
     const appRoot = join(dir, 'api-soul')
@@ -464,7 +451,10 @@ describe('local daemon API', () => {
     const target = await app()
 
     const openapi = await (await target.request('/openapi.json')).json() as { paths: Record<string, unknown> }
+    const localWorkerEngineInvocationPath = ['/api/local/workers', '{workerId}', 'engine/invocations'].join('/')
     expect(Object.keys(openapi.paths)).toContain('/api/sessions/{sessionId}/invocations')
+    expect(Object.keys(openapi.paths)).toContain('/api/engine/invocations')
+    expect(Object.keys(openapi.paths)).not.toContain(localWorkerEngineInvocationPath)
     expect(Object.keys(openapi.paths)).not.toContain('/api/local/apps/{appId}/actions/{actionId}')
 
     const invalidWorker = await target.request('/api/local/workers', {
