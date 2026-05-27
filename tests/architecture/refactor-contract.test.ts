@@ -595,6 +595,24 @@ describe('destructive refactor contract bootstrap', () => {
     expect(source).toContain('currentCapabilities')
   })
 
+  test('WorkerStudio primary capability fixture uses generic descriptor wording instead of person-profile residue', () => {
+    const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const fixtureHeader = source.slice(0, source.indexOf('const themeMediaQuery'))
+    const retiredCapabilitySnippets = [
+      'HR_PERSON_PROFILE',
+      '.person-profile',
+      'person-profile',
+      'Person Profile',
+      'Create a source-backed HR profile snapshot.',
+    ]
+
+    const findings = retiredCapabilitySnippets
+      .filter(snippet => fixtureHeader.includes(snippet))
+      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx fixture header: ${snippet}`)
+
+    expect(findings, 'WorkerStudio positive descriptor fixture should not keep the retired HR person-profile capability').toEqual([])
+  })
+
   test('Web i18n helpers expose capability names instead of template helpers', () => {
     const activeSources = [
       'apps/web/src/features/i18n/index.ts',

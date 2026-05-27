@@ -48,7 +48,7 @@ const HR_SOUL_ID = 'aiworker-demo-people'
 const QA_SOUL_ID = 'aiworker-demo-release'
 const CUSTOM_SOUL_ID = 'aiworker-custom'
 const CUSTOM_TEMPLATE_ID = `${CUSTOM_SOUL_ID}.explore`
-const HR_PERSON_PROFILE = `${HR_SOUL_ID}.person-profile`
+const PEOPLE_CONTEXT_CAPTURE = `${HR_SOUL_ID}.context-capture`
 const HR_LIFECYCLE_NEXT_STEP = `${HR_SOUL_ID}.lifecycle-next-step`
 const HR_CANDIDATE_SCREEN = `${HR_SOUL_ID}.candidate-screen`
 const HR_INTERVIEW_BRIEF = `${HR_SOUL_ID}.interview-brief`
@@ -85,18 +85,18 @@ const workers = [
 ]
 
 const souls = [
-  { defaultCapabilities: [HR_PERSON_PROFILE, HR_PROFILE_UPDATE_PROPOSAL, HR_LIFECYCLE_NEXT_STEP, HR_CANDIDATE_SCREEN, HR_INTERVIEW_BRIEF, HR_ONBOARDING_PLAN, HR_OFFBOARDING_SUMMARY, HR_EVIDENCE_MATRIX, HR_HIRING_RISK], description: 'People operations workspace', id: HR_SOUL_ID, name: 'Demo People', status: 'available' },
+  { defaultCapabilities: [PEOPLE_CONTEXT_CAPTURE, HR_PROFILE_UPDATE_PROPOSAL, HR_LIFECYCLE_NEXT_STEP, HR_CANDIDATE_SCREEN, HR_INTERVIEW_BRIEF, HR_ONBOARDING_PLAN, HR_OFFBOARDING_SUMMARY, HR_EVIDENCE_MATRIX, HR_HIRING_RISK], description: 'People operations workspace', id: HR_SOUL_ID, name: 'Demo People', status: 'available' },
   { defaultCapabilities: ['aiworker-demo-release.release-gate'], description: 'QA workspace', id: QA_SOUL_ID, name: 'Demo Release', status: 'available' },
 ]
 
 const capabilities = [
   {
-    description: 'Create a source-backed HR profile snapshot.',
-    id: HR_PERSON_PROFILE,
-    inputHints: ['Person context', 'Lifecycle stage'],
-    name: 'Person Profile',
-    outputKind: 'person-profile',
-    promptRef: './product/workflows/person-profile/prompt.md',
+    description: 'Capture source context for a workspace item.',
+    id: PEOPLE_CONTEXT_CAPTURE,
+    inputHints: ['Source context', 'Workspace goal'],
+    name: 'Context Capture',
+    outputKind: 'context-capture',
+    promptRef: './product/capabilities/context-capture/prompt.md',
     soulId: HR_SOUL_ID,
   },
   {
