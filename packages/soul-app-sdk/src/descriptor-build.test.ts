@@ -104,6 +104,25 @@ describe('SDK descriptor build conventions', () => {
     expect(readFileSync(join(rootDir, 'dist/engine-assets/mcp/codex/config.toml'), 'utf8')).toContain('literal-test-secret')
   })
 
+  test('redacts secret-like values from SDK validation diagnostics', async () => {
+    const rootDir = await createFreeformSoulFixture()
+    writeFileSync(join(rootDir, 'soul.config.ts'), `throw new Error('token=sk-sdk-config-secret')
+`)
+
+    const result = await validateSoul(rootDir)
+
+    expect(result.status).toBe('invalid')
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'invalid_config',
+        path: 'soul.config.ts',
+      }),
+    ]))
+    const diagnostics = JSON.stringify(result.issues)
+    expect(diagnostics).not.toContain('sk-sdk-config-secret')
+    expect(diagnostics).toContain('[REDACTED]')
+  })
+
   test('validates conventions before Host ever reads Soul source at runtime', async () => {
     const rootDir = await createFreeformSoulFixture()
 

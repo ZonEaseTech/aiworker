@@ -4,6 +4,9 @@ import { basename, join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 
+const SECRET_ASSIGNMENT_RE = /(["']?[\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*["']?\s*[:=]\s*["']?)([^"'\s\n]+)/gi
+const SECRET_VALUE_RE = /\b(Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,})\b/gi
+
 export type SoulBuildStatus = 'built' | 'failed'
 export type SoulValidationStatus = 'invalid' | 'valid'
 
@@ -192,7 +195,7 @@ async function resolveSoul(rootDir: string): Promise<ResolvedSoul & { issues: So
   catch (error) {
     issues.push({
       code: 'invalid_descriptor',
-      message: error instanceof Error ? error.message : 'Generated descriptor is invalid.',
+      message: redactDiagnosticMessage(error instanceof Error ? error.message : 'Generated descriptor is invalid.'),
       path: 'dist/soul.descriptor.json',
     })
   }
@@ -228,7 +231,7 @@ async function loadSoulConfig(rootDir: string, issues: SoulValidationIssue[]): P
   catch (error) {
     issues.push({
       code: 'invalid_config',
-      message: error instanceof Error ? error.message : String(error),
+      message: redactDiagnosticMessage(error instanceof Error ? error.message : String(error)),
       path: 'soul.config.ts',
     })
     return null
@@ -344,6 +347,12 @@ function validateNativeMcp(rootDir: string, target: { file: string, target: stri
       })
     }
   }
+}
+
+function redactDiagnosticMessage(message: string): string {
+  return message
+    .replace(SECRET_ASSIGNMENT_RE, '$1[REDACTED]')
+    .replace(SECRET_VALUE_RE, '[REDACTED]')
 }
 
 function createDescriptor(config: SoulConfig, discovery: SoulDiscovery): SoulDescriptorV1 {

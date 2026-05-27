@@ -1,6 +1,7 @@
 import type { LocalEngineStatus } from '@zonease/aiworker-soul-protocol'
 import { spawnSync } from 'node:child_process'
-import process from 'node:process'
+
+import { sanitizeEngineEnv } from './engine-env'
 
 export interface LocalEngineDefinition {
   command: string
@@ -113,7 +114,7 @@ export function resolveLocalCliEngine(input: {
 }
 
 function commandOutput(command: string, args: string[]): string {
-  const result = spawnSync(command, args, { encoding: 'utf8', env: process.env, timeout: 2500 })
+  const result = spawnSync(command, args, { encoding: 'utf8', env: sanitizeEngineEnv(), timeout: 2500 })
   if (result.status !== 0)
     return ''
   return result.stdout.toString()
