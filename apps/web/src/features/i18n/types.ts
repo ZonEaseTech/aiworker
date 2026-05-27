@@ -266,7 +266,7 @@ export interface StaticMessages {
       capabilitiesTitle: string
       connectorStatus: (connectorId: string, status: string) => string
       connectorsTitle: string
-      disableApp: (name: string) => string
+      archiveApp: (name: string) => string
       disabledConnector: string
       empty: string
       enableApp: (name: string) => string

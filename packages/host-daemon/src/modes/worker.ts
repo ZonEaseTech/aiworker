@@ -275,7 +275,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.post('/api/app-installation/apps/:appId/archive', (c) => {
     const appId = c.req.param('appId')
-    const app = state.host.disableApp(appId)
+    const app = state.host.archiveApp(appId)
     stopMountedSoulAppService(state, appId)
     return c.json({ app, catalog: state.host.listCatalog() })
   })

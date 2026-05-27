@@ -265,7 +265,7 @@ export const de = {
       capabilitiesTitle: 'Capabilities',
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
-      disableApp: name => `${name} deaktivieren`,
+      archiveApp: name => `${name} archivieren`,
       disabledConnector: 'nicht aktiviert',
       empty: 'Keine installierten Soul Apps.',
       enableApp: name => `${name} aktivieren`,

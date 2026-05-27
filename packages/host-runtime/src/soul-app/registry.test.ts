@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { bootstrapOfficialSoulApps } from './official'
 import {
-  disableSoulApp,
+  archiveSoulApp,
   enableSoulApp,
   findHostCapability,
   findHostSoul,
@@ -78,7 +78,7 @@ describe('Host Soul descriptor registry', () => {
     expect(listHostCapabilitiesForSoul('hr')).toEqual([])
   })
 
-  it('installs, enables, projects, healthchecks, and disables a descriptor', async () => {
+  it('installs, enables, projects, healthchecks, and archives a descriptor', async () => {
     const descriptorPath = path.join(dir, 'dist', 'soul.descriptor.json')
     mkdirSync(path.dirname(descriptorPath), { recursive: true })
     writeFileSync(descriptorPath, JSON.stringify(freeformDescriptor))
@@ -123,7 +123,7 @@ describe('Host Soul descriptor registry', () => {
     const checked = runSoulAppHealthcheck(FREEFORM_APP_ID, { hostVersion: '0.19.3' })
     expect(checked.healthMessage).toContain('No Soul App code was executed')
 
-    const disabled = disableSoulApp(FREEFORM_APP_ID, { now: () => '2026-05-12T22:24:00.000Z' })
+    const disabled = archiveSoulApp(FREEFORM_APP_ID, { now: () => '2026-05-12T22:24:00.000Z' })
     expect(disabled.status).toBe('disabled')
     expect(findHostCapability(FREEFORM_DEFAULT)).toBeUndefined()
     expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
@@ -155,7 +155,7 @@ describe('Host Soul descriptor registry', () => {
       [FREEFORM_APP_ID, 'refreshed'],
     ])
 
-    disableSoulApp(FREEFORM_APP_ID, { now: () => '2026-05-13T12:27:00.000Z' })
+    archiveSoulApp(FREEFORM_APP_ID, { now: () => '2026-05-13T12:27:00.000Z' })
     const third = await bootstrapOfficialSoulApps({
       hostVersion: '0.19.3',
       now: () => '2026-05-13T12:28:00.000Z',

@@ -18,7 +18,7 @@ export interface SoulAppProtocolResult {
 }
 
 export interface SoulAppLifecycleProtocol {
-  disable: (context: SoulAppScopedContext) => Promise<SoulAppProtocolResult>
+  archive: (context: SoulAppScopedContext) => Promise<SoulAppProtocolResult>
   enable: (context: SoulAppScopedContext) => Promise<SoulAppProtocolResult>
   healthcheck: (context: SoulAppScopedContext) => Promise<SoulAppProtocolResult>
   install: (context: SoulAppScopedContext) => Promise<SoulAppProtocolResult>

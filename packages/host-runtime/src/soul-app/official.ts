@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { discardLegacySoulMetadata, getSoulApp } from '@zonease/aiworker-storage-sqlite/worker'
 
 import {
-  disableSoulApp,
+  archiveSoulApp,
   enableSoulApp,
   getHostedSoulApp,
   installSoulAppFromPath,
@@ -58,7 +58,7 @@ export async function bootstrapOfficialSoulApps(options: OfficialSoulAppBootstra
     try {
       let app = await installSoulAppFromPath(descriptorPath, options)
       if (wasDisabled) {
-        app = disableSoulApp(definition.id, options)
+        app = archiveSoulApp(definition.id, options)
         results.push({
           action: 'preserved_disabled',
           app,

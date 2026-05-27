@@ -562,7 +562,7 @@ function SoulAppsSettings({
               const soulId = app.soulId || app.projectedSoul?.id || app.appId
               const permissionLabels = app.permissions.map(permissionLabel).filter(isString)
               const busy = busyAppId === app.appId
-              const actionLabel = app.status === 'enabled' ? soulAppsCopy.disableApp(app.name) : soulAppsCopy.enableApp(app.name)
+              const actionLabel = app.status === 'enabled' ? soulAppsCopy.archiveApp(app.name) : soulAppsCopy.enableApp(app.name)
               return (
                 <Card key={app.appId} size="sm" className={app.status === 'enabled' ? undefined : 'opacity-70'}>
                   <CardHeader>

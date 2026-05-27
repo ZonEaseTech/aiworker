@@ -268,7 +268,7 @@ export const en = {
       capabilitiesTitle: 'Capabilities',
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
-      disableApp: name => `Disable ${name}`,
+      archiveApp: name => `Archive ${name}`,
       disabledConnector: 'not enabled',
       empty: 'No installed Soul Apps.',
       enableApp: name => `Enable ${name}`,

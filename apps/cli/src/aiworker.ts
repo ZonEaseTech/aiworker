@@ -1039,7 +1039,7 @@ async function enableAppCommand(id: string): Promise<void> {
 async function archiveAppCommand(id: string): Promise<void> {
   const paths = await ensureDb()
   const host = createHost(paths)
-  printJson({ app: host.disableApp(id), catalog: host.listCatalog() })
+  printJson({ app: host.archiveApp(id), catalog: host.listCatalog() })
 }
 
 async function deleteAppCommand(id: string): Promise<void> {

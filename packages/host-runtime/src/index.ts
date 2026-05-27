@@ -45,8 +45,8 @@ export {
   type OfficialSoulAppDefinition,
 } from './soul-app/official'
 export {
+  archiveSoulApp,
   deleteSoulApp,
-  disableSoulApp,
   enableSoulApp,
   findHostCapability,
   findHostSoul,

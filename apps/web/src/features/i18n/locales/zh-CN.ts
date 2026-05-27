@@ -265,7 +265,7 @@ export const zhCN = {
       capabilitiesTitle: '能力',
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
-      disableApp: name => `停用 ${name}`,
+      archiveApp: name => `归档 ${name}`,
       disabledConnector: '未启用',
       empty: '暂无已安装的 Soul Apps。',
       enableApp: name => `启用 ${name}`,

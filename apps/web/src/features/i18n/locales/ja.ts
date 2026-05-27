@@ -265,7 +265,7 @@ export const ja = {
       capabilitiesTitle: 'Capabilities',
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
-      disableApp: name => `${name} を無効化`,
+      archiveApp: name => `${name} をアーカイブ`,
       disabledConnector: '未有効',
       empty: 'インストール済み Soul Apps はありません。',
       enableApp: name => `${name} を有効化`,

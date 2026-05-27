@@ -20,8 +20,8 @@ import {
   discardOfficialSoulAppLegacyMetadata,
 } from '../soul-app/official'
 import {
+  archiveSoulApp,
   deleteSoulApp,
-  disableSoulApp,
   enableSoulApp,
   findHostCapability,
   findHostSoul,
@@ -115,8 +115,8 @@ export class HostRuntime {
     return enableSoulApp(appId, this.registryContext())
   }
 
-  disableApp(appId: string): HostedSoulApp {
-    return disableSoulApp(appId, this.registryContext())
+  archiveApp(appId: string): HostedSoulApp {
+    return archiveSoulApp(appId, this.registryContext())
   }
 
   deleteApp(appId: string): HostedSoulApp {

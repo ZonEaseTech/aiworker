@@ -455,6 +455,38 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'daemon and Web should expose app archive lifecycle without retired disable aliases').toEqual([])
   })
 
+  test('Host runtime and UI app lifecycle APIs use archive naming internally', () => {
+    const sources = [
+      'apps/cli/src/aiworker.ts',
+      'apps/web/src/features/i18n/types.ts',
+      'apps/web/src/features/i18n/locales/en.ts',
+      'apps/web/src/features/i18n/locales/zh-CN.ts',
+      'apps/web/src/features/i18n/locales/de.ts',
+      'apps/web/src/features/i18n/locales/ja.ts',
+      'apps/web/src/features/settings/components/settings-dialog.tsx',
+      'packages/host-daemon/src/modes/worker.ts',
+      'packages/host-runtime/src/host/runtime.ts',
+      'packages/host-runtime/src/index.ts',
+      'packages/host-runtime/src/soul-app/official.ts',
+      'packages/host-runtime/src/soul-app/registry.ts',
+      'packages/soul-protocol/src/soul-app/protocol.ts',
+    ].map(path => [path, readRepoFile(path)] as const)
+    const forbidden = [
+      'disableApp(',
+      'disableApp:',
+      'disableSoulApp',
+      'disable: (context: SoulAppScopedContext)',
+    ]
+
+    const findings = sources.flatMap(([path, source]) =>
+      forbidden
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`),
+    )
+
+    expect(findings, 'app lifecycle APIs should use archive verbs while registry status may remain disabled').toEqual([])
+  })
+
   test('CLI session start selects a capability without the retired skill option', () => {
     const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
     const cliTests = [

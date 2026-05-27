@@ -123,7 +123,7 @@ export function enableSoulApp(appId: string, context: SoulAppRegistryContext = {
   return hostedSoulAppFromRow(enabled)
 }
 
-export function disableSoulApp(appId: string, context: SoulAppRegistryContext = {}): HostedSoulApp {
+export function archiveSoulApp(appId: string, context: SoulAppRegistryContext = {}): HostedSoulApp {
   const row = requireSoulApp(appId)
   const disabled = updateSoulAppLifecycle({
     id: row.id,
