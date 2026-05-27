@@ -1249,6 +1249,20 @@ describe('destructive refactor contract bootstrap', () => {
     expect(storage).toContain('upsertWorkerConfigValue')
   })
 
+  test('WorkerStudio test harness does not accept legacy overlay write routes', () => {
+    const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const forbidden = [
+      'const requestBody = init?.body ? JSON.parse(String(init.body)) as { assets?: LocalWorkerOverlayAsset[] } : {}',
+      'currentWorkerOverlayAssets = requestBody.assets?.map',
+    ]
+    const findings = forbidden
+      .filter(snippet => workerStudioTest.includes(snippet))
+      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+
+    expect(findings, 'Web tests must fail if WorkerStudio writes through legacy /overlay PUT').toEqual([])
+    expect(workerStudioTest).toContain('/api/workers/people-worker/config/skill-overlay%3Ainterview-brief')
+  })
+
   test('storage legacy discard fixtures use capability wording for custom capability ids', () => {
     const storageTest = readRepoFile('packages/storage-sqlite/src/worker/index.test.ts')
     const forbidden = [

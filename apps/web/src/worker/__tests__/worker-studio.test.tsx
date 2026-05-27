@@ -709,15 +709,6 @@ beforeEach(() => {
     }
     if (requestUrl.pathname.match(/^\/api\/local\/workers\/[^/]+\/overlay$/)) {
       const workerId = requestUrl.pathname.split('/')[4]!
-      if (method === 'PUT') {
-        const requestBody = init?.body ? JSON.parse(String(init.body)) as { assets?: LocalWorkerOverlayAsset[] } : {}
-        currentWorkerOverlayAssets = requestBody.assets?.map(asset => ({
-          ...asset,
-          metadataJson: asset.metadataJson ?? {},
-          source: 'overlay',
-          updatedAt: now,
-        })) ?? []
-      }
       return json({ overlay: { assets: currentWorkerOverlayAssets, workerId } })
     }
     const workerProjectionMatch = requestUrl.pathname.match(/^\/api\/local\/workers\/([^/]+)\/workspaces\/([^/]+)\/projection$/)
