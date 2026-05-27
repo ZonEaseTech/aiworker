@@ -463,10 +463,13 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/host-daemon/src/modes/worker/schemas.ts',
       'packages/host-daemon/src/modes/worker.ts',
       'packages/host-runtime/src/worker/runtime.ts',
+      'packages/storage-sqlite/src/worker/index.ts',
     ].map(path => [path, readRepoFile(path)] as const)
     const forbidden = [
       '--context <text>',
+      'Session context:',
       'session context',
+      'session.context',
       'context?: string',
       'opts.context',
       'context: z.string().optional()',

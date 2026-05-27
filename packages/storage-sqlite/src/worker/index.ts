@@ -315,7 +315,6 @@ export interface CreateSessionInput {
   workspaceId: string
   capabilityId: string
   title: string
-  context?: string
   status?: SessionRow['status']
   metadataJson?: Record<string, unknown>
   startedAt?: string | null
@@ -325,7 +324,6 @@ export interface CreateSessionInput {
 
 export interface UpdateSessionInput {
   id: string
-  context?: string
   status?: SessionRow['status']
   metadataJson?: Record<string, unknown>
   startedAt?: string | null
@@ -639,7 +637,6 @@ export function createSession(input: CreateSessionInput): SessionRow {
     workspaceId: input.workspaceId,
     capabilityId: input.capabilityId,
     title: input.title,
-    context: input.context ?? '',
     status: input.status ?? 'active',
     metadataJson: input.metadataJson ?? {},
     startedAt: input.startedAt ?? now,
@@ -664,7 +661,6 @@ export function updateSession(input: UpdateSessionInput): SessionRow {
   }
   const has = (key: keyof UpdateSessionInput) => Object.hasOwn(input, key)
   getWorkerDb().update(schema.sessions).set({
-    context: input.context ?? existing.context,
     endedAt: has('endedAt') ? input.endedAt ?? null : existing.endedAt,
     metadataJson: input.metadataJson ?? existing.metadataJson,
     startedAt: has('startedAt') ? input.startedAt ?? null : existing.startedAt,

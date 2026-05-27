@@ -122,6 +122,7 @@ describe('greenfield local worker session schema', () => {
       .map(row => row.name)
     expect(sessionColumns).toContain('capability_id')
     expect(sessionColumns).not.toContain('capability_template_id')
+    expect(sessionColumns).not.toContain('context')
   })
 
   it('persists Host Soul App registry lifecycle state', () => {
@@ -406,7 +407,6 @@ describe('greenfield local worker session schema', () => {
       workspaceId: workspace.id,
       capabilityId: 'candidate-screen',
       title: 'Screen candidate',
-      context: 'Review the candidate packet.',
       at: '2026-05-09T01:02:00.000Z',
     })
     expect(listSessions(workspace.id)).toEqual([session])

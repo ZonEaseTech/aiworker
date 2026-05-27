@@ -77,6 +77,7 @@ function forbiddenCurrentSchemaFindings(snapshot: DrizzleSnapshot): string[] {
   ]
   const forbiddenColumnsByTable = new Map<string, string[]>([
     ['engine_invocations', ['prompt', 'turn_id']],
+    ['sessions', ['context']],
     ['worker_overlay_assets', ['content']],
     ['worker_config', ['config_json']],
   ])
@@ -118,6 +119,7 @@ describe('Host DB forbidden domain schema contract', () => {
       ['worker_identity.api_token_enc column', /\bapiTokenEnc\s*:\s*text\(\s*['"`]api_token_enc['"`]/],
       ['engine_invocations.prompt column', /\bprompt\s*:\s*text\(\s*['"`]prompt['"`]/],
       ['engine_invocations.turn_id column', /\bturnId\s*:\s*text\(\s*['"`]turn_id['"`]/],
+      ['sessions.context column', /\bcontext\s*:\s*text\(\s*['"`]context['"`]/],
       ['payload_json column', /\bpayloadJson\s*:\s*text\(\s*['"`]payload_json['"`]/],
       ['worker_overlay_assets.content column', /\bcontent\s*:\s*text\(\s*['"`]content['"`]/],
       ['worker_config.config_json singleton column', /\bconfigJson\s*:\s*text\(\s*['"`]config_json['"`]/],

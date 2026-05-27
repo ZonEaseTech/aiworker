@@ -687,7 +687,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     try {
       return c.json({ session: updateSession({
         id: session.id,
-        context: result.data.context,
         metadataJson: result.data.metadata ? { ...(session.metadataJson ?? {}), ...result.data.metadata } : undefined,
         status: result.data.status,
         title: result.data.title,

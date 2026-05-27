@@ -51,7 +51,6 @@ export const sessions = sqliteTable(
     workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
     capabilityId: text('capability_id').notNull(),
     title: text('title').notNull(),
-    context: text('context').notNull().default(''),
     status: text('status', { enum: ['active', 'archived', 'deleted'] }).notNull().default('active'),
     metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
     startedAt: text('started_at'),
