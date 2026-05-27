@@ -639,6 +639,32 @@ describe('local daemon API', () => {
     await expect(readFile(join(workspace.rootPath, 'business.md'), 'utf8')).resolves.toContain('Keep session workspace file')
   })
 
+  it('archives session metadata and blocks follow-up invocations', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'archive-session-worker')
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    const archiveRes = await target.request(`/api/sessions/${session.id}/archive`, { method: 'POST' })
+
+    expect(archiveRes.status).toBe(200)
+    expect(await archiveRes.json()).toMatchObject({
+      session: { id: session.id, status: 'archived' },
+    })
+
+    const blockedInvocationRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Continue after session archive.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(blockedInvocationRes.status).toBe(400)
+    expect(await blockedInvocationRes.json()).toMatchObject({
+      error: {
+        code: 'SESSION_ARCHIVED',
+        message: `Session ${session.id} is archived and cannot start new work.`,
+      },
+    })
+  })
+
   it('does not expose legacy transient turn read feeds', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)

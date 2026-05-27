@@ -319,7 +319,7 @@ export class LocalWorkerRuntime {
 
   async startInvocation(input: StartLocalInvocationInput): Promise<LocalInvocationStartResult> {
     this.requireActiveWorker()
-    const session = this.requireSession(input.sessionId)
+    const session = this.requireActiveSession(input.sessionId)
     const workspace = this.requireActiveWorkspace(session.workspaceId)
     const sessionEngine = this.resolveSessionEngine(session, input)
     const frozenSessionMetadata = freezeSessionEngineMetadata(session.metadataJson ?? {}, sessionEngine)
@@ -790,6 +790,13 @@ export class LocalWorkerRuntime {
     const session = getSession(id)
     if (!session || session.workerId !== this.workerId)
       throw new Error(`Session not found for worker ${this.workerId}: ${id}`)
+    return session
+  }
+
+  private requireActiveSession(id: string): SessionRow {
+    const session = this.requireSession(id)
+    if (session.status === 'archived')
+      throw AppError.badRequest(`Session ${id} is archived and cannot start new work.`, 'SESSION_ARCHIVED')
     return session
   }
 

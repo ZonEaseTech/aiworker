@@ -236,6 +236,33 @@ describe('LocalWorkerRuntime', () => {
       .toThrow(`Workspace ${workspace.id} is archived and cannot start new work.`)
   })
 
+  it('rejects new work on archived sessions while preserving existing metadata', async () => {
+    const workerRuntime = runtime({
+      async invoke(input) {
+        return { summary: `Should not run ${input.invocationId}` }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Archived Session Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Archived session',
+      metadata: { outputKind: 'freeform' },
+    })
+
+    updateSession({ id: session.id, status: 'archived' })
+
+    await expect(workerRuntime.startInvocation({
+      sessionId: session.id,
+      input: 'Continue archived session work.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    }))
+      .rejects
+      .toThrow(`Session ${session.id} is archived and cannot start new work.`)
+  })
+
   it('runs the workspace session loop from invocation to completion', async () => {
     const workerRuntime = runtime({
       async invoke(input) {
