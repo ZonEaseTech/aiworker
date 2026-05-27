@@ -5,27 +5,27 @@ import { displayCapability, displaySoul, formatStatus, messagesFor } from './ind
 describe('displaySoul/displayCapability 泛化消费 manifest', () => {
   it('displaySoul 返回 descriptor identity 投影值，不暴露 Host domain 字段', () => {
     const soul: VerticalSoul = {
-      id: 'aiworker-hr',
-      name: 'Manifest HR Name',
+      id: 'aiworker-demo-source',
+      name: 'Manifest Demo Name',
       description: 'Manifest desc',
       status: 'available',
       defaultCapabilities: [],
     }
     const copy = displaySoul(soul, 'en')
-    expect(copy.name).toBe('Manifest HR Name')
+    expect(copy.name).toBe('Manifest Demo Name')
     expect(copy.description).toBe('Manifest desc')
     expect('domain' in copy).toBe(false)
   })
 
   it('displayCapability 返回 manifest 投影值且不暴露 Host 不消费的内部字段', () => {
     const capability: WorkspaceCapability = {
-      id: 'aiworker-hr.person-profile',
+      id: 'aiworker-demo-source.context-capture',
       name: 'Manifest Capability',
       description: 'Manifest tdesc',
-      soulId: 'aiworker-hr',
-      outputKind: 'person-profile',
+      soulId: 'aiworker-demo-source',
+      outputKind: 'workspace-note',
       inputHints: ['a'],
-      promptRef: './product/workflows/person-profile/prompt.md',
+      promptRef: './product/capabilities/context-capture/prompt.md',
     }
     const copy = displayCapability(capability, 'en')
     expect(copy.name).toBe('Manifest Capability')

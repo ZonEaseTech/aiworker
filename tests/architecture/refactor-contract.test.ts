@@ -591,6 +591,21 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'Web i18n helpers should describe capabilities instead of retired template helpers').toEqual([])
   })
 
+  test('Web i18n display tests use generic descriptor fixtures instead of retired HR identity', () => {
+    const source = readRepoFile('apps/web/src/features/i18n/display.test.ts')
+    const retiredFixtureSnippets = [
+      'aiworker-hr',
+      'Manifest HR',
+      'person-profile',
+    ]
+
+    const findings = retiredFixtureSnippets
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `apps/web/src/features/i18n/display.test.ts: ${snippet}`)
+
+    expect(findings, 'Web i18n display tests should prove generic descriptor projection without old HR/person fixtures').toEqual([])
+  })
+
   test('Web shell copy schema uses capability keys for startable units', () => {
     const activeSources = [
       'apps/web/src/features/i18n/types.ts',
