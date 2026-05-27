@@ -140,6 +140,13 @@ requireIncludes('docs/runtime.md', [
   'execution/process state belongs to engine_invocations',
   'POST /api/sessions/:sessionId/invocations',
   'B+ structured native engine bridge',
+  'Host orchestrates projection; engine-projection executes projection; SDK and protocol define projection inputs.',
+  'Runtime skills, MCP, and entry-file CRUD',
+  'ENGINE_SESSION_REF_MISSING',
+  'ENGINE_CANCEL_FAILED',
+  'PROJECTION_RECEIPT_STALE',
+  'Allowed bridge event classes',
+  'Delayed hard kill must never terminate a newer invocation.',
   'Author-owned native MCP files may contain literal secrets',
 ])
 

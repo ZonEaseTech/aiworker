@@ -93,10 +93,43 @@ Bridge events are generic observations. They must not encode Soul domain verdict
 such as review approved, release failed, candidate created, artifact accepted, or
 business confirmed.
 
+Failure codes are platform-level and stable enough for tests and diagnostics.
+Required codes include `ENGINE_SESSION_REF_MISSING`, `ENGINE_CANCEL_FAILED`,
+`PROJECTION_RECEIPT_MISSING`, `PROJECTION_RECEIPT_STALE`,
+`WORKSPACE_LOCATOR_MISSING`, `WORKSPACE_ROOT_MISSING`, and
+`BRIDGE_REDACTION_FAILED`.
+
+Allowed bridge event classes are generic invocation and process observations:
+
+```text
+invocation.started
+invocation.progress
+invocation.output.delta
+invocation.output.snapshot
+invocation.tool.observed
+invocation.usage.observed
+invocation.warning
+invocation.error
+invocation.completed
+invocation.cancelled
+process.started
+process.exited
+process.lost
+```
+
+Cancel targets an invocation id. The bridge sends adapter-level protocol cancel
+when supported, then soft interrupt, then process-group termination after the
+grace period. Delayed hard kill must never terminate a newer invocation.
+
 ## Projection
 
+Host orchestrates projection; engine-projection executes projection; SDK and protocol define projection inputs.
+
 `packages/engine-projection` materializes engine-facing files from descriptor
-asset refs and worker-scoped configuration overlays.
+asset refs and worker-scoped configuration overlays. Host runtime calls it
+because Host owns worker, workspace locator, session, selected engine, worker
+configuration, and filesystem root facts. Host does not define skill format, MCP
+semantics, or domain files.
 
 Projection owns:
 
@@ -109,6 +142,22 @@ Projection owns:
 
 Projection cleanup removes receipt-owned files only. Workspace business files
 remain Soul/user-owned.
+
+## Runtime skills, MCP, and entry-file CRUD
+
+Runtime skills, MCP, and entry-file CRUD is a first-class runtime chain.
+
+- CLI, Web, or app-owned UI requests an SDK-standard worker configuration
+  action.
+- Host validates and stores worker-scoped overlay records.
+- Worker-scoped overlay records live in Host metadata; projected file contents do not.
+- `engine-projection` materializes descriptor assets plus overlays for one
+  selected engine target.
+- Projection writes a receipt for cleanup, freshness, and diagnostics.
+
+Workspace assets are single-source. Skills are single-source by default with
+explicit engine override only when necessary. MCP uses one native file per
+engine target, such as Codex `config.toml` and Claude Code `.mcp.json`.
 
 ## Secrets And Redaction
 

@@ -162,6 +162,21 @@ describe('destructive refactor contract bootstrap', () => {
     expect(runtime).toContain('POST /api/sessions/:sessionId/invocations')
   })
 
+  test('runtime doc promotes projection, assets CRUD, and bridge hard rules', () => {
+    const runtime = readRepoFile('docs/runtime.md')
+
+    expect(runtime).toContain('Host orchestrates projection; engine-projection executes projection; SDK and protocol define projection inputs.')
+    expect(runtime).toContain('Runtime skills, MCP, and entry-file CRUD')
+    expect(runtime).toContain('Worker-scoped overlay records live in Host metadata; projected file contents do not.')
+    expect(runtime).toContain('ENGINE_SESSION_REF_MISSING')
+    expect(runtime).toContain('ENGINE_CANCEL_FAILED')
+    expect(runtime).toContain('PROJECTION_RECEIPT_STALE')
+    expect(runtime).toContain('Allowed bridge event classes')
+    expect(runtime).toContain('invocation.tool.observed')
+    expect(runtime).toContain('process.lost')
+    expect(runtime).toContain('Delayed hard kill must never terminate a newer invocation.')
+  })
+
   test('worker-scoped engine invocation storage and APIs stay removed from current surfaces', () => {
     const currentSources = [
       'packages/storage-sqlite/src/worker/schema.ts',
