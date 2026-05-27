@@ -21,7 +21,7 @@
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '@zonease/aiworker-host-daemon' build && bun run --filter '@zonease/aiworker-web' build && bun run --filter '@zonease/aiworker-cli' build:bundle",
     "web:e2e:capture-mounted-evidence": "bun apps/web/scripts/capture-mounted-evidence.ts",
-    "test:contracts": "bun test tests/architecture",
+    "test:contracts": "bun test tests/architecture scripts/check-soul-app-boundaries.test.ts",
     "test:protocol": "bun run --filter '@zonease/aiworker-soul-protocol' test",
     "test:cli": "bun run --filter '@zonease/aiworker-freeform' build && bun test apps/cli/src/aiworker.test.ts apps/cli/src/freeform-golden-path.test.ts --timeout=30000",
     "test:browser:freeform": "bun run --filter '@zonease/aiworker-freeform' build && bun run --filter '@zonease/aiworker-web' build && bun tests/browser/freeform-cli-golden-path.spec.ts && bun tests/browser/freeform-mounted-workbench.spec.ts",

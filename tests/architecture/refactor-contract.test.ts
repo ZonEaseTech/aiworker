@@ -1090,6 +1090,16 @@ describe('destructive refactor contract bootstrap', () => {
     }
   })
 
+  test('contract gate runs Host and Soul import boundary tests', () => {
+    const rootPackage = JSON.parse(readRepoFile('package.json')) as {
+      scripts?: Record<string, string>
+    }
+    const contractScript = rootPackage.scripts?.['test:contracts'] ?? ''
+
+    expect(contractScript).toContain('tests/architecture')
+    expect(contractScript).toContain('scripts/check-soul-app-boundaries.test.ts')
+  })
+
   test('package guardrails reject broad replacement buckets', () => {
     expect(existsSync(join(repoRoot, 'packages/core-v2'))).toBe(false)
     expect(existsSync(join(repoRoot, 'packages/shared-v2'))).toBe(false)

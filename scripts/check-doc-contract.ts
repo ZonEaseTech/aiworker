@@ -209,8 +209,11 @@ const packageJson = JSON.parse(read('package.json')) as {
 }
 if (!packageJson.workspaces?.includes('souls/*'))
   issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
-if (packageJson.scripts?.['test:contracts'] !== 'bun test tests/architecture')
+const testContractsScript = packageJson.scripts?.['test:contracts'] ?? ''
+if (!testContractsScript.includes('bun test tests/architecture'))
   issues.push({ file: 'package.json', message: 'test:contracts must run the refactor contract test' })
+if (!testContractsScript.includes('scripts/check-soul-app-boundaries.test.ts'))
+  issues.push({ file: 'package.json', message: 'test:contracts must run the Host/Soul import boundary test' })
 if (packageJson.scripts?.['test:protocol'] !== 'bun run --filter \'@zonease/aiworker-soul-protocol\' test')
   issues.push({ file: 'package.json', message: 'test:protocol must run the soul-protocol package test' })
 const testCliScript = packageJson.scripts?.['test:cli'] ?? ''

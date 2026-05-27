@@ -80,6 +80,12 @@ packages/host-daemon/src/
   shared/middleware/error-handler.test.ts
 ```
 
+Boundary guard tests:
+
+```text
+scripts/check-soul-app-boundaries.test.ts
+```
+
 CLI and browser tests:
 
 ```text
