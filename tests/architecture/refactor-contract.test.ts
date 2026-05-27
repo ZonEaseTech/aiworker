@@ -1033,6 +1033,26 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'storage fixtures should not name custom capabilities as templates').toEqual([])
   })
 
+  test('storage worker tests use generic non-legacy worker fixtures instead of retired HR worker ids', () => {
+    const storageTest = readRepoFile('packages/storage-sqlite/src/worker/index.test.ts')
+      .replace(/ {2}it\('discards legacy[\s\S]*?\n {2}\}\)/, '')
+      .replace(/ {2}it\('repairs legacy[\s\S]*?\n {2}\}\)/, '')
+    const retiredWorkerSnippets = [
+      'worker-hr',
+      'soulId: \'hr\'',
+      'name: \'HR\'',
+      'HR Recruiting',
+      'HR Talent',
+      '/tmp/hr',
+    ]
+
+    const findings = retiredWorkerSnippets
+      .filter(snippet => storageTest.includes(snippet))
+      .map(snippet => `packages/storage-sqlite/src/worker/index.test.ts: ${snippet}`)
+
+    expect(findings, 'storage tests should use generic worker fixtures except explicit legacy migration cases').toEqual([])
+  })
+
   test('CLI follow-up command surface uses session invocation language only', () => {
     const cli = readRepoFile('apps/cli/src/aiworker.ts')
     const forbidden = [

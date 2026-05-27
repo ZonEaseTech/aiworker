@@ -365,13 +365,13 @@ describe('greenfield local worker session schema', () => {
 
   it('persists the worker -> workspace -> session -> invocation loop without Host review or lesson rows', () => {
     const worker = upsertWorker({
-      id: 'worker-hr',
-      soulId: 'hr',
-      name: 'HR',
+      id: 'worker-demo',
+      soulId: 'demo-soul',
+      name: 'Demo',
       defaultEngineId: 'codex',
       at: '2026-05-09T01:00:00.000Z',
     })
-    expect(worker.soulId).toBe('hr')
+    expect(worker.soulId).toBe('demo-soul')
 
     const workspace = createWorkspace({
       id: 'workspace-1',
@@ -583,7 +583,7 @@ describe('greenfield local worker session schema', () => {
   it('filters session events by id in SQL before applying the limit so long sessions keep streaming', () => {
     const worker = upsertWorker({
       id: 'worker-events',
-      soulId: 'hr',
+      soulId: 'demo-soul',
       name: 'Events worker',
       defaultEngineId: 'codex',
       at: '2026-05-23T00:00:00.000Z',
@@ -706,16 +706,16 @@ describe('greenfield local worker session schema', () => {
 
   it('allows multiple workers to bind the same Soul while isolating workspaces by worker', () => {
     const recruiting = upsertWorker({
-      id: 'worker-hr-recruiting',
-      soulId: 'hr',
-      name: 'HR Recruiting',
+      id: 'worker-demo-primary',
+      soulId: 'demo-soul',
+      name: 'Demo Primary',
       defaultEngineId: 'codex',
       at: '2026-05-09T02:00:00.000Z',
     })
     const talentPool = upsertWorker({
-      id: 'worker-hr-talent-pool',
-      soulId: 'hr',
-      name: 'HR Talent Pool',
+      id: 'worker-demo-secondary',
+      soulId: 'demo-soul',
+      name: 'Demo Secondary',
       defaultEngineId: 'codex',
       at: '2026-05-09T02:01:00.000Z',
     })
@@ -724,14 +724,14 @@ describe('greenfield local worker session schema', () => {
       id: 'workspace-recruiting',
       workerId: recruiting.id,
       name: 'Open roles',
-      rootPath: '/tmp/hr-recruiting',
+      rootPath: '/tmp/demo-primary',
       at: '2026-05-09T02:02:00.000Z',
     })
     const talentWorkspace = createWorkspace({
       id: 'workspace-talent-pool',
       workerId: talentPool.id,
       name: 'Talent pool',
-      rootPath: '/tmp/hr-talent-pool',
+      rootPath: '/tmp/demo-secondary',
       at: '2026-05-09T02:03:00.000Z',
     })
 
@@ -770,7 +770,7 @@ describe('greenfield local worker session schema', () => {
 
   it('keeps indexes aligned with the session workspace query paths', () => {
     expect(explain(`SELECT * FROM workers WHERE status = 'active' ORDER BY updated_at DESC LIMIT 20`)).toContain('workers_status_updated_at_idx')
-    expect(explain(`SELECT * FROM workspaces WHERE worker_id = 'worker-hr' ORDER BY updated_at DESC LIMIT 20`)).toContain('workspaces_worker_updated_at_idx')
+    expect(explain(`SELECT * FROM workspaces WHERE worker_id = 'worker-demo' ORDER BY updated_at DESC LIMIT 20`)).toContain('workspaces_worker_updated_at_idx')
     expect(explain(`SELECT * FROM sessions WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('sessions_workspace_updated_at_idx')
     expect(explain(`SELECT * FROM engine_invocations WHERE invocation_status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('engine_invocations_status_updated_at_idx')
     expect(explain(`SELECT * FROM bridge_events WHERE invocation_id = 'inv-1' ORDER BY created_at ASC LIMIT 200`)).toContain('bridge_events_invocation_created_at_idx')
