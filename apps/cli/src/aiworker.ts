@@ -30,6 +30,7 @@ import {
   closeWorkerDb,
   deleteSession,
   deleteWorker,
+  deleteWorkerConfigValue,
   deleteWorkspace,
   getSession,
   getWorker,
@@ -894,6 +895,22 @@ async function setWorkerConfigCommand(workerId: string, configKey: string, opts:
   printJson({ config: workerConfigValueResponse(saved, false) })
 }
 
+async function archiveWorkerConfigCommand(workerId: string, configKey: string): Promise<void> {
+  await ensureDb()
+  const worker = requireWorkerRow(workerId)
+  const key = requireText(configKey, 'config key')
+  deleteWorkerConfigValue(worker.id, key)
+  printJson({
+    config: {
+      archived: true,
+      configKey: key,
+      updatedAt: new Date().toISOString(),
+      value: null,
+      workerId: worker.id,
+    },
+  })
+}
+
 function workerConfigResponse(workerId: string) {
   return {
     values: listWorkerConfigValues(workerId).map(row => workerConfigValueResponse(row, false)),
@@ -1519,6 +1536,7 @@ function registerCommands(): void {
     .option('--options-json <json>', 'non-secret operational options JSON object')
     .option('--disabled', 'store the config envelope as disabled')
     .action(setWorkerConfigCommand)
+  cli.command('worker config archive <workerId> <configKey>', 'archive a worker-scoped Host config envelope').action(archiveWorkerConfigCommand)
   cli.command('worker archive <id>', 'archive a local Soul worker').action(archiveWorkerCommand)
   cli.command('worker delete <id>', 'hard-delete local Soul worker metadata').action(deleteWorkerCommand)
   cli.command('capability list', 'list app-declared capabilities').option('--soul <id>', 'Soul id').action(async (opts: { soul?: string }) => {
@@ -1597,7 +1615,7 @@ const FULL_COMMAND_INDEX = [
   'daemon start|foreground|status|stop|restart|logs|check',
   'app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke',
   'soul list',
-  'worker create|list|show|select|config list|config set|archive|delete',
+  'worker create|list|show|select|config list|config set|config archive|archive|delete',
   'workspace create|list|show|archive|delete',
   'session start|invoke|list|show|archive|delete',
   'capability list',

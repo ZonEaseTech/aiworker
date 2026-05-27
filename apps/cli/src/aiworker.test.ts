@@ -212,7 +212,7 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('dev')
     expect(output).toContain('daemon start|foreground|status|stop|restart|logs|check')
     expect(output).toContain('app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke')
-    expect(output).toContain('worker create|list|show|select|config list|config set|archive|delete')
+    expect(output).toContain('worker create|list|show|select|config list|config set|config archive|archive|delete')
     expect(output).toContain('capability list')
     expect(output).toContain('files list|show')
     expect(output).not.toContain('compatibility inspection')
@@ -394,6 +394,46 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('workspace create|list|archive|delete')
     expect(output).toContain('session start|invoke|list|show|archive|delete')
     expect(output).not.toContain('run start')
+  })
+
+  it('archives worker config envelopes through CLI commands', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('worker', 'create', '--id', 'config-worker', '--name', 'Config Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv(
+      'worker',
+      'config',
+      'set',
+      'config-worker',
+      'engine-selection',
+      '--kind',
+      'engine-selection',
+      '--target',
+      'codex',
+      '--source-ref',
+      'descriptor://configuration/default-engine',
+      '--options-json',
+      '{"profileRef":"secretref:codex/default-profile"}',
+    ))).toBe(0)
+    expect((JSON.parse(output) as { config: { value: { updatedBy: string } } }).config.value.updatedBy).toBe('cli')
+    output = ''
+
+    expect(await runCli(argv('worker', 'config', 'archive', 'config-worker', 'engine-selection'))).toBe(0)
+    expect(JSON.parse(output)).toMatchObject({
+      config: {
+        archived: true,
+        configKey: 'engine-selection',
+        value: null,
+        workerId: 'config-worker',
+      },
+    })
+    output = ''
+
+    expect(await runCli(argv('worker', 'config', 'list', 'config-worker'))).toBe(0)
+    expect((JSON.parse(output) as { config: { values: unknown[] } }).config.values).toEqual([])
   })
 
   it('archives and deletes Host lifecycle records through CLI commands', async () => {
