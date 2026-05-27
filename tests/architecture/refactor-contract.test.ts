@@ -850,6 +850,20 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'fs-layout must describe only Host filesystem responsibilities').toEqual([])
   })
 
+  test('fs-layout worker path tests use generic worker fixture ids', () => {
+    const source = readRepoFile('packages/fs-layout/src/index.test.ts')
+    const forbidden = [
+      'hr-worker',
+      'qa-worker',
+    ]
+
+    const findings = forbidden
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `packages/fs-layout/src/index.test.ts: ${snippet}`)
+
+    expect(findings, 'fs-layout tests should not encode retired HR/QA worker fixture ids').toEqual([])
+  })
+
   test('public package entrypoints no longer export legacy turn runtime surfaces', () => {
     const hostRuntimeEntrypoint = readRepoFile('packages/host-runtime/src/index.ts')
     const soulProtocolEntrypoint = readRepoFile('packages/soul-protocol/src/index.ts')
