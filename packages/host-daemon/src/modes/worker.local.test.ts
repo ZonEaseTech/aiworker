@@ -1311,6 +1311,26 @@ describe('local daemon API', () => {
       workerId: worker.id,
     })
 
+    const archiveRes = await target.request(`/api/workers/${worker.id}/config/engine-selection/archive`, {
+      method: 'POST',
+    })
+    expect(archiveRes.status).toBe(200)
+    expect(await archiveRes.json()).toMatchObject({
+      config: {
+        archived: true,
+        configKey: 'engine-selection',
+        value: null,
+        workerId: worker.id,
+      },
+    })
+
+    const afterArchiveListRes = await target.request(`/api/workers/${worker.id}/config`)
+    expect(afterArchiveListRes.status).toBe(200)
+    expect(await afterArchiveListRes.json()).toMatchObject({
+      config: { values: [] },
+      workerId: worker.id,
+    })
+
     const malformedRes = await target.request(`/api/workers/${worker.id}/config/malformed`, {
       body: JSON.stringify({
         enabled: 'yes',
