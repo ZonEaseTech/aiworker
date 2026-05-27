@@ -348,6 +348,40 @@ describe('local daemon API', () => {
     expect(localSessionBody.invocations.map(invocation => invocation.sessionId)).toEqual([session.id, session.id])
   })
 
+  it('surfaces missing projection receipt failures through the session invocation API', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'missing-receipt-invocation-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    await rm(join(workspace.rootPath, '.aiworker', 'projections.json'), { force: true })
+
+    const followUpRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Continue without a projection receipt.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(followUpRes.status).toBe(201)
+    const body = await followUpRes.json() as {
+      events: Array<{ payloadJson: Record<string, unknown>, type: string }>
+      invocation: { failureCode: string, processState: string, sessionId: string, status: string }
+      session: { id: string, status: string }
+    }
+    expect(body.invocation).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_MISSING',
+      processState: 'not_spawned',
+      sessionId: session.id,
+      status: 'failed',
+    })
+    expect(body.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(body.events.at(-1)).toMatchObject({
+      payloadJson: {
+        failureCode: 'PROJECTION_RECEIPT_MISSING',
+        invocationId: expect.any(String),
+      },
+      type: 'error',
+    })
+  })
+
   it('creates session input as the first session-level invocation without transient turns', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'freeform-first-invocation')
