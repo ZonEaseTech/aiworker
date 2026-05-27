@@ -1757,6 +1757,62 @@ describe('local daemon API', () => {
     await expect(readFile(join(workspace.rootPath, '.mcp.json'), 'utf8')).resolves.toContain('mcpServers')
   })
 
+  it('refreshes projection assets from canonical worker config overlay routes', async () => {
+    const officialAppsRoot = join(dir, 'official-config-overlay-apps')
+    writePackagedFreeform(officialAppsRoot)
+    mkdirSync(join(officialAppsRoot, FREEFORM_APP_ID, 'dist', 'engine-assets', 'skills', 'freeform-overlay'), { recursive: true })
+    writeFileSync(join(officialAppsRoot, FREEFORM_APP_ID, 'dist', 'engine-assets', 'skills', 'freeform-overlay', 'SKILL.md'), '# Broker Config Overlay Session\n')
+    const target = await app(undefined, undefined, officialAppsRoot)
+    const worker = await createFreeformWorker(target, 'config-overlay-projection-worker')
+    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'Config Overlay Projection Workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspace = (await workspaceRes.json() as { workspace: { id: string, rootPath: string } }).workspace
+    await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'), 'utf8'))
+      .resolves
+      .toContain('Packaged Freeform Session')
+
+    const configRes = await target.request(`/api/workers/${worker.id}/config/skill-overlay%3Afreeform-session`, {
+      body: JSON.stringify({
+        checksum: 'sha256:broker-config-overlay',
+        enabled: true,
+        kind: 'skill-overlay',
+        options: {
+          replaces: 'descriptor://engine/skills/freeform-session',
+        },
+        sourceRef: 'descriptor://engine/skills/freeform-overlay',
+        target: 'codex',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(configRes.status).toBe(200)
+
+    const refreshRes = await target.request('/api/projections/codex/refresh', {
+      body: JSON.stringify({ workerId: worker.id, workspaceId: workspace.id }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(refreshRes.status).toBe(200)
+    expect(await refreshRes.json()).toMatchObject({
+      projection: {
+        receipt: {
+          projections: expect.arrayContaining([
+            expect.objectContaining({ engineTarget: 'codex', kind: 'native-skill', source: 'worker-overlay', target: '.agents/skills/aiworker-freeform-freeform-session/SKILL.md' }),
+          ]),
+        },
+      },
+      target: 'codex',
+    })
+    await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'), 'utf8'))
+      .resolves
+      .toContain('Broker Config Overlay Session')
+  })
+
   it('proxies descriptor-declared app-owned API with sanitized locator context and no Host action routes', async () => {
     const target = await app()
     const appRoot = join(dir, 'api-soul')
