@@ -63,7 +63,7 @@ describe('creation dialogs', () => {
         placeholder="Release name"
         submitting={false}
         workerLabel="Demo People"
-        workspaceTitle="Hiring Workspace"
+        workspaceTitle="Demo Workspace"
         onClose={vi.fn()}
         onSubmit={event => event.preventDefault()}
         onTitleChange={vi.fn()}

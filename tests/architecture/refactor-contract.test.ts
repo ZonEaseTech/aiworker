@@ -581,6 +581,7 @@ describe('destructive refactor contract bootstrap', () => {
       'aiworker-qa',
       'AIWorker HR',
       'AIWorker QA',
+      'Hiring Workspace',
     ]
 
     const findings = retiredFixtureSnippets
