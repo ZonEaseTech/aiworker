@@ -8,5 +8,5 @@ export function createWorker(input: {
   name: string
   soulId: string
 }): Promise<{ worker: LocalWorker }> {
-  return localJson('/api/local/workers', { method: 'POST', body: JSON.stringify(input) })
+  return localJson('/api/workers', { method: 'POST', body: JSON.stringify(input) })
 }

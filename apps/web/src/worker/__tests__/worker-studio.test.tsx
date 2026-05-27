@@ -650,7 +650,7 @@ beforeEach(() => {
         headers: { 'content-type': 'text/html; charset=utf-8' },
       })
     }
-    if (url.endsWith('/api/local/workers') && method === 'POST') {
+    if (url.endsWith('/api/workers') && method === 'POST') {
       const body = init?.body ? JSON.parse(String(init.body)) as { name: string, soulId: string } : { name: 'Created worker', soulId: HR_SOUL_ID }
       const created = {
         createdAt: now,
@@ -1727,7 +1727,7 @@ describe('worker studio', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create worker' }))
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers', expect.objectContaining({
+      expect(fetch).toHaveBeenCalledWith('/api/workers', expect.objectContaining({
         body: expect.stringContaining(`"soulId":"${QA_SOUL_ID}"`),
         method: 'POST',
       }))
@@ -1769,7 +1769,7 @@ describe('worker studio', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create worker' }))
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers', expect.objectContaining({
+      expect(fetch).toHaveBeenCalledWith('/api/workers', expect.objectContaining({
         body: expect.stringContaining(`"soulId":"${HR_SOUL_ID}"`),
         method: 'POST',
       }))
