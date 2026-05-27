@@ -98,6 +98,29 @@ Only end a long-running refactor goal when all of these are true:
 - `docs:check`, `test:contracts`, and the relevant slice verification pass;
 - no P0/P1 architecture drift remains.
 
+## Phase Commit Contract
+
+Use commits as the durable progress anchor for long-running goal work.
+
+After a development slice is verified, create a conventional commit before the
+final response unless the user explicitly forbids commits or the commit would be
+unsafe.
+
+- Commit after verification, not before it.
+- For code changes, run code-review-graph before committing unless it is
+  unavailable; if skipped, state the reason.
+- Stage only files changed by the current slice. Never use `git add .`.
+- Preserve unrelated user or concurrent-session changes as unstaged.
+- Do not commit failing tests, unverified code, incomplete boundary changes, or
+  mixed unrelated work.
+- Use conventional commit messages, for example `feat(scope): ...`,
+  `fix(scope): ...`, `test(scope): ...`, `docs(scope): ...`, or
+  `chore(scope): ...`.
+- Docs-only, instruction-only, and pure formatting slices may commit after
+  light verification such as `git diff --check`.
+- If a slice cannot be committed, keep the goal active and report the exact
+  reason, remaining uncommitted files, and the next recovery step.
+
 ## Preflight
 
 Keep preflight short. Read `AGENTS.md` and the five canonical docs, then check:
@@ -173,6 +196,7 @@ For the selected slice:
 9. Do not add temporary design docs under `docs/`; use `tmp/`.
 10. For code changes, run code-review-graph before final response. For docs-only,
    instruction-only, or pure formatting changes, state that it was skipped.
+11. Apply the Phase Commit Contract before the final response.
 
 ## Minimum Completion
 
@@ -195,6 +219,7 @@ Superpowers/Subagents: workflows used and sidecars dispatched, or why none.
 Changes: files changed.
 Verification: commands and results.
 Drift: found/fixed/none.
+Commit: commit hash, or skipped with reason.
 Next: one next slice.
 ```
 
