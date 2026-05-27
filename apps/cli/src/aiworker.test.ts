@@ -436,6 +436,35 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { config: { values: unknown[] } }).config.values).toEqual([])
   })
 
+  it('rejects literal secrets in worker config envelopes through CLI commands', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('worker', 'create', '--id', 'secret-config-worker', '--name', 'Secret Config Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    errorOutput = ''
+
+    expect(await runCli(argv(
+      'worker',
+      'config',
+      'set',
+      'secret-config-worker',
+      'mcp-overlay',
+      '--kind',
+      'mcp-overlay',
+      '--target',
+      'codex',
+      '--options-json',
+      '{"apiKey":"sk-cli-worker-config-secret"}',
+    ))).toBe(1)
+    expect(errorOutput).toContain('Literal secrets are not allowed in Host metadata')
+    expect(errorOutput).not.toContain('sk-cli-worker-config-secret')
+
+    output = ''
+    expect(await runCli(argv('worker', 'config', 'list', 'secret-config-worker'))).toBe(0)
+    expect((JSON.parse(output) as { config: { values: unknown[] } }).config.values).toEqual([])
+  })
+
   it('archives and deletes Host lifecycle records through CLI commands', async () => {
     await writeFakeCodexCommand()
 
