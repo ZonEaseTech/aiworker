@@ -203,6 +203,33 @@ describe('destructive refactor contract bootstrap', () => {
     expect(authoring).toContain('author-owned native MCP files may contain literal secrets')
   })
 
+  test('protocol doc promotes broker methods and worker config envelope details', () => {
+    const protocol = readRepoFile('docs/protocol.md')
+
+    for (const route of [
+      'GET    /api/app-installation/apps/:appId',
+      'POST   /api/app-installation/apps/:appId/archive',
+      'DELETE /api/app-installation/apps/:appId',
+      'PATCH  /api/workers/:workerId',
+      'POST   /api/workers/:workerId/archive',
+      'DELETE /api/workers/:workerId',
+      'PATCH  /api/workers/:workerId/config/:configKey',
+      'POST   /api/workers/:workerId/config/:configKey/archive',
+      'PATCH  /api/workspace-locators/:workspaceId',
+      'POST   /api/workspace-locators/:workspaceId/archive',
+      'DELETE /api/workspace-locators/:workspaceId',
+      'PATCH  /api/sessions/:sessionId',
+      'POST   /api/sessions/:sessionId/archive',
+      'DELETE /api/sessions/:sessionId',
+    ]) {
+      expect(protocol).toContain(route)
+    }
+
+    expect(protocol).toContain('configValueJson envelope')
+    expect(protocol).toContain('kind, target, enabled, sourceRef, checksum, options, updatedAt, updatedBy')
+    expect(protocol).toContain('Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.')
+  })
+
   test('Freeform v1 has CLI-first and browser golden path gates', () => {
     const rootPackage = JSON.parse(readRepoFile('package.json')) as {
       scripts?: Record<string, string>
