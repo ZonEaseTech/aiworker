@@ -199,8 +199,8 @@ describe('aiworker local CLI', () => {
 
     expect(output).toContain('aiworker operator commands')
     expect(output).toContain('daemon start|stop|restart|status|logs')
-    expect(output).toContain('app list|show|install|enable|bootstrap')
-    expect(output).toContain('worker create|list|select')
+    expect(output).toContain('app list|show|install|enable|archive|delete|bootstrap')
+    expect(output).toContain('worker create|list|select|archive|delete')
     expect(output).not.toContain('dev')
     expect(output).not.toContain('app create|validate|smoke')
 
@@ -210,7 +210,7 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('aiworker command index')
     expect(output).toContain('dev')
     expect(output).toContain('daemon start|foreground|status|stop|restart|logs|check')
-    expect(output).toContain('app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke')
+    expect(output).toContain('app list|show|install|enable|archive|disable|delete|doctor|permissions|bootstrap|create|validate|smoke')
     expect(output).toContain('capability list')
     expect(output).toContain('files list|show')
     expect(output).not.toContain('compatibility inspection')
@@ -386,11 +386,71 @@ describe('aiworker local CLI', () => {
 
     expect(await runCli(argv('commands'))).toBe(0)
     expect(output).toContain('daemon start|stop|restart|status|logs')
-    expect(output).toContain('app list|show|install|enable|bootstrap')
-    expect(output).toContain('worker create|list|select')
-    expect(output).toContain('workspace create|list')
-    expect(output).toContain('session start|invoke|list|show')
+    expect(output).toContain('app list|show|install|enable|archive|delete|bootstrap')
+    expect(output).toContain('worker create|list|select|archive|delete')
+    expect(output).toContain('workspace create|list|archive|delete')
+    expect(output).toContain('session start|invoke|list|show|archive|delete')
     expect(output).not.toContain('run start')
+  })
+
+  it('archives and deletes Host lifecycle records through CLI commands', async () => {
+    await writeFakeCodexCommand()
+
+    expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'lifecycle-worker', '--name', 'Lifecycle Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'Lifecycle Workspace', '--type', 'freeform', '--worker', 'lifecycle-worker'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
+    await writeFile(path.join(workspace.rootPath, 'app-owned.txt'), 'owned by the workspace\n')
+    output = ''
+
+    expect(await runCli(argv(
+      'session',
+      'start',
+      '--worker',
+      'lifecycle-worker',
+      '--workspace',
+      workspace.id,
+      '--capability',
+      FREEFORM_CAPABILITY_ID,
+      '--title',
+      'Lifecycle Session',
+      '--input',
+      'Create lifecycle evidence.',
+    ))).toBe(0)
+    const session = (JSON.parse(output) as { session: { id: string } }).session
+    output = ''
+
+    expect(await runCli(argv('session', 'archive', session.id))).toBe(0)
+    expect((JSON.parse(output) as { session: { status: string } }).session.status).toBe('archived')
+    output = ''
+    expect(await runCli(argv('session', 'delete', session.id))).toBe(0)
+    expect((JSON.parse(output) as { deleted: boolean, session: { id: string } })).toMatchObject({ deleted: true, session: { id: session.id } })
+    output = ''
+
+    expect(await runCli(argv('workspace', 'archive', workspace.id))).toBe(0)
+    expect((JSON.parse(output) as { workspace: { status: string } }).workspace.status).toBe('archived')
+    output = ''
+    expect(await runCli(argv('workspace', 'delete', workspace.id))).toBe(0)
+    expect((JSON.parse(output) as { deleted: boolean, workspace: { id: string } })).toMatchObject({ deleted: true, workspace: { id: workspace.id } })
+    await expect(stat(path.join(workspace.rootPath, 'app-owned.txt'))).resolves.toMatchObject({ size: 23 })
+    output = ''
+
+    expect(await runCli(argv('worker', 'archive', 'lifecycle-worker'))).toBe(0)
+    expect((JSON.parse(output) as { worker: { status: string } }).worker.status).toBe('disabled')
+    output = ''
+    expect(await runCli(argv('worker', 'delete', 'lifecycle-worker'))).toBe(0)
+    expect((JSON.parse(output) as { deleted: boolean, worker: { id: string } })).toMatchObject({ deleted: true, worker: { id: 'lifecycle-worker' } })
+    output = ''
+
+    expect(await runCli(argv('app', 'archive', FREEFORM_APP_ID))).toBe(0)
+    expect((JSON.parse(output) as { app: { status: string } }).app.status).toBe('disabled')
+    output = ''
+    expect(await runCli(argv('app', 'delete', FREEFORM_APP_ID))).toBe(0)
+    expect((JSON.parse(output) as { app: { appId: string, status: string } }).app).toMatchObject({ appId: FREEFORM_APP_ID, status: 'disabled' })
   })
 
   it('materializes app-authored capability assets for the first session invocation', async () => {

@@ -28,6 +28,9 @@ import {
 } from '@zonease/aiworker-soul-protocol'
 import {
   closeWorkerDb,
+  deleteSession,
+  deleteWorker,
+  deleteWorkspace,
   getSession,
   getWorker,
   getWorkspace,
@@ -41,6 +44,8 @@ import {
   runWorkerMigrations,
   setSetting,
   updateSession,
+  updateWorkspace,
+  upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import cac from 'cac'
 
@@ -260,6 +265,13 @@ async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerR
 async function ensureAllWorkers(): Promise<WorkerRow[]> {
   await ensureDb()
   return listWorkers()
+}
+
+function requireWorkerRow(workerId: string): WorkerRow {
+  const worker = getWorker(workerId)
+  if (!worker)
+    throw new Error(`worker not found: ${workerId}`)
+  return worker
 }
 
 function printJson(value: unknown): void {
@@ -800,6 +812,37 @@ async function selectWorkerCommand(id: string): Promise<void> {
   printJson({ setting: setSetting('selected-worker', { workerId: worker.id }) })
 }
 
+async function archiveWorkerCommand(id: string): Promise<void> {
+  await ensureDb()
+  const existing = getWorker(id)
+  if (!existing)
+    throw new Error(`worker not found: ${id}`)
+  const worker = upsertWorker({
+    defaultEngineId: existing.defaultEngineId,
+    id: existing.id,
+    metadataJson: existing.metadataJson,
+    name: existing.name,
+    soulId: existing.soulId,
+    status: 'disabled',
+  })
+  printJson({ worker })
+}
+
+async function deleteWorkerCommand(id: string): Promise<void> {
+  const paths = await ensureDb()
+  const worker = getWorker(id)
+  if (!worker)
+    throw new Error(`worker not found: ${id}`)
+  const runtime = createHost(paths).createRuntimeForWorker(worker)
+  const cleanedTargets: string[] = []
+  for (const workspace of listWorkspaces(worker.id, Number.MAX_SAFE_INTEGER)) {
+    const cleanup = await runtime.cleanupWorkspaceProjectionReceipt(workspace.id)
+    cleanedTargets.push(...cleanup?.cleanedTargets ?? [])
+  }
+  deleteWorker(worker.id)
+  printJson({ cleanedTargets, deleted: true, worker })
+}
+
 async function createWorkspaceCommand(opts: { name?: string, type?: string, worker?: string }): Promise<void> {
   const runtime = await ensureRuntime({ worker: opts.worker })
   printJson({ workspace: await runtime.createWorkspace({ name: requireText(opts.name, 'name'), type: opts.type }) })
@@ -813,6 +856,29 @@ async function listWorkspaceCommand(opts: { worker?: string }): Promise<void> {
   }
   const runtime = await ensureRuntime({ worker: opts.worker })
   printJson({ workspaces: listWorkspaces(runtime.workerId) })
+}
+
+async function archiveWorkspaceCommand(id: string): Promise<void> {
+  await ensureDb()
+  const workspace = getWorkspace(id)
+  if (!workspace)
+    throw new Error(`workspace not found: ${id}`)
+  printJson({ workspace: updateWorkspace({ id: workspace.id, status: 'archived' }) })
+}
+
+async function deleteWorkspaceCommand(id: string): Promise<void> {
+  const paths = await ensureDb()
+  const workspace = getWorkspace(id)
+  if (!workspace)
+    throw new Error(`workspace not found: ${id}`)
+  const runtime = createHost(paths).createRuntimeForWorker(requireWorkerRow(workspace.workerId))
+  const cleanup = await runtime.cleanupWorkspaceProjectionReceipt(workspace.id)
+  deleteWorkspace(workspace.id)
+  printJson({
+    cleanedTargets: cleanup?.cleanedTargets ?? [],
+    deleted: true,
+    workspace,
+  })
 }
 
 async function startSessionCommand(opts: { capability?: string, context?: string, engine?: string, input?: string, model?: string, reasoning?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
@@ -913,6 +979,23 @@ async function showSession(id: string): Promise<void> {
   })
 }
 
+async function archiveSessionCommand(id: string): Promise<void> {
+  await ensureDb()
+  const session = getSession(id)
+  if (!session)
+    throw new Error(`session not found: ${id}`)
+  printJson({ session: updateSession({ id: session.id, status: 'archived' }) })
+}
+
+async function deleteSessionCommand(id: string): Promise<void> {
+  await ensureDb()
+  const session = getSession(id)
+  if (!session)
+    throw new Error(`session not found: ${id}`)
+  deleteSession(session.id)
+  printJson({ deleted: true, session })
+}
+
 async function listWorkspaceFiles(opts: { workspace?: string }): Promise<void> {
   await ensureAllWorkers()
   printJson({ files: listFiles(opts.workspace) })
@@ -958,6 +1041,11 @@ async function disableAppCommand(id: string): Promise<void> {
   const paths = await ensureDb()
   const host = createHost(paths)
   printJson({ app: host.disableApp(id), catalog: host.listCatalog() })
+}
+
+async function deleteAppCommand(id: string): Promise<void> {
+  const paths = await ensureDb()
+  printJson({ app: createHost(paths).deleteApp(id) })
 }
 
 async function doctorAppCommand(id: string): Promise<void> {
@@ -1329,7 +1417,9 @@ function registerCommands(): void {
   cli.command('app show <id>', 'show one installed Host Soul App').action(showAppCommand)
   cli.command('app install <descriptor>', 'install a local Soul descriptor').action(installAppCommand)
   cli.command('app enable <id>', 'enable an installed Soul App').action(enableAppCommand)
+  cli.command('app archive <id>', 'archive an installed Soul App').action(disableAppCommand)
   cli.command('app disable <id>', 'disable an installed Soul App').action(disableAppCommand)
+  cli.command('app delete <id>', 'hard-delete installed Soul App metadata').action(deleteAppCommand)
   cli.command('app doctor <id>', 'run static Soul App healthcheck').action(doctorAppCommand)
   cli.command('app permissions <id>', 'show declared Soul App permissions').action(permissionsAppCommand)
   cli.command('app bootstrap <scope>', 'install and enable first-party Soul Apps by shortcut scope').action(bootstrapAppCommand)
@@ -1351,6 +1441,8 @@ function registerCommands(): void {
     printJson({ worker: getWorker(id) })
   })
   cli.command('worker select <id>', 'select default local Soul worker').action(selectWorkerCommand)
+  cli.command('worker archive <id>', 'archive a local Soul worker').action(archiveWorkerCommand)
+  cli.command('worker delete <id>', 'hard-delete local Soul worker metadata').action(deleteWorkerCommand)
   cli.command('capability list', 'list app-declared capabilities').option('--soul <id>', 'Soul id').action(async (opts: { soul?: string }) => {
     const paths = await ensureDb()
     const capabilities = createHost(paths).listCapabilities(opts.soul)
@@ -1363,6 +1455,8 @@ function registerCommands(): void {
     await ensureDb()
     printJson({ workspace: getWorkspace(id) })
   })
+  cli.command('workspace archive <id>', 'archive a workspace locator').action(archiveWorkspaceCommand)
+  cli.command('workspace delete <id>', 'hard-delete workspace locator metadata').action(deleteWorkspaceCommand)
 
   cli.command('session start', 'create a workspace session and first invocation')
     .option('--workspace <id>', 'workspace id')
@@ -1378,6 +1472,8 @@ function registerCommands(): void {
   cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').action(listSessionCommand)
   cli.command('session show <id>', 'show one session').action(showSession)
   cli.command('session invoke', 'create a session-level engine invocation').option('--session <id>', 'session id').option('--input <text>', 'invocation input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(invokeSessionCommand)
+  cli.command('session archive <id>', 'archive an AIWorker session').action(archiveSessionCommand)
+  cli.command('session delete <id>', 'hard-delete AIWorker session metadata').action(deleteSessionCommand)
 
   cli.command('files list', 'list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
   cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)
@@ -1408,10 +1504,10 @@ const OPERATOR_COMMAND_INDEX = [
   'open',
   'doctor',
   'update',
-  'app list|show|install|enable|bootstrap',
-  'worker create|list|select',
-  'workspace create|list',
-  'session start|invoke|list|show',
+  'app list|show|install|enable|archive|delete|bootstrap',
+  'worker create|list|select|archive|delete',
+  'workspace create|list|archive|delete',
+  'session start|invoke|list|show|archive|delete',
   '',
   'Run `aiworker commands --all` for authoring and diagnostics commands.',
 ]
@@ -1422,11 +1518,11 @@ const FULL_COMMAND_INDEX = [
   'dev',
   'update|upgrade',
   'daemon start|foreground|status|stop|restart|logs|check',
-  'app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke',
+  'app list|show|install|enable|archive|disable|delete|doctor|permissions|bootstrap|create|validate|smoke',
   'soul list',
-  'worker create|list|show|select',
-  'workspace create|list|show',
-  'session start|invoke|list|show',
+  'worker create|list|show|select|archive|delete',
+  'workspace create|list|show|archive|delete',
+  'session start|invoke|list|show|archive|delete',
   'capability list',
   'files list|show',
   'settings list',
