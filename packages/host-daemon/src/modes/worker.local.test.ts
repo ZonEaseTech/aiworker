@@ -1036,6 +1036,60 @@ describe('local daemon API', () => {
     })
   })
 
+  it('blocks new invocations for existing workers when the Soul App is archived', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'archive-app-invocation-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+
+    const archiveRes = await target.request(`/api/app-installation/apps/${FREEFORM_APP_ID}/archive`, { method: 'POST' })
+    expect(archiveRes.status).toBe(200)
+
+    const sessionCreateRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+      body: JSON.stringify({
+        capabilityId: FREEFORM_CAPABILITY,
+        title: 'Blocked after Soul App archive',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(sessionCreateRes.status).toBe(409)
+    expect(await sessionCreateRes.json()).toMatchObject({
+      error: {
+        code: 'SOUL_APP_DISABLED',
+        message: `Soul App is not enabled: ${FREEFORM_APP_ID}`,
+      },
+    })
+
+    const followUpRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Continue after Soul App archive.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(followUpRes.status).toBe(409)
+    expect(await followUpRes.json()).toMatchObject({
+      error: {
+        code: 'SOUL_APP_DISABLED',
+        message: `Soul App is not enabled: ${FREEFORM_APP_ID}`,
+      },
+    })
+
+    const lowLevelRes = await target.request('/api/engine/invocations', {
+      body: JSON.stringify({
+        input: 'Continue through low-level broker after Soul App archive.',
+        sessionId: session.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(lowLevelRes.status).toBe(409)
+    expect(await lowLevelRes.json()).toMatchObject({
+      error: {
+        code: 'SOUL_APP_DISABLED',
+        message: `Soul App is not enabled: ${FREEFORM_APP_ID}`,
+      },
+    })
+  })
+
   it('saves worker overlay assets as metadata and rejects literal secrets', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)

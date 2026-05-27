@@ -1253,6 +1253,16 @@ function requireCapabilityForWorker(state: LocalDaemonState, workerId: string, c
   return state.host.requireCapabilityForWorker(workerId, capabilityId)
 }
 
+function unavailableSoulAppResponse(c: Context, state: LocalDaemonState, workerId: string): Response | null {
+  const worker = requireWorker(workerId)
+  const app = state.host.getApp(worker.soulId)
+  if (!app)
+    return notFound(c, 'Soul App')
+  if (app.status !== 'enabled')
+    return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
+  return null
+}
+
 function enrichCapabilityMetadata(_state: LocalDaemonState, _workerId: string, _capabilityId: string, metadata: Record<string, unknown>): Record<string, unknown> {
   return metadata
 }
@@ -1755,6 +1765,9 @@ async function createWorkspaceSessionFromBody(
     title: string
   },
 ): Promise<Response> {
+  const unavailableApp = unavailableSoulAppResponse(c, state, workspace.workerId)
+  if (unavailableApp)
+    return unavailableApp
   const runtime = requireRuntime(state, workspace.workerId)
   const capability = requireCapabilityForWorker(state, workspace.workerId, body.capabilityId)
   const settings = loadLocalSettings()
@@ -1816,6 +1829,9 @@ async function createSessionInvocationFromBody(
   },
   invalidCode: string,
 ): Promise<Response> {
+  const unavailableApp = unavailableSoulAppResponse(c, state, session.workerId)
+  if (unavailableApp)
+    return unavailableApp
   const runtime = requireRuntime(state, session.workerId)
   const settings = loadLocalSettings()
   const engineCommand = typeof body.engineCommand === 'string' && body.engineCommand.trim().length > 0 ? body.engineCommand.trim() : null
