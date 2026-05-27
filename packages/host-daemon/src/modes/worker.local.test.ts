@@ -507,6 +507,19 @@ describe('local daemon API', () => {
     expect(await getRes.json()).toMatchObject({
       worker: { id: worker.id, status: 'archived' },
     })
+
+    const blockedWorkspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'Blocked Archived Worker Workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(blockedWorkspaceRes.status).toBe(400)
+    expect(await blockedWorkspaceRes.json()).toMatchObject({
+      error: {
+        code: 'WORKER_ARCHIVED',
+        message: `Worker ${worker.id} is archived and cannot start new work.`,
+      },
+    })
   })
 
   it('hard-deletes worker metadata after cleaning receipt-owned workspace projections', async () => {

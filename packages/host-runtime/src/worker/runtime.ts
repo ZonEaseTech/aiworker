@@ -21,6 +21,7 @@ import {
   projectEngineAssetsToWorkspace,
   resolveSoulAppEngineTarget,
 } from '@zonease/aiworker-engine-projection'
+import { AppError } from '@zonease/aiworker-soul-protocol'
 import {
   appendSessionEvent,
   createEngineInvocation,
@@ -200,7 +201,7 @@ export class LocalWorkerRuntime {
   }
 
   async createWorkspace(input: CreateLocalWorkspaceInput): Promise<WorkspaceRow> {
-    this.requireWorker()
+    this.requireActiveWorker()
     const id = randomUUID()
     const rootPath = input.rootPath ? path.resolve(input.rootPath) : path.join(this.#workspacesRoot, id)
     const layout = await this.prepareWorkspaceLayout({
@@ -295,6 +296,7 @@ export class LocalWorkerRuntime {
   }
 
   async createSession(input: CreateLocalSessionInput): Promise<SessionRow> {
+    this.requireActiveWorker()
     const workspace = this.requireWorkspace(input.workspaceId)
     const sessionMetadata = freezeSessionEngineMetadata(input.metadata ?? {}, this.requestedSessionEngine(input.metadata ?? {}))
     const session = createSession({
@@ -314,6 +316,7 @@ export class LocalWorkerRuntime {
   }
 
   async startInvocation(input: StartLocalInvocationInput): Promise<LocalInvocationStartResult> {
+    this.requireActiveWorker()
     const session = this.requireSession(input.sessionId)
     const workspace = this.requireWorkspace(session.workspaceId)
     const sessionEngine = this.resolveSessionEngine(session, input)
@@ -760,6 +763,13 @@ export class LocalWorkerRuntime {
     const worker = getWorker(this.workerId)
     if (!worker)
       throw new Error('Local Soul worker is not initialized.')
+    return worker
+  }
+
+  private requireActiveWorker(): WorkerRow {
+    const worker = this.requireWorker()
+    if (worker.status === 'archived')
+      throw AppError.badRequest(`Worker ${this.workerId} is archived and cannot start new work.`, 'WORKER_ARCHIVED')
     return worker
   }
 

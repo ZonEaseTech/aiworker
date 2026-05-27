@@ -443,6 +443,10 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('worker', 'archive', 'lifecycle-worker'))).toBe(0)
     expect((JSON.parse(output) as { worker: { status: string } }).worker.status).toBe('archived')
     output = ''
+    errorOutput = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'Blocked Workspace', '--type', 'freeform', '--worker', 'lifecycle-worker'))).toBe(1)
+    expect(errorOutput).toContain('Worker lifecycle-worker is archived and cannot start new work.')
+    errorOutput = ''
     expect(await runCli(argv('worker', 'delete', 'lifecycle-worker'))).toBe(0)
     expect((JSON.parse(output) as { deleted: boolean, worker: { id: string } })).toMatchObject({ deleted: true, worker: { id: 'lifecycle-worker' } })
     output = ''
