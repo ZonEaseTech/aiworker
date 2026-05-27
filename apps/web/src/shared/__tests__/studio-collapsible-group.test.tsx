@@ -10,47 +10,47 @@ describe('studio collapsible group', () => {
     render(
       <CollapsibleGroup
         collapsed={false}
-        controlsId="profile-section-candidates"
-        description="Active pipeline"
-        drawerProps={{ 'aria-label': 'Candidate profiles', 'role': 'group' }}
+        controlsId="item-section-primary"
+        description="Active group"
+        drawerProps={{ 'aria-label': 'Primary items', 'role': 'group' }}
         meta={0}
-        title="Candidates"
-        toggleAriaLabel="Candidates 0"
+        title="Items"
+        toggleAriaLabel="Items 0"
         onToggle={onToggle}
       >
-        <button type="button">Open profile</button>
+        <button type="button">Open item</button>
       </CollapsibleGroup>,
     )
 
-    const toggle = screen.getByRole('button', { name: 'Candidates 0' })
+    const toggle = screen.getByRole('button', { name: 'Items 0' })
     expect(toggle.getAttribute('data-slot')).toBe('collapsible-trigger')
     expect(toggle.getAttribute('data-variant')).toBe('ghost')
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(toggle.getAttribute('aria-controls')).toBe('profile-section-candidates')
-    expect(within(toggle).getByText('Candidates').getAttribute('data-slot')).toBe('item-title')
-    expect(within(toggle).queryByText('Active pipeline')).toBeNull()
+    expect(toggle.getAttribute('aria-controls')).toBe('item-section-primary')
+    expect(within(toggle).getByText('Items').getAttribute('data-slot')).toBe('item-title')
+    expect(within(toggle).queryByText('Active group')).toBeNull()
     expect(within(toggle).getByText('0').getAttribute('data-slot')).toBe('badge')
 
-    const drawer = screen.getByRole('group', { name: 'Candidate profiles' })
-    expect(drawer.id).toBe('profile-section-candidates')
+    const drawer = screen.getByRole('group', { name: 'Primary items' })
+    expect(drawer.id).toBe('item-section-primary')
     expect(drawer.getAttribute('data-slot')).toBe('collapsible-content')
-    expect(within(drawer).getByRole('button', { name: 'Open profile' })).toBeTruthy()
+    expect(within(drawer).getByRole('button', { name: 'Open item' })).toBeTruthy()
   })
 
   it('keeps the drawer hidden when collapsed', () => {
     render(
       <CollapsibleGroup
         collapsed
-        controlsId="worker-soul-group-qa"
-        title="QA (1)"
-        toggleAriaLabel="QA (1) quality-assurance"
+        controlsId="worker-soul-group-demo"
+        title="Demo Group (1)"
+        toggleAriaLabel="Demo Group (1) sample-capability"
         onToggle={() => {}}
       >
-        <button type="button">QA</button>
+        <button type="button">Demo</button>
       </CollapsibleGroup>,
     )
 
-    expect(screen.getByRole('button', { name: 'QA (1) quality-assurance' }).getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByRole('button', { name: 'Demo Group (1) sample-capability' }).getAttribute('aria-expanded')).toBe('false')
     const drawer = document.querySelector('[data-slot="collapsible-content"]')
     expect(drawer?.getAttribute('data-state')).toBe('closed')
     expect(drawer?.hasAttribute('hidden')).toBe(true)
@@ -61,13 +61,13 @@ describe('studio collapsible group', () => {
       <StudioMainFrame
         actions={<button type="button">Refresh</button>}
         kicker="Current workspace"
-        title="Hiring Workspace"
+        title="Demo Workspace"
       >
         <p>Workspace content</p>
       </StudioMainFrame>,
     )
 
-    const heading = screen.getByRole('heading', { name: 'Hiring Workspace' })
+    const heading = screen.getByRole('heading', { name: 'Demo Workspace' })
     expect(heading.getAttribute('data-slot')).toBe('item-title')
     expect(heading.closest('[data-slot="item"]')).toBeTruthy()
     expect(screen.getByText('Current workspace').getAttribute('data-slot')).toBe('item-description')

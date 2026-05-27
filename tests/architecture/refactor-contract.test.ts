@@ -1397,6 +1397,25 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'shared composer primitives should not preserve retired capability-template terminology').toEqual([])
   })
 
+  test('shared Web studio shell tests use neutral fixture copy', () => {
+    const source = readRepoFile('apps/web/src/shared/__tests__/studio-collapsible-group.test.tsx')
+    const forbidden = [
+      'profile-section-candidates',
+      'Candidates',
+      'Candidate profiles',
+      'Open profile',
+      'QA (1)',
+      'quality-assurance',
+      'Hiring Workspace',
+    ]
+
+    const findings = forbidden
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `apps/web/src/shared/__tests__/studio-collapsible-group.test.tsx: ${snippet}`)
+
+    expect(findings, 'shared studio shell tests should use neutral fixture labels').toEqual([])
+  })
+
   test('active protocol/runtime/daemon/web/test source no longer exposes legacy Soul manifest compatibility', () => {
     const activeSources = [
       ...listSourceFiles('packages'),
