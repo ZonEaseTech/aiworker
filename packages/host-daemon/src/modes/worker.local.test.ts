@@ -1458,7 +1458,7 @@ describe('local daemon API', () => {
     await expect(readFile(join(workspace.rootPath, '.mcp.json'), 'utf8')).resolves.toContain('mcpServers')
   })
 
-  it('proxies descriptor-declared app-owned API without exposing Host workbench action routes', async () => {
+  it('proxies descriptor-declared app-owned API with sanitized locator context and no Host action routes', async () => {
     const target = await app()
     const appRoot = join(dir, 'api-soul')
     writeApiSoul(appRoot)
@@ -1471,7 +1471,7 @@ describe('local daemon API', () => {
     expect(installRes.status).toBe(201)
     expect((await target.request('/api/local/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
 
-    const proxied = await target.request('/api/apps/demo-api/echo?workerId=worker-1', {
+    const proxied = await target.request('/api/apps/demo-api/echo?workerId=worker-1&workspaceId=workspace-1&sessionId=session-1', {
       headers: {
         'authorization': 'Bearer client-forwarded-credential',
         'cookie': 'sid=client-cookie',
@@ -1487,6 +1487,13 @@ describe('local daemon API', () => {
       hasCookie: false,
       hasForwardedFor: false,
       hasMountToken: true,
+      mountContext: {
+        appId: 'demo-api',
+        routePrefix: '/api/apps/demo-api',
+        sessionId: 'session-1',
+        workerId: 'worker-1',
+        workspaceId: 'workspace-1',
+      },
       path: '/echo',
     })
 
@@ -1814,13 +1821,18 @@ const server = Bun.serve({
     const url = new URL(request.url)
     if (url.pathname === '/health')
       return Response.json({ status: 'ok' })
-    if (url.pathname === '/' || url.pathname === '/echo')
+    if (url.pathname === '/' || url.pathname === '/echo') {
+      const mountContextHeader = request.headers.get('x-aiworker-mount-context')
+      const mountContext = mountContextHeader
+        ? JSON.parse(Buffer.from(mountContextHeader, 'base64url').toString('utf8'))
+        : null
       return Response.json({
         appId: 'demo-api',
         hasAuthorization: Boolean(request.headers.get('authorization')),
         hasCookie: Boolean(request.headers.get('cookie')),
         hasForwardedFor: Boolean(request.headers.get('x-forwarded-for')),
         hasMountToken: Boolean(request.headers.get('x-aiworker-mount-token')),
+        mountContext,
         path: url.pathname,
       }, {
         headers: {
@@ -1829,6 +1841,7 @@ const server = Bun.serve({
           'x-aiworker-mount-token': request.headers.get('x-aiworker-mount-token') ?? '',
         },
       })
+    }
     return Response.json({ path: url.pathname }, { status: 404 })
   },
   hostname: '127.0.0.1',
