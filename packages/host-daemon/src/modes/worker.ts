@@ -26,7 +26,6 @@ import {
 import {
   AppError,
   isLoopbackMountedServiceUrl,
-  localWorkerOverlaySaveSchema,
 } from '@zonease/aiworker-soul-protocol'
 import {
   closeWorkerDb,
@@ -51,7 +50,6 @@ import {
   updateWorkspace,
   upsertWorker,
   upsertWorkerConfigValue,
-  upsertWorkerOverlayAssets,
 } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { errorHandler } from '../shared/middleware/error-handler'
@@ -448,48 +446,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.get('/api/local/workers/:workerId/overlay', async (c) => {
     const worker = requireWorker(c.req.param('workerId'))
-    return c.json({ overlay: await workerOverlayResponse(state, worker.id) })
-  })
-  app.put('/api/local/workers/:workerId/overlay', async (c) => {
-    const worker = requireWorker(c.req.param('workerId'))
-    const parsed = localWorkerOverlaySaveSchema.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) {
-      return c.json({
-        error: {
-          code: 'WORKER_OVERLAY_INVALID',
-          message: 'Invalid worker overlay payload.',
-          issues: parsed.error.issues,
-        },
-      }, 400)
-    }
-    if (parsed.data.assets.some(asset => containsLiteralSecret(JSON.stringify(asset)))) {
-      return c.json({
-        error: {
-          code: 'WORKER_OVERLAY_SECRET',
-          message: 'literal secrets are not allowed in worker overlay descriptors',
-        },
-      }, 422)
-    }
-    try {
-      upsertWorkerOverlayAssets(worker.id, parsed.data.assets.map(asset => ({
-        checksum: asset.checksum,
-        enabled: asset.enabled,
-        id: asset.id,
-        kind: asset.kind,
-        metadataJson: asset.metadataJson,
-        optionsJson: asset.optionsJson,
-        sourceRef: asset.sourceRef,
-        target: asset.target,
-      })))
-    }
-    catch (error) {
-      return c.json({
-        error: {
-          code: 'WORKER_OVERLAY_INVALID',
-          message: error instanceof Error ? error.message : 'Invalid worker overlay metadata.',
-        },
-      }, 422)
-    }
     return c.json({ overlay: await workerOverlayResponse(state, worker.id) })
   })
   app.get('/api/local/workers/:workerId/capabilities', (c) => {

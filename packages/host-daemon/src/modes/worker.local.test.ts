@@ -1213,11 +1213,19 @@ describe('local daemon API', () => {
     })
   })
 
-  it('saves worker overlay assets as metadata and rejects literal secrets', async () => {
+  it('keeps legacy worker overlay route read-only while writes use worker config values', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)
 
-    const saveRes = await target.request(`/api/local/workers/${worker.id}/overlay`, {
+    const readRes = await target.request(`/api/local/workers/${worker.id}/overlay`)
+    expect(readRes.status).toBe(200)
+    expect(await readRes.json()).toMatchObject({
+      overlay: {
+        workerId: worker.id,
+      },
+    })
+
+    const legacyWriteRes = await target.request(`/api/local/workers/${worker.id}/overlay`, {
       body: JSON.stringify({
         assets: [{
           checksum: 'sha256:brief',
@@ -1231,47 +1239,7 @@ describe('local daemon API', () => {
       headers: { 'content-type': 'application/json' },
       method: 'PUT',
     })
-    expect(saveRes.status).toBe(200)
-    expect(await saveRes.json()).toMatchObject({
-      overlay: {
-        assets: expect.arrayContaining([expect.objectContaining({ id: 'brief', source: 'overlay' })]),
-      },
-    })
-
-    const secretRes = await target.request(`/api/local/workers/${worker.id}/overlay`, {
-      body: JSON.stringify({
-        assets: [{
-          enabled: true,
-          id: 'secret',
-          kind: 'mcp-client',
-          sourceRef: 'sk-abcdefghijklmnop',
-          target: 'codex',
-        }],
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'PUT',
-    })
-    expect(secretRes.status).toBe(422)
-    expect(await secretRes.json()).toMatchObject({ error: { code: 'WORKER_OVERLAY_SECRET' } })
-
-    const embeddedMcpFileRes = await target.request(`/api/local/workers/${worker.id}/overlay`, {
-      body: JSON.stringify({
-        assets: [{
-          enabled: true,
-          id: 'embedded-mcp-file',
-          kind: 'mcp-client',
-          optionsJson: {
-            configToml: '[mcp_servers.local]\ncommand = "node"\n',
-          },
-          sourceRef: 'descriptor://engine/mcp/codex',
-          target: 'codex',
-        }],
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'PUT',
-    })
-    expect(embeddedMcpFileRes.status).toBe(422)
-    expect(await embeddedMcpFileRes.json()).toMatchObject({ error: { code: 'WORKER_OVERLAY_INVALID' } })
+    expect(legacyWriteRes.status).toBe(404)
   })
 
   it('rejects full native MCP files in broker metadata write bodies', async () => {

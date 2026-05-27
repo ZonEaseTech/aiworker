@@ -14,7 +14,7 @@ import { localSettingsConfigSchema, localWorkerConfigValueInputSchema, localWork
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
-// parseJsonBody helper — 镜像 PUT /overlay 的 safeParse+400 模式
+// parseJsonBody helper — standard broker write routes use safeParse+400.
 // ---------------------------------------------------------------------------
 
 export async function parseJsonBody<T extends z.ZodTypeAny>(
