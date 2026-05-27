@@ -18,7 +18,7 @@ const responses: Record<string, unknown> = {
       soulId: 'aiworker-freeform',
     }],
   },
-  '/api/local/workers': { workers: [] },
+  '/api/workers': { workers: [] },
   '/api/local/workspaces': { workspaces: [] },
 }
 
@@ -46,7 +46,9 @@ describe('loadLocalWorkspaceData', () => {
     expect(paths).not.toContain('/api/local/turns')
     expect(paths).not.toContain('/api/local/templates')
     expect(paths).not.toContain('/api/local/apps')
+    expect(paths).not.toContain('/api/local/workers')
     expect(paths).toContain('/api/app-installation/apps')
+    expect(paths).toContain('/api/workers')
     expect(paths).toContain('/api/local/capabilities')
     expect(data).not.toHaveProperty('turns')
     expect(data).not.toHaveProperty('templates')

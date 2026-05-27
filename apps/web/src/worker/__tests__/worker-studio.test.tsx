@@ -665,7 +665,7 @@ beforeEach(() => {
       currentWorkers = [created, ...currentWorkers]
       return json({ worker: created }, 201)
     }
-    if (url.endsWith('/api/local/workers'))
+    if (url.endsWith('/api/workers'))
       return json({ workers: currentWorkers })
     const workerConfigMatch = requestUrl.pathname.match(/^\/api\/workers\/([^/]+)\/config\/([^/]+)(?:\/archive)?$/)
     if (workerConfigMatch) {
