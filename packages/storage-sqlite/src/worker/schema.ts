@@ -49,7 +49,7 @@ export const sessions = sqliteTable(
     id: text('id').primaryKey(),
     workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
     workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-    capabilityId: text('capability_template_id').notNull(),
+    capabilityId: text('capability_id').notNull(),
     title: text('title').notNull(),
     context: text('context').notNull().default(''),
     status: text('status', { enum: ['active', 'archived', 'deleted'] }).notNull().default('active'),

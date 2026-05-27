@@ -801,11 +801,12 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'capability-derived session metadata should not be named as native engine skills').toEqual([])
   })
 
-  test('session capability selection uses capabilityId outside the legacy SQLite column name', () => {
+  test('session capability selection uses capabilityId outside historical migrations', () => {
     const protocol = readRepoFile('docs/protocol.md')
     const runtimeDoc = readRepoFile('docs/runtime.md')
     const activeSources = [
       'packages/soul-protocol/src/local-workspace.ts',
+      'packages/storage-sqlite/src/worker/schema.ts',
       'packages/storage-sqlite/src/worker/index.ts',
       'packages/storage-sqlite/src/worker/index.test.ts',
       'packages/host-runtime/src/worker/runtime.ts',
@@ -830,13 +831,18 @@ describe('destructive refactor contract bootstrap', () => {
         .filter(line => !(path === 'packages/host-daemon/src/modes/worker.local.test.ts'
           && (line.includes('rejects legacy session create bodies that still send capabilityTemplateId')
             || line.includes('capabilityTemplateId: FREEFORM_CAPABILITY'))))
+        .filter(line => !(path === 'packages/storage-sqlite/src/worker/index.test.ts'
+          && line.includes('capability_template_id')))
         .join('\n')
-      return source.includes('capabilityTemplateId') ? [`${path}: capabilityTemplateId`] : []
+      return [
+        ...source.includes('capabilityTemplateId') ? [`${path}: capabilityTemplateId`] : [],
+        ...source.includes('capability_template_id') ? [`${path}: capability_template_id`] : [],
+      ]
     })
 
     expect(protocol).toContain('`capabilityId`')
     expect(runtimeDoc).toContain('`capabilityId`')
-    expect(findings, 'current Host-facing session contracts should use capabilityId; only the SQLite column name may stay legacy').toEqual([])
+    expect(findings, 'current Host-facing session contracts and current SQLite schema should use capabilityId; historical migrations may contain the old column only as migration input').toEqual([])
   })
 
   test('Host runtime capability lookup APIs do not expose retired template helper names', () => {

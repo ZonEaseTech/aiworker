@@ -116,6 +116,12 @@ describe('greenfield local worker session schema', () => {
       'workers',
       'workspaces',
     ])
+
+    const sessionColumns = getWorkerDb()
+      .all<{ name: string }>(sql.raw('PRAGMA table_info("sessions")'))
+      .map(row => row.name)
+    expect(sessionColumns).toContain('capability_id')
+    expect(sessionColumns).not.toContain('capability_template_id')
   })
 
   it('persists Host Soul App registry lifecycle state', () => {
@@ -822,6 +828,7 @@ describe('greenfield local worker session schema', () => {
     expect(explain(`SELECT * FROM workers WHERE status = 'active' ORDER BY updated_at DESC LIMIT 20`)).toContain('workers_status_updated_at_idx')
     expect(explain(`SELECT * FROM workspaces WHERE worker_id = 'worker-demo' ORDER BY updated_at DESC LIMIT 20`)).toContain('workspaces_worker_updated_at_idx')
     expect(explain(`SELECT * FROM sessions WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('sessions_workspace_updated_at_idx')
+    expect(explain(`SELECT * FROM sessions WHERE capability_id = 'default' ORDER BY updated_at DESC LIMIT 20`)).toContain('sessions_capability_updated_at_idx')
     expect(explain(`SELECT * FROM engine_invocations WHERE invocation_status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('engine_invocations_status_updated_at_idx')
     expect(explain(`SELECT * FROM bridge_events WHERE invocation_id = 'inv-1' ORDER BY created_at ASC LIMIT 200`)).toContain('bridge_events_invocation_created_at_idx')
     expect(explain(`SELECT * FROM files WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 50`)).toContain('files_workspace_updated_at_idx')

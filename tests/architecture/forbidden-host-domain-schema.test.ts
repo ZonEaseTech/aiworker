@@ -162,6 +162,14 @@ describe('Host DB forbidden domain schema contract', () => {
     expect(findings, 'latest worker snapshot should describe bridge metadata only').toEqual([])
   })
 
+  test('latest session snapshot uses capability_id instead of legacy capability_template_id', () => {
+    const snapshot = latestWorkerSnapshot()
+    const sessionColumns = columnsFor(snapshot, 'sessions')
+
+    expect(sessionColumns).toContain('capability_id')
+    expect(sessionColumns).not.toContain('capability_template_id')
+  })
+
   test('latest worker migration does not introduce forbidden Host-owned prompt/history/content columns', () => {
     const { path, sql } = latestWorkerMigrationSql()
     const rules = [
