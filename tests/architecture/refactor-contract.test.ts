@@ -1429,7 +1429,7 @@ describe('destructive refactor contract bootstrap', () => {
       .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
 
     expect(findings, 'Web tests should model app-owned mounted sessions through sessions/events only').toEqual([])
-    expect(workerStudioTest).toContain('/api/local/sessions')
+    expect(workerStudioTest).toContain('/api/sessions')
     expect(workerStudioTest).toContain('/api/local/events')
   })
 

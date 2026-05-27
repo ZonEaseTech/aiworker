@@ -791,7 +791,7 @@ beforeEach(() => {
       currentEvents = [...currentEvents, { ...eventRecord, id: 2, seq: 1 }]
       return json({ artifacts: [], events: currentEvents, files: [], session: sessionRecord }, 201)
     }
-    if (url.endsWith('/api/local/sessions'))
+    if (url.endsWith('/api/sessions'))
       return json({ sessions: currentSessions })
     if (url.endsWith('/api/local/files'))
       return json({ files: [] })

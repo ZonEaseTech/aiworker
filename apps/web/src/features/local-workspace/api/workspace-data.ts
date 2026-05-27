@@ -17,7 +17,7 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
     localJson<{ souls: VerticalSoul[] }>('/api/local/souls'),
     localJson<{ capabilities: WorkspaceCapability[] }>('/api/local/capabilities'),
     localJson<{ workspaces: LocalWorkspace[] }>('/api/workspace-locators'),
-    localJson<{ sessions: LocalSession[] }>('/api/local/sessions'),
+    localJson<{ sessions: LocalSession[] }>('/api/sessions'),
     localJson<{ settings: LocalSettingsConfig }>('/api/local/settings'),
   ])
   return {

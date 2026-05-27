@@ -4,7 +4,7 @@ import { archiveSoulApp, enableSoulApp, loadLocalWorkspaceData } from './workspa
 const responses: Record<string, unknown> = {
   '/api/app-installation/apps': { apps: [] },
   '/api/local/info': { runtimeVersion: 'test', startedAt: '2026-05-09T00:00:00.000Z', workers: [] },
-  '/api/local/sessions': { sessions: [] },
+  '/api/sessions': { sessions: [] },
   '/api/local/settings': { settings: { language: 'en' } },
   '/api/local/souls': { souls: [] },
   '/api/local/capabilities': {
@@ -48,9 +48,11 @@ describe('loadLocalWorkspaceData', () => {
     expect(paths).not.toContain('/api/local/apps')
     expect(paths).not.toContain('/api/local/workers')
     expect(paths).not.toContain('/api/local/workspaces')
+    expect(paths).not.toContain('/api/local/sessions')
     expect(paths).toContain('/api/app-installation/apps')
     expect(paths).toContain('/api/workers')
     expect(paths).toContain('/api/workspace-locators')
+    expect(paths).toContain('/api/sessions')
     expect(paths).toContain('/api/local/capabilities')
     expect(data).not.toHaveProperty('turns')
     expect(data).not.toHaveProperty('templates')
