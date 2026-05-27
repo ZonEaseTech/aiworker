@@ -23,22 +23,22 @@ workspace/session 只作为不透明 locator/context 传给 mounted Soul surface
 
 ## 文档地图
 
-- `docs/architecture.md`：当前架构合同。
-- `docs/cli.md`：当前 CLI 命令参考。
-- `docs/deployment.md`：local daemon、packaged CLI 和 operator 运行手册。
-- `docs/executor-engines.md`：外部 engine 安装、登录和 readiness 说明。
-- `docs/soul-app-developer.md`：冻结的 Soul App 命令与目录速查，不是架构合同。
+- `docs/architecture.md`：当前架构合同和 ownership 边界。
+- `docs/protocol.md`：Host/Soul descriptor、mount、broker API 和 app-owned API 合同。
+- `docs/runtime.md`：session lifecycle、engine invocation、native engine bridge 和 secret 边界。
+- `docs/soul-authoring.md`：Soul App descriptor authoring、SDK、workbench 和 native MCP 约定。
+- `docs/testing.md`：contract tests、Freeform browser proof、drift patrol 和 release gates。
 
 ## Developer Route
 
 | 我要修改 | 从这里开始 |
 | --- | --- |
-| Host daemon/API、registry、local enablement、storage metadata | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
-| Host Web Shell、Settings、Worker Configuration、mounted workbench | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md`，前端实现再用 `/pma-web`；shadcn/ui 相关改动再用 `.agents/skills/shadcn/SKILL.md` |
-| CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/cli.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
-| 官方 Freeform Soul、descriptor、standalone、Host mounted、artifact/profile/review/lesson | `docs/architecture.md#constraint-registry` + `.agents/skills/aiworker-soul-app-dev/SKILL.md`；命令速查见 `docs/soul-app-developer.md` |
-| 新第三方 Soul App | `docs/architecture.md#constraint-registry` + `.agents/skills/aiworker-soul-app-dev/SKILL.md`；创建命令用 `aiworker app create`，目录/命令速查见 `docs/soul-app-developer.md` |
-| Host/Soul App 边界、shared protocol、descriptor-declared route/context | 先读 `docs/architecture.md#constraint-registry`，判断 ownership 后进入 Host 或 Soul App skill |
+| Host daemon/API、registry、local enablement、storage metadata | `docs/architecture.md` + `docs/protocol.md` + `docs/runtime.md` |
+| Host Web Shell、Settings、Worker Configuration、mounted workbench | `docs/architecture.md` + `docs/runtime.md`；shadcn/ui 相关改动再用 `.agents/skills/shadcn/SKILL.md` |
+| CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/runtime.md` + `docs/testing.md`，再对照 `apps/cli` 当前实现 |
+| 官方 Freeform Soul、descriptor、standalone、Host mounted | `docs/soul-authoring.md` + `docs/protocol.md` |
+| 新第三方 Soul App | `docs/soul-authoring.md` + `docs/protocol.md`；创建和验证命令以当前 CLI help 为准 |
+| Host/Soul App 边界、shared protocol、descriptor-declared route/context | 先读五份 canonical docs，判断 ownership 后再改代码 |
 
 ## 为什么改成这个形态
 
@@ -225,7 +225,7 @@ bun run --filter '@zonease/aiworker-cli' build:bundle
 
 当前重构阶段重新排优先级：
 
-1. 架构入口收敛为 `AGENTS.md` + `docs/architecture.md`；
+1. 架构入口收敛为 `AGENTS.md` + 五份 canonical docs；
 2. Host 作为平台定位、能力壳、安装启用、安全设置和 shell contract；
 3. Soul App 作为 app-level standalone + Host mounted 垂直产品；
 4. 官方 Freeform Soul 通过快捷 install/enable 进入 Host，而不是被 Host 内置；

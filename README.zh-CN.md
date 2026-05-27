@@ -4,8 +4,10 @@
 
 - 产品与开发总览：`README.md`
 - Agent 执行入口：`AGENTS.md`
-- 唯一架构合同与硬约束：`docs/architecture.md#constraint-registry`
-- Soul App authoring：`docs/architecture.md#constraint-registry` + `aiworker-soul-app-dev`；`docs/soul-app-developer.md` 只是冻结速查。
-- CLI / deployment / engine：`docs/cli.md`、`docs/deployment.md`、`docs/executor-engines.md`
+- 架构合同与硬约束：`docs/architecture.md`
+- Host/Soul protocol：`docs/protocol.md`
+- runtime / engine bridge：`docs/runtime.md`
+- Soul App authoring：`docs/soul-authoring.md`
+- 验证与漂移巡检：`docs/testing.md`
 
-如果这些文件出现冲突，以 `docs/architecture.md#constraint-registry` 为准。
+如果历史输入与这些文件出现冲突，以 canonical docs 为准。

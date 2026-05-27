@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 
@@ -38,6 +38,15 @@ for (const file of activeDocs) {
     issues.push({ file, message: 'active documentation file is missing' })
 }
 
+const expectedDocsEntries = canonicalDocs.map(file => path.basename(file)).sort()
+const actualDocsEntries = existsSync(abs('docs')) ? readdirSync(abs('docs')).sort() : []
+if (JSON.stringify(actualDocsEntries) !== JSON.stringify(expectedDocsEntries)) {
+  issues.push({
+    file: 'docs',
+    message: `docs tree must contain only canonical contract docs: expected ${expectedDocsEntries.join(', ')}, found ${actualDocsEntries.join(', ')}`,
+  })
+}
+
 requireIncludes('docs/architecture.md', [
   'Host is shell / locator / mount / bridge',
   'CLI-first',
@@ -62,10 +71,29 @@ requireMaxLines('AGENTS.md', 90)
 forbidIncludes('AGENTS.md', [
   'docs/plan',
   'docs/task',
+  'docs/superpowers',
+  'docs/changelog.md',
+  'docs/soul-app-developer.md',
   'aiworker-host-dev',
   'aiworker-soul-app-dev',
   'PMA requirement',
 ])
+
+for (const file of ['README.md', 'README.zh-CN.md']) {
+  requireIncludes(file, canonicalDocs)
+  forbidIncludes(file, [
+    'docs/plan',
+    'docs/task',
+    'docs/superpowers',
+    'docs/changelog.md',
+    'docs/soul-app-developer.md',
+    'docs/cli.md',
+    'docs/deployment.md',
+    'docs/executor-engines.md',
+    'aiworker-host-dev',
+    'aiworker-soul-app-dev',
+  ])
+}
 
 requireIncludes('docs/protocol.md', [
   'dist/soul.descriptor.json',

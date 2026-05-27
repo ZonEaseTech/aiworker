@@ -88,9 +88,53 @@ describe('destructive refactor contract bootstrap', () => {
     expect(agents).toContain('Host is shell / locator / mount / bridge')
     expect(agents).not.toContain('docs/plan')
     expect(agents).not.toContain('docs/task')
+    expect(agents).not.toContain('docs/superpowers')
     expect(agents).not.toContain('aiworker-host-dev')
     expect(agents).not.toContain('aiworker-soul-app-dev')
     expect(agents).not.toContain('PMA requirement')
+  })
+
+  test('docs tree contains only the canonical contract docs', () => {
+    const docsEntries = readdirSync(join(repoRoot, 'docs')).sort()
+
+    expect(docsEntries).toEqual([
+      'architecture.md',
+      'protocol.md',
+      'runtime.md',
+      'soul-authoring.md',
+      'testing.md',
+    ])
+  })
+
+  test('README files route developers to canonical docs, not retired local authority', () => {
+    const requiredDocs = [
+      'docs/architecture.md',
+      'docs/protocol.md',
+      'docs/runtime.md',
+      'docs/soul-authoring.md',
+      'docs/testing.md',
+    ]
+    const forbiddenSnippets = [
+      'docs/plan',
+      'docs/task',
+      'docs/superpowers',
+      'docs/changelog.md',
+      'docs/soul-app-developer.md',
+      'docs/cli.md',
+      'docs/deployment.md',
+      'docs/executor-engines.md',
+      'aiworker-host-dev',
+      'aiworker-soul-app-dev',
+    ]
+
+    for (const file of ['README.md', 'README.zh-CN.md']) {
+      const readme = readRepoFile(file)
+
+      for (const doc of requiredDocs)
+        expect(readme, file).toContain(doc)
+      for (const snippet of forbiddenSnippets)
+        expect(readme, file).not.toContain(snippet)
+    }
   })
 
   test('runtime contract keeps session lifecycle separate from invocation state', () => {
