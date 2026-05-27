@@ -38,12 +38,22 @@ for (const file of activeDocs) {
     issues.push({ file, message: 'active documentation file is missing' })
 }
 
-const expectedDocsEntries = canonicalDocs.map(file => path.basename(file)).sort()
+const expectedDocsEntries = [
+  ...canonicalDocs.map(file => path.basename(file)),
+  'superpowers',
+].sort()
 const actualDocsEntries = existsSync(abs('docs')) ? readdirSync(abs('docs')).sort() : []
 if (JSON.stringify(actualDocsEntries) !== JSON.stringify(expectedDocsEntries)) {
   issues.push({
     file: 'docs',
-    message: `docs tree must contain only canonical contract docs: expected ${expectedDocsEntries.join(', ')}, found ${actualDocsEntries.join(', ')}`,
+    message: `docs tree must contain only canonical contract docs plus current Superpowers process artifacts: expected ${expectedDocsEntries.join(', ')}, found ${actualDocsEntries.join(', ')}`,
+  })
+}
+const superpowersEntries = existsSync(abs('docs/superpowers')) ? readdirSync(abs('docs/superpowers')).sort() : []
+if (JSON.stringify(superpowersEntries) !== JSON.stringify(['plans', 'specs'])) {
+  issues.push({
+    file: 'docs/superpowers',
+    message: `Superpowers docs must use only plans/ and specs/ process directories, found ${superpowersEntries.join(', ')}`,
   })
 }
 

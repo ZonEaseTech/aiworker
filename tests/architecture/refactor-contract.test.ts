@@ -94,7 +94,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(agents).not.toContain('PMA requirement')
   })
 
-  test('docs tree contains only the canonical contract docs', () => {
+  test('docs tree contains canonical docs plus current Superpowers process artifacts only', () => {
     const docsEntries = readdirSync(join(repoRoot, 'docs')).sort()
 
     expect(docsEntries).toEqual([
@@ -102,7 +102,12 @@ describe('destructive refactor contract bootstrap', () => {
       'protocol.md',
       'runtime.md',
       'soul-authoring.md',
+      'superpowers',
       'testing.md',
+    ])
+    expect(readdirSync(join(repoRoot, 'docs/superpowers')).sort()).toEqual([
+      'plans',
+      'specs',
     ])
   })
 

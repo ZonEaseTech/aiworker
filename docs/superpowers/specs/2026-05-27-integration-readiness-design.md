@@ -6,8 +6,8 @@ Baseline HEAD before readiness: `6d4e6a63 refactor: 固化 Freeform golden path 
 
 ## Authority
 
-This file is non-authoritative evidence for the next handoff step. The active
-AIWorker contract remains only:
+This file is a Superpowers design artifact for the next handoff step. It is not
+an AIWorker architecture authority. The active AIWorker contract remains only:
 
 - `docs/architecture.md`
 - `docs/protocol.md`
@@ -15,8 +15,8 @@ AIWorker contract remains only:
 - `docs/soul-authoring.md`
 - `docs/testing.md`
 
-`tmp/refactor/*` is historical evidence and must not override the canonical
-docs.
+Historical notes, old local skills, old changelogs, and previous temporary
+drafts do not override the canonical docs.
 
 ## Goal
 
