@@ -618,6 +618,11 @@ describe('destructive refactor contract bootstrap', () => {
       'person-profile',
       'Person Profile',
       'Create a source-backed HR profile snapshot.',
+      'HR_HIRING_RISK',
+      '.hiring-risk',
+      'hiring-risk',
+      'Hiring Risk',
+      'Review hiring risk.',
     ]
 
     const findings = retiredCapabilitySnippets

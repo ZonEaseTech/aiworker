@@ -55,7 +55,7 @@ const HR_INTERVIEW_BRIEF = `${HR_SOUL_ID}.interview-brief`
 const HR_ONBOARDING_PLAN = `${HR_SOUL_ID}.onboarding-plan`
 const HR_OFFBOARDING_SUMMARY = `${HR_SOUL_ID}.offboarding-summary`
 const HR_EVIDENCE_MATRIX = `${HR_SOUL_ID}.evidence-matrix`
-const HR_HIRING_RISK = `${HR_SOUL_ID}.hiring-risk`
+const PEOPLE_RISK_REVIEW = `${HR_SOUL_ID}.risk-review`
 const HR_PROFILE_UPDATE_PROPOSAL = `${HR_SOUL_ID}.profile-update-draft`
 
 function openHostSettings() {
@@ -85,7 +85,7 @@ const workers = [
 ]
 
 const souls = [
-  { defaultCapabilities: [PEOPLE_CONTEXT_CAPTURE, HR_PROFILE_UPDATE_PROPOSAL, HR_LIFECYCLE_NEXT_STEP, HR_CANDIDATE_SCREEN, HR_INTERVIEW_BRIEF, HR_ONBOARDING_PLAN, HR_OFFBOARDING_SUMMARY, HR_EVIDENCE_MATRIX, HR_HIRING_RISK], description: 'People operations workspace', id: HR_SOUL_ID, name: 'Demo People', status: 'available' },
+  { defaultCapabilities: [PEOPLE_CONTEXT_CAPTURE, HR_PROFILE_UPDATE_PROPOSAL, HR_LIFECYCLE_NEXT_STEP, HR_CANDIDATE_SCREEN, HR_INTERVIEW_BRIEF, HR_ONBOARDING_PLAN, HR_OFFBOARDING_SUMMARY, HR_EVIDENCE_MATRIX, PEOPLE_RISK_REVIEW], description: 'People operations workspace', id: HR_SOUL_ID, name: 'Demo People', status: 'available' },
   { defaultCapabilities: ['aiworker-demo-release.release-gate'], description: 'QA workspace', id: QA_SOUL_ID, name: 'Demo Release', status: 'available' },
 ]
 
@@ -181,12 +181,12 @@ const capabilities = [
     soulId: HR_SOUL_ID,
   },
   {
-    description: 'Review hiring risk.',
-    id: HR_HIRING_RISK,
+    description: 'Review operational risk.',
+    id: PEOPLE_RISK_REVIEW,
     inputHints: ['Artifact', 'Policy'],
-    name: 'Hiring Risk',
-    outputKind: 'hiring-risk',
-    promptRef: './product/workflows/hiring-risk/prompt.md',
+    name: 'Risk Review',
+    outputKind: 'risk-review',
+    promptRef: './product/workflows/risk-review/prompt.md',
     soulId: HR_SOUL_ID,
   },
   {
