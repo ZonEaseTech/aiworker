@@ -60,6 +60,8 @@ Use Superpowers for brainstorming, non-trivial planning, TDD, systematic debuggi
 
 Destructive refactor is allowed before 1.0. Keep changes scoped to the current phase. Do not change the new architecture to satisfy old E2E assumptions.
 
+If a task depends on an accepted `tmp/refactor` decision, promote it to canonical docs or tests before implementation; tmp/refactor accepted decisions must be promoted to canonical docs or tests before implementation.
+
 Code changes need focused contract tests appropriate to scope. Before final completion, run the smallest fresh verification that proves the touched surface. For code changes, run code-review-graph unless the change is docs-only, instruction-only, or pure formatting.
 
 ## UI

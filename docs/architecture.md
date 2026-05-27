@@ -22,6 +22,21 @@ mounts app-owned UI/API, prepares engine invocation context, and observes native
 engine output. Host is not a domain workflow layer, a product backend, an agent
 runtime, a repository dashboard, or a Soul App configuration center.
 
+## Decision Coverage Index
+
+tmp/refactor decisions are evidence until promoted. Accepted refactor decisions
+become active authority only when they are represented in the canonical docs,
+guarded by tests, or both.
+
+- docs/architecture.md owns product position, Host/Soul ownership, monorepo
+  boundaries, data ownership, Freeform v1 scope, and destructive migration
+  constraints.
+- docs/protocol.md owns descriptor, broker route, configuration envelope, mounted workbench, and app-owned API contracts.
+- docs/runtime.md owns projection, runtime assets CRUD, engine bridge, lifecycle, cleanup, and redaction contracts.
+- docs/soul-authoring.md owns SDK authoring, convention discovery, build output,
+  native MCP source layout, and Freeform source contract.
+- docs/testing.md owns the coverage ledger and guardrail mapping.
+
 ## Ownership
 
 Soul Apps own domain state, domain UI/API, business outputs, confirmation

@@ -58,6 +58,8 @@ if (JSON.stringify(superpowersEntries) !== JSON.stringify(['plans', 'specs'])) {
 }
 
 requireIncludes('docs/architecture.md', [
+  'Decision Coverage Index',
+  'tmp/refactor decisions are evidence until promoted',
   'Host is shell / locator / mount / bridge',
   'CLI-first',
   'descriptor-only',
@@ -74,6 +76,7 @@ requireIncludes('AGENTS.md', [
   'descriptor-only',
   'POST /api/sessions/:sessionId/invocations',
   'Author-owned native MCP files may contain literal secrets',
+  'tmp/refactor accepted decisions must be promoted to canonical docs or tests before implementation',
   'shadcn',
 ])
 requireMaxLines('AGENTS.md', 90)

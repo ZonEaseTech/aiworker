@@ -68,6 +68,18 @@ describe('destructive refactor contract bootstrap', () => {
     expect(architecture).toContain('packages/core and packages/shared disappear')
   })
 
+  test('canonical architecture records the tmp refactor coverage policy', () => {
+    const architecture = readRepoFile('docs/architecture.md')
+    const agents = readRepoFile('AGENTS.md')
+
+    expect(architecture).toContain('Decision Coverage Index')
+    expect(architecture).toContain('tmp/refactor decisions are evidence until promoted')
+    expect(architecture).toContain('docs/protocol.md owns descriptor, broker route, configuration envelope, mounted workbench, and app-owned API contracts')
+    expect(architecture).toContain('docs/runtime.md owns projection, runtime assets CRUD, engine bridge, lifecycle, cleanup, and redaction contracts')
+    expect(architecture).toContain('docs/testing.md owns the coverage ledger and guardrail mapping')
+    expect(agents).toContain('tmp/refactor accepted decisions must be promoted to canonical docs or tests before implementation')
+  })
+
   test('root workspace includes runnable apps, packages, and Soul Apps', () => {
     const rootPackage = JSON.parse(readRepoFile('package.json')) as {
       workspaces?: string[]
