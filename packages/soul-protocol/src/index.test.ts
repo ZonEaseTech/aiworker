@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { localWorkerConfigValueInputSchema, localWorkerConfigValueSchema, soulProtocolPackage } from './index'
+import { localSessionSchema, localWorkerConfigValueInputSchema, localWorkerConfigValueSchema, soulProtocolPackage } from './index'
 
 describe('soul-protocol package boundary', () => {
   test('declares descriptor-only v1 sections', () => {
@@ -43,5 +43,23 @@ describe('soul-protocol package boundary', () => {
       target: 'codex',
       updatedBy: 'ben',
     })).toThrow()
+  })
+
+  test('keeps local session protocol lifecycle-only without Host-owned context', () => {
+    const parsed = localSessionSchema.parse({
+      capabilityId: 'default',
+      createdAt: '2026-05-27T00:00:00.000Z',
+      endedAt: null,
+      id: 'session-1',
+      metadataJson: {},
+      startedAt: '2026-05-27T00:00:00.000Z',
+      status: 'active',
+      title: 'Freeform session',
+      updatedAt: '2026-05-27T00:00:00.000Z',
+      workerId: 'worker-1',
+      workspaceId: 'workspace-1',
+    })
+
+    expect(parsed).not.toHaveProperty('context')
   })
 })

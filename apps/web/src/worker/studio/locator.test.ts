@@ -118,7 +118,6 @@ describe('deriveWorkerStudioLocatorState', () => {
       sessions: [
         session({
           capabilityId: 'aiworker-demo-people.profile',
-          context: 'confidential compensation review',
           id: 'quiet-session',
           title: 'confidential compensation review',
           workerId: 'people-worker',
@@ -222,7 +221,6 @@ function workspace(overrides: Partial<LocalWorkspaceData['workspaces'][number]> 
 function session(overrides: Partial<LocalWorkspaceData['sessions'][number]> = {}): LocalWorkspaceData['sessions'][number] {
   return {
     capabilityId: 'aiworker-demo-people.profile',
-    context: '',
     createdAt: now,
     endedAt: null,
     id: 'session-1',

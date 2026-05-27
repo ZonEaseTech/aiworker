@@ -220,7 +220,6 @@ const baseSettings: LocalSettingsConfig = {
 
 const sessionRecord = {
   capabilityId: HR_CANDIDATE_SCREEN,
-  context: 'Candidate context',
   createdAt: now,
   endedAt: null,
   id: 'session-1',
