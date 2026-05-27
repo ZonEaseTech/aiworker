@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status:** Superseded by `2026-05-27-canonical-coverage-ledger.md`; do not recreate `tmp/refactor` from this historical plan.
+
 **Goal:** Prove the current destructive-refactor branch is ready for PR/release handoff, or stop with precise P0/P1 evidence.
 
 **Architecture:** This is a verification-first plan. It does not change product code unless a fresh readiness command or drift classification proves a P0/P1 issue. Canonical authority remains the five docs under `docs/`; this plan and its paired design under `docs/superpowers/` are Superpowers process artifacts, not architecture authorities.
