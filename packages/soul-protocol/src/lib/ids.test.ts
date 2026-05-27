@@ -16,7 +16,7 @@ describe('worker id utilities', () => {
   })
 
   it('slugifies names for local URL and id fragments', () => {
-    expect(slugify('HR People Profile!')).toBe('hr-people-profile')
-    expect(slugify('  QA___Release   Gate  ')).toBe('qa___release-gate')
+    expect(slugify('Demo People Profile!')).toBe('demo-people-profile')
+    expect(slugify('  Sample___Release   Gate  ')).toBe('sample___release-gate')
   })
 })

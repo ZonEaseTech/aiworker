@@ -822,6 +822,22 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'Soul protocol projection helpers should expose capabilities, not capability templates').toEqual([])
   })
 
+  test('Soul protocol id utility tests use neutral slug examples', () => {
+    const source = readRepoFile('packages/soul-protocol/src/lib/ids.test.ts')
+    const retiredSlugSnippets = [
+      'HR People Profile',
+      'QA___Release',
+      'hr-people-profile',
+      'qa___release-gate',
+    ]
+
+    const findings = retiredSlugSnippets
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `packages/soul-protocol/src/lib/ids.test.ts: ${snippet}`)
+
+    expect(findings, 'slug helper tests should not encode retired HR/QA fixture names').toEqual([])
+  })
+
   test('Host-visible Soul catalog does not expose domain as a platform field', () => {
     const activeSources = [
       'packages/soul-protocol/src/soul-app/registry.ts',
