@@ -460,9 +460,9 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'demo-worker', '--name', 'Demo Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-recruiting'))).toBe(0)
+    expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'demo-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
     output = ''
 
@@ -470,7 +470,7 @@ describe('aiworker local CLI', () => {
       'session',
       'start',
       '--worker',
-      'hr-recruiting',
+      'demo-worker',
       '--workspace',
       workspace.id,
       '--capability',
@@ -584,9 +584,9 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'demo-worker', '--name', 'Demo Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-recruiting'))).toBe(0)
+    expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'demo-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
     output = ''
 
@@ -596,7 +596,7 @@ describe('aiworker local CLI', () => {
       'session',
       'start',
       '--worker',
-      'hr-recruiting',
+      'demo-worker',
       '--workspace',
       workspace.id,
       '--capability',
@@ -626,7 +626,7 @@ describe('aiworker local CLI', () => {
       'session',
       'invoke',
       '--worker',
-      'hr-recruiting',
+      'demo-worker',
       '--session',
       started.session.id,
       '--input',
@@ -648,7 +648,7 @@ describe('aiworker local CLI', () => {
       'session',
       'start',
       '--worker',
-      'hr-recruiting',
+      'demo-worker',
       '--workspace',
       workspace.id,
       '--capability',
@@ -681,9 +681,9 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-claude', '--name', 'HR Claude', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'claude-worker', '--name', 'Claude Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-claude'))).toBe(0)
+    expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'claude-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
     output = ''
 
@@ -693,7 +693,7 @@ describe('aiworker local CLI', () => {
       'session',
       'start',
       '--worker',
-      'hr-claude',
+      'claude-worker',
       '--workspace',
       workspace.id,
       '--capability',
@@ -721,9 +721,9 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-frozen', '--name', 'HR Frozen', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'frozen-worker', '--name', 'Frozen Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-frozen'))).toBe(0)
+    expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'frozen-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
     output = ''
 
@@ -733,7 +733,7 @@ describe('aiworker local CLI', () => {
       'session',
       'start',
       '--worker',
-      'hr-frozen',
+      'frozen-worker',
       '--workspace',
       workspace.id,
       '--capability',
@@ -759,7 +759,7 @@ describe('aiworker local CLI', () => {
       'session',
       'invoke',
       '--worker',
-      'hr-frozen',
+      'frozen-worker',
       '--session',
       started.session.id,
       '--input',
@@ -785,9 +785,9 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-legacy-engine', '--name', 'HR Legacy Engine', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'legacy-engine-worker', '--name', 'Legacy Engine Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-legacy-engine'))).toBe(0)
+    expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'legacy-engine-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
     output = ''
 
@@ -797,7 +797,7 @@ describe('aiworker local CLI', () => {
     runWorkerMigrations()
     createSession({
       id: 'legacy-engine-session',
-      workerId: 'hr-legacy-engine',
+      workerId: 'legacy-engine-worker',
       workspaceId: workspace.id,
       capabilityId: FREEFORM_CAPABILITY_ID,
       title: 'Legacy engine session',
@@ -815,7 +815,7 @@ describe('aiworker local CLI', () => {
       'session',
       'invoke',
       '--worker',
-      'hr-legacy-engine',
+      'legacy-engine-worker',
       '--session',
       'legacy-engine-session',
       '--input',

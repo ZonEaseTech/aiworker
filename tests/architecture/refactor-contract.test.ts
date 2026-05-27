@@ -1067,6 +1067,29 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'storage tests should use generic worker fixtures except explicit legacy migration cases').toEqual([])
   })
 
+  test('CLI tests use generic non-legacy worker and workspace fixtures', () => {
+    const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
+      .replace(/ {2}function seedLegacyHrMetadata\(\) \{[\s\S]*?\n {2}\}/, '')
+    const forbidden = [
+      'hr-recruiting',
+      'hr-claude',
+      'hr-frozen',
+      'hr-legacy-engine',
+      'HR Recruiting',
+      'HR Claude',
+      'HR Frozen',
+      'HR Legacy Engine',
+      'Hiring',
+      'role-search',
+    ]
+
+    const findings = forbidden
+      .filter(snippet => cliTest.includes(snippet))
+      .map(snippet => `apps/cli/src/aiworker.test.ts: ${snippet}`)
+
+    expect(findings, 'CLI positive fixtures should not encode retired HR domain worker/workspace names').toEqual([])
+  })
+
   test('CLI follow-up command surface uses session invocation language only', () => {
     const cli = readRepoFile('apps/cli/src/aiworker.ts')
     const forbidden = [
