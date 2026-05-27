@@ -1791,6 +1791,22 @@ describe('local daemon API', () => {
     })
     expect(configRes.status).toBe(200)
 
+    const overlayRes = await target.request(`/api/local/workers/${worker.id}/overlay`)
+    expect(overlayRes.status).toBe(200)
+    expect(await overlayRes.json()).toMatchObject({
+      overlay: {
+        assets: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'freeform-session',
+            kind: 'skill',
+            source: 'overlay',
+            sourceRef: 'descriptor://engine/skills/freeform-overlay',
+            target: 'codex',
+          }),
+        ]),
+      },
+    })
+
     const refreshRes = await target.request('/api/projections/codex/refresh', {
       body: JSON.stringify({ workerId: worker.id, workspaceId: workspace.id }),
       headers: { 'content-type': 'application/json' },

@@ -229,8 +229,78 @@ function readNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
+function readWorkerConfigOptions(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
 function readJsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function localOverlayKindForWorkerConfig(kind: unknown): WorkerOverlayAssetRow['kind'] | null {
+  if (kind === 'entry-file-overlay')
+    return 'entry-file'
+  if (kind === 'mcp-overlay')
+    return 'mcp-client'
+  if (kind === 'skill-overlay')
+    return 'skill'
+  return null
+}
+
+function workerConfigOverlaySourceRef(value: Record<string, unknown>, options: Record<string, unknown>): string | null {
+  return readNullableString(value.sourceRef)
+    ?? readNullableString(options.replaces)
+    ?? readNullableString(options.replacesSourceRef)
+}
+
+function workerConfigOverlayId(row: WorkerConfigRow, kind: WorkerOverlayAssetRow['kind'], sourceRef: string, options: Record<string, unknown>): string | null {
+  const replacementRef = readNullableString(options.replaces) ?? readNullableString(options.replacesSourceRef)
+  const ref = replacementRef ?? sourceRef
+  if (kind === 'entry-file')
+    return readNullableString(options.targetPath) ?? workspaceOverlayIdFromRef(ref) ?? workerConfigKeyId(row.configKey)
+  if (kind === 'skill')
+    return skillOverlayIdFromRef(ref) ?? workerConfigKeyId(row.configKey)
+  return workerConfigKeyId(row.configKey)
+}
+
+function workerConfigOverlayTargets(kind: WorkerOverlayAssetRow['kind'], target: unknown): string[] {
+  if (kind === 'entry-file')
+    return ['workspace']
+  if (target === 'codex' || target === 'claude-code')
+    return [target]
+  if (kind === 'skill' && target === 'all')
+    return ['codex', 'claude-code']
+  return []
+}
+
+function workerConfigKeyId(configKey: string): string | null {
+  const separatorIndex = configKey.indexOf(':')
+  if (separatorIndex < 0)
+    return null
+  const rawId = configKey.slice(separatorIndex + 1)
+  if (!rawId)
+    return null
+  try {
+    return decodeURIComponent(rawId)
+  }
+  catch {
+    return rawId
+  }
+}
+
+function workspaceOverlayIdFromRef(ref: string): string | null {
+  for (const prefix of ['descriptor://engine/workspaceAssets/', 'descriptor://engine/workspace/']) {
+    if (ref.startsWith(prefix))
+      return ref.slice(prefix.length)
+  }
+  return null
+}
+
+function skillOverlayIdFromRef(ref: string): string | null {
+  const prefix = 'descriptor://engine/skills/'
+  if (!ref.startsWith(prefix))
+    return null
+  return ref.slice(prefix.length).replace(/\/SKILL\.md$/, '')
 }
 
 export type WorkerDatabase = ReturnType<typeof createDb>
@@ -494,8 +564,10 @@ export function listWorkers(limit = 100): WorkerRow[] {
 
 export function listWorkerOverlayAssets(workerId: string): (WorkerOverlayAssetRow & { source: 'overlay' })[] {
   return listWorkerConfigValues(workerId)
-    .filter(row => row.configKey.startsWith('overlay:'))
     .flatMap((row) => {
+      if (!row.configKey.startsWith('overlay:'))
+        return standardWorkerConfigOverlayAssets(row)
+
       const options = row.configValueJson.options
       if (!options || typeof options !== 'object' || Array.isArray(options))
         return []
@@ -519,6 +591,38 @@ export function listWorkerOverlayAssets(workerId: string): (WorkerOverlayAssetRo
         workerId: row.workerId,
       }]
     })
+}
+
+function standardWorkerConfigOverlayAssets(row: WorkerConfigRow): (WorkerOverlayAssetRow & { source: 'overlay' })[] {
+  const kind = localOverlayKindForWorkerConfig(row.configValueJson.kind)
+  if (!kind)
+    return []
+
+  const options = readWorkerConfigOptions(row.configValueJson.options)
+  if (readNullableString(options.overlayId) && readNullableString(options.overlayKind))
+    return []
+
+  const sourceRef = workerConfigOverlaySourceRef(row.configValueJson, options)
+  if (!sourceRef)
+    return []
+
+  const id = workerConfigOverlayId(row, kind, sourceRef, options)
+  if (!id)
+    return []
+
+  return workerConfigOverlayTargets(kind, row.configValueJson.target).map(target => ({
+    checksum: readNullableString(row.configValueJson.checksum),
+    enabled: row.configValueJson.enabled !== false,
+    id,
+    kind,
+    metadataJson: readJsonObject(options.metadataJson),
+    optionsJson: readJsonObject(options.optionsJson),
+    source: 'overlay' as const,
+    sourceRef,
+    target,
+    updatedAt: row.updatedAt,
+    workerId: row.workerId,
+  }))
 }
 
 export function upsertWorkerOverlayAssets(workerId: string, assets: WorkerOverlayAssetInput[], at = new Date().toISOString()): void {

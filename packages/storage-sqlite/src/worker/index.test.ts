@@ -382,6 +382,99 @@ describe('greenfield local worker session schema', () => {
     ).toThrow('Invalid Host worker config envelope updatedBy')
   })
 
+  it('projects standard worker config overlays into legacy overlay asset rows', () => {
+    const worker = upsertWorker({ id: 'worker-config-overlay-1', name: 'Config overlay worker', soulId: 'demo-soul-app' })
+
+    upsertWorkerConfigValue({
+      workerId: worker.id,
+      configKey: 'engine-selection',
+      source: 'web',
+      configValueJson: {
+        enabled: true,
+        kind: 'engine-selection',
+        target: 'codex',
+      },
+    })
+    upsertWorkerConfigValue({
+      workerId: worker.id,
+      configKey: 'skill-overlay:freeform-session',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:skill-overlay',
+        enabled: true,
+        kind: 'skill-overlay',
+        options: {
+          optionsJson: { mode: 'focused' },
+          replaces: 'descriptor://engine/skills/freeform-session',
+        },
+        sourceRef: 'descriptor://engine/skills/freeform-overlay',
+        target: 'codex',
+      },
+    })
+    upsertWorkerConfigValue({
+      workerId: worker.id,
+      configKey: 'entry-file-overlay:AGENTS.md',
+      source: 'web',
+      configValueJson: {
+        enabled: true,
+        kind: 'entry-file-overlay',
+        options: {
+          targetPath: 'AGENTS.md',
+        },
+        sourceRef: 'descriptor://engine/workspace/overlays/AGENTS.md',
+        target: 'all',
+      },
+    })
+    upsertWorkerConfigValue({
+      workerId: worker.id,
+      configKey: 'skill-overlay:disabled-baseline',
+      source: 'web',
+      configValueJson: {
+        enabled: false,
+        kind: 'skill-overlay',
+        options: {
+          replaces: 'descriptor://engine/skills/disabled-baseline',
+        },
+        target: 'all',
+      },
+    })
+
+    expect(listWorkerOverlayAssets(worker.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        checksum: 'sha256:skill-overlay',
+        enabled: true,
+        id: 'freeform-session',
+        kind: 'skill',
+        optionsJson: { mode: 'focused' },
+        source: 'overlay',
+        sourceRef: 'descriptor://engine/skills/freeform-overlay',
+        target: 'codex',
+      }),
+      expect.objectContaining({
+        enabled: true,
+        id: 'AGENTS.md',
+        kind: 'entry-file',
+        sourceRef: 'descriptor://engine/workspace/overlays/AGENTS.md',
+        target: 'workspace',
+      }),
+      expect.objectContaining({
+        enabled: false,
+        id: 'disabled-baseline',
+        kind: 'skill',
+        sourceRef: 'descriptor://engine/skills/disabled-baseline',
+        target: 'codex',
+      }),
+      expect.objectContaining({
+        enabled: false,
+        id: 'disabled-baseline',
+        kind: 'skill',
+        sourceRef: 'descriptor://engine/skills/disabled-baseline',
+        target: 'claude-code',
+      }),
+    ]))
+    expect(listWorkerOverlayAssets(worker.id)).toHaveLength(4)
+  })
+
   it('persists the worker -> workspace -> session -> invocation loop without Host review or lesson rows', () => {
     const worker = upsertWorker({
       id: 'worker-demo',
