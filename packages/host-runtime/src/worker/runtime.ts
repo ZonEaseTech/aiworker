@@ -36,6 +36,7 @@ import {
   listInvocationEvents,
   listSessionEvents,
   listSessions,
+  listWorkerConfigValues,
   listWorkerOverlayAssets,
   listWorkspaces,
   nextEngineInvocationSeq,
@@ -60,6 +61,14 @@ type LocalEngineBridgeOptions = Pick<
   EngineBridgeOptions,
   'adapters' | 'cancelGracePeriodMs' | 'processManager' | 'projectionReceipts' | 'rawChunkStore'
 >
+
+interface WorkerConfigProjectionAssetRef {
+  enabled: boolean
+  id: string
+  kind: WorkerOverlayProjectionAsset['kind']
+  sourceRef: string | null
+  target: string
+}
 
 export interface LocalWorkerRuntimeOptions {
   worker: {
@@ -870,14 +879,18 @@ export class LocalWorkerRuntime {
   private async prepareWorkspaceLayout(input: { engineTarget?: SoulAppEngineTarget | null, name: string, preserveUnownedExistingTargets?: boolean, projectEngineAssets: boolean, projectWorkerOverlayAssets: boolean, rootPath: string }): Promise<{
     engineAssets: SoulAppProjectionReceipt | null
   }> {
+    const engineTarget = input.engineTarget ?? resolveSoulAppEngineTarget(this.#workerInput.defaultEngineId)
     const workerOverlayAssets = this.#engineAssetSource && input.projectWorkerOverlayAssets
-      ? await this.resolveWorkerOverlayProjectionAssets(this.#engineAssetSource.sourceRoot)
+      ? [
+          ...await this.resolveWorkerOverlayProjectionAssets(this.#engineAssetSource.sourceRoot),
+          ...await this.resolveWorkerConfigOverlayProjectionAssets(this.#engineAssetSource.sourceRoot, engineTarget),
+        ]
       : []
     const engineAssets = this.#engineAssetSource && input.projectEngineAssets
       ? await projectEngineAssetsToWorkspace({
           appId: this.#engineAssetSource.appId,
           engineAssets: this.#engineAssetSource.engineAssets,
-          engineTarget: input.engineTarget ?? resolveSoulAppEngineTarget(this.#workerInput.defaultEngineId),
+          engineTarget,
           now: this.#now(),
           preserveUnownedExistingTargets: input.preserveUnownedExistingTargets,
           sourceRoot: this.#engineAssetSource.sourceRoot,
@@ -906,6 +919,112 @@ export class LocalWorkerRuntime {
       })
     }
     return assets
+  }
+
+  private async resolveWorkerConfigOverlayProjectionAssets(sourceRoot: string, engineTarget: SoulAppEngineTarget | null): Promise<WorkerOverlayProjectionAsset[]> {
+    const assets: WorkerOverlayProjectionAsset[] = []
+    for (const row of listWorkerConfigValues(this.workerId)) {
+      for (const assetRef of this.workerConfigProjectionAssetRefs(row.configValueJson, engineTarget)) {
+        if (assetRef.enabled && !assetRef.sourceRef?.trim())
+          throw new Error('Invalid worker overlay sourceRef: ')
+        assets.push({
+          content: assetRef.enabled ? await readFile(this.resolveWorkerOverlaySourcePath(sourceRoot, assetRef.kind, assetRef.sourceRef ?? '', assetRef.target), 'utf8') : '',
+          enabled: assetRef.enabled,
+          id: assetRef.id,
+          kind: assetRef.kind,
+          target: assetRef.target,
+        })
+      }
+    }
+    return assets
+  }
+
+  private workerConfigProjectionAssetRefs(value: Record<string, unknown>, engineTarget: SoulAppEngineTarget | null): WorkerConfigProjectionAssetRef[] {
+    const kind = value.kind
+    if (kind !== 'entry-file-overlay' && kind !== 'skill-overlay' && kind !== 'mcp-overlay')
+      return []
+
+    const options = this.workerConfigOptions(value.options)
+    if (this.workerConfigString(options.overlayId) && this.workerConfigString(options.overlayKind))
+      return []
+
+    const overlayKind = this.workerConfigProjectionKind(kind)
+    const sourceRef = this.workerConfigString(value.sourceRef)
+    const id = this.workerConfigProjectionAssetId(overlayKind, sourceRef, options, value.target, engineTarget)
+    if (!id)
+      return []
+
+    return this.workerConfigProjectionTargets(overlayKind, value.target, engineTarget).map(target => ({
+      enabled: value.enabled !== false,
+      id,
+      kind: overlayKind,
+      sourceRef,
+      target,
+    }))
+  }
+
+  private workerConfigProjectionKind(kind: 'entry-file-overlay' | 'mcp-overlay' | 'skill-overlay'): WorkerOverlayProjectionAsset['kind'] {
+    if (kind === 'entry-file-overlay')
+      return 'entry-file'
+    if (kind === 'mcp-overlay')
+      return 'mcp-client'
+    return 'skill'
+  }
+
+  private workerConfigProjectionAssetId(
+    kind: WorkerOverlayProjectionAsset['kind'],
+    sourceRef: string | null,
+    options: Record<string, unknown>,
+    target: unknown,
+    engineTarget: SoulAppEngineTarget | null,
+  ): string | null {
+    const replaces = this.workerConfigString(options.replaces) ?? this.workerConfigString(options.replacesSourceRef)
+    if (kind === 'entry-file')
+      return this.workerConfigString(options.targetPath) ?? this.workspaceOverlayIdFromRef(replaces ?? sourceRef)
+    if (kind === 'skill')
+      return this.skillOverlayIdFromRef(replaces ?? sourceRef)
+    if (target === 'codex' || target === 'claude-code')
+      return target
+    return engineTarget
+  }
+
+  private workerConfigProjectionTargets(kind: WorkerOverlayProjectionAsset['kind'], target: unknown, engineTarget: SoulAppEngineTarget | null): string[] {
+    if (kind === 'entry-file')
+      return ['all']
+    if (target === 'codex' || target === 'claude-code')
+      return [target]
+    if (target !== 'all')
+      return []
+    if (kind === 'mcp-client')
+      return engineTarget ? [engineTarget] : []
+    return ['codex', 'claude-code']
+  }
+
+  private workspaceOverlayIdFromRef(ref: string | null): string | null {
+    if (!ref)
+      return null
+    for (const prefix of ['descriptor://engine/workspaceAssets/', 'descriptor://engine/workspace/']) {
+      if (ref.startsWith(prefix))
+        return ref.slice(prefix.length)
+    }
+    return null
+  }
+
+  private skillOverlayIdFromRef(ref: string | null): string | null {
+    const prefix = 'descriptor://engine/skills/'
+    if (!ref?.startsWith(prefix))
+      return null
+    return ref.slice(prefix.length).replace(/\/SKILL\.md$/, '')
+  }
+
+  private workerConfigOptions(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return {}
+    return value as Record<string, unknown>
+  }
+
+  private workerConfigString(value: unknown): string | null {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
   }
 
   private resolveWorkerOverlaySourcePath(sourceRoot: string, kind: WorkerOverlayProjectionAsset['kind'], sourceRef: string, target: string): string {

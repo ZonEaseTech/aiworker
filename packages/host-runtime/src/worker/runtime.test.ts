@@ -7,7 +7,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getEngineInvocation, getWorkerConfigValue, initWorkerDb, listSessionEvents, runWorkerMigrations, updateSession, updateWorkspace, upsertWorker, upsertWorkerOverlayAssets } from '@zonease/aiworker-storage-sqlite/worker'
+import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getEngineInvocation, getWorkerConfigValue, initWorkerDb, listSessionEvents, runWorkerMigrations, updateSession, updateWorkspace, upsertWorker, upsertWorkerConfigValue, upsertWorkerOverlayAssets } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { LocalExecutorFailure } from './executor'
@@ -1897,6 +1897,115 @@ describe('LocalWorkerRuntime', () => {
       source: 'worker-overlay',
       target: '.agents/skills/demo-soul-app-interview-brief/SKILL.md',
     }))
+  })
+
+  it('projects standard worker config skill overlays into workspace assets', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-config-overlay-skill')
+    await writeProfileEngineAssets(appRoot)
+    await mkdir(join(appRoot, 'engine-assets', 'skills', 'interview-brief'), { recursive: true })
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'interview-brief', 'SKILL.md'), '# Baseline Interview Brief\n')
+    await mkdir(join(appRoot, 'engine-assets', 'skills', 'overlay-brief'), { recursive: true })
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'overlay-brief', 'SKILL.md'), '# Config Overlay Interview Brief\n')
+
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    })
+
+    await workerRuntime.init()
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'skill-overlay:interview-brief',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:config-overlay',
+        enabled: true,
+        kind: 'skill-overlay',
+        options: {
+          replaces: 'descriptor://engine/skills/interview-brief',
+        },
+        sourceRef: 'descriptor://engine/skills/overlay-brief',
+        target: 'codex',
+      },
+    })
+    expect(JSON.stringify(getWorkerConfigValue(workerRuntime.workerId, 'skill-overlay:interview-brief'))).not.toContain('Config Overlay Interview Brief')
+
+    const workspace = await workerRuntime.createWorkspace({ name: 'Config overlay workspace' })
+
+    await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'demo-soul-app-interview-brief', 'SKILL.md'), 'utf8'))
+      .resolves
+      .toContain('Config Overlay Interview Brief')
+    const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
+      projections: Array<{ source: string, target: string }>
+    }
+    expect(receipt.projections).toContainEqual(expect.objectContaining({
+      source: 'worker-overlay',
+      target: '.agents/skills/demo-soul-app-interview-brief/SKILL.md',
+    }))
+  })
+
+  it('projects standard worker config entry-file and MCP overlays into workspace assets', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-config-overlay-assets')
+    await writeMcpClientEngineAssets(appRoot)
+    await mkdir(join(appRoot, 'engine-assets', 'workspace', 'overlays'), { recursive: true })
+    await mkdir(join(appRoot, 'engine-assets', 'mcp', 'codex-overlay'), { recursive: true })
+    await writeFile(join(appRoot, 'engine-assets', 'workspace', 'overlays', 'CONTEXT.md'), '# Config Overlay Context\n')
+    await writeFile(join(appRoot, 'engine-assets', 'mcp', 'codex-overlay', 'config.toml'), 'command = "config-overlay-mcp"\n')
+
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    }, { engineAssets: mcpClientEngineAssets() })
+
+    await workerRuntime.init()
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'entry-file-overlay:context',
+      source: 'app-owned-api',
+      configValueJson: {
+        checksum: 'sha256:config-context-overlay',
+        enabled: true,
+        kind: 'entry-file-overlay',
+        options: {
+          targetPath: 'CONTEXT.md',
+        },
+        sourceRef: 'descriptor://engine/workspaceAssets/overlays/CONTEXT.md',
+        target: 'all',
+      },
+    })
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'mcp-overlay:codex',
+      source: 'cli',
+      configValueJson: {
+        checksum: 'sha256:config-mcp-overlay',
+        enabled: true,
+        kind: 'mcp-overlay',
+        options: {
+          replaces: 'descriptor://engine/mcp/codex',
+        },
+        sourceRef: 'descriptor://engine/mcp/codex-overlay',
+        target: 'codex',
+      },
+    })
+
+    const workspace = await workerRuntime.createWorkspace({ name: 'Config overlay assets workspace' })
+
+    await expect(readFile(join(workspace.rootPath, 'CONTEXT.md'), 'utf8'))
+      .resolves
+      .toContain('Config Overlay Context')
+    await expect(readFile(join(workspace.rootPath, '.codex', 'config.toml'), 'utf8'))
+      .resolves
+      .toContain('config-overlay-mcp')
+    const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
+      projections: Array<{ source: string, target: string }>
+    }
+    expect(receipt.projections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: 'worker-overlay', target: 'CONTEXT.md' }),
+      expect.objectContaining({ source: 'worker-overlay', target: '.codex/config.toml' }),
+    ]))
   })
 
   it('rejects worker overlay source refs that escape descriptor engine assets', async () => {
