@@ -754,6 +754,89 @@ describe('LocalWorkerRuntime', () => {
     })
   })
 
+  it('records missing native session refs as not-spawned bridge failures', async () => {
+    const callOrder: string[] = []
+    const workerRuntime = new LocalWorkerRuntime({
+      worker: {
+        id: 'worker-demo',
+        soulId: 'demo-soul',
+        name: 'Demo',
+        defaultEngineId: 'codex',
+      },
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
+      now,
+      executor: {
+        async invoke() {
+          throw new Error('executor fallback should not run when engine bridge is configured')
+        },
+      },
+      engineBridge: {
+        adapters: [{
+          target: 'codex',
+          async cancel() {
+            return {}
+          },
+          async discover() {
+            callOrder.push('adapter.discover')
+            return { callable: true, installed: true, supportsNativeResume: true, target: 'codex' }
+          },
+          async followUp() {
+            callOrder.push('adapter.followUp')
+            throw new Error('follow-up should not run without an external session ref')
+          },
+          normalize() {
+            return []
+          },
+          async start() {
+            callOrder.push('adapter.start')
+            throw new Error('follow-up should not start a fresh native session')
+          },
+        }],
+        projectionReceipts: {
+          async assertUsable() {
+            callOrder.push('projection.assert')
+          },
+        },
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Missing Native Ref Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Missing native ref session',
+    })
+    createEngineInvocation({
+      id: 'bridge-previous-missing-ref-invocation-1',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/bridge-previous-missing-ref-invocation-1/input`,
+      processState: 'exited',
+      status: 'succeeded',
+    })
+
+    const result = await workerRuntime.startInvocation({
+      sessionId: session.id,
+      input: 'Continue through bridge without a native ref.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(callOrder).toEqual(['projection.assert', 'adapter.discover'])
+    expect(result.invocation).toMatchObject({
+      failureCode: 'ENGINE_SESSION_REF_MISSING',
+      processState: 'not_spawned',
+      status: 'failed',
+    })
+    expect(result.session.status).toBe('active')
+    expect(result.events.at(-1)?.payloadJson).toMatchObject({
+      failureCode: 'ENGINE_SESSION_REF_MISSING',
+      invocationId: result.invocation.id,
+    })
+  })
+
   it('freezes the session engine and date context across continuation invocations', async () => {
     const engineInputs: Array<{ engineCommand: string | null, engineId: string, prompt: string }> = []
     const workerRuntime = runtime({
