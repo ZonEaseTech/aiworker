@@ -72,6 +72,7 @@ function forbiddenCurrentSchemaFindings(snapshot: DrizzleSnapshot): string[] {
     'engine_auth_tokens',
     'engine_profile_files',
     'mcp_secret_values',
+    'worker_identity',
     'session_events',
   ]
   const forbiddenColumnsByTable = new Map<string, string[]>([
@@ -113,6 +114,8 @@ describe('Host DB forbidden domain schema contract', () => {
     const source = readRepoFile(workerSchemaPath)
     const sourceRules = [
       ['session_events table', /sqliteTable\(\s*['"`]session_events['"`]/],
+      ['worker_identity table', /sqliteTable\(\s*['"`]worker_identity['"`]/],
+      ['worker_identity.api_token_enc column', /\bapiTokenEnc\s*:\s*text\(\s*['"`]api_token_enc['"`]/],
       ['engine_invocations.prompt column', /\bprompt\s*:\s*text\(\s*['"`]prompt['"`]/],
       ['engine_invocations.turn_id column', /\bturnId\s*:\s*text\(\s*['"`]turn_id['"`]/],
       ['payload_json column', /\bpayloadJson\s*:\s*text\(\s*['"`]payload_json['"`]/],

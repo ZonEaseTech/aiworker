@@ -171,17 +171,6 @@ export const settings = sqliteTable('settings', {
   updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
 })
 
-export const workerIdentity = sqliteTable('worker_identity', {
-  pk: text('pk').primaryKey().default('default'),
-  workerId: text('worker_id').notNull().unique(),
-  apiTokenEnc: text('api_token_enc').notNull(),
-  nonce: text('nonce').notNull(),
-  authTag: text('auth_tag').notNull(),
-  bootstrapShownAt: text('bootstrap_shown_at').notNull().$defaultFn(nowIso),
-  createdAt: text('created_at').notNull().$defaultFn(nowIso),
-  rotatedAt: text('rotated_at'),
-})
-
 export const workerConfig = sqliteTable('worker_config', {
   workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
   configKey: text('config_key').notNull(),

@@ -98,7 +98,7 @@ describe('greenfield local worker session schema', () => {
     return rows.map(r => r.detail).join('\n')
   }
 
-  it('creates only the session workspace tables plus security primitives', () => {
+  it('creates only Host metadata tables without token-like identity storage', () => {
     const rows = getWorkerDb().all<{ name: string }>(
       sql.raw('SELECT name FROM sqlite_master WHERE type=\'table\' ORDER BY name'),
     ).map(row => row.name)
@@ -113,7 +113,6 @@ describe('greenfield local worker session schema', () => {
       'soul_apps',
       'sqlite_sequence',
       'worker_config',
-      'worker_identity',
       'workers',
       'workspaces',
     ])
