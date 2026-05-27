@@ -47,6 +47,39 @@ function listSourceFiles(dir: string): string[] {
   })
 }
 
+function documentedTestingPaths(): string[] {
+  const lines = readRepoFile('docs/testing.md').split(/\r?\n/)
+  const paths: string[] = []
+  let inCodeFence = false
+  let baseDir: string | null = null
+
+  for (const line of lines) {
+    if (line.startsWith('```')) {
+      inCodeFence = !inCodeFence
+      baseDir = null
+      continue
+    }
+    if (!inCodeFence)
+      continue
+
+    const trimmed = line.trim()
+    if (!trimmed)
+      continue
+    if (/^[\w./-]+\/$/.test(trimmed)) {
+      baseDir = trimmed
+      continue
+    }
+    if (/\.(?:test|spec)\.tsx?$/.test(trimmed)) {
+      const repoRelative = /^(?:apps|packages|souls|tests)\//.test(trimmed)
+        ? trimmed
+        : `${baseDir ?? ''}${trimmed}`
+      paths.push(repoRelative)
+    }
+  }
+
+  return [...new Set(paths)].sort()
+}
+
 describe('destructive refactor contract bootstrap', () => {
   test('canonical docs are promoted as the only architecture authority set', () => {
     const canonicalDocs = [
@@ -113,6 +146,17 @@ describe('destructive refactor contract bootstrap', () => {
     ]) {
       expect(testing).toContain(phrase)
     }
+  })
+
+  test('testing doc names current test files that exist', () => {
+    const paths = documentedTestingPaths()
+
+    expect(paths).toContain('tests/architecture/refactor-contract.test.ts')
+    expect(paths).toContain('packages/engine-bridge/src/bridge-contract.test.ts')
+    expect(paths).toContain('packages/engine-projection/src/workspace-projection.test.ts')
+
+    const missing = paths.filter(path => !existsSync(join(repoRoot, path)))
+    expect(missing).toEqual([])
   })
 
   test('root workspace includes runnable apps, packages, and Soul Apps', () => {

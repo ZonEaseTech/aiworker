@@ -16,9 +16,11 @@ Architecture tests:
 
 ```text
 tests/architecture/
-  monorepo-boundary.test.ts
   forbidden-host-domain-schema.test.ts
+  freeform-mounted-workbench-contract.test.ts
+  freeform-soul-contract.test.ts
   package-ownership.test.ts
+  refactor-contract.test.ts
 ```
 
 Protocol tests:
@@ -26,6 +28,8 @@ Protocol tests:
 ```text
 packages/soul-protocol/src/
   descriptor-v1.test.ts
+  index.test.ts
+  lib/ids.test.ts
   mounted-routing-contract.test.ts
 ```
 
@@ -33,45 +37,54 @@ SDK tests:
 
 ```text
 packages/soul-app-sdk/src/
-  authoring-conventions.test.ts
   descriptor-build.test.ts
-  common-workbench-fallback.test.ts
 ```
 
 Host runtime tests:
 
 ```text
 packages/host-runtime/src/
-  descriptor-only-install.test.ts
-  worker-config-scope.test.ts
-  archive-delete-lifecycle.test.ts
+  config/worker.test.ts
+  host/identity-provider.test.ts
+  host/runtime.test.ts
+  index.test.ts
+  soul-app/registry.test.ts
+  worker/engine-env.test.ts
+  worker/executor.test.ts
+  worker/local-engine-resolver.test.ts
+  worker/runtime.test.ts
 ```
 
 Engine projection tests:
 
 ```text
 packages/engine-projection/src/
-  workspace-assets-projection.test.ts
-  skills-projection.test.ts
-  native-mcp-projection.test.ts
-  receipt-cleanup.test.ts
+  index.test.ts
+  projection-contract.test.ts
+  workspace-projection.test.ts
 ```
 
 Engine bridge tests:
 
 ```text
 packages/engine-bridge/src/
-  adapter-contract.test.ts
-  invocation-state.test.ts
-  native-resume.test.ts
-  cancel-reconciler.test.ts
-  event-redaction.test.ts
+  bridge-contract.test.ts
+  index.test.ts
+```
+
+Host daemon tests:
+
+```text
+packages/host-daemon/src/
+  modes/worker.local.test.ts
+  shared/middleware/error-handler.test.ts
 ```
 
 CLI and browser tests:
 
 ```text
 apps/cli/src/freeform-golden-path.test.ts
+apps/cli/src/aiworker.test.ts
 tests/browser/freeform-cli-golden-path.spec.ts
 tests/browser/freeform-mounted-workbench.spec.ts
 ```
@@ -111,17 +124,20 @@ Coverage status values:
 | Host metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
 | Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
 
-## Future Gates
+## Current Release Gates
 
-As packages land, add:
+Current release confidence is built from these gates:
 
 ```text
+bun run docs:check
+bun run test:contracts
 bun run test:protocol
-bun run test:sdk
-bun run test:host
-bun run test:engine
 bun run test:cli
 bun run test:browser:freeform
+bun run typecheck
+bun run lint
+bun run build
+bun run test
 bun run check
 ```
 
