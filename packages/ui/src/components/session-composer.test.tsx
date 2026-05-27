@@ -124,16 +124,16 @@ describe('sessionComposer', () => {
     expect(onMentionDismiss).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the selected template trigger to one title line while menu options can include descriptions', () => {
+  it('keeps the selected mode trigger to one title line while mode options can include descriptions', () => {
     const { container } = render(
       <SessionComposer
         ariaLabel="Profile context"
         onSubmit={vi.fn()}
-        onTemplateChange={vi.fn()}
+        onModeChange={vi.fn()}
         onValueChange={vi.fn()}
-        selectedTemplateId="profile-update-proposal"
+        selectedModeId="profile-update-proposal"
         submitAriaLabel="Send"
-        templateOptions={[
+        modeOptions={[
           {
             description: 'profile-update-proposal',
             label: '候选人档案草案',
@@ -270,7 +270,7 @@ describe('sessionComposer', () => {
     expect(previewButton.closest('[data-slot="card"]')).toBeNull()
   })
 
-  it('submits a neutral managed draft with text, materials, template and mentions', async () => {
+  it('submits a neutral managed draft with text, materials, mode and mentions', async () => {
     const onSubmitDraft = vi.fn()
     const onValueChange = vi.fn()
     const file = new File(['hello'], 'notes.txt', { type: 'text/plain' })
@@ -289,9 +289,9 @@ describe('sessionComposer', () => {
         mentionOptions={[{ id: 'review-notes', label: 'Review notes' }]}
         onSubmitDraft={onSubmitDraft}
         onValueChange={onValueChange}
-        selectedTemplateId="review-template"
+        selectedModeId="review-mode"
         submitAriaLabel="Start"
-        templateOptions={[{ label: 'Review template', value: 'review-template' }]}
+        modeOptions={[{ label: 'Review mode', value: 'review-mode' }]}
         value="Use $review-notes"
         variant="large"
       />,
@@ -306,7 +306,7 @@ describe('sessionComposer', () => {
     const draft = onSubmitDraft.mock.calls[0]?.[0]
     expect(draft).toMatchObject({
       text: 'Use $review-notes',
-      selectedTemplateId: 'review-template',
+      selectedModeId: 'review-mode',
       mentions: [{ id: 'review-notes', kind: 'skill', label: 'Review notes' }],
       materials: [{
         content: 'hello',
@@ -319,7 +319,7 @@ describe('sessionComposer', () => {
     expect(draft.files[0]).toBe(file)
   })
 
-  it('shows the controlled selected template label and submits its id', async () => {
+  it('shows the controlled selected mode label and submits its id', async () => {
     const onSubmitDraft = vi.fn()
 
     render(
@@ -335,26 +335,26 @@ describe('sessionComposer', () => {
         }}
         defaultValue="Create the profile"
         onSubmitDraft={onSubmitDraft}
-        onTemplateChange={vi.fn()}
-        selectedTemplateId="aiworker-hr.person-profile"
+        onModeChange={vi.fn()}
+        selectedModeId="aiworker-demo-people.profile"
         submitAriaLabel="Start"
-        templateLabel="Capability/template"
-        templateOptions={[{
+        modeLabel="Mode"
+        modeOptions={[{
           description: 'Create a source-backed people profile snapshot.',
           label: 'Person Profile',
-          value: 'aiworker-hr.person-profile',
+          value: 'aiworker-demo-people.profile',
         }]}
       />,
     )
 
-    expect(screen.getByRole('combobox', { name: 'Capability/template' }).textContent).toContain('Person Profile')
+    expect(screen.getByRole('combobox', { name: 'Mode' }).textContent).toContain('Person Profile')
     expect((screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement).disabled).toBe(false)
 
     fireEvent.submit(screen.getByRole('form', { name: 'Session input' }))
 
     await waitFor(() => expect(onSubmitDraft).toHaveBeenCalledTimes(1))
     expect(onSubmitDraft.mock.calls[0]?.[0]).toMatchObject({
-      selectedTemplateId: 'aiworker-hr.person-profile',
+      selectedModeId: 'aiworker-demo-people.profile',
       text: 'Create the profile',
     })
   })

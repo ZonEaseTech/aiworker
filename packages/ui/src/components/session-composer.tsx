@@ -102,21 +102,21 @@ export interface SessionComposerProps {
   onMentionSelect?: (option: SessionComposerMentionOption) => void
   onRemoveAttachment?: (id: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
-  onTemplateChange?: (value: string) => void
+  onModeChange?: (value: string) => void
   onValueChange: (value: string) => void
   placeholder?: string
   secondaryActions?: SessionComposerAction[]
-  selectedTemplateId?: string
+  selectedModeId?: string
   statusAction?: SessionComposerAction
   submitAriaLabel: string
   submitDisabled?: boolean
   submitIcon?: ReactNode
   submitting?: boolean
   submitTitle?: string
-  templateClassName?: string
-  templateContentClassName?: string
-  templateLabel?: string
-  templateOptions?: SessionComposerOption[]
+  modeClassName?: string
+  modeContentClassName?: string
+  modeLabel?: string
+  modeOptions?: SessionComposerOption[]
   title?: ReactNode
   usage?: SessionComposerUsage
   value: string
@@ -130,18 +130,18 @@ export interface SessionComposerActionBarProps {
   attachmentTriggerLabel?: string
   disabled?: boolean
   onAddAttachments?: () => void
-  onTemplateChange?: (value: string) => void
+  onModeChange?: (value: string) => void
   secondaryActions?: SessionComposerAction[]
-  selectedTemplateId?: string
+  selectedModeId?: string
   statusAction?: SessionComposerAction
   submitAriaLabel: string
   submitIcon?: ReactNode
   submitting?: boolean
   submitTitle?: string
-  templateClassName?: string
-  templateContentClassName?: string
-  templateLabel?: string
-  templateOptions?: SessionComposerOption[]
+  modeClassName?: string
+  modeContentClassName?: string
+  modeLabel?: string
+  modeOptions?: SessionComposerOption[]
   usage?: SessionComposerUsage
 }
 
@@ -168,21 +168,21 @@ export function SessionComposer({
   onMentionSelect,
   onRemoveAttachment,
   onSubmit,
-  onTemplateChange,
+  onModeChange,
   onValueChange,
   placeholder,
   secondaryActions = EMPTY_COMPOSER_ACTIONS,
-  selectedTemplateId,
+  selectedModeId,
   statusAction,
   submitAriaLabel,
   submitDisabled = false,
   submitIcon,
   submitting = false,
   submitTitle,
-  templateClassName,
-  templateContentClassName,
-  templateLabel,
-  templateOptions = EMPTY_COMPOSER_OPTIONS,
+  modeClassName,
+  modeContentClassName,
+  modeLabel,
+  modeOptions = EMPTY_COMPOSER_OPTIONS,
   title,
   usage,
   value,
@@ -292,18 +292,18 @@ export function SessionComposer({
           attachmentTriggerLabel={attachmentTriggerLabel}
           disabled={!canSubmit}
           onAddAttachments={onAddAttachments}
-          onTemplateChange={onTemplateChange}
+          onModeChange={onModeChange}
           secondaryActions={secondaryActions}
-          selectedTemplateId={selectedTemplateId}
+          selectedModeId={selectedModeId}
           statusAction={statusAction}
           submitAriaLabel={submitAriaLabel}
           submitIcon={submitIcon}
           submitting={submitting}
           submitTitle={submitTitle}
-          templateClassName={templateClassName}
-          templateContentClassName={templateContentClassName}
-          templateLabel={templateLabel}
-          templateOptions={templateOptions}
+          modeClassName={modeClassName}
+          modeContentClassName={modeContentClassName}
+          modeLabel={modeLabel}
+          modeOptions={modeOptions}
           usage={usage}
         />
       </InputGroup>
@@ -480,25 +480,25 @@ export function SessionComposerActionBar({
   attachmentTriggerLabel,
   disabled = false,
   onAddAttachments,
-  onTemplateChange,
+  onModeChange,
   secondaryActions = EMPTY_COMPOSER_ACTIONS,
-  selectedTemplateId,
+  selectedModeId,
   statusAction,
   submitAriaLabel,
   submitIcon,
   submitting = false,
   submitTitle,
-  templateClassName,
-  templateContentClassName,
-  templateLabel = 'Proposal type',
-  templateOptions = EMPTY_COMPOSER_OPTIONS,
+  modeClassName,
+  modeContentClassName,
+  modeLabel = 'Mode',
+  modeOptions = EMPTY_COMPOSER_OPTIONS,
   usage,
 }: SessionComposerActionBarProps) {
-  const templateSelect = onTemplateChange && templateOptions.length > 0
-    ? { onChange: onTemplateChange, value: selectedTemplateId }
+  const modeSelect = onModeChange && modeOptions.length > 0
+    ? { onChange: onModeChange, value: selectedModeId }
     : null
-  const selectedTemplateOption = templateSelect
-    ? templateOptions.find(option => option.value === templateSelect.value)
+  const selectedModeOption = modeSelect
+    ? modeOptions.find(option => option.value === modeSelect.value)
     : null
 
   return (
@@ -530,21 +530,21 @@ export function SessionComposerActionBar({
       </ItemActions>
 
       <ItemActions data-session-slot="composer-action-main" className="min-w-0 flex-1 justify-end gap-2">
-        {templateSelect
+        {modeSelect
           ? (
-              <Select value={templateSelect.value ?? ''} onValueChange={templateSelect.onChange}>
+              <Select value={modeSelect.value ?? ''} onValueChange={modeSelect.onChange}>
                 <SelectTrigger
-                  aria-label={templateLabel}
-                  className={cn('max-w-full', templateClassName)}
+                  aria-label={modeLabel}
+                  className={cn('max-w-full', modeClassName)}
                   size="sm"
                 >
                   <span data-slot="select-value" className="flex min-w-0 items-center gap-1.5 truncate">
-                    {selectedTemplateOption?.label ?? templateLabel}
+                    {selectedModeOption?.label ?? modeLabel}
                   </span>
                 </SelectTrigger>
-                <SelectContent className={templateContentClassName} side="top" data-side="top">
+                <SelectContent className={modeContentClassName} side="top" data-side="top">
                   <SelectGroup>
-                    {templateOptions.map(option => (
+                    {modeOptions.map(option => (
                       <SelectItem key={option.value} value={option.value} textValue={typeof option.label === 'string' ? option.label : undefined}>
                         <ItemContent asChild className="min-w-0 gap-0.5">
                           <span>

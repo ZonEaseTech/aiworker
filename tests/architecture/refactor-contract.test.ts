@@ -1174,6 +1174,29 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'Web Host tests should use generic descriptor fixtures, not old app-local product identities').toEqual([])
   })
 
+  test('shared SessionComposer uses neutral selector terminology instead of retired template ids', () => {
+    const sharedComposerSources = [
+      'packages/ui/src/components/session-composer.tsx',
+      'packages/ui/src/components/managed-session-composer.tsx',
+      'packages/ui/src/components/session-composer.test.tsx',
+    ]
+    const retiredSelectorSnippets = [
+      'selectedTemplateId',
+      'templateOptions',
+      'onTemplateChange',
+      'templateLabel',
+    ]
+
+    const findings = sharedComposerSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return retiredSelectorSnippets
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'shared composer primitives should not preserve retired capability-template terminology').toEqual([])
+  })
+
   test('active protocol/runtime/daemon/web/test source no longer exposes legacy Soul manifest compatibility', () => {
     const activeSources = [
       ...listSourceFiles('packages'),
