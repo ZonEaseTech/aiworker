@@ -390,33 +390,6 @@ function hostedApp({
   }
 }
 
-function mountedRouteApp({
-  appId,
-  appName,
-}: {
-  appId: string
-  appName: string
-  routes: Array<{
-    entry?: string
-    id: string
-    label: string
-    path: string
-    scope?: 'app' | 'artifact' | 'review' | 'session' | 'workspace'
-  }>
-}): HostedSoulApp {
-  return hostedApp({ appId, appName })
-}
-
-function universalRoute(label = 'Universal Workbench') {
-  return {
-    entry: '/micro-app/workbench/universal',
-    id: 'universal-workbench',
-    label,
-    path: '/workbench/universal',
-    scope: 'app' as const,
-  }
-}
-
 function listWebSourceFiles(relativeDir: string): string[] {
   const root = path.join(process.cwd(), relativeDir)
   if (!existsSync(root))
@@ -928,10 +901,9 @@ describe('worker studio', () => {
   })
 
   it('renders descriptor workbench through the micro-app mount path without legacy route projection', async () => {
-    currentApps = [mountedRouteApp({
+    currentApps = [hostedApp({
       appId: 'aiworker-hr',
       appName: 'AIWorker HR',
-      routes: [universalRoute()],
     })]
     window.history.replaceState(null, '', '/workers/hr-worker')
 
@@ -961,10 +933,9 @@ describe('worker studio', () => {
   it('passes the resolved dark Host theme to mounted route URL and micro-app data', async () => {
     currentSettings = { ...currentSettings, appearance: 'dark' }
     currentApps = [
-      mountedRouteApp({
+      hostedApp({
         appId: 'aiworker-hr',
         appName: 'AIWorker HR',
-        routes: [universalRoute()],
       }),
     ]
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
@@ -986,10 +957,9 @@ describe('worker studio', () => {
 
   it('updates mounted route theme data when Host appearance changes without reloading', async () => {
     currentApps = [
-      mountedRouteApp({
+      hostedApp({
         appId: 'aiworker-hr',
         appName: 'AIWorker HR',
-        routes: [universalRoute()],
       }),
     ]
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
@@ -1017,10 +987,9 @@ describe('worker studio', () => {
       { createdAt: now, defaultEngineId: 'codex', id: 'qa-worker', metadataJson: {}, name: 'QA', soulId: QA_SOUL_ID, status: 'active', updatedAt: now },
     ]
     currentApps = [
-      mountedRouteApp({
+      hostedApp({
         appId: 'aiworker-qa',
         appName: 'AIWorker QA',
-        routes: [universalRoute()],
       }),
     ]
     const qaWorkspace = { ...workspace, id: 'qa-workspace', name: 'QA Workspace', workerId: 'qa-worker', updatedAt: '2026-05-24T06:49:06.848Z' }
@@ -1241,23 +1210,17 @@ describe('worker studio', () => {
       { createdAt: now, defaultEngineId: 'codex', id: 'custom-worker', metadataJson: {}, name: 'Custom', soulId: CUSTOM_SOUL_ID, status: 'active', updatedAt: now },
     ]
     currentApps = [
-      mountedRouteApp({
+      hostedApp({
         appId: 'aiworker-hr',
         appName: 'AIWorker HR',
-        routes: [
-          universalRoute(),
-          { entry: '/micro-app/routes/hr-home', id: 'hr-home', label: 'HR People Workbench', path: '/hr', scope: 'workspace' },
-        ],
       }),
-      mountedRouteApp({
+      hostedApp({
         appId: 'aiworker-qa',
         appName: 'AIWorker QA',
-        routes: [universalRoute()],
       }),
-      mountedRouteApp({
+      hostedApp({
         appId: 'aiworker-custom',
         appName: 'AIWorker Custom',
-        routes: [universalRoute()],
       }),
     ]
     window.history.replaceState(null, '', '/workers/hr-worker')
@@ -1286,13 +1249,9 @@ describe('worker studio', () => {
       { createdAt: now, defaultEngineId: 'codex', id: 'qa-worker', metadataJson: {}, name: 'QA', soulId: QA_SOUL_ID, status: 'active', updatedAt: now },
     ]
     currentApps = [
-      mountedRouteApp({
+      hostedApp({
         appId: 'aiworker-hr',
         appName: 'AIWorker HR',
-        routes: [
-          universalRoute(),
-          { entry: '/micro-app/routes/hr-home', id: 'hr-home', label: 'HR People Workbench', path: '/hr', scope: 'workspace' },
-        ],
       }),
     ]
     window.history.replaceState(null, '', '/workers/hr-worker')
@@ -1577,10 +1536,10 @@ describe('worker studio', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByText('Soul Apps (2)')).toBeNull()
     expect(screen.queryByText('Enabled · 0.1.0')).toBeNull()
-    expect(screen.queryByText('10 permissions')).toBeNull()
+    expect(screen.queryByText('10 access entries')).toBeNull()
     expect(screen.queryByText('API /api/apps/aiworker-hr')).toBeNull()
     expect(screen.queryByText('Route People workbench · /hr/people')).toBeNull()
-    expect(screen.queryByText('3 mounted contributions')).toBeNull()
+    expect(screen.queryByText('3 mounted workbenches')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Developer details' })).toBeNull()
 
     openHostSettings()
@@ -1594,7 +1553,7 @@ describe('worker studio', () => {
     expect(within(dialog).getByText('Enabled · 0.1.0')).toBeTruthy()
     const permissionsBadge = within(dialog).getByText('10 access entries')
     expect(permissionsBadge.getAttribute('data-slot')).toBe('badge')
-    expect(within(dialog).getAllByText('1 mounted contribution').some(item => item.getAttribute('data-slot') === 'badge')).toBe(true)
+    expect(within(dialog).getAllByText('1 mounted workbench').some(item => item.getAttribute('data-slot') === 'badge')).toBe(true)
     const disableHrButton = within(dialog).getByRole('button', { name: 'Disable AIWorker HR' })
     expect(disableHrButton.getAttribute('data-slot')).toBe('button')
     expect(disableHrButton.classList.contains('settings-action-button')).toBe(false)

@@ -588,7 +588,7 @@ function SoulAppsSettings({
                     <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
                       <Badge variant="outline">{soulAppsCopy.permissionCount(permissionCount)}</Badge>
                       <Badge variant="outline">{soulAppsCopy.templateCount(templateCount)}</Badge>
-                      <Badge variant="outline">{soulAppsCopy.mountedContributionCount(workbenchCount)}</Badge>
+                      <Badge variant="outline">{soulAppsCopy.mountedWorkbenchCount(workbenchCount)}</Badge>
                     </ItemActions>
                     <ItemGroup className="gap-2" aria-label={`${app.name} app access`}>
                       {permissionLabels.length > 0
@@ -604,7 +604,7 @@ function SoulAppsSettings({
                       {app.projectedCapabilities.length > 0
                         ? (
                             <ItemContent className="gap-1.5">
-                              <Kbd className="h-auto w-fit uppercase">{soulAppsCopy.descriptorPermissionsTitle}</Kbd>
+                              <Kbd className="h-auto w-fit uppercase">{soulAppsCopy.capabilitiesTitle}</Kbd>
                               <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
                                 {app.projectedCapabilities.slice(0, 4).map(capability => <Badge key={capability.id} variant="outline">{capability.name}</Badge>)}
                               </ItemActions>

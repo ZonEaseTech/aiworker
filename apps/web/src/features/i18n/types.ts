@@ -123,7 +123,6 @@ export interface StaticMessages {
     followUpInput: string
     followUpPlaceholder: string
     hideDeveloperDetails: string
-    mountedContributionsPaused: string
     mountedSlotCount: (count: number) => string
     noEvents: string
     noOtherWorkspaces: string
@@ -264,16 +263,16 @@ export interface StaticMessages {
     }
     soulPacks: {
       apiRoute: (routePrefix: string) => string
+      capabilitiesTitle: string
       connectorStatus: (connectorId: string, status: string) => string
       connectorsTitle: string
-      descriptorPermissionsTitle: string
       disableApp: (name: string) => string
       disabledConnector: string
       empty: string
       enableApp: (name: string) => string
       enabledConnector: string
       hint: string
-      mountedContributionCount: (count: number) => string
+      mountedWorkbenchCount: (count: number) => string
       permissionsTitle: string
       permissionCount: (count: number) => string
       templateCount: (count: number) => string
