@@ -2008,6 +2008,60 @@ describe('LocalWorkerRuntime', () => {
     ]))
   })
 
+  it('suppresses baseline projected assets with disabled standard worker config overlays', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-disabled-config-overlay')
+    await writeMcpClientEngineAssets(appRoot)
+
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    }, { engineAssets: mcpClientEngineAssets() })
+
+    await workerRuntime.init()
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'skill-overlay:disable-candidate-profile',
+      source: 'web',
+      configValueJson: {
+        enabled: false,
+        kind: 'skill-overlay',
+        options: {
+          replaces: 'descriptor://engine/skills/candidate-profile',
+        },
+        target: 'codex',
+      },
+    })
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'mcp-overlay:disable-codex',
+      source: 'web',
+      configValueJson: {
+        enabled: false,
+        kind: 'mcp-overlay',
+        options: {
+          replaces: 'descriptor://engine/mcp/codex',
+        },
+        target: 'codex',
+      },
+    })
+
+    const workspace = await workerRuntime.createWorkspace({ name: 'Disabled config overlay workspace' })
+    const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
+      projections: Array<{ target: string }>
+    }
+
+    await expect(stat(join(workspace.rootPath, '.agents', 'skills', 'demo-soul-app-candidate-profile', 'SKILL.md'))).rejects.toThrow()
+    await expect(readFile(join(workspace.rootPath, '.claude', 'skills', 'demo-soul-app-candidate-profile', 'SKILL.md'), 'utf8')).resolves.toContain('Candidate Profile')
+    await expect(stat(join(workspace.rootPath, '.codex', 'config.toml'))).rejects.toThrow()
+    expect(receipt.projections).not.toContainEqual(expect.objectContaining({
+      target: '.agents/skills/demo-soul-app-candidate-profile/SKILL.md',
+    }))
+    expect(receipt.projections).not.toContainEqual(expect.objectContaining({
+      target: '.codex/config.toml',
+    }))
+  })
+
   it('rejects worker overlay source refs that escape descriptor engine assets', async () => {
     const appRoot = join(dir, 'souls', 'demo-soul-app-overlay-escape')
     await writeProfileEngineAssets(appRoot)
