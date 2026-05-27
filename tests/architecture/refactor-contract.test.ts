@@ -770,6 +770,24 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'Host runtime should expose capability lookup helpers, not template helper aliases').toEqual([])
   })
 
+  test('Host runtime tests use generic worker fixtures instead of retired HR worker ids', () => {
+    const source = readRepoFile('packages/host-runtime/src/worker/runtime.test.ts')
+    const retiredWorkerSnippets = [
+      'worker-hr',
+      'AIWorker HR',
+      'HR Recruiting',
+      'HR Talent',
+      'soulId: \'hr\'',
+      '"soulId": "hr"',
+    ]
+
+    const findings = retiredWorkerSnippets
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `packages/host-runtime/src/worker/runtime.test.ts: ${snippet}`)
+
+    expect(findings, 'Host runtime tests should keep worker fixtures generic').toEqual([])
+  })
+
   test('Soul protocol capability projection helpers do not expose retired template names', () => {
     const activeSources = [
       'packages/soul-protocol/src/soul-app/index.ts',

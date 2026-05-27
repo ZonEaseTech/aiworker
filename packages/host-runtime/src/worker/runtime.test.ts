@@ -43,12 +43,12 @@ describe('LocalWorkerRuntime', () => {
   function runtime(executor: ConstructorParameters<typeof LocalWorkerRuntime>[0]['executor']) {
     return new LocalWorkerRuntime({
       worker: {
-        id: 'worker-hr',
-        soulId: 'hr',
-        name: 'HR',
+        id: 'worker-demo',
+        soulId: 'demo-soul',
+        name: 'Demo',
         defaultEngineId: 'codex',
       },
-      workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
       now,
       executor,
     })
@@ -61,9 +61,9 @@ describe('LocalWorkerRuntime', () => {
   ) {
     return new LocalWorkerRuntime({
       worker: {
-        id: 'worker-hr',
+        id: 'worker-demo',
         soulId: 'demo-soul-app',
-        name: 'AIWorker HR',
+        name: 'Demo Worker',
         defaultEngineId: options.defaultEngineId ?? 'codex',
       },
       engineAssetSource: {
@@ -71,7 +71,7 @@ describe('LocalWorkerRuntime', () => {
         ...(options.engineAssets ? { engineAssets: options.engineAssets } : {}),
         sourceRoot,
       },
-      workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
       now,
       executor,
     })
@@ -194,7 +194,7 @@ describe('LocalWorkerRuntime', () => {
     expect(result.events.map(event => event.type)).toEqual(['status', 'status'])
 
     const snapshot = workerRuntime.snapshot()
-    expect(snapshot.worker.soulId).toBe('hr')
+    expect(snapshot.worker.soulId).toBe('demo-soul')
     expect(snapshot.workspaces).toHaveLength(1)
     expect(snapshot.sessions[0]?.capabilityId).toBe('candidate-screen')
     expect(snapshot.sessions[0]?.status).toBe('active')
@@ -209,12 +209,12 @@ describe('LocalWorkerRuntime', () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
-        id: 'worker-hr',
-        soulId: 'hr',
-        name: 'HR',
+        id: 'worker-demo',
+        soulId: 'demo-soul',
+        name: 'Demo',
         defaultEngineId: 'codex',
       },
-      workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
       now,
       executor: {
         async invoke() {
@@ -427,12 +427,12 @@ describe('LocalWorkerRuntime', () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
-        id: 'worker-hr',
-        soulId: 'hr',
-        name: 'HR',
+        id: 'worker-demo',
+        soulId: 'demo-soul',
+        name: 'Demo',
         defaultEngineId: 'codex',
       },
-      workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
       now,
       executor: {
         async invoke() {
@@ -458,7 +458,7 @@ describe('LocalWorkerRuntime', () => {
             callOrder.push('adapter.start')
             expect(request.engineTarget).toBe('codex')
             expect(typeof request.sessionId).toBe('string')
-            expect(request.workerId).toBe('worker-hr')
+            expect(request.workerId).toBe('worker-demo')
             expect(typeof request.workspaceId).toBe('string')
             sink.event({
               data: { text: 'Bridge text' },
@@ -517,12 +517,12 @@ describe('LocalWorkerRuntime', () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
-        id: 'worker-hr',
-        soulId: 'hr',
-        name: 'HR',
+        id: 'worker-demo',
+        soulId: 'demo-soul',
+        name: 'Demo',
         defaultEngineId: 'codex',
       },
-      workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
       now,
       executor: {
         async invoke() {
@@ -1042,12 +1042,12 @@ describe('LocalWorkerRuntime', () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
-        id: 'worker-hr',
-        soulId: 'hr',
-        name: 'HR',
+        id: 'worker-demo',
+        soulId: 'demo-soul',
+        name: 'Demo',
         defaultEngineId: 'codex',
       },
-      workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
       now,
       executor: {
         async invoke() {
@@ -1132,12 +1132,12 @@ describe('LocalWorkerRuntime', () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
-        id: 'worker-hr',
-        soulId: 'hr',
-        name: 'HR',
+        id: 'worker-demo',
+        soulId: 'demo-soul',
+        name: 'Demo',
         defaultEngineId: 'codex',
       },
-      workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
       now,
       executor: {
         async invoke() {
@@ -1223,12 +1223,12 @@ describe('LocalWorkerRuntime', () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
-        id: 'worker-hr',
-        soulId: 'hr',
-        name: 'HR',
+        id: 'worker-demo',
+        soulId: 'demo-soul',
+        name: 'Demo',
         defaultEngineId: 'codex',
       },
-      workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
       now,
       executor: {
         async invoke() {
@@ -1439,7 +1439,7 @@ describe('LocalWorkerRuntime', () => {
     ).resolves.toContain('"engineId": "codex"')
     await expect(
       workerRuntime.files(workspace.id).read(`.aiworker/sessions/${session.id}/context/soul-app.json`),
-    ).resolves.toContain('"soulId": "hr"')
+    ).resolves.toContain('"soulId": "demo-soul"')
   })
 
   it('keeps runtime workspaces isolated when two workers share one Soul', async () => {
@@ -1448,16 +1448,16 @@ describe('LocalWorkerRuntime', () => {
         return { summary: 'ok' }
       },
     }
-    const recruitingRuntime = runtimeFor({ id: 'worker-hr-recruiting', soulId: 'hr', name: 'HR Recruiting' }, executor)
-    const talentRuntime = runtimeFor({ id: 'worker-hr-talent-pool', soulId: 'hr', name: 'HR Talent Pool' }, executor)
+    const recruitingRuntime = runtimeFor({ id: 'worker-demo-primary', soulId: 'demo-soul', name: 'Demo Primary' }, executor)
+    const talentRuntime = runtimeFor({ id: 'worker-demo-secondary', soulId: 'demo-soul', name: 'Demo Secondary' }, executor)
 
     await recruitingRuntime.init()
     await talentRuntime.init()
     const recruitingWorkspace = await recruitingRuntime.createWorkspace({ name: 'Open roles' })
     const talentWorkspace = await talentRuntime.createWorkspace({ name: 'Talent pool' })
 
-    expect(recruitingRuntime.snapshot().worker.soulId).toBe('hr')
-    expect(talentRuntime.snapshot().worker.soulId).toBe('hr')
+    expect(recruitingRuntime.snapshot().worker.soulId).toBe('demo-soul')
+    expect(talentRuntime.snapshot().worker.soulId).toBe('demo-soul')
     expect(recruitingRuntime.snapshot().workspaces.map(workspace => workspace.id)).toEqual([recruitingWorkspace.id])
     expect(talentRuntime.snapshot().workspaces.map(workspace => workspace.id)).toEqual([talentWorkspace.id])
   })
