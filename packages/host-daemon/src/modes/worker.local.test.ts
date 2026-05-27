@@ -435,6 +435,58 @@ describe('local daemon API', () => {
     expect(await secretRes.json()).toMatchObject({ error: { code: 'WORKER_OVERLAY_SECRET' } })
   })
 
+  it('stores worker config envelopes with secret references but rejects literal secrets', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+
+    const saveRes = await target.request(`/api/workers/${worker.id}/config/engine-selection`, {
+      body: JSON.stringify({
+        checksum: 'sha256:engine-selection',
+        enabled: true,
+        kind: 'engine-selection',
+        options: {
+          profileTokenRef: 'secretref:codex/default-profile',
+        },
+        sourceRef: 'descriptor://configuration/default-engine',
+        target: 'codex',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(saveRes.status).toBe(200)
+    expect(await saveRes.json()).toMatchObject({
+      config: {
+        archived: false,
+        configKey: 'engine-selection',
+        value: {
+          enabled: true,
+          kind: 'engine-selection',
+          options: {
+            profileTokenRef: 'secretref:codex/default-profile',
+          },
+          target: 'codex',
+          updatedBy: 'web',
+        },
+        workerId: worker.id,
+      },
+    })
+
+    const literalSecretRes = await target.request(`/api/workers/${worker.id}/config/literal-secret`, {
+      body: JSON.stringify({
+        enabled: true,
+        kind: 'mcp-overlay',
+        options: {
+          apiKey: 'sk-abcdefghijklmnop',
+        },
+        target: 'codex',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(literalSecretRes.status).toBe(422)
+    expect(await literalSecretRes.json()).toMatchObject({ error: { code: 'WORKER_CONFIG_SECRET' } })
+  })
+
   it('proxies descriptor-declared app-owned API without exposing Host workbench action routes', async () => {
     const target = await app()
     const appRoot = join(dir, 'api-soul')

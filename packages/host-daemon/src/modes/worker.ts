@@ -1014,7 +1014,7 @@ function containsLiteralSecret(content: string): boolean {
 }
 
 function isSecretReference(value: string): boolean {
-  return value.trim().length === 0 || value.startsWith('$') || value.startsWith('env:')
+  return value.trim().length === 0 || value.startsWith('$') || value.startsWith('env:') || value.startsWith('secretref:')
 }
 
 function readString(value: unknown, fallback: string): string {
