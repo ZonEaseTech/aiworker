@@ -6,9 +6,19 @@ export {
 export type {
   LocalInfoResponse,
   LocalWorkspaceData,
+  WorkerConfigMutationResponse,
+  WorkerConfigResponse,
+  WorkerConfigSaveBody,
+  WorkerConfigSource,
+  WorkerConfigValueResponse,
   WorkerOverlayResponse,
   WorkerOverlaySaveBody,
 } from './types'
+export {
+  archiveWorkerConfigValue,
+  loadWorkerConfig,
+  saveWorkerConfigValue,
+} from './worker-config'
 export {
   loadWorkerOverlay,
   projectWorkerWorkspaceOverlay,
