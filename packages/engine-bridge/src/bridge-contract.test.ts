@@ -7,6 +7,8 @@ interface EngineBridge {
   discover: (target: string) => Promise<unknown>
   followUp: (request: Record<string, unknown>) => Promise<unknown>
   normalize: (target: string, chunk: Record<string, unknown>) => unknown[]
+  reattachInvocationEvents: (request: Record<string, unknown>) => Promise<unknown>
+  reconcileInvocation: (request: Record<string, unknown>) => Promise<unknown>
   startInvocation: (request: Record<string, unknown>) => Promise<unknown>
 }
 
@@ -61,12 +63,35 @@ function createContractHarness(options: {
   projectionReceiptState?: 'valid' | 'missing' | 'stale'
   supportsNativeResume?: boolean
   latestExternalSessionRef?: unknown
+  cancelFails?: boolean
   processBelongsToInvocation?: boolean
+  rawChunkStoreFails?: boolean
+  reconciledProcessState?: 'lost' | 'spawned'
 } = {}) {
   const createEngineBridge = expectExportedFunction('createEngineBridge')
   const callOrder: string[] = []
   const storedRawChunks: unknown[] = []
   const storedBridgeEvents: unknown[] = []
+  const listedBridgeEvents = [
+    {
+      data: { text: 'token=sk-test-secret' },
+      id: 3,
+      invocationId: 'invocation-follow-up',
+      type: 'invocation.output.delta',
+    },
+    {
+      id: 4,
+      invocationId: 'other-invocation',
+      type: 'invocation.progress',
+    },
+    {
+      exitCode: 0,
+      id: 5,
+      invocationId: 'invocation-follow-up',
+      type: 'process.exited',
+    },
+  ]
+  const listBridgeEvents = mock(async () => listedBridgeEvents)
 
   const adapter = {
     target: 'codex',
@@ -109,6 +134,8 @@ function createContractHarness(options: {
     }),
     cancel: mock(async () => {
       callOrder.push('adapter.cancel')
+      if (options.cancelFails)
+        throw new Error('cancel failed authorization = "literal-secret-value"')
       return { completed: true, stage: 'protocol' }
     }),
     normalize: mock((chunk: { type?: string }) => [{ type: chunk.type ?? 'invocation.progress' }]),
@@ -125,12 +152,22 @@ function createContractHarness(options: {
         throw new Error('must not terminate a newer invocation')
       callOrder.push('process.terminateGroup')
     }),
+    inspect: mock(async (handle: { invocationId: string }, guard: { invocationId: string }) => {
+      expect(handle.invocationId).toBe(guard.invocationId)
+      callOrder.push('process.inspect')
+      return {
+        diagnostic: 'process vanished with token=sk-test-secret',
+        invocationId: handle.invocationId,
+        state: options.reconciledProcessState ?? 'lost',
+      }
+    }),
   }
 
   const engineBridge = createEngineBridge({
     adapters: [adapter],
     bridgeEventStore: {
       append: mock(async (event: unknown) => storedBridgeEvents.push(event)),
+      list: listBridgeEvents,
     },
     cancelGracePeriodMs: 0,
     processManager,
@@ -144,7 +181,11 @@ function createContractHarness(options: {
       }),
     },
     rawChunkStore: {
-      append: mock(async (chunk: unknown) => storedRawChunks.push(chunk)),
+      append: mock(async (chunk: unknown) => {
+        if (options.rawChunkStoreFails)
+          throw new Error('raw chunk store failed with token=sk-test-secret')
+        storedRawChunks.push(chunk)
+      }),
     },
     resolveLatestExternalSessionRef: mock(async () => options.latestExternalSessionRef),
   }) as EngineBridge
@@ -153,7 +194,9 @@ function createContractHarness(options: {
     adapter,
     callOrder,
     engineBridge,
+    listBridgeEvents,
     processManager,
+    listedBridgeEvents,
     storedBridgeEvents,
     storedRawChunks,
   }
@@ -169,6 +212,8 @@ describe('engine-bridge B+ adapter contract exports', () => {
     expect(engineBridge.followUp).toBeFunction()
     expect(engineBridge.cancelInvocation).toBeFunction()
     expect(engineBridge.normalize).toBeFunction()
+    expect(engineBridge.reattachInvocationEvents).toBeFunction()
+    expect(engineBridge.reconcileInvocation).toBeFunction()
     expect(failureCodes).toEqual(expectedFailureCodes)
   })
 
@@ -184,6 +229,21 @@ describe('engine-bridge B+ adapter contract exports', () => {
       'lost',
     ])
     expect(exported.ENGINE_PROCESS_STATES).toEqual(['not_spawned', 'spawned', 'exited', 'killed', 'lost'])
+  })
+
+  test('exports a generic bridge redaction helper for native engine diagnostics', () => {
+    const redactEngineBridgeValue = expectExportedFunction('redactEngineBridgeValue')
+
+    const redacted = redactEngineBridgeValue({
+      headers: { authorization: 'Bearer native-secret-token' },
+      lines: ['token=sk-test-secret', 'apiKey = "literal-secret-value"'],
+      profile: { token: 'literal-secret-value' },
+    })
+
+    expect(JSON.stringify(redacted)).not.toContain('native-secret-token')
+    expect(JSON.stringify(redacted)).not.toContain('sk-test-secret')
+    expect(JSON.stringify(redacted)).not.toContain('literal-secret-value')
+    expect(JSON.stringify(redacted)).toContain('[REDACTED]')
   })
 })
 
@@ -227,6 +287,29 @@ describe('engine-bridge start invocation contract', () => {
     expect(storedPayload).not.toContain('sk-test-secret')
     expect(storedPayload).toContain('[REDACTED]')
     expect(storedBridgeEvents).toContainEqual(expect.objectContaining({ type: 'invocation.output.delta' }))
+  })
+
+  test('fails start invocation when redacted raw chunk persistence fails', async () => {
+    const { engineBridge } = createContractHarness({ rawChunkStoreFails: true })
+
+    try {
+      await engineBridge.startInvocation({
+        capabilityDescriptorRef: 'capability/hr-review',
+        cwd: '/workspace',
+        engineTarget: 'codex',
+        input: { body: 'start' },
+        invocationId: 'invocation-start',
+        projectionReceiptId: 'projection-receipt-1',
+        sessionId: 'session-1',
+        workerId: 'worker-1',
+        workspaceLocatorId: 'workspace-1',
+      })
+      throw new Error('expected startInvocation to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({ code: 'BRIDGE_REDACTION_FAILED' })
+      expect(error instanceof Error ? error.message : String(error)).not.toContain('sk-test-secret')
+    }
   })
 })
 
@@ -295,6 +378,25 @@ describe('engine-bridge cancel contract', () => {
     expect(adapter.cancel).not.toHaveBeenCalled()
     expect(processManager.terminateGroup).not.toHaveBeenCalled()
   })
+
+  test('redacts adapter cancellation failure diagnostics', async () => {
+    const { engineBridge } = createContractHarness({ cancelFails: true })
+
+    try {
+      await engineBridge.cancelInvocation({
+        handle: { invocationId: 'invocation-start', pid: 101 },
+        invocationId: 'invocation-start',
+        reason: 'user-request',
+      })
+      throw new Error('expected cancelInvocation to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({ code: 'ENGINE_CANCEL_FAILED' })
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).not.toContain('literal-secret-value')
+      expect(message).toContain('[REDACTED]')
+    }
+  })
 })
 
 describe('engine-bridge normalized event class contract', () => {
@@ -312,5 +414,80 @@ describe('engine-bridge normalized event class contract', () => {
     const { engineBridge } = createContractHarness()
 
     expect(() => engineBridge.normalize('codex', { data: '{}', stream: 'protocol', type })).toThrow(/domain|forbidden|bridge event/i)
+  })
+})
+
+describe('engine-bridge event reattach contract', () => {
+  test('reattaches invocation-scoped normalized bridge events from a cursor without leaking secrets', async () => {
+    const { engineBridge, listBridgeEvents } = createContractHarness()
+
+    const result = await engineBridge.reattachInvocationEvents({
+      after: 2,
+      invocationId: 'invocation-follow-up',
+      limit: 2,
+    })
+
+    expect(result).toEqual({
+      after: 2,
+      events: [
+        {
+          data: { text: 'token=[REDACTED]' },
+          id: 3,
+          invocationId: 'invocation-follow-up',
+          type: 'invocation.output.delta',
+        },
+        {
+          exitCode: 0,
+          id: 5,
+          invocationId: 'invocation-follow-up',
+          type: 'process.exited',
+        },
+      ],
+      invocationId: 'invocation-follow-up',
+      nextAfter: 5,
+    })
+    expect(listBridgeEvents).toHaveBeenCalledWith({
+      after: 2,
+      invocationId: 'invocation-follow-up',
+      limit: 2,
+    })
+    expect(JSON.stringify(result)).not.toContain('sk-test-secret')
+  })
+})
+
+describe('engine-bridge reconciler contract', () => {
+  test('classifies lost native processes as invocation state without changing session lifecycle', async () => {
+    const { engineBridge, processManager, storedBridgeEvents } = createContractHarness()
+
+    const result = await engineBridge.reconcileInvocation({
+      handle: { invocationId: 'invocation-lost', pid: 404 },
+      invocationId: 'invocation-lost',
+    })
+
+    expect(result).toEqual({
+      events: [
+        {
+          diagnostic: 'process vanished with token=[REDACTED]',
+          failureCode: 'ENGINE_PROCESS_LOST',
+          invocationId: 'invocation-lost',
+          processState: 'lost',
+          type: 'process.lost',
+        },
+      ],
+      failureCode: 'ENGINE_PROCESS_LOST',
+      invocationId: 'invocation-lost',
+      processState: 'lost',
+      status: 'lost',
+    })
+    expect(processManager.inspect).toHaveBeenCalledWith(
+      { invocationId: 'invocation-lost', pid: 404 },
+      { invocationId: 'invocation-lost' },
+    )
+    expect(storedBridgeEvents).toContainEqual(expect.objectContaining({
+      failureCode: 'ENGINE_PROCESS_LOST',
+      type: 'process.lost',
+    }))
+    expect(result).not.toHaveProperty('sessionStatus')
+    expect(JSON.stringify({ result, storedBridgeEvents })).not.toContain('sk-test-secret')
   })
 })

@@ -49,6 +49,8 @@ const ALLOWED_EVENT_TYPE_SET = new Set<string>(ALLOWED_BRIDGE_EVENT_TYPES)
 const SECRET_VALUE_RE = /(Bearer\s+)[\w.~+/-]{12,}|(sk-)[\w-]{8,}|(token=)[^\s"']+|(["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["'])[^"'\n]+(["'])/gi
 
 export type EngineBridgeFailureCode = typeof ENGINE_BRIDGE_FAILURE_CODES[number]
+export type EngineInvocationStatus = typeof ENGINE_INVOCATION_STATUSES[number]
+export type EngineProcessState = typeof ENGINE_PROCESS_STATES[number]
 export type BridgeEventType = typeof ALLOWED_BRIDGE_EVENT_TYPES[number]
 export type EngineTarget = 'claude-code' | 'codex' | string
 
@@ -75,11 +77,17 @@ export interface EngineEventSink {
   raw: (chunk: unknown) => void
 }
 
+export interface BridgeEventStore {
+  append?: (event: unknown) => Promise<unknown>
+  list?: (request: { after: number, invocationId: string, limit: number }) => Promise<unknown[]>
+}
+
 export interface EngineBridgeOptions {
   adapters: EngineAdapter[]
-  bridgeEventStore?: { append: (event: unknown) => Promise<unknown> }
+  bridgeEventStore?: BridgeEventStore
   cancelGracePeriodMs?: number
   processManager?: {
+    inspect?: (handle: unknown, guard: { invocationId: string }) => Promise<unknown>
     softInterrupt?: (handle: unknown, guard: { invocationId: string }) => Promise<unknown>
     terminateGroup?: (handle: unknown, guard: { invocationId: string }) => Promise<unknown>
   }
@@ -95,6 +103,8 @@ export interface EngineBridge {
   discover: (target: EngineTarget) => Promise<EngineAvailability>
   followUp: (request: Record<string, unknown>) => Promise<unknown>
   normalize: (target: EngineTarget, chunk: Record<string, unknown>) => Array<Record<string, unknown>>
+  reattachInvocationEvents: (request: Record<string, unknown>) => Promise<unknown>
+  reconcileInvocation: (request: Record<string, unknown>) => Promise<unknown>
   startInvocation: (request: Record<string, unknown>) => Promise<unknown>
 }
 
@@ -111,6 +121,10 @@ export const engineBridgePackage = {
     'redaction',
   ],
 } as const
+
+export function redactEngineBridgeValue(value: unknown): unknown {
+  return redactValue(value)
+}
 
 export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
   function adapterFor(target: EngineTarget): EngineAdapter {
@@ -129,18 +143,37 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
     }
   }
 
-  function sink(): EngineEventSink {
+  function eventPipeline(): { flush: () => Promise<void>, sink: EngineEventSink } {
+    const pendingWrites: Promise<unknown>[] = []
     return {
-      event(event: unknown): void {
-        const redacted = redactValue(event)
-        for (const normalized of normalizeEvents([redacted as Record<string, unknown>])) {
-          void options.bridgeEventStore?.append(normalized)
+      async flush(): Promise<void> {
+        try {
+          await Promise.all(pendingWrites)
+        }
+        catch (error) {
+          throw bridgeFailure('BRIDGE_REDACTION_FAILED', redactString(errorMessage(error)))
         }
       },
-      raw(chunk: unknown): void {
-        void options.rawChunkStore?.append(redactValue(chunk))
+      sink: {
+        event(event: unknown): void {
+          const redacted = redactValue(event)
+          for (const normalized of normalizeEvents([redacted as Record<string, unknown>])) {
+            const write = options.bridgeEventStore?.append?.(normalized)
+            if (write)
+              pendingWrites.push(Promise.resolve(write))
+          }
+        },
+        raw(chunk: unknown): void {
+          const write = options.rawChunkStore?.append(redactValue(chunk))
+          if (write)
+            pendingWrites.push(Promise.resolve(write))
+        },
       },
     }
+  }
+
+  function normalizeBridgeEvent(event: unknown): Record<string, unknown> {
+    return normalizeEvents([redactValue(event) as Record<string, unknown>])[0]!
   }
 
   return {
@@ -188,10 +221,12 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
         )
       }
 
+      const pipeline = eventPipeline()
       const result = await adapter.followUp({
         ...request,
         externalSessionRef,
-      }, sink())
+      }, pipeline.sink)
+      await pipeline.flush()
 
       return redactValue(result)
     },
@@ -201,10 +236,65 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
       return normalizeEvents(adapter.normalize(chunk).map(event => redactValue(event) as Record<string, unknown>))
     },
 
+    async reattachInvocationEvents(request) {
+      const invocationId = readInvocationId(request)
+      const after = readNonNegativeInteger(request.after, 0)
+      const limit = readPositiveInteger(request.limit, 500)
+      const storedEvents = await options.bridgeEventStore?.list?.({ after, invocationId, limit }) ?? []
+      const events = normalizeEvents(storedEvents
+        .map(event => redactValue(event))
+        .filter(isRecord)
+        .filter(event => readInvocationIdFromEvent(event) === invocationId))
+      return {
+        after,
+        events,
+        invocationId,
+        nextAfter: nextAfter(events, after),
+      }
+    },
+
+    async reconcileInvocation(request) {
+      const invocationId = readInvocationId(request)
+      const handle = readObject(request.handle)
+      if (handle?.invocationId !== invocationId)
+        throw bridgeFailure('ENGINE_PROCESS_LOST', 'Process handle no longer belongs to the requested invocation.')
+      if (!options.processManager?.inspect)
+        throw bridgeFailure('ENGINE_PROCESS_LOST', 'No process manager is available for reconciliation.')
+
+      const observation = readObject(await options.processManager.inspect(handle, { invocationId })) ?? {}
+      const processState = readEngineProcessState(observation.state ?? observation.processState, 'lost')
+      if (processState !== 'lost') {
+        return {
+          events: [],
+          invocationId,
+          processState,
+          status: invocationStatusForProcessState(processState),
+        }
+      }
+
+      const event = normalizeBridgeEvent({
+        diagnostic: readString(observation.diagnostic, 'Native engine process was lost.'),
+        failureCode: 'ENGINE_PROCESS_LOST',
+        invocationId,
+        processState,
+        type: 'process.lost',
+      })
+      await options.bridgeEventStore?.append?.(event)
+      return {
+        events: [event],
+        failureCode: 'ENGINE_PROCESS_LOST',
+        invocationId,
+        processState,
+        status: 'lost',
+      }
+    },
+
     async startInvocation(request) {
       await assertProjectionUsable(request)
       const adapter = adapterFor(readEngineTarget(request))
-      const result = await adapter.start(request, sink())
+      const pipeline = eventPipeline()
+      const result = await adapter.start(request, pipeline.sink)
+      await pipeline.flush()
       return redactValue(result)
     },
   }
@@ -235,14 +325,72 @@ function readObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
 
-function redactValue(value: unknown): unknown {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function readInvocationIdFromEvent(event: Record<string, unknown>): string {
+  return typeof event.invocationId === 'string' ? event.invocationId : ''
+}
+
+function readString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
+}
+
+function readEngineProcessState(value: unknown, fallback: EngineProcessState): EngineProcessState {
+  return typeof value === 'string' && (ENGINE_PROCESS_STATES as readonly string[]).includes(value)
+    ? value as EngineProcessState
+    : fallback
+}
+
+function invocationStatusForProcessState(processState: EngineProcessState): EngineInvocationStatus {
+  if (processState === 'killed')
+    return 'cancelled'
+  if (processState === 'lost')
+    return 'lost'
+  return 'running'
+}
+
+function readNonNegativeInteger(value: unknown, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+function readPositiveInteger(value: unknown, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function nextAfter(events: Array<Record<string, unknown>>, fallback: number): number {
+  return events.reduce((max, event) => Math.max(max, readNonNegativeInteger(event.id, max)), fallback)
+}
+
+function redactValue(value: unknown, key?: string): unknown {
   if (typeof value === 'string')
-    return redactString(value)
+    return redactStringValue(value, key)
   if (Array.isArray(value))
     return value.map(item => redactValue(item))
   if (!value || typeof value !== 'object')
     return value
-  return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, redactValue(nested)]))
+  return Object.fromEntries(Object.entries(value).map(([nestedKey, nested]) => [nestedKey, redactValue(nested, nestedKey)]))
+}
+
+function redactStringValue(value: string, key?: string): string {
+  const redacted = redactString(value)
+  if (redacted !== value)
+    return redacted
+  if (key && isSecretLikeKey(key) && !isSafeSecretReference(value))
+    return '[REDACTED]'
+  return value
+}
+
+function isSecretLikeKey(key: string): boolean {
+  return /api[_-]?key|authorization|password|secret|token/i.test(key)
+}
+
+function isSafeSecretReference(value: string): boolean {
+  const trimmed = value.trim()
+  return trimmed.length === 0 || trimmed === '[REDACTED]' || trimmed.startsWith('$') || trimmed.startsWith('env:') || trimmed.startsWith('secretref:')
 }
 
 function redactString(value: string): string {
@@ -272,7 +420,7 @@ function errorCode(error: unknown, fallback: EngineBridgeFailureCode): EngineBri
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return redactString(error instanceof Error ? error.message : String(error))
 }
 
 async function sleep(ms: number): Promise<void> {
