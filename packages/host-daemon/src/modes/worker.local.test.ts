@@ -1681,6 +1681,64 @@ describe('local daemon API', () => {
     const target = await app()
 
     const openapi = await (await target.request('/openapi.json')).json() as { paths: Record<string, unknown> }
+    const expectedBrokerRoutes: Array<[method: string, path: string]> = [
+      ['post', '/api/app-installation/install'],
+      ['get', '/api/app-installation/apps'],
+      ['get', '/api/app-installation/apps/{appId}'],
+      ['post', '/api/app-installation/apps/{appId}/enable'],
+      ['post', '/api/app-installation/apps/{appId}/archive'],
+      ['delete', '/api/app-installation/apps/{appId}'],
+      ['post', '/api/workers'],
+      ['get', '/api/workers'],
+      ['get', '/api/workers/{workerId}'],
+      ['patch', '/api/workers/{workerId}'],
+      ['post', '/api/workers/{workerId}/archive'],
+      ['delete', '/api/workers/{workerId}'],
+      ['get', '/api/workers/{workerId}/config'],
+      ['put', '/api/workers/{workerId}/config/{configKey}'],
+      ['patch', '/api/workers/{workerId}/config/{configKey}'],
+      ['post', '/api/workers/{workerId}/config/{configKey}/archive'],
+      ['post', '/api/workspace-locators'],
+      ['get', '/api/workspace-locators'],
+      ['get', '/api/workspace-locators/{workspaceId}'],
+      ['patch', '/api/workspace-locators/{workspaceId}'],
+      ['post', '/api/workspace-locators/{workspaceId}/archive'],
+      ['delete', '/api/workspace-locators/{workspaceId}'],
+      ['post', '/api/sessions'],
+      ['get', '/api/sessions'],
+      ['get', '/api/sessions/{sessionId}'],
+      ['patch', '/api/sessions/{sessionId}'],
+      ['post', '/api/sessions/{sessionId}/archive'],
+      ['delete', '/api/sessions/{sessionId}'],
+      ['post', '/api/sessions/{sessionId}/invocations'],
+      ['get', '/api/engine/targets'],
+      ['get', '/api/engine/targets/{target}/readiness'],
+      ['post', '/api/engine/invocations'],
+      ['get', '/api/engine/invocations/{invocationId}'],
+      ['get', '/api/engine/invocations/{invocationId}/events'],
+      ['post', '/api/engine/invocations/{invocationId}/cancel'],
+      ['post', '/api/projections/{target}/refresh'],
+      ['get', '/api/projections/receipts/{receiptId}'],
+      ['post', '/api/projections/receipts/{receiptId}/cleanup'],
+      ['get', '/api/mount/workbench'],
+      ['get', '/api/apps/{appId}'],
+      ['post', '/api/apps/{appId}'],
+      ['put', '/api/apps/{appId}'],
+      ['patch', '/api/apps/{appId}'],
+      ['delete', '/api/apps/{appId}'],
+      ['get', '/api/apps/{appId}/{path}'],
+      ['post', '/api/apps/{appId}/{path}'],
+      ['put', '/api/apps/{appId}/{path}'],
+      ['patch', '/api/apps/{appId}/{path}'],
+      ['delete', '/api/apps/{appId}/{path}'],
+    ]
+    const missingBrokerRoutes = expectedBrokerRoutes.flatMap(([method, path]) =>
+      (openapi.paths[path] as Record<string, unknown> | undefined)?.[method]
+        ? []
+        : [`${method.toUpperCase()} ${path}`],
+    )
+    expect(missingBrokerRoutes).toEqual([])
+
     const localWorkerEngineInvocationPath = ['/api/local/workers', '{workerId}', 'engine/invocations'].join('/')
     expect(Object.keys(openapi.paths)).toContain('/api/sessions/{sessionId}/invocations')
     expect(Object.keys(openapi.paths)).toContain('/api/engine/invocations')
