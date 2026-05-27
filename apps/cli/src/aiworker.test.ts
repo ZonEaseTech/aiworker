@@ -250,6 +250,7 @@ describe('aiworker local CLI', () => {
       ['review', 'list'],
       ['lessons', 'list'],
       ['lessons', 'propose'],
+      ['session', 'start', '--context', 'old free-form context'],
     ]) {
       output = ''
       expect(await runCli(argv(...args))).toBe(1)
@@ -477,8 +478,6 @@ describe('aiworker local CLI', () => {
       FREEFORM_CAPABILITY_ID,
       '--title',
       'Evidence Matrix',
-      '--context',
-      'Synthetic source notes.',
       '--input',
       'Create the evidence matrix.',
     ))).toBe(0)

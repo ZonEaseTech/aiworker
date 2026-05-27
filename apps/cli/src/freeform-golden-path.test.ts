@@ -88,8 +88,6 @@ describe('Freeform CLI golden path', () => {
       FREEFORM_CAPABILITY_ID,
       '--title',
       'Freeform golden session',
-      '--context',
-      'CLI-first golden path context.',
       '--input',
       'Start the Freeform golden path.',
     )

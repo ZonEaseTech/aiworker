@@ -123,7 +123,7 @@ export const testEngineBodySchema = z.object({
 
 export const createSessionBodySchema = z.object({
   capabilityId: z.string().trim().min(1),
-  context: z.string().optional(),
+  context: z.never().optional(),
   engineId: z.string().nullable().optional(),
   input: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -154,7 +154,7 @@ export const createBrokerEngineInvocationBodySchema = createSessionInvocationBod
 })
 
 export const patchSessionBodySchema = z.object({
-  context: z.string().optional(),
+  context: z.never().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   status: z.enum(['active', 'archived', 'deleted']).optional(),
   title: z.string().trim().min(1).optional(),

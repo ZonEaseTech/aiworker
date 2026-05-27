@@ -429,6 +429,31 @@ describe('destructive refactor contract bootstrap', () => {
     expect(cliSource).toContain('opts.capability')
   })
 
+  test('session creation surfaces do not accept Host-owned context text', () => {
+    const sources = [
+      'apps/cli/src/aiworker.ts',
+      'packages/host-daemon/src/modes/worker/schemas.ts',
+      'packages/host-daemon/src/modes/worker.ts',
+      'packages/host-runtime/src/worker/runtime.ts',
+    ].map(path => [path, readRepoFile(path)] as const)
+    const forbidden = [
+      '--context <text>',
+      'session context',
+      'context?: string',
+      'opts.context',
+      'context: z.string().optional()',
+      'context: body.context',
+      'context: input.context',
+    ]
+    const findings = sources.flatMap(([path, source]) =>
+      forbidden
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`),
+    )
+
+    expect(findings, 'Host session creation should carry locator metadata and invocation input, not free-form context content').toEqual([])
+  })
+
   test('engine invocation prompts use capability language without retired template copy', () => {
     const sources = [
       'packages/host-runtime/src/worker/runtime.ts',

@@ -129,7 +129,6 @@ describe('local daemon API', () => {
     const sessionRes = await target.request(`/api/local/workers/${workerId}/workspaces/${workspace.id}/sessions`, {
       body: JSON.stringify({
         capabilityId: FREEFORM_CAPABILITY,
-        context: 'Use the Freeform Soul.',
         title: 'Freeform session',
       }),
       headers: { 'content-type': 'application/json' },
@@ -360,7 +359,6 @@ describe('local daemon API', () => {
     const sessionRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
       body: JSON.stringify({
         capabilityId: FREEFORM_CAPABILITY,
-        context: 'Create session and first invocation.',
         input: 'Start through the daemon session create route.',
         title: 'First invocation session',
       }),
@@ -411,6 +409,41 @@ describe('local daemon API', () => {
 
     expect(legacyRes.status).toBe(400)
     expect(await legacyRes.json()).toMatchObject({ error: { code: 'CREATE_SESSION_INVALID' } })
+  })
+
+  it('rejects Host-owned free-form session notes in write bodies', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'freeform-context-reject-worker')
+    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'Context Reject Workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+
+    const rejectedCreateRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+      body: JSON.stringify({
+        capabilityId: FREEFORM_CAPABILITY,
+        context: 'Host must not store this free-form session note.',
+        title: 'Rejected context session',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(rejectedCreateRes.status).toBe(400)
+    expect(await rejectedCreateRes.json()).toMatchObject({ error: { code: 'CREATE_SESSION_INVALID' } })
+
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+    const rejectedPatchRes = await target.request(`/api/sessions/${session.id}`, {
+      body: JSON.stringify({
+        context: 'Host must not patch free-form session note.',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(rejectedPatchRes.status).toBe(400)
+    expect(await rejectedPatchRes.json()).toMatchObject({ error: { code: 'PATCH_SESSION_INVALID' } })
   })
 
   it('honors workspace locator rootPath for app-owned workspace projection', async () => {

@@ -881,7 +881,7 @@ async function deleteWorkspaceCommand(id: string): Promise<void> {
   })
 }
 
-async function startSessionCommand(opts: { capability?: string, context?: string, engine?: string, input?: string, model?: string, reasoning?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
+async function startSessionCommand(opts: { capability?: string, engine?: string, input?: string, model?: string, reasoning?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
   const paths = await ensureDb()
   const runtime = await ensureRuntime({ worker: opts.worker })
   const workspaceId = requireText(opts.workspace, 'workspace')
@@ -900,7 +900,6 @@ async function startSessionCommand(opts: { capability?: string, context?: string
     workspaceId,
     capabilityId: capability.id,
     title: requireText(opts.title, 'title'),
-    context: opts.context ?? '',
     metadata: engineMetadata,
   })
   const input = requireText(opts.input, 'input')
@@ -1461,7 +1460,6 @@ function registerCommands(): void {
     .option('--workspace <id>', 'workspace id')
     .option('--capability <id>', 'capability id')
     .option('--title <text>', 'session title')
-    .option('--context <text>', 'session context')
     .option('--input <text>', 'initial invocation input')
     .option('--engine <id>', 'engine id for this new session')
     .option('--model <id>', 'Codex model override')

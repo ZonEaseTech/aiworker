@@ -1744,7 +1744,6 @@ async function createWorkspaceSessionFromBody(
   workspace: WorkspaceRow,
   body: {
     capabilityId: string
-    context?: string
     engineId?: null | string
     input?: string
     metadata?: Record<string, unknown>
@@ -1765,7 +1764,6 @@ async function createWorkspaceSessionFromBody(
       workspaceId: workspace.id,
       capabilityId: capability.id,
       title: body.title,
-      context: body.context ?? '',
       metadata,
     })
   }

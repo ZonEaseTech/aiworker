@@ -68,8 +68,6 @@ try {
     capabilityId,
     '--title',
     'Freeform CLI browser golden path',
-    '--context',
-    'Browser proof should use this CLI-created locator.',
     '--input',
     'Start the Freeform CLI browser golden path.',
   )

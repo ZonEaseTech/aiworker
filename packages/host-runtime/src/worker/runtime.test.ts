@@ -167,7 +167,6 @@ describe('LocalWorkerRuntime', () => {
       workspaceId: workspace.id,
       capabilityId: 'candidate-screen',
       title: 'Screen candidate',
-      context: 'Review the packet.',
       metadata: {
         outputKind: 'candidate-screen',
         capabilityName: 'Candidate Screen',
@@ -307,7 +306,6 @@ describe('LocalWorkerRuntime', () => {
       workspaceId: workspace.id,
       capabilityId: 'freeform',
       title: 'Session-level invocation',
-      context: 'Use only session-level bridge state.',
       metadata: {
         outputKind: 'freeform',
       },
@@ -782,7 +780,6 @@ describe('LocalWorkerRuntime', () => {
       workspaceId: workspace.id,
       capabilityId: 'candidate-profile',
       title: 'Candidate pool',
-      context: 'Use $interview-brief for this resume.',
       metadata: {
         mentions: [{ id: 'interview-brief', kind: 'skill', label: 'Interview brief' }],
       },
@@ -1414,7 +1411,7 @@ describe('LocalWorkerRuntime', () => {
     expect(JSON.stringify(result)).not.toContain('sk-runtime-secret')
   })
 
-  it('materializes simplified session context with cwd, engine, and soul-app files', async () => {
+  it('materializes simplified session locator files with cwd, engine, and soul-app files', async () => {
     const workerRuntime = runtime({
       async invoke(_input) {
         return { summary: 'ok' }

@@ -87,7 +87,6 @@ export interface CreateLocalSessionInput {
   workspaceId: string
   capabilityId: string
   title: string
-  context?: string
   metadata?: Record<string, unknown>
 }
 
@@ -304,7 +303,6 @@ export class LocalWorkerRuntime {
       workspaceId: workspace.id,
       capabilityId: input.capabilityId,
       title: input.title,
-      context: input.context ?? '',
       status: 'active',
       metadataJson: sessionMetadata,
       startedAt: this.#now(),
