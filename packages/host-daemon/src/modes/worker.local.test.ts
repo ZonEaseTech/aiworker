@@ -310,6 +310,16 @@ describe('local daemon API', () => {
         workerId: worker.id,
         workspaceId: workspace.id,
       },
+      microApp: {
+        data: {
+          mountTokenPresent: false,
+          sessionId: session.id,
+          workerId: worker.id,
+          workspaceId: workspace.id,
+        },
+        name: `${FREEFORM_APP_ID}--workbench`,
+        url: `/api/apps/${FREEFORM_APP_ID}/micro-app/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&sessionId=${session.id}`,
+      },
       mount: {
         appId: FREEFORM_APP_ID,
         entry: `/api/apps/${FREEFORM_APP_ID}/micro-app/workbench`,
@@ -317,23 +327,6 @@ describe('local daemon API', () => {
         type: 'micro-app',
       },
       routerMode: 'search',
-    })
-
-    const surfaceRes = await target.request(`/api/local/apps/${FREEFORM_APP_ID}/surfaces/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&theme=light`)
-    expect(surfaceRes.status).toBe(200)
-    const surface = await surfaceRes.json() as {
-      microApp: {
-        data: { mountTokenPresent: boolean, workerId: string, workspaceId: string }
-        url: string
-      }
-    }
-    expect(surface.microApp).toMatchObject({
-      data: {
-        mountTokenPresent: false,
-        workerId: worker.id,
-        workspaceId: workspace.id,
-      },
-      url: `/api/apps/${FREEFORM_APP_ID}/micro-app/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&theme=light`,
     })
 
     const htmlRes = await target.request(`/api/apps/${FREEFORM_APP_ID}/micro-app/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&theme=light`)

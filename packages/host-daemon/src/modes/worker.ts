@@ -1,5 +1,5 @@
 import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-host-runtime'
-import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppMountedSurface } from '@zonease/aiworker-soul-protocol'
+import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData } from '@zonease/aiworker-soul-protocol'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import type { Context } from 'hono'
@@ -111,7 +111,12 @@ interface MountedSurfaceContribution {
   kind: 'artifact-preview' | 'panel' | 'review-panel' | 'route' | 'workspace-widget'
   label: string
   path?: string
-  surface: SoulAppMountedSurface
+  surface: {
+    entry: string
+    renderer: 'micro-app'
+    requiredPermissions?: readonly string[]
+    scope: 'app' | 'artifact' | 'review' | 'session' | 'workspace'
+  }
   target?: string
 }
 
@@ -241,14 +246,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.post('/api/local/apps/:appId/healthcheck', c => c.json({ app: state.host.healthcheckApp(c.req.param('appId')) }))
   app.get('/api/local/souls', c => c.json({ souls: state.host.listSouls() }))
   app.get('/api/local/templates', c => c.json({ templates: state.host.listCapabilityTemplates() }))
-  app.get('/api/local/apps/:appId/surfaces/:surfaceId', async (c) => {
-    const app = state.host.getApp(c.req.param('appId'))
-    if (!app)
-      return notFound(c, 'Soul App')
-    if (app.status !== 'enabled')
-      return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-    return mountedSurfaceResponse(c, state, app, c.req.param('surfaceId'))
-  })
   app.get('/api/app-installation/apps', c => c.json({ apps: state.host.listApps() }))
   app.post('/api/app-installation/install', async (c) => {
     const result = await parseJsonBody(c, installAppBodySchema, 'INSTALL_APP_INVALID')
@@ -719,37 +716,45 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const workerId = c.req.query('workerId')
     const workspaceId = c.req.query('workspaceId')
     const sessionId = c.req.query('sessionId')
-    if (!workerId || !workspaceId || !sessionId)
-      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: 'workerId, workspaceId, and sessionId are required.' } }, 400)
+    if (!workerId)
+      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: 'workerId is required.' } }, 400)
     const worker = requireWorker(workerId)
-    const workspace = requireWorkerWorkspace(worker.id, workspaceId)
-    const session = requireWorkerSession(worker.id, sessionId)
-    if (session.workspaceId !== workspace.id)
+    const workspace = workspaceId ? requireWorkerWorkspace(worker.id, workspaceId) : null
+    const session = sessionId ? requireWorkerSession(worker.id, sessionId) : null
+    if (workspace && session && session.workspaceId !== workspace.id)
       return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} does not belong to workspace ${workspace.id}` } }, 400)
     const app = state.host.getApp(worker.soulId)
     if (!app)
       return notFound(c, 'Soul App')
     if (app.status !== 'enabled')
       return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-    const workbenchEntries = findWorkbenchMountContributions(app)
-    if (workbenchEntries.length === 0)
+    const contribution = descriptorWorkbenchContribution(app)
+    if (!contribution)
       return c.json({ error: { code: 'WORKBENCH_ENTRY_NOT_FOUND', message: `Soul App does not declare a mounted workbench entry: ${app.appId}` } }, 404)
-    if (workbenchEntries.length > 1)
-      return c.json({ error: { code: 'WORKBENCH_ENTRY_AMBIGUOUS', message: `Soul App declares multiple mounted workbench entries: ${app.appId}` } }, 409)
-    const contribution = workbenchEntries[0]!
+    const service = await resolveMountedSoulAppServiceOrResponse(c, state, app)
+    if (service instanceof Response)
+      return service
+    const sourceUrl = new URL(c.req.url)
+    const entry = `${appOwnedApiRoutePrefix(app)}${contribution.surface.entry}`
     return c.json({
       locator: {
-        sessionId: session.id,
+        sessionId: session?.id ?? null,
         workerId: worker.id,
-        workspaceId: workspace.id,
+        workspaceId: workspace?.id ?? null,
+      },
+      microApp: {
+        data: mountedMicroAppData(c, state, app, service, contribution),
+        name: `${app.appId}--${contribution.id}`,
+        url: `${entry}${sourceUrl.search}`,
       },
       mount: {
         appId: app.appId,
-        entry: `${appOwnedApiRoutePrefix(app)}${contribution.surface.entry}`,
+        entry,
         surfaceId: contribution.id,
         type: contribution.surface.renderer,
       },
       routerMode: 'search',
+      surface: publicMountedSurfaceContribution(contribution),
     })
   })
 
@@ -1077,82 +1082,6 @@ function enrichTemplateMetadata(_state: LocalDaemonState, _workerId: string, _te
   return metadata
 }
 
-async function mountedSurfaceResponse(c: Context, state: LocalDaemonState, app: HostedSoulApp, surfaceId: string): Promise<Response> {
-  const contribution = findMountedSurfaceContribution(app, surfaceId)
-  if (!contribution)
-    return c.json({ error: { code: 'SOUL_APP_SURFACE_NOT_FOUND', message: `Mounted surface is not declared: ${surfaceId}` } }, 404)
-
-  if (contribution.surface.renderer === 'micro-app') {
-    const service = await resolveMountedSoulAppServiceOrResponse(c, state, app)
-    if (service instanceof Response)
-      return service
-    const sourceUrl = new URL(c.req.url)
-    return c.json({
-      microApp: {
-        data: mountedMicroAppData(c, state, app, service, contribution),
-        name: `${app.appId}--${contribution.id}`,
-        url: `${appOwnedApiRoutePrefix(app)}${contribution.surface.entry}${sourceUrl.search}`,
-      },
-      surface: publicMountedSurfaceContribution(contribution),
-    })
-  }
-
-  const service = await mountedSoulAppServiceOrResponse(c, state, app)
-  if (service instanceof Response)
-    return service
-
-  const sourceUrl = new URL(c.req.url)
-  const targetUrl = new URL(contribution.surface.entry, service.baseUrl)
-  targetUrl.search = sourceUrl.search
-  const headers = mountedProxyHeaders(c.req.raw.headers)
-  applyMountedProxyContextHeaders(headers, c, state, app, service, contribution)
-
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), MOUNTED_PROXY_TIMEOUT_MS)
-  try {
-    const res = await fetch(targetUrl, {
-      headers,
-      method: 'GET',
-      redirect: 'manual',
-      signal: controller.signal,
-    })
-    const responseHeaders = new Headers(res.headers)
-    responseHeaders.delete('content-encoding')
-    responseHeaders.delete('transfer-encoding')
-    if (contribution.surface.renderer === 'host-descriptor' && responseHeaders.get('content-type')?.includes('application/json')) {
-      const descriptor = await res.json() as Record<string, unknown>
-      responseHeaders.set('content-type', 'application/json')
-      return new Response(JSON.stringify({
-        ...descriptor,
-        appId: app.appId,
-        authority: 'soul-app',
-        cache: {
-          cachedAt: (state.now ? new Date(state.now()) : new Date()).toISOString(),
-          freshness: 'non-authoritative',
-        },
-      }), {
-        headers: responseHeaders,
-        status: res.status,
-        statusText: res.statusText,
-      })
-    }
-    return new Response(res.body, {
-      headers: responseHeaders,
-      status: res.status,
-      statusText: res.statusText,
-    })
-  }
-  catch (error) {
-    const aborted = controller.signal.aborted
-    return mountedServiceError(c, app, aborted ? 'SOUL_APP_SERVICE_TIMEOUT' : 'SOUL_APP_SERVICE_UNREACHABLE', aborted
-      ? `Mounted Soul App service timed out after ${MOUNTED_PROXY_TIMEOUT_MS}ms.`
-      : error instanceof Error ? error.message : String(error), aborted ? 504 : 502)
-  }
-  finally {
-    clearTimeout(timeout)
-  }
-}
-
 async function proxyMountedSoulAppApi(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<Response> {
   const staticResponse = await descriptorMountedAssetResponse(c, app)
   if (staticResponse)
@@ -1347,9 +1276,8 @@ async function descriptorMountedAssetResponse(c: Context, app: HostedSoulApp): P
   const sourceUrl = new URL(c.req.url)
   const appPrefix = `/api/apps/${app.appId}/`
   const relativeRequestPath = decodeURIComponent(sourceUrl.pathname.slice(appPrefix.length))
-  const contribution = findWorkbenchMountContributions(app)
-    .find(entry => relativeRequestPath === entry.surface.entry.replace(/^\//, ''))
-  if (!contribution)
+  const contribution = descriptorWorkbenchContribution(app)
+  if (!contribution || relativeRequestPath !== contribution.surface.entry.replace(/^\//, ''))
     return null
 
   const workbenchEntry = app.descriptor?.workbench?.entry
@@ -1401,54 +1329,21 @@ function contentTypeForMountedAsset(filePath: string): string {
   return 'application/octet-stream'
 }
 
-function findMountedSurfaceContribution(app: HostedSoulApp, surfaceId: string): MountedSurfaceContribution | null {
-  const contributions: MountedSurfaceContribution[] = [
-    ...app.manifest.ui.routes.filter(route => route.surface).map(route => ({
-      id: route.id,
-      kind: 'route' as const,
-      label: route.label,
-      path: route.path,
-      surface: route.surface!,
-    })),
-    ...app.manifest.ui.panels.filter(slot => slot.surface).map(slot => ({
-      id: slot.id,
-      kind: 'panel' as const,
-      label: slot.label,
-      surface: slot.surface!,
-      target: slot.target,
-    })),
-    ...app.manifest.ui.artifactPreviews.filter(slot => slot.surface).map(slot => ({
-      id: slot.id,
-      kind: 'artifact-preview' as const,
-      label: slot.label,
-      surface: slot.surface!,
-      target: slot.target,
-    })),
-    ...(app.manifest.ui.workspaceWidgets ?? []).filter(slot => slot.surface).map(slot => ({
-      id: slot.id,
-      kind: 'workspace-widget' as const,
-      label: slot.label,
-      surface: slot.surface!,
-      target: slot.target,
-    })),
-  ]
-  return contributions.find(contribution => contribution.id === surfaceId) ?? null
-}
+function descriptorWorkbenchContribution(app: HostedSoulApp): MountedSurfaceContribution | null {
+  if (app.descriptor?.workbench?.type !== 'micro-app')
+    return null
 
-function findWorkbenchMountContributions(app: HostedSoulApp): MountedSurfaceContribution[] {
-  return app.manifest.ui.routes
-    .filter(route => route.surface?.renderer === 'micro-app' && isWorkbenchMountEntry(route.surface.entry))
-    .map(route => ({
-      id: route.id,
-      kind: 'route' as const,
-      label: route.label,
-      path: route.path,
-      surface: route.surface!,
-    }))
-}
-
-function isWorkbenchMountEntry(surfaceEntry: string): boolean {
-  return surfaceEntry === '/micro-app/workbench' || surfaceEntry.startsWith('/micro-app/workbench/')
+  return {
+    id: 'workbench',
+    kind: 'route',
+    label: 'Workbench',
+    path: '/workbench',
+    surface: {
+      entry: '/micro-app/workbench',
+      renderer: 'micro-app',
+      scope: 'app',
+    },
+  }
 }
 
 async function resolveMountedSoulAppService(state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | null> {

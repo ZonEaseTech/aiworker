@@ -21,7 +21,7 @@ export {
   disableSoulApp,
   enableSoulApp,
   loadLocalWorkspaceData,
-  resolveMountedSurface,
+  resolveMountedWorkbench,
 } from './workspace-data'
 export {
   createWorkspace,

@@ -319,7 +319,7 @@ let currentApps: Array<{
         path: string
         surface?: {
           entry?: string
-          renderer: 'host-descriptor' | 'micro-app'
+          renderer: 'micro-app'
           scope?: 'app' | 'artifact' | 'review' | 'session' | 'workspace'
         }
       }>
@@ -352,7 +352,12 @@ let currentApps: Array<{
           requiredPermissions?: string[]
         }
       }
-      workspaceWidgets?: Array<{ id: string, label: string, surface?: { renderer: 'host-descriptor' | 'micro-app' } }>
+      workspaceWidgets?: Array<{ id: string, label: string, surface?: { renderer: 'micro-app' } }>
+    }
+  }
+  descriptor?: {
+    workbench?: {
+      type: 'micro-app'
     }
   }
   mountedContribution?: {
@@ -417,6 +422,11 @@ function mountedRouteApp({
 }): typeof currentApps[number] {
   return {
     appId,
+    descriptor: {
+      workbench: {
+        type: 'micro-app',
+      },
+    },
     manifest: {
       name: appName,
       ui: {
@@ -445,6 +455,21 @@ function mountedRouteApp({
     },
     status: 'enabled',
     version: '0.1.0',
+  }
+}
+
+function appWithDescriptorWorkbench(app: typeof currentApps[number]): typeof currentApps[number] {
+  if (app.descriptor?.workbench?.type === 'micro-app')
+    return app
+  if ((app.mountedContribution?.microAppSurfaceIds?.length ?? 0) === 0)
+    return app
+  return {
+    ...app,
+    descriptor: {
+      workbench: {
+        type: 'micro-app',
+      },
+    },
   }
 }
 
@@ -609,7 +634,7 @@ beforeEach(() => {
     if (url.endsWith('/api/local/info'))
       return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
     if (url.endsWith('/api/local/apps'))
-      return json({ apps: currentApps })
+      return json({ apps: currentApps.map(appWithDescriptorWorkbench) })
     if (url.endsWith('/api/local/apps/aiworker-qa/enable') && method === 'POST') {
       const enabled = currentApps.find(app => app.appId === 'aiworker-qa')
       currentApps = currentApps.map(app => app.appId === 'aiworker-qa' ? { ...app, status: 'enabled' } : app)
@@ -627,57 +652,52 @@ beforeEach(() => {
       })
     }
     const requestUrl = new URL(url, 'http://local.test')
-    const mountedSurfaceMatch = requestUrl.pathname.match(/^\/api\/local\/apps\/([^/]+)\/surfaces\/([^/]+)$/)
-    if (mountedSurfaceMatch) {
-      const appId = mountedSurfaceMatch[1]!
-      const surfaceId = mountedSurfaceMatch[2]!
-      const mountedApp = currentApps
-        .find(app => app.appId === appId)
-      const mountedRoute = mountedApp
-        ?.manifest
-        .ui
-        ?.routes
-        ?.find(route => route.id === surfaceId)
-      if (mountedRoute?.surface?.renderer === 'micro-app') {
-        return json({
-          microApp: {
-            data: {
-              appId,
-              sessionId: requestUrl.searchParams.get('sessionId') ?? null,
-              surfaceId,
-              workerId: requestUrl.searchParams.get('workerId') ?? null,
-              workspaceId: requestUrl.searchParams.get('workspaceId') ?? null,
-              theme: requestUrl.searchParams.get('theme') ?? null,
-            },
-            name: `${appId}--${surfaceId}`,
-            url: `/api/apps/${appId}${mountedRoute.surface.entry ?? `/micro-app/routes/${surfaceId}`}${requestUrl.search}`,
-          },
-          surface: { id: surfaceId, kind: 'route', label: mountedRoute.label, renderer: 'micro-app', scope: mountedRoute.surface.scope ?? null },
-        })
-      }
+    if (requestUrl.pathname === '/api/mount/workbench') {
+      const workerId = requestUrl.searchParams.get('workerId')
+      const worker = currentWorkers.find(item => item.id === workerId)
+      const mountedApp = currentApps.map(appWithDescriptorWorkbench)
+        .find(app => app.appId === worker?.soulId || app.appId === worker?.id || app.appId === HR_SOUL_ID)
+        ?? currentApps.map(appWithDescriptorWorkbench).find(app => app.descriptor?.workbench?.type === 'micro-app')
+      const surfaceId = mountedApp?.mountedContribution?.microAppSurfaceIds?.[0] ?? 'workbench'
+      const routePath = mountedApp?.mountedContribution?.routePaths?.[0] ?? '/workbench'
+      const appId = mountedApp?.appId ?? HR_SOUL_ID
+      const entry = surfaceId === 'universal-workbench'
+        ? '/micro-app/workbench/universal'
+        : `/micro-app/routes/${surfaceId}`
+      const label = surfaceId === 'universal-workbench'
+        ? 'Universal Workbench'
+        : surfaceId === 'hr-session'
+          ? 'HR Session Workbench'
+          : surfaceId === 'hr-home'
+            ? 'HR People Workbench'
+            : 'Workbench'
+      const scope = surfaceId === 'universal-workbench' ? 'app' : surfaceId === 'hr-session' ? 'session' : 'workspace'
       return json({
-        actions: [{ id: 'create-profile-draft', label: 'Create profile draft' }],
-        fields: [
-          { label: 'Domain', value: 'hr-people-ops' },
-          { label: 'Source connector', value: 'ats' },
-        ],
-        status: 'ready',
-        title: 'HR Mounted Workbench',
-        type: 'aiworker.surface.descriptor.v1',
-      })
-    }
-    if (url.endsWith('/api/local/apps/aiworker-hr/surfaces/hr-people-widget')) {
-      return json({
+        locator: {
+          sessionId: requestUrl.searchParams.get('sessionId') ?? null,
+          workerId,
+          workspaceId: requestUrl.searchParams.get('workspaceId') ?? null,
+        },
         microApp: {
           data: {
-            appId: 'aiworker-hr',
-            surfaceId: 'hr-people-widget',
-            theme: null,
+            appId,
+            sessionId: requestUrl.searchParams.get('sessionId') ?? null,
+            surfaceId,
+            workerId,
+            workspaceId: requestUrl.searchParams.get('workspaceId') ?? null,
+            theme: requestUrl.searchParams.get('theme') ?? null,
           },
-          name: 'aiworker-hr--hr-people-widget',
-          url: '/api/apps/aiworker-hr/micro-app/widgets/hr-people-widget',
+          name: `${appId}--${surfaceId}`,
+          url: `/api/apps/${appId}${entry}${requestUrl.search}`,
         },
-        surface: { id: 'hr-people-widget', kind: 'workspace-widget', label: 'People widget', renderer: 'micro-app' },
+        mount: {
+          appId,
+          entry: `/api/apps/${appId}${entry}`,
+          surfaceId,
+          type: 'micro-app',
+        },
+        routerMode: 'search',
+        surface: { id: surfaceId, kind: 'route', label, path: routePath, renderer: 'micro-app', scope },
       })
     }
     if (url.endsWith('/api/apps/aiworker-hr/micro-app/widgets/hr-people-widget')) {
@@ -1000,7 +1020,7 @@ describe('worker studio', () => {
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',
     })
-    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
+    expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
     expect(screen.queryByText('What do you want to build in Hiring Workspace?')).toBeNull()
     expect(screen.queryByRole('combobox', { name: /capability|skill|template/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /\$ skill/i })).toBeNull()
@@ -1033,7 +1053,7 @@ describe('worker studio', () => {
       workerId: 'hr-worker',
       workspaceId: null,
     })
-    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/universal-workbench?workerId=hr-worker&theme=light', expect.objectContaining({ headers: {} }))
+    expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&theme=light', expect.objectContaining({ headers: {} }))
     expect(screen.queryByTestId('universal-workbench')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expect(lastSessionRequestBody).toBeNull()
@@ -1062,7 +1082,7 @@ describe('worker studio', () => {
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',
     })
-    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/universal-workbench?workerId=hr-worker&workspaceId=workspace-1&theme=dark', expect.objectContaining({ headers: {} }))
+    expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=dark', expect.objectContaining({ headers: {} }))
   })
 
   it('updates mounted route theme data when Host appearance changes without reloading', async () => {
@@ -1292,7 +1312,7 @@ describe('worker studio', () => {
     expect(window.location.pathname).toBe('/workers/hr-worker')
   })
 
-  it('shows the workbench switch only for workers whose Soul App declares multiple micro-app routes', async () => {
+  it('does not expose a workbench switch because descriptor v1 resolves one production workbench', async () => {
     currentSouls = [
       ...currentSouls,
       {
@@ -1346,10 +1366,8 @@ describe('worker studio', () => {
 
     const switcher = await screen.findByTestId('worker-switcher')
     fireEvent.click(within(switcher).getByRole('button', { name: 'Configure HR' }))
-    fireEvent.click(screen.getByRole('button', { name: /^Workbench/ }))
-    expect(screen.getByRole('tablist', { name: 'Workbench routes' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Universal Workbench' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'HR People Workbench' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Workbench/ })).toBeNull()
+    expect(screen.queryByRole('tablist', { name: 'Workbench routes' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
     fireEvent.click(within(switcher).getByRole('button', { name: 'Configure QA' }))
@@ -1362,7 +1380,7 @@ describe('worker studio', () => {
     expect(screen.queryByRole('tablist', { name: 'Workbench routes' })).toBeNull()
   })
 
-  it('keeps active workbench route selection scoped to each worker', async () => {
+  it('keeps descriptor workbench resolution single-entry across workers', async () => {
     currentWorkers = [
       { createdAt: now, defaultEngineId: 'codex', id: 'hr-worker', metadataJson: {}, name: 'HR Primary', soulId: HR_SOUL_ID, status: 'active', updatedAt: now },
       { createdAt: now, defaultEngineId: 'codex', id: 'hr-worker-secondary', metadataJson: {}, name: 'HR Secondary', soulId: HR_SOUL_ID, status: 'active', updatedAt: now },
@@ -1383,16 +1401,13 @@ describe('worker studio', () => {
 
     const switcher = await screen.findByTestId('worker-switcher')
     fireEvent.click(within(switcher).getByRole('button', { name: 'Configure HR Primary' }))
-    fireEvent.click(screen.getByRole('button', { name: /^Workbench/ }))
-    fireEvent.click(screen.getByRole('tab', { name: 'HR People Workbench' }))
-    await screen.findByTitle('HR People Workbench')
+    expect(screen.queryByRole('button', { name: /^Workbench/ })).toBeNull()
+    expect(screen.queryByRole('tablist', { name: 'Workbench routes' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
     fireEvent.click(within(switcher).getByRole('button', { name: 'Configure HR Secondary' }))
-    fireEvent.click(screen.getByRole('button', { name: /^Workbench/ }))
-
-    expect(screen.getByRole('tab', { name: 'Universal Workbench' }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByRole('tab', { name: 'HR People Workbench' }).getAttribute('aria-selected')).toBe('false')
+    expect(screen.queryByRole('button', { name: /^Workbench/ })).toBeNull()
+    expect(screen.queryByRole('tablist', { name: 'Workbench routes' })).toBeNull()
   })
 
   it('falls back to first-run Soul App home when every persisted worker is orphaned', async () => {
@@ -1443,6 +1458,7 @@ describe('worker studio', () => {
       version: '0.1.0',
     }]
 
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
     const hostTopBar = await screen.findByLabelText('Host actions')
@@ -1477,7 +1493,7 @@ describe('worker studio', () => {
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',
     })
-    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
+    expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
     expect(screen.queryByText('Soul App mounted route')).toBeNull()
     expect(screen.queryByText('HR People Workbench')).toBeNull()
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
@@ -1656,7 +1672,7 @@ describe('worker studio', () => {
     })
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).not.toHaveProperty('turns')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).not.toHaveProperty('engineStatus')
-    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/hr-session?workerId=hr-worker&workspaceId=workspace-1&sessionId=session-1&theme=light', expect.objectContaining({ headers: {} }))
+    expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&workspaceId=workspace-1&sessionId=session-1&theme=light', expect.objectContaining({ headers: {} }))
     expect(screen.queryByText('Agent is generating')).toBeNull()
     expect(screen.queryByText('File written, indexing')).toBeNull()
     expect(screen.queryByText('Searched files')).toBeNull()
@@ -1717,7 +1733,7 @@ describe('worker studio', () => {
             artifactPreviews: [{ id: 'person-profile-preview', label: 'Person profile preview' }],
             panels: [{ id: 'people-panel', label: 'People panel' }],
             reviewPanels: [{ id: 'hr-review', label: 'HR review' }],
-            routes: [{ id: 'hr-home', label: 'People workbench', path: '/hr/people', surface: { renderer: 'host-descriptor' } }],
+            routes: [{ id: 'hr-home', label: 'People workbench', path: '/hr/people', surface: { renderer: 'micro-app' } }],
             workbench: {
               actions: [
                 {
@@ -1763,7 +1779,7 @@ describe('worker studio', () => {
           apiRoutePrefix: '/api/apps/aiworker-hr',
           artifactPreviewIds: ['person-profile-preview'],
           descriptorSurfaceIds: ['hr-home'],
-          microAppSurfaceIds: ['hr-people-widget'],
+          microAppSurfaceIds: ['hr-home'],
           panelIds: ['people-panel'],
           reviewPanelIds: ['hr-review'],
           routePaths: ['/hr/people'],
@@ -1880,10 +1896,11 @@ describe('worker studio', () => {
     expect(document.querySelector('.hr-people-header')).toBeNull()
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
     expect(screen.queryByText('People Profiles')).toBeNull()
+    expect(await screen.findByTitle('HR People Workbench')).toBeTruthy()
 
     expect(screen.queryByRole('button', { name: 'New people profile' })).toBeNull()
     expect(screen.queryByPlaceholderText('Search people profiles')).toBeNull()
-    expect(screen.getByPlaceholderText('Search workspaces...')).toBeTruthy()
+    expect(screen.queryByPlaceholderText('Search workspaces...')).toBeNull()
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/actions/'))).toBe(false)
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/search?providerId='))).toBe(false)
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -1976,6 +1993,7 @@ describe('worker studio', () => {
       version: '0.1.0',
     }]
 
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
     const microApp = await screen.findByTitle('HR People Workbench')
@@ -1986,7 +2004,7 @@ describe('worker studio', () => {
     expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light')
     expect(screen.queryByText('Soul App mounted route')).toBeNull()
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
-    expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
+    expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
 
     await waitFor(() => {
       expect(microAppRouteMock.dataListeners.has('aiworker-hr--hr-home')).toBe(true)
@@ -2080,7 +2098,7 @@ describe('worker studio', () => {
     })
     const microApp = await screen.findByTitle('HR People Workbench')
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
-    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/routes/hr-home?workerId=e2e-hr-codex-20260525&workspaceId=workspace-20260525&theme=light')
+    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/routes/hr-home?workerId=e2e-hr-codex-20260525&theme=light')
   })
 
   it('routes directly to a worker and updates capability templates with worker identity', async () => {

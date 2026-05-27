@@ -33,7 +33,7 @@ import {
   resolveActiveMountedRoute,
   updateWorkerMountedRoutePreference,
 } from './studio/mounted-route-preferences'
-import { MountedSoulAppRouteSurface } from './studio/mounted-surface'
+import { MountedSoulAppRouteSurface, type MountedWorkbenchRoute } from './studio/mounted-surface'
 import { WorkerHomeFallback, WorkspaceContextNoMountedSurface } from './studio/workspace-fallback'
 import { WorkerConfigurationDialog } from './worker-configuration-dialog'
 import { WorkerSwitcher } from './worker-workbench-tree'
@@ -59,8 +59,20 @@ const emptyWorkerStudioLocatorState: WorkerStudioResolvedLocatorState = {
   templates: [],
 }
 
-function microAppWorkbenchRoutes(app: HostedSoulApp | null): HostedSoulApp['manifest']['ui']['routes'] {
-  return app?.manifest.ui?.routes?.filter(route => route.surface?.renderer === 'micro-app') ?? []
+function descriptorWorkbenchRoutes(app: HostedSoulApp | null): MountedWorkbenchRoute[] {
+  if (!app?.descriptor?.workbench || app.descriptor.workbench.type !== 'micro-app')
+    return []
+  const surfaceId = app.mountedContribution.microAppSurfaceIds[0] ?? 'workbench'
+  const routePath = app.mountedContribution.routePaths[0] ?? '/workbench'
+  return [{
+    id: surfaceId,
+    label: `${app.manifest.name} Workbench`,
+    path: routePath,
+    surface: {
+      renderer: 'micro-app',
+      scope: surfaceId.includes('session') ? 'session' : 'app',
+    },
+  }]
 }
 
 export function WorkerStudio() {
@@ -166,11 +178,11 @@ export function WorkerStudio() {
     [soulAppForWorker, workerConfigurationWorker],
   )
   const selectedMountedRoutes = useMemo(
-    () => microAppWorkbenchRoutes(selectedSoulApp),
+    () => descriptorWorkbenchRoutes(selectedSoulApp),
     [selectedSoulApp],
   )
   const workerConfigurationMountedRoutes = useMemo(
-    () => microAppWorkbenchRoutes(workerConfigurationSoulApp),
+    () => descriptorWorkbenchRoutes(workerConfigurationSoulApp),
     [workerConfigurationSoulApp],
   )
   const selectedMountedWorkbenchRoute = selectedMountedRoutes[0] ?? null
@@ -516,7 +528,7 @@ export function WorkerStudio() {
                     resolvedTheme={resolvedTheme}
                     route={activeMountedRoute}
                     routeMemoryRef={mountedChildRouteMemoryRef}
-                    sessionId={activeMountedRoute?.surface?.scope === 'session' ? selectedSession?.id ?? null : null}
+                    sessionId={activeMountedRoute.surface.scope === 'session' ? selectedSession?.id ?? null : null}
                     workerId={selectedWorker.id}
                     workspaceId={mountedWorkspaceId}
                     onSelectWorkspace={workspaceId => selectWorkspaceLocator(selectedWorker.id, workspaceId)}

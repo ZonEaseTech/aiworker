@@ -35,14 +35,14 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
   }
 }
 
-export interface ResolveMountedSurfaceOptions {
+export interface ResolveMountedWorkbenchOptions {
   sessionId?: string | null
   theme?: string
   workerId?: string | null
   workspaceId?: string | null
 }
 
-export async function resolveMountedSurface<T>(appId: string, surfaceId: string, options: ResolveMountedSurfaceOptions = {}): Promise<T> {
+export async function resolveMountedWorkbench<T>(options: ResolveMountedWorkbenchOptions = {}): Promise<T> {
   const params = new URLSearchParams()
   if (options.workerId)
     params.set('workerId', options.workerId)
@@ -53,7 +53,7 @@ export async function resolveMountedSurface<T>(appId: string, surfaceId: string,
   if (options.theme)
     params.set('theme', options.theme)
   const query = params.toString()
-  return localJson<T>(`/api/local/apps/${appId}/surfaces/${surfaceId}${query ? `?${query}` : ''}`)
+  return localJson<T>(`/api/mount/workbench${query ? `?${query}` : ''}`)
 }
 
 export async function enableSoulApp(appId: string): Promise<LocalSoulAppLifecycleResponse> {

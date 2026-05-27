@@ -119,4 +119,32 @@ describe('destructive refactor contract bootstrap', () => {
     expect(existsSync(join(repoRoot, 'packages/core-v2'))).toBe(false)
     expect(existsSync(join(repoRoot, 'packages/shared-v2'))).toBe(false)
   })
+
+  test('production mounted workbench chain uses descriptor v1 without legacy surface shim', () => {
+    const activeProductionSources = [
+      'packages/host-daemon/src/modes/worker.ts',
+      'apps/web/src/features/local-workspace/api/workspace-data.ts',
+      'apps/web/src/features/local-workspace/api/index.ts',
+      'apps/web/src/worker/studio/mounted-surface.tsx',
+      'apps/web/src/worker/worker-studio.tsx',
+    ]
+    const forbiddenSnippets = [
+      '/api/local/apps/:appId/surfaces/:surfaceId',
+      '/api/local/apps/${appId}/surfaces/${surfaceId}',
+      'mountedSurfaceResponse',
+      'findMountedSurfaceContribution',
+      'findWorkbenchMountContributions',
+      'host-descriptor',
+      'resolveMountedSurface',
+    ]
+
+    const findings = activeProductionSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbiddenSnippets
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'descriptor workbench mount must not depend on legacy surface shim').toEqual([])
+  })
 })

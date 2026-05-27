@@ -1,5 +1,4 @@
 import type {
-  HostedSoulApp,
   MountedMicroAppChildEvent,
   MountedMicroAppHostData,
 } from '@zonease/aiworker-soul-protocol'
@@ -10,7 +9,7 @@ import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { CardContent } from '@zonease/aiworker-ui/components/card'
 import { ItemDescription } from '@zonease/aiworker-ui/components/item'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { resolveMountedSurface } from '../../features/local-workspace/api/workspace-data'
+import { resolveMountedWorkbench } from '../../features/local-workspace/api/workspace-data'
 import {
   addMountedMicroAppDataListener,
   addMountedMicroAppRouteListener,
@@ -32,12 +31,34 @@ interface OpenMountedChildRouteOptions {
   replace?: boolean
 }
 
-interface MountedMicroAppSurfaceResponse {
+export interface MountedWorkbenchRoute {
+  id: string
+  label: string
+  path: string
+  surface: {
+    renderer: 'micro-app'
+    scope: 'app' | 'artifact' | 'review' | 'session' | 'workspace'
+  }
+}
+
+interface MountedWorkbenchResponse {
+  locator: {
+    sessionId: string | null
+    workerId: string
+    workspaceId: string | null
+  }
   microApp: {
     data: MountedMicroAppHostData
     name: string
     url: string
   }
+  mount: {
+    appId: string
+    entry: string
+    surfaceId: string
+    type: 'micro-app'
+  }
+  routerMode: 'search'
   surface: {
     id: string
     kind: string
@@ -58,7 +79,7 @@ export function MountedSoulAppRouteSurface({
 }: {
   appId: string
   resolvedTheme: ResolvedTheme
-  route: HostedSoulApp['manifest']['ui']['routes'][number]
+  route: MountedWorkbenchRoute
   routeMemoryRef: MutableRefObject<Map<string, string>>
   sessionId?: string | null
   onSelectWorkspace?: (workspaceId: string) => void
@@ -66,7 +87,7 @@ export function MountedSoulAppRouteSurface({
   workspaceId?: string | null
 }) {
   const microAppRef = useRef<(HTMLElement & { data?: MountedMicroAppHostData }) | null>(null)
-  const [surface, setSurface] = useState<MountedMicroAppSurfaceResponse | null>(null)
+  const [surface, setSurface] = useState<MountedWorkbenchResponse | null>(null)
   const [childError, setChildError] = useState<string | null>(null)
   const [childReady, setChildReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -186,7 +207,7 @@ export function MountedSoulAppRouteSurface({
     setLoading(true)
     setError(null)
     setChildError(null)
-    resolveMountedSurface<MountedMicroAppSurfaceResponse>(appId, route.id, {
+    resolveMountedWorkbench<MountedWorkbenchResponse>({
       sessionId,
       theme: resolvedTheme,
       workerId,
