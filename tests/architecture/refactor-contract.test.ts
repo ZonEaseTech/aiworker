@@ -1375,6 +1375,20 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'Web Host tests should use generic descriptor fixtures, not old app-local product identities').toEqual([])
   })
 
+  test('Web locator tests use neutral workspace names', () => {
+    const source = readRepoFile('apps/web/src/worker/studio/locator.test.ts')
+    const retiredWorkspaceSnippets = [
+      'Hiring Workspace',
+      'Hiring Pipeline',
+    ]
+
+    const findings = retiredWorkspaceSnippets
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `apps/web/src/worker/studio/locator.test.ts: ${snippet}`)
+
+    expect(findings, 'locator tests should keep workspace names product-neutral').toEqual([])
+  })
+
   test('shared SessionComposer uses neutral selector terminology instead of retired template ids', () => {
     const sharedComposerSources = [
       'packages/ui/src/components/session-composer.tsx',

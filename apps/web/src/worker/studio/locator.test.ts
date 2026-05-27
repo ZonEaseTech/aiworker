@@ -64,7 +64,7 @@ describe('deriveWorkerStudioLocatorState', () => {
         worker({ id: 'release-worker', soulId: 'aiworker-demo-release' }),
       ],
       workspaces: [
-        workspace({ id: 'people-workspace', name: 'Hiring Workspace', workerId: 'people-worker' }),
+        workspace({ id: 'people-workspace', name: 'People Workspace', workerId: 'people-worker' }),
         workspace({ id: 'release-workspace', name: 'Release Workspace', workerId: 'release-worker' }),
       ],
       sessions: [
@@ -112,7 +112,7 @@ describe('deriveWorkerStudioLocatorState', () => {
       workers: [worker({ id: 'people-worker', soulId: 'aiworker-demo-people' })],
       workspaces: [
         workspace({ id: 'quiet-workspace', name: 'Quiet Workspace', workerId: 'people-worker' }),
-        workspace({ id: 'named-workspace', name: 'Hiring Pipeline', workerId: 'people-worker' }),
+        workspace({ id: 'named-workspace', name: 'People Pipeline', workerId: 'people-worker' }),
         workspace({ id: 'capability-workspace', name: 'Operations Board', workerId: 'people-worker' }),
       ],
       sessions: [
@@ -133,7 +133,7 @@ describe('deriveWorkerStudioLocatorState', () => {
       ],
     })
 
-    expect(workspaceIds(data, 'hiring')).toEqual(['named-workspace'])
+    expect(workspaceIds(data, 'pipeline')).toEqual(['named-workspace'])
     expect(workspaceIds(data, 'screening capability')).toEqual(['capability-workspace'])
     expect(workspaceIds(data, 'confidential compensation')).toEqual([])
   })
