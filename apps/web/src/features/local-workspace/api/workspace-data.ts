@@ -54,7 +54,7 @@ export async function resolveMountedWorkbench<T>(options: ResolveMountedWorkbenc
 }
 
 export async function enableSoulApp(appId: string): Promise<LocalSoulAppLifecycleResponse> {
-  return localJson<LocalSoulAppLifecycleResponse>(`/api/local/apps/${appId}/enable`, {
+  return localJson<LocalSoulAppLifecycleResponse>(`/api/app-installation/apps/${appId}/enable`, {
     method: 'POST',
   })
 }

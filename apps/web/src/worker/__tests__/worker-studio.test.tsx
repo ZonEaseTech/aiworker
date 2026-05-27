@@ -584,7 +584,7 @@ beforeEach(() => {
       return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
     if (url.endsWith('/api/local/apps'))
       return json({ apps: currentApps })
-    if (url.endsWith('/api/local/apps/aiworker-demo-release/enable') && method === 'POST') {
+    if (url.endsWith('/api/app-installation/apps/aiworker-demo-release/enable') && method === 'POST') {
       const enabled = currentApps.find(app => app.appId === 'aiworker-demo-release')
       currentApps = currentApps.map(app => app.appId === 'aiworker-demo-release' ? { ...app, status: 'enabled' } : app)
       return json({
@@ -1563,7 +1563,7 @@ describe('worker studio', () => {
     expect(within(dialog).getAllByText('search:write:aiworker-demo-release').length).toBeGreaterThan(0)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Enable Demo Release' }))
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-demo-release/enable', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).toHaveBeenCalledWith('/api/app-installation/apps/aiworker-demo-release/enable', expect.objectContaining({ method: 'POST' }))
     })
     await waitFor(() => {
       expect(within(dialog).getAllByText('Enabled · 0.1.0').length).toBeGreaterThan(1)
