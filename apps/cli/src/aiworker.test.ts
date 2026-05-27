@@ -210,7 +210,7 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('aiworker command index')
     expect(output).toContain('dev')
     expect(output).toContain('daemon start|foreground|status|stop|restart|logs|check')
-    expect(output).toContain('app list|show|install|enable|archive|disable|delete|doctor|permissions|bootstrap|create|validate|smoke')
+    expect(output).toContain('app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke')
     expect(output).toContain('capability list')
     expect(output).toContain('files list|show')
     expect(output).not.toContain('compatibility inspection')
@@ -1033,7 +1033,7 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { worker: null }).worker).toBeNull()
   })
 
-  it('installs, enables, lists, and disables local Soul descriptors', async () => {
+  it('installs, enables, lists, and archives local Soul descriptors', async () => {
     const descriptorPath = freeformDescriptorPath()
 
     expect(await runCli(argv('app', 'install', descriptorPath))).toBe(0)
@@ -1057,7 +1057,7 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { worker: { metadata: Record<string, unknown>, soulId: string } }).worker.soulId).toBe(FREEFORM_APP_ID)
     output = ''
 
-    expect(await runCli(argv('app', 'disable', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('app', 'archive', FREEFORM_APP_ID))).toBe(0)
     expect((JSON.parse(output) as { app: { status: string } }).app.status).toBe('disabled')
     output = ''
 

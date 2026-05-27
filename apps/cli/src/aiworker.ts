@@ -1037,7 +1037,7 @@ async function enableAppCommand(id: string): Promise<void> {
   printJson({ app: host.enableApp(id), catalog: host.listCatalog() })
 }
 
-async function disableAppCommand(id: string): Promise<void> {
+async function archiveAppCommand(id: string): Promise<void> {
   const paths = await ensureDb()
   const host = createHost(paths)
   printJson({ app: host.disableApp(id), catalog: host.listCatalog() })
@@ -1417,8 +1417,7 @@ function registerCommands(): void {
   cli.command('app show <id>', 'show one installed Host Soul App').action(showAppCommand)
   cli.command('app install <descriptor>', 'install a local Soul descriptor').action(installAppCommand)
   cli.command('app enable <id>', 'enable an installed Soul App').action(enableAppCommand)
-  cli.command('app archive <id>', 'archive an installed Soul App').action(disableAppCommand)
-  cli.command('app disable <id>', 'disable an installed Soul App').action(disableAppCommand)
+  cli.command('app archive <id>', 'archive an installed Soul App').action(archiveAppCommand)
   cli.command('app delete <id>', 'hard-delete installed Soul App metadata').action(deleteAppCommand)
   cli.command('app doctor <id>', 'run static Soul App healthcheck').action(doctorAppCommand)
   cli.command('app permissions <id>', 'show declared Soul App permissions').action(permissionsAppCommand)
@@ -1518,7 +1517,7 @@ const FULL_COMMAND_INDEX = [
   'dev',
   'update|upgrade',
   'daemon start|foreground|status|stop|restart|logs|check',
-  'app list|show|install|enable|archive|disable|delete|doctor|permissions|bootstrap|create|validate|smoke',
+  'app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke',
   'soul list',
   'worker create|list|show|select|archive|delete',
   'workspace create|list|show|archive|delete',

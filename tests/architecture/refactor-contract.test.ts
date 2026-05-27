@@ -376,6 +376,32 @@ describe('destructive refactor contract bootstrap', () => {
     expect(cliTest).toContain(').toBe(1)')
   })
 
+  test('CLI app lifecycle surface uses archive command without disable alias', () => {
+    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
+    const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
+
+    const findings = [
+      ...[
+        'cli.command(\'app disable',
+        'disable an installed Soul App',
+        'app list|show|install|enable|archive|disable|delete',
+      ]
+        .filter(snippet => cliSource.includes(snippet))
+        .map(snippet => `apps/cli/src/aiworker.ts: ${snippet}`),
+      ...[
+        'argv(\'app\', \'disable\'',
+        'installs, enables, lists, and disables local Soul descriptors',
+      ]
+        .filter(snippet => cliTest.includes(snippet))
+        .map(snippet => `apps/cli/src/aiworker.test.ts: ${snippet}`),
+    ]
+
+    expect(findings, 'CLI should expose app archive/delete lifecycle commands without the retired disable alias').toEqual([])
+    expect(cliSource).toContain('cli.command(\'app archive <id>\'')
+    expect(cliSource).toContain('archive an installed Soul App')
+    expect(cliTest).toContain('argv(\'app\', \'archive\'')
+  })
+
   test('CLI session start selects a capability without the retired skill option', () => {
     const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
     const cliTests = [
