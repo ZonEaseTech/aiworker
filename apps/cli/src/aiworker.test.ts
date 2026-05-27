@@ -500,6 +500,61 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { app: { appId: string, status: string } }).app).toMatchObject({ appId: FREEFORM_APP_ID, status: 'disabled' })
   })
 
+  it('blocks CLI session work for existing workers when the Soul App is archived', async () => {
+    await writeFakeCodexCommand()
+
+    expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'archive-app-cli-worker', '--name', 'Archive App CLI Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'Archive App CLI Workspace', '--type', 'freeform', '--worker', 'archive-app-cli-worker'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
+    output = ''
+
+    expect(await runCli(argv(
+      'session',
+      'start',
+      '--worker',
+      'archive-app-cli-worker',
+      '--workspace',
+      workspace.id,
+      '--capability',
+      FREEFORM_CAPABILITY_ID,
+      '--title',
+      'Archive app session',
+      '--input',
+      'Create session before app archive.',
+    ))).toBe(0)
+    const session = (JSON.parse(output) as { session: { id: string } }).session
+    output = ''
+
+    expect(await runCli(argv('app', 'archive', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    errorOutput = ''
+
+    expect(await runCli(argv(
+      'session',
+      'start',
+      '--worker',
+      'archive-app-cli-worker',
+      '--workspace',
+      workspace.id,
+      '--capability',
+      FREEFORM_CAPABILITY_ID,
+      '--title',
+      'Blocked by app archive',
+      '--input',
+      'Should not create new work.',
+    ))).toBe(1)
+    expect(errorOutput).toContain(`Soul App is not enabled: ${FREEFORM_APP_ID}`)
+    errorOutput = ''
+
+    expect(await runCli(argv('session', 'invoke', '--session', session.id, '--input', 'Should not follow up.'))).toBe(1)
+    expect(errorOutput).toContain(`Soul App is not enabled: ${FREEFORM_APP_ID}`)
+  })
+
   it('materializes app-authored capability assets for the first session invocation', async () => {
     await writeFakeCodexCommand()
 
