@@ -142,7 +142,7 @@ export function CreateWorkerDialog({
                               <span>{soulCopy.name}</span>
                             </ItemTitle>
                             <ItemDescription asChild>
-                              <span>{soulCopy.domain}</span>
+                              <span>{soulCopy.description}</span>
                             </ItemDescription>
                           </span>
                         </ItemContent>

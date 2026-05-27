@@ -65,7 +65,7 @@ export function FirstRunSoulAppHome({
         {apps.map((app) => {
           const soul = soulForApp(app, souls)
           const soulCopy = soul ? displaySoul(soul, locale) : null
-          const domain = soulCopy?.domain ?? app.projectedSoul?.domain ?? app.appId
+          const soulId = app.soulId || app.projectedSoul?.id || app.appId
           const description = soulCopy?.description ?? app.description
           return (
             <Card
@@ -76,7 +76,7 @@ export function FirstRunSoulAppHome({
               <CardHeader>
                 <ItemContent className="min-w-0">
                   <CardTitle>{app.name}</CardTitle>
-                  <CardDescription>{domain}</CardDescription>
+                  <CardDescription>{soulId}</CardDescription>
                 </ItemContent>
               </CardHeader>
               <CardContent className="flex-1">

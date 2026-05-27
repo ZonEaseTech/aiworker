@@ -7,7 +7,7 @@ type ShellCopy = ReturnType<typeof messagesFor>
 function defaultShellCopy(copy: ShellCopy): string[] {
   return [
     copy.accessibility.artifactSettings,
-    copy.accessibility.businessArtifactPreview,
+    copy.accessibility.sessionOutputPreview,
     copy.accessibility.closeSettings,
     copy.accessibility.openSettings,
     copy.accessibility.soulProjectsAndArtifacts,
@@ -95,5 +95,80 @@ describe('local shell copy', () => {
     expect(messagesFor('zh-CN').projects.empty.title).toBe('还没有工作区')
     expect(messagesFor('en').projects.searchPlaceholder).toBe('Search workspaces...')
     expect(messagesFor('zh-CN').projects.searchPlaceholder).toBe('搜索工作区...')
+  })
+
+  it('uses session context and invocation language for Host shell copy', () => {
+    const forbidden = [
+      /\bbusiness context\b/i,
+      /业务上下文/,
+      /業務コンテキスト/,
+      /Geschäftskontext/i,
+      /\bturns?\b/i,
+      /ターン/,
+    ]
+
+    for (const locale of supportedLocales) {
+      const copy = messagesFor(locale)
+      expect(copy.workspace.invocationCount, `${locale}: invocationCount`).toBeTypeOf('function')
+      const texts = [
+        copy.create.sessionContext,
+        copy.workspace.byokNeedsKey,
+        copy.workspace.byokReady('Codex', 'gpt-5'),
+        copy.workspace.engineReadyDetail('Codex'),
+        copy.workspace.engineStarting,
+        copy.workspace.followUpInput,
+        copy.workspace.noEvents,
+        copy.workspace.noInvocations,
+        copy.workspace.sendInvocation,
+        copy.workspace.sendingInvocation,
+        typeof copy.workspace.invocationCount === 'function'
+          ? copy.workspace.invocationCount(2)
+          : '',
+        copy.workspace.invocationHistory,
+        copy.settings.engine.hint,
+      ]
+
+      for (const text of texts) {
+        expect(text, `${locale}: shell copy is missing`).toBeTypeOf('string')
+        for (const pattern of forbidden)
+          expect(text, `${locale}: ${text}`).not.toMatch(pattern)
+      }
+    }
+
+    expect(Object.keys(messagesFor('en').create)).not.toContain('businessContext')
+    expect(Object.keys(messagesFor('en').workspace)).not.toContain('noTurns')
+    expect(Object.keys(messagesFor('en').workspace)).not.toContain('sendTurn')
+    expect(Object.keys(messagesFor('en').workspace)).not.toContain('sendingTurn')
+    expect(Object.keys(messagesFor('en').workspace)).not.toContain('turnCount')
+    expect(Object.keys(messagesFor('en').workspace)).not.toContain('turnHistory')
+  })
+
+  it('uses capability language instead of template copy for startable units', () => {
+    const forbidden = [
+      /templates?/i,
+      /模板/,
+      /テンプレート/,
+    ]
+
+    for (const locale of supportedLocales) {
+      const copy = messagesFor(locale)
+      const texts = [
+        copy.common.capabilities,
+        copy.create.capability,
+        copy.navigation.createTabs.capability,
+        copy.navigation.topTabs.capabilities,
+        copy.settings.soulPacks.capabilityCount(2),
+      ]
+
+      for (const text of texts) {
+        for (const pattern of forbidden)
+          expect(text, `${locale}: ${text}`).not.toMatch(pattern)
+      }
+    }
+
+    expect(messagesFor('en').create.capability).toBe('Capability')
+    expect(messagesFor('en').navigation.topTabs.capabilities).toBe('Capabilities')
+    expect(messagesFor('zh-CN').create.capability).toBe('能力')
+    expect(messagesFor('zh-CN').navigation.topTabs.capabilities).toBe('能力')
   })
 })

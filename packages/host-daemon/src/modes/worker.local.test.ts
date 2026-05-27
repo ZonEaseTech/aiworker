@@ -5,10 +5,18 @@ import { join } from 'node:path'
 
 import { namespaceSoulAppCapabilityId, parseSoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 import {
+  appendSessionEvent,
+  bridgeEvents,
   closeWorkerDb,
+  createEngineInvocation,
   createSession,
   createWorkspace,
+  engineInvocations,
+  getSession,
+  getWorkerDb,
   initWorkerDb,
+  listEngineInvocations,
+  listSessionEvents,
   listSettings,
   runWorkerMigrations,
   upsertWorker,
@@ -18,7 +26,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { bootstrapWorkerApp, localApiExposureWarning, mountedServiceSpawnEnv } from './worker'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
-const FREEFORM_TEMPLATE = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'default')
+const FREEFORM_CAPABILITY = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'default')
 
 const freeformDescriptor = parseSoulDescriptorV1({
   api: null,
@@ -120,7 +128,7 @@ describe('local daemon API', () => {
 
     const sessionRes = await target.request(`/api/local/workers/${workerId}/workspaces/${workspace.id}/sessions`, {
       body: JSON.stringify({
-        capabilityTemplateId: FREEFORM_TEMPLATE,
+        capabilityId: FREEFORM_CAPABILITY,
         context: 'Use the Freeform Soul.',
         title: 'Freeform session',
       }),
@@ -166,9 +174,9 @@ describe('local daemon API', () => {
     })
     createSession({
       at: seedNow,
-      capabilityTemplateId: 'candidate-screen',
+      capabilityId: 'candidate-screen',
       id: 'legacy-hr-session',
-      metadataJson: { capabilityTemplateId: 'candidate-screen', soulName: 'HR' },
+      metadataJson: { capabilityId: 'candidate-screen', soulName: 'HR' },
       title: 'Legacy candidate screen',
       workerId: 'legacy-hr-worker',
       workspaceId: 'legacy-hr-workspace',
@@ -211,6 +219,29 @@ describe('local daemon API', () => {
 
     const worker = await createFreeformWorker(target, 'official-freeform-worker')
     expect(worker.soulId).toBe(FREEFORM_APP_ID)
+  })
+
+  it('lists capabilities without retired template route aliases', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'capability-route-worker')
+
+    const capabilitiesRes = await target.request('/api/local/capabilities')
+    expect(capabilitiesRes.status).toBe(200)
+    const capabilitiesBody = await capabilitiesRes.json() as { capabilities: Array<{ id: string }> }
+    expect(capabilitiesBody.capabilities.map(capability => capability.id)).toContain(FREEFORM_CAPABILITY)
+
+    const workerCapabilitiesRes = await target.request(`/api/local/workers/${worker.id}/capabilities`)
+    expect(workerCapabilitiesRes.status).toBe(200)
+    const workerCapabilitiesBody = await workerCapabilitiesRes.json() as { capabilities: Array<{ id: string }> }
+    expect(workerCapabilitiesBody.capabilities.map(capability => capability.id)).toEqual([FREEFORM_CAPABILITY])
+
+    const capabilityRes = await target.request(`/api/local/workers/${worker.id}/capabilities/${FREEFORM_CAPABILITY}`)
+    expect(capabilityRes.status).toBe(200)
+    expect(await capabilityRes.json()).toMatchObject({ capability: { id: FREEFORM_CAPABILITY } })
+
+    expect((await target.request('/api/local/templates')).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/templates`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/templates/${FREEFORM_CAPABILITY}`)).status).toBe(404)
   })
 
   it('bootstraps official descriptors from an explicit packaged app root', async () => {
@@ -280,7 +311,7 @@ describe('local daemon API', () => {
       sessionId: session.id,
       status: 'succeeded',
     })
-    expect(followUpBody.invocation.processState).toBe('not_spawned')
+    expect(followUpBody.invocation.processState).toBe('exited')
     expect(followUpBody.session.status).toBe('active')
     expect(followUpBody.events.length).toBeGreaterThan(0)
 
@@ -295,6 +326,450 @@ describe('local daemon API', () => {
       sessionId: session.id,
       status: 'succeeded',
     })
+
+    const sessionRes = await target.request(`/api/sessions/${session.id}`)
+    expect(sessionRes.status).toBe(200)
+    const sessionBody = await sessionRes.json() as {
+      invocations: Array<{ sessionId: string, status: string }>
+      session: { id: string, status: string }
+    }
+    expect(sessionBody.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(sessionBody.invocations.map(invocation => invocation.sessionId)).toEqual([session.id, session.id])
+    expect(sessionBody.invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded'])
+
+    const localSessionRes = await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}`)
+    expect(localSessionRes.status).toBe(200)
+    const localSessionBody = await localSessionRes.json() as {
+      invocations: Array<{ sessionId: string, status: string }>
+    }
+    expect('turns' in localSessionBody).toBe(false)
+    expect(localSessionBody.invocations.map(invocation => invocation.sessionId)).toEqual([session.id, session.id])
+  })
+
+  it('creates session input as the first session-level invocation without transient turns', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'freeform-first-invocation')
+    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'First Invocation Workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+
+    const sessionRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+      body: JSON.stringify({
+        capabilityId: FREEFORM_CAPABILITY,
+        context: 'Create session and first invocation.',
+        input: 'Start through the daemon session create route.',
+        title: 'First invocation session',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(sessionRes.status).toBe(201)
+    const body = await sessionRes.json() as {
+      invocation?: { id: string, inputRef: string, sessionId: string, status: string }
+      session: { id: string, status: string, workspaceId: string }
+      turn?: unknown
+    }
+
+    expect(body.session).toMatchObject({ status: 'active', workspaceId: workspace.id })
+    expect(body.turn).toBeUndefined()
+    expect(body.invocation).toMatchObject({ sessionId: body.session.id, status: 'succeeded' })
+    expect(body.invocation?.inputRef).toBe(`aiworker://sessions/${body.session.id}/invocations/${body.invocation!.id}/input`)
+
+    const localSessionRes = await target.request(`/api/local/workers/${worker.id}/sessions/${body.session.id}`)
+    expect(localSessionRes.status).toBe(200)
+    const localSessionBody = await localSessionRes.json() as {
+      invocations: Array<{ id: string, inputRef: string }>
+    }
+    expect('turns' in localSessionBody).toBe(false)
+    expect(localSessionBody.invocations.map(invocation => invocation.id)).toEqual([body.invocation!.id])
+    expect(localSessionBody.invocations[0]?.inputRef).not.toContain('/turns/')
+  })
+
+  it('rejects legacy session create bodies that still send capabilityTemplateId', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'legacy-capability-field-worker')
+    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'Legacy Capability Field Workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+
+    const legacyRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+      body: JSON.stringify({
+        capabilityTemplateId: FREEFORM_CAPABILITY,
+        title: 'Legacy capability field',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(legacyRes.status).toBe(400)
+    expect(await legacyRes.json()).toMatchObject({ error: { code: 'CREATE_SESSION_INVALID' } })
+  })
+
+  it('honors workspace locator rootPath for app-owned workspace projection', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'requested-root-worker')
+    const requestedRootPath = join(dir, 'requested-workspace-root')
+
+    const createRes = await target.request('/api/workspace-locators', {
+      body: JSON.stringify({
+        name: 'Requested Root Workspace',
+        rootPath: requestedRootPath,
+        type: 'workspace',
+        workerId: worker.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(createRes.status).toBe(201)
+    const body = await createRes.json() as { workspace: { id: string, rootPath: string } }
+    expect(body.workspace.rootPath).toBe(requestedRootPath)
+
+    const getRes = await target.request(`/api/workspace-locators/${body.workspace.id}`)
+    expect(getRes.status).toBe(200)
+    const fetched = await getRes.json() as { workspace: { rootPath: string } }
+    expect(fetched.workspace.rootPath).toBe(requestedRootPath)
+    await expect(readFile(join(requestedRootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Freeform')
+  })
+
+  it('hard-deletes workspace locator metadata while preserving app-owned workspace files', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'delete-workspace-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    writeFileSync(join(workspace.rootPath, 'business.md'), '# Keep app-owned work\n')
+
+    const deleteRes = await target.request(`/api/workspace-locators/${workspace.id}`, { method: 'DELETE' })
+
+    expect(deleteRes.status).toBe(200)
+    expect(await deleteRes.json()).toMatchObject({
+      deleted: true,
+      workspace: { id: workspace.id },
+    })
+    expect((await target.request(`/api/workspace-locators/${workspace.id}`)).status).toBe(404)
+    expect((await target.request(`/api/sessions/${session.id}`)).status).toBe(404)
+    await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).rejects.toThrow()
+    await expect(readFile(join(workspace.rootPath, 'business.md'), 'utf8')).resolves.toContain('Keep app-owned work')
+  })
+
+  it('hard-deletes worker metadata after cleaning receipt-owned workspace projections', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'delete-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    writeFileSync(join(workspace.rootPath, 'business.md'), '# Keep worker app-owned work\n')
+
+    const deleteRes = await target.request(`/api/workers/${worker.id}`, { method: 'DELETE' })
+
+    expect(deleteRes.status).toBe(200)
+    expect(await deleteRes.json()).toMatchObject({
+      deleted: true,
+      worker: { id: worker.id },
+    })
+    expect((await target.request(`/api/workers/${worker.id}`)).status).toBe(404)
+    expect((await target.request(`/api/workspace-locators/${workspace.id}`)).status).toBe(404)
+    expect((await target.request(`/api/sessions/${session.id}`)).status).toBe(404)
+    await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).rejects.toThrow()
+    await expect(readFile(join(workspace.rootPath, 'business.md'), 'utf8')).resolves.toContain('Keep worker app-owned work')
+  })
+
+  it('hard-deletes session metadata without deleting workspace files', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'delete-session-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    writeFileSync(join(workspace.rootPath, 'business.md'), '# Keep session workspace file\n')
+
+    const deleteRes = await target.request(`/api/sessions/${session.id}`, { method: 'DELETE' })
+
+    expect(deleteRes.status).toBe(200)
+    expect(await deleteRes.json()).toMatchObject({
+      deleted: true,
+      session: { id: session.id },
+    })
+    expect((await target.request(`/api/sessions/${session.id}`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}`)).status).toBe(404)
+    await expect(readFile(join(workspace.rootPath, 'business.md'), 'utf8')).resolves.toContain('Keep session workspace file')
+  })
+
+  it('does not expose legacy transient turn read feeds', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    expect((await target.request('/api/local/turns')).status).toBe(404)
+    expect((await target.request(`/api/local/sessions/${session.id}/turns`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}/turns`)).status).toBe(404)
+  })
+
+  it('rejects legacy local turn and message follow-up writes and accepts session invocations', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    const turnAliasRes = await target.request(`/api/local/sessions/${session.id}/turns`, {
+      body: JSON.stringify({ input: 'Continue through the legacy turn alias.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(turnAliasRes.status).toBe(404)
+    expect(listEngineInvocations(session.id)).toEqual([])
+
+    const workerMessageRes = await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}/messages`, {
+      body: JSON.stringify({ input: 'Continue through the legacy worker message alias.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workerMessageRes.status).toBe(404)
+    expect(listEngineInvocations(session.id)).toEqual([])
+
+    const workerMessageStreamRes = await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}/messages/stream`, {
+      body: JSON.stringify({ input: 'Continue through the legacy worker message stream alias.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workerMessageStreamRes.status).toBe(404)
+    expect(listEngineInvocations(session.id)).toEqual([])
+
+    const invocationRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Continue through the canonical session invocation route.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(invocationRes.status).toBe(201)
+    const invocationBody = await invocationRes.json() as { invocation?: { inputRef: string, sessionId: string, status: string }, turn?: unknown }
+    expect(invocationBody.turn).toBeUndefined()
+    expect(invocationBody.invocation).toMatchObject({
+      sessionId: session.id,
+      status: 'succeeded',
+    })
+    expect(invocationBody.invocation?.inputRef).toContain('/invocations/')
+    expect(invocationBody.invocation).toBeDefined()
+    expect(listEngineInvocations(session.id).sort((left, right) => left.seq - right.seq).map(invocation => invocation.inputRef)).toEqual([
+      invocationBody.invocation!.inputRef,
+    ])
+  })
+
+  it('rejects legacy local turn stream writes', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    const streamRes = await target.request(`/api/local/sessions/${session.id}/turns/stream`, {
+      body: JSON.stringify({ input: 'Continue through the legacy stream alias.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(streamRes.status).toBe(404)
+    expect(listEngineInvocations(session.id)).toEqual([])
+  })
+
+  it('rejects legacy workspace session stream creation aliases', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'Open Workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+
+    const workerStreamRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions/stream`, {
+      body: JSON.stringify({
+        capabilityId: FREEFORM_CAPABILITY,
+        input: 'Start through legacy worker workspace stream alias.',
+        title: 'Legacy stream session',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workerStreamRes.status).toBe(404)
+
+    const workspaceStreamRes = await target.request(`/api/local/workspaces/${workspace.id}/sessions/stream`, {
+      body: JSON.stringify({
+        capabilityId: FREEFORM_CAPABILITY,
+        input: 'Start through legacy workspace stream alias.',
+        title: 'Legacy stream session',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceStreamRes.status).toBe(404)
+
+    const sessionsBody = await (await target.request('/api/local/sessions')).json() as { sessions: unknown[] }
+    expect(sessionsBody.sessions).toEqual([])
+  })
+
+  it('cancels engine invocations by invocation id and keeps session lifecycle active', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+    const invocation = createEngineInvocation({
+      id: 'daemon-cancel-invocation-1',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-cancel-invocation-1/input`,
+      processState: 'spawned',
+      status: 'running',
+    })
+
+    const cancelRes = await target.request(`/api/engine/invocations/${invocation.id}/cancel`, { method: 'POST' })
+
+    expect(cancelRes.status).toBe(201)
+    expect(await cancelRes.json()).toMatchObject({
+      events: [
+        {
+          invocationId: invocation.id,
+          payloadJson: {
+            bridgeEvent: 'invocation.cancelled',
+            invocationId: invocation.id,
+            processState: 'killed',
+            status: 'cancelled',
+          },
+          type: 'status',
+        },
+      ],
+      invocation: {
+        id: invocation.id,
+        processState: 'killed',
+        sessionId: session.id,
+        status: 'cancelled',
+        summary: 'Invocation cancelled.',
+      },
+      session: {
+        id: session.id,
+        status: 'active',
+      },
+    })
+    expect(getSession(session.id)?.status).toBe('active')
+    expect(listSessionEvents(session.id).at(-1)?.payloadJson).toMatchObject({
+      bridgeEvent: 'invocation.cancelled',
+      invocationId: invocation.id,
+    })
+  })
+
+  it('reattaches invocation events from an invocation-scoped cursor', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+    const invocation = createEngineInvocation({
+      id: 'daemon-reattach-invocation-1',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-reattach-invocation-1/input`,
+      status: 'running',
+    })
+    const otherInvocation = createEngineInvocation({
+      id: 'daemon-reattach-invocation-2',
+      sessionId: session.id,
+      seq: 2,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-reattach-invocation-2/input`,
+      status: 'running',
+    })
+    const firstEvent = appendSessionEvent({
+      invocationId: invocation.id,
+      payloadJson: { index: 1 },
+      seq: 1,
+      sessionId: session.id,
+      type: 'status',
+    })
+    appendSessionEvent({
+      invocationId: otherInvocation.id,
+      payloadJson: { index: 'other' },
+      seq: 2,
+      sessionId: session.id,
+      type: 'status',
+    })
+    const secondEvent = appendSessionEvent({
+      invocationId: invocation.id,
+      payloadJson: { index: 2 },
+      seq: 3,
+      sessionId: session.id,
+      type: 'status',
+    })
+
+    const eventsRes = await target.request(`/api/engine/invocations/${invocation.id}/events?after=${firstEvent.id}&limit=1`)
+
+    expect(eventsRes.status).toBe(200)
+    expect(await eventsRes.json()).toMatchObject({
+      after: firstEvent.id,
+      bridgeEvents: [
+        {
+          id: secondEvent.id,
+          invocationId: invocation.id,
+          type: 'invocation.progress',
+        },
+      ],
+      events: [
+        {
+          id: secondEvent.id,
+          invocationId: invocation.id,
+          payloadJson: { index: 2 },
+        },
+      ],
+      invocationId: invocation.id,
+      nextAfter: secondEvent.id,
+    })
+  })
+
+  it('redacts legacy secret-like diagnostics from broker read responses', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+    getWorkerDb().insert(engineInvocations).values({
+      id: 'daemon-read-secret-invocation',
+      sessionId: session.id,
+      seq: 99,
+      engineId: 'codex',
+      engineCommand: 'codex --token sk-daemon-read-secret',
+      status: 'failed',
+      processState: 'exited',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-read-secret-invocation/input`,
+      summary: 'authorization = "literal-secret-value"',
+      error: 'token=sk-daemon-read-secret',
+      metadataJson: { authorization: 'literal-secret-value' },
+      createdAt: '2026-05-27T08:20:00.000Z',
+      updatedAt: '2026-05-27T08:20:00.000Z',
+    }).run()
+    getWorkerDb().insert(bridgeEvents).values({
+      invocationId: 'daemon-read-secret-invocation',
+      eventType: 'diagnostic',
+      eventJson: {
+        payload: {
+          message: 'token=sk-daemon-read-secret',
+          authorization: 'literal-secret-value',
+        },
+        seq: 1,
+        sessionEventType: 'log',
+        version: 1,
+      },
+      createdAt: '2026-05-27T08:20:01.000Z',
+    }).run()
+
+    const invocationRes = await target.request('/api/engine/invocations/daemon-read-secret-invocation')
+    const sessionRes = await target.request(`/api/sessions/${session.id}`)
+    const eventsRes = await target.request(`/api/local/sessions/${session.id}/events`)
+
+    for (const res of [invocationRes, sessionRes, eventsRes]) {
+      expect(res.status).toBe(200)
+      const body = JSON.stringify(await res.json())
+      expect(body).not.toContain('sk-daemon-read-secret')
+      expect(body).not.toContain('literal-secret-value')
+      expect(body).toContain('[REDACTED]')
+    }
   })
 
   it('resolves one descriptor workbench mount from locator context only', async () => {
@@ -433,6 +908,204 @@ describe('local daemon API', () => {
     })
     expect(secretRes.status).toBe(422)
     expect(await secretRes.json()).toMatchObject({ error: { code: 'WORKER_OVERLAY_SECRET' } })
+
+    const embeddedMcpFileRes = await target.request(`/api/local/workers/${worker.id}/overlay`, {
+      body: JSON.stringify({
+        assets: [{
+          enabled: true,
+          id: 'embedded-mcp-file',
+          kind: 'mcp-client',
+          optionsJson: {
+            configToml: '[mcp_servers.local]\ncommand = "node"\n',
+          },
+          sourceRef: 'descriptor://engine/mcp/codex',
+          target: 'codex',
+        }],
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(embeddedMcpFileRes.status).toBe(422)
+    expect(await embeddedMcpFileRes.json()).toMatchObject({ error: { code: 'WORKER_OVERLAY_INVALID' } })
+  })
+
+  it('rejects full native MCP files in broker metadata write bodies', async () => {
+    const target = await app()
+
+    const workerMetadataRes = await target.request('/api/local/workers', {
+      body: JSON.stringify({
+        metadata: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+        name: 'Embedded MCP Worker',
+        soulId: FREEFORM_APP_ID,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workerMetadataRes.status).toBe(422)
+    expect(await workerMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKER_INVALID' } })
+
+    const worker = await createFreeformWorker(target, 'metadata-guard-worker')
+    const patchWorkerMetadataRes = await target.request(`/api/local/workers/${worker.id}`, {
+      body: JSON.stringify({
+        metadata: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(patchWorkerMetadataRes.status).toBe(422)
+    expect(await patchWorkerMetadataRes.json()).toMatchObject({ error: { code: 'PATCH_WORKER_INVALID' } })
+
+    const workspaceLocatorMetadataRes = await target.request('/api/workspace-locators', {
+      body: JSON.stringify({
+        metadata: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+        name: 'Embedded MCP Workspace Locator',
+        rootPath: join(dir, 'embedded-mcp-workspace-locator'),
+        type: 'workspace',
+        workerId: worker.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceLocatorMetadataRes.status).toBe(422)
+    expect(await workspaceLocatorMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_LOCATOR_INVALID' } })
+
+    const workspaceLocatorSourcePointersRes = await target.request('/api/workspace-locators', {
+      body: JSON.stringify({
+        name: 'Embedded MCP Workspace Locator Source',
+        rootPath: join(dir, 'embedded-mcp-workspace-locator-source'),
+        sourcePointers: [{
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        }],
+        type: 'workspace',
+        workerId: worker.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceLocatorSourcePointersRes.status).toBe(422)
+    expect(await workspaceLocatorSourcePointersRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_LOCATOR_INVALID' } })
+
+    const workspaceMetadataRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({
+        metadata: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+        name: 'Embedded MCP Workspace',
+        type: 'workspace',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceMetadataRes.status).toBe(422)
+    expect(await workspaceMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_INVALID' } })
+
+    const workspaceSourcePointersRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({
+        name: 'Embedded MCP Workspace Source',
+        sourcePointers: [{
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        }],
+        type: 'workspace',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceSourcePointersRes.status).toBe(422)
+    expect(await workspaceSourcePointersRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_INVALID' } })
+
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    const workspaceLocatorPatchRes = await target.request(`/api/workspace-locators/${workspace.id}`, {
+      body: JSON.stringify({
+        metadataJson: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(workspaceLocatorPatchRes.status).toBe(422)
+    expect(await workspaceLocatorPatchRes.json()).toMatchObject({ error: { code: 'PATCH_WORKSPACE_LOCATOR_INVALID' } })
+
+    const workspaceLocatorSourcePointersPatchRes = await target.request(`/api/workspace-locators/${workspace.id}`, {
+      body: JSON.stringify({
+        sourcePointersJson: [{
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        }],
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(workspaceLocatorSourcePointersPatchRes.status).toBe(422)
+    expect(await workspaceLocatorSourcePointersPatchRes.json()).toMatchObject({ error: { code: 'PATCH_WORKSPACE_LOCATOR_INVALID' } })
+
+    const localWorkspacePatchRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}`, {
+      body: JSON.stringify({
+        metadataJson: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(localWorkspacePatchRes.status).toBe(422)
+    expect(await localWorkspacePatchRes.json()).toMatchObject({ error: { code: 'PATCH_WORKSPACE_INVALID' } })
+
+    const localWorkspaceSourcePointersPatchRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}`, {
+      body: JSON.stringify({
+        sourcePointersJson: [{
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        }],
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(localWorkspaceSourcePointersPatchRes.status).toBe(422)
+    expect(await localWorkspaceSourcePointersPatchRes.json()).toMatchObject({ error: { code: 'PATCH_WORKSPACE_INVALID' } })
+
+    const sessionMetadataRes = await target.request(`/api/sessions/${session.id}`, {
+      body: JSON.stringify({
+        metadata: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(sessionMetadataRes.status).toBe(422)
+    expect(await sessionMetadataRes.json()).toMatchObject({ error: { code: 'PATCH_SESSION_INVALID' } })
+
+    const invocationMetadataRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({
+        input: 'Continue with invalid metadata.',
+        metadata: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(invocationMetadataRes.status).toBe(422)
+    expect(await invocationMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_SESSION_INVOCATION_INVALID' } })
+
+    const engineInvocationMetadataRes = await target.request('/api/engine/invocations', {
+      body: JSON.stringify({
+        input: 'Continue through invalid low-level engine metadata.',
+        metadata: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+        sessionId: session.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(engineInvocationMetadataRes.status).toBe(422)
+    expect(await engineInvocationMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_ENGINE_INVOCATION_INVALID' } })
   })
 
   it('stores worker config envelopes with secret references but rejects literal secrets', async () => {
@@ -471,6 +1144,60 @@ describe('local daemon API', () => {
       },
     })
 
+    const spoofedAuditRes = await target.request(`/api/workers/${worker.id}/config/engine-selection`, {
+      body: JSON.stringify({
+        checksum: 'sha256:engine-selection-spoof',
+        enabled: true,
+        kind: 'engine-selection',
+        options: {},
+        target: 'codex',
+        updatedAt: '2000-01-01T00:00:00.000Z',
+        updatedBy: 'cli',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(spoofedAuditRes.status).toBe(200)
+    const spoofedAuditBody = await spoofedAuditRes.json() as {
+      config: { updatedAt: string, value: { updatedAt: string, updatedBy: string } }
+    }
+    expect(spoofedAuditBody.config.value.updatedBy).toBe('web')
+    expect(spoofedAuditBody.config.value.updatedAt).toBe(spoofedAuditBody.config.updatedAt)
+    expect(spoofedAuditBody.config.value.updatedAt).not.toBe('2000-01-01T00:00:00.000Z')
+
+    const listRes = await target.request(`/api/workers/${worker.id}/config`)
+    expect(listRes.status).toBe(200)
+    expect(await listRes.json()).toMatchObject({
+      config: {
+        values: [
+          {
+            archived: false,
+            configKey: 'engine-selection',
+            value: {
+              enabled: true,
+              kind: 'engine-selection',
+              target: 'codex',
+              updatedBy: 'web',
+            },
+            workerId: worker.id,
+          },
+        ],
+      },
+      workerId: worker.id,
+    })
+
+    const malformedRes = await target.request(`/api/workers/${worker.id}/config/malformed`, {
+      body: JSON.stringify({
+        enabled: 'yes',
+        kind: 'engine-selection',
+        target: 'codex',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(malformedRes.status).toBe(400)
+    expect(await malformedRes.json()).toMatchObject({ error: { code: 'WORKER_CONFIG_INVALID' } })
+
     const literalSecretRes = await target.request(`/api/workers/${worker.id}/config/literal-secret`, {
       body: JSON.stringify({
         enabled: true,
@@ -485,6 +1212,125 @@ describe('local daemon API', () => {
     })
     expect(literalSecretRes.status).toBe(422)
     expect(await literalSecretRes.json()).toMatchObject({ error: { code: 'WORKER_CONFIG_SECRET' } })
+
+    const embeddedMcpFileRes = await target.request(`/api/workers/${worker.id}/config/embedded-mcp-file`, {
+      body: JSON.stringify({
+        enabled: true,
+        kind: 'mcp-overlay',
+        options: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+        target: 'codex',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(embeddedMcpFileRes.status).toBe(422)
+    expect(await embeddedMcpFileRes.json()).toMatchObject({ error: { code: 'WORKER_CONFIG_INVALID' } })
+
+    const domainRecordRes = await target.request(`/api/workers/${worker.id}/config/domain-record`, {
+      body: JSON.stringify({
+        candidateId: 'candidate-1',
+        enabled: true,
+        kind: 'sdk-extension',
+        target: 'none',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(domainRecordRes.status).toBe(400)
+    expect(await domainRecordRes.json()).toMatchObject({ error: { code: 'WORKER_CONFIG_INVALID' } })
+
+    const domainOptionsRes = await target.request(`/api/workers/${worker.id}/config/domain-options`, {
+      body: JSON.stringify({
+        enabled: true,
+        kind: 'sdk-extension',
+        options: {
+          artifactContent: '# Generated report\n',
+          candidateId: 'candidate-1',
+        },
+        target: 'none',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(domainOptionsRes.status).toBe(422)
+    expect(await domainOptionsRes.json()).toMatchObject({ error: { code: 'WORKER_CONFIG_INVALID' } })
+  })
+
+  it('serves projection receipts and cleans up only receipt-owned files', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'Receipt Workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspace = (await workspaceRes.json() as { workspace: { id: string, rootPath: string } }).workspace
+    writeFileSync(join(workspace.rootPath, 'business.md'), '# user-owned work\n')
+
+    const receiptRes = await target.request(`/api/projections/receipts/${workspace.id}`)
+    expect(receiptRes.status).toBe(200)
+    expect(await receiptRes.json()).toMatchObject({
+      receipt: {
+        appId: FREEFORM_APP_ID,
+        projections: expect.arrayContaining([
+          expect.objectContaining({ kind: 'workspace-file', target: 'AGENTS.md' }),
+          expect.objectContaining({ kind: 'native-skill', target: '.agents/skills/aiworker-freeform-freeform-session/SKILL.md' }),
+          expect.objectContaining({ kind: 'mcp-client', target: '.codex/config.toml' }),
+        ]),
+        version: 1,
+      },
+      receiptId: workspace.id,
+      status: 'found',
+    })
+
+    const cleanupRes = await target.request(`/api/projections/receipts/${workspace.id}/cleanup`, { method: 'POST' })
+    expect(cleanupRes.status).toBe(201)
+    expect(await cleanupRes.json()).toMatchObject({
+      cleaned: true,
+      receiptId: workspace.id,
+      status: 'cleaned',
+    })
+    await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).rejects.toThrow()
+    await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'), 'utf8')).rejects.toThrow()
+    await expect(readFile(join(workspace.rootPath, '.codex', 'config.toml'), 'utf8')).rejects.toThrow()
+    await expect(readFile(join(workspace.rootPath, 'business.md'), 'utf8')).resolves.toContain('user-owned')
+    await expect(readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain(FREEFORM_APP_ID)
+  })
+
+  it('refreshes projection assets for the requested broker engine target', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'Claude Refresh Workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspace = (await workspaceRes.json() as { workspace: { id: string, rootPath: string } }).workspace
+
+    const refreshRes = await target.request('/api/projections/claude-code/refresh', {
+      body: JSON.stringify({ workerId: worker.id, workspaceId: workspace.id }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(refreshRes.status).toBe(200)
+    expect(await refreshRes.json()).toMatchObject({
+      projection: {
+        receipt: {
+          projections: expect.arrayContaining([
+            expect.objectContaining({ engineTarget: 'claude-code', kind: 'native-skill', target: '.claude/skills/aiworker-freeform-freeform-session/SKILL.md' }),
+            expect.objectContaining({ engineTarget: 'claude-code', kind: 'mcp-client', target: '.mcp.json' }),
+          ]),
+        },
+      },
+      target: 'claude-code',
+    })
+    await expect(readFile(join(workspace.rootPath, '.claude', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'), 'utf8')).resolves.toContain('AIWorker Freeform Session')
+    await expect(readFile(join(workspace.rootPath, '.mcp.json'), 'utf8')).resolves.toContain('mcpServers')
   })
 
   it('proxies descriptor-declared app-owned API without exposing Host workbench action routes', async () => {
@@ -500,18 +1346,103 @@ describe('local daemon API', () => {
     expect(installRes.status).toBe(201)
     expect((await target.request('/api/local/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
 
-    const proxied = await target.request('/api/apps/demo-api/echo?workerId=worker-1')
+    const proxied = await target.request('/api/apps/demo-api/echo?workerId=worker-1', {
+      headers: {
+        'authorization': 'Bearer client-forwarded-credential',
+        'cookie': 'sid=client-cookie',
+        'x-forwarded-for': '203.0.113.10',
+      },
+    })
     expect(proxied.status).toBe(200)
+    expect(proxied.headers.get('set-cookie')).toBeNull()
+    expect(proxied.headers.get('x-aiworker-mount-token')).toBeNull()
     expect(await proxied.json()).toMatchObject({
       appId: 'demo-api',
+      hasAuthorization: false,
+      hasCookie: false,
+      hasForwardedFor: false,
       hasMountToken: true,
       path: '/echo',
     })
+
+    const proxiedRoot = await target.request('/api/apps/demo-api?workerId=worker-1')
+    const proxiedRootText = await proxiedRoot.text()
+    expect(proxiedRoot.status, proxiedRootText).toBe(200)
+    expect(JSON.parse(proxiedRootText)).toMatchObject({
+      appId: 'demo-api',
+      hasMountToken: true,
+      path: '/',
+    })
+    expect((await target.request('/api/apps/demo-api/?workerId=worker-1')).status).toBe(200)
+
+    const workerRes = await target.request('/api/local/workers', {
+      body: JSON.stringify({ id: 'demo-api-worker', name: 'Demo API Worker', soulId: 'demo-api' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workerRes.status).toBe(201)
+    const mountRes = await target.request('/api/mount/workbench?workerId=demo-api-worker')
+    expect(mountRes.status).toBe(200)
+    const mountBody = await mountRes.json() as { microApp: { data: Record<string, unknown> } }
+    expect(mountBody.microApp.data.mountTokenPresent).toBe(true)
+    expect(mountBody.microApp.data).not.toHaveProperty('mountToken')
 
     const hostAction = await target.request('/api/local/apps/demo-api/actions/create-profile', { method: 'POST' })
     expect(hostAction.status).toBe(404)
 
     await target.request('/api/local/apps/demo-api/disable', { method: 'POST' })
+  })
+
+  it('redacts mounted app-owned API startup diagnostics before returning broker errors', async () => {
+    const target = await app()
+    const appRoot = join(dir, 'failing-api-soul')
+    writeFailingApiSoul(appRoot)
+
+    const installRes = await target.request('/api/local/apps/install', {
+      body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(installRes.status).toBe(201)
+    expect((await target.request('/api/local/apps/demo-failing-api/enable', { method: 'POST' })).status).toBe(200)
+
+    const response = await target.request('/api/apps/demo-failing-api/echo')
+    expect(response.status).toBe(502)
+    const body = await response.json()
+    expect(body).toMatchObject({
+      error: { code: 'SOUL_APP_SERVICE_UNREACHABLE' },
+      routePrefix: '/api/apps/demo-failing-api',
+    })
+    const serialized = JSON.stringify(body)
+    expect(serialized).not.toContain('sk-mounted-service-secret')
+    expect(serialized).not.toContain('literal-secret-value')
+    expect(serialized).toContain('[REDACTED]')
+  })
+
+  it('hard-deletes installed Soul App metadata without leaving a disabled app shell', async () => {
+    const target = await app()
+    const appRoot = join(dir, 'delete-api-soul')
+    writeApiSoul(appRoot)
+
+    const installRes = await target.request('/api/app-installation/install', {
+      body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(installRes.status).toBe(201)
+    expect((await target.request('/api/app-installation/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
+    expect((await target.request('/api/apps/demo-api/echo')).status).toBe(200)
+
+    const deleteRes = await target.request('/api/app-installation/apps/demo-api', { method: 'DELETE' })
+
+    expect(deleteRes.status).toBe(200)
+    expect(await deleteRes.json()).toMatchObject({
+      app: { appId: 'demo-api' },
+      deleted: true,
+    })
+    expect((await target.request('/api/app-installation/apps/demo-api')).status).toBe(404)
+    expect((await target.request('/api/local/apps/demo-api')).status).toBe(404)
+    expect((await target.request('/api/apps/demo-api/echo')).status).toBe(404)
   })
 
   it('requires bearer auth only when a workspace token is configured', async () => {
@@ -550,6 +1481,77 @@ describe('local daemon API', () => {
     expect(listSettings().some(setting => setting.key === 'local-settings')).toBe(true)
   })
 
+  it('rejects literal BYOK API keys in local settings', async () => {
+    const target = await app()
+
+    const response = await target.request('/api/local/settings', {
+      body: JSON.stringify({
+        byok: {
+          apiKeyRef: 'sk-local-settings-secret',
+          baseUrl: 'https://api.example.test/v1',
+          model: 'gpt-test',
+          provider: 'openai-compatible',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+
+    expect(response.status).toBe(422)
+    const body = await response.json()
+    expect(body).toMatchObject({
+      error: { code: 'LOCAL_SETTINGS_SECRET' },
+    })
+    const serialized = JSON.stringify({ body, settings: listSettings() })
+    expect(serialized).not.toContain('sk-local-settings-secret')
+  })
+
+  it('rejects literal secrets and full native MCP files in local settings payloads', async () => {
+    const target = await app()
+
+    const secretResponse = await target.request('/api/local/settings', {
+      body: JSON.stringify({
+        externalMcpServers: [{
+          command: 'node team-context.js --token=sk-local-mcp-secret',
+          enabled: true,
+          id: 'team-context',
+          name: 'Team context MCP',
+        }],
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+
+    expect(secretResponse.status).toBe(422)
+    const secretBody = await secretResponse.json()
+    expect(secretBody).toMatchObject({
+      error: { code: 'LOCAL_SETTINGS_SECRET' },
+    })
+
+    const nativeMcpResponse = await target.request('/api/local/settings', {
+      body: JSON.stringify({
+        externalMcpServers: [{
+          command: '[mcp_servers.local]\ncommand = "node"\n',
+          enabled: true,
+          id: 'team-context',
+          name: 'Team context MCP',
+        }],
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+
+    expect(nativeMcpResponse.status).toBe(422)
+    const nativeMcpBody = await nativeMcpResponse.json()
+    expect(nativeMcpBody).toMatchObject({
+      error: { code: 'LOCAL_SETTINGS_INVALID' },
+    })
+
+    const serialized = JSON.stringify({ nativeMcpBody, secretBody, settings: listSettings() })
+    expect(serialized).not.toContain('sk-local-mcp-secret')
+    expect(serialized).not.toContain('[mcp_servers')
+  })
+
   it('documents broker routes and rejects invalid write bodies', async () => {
     const target = await app()
 
@@ -557,8 +1559,17 @@ describe('local daemon API', () => {
     const localWorkerEngineInvocationPath = ['/api/local/workers', '{workerId}', 'engine/invocations'].join('/')
     expect(Object.keys(openapi.paths)).toContain('/api/sessions/{sessionId}/invocations')
     expect(Object.keys(openapi.paths)).toContain('/api/engine/invocations')
+    expect(Object.keys(openapi.paths)).toContain('/api/apps/{appId}')
+    expect(Object.keys(openapi.paths)).toContain('/api/apps/{appId}/{path}')
     expect(Object.keys(openapi.paths)).not.toContain(localWorkerEngineInvocationPath)
     expect(Object.keys(openapi.paths)).not.toContain('/api/local/apps/{appId}/actions/{actionId}')
+    const retiredCapabilityField = ['capability', 'TemplateId'].join('')
+    const serializedOpenApi = JSON.stringify(openapi)
+    expect(serializedOpenApi).not.toContain(retiredCapabilityField)
+    expect(serializedOpenApi).not.toContain('[mcp_servers')
+    expect(serializedOpenApi).not.toContain('mcpServers')
+    expect(serializedOpenApi).not.toContain('literal-secret')
+    expect(serializedOpenApi).not.toContain('sk-')
 
     const invalidWorker = await target.request('/api/local/workers', {
       body: JSON.stringify({ soulId: FREEFORM_APP_ID }),
@@ -620,11 +1631,20 @@ const server = Bun.serve({
     const url = new URL(request.url)
     if (url.pathname === '/health')
       return Response.json({ status: 'ok' })
-    if (url.pathname === '/echo')
+    if (url.pathname === '/' || url.pathname === '/echo')
       return Response.json({
         appId: 'demo-api',
+        hasAuthorization: Boolean(request.headers.get('authorization')),
+        hasCookie: Boolean(request.headers.get('cookie')),
+        hasForwardedFor: Boolean(request.headers.get('x-forwarded-for')),
         hasMountToken: Boolean(request.headers.get('x-aiworker-mount-token')),
         path: url.pathname,
+      }, {
+        headers: {
+          'content-type': 'application/json',
+          'set-cookie': 'demo_api_session=should-not-reach-host',
+          'x-aiworker-mount-token': request.headers.get('x-aiworker-mount-token') ?? '',
+        },
       })
     return Response.json({ path: url.pathname }, { status: 404 })
   },
@@ -632,6 +1652,37 @@ const server = Bun.serve({
   port: Number(Bun.env.PORT ?? 0),
 })
 process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${server.port}\` }) + '\\n')
+`)
+  }
+
+  function writeFailingApiSoul(root: string): void {
+    const descriptor = parseSoulDescriptorV1({
+      ...freeformDescriptor,
+      api: {
+        entry: 'dist/api/server.js',
+        mount: '/api/apps/demo-failing-api',
+        type: 'local-service',
+      },
+      identity: {
+        appId: 'demo-failing-api',
+        description: 'Descriptor-only API Soul with failing local service.',
+        name: 'Failing API Soul',
+        soulId: 'demo-failing-api',
+        version: '0.1.0',
+      },
+    })
+    const distRoot = join(root, 'dist')
+    mkdirSync(join(distRoot, 'api'), { recursive: true })
+    mkdirSync(join(distRoot, 'engine-assets', 'workspace'), { recursive: true })
+    mkdirSync(join(distRoot, 'engine-assets', 'skills'), { recursive: true })
+    mkdirSync(join(distRoot, 'engine-assets', 'mcp', 'codex'), { recursive: true })
+    writeFileSync(join(distRoot, 'soul.descriptor.json'), `${JSON.stringify(descriptor, null, 2)}\n`)
+    writeFileSync(join(distRoot, 'engine-assets', 'workspace', 'AGENTS.md'), '# Failing API Workspace\n')
+    writeFileSync(join(distRoot, 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex mcp\n')
+    writeFileSync(join(distRoot, 'api', 'server.js'), `
+process.stderr.write('startup token=sk-mounted-service-secret\\n')
+process.stderr.write('authorization = "literal-secret-value"\\n')
+setTimeout(() => process.exit(7), 10)
 `)
   }
 })

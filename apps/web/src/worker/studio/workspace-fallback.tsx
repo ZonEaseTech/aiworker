@@ -12,19 +12,18 @@ import { Button } from '@zonease/aiworker-ui/components/button'
 import { CardContent } from '@zonease/aiworker-ui/components/card'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@zonease/aiworker-ui/components/input-group'
 import { Item, ItemActions, ItemContent, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
-import { displayTemplate } from '../../features/i18n'
+import { displayCapability } from '../../features/i18n'
 import { WorkerIdentityBlock, WorkspaceCard } from '../../features/local-workspace/components'
-import { sessionForWorkspace, turnForSession } from '../../features/local-workspace/model'
+import { sessionForWorkspace } from '../../features/local-workspace/model'
 import { StudioChromeHeader, StudioEmptyState, StudioTitleBlock } from '../components/studio-shell'
 
 type WorkerIdentityBlockProps = Parameters<typeof WorkerIdentityBlock>[0]
 type WorkspaceCardProps = Parameters<typeof WorkspaceCard>[0]
 type LocalWorkspace = WorkspaceCardProps['item']
-type WorkspaceTemplate = NonNullable<WorkspaceCardProps['template']>
+type WorkspaceCapability = NonNullable<WorkspaceCardProps['capability']>
 
 interface WorkspaceFallbackData {
-  templates: WorkspaceTemplate[]
-  turns: Parameters<typeof turnForSession>[1]
+  capabilities: WorkspaceCapability[]
 }
 
 export function WorkspaceContextNoMountedSurface({
@@ -84,7 +83,7 @@ export function WorkerHomeFallback({
   selectedSoulCopy,
   selectedWorker,
   selectedWorkspace,
-  templates,
+  capabilities,
 }: {
   allSessions: Parameters<typeof sessionForWorkspace>[1]
   copy: WorkerIdentityBlockProps['copy']
@@ -101,7 +100,7 @@ export function WorkerHomeFallback({
   selectedSoulCopy: WorkerIdentityBlockProps['soulCopy']
   selectedWorker: NonNullable<WorkerIdentityBlockProps['worker']>
   selectedWorkspace: LocalWorkspace | null
-  templates: WorkspaceTemplate[]
+  capabilities: WorkspaceCapability[]
 }) {
   return (
     <>
@@ -137,11 +136,11 @@ export function WorkerHomeFallback({
           />
           <Item variant="muted" size="sm" className="min-w-0 items-start">
             <ItemContent className="min-w-0 gap-3">
-              <ItemTitle>{`${copy.create.capabilityTemplate} (${templates.length})`}</ItemTitle>
+              <ItemTitle>{`${copy.create.capability} (${capabilities.length})`}</ItemTitle>
               <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
-                {templates.map(template => (
-                  <Badge key={template.id} variant="outline" className="max-w-full truncate">
-                    {displayTemplate(template, locale).name}
+                {capabilities.map(capability => (
+                  <Badge key={capability.id} variant="outline" className="max-w-full truncate">
+                    {displayCapability(capability, locale).name}
                   </Badge>
                 ))}
               </ItemActions>
@@ -186,8 +185,7 @@ export function WorkerHomeFallback({
                       item={item}
                       locale={locale}
                       session={session}
-                      template={data.templates.find(template => template.id === session?.capabilityTemplateId)}
-                      turn={turnForSession(session, data.turns)}
+                      capability={data.capabilities.find(capability => capability.id === session?.capabilityId)}
                       onSelect={() => onSelectWorkspace(item)}
                     />
                   )

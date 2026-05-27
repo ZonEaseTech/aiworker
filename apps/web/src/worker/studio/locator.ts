@@ -1,7 +1,7 @@
 import type { WorkerRoute } from '../../app/router/worker-route'
 import type { LocalWorkspaceData } from '../../features/local-workspace/api/types'
 
-import { displayTemplate, normalizeLocale } from '../../features/i18n'
+import { displayCapability, normalizeLocale } from '../../features/i18n'
 import { latest, sessionForWorkspace } from '../../features/local-workspace/model'
 
 export interface WorkerStudioLocatorInput {
@@ -25,7 +25,7 @@ export interface WorkerStudioLocatorState {
   selectedWorkspace: LocalWorkspaceData['workspaces'][number] | null
   soulSessions: LocalWorkspaceData['sessions']
   soulWorkspaces: LocalWorkspaceData['workspaces']
-  templates: LocalWorkspaceData['templates']
+  capabilities: LocalWorkspaceData['capabilities']
 }
 
 export function deriveWorkerStudioLocatorState({
@@ -60,7 +60,7 @@ export function deriveWorkerStudioLocatorState({
   const selectedSoulApp = selectedWorker && data
     ? data.apps.find(app => app.appId === selectedWorker.soulId || app.projectedSoul?.id === selectedWorker.soulId) ?? null
     : null
-  const templates = data?.templates.filter(template => template.soulId === selectedWorker?.soulId) ?? []
+  const capabilities = data?.capabilities.filter(capability => capability.soulId === selectedWorker?.soulId) ?? []
   const soulWorkspaces = data?.workspaces.filter(item => item.workerId === selectedWorker?.id) ?? []
   const soulSessions = deriveSoulSessions(allSessions, soulWorkspaces)
   const filteredWorkspaces = deriveFilteredWorkspaces({
@@ -96,14 +96,14 @@ export function deriveWorkerStudioLocatorState({
     selectedWorkspace,
     soulSessions,
     soulWorkspaces,
-    templates,
+    capabilities,
   }
 }
 
 function deriveSelectableWorkers(data: LocalWorkspaceData): LocalWorkspaceData['workers'] {
   const availableSoulIds = new Set(data.souls.filter(soul => soul.status === 'available').map(soul => soul.id))
-  const templatedSoulIds = new Set(data.templates.map(template => template.soulId))
-  return data.workers.filter(worker => availableSoulIds.has(worker.soulId) && templatedSoulIds.has(worker.soulId))
+  const capabilitySoulIds = new Set(data.capabilities.map(capability => capability.soulId))
+  return data.workers.filter(worker => availableSoulIds.has(worker.soulId) && capabilitySoulIds.has(worker.soulId))
 }
 
 function deriveSoulSessions(
@@ -123,18 +123,18 @@ function deriveFilteredWorkspaces({
 }: {
   allSessions: LocalWorkspaceData['sessions']
   data: LocalWorkspaceData | null
-  locale: Parameters<typeof displayTemplate>[1]
+  locale: Parameters<typeof displayCapability>[1]
   query: string | null
   soulWorkspaces: LocalWorkspaceData['workspaces']
 }): LocalWorkspaceData['workspaces'] {
   const needle = (query ?? '').trim().toLowerCase()
   return soulWorkspaces.filter((item) => {
     const latestSession = sessionForWorkspace(item, allSessions)
-    const template = data?.templates.find(candidate => candidate.id === latestSession?.capabilityTemplateId)
-    const templateCopy = template ? displayTemplate(template, locale) : null
+    const capability = data?.capabilities.find(candidate => candidate.id === latestSession?.capabilityId)
+    const capabilityCopy = capability ? displayCapability(capability, locale) : null
     return !needle
       || item.name.toLowerCase().includes(needle)
-      || template?.name.toLowerCase().includes(needle)
-      || templateCopy?.name.toLowerCase().includes(needle)
+      || capability?.name.toLowerCase().includes(needle)
+      || capabilityCopy?.name.toLowerCase().includes(needle)
   })
 }

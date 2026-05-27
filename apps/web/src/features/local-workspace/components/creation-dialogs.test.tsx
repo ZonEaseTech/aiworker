@@ -7,9 +7,8 @@ import { CreateWorkerDialog, CreateWorkspaceDialog } from './creation-dialogs'
 
 const copy = messagesFor('en')
 const soul = {
-  defaultTemplates: [],
+  defaultCapabilities: [],
   description: 'People operations workspace',
-  domain: 'hr-people-ops',
   id: 'aiworker-hr',
   name: 'AIWorker HR',
   status: 'available',

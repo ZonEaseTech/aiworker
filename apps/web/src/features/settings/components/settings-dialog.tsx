@@ -1,7 +1,7 @@
 import type { IconSvgElement } from '@hugeicons/react'
 import type { HostedSoulApp, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-soul-protocol'
 import type { CSSProperties, ReactNode } from 'react'
-import type { CapabilityTemplate } from '../../local-workspace/types.compat'
+import type { WorkspaceCapability } from '../../local-workspace/types.compat'
 
 import {
   Cancel01Icon,
@@ -78,22 +78,22 @@ const settingsSections: Array<{
 
 export function SettingsDialog({
   apps,
+  capabilities,
   initial,
   initialSection,
   onAppsChanged,
   onClose,
   onSaved,
   runtimeVersion,
-  templates,
 }: {
   apps: HostedSoulApp[]
+  capabilities: WorkspaceCapability[]
   initial: LocalSettingsConfig
   initialSection: SettingsSection
   onAppsChanged?: () => Promise<void> | void
   onClose: () => void
   onSaved: (settings: LocalSettingsConfig) => void
   runtimeVersion: string
-  templates: CapabilityTemplate[]
 }) {
   const [settings, setSettings] = useState(initial)
   const [section, setSection] = useState<SettingsSection>(initialSection)
@@ -165,7 +165,7 @@ export function SettingsDialog({
             />
           )
         : null}
-      {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} templates={templates} onAppsChanged={onAppsChanged} /> : null}
+      {section === 'soul-packs' ? <SoulAppsSettings apps={apps} capabilities={capabilities} copy={copy} locale={activeLocale} onAppsChanged={onAppsChanged} /> : null}
       {section === 'connectors' ? <ConnectorsSettings copy={copy} settings={settings} update={persist} /> : null}
       {section === 'mcp' ? <LocalMcpSettings copy={copy} /> : null}
       {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} /> : null}
@@ -513,16 +513,16 @@ function EngineCardIcon({ engineId, iconSrc, installed }: { engineId: string, ic
 
 function SoulAppsSettings({
   apps,
+  capabilities,
   copy,
   locale,
   onAppsChanged,
-  templates,
 }: {
   apps: HostedSoulApp[]
+  capabilities: WorkspaceCapability[]
   copy: ReturnType<typeof messagesFor>
   locale: ReturnType<typeof normalizeLocale>
   onAppsChanged?: () => Promise<void> | void
-  templates: CapabilityTemplate[]
 }) {
   const settingsCopy = copy.settings
   const soulAppsCopy = settingsCopy.soulPacks
@@ -557,9 +557,9 @@ function SoulAppsSettings({
           ? apps.map((app) => {
               const permissionCount = app.permissions.length
               const workbenchCount = app.mountedWorkbench ? 1 : 0
-              const templateCount = templates.filter(template => template.soulId === app.appId || template.soulId === app.projectedSoul?.id).length
+              const capabilityCount = capabilities.filter(capability => capability.soulId === app.appId || capability.soulId === app.projectedSoul?.id).length
               const apiRoutePrefix = app.api.routePrefix
-              const domain = app.projectedSoul?.domain ?? app.soulId ?? app.appId
+              const soulId = app.soulId || app.projectedSoul?.id || app.appId
               const permissionLabels = app.permissions.map(permissionLabel).filter(isString)
               const busy = busyAppId === app.appId
               const actionLabel = app.status === 'enabled' ? soulAppsCopy.disableApp(app.name) : soulAppsCopy.enableApp(app.name)
@@ -582,10 +582,10 @@ function SoulAppsSettings({
                     </CardAction>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
-                    <CardDescription>{domain}</CardDescription>
+                    <CardDescription>{soulId}</CardDescription>
                     <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
                       <Badge variant="outline">{soulAppsCopy.permissionCount(permissionCount)}</Badge>
-                      <Badge variant="outline">{soulAppsCopy.templateCount(templateCount)}</Badge>
+                      <Badge variant="outline">{soulAppsCopy.capabilityCount(capabilityCount)}</Badge>
                       <Badge variant="outline">{soulAppsCopy.mountedWorkbenchCount(workbenchCount)}</Badge>
                     </ItemActions>
                     <ItemGroup className="gap-2" aria-label={`${app.name} app access`}>

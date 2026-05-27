@@ -2,13 +2,12 @@ import type {
   HostedSoulApp,
   LocalSession,
   LocalSettingsConfig,
-  LocalTurn,
   LocalWorker,
   LocalWorkerOverlay,
   LocalWorkspace,
   SoulAppProjectionReceipt,
 } from '@zonease/aiworker-soul-protocol'
-import type { CapabilityTemplate, VerticalSoul } from '../types.compat'
+import type { VerticalSoul, WorkspaceCapability } from '../types.compat'
 
 export interface LocalSoulAppLifecycleResponse {
   app: LocalHostedSoulApp
@@ -26,12 +25,11 @@ export interface LocalInfoResponse {
 export interface LocalWorkspaceData {
   info: LocalInfoResponse
   apps: LocalHostedSoulApp[]
+  capabilities: WorkspaceCapability[]
   workers: LocalWorker[]
   souls: VerticalSoul[]
-  templates: CapabilityTemplate[]
   workspaces: LocalWorkspace[]
   sessions: LocalSession[]
-  turns: LocalTurn[]
   settings: LocalSettingsConfig
 }
 

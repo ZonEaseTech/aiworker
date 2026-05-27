@@ -7,11 +7,13 @@ import type {
 } from '@zonease/aiworker-soul-protocol'
 
 import { createHash } from 'node:crypto'
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const SKILL_ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const SKILL_FILE = 'SKILL.md'
+const DEFAULT_SKILL_ASSET_SOURCE = 'engine-assets/skills'
+const DEFAULT_WORKSPACE_ASSET_SOURCE = 'engine-assets/workspace'
 const PROJECTION_RECEIPT = path.posix.join('.aiworker', 'projections.json')
 const PRESERVE_EXISTING_WORKSPACE_TARGETS = new Set(['README.md'])
 const MCP_SECRET_ASSIGNMENT_RE = /["']?([\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*)["']?\s*[:=]\s*["']([^"'\n]+)["']/gi
@@ -41,6 +43,15 @@ export interface EngineAssetProjectionInput {
   variables: Record<string, string>
   workerOverlayAssets?: WorkerOverlayProjectionAsset[]
   workspaceRoot: string
+}
+
+export interface WorkspaceProjectionReceiptCleanupInput {
+  receipt: SoulAppProjectionReceipt
+  workspaceRoot: string
+}
+
+export interface WorkspaceProjectionReceiptCleanupResult {
+  cleanedTargets: string[]
 }
 
 type EngineAssetProjectionContext = EngineAssetProjectionInput & {
@@ -79,6 +90,16 @@ export function engineAssetProjectionReceiptPath(): string {
   return PROJECTION_RECEIPT
 }
 
+export async function cleanupWorkspaceProjectionReceipt(input: WorkspaceProjectionReceiptCleanupInput): Promise<WorkspaceProjectionReceiptCleanupResult> {
+  const workspaceRoot = path.resolve(input.workspaceRoot)
+  const cleanedTargets: string[] = []
+  for (const projection of input.receipt.projections) {
+    await rm(workspaceProjectionTargetPath(workspaceRoot, projection.target), { force: true })
+    cleanedTargets.push(projection.target)
+  }
+  return { cleanedTargets }
+}
+
 export function resolveSoulAppEngineTarget(engineId?: string | null): SoulAppEngineTarget | null {
   if (!engineId)
     return null
@@ -90,7 +111,8 @@ export function resolveSoulAppEngineTarget(engineId?: string | null): SoulAppEng
 }
 
 async function projectWorkspaceFiles(input: EngineAssetProjectionContext): Promise<SoulAppProjectionReceiptEntry[]> {
-  const root = path.join(input.sourceRoot, 'engine-assets', 'workspace')
+  const sourceDir = appLocalSourcePath(input.engineAssets?.workspace?.source ?? DEFAULT_WORKSPACE_ASSET_SOURCE)
+  const root = path.join(input.sourceRoot, ...sourceDir.split('/'))
   const files = await listFiles(root)
   const entries: SoulAppProjectionReceiptEntry[] = []
   const baselineTargets = new Set<string>()
@@ -107,7 +129,7 @@ async function projectWorkspaceFiles(input: EngineAssetProjectionContext): Promi
       }
       continue
     }
-    const source = path.posix.join('engine-assets', 'workspace', relative)
+    const source = path.posix.join(sourceDir, relative)
     const content = renderTemplate(await readFile(file, 'utf8'), input.variables)
     const written = await writeProjectedFile(input.workspaceRoot, relative, content, {
       preserveExisting: PRESERVE_EXISTING_WORKSPACE_TARGETS.has(relative),
@@ -129,7 +151,8 @@ async function projectWorkspaceFiles(input: EngineAssetProjectionContext): Promi
 }
 
 async function projectNativeSkills(input: EngineAssetProjectionContext): Promise<SoulAppProjectionReceiptEntry[]> {
-  const root = path.join(input.sourceRoot, 'engine-assets', 'skills')
+  const sourceDir = appLocalSourcePath(input.engineAssets?.skills?.source ?? DEFAULT_SKILL_ASSET_SOURCE)
+  const root = path.join(input.sourceRoot, ...sourceDir.split('/'))
   const skillDirs = await readdirOrEmpty(root)
   const entries: SoulAppProjectionReceiptEntry[] = []
   const configuredTargets = new Set<SoulAppEngineTarget>(input.engineAssets?.skills?.targets ?? ['codex', 'claude-code'])
@@ -168,7 +191,7 @@ async function projectNativeSkills(input: EngineAssetProjectionContext): Promise
       entries.push(receiptEntry(
         input,
         'native-skill',
-        path.posix.join('engine-assets', 'skills', dirent.name, SKILL_FILE),
+        path.posix.join(sourceDir, dirent.name, SKILL_FILE),
         target.path,
         content,
         target.engineTarget,
@@ -214,7 +237,6 @@ async function projectMcpClients(input: EngineAssetProjectionContext): Promise<S
       throw new Error(`MCP client config not found for ${input.engineTarget}: ${source}`)
 
     const content = await readFile(file, 'utf8')
-    assertNoLiteralMcpSecrets(content, source)
     const written = await writeProjectedFile(input.workspaceRoot, adapter.targetPath, content, preserveUnownedExistingTarget(input, adapter.targetPath))
     if (written)
       entries.push(receiptEntry(input, 'mcp-client', source, adapter.targetPath, content, input.engineTarget))
@@ -261,7 +283,11 @@ function mcpClientAdapter(engineTarget: SoulAppEngineTarget): { sourceFile: stri
 }
 
 function appLocalSourcePath(source: string): string {
-  return source.replace(/^\.\//, '').split('/').filter(Boolean).join('/')
+  const normalized = source.replace(/^\.\//, '').trim()
+  const segments = normalized.split(/[\\/]/).filter(Boolean)
+  if (!segments.length || path.posix.isAbsolute(normalized) || path.win32.isAbsolute(normalized) || segments.includes('..'))
+    throw new Error(`Engine asset source must be relative: ${source}`)
+  return segments.join('/')
 }
 
 function findOverlay(
@@ -299,6 +325,15 @@ function projectableRelativeTarget(target: string): string {
   return normalized
 }
 
+function workspaceProjectionTargetPath(workspaceRoot: string, targetPath: string): string {
+  const segments = targetPath.split('/').filter(Boolean)
+  const target = path.resolve(workspaceRoot, ...segments)
+  const root = path.resolve(workspaceRoot)
+  if (!segments.length || path.posix.isAbsolute(targetPath) || segments.includes('..') || target === root || !target.startsWith(`${root}${path.sep}`))
+    throw new Error(`Projection target escapes workspace root: ${targetPath}`)
+  return target
+}
+
 function assertNoLiteralMcpSecrets(content: string, source: string): void {
   if (hasLiteralSecretAssignment(content) || MCP_SECRET_VALUE_RE.test(content))
     throw new Error(`MCP client config must not contain literal secrets: ${source}`)
@@ -314,7 +349,7 @@ function hasLiteralSecretAssignment(content: string): boolean {
 }
 
 function isSecretReferenceValue(value: string): boolean {
-  return value.startsWith('$') || value.startsWith('env:')
+  return value.startsWith('$') || value.startsWith('env:') || value.startsWith('secretref:')
 }
 
 function receiptEntry(
@@ -341,7 +376,7 @@ function renderTemplate(content: string, variables: Record<string, string>): str
 }
 
 async function writeProjectedFile(root: string, relativePath: string, content: string, options: { preserveExisting?: boolean } = {}): Promise<boolean> {
-  const targetPath = path.join(root, ...relativePath.split('/'))
+  const targetPath = workspaceProjectionTargetPath(root, relativePath)
   if (options.preserveExisting && await isFile(targetPath))
     return false
   await mkdir(path.dirname(targetPath), { recursive: true })
@@ -391,7 +426,8 @@ export async function listBaselineAssets(source: EngineAssetSource): Promise<Loc
   const assets: LocalWorkerOverlayAsset[] = []
   const now = new Date().toISOString()
 
-  const workspaceRoot = path.join(sourceRoot, 'engine-assets', 'workspace')
+  const workspaceSource = appLocalSourcePath(source.engineAssets?.workspace?.source ?? DEFAULT_WORKSPACE_ASSET_SOURCE)
+  const workspaceRoot = path.join(sourceRoot, ...workspaceSource.split('/'))
   for (const file of await listFiles(workspaceRoot)) {
     const id = path.relative(workspaceRoot, file).split(path.sep).join('/')
     const content = await readFile(file, 'utf8')
@@ -403,13 +439,14 @@ export async function listBaselineAssets(source: EngineAssetSource): Promise<Loc
       metadataJson: {},
       optionsJson: {},
       source: 'baseline',
-      sourceRef: path.posix.join('engine-assets', 'workspace', id),
+      sourceRef: path.posix.join(workspaceSource, id),
       target: 'workspace',
       updatedAt: now,
     })
   }
 
-  const skillsRoot = path.join(sourceRoot, 'engine-assets', 'skills')
+  const skillsSource = appLocalSourcePath(source.engineAssets?.skills?.source ?? DEFAULT_SKILL_ASSET_SOURCE)
+  const skillsRoot = path.join(sourceRoot, ...skillsSource.split('/'))
   for (const dirent of await readdirOrEmpty(skillsRoot)) {
     if (!dirent.isDirectory() || !SKILL_ID_RE.test(dirent.name))
       continue
@@ -427,7 +464,7 @@ export async function listBaselineAssets(source: EngineAssetSource): Promise<Loc
         metadataJson: {},
         optionsJson: {},
         source: 'baseline',
-        sourceRef: path.posix.join('engine-assets', 'skills', dirent.name, SKILL_FILE),
+        sourceRef: path.posix.join(skillsSource, dirent.name, SKILL_FILE),
         target,
         updatedAt: now,
       })

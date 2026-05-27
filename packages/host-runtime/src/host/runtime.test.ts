@@ -100,7 +100,7 @@ describe('Host runtime boundary', () => {
       id: 'legacy-hr-session',
       workerId: 'legacy-hr-worker',
       workspaceId: 'legacy-hr-workspace',
-      capabilityTemplateId: 'candidate-screen',
+      capabilityId: 'candidate-screen',
       title: 'Legacy candidate screen',
       at,
     })
@@ -139,11 +139,11 @@ describe('Host runtime boundary', () => {
       soulId: FREEFORM_APP_ID,
     })
     expect(created.worker.metadataJson).toMatchObject({
-      defaultTemplates: expect.any(Array),
-      domain: 'freeform',
+      defaultCapabilities: expect.any(Array),
       owner: 'operator',
       soulAppId: FREEFORM_APP_ID,
     })
+    expect(created.worker.metadataJson).not.toHaveProperty('domain')
     expect(created.snapshot.worker.id).toBe('freeform-worker')
 
     const workspace = await created.runtime.createWorkspace({ name: 'Open Workspace', type: 'workspace' })
@@ -181,7 +181,7 @@ describe('Host runtime boundary', () => {
     await expect(readFile(path.join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain('"kind": "mcp-client"')
   })
 
-  it('validates worker template ownership', async () => {
+  it('validates worker capability ownership', async () => {
     const runtime = host()
     await runtime.bootstrapOfficialSoulApps()
     const created = await runtime.createSoulWorker({
@@ -190,13 +190,13 @@ describe('Host runtime boundary', () => {
       soulId: FREEFORM_APP_ID,
     })
 
-    const template = runtime.requireCapabilityTemplateForWorker(created.worker.id, FREEFORM_DEFAULT)
-    expect(template).toMatchObject({
+    const capability = runtime.requireCapabilityForWorker(created.worker.id, FREEFORM_DEFAULT)
+    expect(capability).toMatchObject({
       id: FREEFORM_DEFAULT,
       soulId: FREEFORM_APP_ID,
     })
 
-    expect(() => runtime.requireCapabilityTemplateForWorker(created.worker.id, 'other-soul.release-gate'))
+    expect(() => runtime.requireCapabilityForWorker(created.worker.id, 'other-soul.release-gate'))
       .toThrow('does not belong to worker')
   })
 })

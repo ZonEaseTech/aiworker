@@ -11,10 +11,10 @@ import { bootstrapOfficialSoulApps } from './official'
 import {
   disableSoulApp,
   enableSoulApp,
-  findHostCapabilityTemplate,
+  findHostCapability,
   findHostSoul,
   installSoulAppFromPath,
-  listHostCapabilityTemplatesForSoul,
+  listHostCapabilitiesForSoul,
   listHostedSoulApps,
   listHostSoulCatalog,
   runSoulAppHealthcheck,
@@ -71,11 +71,11 @@ describe('Host Soul descriptor registry', () => {
 
   it('starts with an app-only empty Host catalog', () => {
     expect(listHostedSoulApps()).toHaveLength(0)
+    expect(listHostSoulCatalog().capabilities).toEqual([])
     expect(listHostSoulCatalog().souls).toEqual([])
-    expect(listHostSoulCatalog().templates).toEqual([])
     expect(findHostSoul('hr')).toBeUndefined()
-    expect(findHostCapabilityTemplate('candidate-screen')).toBeUndefined()
-    expect(listHostCapabilityTemplatesForSoul('hr')).toEqual([])
+    expect(findHostCapability('candidate-screen')).toBeUndefined()
+    expect(listHostCapabilitiesForSoul('hr')).toEqual([])
   })
 
   it('installs, enables, projects, healthchecks, and disables a descriptor', async () => {
@@ -116,8 +116,8 @@ describe('Host Soul descriptor registry', () => {
     expect(enabled.healthStatus).toBe('pass')
 
     expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('available')
-    expect(findHostCapabilityTemplate(FREEFORM_DEFAULT)?.soulId).toBe(FREEFORM_APP_ID)
-    expect(listHostCapabilityTemplatesForSoul(FREEFORM_APP_ID).map(template => template.id)).toEqual([FREEFORM_DEFAULT])
+    expect(findHostCapability(FREEFORM_DEFAULT)?.soulId).toBe(FREEFORM_APP_ID)
+    expect(listHostCapabilitiesForSoul(FREEFORM_APP_ID).map(capability => capability.id)).toEqual([FREEFORM_DEFAULT])
     expect(listHostSoulCatalog().souls.some(soul => soul.id === 'hr')).toBe(false)
 
     const checked = runSoulAppHealthcheck(FREEFORM_APP_ID, { hostVersion: '0.19.3' })
@@ -125,7 +125,7 @@ describe('Host Soul descriptor registry', () => {
 
     const disabled = disableSoulApp(FREEFORM_APP_ID, { now: () => '2026-05-12T22:24:00.000Z' })
     expect(disabled.status).toBe('disabled')
-    expect(findHostCapabilityTemplate(FREEFORM_DEFAULT)).toBeUndefined()
+    expect(findHostCapability(FREEFORM_DEFAULT)).toBeUndefined()
     expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
 
     const reinstalled = await installSoulAppFromPath(descriptorPath, {
@@ -164,7 +164,7 @@ describe('Host Soul descriptor registry', () => {
       [FREEFORM_APP_ID, 'preserved_disabled'],
     ])
     expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
-    expect(listHostCapabilityTemplatesForSoul(FREEFORM_APP_ID)).toEqual([])
+    expect(listHostCapabilitiesForSoul(FREEFORM_APP_ID)).toEqual([])
   })
 
   it('bootstraps official descriptors from an explicit packaged app root', async () => {

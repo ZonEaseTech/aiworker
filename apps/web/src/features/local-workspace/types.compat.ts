@@ -4,12 +4,11 @@ export interface VerticalSoul {
   id: string
   name: string
   description: string
-  domain: string
   status: string
-  defaultTemplates?: string[]
+  defaultCapabilities?: string[]
 }
 
-export interface CapabilityTemplate {
+export interface WorkspaceCapability {
   id: string
   name: string
   description: string
@@ -17,5 +16,4 @@ export interface CapabilityTemplate {
   outputKind: string
   inputHints: readonly string[]
   promptRef: string
-  reviewRubricRef: string | null
 }

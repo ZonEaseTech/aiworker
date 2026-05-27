@@ -2,7 +2,7 @@ import type { Context } from 'hono'
 import { AppError } from '@zonease/aiworker-soul-protocol'
 import consola from 'consola'
 
-const SECRET_ASSIGNMENT_RE = /(["']?[\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*["']?\s*[:=]\s*["']?)([^"'\s\n]+)/gi
+const SECRET_ASSIGNMENT_RE = /(["']?[\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*["']?\s*[:=]\s*["']?)([^"'\s]+)/gi
 const SECRET_VALUE_RE = /\b(Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,})\b/gi
 
 export function errorHandler(err: Error, c: Context) {

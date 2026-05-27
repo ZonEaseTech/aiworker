@@ -130,8 +130,17 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
   function adapterFor(target: EngineTarget): EngineAdapter {
     const adapter = options.adapters.find(item => item.target === target)
     if (!adapter)
-      throw bridgeFailure('ENGINE_NOT_CALLABLE', `No engine adapter registered for ${target}.`)
+      throw bridgeFailure('ENGINE_NOT_CALLABLE', redactString(`No engine adapter registered for ${target}.`))
     return adapter
+  }
+
+  async function discoverAdapter(adapter: EngineAdapter): Promise<EngineAvailability> {
+    try {
+      return await adapter.discover()
+    }
+    catch (error) {
+      throw bridgeFailureFromError(error, 'ENGINE_NOT_CALLABLE')
+    }
   }
 
   async function assertProjectionUsable(request: Record<string, unknown>): Promise<void> {
@@ -184,7 +193,8 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
       if (handle?.invocationId !== invocationId)
         throw bridgeFailure('ENGINE_CANCEL_FAILED', 'Process handle no longer belongs to the requested invocation.')
 
-      const adapter = options.adapters[0]
+      const requestedTarget = readEngineTarget(request)
+      const adapter = requestedTarget ? adapterFor(requestedTarget) : options.adapters[0]
       if (!adapter)
         throw bridgeFailure('ENGINE_CANCEL_FAILED', 'No engine adapter is available for cancellation.')
 
@@ -205,13 +215,13 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
     },
 
     discover(target) {
-      return adapterFor(target).discover()
+      return discoverAdapter(adapterFor(target))
     },
 
     async followUp(request) {
       await assertProjectionUsable(request)
       const adapter = adapterFor(readEngineTarget(request))
-      const availability = await adapter.discover()
+      const availability = await discoverAdapter(adapter)
       const externalSessionRef = await options.resolveLatestExternalSessionRef?.(request)
 
       if (availability.supportsNativeResume && !externalSessionRef) {
@@ -222,10 +232,16 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
       }
 
       const pipeline = eventPipeline()
-      const result = await adapter.followUp({
-        ...request,
-        externalSessionRef,
-      }, pipeline.sink)
+      let result: Record<string, unknown>
+      try {
+        result = await adapter.followUp({
+          ...request,
+          externalSessionRef,
+        }, pipeline.sink)
+      }
+      catch (error) {
+        throw bridgeFailureFromError(error, 'ENGINE_PROTOCOL_INIT_FAILED')
+      }
       await pipeline.flush()
 
       return redactValue(result)
@@ -261,7 +277,14 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
       if (!options.processManager?.inspect)
         throw bridgeFailure('ENGINE_PROCESS_LOST', 'No process manager is available for reconciliation.')
 
-      const observation = readObject(await options.processManager.inspect(handle, { invocationId })) ?? {}
+      let inspection: unknown
+      try {
+        inspection = await options.processManager.inspect(handle, { invocationId })
+      }
+      catch (error) {
+        throw bridgeFailureFromError(error, 'ENGINE_PROCESS_LOST')
+      }
+      const observation = readObject(inspection) ?? {}
       const processState = readEngineProcessState(observation.state ?? observation.processState, 'lost')
       if (processState !== 'lost') {
         return {
@@ -293,7 +316,13 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
       await assertProjectionUsable(request)
       const adapter = adapterFor(readEngineTarget(request))
       const pipeline = eventPipeline()
-      const result = await adapter.start(request, pipeline.sink)
+      let result: Record<string, unknown>
+      try {
+        result = await adapter.start(request, pipeline.sink)
+      }
+      catch (error) {
+        throw bridgeFailureFromError(error, 'ENGINE_PROTOCOL_INIT_FAILED')
+      }
       await pipeline.flush()
       return redactValue(result)
     },
@@ -304,10 +333,10 @@ function normalizeEvents(events: Array<Record<string, unknown>>): Array<Record<s
   return events.map((event) => {
     const type = typeof event.type === 'string' ? event.type : ''
     if (FORBIDDEN_DOMAIN_EVENT_TYPES.has(type)) {
-      throw new Error(`Forbidden domain bridge event type: ${type}`)
+      throw bridgeFailure('ENGINE_OUTPUT_PARSE_FAILED', redactString(`Forbidden domain bridge event type: ${type}`))
     }
     if (!ALLOWED_EVENT_TYPE_SET.has(type)) {
-      throw new Error(`Unsupported bridge event type: ${type}`)
+      throw bridgeFailure('ENGINE_OUTPUT_PARSE_FAILED', redactString(`Unsupported bridge event type: ${type}`))
     }
     return event
   })
@@ -411,11 +440,27 @@ function bridgeFailure(code: EngineBridgeFailureCode, message: string): Error & 
   return Object.assign(new Error(message), { code })
 }
 
+function bridgeFailureFromError(error: unknown, fallback: EngineBridgeFailureCode): Error & { code: EngineBridgeFailureCode } {
+  const failure = bridgeFailure(errorCode(error, fallback), errorMessage(error))
+  const partialResult = readObject(error)?.partialResult
+  if (partialResult)
+    Object.assign(failure, { partialResult: redactValue(partialResult) })
+  if (error instanceof Error && error.name)
+    failure.name = error.name
+  return failure
+}
+
 function errorCode(error: unknown, fallback: EngineBridgeFailureCode): EngineBridgeFailureCode {
   if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
     if ((ENGINE_BRIDGE_FAILURE_CODES as readonly string[]).includes(error.code))
       return error.code as EngineBridgeFailureCode
   }
+  if (error && typeof error === 'object' && 'failureCode' in error && typeof error.failureCode === 'string') {
+    if ((ENGINE_BRIDGE_FAILURE_CODES as readonly string[]).includes(error.failureCode))
+      return error.failureCode as EngineBridgeFailureCode
+  }
+  if (error instanceof Error && error.name === 'LocalExecutorFailure')
+    return 'ENGINE_PROCESS_EXITED'
   return fallback
 }
 

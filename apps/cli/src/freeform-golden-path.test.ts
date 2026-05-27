@@ -75,9 +75,8 @@ describe('Freeform CLI golden path', () => {
     expect(workspace.workspace).toMatchObject({ type: 'freeform', workerId: 'freeform-golden-worker' })
 
     const started = await runCliJson<{
-      invocation: { engineId: string, id: string, sessionId: string, status: string }
+      invocation: { engineId: string, id: string, inputRef: string, sessionId: string, status: string }
       session: { id: string, status: string, workspaceId: string }
-      turn: { sessionId: string, status: string }
     }>(
       'session',
       'start',
@@ -85,7 +84,7 @@ describe('Freeform CLI golden path', () => {
       'freeform-golden-worker',
       '--workspace',
       workspace.workspace.id,
-      '--skill',
+      '--capability',
       FREEFORM_CAPABILITY_ID,
       '--title',
       'Freeform golden session',
@@ -96,7 +95,9 @@ describe('Freeform CLI golden path', () => {
     )
     expect(started.session).toMatchObject({ status: 'active', workspaceId: workspace.workspace.id })
     expect(started.invocation).toMatchObject({ engineId: 'codex', sessionId: started.session.id, status: 'succeeded' })
-    expect(started.turn).toMatchObject({ sessionId: started.session.id, status: 'succeeded' })
+    expect(started.invocation.inputRef).toBe(`aiworker://sessions/${started.session.id}/invocations/${started.invocation.id}/input`)
+    expect(started.invocation.inputRef).not.toContain('/turns/')
+    expect('turn' in started).toBe(false)
 
     const followed = await runCliJson<{
       invocation: { engineId: string, id: string, sessionId: string, status: string }
@@ -110,21 +111,46 @@ describe('Freeform CLI golden path', () => {
     )
     expect(followed.invocation).toMatchObject({ engineId: 'codex', sessionId: started.session.id, status: 'succeeded' })
 
-    const shown = await runCliJson<{ session: { id: string, status: string }, turns: Array<{ sessionId: string, status: string }> }>(
+    const secondFollowed = await runCliJson<{
+      invocation: { engineId: string, id: string, sessionId: string, status: string }
+    }>(
+      'session',
+      'invoke',
+      '--session',
+      started.session.id,
+      '--input',
+      'Continue through another session invocation.',
+    )
+    expect(secondFollowed.invocation).toMatchObject({ engineId: 'codex', sessionId: started.session.id, status: 'succeeded' })
+
+    const shown = await runCliJson<{
+      invocations: Array<{ id: string, sessionId: string, status: string }>
+      session: { id: string, status: string }
+    }>(
       'session',
       'show',
       started.session.id,
     )
     expect(shown.session).toMatchObject({ id: started.session.id, status: 'active' })
-    expect(shown.turns).toEqual([])
+    expect('turns' in shown).toBe(false)
+    expect(shown.invocations.map(invocation => invocation.id)).toEqual([
+      started.invocation.id,
+      followed.invocation.id,
+      secondFollowed.invocation.id,
+    ])
+    expect(shown.invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded', 'succeeded'])
 
     initWorkerDb(process.env.WORKER_DB_PATH!)
     const invocations = listEngineInvocations(started.session.id).sort((left, right) => left.seq - right.seq)
     closeWorkerDb()
-    expect(invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded'])
-    expect(invocations.map(invocation => invocation.sessionId)).toEqual([started.session.id, started.session.id])
+    expect(invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded', 'succeeded'])
+    expect(invocations.map(invocation => invocation.sessionId)).toEqual([started.session.id, started.session.id, started.session.id])
+    expect(invocations[0]?.inputRef).toBe(`aiworker://sessions/${started.session.id}/invocations/${started.invocation.id}/input`)
+    expect(invocations[0]?.inputRef).not.toContain('/turns/')
     expect(invocations[1]?.inputRef).toBe(`aiworker://sessions/${started.session.id}/invocations/${followed.invocation.id}/input`)
     expect(invocations[1]?.inputRef).not.toContain('/turns/')
+    expect(invocations[2]?.inputRef).toBe(`aiworker://sessions/${started.session.id}/invocations/${secondFollowed.invocation.id}/input`)
+    expect(invocations[2]?.inputRef).not.toContain('/turns/')
 
     await expect(readFile(path.join(workspace.workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('AIWorker Freeform Workspace')
     await expect(stat(path.join(workspace.workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'))).resolves.toBeTruthy()

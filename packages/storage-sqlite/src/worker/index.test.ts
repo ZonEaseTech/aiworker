@@ -13,7 +13,6 @@ import {
   closeWorkerDb,
   createEngineInvocation,
   createSession,
-  createTurn,
   createWorkspace,
   discardLegacySoulMetadata,
   engineInvocations,
@@ -21,14 +20,16 @@ import {
   getSession,
   getSoulApp,
   getWorker,
+  getWorkerConfigValue,
   getWorkerDb,
   initWorkerDb,
   listEngineInvocations,
   listFiles,
+  listInvocationEvents,
   listSessionEvents,
   listSessions,
   listSoulApps,
-  listTurns,
+  listWorkerConfigValues,
   listWorkerOverlayAssets,
   listWorkers,
   listWorkspaces,
@@ -42,6 +43,7 @@ import {
   upsertFile,
   upsertSoulApp,
   upsertWorker,
+  upsertWorkerConfigValue,
   upsertWorkerOverlayAssets,
   workerConfig,
   workers,
@@ -188,9 +190,181 @@ describe('greenfield local worker session schema', () => {
       workerId: worker.id,
     })
     expect(overlay[0]).not.toHaveProperty('content')
+    expect(() =>
+      upsertWorkerOverlayAssets(worker.id, [{
+        enabled: true,
+        id: 'embedded-mcp-file',
+        kind: 'mcp-client',
+        optionsJson: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+        sourceRef: 'descriptor://engine/mcp/codex',
+        target: 'codex',
+      }]),
+    ).toThrow('Full native MCP files are not allowed in Host metadata')
   })
 
-  it('persists the worker -> workspace -> session -> turn loop without Host review or lesson rows', () => {
+  it('persists worker config envelopes and rejects malformed Host metadata', () => {
+    const worker = upsertWorker({ id: 'worker-config-1', name: 'Config worker', soulId: 'demo-soul-app' })
+
+    const saved = upsertWorkerConfigValue({
+      workerId: worker.id,
+      configKey: 'engine-selection',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:engine-selection',
+        enabled: true,
+        kind: 'engine-selection',
+        options: { profileRef: 'secretref:codex/default-profile' },
+        sourceRef: 'descriptor://configuration/default-engine',
+        target: 'codex',
+        updatedAt: '2026-05-27T00:00:00.000Z',
+        updatedBy: 'web',
+      },
+    })
+
+    expect(saved.configValueJson).toMatchObject({
+      enabled: true,
+      kind: 'engine-selection',
+      target: 'codex',
+    })
+    expect(getWorkerConfigValue(worker.id, 'engine-selection')).toMatchObject({
+      configKey: 'engine-selection',
+      source: 'web',
+      workerId: worker.id,
+    })
+    expect(listWorkerConfigValues(worker.id)).toHaveLength(1)
+    expect(() =>
+      upsertWorkerConfigValue({
+        workerId: worker.id,
+        configKey: 'malformed',
+        configValueJson: {
+          enabled: 'yes',
+          kind: 'engine-selection',
+          target: 'codex',
+        },
+      }),
+    ).toThrow('Invalid Host worker config envelope enabled flag')
+    expect(getWorkerConfigValue(worker.id, 'malformed')).toBeNull()
+
+    const minimal = upsertWorkerConfigValue({
+      workerId: worker.id,
+      configKey: 'workbench-preference',
+      source: 'web',
+      at: '2026-05-27T00:00:01.000Z',
+      configValueJson: {
+        enabled: false,
+        kind: 'workbench-preference',
+        target: 'none',
+      },
+    })
+    expect(minimal.configValueJson).toEqual({
+      checksum: null,
+      enabled: false,
+      kind: 'workbench-preference',
+      options: {},
+      sourceRef: null,
+      target: 'none',
+      updatedAt: '2026-05-27T00:00:01.000Z',
+      updatedBy: 'web',
+    })
+    expect(() =>
+      upsertWorkerConfigValue({
+        workerId: worker.id,
+        configKey: 'domain-record',
+        configValueJson: {
+          candidateId: 'candidate-1',
+          enabled: true,
+          kind: 'sdk-extension',
+          target: 'none',
+        },
+      }),
+    ).toThrow('Invalid Host worker config envelope field')
+    expect(() =>
+      upsertWorkerConfigValue({
+        workerId: worker.id,
+        configKey: 'domain-option',
+        configValueJson: {
+          enabled: true,
+          kind: 'sdk-extension',
+          options: {
+            candidateId: 'candidate-1',
+          },
+          target: 'none',
+        },
+      }),
+    ).toThrow('Soul-owned config payloads are not allowed in Host metadata: worker_config.domain-option.configValueJson.options.candidateId')
+    expect(() =>
+      upsertWorkerConfigValue({
+        workerId: worker.id,
+        configKey: 'artifact-content-option',
+        configValueJson: {
+          enabled: true,
+          kind: 'entry-file-overlay',
+          options: {
+            artifactContent: '# Generated report\n',
+          },
+          target: 'codex',
+        },
+      }),
+    ).toThrow('Soul-owned config payloads are not allowed in Host metadata: worker_config.artifact-content-option.configValueJson.options.artifactContent')
+    expect(() =>
+      upsertWorkerConfigValue({
+        workerId: worker.id,
+        configKey: 'skill-body-option',
+        configValueJson: {
+          enabled: true,
+          kind: 'skill-overlay',
+          options: {
+            skillBody: '# Skill\nDo domain work.\n',
+          },
+          target: 'codex',
+        },
+      }),
+    ).toThrow('Soul-owned config payloads are not allowed in Host metadata: worker_config.skill-body-option.configValueJson.options.skillBody')
+    expect(() =>
+      upsertWorkerConfigValue({
+        workerId: worker.id,
+        configKey: 'entry-file-content-option',
+        configValueJson: {
+          enabled: true,
+          kind: 'entry-file-overlay',
+          options: {
+            entryFileContent: '# User work\n',
+          },
+          target: 'codex',
+        },
+      }),
+    ).toThrow('Soul-owned config payloads are not allowed in Host metadata: worker_config.entry-file-content-option.configValueJson.options.entryFileContent')
+    expect(() =>
+      upsertWorkerConfigValue({
+        workerId: worker.id,
+        configKey: 'embedded-mcp-file',
+        configValueJson: {
+          enabled: true,
+          kind: 'mcp-overlay',
+          options: {
+            configToml: '[mcp_servers.local]\ncommand = "node"\n',
+          },
+          target: 'codex',
+        },
+      }),
+    ).toThrow('Full native MCP files are not allowed in Host metadata')
+    expect(() =>
+      upsertWorkerConfigValue({
+        workerId: worker.id,
+        configKey: 'bad-updater',
+        configValueJson: {
+          enabled: true,
+          kind: 'sdk-extension',
+          target: 'none',
+          updatedBy: 'ben',
+        },
+      }),
+    ).toThrow('Invalid Host worker config envelope updatedBy')
+  })
+
+  it('persists the worker -> workspace -> session -> invocation loop without Host review or lesson rows', () => {
     const worker = upsertWorker({
       id: 'worker-hr',
       soulId: 'hr',
@@ -213,22 +387,12 @@ describe('greenfield local worker session schema', () => {
       id: 'session-1',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityTemplateId: 'candidate-screen',
+      capabilityId: 'candidate-screen',
       title: 'Screen candidate',
       context: 'Review the candidate packet.',
       at: '2026-05-09T01:02:00.000Z',
     })
     expect(listSessions(workspace.id)).toEqual([session])
-
-    const turn = createTurn({
-      id: 'turn-1',
-      sessionId: session.id,
-      seq: 1,
-      input: 'Prepare the screen.',
-      status: 'running',
-      at: '2026-05-09T01:03:00.000Z',
-    })
-    expect(listTurns(session.id)).toEqual([turn])
 
     const invocation = createEngineInvocation({
       id: 'inv-1',
@@ -236,12 +400,12 @@ describe('greenfield local worker session schema', () => {
       seq: 1,
       engineId: 'codex',
       engineCommand: 'codex',
-      inputRef: 'aiworker://sessions/session-1/turns/turn-1/input',
+      inputRef: 'aiworker://sessions/session-1/invocations/inv-1/input',
       status: 'running',
       at: '2026-05-09T01:04:00.000Z',
     })
     expect(invocation).toMatchObject({
-      inputRef: 'aiworker://sessions/session-1/turns/turn-1/input',
+      inputRef: 'aiworker://sessions/session-1/invocations/inv-1/input',
       processState: 'not_spawned',
     })
     expect(invocation).not.toHaveProperty('turnId')
@@ -249,7 +413,6 @@ describe('greenfield local worker session schema', () => {
     expect(listEngineInvocations(session.id)).toEqual([invocation])
     appendSessionEvent({
       sessionId: session.id,
-      turnId: turn.id,
       invocationId: invocation.id,
       seq: 1,
       type: 'status',
@@ -289,7 +452,7 @@ describe('greenfield local worker session schema', () => {
       id: 'session-invocation-only',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityTemplateId: 'default',
+      capabilityId: 'default',
       title: 'Invocation-only session',
       at: '2026-05-27T01:02:00.000Z',
     })
@@ -319,12 +482,103 @@ describe('greenfield local worker session schema', () => {
     })
     expect(invocation).not.toHaveProperty('turnId')
     expect(invocation).not.toHaveProperty('prompt')
-    expect(listTurns(session.id)).toEqual([])
     expect(listEngineInvocations(session.id)).toEqual([invocation])
     expect(listSessionEvents(session.id)[0]).toMatchObject({
       invocationId: invocation.id,
-      turnId: null,
     })
+  })
+
+  it('rejects secret-like assignment strings in persisted engine diagnostics', () => {
+    const worker = upsertWorker({
+      id: 'worker-engine-diagnostics-secret',
+      soulId: 'freeform',
+      name: 'Freeform',
+      defaultEngineId: 'codex',
+      at: '2026-05-27T02:00:00.000Z',
+    })
+    const workspace = createWorkspace({
+      id: 'workspace-engine-diagnostics-secret',
+      workerId: worker.id,
+      name: 'Diagnostics workspace',
+      rootPath: '/tmp/diagnostics-secret',
+      at: '2026-05-27T02:01:00.000Z',
+    })
+    const session = createSession({
+      id: 'session-engine-diagnostics-secret',
+      workerId: worker.id,
+      workspaceId: workspace.id,
+      capabilityId: 'default',
+      title: 'Diagnostics session',
+      at: '2026-05-27T02:02:00.000Z',
+    })
+
+    expect(() =>
+      createEngineInvocation({
+        id: 'invocation-diagnostic-secret',
+        sessionId: session.id,
+        seq: 1,
+        engineId: 'codex',
+        engineCommand: 'codex',
+        error: 'authorization = "literal-secret-value"',
+        inputRef: 'aiworker://sessions/session-engine-diagnostics-secret/invocations/invocation-diagnostic-secret/input',
+      }),
+    ).toThrow('Literal secrets are not allowed in Host metadata: engine_invocations.error')
+    expect(() =>
+      createWorkspace({
+        id: 'workspace-embedded-mcp-file',
+        workerId: worker.id,
+        name: 'Embedded MCP workspace',
+        rootPath: '/tmp/embedded-mcp-file',
+        metadataJson: {
+          configToml: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+      }),
+    ).toThrow('Full native MCP files are not allowed in Host metadata: workspaces.metadataJson.configToml')
+
+    const invocation = createEngineInvocation({
+      id: 'invocation-diagnostic-safe',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      error: 'authorization = "[REDACTED]"',
+      inputRef: 'aiworker://sessions/session-engine-diagnostics-secret/invocations/invocation-diagnostic-safe/input',
+      metadataJson: { authorization: '[REDACTED]' },
+      status: 'running',
+      summary: 'token=[REDACTED]',
+    })
+    appendSessionEvent({
+      sessionId: session.id,
+      invocationId: invocation.id,
+      seq: 1,
+      type: 'log',
+      payloadJson: { message: 'token=[REDACTED]' },
+      at: '2026-05-27T02:03:00.000Z',
+    })
+
+    expect(() =>
+      appendSessionEvent({
+        sessionId: session.id,
+        invocationId: invocation.id,
+        seq: 2,
+        type: 'log',
+        payloadJson: { message: 'token = "literal-secret-value"' },
+        at: '2026-05-27T02:03:01.000Z',
+      }),
+    ).toThrow('Literal secrets are not allowed in Host metadata: bridge_events.eventJson.payload.message')
+
+    expect(() =>
+      appendSessionEvent({
+        sessionId: session.id,
+        invocationId: invocation.id,
+        seq: 3,
+        type: 'log',
+        payloadJson: {
+          message: '[mcp_servers.local]\ncommand = "node"\n',
+        },
+        at: '2026-05-27T02:03:02.000Z',
+      }),
+    ).toThrow('Full native MCP files are not allowed in Host metadata: bridge_events.eventJson.payload.message')
   })
 
   it('filters session events by id in SQL before applying the limit so long sessions keep streaming', () => {
@@ -346,7 +600,7 @@ describe('greenfield local worker session schema', () => {
       id: 'session-events',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityTemplateId: 'candidate-screen',
+      capabilityId: 'candidate-screen',
       title: 'Events session',
       at: '2026-05-23T00:00:02.000Z',
     })
@@ -359,6 +613,15 @@ describe('greenfield local worker session schema', () => {
       status: 'running',
       at: '2026-05-23T00:00:03.000Z',
     })
+    const otherInvocation = createEngineInvocation({
+      id: 'events-invocation-2',
+      sessionId: session.id,
+      seq: 2,
+      engineId: 'codex',
+      inputRef: 'aiworker://sessions/session-events/invocations/events-invocation-2/input',
+      status: 'running',
+      at: '2026-05-23T00:00:04.000Z',
+    })
 
     const ids = Array.from({ length: 5 }, (_, index) => appendSessionEvent({
       invocationId: invocation.id,
@@ -368,14 +631,24 @@ describe('greenfield local worker session schema', () => {
       payloadJson: { index: index + 1 },
       at: `2026-05-23T00:00:${String(10 + index).padStart(2, '0')}.000Z`,
     }).id)
+    const otherId = appendSessionEvent({
+      invocationId: otherInvocation.id,
+      sessionId: session.id,
+      seq: 6,
+      type: 'assistant_delta',
+      payloadJson: { index: 'other' },
+      at: '2026-05-23T00:00:16.000Z',
+    }).id
 
     // `after` returns only newer events, in seq order.
-    expect(listSessionEvents(session.id, { after: ids[1] }).map(event => event.id)).toEqual([ids[2]!, ids[3]!, ids[4]!])
+    expect(listSessionEvents(session.id, { after: ids[1] }).map(event => event.id)).toEqual([ids[2]!, ids[3]!, ids[4]!, otherId])
     // The limit is applied AFTER the id filter, so a tight window still walks forward past the cursor
     // instead of stalling on the earliest rows (the long-session replay regression).
     expect(listSessionEvents(session.id, { after: ids[1], limit: 2 }).map(event => event.id)).toEqual([ids[2]!, ids[3]!])
     // No cursor returns the full window in seq order.
-    expect(listSessionEvents(session.id).map(event => event.id)).toEqual(ids)
+    expect(listSessionEvents(session.id).map(event => event.id)).toEqual([...ids, otherId])
+    expect(listInvocationEvents(invocation.id, { after: ids[1], limit: 2 }).map(event => event.id)).toEqual([ids[2]!, ids[3]!])
+    expect(listInvocationEvents(otherInvocation.id).map(event => event.id)).toEqual([otherId])
   })
 
   it('discards legacy built-in Soul worker metadata and cascaded local records', () => {
@@ -397,10 +670,10 @@ describe('greenfield local worker session schema', () => {
       id: 'legacy-hr-session',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityTemplateId: 'candidate-screen',
+      capabilityId: 'candidate-screen',
       title: 'Legacy candidate screen',
       metadataJson: {
-        capabilityTemplateId: 'candidate-screen',
+        capabilityId: 'candidate-screen',
         keep: 'value',
         soulName: 'HR',
       },
@@ -410,9 +683,9 @@ describe('greenfield local worker session schema', () => {
       id: 'legacy-hr-custom-session',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityTemplateId: 'custom-legacy-template',
-      title: 'Custom legacy template',
-      metadataJson: { capabilityTemplateId: 'custom-legacy-template' },
+      capabilityId: 'custom-legacy-capability',
+      title: 'Custom legacy capability',
+      metadataJson: { capabilityId: 'custom-legacy-capability' },
       at: '2026-05-13T13:04:03.000Z',
     })
 

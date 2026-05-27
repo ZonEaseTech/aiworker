@@ -54,4 +54,18 @@ describe('Freeform mounted workbench contract', () => {
     expect(source).not.toContain('router-mode="native"')
     expect(source).not.toContain('router-mode="native-scope"')
   })
+
+  test('mounted surface scopes stay protocol-generic and do not encode review domain concepts', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const web = readRepoFile('apps/web/src/worker/studio/mounted-surface.tsx')
+    const protocol = readRepoFile('packages/soul-protocol/src/soul-app/manifest.ts')
+    const microAppProtocol = readRepoFile('packages/soul-protocol/src/soul-app/micro-app.ts')
+
+    expect(protocol).toContain('zod.enum([\'app\', \'workspace\', \'session\', \'artifact\'])')
+    for (const source of [daemon, web, microAppProtocol]) {
+      expect(source).not.toContain('\'review\'')
+      expect(source).not.toContain('\'review-panel\'')
+      expect(source).not.toContain('reviewId:')
+    }
+  })
 })

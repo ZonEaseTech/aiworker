@@ -49,13 +49,13 @@ describe('descriptor Soul runtime harness', () => {
     const capabilityId = namespaceSoulAppCapabilityId('demo-soul-app', 'default')
     expect(standalone.descriptor.identity.appId).toBe('demo-soul-app')
     expect(standalone.catalog.apps.map(item => item.appId)).toEqual(['demo-soul-app'])
+    expect(standalone.catalog.capabilities.map(item => item.id)).toEqual([capabilityId])
     expect(standalone.catalog.souls.map(item => item.id)).toEqual(['demo-soul-app'])
-    expect(standalone.catalog.templates.map(item => item.id)).toEqual([capabilityId])
     expect(standalone.worker).toEqual({
       defaultEngineId: 'codex',
       id: 'demo-worker',
       metadata: expect.objectContaining({
-        defaultTemplates: [capabilityId],
+        defaultCapabilities: [capabilityId],
         domainSoulId: 'demo',
         soulAppId: 'demo-soul-app',
       }),
@@ -69,22 +69,27 @@ describe('descriptor Soul runtime harness', () => {
     await expect(readFile(path.join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain('workspace-file')
 
     const session = await standalone.runtime.createSession({
-      capabilityTemplateId: capabilityId,
+      capabilityId,
       context: 'Standalone context',
       metadata: standalone.sessionMetadata(capabilityId),
       title: 'Standalone session',
       workspaceId: workspace.id,
     })
-    const result = await standalone.runtime.startTurn({
+    const result = await standalone.runtime.startInvocation({
       engineId: 'test',
       input: 'Create standalone artifact.',
       metadata: standalone.sessionMetadata(capabilityId),
       sessionId: session.id,
     })
 
-    expect(result.turn).toBeDefined()
+    expect('turn' in result).toBe(false)
     expect(result.invocation).toBeDefined()
     expect(result.session.status).toBe('active')
+    expect(standalone.sessionMetadata(capabilityId)).toMatchObject({
+      capabilityName: 'Default',
+      capabilityId,
+    })
+    expect(standalone.sessionMetadata(capabilityId)).not.toHaveProperty('skillName')
   })
 
   it('creates a mounted descriptor test runtime', async () => {
@@ -143,7 +148,37 @@ describe('descriptor Soul runtime harness', () => {
       expect(response).not.toBeNull()
       expect(await response!.json()).toEqual({ ok: true })
       expect(calls).toEqual([{ method: 'POST', url: 'http://host.test/api/sessions/session-1/invocations' }])
+      expect(mountSessionApiProxy(new Request('http://soul.test/api/sessions/session-1/turns', { method: 'GET' }), {
+        hostApiBaseUrl: 'http://host.test',
+        workerId: 'worker-1',
+      })).toBeNull()
       expect(mountSessionApiProxy(new Request('http://soul.test/api/sessions/session-1/turns', { method: 'POST' }), {
+        hostApiBaseUrl: 'http://host.test',
+        workerId: 'worker-1',
+      })).toBeNull()
+    }
+    finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it('maps mounted capability listing without the retired template route alias', async () => {
+    const calls: Array<{ method: string, url: string }> = []
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ method: init?.method ?? 'GET', url: String(url) })
+      return Response.json({ capabilities: [] })
+    }) as typeof fetch
+    try {
+      const response = await mountSessionApiProxy(new Request('http://soul.test/api/capabilities'), {
+        hostApiBaseUrl: 'http://host.test',
+        workerId: 'worker-1',
+      })
+
+      expect(response).not.toBeNull()
+      expect(await response!.json()).toEqual({ capabilities: [] })
+      expect(calls).toEqual([{ method: 'GET', url: 'http://host.test/api/local/workers/worker-1/capabilities' }])
+      expect(mountSessionApiProxy(new Request('http://soul.test/api/templates'), {
         hostApiBaseUrl: 'http://host.test',
         workerId: 'worker-1',
       })).toBeNull()

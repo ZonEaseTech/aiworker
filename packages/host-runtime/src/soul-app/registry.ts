@@ -15,6 +15,7 @@ import {
   parseSoulDescriptorV1,
 } from '@zonease/aiworker-soul-protocol'
 import {
+  deleteSoulApp as deleteSoulAppRow,
   getSoulApp,
   listSoulApps,
   updateSoulAppLifecycle,
@@ -22,21 +23,19 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 
 // -- inlined from deleted shared types --
-interface CapabilityTemplate {
+interface HostCapability {
   description: string
   id: string
   inputHints: readonly string[]
   name: string
   outputKind: string
   promptRef: string
-  reviewRubricRef: string | null
   soulId: string
 }
 
 interface VerticalSoul {
-  defaultTemplates: readonly string[]
+  defaultCapabilities: readonly string[]
   description: string
-  domain: string
   id: string
   name: string
   status: 'available' | 'coming_soon'
@@ -59,8 +58,8 @@ export interface SoulDescriptorInstallInput {
 
 export interface HostSoulCatalog {
   apps: HostedSoulApp[]
+  capabilities: HostCapability[]
   souls: VerticalSoul[]
-  templates: CapabilityTemplate[]
 }
 
 export async function installSoulAppFromPath(descriptorPath: string, context: SoulAppRegistryContext = {}): Promise<HostedSoulApp> {
@@ -136,6 +135,12 @@ export function disableSoulApp(appId: string, context: SoulAppRegistryContext = 
   return hostedSoulAppFromRow(disabled)
 }
 
+export function deleteSoulApp(appId: string): HostedSoulApp {
+  const row = requireSoulApp(appId)
+  deleteSoulAppRow(row.id)
+  return hostedSoulAppFromRow(row)
+}
+
 export function runSoulAppHealthcheck(appId: string, context: SoulAppRegistryContext = {}): HostedSoulApp {
   const row = requireSoulApp(appId)
   const descriptor = parseSoulDescriptorV1(row.descriptorJson)
@@ -179,13 +184,13 @@ export function getHostedSoulApp(appId: string): HostedSoulApp | null {
 export function listHostSoulCatalog(): HostSoulCatalog {
   const apps = listHostedSoulApps()
   const appSouls = apps.map(app => app.projectedSoul)
-  const appTemplates = apps
+  const appCapabilities = apps
     .filter(app => app.status === 'enabled')
     .flatMap(app => app.projectedCapabilities)
   return {
     apps,
+    capabilities: appCapabilities,
     souls: appSouls,
-    templates: appTemplates,
   }
 }
 
@@ -193,12 +198,12 @@ export function findHostSoul(id: string): VerticalSoul | undefined {
   return listHostSoulCatalog().souls.find(soul => soul.id === id)
 }
 
-export function findHostCapabilityTemplate(id: string): CapabilityTemplate | undefined {
-  return listHostSoulCatalog().templates.find(template => template.id === id)
+export function findHostCapability(id: string): HostCapability | undefined {
+  return listHostSoulCatalog().capabilities.find(capability => capability.id === id)
 }
 
-export function listHostCapabilityTemplatesForSoul(soulId: string): CapabilityTemplate[] {
-  return listHostSoulCatalog().templates.filter(template => template.soulId === soulId)
+export function listHostCapabilitiesForSoul(soulId: string): HostCapability[] {
+  return listHostSoulCatalog().capabilities.filter(capability => capability.soulId === soulId)
 }
 
 export function hostedSoulAppFromRow(row: SoulAppRow): HostedSoulApp {

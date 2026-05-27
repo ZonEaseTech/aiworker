@@ -1,37 +1,46 @@
-import type { CapabilityTemplate, VerticalSoul } from '../local-workspace/types.compat'
+import type { VerticalSoul, WorkspaceCapability } from '../local-workspace/types.compat'
 import { describe, expect, it } from 'vitest'
-import { displaySoul, displayTemplate } from './index'
+import { displayCapability, displaySoul, formatStatus, messagesFor } from './index'
 
-describe('displaySoul/displayTemplate 泛化消费 manifest', () => {
-  it('displaySoul 返回 manifest 投影值，不被 Host catalog 覆盖', () => {
+describe('displaySoul/displayCapability 泛化消费 manifest', () => {
+  it('displaySoul 返回 descriptor identity 投影值，不暴露 Host domain 字段', () => {
     const soul: VerticalSoul = {
       id: 'aiworker-hr',
       name: 'Manifest HR Name',
       description: 'Manifest desc',
-      domain: 'manifest-domain',
       status: 'available',
-      defaultTemplates: [],
+      defaultCapabilities: [],
     }
     const copy = displaySoul(soul, 'en')
     expect(copy.name).toBe('Manifest HR Name')
     expect(copy.description).toBe('Manifest desc')
-    expect(copy.domain).toBe('manifest-domain')
+    expect('domain' in copy).toBe(false)
   })
 
-  it('displayTemplate 返回 manifest 投影值且不含 reviewRubricRef', () => {
-    const template: CapabilityTemplate = {
+  it('displayCapability 返回 manifest 投影值且不暴露 Host 不消费的内部字段', () => {
+    const capability: WorkspaceCapability = {
       id: 'aiworker-hr.person-profile',
-      name: 'Manifest Template',
+      name: 'Manifest Capability',
       description: 'Manifest tdesc',
       soulId: 'aiworker-hr',
       outputKind: 'person-profile',
       inputHints: ['a'],
       promptRef: './product/workflows/person-profile/prompt.md',
-      reviewRubricRef: './product/workflows/person-profile/review.md',
     }
-    const copy = displayTemplate(template, 'en')
-    expect(copy.name).toBe('Manifest Template')
+    const copy = displayCapability(capability, 'en')
+    expect(copy.name).toBe('Manifest Capability')
     expect(copy.description).toBe('Manifest tdesc')
-    expect('reviewRubricRef' in copy).toBe(false)
+    expect('promptRef' in copy).toBe(false)
+  })
+
+  it('formatStatus 覆盖 engine invocation 状态而不是继承 turn 状态集合', () => {
+    expect(messagesFor('en').statuses).toHaveProperty('starting')
+    expect(messagesFor('en').statuses).toHaveProperty('lost')
+    expect(formatStatus('starting', 'zh-CN')).toBe('启动中')
+    expect(formatStatus('lost', 'zh-CN')).toBe('失联')
+    expect(formatStatus('starting', 'ja')).toBe('開始中')
+    expect(formatStatus('lost', 'ja')).toBe('ロスト')
+    expect(formatStatus('starting', 'de')).toBe('Startet')
+    expect(formatStatus('lost', 'de')).toBe('Verloren')
   })
 })

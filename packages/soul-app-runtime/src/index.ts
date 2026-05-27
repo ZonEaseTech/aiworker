@@ -29,14 +29,13 @@ import {
 
 export { renderUniversalWorkbenchHtml } from './universal-workbench-html'
 
-interface CapabilityTemplate {
+interface RuntimeCapability {
   description: string
   id: string
   inputHints: readonly string[]
   name: string
   outputKind: string
   promptRef: string
-  reviewRubricRef: string | null
   soulId: string
 }
 
@@ -69,7 +68,7 @@ export interface SoulAppRuntimeHarness {
   dispose: () => void
   hostedApp: HostedSoulApp
   runtime: LocalWorkerRuntime
-  sessionMetadata: (capabilityTemplateId: string) => Record<string, unknown>
+  sessionMetadata: (capabilityId: string) => Record<string, unknown>
   snapshot: LocalWorkerRuntime['snapshot']
   worker: SoulAppRuntimeWorkerSnapshot
 }
@@ -189,7 +188,7 @@ async function createRuntimeForDescriptor(input: {
     name: input.workerName,
     defaultEngineId: descriptorDefaultEngine(descriptor),
     metadataJson: {
-      defaultTemplates: capabilities.map(capability => namespaceSoulAppCapabilityId(identity.appId, capability.id)),
+      defaultCapabilities: capabilities.map(capability => namespaceSoulAppCapabilityId(identity.appId, capability.id)),
       description: identity.description,
       domainSoulId: identity.soulId,
       soulAppId: identity.appId,
@@ -299,7 +298,7 @@ function harness(input: {
   return {
     ...input,
     dispose: closeWorkerDb,
-    sessionMetadata: capabilityTemplateId => sessionMetadata(input.descriptor, input.catalog.templates, capabilityTemplateId),
+    sessionMetadata: capabilityId => sessionMetadata(input.descriptor, input.catalog.capabilities, capabilityId),
     snapshot: () => input.runtime.snapshot(),
   }
 }
@@ -317,8 +316,8 @@ function publicWorkerSnapshot(worker: WorkerRow): SoulAppRuntimeWorkerSnapshot {
 function scopedCatalog(app: HostedSoulApp): HostSoulCatalog {
   return {
     apps: [app],
+    capabilities: [...app.projectedCapabilities],
     souls: [app.projectedSoul],
-    templates: [...app.projectedCapabilities],
   }
 }
 
@@ -339,8 +338,8 @@ export function mountSessionApiProxy(request: Request, options: {
   const workerId = url.searchParams.get('workerId') ?? options.workerId
   const workspaceId = url.searchParams.get('workspaceId') ?? options.workspaceId ?? null
 
-  if (url.pathname === '/api/templates' && request.method === 'GET')
-    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/templates`)
+  if (url.pathname === '/api/capabilities' && request.method === 'GET')
+    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/capabilities`)
 
   if (url.pathname === '/api/workspaces' && request.method === 'GET')
     return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/workspaces`)
@@ -376,10 +375,6 @@ export function mountSessionApiProxy(request: Request, options: {
     return proxyJsonRequest(request, `${hostApi}/api/local/sessions/${sessionEventsMatch[1]}/events${query}`)
   }
 
-  const sessionTurnsMatch = /^\/api\/sessions\/([^/]+)\/turns$/.exec(url.pathname)
-  if (sessionTurnsMatch && request.method === 'GET')
-    return proxyJsonRequest(request, `${hostApi}/api/local/sessions/${sessionTurnsMatch[1]}/turns`)
-
   const sessionInvocationsMatch = /^\/api\/sessions\/([^/]+)\/invocations$/.exec(url.pathname)
   if (sessionInvocationsMatch && request.method === 'POST') {
     return proxyJsonRequest(request, `${hostApi}/api/sessions/${sessionInvocationsMatch[1]}/invocations`)
@@ -399,17 +394,16 @@ function proxyJsonRequest(request: Request, target: string): Promise<Response> {
 
 function sessionMetadata(
   descriptor: SoulDescriptorV1,
-  templates: readonly CapabilityTemplate[],
-  capabilityTemplateId: string,
+  capabilities: readonly RuntimeCapability[],
+  capabilityId: string,
 ): Record<string, unknown> {
-  const template = templates.find(item => item.id === capabilityTemplateId)
+  const capability = capabilities.find(item => item.id === capabilityId)
   const identity = descriptorIdentity(descriptor)
   return {
-    capabilityTemplateId,
-    inputHints: template?.inputHints ?? [],
-    outputKind: template?.outputKind ?? 'session',
-    reviewRubricRef: template?.reviewRubricRef ?? null,
-    skillName: template?.name ?? capabilityTemplateId,
+    capabilityName: capability?.name ?? capabilityId,
+    capabilityId,
+    inputHints: capability?.inputHints ?? [],
+    outputKind: capability?.outputKind ?? 'session',
     soulAppId: identity.appId,
     soulName: identity.name,
   }

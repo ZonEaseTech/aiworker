@@ -1,14 +1,14 @@
-import type { LocalSessionStatus, LocalTurnStatus } from '@zonease/aiworker-soul-protocol'
+import type { LocalEngineInvocationStatus, LocalSessionStatus } from '@zonease/aiworker-soul-protocol'
 
 export const supportedLocales = ['en', 'zh-CN', 'ja', 'de'] as const
 export type SupportedLocale = typeof supportedLocales[number]
 
-export type StatusKey = LocalSessionStatus | LocalTurnStatus | 'draft'
+export type StatusKey = LocalSessionStatus | LocalEngineInvocationStatus | 'draft'
 
 export interface StaticMessages {
   accessibility: {
     artifactSettings: string
-    businessArtifactPreview: string
+    sessionOutputPreview: string
     closeDialog: string
     closeSettings: string
     collapseSessionDetail: string
@@ -45,14 +45,14 @@ export interface StaticMessages {
   common: {
     available: string
     comingSoon: string
+    capabilities: string
     interface: string
     notInstalled: string
-    templates: string
     workspace: string
   }
   create: {
-    businessContext: string
-    capabilityTemplate: string
+    capability: string
+    sessionContext: string
     creatingSession: string
     footer: string
     newProject: string
@@ -64,8 +64,8 @@ export interface StaticMessages {
   languageOptions: Record<SupportedLocale, string>
   navigation: {
     createTabs: {
+      capability: string
       project: string
-      template: string
     }
     projectTabs: {
       recent: string
@@ -77,7 +77,7 @@ export interface StaticMessages {
       domainSystems: string
       examples: string
       projects: string
-      templates: string
+      capabilities: string
     }
   }
   projects: {
@@ -94,7 +94,7 @@ export interface StaticMessages {
     configure: string
     continueSession: string
     createSession: string
-    createSessionHint: (templateName: string) => string
+    createSessionHint: (capabilityName: string) => string
     createSessionPlaceholder: string
     createSessionPrompt: (workspaceName: string) => string
     addSourceMaterials: string
@@ -132,10 +132,10 @@ export interface StaticMessages {
     noMountedSurfaceDetail: (soulName: string) => string
     noSoulApps: string
     noSoulAppsDetail: string
-    noTurns: string
+    noInvocations: string
     operatorRole: string
-    sendTurn: string
-    sendingTurn: string
+    sendInvocation: string
+    sendingInvocation: string
     backToSoulHome: string
     backToWorker: string
     backToWorkspace: string
@@ -157,8 +157,8 @@ export interface StaticMessages {
     removeSourceMaterial: (name: string) => string
     soulApps: (count: number) => string
     startSoulApp: (appName: string) => string
-    turnCount: (count: number) => string
-    turnHistory: string
+    invocationCount: (count: number) => string
+    invocationHistory: string
     updated: (when: string) => string
     workspaceNavigation: string
     workspaceSessions: string
@@ -275,7 +275,7 @@ export interface StaticMessages {
       mountedWorkbenchCount: (count: number) => string
       permissionsTitle: string
       permissionCount: (count: number) => string
-      templateCount: (count: number) => string
+      capabilityCount: (count: number) => string
       title: string
       unavailableConnector: string
       updating: string
@@ -286,11 +286,10 @@ export interface StaticMessages {
 
 export interface BuiltinSoulCopy {
   description: string
-  domain: string
   name: string
 }
 
-export interface BuiltinTemplateCopy {
+export interface BuiltinCapabilityCopy {
   description: string
   inputHints: readonly string[]
   name: string

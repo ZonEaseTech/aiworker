@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
 import { sanitizeEngineEnv } from './engine-env'
 import { createEngineStreamHandler } from './engine-stream'
 
@@ -16,15 +17,18 @@ export interface LocalExecutorInput {
   onEvent?: (event: LocalExecutorEvent) => void
   prompt: string
   sessionId: string
-  turnId?: string | null
   workspaceId: string
   workspaceRoot: string
   metadata?: Record<string, unknown>
 }
 
 export interface LocalExecutorResult {
-  summary: string
+  eventLogRef?: string | null
+  externalSessionRef?: string | null
   metadata?: Record<string, unknown>
+  projectionReceiptId?: string | null
+  rawLogRef?: string | null
+  summary: string
 }
 
 export class LocalExecutorFailure extends Error {
@@ -230,8 +234,8 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
   })
   parser?.flush()
 
-  await writeFile(path.join(input.invocationRoot, 'stdout.log'), execution.stdout, 'utf8')
-  await writeFile(path.join(input.invocationRoot, 'stderr.log'), execution.stderr, 'utf8')
+  await writeFile(path.join(input.invocationRoot, 'stdout.log'), redactEngineLog(execution.stdout), 'utf8')
+  await writeFile(path.join(input.invocationRoot, 'stderr.log'), redactEngineLog(execution.stderr), 'utf8')
   if (execution.code !== 0) {
     const visible = filterVisibleEngineLog(execution.stderr || execution.stdout)
     if (visible.trim())
@@ -469,6 +473,11 @@ function filterVisibleEngineLog(value: string): string {
     return transcriptStart === -1 ? '' : value.slice(transcriptStart)
   }
   return value
+}
+
+function redactEngineLog(value: string): string {
+  const redacted = redactEngineBridgeValue(value)
+  return typeof redacted === 'string' ? redacted : ''
 }
 
 function resolveApiKey(ref: string): string {

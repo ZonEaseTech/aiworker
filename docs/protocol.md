@@ -44,6 +44,12 @@ A capability is a generic startable unit. Host can list and select capabilities,
 but Soul App owns what the work means. Host may pass capability id and locator
 context to the engine bridge and mounted surfaces.
 
+Host-facing session creation bodies and local session protocol objects use
+`capabilityId` for the selected capability. `capabilityTemplateId` is not a
+current API, OpenAPI, CLI, Web, mounted-surface, or diagnostic contract. Legacy
+SQLite column names may remain as storage implementation details during
+migration, but they must not leak into broker contracts.
+
 ## Configuration
 
 Configuration is worker-scoped and SDK-standard. Values use stable envelopes
@@ -144,6 +150,7 @@ GET    /api/projections/receipts/:receiptId
 POST   /api/projections/receipts/:receiptId/cleanup
 
 GET    /api/mount/workbench
+ANY    /api/apps/:appId
 ANY    /api/apps/:appId/*
 ```
 
@@ -158,4 +165,5 @@ into a product backend.
 - session follow-up always uses `POST /api/sessions/:sessionId/invocations`.
 - engine cancel and event stream target an invocation id.
 - app-owned API proxy attaches locator context when present and does not
-  interpret domain route names.
+  interpret domain route names. It strips client credentials before proxying and
+  strips app-owned cookies plus Host mount credentials before returning.

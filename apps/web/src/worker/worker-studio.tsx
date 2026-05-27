@@ -49,6 +49,7 @@ type WorkerStudioResolvedLocatorState = Omit<WorkerStudioLocatorState, 'soulSess
 
 const emptyWorkerStudioLocatorState: WorkerStudioResolvedLocatorState = {
   allSessions: [],
+  capabilities: [],
   filteredWorkspaces: [],
   isWorkspaceContextRoute: false,
   selectableWorkers: [],
@@ -57,7 +58,6 @@ const emptyWorkerStudioLocatorState: WorkerStudioResolvedLocatorState = {
   selectedSoulApp: null,
   selectedWorker: null,
   selectedWorkspace: null,
-  templates: [],
 }
 
 function descriptorWorkbenchRoutes(app: HostedSoulApp | null): MountedWorkbenchRoute[] {
@@ -151,7 +151,7 @@ export function WorkerStudio() {
     selectedSoulApp,
     selectedWorker,
     selectedWorkspace,
-    templates,
+    capabilities,
   } = locatorState ?? emptyWorkerStudioLocatorState
   const workerConfigurationWorker = workerConfigurationWorkerId
     ? selectableWorkers.find(worker => worker.id === workerConfigurationWorkerId) ?? selectedWorker
@@ -471,7 +471,7 @@ export function WorkerStudio() {
                     initialSection={settingsInitialSection}
                     apps={data.apps}
                     runtimeVersion={data.info.runtimeVersion}
-                    templates={data.templates}
+                    capabilities={data.capabilities}
                     onClose={() => setSettingsOpen(false)}
                     onSaved={(settings) => {
                       setState(current => current.data
@@ -560,7 +560,7 @@ export function WorkerStudio() {
                     selectedSoulCopy={selectedSoulCopy}
                     selectedWorker={selectedWorker}
                     selectedWorkspace={selectedWorkspace}
-                    templates={templates}
+                    capabilities={capabilities}
                     onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
                     onOpenSettings={() => openSettings()}
                     onRefresh={() => void refresh()}

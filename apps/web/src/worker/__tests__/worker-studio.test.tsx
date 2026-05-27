@@ -1,4 +1,4 @@
-import type { HostedSoulApp, LocalSessionEvent, LocalSettingsConfig, LocalTurn, LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-protocol'
+import type { HostedSoulApp, LocalSessionEvent, LocalSettingsConfig, LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-protocol'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -85,11 +85,11 @@ const workers = [
 ]
 
 const souls = [
-  { defaultTemplates: [HR_PERSON_PROFILE, HR_PROFILE_UPDATE_PROPOSAL, HR_LIFECYCLE_NEXT_STEP, HR_CANDIDATE_SCREEN, HR_INTERVIEW_BRIEF, HR_ONBOARDING_PLAN, HR_OFFBOARDING_SUMMARY, HR_EVIDENCE_MATRIX, HR_HIRING_RISK], description: 'People operations workspace', domain: 'hr-people-ops', id: HR_SOUL_ID, name: 'AIWorker HR', status: 'available' },
-  { defaultTemplates: ['aiworker-qa.release-gate'], description: 'QA workspace', domain: 'quality-assurance', id: QA_SOUL_ID, name: 'AIWorker QA', status: 'available' },
+  { defaultCapabilities: [HR_PERSON_PROFILE, HR_PROFILE_UPDATE_PROPOSAL, HR_LIFECYCLE_NEXT_STEP, HR_CANDIDATE_SCREEN, HR_INTERVIEW_BRIEF, HR_ONBOARDING_PLAN, HR_OFFBOARDING_SUMMARY, HR_EVIDENCE_MATRIX, HR_HIRING_RISK], description: 'People operations workspace', id: HR_SOUL_ID, name: 'AIWorker HR', status: 'available' },
+  { defaultCapabilities: ['aiworker-qa.release-gate'], description: 'QA workspace', id: QA_SOUL_ID, name: 'AIWorker QA', status: 'available' },
 ]
 
-const templates = [
+const capabilities = [
   {
     description: 'Create a source-backed HR profile snapshot.',
     id: HR_PERSON_PROFILE,
@@ -97,7 +97,6 @@ const templates = [
     name: 'Person Profile',
     outputKind: 'person-profile',
     promptRef: './product/workflows/person-profile/prompt.md',
-    reviewRubricRef: './product/workflows/person-profile/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -107,7 +106,6 @@ const templates = [
     name: 'Profile Update Draft',
     outputKind: 'profile-update-draft',
     promptRef: './product/workflows/profile-update-draft/prompt.md',
-    reviewRubricRef: './product/workflows/profile-update-draft/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -117,7 +115,6 @@ const templates = [
     name: 'Lifecycle Next Step',
     outputKind: 'lifecycle-next-step',
     promptRef: './product/workflows/lifecycle-next-step/prompt.md',
-    reviewRubricRef: null,
     soulId: HR_SOUL_ID,
   },
   {
@@ -127,7 +124,6 @@ const templates = [
     name: 'Role Rubric',
     outputKind: 'role-rubric',
     promptRef: './product/workflows/role-rubric/prompt.md',
-    reviewRubricRef: null,
     soulId: HR_SOUL_ID,
   },
   {
@@ -137,7 +133,6 @@ const templates = [
     name: 'Candidate Screen',
     outputKind: 'candidate-screen',
     promptRef: './product/workflows/candidate-screen/prompt.md',
-    reviewRubricRef: './product/workflows/candidate-screen/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -147,7 +142,6 @@ const templates = [
     name: 'Interview Brief',
     outputKind: 'interview-brief',
     promptRef: './product/workflows/interview-brief/prompt.md',
-    reviewRubricRef: './product/workflows/interview-brief/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -157,7 +151,6 @@ const templates = [
     name: 'Onboarding Plan',
     outputKind: 'onboarding-plan',
     promptRef: './product/workflows/onboarding-plan/prompt.md',
-    reviewRubricRef: null,
     soulId: HR_SOUL_ID,
   },
   {
@@ -167,7 +160,6 @@ const templates = [
     name: 'Offboarding Summary',
     outputKind: 'offboarding-summary',
     promptRef: './product/workflows/offboarding-summary/prompt.md',
-    reviewRubricRef: null,
     soulId: HR_SOUL_ID,
   },
   {
@@ -177,7 +169,6 @@ const templates = [
     name: 'Evidence Matrix',
     outputKind: 'evidence-matrix',
     promptRef: './product/workflows/evidence-matrix/prompt.md',
-    reviewRubricRef: './product/workflows/evidence-matrix/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -187,7 +178,6 @@ const templates = [
     name: 'Roundup Packet',
     outputKind: 'roundup-packet',
     promptRef: './product/workflows/roundup-packet/prompt.md',
-    reviewRubricRef: null,
     soulId: HR_SOUL_ID,
   },
   {
@@ -197,7 +187,6 @@ const templates = [
     name: 'Hiring Risk',
     outputKind: 'hiring-risk',
     promptRef: './product/workflows/hiring-risk/prompt.md',
-    reviewRubricRef: './product/workflows/hiring-risk/review.md',
     soulId: HR_SOUL_ID,
   },
   {
@@ -207,7 +196,6 @@ const templates = [
     name: 'Release Gate',
     outputKind: 'release-gate',
     promptRef: './product/workflows/release-gate/prompt.md',
-    reviewRubricRef: './product/workflows/release-gate/review.md',
     soulId: QA_SOUL_ID,
   },
 ]
@@ -231,7 +219,7 @@ const baseSettings: LocalSettingsConfig = {
 }
 
 const sessionRecord = {
-  capabilityTemplateId: HR_CANDIDATE_SCREEN,
+  capabilityId: HR_CANDIDATE_SCREEN,
   context: 'Candidate context',
   createdAt: now,
   endedAt: null,
@@ -245,19 +233,6 @@ const sessionRecord = {
   workspaceId: 'workspace-1',
 }
 
-const turnRecord = {
-  createdAt: now,
-  error: null,
-  id: 'turn-1',
-  input: 'Prepare a candidate screen.',
-  metadataJson: {},
-  response: 'Generated Candidate Screen.',
-  seq: 1,
-  sessionId: 'session-1',
-  status: 'succeeded',
-  updatedAt: now,
-} satisfies LocalTurn
-
 const artifactRecord = {
   createdAt: now,
   id: 'artifact-1',
@@ -268,7 +243,6 @@ const artifactRecord = {
   sessionId: 'session-1',
   status: 'available',
   title: 'Candidate Screen',
-  turnId: 'turn-1',
   updatedAt: now,
   workspaceId: 'workspace-1',
 }
@@ -280,7 +254,6 @@ const eventRecord = {
   payloadJson: { status: 'succeeded' },
   seq: 0,
   sessionId: 'session-1',
-  turnId: 'turn-1',
   type: 'status',
 } satisfies LocalSessionEvent
 
@@ -289,8 +262,7 @@ let currentEvents: LocalSessionEvent[]
 let currentSettings: typeof baseSettings
 let currentSessions: typeof sessionRecord[]
 let currentSouls: typeof souls
-let currentTemplates: typeof templates
-let currentTurns: LocalTurn[]
+let currentCapabilities: typeof capabilities
 let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
 let workspaceDataResponses: Array<Promise<typeof workspace[]> | typeof workspace[]>
@@ -301,7 +273,6 @@ let lastMessageRequestBody: Record<string, unknown> | null
 let lastSessionRequestBody: Record<string, unknown> | null
 let writtenFiles: Array<{ body: string, path: string, workspaceId: string }>
 let currentApps: HostedSoulApp[]
-let deferCreatedSessionStream: boolean
 
 function hostedApp({
   appId,
@@ -370,13 +341,11 @@ function hostedApp({
       name: `${appName} Default`,
       outputKind: 'session',
       promptRef: 'dist/product/capabilities/default/prompt.md',
-      reviewRubricRef: null,
       soulId: appId,
     }],
     projectedSoul: {
-      defaultTemplates: [`${appId}.default`],
+      defaultCapabilities: [`${appId}.default`],
       description: `${appName} descriptor`,
-      domain: appId.replace(/^aiworker-/, ''),
       id: appId,
       name: appName,
       status: status === 'enabled' ? 'available' : 'coming_soon',
@@ -421,12 +390,11 @@ function resetSettings() {
   currentWorkspaces = [{ ...workspace }]
   workspaceDataResponses = []
   currentSessions = [{ ...sessionRecord }]
-  currentSouls = souls.map(soul => ({ ...soul, defaultTemplates: [...soul.defaultTemplates] }))
-  currentTemplates = templates.map(template => ({
-    ...template,
-    inputHints: [...template.inputHints],
+  currentSouls = souls.map(soul => ({ ...soul, defaultCapabilities: [...soul.defaultCapabilities] }))
+  currentCapabilities = capabilities.map(capability => ({
+    ...capability,
+    inputHints: [...capability.inputHints],
   }))
-  currentTurns = [{ ...turnRecord }]
   currentArtifacts = [{ ...artifactRecord }]
   currentEvents = [{ ...eventRecord }]
   currentWorkers = workers.map(worker => ({ ...worker }))
@@ -461,7 +429,6 @@ function resetSettings() {
   ].join('\n')
   currentArtifactRawStatus = 200
   currentApps = []
-  deferCreatedSessionStream = false
 }
 
 function deferred<T>() {
@@ -547,7 +514,7 @@ beforeEach(() => {
       currentApps = currentApps.map(app => app.appId === 'aiworker-qa' ? { ...app, status: 'enabled' } : app)
       return json({
         app: enabled ? { ...enabled, status: 'enabled' } : null,
-        catalog: { apps: currentApps, souls: currentSouls, templates: currentTemplates },
+        catalog: { apps: currentApps, capabilities: currentCapabilities, souls: currentSouls },
       })
     }
     if (url.endsWith('/api/local/apps/aiworker-qa/disable') && method === 'POST') {
@@ -555,7 +522,7 @@ beforeEach(() => {
       currentApps = currentApps.map(app => app.appId === 'aiworker-qa' ? { ...app, status: 'disabled' } : app)
       return json({
         app: disabled ? { ...disabled, status: 'disabled' } : null,
-        catalog: { apps: currentApps, souls: currentSouls, templates: currentTemplates },
+        catalog: { apps: currentApps, capabilities: currentCapabilities, souls: currentSouls },
       })
     }
     const requestUrl = new URL(url, 'http://local.test')
@@ -675,8 +642,8 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/local/souls'))
       return json({ souls: currentSouls })
-    if (url.endsWith('/api/local/templates'))
-      return json({ templates: currentTemplates })
+    if (url.endsWith('/api/local/capabilities'))
+      return json({ capabilities: currentCapabilities })
     if (url.endsWith('/api/local/workers/hr-worker/workspaces') && method === 'POST') {
       const body = init?.body ? JSON.parse(String(init.body)) as { name: string } : { name: 'New candidate workspace' }
       const created = { ...workspace, id: 'workspace-created', name: body.name }
@@ -706,102 +673,20 @@ beforeEach(() => {
         },
       }, 201)
     }
-    const workerSessionStreamMatch = url.match(/\/api\/local\/workers\/hr-worker\/workspaces\/([^/]+)\/sessions\/stream$/)
-    const workspaceSessionStreamMatch = url.match(/\/api\/local\/workspaces\/([^/]+)\/sessions\/stream$/)
-    const streamWorkspaceId = workerSessionStreamMatch?.[1] ?? workspaceSessionStreamMatch?.[1]
-    if (streamWorkspaceId && method === 'POST') {
-      const requestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
-      lastSessionRequestBody = requestBody
-      const sessionId = streamWorkspaceId === 'workspace-created' ? 'session-created' : 'session-created-worker-route'
-      const turnId = streamWorkspaceId === 'workspace-created' ? 'turn-created' : 'turn-created-worker-route'
-      const artifactId = streamWorkspaceId === 'workspace-created' ? 'artifact-created' : 'artifact-created-worker-route'
-      const workspaceName = currentWorkspaces.find(item => item.id === streamWorkspaceId)?.name ?? 'New candidate workspace'
-      const createdSession = {
-        ...sessionRecord,
-        capabilityTemplateId: String(requestBody.capabilityTemplateId ?? sessionRecord.capabilityTemplateId),
-        context: String(requestBody.context ?? ''),
-        metadataJson: requestBody.metadata as Record<string, unknown> ?? {},
-        workspaceId: streamWorkspaceId,
-        id: sessionId,
-        title: workspaceName,
-      }
-      const createdTurn = { ...turnRecord, id: turnId, sessionId }
-      const createdArtifact = { ...artifactRecord, id: artifactId, sessionId, turnId, workspaceId: streamWorkspaceId }
-      currentSessions = [createdSession, ...currentSessions]
-      currentTurns = [createdTurn, ...currentTurns]
-      currentArtifacts = [createdArtifact, ...currentArtifacts]
-      const encoder = new TextEncoder()
-      return new Response(new ReadableStream({
-        start(controller) {
-          const write = () => {
-            controller.enqueue(encoder.encode(`event: session\ndata: ${JSON.stringify(createdSession)}\n\n`))
-            controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify({ ...createdTurn, status: 'running', response: null })}\n\n`))
-            controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [createdArtifact], events: [], files: [], session: createdSession, turn: createdTurn })}\n\n`))
-            controller.close()
-          }
-          if (deferCreatedSessionStream)
-            setTimeout(write, 20)
-          else
-            write()
-        },
-      }), { headers: { 'content-type': 'text/event-stream' }, status: 201 })
-    }
     if ((url.endsWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions') || url.endsWith('/api/local/workspaces/workspace-created/sessions')) && method === 'POST') {
       const createdSession = { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created', title: 'New candidate workspace' }
-      const createdTurn = { ...turnRecord, id: 'turn-created', sessionId: 'session-created' }
-      const createdArtifact = { ...artifactRecord, id: 'artifact-created', sessionId: 'session-created', turnId: 'turn-created', workspaceId: 'workspace-created' }
+      const createdArtifact = { ...artifactRecord, id: 'artifact-created', sessionId: 'session-created', workspaceId: 'workspace-created' }
       currentSessions = [createdSession, ...currentSessions]
-      currentTurns = [createdTurn, ...currentTurns]
       currentArtifacts = [createdArtifact, ...currentArtifacts]
-      return json({ artifacts: [createdArtifact], events: [], files: [], session: createdSession, turn: createdTurn }, 201)
+      return json({ artifacts: [createdArtifact], events: [], files: [], session: createdSession }, 201)
     }
-    if ((url.endsWith('/api/local/workers/hr-worker/sessions/session-1/messages/stream') || url.endsWith('/api/local/sessions/session-1/turns/stream')) && method === 'POST') {
+    if (url.endsWith('/api/sessions/session-1/invocations') && method === 'POST') {
       lastMessageRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
-      const nextTurn = {
-        ...turnRecord,
-        id: 'turn-2',
-        input: String(lastMessageRequestBody.input ?? 'Add interview risks.'),
-        response: 'Updated Candidate Screen.',
-        seq: 2,
-      }
-      const nextEvent = {
-        ...eventRecord,
-        id: 2,
-        payloadJson: { agentEvent: { kind: 'text', text: 'Added interview risks.' }, status: 'succeeded' },
-        seq: 1,
-        turnId: 'turn-2',
-        type: 'assistant_delta',
-      } satisfies LocalSessionEvent
-      currentTurns = [...currentTurns, nextTurn]
-      currentEvents = [...currentEvents, nextEvent]
-      const encoder = new TextEncoder()
-      return new Response(new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify({ ...nextTurn, status: 'running', response: null })}\n\n`))
-          controller.enqueue(encoder.encode(`event: session_event\ndata: ${JSON.stringify(nextEvent)}\n\n`))
-          controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify(nextTurn)}\n\n`))
-          controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [], events: currentEvents, files: [], session: sessionRecord, turn: nextTurn })}\n\n`))
-          controller.close()
-        },
-      }), { headers: { 'content-type': 'text/event-stream' }, status: 200 })
-    }
-    if ((url.endsWith('/api/local/workers/hr-worker/sessions/session-1/messages') || url.endsWith('/api/local/sessions/session-1/turns')) && method === 'POST') {
-      lastMessageRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
-      const nextTurn = {
-        ...turnRecord,
-        id: 'turn-2',
-        input: String(lastMessageRequestBody.input ?? 'Add interview risks.'),
-        response: 'Updated Candidate Screen.',
-        seq: 2,
-      }
-      currentTurns = [...currentTurns, nextTurn]
-      currentEvents = [...currentEvents, { ...eventRecord, id: 2, seq: 1, turnId: 'turn-2' }]
-      return json({ artifacts: [], events: currentEvents, files: [], session: sessionRecord, turn: nextTurn }, 201)
+      currentEvents = [...currentEvents, { ...eventRecord, id: 2, seq: 1 }]
+      return json({ artifacts: [], events: currentEvents, files: [], session: sessionRecord }, 201)
     }
     if (url.endsWith('/api/local/sessions'))
       return json({ sessions: currentSessions })
-    if (url.endsWith('/api/local/turns'))
-      return json({ turns: currentTurns })
     if (url.endsWith('/api/local/files'))
       return json({ files: [] })
     if (url.includes('/api/local/workspaces/') && url.includes('/files/raw/')) {
@@ -1184,16 +1069,15 @@ describe('worker studio', () => {
     currentSouls = [
       ...currentSouls,
       {
-        defaultTemplates: [CUSTOM_TEMPLATE_ID],
+        defaultCapabilities: [CUSTOM_TEMPLATE_ID],
         description: 'Custom workspace',
-        domain: 'general-exploration',
         id: CUSTOM_SOUL_ID,
         name: 'AIWorker Custom',
         status: 'available',
       },
     ]
-    currentTemplates = [
-      ...currentTemplates,
+    currentCapabilities = [
+      ...currentCapabilities,
       {
         description: 'Explore a custom workspace.',
         id: CUSTOM_TEMPLATE_ID,
@@ -1201,7 +1085,6 @@ describe('worker studio', () => {
         name: 'Explore',
         outputKind: 'custom-exploration',
         promptRef: './product/workflows/explore/prompt.md',
-        reviewRubricRef: null,
         soulId: CUSTOM_SOUL_ID,
       },
     ]
@@ -1413,7 +1296,6 @@ describe('worker studio', () => {
   it('does not reinterpret session engine state when a Soul App owns the mounted route', async () => {
     currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
     currentArtifacts = []
-    currentTurns = [{ ...turnRecord, response: null, status: 'running' }]
     currentEvents = [{
       ...eventRecord,
       id: 12,
@@ -1662,7 +1544,7 @@ describe('worker studio', () => {
     expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench?workerId=e2e-hr-codex-20260525&theme=light')
   })
 
-  it('routes directly to a worker and updates capability templates with worker identity', async () => {
+  it('routes directly to a worker and updates capabilities with worker identity', async () => {
     window.history.replaceState(null, '', '/workers/qa-worker')
     render(<WorkerStudio />)
 
@@ -1674,10 +1556,10 @@ describe('worker studio', () => {
       expect(screen.queryByText('candidate-screen')).toBeNull()
     })
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
-    const capabilityTemplateHeading = screen.getByText('Capability template (1)')
-    expect(capabilityTemplateHeading).toBeTruthy()
-    expect(capabilityTemplateHeading.closest('[data-slot="item-group"]')).toBeTruthy()
-    expect(capabilityTemplateHeading.closest('[data-slot="card"]')).toBeNull()
+    const capabilityHeading = screen.getByText('Capability (1)')
+    expect(capabilityHeading).toBeTruthy()
+    expect(capabilityHeading.closest('[data-slot="item-group"]')).toBeTruthy()
+    expect(capabilityHeading.closest('[data-slot="card"]')).toBeNull()
     expect(screen.getByTestId('worker-identity-card').getAttribute('data-slot')).toBe('card')
     expect(document.querySelector('.worker-overview-panel')).toBeNull()
     const workspaceAvatarButton = screen.getByRole('button', { name: 'Workspace' })
@@ -1825,7 +1707,6 @@ describe('worker studio', () => {
   it('keeps workspace routes on app-owned mounted surfaces when a Soul App route exists', async () => {
     currentApps = [hostedApp({ appId: 'aiworker-hr', appName: 'AIWorker HR' })]
     currentSessions = []
-    currentTurns = []
     currentArtifacts = []
     currentEvents = []
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')

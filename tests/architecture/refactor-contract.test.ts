@@ -242,6 +242,7 @@ describe('destructive refactor contract bootstrap', () => {
   test('protocol and authoring contracts stay descriptor-only and native-MCP based', () => {
     const protocol = readRepoFile('docs/protocol.md')
     const authoring = readRepoFile('docs/soul-authoring.md')
+    const soulAppEngineAssets = readRepoFile('packages/soul-protocol/src/soul-app/manifest.ts')
 
     expect(protocol).toContain('dist/soul.descriptor.json')
     expect(protocol).toContain('router-mode="search"')
@@ -251,6 +252,10 @@ describe('destructive refactor contract bootstrap', () => {
     expect(authoring).toContain('souls/*')
     expect(authoring).toContain('soul.config.ts')
     expect(authoring).toContain('author-owned native MCP files may contain literal secrets')
+
+    expect(soulAppEngineAssets).toContain('mcpClients')
+    expect(soulAppEngineAssets).not.toContain('soulAppMcpServer')
+    expect(soulAppEngineAssets).not.toContain('mcpServers:')
   })
 
   test('protocol doc promotes broker methods and worker config envelope details', () => {
@@ -271,6 +276,8 @@ describe('destructive refactor contract bootstrap', () => {
       'PATCH  /api/sessions/:sessionId',
       'POST   /api/sessions/:sessionId/archive',
       'DELETE /api/sessions/:sessionId',
+      'ANY    /api/apps/:appId',
+      'ANY    /api/apps/:appId/*',
     ]) {
       expect(protocol).toContain(route)
     }
@@ -278,6 +285,738 @@ describe('destructive refactor contract bootstrap', () => {
     expect(protocol).toContain('configValueJson envelope')
     expect(protocol).toContain('kind, target, enabled, sourceRef, checksum, options, updatedAt, updatedBy')
     expect(protocol).toContain('Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.')
+    expect(protocol).toContain('strips client credentials before proxying')
+    expect(protocol).toContain('strips app-owned cookies plus Host mount credentials before returning')
+  })
+
+  test('capability template projections stay generic and do not expose review rubric fields', () => {
+    const activeSources = [
+      'packages/soul-protocol/src/soul-app/registry.ts',
+      'packages/host-runtime/src/soul-app/registry.ts',
+      'packages/host-runtime/src/host/runtime.ts',
+      'packages/soul-app-runtime/src/index.ts',
+      'apps/web/src/features/local-workspace/types.compat.ts',
+    ]
+
+    const findings = activeSources
+      .filter(path => readRepoFile(path).includes('reviewRubricRef'))
+      .map(path => `${path}: reviewRubricRef`)
+
+    expect(findings, 'Host-visible capability templates must not carry app-owned review rubric fields').toEqual([])
+  })
+
+  test('CLI exposes capability listing without the retired template list command', () => {
+    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
+    const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
+    const cliSmoke = readRepoFile('apps/cli/scripts/smoke-dist-release.ts')
+    const sourceForbidden = [
+      'cli.command(\'template list\'',
+      'compatibility inspection: template list',
+      'list app-declared session templates',
+      'compatibility inspection:',
+    ]
+
+    for (const snippet of sourceForbidden)
+      expect(cliSource).not.toContain(snippet)
+    for (const snippet of sourceForbidden.slice(1))
+      expect(cliTest).not.toContain(snippet)
+    expect(cliSmoke).not.toContain('const templates')
+    expect(cliSmoke).not.toContain('templates.stdout')
+
+    expect(cliSource).toContain('cli.command(\'capability list\'')
+    expect(cliSource).toContain('list app-declared capabilities')
+    expect(cliSource).toContain('printJson({ capabilities })')
+    expect(cliSmoke).toContain('[\'capability\', \'list\'')
+    expect(cliTest).toContain('argv(\'capability\', \'list\'')
+    expect(cliTest).toContain('argv(\'template\', \'list\'')
+    expect(cliTest).toContain(').toBe(1)')
+  })
+
+  test('CLI session start selects a capability without the retired skill option', () => {
+    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
+    const cliTests = [
+      'apps/cli/src/aiworker.test.ts',
+      'apps/cli/src/freeform-golden-path.test.ts',
+      'tests/browser/freeform-cli-golden-path.spec.ts',
+    ].map(path => [path, readRepoFile(path)] as const)
+
+    const sourceForbidden = [
+      '.option(\'--skill <id>\'',
+      'skill?: string',
+      'opts.skill',
+      'skillId',
+      'capability template id',
+    ]
+    const findings = [
+      ...sourceForbidden
+        .filter(snippet => cliSource.includes(snippet))
+        .map(snippet => `apps/cli/src/aiworker.ts: ${snippet}`),
+      ...cliTests.flatMap(([path, source]) => source.includes('\'--skill\'') ? [`${path}: '--skill'`] : []),
+    ]
+
+    expect(findings, 'CLI session start should use --capability and capability language only').toEqual([])
+    expect(cliSource).toContain('.option(\'--capability <id>\'')
+    expect(cliSource).toContain('opts.capability')
+  })
+
+  test('engine invocation prompts use capability language without retired template copy', () => {
+    const sources = [
+      'packages/host-runtime/src/worker/runtime.ts',
+    ].map(path => [path, readRepoFile(path)] as const)
+    const forbidden = [
+      'Capability template:',
+      'session template metadata',
+    ]
+    const findings = sources.flatMap(([path, source]) =>
+      forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`),
+    )
+
+    expect(findings, 'native engine prompt copy should not reintroduce retired template language').toEqual([])
+  })
+
+  test('local broker capability routes do not preserve retired template route aliases', () => {
+    const activeSources = [
+      'packages/host-daemon/src/modes/worker.ts',
+      'packages/soul-app-runtime/src/index.ts',
+      'apps/cli/scripts/smoke-dist-release.ts',
+      'apps/web/src/features/local-workspace/api/workspace-data.ts',
+      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
+    ]
+    const forbidden = [
+      '/api/local/templates',
+      '/api/local/workers/:workerId/templates',
+      ['/api/local/workers/', '{workerId}/templates'].join('$'),
+      '/api/templates',
+      'templates/:templateId',
+      '[\'template\', \'list\'',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbidden
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'local broker routes should expose capability endpoints, not retired template aliases').toEqual([])
+  })
+
+  test('host daemon capability route tests name the Freeform capability fixture as a capability', () => {
+    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+
+    expect(daemonTest).not.toContain('FREEFORM_TEMPLATE')
+    expect(daemonTest).toContain('FREEFORM_CAPABILITY')
+  })
+
+  test('host daemon capability helpers do not preserve retired template helper names', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const forbidden = [
+      'requireTemplateForWorker',
+      'enrichTemplateMetadata',
+    ]
+    const findings = forbidden
+      .filter(snippet => daemon.includes(snippet))
+      .map(snippet => `packages/host-daemon/src/modes/worker.ts: ${snippet}`)
+
+    expect(findings, 'daemon internals should use capability language for current broker helpers').toEqual([])
+    expect(daemon).toContain('requireCapabilityForWorker')
+    expect(daemon).toContain('enrichCapabilityMetadata')
+  })
+
+  test('Host-visible Soul defaults use capability language instead of template defaults', () => {
+    const activeSources = [
+      'packages/soul-protocol/src/soul-app/registry.ts',
+      'packages/soul-protocol/src/soul-app/index.ts',
+      'packages/host-runtime/src/soul-app/registry.ts',
+      'packages/host-runtime/src/host/runtime.ts',
+      'packages/soul-app-runtime/src/index.ts',
+      'apps/web/src/features/local-workspace/types.compat.ts',
+      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return source.includes('defaultTemplates') ? [`${path}: defaultTemplates`] : []
+    })
+
+    expect(findings, 'Soul catalog defaults should expose defaultCapabilities, not defaultTemplates').toEqual([])
+  })
+
+  test('Host Soul catalog exposes capabilities instead of a template collection', () => {
+    const activeSources = [
+      'packages/host-runtime/src/soul-app/registry.ts',
+      'packages/host-runtime/src/host/runtime.ts',
+      'packages/soul-app-runtime/src/index.ts',
+      'packages/soul-app-runtime/src/index.test.ts',
+      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
+    ]
+    const forbidden = [
+      'templates: CapabilityTemplate[]',
+      'templates: appTemplates',
+      'listHostSoulCatalog().templates',
+      'this.listCatalog().templates',
+      'catalog.templates',
+      'input.catalog.templates',
+      'templates: [...app.projectedCapabilities]',
+      'catalog: { apps: currentApps, souls: currentSouls, templates: currentTemplates }',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbidden
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'Host catalog should return a capabilities collection, not templates').toEqual([])
+  })
+
+  test('Web local workspace model exposes capabilities instead of templates', () => {
+    const activeSources = [
+      'apps/web/src/features/local-workspace/types.compat.ts',
+      'apps/web/src/features/local-workspace/api/types.ts',
+      'apps/web/src/features/local-workspace/api/workspace-data.ts',
+      'apps/web/src/features/local-workspace/components/workspace-card.tsx',
+      'apps/web/src/features/settings/components/settings-dialog.tsx',
+      'apps/web/src/features/i18n/display.test.ts',
+      'apps/web/src/features/i18n/index.ts',
+      'apps/web/src/worker/worker-studio.tsx',
+      'apps/web/src/worker/studio/locator.ts',
+      'apps/web/src/worker/studio/workspace-fallback.tsx',
+    ]
+    const forbidden = [
+      'templates: CapabilityTemplate[]',
+      'templates: WorkspaceTemplate[]',
+      'LocalWorkspaceData[\'templates\']',
+      'WorkspaceCardProps[\'template\']',
+      'data.templates',
+      'templates={data.templates}',
+      'templates={templates}',
+      'template={data.',
+      'const templatedSoulIds',
+      'CapabilityTemplate',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'Web should keep the Host-visible startable unit collection named capabilities').toEqual([])
+  })
+
+  test('WorkerStudio capability fixtures use capability collection names', () => {
+    const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const forbidden = [
+      'const templates =',
+      'currentTemplates',
+      'templates.map',
+      'capability templates',
+      'capabilityTemplateHeading',
+    ]
+    const findings = forbidden
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+
+    expect(findings, 'WorkerStudio fixtures should name Host-visible startable units as capabilities').toEqual([])
+    expect(source).toContain('const capabilities =')
+    expect(source).toContain('currentCapabilities')
+  })
+
+  test('Web i18n helpers expose capability names instead of template helpers', () => {
+    const activeSources = [
+      'apps/web/src/features/i18n/index.ts',
+      'apps/web/src/features/i18n/types.ts',
+      'apps/web/src/features/i18n/display.test.ts',
+      'apps/web/src/features/i18n/locales/en.ts',
+      'apps/web/src/features/i18n/locales/zh-CN.ts',
+      'apps/web/src/features/i18n/locales/ja.ts',
+      'apps/web/src/features/i18n/locales/de.ts',
+      'apps/web/src/features/settings/components/settings-dialog.tsx',
+      'apps/web/src/features/local-workspace/components/workspace-card.tsx',
+      'apps/web/src/worker/studio/locator.ts',
+      'apps/web/src/worker/studio/workspace-fallback.tsx',
+    ]
+    const forbidden = [
+      'displayTemplate',
+      'BuiltinTemplateCopy',
+      'templateCount',
+      'Manifest Template',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'Web i18n helpers should describe capabilities instead of retired template helpers').toEqual([])
+  })
+
+  test('Web shell copy schema uses capability keys for startable units', () => {
+    const activeSources = [
+      'apps/web/src/features/i18n/types.ts',
+      'apps/web/src/features/i18n/locales/en.ts',
+      'apps/web/src/features/i18n/locales/zh-CN.ts',
+      'apps/web/src/features/i18n/locales/ja.ts',
+      'apps/web/src/features/i18n/locales/de.ts',
+      'apps/web/src/features/i18n/locales/local-shell-copy.test.ts',
+      'apps/web/src/worker/studio/workspace-fallback.tsx',
+    ]
+    const forbidden = [
+      'capabilityTemplate:',
+      'common.templates',
+      'createTabs.template',
+      'topTabs.templates',
+      'copy.create.capabilityTemplate',
+      'templateName',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'visible shell copy keys should use capability terminology').toEqual([])
+  })
+
+  test('runtime session metadata names capability display without skillName compatibility', () => {
+    const activeSources = [
+      'packages/soul-app-runtime/src/index.ts',
+      'packages/host-runtime/src/worker/runtime.test.ts',
+      'packages/host-runtime/src/worker/executor.test.ts',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return [
+        ...source.includes('skillName') ? [`${path}: skillName`] : [],
+        ...source.includes('CapabilityTemplate') ? [`${path}: CapabilityTemplate`] : [],
+        ...source.includes('sessionMetadata: (capabilityTemplateId: string)') ? [`${path}: sessionMetadata capabilityTemplateId parameter`] : [],
+        ...source.includes('sessionMetadata: capabilityTemplateId =>') ? [`${path}: sessionMetadata capabilityTemplateId lambda`] : [],
+        ...source.includes('capabilities.find(item => item.id === capabilityTemplateId)') ? [`${path}: capabilityTemplateId lookup local`] : [],
+        ...source.includes('capabilityName: capability?.name ?? capabilityTemplateId') ? [`${path}: capabilityTemplateId fallback local`] : [],
+      ]
+    })
+
+    expect(findings, 'capability-derived session metadata should not be named as native engine skills').toEqual([])
+  })
+
+  test('session capability selection uses capabilityId outside the legacy SQLite column name', () => {
+    const protocol = readRepoFile('docs/protocol.md')
+    const runtimeDoc = readRepoFile('docs/runtime.md')
+    const activeSources = [
+      'packages/soul-protocol/src/local-workspace.ts',
+      'packages/storage-sqlite/src/worker/index.ts',
+      'packages/storage-sqlite/src/worker/index.test.ts',
+      'packages/host-runtime/src/worker/runtime.ts',
+      'packages/host-runtime/src/worker/runtime.test.ts',
+      'packages/host-runtime/src/host/runtime.test.ts',
+      'packages/host-daemon/src/modes/worker.ts',
+      'packages/host-daemon/src/modes/worker/schemas.ts',
+      'packages/host-daemon/src/modes/worker.local.test.ts',
+      'packages/soul-app-runtime/src/index.ts',
+      'packages/soul-app-runtime/src/index.test.ts',
+      'apps/cli/src/aiworker.ts',
+      'apps/cli/src/aiworker.test.ts',
+      'apps/web/src/worker/studio/locator.ts',
+      'apps/web/src/worker/studio/locator.test.ts',
+      'apps/web/src/worker/studio/workspace-fallback.tsx',
+      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
+      'apps/web/src/features/local-workspace/components/workspace-card.tsx',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+        .split('\n')
+        .filter(line => !(path === 'packages/host-daemon/src/modes/worker.local.test.ts'
+          && (line.includes('rejects legacy session create bodies that still send capabilityTemplateId')
+            || line.includes('capabilityTemplateId: FREEFORM_CAPABILITY'))))
+        .join('\n')
+      return source.includes('capabilityTemplateId') ? [`${path}: capabilityTemplateId`] : []
+    })
+
+    expect(protocol).toContain('`capabilityId`')
+    expect(runtimeDoc).toContain('`capabilityId`')
+    expect(findings, 'current Host-facing session contracts should use capabilityId; only the SQLite column name may stay legacy').toEqual([])
+  })
+
+  test('Host runtime capability lookup APIs do not expose retired template helper names', () => {
+    const activeSources = [
+      'packages/host-runtime/src/index.ts',
+      'packages/host-runtime/src/host/runtime.ts',
+      'packages/host-runtime/src/host/runtime.test.ts',
+      'packages/host-runtime/src/soul-app/registry.ts',
+      'packages/host-runtime/src/soul-app/registry.test.ts',
+      'packages/host-daemon/src/modes/worker.ts',
+      'apps/cli/src/aiworker.ts',
+    ]
+    const forbidden = [
+      'findHostCapabilityTemplate',
+      'listHostCapabilityTemplatesForSoul',
+      'listCapabilityTemplates',
+      'listCapabilityTemplatesForWorker',
+      'requireCapabilityTemplateForWorker',
+      ['Template ', '{id} does not belong'].join('$'),
+      'TEMPLATE_NOT_AVAILABLE',
+      'validates worker template ownership',
+      'CapabilityTemplate',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'Host runtime should expose capability lookup helpers, not template helper aliases').toEqual([])
+  })
+
+  test('Soul protocol capability projection helpers do not expose retired template names', () => {
+    const activeSources = [
+      'packages/soul-protocol/src/soul-app/index.ts',
+      'packages/soul-protocol/src/soul-app/registry.ts',
+    ]
+    const forbidden = [
+      'CapabilityTemplate',
+      'capabilityTemplateSchema',
+      'projectSoulAppCapabilityTemplate',
+      'projectSoulAppCapabilityTemplates',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'Soul protocol projection helpers should expose capabilities, not capability templates').toEqual([])
+  })
+
+  test('Host-visible Soul catalog does not expose domain as a platform field', () => {
+    const activeSources = [
+      'packages/soul-protocol/src/soul-app/registry.ts',
+      'packages/host-runtime/src/soul-app/registry.ts',
+      'packages/host-runtime/src/host/runtime.ts',
+      'apps/web/src/features/local-workspace/types.compat.ts',
+      'apps/web/src/features/i18n/index.ts',
+      'apps/web/src/features/i18n/types.ts',
+      'apps/web/src/features/local-workspace/components/creation-dialogs.tsx',
+      'apps/web/src/features/settings/components/settings-dialog.tsx',
+      'apps/web/src/worker/studio/first-run-soul-app-home.tsx',
+    ]
+    const forbidden = [
+      'domain: zod.string',
+      'domain: string',
+      'domain: soul.domain',
+      'soul.domain',
+      'soulCopy.domain',
+      'projectedSoul?.domain',
+    ]
+
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbidden
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'Host catalog should expose Soul App identity/description, not domain primitives').toEqual([])
+  })
+
+  test('filesystem layout comments do not preserve retired review or memory ownership', () => {
+    const source = readRepoFile('packages/fs-layout/src/index.ts')
+    const forbiddenPatterns = [
+      /review\s+policy/,
+      /memory\s+namespace/,
+    ]
+
+    const findings = forbiddenPatterns.filter(pattern => pattern.test(source)).map(pattern => pattern.source)
+
+    expect(findings, 'fs-layout must describe only Host filesystem responsibilities').toEqual([])
+  })
+
+  test('public package entrypoints no longer export legacy turn runtime surfaces', () => {
+    const hostRuntimeEntrypoint = readRepoFile('packages/host-runtime/src/index.ts')
+    const soulProtocolEntrypoint = readRepoFile('packages/soul-protocol/src/index.ts')
+    const forbiddenExports = [
+      ['packages/host-runtime/src/index.ts', 'StartLocalTurnInput', hostRuntimeEntrypoint],
+      ['packages/host-runtime/src/index.ts', 'LocalTurnStartResult', hostRuntimeEntrypoint],
+      ['packages/soul-protocol/src/index.ts', 'LocalTurn', soulProtocolEntrypoint],
+      ['packages/soul-protocol/src/index.ts', 'LocalTurnStatus', soulProtocolEntrypoint],
+      ['packages/soul-protocol/src/index.ts', 'localTurnSchema', soulProtocolEntrypoint],
+      ['packages/soul-protocol/src/index.ts', 'localTurnStatusSchema', soulProtocolEntrypoint],
+    ]
+
+    const findings = forbiddenExports
+      .filter(([, token, source]) => source.includes(token))
+      .map(([path, token]) => `${path}: ${token}`)
+
+    expect(findings, 'package entrypoints must expose session/invocation surfaces, not legacy turns').toEqual([])
+  })
+
+  test('local workspace protocol defines sessions and invocations without LocalTurn schemas', () => {
+    const source = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
+    const forbidden = [
+      'localTurnStatusSchema',
+      'LocalTurnStatus',
+      'localTurnSchema',
+      'LocalTurn',
+    ]
+    const findings = forbidden
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `packages/soul-protocol/src/local-workspace.ts: ${snippet}`)
+
+    expect(findings, 'local workspace protocol should not preserve turn records as a current contract').toEqual([])
+    expect(source).toContain('localEngineInvocationSchema')
+    expect(source).toContain('LocalEngineInvocation')
+  })
+
+  test('Soul App event protocol uses invocation events instead of turn callbacks', () => {
+    const source = readRepoFile('packages/soul-protocol/src/soul-app/protocol.ts')
+
+    expect(source).not.toContain('onTurnCompleted')
+    expect(source).not.toContain('turnId: string')
+    expect(source).toContain('onInvocationCompleted')
+    expect(source).toContain('invocationId: string')
+  })
+
+  test('soul protocol public surface does not expose generic agent runtime providers', () => {
+    const protocolEntrypoint = readRepoFile('packages/soul-protocol/src/index.ts')
+    const providerFiles = listSourceFiles('packages/soul-protocol/src/providers')
+    const forbiddenPublicExports = [
+      'agentEventSchema',
+      'AgentEvent',
+      'AgentFinishReason',
+      'AgentRunInput',
+      'AgentTask',
+      'AgentTaskStatus',
+      'ChatMessage',
+      'EngineSessionBinding',
+      'ExecutorProvider',
+      'ExecutorTool',
+      'TokenUsage',
+      'ToolAction',
+      'ToolCall',
+      'ToolStatus',
+    ]
+    const exportFindings = forbiddenPublicExports
+      .filter(snippet => protocolEntrypoint.includes(snippet))
+      .map(snippet => `packages/soul-protocol/src/index.ts: ${snippet}`)
+
+    expect([...providerFiles, ...exportFindings], 'soul-protocol should not own generic agent runtime provider primitives').toEqual([])
+  })
+
+  test('soul protocol provider surface does not expose memory or governance providers', () => {
+    const providerSources = listSourceFiles('packages/soul-protocol/src/providers')
+      .map(path => [path, readRepoFile(path)] as const)
+    const protocolSources = listSourceFiles('packages/soul-protocol/src')
+      .map(path => [path, readRepoFile(path)] as const)
+    const forbidden = [
+      'BrainMemory',
+      'BrainProvider',
+      'BrainSkill',
+      'BrainWatchEvent',
+      'ExecutionEvent',
+      'MemoryEntry',
+      'MemoryFilter',
+      'SkillMeta',
+      'WriteMemoryInput',
+      'listMemories',
+      'searchMemories',
+      'writeMemory',
+    ]
+    const findings = protocolSources.flatMap(([path, source]) =>
+      forbidden
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`),
+    )
+    const governanceFindings = providerSources.flatMap(([path, source]) =>
+      source.includes('governance') ? [`${path}: governance`] : [],
+    )
+
+    expect([...findings, ...governanceFindings], 'soul-protocol should not expose memory/governance provider primitives').toEqual([])
+  })
+
+  test('host runtime creates session invocations without legacy startTurn compatibility', () => {
+    const runtime = readRepoFile('packages/host-runtime/src/worker/runtime.ts')
+    const forbidden = [
+      'StartLocalTurnInput',
+      'LocalTurnStartResult',
+      'async startTurn(',
+      'createTurn(',
+      'nextTurnSeq(',
+      'updateTurn(',
+      '/turns/${',
+      'kind: \'turn\'',
+      'Turn request:',
+    ]
+    const findings = forbidden
+      .filter(snippet => runtime.includes(snippet))
+      .map(snippet => `packages/host-runtime/src/worker/runtime.ts: ${snippet}`)
+
+    expect(findings, 'runtime follow-up must be session invocation-native, with no turn compatibility writer').toEqual([])
+    expect(runtime).toContain('async startInvocation(')
+    expect(runtime).toContain('Invocation request:')
+  })
+
+  test('host daemon exposes session invocation follow-up without legacy message aliases', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const schemas = readRepoFile('packages/host-daemon/src/modes/worker/schemas.ts')
+    const forbidden = [
+      ['packages/host-daemon/src/modes/worker.ts', '/api/local/workers/:workerId/sessions/:sessionId/messages', daemon],
+      ['packages/host-daemon/src/modes/worker.ts', '/api/local/workers/:workerId/workspaces/:workspaceId/sessions/stream', daemon],
+      ['packages/host-daemon/src/modes/worker.ts', '/api/local/workspaces/:workspaceId/sessions/stream', daemon],
+      ['packages/host-daemon/src/modes/worker.ts', 'createSessionMessageResponse', daemon],
+      ['packages/host-daemon/src/modes/worker.ts', 'streamSessionInvocation', daemon],
+      ['packages/host-daemon/src/modes/worker.ts', 'turnInput', daemon],
+      ['packages/host-daemon/src/modes/worker/schemas.ts', 'createSessionMessageBodySchema', schemas],
+      ['packages/host-daemon/src/modes/worker/schemas.ts', '/messages', schemas],
+      ['packages/host-daemon/src/modes/worker/schemas.ts', 'sessions/stream', schemas],
+    ]
+    const findings = forbidden
+      .filter(([, snippet, source]) => source.includes(snippet))
+      .map(([path, snippet]) => `${path}: ${snippet}`)
+
+    expect(findings, 'host daemon follow-up writes must route through session-level invocations only').toEqual([])
+    expect(daemon).toContain('/api/sessions/:sessionId/invocations')
+    expect(schemas).toContain('createSessionInvocationBodySchema')
+  })
+
+  test('worker storage API does not keep transient turn helper records', () => {
+    const storage = readRepoFile('packages/storage-sqlite/src/worker/index.ts')
+    const forbidden = [
+      'TurnRow',
+      'transientTurns',
+      'CreateTurnInput',
+      'UpdateTurnInput',
+      'createTurn',
+      'getTurn',
+      'updateTurn',
+      'listTurns',
+      'nextTurnSeq',
+      'transient_turns',
+    ]
+    const findings = forbidden
+      .filter(snippet => storage.includes(snippet))
+      .map(snippet => `packages/storage-sqlite/src/worker/index.ts: ${snippet}`)
+
+    expect(findings, 'storage should not emulate removed turns outside the current SQLite schema').toEqual([])
+    expect(storage).toContain('createEngineInvocation')
+    expect(storage).toContain('listEngineInvocations')
+  })
+
+  test('storage legacy discard fixtures use capability wording for custom capability ids', () => {
+    const storageTest = readRepoFile('packages/storage-sqlite/src/worker/index.test.ts')
+    const forbidden = [
+      'custom-legacy-template',
+      'Custom legacy template',
+    ]
+    const findings = forbidden
+      .filter(snippet => storageTest.includes(snippet))
+      .map(snippet => `packages/storage-sqlite/src/worker/index.test.ts: ${snippet}`)
+
+    expect(findings, 'storage fixtures should not name custom capabilities as templates').toEqual([])
+  })
+
+  test('CLI follow-up command surface uses session invocation language only', () => {
+    const cli = readRepoFile('apps/cli/src/aiworker.ts')
+    const forbidden = [
+      'resolveTurnEngineMetadata',
+      'sendTurnCommand',
+      'cli.command(\'turn send\'',
+      'send a turn',
+      'turn input',
+      'turn send',
+    ]
+    const findings = forbidden
+      .filter(snippet => cli.includes(snippet))
+      .map(snippet => `apps/cli/src/aiworker.ts: ${snippet}`)
+
+    expect(findings, 'CLI should route follow-ups through session invoke, not legacy turn send').toEqual([])
+    expect(cli).toContain('cli.command(\'session invoke\'')
+    expect(cli).toContain('create a session-level engine invocation')
+  })
+
+  test('host runtime event bus no longer exposes turn event kind', () => {
+    const events = readRepoFile('packages/host-runtime/src/worker/events.ts')
+    const forbidden = [
+      '\'turn\'',
+      'turnId?:',
+    ]
+    const findings = forbidden
+      .filter(snippet => events.includes(snippet))
+      .map(snippet => `packages/host-runtime/src/worker/events.ts: ${snippet}`)
+
+    expect(findings, 'runtime bus should publish session and invocation events only').toEqual([])
+    expect(events).toContain('\'session\' | \'event\'')
+    expect(events).toContain('invocationId?: string')
+  })
+
+  test('local executor input is invocation-native without turnId', () => {
+    const executor = readRepoFile('packages/host-runtime/src/worker/executor.ts')
+    const runtime = readRepoFile('packages/host-runtime/src/worker/runtime.ts')
+    const forbidden = [
+      ['packages/host-runtime/src/worker/executor.ts', 'turnId', executor],
+      ['packages/host-runtime/src/worker/runtime.ts', 'turnId: readNullableString(request.turnId)', runtime],
+    ]
+    const findings = forbidden
+      .filter(([, snippet, source]) => source.includes(snippet))
+      .map(([path, snippet]) => `${path}: ${snippet}`)
+
+    expect(findings, 'local executor contract should receive invocation context only').toEqual([])
+    expect(executor).toContain('invocationId: string')
+    expect(executor).toContain('invocationRoot: string')
+  })
+
+  test('session event contracts are invocation-native without turnId compatibility', () => {
+    const storage = readRepoFile('packages/storage-sqlite/src/worker/index.ts')
+    const protocol = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
+    const runtime = readRepoFile('packages/host-runtime/src/worker/runtime.ts')
+    const forbidden = [
+      ['packages/storage-sqlite/src/worker/index.ts', 'turnId:', storage],
+      ['packages/storage-sqlite/src/worker/index.ts', 'turnId?', storage],
+      ['packages/storage-sqlite/src/worker/index.ts', 'eventJson.turnId', storage],
+      ['packages/soul-protocol/src/local-workspace.ts', 'turnId:', protocol],
+      ['packages/host-runtime/src/worker/runtime.ts', 'turnId: null', runtime],
+      ['packages/host-runtime/src/worker/runtime.ts', 'turnId: string | null', runtime],
+      ['packages/host-runtime/src/worker/runtime.ts', 'input.turnId', runtime],
+    ]
+    const findings = forbidden
+      .filter(([, snippet, source]) => source.includes(snippet))
+      .map(([path, snippet]) => `${path}: ${snippet}`)
+
+    expect(findings, 'session event and bridge contexts should be keyed by invocation id only').toEqual([])
+    expect(storage).toContain('invocationId: string')
+    expect(protocol).toContain('invocationId: idSchema')
+  })
+
+  test('WorkerStudio test harness does not preserve transient turn fixtures', () => {
+    const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const forbidden = [
+      'LegacyTurnFixture',
+      'turnRecord',
+      'currentTurns',
+      'turnId:',
+      'const turnId',
+      'event: turn',
+      '/api/local/turns',
+      '/api/local/sessions/session-1/turns',
+      '/api/local/workers/hr-worker/sessions/session-1/messages',
+      '/sessions/stream',
+      '/api/sessions/session-1/invocations/stream',
+      'turn: createdTurn',
+      'turn: nextTurn',
+    ]
+    const findings = forbidden
+      .filter(snippet => workerStudioTest.includes(snippet))
+      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+
+    expect(findings, 'Web tests should model app-owned mounted sessions through sessions/events only').toEqual([])
+    expect(workerStudioTest).toContain('/api/local/sessions')
+    expect(workerStudioTest).toContain('/api/local/events')
+  })
+
+  test('host runtime tests seed invocation-native input refs only', () => {
+    const runtimeTest = readRepoFile('packages/host-runtime/src/worker/runtime.test.ts')
+    const forbidden = [
+      '/turns/',
+      'legacy-turn',
+      'current turn preference',
+    ]
+    const findings = forbidden
+      .filter(snippet => runtimeTest.includes(snippet))
+      .map(snippet => `packages/host-runtime/src/worker/runtime.test.ts: ${snippet}`)
+
+    expect(findings, 'runtime fixtures should not normalize old turn inputRef shapes').toEqual([])
+    expect(runtimeTest).toContain('/invocations/')
   })
 
   test('Freeform v1 has CLI-first and browser golden path gates', () => {

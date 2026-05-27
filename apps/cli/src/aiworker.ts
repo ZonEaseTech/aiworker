@@ -12,6 +12,7 @@ import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import {
   createHostRuntime,
@@ -31,10 +32,10 @@ import {
   getWorker,
   getWorkspace,
   initWorkerDb,
+  listEngineInvocations,
   listFiles,
   listSessions,
   listSettings,
-  listTurns,
   listWorkers,
   listWorkspaces,
   runWorkerMigrations,
@@ -214,7 +215,7 @@ function resolveCliEngineMetadata(engineId: string): { engineCommand: string, en
   })
 }
 
-function resolveTurnEngineMetadata(sessionMetadata: Record<string, unknown> | null | undefined): { engineCommand: string, engineId: string, executionMode: 'local-cli' } {
+function resolveInvocationEngineMetadata(sessionMetadata: Record<string, unknown> | null | undefined): { engineCommand: string, engineId: string, executionMode: 'local-cli' } {
   const frozen = readFrozenSessionEngine(sessionMetadata)
   if (frozen?.executionMode === 'local-cli') {
     if (frozen.engineCommand) {
@@ -262,7 +263,7 @@ async function ensureAllWorkers(): Promise<WorkerRow[]> {
 }
 
 function printJson(value: unknown): void {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`)
+  process.stdout.write(`${redactCliInspectOutput(JSON.stringify(redactEngineBridgeValue(value), null, 2))}\n`)
 }
 
 function requireText(value: unknown, label: string): string {
@@ -778,7 +779,7 @@ async function showLogs(opts: { tail?: number } = {}): Promise<void> {
     return
   const text = await readFile(logFile, 'utf8')
   const lines = text.split(/\r?\n/)
-  process.stdout.write(`${lines.slice(-(opts.tail ?? 80)).join('\n')}\n`)
+  process.stdout.write(`${redactCliInspectOutput(lines.slice(-(opts.tail ?? 80)).join('\n'))}\n`)
 }
 
 async function createWorkerCommand(opts: { id?: string, name?: string, soul?: string }): Promise<void> {
@@ -814,16 +815,16 @@ async function listWorkspaceCommand(opts: { worker?: string }): Promise<void> {
   printJson({ workspaces: listWorkspaces(runtime.workerId) })
 }
 
-async function startSessionCommand(opts: { context?: string, engine?: string, input?: string, model?: string, reasoning?: string, skill?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
+async function startSessionCommand(opts: { capability?: string, context?: string, engine?: string, input?: string, model?: string, reasoning?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
   const paths = await ensureDb()
   const runtime = await ensureRuntime({ worker: opts.worker })
   const workspaceId = requireText(opts.workspace, 'workspace')
   const workspace = getWorkspace(workspaceId)
   if (!workspace || workspace.workerId !== runtime.workerId)
     throw new Error(`workspace not found for ${runtime.workerId}: ${workspaceId}`)
-  const skillId = requireText(opts.skill, 'skill')
+  const capabilityId = requireText(opts.capability, 'capability')
   const host = createHost(paths)
-  const template = host.requireCapabilityTemplateForWorker(runtime.workerId, skillId)
+  const capability = host.requireCapabilityForWorker(runtime.workerId, capabilityId)
   const selectedEngineId = opts.engine?.trim() || selectedCliEngineId()
   const engineMetadata = {
     ...resolveCliEngineMetadata(selectedEngineId),
@@ -831,13 +832,13 @@ async function startSessionCommand(opts: { context?: string, engine?: string, in
   }
   const session = await runtime.createSession({
     workspaceId,
-    capabilityTemplateId: template.id,
+    capabilityId: capability.id,
     title: requireText(opts.title, 'title'),
     context: opts.context ?? '',
     metadata: engineMetadata,
   })
   const input = requireText(opts.input, 'input')
-  printJson(await runtime.startTurn({
+  printJson(await runtime.startInvocation({
     sessionId: session.id,
     input,
     engineId: engineMetadata.engineId,
@@ -856,7 +857,7 @@ async function resolveSessionContinuationContext(opts: SessionContinuationComman
   if (!session)
     throw new Error(`session not found: ${sessionId}`)
   const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
-  const engineMetadata = resolveTurnEngineMetadata(session.metadataJson)
+  const engineMetadata = resolveInvocationEngineMetadata(session.metadataJson)
   const frozen = readFrozenSessionEngine(session.metadataJson)
   const currentSession = frozen?.executionMode === 'local-cli' && frozen.engineCommand !== engineMetadata.engineCommand
     ? updateSession({
@@ -879,17 +880,6 @@ async function resolveSessionContinuationContext(opts: SessionContinuationComman
     runtime,
     sessionId,
   }
-}
-
-async function sendTurnCommand(opts: SessionContinuationCommandOptions): Promise<void> {
-  const continuation = await resolveSessionContinuationContext(opts)
-  printJson(await continuation.runtime.startTurn({
-    sessionId: continuation.sessionId,
-    input: continuation.input,
-    engineId: continuation.engineId,
-    engineCommand: continuation.engineCommand,
-    metadata: continuation.metadata,
-  }))
 }
 
 async function invokeSessionCommand(opts: SessionContinuationCommandOptions): Promise<void> {
@@ -917,7 +907,10 @@ async function listSessionCommand(opts: { workspace?: string }): Promise<void> {
 
 async function showSession(id: string): Promise<void> {
   await ensureAllWorkers()
-  printJson({ session: getSession(id), turns: listTurns(id) })
+  printJson({
+    invocations: listEngineInvocations(id).sort((left, right) => left.seq - right.seq),
+    session: getSession(id),
+  })
 }
 
 async function listWorkspaceFiles(opts: { workspace?: string }): Promise<void> {
@@ -932,7 +925,12 @@ async function showFile(filePath: string, opts: { workspace?: string, worker?: s
   if (!workspace)
     throw new Error(`workspace not found: ${workspaceId}`)
   const runtime = await ensureRuntime({ worker: opts.worker ?? workspace.workerId })
-  process.stdout.write(await runtime.files(workspaceId).read(filePath))
+  process.stdout.write(redactCliInspectOutput(await runtime.files(workspaceId).read(filePath)))
+}
+
+function redactCliInspectOutput(value: string): string {
+  const redacted = redactEngineBridgeValue(value)
+  return typeof redacted === 'string' ? redacted : ''
 }
 
 async function listAppsCommand(): Promise<void> {
@@ -1353,10 +1351,10 @@ function registerCommands(): void {
     printJson({ worker: getWorker(id) })
   })
   cli.command('worker select <id>', 'select default local Soul worker').action(selectWorkerCommand)
-  cli.command('template list', 'compatibility inspection: list app-declared session templates').option('--soul <id>', 'Soul id').action(async (opts: { soul?: string }) => {
+  cli.command('capability list', 'list app-declared capabilities').option('--soul <id>', 'Soul id').action(async (opts: { soul?: string }) => {
     const paths = await ensureDb()
-    const templates = createHost(paths).listCapabilityTemplates(opts.soul)
-    printJson({ templates })
+    const capabilities = createHost(paths).listCapabilities(opts.soul)
+    printJson({ capabilities })
   })
 
   cli.command('workspace create', 'create a worker workspace').option('--name <text>', 'workspace name').option('--type <id>', 'workspace type').option('--worker <id>', 'worker id').action(createWorkspaceCommand)
@@ -1366,12 +1364,12 @@ function registerCommands(): void {
     printJson({ workspace: getWorkspace(id) })
   })
 
-  cli.command('session start', 'create a workspace session and first turn')
+  cli.command('session start', 'create a workspace session and first invocation')
     .option('--workspace <id>', 'workspace id')
-    .option('--skill <id>', 'capability template id')
+    .option('--capability <id>', 'capability id')
     .option('--title <text>', 'session title')
     .option('--context <text>', 'session context')
-    .option('--input <text>', 'turn input')
+    .option('--input <text>', 'initial invocation input')
     .option('--engine <id>', 'engine id for this new session')
     .option('--model <id>', 'Codex model override')
     .option('--reasoning <effort>', 'Codex reasoning effort override')
@@ -1380,10 +1378,9 @@ function registerCommands(): void {
   cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').action(listSessionCommand)
   cli.command('session show <id>', 'show one session').action(showSession)
   cli.command('session invoke', 'create a session-level engine invocation').option('--session <id>', 'session id').option('--input <text>', 'invocation input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(invokeSessionCommand)
-  cli.command('turn send', 'send a turn to an existing session').option('--session <id>', 'session id').option('--input <text>', 'turn input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(sendTurnCommand)
 
-  cli.command('files list', 'compatibility inspection: list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
-  cli.command('files show <path>', 'compatibility inspection: print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)
+  cli.command('files list', 'list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
+  cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)
 
   cli.command('settings list', 'list host daemon settings').action(async () => {
     await ensureDb()
@@ -1400,7 +1397,7 @@ function registerCommands(): void {
     Bun.spawn(['open', url])
     printJson({ opened: url })
   })
-  cli.command('commands', 'show command index').option('--all', 'show advanced and compatibility commands').action((opts: { all?: boolean }) => {
+  cli.command('commands', 'show command index').option('--all', 'show advanced and diagnostics commands').action((opts: { all?: boolean }) => {
     process.stdout.write(`${commandIndex({ all: opts.all === true })}\n`)
   })
 }
@@ -1416,7 +1413,7 @@ const OPERATOR_COMMAND_INDEX = [
   'workspace create|list',
   'session start|invoke|list|show',
   '',
-  'Run `aiworker commands --all` for authoring, diagnostics and compatibility commands.',
+  'Run `aiworker commands --all` for authoring and diagnostics commands.',
 ]
 
 const FULL_COMMAND_INDEX = [
@@ -1430,7 +1427,8 @@ const FULL_COMMAND_INDEX = [
   'worker create|list|show|select',
   'workspace create|list|show',
   'session start|invoke|list|show',
-  'compatibility inspection: template list; files list|show; turn send',
+  'capability list',
+  'files list|show',
   'settings list',
   'engine select',
   'open',
@@ -1513,7 +1511,7 @@ export async function runCli(argv: string[] = process.argv): Promise<number> {
     return code
   }
   catch (error) {
-    consola.error(error instanceof Error ? error.message : String(error))
+    consola.error(redactCliInspectOutput(error instanceof Error ? error.message : String(error)))
     process.exitCode = 0
     return 1
   }

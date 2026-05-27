@@ -57,14 +57,14 @@ try {
     'freeform',
   )
   cliOutputs.workspace = workspaceResult
-  const sessionResult = runCliJson<{ invocation: { status: string }, session: { id: string }, turn: { status: string } }>(
+  const sessionResult = runCliJson<{ invocation: { id: string, inputRef: string, status: string }, session: { id: string } }>(
     'session',
     'start',
     '--worker',
     workerId,
     '--workspace',
     workspaceResult.workspace.id,
-    '--skill',
+    '--capability',
     capabilityId,
     '--title',
     'Freeform CLI browser golden path',
@@ -84,8 +84,12 @@ try {
   )
   cliOutputs.followUp = followUpResult
 
-  if (sessionResult.invocation.status !== 'succeeded' || sessionResult.turn.status !== 'succeeded')
+  if (sessionResult.invocation.status !== 'succeeded')
     throw new Error(`CLI first invocation did not succeed: ${JSON.stringify(sessionResult)}`)
+  if (sessionResult.invocation.inputRef !== `aiworker://sessions/${sessionResult.session.id}/invocations/${sessionResult.invocation.id}/input`)
+    throw new Error(`Session start did not use session-level invocation inputRef: ${JSON.stringify(sessionResult.invocation)}`)
+  if ('turn' in sessionResult)
+    throw new Error(`session start returned legacy turn payload: ${JSON.stringify(sessionResult)}`)
   if (followUpResult.invocation.status !== 'succeeded')
     throw new Error(`CLI session-level follow-up invocation did not succeed: ${JSON.stringify(followUpResult)}`)
   if (followUpResult.invocation.inputRef !== `aiworker://sessions/${sessionResult.session.id}/invocations/${followUpResult.invocation.id}/input`)
@@ -148,6 +152,15 @@ try {
     throw new Error(`Freeform common workbench root did not render: ${mountedSurface.text}`)
   if (!mountedSurface.bridgeRefs || !mountedSurface.text.includes('Bridge event refs'))
     throw new Error(`Bridge event refs were not visible to the mounted surface: ${mountedSurface.text}`)
+  for (const expectedSection of [
+    'Worker configuration summary',
+    'Session controls',
+    'Projection receipt status',
+    'Archive controls',
+  ]) {
+    if (!mountedSurface.text.includes(expectedSection))
+      throw new Error(`Mounted Freeform workbench missed ${expectedSection}: ${mountedSurface.text}`)
+  }
   assertNoUnexpectedBrowserEvents(browserEvents)
 
   await page.screenshot({ fullPage: true, path: join(evidenceRoot, 'freeform-cli-golden-path.png') })

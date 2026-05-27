@@ -27,5 +27,5 @@ export interface SoulAppLifecycleProtocol {
 
 export interface SoulAppEventProtocol {
   onSessionCreated?: (context: SoulAppScopedContext, event: { sessionId: string }) => Promise<void>
-  onTurnCompleted?: (context: SoulAppScopedContext, event: { sessionId: string, turnId: string }) => Promise<void>
+  onInvocationCompleted?: (context: SoulAppScopedContext, event: { invocationId: string, sessionId: string }) => Promise<void>
 }

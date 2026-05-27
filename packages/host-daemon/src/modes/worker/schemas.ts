@@ -10,7 +10,7 @@
 
 import type { Context } from 'hono'
 
-import { localSettingsConfigSchema, localWorkerStatusSchema, localWorkspaceStatusSchema } from '@zonease/aiworker-soul-protocol'
+import { localSettingsConfigSchema, localWorkerConfigValueInputSchema, localWorkerStatusSchema, localWorkspaceStatusSchema } from '@zonease/aiworker-soul-protocol'
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
@@ -114,15 +114,15 @@ export const testEngineBodySchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
-// POST /api/local/workers/:workerId/workspaces/:workspaceId/sessions[/stream]
-// POST /api/local/workspaces/:workspaceId/sessions[/stream]
+// POST /api/local/workers/:workerId/workspaces/:workspaceId/sessions
+// POST /api/local/workspaces/:workspaceId/sessions
 // 对应 createWorkspaceSessionResponse 内的 body：
 // title 被 requireString 强制：必填
 // 其余可选
 // ---------------------------------------------------------------------------
 
 export const createSessionBodySchema = z.object({
-  capabilityTemplateId: z.string().optional(),
+  capabilityId: z.string().trim().min(1),
   context: z.string().optional(),
   engineId: z.string().nullable().optional(),
   input: z.string().optional(),
@@ -136,18 +136,18 @@ export const createBrokerSessionBodySchema = createSessionBodySchema.extend({
 })
 
 // ---------------------------------------------------------------------------
-// POST /api/local/workers/:workerId/sessions/:sessionId/messages[/stream]
-// POST /api/local/sessions/:sessionId/turns[/stream]
-// 对应 createSessionMessageResponse 内的 body：
+// POST /api/sessions/:sessionId/invocations
+// POST /api/engine/invocations
+// 对应 createSessionInvocationResponse / createSessionInvocationFromBody 内的 body：
 // input 被 requireString 强制：必填
 // ---------------------------------------------------------------------------
 
-export const createSessionMessageBodySchema = z.object({
+export const createSessionInvocationBodySchema = z.object({
   input: z.string().trim().min(1),
   metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
-export const createBrokerEngineInvocationBodySchema = createSessionMessageBodySchema.extend({
+export const createBrokerEngineInvocationBodySchema = createSessionInvocationBodySchema.extend({
   engineCommand: z.string().nullable().optional(),
   engineId: z.string().nullable().optional(),
   sessionId: z.string().trim().min(1),
@@ -165,4 +165,4 @@ export const projectionRefreshBodySchema = z.object({
   workspaceId: z.string().trim().min(1),
 })
 
-export const workerConfigValueBodySchema = z.record(z.string(), z.unknown())
+export const workerConfigValueBodySchema = localWorkerConfigValueInputSchema

@@ -12,22 +12,20 @@ import { z as zod } from 'zod'
 const verticalSoulStatusSchema = zod.enum(['available', 'coming_soon'])
 type VerticalSoulStatus = zod.infer<typeof verticalSoulStatusSchema>
 
-const capabilityTemplateSchema = zod.object({
+const projectedCapabilitySchema = zod.object({
   description: zod.string().min(1),
   id: zod.string().min(1),
   inputHints: zod.array(zod.string().min(1)).readonly(),
   name: zod.string().min(1),
   outputKind: zod.string().min(1),
   promptRef: zod.string().min(1),
-  reviewRubricRef: zod.string().min(1).nullable(),
   soulId: zod.string().min(1),
 })
-type CapabilityTemplate = zod.infer<typeof capabilityTemplateSchema>
+type ProjectedCapability = zod.infer<typeof projectedCapabilitySchema>
 
 const verticalSoulSchema = zod.object({
-  defaultTemplates: zod.array(zod.string().min(1)).readonly(),
+  defaultCapabilities: zod.array(zod.string().min(1)).readonly(),
   description: zod.string().min(1),
-  domain: zod.string().min(1),
   id: zod.string().min(1),
   name: zod.string().min(1),
   status: verticalSoulStatusSchema,
@@ -102,7 +100,7 @@ export const hostedSoulAppSchema = zod.object({
   mountedWorkbench: mountedWorkbenchSchema,
   name: zod.string().min(1),
   permissions: zod.array(soulAppPermissionSchema).readonly(),
-  projectedCapabilities: zod.array(capabilityTemplateSchema).readonly(),
+  projectedCapabilities: zod.array(projectedCapabilitySchema).readonly(),
   projectedSoul: verticalSoulSchema,
   soulId: zod.string().min(1),
   sourceKind: soulAppInstallSourceKindSchema,
@@ -127,23 +125,22 @@ export function parseNamespacedSoulAppCapabilityId(id: string): { appId: string,
 export function projectSoulAppSoul(descriptor: SoulDescriptorV1, status: VerticalSoulStatus = 'available'): VerticalSoul {
   const identity = descriptorIdentity(descriptor)
   return {
-    defaultTemplates: projectSoulAppDefaultTemplates(descriptor),
+    defaultCapabilities: projectSoulAppDefaultCapabilities(descriptor),
     description: identity.description,
-    domain: identity.soulId,
     id: identity.appId,
     name: identity.name,
     status,
   }
 }
 
-export function projectSoulAppDefaultTemplates(descriptor: SoulDescriptorV1): string[] {
+export function projectSoulAppDefaultCapabilities(descriptor: SoulDescriptorV1): string[] {
   const identity = descriptorIdentity(descriptor)
   return descriptor.capabilities
     .map(capability => capabilityRecord(capability))
     .map(capability => namespaceSoulAppCapabilityId(identity.appId, capability.id))
 }
 
-export function projectSoulAppCapabilityTemplate(descriptor: SoulDescriptorV1, capability: unknown): CapabilityTemplate {
+export function projectSoulAppCapability(descriptor: SoulDescriptorV1, capability: unknown): ProjectedCapability {
   const identity = descriptorIdentity(descriptor)
   const record = capabilityRecord(capability)
   return {
@@ -153,13 +150,12 @@ export function projectSoulAppCapabilityTemplate(descriptor: SoulDescriptorV1, c
     name: record.name,
     outputKind: 'session',
     promptRef: record.promptRef,
-    reviewRubricRef: null,
     soulId: identity.appId,
   }
 }
 
-export function projectSoulAppCapabilityTemplates(descriptor: SoulDescriptorV1): CapabilityTemplate[] {
-  return descriptor.capabilities.map(capability => projectSoulAppCapabilityTemplate(descriptor, capability))
+export function projectSoulAppCapabilities(descriptor: SoulDescriptorV1): ProjectedCapability[] {
+  return descriptor.capabilities.map(capability => projectSoulAppCapability(descriptor, capability))
 }
 
 export function buildHostedSoulApp(input: {
@@ -191,7 +187,7 @@ export function buildHostedSoulApp(input: {
     },
     name: identity.name,
     permissions: permissionsForDescriptor(input.descriptor),
-    projectedCapabilities: projectSoulAppCapabilityTemplates(input.descriptor),
+    projectedCapabilities: projectSoulAppCapabilities(input.descriptor),
     projectedSoul: projectSoulAppSoul(input.descriptor, input.status === 'enabled' ? 'available' : 'coming_soon'),
     soulId: identity.soulId,
     sourceKind: input.sourceKind,

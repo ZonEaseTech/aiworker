@@ -1,11 +1,11 @@
-import type { CapabilityTemplate, VerticalSoul } from '../local-workspace/types.compat'
-import type { BuiltinSoulCopy, BuiltinTemplateCopy, StaticMessages, StatusKey, SupportedLocale } from './types'
+import type { VerticalSoul, WorkspaceCapability } from '../local-workspace/types.compat'
+import type { BuiltinCapabilityCopy, BuiltinSoulCopy, StaticMessages, StatusKey, SupportedLocale } from './types'
 
 import { de, en, ja, zhCN } from './locales'
 import { supportedLocales } from './types'
 
 export { supportedLocales } from './types'
-export type { BuiltinSoulCopy, BuiltinTemplateCopy, StaticMessages, SupportedLocale } from './types'
+export type { BuiltinCapabilityCopy, BuiltinSoulCopy, StaticMessages, SupportedLocale } from './types'
 
 const messagesByLocale: Record<SupportedLocale, StaticMessages> = {
   de,
@@ -27,15 +27,15 @@ export function languageLabel(locale: SupportedLocale, activeLocale: SupportedLo
 }
 
 export function displaySoul(soul: VerticalSoul, _locale: SupportedLocale): BuiltinSoulCopy {
-  return { description: soul.description, domain: soul.domain, name: soul.name }
+  return { description: soul.description, name: soul.name }
 }
 
-export function displayTemplate(template: CapabilityTemplate, _locale: SupportedLocale): BuiltinTemplateCopy {
+export function displayCapability(capability: WorkspaceCapability, _locale: SupportedLocale): BuiltinCapabilityCopy {
   return {
-    description: template.description,
-    inputHints: template.inputHints,
-    name: template.name,
-    outputKind: template.outputKind,
+    description: capability.description,
+    inputHints: capability.inputHints,
+    name: capability.name,
+    outputKind: capability.outputKind,
   }
 }
 

@@ -25,7 +25,7 @@ type ProjectEngineAssets = (input: {
   descriptor: ReturnType<typeof descriptorFor>
   descriptorRoot: string
   target: EngineTarget
-  workerConfig: ReturnType<typeof workerConfigFor>
+  workerConfig: unknown
   workspaceRoot: string
 }) => Promise<ProjectionReceipt>
 
@@ -138,6 +138,158 @@ describe('engine-projection contract', () => {
     expect(receiptJson).not.toContain('Full skill body must stay out of receipts')
   })
 
+  test('worker config overlays can disable selected skill and native MCP projections', async () => {
+    const projectEngineAssets = requireExport<ProjectEngineAssets>('projectEngineAssets')
+    const descriptorRoot = await writeDescriptorAssets(tempRoot('disabled-overlay-descriptor'))
+    const workspaceRoot = tempRoot('disabled-overlay-workspace')
+
+    const receipt = await projectEngineAssets({
+      descriptor: descriptorFor(),
+      descriptorRoot,
+      target: 'codex',
+      workerConfig: {
+        values: [
+          {
+            checksum: 'sha256:disabled-skill',
+            enabled: false,
+            kind: 'skill-overlay',
+            options: {},
+            sourceRef: 'descriptor://engine/skills/freeform-session',
+            target: 'codex',
+            updatedAt: '2026-05-27T00:00:00.000Z',
+            updatedBy: 'web',
+          },
+          {
+            checksum: 'sha256:disabled-mcp',
+            enabled: false,
+            kind: 'mcp-overlay',
+            options: {},
+            sourceRef: 'descriptor://engine/mcp/codex',
+            target: 'codex',
+            updatedAt: '2026-05-27T00:00:00.000Z',
+            updatedBy: 'web',
+          },
+        ],
+      },
+      workspaceRoot,
+    })
+
+    await expect(readFile(path.join(workspaceRoot, 'AGENTS.md'), 'utf8')).resolves.toContain('Freeform workspace instructions')
+    await expect(stat(path.join(workspaceRoot, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'))).rejects.toThrow()
+    await expect(stat(path.join(workspaceRoot, '.codex', 'config.toml'))).rejects.toThrow()
+    expect(receipt.projectedFiles).not.toContainEqual(expect.objectContaining({
+      sourceRef: 'descriptor://engine/skills/freeform-session',
+    }))
+    expect(receipt.projectedFiles).not.toContainEqual(expect.objectContaining({
+      sourceRef: 'descriptor://engine/mcp/codex',
+    }))
+  })
+
+  test('worker config overlays replace descriptor workspace, skill, and native MCP sources by ref', async () => {
+    const projectEngineAssets = requireExport<ProjectEngineAssets>('projectEngineAssets')
+    const descriptorRoot = await writeDescriptorAssets(tempRoot('replacement-overlay-descriptor'))
+    const workspaceRoot = tempRoot('replacement-overlay-workspace')
+
+    const receipt = await projectEngineAssets({
+      descriptor: descriptorFor(),
+      descriptorRoot,
+      target: 'codex',
+      workerConfig: {
+        values: [
+          {
+            checksum: 'sha256:workspace-overlay-v1',
+            enabled: true,
+            kind: 'entry-file-overlay',
+            options: { replaces: 'descriptor://engine/workspaceAssets/AGENTS.md' },
+            sourceRef: 'descriptor://engine/workspaceAssets/overlays/AGENTS.md',
+            target: 'all',
+            updatedAt: '2026-05-27T00:00:00.000Z',
+            updatedBy: 'app-owned-api',
+          },
+          {
+            checksum: 'sha256:skill-overlay-v1',
+            enabled: true,
+            kind: 'skill-overlay',
+            options: { replaces: 'descriptor://engine/skills/freeform-session' },
+            sourceRef: 'descriptor://engine/skills/overlay-session',
+            target: 'codex',
+            updatedAt: '2026-05-27T00:00:00.000Z',
+            updatedBy: 'web',
+          },
+          {
+            checksum: 'sha256:mcp-overlay-v1',
+            enabled: true,
+            kind: 'mcp-overlay',
+            options: { replaces: 'descriptor://engine/mcp/codex' },
+            sourceRef: 'descriptor://engine/mcp/codex-overlay',
+            target: 'codex',
+            updatedAt: '2026-05-27T00:00:00.000Z',
+            updatedBy: 'cli',
+          },
+        ],
+      },
+      workspaceRoot,
+    })
+
+    await expect(readFile(path.join(workspaceRoot, 'AGENTS.md'), 'utf8')).resolves.toContain('Overlay workspace instructions')
+    await expect(readFile(path.join(workspaceRoot, 'templates', 'note.md'), 'utf8')).resolves.toContain('workspace template')
+    await expect(readFile(path.join(workspaceRoot, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'), 'utf8')).resolves.toContain('Overlay Session')
+    await expect(readFile(path.join(workspaceRoot, '.codex', 'config.toml'), 'utf8')).resolves.toContain('overlay-server')
+
+    expect(receipt.projectedFiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceRef: 'descriptor://engine/workspaceAssets/overlays/AGENTS.md',
+        targetPath: 'AGENTS.md',
+      }),
+      expect.objectContaining({
+        sourceRef: 'descriptor://engine/skills/overlay-session',
+        targetPath: '.agents/skills/aiworker-freeform-freeform-session/SKILL.md',
+      }),
+      expect.objectContaining({
+        sourceRef: 'descriptor://engine/mcp/codex-overlay',
+        targetPath: '.codex/config.toml',
+      }),
+    ]))
+    expect(JSON.stringify(receipt)).not.toContain('Overlay Session')
+    expect(JSON.stringify(receipt)).not.toContain('overlay-secret')
+  })
+
+  test('worker config entry-file overlays can add new workspace files by source ref', async () => {
+    const projectEngineAssets = requireExport<ProjectEngineAssets>('projectEngineAssets')
+    const descriptorRoot = await writeDescriptorAssets(tempRoot('entry-file-overlay-descriptor'))
+    const workspaceRoot = tempRoot('entry-file-overlay-workspace')
+
+    const receipt = await projectEngineAssets({
+      descriptor: descriptorFor(),
+      descriptorRoot,
+      target: 'codex',
+      workerConfig: {
+        values: [
+          {
+            checksum: 'sha256:context-overlay-v1',
+            enabled: true,
+            kind: 'entry-file-overlay',
+            options: { targetPath: 'CONTEXT.md' },
+            sourceRef: 'descriptor://engine/workspaceAssets/overlays/CONTEXT.md',
+            target: 'all',
+            updatedAt: '2026-05-27T00:00:00.000Z',
+            updatedBy: 'app-owned-api',
+          },
+        ],
+      },
+      workspaceRoot,
+    })
+
+    await expect(readFile(path.join(workspaceRoot, 'CONTEXT.md'), 'utf8')).resolves.toContain('Overlay context file')
+    await expect(stat(path.join(workspaceRoot, 'overlays', 'CONTEXT.md'))).rejects.toThrow()
+    expect(receipt.projectedFiles).toContainEqual(expect.objectContaining({
+      kind: 'workspace-asset',
+      sourceRef: 'descriptor://engine/workspaceAssets/overlays/CONTEXT.md',
+      targetPath: 'CONTEXT.md',
+    }))
+    expect(JSON.stringify(receipt)).not.toContain('Overlay context file')
+  })
+
   test('cleanupReceipt deletes only receipt-owned projected files', async () => {
     const projectEngineAssets = requireExport<ProjectEngineAssets>('projectEngineAssets')
     const cleanupReceipt = requireExport<CleanupReceipt>('cleanupReceipt')
@@ -159,6 +311,26 @@ describe('engine-projection contract', () => {
     await expect(stat(path.join(workspaceRoot, '.codex', 'config.toml'))).rejects.toThrow()
     await expect(stat(path.join(workspaceRoot, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'))).rejects.toThrow()
     await expect(readFile(path.join(workspaceRoot, 'business', 'case.md'), 'utf8')).resolves.toContain('User-owned')
+  })
+
+  test('cleanupReceipt rejects receipt targets that resolve to the workspace root', async () => {
+    const cleanupReceipt = requireExport<CleanupReceipt>('cleanupReceipt')
+    const workspaceRoot = tempRoot('cleanup-root-target')
+
+    await expect(cleanupReceipt({
+      receipt: {
+        freshnessMarker: 'sha256:root-target',
+        projectedFiles: [{
+          checksum: 'sha256:root-target',
+          kind: 'workspace-asset',
+          sourceRef: 'descriptor://engine/workspaceAssets/root',
+          status: 'projected',
+          target: 'codex',
+          targetPath: '.',
+        }],
+      },
+      workspaceRoot,
+    })).rejects.toThrow('Projection target escapes workspace root')
   })
 
   test('freshness marker is stable for the same descriptor, worker config, and target', () => {
@@ -190,19 +362,32 @@ function requireExport<T>(name: string): T {
 
 async function writeDescriptorAssets(root: string): Promise<string> {
   await mkdir(path.join(root, 'dist', 'engine-assets', 'workspace', 'templates'), { recursive: true })
+  await mkdir(path.join(root, 'dist', 'engine-assets', 'workspace', 'overlays'), { recursive: true })
   await mkdir(path.join(root, 'dist', 'engine-assets', 'skills', 'freeform-session'), { recursive: true })
+  await mkdir(path.join(root, 'dist', 'engine-assets', 'skills', 'overlay-session'), { recursive: true })
   await mkdir(path.join(root, 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
+  await mkdir(path.join(root, 'dist', 'engine-assets', 'mcp', 'codex-overlay'), { recursive: true })
   await mkdir(path.join(root, 'dist', 'engine-assets', 'mcp', 'claude-code'), { recursive: true })
 
   await writeFile(path.join(root, 'dist', 'engine-assets', 'workspace', 'AGENTS.md'), '# Freeform workspace instructions\n')
   await writeFile(path.join(root, 'dist', 'engine-assets', 'workspace', 'templates', 'note.md'), '# workspace template\n')
+  await writeFile(path.join(root, 'dist', 'engine-assets', 'workspace', 'overlays', 'AGENTS.md'), '# Overlay workspace instructions\n')
+  await writeFile(path.join(root, 'dist', 'engine-assets', 'workspace', 'overlays', 'CONTEXT.md'), '# Overlay context file\n')
   await writeFile(
     path.join(root, 'dist', 'engine-assets', 'skills', 'freeform-session', 'SKILL.md'),
     '# Freeform Session\n\nFull skill body must stay out of receipts.\n',
   )
   await writeFile(
+    path.join(root, 'dist', 'engine-assets', 'skills', 'overlay-session', 'SKILL.md'),
+    '# Overlay Session\n\nOverlay skill body must stay out of receipts.\n',
+  )
+  await writeFile(
     path.join(root, 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'),
     '[mcp_servers.local]\ncommand = "node"\nargs = ["server.js"]\napi_key = "literal-test-secret"\n',
+  )
+  await writeFile(
+    path.join(root, 'dist', 'engine-assets', 'mcp', 'codex-overlay', 'config.toml'),
+    '[mcp_servers.overlay]\ncommand = "overlay-server"\napi_key = "overlay-secret"\n',
   )
   await writeFile(
     path.join(root, 'dist', 'engine-assets', 'mcp', 'claude-code', '.mcp.json'),

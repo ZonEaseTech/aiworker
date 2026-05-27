@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
-import consola from 'consola'
 import { describe, expect, test } from 'bun:test'
+import consola from 'consola'
 
 import { errorHandler } from './error-handler'
 

@@ -45,34 +45,23 @@ export {
   type OfficialSoulAppDefinition,
 } from './soul-app/official'
 export {
+  deleteSoulApp,
   disableSoulApp,
   enableSoulApp,
-  findHostCapabilityTemplate,
+  findHostCapability,
   findHostSoul,
   getHostedSoulApp,
   hostedSoulAppFromRow,
   type HostSoulCatalog,
   installSoulAppFromPath,
   installSoulDescriptor,
-  listHostCapabilityTemplatesForSoul,
+  listHostCapabilitiesForSoul,
   listHostedSoulApps,
   listHostSoulCatalog,
   runSoulAppHealthcheck,
   type SoulAppRegistryContext,
   type SoulDescriptorInstallInput,
 } from './soul-app/registry'
-export {
-  type EngineAssetSource,
-  listBaselineAssets,
-  projectEngineAssetsToWorkspace,
-} from './worker/engine-assets'
-export {
-  invokeNativeEngine,
-  type NativeEngineBridgeEvent,
-  type NativeEngineBridgeInput,
-  type NativeEngineBridgeResult,
-  type NativeEngineInvocationStatus,
-} from './worker/engine-bridge'
 export { sanitizeEngineEnv, soulAppServiceEnv } from './worker/engine-env'
 export {
   type LocalWorkerEvent,
@@ -107,13 +96,14 @@ export {
   type CreateLocalSessionInput,
   createLocalWorkerRuntime,
   type CreateLocalWorkspaceInput,
+  type LocalInvocationEventReattachResult,
+  type LocalInvocationReconcileInput,
+  type LocalInvocationReconcileResult,
   type LocalInvocationStartResult,
-  type LocalTurnStartResult,
   LocalWorkerRuntime,
   type LocalWorkerRuntimeOptions,
   type LocalWorkerSnapshot,
   type StartLocalInvocationInput,
-  type StartLocalTurnInput,
   type WorkspaceAssetProjectionResult,
 } from './worker/runtime'
 export {

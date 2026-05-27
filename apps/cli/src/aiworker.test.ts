@@ -12,6 +12,8 @@ import {
   closeWorkerDb,
   createSession,
   createWorkspace,
+  engineInvocations,
+  getWorkerDb,
   initWorkerDb,
   runWorkerMigrations,
   upsertWorker,
@@ -31,18 +33,25 @@ import {
 describe('aiworker local CLI', () => {
   const originalEnv = { ...process.env }
   const originalFetch = globalThis.fetch
+  const originalErrorWrite = process.stderr.write
   const originalWrite = process.stdout.write
   let fakeEngineCommandPaths: string[] = []
+  let errorOutput = ''
   let root: string
   let output = ''
 
   beforeEach(async () => {
     closeWorkerDb()
     fakeEngineCommandPaths = []
+    errorOutput = ''
     output = ''
     root = await mkdtemp(path.join(tmpdir(), 'aiworker-cli-'))
     process.env.AIWORKER_HOME = path.join(root, 'home')
     process.env.WORKER_DB_PATH = path.join(root, 'home', 'aiworker.db')
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      errorOutput += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
+      return true
+    }) as typeof process.stderr.write
     process.stdout.write = ((chunk: string | Uint8Array) => {
       output += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
       return true
@@ -56,6 +65,7 @@ describe('aiworker local CLI', () => {
       delete process.env[key]
     Object.assign(process.env, originalEnv)
     globalThis.fetch = originalFetch
+    process.stderr.write = originalErrorWrite
     process.stdout.write = originalWrite
     await Promise.all(fakeEngineCommandPaths.map(commandPath => rm(commandPath, { force: true })))
     await rm(root, { recursive: true, force: true })
@@ -95,9 +105,9 @@ describe('aiworker local CLI', () => {
       id: 'legacy-hr-session',
       workerId: 'legacy-hr-worker',
       workspaceId: 'legacy-hr-workspace',
-      capabilityTemplateId: 'candidate-screen',
+      capabilityId: 'candidate-screen',
       title: 'Legacy candidate screen',
-      metadataJson: { capabilityTemplateId: 'candidate-screen', soulName: 'HR' },
+      metadataJson: { capabilityId: 'candidate-screen', soulName: 'HR' },
       at: '2026-05-13T13:04:02.000Z',
     })
     closeWorkerDb()
@@ -201,7 +211,9 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('dev')
     expect(output).toContain('daemon start|foreground|status|stop|restart|logs|check')
     expect(output).toContain('app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke')
-    expect(output).toContain('compatibility inspection: template list; files list|show')
+    expect(output).toContain('capability list')
+    expect(output).toContain('files list|show')
+    expect(output).not.toContain('compatibility inspection')
     expect(output).not.toContain('artifacts list|show|open')
     expect(output).not.toContain('profile promote')
     expect(output).not.toContain('review list|show')
@@ -220,9 +232,10 @@ describe('aiworker local CLI', () => {
 
     expect(output).toContain('Commands:')
     expect(output).toContain('app create <id>')
-    expect(output).toContain('compatibility inspection: list app-declared session templates')
-    expect(output).toContain('compatibility inspection: list workspace files')
-    expect(output).toContain('compatibility inspection: print workspace file')
+    expect(output).toContain('list app-declared capabilities')
+    expect(output).toContain('list workspace files')
+    expect(output).toContain('print workspace file')
+    expect(output).not.toContain('compatibility inspection')
     expect(output).not.toContain('deprecated compatibility: list app output descriptors')
     expect(output).not.toContain('deprecated HR compatibility: promote app output into a workspace README')
     expect(output).not.toContain('artifacts list')
@@ -241,6 +254,30 @@ describe('aiworker local CLI', () => {
       output = ''
       expect(await runCli(argv(...args))).toBe(1)
     }
+  })
+
+  it('redacts secret-like values from fatal CLI error output', async () => {
+    expect(await runCli(argv('unknown-token=sk-cli-fatal-secret'))).toBe(1)
+
+    expect(errorOutput).not.toContain('sk-cli-fatal-secret')
+    expect(errorOutput).toContain('[REDACTED]')
+  })
+
+  it('redacts secret-like values from daemon log output', async () => {
+    const logFile = path.join(process.env.AIWORKER_HOME!, 'aiworker-daemon.log')
+    mkdirSync(path.dirname(logFile), { recursive: true })
+    await writeFile(logFile, [
+      'daemon ready',
+      'startup token=sk-cli-daemon-log-secret',
+      'authorization = "literal-secret-value"',
+      '',
+    ].join('\n'))
+
+    expect(await runCli(argv('daemon', 'logs', '--tail', '3'))).toBe(0)
+
+    expect(output).not.toContain('sk-cli-daemon-log-secret')
+    expect(output).not.toContain('literal-secret-value')
+    expect(output).toContain('[REDACTED]')
   })
 
   it('resolves package-local official descriptor apps before source apps', async () => {
@@ -356,7 +393,7 @@ describe('aiworker local CLI', () => {
     expect(output).not.toContain('run start')
   })
 
-  it('materializes app-authored capability assets for the first session turn', async () => {
+  it('materializes app-authored capability assets for the first session invocation', async () => {
     await writeFakeCodexCommand()
 
     expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
@@ -376,7 +413,7 @@ describe('aiworker local CLI', () => {
       'hr-recruiting',
       '--workspace',
       workspace.id,
-      '--skill',
+      '--capability',
       FREEFORM_CAPABILITY_ID,
       '--title',
       'Evidence Matrix',
@@ -392,6 +429,92 @@ describe('aiworker local CLI', () => {
 
     expect(result.session.id).toBeTruthy()
     expect(result.invocation.sessionId).toBeTruthy()
+  })
+
+  it('redacts secret-like values from workspace file inspection output', async () => {
+    closeWorkerDb()
+    mkdirSync(path.dirname(process.env.WORKER_DB_PATH!), { recursive: true })
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    runWorkerMigrations()
+    upsertWorker({
+      id: 'inspect-worker',
+      soulId: FREEFORM_APP_ID,
+      name: 'Inspect Worker',
+      defaultEngineId: 'codex',
+      at: '2026-05-27T08:00:00.000Z',
+    })
+    const workspaceRoot = path.join(root, 'home', 'workers', 'inspect-worker', 'workspaces', 'inspect-workspace')
+    createWorkspace({
+      id: 'inspect-workspace',
+      workerId: 'inspect-worker',
+      name: 'Inspect Workspace',
+      rootPath: workspaceRoot,
+      at: '2026-05-27T08:00:01.000Z',
+    })
+    mkdirSync(path.join(workspaceRoot, '.codex'), { recursive: true })
+    await writeFile(path.join(workspaceRoot, '.codex', 'config.toml'), [
+      'token = "sk-cli-inspect-secret"',
+      'authorization = "literal-secret-value"',
+      '',
+    ].join('\n'))
+    closeWorkerDb()
+
+    expect(await runCli(argv('files', 'show', '.codex/config.toml', '--worker', 'inspect-worker', '--workspace', 'inspect-workspace'))).toBe(0)
+
+    expect(output).not.toContain('sk-cli-inspect-secret')
+    expect(output).not.toContain('literal-secret-value')
+    expect(output).toContain('[REDACTED]')
+  })
+
+  it('redacts legacy secret-like engine diagnostics from session inspection output', async () => {
+    closeWorkerDb()
+    mkdirSync(path.dirname(process.env.WORKER_DB_PATH!), { recursive: true })
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    runWorkerMigrations()
+    upsertWorker({
+      id: 'session-inspect-worker',
+      soulId: FREEFORM_APP_ID,
+      name: 'Session Inspect Worker',
+      defaultEngineId: 'codex',
+      at: '2026-05-27T08:10:00.000Z',
+    })
+    createWorkspace({
+      id: 'session-inspect-workspace',
+      workerId: 'session-inspect-worker',
+      name: 'Session Inspect Workspace',
+      rootPath: path.join(root, 'home', 'workers', 'session-inspect-worker', 'workspaces', 'session-inspect-workspace'),
+      at: '2026-05-27T08:10:01.000Z',
+    })
+    createSession({
+      id: 'session-inspect-session',
+      workerId: 'session-inspect-worker',
+      workspaceId: 'session-inspect-workspace',
+      capabilityId: FREEFORM_CAPABILITY_ID,
+      title: 'Session Inspect',
+      at: '2026-05-27T08:10:02.000Z',
+    })
+    getWorkerDb().insert(engineInvocations).values({
+      id: 'session-inspect-invocation',
+      sessionId: 'session-inspect-session',
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex --token sk-session-show-secret',
+      status: 'failed',
+      processState: 'exited',
+      inputRef: 'aiworker://sessions/session-inspect-session/invocations/session-inspect-invocation/input',
+      summary: 'authorization = "literal-secret-value"',
+      error: 'token=sk-session-show-secret',
+      metadataJson: { authorization: 'literal-secret-value' },
+      createdAt: '2026-05-27T08:10:03.000Z',
+      updatedAt: '2026-05-27T08:10:03.000Z',
+    }).run()
+    closeWorkerDb()
+
+    expect(await runCli(argv('session', 'show', 'session-inspect-session'))).toBe(0)
+
+    expect(output).not.toContain('sk-session-show-secret')
+    expect(output).not.toContain('literal-secret-value')
+    expect(output).toContain('[REDACTED]')
   })
 
   it('freezes CLI engine choice for new sessions without changing existing sessions', async () => {
@@ -416,7 +539,7 @@ describe('aiworker local CLI', () => {
       'hr-recruiting',
       '--workspace',
       workspace.id,
-      '--skill',
+      '--capability',
       FREEFORM_CAPABILITY_ID,
       '--title',
       'Evidence Matrix',
@@ -440,8 +563,8 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('engine', 'select', 'codex'))).toBe(0)
     output = ''
     expect(await runCli(argv(
-      'turn',
-      'send',
+      'session',
+      'invoke',
       '--worker',
       'hr-recruiting',
       '--session',
@@ -450,16 +573,15 @@ describe('aiworker local CLI', () => {
       'Continue after changing the selected engine.',
     ))).toBe(0)
     const continued = JSON.parse(output) as {
-      invocation: { engineCommand: string | null, engineId: string }
-      turn: { metadataJson: Record<string, unknown> }
+      invocation: { engineCommand: string | null, engineId: string, metadataJson: Record<string, unknown> }
     }
     expect(continued.invocation.engineCommand).toBe(frozenEngineCommand)
     expect(continued.invocation.engineId).toBe('opencode')
-    expect(continued.turn.metadataJson).toMatchObject({
+    expect(continued.invocation.metadataJson).toMatchObject({
       engineId: 'opencode',
       executionMode: 'local-cli',
     })
-    expect(continued.turn.metadataJson.engineCommand).toBe(frozenEngineCommand)
+    expect(continued.invocation.metadataJson.engineCommand).toBe(frozenEngineCommand)
     output = ''
 
     expect(await runCli(argv(
@@ -469,7 +591,7 @@ describe('aiworker local CLI', () => {
       'hr-recruiting',
       '--workspace',
       workspace.id,
-      '--skill',
+      '--capability',
       FREEFORM_CAPABILITY_ID,
       '--title',
       'Explicit Engine Matrix',
@@ -514,7 +636,7 @@ describe('aiworker local CLI', () => {
       'hr-claude',
       '--workspace',
       workspace.id,
-      '--skill',
+      '--capability',
       FREEFORM_CAPABILITY_ID,
       '--title',
       'Claude profile',
@@ -554,7 +676,7 @@ describe('aiworker local CLI', () => {
       'hr-frozen',
       '--workspace',
       workspace.id,
-      '--skill',
+      '--capability',
       FREEFORM_CAPABILITY_ID,
       '--title',
       'Frozen engine',
@@ -574,8 +696,8 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('engine', 'select', 'qwen'))).toBe(0)
     output = ''
     expect(await runCli(argv(
-      'turn',
-      'send',
+      'session',
+      'invoke',
       '--worker',
       'hr-frozen',
       '--session',
@@ -584,16 +706,15 @@ describe('aiworker local CLI', () => {
       'Continue after selecting an unavailable engine.',
     ))).toBe(0)
     const continued = JSON.parse(output) as {
-      invocation: { engineCommand: string | null, engineId: string }
-      turn: { metadataJson: Record<string, unknown> }
+      invocation: { engineCommand: string | null, engineId: string, metadataJson: Record<string, unknown> }
     }
     expect(continued.invocation.engineCommand).toBe(frozenEngineCommand)
     expect(continued.invocation.engineId).toBe('opencode')
-    expect(continued.turn.metadataJson).toMatchObject({
+    expect(continued.invocation.metadataJson).toMatchObject({
       engineId: 'opencode',
       executionMode: 'local-cli',
     })
-    expect(continued.turn.metadataJson.engineCommand).toBe(frozenEngineCommand)
+    expect(continued.invocation.metadataJson.engineCommand).toBe(frozenEngineCommand)
   })
 
   it('resolves legacy frozen local engine metadata without switching to the selected engine', async () => {
@@ -618,7 +739,7 @@ describe('aiworker local CLI', () => {
       id: 'legacy-engine-session',
       workerId: 'hr-legacy-engine',
       workspaceId: workspace.id,
-      capabilityTemplateId: FREEFORM_CAPABILITY_ID,
+      capabilityId: FREEFORM_CAPABILITY_ID,
       title: 'Legacy engine session',
       metadataJson: {
         engineId: 'claude-code',
@@ -631,8 +752,8 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('engine', 'select', 'opencode'))).toBe(0)
     output = ''
     expect(await runCli(argv(
-      'turn',
-      'send',
+      'session',
+      'invoke',
       '--worker',
       'hr-legacy-engine',
       '--session',
@@ -642,17 +763,16 @@ describe('aiworker local CLI', () => {
     ))).toBe(0)
 
     const continued = JSON.parse(output) as {
-      invocation: { engineCommand: string | null, engineId: string, status: string }
-      turn: { metadataJson: Record<string, unknown>, status: string }
+      invocation: { engineCommand: string | null, engineId: string, metadataJson: Record<string, unknown>, status: string }
     }
     expect(continued.invocation.engineId).toBe('claude-code')
     expect(String(continued.invocation.engineCommand)).toMatch(/\/claude$/)
     expect(continued.invocation.status).toBe('succeeded')
-    expect(continued.turn.metadataJson).toMatchObject({
+    expect(continued.invocation.metadataJson).toMatchObject({
       engineId: 'claude-code',
       executionMode: 'local-cli',
     })
-    expect(String(continued.turn.metadataJson.engineCommand)).toMatch(/\/claude$/)
+    expect(String(continued.invocation.metadataJson.engineCommand)).toMatch(/\/claude$/)
   })
 
   it('keeps upgrade discoverable only in the full command index', async () => {
@@ -868,9 +988,9 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { souls: Array<{ id: string, status: string }> }).souls).toEqual(expect.arrayContaining([expect.objectContaining({ id: FREEFORM_APP_ID, status: 'available' })]))
     output = ''
 
-    expect(await runCli(argv('template', 'list', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('capability', 'list', '--soul', FREEFORM_APP_ID))).toBe(0)
     const capabilityId = FREEFORM_CAPABILITY_ID
-    expect((JSON.parse(output) as { templates: Array<{ id: string }> }).templates.map(template => template.id)).toContain(capabilityId)
+    expect((JSON.parse(output) as { capabilities: Array<{ id: string }> }).capabilities.map(capability => capability.id)).toContain(capabilityId)
     output = ''
 
     expect(await runCli(argv('worker', 'create', '--id', 'mounted-hr', '--name', 'Mounted HR', '--soul', FREEFORM_APP_ID))).toBe(0)
@@ -881,8 +1001,11 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { app: { status: string } }).app.status).toBe('disabled')
     output = ''
 
-    expect(await runCli(argv('template', 'list', '--soul', FREEFORM_APP_ID))).toBe(0)
-    expect((JSON.parse(output) as { templates: unknown[] }).templates).toEqual([])
+    expect(await runCli(argv('capability', 'list', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect((JSON.parse(output) as { capabilities: unknown[] }).capabilities).toEqual([])
+    output = ''
+
+    expect(await runCli(argv('template', 'list', '--soul', FREEFORM_APP_ID))).toBe(1)
   })
 
   it('scaffolds, validates, and smokes a descriptor-only SDK Soul App', async () => {
@@ -967,6 +1090,9 @@ describe('aiworker local CLI', () => {
       skills: { source: 'dist/engine-assets/skills' },
       workspaceAssets: { source: 'dist/engine-assets/workspace' },
     })
+    const serializedDescriptor = JSON.stringify(descriptor)
+    expect(serializedDescriptor).not.toContain('mcpServers')
+    expect(serializedDescriptor).not.toContain('Codex native MCP placeholder')
     expect(scaffoldReadme).toContain('descriptor-only')
     expect(scaffoldReadme).toContain('soul.config.ts')
     expect(scaffoldReadme).toContain('dist/soul.descriptor.json')

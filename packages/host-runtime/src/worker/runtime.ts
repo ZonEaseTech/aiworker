@@ -1,44 +1,49 @@
-import type { LocalExecutionMode, SoulAppProjectionReceipt } from '@zonease/aiworker-soul-protocol'
+import type { EngineAdapter, EngineBridgeFailureCode, EngineBridgeOptions, EngineEventSink } from '@zonease/aiworker-engine-bridge'
+import type { EngineAssetSource, WorkerOverlayProjectionAsset } from '@zonease/aiworker-engine-projection'
+import type { LocalExecutionMode, SoulAppEngineTarget, SoulAppProjectionReceipt } from '@zonease/aiworker-soul-protocol'
 import type {
   EngineInvocationRow,
   FileRow,
   SessionEventRow,
   SessionRow,
-  TurnRow,
   WorkerRow,
   WorkspaceRow,
 } from '@zonease/aiworker-storage-sqlite/worker'
-import type { EngineAssetSource } from './engine-assets'
 import type { LocalExecutor, LocalExecutorEvent, LocalExecutorResult } from './executor'
 import type { FrozenSessionEngine } from './session-engine'
 import { randomUUID } from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { createEngineBridge, ENGINE_BRIDGE_FAILURE_CODES, redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
+import {
+  cleanupWorkspaceProjectionReceipt as cleanupProjectedWorkspaceReceipt,
+  engineAssetProjectionReceiptPath,
+  projectEngineAssetsToWorkspace,
+  resolveSoulAppEngineTarget,
+} from '@zonease/aiworker-engine-projection'
 import {
   appendSessionEvent,
   createEngineInvocation,
   createSession,
-  createTurn,
   createWorkspace,
+  getEngineInvocation,
   getSession,
   getWorker,
   getWorkspace,
   listEngineInvocations,
   listFiles,
+  listInvocationEvents,
   listSessionEvents,
   listSessions,
-  listTurns,
+  listWorkerOverlayAssets,
   listWorkspaces,
   nextEngineInvocationSeq,
   nextSessionEventSeq,
-  nextTurnSeq,
   updateEngineInvocation,
   updateSession,
-  updateTurn,
   updateWorkspace,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
-import { engineAssetProjectionReceiptPath, projectEngineAssetsToWorkspace, resolveSoulAppEngineTarget } from './engine-assets'
 import { LocalWorkerEventBus } from './events'
 import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
 import { LocalWorkspaceFiles } from './files'
@@ -50,6 +55,11 @@ import {
   resolveFrozenSessionEngine,
 } from './session-engine'
 
+type LocalEngineBridgeOptions = Pick<
+  EngineBridgeOptions,
+  'adapters' | 'cancelGracePeriodMs' | 'processManager' | 'projectionReceipts' | 'rawChunkStore'
+>
+
 export interface LocalWorkerRuntimeOptions {
   worker: {
     id: string
@@ -60,12 +70,14 @@ export interface LocalWorkerRuntimeOptions {
   }
   workspacesRoot: string
   executor?: LocalExecutor
+  engineBridge?: LocalEngineBridgeOptions | null
   engineAssetSource?: EngineAssetSource | null
   now?: () => string
 }
 
 export interface CreateLocalWorkspaceInput {
   name: string
+  rootPath?: string
   type?: string
   sourcePointers?: Record<string, unknown>[]
   metadata?: Record<string, unknown>
@@ -73,17 +85,9 @@ export interface CreateLocalWorkspaceInput {
 
 export interface CreateLocalSessionInput {
   workspaceId: string
-  capabilityTemplateId: string
+  capabilityId: string
   title: string
   context?: string
-  metadata?: Record<string, unknown>
-}
-
-export interface StartLocalTurnInput {
-  sessionId: string
-  input: string
-  engineId: string
-  engineCommand?: string | null
   metadata?: Record<string, unknown>
 }
 
@@ -95,14 +99,6 @@ export interface StartLocalInvocationInput {
   metadata?: Record<string, unknown>
 }
 
-export interface LocalTurnStartResult {
-  session: SessionRow
-  turn: TurnRow
-  invocation: EngineInvocationRow
-  events: SessionEventRow[]
-  files: FileRow[]
-}
-
 export interface LocalInvocationStartResult {
   session: SessionRow
   invocation: EngineInvocationRow
@@ -110,11 +106,39 @@ export interface LocalInvocationStartResult {
   files: FileRow[]
 }
 
+export interface LocalInvocationCancelResult {
+  session: SessionRow
+  invocation: EngineInvocationRow
+  events: SessionEventRow[]
+}
+
+export interface LocalInvocationEventReattachResult {
+  after: number
+  bridgeEvents: Array<Record<string, unknown>>
+  events: SessionEventRow[]
+  invocation: EngineInvocationRow
+  invocationId: string
+  nextAfter: number
+  session: SessionRow
+}
+
+export interface LocalInvocationReconcileInput {
+  diagnostic?: string
+  handle?: Record<string, unknown>
+  state?: EngineInvocationRow['processState']
+}
+
+export interface LocalInvocationReconcileResult {
+  bridgeEvents: Array<Record<string, unknown>>
+  events: SessionEventRow[]
+  invocation: EngineInvocationRow
+  session: SessionRow
+}
+
 export interface LocalWorkerSnapshot {
   worker: WorkerRow
   workspaces: WorkspaceRow[]
   sessions: SessionRow[]
-  turns: TurnRow[]
   invocations: EngineInvocationRow[]
   files: FileRow[]
   events: SessionEventRow[]
@@ -125,11 +149,23 @@ export interface WorkspaceAssetProjectionResult {
   workspace: WorkspaceRow
 }
 
+export interface WorkspaceProjectionReceiptResult {
+  manifestPath: string
+  receipt: SoulAppProjectionReceipt
+  receiptId: string
+  workspace: WorkspaceRow
+}
+
+export interface WorkspaceProjectionCleanupResult extends WorkspaceProjectionReceiptResult {
+  cleanedTargets: string[]
+}
+
 export class LocalWorkerRuntime {
   readonly #workerInput: LocalWorkerRuntimeOptions['worker']
   readonly #workspacesRoot: string
   readonly #executor: LocalExecutor
   readonly #engineAssetSource: EngineAssetSource | null
+  readonly #engineBridgeOptions: LocalEngineBridgeOptions | null
   readonly #now: () => string
   readonly bus = new LocalWorkerEventBus()
 
@@ -138,6 +174,7 @@ export class LocalWorkerRuntime {
     this.#workspacesRoot = path.resolve(options.workspacesRoot)
     this.#executor = options.executor ?? createExternalEngineExecutor()
     this.#engineAssetSource = options.engineAssetSource ?? null
+    this.#engineBridgeOptions = options.engineBridge ?? null
     this.#now = options.now ?? (() => new Date().toISOString())
   }
 
@@ -166,7 +203,7 @@ export class LocalWorkerRuntime {
   async createWorkspace(input: CreateLocalWorkspaceInput): Promise<WorkspaceRow> {
     this.requireWorker()
     const id = randomUUID()
-    const rootPath = path.join(this.#workspacesRoot, id)
+    const rootPath = input.rootPath ? path.resolve(input.rootPath) : path.join(this.#workspacesRoot, id)
     const layout = await this.prepareWorkspaceLayout({
       name: input.name,
       projectEngineAssets: true,
@@ -193,9 +230,10 @@ export class LocalWorkerRuntime {
     })
   }
 
-  async reprojectWorkspaceAssets(workspaceId: string): Promise<WorkspaceAssetProjectionResult> {
+  async reprojectWorkspaceAssets(workspaceId: string, input: { engineTarget?: SoulAppEngineTarget | null } = {}): Promise<WorkspaceAssetProjectionResult> {
     const workspace = this.requireWorkspace(workspaceId)
     const layout = await this.prepareWorkspaceLayout({
+      engineTarget: input.engineTarget,
       name: workspace.name,
       preserveUnownedExistingTargets: true,
       projectEngineAssets: true,
@@ -222,6 +260,41 @@ export class LocalWorkerRuntime {
     }
   }
 
+  async readWorkspaceProjectionReceipt(workspaceId: string): Promise<WorkspaceProjectionReceiptResult | null> {
+    const workspace = this.requireWorkspace(workspaceId)
+    const manifestPath = engineAssetProjectionReceiptPath()
+    try {
+      const raw = await readFile(path.join(workspace.rootPath, ...manifestPath.split('/')), 'utf8')
+      return {
+        manifestPath,
+        receipt: JSON.parse(raw) as SoulAppProjectionReceipt,
+        receiptId: workspace.id,
+        workspace,
+      }
+    }
+    catch (error) {
+      if (isNoEntryError(error))
+        return null
+      throw error
+    }
+  }
+
+  async cleanupWorkspaceProjectionReceipt(workspaceId: string): Promise<WorkspaceProjectionCleanupResult | null> {
+    const result = await this.readWorkspaceProjectionReceipt(workspaceId)
+    if (!result)
+      return null
+
+    const cleanup = await cleanupProjectedWorkspaceReceipt({
+      receipt: result.receipt,
+      workspaceRoot: result.workspace.rootPath,
+    })
+
+    return {
+      ...result,
+      cleanedTargets: cleanup.cleanedTargets,
+    }
+  }
+
   async createSession(input: CreateLocalSessionInput): Promise<SessionRow> {
     const workspace = this.requireWorkspace(input.workspaceId)
     const sessionMetadata = freezeSessionEngineMetadata(input.metadata ?? {}, this.requestedSessionEngine(input.metadata ?? {}))
@@ -229,7 +302,7 @@ export class LocalWorkerRuntime {
       id: randomUUID(),
       workerId: this.workerId,
       workspaceId: workspace.id,
-      capabilityTemplateId: input.capabilityTemplateId,
+      capabilityId: input.capabilityId,
       title: input.title,
       context: input.context ?? '',
       status: 'active',
@@ -240,133 +313,6 @@ export class LocalWorkerRuntime {
     await this.materializeSessionContext(workspace, session, sessionMetadata)
     this.bus.emit({ kind: 'session', workspaceId: workspace.id, sessionId: session.id, payload: { status: 'active' }, at: this.#now() })
     return session
-  }
-
-  async startTurn(input: StartLocalTurnInput): Promise<LocalTurnStartResult> {
-    const session = this.requireSession(input.sessionId)
-    const workspace = this.requireWorkspace(session.workspaceId)
-    const sessionEngine = this.resolveSessionEngine(session, input)
-    const frozenSessionMetadata = freezeSessionEngineMetadata(session.metadataJson ?? {}, sessionEngine)
-    const currentSession = sessionEngine.source === 'session'
-      ? session
-      : updateSession({
-          id: session.id,
-          metadataJson: frozenSessionMetadata,
-          at: this.#now(),
-        })
-    const metadata = {
-      ...(currentSession.metadataJson ?? {}),
-      ...(input.metadata ?? {}),
-      engineCommand: sessionEngine.engineCommand,
-      engineId: sessionEngine.engineId,
-      executionMode: sessionEngine.executionMode,
-      capabilityTemplateId: session.capabilityTemplateId,
-      sessionId: session.id,
-      workerId: this.workerId,
-      workspaceId: workspace.id,
-    }
-    const seq = nextTurnSeq(session.id)
-    const turn = createTurn({
-      id: randomUUID(),
-      sessionId: session.id,
-      seq,
-      input: input.input,
-      status: 'running',
-      metadataJson: metadata,
-      at: this.#now(),
-    })
-    const prompt = this.buildInvocationPrompt(session, turn, metadata)
-    const invocationId = randomUUID()
-    const invocation = createEngineInvocation({
-      id: invocationId,
-      sessionId: session.id,
-      seq: nextEngineInvocationSeq(session.id),
-      engineId: sessionEngine.engineId,
-      engineCommand: sessionEngine.engineCommand,
-      inputRef: `aiworker://sessions/${session.id}/turns/${turn.id}/input`,
-      status: 'running',
-      metadataJson: metadata,
-      startedAt: this.#now(),
-      at: this.#now(),
-    })
-    this.appendEvent(session.id, 'status', { status: 'running', turnId: turn.id }, turn.id, invocation.id)
-    this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'running', turn }, at: this.#now() })
-
-    try {
-      const invocationRoot = await this.ensureInvocationRoot(workspace, session, invocation)
-      const result = await this.#executor.invoke({
-        engineCommand: sessionEngine.engineCommand,
-        engineId: sessionEngine.engineId,
-        invocationId: invocation.id,
-        invocationRoot,
-        onEvent: event => this.appendAgentEvent(session.id, event, turn.id, invocation.id),
-        prompt,
-        sessionId: session.id,
-        turnId: turn.id,
-        workspaceId: workspace.id,
-        workspaceRoot: workspace.rootPath,
-        metadata: {
-          ...metadata,
-          turnId: turn.id,
-        },
-      })
-      const output = await this.captureResult(workspace, session, turn, invocation, result, metadata)
-      const finishedInvocation = updateEngineInvocation({
-        id: invocation.id,
-        status: 'succeeded',
-        summary: result.summary,
-        metadataJson: { ...metadata, ...(result.metadata ?? {}) },
-        finishedAt: this.#now(),
-        at: this.#now(),
-      })
-      const finishedTurn = updateTurn({
-        id: turn.id,
-        status: 'succeeded',
-        response: result.summary,
-        at: this.#now(),
-      })
-      this.appendEvent(session.id, 'status', { status: 'succeeded', turnId: turn.id }, turn.id, invocation.id)
-      this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'succeeded', turn: finishedTurn }, at: this.#now() })
-      return {
-        session: currentSession,
-        turn: finishedTurn,
-        invocation: finishedInvocation,
-        events: listSessionEvents(session.id),
-        ...output,
-      }
-    }
-    catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      const recoveredOutput = error instanceof LocalExecutorFailure && error.partialResult
-        ? await this.captureResult(workspace, session, turn, invocation, error.partialResult, metadata)
-        : { files: [] }
-      const recoveredMetadata = error instanceof LocalExecutorFailure ? error.partialResult?.metadata ?? {} : {}
-      const failedInvocation = updateEngineInvocation({
-        id: invocation.id,
-        status: 'failed',
-        error: message,
-        metadataJson: { ...metadata, ...recoveredMetadata },
-        summary: error instanceof LocalExecutorFailure ? error.partialResult?.summary ?? null : null,
-        finishedAt: this.#now(),
-        at: this.#now(),
-      })
-      const failedTurn = updateTurn({
-        id: turn.id,
-        status: 'failed',
-        response: error instanceof LocalExecutorFailure ? error.partialResult?.summary ?? null : null,
-        error: message,
-        at: this.#now(),
-      })
-      this.appendEvent(session.id, 'error', { message, turnId: turn.id }, turn.id, invocation.id)
-      this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'failed', turn: failedTurn }, at: this.#now() })
-      return {
-        session: currentSession,
-        turn: failedTurn,
-        invocation: failedInvocation,
-        events: listSessionEvents(session.id),
-        ...recoveredOutput,
-      }
-    }
   }
 
   async startInvocation(input: StartLocalInvocationInput): Promise<LocalInvocationStartResult> {
@@ -387,7 +333,7 @@ export class LocalWorkerRuntime {
       engineCommand: sessionEngine.engineCommand,
       engineId: sessionEngine.engineId,
       executionMode: sessionEngine.executionMode,
-      capabilityTemplateId: session.capabilityTemplateId,
+      capabilityId: session.capabilityId,
       sessionId: session.id,
       workerId: this.workerId,
       workspaceId: workspace.id,
@@ -401,38 +347,40 @@ export class LocalWorkerRuntime {
       engineId: sessionEngine.engineId,
       engineCommand: sessionEngine.engineCommand,
       inputRef: `aiworker://sessions/${session.id}/invocations/${invocationId}/input`,
+      processState: 'spawned',
       status: 'running',
       metadataJson: metadata,
       startedAt: this.#now(),
       at: this.#now(),
     })
-    this.appendEvent(session.id, 'status', { invocationId: invocation.id, status: 'running' }, null, invocation.id)
+    this.appendEvent(session.id, 'status', { invocationId: invocation.id, status: 'running' }, invocation.id)
     this.bus.emit({ kind: 'event', workspaceId: workspace.id, sessionId: session.id, invocationId: invocation.id, payload: { invocation, status: 'running' }, at: this.#now() })
 
     try {
       const invocationRoot = await this.ensureInvocationRoot(workspace, session, invocation)
-      const result = await this.#executor.invoke({
-        engineCommand: sessionEngine.engineCommand,
-        engineId: sessionEngine.engineId,
-        invocationId: invocation.id,
+      const result = await this.invokeEngine({
+        invocation,
         invocationRoot,
-        onEvent: event => this.appendAgentEvent(session.id, event, null, invocation.id),
-        prompt,
-        sessionId: session.id,
-        turnId: null,
-        workspaceId: workspace.id,
-        workspaceRoot: workspace.rootPath,
         metadata,
+        prompt,
+        requestInput: input.input,
+        session: currentSession,
+        sessionEngine,
+        workspace,
       })
+      const resultMetadata = redactEngineRecord(result.metadata ?? {})
+      const summary = redactEngineString(result.summary)
       const finishedInvocation = updateEngineInvocation({
         id: invocation.id,
+        ...engineInvocationReferenceFields(result),
         status: 'succeeded',
-        summary: result.summary,
-        metadataJson: { ...metadata, ...(result.metadata ?? {}) },
+        processState: 'exited',
+        summary,
+        metadataJson: { ...metadata, ...resultMetadata },
         finishedAt: this.#now(),
         at: this.#now(),
       })
-      this.appendEvent(session.id, 'status', { invocationId: invocation.id, status: 'succeeded' }, null, invocation.id)
+      this.appendEvent(session.id, 'status', { invocationId: invocation.id, status: 'succeeded' }, invocation.id)
       this.bus.emit({ kind: 'event', workspaceId: workspace.id, sessionId: session.id, invocationId: invocation.id, payload: { invocation: finishedInvocation, status: 'succeeded' }, at: this.#now() })
       return {
         session: currentSession,
@@ -442,18 +390,22 @@ export class LocalWorkerRuntime {
       }
     }
     catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      const recoveredMetadata = error instanceof LocalExecutorFailure ? error.partialResult?.metadata ?? {} : {}
+      const message = redactEngineString(error instanceof Error ? error.message : String(error))
+      const recoveredMetadata = isLocalExecutorFailureLike(error) ? redactEngineRecord(error.partialResult?.metadata ?? {}) : {}
+      const failureCode = engineFailureCode(error)
+      const processState = engineFailureProcessState(error)
       const failedInvocation = updateEngineInvocation({
         id: invocation.id,
         status: 'failed',
+        processState,
+        failureCode,
         error: message,
         metadataJson: { ...metadata, ...recoveredMetadata },
-        summary: error instanceof LocalExecutorFailure ? error.partialResult?.summary ?? null : null,
+        summary: isLocalExecutorFailureLike(error) ? redactEngineNullableString(error.partialResult?.summary ?? null) : null,
         finishedAt: this.#now(),
         at: this.#now(),
       })
-      this.appendEvent(session.id, 'error', { invocationId: invocation.id, message }, null, invocation.id)
+      this.appendEvent(session.id, 'error', { failureCode, invocationId: invocation.id, message }, invocation.id)
       this.bus.emit({ kind: 'event', workspaceId: workspace.id, sessionId: session.id, invocationId: invocation.id, payload: { invocation: failedInvocation, status: 'failed' }, at: this.#now() })
       return {
         session: currentSession,
@@ -464,18 +416,165 @@ export class LocalWorkerRuntime {
     }
   }
 
+  async cancelEngineInvocation(
+    invocationId: string,
+    input: { reason?: unknown } = {},
+  ): Promise<LocalInvocationCancelResult> {
+    const invocation = getEngineInvocation(invocationId)
+    if (!invocation)
+      throw new Error(`Engine invocation not found: ${invocationId}`)
+    const session = this.requireSession(invocation.sessionId)
+    if (session.workerId !== this.workerId)
+      throw new Error(`Engine invocation does not belong to worker ${this.workerId}: ${invocationId}`)
+
+    const eventsForInvocation = () => listSessionEvents(session.id).filter(event => event.invocationId === invocation.id)
+    if (invocation.status !== 'queued' && invocation.status !== 'running')
+      return { session, invocation, events: eventsForInvocation() }
+
+    const processHandle = readRecord(readRecord(invocation.metadataJson).processHandle)
+    const processHandleInvocationId = typeof processHandle.invocationId === 'string' && processHandle.invocationId.trim().length > 0
+      ? processHandle.invocationId
+      : null
+    const engineBridgeOptions = this.#engineBridgeOptions
+    if (processHandleInvocationId && engineBridgeOptions && engineBridgeOptions.adapters.length > 0) {
+      const bridge = createEngineBridge({
+        adapters: engineBridgeOptions.adapters,
+        cancelGracePeriodMs: engineBridgeOptions.cancelGracePeriodMs,
+        processManager: engineBridgeOptions.processManager,
+      })
+      await bridge.cancelInvocation({
+        engineTarget: invocation.engineId,
+        handle: processHandle,
+        invocationId: invocation.id,
+        reason: input.reason,
+      })
+    }
+
+    const processState = invocation.status === 'queued' ? 'not_spawned' : 'killed'
+    const cancelledInvocation = updateEngineInvocation({
+      id: invocation.id,
+      status: 'cancelled',
+      processState,
+      summary: 'Invocation cancelled.',
+      finishedAt: this.#now(),
+      at: this.#now(),
+    })
+    this.appendEvent(session.id, 'status', {
+      bridgeEvent: 'invocation.cancelled',
+      invocationId: invocation.id,
+      processState,
+      status: 'cancelled',
+    }, invocation.id)
+    this.bus.emit({
+      kind: 'event',
+      workspaceId: session.workspaceId,
+      sessionId: session.id,
+      invocationId: invocation.id,
+      payload: { invocation: cancelledInvocation, status: 'cancelled' },
+      at: this.#now(),
+    })
+    return {
+      session,
+      invocation: cancelledInvocation,
+      events: eventsForInvocation(),
+    }
+  }
+
+  async reattachEngineInvocationEvents(
+    invocationId: string,
+    options: { after?: number, limit?: number } = {},
+  ): Promise<LocalInvocationEventReattachResult> {
+    const { invocation, session } = this.requireEngineInvocationForWorker(invocationId)
+    const limit = options.limit ?? 500
+    const bridge = createEngineBridge({
+      adapters: [],
+      bridgeEventStore: {
+        list: async ({ after, limit }) => listInvocationEvents(invocation.id, { after, limit }).map(bridgeEventFromSessionEvent),
+      },
+    })
+    const result = readRecord(await bridge.reattachInvocationEvents({
+      after: options.after ?? 0,
+      invocationId: invocation.id,
+      limit,
+    }))
+    const after = readNumber(result.after, options.after ?? 0)
+    const nextAfter = readNumber(result.nextAfter, after)
+    return {
+      after,
+      bridgeEvents: readRecords(result.events),
+      events: listInvocationEvents(invocation.id, { after, limit }),
+      invocation,
+      invocationId: invocation.id,
+      nextAfter,
+      session,
+    }
+  }
+
+  async reconcileEngineInvocation(
+    invocationId: string,
+    input: LocalInvocationReconcileInput = {},
+  ): Promise<LocalInvocationReconcileResult> {
+    const { invocation, session } = this.requireEngineInvocationForWorker(invocationId)
+    const bridgeEvents: Array<Record<string, unknown>> = []
+    const bridge = createEngineBridge({
+      adapters: [],
+      bridgeEventStore: {
+        append: async (event) => {
+          bridgeEvents.push(readRecord(event))
+        },
+      },
+      processManager: {
+        inspect: async (_handle, guard) => ({
+          diagnostic: input.diagnostic,
+          invocationId: guard.invocationId,
+          state: input.state ?? 'lost',
+        }),
+      },
+    })
+    const result = readRecord(await bridge.reconcileInvocation({
+      handle: input.handle ?? { invocationId: invocation.id },
+      invocationId: invocation.id,
+    }))
+    const processState = readEngineProcessState(result.processState, invocation.processState)
+    const status = readEngineInvocationStatus(result.status, invocation.status)
+    const failureCode = readNullableString(result.failureCode)
+    const updated = updateEngineInvocation({
+      id: invocation.id,
+      status,
+      processState,
+      failureCode,
+      summary: status === 'lost' ? 'Native engine process was lost.' : invocation.summary,
+      finishedAt: status === 'lost' ? this.#now() : invocation.finishedAt,
+      at: this.#now(),
+    })
+    for (const bridgeEvent of bridgeEvents)
+      this.appendEvent(session.id, 'status', sessionPayloadFromBridgeEvent(bridgeEvent, status), invocation.id)
+    this.bus.emit({
+      kind: 'event',
+      workspaceId: session.workspaceId,
+      sessionId: session.id,
+      invocationId: invocation.id,
+      payload: { invocation: updated, status },
+      at: this.#now(),
+    })
+    return {
+      bridgeEvents,
+      events: listInvocationEvents(invocation.id),
+      invocation: updated,
+      session,
+    }
+  }
+
   snapshot(): LocalWorkerSnapshot {
     const worker = this.requireWorker()
     const workspaces = listWorkspaces(worker.id)
     const workspaceIds = new Set(workspaces.map(workspace => workspace.id))
     const sessions = listSessions().filter(session => workspaceIds.has(session.workspaceId))
     const sessionIds = new Set(sessions.map(session => session.id))
-    const turns = listTurns().filter(turn => sessionIds.has(turn.sessionId))
     return {
       worker,
       workspaces,
       sessions,
-      turns,
       invocations: listEngineInvocations().filter(invocation => sessionIds.has(invocation.sessionId)),
       files: listFiles().filter(file => workspaceIds.has(file.workspaceId)),
       events: listSessionEvents().filter(event => sessionIds.has(event.sessionId)),
@@ -491,34 +590,102 @@ export class LocalWorkerRuntime {
     return undefined
   }
 
-  private async captureResult(
-    _workspace: WorkspaceRow,
-    _session: SessionRow,
-    _turn: TurnRow,
-    _invocation: EngineInvocationRow,
-    _result: LocalExecutorResult,
-    _metadata: Record<string, unknown>,
-  ): Promise<Omit<LocalTurnStartResult, 'events' | 'invocation' | 'session' | 'turn'>> {
-    return { files: [] }
+  private async invokeEngine(input: {
+    invocation: EngineInvocationRow
+    invocationRoot: string
+    metadata: Record<string, unknown>
+    prompt: string
+    requestInput: string
+    session: SessionRow
+    sessionEngine: FrozenSessionEngine
+    workspace: WorkspaceRow
+  }): Promise<LocalExecutorResult> {
+    const bridgeOptions = this.#engineBridgeOptions && this.#engineBridgeOptions.adapters.length > 0
+      ? this.#engineBridgeOptions
+      : createLocalExecutorBridgeOptions(this.#executor, input.sessionEngine.engineId, {
+          assertUsable: request => this.assertWorkspaceProjectionReceipt(input.workspace, request),
+        })
+
+    const previousInvocation = latestPriorEngineInvocation(input.session.id, input.invocation.seq, input.sessionEngine.engineId)
+    const bridge = createEngineBridge({
+      adapters: bridgeOptions.adapters,
+      bridgeEventStore: {
+        append: async event => this.appendBridgeEvent(input.session.id, readRecord(event), input.invocation.id, 'running'),
+      },
+      projectionReceipts: bridgeOptions.projectionReceipts,
+      rawChunkStore: bridgeOptions.rawChunkStore,
+      resolveLatestExternalSessionRef: async () => latestExternalSessionRef(previousInvocation),
+    })
+    const request = {
+      capabilityDescriptorRef: input.session.capabilityId,
+      cwd: input.workspace.rootPath,
+      engineCommand: input.sessionEngine.engineCommand,
+      engineTarget: input.sessionEngine.engineId,
+      input: { body: input.requestInput },
+      invocationId: input.invocation.id,
+      invocationRoot: input.invocationRoot,
+      metadata: input.metadata,
+      projectionManifestPath: readString(readRecord(input.workspace.metadataJson.engineAssetProjection).projectionManifestPath, engineAssetProjectionReceiptPath()),
+      projectionReceiptId: input.workspace.id,
+      prompt: input.prompt,
+      sessionId: input.session.id,
+      workerId: this.workerId,
+      workspaceId: input.workspace.id,
+      workspaceLocatorId: input.workspace.id,
+    }
+    const result = readRecord(previousInvocation
+      ? await bridge.followUp(request)
+      : await bridge.startInvocation(request))
+    return {
+      ...localExecutorResultFromBridgeResult(result),
+      eventLogRef: readNullableString(result.eventLogRef) ?? `aiworker://sessions/${input.session.id}/invocations/${input.invocation.id}/events`,
+      projectionReceiptId: readNullableString(result.projectionReceiptId) ?? input.workspace.id,
+    }
   }
 
-  private appendAgentEvent(sessionId: string, event: LocalExecutorEvent, turnId: string | null, invocationId: string): SessionEventRow {
-    if (event.kind === 'text') {
-      return this.appendEvent(sessionId, 'assistant_delta', { agentEvent: event, delta: event.text, text: event.text }, turnId, invocationId)
-    }
-    if (event.kind === 'thinking' || event.kind === 'log' || event.kind === 'raw') {
-      return this.appendEvent(sessionId, 'log', { agentEvent: event }, turnId, invocationId)
-    }
-    if (event.kind === 'tool_use' || event.kind === 'tool_result') {
-      return this.appendEvent(sessionId, 'tool', { agentEvent: event }, turnId, invocationId)
-    }
-    return this.appendEvent(sessionId, event.kind === 'status' || event.kind === 'usage' ? 'status' : 'log', { agentEvent: event }, turnId, invocationId)
+  private appendBridgeEvent(
+    sessionId: string,
+    event: Record<string, unknown>,
+    invocationId: string,
+    status: EngineInvocationRow['status'],
+  ): SessionEventRow {
+    return this.appendEvent(sessionId, sessionEventTypeFromBridgeEvent(readString(event.type, 'invocation.progress')), sessionPayloadFromBridgeEvent(event, status), invocationId)
   }
 
-  private appendEvent(sessionId: string, type: SessionEventRow['type'], payloadJson: Record<string, unknown>, turnId: string | null, invocationId: string): SessionEventRow {
+  private async assertWorkspaceProjectionReceipt(workspace: WorkspaceRow, request: Record<string, unknown>): Promise<void> {
+    const projection = readRecord(workspace.metadataJson.engineAssetProjection)
+    const expectedManifestPath = readNullableString(projection.projectionManifestPath)
+    if (!expectedManifestPath)
+      return
+
+    const requestManifestPath = readString(request.projectionManifestPath, '')
+    if (requestManifestPath !== expectedManifestPath) {
+      throw localEngineBridgeFailure(
+        'PROJECTION_RECEIPT_STALE',
+        `Projection receipt path changed for workspace ${workspace.id}.`,
+      )
+    }
+
+    const receipt = await this.readWorkspaceProjectionReceipt(workspace.id)
+    if (!receipt) {
+      throw localEngineBridgeFailure(
+        'PROJECTION_RECEIPT_MISSING',
+        `Projection receipt is missing for workspace ${workspace.id}.`,
+      )
+    }
+
+    const requestReceiptId = readString(request.projectionReceiptId, '')
+    if (requestReceiptId && requestReceiptId !== receipt.receiptId) {
+      throw localEngineBridgeFailure(
+        'PROJECTION_RECEIPT_STALE',
+        `Projection receipt id changed for workspace ${workspace.id}.`,
+      )
+    }
+  }
+
+  private appendEvent(sessionId: string, type: SessionEventRow['type'], payloadJson: Record<string, unknown>, invocationId: string): SessionEventRow {
     const row = appendSessionEvent({
       sessionId,
-      turnId: turnId ?? null,
       invocationId,
       seq: nextSessionEventSeq(sessionId),
       type,
@@ -533,15 +700,10 @@ export class LocalWorkerRuntime {
         kind: 'event',
         payload: { event: row },
         sessionId,
-        turnId: turnId ?? undefined,
         workspaceId: session.workspaceId,
       })
     }
     return row
-  }
-
-  private buildInvocationPrompt(session: SessionRow, turn: TurnRow, metadata: Record<string, unknown>): string {
-    return this.buildSessionPrompt(session, 'Turn request:', turn.input, metadata)
   }
 
   private buildInvocationPromptFromRequest(session: SessionRow, request: string, metadata: Record<string, unknown>): string {
@@ -555,8 +717,8 @@ export class LocalWorkerRuntime {
       `Soul worker: ${this.#workerInput.name}`,
       `Soul id: ${this.#workerInput.soulId}`,
       `Workspace session: ${session.title}`,
-      `Capability template: ${session.capabilityTemplateId}`,
-      `Output kind: ${readString(metadata.outputKind, 'business-artifact')}`,
+      `Capability: ${session.capabilityId}`,
+      `Output kind: ${readString(metadata.outputKind, 'session')}`,
       '',
       'Session context:',
       session.context || '(no prior context)',
@@ -617,6 +779,14 @@ export class LocalWorkerRuntime {
     return session
   }
 
+  private requireEngineInvocationForWorker(invocationId: string): { invocation: EngineInvocationRow, session: SessionRow } {
+    const invocation = getEngineInvocation(invocationId)
+    if (!invocation)
+      throw new Error(`Engine invocation not found: ${invocationId}`)
+    const session = this.requireSession(invocation.sessionId)
+    return { invocation, session }
+  }
+
   private requestedSessionEngine(metadata: Record<string, unknown>): FrozenSessionEngine {
     return {
       engineCommand: readNullableString(metadata.engineCommand),
@@ -625,7 +795,7 @@ export class LocalWorkerRuntime {
     }
   }
 
-  private requestedTurnEngine(input: StartLocalTurnInput): FrozenSessionEngine {
+  private requestedInvocationEngine(input: StartLocalInvocationInput): FrozenSessionEngine {
     return {
       engineCommand: input.engineCommand ?? null,
       engineId: input.engineId,
@@ -648,8 +818,8 @@ export class LocalWorkerRuntime {
         })
   }
 
-  private resolveSessionEngine(session: SessionRow, input: StartLocalTurnInput) {
-    const requested = this.requestedTurnEngine(input)
+  private resolveSessionEngine(session: SessionRow, input: StartLocalInvocationInput) {
+    const requested = this.requestedInvocationEngine(input)
     return resolveFrozenSessionEngine({
       latestInvocation: this.latestInvocationEngine(session.id),
       requested,
@@ -668,14 +838,17 @@ export class LocalWorkerRuntime {
     }
   }
 
-  private async prepareWorkspaceLayout(input: { name: string, preserveUnownedExistingTargets?: boolean, projectEngineAssets: boolean, projectWorkerOverlayAssets: boolean, rootPath: string }): Promise<{
+  private async prepareWorkspaceLayout(input: { engineTarget?: SoulAppEngineTarget | null, name: string, preserveUnownedExistingTargets?: boolean, projectEngineAssets: boolean, projectWorkerOverlayAssets: boolean, rootPath: string }): Promise<{
     engineAssets: SoulAppProjectionReceipt | null
   }> {
+    const workerOverlayAssets = this.#engineAssetSource && input.projectWorkerOverlayAssets
+      ? await this.resolveWorkerOverlayProjectionAssets(this.#engineAssetSource.sourceRoot)
+      : []
     const engineAssets = this.#engineAssetSource && input.projectEngineAssets
       ? await projectEngineAssetsToWorkspace({
           appId: this.#engineAssetSource.appId,
           engineAssets: this.#engineAssetSource.engineAssets,
-          engineTarget: resolveSoulAppEngineTarget(this.#workerInput.defaultEngineId),
+          engineTarget: input.engineTarget ?? resolveSoulAppEngineTarget(this.#workerInput.defaultEngineId),
           now: this.#now(),
           preserveUnownedExistingTargets: input.preserveUnownedExistingTargets,
           sourceRoot: this.#engineAssetSource.sourceRoot,
@@ -685,11 +858,65 @@ export class LocalWorkerRuntime {
             workerName: this.#workerInput.name,
             workspaceName: input.name,
           },
-          workerOverlayAssets: [],
+          workerOverlayAssets,
           workspaceRoot: input.rootPath,
         })
       : null
     return { engineAssets }
+  }
+
+  private async resolveWorkerOverlayProjectionAssets(sourceRoot: string): Promise<WorkerOverlayProjectionAsset[]> {
+    const assets: WorkerOverlayProjectionAsset[] = []
+    for (const asset of listWorkerOverlayAssets(this.workerId)) {
+      assets.push({
+        content: asset.enabled ? await readFile(this.resolveWorkerOverlaySourcePath(sourceRoot, asset.kind, asset.sourceRef, asset.target), 'utf8') : '',
+        enabled: asset.enabled,
+        id: asset.id,
+        kind: asset.kind,
+        target: asset.target,
+      })
+    }
+    return assets
+  }
+
+  private resolveWorkerOverlaySourcePath(sourceRoot: string, kind: WorkerOverlayProjectionAsset['kind'], sourceRef: string, target: string): string {
+    return path.join(path.resolve(sourceRoot), ...this.workerOverlaySourceSegments(kind, sourceRef, target))
+  }
+
+  private workerOverlaySourceSegments(kind: WorkerOverlayProjectionAsset['kind'], sourceRef: string, target: string): string[] {
+    const ref = sourceRef.trim()
+    if (ref.startsWith('descriptor://engine/skills/')) {
+      const skillPath = ref.slice('descriptor://engine/skills/'.length).replace(/\/SKILL\.md$/, '')
+      return this.safeEngineAssetSegments(['engine-assets', 'skills', ...this.workerOverlayRefPathSegments(skillPath, sourceRef), 'SKILL.md'], sourceRef)
+    }
+    if (ref.startsWith('descriptor://engine/workspace/')) {
+      const workspacePath = ref.slice('descriptor://engine/workspace/'.length)
+      return this.safeEngineAssetSegments(['engine-assets', 'workspace', ...this.workerOverlayRefPathSegments(workspacePath, sourceRef)], sourceRef)
+    }
+    if (ref.startsWith('descriptor://engine/workspaceAssets/')) {
+      const workspacePath = ref.slice('descriptor://engine/workspaceAssets/'.length)
+      return this.safeEngineAssetSegments(['engine-assets', 'workspace', ...this.workerOverlayRefPathSegments(workspacePath, sourceRef)], sourceRef)
+    }
+    if (kind === 'mcp-client' && ref.startsWith('descriptor://engine/mcp/')) {
+      const engineTarget = ref.slice('descriptor://engine/mcp/'.length) || target
+      const file = engineTarget === 'claude-code' ? '.mcp.json' : 'config.toml'
+      return this.safeEngineAssetSegments(['engine-assets', 'mcp', ...this.workerOverlayRefPathSegments(engineTarget, sourceRef), file], sourceRef)
+    }
+    return this.safeEngineAssetSegments(this.workerOverlayRefPathSegments(ref, sourceRef), sourceRef)
+  }
+
+  private workerOverlayRefPathSegments(pathValue: string, sourceRef: string): string[] {
+    const refPath = pathValue.trim()
+    if (refPath.length === 0 || refPath.startsWith('/'))
+      throw new Error(`Invalid worker overlay sourceRef: ${sourceRef}`)
+    return refPath.split('/')
+  }
+
+  private safeEngineAssetSegments(segments: string[], sourceRef: string): string[] {
+    const safe = segments.filter(Boolean)
+    if (safe.length === 0 || path.isAbsolute(sourceRef.trim()) || safe.some(segment => segment === '.' || segment === '..' || segment.includes('\0') || segment.includes('/') || segment.includes('\\')))
+      throw new Error(`Invalid worker overlay sourceRef: ${sourceRef}`)
+    return safe
   }
 }
 
@@ -709,6 +936,305 @@ function readNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
+function readNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function redactEngineRecord(value: Record<string, unknown>): Record<string, unknown> {
+  return readRecord(redactEngineBridgeValue(value))
+}
+
+function redactEngineString(value: string): string {
+  const redacted = redactEngineBridgeValue(value)
+  return typeof redacted === 'string' ? redacted : ''
+}
+
+function redactEngineNullableString(value: string | null): string | null {
+  return value == null ? null : redactEngineString(value)
+}
+
+function readRecords(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.map(readRecord).filter(record => Object.keys(record).length > 0) : []
+}
+
+function readEngineInvocationStatus(value: unknown, fallback: EngineInvocationRow['status']): EngineInvocationRow['status'] {
+  return value === 'queued'
+    || value === 'starting'
+    || value === 'running'
+    || value === 'succeeded'
+    || value === 'failed'
+    || value === 'cancelled'
+    || value === 'lost'
+    ? value
+    : fallback
+}
+
+function readEngineProcessState(value: unknown, fallback: EngineInvocationRow['processState']): EngineInvocationRow['processState'] {
+  return value === 'not_spawned'
+    || value === 'spawned'
+    || value === 'exited'
+    || value === 'killed'
+    || value === 'lost'
+    ? value
+    : fallback
+}
+
+function bridgeEventFromSessionEvent(event: SessionEventRow): Record<string, unknown> {
+  const payload = readRecord(event.payloadJson)
+  const { bridgeEvent, ...rest } = payload
+  return {
+    ...rest,
+    id: event.id,
+    invocationId: event.invocationId,
+    type: readString(bridgeEvent, bridgeEventTypeFromSessionEvent(event.type)),
+  }
+}
+
+function bridgeEventTypeFromSessionEvent(type: SessionEventRow['type']): string {
+  if (type === 'assistant_delta')
+    return 'invocation.output.delta'
+  if (type === 'tool')
+    return 'invocation.tool.observed'
+  if (type === 'error')
+    return 'invocation.error'
+  return 'invocation.progress'
+}
+
+function sessionPayloadFromBridgeEvent(event: Record<string, unknown>, status: EngineInvocationRow['status']): Record<string, unknown> {
+  const type = readString(event.type, 'invocation.progress')
+  const { type: _type, ...payload } = event
+  return {
+    ...payload,
+    bridgeEvent: type,
+    status,
+  }
+}
+
+function sessionEventTypeFromBridgeEvent(type: string): SessionEventRow['type'] {
+  if (type === 'invocation.output.delta' || type === 'invocation.output.snapshot')
+    return 'assistant_delta'
+  if (type === 'invocation.tool.observed')
+    return 'tool'
+  if (type === 'invocation.error')
+    return 'error'
+  return 'status'
+}
+
+function latestPriorEngineInvocation(sessionId: string, beforeSeq: number, engineId: string): EngineInvocationRow | null {
+  return listEngineInvocations(sessionId)
+    .filter(invocation => invocation.seq < beforeSeq && invocation.engineId === engineId)
+    .sort((left, right) => right.seq - left.seq)[0] ?? null
+}
+
+function latestExternalSessionRef(invocation: EngineInvocationRow | null): unknown {
+  if (!invocation)
+    return null
+  const topLevel = parseExternalSessionRef(invocation.externalSessionRef)
+  if (topLevel)
+    return topLevel
+  const metadataRef = readRecord(invocation.metadataJson).externalSessionRef
+  return Object.keys(readRecord(metadataRef)).length > 0 ? metadataRef : null
+}
+
+function parseExternalSessionRef(value: string | null): unknown {
+  if (!value)
+    return null
+  try {
+    return JSON.parse(value) as unknown
+  }
+  catch {
+    return value
+  }
+}
+
+function createLocalExecutorBridgeOptions(
+  executor: LocalExecutor,
+  target: string,
+  projectionReceipts?: LocalEngineBridgeOptions['projectionReceipts'],
+): LocalEngineBridgeOptions {
+  return {
+    adapters: [createLocalExecutorBridgeAdapter(executor, target)],
+    projectionReceipts,
+  }
+}
+
+function createLocalExecutorBridgeAdapter(executor: LocalExecutor, target: string): EngineAdapter {
+  return {
+    target,
+    async cancel() {
+      return {}
+    },
+    async discover() {
+      return {
+        callable: true,
+        installed: true,
+        supportsNativeResume: false,
+        supportsProtocolCancel: false,
+        target,
+      }
+    },
+    async followUp(request, sink) {
+      return invokeLocalExecutorThroughBridge(executor, request, sink, target)
+    },
+    normalize(chunk) {
+      return Object.keys(readRecord(chunk)).length > 0 ? [readRecord(chunk)] : []
+    },
+    async start(request, sink) {
+      return invokeLocalExecutorThroughBridge(executor, request, sink, target)
+    },
+  }
+}
+
+async function invokeLocalExecutorThroughBridge(
+  executor: LocalExecutor,
+  request: Record<string, unknown>,
+  sink: EngineEventSink,
+  fallbackTarget: string,
+): Promise<Record<string, unknown>> {
+  const invocationId = readString(request.invocationId, '')
+  const result = await executor.invoke({
+    engineCommand: readNullableString(request.engineCommand),
+    engineId: readString(request.engineTarget, fallbackTarget),
+    invocationId,
+    invocationRoot: readString(request.invocationRoot, ''),
+    onEvent: event => sink.event(bridgeEventFromLocalExecutorEvent(event, invocationId)),
+    prompt: readString(request.prompt, ''),
+    sessionId: readString(request.sessionId, ''),
+    workspaceId: readString(request.workspaceId, ''),
+    workspaceRoot: readString(request.cwd, ''),
+    metadata: readRecord(request.metadata),
+  })
+  return result as unknown as Record<string, unknown>
+}
+
+function bridgeEventFromLocalExecutorEvent(event: LocalExecutorEvent, invocationId: string): Record<string, unknown> {
+  if (event.kind === 'text') {
+    return {
+      data: { text: event.text },
+      invocationId,
+      type: 'invocation.output.delta',
+    }
+  }
+  if (event.kind === 'tool_use') {
+    return {
+      invocationId,
+      tool: {
+        id: event.id,
+        input: event.input,
+        name: event.name,
+        phase: 'use',
+      },
+      type: 'invocation.tool.observed',
+    }
+  }
+  if (event.kind === 'tool_result') {
+    return {
+      invocationId,
+      tool: {
+        content: event.content,
+        id: event.id,
+        isError: event.isError ?? false,
+        name: event.name ?? null,
+        phase: 'result',
+      },
+      type: 'invocation.tool.observed',
+    }
+  }
+  if (event.kind === 'usage') {
+    return {
+      invocationId,
+      type: 'invocation.usage.observed',
+      usage: {
+        costUsd: event.costUsd ?? null,
+        inputTokens: event.inputTokens ?? null,
+        outputTokens: event.outputTokens ?? null,
+      },
+    }
+  }
+  if (event.kind === 'thinking') {
+    return {
+      data: { text: event.text },
+      invocationId,
+      phase: 'thinking',
+      type: 'invocation.progress',
+    }
+  }
+  if (event.kind === 'log') {
+    return {
+      data: { chunk: event.chunk },
+      invocationId,
+      stream: event.stream,
+      type: 'invocation.progress',
+    }
+  }
+  if (event.kind === 'raw') {
+    return {
+      data: { line: event.line },
+      invocationId,
+      stream: 'raw',
+      type: 'invocation.progress',
+    }
+  }
+  return {
+    detail: event.detail,
+    invocationId,
+    label: event.label,
+    type: 'invocation.progress',
+  }
+}
+
+function localExecutorResultFromBridgeResult(result: Record<string, unknown>): LocalExecutorResult {
+  const externalSessionRef = readRecord(result.externalSessionRef)
+  const processHandle = readRecord(result.processHandle)
+  const metadata = {
+    ...readRecord(result.metadata),
+    ...(Object.keys(externalSessionRef).length > 0 ? { externalSessionRef } : {}),
+    ...(Object.keys(processHandle).length > 0 ? { processHandle } : {}),
+  }
+  return {
+    eventLogRef: readNullableString(result.eventLogRef),
+    externalSessionRef: encodeExternalSessionRef(result.externalSessionRef),
+    metadata,
+    projectionReceiptId: readNullableString(result.projectionReceiptId),
+    rawLogRef: readNullableString(result.rawLogRef),
+    summary: readString(result.summary, 'Engine bridge invocation completed.'),
+  }
+}
+
+function encodeExternalSessionRef(value: unknown): string | null {
+  const ref = readRecord(value)
+  if (Object.keys(ref).length === 0)
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+  return JSON.stringify(ref)
+}
+
+function engineInvocationReferenceFields(result: LocalExecutorResult): {
+  eventLogRef?: string | null
+  externalSessionRef?: string | null
+  projectionReceiptId?: string | null
+  rawLogRef?: string | null
+} {
+  const fields: {
+    eventLogRef?: string | null
+    externalSessionRef?: string | null
+    projectionReceiptId?: string | null
+    rawLogRef?: string | null
+  } = {}
+  if (result.eventLogRef !== undefined)
+    fields.eventLogRef = result.eventLogRef
+  if (result.externalSessionRef !== undefined)
+    fields.externalSessionRef = result.externalSessionRef
+  if (result.projectionReceiptId !== undefined)
+    fields.projectionReceiptId = result.projectionReceiptId
+  if (result.rawLogRef !== undefined)
+    fields.rawLogRef = result.rawLogRef
+  return fields
+}
+
 function explicitMentionLines(value: unknown): string[] {
   if (!Array.isArray(value))
     return []
@@ -721,4 +1247,49 @@ function explicitMentionLines(value: unknown): string[] {
     return id && kind ? [`- ${kind}: ${id}`] : []
   })
   return lines.length > 0 ? ['Explicit skill mentions:', ...lines] : []
+}
+
+function engineFailureCode(error: unknown): EngineBridgeFailureCode | 'ENGINE_PROCESS_EXITED' | null {
+  if (isLocalExecutorFailureLike(error))
+    return 'ENGINE_PROCESS_EXITED'
+  return readEngineBridgeFailureCode(error)
+}
+
+function engineFailureProcessState(error: unknown): 'exited' | 'not_spawned' | undefined {
+  if (isLocalExecutorFailureLike(error))
+    return 'exited'
+  const failureCode = readEngineBridgeFailureCode(error)
+  if (failureCode === 'ENGINE_PROCESS_EXITED')
+    return 'exited'
+  if (failureCode === 'PROJECTION_RECEIPT_MISSING'
+    || failureCode === 'PROJECTION_RECEIPT_STALE'
+    || failureCode === 'ENGINE_NOT_CALLABLE'
+    || failureCode === 'ENGINE_NOT_INSTALLED'
+    || failureCode === 'ENGINE_SESSION_REF_MISSING'
+    || failureCode === 'WORKSPACE_LOCATOR_MISSING'
+    || failureCode === 'WORKSPACE_ROOT_MISSING') {
+    return 'not_spawned'
+  }
+  return undefined
+}
+
+function isLocalExecutorFailureLike(error: unknown): error is { partialResult?: LocalExecutorResult } {
+  return error instanceof LocalExecutorFailure
+    || (error instanceof Error && error.name === 'LocalExecutorFailure')
+}
+
+function readEngineBridgeFailureCode(error: unknown): EngineBridgeFailureCode | null {
+  if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
+    if ((ENGINE_BRIDGE_FAILURE_CODES as readonly string[]).includes(error.code))
+      return error.code as EngineBridgeFailureCode
+  }
+  return null
+}
+
+function localEngineBridgeFailure(code: EngineBridgeFailureCode, message: string): Error & { code: EngineBridgeFailureCode } {
+  return Object.assign(new Error(message), { code })
+}
+
+function isNoEntryError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }

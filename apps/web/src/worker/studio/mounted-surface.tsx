@@ -37,7 +37,7 @@ export interface MountedWorkbenchRoute {
   path: string
   surface: {
     renderer: 'micro-app'
-    scope: 'app' | 'artifact' | 'review' | 'session' | 'workspace'
+    scope: 'app' | 'artifact' | 'session' | 'workspace'
   }
 }
 

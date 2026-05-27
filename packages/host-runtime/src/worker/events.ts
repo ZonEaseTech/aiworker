@@ -1,10 +1,9 @@
-export type LocalWorkerEventKind = 'session' | 'turn' | 'event'
+export type LocalWorkerEventKind = 'session' | 'event'
 
 export interface LocalWorkerEvent {
   kind: LocalWorkerEventKind
   workspaceId: string
   sessionId?: string
-  turnId?: string
   invocationId?: string
   payload: Record<string, unknown>
   at: string

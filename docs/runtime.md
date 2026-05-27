@@ -28,6 +28,11 @@ session lifecycle: active | archived | deleted
 Session lifecycle describes whether the locator remains available in AIWorker.
 It does not describe engine execution.
 
+Session lifecycle metadata records the selected capability as `capabilityId`.
+Runtime APIs, snapshots, prompts, mounted context, CLI output, Web state, and
+diagnostics must use capability terminology. Historical SQLite column names may
+remain only behind the storage boundary while migrations are collapsed.
+
 execution/process state belongs to engine_invocations
 
 Engine invocation status:

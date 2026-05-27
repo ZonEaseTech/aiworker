@@ -5,7 +5,6 @@ export interface MountedMicroAppHostData {
   artifactId?: string | null
   expiresAt?: string | null
   mountTokenPresent?: boolean
-  reviewId?: string | null
   routePrefix?: string | null
   sessionId?: string | null
   surfaceId: string

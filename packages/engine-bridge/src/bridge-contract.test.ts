@@ -64,8 +64,12 @@ function createContractHarness(options: {
   supportsNativeResume?: boolean
   latestExternalSessionRef?: unknown
   cancelFails?: boolean
+  discoverFails?: boolean
+  followUpFails?: boolean
+  inspectFails?: boolean
   processBelongsToInvocation?: boolean
   rawChunkStoreFails?: boolean
+  startFails?: boolean
   reconciledProcessState?: 'lost' | 'spawned'
 } = {}) {
   const createEngineBridge = expectExportedFunction('createEngineBridge')
@@ -95,18 +99,24 @@ function createContractHarness(options: {
 
   const adapter = {
     target: 'codex',
-    discover: mock(async () => ({
-      callable: true,
-      diagnosticMessage: 'codex ready',
-      installed: true,
-      supportedInputMode: 'stdin',
-      supportsNativeResume: options.supportsNativeResume ?? true,
-      supportsProtocolCancel: true,
-      target: 'codex',
-      version: '1.2.3',
-    })),
+    discover: mock(async () => {
+      if (options.discoverFails)
+        throw new Error('native discover failed with token=sk-test-secret')
+      return {
+        callable: true,
+        diagnosticMessage: 'codex ready',
+        installed: true,
+        supportedInputMode: 'stdin',
+        supportsNativeResume: options.supportsNativeResume ?? true,
+        supportsProtocolCancel: true,
+        target: 'codex',
+        version: '1.2.3',
+      }
+    }),
     start: mock(async (_request: unknown, sink: { event: (event: unknown) => void, raw: (chunk: unknown) => void }) => {
       callOrder.push('adapter.start')
+      if (options.startFails)
+        throw new Error('native protocol init failed with token=sk-test-secret')
       sink.raw({ data: 'stdout token=sk-test-secret', stream: 'stdout' })
       sink.event({ data: { text: 'token=sk-test-secret' }, type: 'invocation.output.delta' })
       return {
@@ -122,6 +132,8 @@ function createContractHarness(options: {
     followUp: mock(async (request: { externalSessionRef?: unknown }) => {
       callOrder.push('adapter.followUp')
       expect(request.externalSessionRef).toEqual({ id: 'native-thread-1', target: 'codex' })
+      if (options.followUpFails)
+        throw new Error('native follow-up failed with token=sk-test-secret')
       return {
         eventStreamRef: 'events/invocation-follow-up',
         externalSessionRef: { id: 'native-thread-2', target: 'codex' },
@@ -155,6 +167,8 @@ function createContractHarness(options: {
     inspect: mock(async (handle: { invocationId: string }, guard: { invocationId: string }) => {
       expect(handle.invocationId).toBe(guard.invocationId)
       callOrder.push('process.inspect')
+      if (options.inspectFails)
+        throw new Error('process inspect failed with token=sk-test-secret')
       return {
         diagnostic: 'process vanished with token=sk-test-secret',
         invocationId: handle.invocationId,
@@ -245,6 +259,36 @@ describe('engine-bridge B+ adapter contract exports', () => {
     expect(JSON.stringify(redacted)).not.toContain('literal-secret-value')
     expect(JSON.stringify(redacted)).toContain('[REDACTED]')
   })
+
+  test('redacts adapter discover failures and classifies them as callable failures', async () => {
+    const { engineBridge } = createContractHarness({ discoverFails: true })
+
+    try {
+      await engineBridge.discover('codex')
+      throw new Error('expected discover to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({ code: 'ENGINE_NOT_CALLABLE' })
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('[REDACTED]')
+      expect(message).not.toContain('sk-test-secret')
+    }
+  })
+
+  test('redacts unsupported engine target diagnostics', async () => {
+    const { engineBridge } = createContractHarness()
+
+    try {
+      await engineBridge.discover('codex token=sk-test-secret')
+      throw new Error('expected discover to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({ code: 'ENGINE_NOT_CALLABLE' })
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('[REDACTED]')
+      expect(message).not.toContain('sk-test-secret')
+    }
+  })
 })
 
 describe('engine-bridge start invocation contract', () => {
@@ -311,6 +355,80 @@ describe('engine-bridge start invocation contract', () => {
       expect(error instanceof Error ? error.message : String(error)).not.toContain('sk-test-secret')
     }
   })
+
+  test('redacts adapter start failures and classifies them as protocol init failures', async () => {
+    const { engineBridge } = createContractHarness({ startFails: true })
+
+    try {
+      await engineBridge.startInvocation({
+        capabilityDescriptorRef: 'capability/hr-review',
+        cwd: '/workspace',
+        engineTarget: 'codex',
+        input: { body: 'start' },
+        invocationId: 'invocation-start',
+        projectionReceiptId: 'projection-receipt-1',
+        sessionId: 'session-1',
+        workerId: 'worker-1',
+        workspaceLocatorId: 'workspace-1',
+      })
+      throw new Error('expected startInvocation to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({ code: 'ENGINE_PROTOCOL_INIT_FAILED' })
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('[REDACTED]')
+      expect(message).not.toContain('sk-test-secret')
+    }
+  })
+
+  test('preserves local executor process-exit failures and redacts partial results', async () => {
+    const createEngineBridge = expectExportedFunction('createEngineBridge')
+    const localExecutorFailure = Object.assign(
+      new Error('codex exited token=sk-test-secret'),
+      {
+        name: 'LocalExecutorFailure',
+        partialResult: {
+          metadata: { diagnostic: 'authorization = "literal-secret-value"' },
+          summary: 'Codex exited token=sk-test-secret.',
+        },
+      },
+    )
+    const engineBridge = createEngineBridge({
+      adapters: [{
+        async cancel() {
+          return {}
+        },
+        async discover() {
+          return { callable: true, installed: true, target: 'codex' }
+        },
+        async followUp() {
+          return {}
+        },
+        normalize() {
+          return [{ type: 'invocation.progress' }]
+        },
+        async start() {
+          throw localExecutorFailure
+        },
+        target: 'codex',
+      }],
+    }) as EngineBridge
+
+    try {
+      await engineBridge.startInvocation({
+        engineTarget: 'codex',
+        invocationId: 'invocation-start',
+        projectionReceiptId: 'projection-receipt-1',
+      })
+      throw new Error('expected startInvocation to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({ code: 'ENGINE_PROCESS_EXITED', name: 'LocalExecutorFailure' })
+      expect(JSON.stringify(error)).not.toContain('sk-test-secret')
+      expect(JSON.stringify(error)).not.toContain('literal-secret-value')
+      expect(JSON.stringify(error)).toContain('[REDACTED]')
+    }
+  })
 })
 
 describe('engine-bridge follow-up native resume contract', () => {
@@ -352,6 +470,34 @@ describe('engine-bridge follow-up native resume contract', () => {
     })
     expect(adapter.followUp).toHaveBeenCalledTimes(1)
   })
+
+  test('redacts adapter follow-up failures and classifies them as protocol init failures', async () => {
+    const { engineBridge } = createContractHarness({
+      followUpFails: true,
+      latestExternalSessionRef: { id: 'native-thread-1', target: 'codex' },
+      supportsNativeResume: true,
+    })
+
+    try {
+      await engineBridge.followUp({
+        cwd: '/workspace',
+        engineTarget: 'codex',
+        input: { body: 'continue' },
+        invocationId: 'invocation-follow-up',
+        projectionReceiptId: 'projection-receipt-1',
+        sessionId: 'session-1',
+        workerId: 'worker-1',
+        workspaceLocatorId: 'workspace-1',
+      })
+      throw new Error('expected followUp to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({ code: 'ENGINE_PROTOCOL_INIT_FAILED' })
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('[REDACTED]')
+      expect(message).not.toContain('sk-test-secret')
+    }
+  })
 })
 
 describe('engine-bridge cancel contract', () => {
@@ -365,6 +511,45 @@ describe('engine-bridge cancel contract', () => {
     })
 
     expect(callOrder).toEqual(['adapter.cancel', 'process.softInterrupt', 'process.terminateGroup'])
+  })
+
+  test('uses the requested engine target adapter for protocol cancel', async () => {
+    const createEngineBridge = expectExportedFunction('createEngineBridge')
+    const codexCancel = mock(async () => {
+      throw new Error('codex adapter must not cancel claude-code invocations')
+    })
+    const claudeCancel = mock(async () => ({ cancelled: true }))
+    const minimalAdapter = {
+      async discover() {
+        return { callable: true, installed: true, target: 'codex' }
+      },
+      async followUp() {
+        return {}
+      },
+      normalize() {
+        return [{ type: 'invocation.progress' }]
+      },
+      async start() {
+        return {}
+      },
+    }
+    const engineBridge = createEngineBridge({
+      adapters: [
+        { ...minimalAdapter, cancel: codexCancel, target: 'codex' },
+        { ...minimalAdapter, cancel: claudeCancel, target: 'claude-code' },
+      ],
+      cancelGracePeriodMs: 0,
+    }) as EngineBridge
+
+    await engineBridge.cancelInvocation({
+      engineTarget: 'claude-code',
+      handle: { invocationId: 'claude-invocation', pid: 202 },
+      invocationId: 'claude-invocation',
+      reason: 'user-request',
+    })
+
+    expect(codexCancel).not.toHaveBeenCalled()
+    expect(claudeCancel).toHaveBeenCalledTimes(1)
   })
 
   test('does not terminate when the process handle no longer belongs to the requested invocation', async () => {
@@ -414,6 +599,21 @@ describe('engine-bridge normalized event class contract', () => {
     const { engineBridge } = createContractHarness()
 
     expect(() => engineBridge.normalize('codex', { data: '{}', stream: 'protocol', type })).toThrow(/domain|forbidden|bridge event/i)
+  })
+
+  test('classifies unsupported native bridge event output as a redacted platform parse failure', () => {
+    const { engineBridge } = createContractHarness()
+
+    try {
+      engineBridge.normalize('codex', { data: '{}', stream: 'protocol', type: 'review.approved token=sk-test-secret' })
+      throw new Error('expected normalize to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({ code: 'ENGINE_OUTPUT_PARSE_FAILED' })
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('[REDACTED]')
+      expect(message).not.toContain('sk-test-secret')
+    }
   })
 })
 
@@ -489,5 +689,23 @@ describe('engine-bridge reconciler contract', () => {
     }))
     expect(result).not.toHaveProperty('sessionStatus')
     expect(JSON.stringify({ result, storedBridgeEvents })).not.toContain('sk-test-secret')
+  })
+
+  test('redacts process inspection failures and classifies them as process lost', async () => {
+    const { engineBridge } = createContractHarness({ inspectFails: true })
+
+    try {
+      await engineBridge.reconcileInvocation({
+        handle: { invocationId: 'invocation-lost', pid: 404 },
+        invocationId: 'invocation-lost',
+      })
+      throw new Error('expected reconcileInvocation to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({ code: 'ENGINE_PROCESS_LOST' })
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('[REDACTED]')
+      expect(message).not.toContain('sk-test-secret')
+    }
   })
 })

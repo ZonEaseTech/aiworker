@@ -49,7 +49,7 @@ export const sessions = sqliteTable(
     id: text('id').primaryKey(),
     workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
     workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-    capabilityTemplateId: text('capability_template_id').notNull(),
+    capabilityId: text('capability_template_id').notNull(),
     title: text('title').notNull(),
     context: text('context').notNull().default(''),
     status: text('status', { enum: ['active', 'archived', 'deleted'] }).notNull().default('active'),
@@ -60,7 +60,7 @@ export const sessions = sqliteTable(
     updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    capabilityUpdatedAtIdx: index('sessions_capability_updated_at_idx').on(table.capabilityTemplateId, table.updatedAt),
+    capabilityUpdatedAtIdx: index('sessions_capability_updated_at_idx').on(table.capabilityId, table.updatedAt),
     statusUpdatedAtIdx: index('sessions_status_updated_at_idx').on(table.status, table.updatedAt),
     workerUpdatedAtIdx: index('sessions_worker_updated_at_idx').on(table.workerId, table.updatedAt),
     workspaceUpdatedAtIdx: index('sessions_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),

@@ -121,9 +121,9 @@ export function resolveWorkspacesRoot(workerId: string): string {
 }
 
 /**
- * Worker identity, Soul binding, enabled capabilities, engine defaults, review
- * policy, and memory namespace live in `aiworker.db`. Worker init creates only
- * the filesystem root an external engine can actually use: workspaces.
+ * Worker identity, Soul binding, enabled capabilities, and engine defaults live
+ * in `aiworker.db`. Worker init creates only the filesystem root an external
+ * engine can actually use: workspaces.
  */
 export async function ensureWorkerHome(workerId: string): Promise<void> {
   await mkdir(resolveWorkspacesRoot(workerId), { recursive: true })

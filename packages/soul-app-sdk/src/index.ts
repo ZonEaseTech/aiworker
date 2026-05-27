@@ -4,7 +4,7 @@ import { basename, join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 
-const SECRET_ASSIGNMENT_RE = /(["']?[\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*["']?\s*[:=]\s*["']?)([^"'\s\n]+)/gi
+const SECRET_ASSIGNMENT_RE = /(["']?[\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*["']?\s*[:=]\s*["']?)([^"'\s]+)/gi
 const SECRET_VALUE_RE = /\b(Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,})\b/gi
 
 export type SoulBuildStatus = 'built' | 'failed'

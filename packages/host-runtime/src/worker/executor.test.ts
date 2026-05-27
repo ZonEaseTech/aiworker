@@ -41,12 +41,11 @@ describe('createExternalEngineExecutor', () => {
       onEvent: (event: LocalExecutorEvent) => events.push(event),
       prompt: 'Prepare a business answer.',
       sessionId: 'session-1',
-      turnId: 'turn-1',
       workspaceId: 'workspace-1',
       workspaceRoot,
       metadata: {
+        capabilityName: 'Candidate Screen',
         outputKind: 'candidate-screen',
-        skillName: 'Candidate Screen',
       },
     }
   }
@@ -137,6 +136,28 @@ exit 9
 
     await expect(createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events))).rejects.toThrow('exited with code 9')
     expect(events.some(event => event.kind === 'log' && event.stream === 'stderr' && event.chunk.includes('fatal engine error'))).toBe(true)
+  })
+
+  it('redacts persisted native engine stdout and stderr logs', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+printf 'answer token=sk-test-secret\\n'
+printf 'authorization = "literal-secret-value"\\n' >&2
+`)
+    const input = {
+      ...baseInput(command, workspaceRoot),
+      engineId: 'qwen',
+    }
+
+    await createExternalEngineExecutor().invoke(input)
+
+    const stdout = await readFile(path.join(input.invocationRoot, 'stdout.log'), 'utf8')
+    const stderr = await readFile(path.join(input.invocationRoot, 'stderr.log'), 'utf8')
+    expect(stdout).not.toContain('sk-test-secret')
+    expect(stderr).not.toContain('literal-secret-value')
+    expect(`${stdout}\n${stderr}`).toContain('[REDACTED]')
   })
 
   it('terminates local CLI engines after the configured hard timeout', async () => {

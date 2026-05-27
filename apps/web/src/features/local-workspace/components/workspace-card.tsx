@@ -1,34 +1,32 @@
-import type { LocalSession, LocalTurn, LocalWorkspace } from '@zonease/aiworker-soul-protocol'
+import type { LocalSession, LocalWorkspace } from '@zonease/aiworker-soul-protocol'
 import type { normalizeLocale } from '../../i18n'
-import type { CapabilityTemplate } from '../types.compat'
+import type { WorkspaceCapability } from '../types.compat'
 
 import { File02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@zonease/aiworker-ui/components/item'
-import { displayTemplate, formatRelativeTime, formatStatus, messagesFor } from '../../i18n'
+import { displayCapability, formatRelativeTime, formatStatus, messagesFor } from '../../i18n'
 
 export function WorkspaceCard({
   active,
+  capability,
   item,
   locale,
   onSelect,
   session,
-  template,
-  turn,
 }: {
   active: boolean
+  capability?: WorkspaceCapability
   item: LocalWorkspace
   locale: ReturnType<typeof normalizeLocale>
   onSelect: () => void
   session: LocalSession | null
-  template?: CapabilityTemplate
-  turn: LocalTurn | null
 }) {
   const copy = messagesFor(locale)
-  const templateCopy = template ? displayTemplate(template, locale) : null
-  const status = formatStatus(turn?.status ?? session?.status ?? item.status, locale)
+  const capabilityCopy = capability ? displayCapability(capability, locale) : null
+  const status = formatStatus(session?.status ?? item.status, locale)
   return (
     <Button
       type="button"
@@ -45,7 +43,7 @@ export function WorkspaceCard({
         <ItemContent className="min-w-0">
           <ItemTitle className="max-w-full" title={item.name}>{item.name}</ItemTitle>
           <ItemDescription className="max-w-full">
-            {templateCopy?.name ?? session?.capabilityTemplateId ?? copy.common.workspace}
+            {capabilityCopy?.name ?? session?.capabilityId ?? copy.common.workspace}
           </ItemDescription>
         </ItemContent>
       </ItemActions>

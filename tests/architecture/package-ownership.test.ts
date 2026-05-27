@@ -84,4 +84,28 @@ describe('target package ownership', () => {
     expect(cliPackage.devDependencies ?? {}).toHaveProperty('@zonease/aiworker-host-daemon')
     expect(cliPackage.devDependencies ?? {}).not.toHaveProperty('@zonease/aiworker-api')
   })
+
+  test('host runtime delegates engine asset projection to the engine-projection package', () => {
+    const hostRuntimeEntrypoint = readFileSync(join(repoRoot, 'packages/host-runtime/src/index.ts'), 'utf8')
+    const hostRuntimeSource = readFileSync(join(repoRoot, 'packages/host-runtime/src/worker/runtime.ts'), 'utf8')
+    const hostDaemonPackage = JSON.parse(readFileSync(join(repoRoot, 'packages/host-daemon/package.json'), 'utf8')) as PackageJson
+
+    expect(existsSync(join(repoRoot, 'packages/host-runtime/src/worker/engine-assets.ts'))).toBe(false)
+    expect(existsSync(join(repoRoot, 'packages/host-runtime/src/worker/engine-assets.test.ts'))).toBe(false)
+    expect(hostRuntimeEntrypoint).not.toContain('projectEngineAssetsToWorkspace')
+    expect(hostRuntimeEntrypoint).not.toContain('listBaselineAssets')
+    expect(hostRuntimeSource).toContain('@zonease/aiworker-engine-projection')
+    expect(hostRuntimeSource).toContain('cleanupWorkspaceProjectionReceipt')
+    expect(hostRuntimeSource).not.toContain('resolveWorkspaceProjectionTarget')
+    expect(hostDaemonPackage.dependencies ?? {}).toHaveProperty('@zonease/aiworker-engine-projection')
+  })
+
+  test('host runtime does not retain a local native engine bridge implementation', () => {
+    const hostRuntimeEntrypoint = readFileSync(join(repoRoot, 'packages/host-runtime/src/index.ts'), 'utf8')
+
+    expect(existsSync(join(repoRoot, 'packages/host-runtime/src/worker/engine-bridge.ts'))).toBe(false)
+    expect(existsSync(join(repoRoot, 'packages/host-runtime/src/worker/engine-bridge.test.ts'))).toBe(false)
+    expect(hostRuntimeEntrypoint).not.toContain('invokeNativeEngine')
+    expect(hostRuntimeEntrypoint).not.toContain('NativeEngineBridge')
+  })
 })

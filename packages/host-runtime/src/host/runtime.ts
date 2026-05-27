@@ -20,14 +20,15 @@ import {
   discardOfficialSoulAppLegacyMetadata,
 } from '../soul-app/official'
 import {
+  deleteSoulApp,
   disableSoulApp,
   enableSoulApp,
-  findHostCapabilityTemplate,
+  findHostCapability,
   findHostSoul,
   getHostedSoulApp,
   installSoulAppFromPath,
   installSoulDescriptor,
-  listHostCapabilityTemplatesForSoul,
+  listHostCapabilitiesForSoul,
   listHostedSoulApps,
   listHostSoulCatalog,
   runSoulAppHealthcheck,
@@ -35,21 +36,19 @@ import {
 import { createLocalWorkerRuntime } from '../worker/runtime'
 
 // -- inlined from deleted shared types --
-interface CapabilityTemplate {
+interface HostCapability {
   description: string
   id: string
   inputHints: readonly string[]
   name: string
   outputKind: string
   promptRef: string
-  reviewRubricRef: string | null
   soulId: string
 }
 
 interface VerticalSoul {
-  defaultTemplates: readonly string[]
+  defaultCapabilities: readonly string[]
   description: string
-  domain: string
   id: string
   name: string
   status: 'available' | 'coming_soon'
@@ -120,6 +119,10 @@ export class HostRuntime {
     return disableSoulApp(appId, this.registryContext())
   }
 
+  deleteApp(appId: string): HostedSoulApp {
+    return deleteSoulApp(appId)
+  }
+
   healthcheckApp(appId: string): HostedSoulApp {
     return runSoulAppHealthcheck(appId, this.registryContext())
   }
@@ -155,22 +158,22 @@ export class HostRuntime {
     return soul
   }
 
-  listCapabilityTemplates(soulId?: string): CapabilityTemplate[] {
-    return soulId ? listHostCapabilityTemplatesForSoul(soulId) : this.listCatalog().templates
+  listCapabilities(soulId?: string): HostCapability[] {
+    return soulId ? listHostCapabilitiesForSoul(soulId) : this.listCatalog().capabilities
   }
 
-  listCapabilityTemplatesForWorker(workerId: string): CapabilityTemplate[] {
+  listCapabilitiesForWorker(workerId: string): HostCapability[] {
     const worker = this.requireWorker(workerId)
-    return listHostCapabilityTemplatesForSoul(worker.soulId)
+    return listHostCapabilitiesForSoul(worker.soulId)
   }
 
-  requireCapabilityTemplateForWorker(workerId: string, templateId: unknown): CapabilityTemplate {
+  requireCapabilityForWorker(workerId: string, capabilityId: unknown): HostCapability {
     const worker = this.requireWorker(workerId)
-    const id = requireText(templateId, 'capabilityTemplateId')
-    const template = findHostCapabilityTemplate(id)
-    if (!template || template.soulId !== worker.soulId)
-      throw AppError.badRequest(`Template ${id} does not belong to worker ${workerId}.`, 'TEMPLATE_NOT_AVAILABLE')
-    return template
+    const id = requireText(capabilityId, 'capabilityId')
+    const capability = findHostCapability(id)
+    if (!capability || capability.soulId !== worker.soulId)
+      throw AppError.badRequest(`Capability ${id} does not belong to worker ${workerId}.`, 'CAPABILITY_NOT_AVAILABLE')
+    return capability
   }
 
   async createSoulWorker(input: CreateHostSoulWorkerInput): Promise<CreateHostSoulWorkerResult> {
@@ -186,9 +189,8 @@ export class HostRuntime {
       name,
       defaultEngineId: input.defaultEngineId ?? 'codex',
       metadataJson: {
-        defaultTemplates: [...soul.defaultTemplates],
+        defaultCapabilities: [...soul.defaultCapabilities],
         description: soul.description,
-        domain: soul.domain,
         soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
         ...(input.metadata ?? {}),
       },

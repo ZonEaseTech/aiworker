@@ -29,20 +29,8 @@ export const soulAppMcpClientEngineAssetsSchema = zod.object({
 })
 export type SoulAppMcpClientEngineAssets = z.infer<typeof soulAppMcpClientEngineAssetsSchema>
 
-export const soulAppMcpServerTransportSchema = zod.enum(['stdio', 'http'])
-export type SoulAppMcpServerTransport = z.infer<typeof soulAppMcpServerTransportSchema>
-
-export const soulAppMcpServerEngineAssetsSchema = zod.object({
-  id: soulAppIdSchema,
-  package: zod.string().min(1),
-  requiredPermissions: zod.array(zod.string().min(1)).readonly().optional(),
-  transport: soulAppMcpServerTransportSchema,
-})
-export type SoulAppMcpServerEngineAssets = z.infer<typeof soulAppMcpServerEngineAssetsSchema>
-
 export const soulAppEngineAssetsSchema = zod.object({
   mcpClients: zod.array(soulAppMcpClientEngineAssetsSchema).readonly().optional(),
-  mcpServers: zod.array(soulAppMcpServerEngineAssetsSchema).readonly().optional(),
   skills: soulAppSkillEngineAssetsSchema.optional(),
   workspace: soulAppWorkspaceEngineAssetsSchema,
 })

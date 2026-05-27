@@ -6,8 +6,8 @@ import { describe, expect, it } from 'bun:test'
 
 import {
   LocalEngineResolutionError,
-  scanLocalEngines,
   resolveLocalCliEngine,
+  scanLocalEngines,
   scanLocalEnginesFromCommands,
 } from './local-engine-resolver'
 

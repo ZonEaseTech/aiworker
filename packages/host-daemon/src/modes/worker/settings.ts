@@ -1,6 +1,6 @@
 import type { LocalEngineReadinessSettings, LocalSettingsConfig } from '@zonease/aiworker-soul-protocol'
 import { scanLocalEngines } from '@zonease/aiworker-host-runtime'
-import { localSettingsConfigSchema } from '@zonease/aiworker-soul-protocol'
+import { AppError, localSettingsConfigSchema } from '@zonease/aiworker-soul-protocol'
 import { getSetting, listSettings, setSetting } from '@zonease/aiworker-storage-sqlite/worker'
 
 export const LOCAL_SETTINGS_KEY = 'local-settings'
@@ -65,8 +65,52 @@ export function readLocalConnectorSettings(): Pick<LocalSettingsConfig, 'connect
 
 export function saveLocalSettings(settings: LocalSettingsConfig): LocalSettingsConfig {
   const parsed = localSettingsConfigSchema.parse(normalizePendingMcpSettings(settings))
-  setSetting(LOCAL_SETTINGS_KEY, parsed)
+  assertSafeSecretRefs(parsed)
+  try {
+    setSetting(LOCAL_SETTINGS_KEY, parsed)
+  }
+  catch (error) {
+    throw normalizeLocalSettingsPersistenceError(error)
+  }
   return parsed
+}
+
+function assertSafeSecretRefs(settings: LocalSettingsConfig): void {
+  if (isSafeSecretReference(settings.byok.apiKeyRef))
+    return
+  throw new AppError(
+    'LOCAL_SETTINGS_SECRET',
+    422,
+    'Local settings must store BYOK API key references, not literal secrets.',
+  )
+}
+
+function isSafeSecretReference(value: string): boolean {
+  const trimmed = value.trim()
+  return trimmed.length === 0 || trimmed === '[REDACTED]' || trimmed.startsWith('$') || trimmed.startsWith('env:') || trimmed.startsWith('secretref:')
+}
+
+function normalizeLocalSettingsPersistenceError(error: unknown): unknown {
+  if (!(error instanceof Error))
+    return error
+
+  if (error.message.startsWith('Literal secrets are not allowed in Host metadata:')) {
+    return new AppError(
+      'LOCAL_SETTINGS_SECRET',
+      422,
+      'Local settings must store secret references, not literal secrets.',
+    )
+  }
+
+  if (error.message.startsWith('Full native MCP files are not allowed in Host metadata:')) {
+    return new AppError(
+      'LOCAL_SETTINGS_INVALID',
+      422,
+      'Local settings must store references, not full native MCP files.',
+    )
+  }
+
+  return error
 }
 
 function normalizePendingMcpSettings(settings: LocalSettingsConfig): LocalSettingsConfig {

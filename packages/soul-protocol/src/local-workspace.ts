@@ -9,9 +9,6 @@ export type LocalWorkspaceStatus = z.infer<typeof localWorkspaceStatusSchema>
 export const localSessionStatusSchema = z.enum(['active', 'archived', 'deleted'])
 export type LocalSessionStatus = z.infer<typeof localSessionStatusSchema>
 
-export const localTurnStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled'])
-export type LocalTurnStatus = z.infer<typeof localTurnStatusSchema>
-
 export const localEngineInvocationStatusSchema = z.enum(['queued', 'starting', 'running', 'succeeded', 'failed', 'cancelled', 'lost'])
 export type LocalEngineInvocationStatus = z.infer<typeof localEngineInvocationStatusSchema>
 
@@ -74,6 +71,44 @@ export const localWorkerOverlaySaveSchema = z.object({
 })
 export type LocalWorkerOverlaySaveInput = z.infer<typeof localWorkerOverlaySaveSchema>
 
+export const localWorkerConfigKindSchema = z.enum([
+  'engine-selection',
+  'projection-overlay',
+  'skill-overlay',
+  'mcp-overlay',
+  'entry-file-overlay',
+  'workbench-preference',
+  'sdk-extension',
+])
+export type LocalWorkerConfigKind = z.infer<typeof localWorkerConfigKindSchema>
+
+export const localWorkerConfigTargetSchema = z.enum(['codex', 'claude-code', 'all', 'none'])
+export type LocalWorkerConfigTarget = z.infer<typeof localWorkerConfigTargetSchema>
+
+export const localWorkerConfigUpdatedBySchema = z.enum(['cli', 'web', 'app-owned-api'])
+export type LocalWorkerConfigUpdatedBy = z.infer<typeof localWorkerConfigUpdatedBySchema>
+
+const localWorkerConfigValueBaseSchema = z.object({
+  checksum: z.string().nullable().optional().default(null),
+  enabled: z.boolean(),
+  kind: localWorkerConfigKindSchema,
+  options: localJsonObjectSchema.optional().default({}),
+  sourceRef: z.string().min(1).nullable().optional().default(null),
+  target: localWorkerConfigTargetSchema,
+})
+
+export const localWorkerConfigValueInputSchema = localWorkerConfigValueBaseSchema.extend({
+  updatedAt: timestampSchema.optional(),
+  updatedBy: localWorkerConfigUpdatedBySchema.optional(),
+}).strict()
+export type LocalWorkerConfigValueInput = z.infer<typeof localWorkerConfigValueInputSchema>
+
+export const localWorkerConfigValueSchema = localWorkerConfigValueBaseSchema.extend({
+  updatedAt: timestampSchema,
+  updatedBy: localWorkerConfigUpdatedBySchema,
+}).strict()
+export type LocalWorkerConfigValue = z.infer<typeof localWorkerConfigValueSchema>
+
 export const localComposerMentionSchema = z.object({
   id: idSchema,
   kind: z.literal('skill'),
@@ -115,7 +150,7 @@ export const localSessionSchema = z.object({
   id: idSchema,
   workerId: idSchema,
   workspaceId: idSchema,
-  capabilityTemplateId: idSchema,
+  capabilityId: idSchema,
   title: z.string().min(1),
   context: z.string(),
   status: localSessionStatusSchema,
@@ -126,20 +161,6 @@ export const localSessionSchema = z.object({
   updatedAt: timestampSchema,
 })
 export type LocalSession = z.infer<typeof localSessionSchema>
-
-export const localTurnSchema = z.object({
-  id: idSchema,
-  sessionId: idSchema,
-  seq: z.number().int().positive(),
-  input: z.string().min(1),
-  response: z.string().nullable(),
-  status: localTurnStatusSchema,
-  error: z.string().nullable(),
-  metadataJson: localJsonObjectSchema,
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-})
-export type LocalTurn = z.infer<typeof localTurnSchema>
 
 export const localEngineInvocationSchema = z.object({
   id: idSchema,
@@ -168,8 +189,7 @@ export type LocalEngineInvocation = z.infer<typeof localEngineInvocationSchema>
 export const localSessionEventSchema = z.object({
   id: z.number().int().positive(),
   sessionId: idSchema,
-  turnId: idSchema.nullable(),
-  invocationId: idSchema.nullable(),
+  invocationId: idSchema,
   seq: z.number().int().nonnegative(),
   type: localSessionEventTypeSchema,
   payloadJson: localJsonObjectSchema,

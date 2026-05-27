@@ -7,16 +7,16 @@ import { deriveWorkerStudioLocatorState } from './locator'
 const now = '2026-05-23T00:00:00.000Z'
 
 describe('deriveWorkerStudioLocatorState', () => {
-  it('selectable workers only include available Souls with at least one template', () => {
+  it('selectable workers only include available Souls with at least one capability', () => {
     const data = createData({
       souls: [
         soul({ id: 'aiworker-hr', status: 'available' }),
         soul({ id: 'aiworker-qa', status: 'coming_soon' }),
         soul({ id: 'aiworker-empty', status: 'available' }),
       ],
-      templates: [
-        template({ id: 'aiworker-hr.profile', soulId: 'aiworker-hr' }),
-        template({ id: 'aiworker-qa.release', soulId: 'aiworker-qa' }),
+      capabilities: [
+        capability({ id: 'aiworker-hr.profile', soulId: 'aiworker-hr' }),
+        capability({ id: 'aiworker-qa.release', soulId: 'aiworker-qa' }),
       ],
       workers: [
         worker({ id: 'hr-worker', soulId: 'aiworker-hr' }),
@@ -55,9 +55,9 @@ describe('deriveWorkerStudioLocatorState', () => {
         soul({ id: 'aiworker-hr', status: 'available' }),
         soul({ id: 'aiworker-qa', status: 'available' }),
       ],
-      templates: [
-        template({ id: 'aiworker-hr.profile', soulId: 'aiworker-hr' }),
-        template({ id: 'aiworker-qa.release', soulId: 'aiworker-qa' }),
+      capabilities: [
+        capability({ id: 'aiworker-hr.profile', soulId: 'aiworker-hr' }),
+        capability({ id: 'aiworker-qa.release', soulId: 'aiworker-qa' }),
       ],
       workers: [
         worker({ id: 'hr-worker', soulId: 'aiworker-hr' }),
@@ -69,7 +69,7 @@ describe('deriveWorkerStudioLocatorState', () => {
       ],
       sessions: [
         session({
-          capabilityTemplateId: 'aiworker-qa.release',
+          capabilityId: 'aiworker-qa.release',
           id: 'qa-session',
           workerId: 'qa-worker',
           workspaceId: 'qa-workspace',
@@ -101,23 +101,23 @@ describe('deriveWorkerStudioLocatorState', () => {
     expect(sessionState.selectedSession?.id).toBe('qa-session')
   })
 
-  it('filters workspaces by workspace name and template display without reading app-owned session content', () => {
+  it('filters workspaces by workspace name and capability display without reading app-owned session content', () => {
     const data = createData({
       settings: { language: 'en' } as LocalWorkspaceData['settings'],
       souls: [soul({ id: 'aiworker-hr', status: 'available' })],
-      templates: [
-        template({ id: 'aiworker-hr.profile', name: 'Profile Template', soulId: 'aiworker-hr' }),
-        template({ id: 'aiworker-hr.screen', name: 'Screening Template', soulId: 'aiworker-hr' }),
+      capabilities: [
+        capability({ id: 'aiworker-hr.profile', name: 'Profile Capability', soulId: 'aiworker-hr' }),
+        capability({ id: 'aiworker-hr.screen', name: 'Screening Capability', soulId: 'aiworker-hr' }),
       ],
       workers: [worker({ id: 'hr-worker', soulId: 'aiworker-hr' })],
       workspaces: [
         workspace({ id: 'quiet-workspace', name: 'Quiet Workspace', workerId: 'hr-worker' }),
         workspace({ id: 'named-workspace', name: 'Hiring Pipeline', workerId: 'hr-worker' }),
-        workspace({ id: 'templated-workspace', name: 'Operations Board', workerId: 'hr-worker' }),
+        workspace({ id: 'capability-workspace', name: 'Operations Board', workerId: 'hr-worker' }),
       ],
       sessions: [
         session({
-          capabilityTemplateId: 'aiworker-hr.profile',
+          capabilityId: 'aiworker-hr.profile',
           context: 'confidential compensation review',
           id: 'quiet-session',
           title: 'confidential compensation review',
@@ -125,30 +125,16 @@ describe('deriveWorkerStudioLocatorState', () => {
           workspaceId: 'quiet-workspace',
         }),
         session({
-          capabilityTemplateId: 'aiworker-hr.screen',
-          id: 'templated-session',
+          capabilityId: 'aiworker-hr.screen',
+          id: 'capability-session',
           workerId: 'hr-worker',
-          workspaceId: 'templated-workspace',
+          workspaceId: 'capability-workspace',
         }),
-      ],
-      turns: [
-        {
-          createdAt: now,
-          error: null,
-          id: 'turn-1',
-          input: 'confidential compensation review',
-          metadataJson: {},
-          response: 'confidential compensation review',
-          seq: 1,
-          sessionId: 'quiet-session',
-          status: 'succeeded',
-          updatedAt: now,
-        },
       ],
     })
 
     expect(workspaceIds(data, 'hiring')).toEqual(['named-workspace'])
-    expect(workspaceIds(data, 'screening template')).toEqual(['templated-workspace'])
+    expect(workspaceIds(data, 'screening capability')).toEqual(['capability-workspace'])
     expect(workspaceIds(data, 'confidential compensation')).toEqual([])
   })
 })
@@ -172,8 +158,7 @@ function createData(overrides: Partial<LocalWorkspaceData> = {}): LocalWorkspace
     sessions: [],
     settings: { language: 'en' } as LocalWorkspaceData['settings'],
     souls: [],
-    templates: [],
-    turns: [],
+    capabilities: [],
     workers: [],
     workspaces: [],
     ...overrides,
@@ -182,9 +167,8 @@ function createData(overrides: Partial<LocalWorkspaceData> = {}): LocalWorkspace
 
 function soul(overrides: Partial<LocalWorkspaceData['souls'][number]> = {}): LocalWorkspaceData['souls'][number] {
   return {
-    defaultTemplates: [],
+    defaultCapabilities: [],
     description: 'Soul for tests',
-    domain: 'test',
     id: 'aiworker-hr',
     name: 'AIWorker HR',
     status: 'available',
@@ -192,15 +176,14 @@ function soul(overrides: Partial<LocalWorkspaceData['souls'][number]> = {}): Loc
   }
 }
 
-function template(overrides: Partial<LocalWorkspaceData['templates'][number]> = {}): LocalWorkspaceData['templates'][number] {
+function capability(overrides: Partial<LocalWorkspaceData['capabilities'][number]> = {}): LocalWorkspaceData['capabilities'][number] {
   return {
-    description: 'Template for tests',
+    description: 'Capability for tests',
     id: 'aiworker-hr.profile',
     inputHints: [],
-    name: 'Profile Template',
+    name: 'Profile Capability',
     outputKind: 'profile',
     promptRef: './product/workflows/profile/prompt.md',
-    reviewRubricRef: null,
     soulId: 'aiworker-hr',
     ...overrides,
   }
@@ -238,7 +221,7 @@ function workspace(overrides: Partial<LocalWorkspaceData['workspaces'][number]> 
 
 function session(overrides: Partial<LocalWorkspaceData['sessions'][number]> = {}): LocalWorkspaceData['sessions'][number] {
   return {
-    capabilityTemplateId: 'aiworker-hr.profile',
+    capabilityId: 'aiworker-hr.profile',
     context: '',
     createdAt: now,
     endedAt: null,

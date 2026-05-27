@@ -1,36 +1,33 @@
 import type {
   LocalSession,
   LocalSettingsConfig,
-  LocalTurn,
   LocalWorker,
   LocalWorkspace,
 } from '@zonease/aiworker-soul-protocol'
-import type { CapabilityTemplate, VerticalSoul } from '../types.compat'
+import type { VerticalSoul, WorkspaceCapability } from '../types.compat'
 import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppLifecycleResponse, LocalWorkspaceData } from './types'
 
 import { localJson } from '../../../shared/api/local-client'
 
 export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
-  const [info, apps, workers, souls, templates, workspaces, sessions, turns, settings] = await Promise.all([
+  const [info, apps, workers, souls, capabilities, workspaces, sessions, settings] = await Promise.all([
     localJson<LocalInfoResponse>('/api/local/info'),
     localJson<{ apps: LocalHostedSoulApp[] }>('/api/local/apps'),
     localJson<{ workers: LocalWorker[] }>('/api/local/workers'),
     localJson<{ souls: VerticalSoul[] }>('/api/local/souls'),
-    localJson<{ templates: CapabilityTemplate[] }>('/api/local/templates'),
+    localJson<{ capabilities: WorkspaceCapability[] }>('/api/local/capabilities'),
     localJson<{ workspaces: LocalWorkspace[] }>('/api/local/workspaces'),
     localJson<{ sessions: LocalSession[] }>('/api/local/sessions'),
-    localJson<{ turns: LocalTurn[] }>('/api/local/turns'),
     localJson<{ settings: LocalSettingsConfig }>('/api/local/settings'),
   ])
   return {
     info,
     apps: apps.apps,
+    capabilities: capabilities.capabilities,
     workers: workers.workers,
     souls: souls.souls,
-    templates: templates.templates,
     workspaces: workspaces.workspaces,
     sessions: sessions.sessions,
-    turns: turns.turns,
     settings: settings.settings,
   }
 }
