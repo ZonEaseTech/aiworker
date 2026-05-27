@@ -1,5 +1,5 @@
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { readFile, rm } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -376,6 +376,42 @@ describe('local daemon API', () => {
     expect(body.events.at(-1)).toMatchObject({
       payloadJson: {
         failureCode: 'PROJECTION_RECEIPT_MISSING',
+        invocationId: expect.any(String),
+      },
+      type: 'error',
+    })
+  })
+
+  it('surfaces stale projection receipt failures through the session invocation API', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'stale-receipt-invocation-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    const receiptPath = join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    await writeFile(receiptPath, `${JSON.stringify({ ...receipt, receiptId: 'stale-receipt' }, null, 2)}\n`)
+
+    const followUpRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Continue with a stale projection receipt.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(followUpRes.status).toBe(201)
+    const body = await followUpRes.json() as {
+      events: Array<{ payloadJson: Record<string, unknown>, type: string }>
+      invocation: { failureCode: string, processState: string, sessionId: string, status: string }
+      session: { id: string, status: string }
+    }
+    expect(body.invocation).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_STALE',
+      processState: 'not_spawned',
+      sessionId: session.id,
+      status: 'failed',
+    })
+    expect(body.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(body.events.at(-1)).toMatchObject({
+      payloadJson: {
+        failureCode: 'PROJECTION_RECEIPT_STALE',
         invocationId: expect.any(String),
       },
       type: 'error',
