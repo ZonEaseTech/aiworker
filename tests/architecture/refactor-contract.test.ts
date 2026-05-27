@@ -361,6 +361,23 @@ describe('destructive refactor contract bootstrap', () => {
     expect(protocol).toContain('strips app-owned cookies plus Host mount credentials before returning')
   })
 
+  test('soul protocol does not expose legacy worker overlay write contracts', () => {
+    const protocolIndex = readRepoFile('packages/soul-protocol/src/index.ts')
+    const localWorkspaceProtocol = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
+    const forbidden = [
+      'localWorkerOverlaySaveSchema',
+      'LocalWorkerOverlaySaveInput',
+    ]
+    const findings = forbidden.flatMap(snippet => [
+      protocolIndex.includes(snippet) ? `packages/soul-protocol/src/index.ts: ${snippet}` : null,
+      localWorkspaceProtocol.includes(snippet) ? `packages/soul-protocol/src/local-workspace.ts: ${snippet}` : null,
+    ].filter((item): item is string => Boolean(item)))
+
+    expect(findings, 'worker overlay writes must use worker config envelope contracts').toEqual([])
+    expect(protocolIndex).toContain('localWorkerConfigValueInputSchema')
+    expect(localWorkspaceProtocol).toContain('localWorkerConfigValueInputSchema')
+  })
+
   test('capability template projections stay generic and do not expose review rubric fields', () => {
     const activeSources = [
       'packages/soul-protocol/src/soul-app/registry.ts',

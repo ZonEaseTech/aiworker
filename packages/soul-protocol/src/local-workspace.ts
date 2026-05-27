@@ -64,13 +64,6 @@ export const localWorkerOverlaySchema = z.object({
 })
 export type LocalWorkerOverlay = z.infer<typeof localWorkerOverlaySchema>
 
-export const localWorkerOverlaySaveSchema = z.object({
-  assets: z.array(localWorkerOverlayAssetSchema.omit({ source: true, updatedAt: true }).extend({
-    source: z.literal('overlay').optional().default('overlay'),
-  })),
-})
-export type LocalWorkerOverlaySaveInput = z.infer<typeof localWorkerOverlaySaveSchema>
-
 export const localWorkerConfigKindSchema = z.enum([
   'engine-selection',
   'projection-overlay',
