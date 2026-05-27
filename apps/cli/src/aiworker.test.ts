@@ -191,6 +191,7 @@ describe('aiworker local CLI', () => {
     expect(preprocessArgv(argv('session', 'start', '--input', 'P')).slice(2, 3)).toEqual(['session start'])
     expect(preprocessArgv(argv('session', 'invoke', '--input', 'P')).slice(2, 3)).toEqual(['session invoke'])
     expect(preprocessArgv(argv('worker', 'create', '--name', 'HR')).slice(2, 3)).toEqual(['worker create'])
+    expect(preprocessArgv(argv('worker', 'config', 'set', 'worker-1', 'engine-selection')).slice(2, 3)).toEqual(['worker config set'])
     expect(preprocessArgv(argv('daemon', 'restart')).slice(2, 3)).toEqual(['daemon restart'])
   })
 
@@ -200,7 +201,7 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('aiworker operator commands')
     expect(output).toContain('daemon start|stop|restart|status|logs')
     expect(output).toContain('app list|show|install|enable|archive|delete|bootstrap')
-    expect(output).toContain('worker create|list|select|archive|delete')
+    expect(output).toContain('worker create|list|select|config|archive|delete')
     expect(output).not.toContain('dev')
     expect(output).not.toContain('app create|validate|smoke')
 
@@ -211,6 +212,7 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('dev')
     expect(output).toContain('daemon start|foreground|status|stop|restart|logs|check')
     expect(output).toContain('app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke')
+    expect(output).toContain('worker create|list|show|select|config list|config set|archive|delete')
     expect(output).toContain('capability list')
     expect(output).toContain('files list|show')
     expect(output).not.toContain('compatibility inspection')
@@ -388,7 +390,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('commands'))).toBe(0)
     expect(output).toContain('daemon start|stop|restart|status|logs')
     expect(output).toContain('app list|show|install|enable|archive|delete|bootstrap')
-    expect(output).toContain('worker create|list|select|archive|delete')
+    expect(output).toContain('worker create|list|select|config|archive|delete')
     expect(output).toContain('workspace create|list|archive|delete')
     expect(output).toContain('session start|invoke|list|show|archive|delete')
     expect(output).not.toContain('run start')

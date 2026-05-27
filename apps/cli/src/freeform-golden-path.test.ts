@@ -62,6 +62,64 @@ describe('Freeform CLI golden path', () => {
     )
     expect(worker.worker).toMatchObject({ id: 'freeform-golden-worker', soulId: FREEFORM_APP_ID })
 
+    const savedConfig = await runCliJson<{
+      config: {
+        configKey: string
+        source: string
+        value: {
+          enabled: boolean
+          kind: string
+          options: Record<string, unknown>
+          sourceRef: string
+          target: string
+          updatedBy: string
+        }
+        workerId: string
+      }
+    }>(
+      'worker',
+      'config',
+      'set',
+      'freeform-golden-worker',
+      'engine-selection',
+      '--kind',
+      'engine-selection',
+      '--target',
+      'codex',
+      '--source-ref',
+      'descriptor://configuration/default-engine',
+      '--options-json',
+      '{"profileRef":"secretref:codex/default-profile"}',
+    )
+    expect(savedConfig.config).toMatchObject({
+      configKey: 'engine-selection',
+      source: 'cli',
+      value: {
+        enabled: true,
+        kind: 'engine-selection',
+        options: { profileRef: 'secretref:codex/default-profile' },
+        sourceRef: 'descriptor://configuration/default-engine',
+        target: 'codex',
+        updatedBy: 'cli',
+      },
+      workerId: 'freeform-golden-worker',
+    })
+
+    const listedConfig = await runCliJson<{
+      config: {
+        values: Array<{
+          configKey: string
+          value: { kind: string, target: string }
+          workerId: string
+        }>
+      }
+    }>('worker', 'config', 'list', 'freeform-golden-worker')
+    expect(listedConfig.config.values).toContainEqual(expect.objectContaining({
+      configKey: 'engine-selection',
+      value: expect.objectContaining({ kind: 'engine-selection', target: 'codex' }),
+      workerId: 'freeform-golden-worker',
+    }))
+
     const workspace = await runCliJson<{ workspace: { id: string, rootPath: string, type: string, workerId: string } }>(
       'workspace',
       'create',

@@ -39,6 +39,7 @@ import {
   listFiles,
   listSessions,
   listSettings,
+  listWorkerConfigValues,
   listWorkers,
   listWorkspaces,
   runWorkerMigrations,
@@ -46,6 +47,7 @@ import {
   updateSession,
   updateWorkspace,
   upsertWorker,
+  upsertWorkerConfigValue,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import cac from 'cac'
 
@@ -94,6 +96,15 @@ let soulAppSdk: Promise<SoulAppSdkModule> | null = null
 
 interface RuntimeOptions {
   worker?: string
+}
+
+interface WorkerConfigSetCommandOptions {
+  checksum?: string
+  disabled?: boolean
+  kind?: string
+  optionsJson?: string
+  sourceRef?: string
+  target?: string
 }
 
 interface SessionContinuationCommandOptions {
@@ -287,6 +298,21 @@ function requireText(value: unknown, label: string): string {
 function optionalNumber(value: number[] | undefined): number | undefined {
   const item = value?.[0]
   return typeof item === 'number' && Number.isFinite(item) ? item : undefined
+}
+
+function parseJsonObjectOption(value: string | undefined, label: string): Record<string, unknown> {
+  if (!value)
+    return {}
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  }
+  catch {
+    throw new Error(`${label} must be valid JSON`)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    throw new Error(`${label} must be a JSON object`)
+  return parsed as Record<string, unknown>
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -841,6 +867,51 @@ async function deleteWorkerCommand(id: string): Promise<void> {
   }
   deleteWorker(worker.id)
   printJson({ cleanedTargets, deleted: true, worker })
+}
+
+async function listWorkerConfigCommand(workerId: string): Promise<void> {
+  await ensureDb()
+  const worker = requireWorkerRow(workerId)
+  printJson({ config: workerConfigResponse(worker.id) })
+}
+
+async function setWorkerConfigCommand(workerId: string, configKey: string, opts: WorkerConfigSetCommandOptions): Promise<void> {
+  await ensureDb()
+  const worker = requireWorkerRow(workerId)
+  const saved = upsertWorkerConfigValue({
+    configKey: requireText(configKey, 'config key'),
+    configValueJson: {
+      checksum: opts.checksum ?? null,
+      enabled: opts.disabled !== true,
+      kind: requireText(opts.kind, 'kind'),
+      options: parseJsonObjectOption(opts.optionsJson, 'options-json'),
+      sourceRef: opts.sourceRef ?? null,
+      target: requireText(opts.target, 'target'),
+    },
+    source: 'cli',
+    workerId: worker.id,
+  })
+  printJson({ config: workerConfigValueResponse(saved, false) })
+}
+
+function workerConfigResponse(workerId: string) {
+  return {
+    values: listWorkerConfigValues(workerId).map(row => workerConfigValueResponse(row, false)),
+  }
+}
+
+function workerConfigValueResponse(
+  row: ReturnType<typeof listWorkerConfigValues>[number],
+  archived: boolean,
+) {
+  return {
+    archived,
+    configKey: row.configKey,
+    source: row.source,
+    updatedAt: row.updatedAt,
+    value: row.configValueJson,
+    workerId: row.workerId,
+  }
 }
 
 async function createWorkspaceCommand(opts: { name?: string, type?: string, worker?: string }): Promise<void> {
@@ -1439,6 +1510,15 @@ function registerCommands(): void {
     printJson({ worker: getWorker(id) })
   })
   cli.command('worker select <id>', 'select default local Soul worker').action(selectWorkerCommand)
+  cli.command('worker config list <workerId>', 'list worker-scoped Host config envelopes').action(listWorkerConfigCommand)
+  cli.command('worker config set <workerId> <configKey>', 'set a worker-scoped Host config envelope')
+    .option('--kind <kind>', 'config value kind')
+    .option('--target <target>', 'engine target, all, or none')
+    .option('--source-ref <ref>', 'non-secret source reference')
+    .option('--checksum <checksum>', 'optional checksum')
+    .option('--options-json <json>', 'non-secret operational options JSON object')
+    .option('--disabled', 'store the config envelope as disabled')
+    .action(setWorkerConfigCommand)
   cli.command('worker archive <id>', 'archive a local Soul worker').action(archiveWorkerCommand)
   cli.command('worker delete <id>', 'hard-delete local Soul worker metadata').action(deleteWorkerCommand)
   cli.command('capability list', 'list app-declared capabilities').option('--soul <id>', 'Soul id').action(async (opts: { soul?: string }) => {
@@ -1502,7 +1582,7 @@ const OPERATOR_COMMAND_INDEX = [
   'doctor',
   'update',
   'app list|show|install|enable|archive|delete|bootstrap',
-  'worker create|list|select|archive|delete',
+  'worker create|list|select|config|archive|delete',
   'workspace create|list|archive|delete',
   'session start|invoke|list|show|archive|delete',
   '',
@@ -1517,7 +1597,7 @@ const FULL_COMMAND_INDEX = [
   'daemon start|foreground|status|stop|restart|logs|check',
   'app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke',
   'soul list',
-  'worker create|list|show|select|archive|delete',
+  'worker create|list|show|select|config list|config set|archive|delete',
   'workspace create|list|show|archive|delete',
   'session start|invoke|list|show|archive|delete',
   'capability list',
