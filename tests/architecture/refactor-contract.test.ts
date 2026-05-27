@@ -545,6 +545,22 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'Web should keep the Host-visible startable unit collection named capabilities').toEqual([])
   })
 
+  test('Web local workspace model tests use generic soul ids instead of retired HR and QA identities', () => {
+    const source = readRepoFile('apps/web/src/features/local-workspace/model.test.ts')
+    const retiredFixtureSnippets = [
+      'aiworker-hr',
+      'aiworker-qa',
+      'AIWorker HR',
+      'AIWorker QA',
+    ]
+
+    const findings = retiredFixtureSnippets
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `apps/web/src/features/local-workspace/model.test.ts: ${snippet}`)
+
+    expect(findings, 'local workspace model tests should use neutral soul ids when proving Host-generic placeholder behavior').toEqual([])
+  })
+
   test('WorkerStudio capability fixtures use capability collection names', () => {
     const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
     const forbidden = [
