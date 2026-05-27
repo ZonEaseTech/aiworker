@@ -147,4 +147,23 @@ describe('destructive refactor contract bootstrap', () => {
 
     expect(findings, 'descriptor workbench mount must not depend on legacy surface shim').toEqual([])
   })
+
+  test('WorkerStudio derives production workbench routes from descriptor v1 only', () => {
+    const source = readRepoFile('apps/web/src/worker/worker-studio.tsx')
+    const match = source.match(/function descriptorWorkbenchRoutes[\s\S]*?\n}\n/)
+    expect(match, 'descriptorWorkbenchRoutes should stay a small explicit descriptor adapter').not.toBeNull()
+
+    const routeAdapter = match![0]
+    const forbiddenSnippets = [
+      'mountedContribution',
+      'microAppSurfaceIds',
+      'routePaths',
+    ]
+
+    const findings = forbiddenSnippets
+      .filter(snippet => routeAdapter.includes(snippet))
+      .map(snippet => `descriptorWorkbenchRoutes: ${snippet}`)
+
+    expect(findings, 'descriptor workbench routes must not be derived from legacy manifest.ui projection').toEqual([])
+  })
 })

@@ -62,15 +62,15 @@ const emptyWorkerStudioLocatorState: WorkerStudioResolvedLocatorState = {
 function descriptorWorkbenchRoutes(app: HostedSoulApp | null): MountedWorkbenchRoute[] {
   if (!app?.descriptor?.workbench || app.descriptor.workbench.type !== 'micro-app')
     return []
-  const surfaceId = app.mountedContribution.microAppSurfaceIds[0] ?? 'workbench'
-  const routePath = app.mountedContribution.routePaths[0] ?? '/workbench'
+  const identity = app.descriptor.identity as { name?: unknown } | undefined
+  const name = typeof identity?.name === 'string' && identity.name.length > 0 ? identity.name : app.appId
   return [{
-    id: surfaceId,
-    label: `${app.manifest.name} Workbench`,
-    path: routePath,
+    id: 'workbench',
+    label: `${name} Workbench`,
+    path: '/workbench',
     surface: {
       renderer: 'micro-app',
-      scope: surfaceId.includes('session') ? 'session' : 'app',
+      scope: 'app',
     },
   }]
 }

@@ -356,6 +356,9 @@ let currentApps: Array<{
     }
   }
   descriptor?: {
+    identity?: {
+      name?: string
+    }
     workbench?: {
       type: 'micro-app'
     }
@@ -423,6 +426,9 @@ function mountedRouteApp({
   return {
     appId,
     descriptor: {
+      identity: {
+        name: appName,
+      },
       workbench: {
         type: 'micro-app',
       },
@@ -466,6 +472,9 @@ function appWithDescriptorWorkbench(app: typeof currentApps[number]): typeof cur
   return {
     ...app,
     descriptor: {
+      identity: {
+        name: app.manifest.name,
+      },
       workbench: {
         type: 'micro-app',
       },
@@ -658,20 +667,16 @@ beforeEach(() => {
       const mountedApp = currentApps.map(appWithDescriptorWorkbench)
         .find(app => app.appId === worker?.soulId || app.appId === worker?.id || app.appId === HR_SOUL_ID)
         ?? currentApps.map(appWithDescriptorWorkbench).find(app => app.descriptor?.workbench?.type === 'micro-app')
-      const surfaceId = mountedApp?.mountedContribution?.microAppSurfaceIds?.[0] ?? 'workbench'
-      const routePath = mountedApp?.mountedContribution?.routePaths?.[0] ?? '/workbench'
+      const surfaceId = 'workbench'
+      const routePath = '/workbench'
       const appId = mountedApp?.appId ?? HR_SOUL_ID
-      const entry = surfaceId === 'universal-workbench'
-        ? '/micro-app/workbench/universal'
-        : `/micro-app/routes/${surfaceId}`
-      const label = surfaceId === 'universal-workbench'
-        ? 'Universal Workbench'
-        : surfaceId === 'hr-session'
-          ? 'HR Session Workbench'
-          : surfaceId === 'hr-home'
-            ? 'HR People Workbench'
-            : 'Workbench'
-      const scope = surfaceId === 'universal-workbench' ? 'app' : surfaceId === 'hr-session' ? 'session' : 'workspace'
+      const entry = '/micro-app/workbench'
+      const descriptorIdentity = mountedApp?.descriptor?.identity
+      const identityName = typeof descriptorIdentity?.name === 'string' && descriptorIdentity.name.length > 0
+        ? descriptorIdentity.name
+        : appId
+      const label = `${identityName} Workbench`
+      const scope = 'app'
       return json({
         locator: {
           sessionId: requestUrl.searchParams.get('sessionId') ?? null,
@@ -1010,13 +1015,13 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const microApp = await screen.findByTitle('HR People Workbench')
+    const microApp = await screen.findByTitle('AIWorker HR Workbench')
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
     expect(microApp.getAttribute('router-mode')).toBe('search')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
       sessionId: null,
-      surfaceId: 'hr-home',
+      surfaceId: 'workbench',
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',
     })
@@ -1027,34 +1032,42 @@ describe('worker studio', () => {
     expect(lastSessionRequestBody).toBeNull()
   })
 
-  it('renders universal workbench routes through the micro-app mount path', async () => {
-    currentApps = [
-      mountedRouteApp({
-        appId: 'aiworker-hr',
-        appName: 'AIWorker HR',
-        routes: [universalRoute()],
-      }),
-    ]
+  it('renders descriptor workbench through the micro-app mount path without legacy route projection', async () => {
+    const staleLegacyProjection = mountedRouteApp({
+      appId: 'aiworker-hr',
+      appName: 'AIWorker HR',
+      routes: [universalRoute()],
+    })
+    const staleMountedContribution = staleLegacyProjection.mountedContribution!
+    currentApps = [{
+      ...staleLegacyProjection,
+      mountedContribution: {
+        ...staleMountedContribution,
+        microAppSurfaceIds: [],
+        routePaths: ['/legacy-workbench'],
+      },
+    }]
     window.history.replaceState(null, '', '/workers/hr-worker')
 
     render(<WorkerStudio />)
 
-    const microApp = await screen.findByTitle('Universal Workbench')
+    const microApp = await screen.findByTitle('AIWorker HR Workbench')
     expect(microApp.tagName).toBe('MICRO-APP')
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
-    expect(microApp.getAttribute('name')).toBe('aiworker-hr--universal-workbench')
-    expect(microApp.getAttribute('baseroute')).toBe('/workbench/universal')
+    expect(microApp.getAttribute('name')).toBe('aiworker-hr--workbench')
+    expect(microApp.getAttribute('baseroute')).toBe('/workbench')
     expect(microApp.getAttribute('router-mode')).toBe('search')
-    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench/universal?workerId=hr-worker&theme=light')
+    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench?workerId=hr-worker&theme=light')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
       sessionId: null,
-      surfaceId: 'universal-workbench',
+      surfaceId: 'workbench',
       workerId: 'hr-worker',
       workspaceId: null,
     })
     expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&theme=light', expect.objectContaining({ headers: {} }))
     expect(screen.queryByTestId('universal-workbench')).toBeNull()
+    expect(screen.queryByText('/legacy-workbench')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expect(lastSessionRequestBody).toBeNull()
   })
@@ -1072,12 +1085,12 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    const microApp = await screen.findByTitle('Universal Workbench')
+    const microApp = await screen.findByTitle('AIWorker HR Workbench')
     expect(screen.getByTestId('worker-studio-shell').getAttribute('data-theme')).toBe('dark')
-    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench/universal?workerId=hr-worker&workspaceId=workspace-1&theme=dark')
+    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=dark')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
-      surfaceId: 'universal-workbench',
+      surfaceId: 'workbench',
       theme: 'dark',
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',
@@ -1097,7 +1110,7 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    const microApp = await screen.findByTitle('Universal Workbench') as HTMLElement & { data?: Record<string, unknown> }
+    const microApp = await screen.findByTitle('AIWorker HR Workbench') as HTMLElement & { data?: Record<string, unknown> }
     expect(microApp.data).toMatchObject({ theme: 'light' })
 
     openHostSettings()
@@ -1109,7 +1122,7 @@ describe('worker studio', () => {
     await waitFor(() => {
       expect(screen.getByTestId('worker-studio-shell').getAttribute('data-theme')).toBe('dark')
       expect(microApp.data).toMatchObject({ theme: 'dark' })
-      expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench/universal?workerId=hr-worker&workspaceId=workspace-1&theme=dark')
+      expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=dark')
     })
   })
 
@@ -1131,28 +1144,28 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/qa-worker')
     render(<WorkerStudio />)
 
-    const microApp = await screen.findByTitle('Universal Workbench')
-    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-qa/micro-app/workbench/universal?workerId=qa-worker&theme=light')
+    const microApp = await screen.findByTitle('AIWorker QA Workbench')
+    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-qa/micro-app/workbench?workerId=qa-worker&theme=light')
 
     await waitFor(() => {
-      expect(microAppRouteMock.dataListeners.has('aiworker-qa--universal-workbench')).toBe(true)
+      expect(microAppRouteMock.dataListeners.has('aiworker-qa--workbench')).toBe(true)
     })
     act(() => {
-      microAppRouteMock.dataListeners.get('aiworker-qa--universal-workbench')?.({
+      microAppRouteMock.dataListeners.get('aiworker-qa--workbench')?.({
         appId: 'aiworker-qa',
-        surfaceId: 'universal-workbench',
+        surfaceId: 'workbench',
         type: 'locator:workspace-selected',
         workerId: 'hr-worker',
         workspaceId: 'qa-workspace',
       })
     })
     expect(window.location.pathname).toBe('/workers/qa-worker')
-    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-qa/micro-app/workbench/universal?workerId=qa-worker&theme=light')
+    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-qa/micro-app/workbench?workerId=qa-worker&theme=light')
 
     act(() => {
-      microAppRouteMock.dataListeners.get('aiworker-qa--universal-workbench')?.({
+      microAppRouteMock.dataListeners.get('aiworker-qa--workbench')?.({
         appId: 'aiworker-qa',
-        surfaceId: 'universal-workbench',
+        surfaceId: 'workbench',
         type: 'locator:workspace-selected',
         workerId: 'qa-worker',
         workspaceId: 'workspace-1',
@@ -1161,9 +1174,9 @@ describe('worker studio', () => {
     expect(window.location.pathname).toBe('/workers/qa-worker')
 
     act(() => {
-      microAppRouteMock.dataListeners.get('aiworker-qa--universal-workbench')?.({
+      microAppRouteMock.dataListeners.get('aiworker-qa--workbench')?.({
         appId: 'aiworker-qa',
-        surfaceId: 'universal-workbench',
+        surfaceId: 'workbench',
         type: 'locator:workspace-selected',
         workerId: 'qa-worker',
         workspaceId: 'qa-workspace',
@@ -1174,7 +1187,7 @@ describe('worker studio', () => {
       expect(window.location.pathname).toBe('/workers/qa-worker/workspaces/qa-workspace')
     })
     await waitFor(() => {
-      expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-qa/micro-app/workbench/universal?workerId=qa-worker&workspaceId=qa-workspace&theme=light')
+      expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-qa/micro-app/workbench?workerId=qa-worker&workspaceId=qa-workspace&theme=light')
     })
     await waitFor(() => {
       expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
@@ -1188,7 +1201,7 @@ describe('worker studio', () => {
     })
     expect(window.location.pathname).toBe('/workers/qa-worker/workspaces/qa-workspace')
     await waitFor(() => {
-      expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-qa/micro-app/workbench/universal?workerId=qa-worker&workspaceId=qa-workspace&theme=light')
+      expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-qa/micro-app/workbench?workerId=qa-worker&workspaceId=qa-workspace&theme=light')
     })
   })
 
@@ -1479,16 +1492,16 @@ describe('worker studio', () => {
     expect(shellSidebar.querySelector('[data-sidebar="group"][aria-label="Workspaces"]')).toBeNull()
     expect(screen.queryByRole('button', { name: /AIWorker HR \(1\)/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /AIWorker QA \(1\)/ })).toBeNull()
-    const microApp = await screen.findByTitle('HR People Workbench')
+    const microApp = await screen.findByTitle('AIWorker HR Workbench')
     expect(microApp.tagName).toBe('MICRO-APP')
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
-    expect(microApp.getAttribute('name')).toBe('aiworker-hr--hr-home')
-    expect(microApp.getAttribute('baseroute')).toBe('/hr')
+    expect(microApp.getAttribute('name')).toBe('aiworker-hr--workbench')
+    expect(microApp.getAttribute('baseroute')).toBe('/workbench')
     expect(microApp.getAttribute('router-mode')).toBe('search')
-    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light')
+    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=light')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
-      surfaceId: 'hr-home',
+      surfaceId: 'workbench',
       theme: 'light',
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',
@@ -1540,20 +1553,20 @@ describe('worker studio', () => {
       version: '0.1.0',
     }]
     currentWorkspaces = [workspace, secondWorkspace]
-    microAppRouteMock.getMountedMicroAppCurrentRoute.mockResolvedValue({ pathname: '/hr' })
+    microAppRouteMock.getMountedMicroAppCurrentRoute.mockResolvedValue({ pathname: '/workbench' })
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
 
     render(<WorkerStudio />)
 
-    const firstMicroApp = await screen.findByTitle('HR People Workbench')
-    expect(firstMicroApp.getAttribute('name')).toBe('aiworker-hr--hr-home')
+    const firstMicroApp = await screen.findByTitle('AIWorker HR Workbench')
+    expect(firstMicroApp.getAttribute('name')).toBe('aiworker-hr--workbench')
 
     await waitFor(() => {
-      expect(microAppRouteMock.listeners.has('aiworker-hr--hr-home')).toBe(true)
+      expect(microAppRouteMock.listeners.has('aiworker-hr--workbench')).toBe(true)
     })
-    microAppRouteMock.listeners.get('aiworker-hr--hr-home')?.(
-      { pathname: '/hr/profiles/profile-ben' },
-      { pathname: '/hr' },
+    microAppRouteMock.listeners.get('aiworker-hr--workbench')?.(
+      { pathname: '/workbench/profiles/profile-ben' },
+      { pathname: '/workbench' },
     )
 
     act(() => {
@@ -1561,8 +1574,8 @@ describe('worker studio', () => {
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
 
-    expect(await screen.findByTitle('HR People Workbench')).toBe(firstMicroApp)
-    expect(firstMicroApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-2&theme=light')
+    expect(await screen.findByTitle('AIWorker HR Workbench')).toBe(firstMicroApp)
+    expect(firstMicroApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench?workerId=hr-worker&workspaceId=workspace-2&theme=light')
     await waitFor(() => {
       expect((firstMicroApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
         workspaceId: 'workspace-2',
@@ -1570,11 +1583,11 @@ describe('worker studio', () => {
     })
 
     await waitFor(() => {
-      expect(microAppRouteMock.listeners.has('aiworker-hr--hr-home')).toBe(true)
+      expect(microAppRouteMock.listeners.has('aiworker-hr--workbench')).toBe(true)
     })
-    microAppRouteMock.listeners.get('aiworker-hr--hr-home')?.(
-      { pathname: '/hr/profiles/profile-stella' },
-      { pathname: '/hr' },
+    microAppRouteMock.listeners.get('aiworker-hr--workbench')?.(
+      { pathname: '/workbench/profiles/profile-stella' },
+      { pathname: '/workbench' },
     )
 
     act(() => {
@@ -1582,15 +1595,15 @@ describe('worker studio', () => {
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
 
-    expect(await screen.findByTitle('HR People Workbench')).toBe(firstMicroApp)
-    expect(firstMicroApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light')
+    expect(await screen.findByTitle('AIWorker HR Workbench')).toBe(firstMicroApp)
+    expect(firstMicroApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=light')
     await waitFor(() => {
       expect((firstMicroApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
         workspaceId: 'workspace-1',
       })
     })
     await waitFor(() => {
-      expect(microAppRouteMock.replaceMountedMicroAppRoute).toHaveBeenLastCalledWith('aiworker-hr--hr-home', '/hr/profiles/profile-ben')
+      expect(microAppRouteMock.replaceMountedMicroAppRoute).toHaveBeenLastCalledWith('aiworker-hr--workbench', '/workbench/profiles/profile-ben')
     })
 
     act(() => {
@@ -1598,15 +1611,15 @@ describe('worker studio', () => {
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
 
-    expect(await screen.findByTitle('HR People Workbench')).toBe(firstMicroApp)
-    expect(firstMicroApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-2&theme=light')
+    expect(await screen.findByTitle('AIWorker HR Workbench')).toBe(firstMicroApp)
+    expect(firstMicroApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench?workerId=hr-worker&workspaceId=workspace-2&theme=light')
     await waitFor(() => {
       expect((firstMicroApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
         workspaceId: 'workspace-2',
       })
     })
     await waitFor(() => {
-      expect(microAppRouteMock.replaceMountedMicroAppRoute).toHaveBeenLastCalledWith('aiworker-hr--hr-home', '/hr/profiles/profile-stella')
+      expect(microAppRouteMock.replaceMountedMicroAppRoute).toHaveBeenLastCalledWith('aiworker-hr--workbench', '/workbench/profiles/profile-stella')
     })
   })
 
@@ -1661,18 +1674,18 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    const microApp = await screen.findByTitle('HR Session Workbench')
+    const microApp = await screen.findByTitle('AIWorker HR Workbench')
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
-      sessionId: 'session-1',
-      surfaceId: 'hr-session',
+      sessionId: null,
+      surfaceId: 'workbench',
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',
     })
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).not.toHaveProperty('turns')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).not.toHaveProperty('engineStatus')
-    expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&workspaceId=workspace-1&sessionId=session-1&theme=light', expect.objectContaining({ headers: {} }))
+    expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
     expect(screen.queryByText('Agent is generating')).toBeNull()
     expect(screen.queryByText('File written, indexing')).toBeNull()
     expect(screen.queryByText('Searched files')).toBeNull()
@@ -1896,7 +1909,7 @@ describe('worker studio', () => {
     expect(document.querySelector('.hr-people-header')).toBeNull()
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
     expect(screen.queryByText('People Profiles')).toBeNull()
-    expect(await screen.findByTitle('HR People Workbench')).toBeTruthy()
+    expect(await screen.findByTitle('AIWorker HR Workbench')).toBeTruthy()
 
     expect(screen.queryByRole('button', { name: 'New people profile' })).toBeNull()
     expect(screen.queryByPlaceholderText('Search people profiles')).toBeNull()
@@ -1996,30 +2009,30 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const microApp = await screen.findByTitle('HR People Workbench')
+    const microApp = await screen.findByTitle('AIWorker HR Workbench')
     expect(microApp.tagName).toBe('MICRO-APP')
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
-    expect(microApp.getAttribute('name')).toBe('aiworker-hr--hr-home')
+    expect(microApp.getAttribute('name')).toBe('aiworker-hr--workbench')
     expect(microApp.getAttribute('router-mode')).toBe('search')
-    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light')
+    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=light')
     expect(screen.queryByText('Soul App mounted route')).toBeNull()
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
     expect(fetch).toHaveBeenCalledWith('/api/mount/workbench?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))
 
     await waitFor(() => {
-      expect(microAppRouteMock.dataListeners.has('aiworker-hr--hr-home')).toBe(true)
+      expect(microAppRouteMock.dataListeners.has('aiworker-hr--workbench')).toBe(true)
     })
     vi.mocked(fetch).mockClear()
-    microAppRouteMock.dataListeners.get('aiworker-hr--hr-home')?.({
+    microAppRouteMock.dataListeners.get('aiworker-hr--workbench')?.({
       actionId: 'create-people-profile',
       appId: 'aiworker-hr',
       input: { source: 'soul-workbench' },
-      surfaceId: 'hr-home',
+      surfaceId: 'workbench',
       type: 'action',
     })
 
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/actions/'))).toBe(false)
-    expect(microAppRouteMock.pushMountedMicroAppRoute).not.toHaveBeenCalledWith('aiworker-hr--hr-home', '/hr/profiles/new')
+    expect(microAppRouteMock.pushMountedMicroAppRoute).not.toHaveBeenCalledWith('aiworker-hr--workbench', '/hr/profiles/new')
   })
 
   it('keeps worker identity in the Host worker switcher without duplicated worker rail labels', async () => {
@@ -2096,9 +2109,9 @@ describe('worker studio', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/workers/e2e-hr-codex-20260525')
     })
-    const microApp = await screen.findByTitle('HR People Workbench')
+    const microApp = await screen.findByTitle('AIWorker HR Workbench')
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
-    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/routes/hr-home?workerId=e2e-hr-codex-20260525&theme=light')
+    expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-hr/micro-app/workbench?workerId=e2e-hr-codex-20260525&theme=light')
   })
 
   it('routes directly to a worker and updates capability templates with worker identity', async () => {
@@ -2388,12 +2401,12 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    const microApp = await screen.findByTitle('HR Session Workbench')
-    expect(microApp.getAttribute('name')).toBe('aiworker-hr--hr-session')
+    const microApp = await screen.findByTitle('AIWorker HR Workbench')
+    expect(microApp.getAttribute('name')).toBe('aiworker-hr--workbench')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
-      sessionId: 'session-1',
-      surfaceId: 'hr-session',
+      sessionId: null,
+      surfaceId: 'workbench',
       workerId: 'hr-worker',
       workspaceId: 'workspace-1',
     })
@@ -2440,7 +2453,7 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    expect(await screen.findByTitle('HR Session Workbench')).toBeTruthy()
+    expect(await screen.findByTitle('AIWorker HR Workbench')).toBeTruthy()
     expect(screen.queryByTestId('session-detail-panel')).toBeNull()
     expect(screen.queryByTestId('artifact-preview-frame')).toBeNull()
     expect(screen.queryByText('Local file 500: /api/local/workspaces/workspace-1/files/raw/artifacts/session-1/candidate-screen.md')).toBeNull()
@@ -2486,7 +2499,7 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    expect(await screen.findByTitle('HR People Workbench')).toBeTruthy()
+    expect(await screen.findByTitle('AIWorker HR Workbench')).toBeTruthy()
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
     expect(screen.queryByText('Workspace navigation')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
@@ -2529,7 +2542,7 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    expect(await screen.findByTitle('HR Session Workbench')).toBeTruthy()
+    expect(await screen.findByTitle('AIWorker HR Workbench')).toBeTruthy()
     expect(document.querySelector('.workspace-context-card')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Back to workspace' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
@@ -2573,7 +2586,7 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    expect(await screen.findByTitle('HR Session Workbench')).toBeTruthy()
+    expect(await screen.findByTitle('AIWorker HR Workbench')).toBeTruthy()
     const switcher = screen.getByTestId('worker-switcher')
     expect(within(switcher).getByRole('button', { name: 'Switch to HR' })).toBeTruthy()
     expect(within(switcher).queryByText('Hiring Workspace')).toBeNull()

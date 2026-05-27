@@ -335,6 +335,64 @@ describe('local daemon API', () => {
     expect(await htmlRes.text()).toContain('data-aiworker-common-workbench="true"')
   })
 
+  it('rejects descriptor workbench mount without worker locator', async () => {
+    const target = await app()
+
+    const res = await target.request('/api/mount/workbench')
+
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({
+      error: {
+        code: 'MOUNT_CONTEXT_INVALID',
+      },
+    })
+  })
+
+  it('rejects descriptor workbench mount when session and workspace locators mismatch', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const first = await createWorkspaceAndSession(target, worker.id)
+    const second = await createWorkspaceAndSession(target, worker.id)
+
+    const res = await target.request(`/api/mount/workbench?workerId=${worker.id}&workspaceId=${first.workspace.id}&sessionId=${second.session.id}`)
+
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({
+      error: {
+        code: 'MOUNT_CONTEXT_INVALID',
+      },
+    })
+  })
+
+  it('rejects descriptor workbench mount for an unknown worker', async () => {
+    const target = await app()
+
+    const res = await target.request('/api/mount/workbench?workerId=missing-worker')
+
+    expect(res.status).toBe(404)
+    expect(await res.json()).toMatchObject({
+      error: {
+        code: 'NOT_FOUND',
+      },
+    })
+  })
+
+  it('rejects descriptor workbench mount when the worker Soul App is disabled', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const disableRes = await target.request(`/api/local/apps/${FREEFORM_APP_ID}/disable`, { method: 'POST' })
+    expect(disableRes.status).toBe(200)
+
+    const res = await target.request(`/api/mount/workbench?workerId=${worker.id}`)
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({
+      error: {
+        code: 'SOUL_APP_DISABLED',
+      },
+    })
+  })
+
   it('saves worker overlay assets as metadata and rejects literal secrets', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)
