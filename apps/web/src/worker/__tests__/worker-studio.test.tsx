@@ -570,7 +570,7 @@ beforeEach(() => {
         surface: { id: surfaceId, kind: 'route', label, path: routePath, renderer: 'micro-app', scope },
       })
     }
-    if (url.endsWith('/api/apps/aiworker-demo-people/micro-app/widgets/hr-people-widget')) {
+    if (url.endsWith('/api/apps/aiworker-demo-people/micro-app/widgets/people-widget')) {
       return new Response('<!doctype html><html><body><h1>People widget</h1></body></html>', {
         headers: { 'content-type': 'text/html; charset=utf-8' },
       })

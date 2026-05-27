@@ -1439,6 +1439,19 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'WorkerStudio tests should keep workspace names product-neutral').toEqual([])
   })
 
+  test('WorkerStudio fetch mocks use neutral app-owned widget paths', () => {
+    const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const retiredWidgetSnippets = [
+      'hr-people-widget',
+    ]
+
+    const findings = retiredWidgetSnippets
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+
+    expect(findings, 'WorkerStudio app-owned widget mock paths should not preserve retired HR prefixes').toEqual([])
+  })
+
   test('shared SessionComposer uses neutral selector terminology instead of retired template ids', () => {
     const sharedComposerSources = [
       'packages/ui/src/components/session-composer.tsx',
