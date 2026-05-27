@@ -464,6 +464,46 @@ describe('LocalWorkerRuntime', () => {
     })
   })
 
+  it('rejects default bridge invocations before executor spawn when projection receipts are stale', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-default-bridge-stale-receipt')
+    await writeProfileEngineAssets(appRoot)
+    const executorInputs: string[] = []
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke(input) {
+        executorInputs.push(input.invocationId)
+        return { summary: 'should not run' }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Stale Receipt Workspace' })
+    const receiptPath = join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    await writeFile(receiptPath, `${JSON.stringify({ ...receipt, receiptId: 'stale-receipt' }, null, 2)}\n`)
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Stale receipt session',
+    })
+
+    const result = await workerRuntime.startInvocation({
+      sessionId: session.id,
+      input: 'Run with a stale projection receipt.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(executorInputs).toEqual([])
+    expect(result.invocation).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_STALE',
+      processState: 'not_spawned',
+      status: 'failed',
+    })
+    expect(result.events.at(-1)?.payloadJson).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_STALE',
+      invocationId: result.invocation.id,
+    })
+  })
+
   it('starts first session-level engine invocations through the engine bridge when adapters are configured', async () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({

@@ -265,10 +265,11 @@ export class LocalWorkerRuntime {
     const manifestPath = engineAssetProjectionReceiptPath()
     try {
       const raw = await readFile(path.join(workspace.rootPath, ...manifestPath.split('/')), 'utf8')
+      const { receiptId, ...receipt } = JSON.parse(raw) as SoulAppProjectionReceipt & { receiptId?: unknown }
       return {
         manifestPath,
-        receipt: JSON.parse(raw) as SoulAppProjectionReceipt,
-        receiptId: workspace.id,
+        receipt: receipt as SoulAppProjectionReceipt,
+        receiptId: readNullableString(receiptId) ?? workspace.id,
         workspace,
       }
     }
