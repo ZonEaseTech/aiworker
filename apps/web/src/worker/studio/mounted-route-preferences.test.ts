@@ -13,13 +13,13 @@ describe('mounted route preferences', () => {
     const storage = createMemoryStorage()
 
     persistActiveMountedRoutePreferences({
-      'worker-hr-primary': 'hr-profile-review',
-      'worker-hr-backup': 'hr-profile-summary',
+      'worker-demo-primary': 'route-review',
+      'worker-demo-backup': 'route-summary',
     }, storage)
 
     expect(JSON.parse(storage.getItem(activeMountedRoutePreferenceKey) ?? '{}')).toEqual({
-      'worker-hr-primary': 'hr-profile-review',
-      'worker-hr-backup': 'hr-profile-summary',
+      'worker-demo-primary': 'route-review',
+      'worker-demo-backup': 'route-summary',
     })
   })
 
@@ -29,62 +29,62 @@ describe('mounted route preferences', () => {
     storage.setItem(activeMountedRoutePreferenceKey, '[')
     expect(readActiveMountedRoutePreferences(storage)).toEqual({})
 
-    storage.setItem(activeMountedRoutePreferenceKey, JSON.stringify(['hr-profile-review']))
+    storage.setItem(activeMountedRoutePreferenceKey, JSON.stringify(['route-review']))
     expect(readActiveMountedRoutePreferences(storage)).toEqual({})
 
     storage.setItem(activeMountedRoutePreferenceKey, JSON.stringify({
-      'worker-hr-primary': 'hr-profile-review',
-      'worker-hr-backup': 42,
-      'worker-hr-null': null,
+      'worker-demo-primary': 'route-review',
+      'worker-demo-backup': 42,
+      'worker-demo-null': null,
     }))
     expect(readActiveMountedRoutePreferences(storage)).toEqual({
-      'worker-hr-primary': 'hr-profile-review',
+      'worker-demo-primary': 'route-review',
     })
   })
 
   it('resolves the active mounted route by worker id and falls back to the first declared route', () => {
     const routes = [
-      { id: 'hr-profile-summary', label: 'Summary' },
-      { id: 'hr-profile-review', label: 'Review' },
+      { id: 'route-summary', label: 'Summary' },
+      { id: 'route-review', label: 'Review' },
     ] as const
 
     expect(resolveActiveMountedRoute({
-      preferences: { 'worker-hr-primary': 'hr-profile-review' },
+      preferences: { 'worker-demo-primary': 'route-review' },
       routes,
-      workerId: 'worker-hr-primary',
+      workerId: 'worker-demo-primary',
     })).toBe(routes[1])
 
     expect(resolveActiveMountedRoute({
-      preferences: { 'worker-hr-primary': 'missing-route' },
+      preferences: { 'worker-demo-primary': 'missing-route' },
       routes,
-      workerId: 'worker-hr-primary',
+      workerId: 'worker-demo-primary',
     })).toBe(routes[0])
 
     expect(resolveActiveMountedRoute({
       preferences: {},
       routes: [],
-      workerId: 'worker-hr-primary',
+      workerId: 'worker-demo-primary',
     })).toBeNull()
   })
 
   it('updates only one worker mounted route preference for workers in the same Soul App', () => {
     const current = {
-      'worker-hr-primary': 'hr-profile-summary',
-      'worker-hr-backup': 'hr-profile-review',
+      'worker-demo-primary': 'route-summary',
+      'worker-demo-backup': 'route-review',
     }
 
     expect(updateWorkerMountedRoutePreference({
       current,
-      routeId: 'hr-profile-review',
-      workerId: 'worker-hr-primary',
+      routeId: 'route-review',
+      workerId: 'worker-demo-primary',
     })).toEqual({
-      'worker-hr-primary': 'hr-profile-review',
-      'worker-hr-backup': 'hr-profile-review',
+      'worker-demo-primary': 'route-review',
+      'worker-demo-backup': 'route-review',
     })
 
     expect(current).toEqual({
-      'worker-hr-primary': 'hr-profile-summary',
-      'worker-hr-backup': 'hr-profile-review',
+      'worker-demo-primary': 'route-summary',
+      'worker-demo-backup': 'route-review',
     })
   })
 })
