@@ -186,6 +186,14 @@ requireIncludes('docs/testing.md', [
   'Runtime and bridge contract',
   'Soul authoring contract',
 ])
+for (const testPath of documentedTestingPaths()) {
+  if (!existsSync(abs(testPath))) {
+    issues.push({
+      file: 'docs/testing.md',
+      message: `listed test file does not exist: ${testPath}`,
+    })
+  }
+}
 
 for (const file of canonicalDocs) {
   forbidIncludes(file, [
@@ -282,6 +290,39 @@ function forbidIncludes(file: string, needles: string[]): void {
     if (content.includes(needle))
       issues.push({ file, message: `contains forbidden active-route text ${JSON.stringify(needle)}` })
   }
+}
+
+function documentedTestingPaths(): string[] {
+  const lines = read('docs/testing.md').split(/\r?\n/)
+  const paths: string[] = []
+  let inCodeFence = false
+  let baseDir: string | null = null
+
+  for (const line of lines) {
+    if (line.startsWith('```')) {
+      inCodeFence = !inCodeFence
+      baseDir = null
+      continue
+    }
+    if (!inCodeFence)
+      continue
+
+    const trimmed = line.trim()
+    if (!trimmed)
+      continue
+    if (/^[\w./-]+\/$/.test(trimmed)) {
+      baseDir = trimmed
+      continue
+    }
+    if (/\.(?:test|spec)\.tsx?$/.test(trimmed)) {
+      const repoRelative = /^(?:apps|packages|souls|tests)\//.test(trimmed)
+        ? trimmed
+        : `${baseDir ?? ''}${trimmed}`
+      paths.push(repoRelative)
+    }
+  }
+
+  return [...new Set(paths)].sort()
 }
 
 function requireScriptBefore(scriptName: string, script: string, before: string, after: string): void {
