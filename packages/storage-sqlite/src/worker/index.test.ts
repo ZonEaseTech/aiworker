@@ -376,8 +376,8 @@ describe('greenfield local worker session schema', () => {
     const workspace = createWorkspace({
       id: 'workspace-1',
       workerId: worker.id,
-      name: 'Hiring workspace',
-      rootPath: '/tmp/hiring',
+      name: 'Demo workspace',
+      rootPath: '/tmp/demo-workspace',
       at: '2026-05-09T01:01:00.000Z',
     })
     expect(listWorkspaces(worker.id)).toEqual([workspace])

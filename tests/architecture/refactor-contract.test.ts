@@ -1071,6 +1071,8 @@ describe('destructive refactor contract bootstrap', () => {
       'HR Recruiting',
       'HR Talent',
       '/tmp/hr',
+      'Hiring workspace',
+      '/tmp/hiring',
     ]
 
     const findings = retiredWorkerSnippets
