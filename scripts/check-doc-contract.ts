@@ -156,6 +156,19 @@ requireIncludes('docs/soul-authoring.md', [
   'packages/soul-workbench',
   'author-owned native MCP files may contain literal secrets',
   '`souls/aiworker-freeform` is the v1 acceptance Soul',
+  'Convention discovery',
+  'product/capabilities/*/prompt.md',
+  'engine/workspace/*',
+  'engine/skills/*',
+  'engine/mcp/codex/config.toml',
+  'engine/mcp/claude-code/.mcp.json',
+  'dist/engine-assets/',
+])
+forbidIncludes('docs/soul-authoring.md', [
+  'product/api/index.ts',
+  'product/artifacts/*',
+  'dist/api/',
+  '  web/\n  api/\n  engine-assets/',
 ])
 
 requireIncludes('docs/testing.md', [
@@ -163,6 +176,15 @@ requireIncludes('docs/testing.md', [
   'Contract tests are the primary guardrail',
   'The v1 browser proof is Freeform-only',
   'tests/browser/freeform-cli-golden-path.spec.ts',
+  'Canonical Coverage Ledger',
+  'docs+tests',
+  'docs-only',
+  'tests-only',
+  'tmp-only',
+  'tmp-only is not acceptable for closed hard decisions',
+  'Protocol implementation contract',
+  'Runtime and bridge contract',
+  'Soul authoring contract',
 ])
 
 for (const file of canonicalDocs) {

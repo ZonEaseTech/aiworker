@@ -89,6 +89,28 @@ It verifies that canonical docs exist, root workspaces include `souls/*`,
 state, protocol/authoring remain descriptor-only and native-MCP based, and broad
 replacement buckets such as `core-v2` and `shared-v2` do not appear.
 
+## Canonical Coverage Ledger
+
+Coverage status values:
+
+- `docs+tests`: preferred for high-risk architecture boundaries.
+- `docs-only`: acceptable for explanatory or low-risk guidance.
+- `tests-only`: acceptable for mechanical constraints where docs would be noisy.
+- `tmp-only`: evidence only. tmp-only is not acceptable for closed hard decisions.
+  Use it only when the ledger explains that the idea was exploratory or rejected.
+
+| Decision area | Canonical home | Guardrail | Status |
+| --- | --- | --- | --- |
+| Host shell / locator / mount / bridge | `docs/architecture.md`, `AGENTS.md` | `bun run docs:check`, `bun run test:contracts` | docs+tests |
+| Descriptor-only Host/Soul boundary | `docs/protocol.md`, `docs/soul-authoring.md` | `packages/soul-protocol` tests, architecture tests | docs+tests |
+| Production mounted workbench routing | `docs/protocol.md`, `docs/runtime.md` | browser Freeform proof, mounted routing contract tests | docs+tests |
+| Session lifecycle and invocation state split | `docs/runtime.md` | architecture tests and engine bridge tests | docs+tests |
+| Protocol implementation contract | `docs/protocol.md` | docs check and architecture tests | docs+tests |
+| Runtime and bridge contract | `docs/runtime.md` | engine bridge and projection tests | docs+tests |
+| Soul authoring contract | `docs/soul-authoring.md` | SDK and Freeform contract tests | docs+tests |
+| Host metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
+| Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
+
 ## Future Gates
 
 As packages land, add:

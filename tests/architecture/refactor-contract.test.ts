@@ -80,6 +80,41 @@ describe('destructive refactor contract bootstrap', () => {
     expect(agents).toContain('tmp/refactor accepted decisions must be promoted to canonical docs or tests before implementation')
   })
 
+  test('soul authoring and testing docs expose coverage ledger details', () => {
+    const authoring = readRepoFile('docs/soul-authoring.md')
+    const testing = readRepoFile('docs/testing.md')
+
+    for (const phrase of [
+      'Convention discovery',
+      'product/capabilities/*/prompt.md',
+      'engine/workspace/*',
+      'engine/skills/*',
+      'engine/mcp/codex/config.toml',
+      'engine/mcp/claude-code/.mcp.json',
+      'dist/engine-assets/',
+    ]) {
+      expect(authoring).toContain(phrase)
+    }
+    expect(authoring).not.toContain('product/api/index.ts')
+    expect(authoring).not.toContain('product/artifacts/*')
+    expect(authoring).not.toContain('dist/api/')
+    expect(authoring).not.toContain('  web/\n  api/\n  engine-assets/')
+
+    for (const phrase of [
+      'Canonical Coverage Ledger',
+      'docs+tests',
+      'docs-only',
+      'tests-only',
+      'tmp-only',
+      'tmp-only is not acceptable for closed hard decisions',
+      'Protocol implementation contract',
+      'Runtime and bridge contract',
+      'Soul authoring contract',
+    ]) {
+      expect(testing).toContain(phrase)
+    }
+  })
+
   test('root workspace includes runnable apps, packages, and Soul Apps', () => {
     const rootPackage = JSON.parse(readRepoFile('package.json')) as {
       workspaces?: string[]

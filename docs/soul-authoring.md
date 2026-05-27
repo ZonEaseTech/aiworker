@@ -52,6 +52,45 @@ souls/my-soul/
     src/
 ```
 
+## Convention Discovery
+
+Convention discovery uses the common authoring path from:
+
+```text
+product/capabilities/*/prompt.md
+product/workbench/index.tsx
+engine/workspace/*
+engine/skills/*
+engine/mcp/codex/config.toml
+engine/mcp/claude-code/.mcp.json
+```
+
+Custom API and artifact helpers are explicit SDK or configuration surfaces; they
+are not current convention-discovery inputs. Custom app-owned API entries must be
+explicit descriptor/build inputs when supported; they are not part of current
+convention discovery or build output.
+
+Discovery output must tell the author what the SDK found and which descriptor
+sections it generated. `soul.config.ts` owns identity, version, display name,
+compatibility overrides, explicit include/exclude choices, advanced build
+overrides, and SDK module opt-ins. It must not become a Host integration file, a
+handwritten descriptor, or arbitrary Host-readable configuration.
+
+Build output is installed through descriptor references. The
+`dist/engine-assets/` subtree contains projected engine assets:
+
+```text
+dist/
+  soul.descriptor.json
+  web/
+  engine-assets/
+    workspace/
+    skills/
+    mcp/
+      codex/config.toml
+      claude-code/.mcp.json
+```
+
 ## SDK Responsibilities
 
 `packages/soul-app-sdk` owns:
