@@ -70,7 +70,6 @@ describe('descriptor Soul runtime harness', () => {
 
     const session = await standalone.runtime.createSession({
       capabilityId,
-      context: 'Standalone context',
       metadata: standalone.sessionMetadata(capabilityId),
       title: 'Standalone session',
       workspaceId: workspace.id,

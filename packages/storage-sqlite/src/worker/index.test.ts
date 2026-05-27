@@ -163,6 +163,18 @@ describe('greenfield local worker session schema', () => {
     expect(disabled.disabledAt).toBe('2026-05-12T22:24:00.000Z')
   })
 
+  it('normalizes retired worker lifecycle rows to archived', () => {
+    upsertWorker({ id: 'legacy-disabled-worker', name: 'Legacy Disabled Worker', soulId: 'demo-soul-app' })
+    upsertWorker({ id: 'legacy-paused-worker', name: 'Legacy Paused Worker', soulId: 'demo-soul-app' })
+    getWorkerDb().run(sql.raw('UPDATE workers SET status = \'disabled\' WHERE id = \'legacy-disabled-worker\''))
+    getWorkerDb().run(sql.raw('UPDATE workers SET status = \'paused\' WHERE id = \'legacy-paused-worker\''))
+
+    runWorkerMigrations()
+
+    expect(getWorker('legacy-disabled-worker')?.status).toBe('archived')
+    expect(getWorker('legacy-paused-worker')?.status).toBe('archived')
+  })
+
   it('persists worker overlay assets as Host metadata with baseline provenance', () => {
     const worker = upsertWorker({ id: 'worker-overlay-1', name: 'Descriptor worker', soulId: 'demo-soul-app' })
 

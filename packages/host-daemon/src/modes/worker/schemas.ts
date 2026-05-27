@@ -64,7 +64,7 @@ export const patchWorkerBodySchema = z.object({
   defaultEngineId: z.string().nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   name: z.string().trim().min(1).optional(),
-  // status 枚举值来自 @zonease/aiworker-soul-protocol localWorkerStatusSchema：['active','paused','disabled']
+  // status 枚举值来自 @zonease/aiworker-soul-protocol localWorkerStatusSchema：['active','archived']
   status: localWorkerStatusSchema.optional(),
 })
 

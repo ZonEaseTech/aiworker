@@ -492,6 +492,23 @@ describe('local daemon API', () => {
     await expect(readFile(join(workspace.rootPath, 'business.md'), 'utf8')).resolves.toContain('Keep app-owned work')
   })
 
+  it('archives worker metadata with archived status', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'archive-worker')
+
+    const archiveRes = await target.request(`/api/workers/${worker.id}/archive`, { method: 'POST' })
+
+    expect(archiveRes.status).toBe(200)
+    expect(await archiveRes.json()).toMatchObject({
+      worker: { id: worker.id, status: 'archived' },
+    })
+    const getRes = await target.request(`/api/workers/${worker.id}`)
+    expect(getRes.status).toBe(200)
+    expect(await getRes.json()).toMatchObject({
+      worker: { id: worker.id, status: 'archived' },
+    })
+  })
+
   it('hard-deletes worker metadata after cleaning receipt-owned workspace projections', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'delete-worker')

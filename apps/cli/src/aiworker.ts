@@ -823,7 +823,7 @@ async function archiveWorkerCommand(id: string): Promise<void> {
     metadataJson: existing.metadataJson,
     name: existing.name,
     soulId: existing.soulId,
-    status: 'disabled',
+    status: 'archived',
   })
   printJson({ worker })
 }

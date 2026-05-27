@@ -241,6 +241,34 @@ describe('destructive refactor contract bootstrap', () => {
     expect(runtime).toContain('POST /api/sessions/:sessionId/invocations')
   })
 
+  test('worker lifecycle uses archive status without disabled or paused worker states', () => {
+    const protocol = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
+    const storageSchema = readRepoFile('packages/storage-sqlite/src/worker/schema.ts')
+    const daemonSchemas = readRepoFile('packages/host-daemon/src/modes/worker/schemas.ts')
+    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
+    const daemonSource = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const cliArchiveWorker = cliSource.slice(
+      cliSource.indexOf('async function archiveWorkerCommand'),
+      cliSource.indexOf('async function deleteWorkerCommand'),
+    )
+    const daemonArchiveWorker = daemonSource.slice(
+      daemonSource.indexOf('app.post(\'/api/workers/:workerId/archive\''),
+      daemonSource.indexOf('app.delete(\'/api/workers/:workerId\''),
+    )
+    const findings = [
+      protocol.includes('localWorkerStatusSchema = z.enum([\'active\', \'paused\', \'disabled\'])') ? 'protocol: paused/disabled worker enum' : null,
+      storageSchema.includes('enum: [\'active\', \'paused\', \'disabled\']') ? 'storage schema: paused/disabled worker enum' : null,
+      daemonSchemas.includes('[\'active\',\'paused\',\'disabled\']') ? 'daemon schema comment: paused/disabled worker enum' : null,
+      cliArchiveWorker.includes('status: \'disabled\'') ? 'CLI worker archive writes disabled' : null,
+      daemonArchiveWorker.includes('status: \'disabled\'') ? 'daemon worker archive writes disabled' : null,
+    ].filter(Boolean)
+
+    expect(protocol).toContain('localWorkerStatusSchema = z.enum([\'active\', \'archived\'])')
+    expect(cliArchiveWorker).toContain('status: \'archived\'')
+    expect(daemonArchiveWorker).toContain('status: \'archived\'')
+    expect(findings, 'Local Worker lifecycle should archive/delete Host metadata; Soul App disabled remains a separate app registry state').toEqual([])
+  })
+
   test('runtime doc promotes projection, assets CRUD, and bridge hard rules', () => {
     const runtime = readRepoFile('docs/runtime.md')
 

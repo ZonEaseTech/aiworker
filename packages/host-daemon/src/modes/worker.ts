@@ -418,7 +418,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       id: existing.id,
       soulId: existing.soulId,
       name: existing.name,
-      status: 'disabled',
+      status: 'archived',
       defaultEngineId: existing.defaultEngineId,
       metadataJson: existing.metadataJson,
     })

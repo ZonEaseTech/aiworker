@@ -60,6 +60,7 @@ export function closeWorkerDb() {
 export function runWorkerMigrations(migrationsFolder: string = defaultWorkerMigrationsFolder) {
   migrate(getWorkerDb(), { migrationsFolder })
   discardLegacyWorkerOverlayAssets()
+  repairWorkerLifecycleStatuses()
   repairWorkerIndexes()
 }
 
@@ -74,6 +75,10 @@ function repairWorkerIndexes() {
     getWorkerDb().run(sql.raw('DROP INDEX IF EXISTS workers_soul_idx'))
   if (!soulIndex || soulIndex.unique === 1)
     getWorkerDb().run(sql.raw('CREATE INDEX IF NOT EXISTS workers_soul_idx ON workers (soul_id)'))
+}
+
+function repairWorkerLifecycleStatuses() {
+  getWorkerDb().run(sql.raw('UPDATE workers SET status = \'archived\' WHERE status IN (\'paused\', \'disabled\')'))
 }
 
 function assertNoLiteralSecrets(value: unknown, context: string): void {

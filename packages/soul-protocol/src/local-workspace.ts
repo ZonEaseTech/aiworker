@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const localWorkerStatusSchema = z.enum(['active', 'paused', 'disabled'])
+export const localWorkerStatusSchema = z.enum(['active', 'archived'])
 export type LocalWorkerStatus = z.infer<typeof localWorkerStatusSchema>
 
 export const localWorkspaceStatusSchema = z.enum(['active', 'archived'])

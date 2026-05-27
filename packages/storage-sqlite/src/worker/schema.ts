@@ -10,7 +10,7 @@ export const workers = sqliteTable(
     id: text('id').primaryKey(),
     soulId: text('soul_id').notNull(),
     name: text('name').notNull(),
-    status: text('status', { enum: ['active', 'paused', 'disabled'] }).notNull().default('active'),
+    status: text('status', { enum: ['active', 'archived'] }).notNull().default('active'),
     defaultEngineId: text('default_engine_id'),
     metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
     createdAt: text('created_at').notNull().$defaultFn(nowIso),

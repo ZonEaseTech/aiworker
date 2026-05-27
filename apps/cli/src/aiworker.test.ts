@@ -441,7 +441,7 @@ describe('aiworker local CLI', () => {
     output = ''
 
     expect(await runCli(argv('worker', 'archive', 'lifecycle-worker'))).toBe(0)
-    expect((JSON.parse(output) as { worker: { status: string } }).worker.status).toBe('disabled')
+    expect((JSON.parse(output) as { worker: { status: string } }).worker.status).toBe('archived')
     output = ''
     expect(await runCli(argv('worker', 'delete', 'lifecycle-worker'))).toBe(0)
     expect((JSON.parse(output) as { deleted: boolean, worker: { id: string } })).toMatchObject({ deleted: true, worker: { id: 'lifecycle-worker' } })
