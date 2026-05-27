@@ -9,36 +9,36 @@ import {
 
 describe('mounted child route helpers', () => {
   it('uses the manifest route path as the mounted child default', () => {
-    expect(mountedChildDefaultPath('/hr')).toBe('/hr')
+    expect(mountedChildDefaultPath('/workbench')).toBe('/workbench')
     expect(mountedChildDefaultPath('')).toBe('/')
   })
 
   it('normalizes child paths under the mounted base path', () => {
-    expect(normalizeMountedChildPath('/hr/profiles/profile-ben', '/hr')).toBe('/hr/profiles/profile-ben')
-    expect(normalizeMountedChildPath('/hr/profiles/profile-ben?tab=review#patch', '/hr')).toBe('/hr/profiles/profile-ben?tab=review#patch')
-    expect(normalizeMountedChildPath('/qa/release', '/hr')).toBe('/hr')
-    expect(normalizeMountedChildPath('', '/hr')).toBe('/hr')
-    expect(normalizeMountedChildPath('/profile?tab=x#y', '/')).toBe('/profile?tab=x#y')
+    expect(normalizeMountedChildPath('/workbench/items/item-ben', '/workbench')).toBe('/workbench/items/item-ben')
+    expect(normalizeMountedChildPath('/workbench/items/item-ben?tab=review#patch', '/workbench')).toBe('/workbench/items/item-ben?tab=review#patch')
+    expect(normalizeMountedChildPath('/outside/release', '/workbench')).toBe('/workbench')
+    expect(normalizeMountedChildPath('', '/workbench')).toBe('/workbench')
+    expect(normalizeMountedChildPath('/item?tab=x#y', '/')).toBe('/item?tab=x#y')
   })
 
   it('reads path-like values from micro-app route info', () => {
-    expect(mountedChildPathFromRouteInfo({ fullPath: '/hr/profiles/profile-ben?tab=summary' }, '/hr')).toBe('/hr/profiles/profile-ben?tab=summary')
-    expect(mountedChildPathFromRouteInfo({ pathname: '/hr/profiles/profile-stella', search: '?tab=evidence', hash: '#sources' }, '/hr')).toBe('/hr/profiles/profile-stella?tab=evidence#sources')
-    expect(mountedChildPathFromRouteInfo({ href: 'http://child.local/hr/profiles/profile-ada?tab=review#patch' }, '/hr')).toBe('/hr/profiles/profile-ada?tab=review#patch')
-    expect(mountedChildPathFromRouteInfo({ fullPath: '/hr/profiles/full', href: 'http://child.local/hr/profiles/href', pathname: '/hr/profiles/pathname' }, '/hr')).toBe('/hr/profiles/full')
-    expect(mountedChildPathFromRouteInfo({ pathname: '/qa/release' }, '/hr')).toBe('/hr')
+    expect(mountedChildPathFromRouteInfo({ fullPath: '/workbench/items/item-ben?tab=summary' }, '/workbench')).toBe('/workbench/items/item-ben?tab=summary')
+    expect(mountedChildPathFromRouteInfo({ pathname: '/workbench/items/item-stella', search: '?tab=evidence', hash: '#sources' }, '/workbench')).toBe('/workbench/items/item-stella?tab=evidence#sources')
+    expect(mountedChildPathFromRouteInfo({ href: 'http://child.local/workbench/items/item-ada?tab=review#patch' }, '/workbench')).toBe('/workbench/items/item-ada?tab=review#patch')
+    expect(mountedChildPathFromRouteInfo({ fullPath: '/workbench/items/full', href: 'http://child.local/workbench/items/href', pathname: '/workbench/items/pathname' }, '/workbench')).toBe('/workbench/items/full')
+    expect(mountedChildPathFromRouteInfo({ pathname: '/outside/release' }, '/workbench')).toBe('/workbench')
   })
 
   it('keys route memory by app, surface and workspace', () => {
     expect(mountedRouteMemoryKey({
-      appId: 'aiworker-hr',
-      surfaceId: 'hr-home',
+      appId: 'aiworker-demo-people',
+      surfaceId: 'workbench',
       workspaceId: 'workspace-1',
-    })).toBe('aiworker-hr::hr-home::workspace-1')
+    })).toBe('aiworker-demo-people::workbench::workspace-1')
     expect(mountedRouteMemoryKey({
-      appId: 'aiworker-hr',
-      surfaceId: 'hr-home',
+      appId: 'aiworker-demo-people',
+      surfaceId: 'workbench',
       workspaceId: null,
-    })).toBe('aiworker-hr::hr-home::app')
+    })).toBe('aiworker-demo-people::workbench::app')
   })
 })
