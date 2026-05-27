@@ -7,7 +7,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getWorkerConfigValue, initWorkerDb, runWorkerMigrations, updateSession, updateWorkspace, upsertWorker, upsertWorkerOverlayAssets } from '@zonease/aiworker-storage-sqlite/worker'
+import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getEngineInvocation, getWorkerConfigValue, initWorkerDb, listSessionEvents, runWorkerMigrations, updateSession, updateWorkspace, upsertWorker, upsertWorkerOverlayAssets } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { LocalExecutorFailure } from './executor'
@@ -1447,6 +1447,84 @@ describe('LocalWorkerRuntime', () => {
       processState: 'killed',
       status: 'cancelled',
     })
+  })
+
+  it('surfaces bridge cancel failures without marking the invocation cancelled', async () => {
+    const workerRuntime = new LocalWorkerRuntime({
+      worker: {
+        id: 'worker-demo',
+        soulId: 'demo-soul',
+        name: 'Demo',
+        defaultEngineId: 'codex',
+      },
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
+      now,
+      executor: {
+        async invoke() {
+          return { summary: 'unused' }
+        },
+      },
+      engineBridge: {
+        adapters: [{
+          target: 'codex',
+          async cancel() {
+            throw new Error('cancel failed authorization = "literal-secret-value"')
+          },
+          async discover() {
+            return { callable: true, installed: true, target: 'codex' }
+          },
+          async followUp() {
+            return {}
+          },
+          normalize() {
+            return [{ type: 'invocation.progress' }]
+          },
+          async start() {
+            return {}
+          },
+        }],
+        cancelGracePeriodMs: 0,
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Cancel Failure Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Cancel failure session',
+    })
+    const invocation = createEngineInvocation({
+      id: 'cancel-failure-invocation-1',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/cancel-failure-invocation-1/input`,
+      metadataJson: {
+        processHandle: { invocationId: 'cancel-failure-invocation-1', pid: 303 },
+      },
+      processState: 'spawned',
+      status: 'running',
+    })
+
+    try {
+      await workerRuntime.cancelEngineInvocation(invocation.id, { reason: 'user-request' })
+      throw new Error('expected cancel to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({
+        code: 'ENGINE_CANCEL_FAILED',
+        status: 500,
+      })
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('[REDACTED]')
+      expect(message).not.toContain('literal-secret-value')
+    }
+    expect(getEngineInvocation(invocation.id)).toMatchObject({
+      processState: 'spawned',
+      status: 'running',
+    })
+    expect(listSessionEvents(session.id)).toEqual([])
   })
 
   it('falls back to DB-only cancellation when stored process handle metadata is incomplete', async () => {

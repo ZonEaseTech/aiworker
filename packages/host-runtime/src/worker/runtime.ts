@@ -445,12 +445,20 @@ export class LocalWorkerRuntime {
         cancelGracePeriodMs: engineBridgeOptions.cancelGracePeriodMs,
         processManager: engineBridgeOptions.processManager,
       })
-      await bridge.cancelInvocation({
-        engineTarget: invocation.engineId,
-        handle: processHandle,
-        invocationId: invocation.id,
-        reason: input.reason,
-      })
+      try {
+        await bridge.cancelInvocation({
+          engineTarget: invocation.engineId,
+          handle: processHandle,
+          invocationId: invocation.id,
+          reason: input.reason,
+        })
+      }
+      catch (error) {
+        const failureCode = readEngineBridgeFailureCode(error)
+        if (failureCode)
+          throw AppError.internal(redactEngineString(error instanceof Error ? error.message : String(error)), failureCode)
+        throw error
+      }
     }
 
     const processState = invocation.status === 'queued' ? 'not_spawned' : 'killed'
