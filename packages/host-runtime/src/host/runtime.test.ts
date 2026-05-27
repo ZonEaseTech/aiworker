@@ -199,4 +199,26 @@ describe('Host runtime boundary', () => {
     expect(() => runtime.requireCapabilityForWorker(created.worker.id, 'other-soul.release-gate'))
       .toThrow('does not belong to worker')
   })
+
+  it('validates that a worker Soul App is enabled before new work', async () => {
+    const runtime = host()
+    await runtime.bootstrapOfficialSoulApps()
+    const created = await runtime.createSoulWorker({
+      id: 'archive-app-worker',
+      name: 'Archive App Worker',
+      soulId: FREEFORM_APP_ID,
+    })
+
+    expect(runtime.requireEnabledAppForWorker(created.worker.id)).toMatchObject({
+      appId: FREEFORM_APP_ID,
+      status: 'enabled',
+    })
+
+    runtime.archiveApp(FREEFORM_APP_ID)
+
+    expect(() => runtime.requireEnabledAppForWorker(created.worker.id))
+      .toThrow(`Soul App is not enabled: ${FREEFORM_APP_ID}`)
+    expect(() => runtime.requireEnabledAppForWorker(created.worker.id))
+      .toThrow(expect.objectContaining({ code: 'SOUL_APP_DISABLED', status: 409 }))
+  })
 })

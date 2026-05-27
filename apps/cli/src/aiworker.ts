@@ -286,13 +286,6 @@ function requireWorkerRow(workerId: string): WorkerRow {
   return worker
 }
 
-function requireEnabledSoulAppForWorker(host: HostRuntime, workerId: string): void {
-  const worker = requireWorkerRow(workerId)
-  const app = host.getApp(worker.soulId)
-  if (!app || app.status !== 'enabled')
-    throw new Error(`Soul App is not enabled: ${worker.soulId}`)
-}
-
 function printJson(value: unknown): void {
   process.stdout.write(`${redactCliInspectOutput(JSON.stringify(redactEngineBridgeValue(value), null, 2))}\n`)
 }
@@ -941,7 +934,7 @@ function workerConfigValueResponse(
 async function createWorkspaceCommand(opts: { name?: string, type?: string, worker?: string }): Promise<void> {
   const paths = await ensureDb()
   const runtime = await ensureRuntime({ worker: opts.worker })
-  requireEnabledSoulAppForWorker(createHost(paths), runtime.workerId)
+  createHost(paths).requireEnabledAppForWorker(runtime.workerId)
   printJson({ workspace: await runtime.createWorkspace({ name: requireText(opts.name, 'name'), type: opts.type }) })
 }
 
@@ -987,7 +980,7 @@ async function startSessionCommand(opts: { capability?: string, engine?: string,
     throw new Error(`workspace not found for ${runtime.workerId}: ${workspaceId}`)
   const capabilityId = requireText(opts.capability, 'capability')
   const host = createHost(paths)
-  requireEnabledSoulAppForWorker(host, runtime.workerId)
+  host.requireEnabledAppForWorker(runtime.workerId)
   const capability = host.requireCapabilityForWorker(runtime.workerId, capabilityId)
   const selectedEngineId = opts.engine?.trim() || selectedCliEngineId()
   const engineMetadata = {
@@ -1020,7 +1013,7 @@ async function resolveSessionContinuationContext(opts: SessionContinuationComman
   if (!session)
     throw new Error(`session not found: ${sessionId}`)
   const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
-  requireEnabledSoulAppForWorker(createHost(paths), runtime.workerId)
+  createHost(paths).requireEnabledAppForWorker(runtime.workerId)
   const engineMetadata = resolveInvocationEngineMetadata(session.metadataJson)
   const frozen = readFrozenSessionEngine(session.metadataJson)
   const currentSession = frozen?.executionMode === 'local-cli' && frozen.engineCommand !== engineMetadata.engineCommand

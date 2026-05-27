@@ -176,6 +176,18 @@ export class HostRuntime {
     return capability
   }
 
+  requireEnabledAppForWorker(workerId: string): HostedSoulApp {
+    const worker = getWorker(workerId)
+    if (!worker)
+      throw AppError.notFound(`Worker not found: ${workerId}`)
+    const app = getHostedSoulApp(worker.soulId)
+    if (!app)
+      throw AppError.notFound(`Soul App not found: ${worker.soulId}`)
+    if (app.status !== 'enabled')
+      throw new AppError('SOUL_APP_DISABLED', 409, `Soul App is not enabled: ${app.appId}`)
+    return app
+  }
+
   async createSoulWorker(input: CreateHostSoulWorkerInput): Promise<CreateHostSoulWorkerResult> {
     const soul = this.requireAvailableSoul(input.soulId)
     const name = requireText(input.name, 'name')

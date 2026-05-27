@@ -1267,13 +1267,19 @@ function requireCapabilityForWorker(state: LocalDaemonState, workerId: string, c
 }
 
 function unavailableSoulAppResponse(c: Context, state: LocalDaemonState, workerId: string): Response | null {
-  const worker = requireWorker(workerId)
-  const app = state.host.getApp(worker.soulId)
-  if (!app)
-    return notFound(c, 'Soul App')
-  if (app.status !== 'enabled')
-    return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-  return null
+  try {
+    state.host.requireEnabledAppForWorker(workerId)
+    return null
+  }
+  catch (error) {
+    if (error instanceof AppError) {
+      const status = error.status === 400 || error.status === 404 || error.status === 409 || error.status === 500
+        ? error.status
+        : 500
+      return c.json(error.toJSON(), status)
+    }
+    throw error
+  }
 }
 
 function enrichCapabilityMetadata(_state: LocalDaemonState, _workerId: string, _capabilityId: string, metadata: Record<string, unknown>): Record<string, unknown> {
