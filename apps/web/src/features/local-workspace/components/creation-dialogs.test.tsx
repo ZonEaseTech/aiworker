@@ -9,8 +9,8 @@ const copy = messagesFor('en')
 const soul = {
   defaultCapabilities: [],
   description: 'People operations workspace',
-  id: 'aiworker-hr',
-  name: 'AIWorker HR',
+  id: 'aiworker-demo-people',
+  name: 'Demo People',
   status: 'available',
 } as VerticalSoul
 
@@ -23,7 +23,7 @@ describe('creation dialogs', () => {
         locale="en"
         open
         selectedSoulId={soul.id}
-        workerName="AIWorker HR"
+        workerName="Demo People"
         onClose={vi.fn()}
         onNameChange={vi.fn()}
         onSoulChange={vi.fn()}
@@ -62,7 +62,7 @@ describe('creation dialogs', () => {
         open
         placeholder="Release name"
         submitting={false}
-        workerLabel="AIWorker HR"
+        workerLabel="Demo People"
         workspaceTitle="Hiring Workspace"
         onClose={vi.fn()}
         onSubmit={event => event.preventDefault()}
@@ -74,7 +74,7 @@ describe('creation dialogs', () => {
     expect(dialog.getAttribute('data-slot')).toBe('dialog-content')
     expect(dialog.classList.contains('creation-dialog')).toBe(false)
 
-    const workerInput = within(dialog).getByDisplayValue('AIWorker HR')
+    const workerInput = within(dialog).getByDisplayValue('Demo People')
     expect(workerInput.getAttribute('data-slot')).toBe('input')
 
     const workspaceInput = within(dialog).getByTestId('new-project-name')

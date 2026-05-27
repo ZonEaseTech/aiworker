@@ -561,6 +561,22 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'local workspace model tests should use neutral soul ids when proving Host-generic placeholder behavior').toEqual([])
   })
 
+  test('Web local workspace dialog tests use generic descriptor fixtures instead of retired HR and QA identities', () => {
+    const source = readRepoFile('apps/web/src/features/local-workspace/components/creation-dialogs.test.tsx')
+    const retiredFixtureSnippets = [
+      'aiworker-hr',
+      'aiworker-qa',
+      'AIWorker HR',
+      'AIWorker QA',
+    ]
+
+    const findings = retiredFixtureSnippets
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `apps/web/src/features/local-workspace/components/creation-dialogs.test.tsx: ${snippet}`)
+
+    expect(findings, 'local workspace dialog tests should not use old app-local product identities as generic descriptor fixtures').toEqual([])
+  })
+
   test('WorkerStudio capability fixtures use capability collection names', () => {
     const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
     const forbidden = [
