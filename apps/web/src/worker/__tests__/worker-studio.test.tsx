@@ -427,10 +427,6 @@ function workerOverlayConfigKeyForTest(asset: LocalWorkerOverlayAsset): string {
   return `${kind}:${asset.id}`
 }
 
-function legacyWorkerOverlayConfigKeyForTest(asset: LocalWorkerOverlayAsset): string {
-  return `overlay:${encodeURIComponent(asset.kind)}:${encodeURIComponent(asset.target)}:${encodeURIComponent(asset.id)}`
-}
-
 function workerOverlayAssetsFromConfigForTest(configKey: string, body: Record<string, unknown>): LocalWorkerOverlayAsset[] {
   const kind = body.kind === 'entry-file-overlay'
     ? 'entry-file'
@@ -673,7 +669,7 @@ beforeEach(() => {
       const archive = requestUrl.pathname.endsWith('/archive')
       if (archive && method === 'POST') {
         currentWorkerOverlayAssets = currentWorkerOverlayAssets.filter((asset) => {
-          return workerOverlayConfigKeyForTest(asset) !== configKey && legacyWorkerOverlayConfigKeyForTest(asset) !== configKey
+          return workerOverlayConfigKeyForTest(asset) !== configKey
         })
         return json({
           config: {
@@ -690,7 +686,7 @@ beforeEach(() => {
         const nextAssets = workerOverlayAssetsFromConfigForTest(configKey, body)
         currentWorkerOverlayAssets = [
           ...currentWorkerOverlayAssets.filter((asset) => {
-            return workerOverlayConfigKeyForTest(asset) !== configKey && legacyWorkerOverlayConfigKeyForTest(asset) !== configKey
+            return workerOverlayConfigKeyForTest(asset) !== configKey
           }),
           ...nextAssets,
         ]

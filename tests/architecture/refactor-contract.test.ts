@@ -1467,16 +1467,28 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('WorkerStudio test harness does not accept legacy overlay write routes', () => {
+    const workerOverlayConfigApi = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlay-config.ts')
+    const workerOverlayConfigTest = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlay-config.test.ts')
     const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
     const forbidden = [
       'const requestBody = init?.body ? JSON.parse(String(init.body)) as { assets?: LocalWorkerOverlayAsset[] } : {}',
       'currentWorkerOverlayAssets = requestBody.assets?.map',
+      'legacyWorkerOverlayConfigKey',
+      'legacyWorkerOverlayConfigKeyForTest',
+      'overlay%3Askill%3Acodex',
     ]
-    const findings = forbidden
-      .filter(snippet => workerStudioTest.includes(snippet))
-      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+    const sources = [
+      ['apps/web/src/features/local-workspace/api/worker-overlay-config.ts', workerOverlayConfigApi],
+      ['apps/web/src/features/local-workspace/api/worker-overlay-config.test.ts', workerOverlayConfigTest],
+      ['apps/web/src/worker/__tests__/worker-studio.test.tsx', workerStudioTest],
+    ]
+    const findings = sources.flatMap(([path, source]) =>
+      forbidden
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`),
+    )
 
-    expect(findings, 'Web tests must fail if WorkerStudio writes through legacy /overlay PUT').toEqual([])
+    expect(findings, 'Web overlay config writes must use canonical worker_config keys only').toEqual([])
     expect(workerStudioTest).toContain('/api/workers/people-worker/config/skill-overlay%3Ainterview-brief')
   })
 

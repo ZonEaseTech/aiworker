@@ -21,11 +21,6 @@ export async function saveWorkerOverlayConfigValues(workerId: string, previousAs
     if (!nextKeys.has(entry.configKey))
       await archiveWorkerConfigValue(workerId, entry.configKey)
   }
-
-  const legacyKeys = new Set(previousAssets.filter(isOverlayAsset).map(legacyWorkerOverlayConfigKey))
-  for (const configKey of legacyKeys) {
-    await archiveWorkerConfigValue(workerId, configKey)
-  }
 }
 
 function workerOverlayConfigEntries(assets: LocalWorkerOverlayAsset[]): WorkerOverlayConfigEntry[] {
@@ -98,8 +93,4 @@ function workerOverlayConfigTarget(asset: LocalWorkerOverlayAsset, assets: Local
 
 function workerOverlayConfigKey(asset: LocalWorkerOverlayAsset): string {
   return `${workerOverlayConfigKind(asset)}:${asset.id}`
-}
-
-function legacyWorkerOverlayConfigKey(asset: LocalWorkerOverlayAsset): string {
-  return `overlay:${encodeURIComponent(asset.kind)}:${encodeURIComponent(asset.target)}:${encodeURIComponent(asset.id)}`
 }

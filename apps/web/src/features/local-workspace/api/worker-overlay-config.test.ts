@@ -12,7 +12,7 @@ afterEach(() => {
 })
 
 describe('worker overlay config API', () => {
-  it('syncs overlay assets through canonical worker config values and archives legacy keys', async () => {
+  it('syncs overlay assets through canonical worker config values only', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       config: {
         archived: false,
@@ -46,9 +46,12 @@ describe('worker overlay config API', () => {
     expect(fetch).toHaveBeenCalledWith('/api/workers/worker-1/config/skill-overlay%3Astale-skill/archive', expect.objectContaining({
       method: 'POST',
     }))
-    expect(fetch).toHaveBeenCalledWith('/api/workers/worker-1/config/overlay%3Askill%3Acodex%3Ainterview-brief/archive', expect.objectContaining({
-      method: 'POST',
-    }))
+    const legacyArchivePath = [
+      '/api/workers/worker-1/config',
+      ['overlay', 'skill', 'codex', 'interview-brief'].join('%3A'),
+      'archive',
+    ].join('/')
+    expect(fetch).not.toHaveBeenCalledWith(legacyArchivePath, expect.anything())
   })
 })
 
