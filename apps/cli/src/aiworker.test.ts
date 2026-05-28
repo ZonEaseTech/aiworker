@@ -114,9 +114,13 @@ describe('aiworker local CLI', () => {
     closeWorkerDb()
   }
 
-  async function writeFakeBundle(bundleDir: string, marker: string): Promise<void> {
+  async function writeFakeBundle(bundleDir: string, marker: string, options: { includeMigrationJournal?: boolean, includeOfficialApp?: boolean } = {}): Promise<void> {
+    const includeMigrationJournal = options.includeMigrationJournal ?? true
+    const includeOfficialApp = options.includeOfficialApp ?? true
     mkdirSync(path.join(bundleDir, 'web', 'worker'), { recursive: true })
-    mkdirSync(path.join(bundleDir, 'drizzle'), { recursive: true })
+    mkdirSync(path.join(bundleDir, 'drizzle', 'worker', 'meta'), { recursive: true })
+    if (includeOfficialApp)
+      mkdirSync(path.join(bundleDir, 'official-apps', FREEFORM_APP_ID, 'dist'), { recursive: true })
     await writeFile(path.join(bundleDir, 'aiworker'), [
       '#!/bin/sh',
       'if [ "$1" = "--version" ]; then',
@@ -129,6 +133,10 @@ describe('aiworker local CLI', () => {
     await chmod(path.join(bundleDir, 'aiworker'), 0o755)
     await writeFile(path.join(bundleDir, 'web', 'worker', 'index.html'), `<html>${marker}</html>\n`)
     await writeFile(path.join(bundleDir, 'drizzle', 'migration.sql'), `-- ${marker}\n`)
+    if (includeMigrationJournal)
+      await writeFile(path.join(bundleDir, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
+    if (includeOfficialApp)
+      await writeFile(path.join(bundleDir, 'official-apps', FREEFORM_APP_ID, 'dist', 'soul.descriptor.json'), '{"protocol":"soul/v1"}\n')
     await writeFile(path.join(bundleDir, 'README.md'), `${marker} readme\n`)
   }
 
@@ -1158,6 +1166,46 @@ describe('aiworker local CLI', () => {
     expect(await readFile(path.join(result.backupPath, 'web', 'worker', 'index.html'), 'utf8')).toContain('old')
     expect(await readFile(path.join(result.backupPath, 'drizzle', 'migration.sql'), 'utf8')).toContain('old')
     expect(await readFile(path.join(result.backupPath, 'README.md'), 'utf8')).toContain('old')
+    expect(await updateScratchEntries(installParent)).toEqual([])
+  })
+
+  it('rejects GitHub release bundles missing packaged official Soul Apps', async () => {
+    const installParent = path.join(root, 'install')
+    const currentBundleDir = path.join(installParent, 'aiworker-darwin-arm64')
+    const releaseBundleDir = path.join(root, 'release', 'aiworker-darwin-arm64')
+    await writeFakeBundle(currentBundleDir, 'old')
+    await writeFakeBundle(releaseBundleDir, 'new', { includeOfficialApp: false })
+    const archiveBytes = await createTarGz(releaseBundleDir)
+
+    await expect(downloadAndReplaceGitHubBundle({
+      checksumUrl: 'https://example.test/aiworker.tar.gz.sha256',
+      downloadUrl: 'https://example.test/aiworker.tar.gz',
+    }, {
+      currentPath: path.join(currentBundleDir, 'aiworker'),
+      fetch: mockReleaseFetch(archiveBytes),
+    })).rejects.toThrow('staging_failed: official Freeform descriptor not found')
+
+    expect(await readFile(path.join(currentBundleDir, 'web', 'worker', 'index.html'), 'utf8')).toContain('old')
+    expect(await updateScratchEntries(installParent)).toEqual([])
+  })
+
+  it('rejects GitHub release bundles missing packaged migration metadata', async () => {
+    const installParent = path.join(root, 'install')
+    const currentBundleDir = path.join(installParent, 'aiworker-darwin-arm64')
+    const releaseBundleDir = path.join(root, 'release', 'aiworker-darwin-arm64')
+    await writeFakeBundle(currentBundleDir, 'old')
+    await writeFakeBundle(releaseBundleDir, 'new', { includeMigrationJournal: false })
+    const archiveBytes = await createTarGz(releaseBundleDir)
+
+    await expect(downloadAndReplaceGitHubBundle({
+      checksumUrl: 'https://example.test/aiworker.tar.gz.sha256',
+      downloadUrl: 'https://example.test/aiworker.tar.gz',
+    }, {
+      currentPath: path.join(currentBundleDir, 'aiworker'),
+      fetch: mockReleaseFetch(archiveBytes),
+    })).rejects.toThrow('staging_failed: drizzle migration journal not found')
+
+    expect(await readFile(path.join(currentBundleDir, 'web', 'worker', 'index.html'), 'utf8')).toContain('old')
     expect(await updateScratchEntries(installParent)).toEqual([])
   })
 

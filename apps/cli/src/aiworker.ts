@@ -533,6 +533,10 @@ export async function downloadAndReplaceGitHubBundle(action: { checksumUrl: stri
       throw new Error('staging_failed: web assets not found')
     if (!existsSync(path.join(extractedDir, 'drizzle')) || !statSync(path.join(extractedDir, 'drizzle')).isDirectory())
       throw new Error('staging_failed: drizzle migrations not found')
+    if (!existsSync(path.join(extractedDir, 'drizzle', 'worker', 'meta', '_journal.json')))
+      throw new Error('staging_failed: drizzle migration journal not found')
+    if (!existsSync(path.join(extractedDir, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json')))
+      throw new Error('staging_failed: official Freeform descriptor not found')
 
     rmSync(nextBundleDir, { force: true, recursive: true })
     rmSync(backupPath, { force: true, recursive: true })
