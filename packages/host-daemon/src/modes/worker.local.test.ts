@@ -2252,6 +2252,140 @@ describe('local daemon API', () => {
     expect(await domainOptionsRes.json()).toMatchObject({ error: { code: 'WORKER_CONFIG_INVALID' } })
   })
 
+  it('守住 projection-overlay 与 workbench-preference envelope kind 的 broker 正向合同', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'projection-overlay-worker')
+
+    const projectionRes = await target.request(`/api/workers/${worker.id}/config/projection-overlay`, {
+      body: JSON.stringify({
+        checksum: 'sha256:projection-overlay',
+        enabled: true,
+        kind: 'projection-overlay',
+        options: {
+          baselineRef: 'descriptor://engine/workspace/AGENTS.md',
+        },
+        sourceRef: 'descriptor://engine/workspace/AGENTS.md',
+        target: 'codex',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(projectionRes.status).toBe(200)
+    expect(await projectionRes.json()).toMatchObject({
+      config: {
+        archived: false,
+        configKey: 'projection-overlay',
+        value: {
+          enabled: true,
+          kind: 'projection-overlay',
+          options: {
+            baselineRef: 'descriptor://engine/workspace/AGENTS.md',
+          },
+          target: 'codex',
+          updatedBy: 'web',
+        },
+        workerId: worker.id,
+      },
+    })
+
+    const workbenchRes = await target.request(`/api/workers/${worker.id}/config/workbench-preference`, {
+      body: JSON.stringify({
+        checksum: 'sha256:workbench-preference',
+        enabled: true,
+        kind: 'workbench-preference',
+        options: {
+          preferredEntry: 'mounted',
+        },
+        sourceRef: 'descriptor://workbench/entry',
+        target: 'all',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(workbenchRes.status).toBe(200)
+    expect(await workbenchRes.json()).toMatchObject({
+      config: {
+        archived: false,
+        configKey: 'workbench-preference',
+        value: {
+          enabled: true,
+          kind: 'workbench-preference',
+          options: {
+            preferredEntry: 'mounted',
+          },
+          target: 'all',
+          updatedBy: 'web',
+        },
+        workerId: worker.id,
+      },
+    })
+
+    const patchProjectionRes = await target.request(`/api/workers/${worker.id}/config/projection-overlay`, {
+      body: JSON.stringify({
+        checksum: 'sha256:projection-overlay-disabled',
+        enabled: false,
+        kind: 'projection-overlay',
+        options: {
+          baselineRef: 'descriptor://engine/workspace/AGENTS.md',
+        },
+        sourceRef: 'descriptor://engine/workspace/AGENTS.md',
+        target: 'codex',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(patchProjectionRes.status).toBe(200)
+    expect(await patchProjectionRes.json()).toMatchObject({
+      config: {
+        archived: false,
+        configKey: 'projection-overlay',
+        value: {
+          enabled: false,
+          kind: 'projection-overlay',
+          updatedBy: 'web',
+        },
+      },
+    })
+
+    const listRes = await target.request(`/api/workers/${worker.id}/config`)
+    expect(listRes.status).toBe(200)
+    const listed = await listRes.json() as { config: { values: Array<{ configKey: string, value: { kind: string } }> } }
+    const kindByKey = new Map(listed.config.values.map(row => [row.configKey, row.value.kind]))
+    expect(kindByKey.get('projection-overlay')).toBe('projection-overlay')
+    expect(kindByKey.get('workbench-preference')).toBe('workbench-preference')
+
+    const archiveProjectionRes = await target.request(`/api/workers/${worker.id}/config/projection-overlay/archive`, {
+      method: 'POST',
+    })
+    expect(archiveProjectionRes.status).toBe(200)
+    expect(await archiveProjectionRes.json()).toMatchObject({
+      config: {
+        archived: true,
+        configKey: 'projection-overlay',
+        value: null,
+      },
+    })
+
+    const archiveWorkbenchRes = await target.request(`/api/workers/${worker.id}/config/workbench-preference/archive`, {
+      method: 'POST',
+    })
+    expect(archiveWorkbenchRes.status).toBe(200)
+    expect(await archiveWorkbenchRes.json()).toMatchObject({
+      config: {
+        archived: true,
+        configKey: 'workbench-preference',
+        value: null,
+      },
+    })
+
+    const afterArchiveListRes = await target.request(`/api/workers/${worker.id}/config`)
+    expect(afterArchiveListRes.status).toBe(200)
+    expect(await afterArchiveListRes.json()).toMatchObject({
+      config: { values: [] },
+      workerId: worker.id,
+    })
+  })
+
   it('serves projection receipts and cleans up only receipt-owned files', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)
