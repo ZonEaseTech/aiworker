@@ -129,6 +129,9 @@ requireIncludes('docs/protocol.md', [
   'DELETE /api/sessions/:sessionId',
   'configValueJson envelope',
   'kind, target, enabled, sourceRef, checksum, options, updatedAt, updatedBy',
+  '`engine-selection`, `projection-overlay`,\n`skill-overlay`, `mcp-overlay`, `entry-file-overlay`, `workbench-preference`, or\n`sdk-extension`',
+  '`target` is an engine target, `all`, or `none`.',
+  '`updatedBy` records caller class such as `cli`,\n`web`, or `app-owned-api`',
 ])
 forbidIncludes('docs/protocol.md', [
   'host-adapter',
