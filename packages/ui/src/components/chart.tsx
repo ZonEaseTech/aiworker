@@ -58,9 +58,10 @@ function ChartContainer({
 }) {
   const uniqueId = React.useId()
   const chartId = `chart-${id ?? uniqueId.replace(/:/g, '')}`
+  const chartContextValue = React.useMemo<ChartContextProps>(() => ({ config }), [config])
 
   return (
-    <ChartContext value={{ config }}>
+    <ChartContext value={chartContextValue}>
       <div
         data-slot="chart"
         data-chart={chartId}
@@ -92,6 +93,7 @@ function ChartStyle({ id, config }: { id: string, config: ChartConfig }) {
 
   return (
     <style
+      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- chart theme variables are emitted as scoped CSS.
       dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(
@@ -203,10 +205,11 @@ function ChartTooltipContent({
             const key = `${nameKey ?? item.name ?? item.dataKey ?? 'value'}`
             const itemConfig = getPayloadConfigFromPayload(config, item, key)
             const indicatorColor = color ?? item.payload?.fill ?? item.color
+            const itemKey = `${key}-${item.name ?? item.dataKey ?? index}`
 
             return (
               <div
-                key={index}
+                key={itemKey}
                 className={cn(
                   'flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground',
                   indicator === 'dot' && 'items-center',
@@ -305,10 +308,11 @@ function ChartLegendContent({
         .map((item, index) => {
           const key = `${nameKey ?? item.dataKey ?? 'value'}`
           const itemConfig = getPayloadConfigFromPayload(config, item, key)
+          const itemKey = `${key}-${item.value ?? item.color ?? index}`
 
           return (
             <div
-              key={index}
+              key={itemKey}
               className={cn(
                 'flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground',
               )}
