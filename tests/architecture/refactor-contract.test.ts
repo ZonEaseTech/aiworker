@@ -2057,9 +2057,11 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('standalone release bundles include descriptor-only official Soul Apps', () => {
     const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
+    const releasePackager = readRepoFile('apps/cli/scripts/package-release-bundles.ts')
 
-    expect(releaseWorkflow).toContain('cp -R apps/cli/dist/official-apps "release/${bundle}/official-apps"')
-    expect(releaseWorkflow.indexOf('cp -R apps/cli/dist/official-apps')).toBeLessThan(releaseWorkflow.indexOf('tar -C release -czf "${bundle}.tar.gz" "${bundle}"'))
+    expect(releaseWorkflow).toContain('bun apps/cli/scripts/package-release-bundles.ts')
+    expect(releasePackager).toContain('official-apps')
+    expect(releasePackager.indexOf('official-apps')).toBeLessThan(releasePackager.indexOf('createTarball'))
   })
 
   test('package guardrails reject broad replacement buckets', () => {

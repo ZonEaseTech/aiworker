@@ -44,21 +44,7 @@ jobs:
           bun build --compile --target=bun-darwin-arm64 --outfile=aiworker-darwin-arm64 apps/cli/src/aiworker.ts
 
       - name: Package binary release bundles
-        run: |
-          set -euo pipefail
-          mkdir -p release
-          for target in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
-            bundle="aiworker-${target}"
-            mkdir -p "release/${bundle}"
-            cp "${bundle}" "release/${bundle}/aiworker"
-            chmod +x "release/${bundle}/aiworker"
-            cp -R apps/cli/dist/web "release/${bundle}/web"
-            cp -R apps/cli/dist/drizzle "release/${bundle}/drizzle"
-            cp -R apps/cli/dist/official-apps "release/${bundle}/official-apps"
-            cp apps/cli/dist/README.md "release/${bundle}/README.md"
-            tar -C release -czf "${bundle}.tar.gz" "${bundle}"
-            shasum -a 256 "${bundle}.tar.gz" > "${bundle}.tar.gz.sha256"
-          done
+        run: bun apps/cli/scripts/package-release-bundles.ts
 
       - name: Attach binaries to GitHub Release
         uses: softprops/action-gh-release@v3
