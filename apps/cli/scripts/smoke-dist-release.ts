@@ -8,6 +8,7 @@ import { spawn } from 'bun'
 import consola from 'consola'
 
 import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
+import { assertDistOpenApiFreshness } from './smoke-dist-release-contract'
 
 interface CommandResult {
   code: number
@@ -228,8 +229,7 @@ async function assertDaemonOpenApiWorkerConfigEnvelope(port: number): Promise<vo
   } | undefined
   const putBody = JSON.stringify(workerConfigPath?.put?.requestBody)
   const patchBody = JSON.stringify(workerConfigPath?.patch?.requestBody)
-  if (!workerConfigPath?.put?.requestBody || !workerConfigPath.patch?.requestBody)
-    throw new Error('dist daemon OpenAPI must document worker config PUT/PATCH request bodies')
+  assertDistOpenApiFreshness(workerConfigPath)
   if (!putBody.includes('WorkerConfigValueInput') || patchBody !== putBody)
     throw new Error(`dist daemon OpenAPI worker config routes must share WorkerConfigValueInput request bodies: ${putBody} / ${patchBody}`)
   for (const required of ['WorkerConfigValueInput', 'configValueJson envelope', 'skill-overlay', 'descriptor://engine/skills/freeform-session', 'updatedBy', 'web']) {
