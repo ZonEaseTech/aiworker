@@ -2037,9 +2037,11 @@ describe('destructive refactor contract bootstrap', () => {
     const testing = readRepoFile('docs/testing.md')
 
     expect(testing).toContain('bun run release:check')
+    expect(testing).toContain('bun run smoke:dist-release')
     expect(releaseCheckScript).toBeTruthy()
     for (const command of releaseGateCommands)
       expect(releaseCheckScript).toContain(command)
+    expect(releaseCheckScript.indexOf('bun run build')).toBeLessThan(releaseCheckScript.indexOf('bun run smoke:dist-release'))
     expect(releaseCheckScript).not.toContain('tmp/refactor')
   })
 
