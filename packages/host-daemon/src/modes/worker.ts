@@ -281,41 +281,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     state.runtimes.set(created.worker.id, created.runtime)
     return c.json({ worker: created.worker, snapshot: created.snapshot }, 201)
   })
-  app.get('/api/local/workers/:workerId', (c) => {
-    const worker = getWorker(c.req.param('workerId'))
-    if (!worker)
-      return notFound(c, 'worker')
-    return c.json({ worker, snapshot: requireRuntime(state, worker.id).snapshot() })
-  })
-  app.patch('/api/local/workers/:workerId', async (c) => {
-    const existing = getWorker(c.req.param('workerId'))
-    if (!existing)
-      return notFound(c, 'worker')
-    const result = await parseJsonBody(c, patchWorkerBodySchema, 'PATCH_WORKER_INVALID')
-    if (!result.ok)
-      return result.response
-    let worker
-    try {
-      worker = upsertWorker({
-        id: existing.id,
-        soulId: existing.soulId,
-        name: result.data.name ?? existing.name,
-        status: result.data.status ?? existing.status,
-        defaultEngineId: result.data.defaultEngineId ?? existing.defaultEngineId,
-        metadataJson: result.data.metadata ?? existing.metadataJson,
-      })
-    }
-    catch (error) {
-      const response = hostMetadataValidationResponse(c, 'PATCH_WORKER_INVALID', error)
-      if (response)
-        return response
-      throw error
-    }
-    const runtime = state.host.createRuntimeForWorker(worker)
-    await runtime.init()
-    state.runtimes.set(worker.id, runtime)
-    return c.json({ worker, snapshot: runtime.snapshot() })
-  })
   app.get('/api/workers/:workerId', (c) => {
     const worker = getWorker(c.req.param('workerId'))
     if (!worker)

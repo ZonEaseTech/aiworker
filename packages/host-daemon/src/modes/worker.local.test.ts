@@ -230,6 +230,13 @@ describe('local daemon API', () => {
 
     const worker = await createFreeformWorker(target, 'official-freeform-worker')
     expect(worker.soulId).toBe(FREEFORM_APP_ID)
+    expect((await target.request(`/api/local/workers/${worker.id}`)).status).toBe(404)
+    const legacyMemberWriteRes = await target.request(`/api/local/workers/${worker.id}`, {
+      body: JSON.stringify({ name: 'Legacy Member' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(legacyMemberWriteRes.status).toBe(404)
   })
 
   it('lists capabilities without retired template route aliases', async () => {
@@ -1274,7 +1281,7 @@ describe('local daemon API', () => {
     expect(await workerMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKER_INVALID' } })
 
     const worker = await createFreeformWorker(target, 'metadata-guard-worker')
-    const patchWorkerMetadataRes = await target.request(`/api/local/workers/${worker.id}`, {
+    const patchWorkerMetadataRes = await target.request(`/api/workers/${worker.id}`, {
       body: JSON.stringify({
         metadata: {
           configToml: '[mcp_servers.local]\ncommand = "node"\n',
