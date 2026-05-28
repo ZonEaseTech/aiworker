@@ -205,8 +205,9 @@ describe('local daemon API', () => {
   it('bootstraps official Freeform and rejects legacy built-in Soul ids', async () => {
     const target = await app()
 
-    const appsBody = await (await target.request('/api/local/apps')).json() as { apps: Array<{ appId: string, status: string }> }
+    const appsBody = await (await target.request('/api/app-installation/apps')).json() as { apps: Array<{ appId: string, status: string }> }
     expect(appsBody.apps).toEqual([expect.objectContaining({ appId: FREEFORM_APP_ID, status: 'enabled' })])
+    expect((await target.request('/api/local/apps')).status).toBe(404)
 
     const legacyRes = await target.request('/api/local/workers', {
       body: JSON.stringify({ id: 'legacy-hr-worker', name: 'Legacy HR', soulId: 'hr' }),
@@ -250,7 +251,7 @@ describe('local daemon API', () => {
     writePackagedFreeform(officialAppsRoot)
 
     const target = await app(undefined, undefined, officialAppsRoot)
-    const body = await (await target.request('/api/local/apps')).json() as {
+    const body = await (await target.request('/api/app-installation/apps')).json() as {
       apps: Array<{ appId: string, sourceKind: string, sourceRef: string, status: string }>
     }
 
@@ -1921,10 +1922,10 @@ describe('local daemon API', () => {
   it('requires bearer auth only when a workspace token is configured', async () => {
     const target = await app('secret-token')
 
-    const denied = await target.request('/api/local/apps')
+    const denied = await target.request('/api/app-installation/apps')
     expect(denied.status).toBe(401)
 
-    const allowed = await target.request('/api/local/apps', {
+    const allowed = await target.request('/api/app-installation/apps', {
       headers: { authorization: 'Bearer secret-token' },
     })
     expect(allowed.status).toBe(200)

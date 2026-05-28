@@ -473,6 +473,13 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'daemon and Web should expose app archive lifecycle without retired disable aliases').toEqual([])
   })
 
+  test('daemon app list surface does not preserve local lifecycle alias', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+
+    expect(daemon).toContain('app.get(\'/api/app-installation/apps\'')
+    expect(daemon).not.toContain('app.get(\'/api/local/apps\'')
+  })
+
   test('Host runtime and UI app lifecycle APIs use archive naming internally', () => {
     const sources = [
       'apps/cli/src/aiworker.ts',

@@ -217,7 +217,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     workers: listWorkers(),
   }))
 
-  app.get('/api/local/apps', c => c.json({ apps: state.host.listApps() }))
   app.post('/api/local/apps/install', async (c) => {
     const result = await parseJsonBody(c, installAppBodySchema, 'INSTALL_APP_INVALID')
     if (!result.ok)
