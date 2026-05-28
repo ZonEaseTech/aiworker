@@ -147,6 +147,7 @@ export interface SessionComposerActionBarProps {
 
 const EMPTY_ATTACHMENTS: SessionComposerAttachmentItem[] = []
 const EMPTY_COMPOSER_ACTIONS: SessionComposerAction[] = []
+const EMPTY_MENTION_OPTIONS: SessionComposerMentionOption[] = []
 const EMPTY_COMPOSER_OPTIONS: SessionComposerOption[] = []
 
 export function SessionComposer({
@@ -160,7 +161,7 @@ export function SessionComposer({
   disabled = false,
   disabledReason,
   error,
-  mentionOptions = [],
+  mentionOptions = EMPTY_MENTION_OPTIONS,
   mentionQuery,
   onAddAttachmentFiles,
   onAddAttachments,
