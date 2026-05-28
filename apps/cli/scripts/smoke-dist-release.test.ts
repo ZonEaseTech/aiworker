@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'bun:test'
 
 import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
-import { assertDistDescriptorRefsForRoot, assertOpenApiBrokerRouteDocument } from './smoke-dist-release'
+import { assertDistDescriptorRefsForRoot, assertOpenApiBrokerRouteDocument, assertProjectionReceiptMissingResponseText } from './smoke-dist-release'
 import { assertDistOpenApiFreshness } from './smoke-dist-release-contract'
 
 describe('dist release smoke script contract', () => {
@@ -212,16 +212,27 @@ describe('dist release smoke script contract', () => {
     ).not.toThrow()
   })
 
-  it('validates packaged daemon projection receipt broker boundary', async () => {
-    const source = await readFile(join(import.meta.dirname, 'smoke-dist-release.ts'), 'utf8')
+  it('validates packaged daemon projection receipt missing responses without leaking request secrets', () => {
+    expect(() => assertProjectionReceiptMissingResponseText({
+      body: '{"code":"PROJECTION_RECEIPT_MISSING","message":"receipt-owned projection receipt not found"}',
+      label: 'read missing receipt-owned projection receipt',
+      secretCanary: 'sk-smoke-projection-secret',
+      status: 404,
+    })).not.toThrow()
 
-    expect(source).toContain('assertDaemonProjectionReceiptBoundary')
-    expect(source).toContain('/api/projections/receipts/')
-    expect(source).toContain('smoke-missing-receipt')
-    expect(source).toContain('/cleanup')
-    expect(source).toContain('PROJECTION_RECEIPT_MISSING')
-    expect(source).toContain('sk-smoke-projection-secret')
-    expect(source).toContain('receipt-owned projection')
+    expect(() => assertProjectionReceiptMissingResponseText({
+      body: '{"code":"PROJECTION_RECEIPT_MISSING","debug":"sk-smoke-projection-secret"}',
+      label: 'read missing receipt-owned projection receipt',
+      secretCanary: 'sk-smoke-projection-secret',
+      status: 404,
+    })).toThrow('dist daemon projection receipt read missing receipt-owned projection receipt leaked secret-like request data')
+
+    expect(() => assertProjectionReceiptMissingResponseText({
+      body: '{"code":"NOT_FOUND"}',
+      label: 'cleanup missing receipt-owned projection receipt',
+      secretCanary: 'sk-smoke-projection-secret',
+      status: 404,
+    })).toThrow('dist daemon projection receipt cleanup missing receipt-owned projection receipt must return PROJECTION_RECEIPT_MISSING')
   })
 })
 

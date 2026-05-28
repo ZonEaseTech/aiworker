@@ -31,6 +31,13 @@ interface OpenApiBrokerRouteDocument {
   paths?: Record<string, Record<string, unknown>>
 }
 
+interface ProjectionReceiptMissingResponse {
+  body: string
+  label: string
+  secretCanary: string
+  status: number
+}
+
 const officialFreeformDistRoot = resolve(import.meta.dirname, '..', 'dist', 'official-apps', 'aiworker-freeform')
 const officialFreeformDescriptorPath = resolve(officialFreeformDistRoot, 'dist', 'soul.descriptor.json')
 
@@ -362,10 +369,14 @@ async function assertDaemonProjectionReceiptBoundary(port: number): Promise<void
 async function assertReceiptMissingResponse(url: string, label: string, secretCanary: string, init?: RequestInit): Promise<void> {
   const res = await fetch(url, init)
   const body = await res.text()
-  if (res.status !== 404 || !body.includes('PROJECTION_RECEIPT_MISSING'))
-    throw new Error(`dist daemon projection receipt ${label} must return PROJECTION_RECEIPT_MISSING, got ${res.status}: ${body.slice(0, 500)}`)
-  if (body.includes(secretCanary))
-    throw new Error(`dist daemon projection receipt ${label} leaked secret-like request data`)
+  assertProjectionReceiptMissingResponseText({ body, label, secretCanary, status: res.status })
+}
+
+export function assertProjectionReceiptMissingResponseText(response: ProjectionReceiptMissingResponse): void {
+  if (response.status !== 404 || !response.body.includes('PROJECTION_RECEIPT_MISSING'))
+    throw new Error(`dist daemon projection receipt ${response.label} must return PROJECTION_RECEIPT_MISSING, got ${response.status}: ${response.body.slice(0, 500)}`)
+  if (response.body.includes(response.secretCanary))
+    throw new Error(`dist daemon projection receipt ${response.label} leaked secret-like request data`)
 }
 
 function assertCatalogApps(apps: Array<{ appId: string, status: string }>): void {
