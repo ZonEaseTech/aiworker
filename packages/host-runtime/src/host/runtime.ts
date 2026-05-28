@@ -55,6 +55,7 @@ interface VerticalSoul {
 }
 
 export interface HostRuntimeOptions {
+  engineBridge?: LocalWorkerRuntimeOptions['engineBridge']
   executor?: LocalExecutor
   now?: () => string
   officialAppsRoot?: string
@@ -226,6 +227,7 @@ export class HostRuntime {
         metadata: worker.metadataJson,
       },
       executor: this.options.executor,
+      engineBridge: this.options.engineBridge,
       engineAssetSource: this.engineAssetSourceForWorker(worker),
       now: this.options.now,
       workspacesRoot: path.join(this.options.workersRoot, worker.id, 'workspaces'),

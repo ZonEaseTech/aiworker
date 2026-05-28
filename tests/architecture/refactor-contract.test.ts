@@ -1605,6 +1605,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('host daemon exposes session invocation follow-up without legacy message aliases', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemonTests = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
     const schemas = readRepoFile('packages/host-daemon/src/modes/worker/schemas.ts')
     const forbidden = [
       ['packages/host-daemon/src/modes/worker.ts', '/api/local/workers/:workerId/sessions/:sessionId/messages', daemon],
@@ -1624,6 +1625,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'host daemon follow-up writes must route through session-level invocations only').toEqual([])
     expect(daemon).toContain('/api/sessions/:sessionId/invocations')
     expect(schemas).toContain('createSessionInvocationBodySchema')
+    expect(daemonTests).toContain('records missing native resume refs through the session invocation broker route')
+    expect(daemonTests).toContain('ENGINE_SESSION_REF_MISSING')
   })
 
   test('worker storage API does not keep transient turn helper records', () => {

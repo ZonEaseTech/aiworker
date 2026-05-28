@@ -1,4 +1,4 @@
-import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-host-runtime'
+import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions } from '@zonease/aiworker-host-runtime'
 import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppEngineTarget } from '@zonease/aiworker-soul-protocol'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
@@ -78,6 +78,7 @@ const REQUEST_IDENTITIES = new WeakMap<Context, HostIdentity>()
 
 export interface BootstrapWorkerAppOptions {
   dbPath?: string
+  engineBridge?: LocalWorkerRuntimeOptions['engineBridge']
   officialAppsRoot?: string
   webStaticDir?: string
   migrationsFolder?: string
@@ -155,6 +156,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const workersRoot = options.workersRoot ?? path.join(path.dirname(dbPath), 'workers')
   const runtimes = new Map<string, LocalWorkerRuntime>()
   const host = createHostRuntime({
+    engineBridge: options.engineBridge,
     executor: options.executor,
     now: options.now,
     officialAppsRoot: options.officialAppsRoot,

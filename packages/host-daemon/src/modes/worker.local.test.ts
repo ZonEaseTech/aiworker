@@ -1,3 +1,4 @@
+import type { LocalWorkerRuntimeOptions } from '@zonease/aiworker-host-runtime'
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -83,9 +84,15 @@ describe('local daemon API', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  async function app(token?: string, webStaticDir?: string, officialAppsRoot?: string) {
+  async function app(
+    token?: string,
+    webStaticDir?: string,
+    officialAppsRoot?: string,
+    engineBridge?: LocalWorkerRuntimeOptions['engineBridge'],
+  ) {
     const boot = await bootstrapWorkerApp({
       dbPath: join(dir, 'worker.db'),
+      engineBridge,
       executor: {
         async invoke(input) {
           input.onEvent?.({ kind: 'status', label: 'test-started', detail: input.engineId })
@@ -446,6 +453,91 @@ describe('local daemon API', () => {
       payloadJson: {
         failureCode: 'PROJECTION_RECEIPT_STALE',
         invocationId: expect.any(String),
+      },
+      type: 'error',
+    })
+  })
+
+  it('records missing native resume refs through the session invocation broker route', async () => {
+    const callOrder: string[] = []
+    const target = await app(undefined, undefined, undefined, {
+      adapters: [{
+        target: 'codex',
+        async cancel() {
+          return {}
+        },
+        async discover() {
+          callOrder.push('adapter.discover')
+          return { callable: true, installed: true, supportsNativeResume: true, target: 'codex' }
+        },
+        async followUp() {
+          callOrder.push('adapter.followUp')
+          throw new Error('broker follow-up should not run without an external session ref')
+        },
+        normalize() {
+          return []
+        },
+        async start() {
+          callOrder.push('adapter.start')
+          throw new Error('broker follow-up should not start a fresh native session')
+        },
+      }],
+      projectionReceipts: {
+        async assertUsable() {
+          callOrder.push('projection.assert')
+        },
+      },
+    })
+    const worker = await createFreeformWorker(target, 'freeform-missing-native-ref-worker')
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+    createEngineInvocation({
+      engineCommand: null,
+      engineId: 'codex',
+      id: 'daemon-previous-missing-native-ref-invocation',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-previous-missing-native-ref-invocation/input`,
+      processState: 'exited',
+      seq: 1,
+      sessionId: session.id,
+      status: 'succeeded',
+    })
+
+    const followUpRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Continue through missing native resume ref.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(followUpRes.status).toBe(201)
+    const followUpBody = await followUpRes.json() as {
+      events: Array<{ invocationId: string, payloadJson: Record<string, unknown>, type: string }>
+      invocation: {
+        eventLogRef: string | null
+        failureCode: string | null
+        id: string
+        inputRef: string
+        processState: string
+        sessionId: string
+        status: string
+      }
+      session: { id: string, status: string }
+      turn?: unknown
+    }
+    expect(callOrder).toEqual(['projection.assert', 'adapter.discover'])
+    expect(followUpBody.turn).toBeUndefined()
+    expect(followUpBody.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(followUpBody.invocation).toMatchObject({
+      eventLogRef: `aiworker://sessions/${session.id}/invocations/${followUpBody.invocation.id}/events`,
+      failureCode: 'ENGINE_SESSION_REF_MISSING',
+      inputRef: `aiworker://sessions/${session.id}/invocations/${followUpBody.invocation.id}/input`,
+      processState: 'not_spawned',
+      sessionId: session.id,
+      status: 'failed',
+    })
+    expect(followUpBody.events.at(-1)).toMatchObject({
+      invocationId: followUpBody.invocation.id,
+      payloadJson: {
+        failureCode: 'ENGINE_SESSION_REF_MISSING',
+        invocationId: followUpBody.invocation.id,
       },
       type: 'error',
     })
