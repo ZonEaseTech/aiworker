@@ -1981,6 +1981,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(freeformCliBrowserProof).toContain('invocation.output.delta')
     expect(freeformCliBrowserProof).toContain('invocation.tool.observed')
     expect(freeformCliBrowserProof).toContain('invocation.usage.observed')
+    expect(freeformCliBrowserProof).toContain('assertInvocationExternalSessionRefProof')
     expect(freeformCliBrowserProof).toContain('reattached')
     expect(freeformCliBrowserProof).toContain(`/api/engine/invocations/\${id}/cancel`)
     expect(freeformCliBrowserProof).toContain('assertInvocationCancelProof')

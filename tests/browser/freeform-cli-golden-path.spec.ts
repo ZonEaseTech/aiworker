@@ -156,6 +156,8 @@ try {
     throw new Error(`Bridge event refs were not visible to the mounted surface: ${mountedSurface.text}`)
   const invocationEventProof = await readInvocationEventProofFromBrowser(page, followUpResult.invocation.id)
   assertInvocationEventProof(invocationEventProof, followUpResult.invocation.id)
+  const invocationExternalSessionRefProof = await readInvocationExternalSessionRefProofFromBrowser(page, followUpResult.invocation.id)
+  assertInvocationExternalSessionRefProof(invocationExternalSessionRefProof, followUpResult.invocation.id)
   for (const expectedSection of [
     'Worker configuration summary',
     'Session controls',
@@ -187,6 +189,7 @@ try {
     mountedSurface,
     invocationCancelProof,
     invocationEventProof,
+    invocationExternalSessionRefProof,
     projectionRefreshProof,
     sessionArchiveProof,
     routeUrl,
@@ -255,11 +258,18 @@ function seedQueuedInvocationForBrowserCancel(sessionId: string): void {
 async function writeFakeCodexCommand(): Promise<void> {
   mkdirSync(binDir, { recursive: true })
   const commandPath = join(binDir, 'codex')
+  const counterPath = shellSingleQuote(join(workRoot, 'codex-thread-counter'))
+  const shCounter = '$' + '{counter}'
+  const shThreadSeq = '$' + '{thread_seq}'
   await writeFile(commandPath, [
     '#!/usr/bin/env bash',
     'set -euo pipefail',
     'cat >/dev/null',
-    'printf \'%s\\n\' \'{"type":"thread.started"}\'',
+    `counter=${counterPath}`,
+    'thread_seq=1',
+    `if [ -f "${shCounter}" ]; then thread_seq=$(( $(cat "${shCounter}") + 1 )); fi`,
+    `printf '%s' "${shThreadSeq}" > "${shCounter}"`,
+    `printf '%s\\n' "{\\"type\\":\\"thread.started\\",\\"thread_id\\":\\"native-thread-${shThreadSeq}\\"}"`,
     'printf \'%s\\n\' \'{"type":"turn.started"}\'',
     'printf \'%s\\n\' \'{"type":"item.started","item":{"type":"command_execution","id":"tool-1","command":"printf bridge"}}\'',
     'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"command_execution","id":"tool-1","command":"printf bridge","aggregated_output":"bridge","exit_code":0}}\'',
@@ -268,6 +278,10 @@ async function writeFakeCodexCommand(): Promise<void> {
     '',
   ].join('\n'))
   await chmod(commandPath, 0o755)
+}
+
+function shellSingleQuote(value: string): string {
+  return `'${value.replaceAll('\'', '\'\\\'\'')}'`
 }
 
 function reservePort(): number {
@@ -368,6 +382,16 @@ async function readInvocationEventProofFromBrowser(page: Page, invocationId: str
   }, invocationId)
 }
 
+async function readInvocationExternalSessionRefProofFromBrowser(page: Page, invocationId: string): Promise<Record<string, unknown>> {
+  return await page.evaluate(async (id) => {
+    const response = await fetch(`/api/engine/invocations/${id}`)
+    const body = await response.text()
+    if (!response.ok)
+      throw new Error(`invocation read request failed ${response.status}: ${body}`)
+    return JSON.parse(body) as Record<string, unknown>
+  }, invocationId)
+}
+
 function assertInvocationEventProof(proof: Record<string, unknown>, invocationId: string): void {
   if (proof.invocationId !== invocationId)
     throw new Error(`Invocation event proof returned the wrong invocation: ${JSON.stringify(proof)}`)
@@ -430,6 +454,26 @@ function assertInvocationEventProof(proof: Record<string, unknown>, invocationId
   const serialized = JSON.stringify(proof)
   if (serialized.includes('/turns/') || serialized.includes('"turn"'))
     throw new Error(`Invocation event proof exposed retired turn semantics: ${serialized}`)
+}
+
+function assertInvocationExternalSessionRefProof(proof: Record<string, unknown>, invocationId: string): void {
+  const invocation = readRecord(proof.invocation)
+  if (invocation.id !== invocationId)
+    throw new Error(`Invocation external ref proof returned the wrong invocation: ${JSON.stringify(proof)}`)
+  const externalSessionRef = typeof invocation.externalSessionRef === 'string' ? invocation.externalSessionRef : ''
+  if (!externalSessionRef)
+    throw new Error(`Invocation external ref proof missed externalSessionRef: ${JSON.stringify(proof)}`)
+  const ref = readRecord(JSON.parse(externalSessionRef))
+  if (ref.target !== 'codex' || typeof ref.id !== 'string' || !ref.id.startsWith('native-thread-'))
+    throw new Error(`Invocation external ref proof returned a non-Codex ref: ${JSON.stringify(proof)}`)
+  if (JSON.stringify(readRecord(invocation.metadataJson).externalSessionRef) !== JSON.stringify(ref))
+    throw new Error(`Invocation external ref proof missed matching metadata ref: ${JSON.stringify(proof)}`)
+
+  const serialized = JSON.stringify(proof)
+  for (const forbidden of ['/turns/', '"turn"', 'sk-', 'literal-secret-value']) {
+    if (serialized.includes(forbidden))
+      throw new Error(`Invocation external ref proof exposed forbidden content ${forbidden}: ${serialized}`)
+  }
 }
 
 async function readProjectionRefreshProofFromBrowser(page: Page, workerId: string, workspaceId: string): Promise<Record<string, unknown>> {
