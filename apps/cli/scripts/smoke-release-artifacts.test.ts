@@ -43,6 +43,16 @@ describe('release artifact smoke', () => {
     ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz descriptor references missing file: aiworker-darwin-arm64/official-apps/aiworker-freeform/dist/web/workbench/index.html')
   })
 
+  it('rejects attach artifacts when the packaged Freeform descriptor drops the default capability', async () => {
+    await writeFixtureReleaseArtifact(root, 'darwin-arm64', {
+      descriptorText: fixtureDescriptorText({ capabilities: [] }),
+    })
+
+    await expect(
+      verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz official Freeform descriptor must use protocol soul/v1')
+  })
+
   it('rejects attach artifacts when the tarball binary is not executable', async () => {
     await writeFixtureReleaseArtifact(root, 'darwin-arm64', { binaryMode: 0o644 })
 
@@ -76,7 +86,7 @@ describe('release artifact smoke', () => {
   })
 })
 
-async function writeFixtureDist(root: string): Promise<void> {
+async function writeFixtureDist(root: string, options: { descriptorText?: string } = {}): Promise<void> {
   const dist = path.join(root, 'apps', 'cli', 'dist')
   await mkdir(path.join(dist, 'web', 'worker'), { recursive: true })
   await mkdir(path.join(dist, 'drizzle', 'worker', 'meta'), { recursive: true })
@@ -89,23 +99,7 @@ async function writeFixtureDist(root: string): Promise<void> {
   await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex\n')
-  await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), `${JSON.stringify({
-    api: null,
-    capabilities: [],
-    compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
-    configuration: {},
-    engine: {
-      mcp: { targets: { codex: { file: 'dist/engine-assets/mcp/codex/config.toml' } } },
-      skills: { source: 'dist/engine-assets/skills' },
-      workspaceAssets: { source: 'dist/engine-assets/workspace' },
-    },
-    extensions: {},
-    external: {},
-    health: { ready: true, type: 'static' },
-    identity: { appId: 'aiworker-freeform', name: 'AIWorker Freeform', soulId: 'freeform', version: '0.1.0' },
-    protocol: 'soul/v1',
-    workbench: { entry: 'dist/web/workbench/index.html', mode: 'sdk-common', router: { mode: 'search' }, type: 'micro-app' },
-  })}\n`)
+  await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), options.descriptorText ?? fixtureDescriptorText())
   await writeFile(path.join(dist, 'README.md'), '# AIWorker\n')
 }
 
@@ -119,19 +113,7 @@ async function writeMalformedReleaseArtifact(root: string, target: string): Prom
   await chmod(path.join(bundleRoot, 'aiworker'), 0o755)
   await writeFile(path.join(bundleRoot, 'web', 'worker', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(bundleRoot, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
-  await writeFile(path.join(bundleRoot, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), `${JSON.stringify({
-    api: null,
-    capabilities: [],
-    compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
-    configuration: {},
-    engine: {},
-    extensions: {},
-    external: {},
-    health: { ready: true, type: 'static' },
-    identity: { appId: 'aiworker-freeform', name: 'AIWorker Freeform', soulId: 'freeform', version: '0.1.0' },
-    protocol: 'soul/v1',
-    workbench: { entry: 'dist/web/workbench/index.html', mode: 'sdk-common', router: { mode: 'search' }, type: 'micro-app' },
-  })}\n`)
+  await writeFile(path.join(bundleRoot, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), fixtureDescriptorText({ engine: {} }))
   await writeFile(path.join(bundleRoot, 'README.md'), '# AIWorker\n')
   await run(['tar', '-C', root, '-czf', path.join(root, `${bundle}.tar.gz`), bundle])
   const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
@@ -142,9 +124,9 @@ async function writeMalformedReleaseArtifact(root: string, target: string): Prom
 async function writeFixtureReleaseArtifact(
   root: string,
   target: string,
-  options: { binaryMode?: number, binaryText?: string } = {},
+  options: { binaryMode?: number, binaryText?: string, descriptorText?: string } = {},
 ): Promise<void> {
-  await writeFixtureDist(root)
+  await writeFixtureDist(root, options.descriptorText ? { descriptorText: options.descriptorText } : {})
   const bundle = `aiworker-${target}`
   const bundleRoot = path.join(root, bundle)
   await mkdir(bundleRoot, { recursive: true })
@@ -158,6 +140,38 @@ async function writeFixtureReleaseArtifact(
   const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
   const checksum = createHash('sha256').update(archive).digest('hex')
   await writeFile(path.join(root, `${bundle}.tar.gz.sha256`), `${checksum}  ${bundle}.tar.gz\n`)
+}
+
+function fixtureDescriptorText(options: {
+  capabilities?: unknown[]
+  engine?: Record<string, unknown>
+} = {}): string {
+  return `${JSON.stringify({
+    api: null,
+    capabilities: options.capabilities ?? [
+      {
+        id: 'default',
+        name: 'Freeform Session',
+        prompt: {
+          ref: 'dist/product/capabilities/default/prompt.md',
+          type: 'packaged-file',
+        },
+      },
+    ],
+    compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
+    configuration: {},
+    engine: options.engine ?? {
+      mcp: { targets: { codex: { file: 'dist/engine-assets/mcp/codex/config.toml' } } },
+      skills: { source: 'dist/engine-assets/skills' },
+      workspaceAssets: { source: 'dist/engine-assets/workspace' },
+    },
+    extensions: {},
+    external: {},
+    health: { ready: true, type: 'static' },
+    identity: { appId: 'aiworker-freeform', name: 'AIWorker Freeform', soulId: 'freeform', version: '0.1.0' },
+    protocol: 'soul/v1',
+    workbench: { entry: 'dist/web/workbench/index.html', mode: 'sdk-common', router: { mode: 'search' }, type: 'micro-app' },
+  })}\n`
 }
 
 function currentTestTarget(): string {
