@@ -8,7 +8,7 @@ import type { ResolvedTheme } from '../../features/theme/system-theme'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { CardContent } from '@zonease/aiworker-ui/components/card'
 import { ItemDescription } from '@zonease/aiworker-ui/components/item'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { resolveMountedWorkbench } from '../../features/local-workspace/api/workspace-data'
 import {
   addMountedMicroAppDataListener,
@@ -67,6 +67,39 @@ interface MountedWorkbenchResponse {
   }
 }
 
+interface MountedSurfaceState {
+  childError: string | null
+  error: string | null
+  loading: boolean
+  surface: MountedWorkbenchResponse | null
+}
+
+type MountedSurfaceAction
+  = | { type: 'child-error', message: string }
+    | { type: 'load-failed', message: string }
+    | { type: 'load-started' }
+    | { type: 'load-succeeded', surface: MountedWorkbenchResponse }
+
+const initialMountedSurfaceState: MountedSurfaceState = {
+  childError: null,
+  error: null,
+  loading: false,
+  surface: null,
+}
+
+function mountedSurfaceReducer(state: MountedSurfaceState, action: MountedSurfaceAction): MountedSurfaceState {
+  switch (action.type) {
+    case 'child-error':
+      return { ...state, childError: action.message }
+    case 'load-failed':
+      return { ...state, error: action.message, loading: false }
+    case 'load-started':
+      return { ...state, childError: null, error: null, loading: true }
+    case 'load-succeeded':
+      return { ...state, loading: false, surface: action.surface }
+  }
+}
+
 export function MountedSoulAppRouteSurface({
   appId,
   resolvedTheme,
@@ -87,11 +120,11 @@ export function MountedSoulAppRouteSurface({
   workspaceId?: string | null
 }) {
   const microAppRef = useRef<(HTMLElement & { data?: MountedMicroAppHostData }) | null>(null)
-  const [surface, setSurface] = useState<MountedWorkbenchResponse | null>(null)
-  const [childError, setChildError] = useState<string | null>(null)
   const [childReady, setChildReady] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [{ childError, error, loading, surface }, dispatchMountedSurface] = useReducer(
+    mountedSurfaceReducer,
+    initialMountedSurfaceState,
+  )
   const childBasePath = mountedChildDefaultPath(route.path)
   const mountedChildRouteMemoryKeyValue = mountedRouteMemoryKey({
     appId,
@@ -123,7 +156,7 @@ export function MountedSoulAppRouteSurface({
       return
     }
     if (event.type === 'error') {
-      setChildError(event.message)
+      dispatchMountedSurface({ type: 'child-error', message: event.message })
       return
     }
     if (event.type === 'locator:workspace-selected') {
@@ -204,9 +237,7 @@ export function MountedSoulAppRouteSurface({
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(null)
-    setChildError(null)
+    dispatchMountedSurface({ type: 'load-started' })
     resolveMountedWorkbench<MountedWorkbenchResponse>({
       sessionId,
       theme: resolvedTheme,
@@ -215,15 +246,15 @@ export function MountedSoulAppRouteSurface({
     })
       .then((response) => {
         if (!cancelled)
-          setSurface(response)
+          dispatchMountedSurface({ type: 'load-succeeded', surface: response })
       })
       .catch((caught: unknown) => {
-        if (!cancelled)
-          setError(caught instanceof Error ? caught.message : String(caught))
-      })
-      .finally(() => {
-        if (!cancelled)
-          setLoading(false)
+        if (!cancelled) {
+          dispatchMountedSurface({
+            type: 'load-failed',
+            message: caught instanceof Error ? caught.message : String(caught),
+          })
+        }
       })
     return () => {
       cancelled = true
