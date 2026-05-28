@@ -2362,6 +2362,88 @@ describe('local daemon API', () => {
     await target.request('/api/app-installation/apps/demo-api/archive', { method: 'POST' })
   })
 
+  it('rejects archived locator context before proxying app-owned API requests', async () => {
+    const target = await app()
+    const appRoot = join(dir, 'api-archive-soul')
+    writeApiSoul(appRoot)
+
+    const installRes = await target.request('/api/app-installation/install', {
+      body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(installRes.status).toBe(201)
+    expect((await target.request('/api/app-installation/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
+
+    const workerRes = await target.request('/api/workers', {
+      body: JSON.stringify({ id: 'demo-api-archive-worker', name: 'Demo API Archive Worker', soulId: 'demo-api' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workerRes.status).toBe(201)
+    const workspace = await createWorkspaceLocator(target, 'demo-api-archive-worker')
+    const sessionRes = await target.request('/api/sessions', {
+      body: JSON.stringify({
+        capabilityId: namespaceSoulAppCapabilityId('demo-api', 'default'),
+        title: 'Demo API archive session',
+        workerId: 'demo-api-archive-worker',
+        workspaceId: workspace.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(sessionRes.status).toBe(201)
+    const session = (await sessionRes.json() as { session: { id: string } }).session
+
+    await target.request(`/api/sessions/${session.id}/archive`, { method: 'POST' })
+    const archivedSession = await target.request(`/api/apps/demo-api/echo?workerId=demo-api-archive-worker&workspaceId=${workspace.id}&sessionId=${session.id}`)
+    expect(archivedSession.status).toBe(400)
+    expect(await archivedSession.json()).toMatchObject({
+      error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} is archived and cannot proxy app-owned API requests.` },
+    })
+
+    const replacementSessionRes = await target.request('/api/sessions', {
+      body: JSON.stringify({
+        capabilityId: namespaceSoulAppCapabilityId('demo-api', 'default'),
+        title: 'Demo API replacement session',
+        workerId: 'demo-api-archive-worker',
+        workspaceId: workspace.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(replacementSessionRes.status).toBe(201)
+    const replacementSession = (await replacementSessionRes.json() as { session: { id: string } }).session
+
+    await target.request(`/api/workspace-locators/${workspace.id}/archive`, { method: 'POST' })
+    const archivedWorkspace = await target.request(`/api/apps/demo-api/echo?workerId=demo-api-archive-worker&workspaceId=${workspace.id}&sessionId=${replacementSession.id}`)
+    expect(archivedWorkspace.status).toBe(400)
+    expect(await archivedWorkspace.json()).toMatchObject({
+      error: { code: 'MOUNT_CONTEXT_INVALID', message: `Workspace ${workspace.id} is archived and cannot proxy app-owned API requests.` },
+    })
+
+    const activeWorkspace = await createWorkspaceLocator(target, 'demo-api-archive-worker')
+    const activeSessionRes = await target.request('/api/sessions', {
+      body: JSON.stringify({
+        capabilityId: namespaceSoulAppCapabilityId('demo-api', 'default'),
+        title: 'Demo API active workspace session',
+        workerId: 'demo-api-archive-worker',
+        workspaceId: activeWorkspace.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(activeSessionRes.status).toBe(201)
+    const activeSession = (await activeSessionRes.json() as { session: { id: string } }).session
+
+    await target.request('/api/workers/demo-api-archive-worker/archive', { method: 'POST' })
+    const archivedWorker = await target.request(`/api/apps/demo-api/echo?workerId=demo-api-archive-worker&workspaceId=${activeWorkspace.id}&sessionId=${activeSession.id}`)
+    expect(archivedWorker.status).toBe(400)
+    expect(await archivedWorker.json()).toMatchObject({
+      error: { code: 'MOUNT_CONTEXT_INVALID', message: 'Worker demo-api-archive-worker is archived and cannot proxy app-owned API requests.' },
+    })
+  })
+
   it('redacts mounted app-owned API startup diagnostics before returning broker errors', async () => {
     const target = await app()
     const appRoot = join(dir, 'failing-api-soul')

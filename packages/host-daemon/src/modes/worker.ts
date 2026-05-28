@@ -1194,6 +1194,12 @@ function mountedProxyLocatorContextError(c: Context, app: HostedSoulApp): Respon
     return mountContextInvalid(c, `Workspace not found: ${workspaceId}`)
   if (sessionId && !session)
     return mountContextInvalid(c, `Session not found: ${sessionId}`)
+  if (worker?.status === 'archived')
+    return mountContextInvalid(c, `Worker ${worker.id} is archived and cannot proxy app-owned API requests.`)
+  if (workspace?.status === 'archived')
+    return mountContextInvalid(c, `Workspace ${workspace.id} is archived and cannot proxy app-owned API requests.`)
+  if (session?.status === 'archived')
+    return mountContextInvalid(c, `Session ${session.id} is archived and cannot proxy app-owned API requests.`)
   if (worker && worker.soulId !== app.appId)
     return mountContextInvalid(c, `Worker ${worker.id} does not belong to Soul App ${app.appId}`)
   if (workspace && workspace.workerId) {
