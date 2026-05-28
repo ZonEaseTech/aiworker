@@ -274,6 +274,23 @@ for (const requiredReleaseExitText of [
     })
   }
 }
+for (const requiredBrowserProofScopeText of [
+  '-> verifies the first invocation and starts a session-level follow-up from browser context',
+  '-> shows bridge event refs to the mounted surface',
+  '-> cancels a queued invocation without changing session lifecycle',
+  '-> reattaches and reconciles engine bridge events',
+  '-> refreshes projection receipts from mounted context',
+  '-> applies worker config overlay and observes worker-overlay projection receipts',
+  '-> archives the session and rejects follow-up',
+  '-> archives workspace and worker lifecycle, blocking new work on archived worker',
+]) {
+  if (!testingDoc.includes(requiredBrowserProofScopeText)) {
+    issues.push({
+      file: 'docs/testing.md',
+      message: 'browser proof must cover Freeform v1 scope',
+    })
+  }
+}
 if (!packageJson.workspaces?.includes('souls/*'))
   issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
 const expectedNodeEngineRange = '>=20.19.0 <21 || >=22.12.0'
@@ -356,6 +373,7 @@ if (packageJson.scripts?.['test:protocol'] !== 'bun run --filter \'@zonease/aiwo
   issues.push({ file: 'package.json', message: 'test:protocol must run the soul-protocol package test' })
 const testCliScript = packageJson.scripts?.['test:cli'] ?? ''
 const testBrowserFreeformScript = packageJson.scripts?.['test:browser:freeform'] ?? ''
+const freeformCliBrowserProof = read('tests/browser/freeform-cli-golden-path.spec.ts')
 const freeformBuildScript = 'bun run --filter \'@zonease/aiworker-freeform\' build'
 const webBuildScript = 'bun run --filter \'@zonease/aiworker-web\' build'
 const browserFreeformProofs = [
@@ -378,6 +396,28 @@ if (!testBrowserFreeformScript.includes('tests/browser/freeform-cli-golden-path.
   issues.push({ file: 'package.json', message: 'test:browser:freeform must include the Freeform CLI browser golden path proof' })
 if (!testBrowserFreeformScript.includes('tests/browser/freeform-mounted-workbench.spec.ts'))
   issues.push({ file: 'package.json', message: 'test:browser:freeform must include the mounted workbench browser proof' })
+requireFreeformBrowserProofIncludes([
+  'readSessionFollowUpProofFromBrowser',
+  ['/api/sessions/', '{id}/invocations'].join('$'),
+  'assertBrowserSessionFollowUpProof',
+  'data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events"',
+  ['/api/engine/invocations/', '{id}/cancel'].join('$'),
+  'assertInvocationCancelProof',
+  ['/api/engine/invocations/', '{id}/reconcile'].join('$'),
+  'assertInvocationReconcileProof',
+  'reattached',
+  'readProjectionRefreshProofFromBrowser',
+  '/api/projections/codex/refresh',
+  ['/api/projections/receipts/', '{workspaceId}'].join('$'),
+  'worker-overlay',
+  'assertProjectionRefreshProof',
+  ['/api/sessions/', '{id}/archive'].join('$'),
+  'assertSessionArchiveProof',
+  ['/api/workspace-locators/', '{workspaceId}/archive'].join('$'),
+  ['/api/workers/', '{workerId}/archive'].join('$'),
+  'assertHostLifecycleArchiveProof',
+  'WORKER_ARCHIVED',
+])
 if (packageJson.scripts?.['docs:check'] !== 'bun scripts/check-doc-contract.ts')
   issues.push({ file: 'package.json', message: 'docs:check must run scripts/check-doc-contract.ts' })
 if (packageJson.scripts?.['ui:check'] !== 'bun scripts/check-web-ui-components.ts')
@@ -553,4 +593,15 @@ function extractMatches(content: string, pattern: RegExp): string[] {
 function requireExactList(file: string, actual: string[], expected: string[], message: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected))
     issues.push({ file, message })
+}
+
+function requireFreeformBrowserProofIncludes(needles: string[]): void {
+  for (const needle of needles) {
+    if (!freeformCliBrowserProof.includes(needle)) {
+      issues.push({
+        file: 'tests/browser/freeform-cli-golden-path.spec.ts',
+        message: 'browser proof must cover Freeform v1 scope',
+      })
+    }
+  }
 }

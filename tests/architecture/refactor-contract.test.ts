@@ -2136,6 +2136,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('canonical testing docs track Freeform browser proof scope', () => {
     const testing = readRepoFile('docs/testing.md')
+    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
 
     expect(testing).toContain('-> verifies the first invocation and starts a session-level follow-up from browser context')
     expect(testing).toContain('-> shows bridge event refs to the mounted surface')
@@ -2145,6 +2146,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(testing).toContain('-> applies worker config overlay and observes worker-overlay projection receipts')
     expect(testing).toContain('-> archives the session and rejects follow-up')
     expect(testing).toContain('-> archives workspace and worker lifecycle, blocking new work on archived worker')
+    expect(docCheck).toContain('browser proof must cover Freeform v1 scope')
   })
 
   test('tag release workflow runs the canonical release gate before publishing', () => {
