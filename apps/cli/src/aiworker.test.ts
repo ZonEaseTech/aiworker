@@ -9,6 +9,7 @@ import process from 'node:process'
 import { soulAppServiceEnv } from '@zonease/aiworker-host-runtime'
 import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
 import {
+  appendSessionEvent,
   closeWorkerDb,
   createEngineInvocation,
   createSession,
@@ -429,6 +430,83 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('workspace create|list|projection refresh|archive|delete')
     expect(output).toContain('session start|invoke|events|reconcile|cancel|list|show|archive|delete')
     expect(output).not.toContain('run start')
+  })
+
+  it('streams session events for an active running engine invocation through CLI with after/limit paging', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('worker', 'create', '--id', 'events-worker', '--name', 'Events Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'select', 'events-worker'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('workspace', 'create', '--name', 'Events Workspace', '--type', 'freeform', '--worker', 'events-worker'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
+    output = ''
+
+    closeWorkerDb()
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    const session = createSession({
+      capabilityId: FREEFORM_CAPABILITY_ID,
+      id: 'events-session-1',
+      metadataJson: {},
+      title: 'Stream events while running',
+      workerId: 'events-worker',
+      workspaceId: workspace.id,
+      at: '2026-05-28T00:00:00.000Z',
+    })
+    const invocation = createEngineInvocation({
+      engineCommand: 'codex',
+      engineId: 'codex',
+      id: 'events-running-invocation-1',
+      inputRef: `aiworker://sessions/${session.id}/invocations/events-running-invocation-1/input`,
+      processState: 'spawned',
+      seq: 1,
+      sessionId: session.id,
+      status: 'running',
+    })
+    for (let seq = 1; seq <= 3; seq++) {
+      appendSessionEvent({
+        invocationId: invocation.id,
+        payloadJson: {
+          bridgeEvent: 'invocation.progress',
+          data: { step: `step-${seq}` },
+        },
+        seq,
+        sessionId: session.id,
+        type: 'status',
+        at: `2026-05-28T00:00:0${seq}.000Z`,
+      })
+    }
+    const persistedEvents = listSessionEvents(session.id).filter(event => event.invocationId === invocation.id)
+    expect(persistedEvents).toHaveLength(3)
+    const ids = persistedEvents.map(event => event.id)
+    closeWorkerDb()
+
+    expect(await runCli(argv('session', 'events', invocation.id))).toBe(0)
+    const all = JSON.parse(output) as {
+      events: Array<{ id: number, invocationId: string, payloadJson: Record<string, unknown>, sessionId: string, type: string }>
+      invocation: { id: string, processState: string, sessionId: string, status: string }
+    }
+    expect(all.invocation).toEqual({
+      id: invocation.id,
+      processState: 'spawned',
+      sessionId: session.id,
+      status: 'running',
+    })
+    expect(all.events.map(event => event.id)).toEqual(ids)
+    expect(all.events.every(event => event.invocationId === invocation.id && event.sessionId === session.id)).toBe(true)
+    output = ''
+
+    expect(await runCli(argv('session', 'events', invocation.id, '--limit', '2'))).toBe(0)
+    const limited = JSON.parse(output) as { events: Array<{ id: number }> }
+    expect(limited.events.map(event => event.id)).toEqual(ids.slice(0, 2))
+    output = ''
+
+    expect(await runCli(argv('session', 'events', invocation.id, '--after', String(ids[0])))).toBe(0)
+    const afterFirst = JSON.parse(output) as { events: Array<{ id: number }> }
+    expect(afterFirst.events.map(event => event.id)).toEqual(ids.slice(1))
   })
 
   it('cancels an active running engine invocation through CLI by invocation id', async () => {
