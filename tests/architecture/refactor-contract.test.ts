@@ -2185,6 +2185,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(testing).toContain('-> archives the session and rejects follow-up')
     expect(testing).toContain('-> archives workspace and worker lifecycle, blocking new work on archived worker')
     expect(docCheck).toContain('browser proof must cover Freeform v1 scope')
+    expect(docCheck).toContain('assertInvocationExternalSessionRefProof')
+    expect(docCheck).toContain('externalSessionRef')
   })
 
   test('tag release workflow runs the canonical release gate before publishing', () => {

@@ -517,6 +517,8 @@ requireFreeformBrowserProofIncludes([
   'readSessionFollowUpProofFromBrowser',
   ['/api/sessions/', '{id}/invocations'].join('$'),
   'assertBrowserSessionFollowUpProof',
+  'assertInvocationExternalSessionRefProof',
+  'externalSessionRef',
   'data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events"',
   ['/api/engine/invocations/', '{id}/cancel'].join('$'),
   'assertInvocationCancelProof',
