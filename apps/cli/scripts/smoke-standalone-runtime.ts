@@ -153,6 +153,13 @@ async function assertStandaloneDescriptorRefs(
   freeformRoot: string,
   refs: Array<{ kind: 'dir' | 'file', ref?: string }>,
 ): Promise<void> {
+  await assertStandaloneDescriptorRefsForRoot(freeformRoot, refs)
+}
+
+export async function assertStandaloneDescriptorRefsForRoot(
+  freeformRoot: string,
+  refs: Array<{ kind: 'dir' | 'file', ref?: string }>,
+): Promise<void> {
   for (const item of refs) {
     if (!item.ref)
       continue
@@ -193,10 +200,12 @@ async function run(command: string[], options: { env?: NodeJS.ProcessEnv } = {})
   return { stderr, stdout }
 }
 
-main()
-  .then(code => process.exit(code))
-  .catch(async (err) => {
-    consola.error(`[smoke-standalone-runtime] FAIL: ${err instanceof Error ? err.message : String(err)}`)
-    await cleanup()
-    process.exit(1)
-  })
+if (import.meta.main) {
+  main()
+    .then(code => process.exit(code))
+    .catch(async (err) => {
+      consola.error(`[smoke-standalone-runtime] FAIL: ${err instanceof Error ? err.message : String(err)}`)
+      await cleanup()
+      process.exit(1)
+    })
+}
