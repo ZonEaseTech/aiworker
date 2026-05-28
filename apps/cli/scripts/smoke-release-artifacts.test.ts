@@ -46,11 +46,13 @@ describe('release artifact smoke', () => {
     const workflow = await readFile(path.join(import.meta.dirname, '..', '..', '..', '.github', 'workflows', 'release.yml'), 'utf8')
     const packageIndex = workflow.indexOf('bun apps/cli/scripts/package-release-bundles.ts')
     const smokeIndex = workflow.indexOf('bun apps/cli/scripts/smoke-release-artifacts.ts')
+    const publishIndex = workflow.indexOf('npm publish --access public')
     const attachIndex = workflow.indexOf('softprops/action-gh-release')
 
     expect(packageIndex).toBeGreaterThanOrEqual(0)
     expect(smokeIndex).toBeGreaterThan(packageIndex)
-    expect(smokeIndex).toBeLessThan(attachIndex)
+    expect(publishIndex).toBeGreaterThan(smokeIndex)
+    expect(publishIndex).toBeLessThan(attachIndex)
   })
 })
 

@@ -2136,17 +2136,20 @@ describe('destructive refactor contract bootstrap', () => {
   test('tag release workflow runs the canonical release gate before publishing', () => {
     const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
     const releaseCheckIndex = releaseWorkflow.indexOf('bun run release:check')
+    const compileIndex = releaseWorkflow.indexOf('Compile single-file binaries')
     const publishIndex = releaseWorkflow.indexOf('npm publish --access public')
     const packageIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/package-release-bundles.ts')
     const artifactSmokeIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/smoke-release-artifacts.ts')
     const attachIndex = releaseWorkflow.indexOf('softprops/action-gh-release')
 
     expect(releaseCheckIndex).toBeGreaterThanOrEqual(0)
+    expect(compileIndex).toBeGreaterThan(releaseCheckIndex)
     expect(publishIndex).toBeGreaterThanOrEqual(0)
-    expect(releaseCheckIndex).toBeLessThan(publishIndex)
     expect(packageIndex).toBeGreaterThanOrEqual(0)
+    expect(packageIndex).toBeGreaterThan(compileIndex)
     expect(artifactSmokeIndex).toBeGreaterThan(packageIndex)
-    expect(artifactSmokeIndex).toBeLessThan(attachIndex)
+    expect(artifactSmokeIndex).toBeLessThan(publishIndex)
+    expect(publishIndex).toBeLessThan(attachIndex)
   })
 
   test('standalone release bundles include descriptor-only official Soul Apps', () => {
