@@ -209,6 +209,7 @@ describe('Freeform CLI golden path', () => {
     expect(invocations[2]?.inputRef).toBe(`aiworker://sessions/${started.session.id}/invocations/${secondFollowed.invocation.id}/input`)
     expect(invocations[2]?.inputRef).not.toContain('/turns/')
     assertInvocationEventLogRefs(invocations, started.session.id)
+    assertInvocationExternalSessionRefs(invocations)
 
     const startedEvents = bridgeEvents.filter(event => event.invocationId === started.invocation.id)
     expect(startedEvents).toContainEqual(expect.objectContaining({
@@ -268,12 +269,19 @@ describe('Freeform CLI golden path', () => {
     const binDir = path.join(root, 'bin')
     mkdirSync(binDir, { recursive: true })
     const commandPath = path.join(binDir, 'codex')
+    const counterPath = shellSingleQuote(path.join(root, 'codex-thread-counter'))
+    const shCounter = '$' + '{counter}'
+    const shThreadSeq = '$' + '{thread_seq}'
     await writeFile(commandPath, [
       '#!/usr/bin/env bash',
       'set -euo pipefail',
       'cat >/dev/null',
+      `counter=${counterPath}`,
+      'thread_seq=1',
+      `if [ -f "${shCounter}" ]; then thread_seq=$(( $(cat "${shCounter}") + 1 )); fi`,
+      `printf '%s' "${shThreadSeq}" > "${shCounter}"`,
       'printf \'authorization = "literal-secret-value"\\n\' >&2',
-      'printf \'%s\\n\' \'{"type":"thread.started"}\'',
+      `printf '%s\\n' "{\\"type\\":\\"thread.started\\",\\"thread_id\\":\\"native-thread-${shThreadSeq}\\"}"`,
       'printf \'%s\\n\' \'{"type":"turn.started"}\'',
       'printf \'%s\\n\' \'{"type":"item.started","item":{"type":"command_execution","id":"tool-1","command":"printf bridge"}}\'',
       'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"command_execution","id":"tool-1","command":"printf bridge","aggregated_output":"bridge","exit_code":0}}\'',
@@ -293,6 +301,20 @@ function assertInvocationEventLogRefs(invocations: Array<{ eventLogRef: string |
   }
 }
 
+function assertInvocationExternalSessionRefs(invocations: Array<{ externalSessionRef: string | null, metadataJson: Record<string, unknown> }>): void {
+  const ids: string[] = []
+  for (const invocation of invocations) {
+    expect(invocation.externalSessionRef).toBeTruthy()
+    expect(invocation.externalSessionRef).not.toContain('/turns/')
+    const ref = JSON.parse(invocation.externalSessionRef!) as { id?: string, target?: string }
+    expect(ref.target).toBe('codex')
+    expect(ref.id).toMatch(/^native-thread-\d+$/)
+    expect(invocation.metadataJson).toMatchObject({ externalSessionRef: ref })
+    ids.push(ref.id!)
+  }
+  expect(new Set(ids).size).toBe(invocations.length)
+}
+
 async function assertRedactedEngineLogProof(metadataJson: Record<string, unknown>): Promise<void> {
   const stderrLog = metadataJson.stderrLog
   expect(typeof stderrLog).toBe('string')
@@ -303,4 +325,8 @@ async function assertRedactedEngineLogProof(metadataJson: Record<string, unknown
 
 function freeformDescriptorPath(): string {
   return path.resolve(import.meta.dir, '..', '..', '..', 'souls', FREEFORM_APP_ID, 'dist', 'soul.descriptor.json')
+}
+
+function shellSingleQuote(value: string): string {
+  return `'${value.replaceAll('\'', '\'\\\'\'')}'`
 }

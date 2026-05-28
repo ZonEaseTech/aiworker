@@ -207,8 +207,13 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
   })
   const timeoutMs = options.timeoutMs ?? DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS
   let finalMessage = ''
+  let externalSessionRef: Record<string, unknown> | null = null
   const parser = engine.parser
     ? createEngineStreamHandler(engine.parser, (event) => {
+        if (event.type === 'external_session_ref') {
+          externalSessionRef = event.ref
+          return
+        }
         const localEvent = toLocalExecutorEvent(event)
         if (localEvent.kind === 'text')
           finalMessage += localEvent.text
@@ -244,11 +249,13 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
       metadata: {
         engineExitCode: execution.code,
         executionSource: 'local-cli',
+        ...(externalSessionRef ? { externalSessionRef } : {}),
         finalMessage: finalMessage.trim(),
         processId: randomUUID(),
         stderrLog: path.join(input.invocationRoot, 'stderr.log'),
         stdoutLog: path.join(input.invocationRoot, 'stdout.log'),
       },
+      externalSessionRef: encodeLocalExternalSessionRef(externalSessionRef),
       summary: finalMessage.trim() || `${engine.name} exited with code ${execution.code}.`,
     })
   }
@@ -263,11 +270,13 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
   return {
     metadata: {
       executionSource: 'local-cli',
+      ...(externalSessionRef ? { externalSessionRef } : {}),
       finalMessage,
       processId: randomUUID(),
       stderrLog: path.join(input.invocationRoot, 'stderr.log'),
       stdoutLog: path.join(input.invocationRoot, 'stdout.log'),
     },
+    externalSessionRef: encodeLocalExternalSessionRef(externalSessionRef),
     summary: finalMessage || `${engine.name} completed.`,
   }
 }
@@ -409,6 +418,8 @@ function execCommand(
 }
 
 function toLocalExecutorEvent(event: ParsedEngineEvent): LocalExecutorEvent {
+  if (event.type === 'external_session_ref')
+    return { kind: 'raw', line: JSON.stringify({ externalSessionRef: event.ref }) }
   if (event.type === 'status')
     return { detail: event.detail, kind: 'status', label: event.label }
   if (event.type === 'text_delta')
@@ -426,6 +437,10 @@ function toLocalExecutorEvent(event: ParsedEngineEvent): LocalExecutorEvent {
   if (event.type === 'usage')
     return { costUsd: event.costUsd, inputTokens: event.inputTokens, kind: 'usage', outputTokens: event.outputTokens }
   return { kind: 'raw', line: event.line }
+}
+
+function encodeLocalExternalSessionRef(value: Record<string, unknown> | null): string | null {
+  return value ? JSON.stringify(value) : null
 }
 
 const helpFlagCache = new Map<string, boolean>()

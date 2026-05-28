@@ -54,7 +54,7 @@ describe('createExternalEngineExecutor', () => {
     const workspaceRoot = path.join(makeRoot(), 'workspace')
     const command = await makeScript(`
 cat >/dev/null
-printf '%s\\n' '{"type":"thread.started"}'
+printf '%s\\n' '{"type":"thread.started","thread_id":"codex-thread-1"}'
 printf '%s\\n' '{"type":"turn.started"}'
 printf '%s\\n' '{"type":"item.started","item":{"type":"command_execution","id":"tool-1","command":"printf hi"}}'
 printf '%s\\n' '{"type":"item.completed","item":{"type":"command_execution","id":"tool-1","command":"printf hi","aggregated_output":"hi","exit_code":0}}'
@@ -68,6 +68,7 @@ printf '%s\\n' '{"type":"turn.completed","usage":{"input_tokens":3,"output_token
     const result = await createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events))
 
     expect(result.summary).toBe('Done.')
+    expect(result.externalSessionRef).toBe(JSON.stringify({ id: 'codex-thread-1', target: 'codex' }))
     expect(events.map(event => event.kind)).toContain('tool_use')
     expect(events.map(event => event.kind)).toContain('tool_result')
     expect(events.map(event => event.kind)).toContain('usage')

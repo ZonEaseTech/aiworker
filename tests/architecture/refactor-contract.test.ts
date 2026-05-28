@@ -1965,6 +1965,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(freeformCliProof).toContain('phase: \'result\'')
     expect(freeformCliProof).toContain('invocation.usage.observed')
     expect(freeformCliProof).toContain('assertInvocationEventLogRefs')
+    expect(freeformCliProof).toContain('assertInvocationExternalSessionRefs')
     expect(freeformCliProof).toContain('assertRedactedEngineLogProof')
     expect(freeformCliProof).toContain('stderrLog')
     expect(rootPackage.scripts?.['test:browser:freeform']).toContain(freeformBuildScript)

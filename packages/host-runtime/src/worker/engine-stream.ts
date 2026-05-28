@@ -2,6 +2,7 @@ export type EngineEventParserKind = 'claude' | 'codex' | 'cursor-agent' | 'gemin
 
 export type ParsedEngineEvent
   = | { type: 'status', label: string, detail?: string }
+    | { type: 'external_session_ref', ref: Record<string, unknown> }
     | { type: 'text_delta', delta: string }
     | { type: 'thinking_delta', delta: string }
     | { type: 'thinking_start' }
@@ -150,6 +151,9 @@ function handleCodexEvent(
   const type = readString(obj.type)
 
   if (type === 'thread.started') {
+    const ref = codexThreadExternalSessionRef(obj)
+    if (ref)
+      onEvent({ ref, type: 'external_session_ref' })
     onEvent({ label: 'initializing', type: 'status' })
     return true
   }
@@ -219,6 +223,14 @@ function handleCodexEvent(
   }
 
   return false
+}
+
+function codexThreadExternalSessionRef(obj: Record<string, unknown>): Record<string, unknown> | null {
+  const thread = asRecord(obj.thread)
+  const id = readString(obj.thread_id ?? obj.threadId ?? obj.id ?? thread?.id)
+  if (!id)
+    return null
+  return { id, target: 'codex' }
 }
 
 function emitCodexToolUse(
