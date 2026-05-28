@@ -2166,6 +2166,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(artifactSmokeIndex).toBeGreaterThan(packageIndex)
     expect(artifactSmokeIndex).toBeLessThan(publishIndex)
     expect(publishIndex).toBeLessThan(attachIndex)
+    expect(releaseWorkflow).toContain('fail_on_unmatched_files: true')
   })
 
   test('release and CI workflows pin a Node version compatible with packaged Web assets', () => {

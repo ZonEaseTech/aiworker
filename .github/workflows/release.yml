@@ -52,6 +52,7 @@ jobs:
       - name: Attach binaries to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          fail_on_unmatched_files: true
           files: |
             aiworker-linux-x64.tar.gz
             aiworker-linux-arm64.tar.gz
