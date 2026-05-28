@@ -6,7 +6,7 @@ import path from 'node:path'
 import process from 'node:process'
 
 import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
-import { closeWorkerDb, initWorkerDb, listEngineInvocations } from '@zonease/aiworker-storage-sqlite/worker'
+import { closeWorkerDb, initWorkerDb, listEngineInvocations, listSessionEvents } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { runCli } from './aiworker'
@@ -198,6 +198,7 @@ describe('Freeform CLI golden path', () => {
 
     initWorkerDb(process.env.WORKER_DB_PATH!)
     const invocations = listEngineInvocations(started.session.id).sort((left, right) => left.seq - right.seq)
+    const bridgeEvents = listSessionEvents(started.session.id)
     closeWorkerDb()
     expect(invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded', 'succeeded'])
     expect(invocations.map(invocation => invocation.sessionId)).toEqual([started.session.id, started.session.id, started.session.id])
@@ -207,6 +208,46 @@ describe('Freeform CLI golden path', () => {
     expect(invocations[1]?.inputRef).not.toContain('/turns/')
     expect(invocations[2]?.inputRef).toBe(`aiworker://sessions/${started.session.id}/invocations/${secondFollowed.invocation.id}/input`)
     expect(invocations[2]?.inputRef).not.toContain('/turns/')
+
+    const startedEvents = bridgeEvents.filter(event => event.invocationId === started.invocation.id)
+    expect(startedEvents).toContainEqual(expect.objectContaining({
+      payloadJson: expect.objectContaining({
+        bridgeEvent: 'invocation.tool.observed',
+        tool: expect.objectContaining({ name: 'Bash', phase: 'use' }),
+      }),
+      type: 'tool',
+    }))
+    expect(startedEvents).toContainEqual(expect.objectContaining({
+      payloadJson: expect.objectContaining({
+        bridgeEvent: 'invocation.tool.observed',
+        tool: expect.objectContaining({ content: 'bridge', phase: 'result' }),
+      }),
+      type: 'tool',
+    }))
+    expect(startedEvents).toContainEqual(expect.objectContaining({
+      payloadJson: expect.objectContaining({
+        bridgeEvent: 'invocation.output.delta',
+        data: { text: 'Done.' },
+      }),
+      type: 'assistant_delta',
+    }))
+    expect(startedEvents).toContainEqual(expect.objectContaining({
+      payloadJson: expect.objectContaining({
+        bridgeEvent: 'invocation.usage.observed',
+        usage: { costUsd: null, inputTokens: 3, outputTokens: 5 },
+      }),
+      type: 'status',
+    }))
+    expect(bridgeEvents).toContainEqual(expect.objectContaining({
+      invocationId: followed.invocation.id,
+      payloadJson: expect.objectContaining({
+        bridgeEvent: 'invocation.output.delta',
+        data: { text: 'Done.' },
+      }),
+      type: 'assistant_delta',
+    }))
+    expect(bridgeEvents.every(event => event.sessionId === started.session.id)).toBe(true)
+    expect(JSON.stringify(bridgeEvents)).not.toContain('/turns/')
 
     await expect(readFile(path.join(workspace.workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('AIWorker Freeform Workspace')
     await expect(stat(path.join(workspace.workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'))).resolves.toBeTruthy()
@@ -228,7 +269,12 @@ describe('Freeform CLI golden path', () => {
       '#!/usr/bin/env bash',
       'set -euo pipefail',
       'cat >/dev/null',
+      'printf \'%s\\n\' \'{"type":"thread.started"}\'',
+      'printf \'%s\\n\' \'{"type":"turn.started"}\'',
+      'printf \'%s\\n\' \'{"type":"item.started","item":{"type":"command_execution","id":"tool-1","command":"printf bridge"}}\'',
+      'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"command_execution","id":"tool-1","command":"printf bridge","aggregated_output":"bridge","exit_code":0}}\'',
       'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}\'',
+      'printf \'%s\\n\' \'{"type":"turn.completed","usage":{"input_tokens":3,"output_tokens":5}}\'',
       '',
     ].join('\n'))
     await chmod(commandPath, 0o755)

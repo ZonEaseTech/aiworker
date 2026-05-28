@@ -1946,6 +1946,7 @@ describe('destructive refactor contract bootstrap', () => {
       'tests/browser/freeform-cli-golden-path.spec.ts',
       'tests/browser/freeform-mounted-workbench.spec.ts',
     ]
+    const freeformCliProof = readRepoFile('apps/cli/src/freeform-golden-path.test.ts')
     const freeformCliBrowserProof = readRepoFile('tests/browser/freeform-cli-golden-path.spec.ts')
 
     expect(existsSync(join(repoRoot, 'apps/cli/src/freeform-golden-path.test.ts'))).toBe(true)
@@ -1953,6 +1954,10 @@ describe('destructive refactor contract bootstrap', () => {
     expect(existsSync(join(repoRoot, 'tests/browser/freeform-mounted-workbench.spec.ts'))).toBe(true)
     expect(rootPackage.scripts?.['test:cli']).toContain('bun run --filter \'@zonease/aiworker-freeform\' build')
     expect(rootPackage.scripts?.['test:cli']).toContain('apps/cli/src/freeform-golden-path.test.ts')
+    expect(freeformCliProof).toContain('listSessionEvents')
+    expect(freeformCliProof).toContain("type: 'tool'")
+    expect(freeformCliProof).toContain("phase: 'result'")
+    expect(freeformCliProof).toContain('invocation.usage.observed')
     expect(rootPackage.scripts?.['test:browser:freeform']).toContain(freeformBuildScript)
     expect(rootPackage.scripts?.['test:browser:freeform']).toContain(webBuildScript)
     expect(rootPackage.scripts?.['test:browser:freeform']).toContain('tests/browser/freeform-cli-golden-path.spec.ts')
