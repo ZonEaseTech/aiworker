@@ -4,7 +4,7 @@ import type { TranscriptActivityStatus } from './transcript-types'
 import { Badge, BadgeLabel } from '#components/badge'
 import { Button } from '#components/button'
 import { cn } from '#lib/utils'
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 
 export interface CommandBlockProps {
   className?: string
@@ -14,6 +14,12 @@ export interface CommandBlockProps {
   output?: string
   status?: TranscriptActivityStatus
   title?: ReactNode
+}
+
+type ExpandedAction = boolean | ((current: boolean) => boolean)
+
+function expandedReducer(current: boolean, action: ExpandedAction): boolean {
+  return typeof action === 'function' ? action(current) : action
 }
 
 export function CommandBlock({
@@ -26,13 +32,13 @@ export function CommandBlock({
   title,
 }: CommandBlockProps) {
   const hasOutput = output !== undefined && output !== ''
-  const [expanded, setExpanded] = useState(status === 'failed' ? true : defaultExpanded)
+  const [expanded, dispatchExpanded] = useReducer(expandedReducer, status === 'failed' ? true : defaultExpanded)
   const [wrapped, setWrapped] = useState(false)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (status === 'failed' && hasOutput)
-      setExpanded(true)
+      dispatchExpanded(true)
   }, [hasOutput, status])
 
   async function copyCommand() {
@@ -91,7 +97,7 @@ export function CommandBlock({
                   size="sm"
                   aria-label={expanded ? 'Collapse command output' : 'Expand command output'}
                   aria-expanded={expanded}
-                  onClick={() => setExpanded(value => !value)}
+                  onClick={() => dispatchExpanded(value => !value)}
                 >
                   {expanded ? 'Collapse' : 'Expand'}
                 </Button>
