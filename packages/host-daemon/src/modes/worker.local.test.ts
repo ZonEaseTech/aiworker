@@ -543,6 +543,97 @@ describe('local daemon API', () => {
     })
   })
 
+  it('continues native resume refs through the session invocation broker route', async () => {
+    const callOrder: string[] = []
+    const target = await app(undefined, undefined, undefined, {
+      adapters: [{
+        target: 'codex',
+        async cancel() {
+          return {}
+        },
+        async discover() {
+          callOrder.push('adapter.discover')
+          return { callable: true, installed: true, supportsNativeResume: true, target: 'codex' }
+        },
+        async followUp(request: { externalSessionRef?: unknown, invocationId?: unknown }) {
+          callOrder.push('adapter.followUp')
+          expect(request.externalSessionRef).toEqual({ id: 'native-thread-1', target: 'codex' })
+          return {
+            externalSessionRef: { id: 'native-thread-2', target: 'codex' },
+            metadata: { executionSource: 'engine-bridge' },
+            processHandle: { invocationId: request.invocationId, pid: 4202 },
+            summary: 'Daemon bridge follow-up summary.',
+          }
+        },
+        normalize() {
+          return []
+        },
+        async start() {
+          callOrder.push('adapter.start')
+          throw new Error('broker follow-up should not start a fresh native session')
+        },
+      }],
+      projectionReceipts: {
+        async assertUsable() {
+          callOrder.push('projection.assert')
+        },
+      },
+    })
+    const worker = await createFreeformWorker(target, 'freeform-native-resume-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    createEngineInvocation({
+      engineCommand: null,
+      engineId: 'codex',
+      externalSessionRef: JSON.stringify({ id: 'native-thread-1', target: 'codex' }),
+      id: 'daemon-previous-native-resume-invocation',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-previous-native-resume-invocation/input`,
+      metadataJson: {
+        externalSessionRef: { id: 'native-thread-1', target: 'codex' },
+      },
+      processState: 'exited',
+      seq: 1,
+      sessionId: session.id,
+      status: 'succeeded',
+    })
+
+    const followUpRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Continue through native resume ref.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(followUpRes.status).toBe(201)
+    const followUpBody = await followUpRes.json() as {
+      invocation: {
+        externalSessionRef: string | null
+        id: string
+        metadataJson: Record<string, unknown>
+        processState: string
+        projectionReceiptId: string | null
+        sessionId: string
+        status: string
+        summary: string | null
+      }
+      session: { id: string, status: string }
+      turn?: unknown
+    }
+    expect(callOrder).toEqual(['projection.assert', 'adapter.discover', 'adapter.followUp'])
+    expect(followUpBody.turn).toBeUndefined()
+    expect(followUpBody.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(followUpBody.invocation).toMatchObject({
+      externalSessionRef: expect.stringContaining('native-thread-2'),
+      processState: 'exited',
+      projectionReceiptId: workspace.id,
+      sessionId: session.id,
+      status: 'succeeded',
+      summary: 'Daemon bridge follow-up summary.',
+    })
+    expect(followUpBody.invocation.metadataJson).toMatchObject({
+      externalSessionRef: { id: 'native-thread-2', target: 'codex' },
+      processHandle: { invocationId: followUpBody.invocation.id, pid: 4202 },
+    })
+  })
+
   it('creates session input as the first session-level invocation without transient turns', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'freeform-first-invocation')

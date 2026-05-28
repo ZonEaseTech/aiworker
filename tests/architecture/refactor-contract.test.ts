@@ -1626,6 +1626,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).toContain('/api/sessions/:sessionId/invocations')
     expect(schemas).toContain('createSessionInvocationBodySchema')
     expect(daemonTests).toContain('records missing native resume refs through the session invocation broker route')
+    expect(daemonTests).toContain('continues native resume refs through the session invocation broker route')
     expect(daemonTests).toContain('ENGINE_SESSION_REF_MISSING')
   })
 
