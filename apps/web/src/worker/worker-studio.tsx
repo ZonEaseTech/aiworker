@@ -11,7 +11,7 @@ import type { MountedWorkbenchRoute } from './studio/mounted-surface'
 
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Item, ItemContent, ItemDescription, ItemTitle } from '@zonease/aiworker-ui/components/item'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { navigateWorkerRoute, useWorkerRoute } from '../app/router/worker-route'
 import {
   displaySoul,
@@ -60,6 +60,13 @@ const emptyWorkerStudioLocatorState: WorkerStudioResolvedLocatorState = {
   selectedWorkspace: null,
 }
 
+function workerOverlayAssetsReducer(
+  _current: LocalWorkerOverlayAsset[],
+  assets: LocalWorkerOverlayAsset[],
+): LocalWorkerOverlayAsset[] {
+  return assets
+}
+
 function descriptorWorkbenchRoutes(app: HostedSoulApp | null): MountedWorkbenchRoute[] {
   if (!app?.descriptor?.workbench || app.descriptor.workbench.type !== 'micro-app')
     return []
@@ -79,7 +86,7 @@ export function WorkerStudio() {
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null)
   const [newWorkerName, setNewWorkerName] = useState('')
-  const [newWorkerSoulId, setNewWorkerSoulId] = useState<string | null>(null)
+  const [selectedNewWorkerSoulId, setSelectedNewWorkerSoulId] = useState<string | null>(null)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceTitle, setWorkspaceTitle] = useState('')
   const [query, setQuery] = useState('')
@@ -90,7 +97,7 @@ export function WorkerStudio() {
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>('execution')
   const [workerConfigurationOpen, setWorkerConfigurationOpen] = useState(false)
   const [workerConfigurationWorkerId, setWorkerConfigurationWorkerId] = useState<string | null>(null)
-  const [workerOverlayAssets, setWorkerOverlayAssets] = useState<LocalWorkerOverlayAsset[]>([])
+  const [workerOverlayAssets, dispatchWorkerOverlayAssets] = useReducer(workerOverlayAssetsReducer, [])
   const [submitting, setSubmitting] = useState(false)
   const mountedChildRouteMemoryRef = useRef(new Map<string, string>())
   const refreshRequestSeqRef = useRef(0)
@@ -119,13 +126,11 @@ export function WorkerStudio() {
   }, [refresh])
 
   const data = state.data
-  useEffect(() => {
-    if (newWorkerSoulId)
-      return
-    const firstAvailable = data?.souls.find(soul => soul.status === 'available')
-    if (firstAvailable)
-      setNewWorkerSoulId(firstAvailable.id)
-  }, [data, newWorkerSoulId])
+  const defaultNewWorkerSoulId = useMemo(
+    () => data?.souls.find(soul => soul.status === 'available')?.id ?? null,
+    [data?.souls],
+  )
+  const newWorkerSoulId = selectedNewWorkerSoulId ?? defaultNewWorkerSoulId
   const activeLocale = normalizeLocale(data?.settings.language)
   const copy = messagesFor(activeLocale)
   const locatorState = useMemo(
@@ -261,17 +266,17 @@ export function WorkerStudio() {
   useEffect(() => {
     let cancelled = false
     if (!selectedWorkerOverlayId) {
-      setWorkerOverlayAssets([])
+      dispatchWorkerOverlayAssets([])
       return
     }
     loadWorkerOverlay(selectedWorkerOverlayId)
       .then((result) => {
         if (!cancelled)
-          setWorkerOverlayAssets(result.overlay.assets)
+          dispatchWorkerOverlayAssets(result.overlay.assets)
       })
       .catch(() => {
         if (!cancelled)
-          setWorkerOverlayAssets([])
+          dispatchWorkerOverlayAssets([])
       })
     return () => {
       cancelled = true
@@ -287,11 +292,11 @@ export function WorkerStudio() {
     if (!workerOverlayTarget)
       return
     const previousOverlayAssets = workerOverlayAssets.filter(asset => asset.source !== 'baseline')
-    setWorkerOverlayAssets(assets)
+    dispatchWorkerOverlayAssets(assets)
     const overlayOnly = assets.filter(asset => asset.source !== 'baseline')
     await saveWorkerOverlayConfigValues(workerOverlayTarget.id, previousOverlayAssets, overlayOnly)
     const result = await loadWorkerOverlay(workerOverlayTarget.id)
-    setWorkerOverlayAssets(result.overlay.assets)
+    dispatchWorkerOverlayAssets(result.overlay.assets)
   }
 
   function startSoulApp(app: HostedSoulApp) {
@@ -302,7 +307,7 @@ export function WorkerStudio() {
       : app.projectedSoul?.id ?? app.appId
     const soul = data.souls.find(item => item.id === soulId)
     const soulCopy = soul ? displaySoul(soul, activeLocale) : null
-    setNewWorkerSoulId(soulId)
+    setSelectedNewWorkerSoulId(soulId)
     setNewWorkerName(soulCopy?.name ?? app.name)
     setCreateWorkerOpen(true)
   }
@@ -420,7 +425,7 @@ export function WorkerStudio() {
             workerName={newWorkerName}
             onClose={() => setCreateWorkerOpen(false)}
             onNameChange={setNewWorkerName}
-            onSoulChange={setNewWorkerSoulId}
+            onSoulChange={setSelectedNewWorkerSoulId}
             onSubmit={submitWorker}
           />
         )}
@@ -456,7 +461,7 @@ export function WorkerStudio() {
               workerName={newWorkerName}
               onClose={() => setCreateWorkerOpen(false)}
               onNameChange={setNewWorkerName}
-              onSoulChange={setNewWorkerSoulId}
+              onSoulChange={setSelectedNewWorkerSoulId}
               onSubmit={submitWorker}
             />
 
