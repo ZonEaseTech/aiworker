@@ -358,6 +358,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(protocol).toContain('configValueJson envelope')
     expect(protocol).toContain('kind, target, enabled, sourceRef, checksum, options, updatedAt, updatedBy')
     expect(protocol).toContain('Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.')
+    expect(protocol).toContain('GET /api/workspace-locators` may receive `workerId`')
+    expect(protocol).toContain('POST /api/workspace-locators` receives `workerId`, may receive `rootPath`')
     expect(protocol).toContain('strips client credentials before proxying')
     expect(protocol).toContain('strips app-owned cookies plus Host mount credentials before returning')
   })
@@ -522,9 +524,18 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('daemon workspace locator collection surface does not preserve local broker alias', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
+    const mountedWorkspaceProxy = soulAppRuntime.slice(
+      soulAppRuntime.indexOf('url.pathname === \'/api/workspaces\''),
+      soulAppRuntime.indexOf('url.pathname === \'/api/sessions\''),
+    )
 
     expect(daemon).toContain('app.get(\'/api/workspace-locators\'')
     expect(daemon).not.toContain('app.get(\'/api/local/workspaces\',')
+    expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/workspaces\',')
+    expect(daemon).not.toContain('app.post(\'/api/local/workers/:workerId/workspaces\',')
+    expect(mountedWorkspaceProxy).toContain('/api/workspace-locators?workerId=')
+    expect(mountedWorkspaceProxy).not.toContain(['/api/local/workers/', '{workerId}/workspaces'].join('$'))
   })
 
   test('daemon workspace locator member surface does not preserve local broker aliases', () => {
@@ -714,7 +725,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('host daemon workspace session fixture uses canonical broker routes', () => {
     const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
-    const helperStart = daemonTest.indexOf('async function createWorkspaceAndSession')
+    const helperStart = daemonTest.indexOf('async function createWorkspaceLocator')
     const helperEnd = daemonTest.indexOf('function writePackagedFreeform')
     const createWorkspaceAndSessionHelper = helperStart >= 0 && helperEnd > helperStart
       ? daemonTest.slice(helperStart, helperEnd)

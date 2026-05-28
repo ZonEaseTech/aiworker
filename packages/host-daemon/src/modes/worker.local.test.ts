@@ -117,15 +117,28 @@ describe('local daemon API', () => {
     return (await res.json() as { worker: { id: string, soulId: string } }).worker
   }
 
-  async function createWorkspaceAndSession(target: Awaited<ReturnType<typeof app>>, workerId: string) {
-    const rootPath = mkdtempSync(join(dir, `${workerId}-workspace-`))
+  async function createWorkspaceLocator(
+    target: Awaited<ReturnType<typeof app>>,
+    workerId: string,
+    input: { name?: string, rootPath?: string, type?: string } = {},
+  ) {
     const workspaceRes = await target.request('/api/workspace-locators', {
-      body: JSON.stringify({ name: 'Open Workspace', rootPath, type: 'workspace', workerId }),
+      body: JSON.stringify({
+        name: input.name ?? 'Open Workspace',
+        rootPath: input.rootPath,
+        type: input.type ?? 'workspace',
+        workerId,
+      }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(workspaceRes.status).toBe(201)
-    const workspace = (await workspaceRes.json() as { workspace: { id: string, rootPath: string } }).workspace
+    return (await workspaceRes.json() as { workspace: { id: string, rootPath: string, workerId: string } }).workspace
+  }
+
+  async function createWorkspaceAndSession(target: Awaited<ReturnType<typeof app>>, workerId: string) {
+    const rootPath = mkdtempSync(join(dir, `${workerId}-workspace-`))
+    const workspace = await createWorkspaceLocator(target, workerId, { rootPath })
 
     const sessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
@@ -437,13 +450,7 @@ describe('local daemon API', () => {
   it('creates session input as the first session-level invocation without transient turns', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'freeform-first-invocation')
-    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
-      body: JSON.stringify({ name: 'First Invocation Workspace', type: 'workspace' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workspaceRes.status).toBe(201)
-    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'First Invocation Workspace' })
 
     const sessionRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
       body: JSON.stringify({
@@ -481,13 +488,7 @@ describe('local daemon API', () => {
   it('rejects legacy session create bodies that still send capabilityTemplateId', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'legacy-capability-field-worker')
-    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
-      body: JSON.stringify({ name: 'Legacy Capability Field Workspace', type: 'workspace' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workspaceRes.status).toBe(201)
-    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Legacy Capability Field Workspace' })
 
     const legacyRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
       body: JSON.stringify({
@@ -505,13 +506,7 @@ describe('local daemon API', () => {
   it('rejects Host-owned free-form session notes in write bodies', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'freeform-context-reject-worker')
-    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
-      body: JSON.stringify({ name: 'Context Reject Workspace', type: 'workspace' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workspaceRes.status).toBe(201)
-    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Context Reject Workspace' })
 
     const rejectedCreateRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
       body: JSON.stringify({
@@ -540,6 +535,7 @@ describe('local daemon API', () => {
   it('honors workspace locator rootPath for app-owned workspace projection', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'requested-root-worker')
+    const siblingWorker = await createFreeformWorker(target, 'sibling-root-worker')
     const requestedRootPath = join(dir, 'requested-workspace-root')
 
     const createRes = await target.request('/api/workspace-locators', {
@@ -562,6 +558,12 @@ describe('local daemon API', () => {
     const fetched = await getRes.json() as { workspace: { rootPath: string } }
     expect(fetched.workspace.rootPath).toBe(requestedRootPath)
     expect((await target.request('/api/local/workspaces')).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/workspaces`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+      body: JSON.stringify({ name: 'Legacy Collection Workspace', type: 'workspace' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })).status).toBe(404)
     expect((await target.request(`/api/local/workspaces/${body.workspace.id}`)).status).toBe(404)
     expect((await target.request(`/api/local/workers/${worker.id}/workspaces/${body.workspace.id}`)).status).toBe(404)
     expect((await target.request(`/api/local/workspaces/${body.workspace.id}`, {
@@ -574,6 +576,35 @@ describe('local daemon API', () => {
       headers: { 'content-type': 'application/json' },
       method: 'PATCH',
     })).status).toBe(404)
+
+    const defaultRootCreateRes = await target.request('/api/workspace-locators', {
+      body: JSON.stringify({
+        name: 'Default Root Workspace',
+        type: 'workspace',
+        workerId: worker.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(defaultRootCreateRes.status).toBe(201)
+    const defaultRootBody = await defaultRootCreateRes.json() as { workspace: { id: string, workerId: string } }
+    expect(defaultRootBody.workspace.workerId).toBe(worker.id)
+
+    const siblingCreateRes = await target.request('/api/workspace-locators', {
+      body: JSON.stringify({
+        name: 'Sibling Workspace',
+        type: 'workspace',
+        workerId: siblingWorker.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(siblingCreateRes.status).toBe(201)
+
+    const scopedListRes = await target.request(`/api/workspace-locators?workerId=${worker.id}`)
+    expect(scopedListRes.status).toBe(200)
+    const scopedList = await scopedListRes.json() as { workspaces: Array<{ id: string, workerId: string }> }
+    expect(scopedList.workspaces.map(workspace => workspace.workerId)).toEqual([worker.id, worker.id])
     await expect(readFile(join(requestedRootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Freeform')
   })
 
@@ -655,13 +686,7 @@ describe('local daemon API', () => {
   it('archives worker metadata with archived status', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'archive-worker')
-    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
-      body: JSON.stringify({ name: 'Archived Worker Existing Workspace', type: 'workspace' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workspaceRes.status).toBe(201)
-    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Archived Worker Existing Workspace' })
 
     const archiveRes = await target.request(`/api/workers/${worker.id}/archive`, { method: 'POST' })
 
@@ -675,8 +700,8 @@ describe('local daemon API', () => {
       worker: { id: worker.id, status: 'archived' },
     })
 
-    const blockedWorkspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
-      body: JSON.stringify({ name: 'Blocked Archived Worker Workspace', type: 'workspace' }),
+    const blockedWorkspaceRes = await target.request('/api/workspace-locators', {
+      body: JSON.stringify({ name: 'Blocked Archived Worker Workspace', type: 'workspace', workerId: worker.id }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
@@ -842,13 +867,7 @@ describe('local daemon API', () => {
   it('rejects legacy workspace session stream creation aliases', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)
-    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
-      body: JSON.stringify({ name: 'Open Workspace', type: 'workspace' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workspaceRes.status).toBe(201)
-    const workspace = (await workspaceRes.json() as { workspace: { id: string } }).workspace
+    const workspace = await createWorkspaceLocator(target, worker.id)
 
     const workerStreamRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions/stream`, {
       body: JSON.stringify({
@@ -1146,19 +1165,6 @@ describe('local daemon API', () => {
     const archiveRes = await target.request(`/api/app-installation/apps/${FREEFORM_APP_ID}/archive`, { method: 'POST' })
     expect(archiveRes.status).toBe(200)
 
-    const workerWorkspaceCreateRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
-      body: JSON.stringify({ name: 'Blocked worker workspace', type: 'workspace' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workerWorkspaceCreateRes.status).toBe(409)
-    expect(await workerWorkspaceCreateRes.json()).toMatchObject({
-      error: {
-        code: 'SOUL_APP_DISABLED',
-        message: `Soul App is not enabled: ${FREEFORM_APP_ID}`,
-      },
-    })
-
     const brokerWorkspaceCreateRes = await target.request('/api/workspace-locators', {
       body: JSON.stringify({
         name: 'Blocked broker workspace',
@@ -1336,33 +1342,35 @@ describe('local daemon API', () => {
     expect(workspaceLocatorSourcePointersRes.status).toBe(422)
     expect(await workspaceLocatorSourcePointersRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_LOCATOR_INVALID' } })
 
-    const workspaceMetadataRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+    const workspaceMetadataRes = await target.request('/api/workspace-locators', {
       body: JSON.stringify({
         metadata: {
           configToml: '[mcp_servers.local]\ncommand = "node"\n',
         },
         name: 'Embedded MCP Workspace',
         type: 'workspace',
+        workerId: worker.id,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(workspaceMetadataRes.status).toBe(422)
-    expect(await workspaceMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_INVALID' } })
+    expect(await workspaceMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_LOCATOR_INVALID' } })
 
-    const workspaceSourcePointersRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+    const workspaceSourcePointersRes = await target.request('/api/workspace-locators', {
       body: JSON.stringify({
         name: 'Embedded MCP Workspace Source',
         sourcePointers: [{
           configToml: '[mcp_servers.local]\ncommand = "node"\n',
         }],
         type: 'workspace',
+        workerId: worker.id,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(workspaceSourcePointersRes.status).toBe(422)
-    expect(await workspaceSourcePointersRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_INVALID' } })
+    expect(await workspaceSourcePointersRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_LOCATOR_INVALID' } })
 
     const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
     const workspaceLocatorPatchRes = await target.request(`/api/workspace-locators/${workspace.id}`, {
@@ -1469,19 +1477,20 @@ describe('local daemon API', () => {
     expect(await workerMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKER_INVALID' } })
 
     const worker = await createFreeformWorker(target, 'domain-payload-guard-worker')
-    const workspaceMetadataRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
+    const workspaceMetadataRes = await target.request('/api/workspace-locators', {
       body: JSON.stringify({
         metadata: {
           artifactContent: '# Generated report\n',
         },
         name: 'Domain Payload Workspace',
         type: 'workspace',
+        workerId: worker.id,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(workspaceMetadataRes.status).toBe(422)
-    expect(await workspaceMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_INVALID' } })
+    expect(await workspaceMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKSPACE_LOCATOR_INVALID' } })
 
     const { session } = await createWorkspaceAndSession(target, worker.id)
     const sessionMetadataRes = await target.request(`/api/sessions/${session.id}`, {
@@ -1683,13 +1692,7 @@ describe('local daemon API', () => {
   it('serves projection receipts and cleans up only receipt-owned files', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)
-    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
-      body: JSON.stringify({ name: 'Receipt Workspace', type: 'workspace' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workspaceRes.status).toBe(201)
-    const workspace = (await workspaceRes.json() as { workspace: { id: string, rootPath: string } }).workspace
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Receipt Workspace' })
     writeFileSync(join(workspace.rootPath, 'business.md'), '# user-owned work\n')
 
     const receiptRes = await target.request(`/api/projections/receipts/${workspace.id}`)
@@ -1725,13 +1728,7 @@ describe('local daemon API', () => {
   it('refreshes projection assets for the requested broker engine target', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)
-    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
-      body: JSON.stringify({ name: 'Claude Refresh Workspace', type: 'workspace' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workspaceRes.status).toBe(201)
-    const workspace = (await workspaceRes.json() as { workspace: { id: string, rootPath: string } }).workspace
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Claude Refresh Workspace' })
 
     const refreshRes = await target.request('/api/projections/claude-code/refresh', {
       body: JSON.stringify({ workerId: worker.id, workspaceId: workspace.id }),
@@ -1762,13 +1759,7 @@ describe('local daemon API', () => {
     writeFileSync(join(officialAppsRoot, FREEFORM_APP_ID, 'dist', 'engine-assets', 'skills', 'freeform-overlay', 'SKILL.md'), '# Broker Config Overlay Session\n')
     const target = await app(undefined, undefined, officialAppsRoot)
     const worker = await createFreeformWorker(target, 'config-overlay-projection-worker')
-    const workspaceRes = await target.request(`/api/local/workers/${worker.id}/workspaces`, {
-      body: JSON.stringify({ name: 'Config Overlay Projection Workspace', type: 'workspace' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workspaceRes.status).toBe(201)
-    const workspace = (await workspaceRes.json() as { workspace: { id: string, rootPath: string } }).workspace
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Config Overlay Projection Workspace' })
     await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'), 'utf8'))
       .resolves
       .toContain('Packaged Freeform Session')

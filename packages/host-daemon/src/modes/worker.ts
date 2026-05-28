@@ -61,7 +61,6 @@ import {
   createSessionBodySchema,
   createSessionInvocationBodySchema,
   createWorkerBodySchema,
-  createWorkspaceBodySchema,
   createWorkspaceLocatorBodySchema,
   installAppBodySchema,
   parseJsonBody,
@@ -366,7 +365,13 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ overlay: await workerOverlayResponse(state, worker.id) })
   })
 
-  app.get('/api/workspace-locators', c => c.json({ workspaces: listWorkspaces() }))
+  app.get('/api/workspace-locators', (c) => {
+    const workerId = c.req.query('workerId')
+    if (!workerId)
+      return c.json({ workspaces: listWorkspaces() })
+    requireRuntime(state, workerId)
+    return c.json({ workspaces: listWorkspaces(workerId) })
+  })
   app.post('/api/workspace-locators', async (c) => {
     const result = await parseJsonBody(c, createWorkspaceLocatorBodySchema, 'CREATE_WORKSPACE_LOCATOR_INVALID')
     if (!result.ok)
@@ -427,37 +432,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       deleted: true,
       workspace,
     })
-  })
-  app.get('/api/local/workers/:workerId/workspaces', (c) => {
-    const workerId = c.req.param('workerId')
-    requireRuntime(state, workerId)
-    return c.json({ workspaces: listWorkspaces(workerId) })
-  })
-  app.post('/api/local/workers/:workerId/workspaces', async (c) => {
-    const workerId = c.req.param('workerId')
-    const unavailableApp = unavailableSoulAppResponse(c, state, workerId)
-    if (unavailableApp)
-      return unavailableApp
-    const runtime = requireRuntime(state, workerId)
-    const result = await parseJsonBody(c, createWorkspaceBodySchema, 'CREATE_WORKSPACE_INVALID')
-    if (!result.ok)
-      return result.response
-    let workspace
-    try {
-      workspace = await runtime.createWorkspace({
-        name: result.data.name,
-        type: result.data.type ?? 'workspace',
-        sourcePointers: result.data.sourcePointers ?? [],
-        metadata: result.data.metadata ?? {},
-      })
-    }
-    catch (error) {
-      const response = hostMetadataValidationResponse(c, 'CREATE_WORKSPACE_INVALID', error)
-      if (response)
-        return response
-      throw error
-    }
-    return c.json({ workspace }, 201)
   })
   app.post('/api/local/workers/:workerId/workspaces/:workspaceId/projection', async (c) => {
     const workerId = c.req.param('workerId')

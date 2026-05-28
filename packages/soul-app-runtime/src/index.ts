@@ -342,10 +342,10 @@ export function mountSessionApiProxy(request: Request, options: {
     return proxyJsonRequest(request, `${hostApi}/api/capabilities?workerId=${encodeURIComponent(workerId)}`)
 
   if (url.pathname === '/api/workspaces' && request.method === 'GET')
-    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/workspaces`)
+    return proxyJsonRequest(request, `${hostApi}/api/workspace-locators?workerId=${encodeURIComponent(workerId)}`)
 
   if (url.pathname === '/api/workspaces' && request.method === 'POST')
-    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/workspaces`)
+    return proxyMountedWorkspaceCreateRequest(request, `${hostApi}/api/workspace-locators`, workerId)
 
   if (url.pathname === '/api/sessions' && request.method === 'GET') {
     if (!workspaceId)
@@ -387,6 +387,27 @@ export function mountSessionApiProxy(request: Request, options: {
 function proxyJsonRequest(request: Request, target: string): Promise<Response> {
   return fetch(target, {
     body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+    headers: request.headers,
+    method: request.method,
+  }).then(r => new Response(r.body, { status: r.status, headers: r.headers }))
+}
+
+async function proxyMountedWorkspaceCreateRequest(request: Request, target: string, workerId: string): Promise<Response> {
+  const text = await request.text()
+  let parsed: unknown = {}
+  if (text.trim().length > 0) {
+    try {
+      parsed = JSON.parse(text)
+    }
+    catch {
+      parsed = {}
+    }
+  }
+  const body = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {}
+  return fetch(target, {
+    body: JSON.stringify({ ...body, workerId }),
     headers: request.headers,
     method: request.method,
   }).then(r => new Response(r.body, { status: r.status, headers: r.headers }))

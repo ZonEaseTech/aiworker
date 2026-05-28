@@ -164,6 +164,11 @@ into a product backend.
 - `enable` creates a worker from an installed descriptor.
 - archive operations mark Host metadata unavailable for new work.
 - hard delete removes Host metadata and receipt-owned projections only.
+- `GET /api/workspace-locators` may receive `workerId` to filter locators for
+  mounted app contexts.
+- `POST /api/workspace-locators` receives `workerId`, may receive `rootPath`,
+  and creates Host workspace locator metadata plus projection-owned bootstrap
+  files.
 - session follow-up always uses `POST /api/sessions/:sessionId/invocations`.
 - engine cancel and event stream target an invocation id.
 - `GET /api/capabilities` may receive `workerId` to filter capabilities to the

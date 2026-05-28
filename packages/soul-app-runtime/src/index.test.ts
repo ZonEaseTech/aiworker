@@ -187,6 +187,44 @@ describe('descriptor Soul runtime harness', () => {
     }
   })
 
+  it('maps mounted workspace collection calls to canonical workspace locator APIs', async () => {
+    const calls: Array<{ body: unknown, method: string, url: string }> = []
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const body = init?.body ? await new Response(init.body).json() : null
+      calls.push({ body, method: init?.method ?? 'GET', url: String(url) })
+      return Response.json({ workspaces: [] })
+    }) as typeof fetch
+    try {
+      const listResponse = await mountSessionApiProxy(new Request('http://soul.test/api/workspaces'), {
+        hostApiBaseUrl: 'http://host.test',
+        workerId: 'worker-1',
+      })
+      const createResponse = await mountSessionApiProxy(new Request('http://soul.test/api/workspaces', {
+        body: JSON.stringify({ name: 'Mounted Workspace', type: 'workspace', workerId: 'client-worker' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      }), {
+        hostApiBaseUrl: 'http://host.test',
+        workerId: 'worker-1',
+      })
+
+      expect(listResponse).not.toBeNull()
+      expect(createResponse).not.toBeNull()
+      expect(calls).toEqual([
+        { body: null, method: 'GET', url: 'http://host.test/api/workspace-locators?workerId=worker-1' },
+        {
+          body: { name: 'Mounted Workspace', type: 'workspace', workerId: 'worker-1' },
+          method: 'POST',
+          url: 'http://host.test/api/workspace-locators',
+        },
+      ])
+    }
+    finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
   function tempRoot(label: string): string {
     const root = mkdtempSync(path.join(tmpdir(), `aiworker-runtime-${label}-`))
     roots.push(root)

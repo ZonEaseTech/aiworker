@@ -80,7 +80,7 @@ export const createWorkspaceBodySchema = z.object({
 })
 
 export const createWorkspaceLocatorBodySchema = createWorkspaceBodySchema.extend({
-  rootPath: z.string().trim().min(1),
+  rootPath: z.string().trim().min(1).optional(),
   workerId: z.string().trim().min(1),
 })
 
