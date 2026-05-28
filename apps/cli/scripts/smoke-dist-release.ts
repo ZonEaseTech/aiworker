@@ -42,7 +42,7 @@ async function main(): Promise<number> {
     const html = await assertHttpText(`http://127.0.0.1:${port}/`, /<!doctype html>/i)
     await assertWorkerWebAsset(port, html)
 
-    const apps = await getJson<{ apps: Array<{ appId: string, status: string }> }>(`http://127.0.0.1:${port}/api/local/apps`)
+    const apps = await getJson<{ apps: Array<{ appId: string, status: string }> }>(`http://127.0.0.1:${port}/api/app-installation/apps`)
     assertCatalogApps(apps.apps)
 
     await assertCli(cli, ['app', 'bootstrap', 'official'], { env, label: 'app bootstrap official' })

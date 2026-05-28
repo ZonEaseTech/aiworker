@@ -1494,6 +1494,13 @@ describe('destructive refactor contract bootstrap', () => {
     }
   })
 
+  test('dist release smoke reads installed apps through canonical app-installation route', () => {
+    const smokeScript = readRepoFile('apps/cli/scripts/smoke-dist-release.ts')
+
+    expect(smokeScript).toContain('/api/app-installation/apps')
+    expect(smokeScript).not.toContain('/api/local/apps')
+  })
+
   test('contract gate runs Host and Soul import boundary tests', () => {
     const rootPackage = JSON.parse(readRepoFile('package.json')) as {
       scripts?: Record<string, string>
