@@ -2184,6 +2184,7 @@ describe('destructive refactor contract bootstrap', () => {
   test('canonical testing docs track Freeform browser proof scope', () => {
     const testing = readRepoFile('docs/testing.md')
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')
+    const browserProof = readRepoFile('tests/browser/freeform-cli-golden-path.spec.ts')
 
     expect(testing).toContain('-> verifies the first invocation and starts a session-level follow-up from browser context')
     expect(testing).toContain('-> shows bridge event refs to the mounted surface')
@@ -2196,6 +2197,9 @@ describe('destructive refactor contract bootstrap', () => {
     expect(docCheck).toContain('browser proof must cover Freeform v1 scope')
     expect(docCheck).toContain('assertInvocationExternalSessionRefProof')
     expect(docCheck).toContain('externalSessionRef')
+    expect(browserProof).toContain('readArchivedMountRejectionProofFromBrowser')
+    expect(browserProof).toContain('assertArchivedMountRejectionProof')
+    expect(browserProof).toContain('cannot mount workbench')
   })
 
   test('tag release workflow runs the canonical release gate before publishing', () => {

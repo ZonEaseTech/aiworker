@@ -197,6 +197,14 @@ try {
   const sessionArchiveProof = await readSessionArchiveProofFromBrowser(page, sessionResult.session.id)
   assertSessionArchiveProof(sessionArchiveProof, sessionResult.session.id)
 
+  const archivedMountRejectionProof = await readArchivedMountRejectionProofFromBrowser(
+    page,
+    workerId,
+    workspaceResult.workspace.id,
+    sessionResult.session.id,
+  )
+  assertArchivedMountRejectionProof(archivedMountRejectionProof, sessionResult.session.id)
+
   const hostLifecycleArchiveProof = await readHostLifecycleArchiveProofFromBrowser(page, workerId, workspaceResult.workspace.id)
   assertHostLifecycleArchiveProof(hostLifecycleArchiveProof, workerId, workspaceResult.workspace.id)
 
@@ -215,6 +223,7 @@ try {
     invocationExternalSessionRefProof,
     invocationReconcileProof,
     projectionRefreshProof,
+    archivedMountRejectionProof,
     hostLifecycleArchiveProof,
     sessionArchiveProof,
     routeUrl,
@@ -890,6 +899,39 @@ function assertSessionArchiveProof(proof: Record<string, unknown>, sessionId: st
     throw new Error(`Archive proof missed archived diagnostic: ${serialized}`)
   if (serialized.includes('/turns/') || serialized.includes('"turn"'))
     throw new Error(`Archive proof exposed retired turn semantics: ${serialized}`)
+}
+
+async function readArchivedMountRejectionProofFromBrowser(
+  page: Page,
+  workerId: string,
+  workspaceId: string,
+  sessionId: string,
+): Promise<Record<string, unknown>> {
+  return await page.evaluate(async ({ sessionId, workerId, workspaceId }) => {
+    const response = await fetch(`/api/mount/workbench?workerId=${workerId}&workspaceId=${workspaceId}&sessionId=${sessionId}&theme=light`)
+    const body = await response.text()
+    return {
+      body: JSON.parse(body) as Record<string, unknown>,
+      status: response.status,
+    }
+  }, { sessionId, workerId, workspaceId })
+}
+
+function assertArchivedMountRejectionProof(proof: Record<string, unknown>, sessionId: string): void {
+  if (proof.status !== 400)
+    throw new Error(`Archived locator mounted a workbench from browser context: ${JSON.stringify(proof)}`)
+
+  const error = readRecord(readRecord(proof.body).error)
+  if (error.code !== 'MOUNT_CONTEXT_INVALID')
+    throw new Error(`Archived mount rejection used the wrong error code: ${JSON.stringify(proof)}`)
+  if (typeof error.message !== 'string' || !error.message.includes(`Session ${sessionId} is archived and cannot mount workbench.`))
+    throw new Error(`Archived mount rejection missed archived session diagnostic: ${JSON.stringify(proof)}`)
+
+  const serialized = JSON.stringify(proof)
+  for (const forbidden of ['/turns/', '"turn"', 'candidateId', 'reviewRecord', 'artifactContent', 'literal-secret-value']) {
+    if (serialized.includes(forbidden))
+      throw new Error(`Archived mount rejection exposed forbidden content ${forbidden}: ${serialized}`)
+  }
 }
 
 async function readHostLifecycleArchiveProofFromBrowser(page: Page, workerId: string, workspaceId: string): Promise<Record<string, unknown>> {
