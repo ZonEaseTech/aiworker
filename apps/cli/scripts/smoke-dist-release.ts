@@ -122,11 +122,19 @@ function assertDistOfficialFreeformDescriptor(): void {
 }
 
 function assertDistDescriptorRefs(refs: Array<{ kind: 'dir' | 'file', ref?: string }>): void {
-  const appRoot = realpathSync(officialFreeformDistRoot)
+  assertDistDescriptorRefsForRoot(officialFreeformDistRoot, refs)
+}
+
+export function assertDistDescriptorRefsForRoot(appRootPath: string, refs: Array<{ kind: 'dir' | 'file', ref?: string }>): void {
+  const appRootResolved = resolve(appRootPath)
+  const appRoot = realpathSync(appRootPath)
   for (const item of refs) {
     if (!item.ref)
       continue
-    const resourcePath = resolve(officialFreeformDistRoot, item.ref)
+    const resourcePath = resolve(appRootResolved, item.ref)
+    const lexicalRelativeResourcePath = relative(appRootResolved, resourcePath)
+    if (!lexicalRelativeResourcePath || lexicalRelativeResourcePath.startsWith('..') || isAbsolute(lexicalRelativeResourcePath))
+      throw new Error(`dist Freeform descriptor reference escapes package root: ${item.ref}`)
     try {
       const relativeResourcePath = relative(appRoot, realpathSync(resourcePath))
       if (!relativeResourcePath || relativeResourcePath.startsWith('..') || isAbsolute(relativeResourcePath))
@@ -385,9 +393,11 @@ function assertJsonIncludes(stdout: string, expected: string): void {
     throw new Error(`Expected CLI output to include ${expected}:\n${stdout}`)
 }
 
-main()
-  .then(code => process.exit(code))
-  .catch((err) => {
-    consola.error(`[smoke-dist-release] FAIL: ${err instanceof Error ? err.message : String(err)}`)
-    process.exit(1)
-  })
+if (import.meta.main) {
+  main()
+    .then(code => process.exit(code))
+    .catch((err) => {
+      consola.error(`[smoke-dist-release] FAIL: ${err instanceof Error ? err.message : String(err)}`)
+      process.exit(1)
+    })
+}
