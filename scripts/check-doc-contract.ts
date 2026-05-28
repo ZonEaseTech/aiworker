@@ -436,6 +436,42 @@ if (!smokeReleaseArtifactsScript.includes(`const DEFAULT_TARGETS = ${expectedRel
     message: 'release target list must stay aligned',
   })
 }
+const requiredReleasePackageResources = [
+  'web/worker/index.html',
+  'drizzle/worker/migration.sql',
+  'drizzle/worker/meta/_journal.json',
+  'official-apps/aiworker-freeform/dist/soul.descriptor.json',
+  'README.md',
+]
+const requiredReleaseSmokeResources = [
+  'web/worker/index.html',
+  'drizzle/worker/migration.sql',
+  'drizzle/worker/meta/_journal.json',
+  'FREEFORM_DESCRIPTOR',
+  'README.md',
+]
+for (const resource of requiredReleasePackageResources) {
+  if (!packageReleaseBundlesScript.includes(resource)) {
+    issues.push({
+      file: 'apps/cli/scripts/package-release-bundles.ts',
+      message: 'release artifact required resources must stay aligned',
+    })
+  }
+}
+for (const resource of requiredReleaseSmokeResources) {
+  if (!smokeReleaseArtifactsScript.includes(resource)) {
+    issues.push({
+      file: 'apps/cli/scripts/smoke-release-artifacts.ts',
+      message: 'release artifact required resources must stay aligned',
+    })
+  }
+}
+if (!smokeReleaseArtifactsScript.includes('official-apps/aiworker-freeform') || !smokeReleaseArtifactsScript.includes('dist/soul.descriptor.json')) {
+  issues.push({
+    file: 'apps/cli/scripts/smoke-release-artifacts.ts',
+    message: 'release artifact required resources must stay aligned',
+  })
+}
 const testContractsScript = packageJson.scripts?.['test:contracts'] ?? ''
 if (!testContractsScript.includes('bun test tests/architecture'))
   issues.push({ file: 'package.json', message: 'test:contracts must run the refactor contract test' })

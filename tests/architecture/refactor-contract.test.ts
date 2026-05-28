@@ -2112,14 +2112,18 @@ describe('destructive refactor contract bootstrap', () => {
 
     const publishManifestTest = readRepoFile('apps/cli/scripts/build-publish-manifest.test.ts')
     const packageReleaseBundlesTest = readRepoFile('apps/cli/scripts/package-release-bundles.test.ts')
+    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
 
     expect(publishManifestTest).toContain('descriptor-only official Soul dist tree')
     expect(publishManifestTest).toContain('host-adapter')
     expect(publishManifestTest).toContain('AGENTS.test.ts')
     expect(packageReleaseBundlesTest).toContain('official descriptor Soul Apps')
     expect(packageReleaseBundlesTest).toContain('missing Drizzle metadata')
+    expect(packageReleaseBundlesTest).toContain('missing migration SQL')
     expect(packageReleaseBundlesTest).toContain('descriptor-declared workbench assets are missing')
     expect(packageReleaseBundlesTest).toContain('descriptor-declared MCP assets are missing')
+    expect(docCheck).toContain('release artifact required resources must stay aligned')
+    expect(docCheck).toContain('drizzle/worker/migration.sql')
   })
 
   test('canonical testing docs track OpenAPI and redaction guardrails', () => {
