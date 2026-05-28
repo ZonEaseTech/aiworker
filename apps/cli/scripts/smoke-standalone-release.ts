@@ -7,54 +7,75 @@ import consola from 'consola'
 
 import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
 import { packageReleaseBundles } from './package-release-bundles'
+import { verifyReleaseArtifacts } from './smoke-release-artifacts'
 
 const TARGETS = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'] as const
-const GENERATED_PATHS = [
-  'release',
-  ...TARGETS.flatMap(target => [
-    `aiworker-${target}`,
-    `aiworker-${target}.tar.gz`,
-    `aiworker-${target}.tar.gz.sha256`,
-  ]),
-]
 
-async function main(): Promise<number> {
+export interface RunStandaloneReleaseSmokeOptions {
+  binaryTextForTarget?: (target: string, version: string) => string
+  rootDir?: string
+  targets?: readonly string[]
+}
+
+export async function runStandaloneReleaseSmoke(options: RunStandaloneReleaseSmokeOptions = {}): Promise<void> {
+  const rootDir = resolve(options.rootDir ?? process.cwd())
+  const targets = options.targets ?? TARGETS
   try {
-    await cleanup()
-    for (const target of TARGETS) {
-      const binary = resolve(`aiworker-${target}`)
-      await writeFile(binary, `#!/bin/sh\necho aiworker-${target}\n`)
+    await cleanup(rootDir, targets)
+    const version = await readDistPackageVersion(rootDir)
+    for (const target of targets) {
+      const binary = resolve(rootDir, `aiworker-${target}`)
+      const binaryText = options.binaryTextForTarget?.(target, version)
+        ?? `#!/bin/sh\necho ${target === currentTarget() ? `aiworker/${version} ${target} node-v24.3.0` : `aiworker-${target}`}\n`
+      await writeFile(binary, binaryText)
       await chmod(binary, 0o755)
     }
 
-    await packageReleaseBundles({ targets: TARGETS })
+    await packageReleaseBundles({ rootDir, targets })
+    await verifyReleaseArtifacts({ rootDir, targets })
 
-    for (const target of TARGETS) {
+    for (const target of targets) {
       const bundle = `aiworker-${target}`
-      await assertExists(`release/${bundle}/aiworker`)
-      await assertExists(`release/${bundle}/web/worker/index.html`)
-      await assertExists(`release/${bundle}/drizzle`)
-      await assertExists(`release/${bundle}/official-apps/aiworker-freeform/dist/soul.descriptor.json`)
-      await assertStandaloneBundleOfficialFreeformDescriptor(`release/${bundle}/official-apps/aiworker-freeform`)
-      await assertExists(`release/${bundle}/README.md`)
-      await assertExists(`${bundle}.tar.gz`)
-      await assertExists(`${bundle}.tar.gz.sha256`)
+      await assertExists(rootDir, `release/${bundle}/aiworker`)
+      await assertExists(rootDir, `release/${bundle}/web/worker/index.html`)
+      await assertExists(rootDir, `release/${bundle}/drizzle`)
+      await assertExists(rootDir, `release/${bundle}/official-apps/aiworker-freeform/dist/soul.descriptor.json`)
+      await assertStandaloneBundleOfficialFreeformDescriptor(rootDir, `release/${bundle}/official-apps/aiworker-freeform`)
+      await assertExists(rootDir, `release/${bundle}/README.md`)
+      await assertExists(rootDir, `${bundle}.tar.gz`)
+      await assertExists(rootDir, `${bundle}.tar.gz.sha256`)
     }
-
-    consola.success('[smoke-standalone-release] PASS: standalone bundles include packaged Host assets and official Soul Apps descriptor refs')
-    return 0
   }
   finally {
-    await cleanup()
+    await cleanup(rootDir, targets)
   }
 }
 
-async function assertExists(path: string): Promise<void> {
-  await stat(resolve(path))
+async function main(): Promise<number> {
+  await runStandaloneReleaseSmoke()
+  consola.success('[smoke-standalone-release] PASS: standalone bundles include packaged Host assets and official Soul Apps descriptor refs')
+  return 0
 }
 
-async function assertStandaloneBundleOfficialFreeformDescriptor(freeformRoot: string): Promise<void> {
-  const appRoot = resolve(freeformRoot)
+async function readDistPackageVersion(rootDir: string): Promise<string> {
+  const pkg = JSON.parse(await readFile(resolve(rootDir, 'apps/cli/dist/package.json'), 'utf8')) as { version?: unknown }
+  if (typeof pkg.version !== 'string' || pkg.version.length === 0)
+    throw new Error('standalone release smoke requires apps/cli/dist/package.json with a version')
+  return pkg.version
+}
+
+function currentTarget(): string {
+  const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : null
+  const arch = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : null
+  return platform && arch ? `${platform}-${arch}` : ''
+}
+
+async function assertExists(rootDir: string, path: string): Promise<void> {
+  await stat(resolve(rootDir, path))
+}
+
+async function assertStandaloneBundleOfficialFreeformDescriptor(rootDir: string, freeformRoot: string): Promise<void> {
+  const appRoot = resolve(rootDir, freeformRoot)
   const descriptorPath = resolve(appRoot, 'dist', 'soul.descriptor.json')
   let descriptor: ReturnType<typeof parseOfficialFreeformDescriptorJson>
   try {
@@ -95,13 +116,26 @@ async function assertStandaloneBundleDescriptorRefs(
   }
 }
 
-async function cleanup(): Promise<void> {
-  await Promise.all(GENERATED_PATHS.map(path => rm(resolve(path), { force: true, recursive: true })))
+function generatedPaths(targets: readonly string[]): string[] {
+  return [
+    'release',
+    ...targets.flatMap(target => [
+      `aiworker-${target}`,
+      `aiworker-${target}.tar.gz`,
+      `aiworker-${target}.tar.gz.sha256`,
+    ]),
+  ]
 }
 
-main()
-  .then(code => process.exit(code))
-  .catch((err) => {
-    consola.error(`[smoke-standalone-release] FAIL: ${err instanceof Error ? err.message : String(err)}`)
-    process.exit(1)
-  })
+async function cleanup(rootDir: string, targets: readonly string[]): Promise<void> {
+  await Promise.all(generatedPaths(targets).map(path => rm(resolve(rootDir, path), { force: true, recursive: true })))
+}
+
+if (import.meta.main) {
+  main()
+    .then(code => process.exit(code))
+    .catch((err) => {
+      consola.error(`[smoke-standalone-release] FAIL: ${err instanceof Error ? err.message : String(err)}`)
+      process.exit(1)
+    })
+}
