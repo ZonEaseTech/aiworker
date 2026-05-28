@@ -16,17 +16,24 @@ const FREEFORM_CAPABILITY_ID = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'de
 
 describe('Freeform CLI golden path', () => {
   const originalEnv = { ...process.env }
+  const originalErrorWrite = process.stderr.write
   const originalWrite = process.stdout.write
+  let errorOutput = ''
   let root = ''
   let output = ''
 
   beforeEach(async () => {
     closeWorkerDb()
+    errorOutput = ''
     output = ''
     root = await mkdtemp(path.join(tmpdir(), 'aiworker-freeform-cli-golden-'))
     process.env.AIWORKER_HOME = path.join(root, 'home')
     process.env.WORKER_DB_PATH = path.join(root, 'home', 'aiworker.db')
     await writeFakeCodexCommand()
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      errorOutput += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
+      return true
+    }) as typeof process.stderr.write
     process.stdout.write = ((chunk: string | Uint8Array) => {
       output += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
       return true
@@ -39,6 +46,7 @@ describe('Freeform CLI golden path', () => {
     for (const key of Object.keys(process.env))
       delete process.env[key]
     Object.assign(process.env, originalEnv)
+    process.stderr.write = originalErrorWrite
     process.stdout.write = originalWrite
     await rm(root, { recursive: true, force: true })
   })
@@ -255,14 +263,52 @@ describe('Freeform CLI golden path', () => {
 
     await expect(readFile(path.join(workspace.workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('AIWorker Freeform Workspace')
     await expect(stat(path.join(workspace.workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'))).resolves.toBeTruthy()
+
+    const archived = await runCliJson<{ session: { id: string, status: string } }>('session', 'archive', started.session.id)
+    expect(archived.session).toMatchObject({ id: started.session.id, status: 'archived' })
+    await assertArchivedSessionBlocksFollowUp(started.session.id)
+
+    const archivedShown = await runCliJson<{
+      invocations: Array<{ id: string, status: string }>
+      session: { id: string, status: string }
+    }>('session', 'show', started.session.id)
+    expect(archivedShown.session).toMatchObject({ id: started.session.id, status: 'archived' })
+    expect(archivedShown.invocations.map(invocation => invocation.id)).toEqual([
+      started.invocation.id,
+      followed.invocation.id,
+      secondFollowed.invocation.id,
+    ])
+    expect(archivedShown.invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded', 'succeeded'])
   })
 
   async function runCliJson<T>(...args: string[]): Promise<T> {
+    errorOutput = ''
     output = ''
     const exitCode = await runCli(['/usr/bin/bun', '/repo/apps/cli/src/aiworker.ts', ...args])
     expect(output).not.toContain('[error]')
+    expect(errorOutput).not.toContain('[error]')
     expect(exitCode).toBe(0)
     return JSON.parse(output) as T
+  }
+
+  async function assertArchivedSessionBlocksFollowUp(sessionId: string): Promise<void> {
+    errorOutput = ''
+    output = ''
+    const exitCode = await runCli([
+      '/usr/bin/bun',
+      '/repo/apps/cli/src/aiworker.ts',
+      'session',
+      'invoke',
+      '--session',
+      sessionId,
+      '--input',
+      'This follow-up should be blocked after archive.',
+    ])
+    expect(exitCode).toBe(1)
+    expect(output).toBe('')
+    expect(errorOutput).toContain(`Session ${sessionId} is archived and cannot start new work.`)
+    expect(errorOutput).not.toContain('/turns/')
+    expect(errorOutput).not.toContain('literal-secret-value')
   }
 
   async function writeFakeCodexCommand(): Promise<void> {
