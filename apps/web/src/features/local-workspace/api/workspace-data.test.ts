@@ -1,12 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { archiveSoulApp, enableSoulApp, loadLocalWorkspaceData } from './workspace-data'
 
+const projectedSoul = {
+  defaultCapabilities: ['aiworker-freeform.default'],
+  description: 'Open-ended Soul for freeform local work.',
+  id: 'aiworker-freeform',
+  name: 'AIWorker Freeform',
+  status: 'available',
+}
+
+const retiredLocalSoulsPath = ['/api/local', 'souls'].join('/')
+
 const responses: Record<string, unknown> = {
-  '/api/app-installation/apps': { apps: [] },
+  '/api/app-installation/apps': {
+    apps: [{
+      appId: 'aiworker-freeform',
+      projectedSoul,
+      status: 'enabled',
+    }],
+  },
   '/api/local/info': { runtimeVersion: 'test', startedAt: '2026-05-09T00:00:00.000Z', workers: [] },
   '/api/sessions': { sessions: [] },
   '/api/local/settings': { settings: { language: 'en' } },
-  '/api/local/souls': { souls: [] },
   '/api/capabilities': {
     capabilities: [{
       description: 'Freeform session work',
@@ -50,6 +65,7 @@ describe('loadLocalWorkspaceData', () => {
     expect(paths).not.toContain('/api/local/workspaces')
     expect(paths).not.toContain('/api/local/sessions')
     expect(paths).not.toContain('/api/local/capabilities')
+    expect(paths).not.toContain(retiredLocalSoulsPath)
     expect(paths).toContain('/api/app-installation/apps')
     expect(paths).toContain('/api/capabilities')
     expect(paths).toContain('/api/workers')
@@ -57,6 +73,7 @@ describe('loadLocalWorkspaceData', () => {
     expect(paths).toContain('/api/sessions')
     expect(data).not.toHaveProperty('turns')
     expect(data).not.toHaveProperty('templates')
+    expect(data.souls).toEqual([projectedSoul])
     expect(data.capabilities.map(capability => capability.id)).toEqual(['aiworker-freeform.default'])
   })
 

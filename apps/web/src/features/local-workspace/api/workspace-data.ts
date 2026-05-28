@@ -10,11 +10,10 @@ import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppLifecycleRespon
 import { localJson } from '../../../shared/api/local-client'
 
 export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
-  const [info, apps, workers, souls, capabilities, workspaces, sessions, settings] = await Promise.all([
+  const [info, apps, workers, capabilities, workspaces, sessions, settings] = await Promise.all([
     localJson<LocalInfoResponse>('/api/local/info'),
     localJson<{ apps: LocalHostedSoulApp[] }>('/api/app-installation/apps'),
     localJson<{ workers: LocalWorker[] }>('/api/workers'),
-    localJson<{ souls: VerticalSoul[] }>('/api/local/souls'),
     localJson<{ capabilities: WorkspaceCapability[] }>('/api/capabilities'),
     localJson<{ workspaces: LocalWorkspace[] }>('/api/workspace-locators'),
     localJson<{ sessions: LocalSession[] }>('/api/sessions'),
@@ -25,11 +24,18 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
     apps: apps.apps,
     capabilities: capabilities.capabilities,
     workers: workers.workers,
-    souls: souls.souls,
+    souls: deriveSoulsFromApps(apps.apps),
     workspaces: workspaces.workspaces,
     sessions: sessions.sessions,
     settings: settings.settings,
   }
+}
+
+function deriveSoulsFromApps(apps: readonly LocalHostedSoulApp[]): VerticalSoul[] {
+  return apps.map(app => ({
+    ...app.projectedSoul,
+    defaultCapabilities: [...app.projectedSoul.defaultCapabilities],
+  }))
 }
 
 export interface ResolveMountedWorkbenchOptions {

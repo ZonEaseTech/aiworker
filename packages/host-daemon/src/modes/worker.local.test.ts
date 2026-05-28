@@ -221,9 +221,13 @@ describe('local daemon API', () => {
   it('bootstraps official Freeform and rejects legacy built-in Soul ids', async () => {
     const target = await app()
 
-    const appsBody = await (await target.request('/api/app-installation/apps')).json() as { apps: Array<{ appId: string, status: string }> }
+    const appsBody = await (await target.request('/api/app-installation/apps')).json() as {
+      apps: Array<{ appId: string, projectedSoul: { id: string, status: string }, status: string }>
+    }
     expect(appsBody.apps).toEqual([expect.objectContaining({ appId: FREEFORM_APP_ID, status: 'enabled' })])
+    expect(appsBody.apps[0]!.projectedSoul).toMatchObject({ id: FREEFORM_APP_ID, status: 'available' })
     expect((await target.request('/api/local/apps')).status).toBe(404)
+    expect((await target.request('/api/local/souls')).status).toBe(404)
 
     expect((await target.request('/api/local/workers')).status).toBe(404)
     const legacyCollectionWriteRes = await target.request('/api/local/workers', {

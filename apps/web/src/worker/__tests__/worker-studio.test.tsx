@@ -358,6 +358,29 @@ function hostedApp({
   }
 }
 
+function catalogOnlyAppForSoul(
+  soul: typeof souls[number],
+  projectedCapabilities: typeof capabilities,
+): HostedSoulApp {
+  const app = hostedApp({ appId: soul.id, appName: soul.name })
+  return {
+    ...app,
+    description: soul.description,
+    descriptor: {
+      ...app.descriptor,
+      workbench: null,
+    } as unknown as HostedSoulApp['descriptor'],
+    projectedCapabilities: projectedCapabilities
+      .filter(capability => capability.soulId === soul.id)
+      .map(capability => ({ ...capability, inputHints: [...capability.inputHints] })),
+    projectedSoul: {
+      ...soul,
+      defaultCapabilities: [...(soul.defaultCapabilities ?? [])],
+      status: soul.status === 'available' ? 'available' : 'coming_soon',
+    },
+  }
+}
+
 function listWebSourceFiles(relativeDir: string): string[] {
   const root = path.join(process.cwd(), relativeDir)
   if (!existsSync(root))
@@ -427,7 +450,7 @@ function resetSettings() {
     '',
   ].join('\n')
   currentArtifactRawStatus = 200
-  currentApps = []
+  currentApps = currentSouls.map(soul => catalogOnlyAppForSoul(soul, currentCapabilities))
 }
 
 function workerOverlayConfigKeyForTest(asset: LocalWorkerOverlayAsset): string {
@@ -753,8 +776,6 @@ beforeEach(() => {
         target: projectionRefreshMatch[1],
       })
     }
-    if (url.endsWith('/api/local/souls'))
-      return json({ souls: currentSouls })
     if (url.endsWith('/api/capabilities'))
       return json({ capabilities: currentCapabilities })
     if (url.endsWith('/api/workspace-locators') && method === 'POST') {
@@ -1262,6 +1283,7 @@ describe('worker studio', () => {
     currentWorkers = [
       { createdAt: now, defaultEngineId: 'codex', id: 'devops-worker', metadataJson: {}, name: 'DevOps', soulId: 'devops', status: 'active', updatedAt: now },
     ]
+    currentApps = []
 
     render(<WorkerStudio />)
 

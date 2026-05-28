@@ -215,7 +215,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     workers: listWorkers(),
   }))
 
-  app.get('/api/local/souls', c => c.json({ souls: state.host.listSouls() }))
   app.get('/api/capabilities', (c) => {
     const workerId = c.req.query('workerId')
     return c.json({ capabilities: workerId ? state.host.listCapabilitiesForWorker(workerId) : state.host.listCapabilities() })

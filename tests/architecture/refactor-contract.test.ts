@@ -484,6 +484,20 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.get(\'/api/local/apps\'')
   })
 
+  test('Web derives Host-visible souls from app-installation apps without local souls alias', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const workspaceData = readRepoFile('apps/web/src/features/local-workspace/api/workspace-data.ts')
+    const workspaceDataTest = readRepoFile('apps/web/src/features/local-workspace/api/workspace-data.test.ts')
+    const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+
+    expect(daemon).toContain('app.get(\'/api/app-installation/apps\'')
+    expect(daemon).not.toContain('app.get(\'/api/local/souls\'')
+    expect(workspaceData).toContain('projectedSoul')
+    expect(workspaceData).not.toContain('/api/local/souls')
+    expect(workspaceDataTest).not.toContain('/api/local/souls')
+    expect(workerStudioTest).not.toContain('/api/local/souls')
+  })
+
   test('daemon app installation surface does not preserve local lifecycle aliases', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
 
