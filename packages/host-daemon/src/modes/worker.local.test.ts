@@ -1976,17 +1976,24 @@ describe('local daemon API', () => {
         'authorization': 'Bearer client-forwarded-credential',
         'cookie': 'sid=client-cookie',
         'x-forwarded-for': '203.0.113.10',
+        'x-aiworker-mount-context': 'client-spoofed-context',
+        'x-aiworker-mount-signature': 'client-spoofed-signature',
+        'x-aiworker-mount-token': 'client-spoofed-token',
       },
     })
     expect(proxied.status).toBe(200)
     expect(proxied.headers.get('set-cookie')).toBeNull()
+    expect(proxied.headers.get('x-aiworker-mount-context')).toBeNull()
+    expect(proxied.headers.get('x-aiworker-mount-signature')).toBeNull()
     expect(proxied.headers.get('x-aiworker-mount-token')).toBeNull()
-    expect(await proxied.json()).toMatchObject({
+    const proxiedBody = await proxied.json()
+    expect(proxiedBody).toMatchObject({
       appId: 'demo-api',
       hasAuthorization: false,
       hasCookie: false,
       hasForwardedFor: false,
       hasMountToken: true,
+      mountTokenHeader: expect.not.stringContaining('client-spoofed-token'),
       mountContext: {
         appId: 'demo-api',
         routePrefix: '/api/apps/demo-api',
@@ -1996,6 +2003,8 @@ describe('local daemon API', () => {
       },
       path: '/echo',
     })
+    expect(proxiedBody.mountContextHeader).not.toBe('client-spoofed-context')
+    expect(proxiedBody.mountSignatureHeader).not.toBe('client-spoofed-signature')
     expect((await target.request('/api/local/apps/demo-api/echo')).status).toBe(404)
 
     const proxiedRoot = await target.request('/api/apps/demo-api?workerId=worker-1')
@@ -2022,6 +2031,24 @@ describe('local daemon API', () => {
 
     const hostAction = await target.request('/api/local/apps/demo-api/actions/create-profile', { method: 'POST' })
     expect(hostAction.status).toBe(404)
+
+    const domainRoute = await target.request('/api/apps/demo-api/candidates/123/reports?workerId=worker-1&workspaceId=workspace-1', {
+      body: JSON.stringify({ reportDraft: 'app-owned-only' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(domainRoute.status).toBe(200)
+    expect(await domainRoute.json()).toMatchObject({
+      body: { reportDraft: 'app-owned-only' },
+      method: 'POST',
+      mountContext: {
+        appId: 'demo-api',
+        routePrefix: '/api/apps/demo-api',
+        workerId: 'worker-1',
+        workspaceId: 'workspace-1',
+      },
+      path: '/candidates/123/reports',
+    })
 
     await target.request('/api/app-installation/apps/demo-api/archive', { method: 'POST' })
   })
@@ -2338,7 +2365,7 @@ describe('local daemon API', () => {
     writeFileSync(join(distRoot, 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex mcp\n')
     writeFileSync(join(distRoot, 'api', 'server.js'), `
 const server = Bun.serve({
-  fetch(request) {
+  async fetch(request) {
     const url = new URL(request.url)
     if (url.pathname === '/health')
       return Response.json({ status: 'ok' })
@@ -2353,14 +2380,31 @@ const server = Bun.serve({
         hasCookie: Boolean(request.headers.get('cookie')),
         hasForwardedFor: Boolean(request.headers.get('x-forwarded-for')),
         hasMountToken: Boolean(request.headers.get('x-aiworker-mount-token')),
+        mountContextHeader: request.headers.get('x-aiworker-mount-context'),
         mountContext,
+        mountSignatureHeader: request.headers.get('x-aiworker-mount-signature'),
+        mountTokenHeader: request.headers.get('x-aiworker-mount-token'),
         path: url.pathname,
       }, {
         headers: {
           'content-type': 'application/json',
           'set-cookie': 'demo_api_session=should-not-reach-host',
+          'x-aiworker-mount-context': request.headers.get('x-aiworker-mount-context') ?? '',
+          'x-aiworker-mount-signature': request.headers.get('x-aiworker-mount-signature') ?? '',
           'x-aiworker-mount-token': request.headers.get('x-aiworker-mount-token') ?? '',
         },
+      })
+    }
+    if (url.pathname === '/candidates/123/reports') {
+      const mountContextHeader = request.headers.get('x-aiworker-mount-context')
+      const mountContext = mountContextHeader
+        ? JSON.parse(Buffer.from(mountContextHeader, 'base64url').toString('utf8'))
+        : null
+      return Response.json({
+        body: await request.json(),
+        method: request.method,
+        mountContext,
+        path: url.pathname,
       })
     }
     return Response.json({ path: url.pathname }, { status: 404 })

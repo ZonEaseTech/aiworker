@@ -567,14 +567,22 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('daemon app-owned API proxy does not preserve local catch-all alias', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
     const protocol = readRepoFile('docs/protocol.md')
 
     expect(protocol).toContain('ANY    /api/apps/:appId')
     expect(protocol).toContain('ANY    /api/apps/:appId/*')
+    expect(protocol).toContain('strips client credentials before proxying')
+    expect(protocol).toContain('strips app-owned cookies plus Host mount credentials before returning')
     expect(daemon).toContain('app.all(\'/api/apps/:appId/:path{.+}\'')
     expect(daemon).not.toContain('app.all(\'/api/local/apps/:appId/:path{.+}\'')
     expect(daemon).not.toContain('(?:local/)?apps')
     expect(daemon).not.toContain('isReservedLocalAppLifecyclePath')
+    expect(daemonTest).toContain('client-spoofed-token')
+    expect(daemonTest).toContain('/api/apps/demo-api/candidates/123/reports')
+    expect(daemonTest).toContain('x-aiworker-mount-context')
+    expect(daemonTest).toContain('x-aiworker-mount-signature')
+    expect(daemonTest).toContain('set-cookie')
   })
 
   test('daemon worker collection surface does not preserve local broker aliases', () => {
