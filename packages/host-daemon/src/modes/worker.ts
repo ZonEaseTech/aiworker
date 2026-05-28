@@ -1109,6 +1109,10 @@ async function proxyMountedSoulAppApi(c: Context, state: LocalDaemonState, app: 
   if (staticResponse)
     return staticResponse
 
+  const locatorError = mountedProxyLocatorContextError(c, app)
+  if (locatorError)
+    return locatorError
+
   const service = await mountedSoulAppServiceOrResponse(c, state, app)
   if (service instanceof Response)
     return service
@@ -1174,6 +1178,49 @@ function stripMountedProxyResponseHeaders(headers: Headers): void {
   }
   headers.delete('content-encoding')
   headers.delete('transfer-encoding')
+}
+
+function mountedProxyLocatorContextError(c: Context, app: HostedSoulApp): Response | null {
+  const workerId = c.req.query('workerId')
+  const workspaceId = c.req.query('workspaceId')
+  const sessionId = c.req.query('sessionId')
+  const worker = workerId ? getWorker(workerId) : null
+  const workspace = workspaceId ? getWorkspace(workspaceId) : null
+  const session = sessionId ? getSession(sessionId) : null
+
+  if (workerId && !worker)
+    return mountContextInvalid(c, `Worker not found: ${workerId}`)
+  if (workspaceId && !workspace)
+    return mountContextInvalid(c, `Workspace not found: ${workspaceId}`)
+  if (sessionId && !session)
+    return mountContextInvalid(c, `Session not found: ${sessionId}`)
+  if (worker && worker.soulId !== app.appId)
+    return mountContextInvalid(c, `Worker ${worker.id} does not belong to Soul App ${app.appId}`)
+  if (workspace && workspace.workerId) {
+    if (worker && workspace.workerId !== worker.id)
+      return mountContextInvalid(c, `Workspace ${workspace.id} does not belong to worker ${worker.id}`)
+    if (!worker && workspace.workerId) {
+      const workspaceWorker = getWorker(workspace.workerId)
+      if (!workspaceWorker || workspaceWorker.soulId !== app.appId)
+        return mountContextInvalid(c, `Workspace ${workspace.id} does not belong to Soul App ${app.appId}`)
+    }
+  }
+  if (session) {
+    if (worker && session.workerId !== worker.id)
+      return mountContextInvalid(c, `Session ${session.id} does not belong to worker ${worker.id}`)
+    if (workspace && session.workspaceId !== workspace.id)
+      return mountContextInvalid(c, `Session ${session.id} does not belong to workspace ${workspace.id}`)
+    if (!worker) {
+      const sessionWorker = getWorker(session.workerId)
+      if (!sessionWorker || sessionWorker.soulId !== app.appId)
+        return mountContextInvalid(c, `Session ${session.id} does not belong to Soul App ${app.appId}`)
+    }
+  }
+  return null
+}
+
+function mountContextInvalid(c: Context, message: string): Response {
+  return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message } }, 400)
 }
 
 function appOwnedApiRoutePrefix(app: HostedSoulApp): string {

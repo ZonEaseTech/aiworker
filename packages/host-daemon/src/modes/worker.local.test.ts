@@ -2227,7 +2227,34 @@ describe('local daemon API', () => {
     expect((await target.request('/api/app-installation/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
     expect((await target.request('/api/local/apps/demo-api/enable', { method: 'POST' })).status).toBe(404)
 
-    const proxied = await target.request('/api/apps/demo-api/echo?workerId=worker-1&workspaceId=workspace-1&sessionId=session-1', {
+    const workerRes = await target.request('/api/workers', {
+      body: JSON.stringify({ id: 'demo-api-worker', name: 'Demo API Worker', soulId: 'demo-api' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workerRes.status).toBe(201)
+    const workspace = await createWorkspaceLocator(target, 'demo-api-worker')
+    const siblingWorkspace = await createWorkspaceLocator(target, 'demo-api-worker')
+    const sessionRes = await target.request('/api/sessions', {
+      body: JSON.stringify({
+        capabilityId: namespaceSoulAppCapabilityId('demo-api', 'default'),
+        title: 'Demo API session',
+        workerId: 'demo-api-worker',
+        workspaceId: workspace.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(sessionRes.status).toBe(201)
+    const session = (await sessionRes.json() as { session: { id: string } }).session
+
+    const mismatchedContext = await target.request(`/api/apps/demo-api/echo?workerId=demo-api-worker&workspaceId=${siblingWorkspace.id}&sessionId=${session.id}`)
+    expect(mismatchedContext.status).toBe(400)
+    expect(await mismatchedContext.json()).toMatchObject({
+      error: { code: 'MOUNT_CONTEXT_INVALID' },
+    })
+
+    const proxied = await target.request(`/api/apps/demo-api/echo?workerId=demo-api-worker&workspaceId=${workspace.id}&sessionId=${session.id}`, {
       headers: {
         'authorization': 'Bearer client-forwarded-credential',
         'cookie': 'sid=client-cookie',
@@ -2253,9 +2280,9 @@ describe('local daemon API', () => {
       mountContext: {
         appId: 'demo-api',
         routePrefix: '/api/apps/demo-api',
-        sessionId: 'session-1',
-        workerId: 'worker-1',
-        workspaceId: 'workspace-1',
+        sessionId: session.id,
+        workerId: 'demo-api-worker',
+        workspaceId: workspace.id,
       },
       path: '/echo',
     })
@@ -2263,7 +2290,7 @@ describe('local daemon API', () => {
     expect(proxiedBody.mountSignatureHeader).not.toBe('client-spoofed-signature')
     expect((await target.request('/api/local/apps/demo-api/echo')).status).toBe(404)
 
-    const proxiedRoot = await target.request('/api/apps/demo-api?workerId=worker-1')
+    const proxiedRoot = await target.request('/api/apps/demo-api?workerId=demo-api-worker')
     const proxiedRootText = await proxiedRoot.text()
     expect(proxiedRoot.status, proxiedRootText).toBe(200)
     expect(JSON.parse(proxiedRootText)).toMatchObject({
@@ -2271,14 +2298,7 @@ describe('local daemon API', () => {
       hasMountToken: true,
       path: '/',
     })
-    expect((await target.request('/api/apps/demo-api/?workerId=worker-1')).status).toBe(200)
-
-    const workerRes = await target.request('/api/workers', {
-      body: JSON.stringify({ id: 'demo-api-worker', name: 'Demo API Worker', soulId: 'demo-api' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workerRes.status).toBe(201)
+    expect((await target.request('/api/apps/demo-api/?workerId=demo-api-worker')).status).toBe(200)
     const mountRes = await target.request('/api/mount/workbench?workerId=demo-api-worker')
     expect(mountRes.status).toBe(200)
     const mountBody = await mountRes.json() as { microApp: { data: Record<string, unknown> } }
@@ -2288,7 +2308,7 @@ describe('local daemon API', () => {
     const hostAction = await target.request('/api/local/apps/demo-api/actions/create-profile', { method: 'POST' })
     expect(hostAction.status).toBe(404)
 
-    const domainRoute = await target.request('/api/apps/demo-api/candidates/123/reports?workerId=worker-1&workspaceId=workspace-1', {
+    const domainRoute = await target.request(`/api/apps/demo-api/candidates/123/reports?workerId=demo-api-worker&workspaceId=${workspace.id}`, {
       body: JSON.stringify({ reportDraft: 'app-owned-only' }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -2300,8 +2320,8 @@ describe('local daemon API', () => {
       mountContext: {
         appId: 'demo-api',
         routePrefix: '/api/apps/demo-api',
-        workerId: 'worker-1',
-        workspaceId: 'workspace-1',
+        workerId: 'demo-api-worker',
+        workspaceId: workspace.id,
       },
       path: '/candidates/123/reports',
     })
