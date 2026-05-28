@@ -232,7 +232,12 @@ async function writeFakeCodexCommand(): Promise<void> {
     '#!/usr/bin/env bash',
     'set -euo pipefail',
     'cat >/dev/null',
+    'printf \'%s\\n\' \'{"type":"thread.started"}\'',
+    'printf \'%s\\n\' \'{"type":"turn.started"}\'',
+    'printf \'%s\\n\' \'{"type":"item.started","item":{"type":"command_execution","id":"tool-1","command":"printf bridge"}}\'',
+    'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"command_execution","id":"tool-1","command":"printf bridge","aggregated_output":"bridge","exit_code":0}}\'',
     'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}\'',
+    'printf \'%s\\n\' \'{"type":"turn.completed","usage":{"input_tokens":3,"output_tokens":5}}\'',
     '',
   ].join('\n'))
   await chmod(commandPath, 0o755)
@@ -319,7 +324,20 @@ async function readInvocationEventProofFromBrowser(page: Page, invocationId: str
     const body = await response.text()
     if (!response.ok)
       throw new Error(`invocation events request failed ${response.status}: ${body}`)
-    return JSON.parse(body) as Record<string, unknown>
+    const proof = JSON.parse(body) as Record<string, unknown>
+    const events = Array.isArray(proof.events) ? proof.events : []
+    const firstEvent = events.find(event =>
+      event && typeof event === 'object' && 'id' in event && typeof event.id === 'number',
+    ) as { id: number } | undefined
+    const reattachResponse = await fetch(`/api/engine/invocations/${id}/events?after=${firstEvent?.id ?? 0}&limit=20`)
+    const reattachBody = await reattachResponse.text()
+    if (!reattachResponse.ok)
+      throw new Error(`invocation event reattach request failed ${reattachResponse.status}: ${reattachBody}`)
+    return {
+      ...proof,
+      reattachCursor: firstEvent?.id ?? 0,
+      reattached: JSON.parse(reattachBody) as Record<string, unknown>,
+    }
   }, invocationId)
 }
 
@@ -329,18 +347,58 @@ function assertInvocationEventProof(proof: Record<string, unknown>, invocationId
 
   const bridgeEvents = Array.isArray(proof.bridgeEvents) ? proof.bridgeEvents : []
   const storedEvents = Array.isArray(proof.events) ? proof.events : []
+  const reattachCursor = typeof proof.reattachCursor === 'number' ? proof.reattachCursor : null
+  const reattached = readRecord(proof.reattached)
+  const reattachedBridgeEvents = Array.isArray(reattached.bridgeEvents) ? reattached.bridgeEvents : []
+  const reattachedStoredEvents = Array.isArray(reattached.events) ? reattached.events : []
   if (bridgeEvents.length === 0)
     throw new Error(`Invocation event proof did not include bridge events: ${JSON.stringify(proof)}`)
   if (!bridgeEvents.every(event => isRecord(event) && event.invocationId === invocationId))
     throw new Error(`Invocation event proof leaked events for another invocation: ${JSON.stringify(proof)}`)
   if (!storedEvents.every(event => isRecord(event) && event.invocationId === invocationId))
     throw new Error(`Stored invocation events were not invocation-scoped: ${JSON.stringify(proof)}`)
+  if (reattachCursor === null)
+    throw new Error(`Invocation event proof missed reattach cursor: ${JSON.stringify(proof)}`)
+  if (reattached.invocationId !== invocationId)
+    throw new Error(`Reattached invocation event proof returned the wrong invocation: ${JSON.stringify(proof)}`)
+  if (reattached.after !== reattachCursor)
+    throw new Error(`Reattached invocation event proof returned the wrong cursor: ${JSON.stringify(proof)}`)
+  if (!reattachedBridgeEvents.every(event => isRecord(event) && event.invocationId === invocationId))
+    throw new Error(`Reattached invocation events leaked another invocation: ${JSON.stringify(proof)}`)
+  if (!reattachedStoredEvents.every(event => isRecord(event) && event.invocationId === invocationId))
+    throw new Error(`Reattached stored events were not invocation-scoped: ${JSON.stringify(proof)}`)
+  if (!reattachedStoredEvents.every(event => isRecord(event) && typeof event.id === 'number' && event.id > reattachCursor))
+    throw new Error(`Reattached stored events did not resume after the cursor: ${JSON.stringify(proof)}`)
 
   const bridgeEventTypes = bridgeEvents
     .filter(isRecord)
     .map(event => event.type)
   if (!bridgeEventTypes.includes('invocation.output.delta') && !bridgeEventTypes.includes('invocation.completed'))
     throw new Error(`Invocation event proof missed normalized bridge output/completion events: ${JSON.stringify(proof)}`)
+  if (!bridgeEventTypes.includes('invocation.tool.observed'))
+    throw new Error(`Invocation event proof missed normalized tool observation events: ${JSON.stringify(proof)}`)
+  if (!bridgeEventTypes.includes('invocation.usage.observed'))
+    throw new Error(`Invocation event proof missed normalized usage observation events: ${JSON.stringify(proof)}`)
+  const outputEvent = bridgeEvents.filter(isRecord).find(event => event.type === 'invocation.output.delta')
+  if (!isRecord(outputEvent?.data) || outputEvent.data.text !== 'Done.')
+    throw new Error(`Invocation event proof missed normalized output text: ${JSON.stringify(proof)}`)
+  const toolPhases = bridgeEvents
+    .filter(isRecord)
+    .filter(event => event.type === 'invocation.tool.observed' && isRecord(event.tool))
+    .map(event => readRecord(event.tool).phase)
+  if (!toolPhases.includes('use') || !toolPhases.includes('result'))
+    throw new Error(`Invocation event proof missed tool use/result phases: ${JSON.stringify(proof)}`)
+  const usageEvent = bridgeEvents.filter(isRecord).find(event => event.type === 'invocation.usage.observed')
+  const usage = isRecord(usageEvent?.usage) ? usageEvent.usage : null
+  if (usage?.inputTokens !== 3 || usage.outputTokens !== 5 || usage.costUsd !== null)
+    throw new Error(`Invocation event proof missed normalized usage values: ${JSON.stringify(proof)}`)
+  const reattachedIds = reattachedStoredEvents
+    .filter(isRecord)
+    .map(event => event.id)
+    .filter((id): id is number => typeof id === 'number')
+  const lastReattachedId = Math.max(...reattachedIds, reattachCursor)
+  if (typeof reattached.nextAfter !== 'number' || reattached.nextAfter < lastReattachedId)
+    throw new Error(`Reattached invocation event proof returned an invalid next cursor: ${JSON.stringify(proof)}`)
 
   const serialized = JSON.stringify(proof)
   if (serialized.includes('/turns/') || serialized.includes('"turn"'))
