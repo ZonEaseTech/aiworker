@@ -225,6 +225,51 @@ describe('descriptor Soul runtime harness', () => {
     }
   })
 
+  it('maps mounted session collection calls to canonical session APIs', async () => {
+    const calls: Array<{ body: unknown, method: string, url: string }> = []
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const body = init?.body ? await new Response(init.body).json() : null
+      calls.push({ body, method: init?.method ?? 'GET', url: String(url) })
+      return Response.json({ sessions: [] })
+    }) as typeof fetch
+    try {
+      const listResponse = await mountSessionApiProxy(new Request('http://soul.test/api/sessions'), {
+        hostApiBaseUrl: 'http://host.test',
+        workerId: 'worker-1',
+        workspaceId: 'workspace-1',
+      })
+      const createResponse = await mountSessionApiProxy(new Request('http://soul.test/api/sessions', {
+        body: JSON.stringify({ capabilityId: 'capability-1', title: 'Mounted Session', workerId: 'client-worker' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      }), {
+        hostApiBaseUrl: 'http://host.test',
+        workerId: 'worker-1',
+        workspaceId: 'workspace-1',
+      })
+
+      expect(listResponse).not.toBeNull()
+      expect(createResponse).not.toBeNull()
+      expect(calls).toEqual([
+        { body: null, method: 'GET', url: 'http://host.test/api/sessions?workerId=worker-1&workspaceId=workspace-1' },
+        {
+          body: {
+            capabilityId: 'capability-1',
+            title: 'Mounted Session',
+            workerId: 'worker-1',
+            workspaceId: 'workspace-1',
+          },
+          method: 'POST',
+          url: 'http://host.test/api/sessions',
+        },
+      ])
+    }
+    finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
   function tempRoot(label: string): string {
     const root = mkdtempSync(path.join(tmpdir(), `aiworker-runtime-${label}-`))
     roots.push(root)

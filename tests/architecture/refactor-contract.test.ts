@@ -360,6 +360,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(protocol).toContain('Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.')
     expect(protocol).toContain('GET /api/workspace-locators` may receive `workerId`')
     expect(protocol).toContain('POST /api/workspace-locators` receives `workerId`, may receive `rootPath`')
+    expect(protocol).toContain('GET /api/sessions` may receive `workerId` and `workspaceId`')
+    expect(protocol).toContain('POST /api/sessions` receives `workerId` and `workspaceId`')
     expect(protocol).toContain('strips client credentials before proxying')
     expect(protocol).toContain('strips app-owned cookies plus Host mount credentials before returning')
   })
@@ -551,9 +553,21 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('daemon session collection surface does not preserve local broker alias', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
+    const mountedSessionProxy = soulAppRuntime.slice(
+      soulAppRuntime.indexOf('url.pathname === \'/api/sessions\''),
+      soulAppRuntime.indexOf('const sessionMatch'),
+    )
 
     expect(daemon).toContain('app.get(\'/api/sessions\'')
+    expect(daemon).toContain('app.post(\'/api/sessions\'')
     expect(daemon).not.toContain('app.get(\'/api/local/sessions\',')
+    expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/workspaces/:workspaceId/sessions\',')
+    expect(daemon).not.toContain('app.post(\'/api/local/workers/:workerId/workspaces/:workspaceId/sessions\',')
+    expect(daemon).not.toContain('app.get(\'/api/local/workspaces/:workspaceId/sessions\',')
+    expect(daemon).not.toContain('app.post(\'/api/local/workspaces/:workspaceId/sessions\',')
+    expect(mountedSessionProxy).toContain('/api/sessions?')
+    expect(mountedSessionProxy).not.toContain(['/api/local/workers/', '{workerId}/workspaces/'].join('$'))
   })
 
   test('daemon session read surface does not preserve local broker aliases', () => {

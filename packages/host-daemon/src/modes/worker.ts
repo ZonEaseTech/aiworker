@@ -58,7 +58,6 @@ import { registerLocalOpenApiPaths } from './worker/openapi'
 import {
   createBrokerEngineInvocationBodySchema,
   createBrokerSessionBodySchema,
-  createSessionBodySchema,
   createSessionInvocationBodySchema,
   createWorkerBodySchema,
   createWorkspaceLocatorBodySchema,
@@ -446,22 +445,19 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const projection = await requireRuntime(state, workerId).reprojectWorkspaceAssets(workspace.id)
     return c.json({ projection })
   })
-  app.get('/api/sessions', c => c.json({ sessions: listSessions() }))
-  app.get('/api/local/workers/:workerId/workspaces/:workspaceId/sessions', (c) => {
-    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
-    return c.json({ sessions: listSessions(workspace.id) })
-  })
-  app.post('/api/local/workers/:workerId/workspaces/:workspaceId/sessions', async (c) => {
-    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
-    return createWorkspaceSessionResponse(c, state, workspace)
-  })
-  app.get('/api/local/workspaces/:workspaceId/sessions', (c) => {
-    const workspace = requireWorkspace(c.req.param('workspaceId'))
-    return c.json({ sessions: listSessions(workspace.id) })
-  })
-  app.post('/api/local/workspaces/:workspaceId/sessions', async (c) => {
-    const workspace = requireWorkspace(c.req.param('workspaceId'))
-    return createWorkspaceSessionResponse(c, state, workspace)
+  app.get('/api/sessions', (c) => {
+    const workerId = c.req.query('workerId')
+    const workspaceId = c.req.query('workspaceId')
+    if (workspaceId) {
+      const workspace = workerId ? requireWorkerWorkspace(workerId, workspaceId) : requireWorkspace(workspaceId)
+      return c.json({ sessions: listSessions(workspace.id) })
+    }
+    if (workerId) {
+      requireRuntime(state, workerId)
+      const workspaceIds = new Set(listWorkspaces(workerId, Number.MAX_SAFE_INTEGER).map(workspace => workspace.id))
+      return c.json({ sessions: listSessions().filter(session => workspaceIds.has(session.workspaceId)) })
+    }
+    return c.json({ sessions: listSessions() })
   })
   app.post('/api/sessions', async (c) => {
     const result = await parseJsonBody(c, createBrokerSessionBodySchema, 'CREATE_SESSION_INVALID')
@@ -1552,13 +1548,6 @@ function sessionExecutionMetadata(session: SessionRow, settings: LocalSettingsCo
     engineName,
     executionMode,
   }
-}
-
-async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonState, workspace: WorkspaceRow): Promise<Response> {
-  const result = await parseJsonBody(c, createSessionBodySchema, 'CREATE_SESSION_INVALID')
-  if (!result.ok)
-    return result.response
-  return createWorkspaceSessionFromBody(c, state, workspace, result.data)
 }
 
 async function createWorkspaceSessionFromBody(

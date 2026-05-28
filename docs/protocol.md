@@ -169,6 +169,9 @@ into a product backend.
 - `POST /api/workspace-locators` receives `workerId`, may receive `rootPath`,
   and creates Host workspace locator metadata plus projection-owned bootstrap
   files.
+- `GET /api/sessions` may receive `workerId` and `workspaceId` to filter
+  mounted app context session lists.
+- `POST /api/sessions` receives `workerId` and `workspaceId` as locator context.
 - session follow-up always uses `POST /api/sessions/:sessionId/invocations`.
 - engine cancel and event stream target an invocation id.
 - `GET /api/capabilities` may receive `workerId` to filter capabilities to the

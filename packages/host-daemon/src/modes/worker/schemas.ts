@@ -113,9 +113,8 @@ export const testEngineBodySchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
-// POST /api/local/workers/:workerId/workspaces/:workspaceId/sessions
-// POST /api/local/workspaces/:workspaceId/sessions
-// 对应 createWorkspaceSessionResponse 内的 body：
+// POST /api/sessions
+// 对应 createWorkspaceSessionFromBody 内的 body：
 // title 被 requireString 强制：必填
 // 其余可选
 // ---------------------------------------------------------------------------

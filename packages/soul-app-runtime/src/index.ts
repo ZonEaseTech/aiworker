@@ -350,14 +350,14 @@ export function mountSessionApiProxy(request: Request, options: {
   if (url.pathname === '/api/sessions' && request.method === 'GET') {
     if (!workspaceId)
       return Promise.resolve(Response.json({ sessions: [] }))
-    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions`)
+    return proxyJsonRequest(request, `${hostApi}/api/sessions?workerId=${encodeURIComponent(workerId)}&workspaceId=${encodeURIComponent(workspaceId)}`)
       .catch(() => Response.json({ sessions: [] }))
   }
 
   if (url.pathname === '/api/sessions' && request.method === 'POST') {
     if (!workspaceId)
       return Promise.resolve(Response.json({ error: { code: 'WORKSPACE_REQUIRED', message: 'workspaceId is required.' } }, { status: 400 }))
-    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions`)
+    return proxyMountedSessionCreateRequest(request, `${hostApi}/api/sessions`, workerId, workspaceId)
       .catch(() => new Response(null, { status: 502 }))
   }
 
@@ -393,6 +393,18 @@ function proxyJsonRequest(request: Request, target: string): Promise<Response> {
 }
 
 async function proxyMountedWorkspaceCreateRequest(request: Request, target: string, workerId: string): Promise<Response> {
+  return proxyJsonRequestWithBody(request, target, body => ({ ...body, workerId }))
+}
+
+async function proxyMountedSessionCreateRequest(request: Request, target: string, workerId: string, workspaceId: string): Promise<Response> {
+  return proxyJsonRequestWithBody(request, target, body => ({ ...body, workerId, workspaceId }))
+}
+
+async function proxyJsonRequestWithBody(
+  request: Request,
+  target: string,
+  mapBody: (body: Record<string, unknown>) => Record<string, unknown>,
+): Promise<Response> {
   const text = await request.text()
   let parsed: unknown = {}
   if (text.trim().length > 0) {
@@ -407,7 +419,7 @@ async function proxyMountedWorkspaceCreateRequest(request: Request, target: stri
     ? parsed as Record<string, unknown>
     : {}
   return fetch(target, {
-    body: JSON.stringify({ ...body, workerId }),
+    body: JSON.stringify(mapBody(body)),
     headers: request.headers,
     method: request.method,
   }).then(r => new Response(r.body, { status: r.status, headers: r.headers }))

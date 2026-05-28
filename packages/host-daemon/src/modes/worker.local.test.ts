@@ -452,11 +452,13 @@ describe('local daemon API', () => {
     const worker = await createFreeformWorker(target, 'freeform-first-invocation')
     const workspace = await createWorkspaceLocator(target, worker.id, { name: 'First Invocation Workspace' })
 
-    const sessionRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+    const sessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
         capabilityId: FREEFORM_CAPABILITY,
         input: 'Start through the daemon session create route.',
         title: 'First invocation session',
+        workerId: worker.id,
+        workspaceId: workspace.id,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -475,6 +477,24 @@ describe('local daemon API', () => {
 
     expect((await target.request(`/api/local/sessions/${body.session.id}`)).status).toBe(404)
     expect((await target.request(`/api/local/workers/${worker.id}/sessions/${body.session.id}`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`)).status).toBe(404)
+    expect((await target.request(`/api/local/workspaces/${workspace.id}/sessions`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+      body: JSON.stringify({
+        capabilityId: FREEFORM_CAPABILITY,
+        title: 'Legacy nested session create',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })).status).toBe(404)
+    expect((await target.request(`/api/local/workspaces/${workspace.id}/sessions`, {
+      body: JSON.stringify({
+        capabilityId: FREEFORM_CAPABILITY,
+        title: 'Legacy workspace session create',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })).status).toBe(404)
     const canonicalSessionRes = await target.request(`/api/sessions/${body.session.id}`)
     expect(canonicalSessionRes.status).toBe(200)
     const canonicalSessionBody = await canonicalSessionRes.json() as {
@@ -483,6 +503,25 @@ describe('local daemon API', () => {
     expect('turns' in canonicalSessionBody).toBe(false)
     expect(canonicalSessionBody.invocations.map(invocation => invocation.id)).toEqual([body.invocation!.id])
     expect(canonicalSessionBody.invocations[0]?.inputRef).not.toContain('/turns/')
+
+    const siblingWorkspace = await createWorkspaceLocator(target, worker.id, { name: 'Sibling Session Workspace' })
+    const siblingSessionRes = await target.request('/api/sessions', {
+      body: JSON.stringify({
+        capabilityId: FREEFORM_CAPABILITY,
+        title: 'Sibling session',
+        workerId: worker.id,
+        workspaceId: siblingWorkspace.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(siblingSessionRes.status).toBe(201)
+
+    const scopedSessionsRes = await target.request(`/api/sessions?workerId=${worker.id}&workspaceId=${workspace.id}`)
+    expect(scopedSessionsRes.status).toBe(200)
+    const scopedSessions = await scopedSessionsRes.json() as { sessions: Array<{ id: string, workspaceId: string }> }
+    expect(scopedSessions.sessions.map(session => session.id)).toEqual([body.session.id])
+    expect(scopedSessions.sessions.map(session => session.workspaceId)).toEqual([workspace.id])
   })
 
   it('rejects legacy session create bodies that still send capabilityTemplateId', async () => {
@@ -490,10 +529,12 @@ describe('local daemon API', () => {
     const worker = await createFreeformWorker(target, 'legacy-capability-field-worker')
     const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Legacy Capability Field Workspace' })
 
-    const legacyRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+    const legacyRes = await target.request('/api/sessions', {
       body: JSON.stringify({
         capabilityTemplateId: FREEFORM_CAPABILITY,
         title: 'Legacy capability field',
+        workerId: worker.id,
+        workspaceId: workspace.id,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -508,11 +549,13 @@ describe('local daemon API', () => {
     const worker = await createFreeformWorker(target, 'freeform-context-reject-worker')
     const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Context Reject Workspace' })
 
-    const rejectedCreateRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+    const rejectedCreateRes = await target.request('/api/sessions', {
       body: JSON.stringify({
         capabilityId: FREEFORM_CAPABILITY,
         context: 'Host must not store this free-form session note.',
         title: 'Rejected context session',
+        workerId: worker.id,
+        workspaceId: workspace.id,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -620,11 +663,13 @@ describe('local daemon API', () => {
       workspace: { id: workspace.id, status: 'archived' },
     })
 
-    const blockedSessionRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+    const blockedSessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
         capabilityId: FREEFORM_CAPABILITY,
         input: 'Start after workspace archive.',
         title: 'Blocked archived workspace session',
+        workerId: worker.id,
+        workspaceId: workspace.id,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -1205,10 +1250,12 @@ describe('local daemon API', () => {
       },
     })
 
-    const sessionCreateRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
+    const sessionCreateRes = await target.request('/api/sessions', {
       body: JSON.stringify({
         capabilityId: FREEFORM_CAPABILITY,
         title: 'Blocked after Soul App archive',
+        workerId: worker.id,
+        workspaceId: workspace.id,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
