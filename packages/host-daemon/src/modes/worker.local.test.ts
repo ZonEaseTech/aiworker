@@ -118,18 +118,21 @@ describe('local daemon API', () => {
   }
 
   async function createWorkspaceAndSession(target: Awaited<ReturnType<typeof app>>, workerId: string) {
-    const workspaceRes = await target.request(`/api/local/workers/${workerId}/workspaces`, {
-      body: JSON.stringify({ name: 'Open Workspace', type: 'workspace' }),
+    const rootPath = mkdtempSync(join(dir, `${workerId}-workspace-`))
+    const workspaceRes = await target.request('/api/workspace-locators', {
+      body: JSON.stringify({ name: 'Open Workspace', rootPath, type: 'workspace', workerId }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(workspaceRes.status).toBe(201)
     const workspace = (await workspaceRes.json() as { workspace: { id: string, rootPath: string } }).workspace
 
-    const sessionRes = await target.request(`/api/local/workers/${workerId}/workspaces/${workspace.id}/sessions`, {
+    const sessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
         capabilityId: FREEFORM_CAPABILITY,
         title: 'Freeform session',
+        workerId,
+        workspaceId: workspace.id,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',

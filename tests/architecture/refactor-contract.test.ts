@@ -650,6 +650,20 @@ describe('destructive refactor contract bootstrap', () => {
     expect(createFreeformWorkerHelper).not.toContain('/api/local/workers')
   })
 
+  test('host daemon workspace session fixture uses canonical broker routes', () => {
+    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const helperStart = daemonTest.indexOf('async function createWorkspaceAndSession')
+    const helperEnd = daemonTest.indexOf('function writePackagedFreeform')
+    const createWorkspaceAndSessionHelper = helperStart >= 0 && helperEnd > helperStart
+      ? daemonTest.slice(helperStart, helperEnd)
+      : daemonTest
+
+    expect(createWorkspaceAndSessionHelper).toContain('/api/workspace-locators')
+    expect(createWorkspaceAndSessionHelper).toContain('/api/sessions')
+    expect(createWorkspaceAndSessionHelper).not.toContain(['/api/local/workers/', '{workerId}/workspaces'].join('$'))
+    expect(createWorkspaceAndSessionHelper).not.toContain(['/workspaces/', '{workspace.id}/sessions'].join('$'))
+  })
+
   test('host daemon capability helpers do not preserve retired template helper names', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
     const forbidden = [
