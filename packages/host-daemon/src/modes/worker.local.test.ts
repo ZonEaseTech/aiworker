@@ -563,6 +563,7 @@ describe('local daemon API', () => {
     expect(getRes.status).toBe(200)
     const fetched = await getRes.json() as { workspace: { rootPath: string } }
     expect(fetched.workspace.rootPath).toBe(requestedRootPath)
+    expect((await target.request('/api/local/workspaces')).status).toBe(404)
     await expect(readFile(join(requestedRootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Freeform')
   })
 

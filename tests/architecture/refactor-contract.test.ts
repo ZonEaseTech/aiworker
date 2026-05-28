@@ -520,6 +520,13 @@ describe('destructive refactor contract bootstrap', () => {
     expect(soulAppRuntime).not.toContain(['/api/local/workers/', '{workerId}/capabilities'].join('$'))
   })
 
+  test('daemon workspace locator collection surface does not preserve local broker alias', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+
+    expect(daemon).toContain('app.get(\'/api/workspace-locators\'')
+    expect(daemon).not.toContain('app.get(\'/api/local/workspaces\',')
+  })
+
   test('Host runtime and UI app lifecycle APIs use archive naming internally', () => {
     const sources = [
       'apps/cli/src/aiworker.ts',

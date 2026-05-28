@@ -366,7 +366,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ overlay: await workerOverlayResponse(state, worker.id) })
   })
 
-  app.get('/api/local/workspaces', c => c.json({ workspaces: listWorkspaces() }))
   app.get('/api/workspace-locators', c => c.json({ workspaces: listWorkspaces() }))
   app.post('/api/workspace-locators', async (c) => {
     const result = await parseJsonBody(c, createWorkspaceLocatorBodySchema, 'CREATE_WORKSPACE_LOCATOR_INVALID')
