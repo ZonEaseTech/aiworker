@@ -208,6 +208,7 @@ describe('Freeform CLI golden path', () => {
     expect(invocations[1]?.inputRef).not.toContain('/turns/')
     expect(invocations[2]?.inputRef).toBe(`aiworker://sessions/${started.session.id}/invocations/${secondFollowed.invocation.id}/input`)
     expect(invocations[2]?.inputRef).not.toContain('/turns/')
+    assertInvocationEventLogRefs(invocations, started.session.id)
 
     const startedEvents = bridgeEvents.filter(event => event.invocationId === started.invocation.id)
     expect(startedEvents).toContainEqual(expect.objectContaining({
@@ -284,6 +285,13 @@ describe('Freeform CLI golden path', () => {
     process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`
   }
 })
+
+function assertInvocationEventLogRefs(invocations: Array<{ eventLogRef: string | null, id: string }>, sessionId: string): void {
+  for (const invocation of invocations) {
+    expect(invocation.eventLogRef).toBe(`aiworker://sessions/${sessionId}/invocations/${invocation.id}/events`)
+    expect(invocation.eventLogRef).not.toContain('/turns/')
+  }
+}
 
 async function assertRedactedEngineLogProof(metadataJson: Record<string, unknown>): Promise<void> {
   const stderrLog = metadataJson.stderrLog
