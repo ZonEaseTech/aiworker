@@ -204,8 +204,12 @@ for (const file of canonicalDocs) {
 }
 
 const packageJson = JSON.parse(read('package.json')) as {
+  engines?: Record<string, string>
   scripts?: Record<string, string>
   workspaces?: string[]
+}
+const cliPackageJson = JSON.parse(read('apps/cli/package.json')) as {
+  engines?: Record<string, string>
 }
 const expectedReleaseGateCommands = [
   'bun run docs:check',
@@ -256,6 +260,18 @@ for (const testPath of documentedTestingPaths()) {
 }
 if (!packageJson.workspaces?.includes('souls/*'))
   issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
+const expectedNodeEngineRange = '>=20.19.0 <21 || >=22.12.0'
+const expectedWorkflowNodeVersion = '24'
+const releaseWorkflow = read('.github/workflows/release.yml')
+const lintWorkflow = read('.github/workflows/lint.yml')
+if (packageJson.engines?.node !== expectedNodeEngineRange)
+  issues.push({ file: 'package.json', message: `root package must declare Node engine ${expectedNodeEngineRange}` })
+if (cliPackageJson.engines?.node !== expectedNodeEngineRange)
+  issues.push({ file: 'apps/cli/package.json', message: `published CLI package must declare Node engine ${expectedNodeEngineRange}` })
+if (!releaseWorkflow.includes(`node-version: '${expectedWorkflowNodeVersion}'`))
+  issues.push({ file: '.github/workflows/release.yml', message: 'GitHub workflows must use Node 24 for release reproducibility' })
+if (!lintWorkflow.includes(`node-version: '${expectedWorkflowNodeVersion}'`))
+  issues.push({ file: '.github/workflows/lint.yml', message: 'GitHub workflows must use Node 24 for release reproducibility' })
 const testContractsScript = packageJson.scripts?.['test:contracts'] ?? ''
 if (!testContractsScript.includes('bun test tests/architecture'))
   issues.push({ file: 'package.json', message: 'test:contracts must run the refactor contract test' })

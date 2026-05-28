@@ -2154,6 +2154,25 @@ describe('destructive refactor contract bootstrap', () => {
     expect(publishIndex).toBeLessThan(attachIndex)
   })
 
+  test('release and CI workflows pin a Node version compatible with packaged Web assets', () => {
+    const rootPackage = JSON.parse(readRepoFile('package.json')) as {
+      engines?: Record<string, string>
+    }
+    const cliPackage = JSON.parse(readRepoFile('apps/cli/package.json')) as {
+      engines?: Record<string, string>
+    }
+    const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
+    const lintWorkflow = readRepoFile('.github/workflows/lint.yml')
+    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
+    const expectedNodeRange = '>=20.19.0 <21 || >=22.12.0'
+
+    expect(rootPackage.engines?.node).toBe(expectedNodeRange)
+    expect(cliPackage.engines?.node).toBe(expectedNodeRange)
+    expect(releaseWorkflow).toContain('node-version: \'24\'')
+    expect(lintWorkflow).toContain('node-version: \'24\'')
+    expect(docCheck).toContain('GitHub workflows must use Node 24 for release reproducibility')
+  })
+
   test('standalone release bundles include descriptor-only official Soul Apps', () => {
     const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
     const releasePackager = readRepoFile('apps/cli/scripts/package-release-bundles.ts')
