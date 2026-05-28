@@ -1773,6 +1773,21 @@ describe('local daemon API', () => {
     await expect(readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain(FREEFORM_APP_ID)
   })
 
+  it('serves malformed projection receipts as stable platform errors without leaking receipt content', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Malformed Receipt API Workspace' })
+    await writeFile(join(workspace.rootPath, '.aiworker', 'projections.json'), '{"secret":"sk-daemon-bad-receipt",')
+
+    const receiptRes = await target.request(`/api/projections/receipts/${workspace.id}`)
+
+    expect(receiptRes.status).toBe(409)
+    const bodyText = await receiptRes.text()
+    expect(bodyText).toContain('PROJECTION_RECEIPT_STALE')
+    expect(bodyText).not.toContain('sk-daemon-bad-receipt')
+    expect(bodyText).not.toContain('JSON Parse error')
+  })
+
   it('refreshes projection assets for the requested broker engine target', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)

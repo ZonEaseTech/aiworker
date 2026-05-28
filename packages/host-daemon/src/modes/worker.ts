@@ -879,7 +879,16 @@ async function projectionReceiptResponse(c: Context, state: LocalDaemonState): P
   const workspace = getWorkspace(receiptId)
   if (!workspace)
     return projectionReceiptMissing(c, receiptId)
-  const result = await requireRuntime(state, workspace.workerId).readWorkspaceProjectionReceipt(workspace.id)
+  const runtime = requireRuntime(state, workspace.workerId)
+  let result: Awaited<ReturnType<LocalWorkerRuntime['readWorkspaceProjectionReceipt']>>
+  try {
+    result = await runtime.readWorkspaceProjectionReceipt(workspace.id)
+  }
+  catch (error) {
+    if (isMalformedProjectionReceiptError(error))
+      return projectionReceiptStale(c, receiptId)
+    throw error
+  }
   if (!result)
     return projectionReceiptMissing(c, receiptId)
   return c.json({
@@ -903,6 +912,18 @@ function projectionReceiptMissing(c: Context, receiptId: string): Response {
   }, 404)
 }
 
+function projectionReceiptStale(c: Context, receiptId: string): Response {
+  return c.json({
+    error: {
+      code: 'PROJECTION_RECEIPT_STALE',
+      message: 'Projection receipt is invalid.',
+    },
+    receipt: null,
+    receiptId,
+    status: 'stale',
+  }, 409)
+}
+
 function containsLiteralSecret(content: string): boolean {
   const assignment = /["']?([\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*)["']?\s*[:=]\s*["']([^"'\n]+)["']/gi
   for (const match of content.matchAll(assignment)) {
@@ -915,6 +936,10 @@ function containsLiteralSecret(content: string): boolean {
 
 function isSecretReference(value: string): boolean {
   return value.trim().length === 0 || value.startsWith('$') || value.startsWith('env:') || value.startsWith('secretref:')
+}
+
+function isMalformedProjectionReceiptError(error: unknown): boolean {
+  return error instanceof SyntaxError
 }
 
 function readProjectionTarget(value: unknown): SoulAppEngineTarget | null {
