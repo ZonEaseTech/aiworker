@@ -2045,6 +2045,16 @@ describe('destructive refactor contract bootstrap', () => {
     expect(releaseCheckScript).not.toContain('tmp/refactor')
   })
 
+  test('tag release workflow runs the canonical release gate before publishing', () => {
+    const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
+    const releaseCheckIndex = releaseWorkflow.indexOf('bun run release:check')
+    const publishIndex = releaseWorkflow.indexOf('npm publish --access public')
+
+    expect(releaseCheckIndex).toBeGreaterThanOrEqual(0)
+    expect(publishIndex).toBeGreaterThanOrEqual(0)
+    expect(releaseCheckIndex).toBeLessThan(publishIndex)
+  })
+
   test('package guardrails reject broad replacement buckets', () => {
     expect(existsSync(join(repoRoot, 'packages/core-v2'))).toBe(false)
     expect(existsSync(join(repoRoot, 'packages/shared-v2'))).toBe(false)

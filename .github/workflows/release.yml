@@ -26,14 +26,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Typecheck
-        run: bun run typecheck
-
-      - name: Test
-        run: bun run test
-
-      - name: Bundle CLI
-        run: bun run --filter '@zonease/aiworker-cli' build
+      - name: Release check
+        run: bun run release:check
 
       - name: Publish to npm
         working-directory: apps/cli/dist
