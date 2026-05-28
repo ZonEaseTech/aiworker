@@ -1091,6 +1091,48 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'WorkerStudio positive descriptor fixture should not keep the retired HR person-profile capability').toEqual([])
   })
 
+  test('WorkerStudio tests use generic mounted Soul fixtures instead of retired HR QA workflow language', () => {
+    const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const retiredFixtureSnippets = [
+      'HR_SOUL_ID',
+      'QA_SOUL_ID',
+      'HR_',
+      'PEOPLE_',
+      'people-worker',
+      'release-worker',
+      'aiworker-demo-people',
+      'aiworker-demo-release',
+      'Demo People',
+      'Demo Release',
+      'Candidate',
+      'candidate',
+      'Interview',
+      'interview',
+      'Profile',
+      'profile',
+      'HR',
+      'QA',
+      'Release Gate',
+      'release-gate',
+      'onboarding',
+      'offboarding',
+      'Person context',
+      'Employee context',
+      'Departing employee',
+      'Risk Review',
+      'risk-review',
+      'Role Rubric',
+      'role-rubric',
+      'CUSTOM_TEMPLATE_ID',
+    ]
+
+    const findings = retiredFixtureSnippets
+      .filter(snippet => source.includes(snippet))
+      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+
+    expect(findings, 'WorkerStudio tests should prove Host-generic mounted behavior without old HR/QA domain fixtures').toEqual([])
+  })
+
   test('Web i18n helpers expose capability names instead of template helpers', () => {
     const activeSources = [
       'apps/web/src/features/i18n/index.ts',
@@ -1635,7 +1677,7 @@ describe('destructive refactor contract bootstrap', () => {
     )
 
     expect(findings, 'Web overlay config writes must use canonical worker_config keys only').toEqual([])
-    expect(workerStudioTest).toContain('/api/workers/people-worker/config/skill-overlay%3Ainterview-brief')
+    expect(workerStudioTest).toContain('/api/workers/primary-worker/config/skill-overlay%3Abriefing-brief')
   })
 
   test('storage legacy discard fixtures use capability wording for custom capability ids', () => {
