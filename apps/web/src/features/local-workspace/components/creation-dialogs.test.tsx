@@ -1,4 +1,4 @@
-import type { VerticalSoul } from '../types.compat'
+import type { VerticalSoul } from '../model-types'
 
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'

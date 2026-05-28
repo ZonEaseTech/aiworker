@@ -389,7 +389,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/host-runtime/src/soul-app/registry.ts',
       'packages/host-runtime/src/host/runtime.ts',
       'packages/soul-app-runtime/src/index.ts',
-      'apps/web/src/features/local-workspace/types.compat.ts',
+      'apps/web/src/features/local-workspace/model-types.ts',
     ]
 
     const findings = activeSources
@@ -871,7 +871,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/host-runtime/src/soul-app/registry.ts',
       'packages/host-runtime/src/host/runtime.ts',
       'packages/soul-app-runtime/src/index.ts',
-      'apps/web/src/features/local-workspace/types.compat.ts',
+      'apps/web/src/features/local-workspace/model-types.ts',
       'apps/web/src/worker/__tests__/worker-studio.test.tsx',
     ]
     const findings = activeSources.flatMap((path) => {
@@ -912,7 +912,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('Web local workspace model exposes capabilities instead of templates', () => {
     const activeSources = [
-      'apps/web/src/features/local-workspace/types.compat.ts',
+      'apps/web/src/features/local-workspace/model-types.ts',
       'apps/web/src/features/local-workspace/api/types.ts',
       'apps/web/src/features/local-workspace/api/workspace-data.ts',
       'apps/web/src/features/local-workspace/components/workspace-card.tsx',
@@ -1239,7 +1239,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/soul-protocol/src/soul-app/registry.ts',
       'packages/host-runtime/src/soul-app/registry.ts',
       'packages/host-runtime/src/host/runtime.ts',
-      'apps/web/src/features/local-workspace/types.compat.ts',
+      'apps/web/src/features/local-workspace/model-types.ts',
       'apps/web/src/features/i18n/index.ts',
       'apps/web/src/features/i18n/types.ts',
       'apps/web/src/features/local-workspace/components/creation-dialogs.tsx',
@@ -1263,6 +1263,21 @@ describe('destructive refactor contract bootstrap', () => {
     })
 
     expect(findings, 'Host catalog should expose Soul App identity/description, not domain primitives').toEqual([])
+  })
+
+  test('Web local workspace model does not preserve removed protocol compat shims', () => {
+    const compatPath = 'apps/web/src/features/local-workspace/types.compat.ts'
+    const activeWebSources = listSourceFiles('apps/web/src')
+      .filter(path => !/\.(?:test|spec)\.[cm]?[tj]sx?$/.test(path))
+    const importFindings = activeWebSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return source.includes('types.compat')
+        ? [`${path}: types.compat`]
+        : []
+    })
+
+    expect(existsSync(join(repoRoot, compatPath)), `${compatPath} should be removed after the Thin Shell migration`).toBe(false)
+    expect(importFindings, 'Web runtime source should derive local workspace model types from current protocol projections').toEqual([])
   })
 
   test('filesystem layout comments do not preserve retired review or memory ownership', () => {

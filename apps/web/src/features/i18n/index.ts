@@ -1,4 +1,4 @@
-import type { VerticalSoul, WorkspaceCapability } from '../local-workspace/types.compat'
+import type { VerticalSoul, WorkspaceCapability } from '../local-workspace/model-types'
 import type { BuiltinCapabilityCopy, BuiltinSoulCopy, StaticMessages, StatusKey, SupportedLocale } from './types'
 
 import { de, en, ja, zhCN } from './locales'

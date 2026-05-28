@@ -1,6 +1,6 @@
 import type { LocalWorker } from '@zonease/aiworker-soul-protocol'
 import type { displaySoul, messagesFor, normalizeLocale } from '../../i18n'
-import type { VerticalSoul } from '../types.compat'
+import type { VerticalSoul } from '../model-types'
 
 import { Card } from '@zonease/aiworker-ui/components/card'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'

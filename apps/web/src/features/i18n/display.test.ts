@@ -1,4 +1,4 @@
-import type { VerticalSoul, WorkspaceCapability } from '../local-workspace/types.compat'
+import type { VerticalSoul, WorkspaceCapability } from '../local-workspace/model-types'
 import { describe, expect, it } from 'vitest'
 import { displayCapability, displaySoul, formatStatus, messagesFor } from './index'
 

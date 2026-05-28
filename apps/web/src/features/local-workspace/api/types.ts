@@ -11,7 +11,7 @@ import type {
   LocalWorkspace,
   SoulAppProjectionReceipt,
 } from '@zonease/aiworker-soul-protocol'
-import type { VerticalSoul, WorkspaceCapability } from '../types.compat'
+import type { VerticalSoul, WorkspaceCapability } from '../model-types'
 
 export interface LocalSoulAppLifecycleResponse {
   app: LocalHostedSoulApp

@@ -1,6 +1,6 @@
 import type { FormEvent, ReactNode } from 'react'
 import type { messagesFor, normalizeLocale } from '../../i18n'
-import type { VerticalSoul } from '../types.compat'
+import type { VerticalSoul } from '../model-types'
 
 import { Add01Icon, Cancel01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'

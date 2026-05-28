@@ -1,6 +1,6 @@
 import type { LocalSession, LocalWorkspace } from '@zonease/aiworker-soul-protocol'
 import type { normalizeLocale } from '../../i18n'
-import type { WorkspaceCapability } from '../types.compat'
+import type { WorkspaceCapability } from '../model-types'
 
 import { File02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
