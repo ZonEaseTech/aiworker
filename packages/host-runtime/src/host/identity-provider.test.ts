@@ -10,7 +10,7 @@ describe('Host identity provider', () => {
       identity: {
         authMethod: 'local-bearer',
         grants: [
-          { action: 'access', kind: 'host', target: 'api/local' },
+          { action: 'access', kind: 'host', target: 'api/broker' },
         ],
         operatorId: 'operator-local',
         providerId: 'local-bearer',

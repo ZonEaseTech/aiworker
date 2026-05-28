@@ -698,6 +698,16 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'app lifecycle APIs should use archive verbs while registry status may remain disabled').toEqual([])
   })
 
+  test('Host identity grants name the broker API without local route namespace residue', () => {
+    const identityProvider = readRepoFile('packages/host-runtime/src/host/identity-provider.ts')
+    const identityProviderTest = readRepoFile('packages/host-runtime/src/host/identity-provider.test.ts')
+
+    expect(identityProvider).toContain('target: \'api/broker\'')
+    expect(identityProvider).not.toContain('target: \'api/local\'')
+    expect(identityProviderTest).toContain('target: \'api/broker\'')
+    expect(identityProviderTest).not.toContain('target: \'api/local\'')
+  })
+
   test('CLI session start selects a capability without the retired skill option', () => {
     const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
     const cliTests = [

@@ -52,7 +52,7 @@ export function createLocalBearerAuthProvider(options: LocalBearerAuthProviderOp
         identity: {
           authMethod: 'local-bearer',
           grants: [
-            { action: 'access', kind: 'host', target: 'api/local' },
+            { action: 'access', kind: 'host', target: 'api/broker' },
           ],
           operatorId,
           providerId: 'local-bearer',
