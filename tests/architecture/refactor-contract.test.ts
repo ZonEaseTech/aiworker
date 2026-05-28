@@ -1988,6 +1988,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(freeformCliBrowserProof).toContain('reattached')
     expect(freeformCliBrowserProof).toContain(`/api/engine/invocations/\${id}/cancel`)
     expect(freeformCliBrowserProof).toContain('assertInvocationCancelProof')
+    expect(freeformCliBrowserProof).toContain(`/api/engine/invocations/\${id}/reconcile`)
+    expect(freeformCliBrowserProof).toContain('assertInvocationReconcileProof')
     expect(freeformCliBrowserProof).toContain('serialized.includes(\'/turns/\')')
     expect(freeformCliBrowserProof).toContain(`/api/sessions/\${id}/archive`)
     expect(freeformCliBrowserProof).toContain('assertSessionArchiveProof')

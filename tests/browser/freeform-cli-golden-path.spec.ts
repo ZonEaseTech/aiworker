@@ -14,6 +14,7 @@ const appId = 'aiworker-freeform'
 const workerId = 'freeform-cli-golden-worker'
 const capabilityId = namespaceSoulAppCapabilityId(appId, 'default')
 const cancelInvocationId = 'freeform-browser-cancel-invocation'
+const reconcileInvocationId = 'freeform-browser-reconcile-invocation'
 const descriptorPath = join(repoRoot, 'souls/aiworker-freeform/dist/soul.descriptor.json')
 const evidenceRoot = join(repoRoot, 'tmp', `freeform-cli-golden-path-${new Date().toISOString().replace(/[:.]/g, '-')}`)
 const workRoot = await mkdtemp(join(tmpdir(), 'aiworker-freeform-browser-golden-'))
@@ -95,7 +96,7 @@ try {
   if (followUpResult.invocation.inputRef !== `aiworker://sessions/${sessionResult.session.id}/invocations/${followUpResult.invocation.id}/input`)
     throw new Error(`Follow-up did not use session-level invocation inputRef: ${JSON.stringify(followUpResult.invocation)}`)
 
-  seedQueuedInvocationForBrowserCancel(sessionResult.session.id)
+  seedInvocationsForBrowserEngineActions(sessionResult.session.id)
 
   const port = reservePort()
   daemon = Bun.spawn({
@@ -175,6 +176,9 @@ try {
   const invocationCancelProof = await readInvocationCancelProofFromBrowser(page, cancelInvocationId)
   assertInvocationCancelProof(invocationCancelProof, cancelInvocationId, sessionResult.session.id)
 
+  const invocationReconcileProof = await readInvocationReconcileProofFromBrowser(page, reconcileInvocationId)
+  assertInvocationReconcileProof(invocationReconcileProof, reconcileInvocationId, sessionResult.session.id)
+
   const sessionArchiveProof = await readSessionArchiveProofFromBrowser(page, sessionResult.session.id)
   assertSessionArchiveProof(sessionArchiveProof, sessionResult.session.id)
 
@@ -190,6 +194,7 @@ try {
     invocationCancelProof,
     invocationEventProof,
     invocationExternalSessionRefProof,
+    invocationReconcileProof,
     projectionRefreshProof,
     sessionArchiveProof,
     routeUrl,
@@ -236,7 +241,7 @@ function runCliJson<T = unknown>(...args: string[]): T {
   return JSON.parse(stdout) as T
 }
 
-function seedQueuedInvocationForBrowserCancel(sessionId: string): void {
+function seedInvocationsForBrowserEngineActions(sessionId: string): void {
   initWorkerDb(dbPath)
   try {
     createEngineInvocation({
@@ -248,6 +253,16 @@ function seedQueuedInvocationForBrowserCancel(sessionId: string): void {
       seq: 3,
       sessionId,
       status: 'queued',
+    })
+    createEngineInvocation({
+      engineCommand: 'codex',
+      engineId: 'codex',
+      id: reconcileInvocationId,
+      inputRef: `aiworker://sessions/${sessionId}/invocations/${reconcileInvocationId}/input`,
+      processState: 'spawned',
+      seq: 4,
+      sessionId,
+      status: 'running',
     })
   }
   finally {
@@ -623,6 +638,82 @@ function assertInvocationCancelProof(proof: Record<string, unknown>, invocationI
   const serialized = JSON.stringify(proof)
   if (serialized.includes('/turns/') || serialized.includes('"turn"'))
     throw new Error(`Invocation cancel proof exposed retired turn semantics: ${serialized}`)
+}
+
+async function readInvocationReconcileProofFromBrowser(page: Page, invocationId: string): Promise<Record<string, unknown>> {
+  return await page.evaluate(async (id) => {
+    const reconcileResponse = await fetch(`/api/engine/invocations/${id}/reconcile`, {
+      body: JSON.stringify({
+        diagnostic: 'browser reconcile token=sk-browser-reconcile-secret',
+        handle: { invocationId: id, pid: 505 },
+        state: 'lost',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    const reconcileBody = await reconcileResponse.text()
+    const invocationResponse = await fetch(`/api/engine/invocations/${id}`)
+    const invocationBody = await invocationResponse.text()
+    const eventsResponse = await fetch(`/api/engine/invocations/${id}/events?after=0&limit=20`)
+    const eventsBody = await eventsResponse.text()
+    return {
+      events: {
+        body: JSON.parse(eventsBody) as Record<string, unknown>,
+        status: eventsResponse.status,
+      },
+      invocation: {
+        body: JSON.parse(invocationBody) as Record<string, unknown>,
+        status: invocationResponse.status,
+      },
+      reconcile: {
+        body: JSON.parse(reconcileBody) as Record<string, unknown>,
+        status: reconcileResponse.status,
+      },
+    }
+  }, invocationId)
+}
+
+function assertInvocationReconcileProof(proof: Record<string, unknown>, invocationId: string, sessionId: string): void {
+  const reconcile = readRecord(proof.reconcile)
+  const invocationRead = readRecord(proof.invocation)
+  const eventsRead = readRecord(proof.events)
+  if (reconcile.status !== 201)
+    throw new Error(`Invocation reconcile failed in browser proof: ${JSON.stringify(proof)}`)
+  if (invocationRead.status !== 200)
+    throw new Error(`Reconciled invocation read failed in browser proof: ${JSON.stringify(proof)}`)
+  if (eventsRead.status !== 200)
+    throw new Error(`Reconciled invocation events read failed in browser proof: ${JSON.stringify(proof)}`)
+
+  const reconciledInvocation = readRecord(readRecord(reconcile.body).invocation)
+  const readBackInvocation = readRecord(readRecord(invocationRead.body).invocation)
+  for (const candidate of [reconciledInvocation, readBackInvocation]) {
+    if (candidate.id !== invocationId || candidate.sessionId !== sessionId)
+      throw new Error(`Invocation reconcile proof returned the wrong invocation: ${JSON.stringify(proof)}`)
+    if (candidate.status !== 'lost' || candidate.processState !== 'lost' || candidate.failureCode !== 'ENGINE_PROCESS_LOST')
+      throw new Error(`Invocation reconcile proof missed lost process state: ${JSON.stringify(proof)}`)
+    if (candidate.summary !== 'Native engine process was lost.')
+      throw new Error(`Invocation reconcile proof missed lost process summary: ${JSON.stringify(proof)}`)
+  }
+  if (readRecord(readRecord(reconcile.body).session).status !== 'active')
+    throw new Error(`Invocation reconcile changed session lifecycle: ${JSON.stringify(proof)}`)
+
+  const bridgeEvents = Array.isArray(readRecord(eventsRead.body).bridgeEvents) ? readRecord(eventsRead.body).bridgeEvents : []
+  if (!bridgeEvents.some(event =>
+    isRecord(event)
+    && event.invocationId === invocationId
+    && event.failureCode === 'ENGINE_PROCESS_LOST'
+    && event.processState === 'lost'
+    && event.status === 'lost'
+    && event.type === 'process.lost',
+  )) {
+    throw new Error(`Invocation reconcile proof missed normalized process.lost event: ${JSON.stringify(proof)}`)
+  }
+
+  const serialized = JSON.stringify(proof)
+  for (const forbidden of ['/turns/', '"turn"', 'sk-browser-reconcile-secret']) {
+    if (serialized.includes(forbidden))
+      throw new Error(`Invocation reconcile proof exposed forbidden content ${forbidden}: ${serialized}`)
+  }
 }
 
 async function readSessionArchiveProofFromBrowser(page: Page, sessionId: string): Promise<Record<string, unknown>> {
