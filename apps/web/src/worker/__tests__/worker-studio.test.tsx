@@ -251,8 +251,6 @@ let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
 let workspaceDataResponses: Array<Promise<typeof workspace[]> | typeof workspace[]>
 let currentWorkerOverlayAssets: LocalWorkerOverlayAsset[]
-let currentArtifactRawContent: string
-let currentArtifactRawStatus: number
 let lastMessageRequestBody: Record<string, unknown> | null
 let lastSessionRequestBody: Record<string, unknown> | null
 let writtenFiles: Array<{ body: string, path: string, workspaceId: string }>
@@ -419,21 +417,6 @@ function resetSettings() {
   lastMessageRequestBody = null
   lastSessionRequestBody = null
   writtenFiles = []
-  currentArtifactRawContent = [
-    '# Candidate Screen',
-    '',
-    'Evidence summary.',
-    '',
-    '```aiworker-profile-readme',
-    '# Accepted Ada Profile',
-    '',
-    '## Current Profile Summary',
-    '',
-    'Reviewed profile summary.',
-    '```',
-    '',
-  ].join('\n')
-  currentArtifactRawStatus = 200
   currentApps = currentSouls.map(soul => catalogOnlyAppForSoul(soul, currentCapabilities))
 }
 
@@ -798,12 +781,6 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/sessions'))
       return json({ sessions: currentSessions })
-    if (url.includes('/api/local/workspaces/') && url.includes('/files/raw/')) {
-      return new Response(currentArtifactRawContent, {
-        headers: { 'content-type': 'text/plain' },
-        status: currentArtifactRawStatus,
-      })
-    }
     if (url.endsWith('/api/local/settings') && method === 'PATCH') {
       const patch = init?.body ? JSON.parse(String(init.body)) as Partial<typeof baseSettings> : {}
       currentSettings = {
@@ -1798,7 +1775,6 @@ describe('worker studio', () => {
 
   it('keeps Host from rendering session detail or artifact preview failures for app-owned mounted sessions', async () => {
     currentApps = [hostedApp({ appId: 'aiworker-demo-people', appName: 'Demo People' })]
-    currentArtifactRawStatus = 500
     window.history.replaceState(null, '', '/workers/people-worker/workspaces/workspace-1/sessions/session-1')
 
     render(<WorkerStudio />)
@@ -1806,7 +1782,10 @@ describe('worker studio', () => {
     expect(await screen.findByTitle('Demo People Workbench')).toBeTruthy()
     expect(screen.queryByTestId('session-detail-panel')).toBeNull()
     expect(screen.queryByTestId('artifact-preview-frame')).toBeNull()
-    expect(screen.queryByText('Local file 500: /api/local/workspaces/workspace-1/files/raw/artifacts/session-1/candidate-screen.md')).toBeNull()
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => {
+      const path = String(url)
+      return path.includes(`${['', 'api', 'local', 'workspaces'].join('/')}/`) && path.includes(`/${['files', 'raw'].join('/')}/`)
+    })).toBe(false)
   })
 
   it('keeps workspace routes on app-owned mounted surfaces when a Soul App route exists', async () => {

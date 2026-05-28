@@ -1653,6 +1653,9 @@ describe('destructive refactor contract bootstrap', () => {
       '/api/local/files',
       '/api/local/artifacts',
       '/api/local/events',
+      '/api/local/workspaces/',
+      '/files/raw/',
+      'currentArtifactRaw',
     ]
     const findings = forbidden
       .filter(snippet => workerStudioTest.includes(snippet))
