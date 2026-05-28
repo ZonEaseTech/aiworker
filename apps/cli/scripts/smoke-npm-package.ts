@@ -46,6 +46,7 @@ async function main(): Promise<number> {
       if (file.includes('/node_modules/') || file.includes('/host-adapter/') || /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file))
         throw new Error(`npm package includes non-release file: ${file}`)
     }
+    await assertTarballDescriptorV1(archivePath, 'package/official-apps/aiworker-freeform/dist/soul.descriptor.json')
     await assertInstalledPackageDoctor(tempDir, archivePath)
     consola.success('[smoke-npm-package] PASS: npm package installs, runs doctor, and includes Host assets plus descriptor-only official Soul Apps')
     return 0
@@ -81,6 +82,18 @@ async function packDist(tempDir: string): Promise<string> {
 async function listTarball(archivePath: string): Promise<string[]> {
   const output = await run(['tar', '-tzf', archivePath], { cwd: process.cwd() })
   return output.stdout.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+}
+
+async function assertTarballDescriptorV1(archivePath: string, descriptorPath: string): Promise<void> {
+  const output = await run(['tar', '-xOzf', archivePath, descriptorPath], { cwd: process.cwd() })
+  try {
+    const descriptor = JSON.parse(output.stdout) as { protocol?: unknown }
+    if (descriptor.protocol !== 'soul/v1')
+      throw new Error('invalid protocol')
+  }
+  catch {
+    throw new Error(`npm package descriptor is not descriptor v1: ${descriptorPath}`)
+  }
 }
 
 async function assertInstalledPackageDoctor(tempDir: string, archivePath: string): Promise<void> {
