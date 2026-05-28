@@ -637,6 +637,12 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const session = sessionId ? requireWorkerSession(worker.id, sessionId) : null
     if (workspace && session && session.workspaceId !== workspace.id)
       return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} does not belong to workspace ${workspace.id}` } }, 400)
+    if (worker.status === 'archived')
+      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Worker ${worker.id} is archived and cannot mount workbench.` } }, 400)
+    if (workspace?.status === 'archived')
+      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Workspace ${workspace.id} is archived and cannot mount workbench.` } }, 400)
+    if (session?.status === 'archived')
+      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} is archived and cannot mount workbench.` } }, 400)
     const app = state.host.getApp(worker.soulId)
     if (!app)
       return notFound(c, 'Soul App')

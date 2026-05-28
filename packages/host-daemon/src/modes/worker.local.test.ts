@@ -1506,6 +1506,35 @@ describe('local daemon API', () => {
     })
   })
 
+  it('rejects descriptor workbench mount for archived locator context', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'archive-mount-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+
+    await target.request(`/api/sessions/${session.id}/archive`, { method: 'POST' })
+    const archivedSession = await target.request(`/api/mount/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&sessionId=${session.id}`)
+    expect(archivedSession.status).toBe(400)
+    expect(await archivedSession.json()).toMatchObject({
+      error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} is archived and cannot mount workbench.` },
+    })
+
+    const replacement = await createWorkspaceAndSession(target, worker.id)
+    await target.request(`/api/workspace-locators/${replacement.workspace.id}/archive`, { method: 'POST' })
+    const archivedWorkspace = await target.request(`/api/mount/workbench?workerId=${worker.id}&workspaceId=${replacement.workspace.id}&sessionId=${replacement.session.id}`)
+    expect(archivedWorkspace.status).toBe(400)
+    expect(await archivedWorkspace.json()).toMatchObject({
+      error: { code: 'MOUNT_CONTEXT_INVALID', message: `Workspace ${replacement.workspace.id} is archived and cannot mount workbench.` },
+    })
+
+    const active = await createWorkspaceAndSession(target, worker.id)
+    await target.request(`/api/workers/${worker.id}/archive`, { method: 'POST' })
+    const archivedWorker = await target.request(`/api/mount/workbench?workerId=${worker.id}&workspaceId=${active.workspace.id}&sessionId=${active.session.id}`)
+    expect(archivedWorker.status).toBe(400)
+    expect(await archivedWorker.json()).toMatchObject({
+      error: { code: 'MOUNT_CONTEXT_INVALID', message: `Worker ${worker.id} is archived and cannot mount workbench.` },
+    })
+  })
+
   it('rejects descriptor workbench mount for an unknown worker', async () => {
     const target = await app()
 
