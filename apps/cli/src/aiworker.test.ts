@@ -192,6 +192,7 @@ describe('aiworker local CLI', () => {
     expect(preprocessArgv(argv('session', 'invoke', '--input', 'P')).slice(2, 3)).toEqual(['session invoke'])
     expect(preprocessArgv(argv('worker', 'create', '--name', 'HR')).slice(2, 3)).toEqual(['worker create'])
     expect(preprocessArgv(argv('worker', 'config', 'set', 'worker-1', 'engine-selection')).slice(2, 3)).toEqual(['worker config set'])
+    expect(preprocessArgv(argv('workspace', 'projection', 'refresh', 'workspace-1')).slice(2, 3)).toEqual(['workspace projection refresh'])
     expect(preprocessArgv(argv('daemon', 'restart')).slice(2, 3)).toEqual(['daemon restart'])
   })
 
@@ -391,7 +392,7 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('daemon start|stop|restart|status|logs')
     expect(output).toContain('app list|show|install|enable|archive|delete|bootstrap')
     expect(output).toContain('worker create|list|select|config|archive|delete')
-    expect(output).toContain('workspace create|list|archive|delete')
+    expect(output).toContain('workspace create|list|projection refresh|archive|delete')
     expect(output).toContain('session start|invoke|list|show|archive|delete')
     expect(output).not.toContain('run start')
   })
@@ -582,6 +583,46 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('workspace', 'show', workspace.id))).toBe(0)
     expect((JSON.parse(output) as { workspace: { id: string } }).workspace.id).toBe(workspace.id)
+  })
+
+  it('refreshes a workspace projection through CLI after a stale receipt blocks cleanup', async () => {
+    expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'cli-refresh-worker', '--name', 'CLI Refresh Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'CLI Refresh Workspace', '--type', 'freeform', '--worker', 'cli-refresh-worker'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
+    const receiptPath = path.join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    const { freshnessMarker: _freshnessMarker, ...legacyReceipt } = receipt
+    await writeFile(receiptPath, `${JSON.stringify({ ...legacyReceipt, secret: 'sk-cli-refresh-stale-receipt' }, null, 2)}\n`)
+    output = ''
+    errorOutput = ''
+
+    expect(await runCli(argv('workspace', 'delete', workspace.id))).toBe(1)
+    expect(errorOutput).toContain('PROJECTION_RECEIPT_STALE')
+    expect(errorOutput).not.toContain('sk-cli-refresh-stale-receipt')
+    output = ''
+    errorOutput = ''
+
+    expect(await runCli(argv('workspace', 'projection', 'refresh', workspace.id, '--target', 'codex'))).toBe(0)
+    const refreshed = JSON.parse(output) as { projection: { receipt: Record<string, unknown>, workspace: { id: string } }, target: string }
+    expect(refreshed).toMatchObject({
+      projection: {
+        workspace: { id: workspace.id },
+      },
+      target: 'codex',
+    })
+    expect(output).not.toContain('sk-cli-refresh-stale-receipt')
+    const refreshedReceipt = await readFile(receiptPath, 'utf8')
+    expect(refreshedReceipt).toContain('freshnessMarker')
+    expect(refreshedReceipt).not.toContain('sk-cli-refresh-stale-receipt')
+    output = ''
+
+    expect(await runCli(argv('workspace', 'delete', workspace.id))).toBe(0)
+    expect((JSON.parse(output) as { deleted: boolean, workspace: { id: string } })).toMatchObject({ deleted: true, workspace: { id: workspace.id } })
   })
 
   it('blocks CLI session work for existing workers when the Soul App is archived', async () => {

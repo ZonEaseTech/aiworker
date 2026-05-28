@@ -116,6 +116,10 @@ interface SessionContinuationCommandOptions {
   worker?: string
 }
 
+interface WorkspaceProjectionRefreshCommandOptions {
+  target?: string
+}
+
 interface SessionContinuationContext {
   engineCommand: string
   engineId: string
@@ -256,6 +260,14 @@ function cliProjectionEngineTarget(engineId: string): CliProjectionEngineTarget 
   if (engineId === 'claude-code' || engineId.startsWith('claude-code/'))
     return 'claude-code'
   return null
+}
+
+function resolveCliProjectionTarget(value?: string): CliProjectionEngineTarget {
+  const engineId = value?.trim() || selectedCliEngineId()
+  const target = cliProjectionEngineTarget(engineId)
+  if (!target)
+    throw new Error(`projection target must be codex or claude-code: ${engineId}`)
+  return target
 }
 
 function registryContext() {
@@ -992,6 +1004,21 @@ async function deleteWorkspaceCommand(id: string): Promise<void> {
   })
 }
 
+async function refreshWorkspaceProjectionCommand(id: string, opts: WorkspaceProjectionRefreshCommandOptions): Promise<void> {
+  const paths = await ensureDb()
+  const workspace = getWorkspace(id)
+  if (!workspace)
+    throw new Error(`workspace not found: ${id}`)
+  const host = createHost(paths)
+  const runtime = host.createRuntimeForWorker(requireWorkerRow(workspace.workerId))
+  host.requireEnabledAppForWorker(runtime.workerId)
+  const target = resolveCliProjectionTarget(opts.target)
+  printJson({
+    projection: await runtime.reprojectWorkspaceAssets(workspace.id, { engineTarget: target }),
+    target,
+  })
+}
+
 function isProjectionReceiptStaleError(error: unknown): boolean {
   return error != null
     && typeof error === 'object'
@@ -1587,6 +1614,7 @@ function registerCommands(): void {
     await ensureDb()
     printJson({ workspace: getWorkspace(id) })
   })
+  cli.command('workspace projection refresh <id>', 'refresh workspace engine projection').option('--target <target>', 'projection target: codex or claude-code').action(refreshWorkspaceProjectionCommand)
   cli.command('workspace archive <id>', 'archive a workspace locator').action(archiveWorkspaceCommand)
   cli.command('workspace delete <id>', 'hard-delete workspace locator metadata').action(deleteWorkspaceCommand)
 
@@ -1637,7 +1665,7 @@ const OPERATOR_COMMAND_INDEX = [
   'update',
   'app list|show|install|enable|archive|delete|bootstrap',
   'worker create|list|select|config|archive|delete',
-  'workspace create|list|archive|delete',
+  'workspace create|list|projection refresh|archive|delete',
   'session start|invoke|list|show|archive|delete',
   '',
   'Run `aiworker commands --all` for authoring and diagnostics commands.',
@@ -1651,7 +1679,7 @@ const FULL_COMMAND_INDEX = [
   'app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke',
   'soul list',
   'worker create|list|show|select|config list|config set|config archive|archive|delete',
-  'workspace create|list|show|archive|delete',
+  'workspace create|list|show|projection refresh|archive|delete',
   'session start|invoke|list|show|archive|delete',
   'capability list',
   'files list|show',
