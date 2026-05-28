@@ -55,9 +55,20 @@ describe('release bundle packager', () => {
     ).rejects.toThrow('missing release binary: aiworker-darwin-arm64')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
+
+  it('rejects standalone bundles before staging when the packaged Freeform descriptor is not v1', async () => {
+    await writeFixtureDist(root, { descriptorText: '{"protocol":"legacy-manifest"}\n' })
+    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
+    await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
+
+    await expect(
+      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not descriptor v1')
+    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
+  })
 })
 
-async function writeFixtureDist(root: string, options: { includeMigrationJournal?: boolean } = {}): Promise<void> {
+async function writeFixtureDist(root: string, options: { descriptorText?: string, includeMigrationJournal?: boolean } = {}): Promise<void> {
   const includeMigrationJournal = options.includeMigrationJournal ?? true
   const dist = path.join(root, 'apps', 'cli', 'dist')
   await mkdir(path.join(dist, 'web', 'worker'), { recursive: true })
@@ -67,6 +78,6 @@ async function writeFixtureDist(root: string, options: { includeMigrationJournal
   await writeFile(path.join(dist, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
   if (includeMigrationJournal)
     await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
-  await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), '{"protocol":"soul/v1"}\n')
+  await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), options.descriptorText ?? '{"protocol":"soul/v1"}\n')
   await writeFile(path.join(dist, 'README.md'), '# AIWorker\n')
 }

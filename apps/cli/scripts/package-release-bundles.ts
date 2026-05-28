@@ -14,6 +14,7 @@ const REQUIRED_DIST_RESOURCES = [
   'official-apps/aiworker-freeform/dist/soul.descriptor.json',
   'README.md',
 ] as const
+const FREEFORM_DESCRIPTOR_RESOURCE = 'official-apps/aiworker-freeform/dist/soul.descriptor.json'
 
 export interface PackageReleaseBundlesOptions {
   rootDir?: string
@@ -27,6 +28,7 @@ export async function packageReleaseBundles(options: PackageReleaseBundlesOption
   const releaseDir = resolve(rootDir, 'release')
 
   await assertRequiredDistResources(rootDir, distDir)
+  await assertDescriptorV1(rootDir, distDir, FREEFORM_DESCRIPTOR_RESOURCE)
   await assertTargetBinaries(rootDir, targets)
   await mkdir(releaseDir, { recursive: true })
   for (const target of targets) {
@@ -54,6 +56,18 @@ async function assertTargetBinaries(rootDir: string, targets: readonly string[])
     catch {
       throw new Error(`missing release binary: ${binary}`)
     }
+  }
+}
+
+async function assertDescriptorV1(rootDir: string, distDir: string, resource: string): Promise<void> {
+  const resourcePath = resolve(distDir, resource)
+  try {
+    const descriptor = JSON.parse(await readFile(resourcePath, 'utf8')) as { protocol?: unknown }
+    if (descriptor.protocol !== 'soul/v1')
+      throw new Error('invalid protocol')
+  }
+  catch {
+    throw new Error(`invalid release resource: ${relative(rootDir, resourcePath)} is not descriptor v1`)
   }
 }
 
