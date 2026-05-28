@@ -359,13 +359,9 @@ describe('local daemon API', () => {
     expect(sessionBody.invocations.map(invocation => invocation.sessionId)).toEqual([session.id, session.id])
     expect(sessionBody.invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded'])
 
-    const localSessionRes = await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}`)
-    expect(localSessionRes.status).toBe(200)
-    const localSessionBody = await localSessionRes.json() as {
-      invocations: Array<{ sessionId: string, status: string }>
-    }
-    expect('turns' in localSessionBody).toBe(false)
-    expect(localSessionBody.invocations.map(invocation => invocation.sessionId)).toEqual([session.id, session.id])
+    expect((await target.request(`/api/local/sessions/${session.id}`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}`)).status).toBe(404)
+    expect('turns' in sessionBody).toBe(false)
   })
 
   it('surfaces missing projection receipt failures through the session invocation API', async () => {
@@ -470,14 +466,16 @@ describe('local daemon API', () => {
     expect(body.invocation).toMatchObject({ sessionId: body.session.id, status: 'succeeded' })
     expect(body.invocation?.inputRef).toBe(`aiworker://sessions/${body.session.id}/invocations/${body.invocation!.id}/input`)
 
-    const localSessionRes = await target.request(`/api/local/workers/${worker.id}/sessions/${body.session.id}`)
-    expect(localSessionRes.status).toBe(200)
-    const localSessionBody = await localSessionRes.json() as {
+    expect((await target.request(`/api/local/sessions/${body.session.id}`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/sessions/${body.session.id}`)).status).toBe(404)
+    const canonicalSessionRes = await target.request(`/api/sessions/${body.session.id}`)
+    expect(canonicalSessionRes.status).toBe(200)
+    const canonicalSessionBody = await canonicalSessionRes.json() as {
       invocations: Array<{ id: string, inputRef: string }>
     }
-    expect('turns' in localSessionBody).toBe(false)
-    expect(localSessionBody.invocations.map(invocation => invocation.id)).toEqual([body.invocation!.id])
-    expect(localSessionBody.invocations[0]?.inputRef).not.toContain('/turns/')
+    expect('turns' in canonicalSessionBody).toBe(false)
+    expect(canonicalSessionBody.invocations.map(invocation => invocation.id)).toEqual([body.invocation!.id])
+    expect(canonicalSessionBody.invocations[0]?.inputRef).not.toContain('/turns/')
   })
 
   it('rejects legacy session create bodies that still send capabilityTemplateId', async () => {

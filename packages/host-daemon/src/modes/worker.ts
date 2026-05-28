@@ -535,12 +535,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const workspace = requireWorkerWorkspace(result.data.workerId, result.data.workspaceId)
     return createWorkspaceSessionFromBody(c, state, workspace, result.data)
   })
-  app.get('/api/local/sessions/:sessionId', (c) => {
-    const session = getSession(c.req.param('sessionId'))
-    if (!session)
-      return notFound(c, 'session')
-    return c.json(redactBrokerOutput({ session, invocations: sessionInvocations(session.id), events: listSessionEvents(session.id) }))
-  })
   app.get('/api/sessions/:sessionId', (c) => {
     const session = getSession(c.req.param('sessionId'))
     if (!session)
@@ -575,10 +569,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const session = requireSession(c.req.param('sessionId'))
     deleteSession(session.id)
     return c.json({ deleted: true, session })
-  })
-  app.get('/api/local/workers/:workerId/sessions/:sessionId', (c) => {
-    const session = requireWorkerSession(c.req.param('workerId'), c.req.param('sessionId'))
-    return c.json(redactBrokerOutput({ session, invocations: sessionInvocations(session.id), events: listSessionEvents(session.id) }))
   })
   app.get('/api/local/workers/:workerId/sessions/:sessionId/events', (c) => {
     const session = requireWorkerSession(c.req.param('workerId'), c.req.param('sessionId'))
