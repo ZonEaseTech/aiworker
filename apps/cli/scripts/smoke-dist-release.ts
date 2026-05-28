@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
@@ -26,12 +26,15 @@ interface DoctorOutput {
   }
 }
 
+const officialFreeformDistRoot = resolve(import.meta.dirname, '..', 'dist', 'official-apps', 'aiworker-freeform')
+const officialFreeformDescriptorPath = resolve(officialFreeformDistRoot, 'dist', 'soul.descriptor.json')
+
 async function main(): Promise<number> {
   const cli = resolve(import.meta.dirname, '..', 'dist', 'aiworker.js')
   if (!existsSync(cli))
     throw new Error(`Dist CLI not found: ${cli}. Run bun run build:bundle first.`)
   const expectedVersion = readDistPackageVersion()
-  assertDistDescriptorV1()
+  assertDistOfficialFreeformDescriptor()
 
   const root = mkdtempSync(join(tmpdir(), 'aiworker-dist-release-'))
   const home = join(root, 'home')
@@ -70,7 +73,7 @@ async function main(): Promise<number> {
     assertJsonIncludes(capabilities.stdout, 'aiworker-freeform.default')
     await assertWorkbenchMountRequiresLocator(port)
 
-    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API, reports packaged resources, and bootstraps the descriptor-only Freeform Soul')
+    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API, reports packaged resources, and bootstraps official Soul Apps with descriptor refs')
     return 0
   }
   finally {
@@ -98,21 +101,37 @@ function readDistPackageVersion(): string {
   return pkg.version
 }
 
-function assertDistDescriptorV1(): void {
-  const descriptorPath = resolve(
-    import.meta.dirname,
-    '..',
-    'dist',
-    'official-apps',
-    'aiworker-freeform',
-    'dist',
-    'soul.descriptor.json',
-  )
+function assertDistOfficialFreeformDescriptor(): void {
+  let descriptor: ReturnType<typeof parseOfficialFreeformDescriptorJson>
   try {
-    parseOfficialFreeformDescriptorJson(readFileSync(descriptorPath, 'utf8'))
+    descriptor = parseOfficialFreeformDescriptorJson(readFileSync(officialFreeformDescriptorPath, 'utf8'))
   }
   catch {
-    throw new Error(`dist Freeform descriptor must use protocol soul/v1: ${descriptorPath}`)
+    throw new Error(`dist Freeform descriptor must use protocol soul/v1: ${officialFreeformDescriptorPath}`)
+  }
+  assertDistDescriptorRefs([
+    { kind: 'file', ref: descriptor.workbench.entry },
+    { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
+    { kind: 'dir', ref: descriptor.engine.skills?.source },
+    ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
+  ])
+}
+
+function assertDistDescriptorRefs(refs: Array<{ kind: 'dir' | 'file', ref?: string }>): void {
+  for (const item of refs) {
+    if (!item.ref)
+      continue
+    const resourcePath = resolve(officialFreeformDistRoot, item.ref)
+    try {
+      const info = statSync(resourcePath)
+      if (item.kind === 'dir' && !info.isDirectory())
+        throw new Error('not a directory')
+      if (item.kind === 'file' && !info.isFile())
+        throw new Error('not a file')
+    }
+    catch {
+      throw new Error(`dist Freeform descriptor references missing ${item.kind}: ${resourcePath}`)
+    }
   }
 }
 
