@@ -43,6 +43,14 @@ describe('release artifact smoke', () => {
     ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz descriptor references missing file: aiworker-darwin-arm64/official-apps/aiworker-freeform/dist/web/workbench/index.html')
   })
 
+  it('rejects attach artifacts when required migration resources are missing from the tarball', async () => {
+    await writeReleaseArtifactWithoutMigrationSql(root, 'darwin-arm64')
+
+    await expect(
+      verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz is missing aiworker-darwin-arm64/drizzle/worker/migration.sql')
+  })
+
   it('rejects attach artifacts when the packaged Freeform descriptor drops the default capability', async () => {
     await writeFixtureReleaseArtifact(root, 'darwin-arm64', {
       descriptorText: fixtureDescriptorText({ capabilities: [] }),
@@ -107,6 +115,7 @@ async function writeFixtureDist(root: string, options: { descriptorText?: string
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code'), { recursive: true })
   await writeFile(path.join(dist, 'web', 'worker', 'index.html'), '<!doctype html>\n')
+  await writeFile(path.join(dist, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
   await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex\n')
@@ -124,9 +133,28 @@ async function writeMalformedReleaseArtifact(root: string, target: string): Prom
   await writeFile(path.join(bundleRoot, 'aiworker'), '#!/bin/sh\necho aiworker\n')
   await chmod(path.join(bundleRoot, 'aiworker'), 0o755)
   await writeFile(path.join(bundleRoot, 'web', 'worker', 'index.html'), '<!doctype html>\n')
+  await writeFile(path.join(bundleRoot, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
   await writeFile(path.join(bundleRoot, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
   await writeFile(path.join(bundleRoot, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), fixtureDescriptorText())
   await writeFile(path.join(bundleRoot, 'README.md'), '# AIWorker\n')
+  await run(['tar', '-C', root, '-czf', path.join(root, `${bundle}.tar.gz`), bundle])
+  const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
+  const checksum = createHash('sha256').update(archive).digest('hex')
+  await writeFile(path.join(root, `${bundle}.tar.gz.sha256`), `${checksum}  ${bundle}.tar.gz\n`)
+}
+
+async function writeReleaseArtifactWithoutMigrationSql(root: string, target: string): Promise<void> {
+  await writeFixtureDist(root)
+  const bundle = `aiworker-${target}`
+  const bundleRoot = path.join(root, bundle)
+  await mkdir(bundleRoot, { recursive: true })
+  await writeFile(path.join(bundleRoot, 'aiworker'), '#!/bin/sh\necho 0.0.0-test\n')
+  await chmod(path.join(bundleRoot, 'aiworker'), 0o755)
+  await cp(path.join(root, 'apps', 'cli', 'dist', 'web'), path.join(bundleRoot, 'web'), { recursive: true })
+  await mkdir(path.join(bundleRoot, 'drizzle', 'worker', 'meta'), { recursive: true })
+  await cp(path.join(root, 'apps', 'cli', 'dist', 'drizzle', 'worker', 'meta'), path.join(bundleRoot, 'drizzle', 'worker', 'meta'), { recursive: true })
+  await cp(path.join(root, 'apps', 'cli', 'dist', 'official-apps'), path.join(bundleRoot, 'official-apps'), { recursive: true })
+  await cp(path.join(root, 'apps', 'cli', 'dist', 'README.md'), path.join(bundleRoot, 'README.md'))
   await run(['tar', '-C', root, '-czf', path.join(root, `${bundle}.tar.gz`), bundle])
   const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
   const checksum = createHash('sha256').update(archive).digest('hex')

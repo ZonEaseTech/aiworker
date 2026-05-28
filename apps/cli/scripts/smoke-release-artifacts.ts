@@ -16,6 +16,7 @@ const FREEFORM_DESCRIPTOR = `${FREEFORM_ROOT}/dist/soul.descriptor.json`
 const REQUIRED_BUNDLE_ENTRIES = [
   'aiworker',
   'web/worker/index.html',
+  'drizzle/worker/migration.sql',
   'drizzle/worker/meta/_journal.json',
   FREEFORM_DESCRIPTOR,
   'README.md',
