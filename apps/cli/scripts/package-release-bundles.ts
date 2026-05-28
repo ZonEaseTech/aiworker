@@ -11,7 +11,6 @@ import { copyDir } from './build-publish-manifest'
 const DEFAULT_TARGETS = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'] as const
 const REQUIRED_DIST_RESOURCES = [
   'web/worker/index.html',
-  'drizzle/worker/migration.sql',
   'drizzle/worker/meta/_journal.json',
   'official-apps/aiworker-freeform/dist/soul.descriptor.json',
   'README.md',
@@ -30,6 +29,7 @@ export async function packageReleaseBundles(options: PackageReleaseBundlesOption
   const releaseDir = resolve(rootDir, 'release')
 
   await assertRequiredDistResources(rootDir, distDir)
+  await assertDrizzleJournalMigrations(rootDir, distDir)
   await assertDescriptorV1(rootDir, distDir, FREEFORM_DESCRIPTOR_RESOURCE)
   await assertTargetBinaries(rootDir, targets)
   await mkdir(releaseDir, { recursive: true })
@@ -57,6 +57,23 @@ async function assertTargetBinaries(rootDir: string, targets: readonly string[])
     }
     catch {
       throw new Error(`missing release binary: ${binary}`)
+    }
+  }
+}
+
+async function assertDrizzleJournalMigrations(rootDir: string, distDir: string): Promise<void> {
+  const journalPath = resolve(distDir, 'drizzle/worker/meta/_journal.json')
+  const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries?: Array<{ tag?: unknown }> }
+  const tags = journal.entries?.map(entry => entry.tag).filter((tag): tag is string => typeof tag === 'string' && tag.length > 0) ?? []
+  if (tags.length === 0)
+    throw new Error(`invalid release resource: ${relative(rootDir, journalPath)} has no migration entries`)
+  for (const tag of tags) {
+    const migrationPath = resolve(distDir, 'drizzle', 'worker', `${tag}.sql`)
+    try {
+      await stat(migrationPath)
+    }
+    catch {
+      throw new Error(`missing release resource: ${relative(rootDir, migrationPath)}`)
     }
   }
 }

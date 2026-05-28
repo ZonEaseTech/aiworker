@@ -16,7 +16,6 @@ const FREEFORM_DESCRIPTOR = `${FREEFORM_ROOT}/dist/soul.descriptor.json`
 const REQUIRED_BUNDLE_ENTRIES = [
   'aiworker',
   'web/worker/index.html',
-  'drizzle/worker/migration.sql',
   'drizzle/worker/meta/_journal.json',
   FREEFORM_DESCRIPTOR,
   'README.md',
@@ -44,6 +43,7 @@ export async function verifyReleaseArtifacts(options: VerifyReleaseArtifactsOpti
         throw new Error(`release artifact ${archive} is missing ${archivedPath}`)
     }
     assertExecutableBinary(archive, `${bundle}/aiworker`, verboseEntries)
+    await assertDrizzleJournalMigrations(rootDir, archive, bundle, entries)
     await assertOfficialFreeformDescriptorRefs(rootDir, archive, bundle, entries)
     await smokeCurrentTargetBinary(rootDir, archive, target, expectedVersion)
   }
@@ -54,6 +54,24 @@ async function readDistPackageVersion(rootDir: string): Promise<string> {
   if (typeof pkg.version !== 'string' || pkg.version.length === 0)
     throw new Error('release artifact smoke requires apps/cli/dist/package.json with a version')
   return pkg.version
+}
+
+async function assertDrizzleJournalMigrations(
+  rootDir: string,
+  archive: string,
+  bundle: string,
+  entries: Set<string>,
+): Promise<void> {
+  const journalPath = `${bundle}/drizzle/worker/meta/_journal.json`
+  const journal = JSON.parse(await tarFile(rootDir, archive, journalPath)) as { entries?: Array<{ tag?: unknown }> }
+  const tags = journal.entries?.map(entry => entry.tag).filter((tag): tag is string => typeof tag === 'string' && tag.length > 0) ?? []
+  if (tags.length === 0)
+    throw new Error(`release artifact ${archive} migration journal has no entries: ${journalPath}`)
+  for (const tag of tags) {
+    const archivedPath = `${bundle}/drizzle/worker/${tag}.sql`
+    if (!entries.has(archivedPath))
+      throw new Error(`release artifact ${archive} is missing ${archivedPath}`)
+  }
 }
 
 async function assertOfficialFreeformDescriptorRefs(
@@ -215,8 +233,13 @@ async function runBinarySmoke(binary: string, archive: string, archivedFile: str
     throw new Error(`release artifact ${archive} binary smoke failed: ${archivedFile} --version exited ${code}`)
   if (stdout.trim().length === 0)
     throw new Error(`release artifact ${archive} binary smoke failed: ${archivedFile} --version produced no output${stderr ? `: ${stderr}` : ''}`)
-  if (stdout.trim() !== expectedVersion)
+  if (!reportsExpectedVersion(stdout, expectedVersion))
     throw new Error(`release artifact ${archive} binary smoke failed: ${archivedFile} --version did not report ${expectedVersion}`)
+}
+
+function reportsExpectedVersion(stdout: string, expectedVersion: string): boolean {
+  const normalized = stdout.trim()
+  return normalized === expectedVersion || normalized.includes(`aiworker/${expectedVersion}`)
 }
 
 function hasDirectoryEntry(entries: Set<string>, directory: string): boolean {

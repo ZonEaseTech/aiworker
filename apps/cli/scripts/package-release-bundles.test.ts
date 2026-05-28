@@ -27,7 +27,8 @@ describe('release bundle packager', () => {
     const bundleRoot = path.join(root, 'release', 'aiworker-darwin-arm64')
     await expect(stat(path.join(bundleRoot, 'aiworker'))).resolves.toBeTruthy()
     await expect(stat(path.join(bundleRoot, 'web', 'worker', 'index.html'))).resolves.toBeTruthy()
-    await expect(stat(path.join(bundleRoot, 'drizzle', 'worker', 'migration.sql'))).resolves.toBeTruthy()
+    await expect(stat(path.join(bundleRoot, 'drizzle', 'worker', '0000_fixture.sql'))).resolves.toBeTruthy()
+    await expect(stat(path.join(bundleRoot, 'drizzle', 'worker', 'meta', '_journal.json'))).resolves.toBeTruthy()
     await expect(stat(path.join(bundleRoot, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'))).resolves.toBeTruthy()
     await expect(stat(path.join(bundleRoot, 'README.md'))).resolves.toBeTruthy()
     await expect(stat(path.join(root, 'aiworker-darwin-arm64.tar.gz'))).resolves.toBeTruthy()
@@ -47,14 +48,14 @@ describe('release bundle packager', () => {
     ).rejects.toThrow('missing release resource: apps/cli/dist/drizzle/worker/meta/_journal.json')
   })
 
-  it('rejects standalone bundles when packaged migrations are missing migration SQL', async () => {
-    await writeFixtureDist(root, { includeMigrationSql: false })
+  it('rejects standalone bundles when packaged migrations are missing journal SQL files', async () => {
+    await writeFixtureDist(root, { includeJournalMigrationSql: false })
     await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
     await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('missing release resource: apps/cli/dist/drizzle/worker/migration.sql')
+    ).rejects.toThrow('missing release resource: apps/cli/dist/drizzle/worker/0000_fixture.sql')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
@@ -155,14 +156,14 @@ async function writeFixtureDist(
   options: {
     descriptorText?: string
     includeCodexMcpFile?: boolean
+    includeJournalMigrationSql?: boolean
     includeMigrationJournal?: boolean
-    includeMigrationSql?: boolean
     includeWorkbenchEntry?: boolean
   } = {},
 ): Promise<void> {
   const includeCodexMcpFile = options.includeCodexMcpFile ?? true
+  const includeJournalMigrationSql = options.includeJournalMigrationSql ?? true
   const includeMigrationJournal = options.includeMigrationJournal ?? true
-  const includeMigrationSql = options.includeMigrationSql ?? true
   const includeWorkbenchEntry = options.includeWorkbenchEntry ?? true
   const dist = path.join(root, 'apps', 'cli', 'dist')
   await mkdir(path.join(dist, 'web', 'worker'), { recursive: true })
@@ -174,10 +175,10 @@ async function writeFixtureDist(
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code'), { recursive: true })
   await writeFile(path.join(dist, 'web', 'worker', 'index.html'), '<!doctype html>\n')
-  if (includeMigrationSql)
-    await writeFile(path.join(dist, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
+  if (includeJournalMigrationSql)
+    await writeFile(path.join(dist, 'drizzle', 'worker', '0000_fixture.sql'), '-- migration\n')
   if (includeMigrationJournal)
-    await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
+    await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[{"tag":"0000_fixture"}]}\n')
   if (includeWorkbenchEntry)
     await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
   if (includeCodexMcpFile)

@@ -7,6 +7,10 @@ describe('standalone runtime smoke script contract', () => {
   it('validates the unpacked official Freeform descriptor refs from standalone official apps', async () => {
     const source = await readFile(join(import.meta.dirname, 'smoke-standalone-runtime.ts'), 'utf8')
 
+    expect(source).toContain('readDistPackageVersion')
+    expect(source).toContain('assertStandaloneBinaryVersion')
+    expect(source).toContain('--version')
+    expect(source).toContain('standalone binary must report dist package version')
     expect(source).toContain('assertStandaloneOfficialFreeformDescriptor')
     expect(source).toContain('assertStandaloneDescriptorRefs')
     expect(source).toContain('parseOfficialFreeformDescriptorJson')

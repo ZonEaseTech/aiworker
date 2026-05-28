@@ -452,15 +452,15 @@ if (!smokeReleaseArtifactsScript.includes(`const DEFAULT_TARGETS = ${expectedRel
 }
 const requiredReleasePackageResources = [
   'web/worker/index.html',
-  'drizzle/worker/migration.sql',
   'drizzle/worker/meta/_journal.json',
+  'assertDrizzleJournalMigrations',
   'official-apps/aiworker-freeform/dist/soul.descriptor.json',
   'README.md',
 ]
 const requiredReleaseSmokeResources = [
   'web/worker/index.html',
-  'drizzle/worker/migration.sql',
   'drizzle/worker/meta/_journal.json',
+  'assertDrizzleJournalMigrations',
   'FREEFORM_DESCRIPTOR',
   'README.md',
 ]

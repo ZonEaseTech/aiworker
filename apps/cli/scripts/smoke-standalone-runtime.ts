@@ -47,6 +47,7 @@ async function main(): Promise<number> {
   try {
     await cleanup()
     await run(['bun', 'build', '--compile', `--target=bun-${target}`, `--outfile=${bundle}`, 'apps/cli/src/aiworker.ts'])
+    const expectedVersion = await readDistPackageVersion()
     await packageReleaseBundles({ targets: [target] })
     await run(['tar', '-xzf', `${bundle}.tar.gz`, '-C', tempDir])
 
@@ -60,6 +61,7 @@ async function main(): Promise<number> {
     }
     delete env.WORKER_MIGRATIONS_FOLDER
 
+    await assertStandaloneBinaryVersion(binary, expectedVersion)
     const doctor = await run([binary, 'doctor'], { env })
     assertStandaloneDoctor(doctor.stdout)
     await run([binary, 'app', 'bootstrap', 'official'], { env })
@@ -75,6 +77,24 @@ async function main(): Promise<number> {
     await rm(tempDir, { recursive: true, force: true })
     await cleanup()
   }
+}
+
+async function readDistPackageVersion(): Promise<string> {
+  const pkg = JSON.parse(await readFile(resolve('apps/cli/dist/package.json'), 'utf8')) as { version?: unknown }
+  if (typeof pkg.version !== 'string' || pkg.version.length === 0)
+    throw new Error('standalone runtime smoke requires apps/cli/dist/package.json with a version')
+  return pkg.version
+}
+
+async function assertStandaloneBinaryVersion(binary: string, expectedVersion: string): Promise<void> {
+  const version = await run([binary, '--version'])
+  if (!reportsExpectedVersion(version.stdout, expectedVersion))
+    throw new Error(`standalone binary must report dist package version ${expectedVersion}; got ${version.stdout.trim() || '<empty>'}`)
+}
+
+function reportsExpectedVersion(stdout: string, expectedVersion: string): boolean {
+  const normalized = stdout.trim()
+  return normalized === expectedVersion || normalized.includes(`aiworker/${expectedVersion}`)
 }
 
 function currentTarget(): string {

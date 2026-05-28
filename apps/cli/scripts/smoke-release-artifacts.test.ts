@@ -23,7 +23,7 @@ describe('release artifact smoke', () => {
 
   it('accepts packaged release tarballs only when attach artifacts include checksums and required resources', async () => {
     await writeFixtureDist(root)
-    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho 0.19.3\n')
+    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker/0.19.3 darwin-arm64 node-v24.3.0\n')
     await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
     await packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] })
 
@@ -43,12 +43,12 @@ describe('release artifact smoke', () => {
     ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz descriptor references missing file: aiworker-darwin-arm64/official-apps/aiworker-freeform/dist/web/workbench/index.html')
   })
 
-  it('rejects attach artifacts when required migration resources are missing from the tarball', async () => {
-    await writeReleaseArtifactWithoutMigrationSql(root, 'darwin-arm64')
+  it('rejects attach artifacts when required journal migration SQL files are missing from the tarball', async () => {
+    await writeReleaseArtifactWithoutJournalMigrationSql(root, 'darwin-arm64')
 
     await expect(
       verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz is missing aiworker-darwin-arm64/drizzle/worker/migration.sql')
+    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz is missing aiworker-darwin-arm64/drizzle/worker/0000_fixture.sql')
   })
 
   it('rejects attach artifacts when the packaged Freeform descriptor drops the default capability', async () => {
@@ -127,8 +127,8 @@ async function writeFixtureDist(root: string, options: { descriptorText?: string
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code'), { recursive: true })
   await writeFile(path.join(dist, 'package.json'), '{"version":"0.19.3"}\n')
   await writeFile(path.join(dist, 'web', 'worker', 'index.html'), '<!doctype html>\n')
-  await writeFile(path.join(dist, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
-  await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
+  await writeFile(path.join(dist, 'drizzle', 'worker', '0000_fixture.sql'), '-- migration\n')
+  await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[{"tag":"0000_fixture"}]}\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code', '.mcp.json'), '{}\n')
@@ -146,8 +146,8 @@ async function writeMalformedReleaseArtifact(root: string, target: string): Prom
   await writeFile(path.join(bundleRoot, 'aiworker'), '#!/bin/sh\necho aiworker\n')
   await chmod(path.join(bundleRoot, 'aiworker'), 0o755)
   await writeFile(path.join(bundleRoot, 'web', 'worker', 'index.html'), '<!doctype html>\n')
-  await writeFile(path.join(bundleRoot, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
-  await writeFile(path.join(bundleRoot, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
+  await writeFile(path.join(bundleRoot, 'drizzle', 'worker', '0000_fixture.sql'), '-- migration\n')
+  await writeFile(path.join(bundleRoot, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[{"tag":"0000_fixture"}]}\n')
   await writeFile(path.join(bundleRoot, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), fixtureDescriptorText())
   await writeFile(path.join(bundleRoot, 'README.md'), '# AIWorker\n')
   await run(['tar', '-C', root, '-czf', path.join(root, `${bundle}.tar.gz`), bundle])
@@ -162,7 +162,7 @@ async function writeFixturePackageMetadata(root: string): Promise<void> {
   await writeFile(path.join(dist, 'package.json'), '{"version":"0.19.3"}\n')
 }
 
-async function writeReleaseArtifactWithoutMigrationSql(root: string, target: string): Promise<void> {
+async function writeReleaseArtifactWithoutJournalMigrationSql(root: string, target: string): Promise<void> {
   await writeFixtureDist(root)
   const bundle = `aiworker-${target}`
   const bundleRoot = path.join(root, bundle)
