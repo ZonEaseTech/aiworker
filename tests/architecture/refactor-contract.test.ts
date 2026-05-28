@@ -2149,12 +2149,18 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('tag release workflow runs the canonical release gate before publishing', () => {
     const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
+    const expectedReleaseTargets = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64']
     const releaseCheckIndex = releaseWorkflow.indexOf('bun run release:check')
     const compileIndex = releaseWorkflow.indexOf('Compile single-file binaries')
     const publishIndex = releaseWorkflow.indexOf('npm publish --provenance --access public')
     const packageIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/package-release-bundles.ts')
     const artifactSmokeIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/smoke-release-artifacts.ts')
     const attachIndex = releaseWorkflow.indexOf('softprops/action-gh-release')
+    const compileTargets = Array.from(releaseWorkflow.matchAll(/--target=bun-([a-z0-9-]+)/g), match => match[1])
+    const outfileTargets = Array.from(releaseWorkflow.matchAll(/--outfile=aiworker-([a-z0-9-]+)/g), match => match[1])
+    const attachedBundleTargets = Array.from(releaseWorkflow.matchAll(/^\s+aiworker-([a-z0-9-]+)\.tar\.gz$/gm), match => match[1])
+    const attachedChecksumTargets = Array.from(releaseWorkflow.matchAll(/^\s+aiworker-([a-z0-9-]+)\.tar\.gz\.sha256$/gm), match => match[1])
+    const expectedTargetsLiteral = `['${expectedReleaseTargets.join('\', \'')}']`
 
     expect(releaseWorkflow).toContain('runs-on: ubuntu-latest')
     expect(releaseWorkflow).toContain('id-token: write')
@@ -2167,6 +2173,13 @@ describe('destructive refactor contract bootstrap', () => {
     expect(artifactSmokeIndex).toBeLessThan(publishIndex)
     expect(publishIndex).toBeLessThan(attachIndex)
     expect(releaseWorkflow).toContain('fail_on_unmatched_files: true')
+    expect(compileTargets).toEqual(expectedReleaseTargets)
+    expect(outfileTargets).toEqual(expectedReleaseTargets)
+    expect(attachedBundleTargets).toEqual(expectedReleaseTargets)
+    expect(attachedChecksumTargets).toEqual(expectedReleaseTargets)
+    expect(readRepoFile('apps/cli/scripts/package-release-bundles.ts')).toContain(`const DEFAULT_TARGETS = ${expectedTargetsLiteral} as const`)
+    expect(readRepoFile('apps/cli/scripts/smoke-release-artifacts.ts')).toContain(`const DEFAULT_TARGETS = ${expectedTargetsLiteral} as const`)
+    expect(readRepoFile('scripts/check-doc-contract.ts')).toContain('release target list must stay aligned')
   })
 
   test('release and CI workflows pin a Node version compatible with packaged Web assets', () => {

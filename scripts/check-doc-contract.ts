@@ -278,6 +278,8 @@ if (!packageJson.workspaces?.includes('souls/*'))
   issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
 const expectedNodeEngineRange = '>=20.19.0 <21 || >=22.12.0'
 const expectedWorkflowNodeVersion = '24'
+const expectedReleaseTargets = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64']
+const expectedReleaseTargetsLiteral = `['${expectedReleaseTargets.join('\', \'')}']`
 const releaseWorkflow = read('.github/workflows/release.yml')
 const lintWorkflow = read('.github/workflows/lint.yml')
 const releaseWorkflowReleaseCheckIndex = releaseWorkflow.indexOf('bun run release:check')
@@ -286,6 +288,8 @@ const releaseWorkflowPackageIndex = releaseWorkflow.indexOf('bun apps/cli/script
 const releaseWorkflowArtifactSmokeIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/smoke-release-artifacts.ts')
 const releaseWorkflowPublishIndex = releaseWorkflow.indexOf('npm publish --provenance --access public')
 const releaseWorkflowAttachIndex = releaseWorkflow.indexOf('softprops/action-gh-release')
+const packageReleaseBundlesScript = read('apps/cli/scripts/package-release-bundles.ts')
+const smokeReleaseArtifactsScript = read('apps/cli/scripts/smoke-release-artifacts.ts')
 if (packageJson.engines?.node !== expectedNodeEngineRange)
   issues.push({ file: 'package.json', message: `root package must declare Node engine ${expectedNodeEngineRange}` })
 if (cliPackageJson.engines?.node !== expectedNodeEngineRange)
@@ -305,6 +309,42 @@ if (
   issues.push({
     file: '.github/workflows/release.yml',
     message: 'tag release must run release:check, compile, package, smoke artifacts, publish, then attach release assets',
+  })
+}
+requireExactList(
+  '.github/workflows/release.yml',
+  extractMatches(releaseWorkflow, /--target=bun-([a-z0-9-]+)/g),
+  expectedReleaseTargets,
+  'release target list must stay aligned',
+)
+requireExactList(
+  '.github/workflows/release.yml',
+  extractMatches(releaseWorkflow, /--outfile=aiworker-([a-z0-9-]+)/g),
+  expectedReleaseTargets,
+  'release target list must stay aligned',
+)
+requireExactList(
+  '.github/workflows/release.yml',
+  extractMatches(releaseWorkflow, /^\s+aiworker-([a-z0-9-]+)\.tar\.gz$/gm),
+  expectedReleaseTargets,
+  'release target list must stay aligned',
+)
+requireExactList(
+  '.github/workflows/release.yml',
+  extractMatches(releaseWorkflow, /^\s+aiworker-([a-z0-9-]+)\.tar\.gz\.sha256$/gm),
+  expectedReleaseTargets,
+  'release target list must stay aligned',
+)
+if (!packageReleaseBundlesScript.includes(`const DEFAULT_TARGETS = ${expectedReleaseTargetsLiteral} as const`)) {
+  issues.push({
+    file: 'apps/cli/scripts/package-release-bundles.ts',
+    message: 'release target list must stay aligned',
+  })
+}
+if (!smokeReleaseArtifactsScript.includes(`const DEFAULT_TARGETS = ${expectedReleaseTargetsLiteral} as const`)) {
+  issues.push({
+    file: 'apps/cli/scripts/smoke-release-artifacts.ts',
+    message: 'release target list must stay aligned',
   })
 }
 const testContractsScript = packageJson.scripts?.['test:contracts'] ?? ''
@@ -504,4 +544,13 @@ function requireScriptBefore(scriptName: string, script: string, before: string,
     return
   if (beforeIndex > afterIndex)
     issues.push({ file: 'package.json', message: `${scriptName} must run ${before} before ${after}` })
+}
+
+function extractMatches(content: string, pattern: RegExp): string[] {
+  return Array.from(content.matchAll(pattern), match => match[1] ?? '')
+}
+
+function requireExactList(file: string, actual: string[], expected: string[], message: string): void {
+  if (JSON.stringify(actual) !== JSON.stringify(expected))
+    issues.push({ file, message })
 }
