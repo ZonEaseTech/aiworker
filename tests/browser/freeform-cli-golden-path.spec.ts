@@ -150,6 +150,8 @@ try {
     throw new Error(`Freeform common workbench root did not render: ${mountedSurface.text}`)
   if (!mountedSurface.bridgeRefs || !mountedSurface.text.includes('Bridge event refs'))
     throw new Error(`Bridge event refs were not visible to the mounted surface: ${mountedSurface.text}`)
+  const invocationEventProof = await readInvocationEventProofFromBrowser(page, followUpResult.invocation.id)
+  assertInvocationEventProof(invocationEventProof, followUpResult.invocation.id)
   for (const expectedSection of [
     'Worker configuration summary',
     'Session controls',
@@ -170,6 +172,7 @@ try {
     mountAttributes,
     mountProof,
     mountedSurface,
+    invocationEventProof,
     routeUrl,
   })
 }
@@ -300,6 +303,44 @@ async function readMountedSurface(page: Page): Promise<{ bridgeRefs: boolean, co
       text: `${hostText}\n${shadowText}`,
     }
   })
+}
+
+async function readInvocationEventProofFromBrowser(page: Page, invocationId: string): Promise<Record<string, unknown>> {
+  return await page.evaluate(async (id) => {
+    const response = await fetch(`/api/engine/invocations/${id}/events?after=0&limit=20`)
+    const body = await response.text()
+    if (!response.ok)
+      throw new Error(`invocation events request failed ${response.status}: ${body}`)
+    return JSON.parse(body) as Record<string, unknown>
+  }, invocationId)
+}
+
+function assertInvocationEventProof(proof: Record<string, unknown>, invocationId: string): void {
+  if (proof.invocationId !== invocationId)
+    throw new Error(`Invocation event proof returned the wrong invocation: ${JSON.stringify(proof)}`)
+
+  const bridgeEvents = Array.isArray(proof.bridgeEvents) ? proof.bridgeEvents : []
+  const storedEvents = Array.isArray(proof.events) ? proof.events : []
+  if (bridgeEvents.length === 0)
+    throw new Error(`Invocation event proof did not include bridge events: ${JSON.stringify(proof)}`)
+  if (!bridgeEvents.every(event => isRecord(event) && event.invocationId === invocationId))
+    throw new Error(`Invocation event proof leaked events for another invocation: ${JSON.stringify(proof)}`)
+  if (!storedEvents.every(event => isRecord(event) && event.invocationId === invocationId))
+    throw new Error(`Stored invocation events were not invocation-scoped: ${JSON.stringify(proof)}`)
+
+  const bridgeEventTypes = bridgeEvents
+    .filter(isRecord)
+    .map(event => event.type)
+  if (!bridgeEventTypes.includes('invocation.output.delta') && !bridgeEventTypes.includes('invocation.completed'))
+    throw new Error(`Invocation event proof missed normalized bridge output/completion events: ${JSON.stringify(proof)}`)
+
+  const serialized = JSON.stringify(proof)
+  if (serialized.includes('/turns/') || serialized.includes('"turn"'))
+    throw new Error(`Invocation event proof exposed retired turn semantics: ${serialized}`)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function readBrowserDiagnostics(page: Page): Promise<unknown> {

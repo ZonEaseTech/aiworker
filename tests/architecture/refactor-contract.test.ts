@@ -1938,6 +1938,7 @@ describe('destructive refactor contract bootstrap', () => {
       'tests/browser/freeform-cli-golden-path.spec.ts',
       'tests/browser/freeform-mounted-workbench.spec.ts',
     ]
+    const freeformCliBrowserProof = readRepoFile('tests/browser/freeform-cli-golden-path.spec.ts')
 
     expect(existsSync(join(repoRoot, 'apps/cli/src/freeform-golden-path.test.ts'))).toBe(true)
     expect(existsSync(join(repoRoot, 'tests/browser/freeform-cli-golden-path.spec.ts'))).toBe(true)
@@ -1952,6 +1953,10 @@ describe('destructive refactor contract bootstrap', () => {
       expect(browserFreeformScript.indexOf(freeformBuildScript)).toBeLessThan(browserFreeformScript.indexOf(proof))
       expect(browserFreeformScript.indexOf(webBuildScript)).toBeLessThan(browserFreeformScript.indexOf(proof))
     }
+    expect(freeformCliBrowserProof).toContain('/api/engine/invocations/${id}/events')
+    expect(freeformCliBrowserProof).toContain('assertInvocationEventProof')
+    expect(freeformCliBrowserProof).toContain('invocation.output.delta')
+    expect(freeformCliBrowserProof).toContain("serialized.includes('/turns/')")
   })
 
   test('dist release smoke reads installed apps through canonical app-installation route', () => {

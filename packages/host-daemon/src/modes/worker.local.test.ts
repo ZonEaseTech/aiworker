@@ -1123,7 +1123,7 @@ describe('local daemon API', () => {
     }).run()
     getWorkerDb().insert(bridgeEvents).values({
       invocationId: 'daemon-read-secret-invocation',
-      eventType: 'diagnostic',
+      eventType: 'invocation.warning',
       eventJson: {
         payload: {
           message: 'token=sk-daemon-read-secret',
