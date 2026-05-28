@@ -495,6 +495,18 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.post(\'/api/local/apps/:appId/healthcheck\'')
   })
 
+  test('daemon app-owned API proxy does not preserve local catch-all alias', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const protocol = readRepoFile('docs/protocol.md')
+
+    expect(protocol).toContain('ANY    /api/apps/:appId')
+    expect(protocol).toContain('ANY    /api/apps/:appId/*')
+    expect(daemon).toContain('app.all(\'/api/apps/:appId/:path{.+}\'')
+    expect(daemon).not.toContain('app.all(\'/api/local/apps/:appId/:path{.+}\'')
+    expect(daemon).not.toContain('(?:local/)?apps')
+    expect(daemon).not.toContain('isReservedLocalAppLifecyclePath')
+  })
+
   test('daemon worker collection surface does not preserve local broker aliases', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
 

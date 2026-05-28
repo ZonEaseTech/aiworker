@@ -1901,6 +1901,7 @@ describe('local daemon API', () => {
       },
       path: '/echo',
     })
+    expect((await target.request('/api/local/apps/demo-api/echo')).status).toBe(404)
 
     const proxiedRoot = await target.request('/api/apps/demo-api?workerId=worker-1')
     const proxiedRootText = await proxiedRoot.text()

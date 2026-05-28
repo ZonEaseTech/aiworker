@@ -664,16 +664,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ result: { engineId, message: `${engine.name} responded as ${engine.version ?? engine.path}.`, status: 'pass' } })
   })
 
-  app.all('/api/local/apps/:appId/:path{.+}', (c) => {
-    if (isReservedLocalAppLifecyclePath(c.req.param('path')))
-      return notFound(c, 'route')
-    const app = state.host.getApp(c.req.param('appId'))
-    if (!app)
-      return notFound(c, 'Soul App')
-    if (app.status !== 'enabled')
-      return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-    return proxyMountedSoulAppApi(c, state, app)
-  })
   app.all('/api/apps/:appId', (c) => {
     return proxyMountedSoulAppApiRoute(c, state)
   })
@@ -746,7 +736,7 @@ function authenticateMountedBrokerRequest(c: Context, state: LocalDaemonState): 
 }
 
 function brokerAppIdFromPath(pathname: string): string | null {
-  const match = /^\/api\/(?:local\/)?apps\/([^/]+)\/broker(?:\/|$)/.exec(pathname)
+  const match = /^\/api\/apps\/([^/]+)\/broker(?:\/|$)/.exec(pathname)
   if (!match?.[1])
     return null
   try {
@@ -1044,16 +1034,6 @@ function unavailableSoulAppResponse(c: Context, state: LocalDaemonState, workerI
 
 function enrichCapabilityMetadata(_state: LocalDaemonState, _workerId: string, _capabilityId: string, metadata: Record<string, unknown>): Record<string, unknown> {
   return metadata
-}
-
-function isReservedLocalAppLifecyclePath(pathValue: string | undefined): boolean {
-  const action = pathValue?.split('/')[0]
-  return action === 'archive'
-    || action === 'delete'
-    || action === 'disable'
-    || action === 'enable'
-    || action === 'healthcheck'
-    || action === 'install'
 }
 
 function proxyMountedSoulAppApiRoute(c: Context, state: LocalDaemonState): Promise<Response> | Response {
