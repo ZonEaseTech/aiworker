@@ -340,6 +340,38 @@ describe('Freeform CLI golden path', () => {
     ])
     expect(missingReconcileExit).toBe(1)
     expect(errorOutput).toContain('invocation not found: invocation-does-not-exist')
+
+    const cancelledTerminal = await runCliJson<{
+      invocation: { id: string, processState: string, sessionId: string, status: string }
+      session: { id: string, status: string }
+    }>(
+      'session',
+      'cancel',
+      followed.invocation.id,
+      '--reason',
+      'operator pressed Ctrl+C token=sk-cli-cancel-secret',
+    )
+    expect(cancelledTerminal.invocation).toMatchObject({
+      id: followed.invocation.id,
+      sessionId: started.session.id,
+      status: 'succeeded',
+    })
+    expect(cancelledTerminal.session).toMatchObject({
+      id: started.session.id,
+      status: 'archived',
+    })
+    expect(JSON.stringify(cancelledTerminal)).not.toContain('sk-cli-cancel-secret')
+    expect(JSON.stringify(cancelledTerminal)).not.toContain('/turns/')
+
+    const missingCancelExit = await runCli([
+      '/usr/bin/bun',
+      '/repo/apps/cli/src/aiworker.ts',
+      'session',
+      'cancel',
+      'invocation-does-not-exist',
+    ])
+    expect(missingCancelExit).toBe(1)
+    expect(errorOutput).toContain('invocation not found: invocation-does-not-exist')
   })
 
   async function runCliJson<T>(...args: string[]): Promise<T> {
