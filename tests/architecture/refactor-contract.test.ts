@@ -448,6 +448,35 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'CLI should use bun run dev in source checkouts and daemon foreground/start in the product CLI').toEqual([])
   })
 
+  test('CLI updater does not preserve confirmation compatibility flags', () => {
+    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
+    const updaterSource = readRepoFile('apps/cli/src/updater.ts')
+    const updaterTest = readRepoFile('apps/cli/src/updater.test.ts')
+    const forbidden = [
+      '.option(\'--yes\'',
+      'accepted for compatibility',
+      'confirm update application',
+      'update requires --yes',
+      'requiresConfirmation',
+      'yes?: boolean',
+      'yes: boolean',
+      'opts.yes',
+    ]
+    const findings = [
+      ...forbidden
+        .filter(snippet => cliSource.includes(snippet))
+        .map(snippet => `apps/cli/src/aiworker.ts: ${snippet}`),
+      ...forbidden
+        .filter(snippet => updaterSource.includes(snippet))
+        .map(snippet => `apps/cli/src/updater.ts: ${snippet}`),
+      ...forbidden
+        .filter(snippet => updaterTest.includes(snippet))
+        .map(snippet => `apps/cli/src/updater.test.ts: ${snippet}`),
+    ]
+
+    expect(findings, 'update and upgrade apply by default and should not keep --yes compatibility state').toEqual([])
+  })
+
   test('CLI app lifecycle surface uses archive command without disable alias', () => {
     const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
     const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')

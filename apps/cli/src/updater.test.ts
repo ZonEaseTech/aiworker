@@ -18,8 +18,13 @@ import {
 
 describe('CLI updater core', () => {
   it('treats update and upgrade as apply-mode aliases', () => {
-    expect(parseUpdateCommandOptions('update', {})).toMatchObject({ command: 'update', mode: 'apply' })
-    expect(parseUpdateCommandOptions('upgrade', {})).toMatchObject({ command: 'upgrade', mode: 'apply' })
+    const update = parseUpdateCommandOptions('update', {})
+    const upgrade = parseUpdateCommandOptions('upgrade', {})
+
+    expect(update).toMatchObject({ command: 'update', mode: 'apply' })
+    expect(upgrade).toMatchObject({ command: 'upgrade', mode: 'apply' })
+    expect(update).not.toHaveProperty('yes')
+    expect(upgrade).not.toHaveProperty('yes')
   })
 
   it('maps check to read-only mode before dry-run and apply', () => {
@@ -146,7 +151,6 @@ describe('CLI updater core', () => {
 
     expect(plan).toMatchObject({
       actions: [],
-      requiresConfirmation: false,
       status: 'update_available',
     })
   })
@@ -160,7 +164,6 @@ describe('CLI updater core', () => {
     })
 
     expect(plan).toMatchObject({
-      requiresConfirmation: false,
       status: 'update_available',
     })
     expect(plan.actions.map(action => action.kind)).toEqual([
@@ -476,7 +479,6 @@ describe('CLI updater core', () => {
         ],
         currentVersion: '1.2.2',
         mode: 'dry-run',
-        requiresConfirmation: false,
         source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
         status: 'update_available',
         target: { checksumUrl: null, downloadUrl: null, source: 'npm', version: '1.2.3' },
@@ -515,7 +517,6 @@ describe('CLI updater core', () => {
         ],
         currentVersion: '1.2.3',
         mode: 'apply',
-        requiresConfirmation: false,
         source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
         status: 'already_current',
         target: { checksumUrl: null, downloadUrl: null, source: 'npm', version: '1.2.3' },
@@ -546,7 +547,6 @@ describe('CLI updater core', () => {
         actions: [],
         currentVersion: '1.2.2',
         mode: 'apply',
-        requiresConfirmation: false,
         source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
         status: 'update_available',
         target: { checksumUrl: null, downloadUrl: null, source: 'npm', version: '1.2.3' },
@@ -626,7 +626,6 @@ describe('CLI updater core', () => {
         ],
         currentVersion: '1.2.2',
         mode: 'apply',
-        requiresConfirmation: false,
         source: { canAutoUpgrade: true, kind: 'github-tarball' },
         status: 'update_available',
         target: {
@@ -753,7 +752,6 @@ function upgradePlanWithActions(actions: UpgradeAction[]): UpgradePlan {
     actions,
     currentVersion: '1.2.2',
     mode: 'apply',
-    requiresConfirmation: false,
     source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
     status: 'update_available',
     target: { checksumUrl: null, downloadUrl: null, source: 'npm', version: '1.2.3' },

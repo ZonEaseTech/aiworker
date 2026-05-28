@@ -394,11 +394,6 @@ async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptio
     return
   }
 
-  if (plan.requiresConfirmation) {
-    printJson({ update: plan })
-    throw new Error('update requires --yes to apply changes')
-  }
-
   let daemonRestart: DaemonRestartResult = { reason: 'update did not request daemon restart', restarted: false }
   const result = await executeUpgradePlan({
     convergeHost: async () => {
@@ -1478,7 +1473,6 @@ function registerCommands(): void {
   cli.command('update', 'check or apply an AIWorker CLI update')
     .option('--check', 'check for updates without changing files')
     .option('--dry-run', 'print planned update actions without applying them')
-    .option('--yes', 'accepted for compatibility; updates execute by default')
     .option('--target <version>', 'explicit target version')
     .option('--channel <channel>', 'release channel: stable or preview')
     .option('--pre', 'use preview release channel')
@@ -1486,7 +1480,6 @@ function registerCommands(): void {
   cli.command('upgrade', 'alias for aiworker update')
     .option('--check', 'check for updates without changing files')
     .option('--dry-run', 'print planned update actions without applying them')
-    .option('--yes', 'confirm update application')
     .option('--target <version>', 'explicit target version')
     .option('--channel <channel>', 'release channel: stable or preview')
     .option('--pre', 'use preview release channel')

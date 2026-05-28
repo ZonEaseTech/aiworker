@@ -16,7 +16,6 @@ export interface UpdateCliOptions {
   dryRun?: boolean
   pre?: boolean
   target?: string
-  yes?: boolean
 }
 
 export interface ParsedUpdateOptions {
@@ -25,7 +24,6 @@ export interface ParsedUpdateOptions {
   mode: UpdateMode
   prerelease: boolean
   target?: string
-  yes: boolean
 }
 
 export interface InstallSourceInput {
@@ -72,7 +70,6 @@ export interface UpgradePlan {
   actions: UpgradeAction[]
   currentVersion: string
   mode: UpdateMode
-  requiresConfirmation: boolean
   source: InstallSource
   status: UpgradePlanStatus
   target: ReleaseTarget
@@ -166,7 +163,6 @@ export function parseUpdateCommandOptions(command: UpdateCommandName, opts: Upda
     mode,
     prerelease,
     target: opts.target,
-    yes: opts.yes === true,
   }
 }
 
@@ -248,7 +244,6 @@ export function buildUpgradePlan(input: BuildUpgradePlanInput): UpgradePlan {
     actions,
     currentVersion: input.currentVersion,
     mode: input.options.mode,
-    requiresConfirmation: false,
     source: input.source,
     status,
     target: input.target,
