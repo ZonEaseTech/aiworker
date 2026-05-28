@@ -1959,6 +1959,11 @@ describe('destructive refactor contract bootstrap', () => {
     expect(freeformCliBrowserProof).toContain("serialized.includes('/turns/')")
     expect(freeformCliBrowserProof).toContain('/api/sessions/${id}/archive')
     expect(freeformCliBrowserProof).toContain('assertSessionArchiveProof')
+    expect(freeformCliBrowserProof).toContain('/api/workers/${workerId}/config/skill-overlay%3Afreeform-session')
+    expect(freeformCliBrowserProof).toContain('/api/projections/codex/refresh')
+    expect(freeformCliBrowserProof).toContain('/api/projections/receipts/${workspaceId}')
+    expect(freeformCliBrowserProof).toContain('assertProjectionRefreshProof')
+    expect(freeformCliBrowserProof).toContain('worker-overlay')
   })
 
   test('dist release smoke reads installed apps through canonical app-installation route', () => {

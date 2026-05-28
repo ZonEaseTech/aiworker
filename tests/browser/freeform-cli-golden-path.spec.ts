@@ -163,6 +163,9 @@ try {
   }
   assertNoUnexpectedBrowserEvents(browserEvents)
 
+  const projectionRefreshProof = await readProjectionRefreshProofFromBrowser(page, workerId, workspaceResult.workspace.id)
+  assertProjectionRefreshProof(projectionRefreshProof, workspaceResult.workspace.id)
+
   const sessionArchiveProof = await readSessionArchiveProofFromBrowser(page, sessionResult.session.id)
   assertSessionArchiveProof(sessionArchiveProof, sessionResult.session.id)
 
@@ -176,6 +179,7 @@ try {
     mountProof,
     mountedSurface,
     invocationEventProof,
+    projectionRefreshProof,
     sessionArchiveProof,
     routeUrl,
   })
@@ -341,6 +345,90 @@ function assertInvocationEventProof(proof: Record<string, unknown>, invocationId
   const serialized = JSON.stringify(proof)
   if (serialized.includes('/turns/') || serialized.includes('"turn"'))
     throw new Error(`Invocation event proof exposed retired turn semantics: ${serialized}`)
+}
+
+async function readProjectionRefreshProofFromBrowser(page: Page, workerId: string, workspaceId: string): Promise<Record<string, unknown>> {
+  return await page.evaluate(async ({ workerId, workspaceId }) => {
+    const configResponse = await fetch(`/api/workers/${workerId}/config/skill-overlay%3Afreeform-session`, {
+      body: JSON.stringify({
+        checksum: 'sha256:freeform-browser-overlay',
+        enabled: true,
+        kind: 'skill-overlay',
+        options: {
+          replaces: 'descriptor://engine/skills/freeform-session',
+        },
+        sourceRef: 'descriptor://engine/skills/freeform-session',
+        target: 'codex',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    const configBody = await configResponse.text()
+    const refreshResponse = await fetch('/api/projections/codex/refresh', {
+      body: JSON.stringify({ workerId, workspaceId }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    const refreshBody = await refreshResponse.text()
+    const receiptResponse = await fetch(`/api/projections/receipts/${workspaceId}`)
+    const receiptBody = await receiptResponse.text()
+    return {
+      config: {
+        body: JSON.parse(configBody) as Record<string, unknown>,
+        status: configResponse.status,
+      },
+      receipt: {
+        body: JSON.parse(receiptBody) as Record<string, unknown>,
+        status: receiptResponse.status,
+      },
+      refresh: {
+        body: JSON.parse(refreshBody) as Record<string, unknown>,
+        status: refreshResponse.status,
+      },
+    }
+  }, { workerId, workspaceId })
+}
+
+function assertProjectionRefreshProof(proof: Record<string, unknown>, workspaceId: string): void {
+  const config = readRecord(proof.config)
+  const refresh = readRecord(proof.refresh)
+  const receipt = readRecord(proof.receipt)
+  if (config.status !== 200)
+    throw new Error(`Worker config overlay write failed in browser proof: ${JSON.stringify(proof)}`)
+  if (refresh.status !== 200)
+    throw new Error(`Projection refresh failed in browser proof: ${JSON.stringify(proof)}`)
+  if (receipt.status !== 200)
+    throw new Error(`Projection receipt read failed in browser proof: ${JSON.stringify(proof)}`)
+
+  const savedConfig = readRecord(readRecord(config.body).config)
+  if (savedConfig.configKey !== 'skill-overlay:freeform-session')
+    throw new Error(`Worker config overlay proof saved the wrong config key: ${JSON.stringify(proof)}`)
+  const savedValue = readRecord(savedConfig.value)
+  if (savedValue.kind !== 'skill-overlay' || savedValue.target !== 'codex' || savedValue.updatedBy !== 'web')
+    throw new Error(`Worker config overlay proof missed SDK-standard envelope fields: ${JSON.stringify(proof)}`)
+
+  const refreshReceipt = readRecord(readRecord(readRecord(refresh.body).projection).receipt)
+  const readBackReceipt = readRecord(readRecord(receipt.body).receipt)
+  for (const candidate of [refreshReceipt, readBackReceipt]) {
+    const projections = Array.isArray(candidate.projections) ? candidate.projections : []
+    const hasWorkerOverlaySkill = projections.some(item =>
+      isRecord(item)
+      && item.engineTarget === 'codex'
+      && item.kind === 'native-skill'
+      && item.source === 'worker-overlay'
+      && item.target === '.agents/skills/aiworker-freeform-freeform-session/SKILL.md',
+    )
+    if (!hasWorkerOverlaySkill)
+      throw new Error(`Projection proof missed worker-overlay native skill receipt entry: ${JSON.stringify(proof)}`)
+  }
+  if (readRecord(receipt.body).receiptId !== workspaceId)
+    throw new Error(`Projection receipt proof returned the wrong receipt id: ${JSON.stringify(proof)}`)
+
+  const serialized = JSON.stringify(proof)
+  for (const forbidden of ['/turns/', '"turn"', 'sk-', 'literal-secret-value', 'candidateId', 'reviewRecord', 'artifactContent']) {
+    if (serialized.includes(forbidden))
+      throw new Error(`Projection proof exposed forbidden content ${forbidden}: ${serialized}`)
+  }
 }
 
 async function readSessionArchiveProofFromBrowser(page: Page, sessionId: string): Promise<Record<string, unknown>> {
