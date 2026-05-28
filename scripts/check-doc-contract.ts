@@ -110,6 +110,8 @@ for (const file of ['README.md', 'README.zh-CN.md']) {
 
 requireIncludes('docs/protocol.md', [
   'dist/soul.descriptor.json',
+  'Descriptor v1 contains only these top-level sections:',
+  'protocol\nidentity\ncompatibility\ncapabilities\nconfiguration\nworkbench\napi\nengine\nhealth\nextensions\nexternal',
   'router-mode="search"',
   'POST   /api/sessions/:sessionId/invocations',
   'These are broker routes, not business product APIs.',
