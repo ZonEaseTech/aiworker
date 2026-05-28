@@ -82,7 +82,9 @@ export interface UseSessionComposerDraftResult {
 }
 
 const TRAILING_MENTION_PATTERN = /(^|\s)\$([\w-]*)$/
+const EMPTY_MENTION_OPTIONS: SessionComposerMentionOption[] = []
 
+// eslint-disable-next-line react-refresh/only-export-components -- public composer hook exported beside the managed component.
 export function useSessionComposerDraft({
   defaultValue = '',
   dedupeAttachments = true,
@@ -166,7 +168,7 @@ export function ManagedSessionComposer({
   dedupeAttachments = true,
   disabled = false,
   error,
-  mentionOptions = [],
+  mentionOptions = EMPTY_MENTION_OPTIONS,
   mentionQuery,
   onSubmitDraft,
   onValueChange,
