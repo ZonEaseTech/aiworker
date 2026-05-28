@@ -258,12 +258,33 @@ for (const testPath of documentedTestingPaths()) {
     })
   }
 }
+const testingDoc = read('docs/testing.md')
+for (const requiredReleaseExitText of [
+  '## Release Exit Criteria',
+  '`bun run release:check` must exactly aggregate the Current Release Gates',
+  'Tag release handoff must run post-compile artifact proof after `release:check`',
+  'bun apps/cli/scripts/package-release-bundles.ts',
+  'bun apps/cli/scripts/smoke-release-artifacts.ts',
+]) {
+  if (!testingDoc.includes(requiredReleaseExitText)) {
+    issues.push({
+      file: 'docs/testing.md',
+      message: 'Release Exit Criteria must document post-compile artifact proof',
+    })
+  }
+}
 if (!packageJson.workspaces?.includes('souls/*'))
   issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
 const expectedNodeEngineRange = '>=20.19.0 <21 || >=22.12.0'
 const expectedWorkflowNodeVersion = '24'
 const releaseWorkflow = read('.github/workflows/release.yml')
 const lintWorkflow = read('.github/workflows/lint.yml')
+const releaseWorkflowReleaseCheckIndex = releaseWorkflow.indexOf('bun run release:check')
+const releaseWorkflowCompileIndex = releaseWorkflow.indexOf('Compile single-file binaries')
+const releaseWorkflowPackageIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/package-release-bundles.ts')
+const releaseWorkflowArtifactSmokeIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/smoke-release-artifacts.ts')
+const releaseWorkflowPublishIndex = releaseWorkflow.indexOf('npm publish --provenance --access public')
+const releaseWorkflowAttachIndex = releaseWorkflow.indexOf('softprops/action-gh-release')
 if (packageJson.engines?.node !== expectedNodeEngineRange)
   issues.push({ file: 'package.json', message: `root package must declare Node engine ${expectedNodeEngineRange}` })
 if (cliPackageJson.engines?.node !== expectedNodeEngineRange)
@@ -272,6 +293,19 @@ if (!releaseWorkflow.includes(`node-version: '${expectedWorkflowNodeVersion}'`))
   issues.push({ file: '.github/workflows/release.yml', message: 'GitHub workflows must use Node 24 for release reproducibility' })
 if (!lintWorkflow.includes(`node-version: '${expectedWorkflowNodeVersion}'`))
   issues.push({ file: '.github/workflows/lint.yml', message: 'GitHub workflows must use Node 24 for release reproducibility' })
+if (
+  releaseWorkflowReleaseCheckIndex === -1
+  || releaseWorkflowCompileIndex <= releaseWorkflowReleaseCheckIndex
+  || releaseWorkflowPackageIndex <= releaseWorkflowCompileIndex
+  || releaseWorkflowArtifactSmokeIndex <= releaseWorkflowPackageIndex
+  || releaseWorkflowPublishIndex <= releaseWorkflowArtifactSmokeIndex
+  || releaseWorkflowAttachIndex <= releaseWorkflowPublishIndex
+) {
+  issues.push({
+    file: '.github/workflows/release.yml',
+    message: 'tag release must run release:check, compile, package, smoke artifacts, publish, then attach release assets',
+  })
+}
 const testContractsScript = packageJson.scripts?.['test:contracts'] ?? ''
 if (!testContractsScript.includes('bun test tests/architecture'))
   issues.push({ file: 'package.json', message: 'test:contracts must run the refactor contract test' })

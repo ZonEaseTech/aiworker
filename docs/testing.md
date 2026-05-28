@@ -181,6 +181,19 @@ bun run check
 `bun run release:check` is the aggregator for this current release gate list.
 It must stay in sync with the commands above.
 
+## Release Exit Criteria
+
+`bun run release:check` must exactly aggregate the Current Release Gates.
+
+Tag release handoff must run post-compile artifact proof after `release:check`
+and before npm publish or GitHub release attachment. The post-compile artifact
+proof is:
+
+```text
+bun apps/cli/scripts/package-release-bundles.ts
+bun apps/cli/scripts/smoke-release-artifacts.ts
+```
+
 ## Browser Proof Scope
 
 The v1 browser proof is Freeform-only:

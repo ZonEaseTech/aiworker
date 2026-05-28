@@ -2060,6 +2060,19 @@ describe('destructive refactor contract bootstrap', () => {
     expect(releaseCheckScript).not.toContain('tmp/refactor')
   })
 
+  test('release exit criteria document the tag release handoff after release check', () => {
+    const testing = readRepoFile('docs/testing.md')
+    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
+
+    expect(testing).toContain('## Release Exit Criteria')
+    expect(testing).toContain('`bun run release:check` must exactly aggregate the Current Release Gates')
+    expect(testing).toContain('Tag release handoff must run post-compile artifact proof after `release:check`')
+    expect(testing).toContain('bun apps/cli/scripts/package-release-bundles.ts')
+    expect(testing).toContain('bun apps/cli/scripts/smoke-release-artifacts.ts')
+    expect(testing.indexOf('## Current Release Gates')).toBeLessThan(testing.indexOf('## Release Exit Criteria'))
+    expect(docCheck).toContain('Release Exit Criteria must document post-compile artifact proof')
+  })
+
   test('release smoke contract tests guard official Freeform descriptor refs', () => {
     const testing = readRepoFile('docs/testing.md')
     const releaseSmokeContractTests = [
