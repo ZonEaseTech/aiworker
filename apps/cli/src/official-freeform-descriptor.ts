@@ -7,6 +7,11 @@ const OFFICIAL_FREEFORM_SOUL_ID = 'freeform'
 const OFFICIAL_FREEFORM_NAME = 'AIWorker Freeform'
 const OFFICIAL_FREEFORM_CAPABILITY_ID = 'default'
 const OFFICIAL_FREEFORM_CAPABILITY_NAME = 'Freeform Session'
+const OFFICIAL_FREEFORM_WORKBENCH_ENTRY = 'dist/web/workbench/index.html'
+const OFFICIAL_FREEFORM_MCP_REFS = {
+  'claude-code': 'dist/engine-assets/mcp/claude-code/.mcp.json',
+  'codex': 'dist/engine-assets/mcp/codex/config.toml',
+} as const
 
 export function parseOfficialFreeformDescriptorJson(text: string): ReturnType<typeof parseSoulDescriptorV1> {
   const descriptor = parseSoulDescriptorV1(JSON.parse(text))
@@ -17,6 +22,16 @@ export function parseOfficialFreeformDescriptorJson(text: string): ReturnType<ty
   const defaultCapability = descriptor.capabilities.find(isOfficialFreeformDefaultCapability)
   if (defaultCapability?.name !== OFFICIAL_FREEFORM_CAPABILITY_NAME)
     throw new Error('expected official Freeform default capability')
+  if (
+    descriptor.workbench.entry !== OFFICIAL_FREEFORM_WORKBENCH_ENTRY
+    || descriptor.workbench.mode !== 'sdk-common'
+    || descriptor.workbench.router.mode !== 'search'
+    || descriptor.workbench.type !== 'micro-app'
+  ) {
+    throw new Error('expected official Freeform SDK common workbench')
+  }
+  if (!hasOfficialFreeformMcpTargets(descriptor.engine.mcp?.targets))
+    throw new Error('expected official Freeform native MCP targets')
   return descriptor
 }
 
@@ -27,6 +42,22 @@ function isOfficialFreeformDefaultCapability(capability: unknown): capability is
     && 'name' in capability
     && capability.id === OFFICIAL_FREEFORM_CAPABILITY_ID
     && typeof capability.name === 'string'
+}
+
+function hasOfficialFreeformMcpTargets(targets: unknown): boolean {
+  if (typeof targets !== 'object' || targets === null)
+    return false
+
+  const targetRecord = targets as Record<string, unknown>
+  for (const [target, file] of Object.entries(OFFICIAL_FREEFORM_MCP_REFS)) {
+    if (!(target in targetRecord))
+      return false
+    const value = targetRecord[target]
+    if (typeof value !== 'object' || value === null || !('file' in value) || value.file !== file)
+      return false
+  }
+
+  return true
 }
 
 export function isOfficialFreeformDescriptorJson(text: string): boolean {

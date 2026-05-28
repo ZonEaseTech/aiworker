@@ -89,6 +89,17 @@ describe('release bundle packager', () => {
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
+  it('rejects standalone bundles before staging when the packaged Freeform descriptor drops the Claude Code MCP target', async () => {
+    await writeFixtureDist(root, { descriptorText: fixtureDescriptorText({ mcpTargets: ['codex'] }) })
+    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
+    await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
+
+    await expect(
+      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
+    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
+  })
+
   it('rejects standalone bundles before staging when descriptor-declared workbench assets are missing', async () => {
     await writeFixtureDist(root, { includeWorkbenchEntry: false })
     await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
@@ -146,7 +157,12 @@ async function writeFixtureDist(
   await writeFile(path.join(dist, 'README.md'), '# AIWorker\n')
 }
 
-function fixtureDescriptorText(options: { appId?: string, capabilities?: unknown[] } = {}): string {
+function fixtureDescriptorText(options: {
+  appId?: string
+  capabilities?: unknown[]
+  mcpTargets?: Array<'claude-code' | 'codex'>
+} = {}): string {
+  const mcpTargets = options.mcpTargets ?? ['claude-code', 'codex']
   return `${JSON.stringify({
     protocol: 'soul/v1',
     identity: {
@@ -182,14 +198,14 @@ function fixtureDescriptorText(options: { appId?: string, capabilities?: unknown
     api: null,
     engine: {
       mcp: {
-        targets: {
-          'claude-code': {
-            file: 'dist/engine-assets/mcp/claude-code/.mcp.json',
+        targets: Object.fromEntries(mcpTargets.map(target => [
+          target,
+          {
+            file: target === 'claude-code'
+              ? 'dist/engine-assets/mcp/claude-code/.mcp.json'
+              : 'dist/engine-assets/mcp/codex/config.toml',
           },
-          'codex': {
-            file: 'dist/engine-assets/mcp/codex/config.toml',
-          },
-        },
+        ])),
       },
       skills: {
         source: 'dist/engine-assets/skills',

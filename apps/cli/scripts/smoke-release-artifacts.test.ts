@@ -53,6 +53,16 @@ describe('release artifact smoke', () => {
     ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz official Freeform descriptor must use protocol soul/v1')
   })
 
+  it('rejects attach artifacts when the packaged Freeform descriptor drops the Claude Code MCP target', async () => {
+    await writeFixtureReleaseArtifact(root, 'darwin-arm64', {
+      descriptorText: fixtureDescriptorText({ mcpTargets: ['codex'] }),
+    })
+
+    await expect(
+      verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz official Freeform descriptor must use protocol soul/v1')
+  })
+
   it('rejects attach artifacts when the tarball binary is not executable', async () => {
     await writeFixtureReleaseArtifact(root, 'darwin-arm64', { binaryMode: 0o644 })
 
@@ -95,10 +105,12 @@ async function writeFixtureDist(root: string, options: { descriptorText?: string
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'workspace'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'skills'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
+  await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code'), { recursive: true })
   await writeFile(path.join(dist, 'web', 'worker', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex\n')
+  await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code', '.mcp.json'), '{}\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), options.descriptorText ?? fixtureDescriptorText())
   await writeFile(path.join(dist, 'README.md'), '# AIWorker\n')
 }
@@ -113,7 +125,7 @@ async function writeMalformedReleaseArtifact(root: string, target: string): Prom
   await chmod(path.join(bundleRoot, 'aiworker'), 0o755)
   await writeFile(path.join(bundleRoot, 'web', 'worker', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(bundleRoot, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
-  await writeFile(path.join(bundleRoot, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), fixtureDescriptorText({ engine: {} }))
+  await writeFile(path.join(bundleRoot, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), fixtureDescriptorText())
   await writeFile(path.join(bundleRoot, 'README.md'), '# AIWorker\n')
   await run(['tar', '-C', root, '-czf', path.join(root, `${bundle}.tar.gz`), bundle])
   const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
@@ -145,7 +157,9 @@ async function writeFixtureReleaseArtifact(
 function fixtureDescriptorText(options: {
   capabilities?: unknown[]
   engine?: Record<string, unknown>
+  mcpTargets?: Array<'claude-code' | 'codex'>
 } = {}): string {
+  const mcpTargets = options.mcpTargets ?? ['claude-code', 'codex']
   return `${JSON.stringify({
     api: null,
     capabilities: options.capabilities ?? [
@@ -161,7 +175,16 @@ function fixtureDescriptorText(options: {
     compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
     configuration: {},
     engine: options.engine ?? {
-      mcp: { targets: { codex: { file: 'dist/engine-assets/mcp/codex/config.toml' } } },
+      mcp: {
+        targets: Object.fromEntries(mcpTargets.map(target => [
+          target,
+          {
+            file: target === 'claude-code'
+              ? 'dist/engine-assets/mcp/claude-code/.mcp.json'
+              : 'dist/engine-assets/mcp/codex/config.toml',
+          },
+        ])),
+      },
       skills: { source: 'dist/engine-assets/skills' },
       workspaceAssets: { source: 'dist/engine-assets/workspace' },
     },
