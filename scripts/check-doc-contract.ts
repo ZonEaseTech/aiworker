@@ -383,6 +383,7 @@ if (packageJson.scripts?.['test:protocol'] !== 'bun run --filter \'@zonease/aiwo
   issues.push({ file: 'package.json', message: 'test:protocol must run the soul-protocol package test' })
 const testCliScript = packageJson.scripts?.['test:cli'] ?? ''
 const testBrowserFreeformScript = packageJson.scripts?.['test:browser:freeform'] ?? ''
+const hostDaemonOpenApi = read('packages/host-daemon/src/modes/worker/openapi.ts')
 const hostDaemonWorkerLocalTest = read('packages/host-daemon/src/modes/worker.local.test.ts')
 const freeformCliBrowserProof = read('tests/browser/freeform-cli-golden-path.spec.ts')
 const freeformBuildScript = 'bun run --filter \'@zonease/aiworker-freeform\' build'
@@ -407,6 +408,29 @@ if (!testBrowserFreeformScript.includes('tests/browser/freeform-cli-golden-path.
   issues.push({ file: 'package.json', message: 'test:browser:freeform must include the Freeform CLI browser golden path proof' })
 if (!testBrowserFreeformScript.includes('tests/browser/freeform-mounted-workbench.spec.ts'))
   issues.push({ file: 'package.json', message: 'test:browser:freeform must include the mounted workbench browser proof' })
+requireWorkerConfigBrokerRoutesComplete([
+  ['docs/protocol.md', read('docs/protocol.md'), [
+    'GET    /api/workers/:workerId/config',
+    'PUT    /api/workers/:workerId/config/:configKey',
+    'PATCH  /api/workers/:workerId/config/:configKey',
+    'POST   /api/workers/:workerId/config/:configKey/archive',
+  ]],
+  ['packages/host-daemon/src/modes/worker/openapi.ts', hostDaemonOpenApi, [
+    'path: \'/api/workers/{workerId}/config\'',
+    'path: \'/api/workers/{workerId}/config/{configKey}\'',
+    'path: \'/api/workers/{workerId}/config/{configKey}/archive\'',
+    'method: \'get\'',
+    'method: \'put\'',
+    'method: \'patch\'',
+    'method: \'post\'',
+  ]],
+  ['packages/host-daemon/src/modes/worker.local.test.ts', hostDaemonWorkerLocalTest, [
+    '[\'get\', \'/api/workers/{workerId}/config\']',
+    '[\'put\', \'/api/workers/{workerId}/config/{configKey}\']',
+    '[\'patch\', \'/api/workers/{workerId}/config/{configKey}\']',
+    '[\'post\', \'/api/workers/{workerId}/config/{configKey}/archive\']',
+  ]],
+])
 requireAppOwnedApiProxyGuardrails([
   ['docs/protocol.md', read('docs/protocol.md'), [
     'ANY    /api/apps/:appId',
@@ -633,6 +657,19 @@ function requireFreeformBrowserProofIncludes(needles: string[]): void {
         file: 'tests/browser/freeform-cli-golden-path.spec.ts',
         message: 'browser proof must cover Freeform v1 scope',
       })
+    }
+  }
+}
+
+function requireWorkerConfigBrokerRoutesComplete(entries: Array<[file: string, content: string, needles: string[]]>): void {
+  for (const [file, content, needles] of entries) {
+    for (const needle of needles) {
+      if (!content.includes(needle)) {
+        issues.push({
+          file,
+          message: 'worker config broker routes must stay complete',
+        })
+      }
     }
   }
 }

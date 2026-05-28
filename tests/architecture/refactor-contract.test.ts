@@ -344,6 +344,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('protocol doc promotes broker methods and worker config envelope details', () => {
     const protocol = readRepoFile('docs/protocol.md')
+    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
 
     for (const route of [
       'GET    /api/app-installation/apps/:appId',
@@ -356,6 +357,8 @@ describe('destructive refactor contract bootstrap', () => {
       'PATCH  /api/workers/:workerId',
       'POST   /api/workers/:workerId/archive',
       'DELETE /api/workers/:workerId',
+      'GET    /api/workers/:workerId/config',
+      'PUT    /api/workers/:workerId/config/:configKey',
       'PATCH  /api/workers/:workerId/config/:configKey',
       'POST   /api/workers/:workerId/config/:configKey/archive',
       'PATCH  /api/workspace-locators/:workspaceId',
@@ -381,6 +384,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(protocol).toContain('POST /api/sessions` receives `workerId` and `workspaceId`')
     expect(protocol).toContain('strips client credentials before proxying')
     expect(protocol).toContain('strips app-owned cookies plus Host mount credentials before returning')
+    expect(docCheck).toContain('worker config broker routes must stay complete')
   })
 
   test('soul protocol does not expose legacy worker overlay write contracts', () => {
