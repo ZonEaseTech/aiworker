@@ -22,7 +22,7 @@ import {
   projectEngineAssetsToWorkspace,
   resolveSoulAppEngineTarget,
 } from '@zonease/aiworker-engine-projection'
-import { AppError } from '@zonease/aiworker-soul-protocol'
+import { AppError, soulAppProjectionReceiptSchema } from '@zonease/aiworker-soul-protocol'
 import {
   appendSessionEvent,
   createEngineInvocation,
@@ -276,10 +276,12 @@ export class LocalWorkerRuntime {
     const manifestPath = engineAssetProjectionReceiptPath()
     try {
       const raw = await readFile(path.join(workspace.rootPath, ...manifestPath.split('/')), 'utf8')
-      const { receiptId, ...receipt } = JSON.parse(raw) as SoulAppProjectionReceipt & { receiptId?: unknown }
+      const parsed = JSON.parse(raw) as unknown
+      const receiptId = readNullableString(readRecord(parsed).receiptId)
+      const receipt = soulAppProjectionReceiptSchema.parse(parsed)
       return {
         manifestPath,
-        receipt: receipt as SoulAppProjectionReceipt,
+        receipt,
         receiptId: readNullableString(receiptId) ?? workspace.id,
         workspace,
       }
@@ -287,6 +289,12 @@ export class LocalWorkerRuntime {
     catch (error) {
       if (isNoEntryError(error))
         return null
+      if (isInvalidProjectionReceiptError(error)) {
+        throw localEngineBridgeFailure(
+          'PROJECTION_RECEIPT_STALE',
+          `Projection receipt is invalid for workspace ${workspace.id}.`,
+        )
+      }
       throw error
     }
   }
@@ -692,7 +700,7 @@ export class LocalWorkerRuntime {
       receipt = await this.readWorkspaceProjectionReceipt(workspace.id)
     }
     catch (error) {
-      if (isMalformedProjectionReceiptError(error)) {
+      if (isInvalidProjectionReceiptError(error)) {
         throw localEngineBridgeFailure(
           'PROJECTION_RECEIPT_STALE',
           `Projection receipt is invalid for workspace ${workspace.id}.`,
@@ -1484,6 +1492,7 @@ function isNoEntryError(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
 
-function isMalformedProjectionReceiptError(error: unknown): boolean {
+function isInvalidProjectionReceiptError(error: unknown): boolean {
   return error instanceof SyntaxError
+    || (error instanceof Error && error.name === 'ZodError')
 }

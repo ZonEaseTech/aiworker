@@ -571,6 +571,49 @@ describe('LocalWorkerRuntime', () => {
     expect(JSON.stringify(result)).not.toContain('JSON Parse error')
   })
 
+  it('rejects default bridge invocations before executor spawn when projection receipt schema is invalid', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-default-bridge-invalid-receipt')
+    await writeProfileEngineAssets(appRoot)
+    const executorInputs: string[] = []
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke(input) {
+        executorInputs.push(input.invocationId)
+        return { summary: 'should not run' }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Invalid Receipt Schema Workspace' })
+    const receiptPath = join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    const { freshnessMarker: _freshnessMarker, ...legacyReceipt } = receipt
+    await writeFile(receiptPath, `${JSON.stringify({ ...legacyReceipt, secret: 'sk-invalid-receipt-secret' }, null, 2)}\n`)
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Invalid receipt schema session',
+    })
+
+    const result = await workerRuntime.startInvocation({
+      sessionId: session.id,
+      input: 'Run with an invalid projection receipt schema.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(executorInputs).toEqual([])
+    expect(result.invocation).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_STALE',
+      processState: 'not_spawned',
+      status: 'failed',
+    })
+    expect(result.events.at(-1)?.payloadJson).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_STALE',
+      invocationId: result.invocation.id,
+    })
+    expect(JSON.stringify(result)).not.toContain('sk-invalid-receipt-secret')
+    expect(JSON.stringify(result)).not.toContain('freshnessMarker')
+  })
+
   it('rejects default bridge invocations before executor spawn when projection receipts are stale', async () => {
     const appRoot = join(dir, 'souls', 'demo-soul-app-default-bridge-stale-receipt')
     await writeProfileEngineAssets(appRoot)

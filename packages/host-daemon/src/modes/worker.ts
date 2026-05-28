@@ -337,7 +337,15 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const runtime = requireRuntime(state, existing.id)
     const cleanedTargets: string[] = []
     for (const workspace of listWorkspaces(existing.id, Number.MAX_SAFE_INTEGER)) {
-      const cleanup = await runtime.cleanupWorkspaceProjectionReceipt(workspace.id)
+      let cleanup: Awaited<ReturnType<LocalWorkerRuntime['cleanupWorkspaceProjectionReceipt']>>
+      try {
+        cleanup = await runtime.cleanupWorkspaceProjectionReceipt(workspace.id)
+      }
+      catch (error) {
+        if (isInvalidProjectionReceiptError(error))
+          return projectionReceiptStale(c, workspace.id)
+        throw error
+      }
       cleanedTargets.push(...cleanup?.cleanedTargets ?? [])
     }
     deleteWorker(existing.id)
@@ -421,7 +429,15 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const workspace = getWorkspace(c.req.param('workspaceId'))
     if (!workspace)
       return notFound(c, 'workspace')
-    const cleanup = await requireRuntime(state, workspace.workerId).cleanupWorkspaceProjectionReceipt(workspace.id)
+    let cleanup: Awaited<ReturnType<LocalWorkerRuntime['cleanupWorkspaceProjectionReceipt']>>
+    try {
+      cleanup = await requireRuntime(state, workspace.workerId).cleanupWorkspaceProjectionReceipt(workspace.id)
+    }
+    catch (error) {
+      if (isInvalidProjectionReceiptError(error))
+        return projectionReceiptStale(c, workspace.id)
+      throw error
+    }
     deleteWorkspace(workspace.id)
     return c.json({
       cleanedTargets: cleanup?.cleanedTargets ?? [],
@@ -576,7 +592,15 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const workspace = getWorkspace(receiptId)
     if (!workspace)
       return projectionReceiptMissing(c, receiptId)
-    const result = await requireRuntime(state, workspace.workerId).cleanupWorkspaceProjectionReceipt(workspace.id)
+    let result: Awaited<ReturnType<LocalWorkerRuntime['cleanupWorkspaceProjectionReceipt']>>
+    try {
+      result = await requireRuntime(state, workspace.workerId).cleanupWorkspaceProjectionReceipt(workspace.id)
+    }
+    catch (error) {
+      if (isInvalidProjectionReceiptError(error))
+        return projectionReceiptStale(c, receiptId)
+      throw error
+    }
     if (!result)
       return projectionReceiptMissing(c, receiptId)
     return c.json({
@@ -885,7 +909,7 @@ async function projectionReceiptResponse(c: Context, state: LocalDaemonState): P
     result = await runtime.readWorkspaceProjectionReceipt(workspace.id)
   }
   catch (error) {
-    if (isMalformedProjectionReceiptError(error))
+    if (isInvalidProjectionReceiptError(error))
       return projectionReceiptStale(c, receiptId)
     throw error
   }
@@ -938,8 +962,12 @@ function isSecretReference(value: string): boolean {
   return value.trim().length === 0 || value.startsWith('$') || value.startsWith('env:') || value.startsWith('secretref:')
 }
 
-function isMalformedProjectionReceiptError(error: unknown): boolean {
+function isInvalidProjectionReceiptError(error: unknown): boolean {
   return error instanceof SyntaxError
+    || (error != null
+      && typeof error === 'object'
+      && 'code' in error
+      && error.code === 'PROJECTION_RECEIPT_STALE')
 }
 
 function readProjectionTarget(value: unknown): SoulAppEngineTarget | null {

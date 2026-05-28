@@ -732,6 +732,25 @@ describe('local daemon API', () => {
     await expect(readFile(join(workspace.rootPath, 'business.md'), 'utf8')).resolves.toContain('Keep app-owned work')
   })
 
+  it('rejects workspace hard delete when its projection receipt schema is invalid', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'delete-workspace-invalid-receipt-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    const receiptPath = join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    const { freshnessMarker: _freshnessMarker, ...legacyReceipt } = receipt
+    await writeFile(receiptPath, `${JSON.stringify({ ...legacyReceipt, secret: 'sk-workspace-delete-receipt' }, null, 2)}\n`)
+
+    const deleteRes = await target.request(`/api/workspace-locators/${workspace.id}`, { method: 'DELETE' })
+
+    expect(deleteRes.status).toBe(409)
+    const bodyText = await deleteRes.text()
+    expect(bodyText).toContain('PROJECTION_RECEIPT_STALE')
+    expect(bodyText).not.toContain('sk-workspace-delete-receipt')
+    expect((await target.request(`/api/workspace-locators/${workspace.id}`)).status).toBe(200)
+    expect((await target.request(`/api/sessions/${session.id}`)).status).toBe(200)
+  })
+
   it('archives worker metadata with archived status', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'archive-worker')
@@ -794,6 +813,26 @@ describe('local daemon API', () => {
     expect((await target.request(`/api/sessions/${session.id}`)).status).toBe(404)
     await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).rejects.toThrow()
     await expect(readFile(join(workspace.rootPath, 'business.md'), 'utf8')).resolves.toContain('Keep worker app-owned work')
+  })
+
+  it('rejects worker hard delete when a workspace projection receipt schema is invalid', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'delete-worker-invalid-receipt')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    const receiptPath = join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    const { freshnessMarker: _freshnessMarker, ...legacyReceipt } = receipt
+    await writeFile(receiptPath, `${JSON.stringify({ ...legacyReceipt, secret: 'sk-worker-delete-receipt' }, null, 2)}\n`)
+
+    const deleteRes = await target.request(`/api/workers/${worker.id}`, { method: 'DELETE' })
+
+    expect(deleteRes.status).toBe(409)
+    const bodyText = await deleteRes.text()
+    expect(bodyText).toContain('PROJECTION_RECEIPT_STALE')
+    expect(bodyText).not.toContain('sk-worker-delete-receipt')
+    expect((await target.request(`/api/workers/${worker.id}`)).status).toBe(200)
+    expect((await target.request(`/api/workspace-locators/${workspace.id}`)).status).toBe(200)
+    expect((await target.request(`/api/sessions/${session.id}`)).status).toBe(200)
   })
 
   it('hard-deletes session metadata without deleting workspace files', async () => {
@@ -1786,6 +1825,42 @@ describe('local daemon API', () => {
     expect(bodyText).toContain('PROJECTION_RECEIPT_STALE')
     expect(bodyText).not.toContain('sk-daemon-bad-receipt')
     expect(bodyText).not.toContain('JSON Parse error')
+  })
+
+  it('serves schema-invalid projection receipts as stable platform errors without leaking receipt content', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Legacy Receipt API Workspace' })
+    const receiptPath = join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    const { freshnessMarker: _freshnessMarker, ...legacyReceipt } = receipt
+    await writeFile(receiptPath, `${JSON.stringify({ ...legacyReceipt, secret: 'sk-daemon-legacy-receipt' }, null, 2)}\n`)
+
+    const receiptRes = await target.request(`/api/projections/receipts/${workspace.id}`)
+
+    expect(receiptRes.status).toBe(409)
+    const bodyText = await receiptRes.text()
+    expect(bodyText).toContain('PROJECTION_RECEIPT_STALE')
+    expect(bodyText).not.toContain('sk-daemon-legacy-receipt')
+    expect(bodyText).not.toContain('freshnessMarker')
+  })
+
+  it('serves schema-invalid projection receipt cleanup as a stable platform error without leaking receipt content', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Legacy Receipt Cleanup Workspace' })
+    const receiptPath = join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    const { freshnessMarker: _freshnessMarker, ...legacyReceipt } = receipt
+    await writeFile(receiptPath, `${JSON.stringify({ ...legacyReceipt, secret: 'sk-daemon-cleanup-receipt' }, null, 2)}\n`)
+
+    const cleanupRes = await target.request(`/api/projections/receipts/${workspace.id}/cleanup`, { method: 'POST' })
+
+    expect(cleanupRes.status).toBe(409)
+    const bodyText = await cleanupRes.text()
+    expect(bodyText).toContain('PROJECTION_RECEIPT_STALE')
+    expect(bodyText).not.toContain('sk-daemon-cleanup-receipt')
+    expect(bodyText).not.toContain('freshnessMarker')
   })
 
   it('refreshes projection assets for the requested broker engine target', async () => {
