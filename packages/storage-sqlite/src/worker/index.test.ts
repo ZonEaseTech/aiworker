@@ -169,6 +169,52 @@ describe('greenfield local worker session schema', () => {
     expect(disabled.disabledAt).toBe('2026-05-12T22:24:00.000Z')
   })
 
+  it('rejects literal secrets inside opaque descriptor extensions and external payloads', () => {
+    expect(() =>
+      upsertSoulApp({
+        id: freeformDescriptor.identity.appId as string,
+        name: freeformDescriptor.identity.name as string,
+        version: freeformDescriptor.identity.version as string,
+        protocol: freeformDescriptor.protocol,
+        soulId: freeformDescriptor.identity.soulId as string,
+        sourceKind: 'inline',
+        sourceRef: 'test:inline',
+        descriptorDigest: 'digest-secret-external',
+        descriptorJson: {
+          ...freeformDescriptor,
+          external: {
+            businessWorkflow: {
+              apiKey: 'literal-secret',
+            },
+          },
+        },
+        at: '2026-05-12T22:22:00.000Z',
+      }),
+    ).toThrow('Literal secrets are not allowed in Host metadata: soul_apps.descriptorJson.external.businessWorkflow.apiKey')
+
+    expect(() =>
+      upsertSoulApp({
+        id: freeformDescriptor.identity.appId as string,
+        name: freeformDescriptor.identity.name as string,
+        version: freeformDescriptor.identity.version as string,
+        protocol: freeformDescriptor.protocol,
+        soulId: freeformDescriptor.identity.soulId as string,
+        sourceKind: 'inline',
+        sourceRef: 'test:inline',
+        descriptorDigest: 'digest-secret-extension',
+        descriptorJson: {
+          ...freeformDescriptor,
+          extensions: {
+            'demo.example/review': {
+              token: 'literal-secret',
+            },
+          },
+        },
+        at: '2026-05-12T22:22:00.000Z',
+      }),
+    ).toThrow('Literal secrets are not allowed in Host metadata: soul_apps.descriptorJson.extensions.demo.example/review.token')
+  })
+
   it('normalizes retired worker lifecycle rows to archived', () => {
     upsertWorker({ id: 'legacy-disabled-worker', name: 'Legacy Disabled Worker', soulId: 'demo-soul-app' })
     upsertWorker({ id: 'legacy-paused-worker', name: 'Legacy Paused Worker', soulId: 'demo-soul-app' })

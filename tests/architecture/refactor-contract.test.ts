@@ -336,9 +336,12 @@ describe('destructive refactor contract bootstrap', () => {
     const protocol = readRepoFile('docs/protocol.md')
     const authoring = readRepoFile('docs/soul-authoring.md')
     const soulAppEngineAssets = readRepoFile('packages/soul-protocol/src/soul-app/manifest.ts')
+    const registry = readRepoFile('packages/soul-protocol/src/soul-app/registry.ts')
+    const hostRuntimeRegistryTest = readRepoFile('packages/host-runtime/src/soul-app/registry.test.ts')
 
     expect(protocol).toContain('dist/soul.descriptor.json')
     expect(protocol).toContain('router-mode="search"')
+    expect(protocol).toContain('`extensions` and `external` are opaque to Host')
     expect(protocol).not.toContain('host-adapter')
     expect(protocol).not.toContain('source exports')
 
@@ -349,6 +352,11 @@ describe('destructive refactor contract bootstrap', () => {
     expect(soulAppEngineAssets).toContain('mcpClients')
     expect(soulAppEngineAssets).not.toContain('soulAppMcpServer')
     expect(soulAppEngineAssets).not.toContain('mcpServers:')
+    expect(registry).not.toContain('descriptor.extensions')
+    expect(registry).not.toContain('descriptor.external')
+    expect(hostRuntimeRegistryTest).toContain('keeps descriptor extensions and external payload opaque to Host projections')
+    expect(hostRuntimeRegistryTest).toContain('reviewRubric')
+    expect(hostRuntimeRegistryTest).toContain('memoryPolicy')
   })
 
   test('protocol doc promotes broker methods and worker config envelope details', () => {

@@ -148,6 +148,53 @@ describe('descriptor v1 schema', () => {
     ).toThrow()
   })
 
+  test('keeps extensions and external as opaque descriptor payloads without secrets', () => {
+    const descriptor = parseSoulDescriptorV1({
+      ...baseDescriptor,
+      extensions: {
+        'demo.example/review': {
+          rubricRef: 'opaque-ref',
+        },
+      },
+      external: {
+        businessWorkflow: {
+          candidateId: 'candidate-123',
+        },
+      },
+    })
+
+    expect(descriptor.extensions).toEqual({
+      'demo.example/review': {
+        rubricRef: 'opaque-ref',
+      },
+    })
+    expect(descriptor.external).toEqual({
+      businessWorkflow: {
+        candidateId: 'candidate-123',
+      },
+    })
+
+    expect(() =>
+      parseSoulDescriptorV1({
+        ...baseDescriptor,
+        external: {
+          token: 'literal-secret',
+        },
+      }),
+    ).toThrow()
+
+    expect(() =>
+      parseSoulDescriptorV1({
+        ...baseDescriptor,
+        extensions: {
+          'demo.example/review': {
+            memory: {},
+          },
+        },
+      }),
+    ).toThrow()
+  })
+
   test('rejects unsafe engine projection references and inline native MCP content', () => {
     for (const source of ['./host-adapter/engine-assets', 'dist/engine-assets/../host-adapter']) {
       expect(() =>

@@ -13,6 +13,7 @@ import {
   enableSoulApp,
   findHostCapability,
   findHostSoul,
+  installSoulDescriptor,
   installSoulAppFromPath,
   listHostCapabilitiesForSoul,
   listHostedSoulApps,
@@ -134,6 +135,56 @@ describe('Host Soul descriptor registry', () => {
     })
     expect(reinstalled.status).toBe('installed')
     expect(reinstalled.descriptorDigest).toBe(installed.descriptorDigest)
+  })
+
+  it('keeps descriptor extensions and external payload opaque to Host projections', () => {
+    const descriptor = parseSoulDescriptorV1({
+      ...freeformDescriptor,
+      extensions: {
+        'demo.example/review': {
+          memoryPolicy: 'domain-owned',
+          reviewRubric: 'candidate-scorecard',
+        },
+      },
+      external: {
+        businessWorkflow: {
+          candidateId: 'candidate-123',
+          reviewRubric: 'approve-or-reject',
+        },
+      },
+    })
+
+    const installed = installSoulDescriptor({
+      descriptor,
+      sourceKind: 'inline',
+      sourceRef: 'inline://opaque-descriptor',
+    }, {
+      hostVersion: '0.19.3',
+      now: () => '2026-05-12T22:22:00.000Z',
+    })
+    const enabled = enableSoulApp(FREEFORM_APP_ID, {
+      hostVersion: '0.19.3',
+      now: () => '2026-05-12T22:23:00.000Z',
+    })
+    const catalog = listHostSoulCatalog()
+
+    expect(installed.descriptor.extensions).toEqual(descriptor.extensions)
+    expect(installed.descriptor.external).toEqual(descriptor.external)
+    expect(enabled.descriptor.extensions).toEqual(descriptor.extensions)
+    expect(enabled.descriptor.external).toEqual(descriptor.external)
+
+    const projected = JSON.stringify({
+      capabilities: catalog.capabilities,
+      mountedWorkbench: enabled.mountedWorkbench,
+      permissions: enabled.permissions,
+      projectedCapabilities: enabled.projectedCapabilities,
+      projectedSoul: enabled.projectedSoul,
+      souls: catalog.souls,
+    })
+    expect(projected).not.toContain('candidate-123')
+    expect(projected).not.toContain('reviewRubric')
+    expect(projected).not.toContain('memoryPolicy')
+    expect(projected).not.toContain('businessWorkflow')
   })
 
   it('bootstraps official Freeform without re-enabling disabled apps', async () => {
