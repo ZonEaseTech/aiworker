@@ -2120,12 +2120,16 @@ describe('destructive refactor contract bootstrap', () => {
   test('canonical testing docs track OpenAPI and redaction guardrails', () => {
     const testing = readRepoFile('docs/testing.md')
     const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
 
     expect(testing).toContain('OpenAPI and redaction contract tests')
     expect(testing).toContain('packages/host-daemon/src/modes/worker.local.test.ts')
     expect(testing).toContain('packages/storage-sqlite/src/worker/index.test.ts')
     expect(testing).toContain('packages/engine-bridge/src/bridge-contract.test.ts')
     expect(testing).toContain('packages/engine-projection/src/workspace-projection.test.ts')
+    expect(testing).toContain('App-owned API proxy')
+    expect(testing).toContain('app-owned API proxy test')
+    expect(docCheck).toContain('Testing ledger must track app-owned API proxy coverage')
     expect(daemonTest).toContain('target.request(\'/openapi.json\')')
     expect(daemonTest).toContain('\'/api/sessions/{sessionId}/invocations\'')
     expect(daemonTest).toContain('\'/api/local/info\'')

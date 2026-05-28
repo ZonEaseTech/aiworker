@@ -291,6 +291,16 @@ for (const requiredBrowserProofScopeText of [
     })
   }
 }
+for (const requiredAppOwnedApiCoverageText of [
+  '| App-owned API proxy | `docs/protocol.md`, `docs/runtime.md` | host-daemon app-owned API proxy test and docs check | docs+tests |',
+]) {
+  if (!testingDoc.includes(requiredAppOwnedApiCoverageText)) {
+    issues.push({
+      file: 'docs/testing.md',
+      message: 'Testing ledger must track app-owned API proxy coverage',
+    })
+  }
+}
 if (!packageJson.workspaces?.includes('souls/*'))
   issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
 const expectedNodeEngineRange = '>=20.19.0 <21 || >=22.12.0'
