@@ -23,5 +23,6 @@ describe('npm package smoke script contract', () => {
     expect(source).toContain('node_modules/@zonease/aiworker-cli/official-apps')
     expect(source).toContain('tar')
     expect(source).toContain('-xOzf')
+    expect(source).toContain('npm package descriptor reference escapes package root')
   })
 })

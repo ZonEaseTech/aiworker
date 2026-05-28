@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { mkdir, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, isAbsolute, join, posix, relative, resolve } from 'node:path'
 import process from 'node:process'
 
 import { spawn } from 'bun'
@@ -124,7 +124,10 @@ function assertTarballDescriptorRefs(
   for (const item of refs) {
     if (!item.ref)
       continue
-    const packagedRef = `${appRoot}/${item.ref.replace(/^\/+/, '')}`
+    const packagedRef = posix.normalize(posix.join(appRoot, item.ref))
+    const relativeRef = posix.relative(appRoot, packagedRef)
+    if (!relativeRef || relativeRef.startsWith('..') || posix.isAbsolute(relativeRef))
+      throw new Error(`npm package descriptor reference escapes package root: ${item.ref}`)
     const hasRef = item.kind === 'dir'
       ? files.some(file => file === packagedRef || file === `${packagedRef}/` || file.startsWith(`${packagedRef}/`))
       : files.includes(packagedRef)
