@@ -18,6 +18,7 @@ interface DoctorOutput {
     resources?: {
       migrationsReady?: boolean
       officialAppsReady?: boolean
+      officialFreeformDescriptorReady?: boolean
       workerWebReady?: boolean
     }
   }
@@ -200,6 +201,8 @@ function assertPackagedResourcesReady(stdout: string): void {
   const resources = body.installation?.resources
   if (resources?.officialAppsReady !== true)
     throw new Error(`dist doctor must report packaged official apps ready: ${stdout}`)
+  if (resources?.officialFreeformDescriptorReady !== true)
+    throw new Error(`dist doctor must report packaged Freeform descriptor ready: ${stdout}`)
   if (resources?.workerWebReady !== true)
     throw new Error(`dist doctor must report packaged Worker Web ready: ${stdout}`)
   if (resources?.migrationsReady !== true)

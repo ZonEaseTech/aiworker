@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
   downloadAndReplaceGitHubBundle,
+  inspectCliOfficialAppsResource,
   preprocessArgv,
   resolveCliDefaultHomeDir,
   resolveCliLocalPaths,
@@ -1306,6 +1307,7 @@ describe('aiworker local CLI', () => {
           migrationsFolder: string | null
           migrationsReady: boolean
           officialAppsReady: boolean
+          officialFreeformDescriptorReady: boolean
           workerWebReady: boolean
         }
         source: { canAutoUpgrade: boolean, kind: string }
@@ -1319,7 +1321,32 @@ describe('aiworker local CLI', () => {
     expect(body.installation.resources.migrationsFolder).toContain('drizzle/worker')
     expect(body.installation.resources.migrationsReady).toBe(true)
     expect(typeof body.installation.resources.officialAppsReady).toBe('boolean')
+    expect(typeof body.installation.resources.officialFreeformDescriptorReady).toBe('boolean')
     expect(typeof body.installation.resources.workerWebReady).toBe('boolean')
+  })
+
+  it('reports packaged official apps unready when Freeform descriptor is not v1', async () => {
+    const moduleDir = path.join(root, 'dist')
+    await writeFakeBundle(moduleDir, 'invalid-official-app', { descriptorText: '{"protocol":"legacy"}\n' })
+
+    const resources = inspectCliOfficialAppsResource(moduleDir)
+
+    expect(resources.officialAppsRoot).toBe(path.join(moduleDir, 'official-apps'))
+    expect(resources.officialAppsReady).toBe(false)
+    expect(resources.officialFreeformDescriptorReady).toBe(false)
+  })
+
+  it('reports packaged official apps unready when Freeform descriptor has the wrong app id', async () => {
+    const moduleDir = path.join(root, 'dist')
+    const descriptor = JSON.parse(await readFile(freeformDescriptorPath(), 'utf8')) as { identity: { appId: string } }
+    descriptor.identity.appId = 'wrong-freeform'
+    await writeFakeBundle(moduleDir, 'wrong-official-app', { descriptorText: `${JSON.stringify(descriptor)}\n` })
+
+    const resources = inspectCliOfficialAppsResource(moduleDir)
+
+    expect(resources.officialAppsRoot).toBe(path.join(moduleDir, 'official-apps'))
+    expect(resources.officialAppsReady).toBe(false)
+    expect(resources.officialFreeformDescriptorReady).toBe(false)
   })
 
   it('prints equivalent check reports for update and upgrade aliases', async () => {

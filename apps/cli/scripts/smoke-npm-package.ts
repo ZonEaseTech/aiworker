@@ -16,6 +16,7 @@ interface DoctorOutput {
     resources?: {
       migrationsReady?: boolean
       officialAppsReady?: boolean
+      officialFreeformDescriptorReady?: boolean
       workerWebReady?: boolean
     }
   }
@@ -113,6 +114,8 @@ async function assertInstalledPackageDoctor(tempDir: string, archivePath: string
   const resources = body.installation?.resources
   if (resources?.officialAppsReady !== true)
     throw new Error(`installed npm package doctor must report packaged official apps ready: ${doctor.stdout}`)
+  if (resources?.officialFreeformDescriptorReady !== true)
+    throw new Error(`installed npm package doctor must report packaged Freeform descriptor ready: ${doctor.stdout}`)
   if (resources?.workerWebReady !== true)
     throw new Error(`installed npm package doctor must report packaged Worker Web ready: ${doctor.stdout}`)
   if (resources?.migrationsReady !== true)

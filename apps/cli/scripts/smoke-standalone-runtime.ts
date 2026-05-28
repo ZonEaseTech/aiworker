@@ -23,6 +23,7 @@ interface DoctorOutput {
     resources?: {
       migrationsReady?: boolean
       officialAppsReady?: boolean
+      officialFreeformDescriptorReady?: boolean
       workerWebReady?: boolean
     }
     source?: {
@@ -88,6 +89,8 @@ function assertStandaloneDoctor(stdout: string): void {
     throw new Error(`standalone doctor must report github-tarball install source: ${stdout}`)
   if (installation.resources?.officialAppsReady !== true)
     throw new Error(`standalone doctor must report packaged official apps ready: ${stdout}`)
+  if (installation.resources?.officialFreeformDescriptorReady !== true)
+    throw new Error(`standalone doctor must report packaged Freeform descriptor ready: ${stdout}`)
   if (installation.resources?.workerWebReady !== true)
     throw new Error(`standalone doctor must report packaged Worker Web ready: ${stdout}`)
   if (installation.resources?.migrationsReady !== true)

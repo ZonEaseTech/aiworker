@@ -191,6 +191,33 @@ export function resolveCliOfficialAppsRoot(moduleDir = CLI_MODULE_DIR, options: 
   return undefined
 }
 
+export function inspectCliOfficialAppsResource(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): {
+  officialAppsReady: boolean
+  officialAppsRoot: null | string
+  officialFreeformDescriptorReady: boolean
+} {
+  const officialAppsRoot = resolveCliOfficialAppsRoot(moduleDir, options) ?? null
+  const descriptorPath = officialAppsRoot
+    ? path.join(officialAppsRoot, 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME)
+    : null
+  const officialFreeformDescriptorReady = Boolean(descriptorPath && isOfficialFreeformDescriptor(descriptorPath))
+  return {
+    officialAppsReady: Boolean(officialAppsRoot && officialFreeformDescriptorReady),
+    officialAppsRoot,
+    officialFreeformDescriptorReady,
+  }
+}
+
+function isOfficialFreeformDescriptor(descriptorPath: string): boolean {
+  try {
+    const descriptor = parseSoulDescriptorV1(JSON.parse(readFileSync(descriptorPath, 'utf8')))
+    return descriptor.identity.appId === 'aiworker-freeform'
+  }
+  catch {
+    return false
+  }
+}
+
 export function resolveCliWorkerWebStaticDir(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string | undefined {
   for (const root of packagedResourceRoots(moduleDir, options)) {
     const packaged = path.resolve(root, 'web', 'worker')
@@ -332,20 +359,22 @@ function cliInstallationDiagnostics(): {
     migrationsReady: boolean
     officialAppsReady: boolean
     officialAppsRoot: null | string
+    officialFreeformDescriptorReady: boolean
     workerWebReady: boolean
     workerWebStaticDir: null | string
   }
   source: ReturnType<typeof detectInstallSource>
 } {
-  const officialAppsRoot = resolveCliOfficialAppsRoot() ?? null
+  const officialApps = inspectCliOfficialAppsResource()
   const workerWebStaticDir = resolveCliWorkerWebStaticDir() ?? null
   const migrationsFolder = getWorkerEnv().WORKER_MIGRATIONS_FOLDER || null
   return {
     resources: {
       migrationsFolder,
       migrationsReady: Boolean(migrationsFolder && existsSync(path.join(migrationsFolder, 'meta', '_journal.json'))),
-      officialAppsReady: Boolean(officialAppsRoot && existsSync(path.join(officialAppsRoot, 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME))),
-      officialAppsRoot,
+      officialAppsReady: officialApps.officialAppsReady,
+      officialAppsRoot: officialApps.officialAppsRoot,
+      officialFreeformDescriptorReady: officialApps.officialFreeformDescriptorReady,
       workerWebReady: Boolean(workerWebStaticDir && existsSync(path.join(workerWebStaticDir, 'index.html'))),
       workerWebStaticDir,
     },
