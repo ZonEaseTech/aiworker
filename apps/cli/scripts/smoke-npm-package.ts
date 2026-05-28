@@ -34,6 +34,8 @@ const requiredPackageFiles = [
   'package/web/worker/index.html',
   'package/official-apps/aiworker-freeform/dist/soul.descriptor.json',
 ]
+const officialFreeformPackageRoot = 'package/official-apps/aiworker-freeform'
+const officialFreeformDescriptorPath = `${officialFreeformPackageRoot}/dist/soul.descriptor.json`
 
 async function main(): Promise<number> {
   const tempDir = await mkdtemp(join(tmpdir(), 'aiworker-npm-package-'))
@@ -49,9 +51,9 @@ async function main(): Promise<number> {
       if (file.includes('/node_modules/') || file.includes('/host-adapter/') || /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file))
         throw new Error(`npm package includes non-release file: ${file}`)
     }
-    await assertTarballDescriptorV1(archivePath, 'package/official-apps/aiworker-freeform/dist/soul.descriptor.json')
+    await assertTarballOfficialFreeformDescriptor(archivePath, officialFreeformDescriptorPath, files)
     await assertInstalledPackageDoctor(tempDir, archivePath)
-    consola.success('[smoke-npm-package] PASS: npm package installs, runs doctor, and includes Host assets plus descriptor-only official Soul Apps')
+    consola.success('[smoke-npm-package] PASS: npm package installs, runs doctor, and includes Host assets plus descriptor refs for official Soul Apps')
     return 0
   }
   finally {
@@ -87,13 +89,37 @@ async function listTarball(archivePath: string): Promise<string[]> {
   return output.stdout.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
 }
 
-async function assertTarballDescriptorV1(archivePath: string, descriptorPath: string): Promise<void> {
+async function assertTarballOfficialFreeformDescriptor(archivePath: string, descriptorPath: string, files: string[]): Promise<void> {
   const output = await run(['tar', '-xOzf', archivePath, descriptorPath], { cwd: process.cwd() })
+  let descriptor: ReturnType<typeof parseOfficialFreeformDescriptorJson>
   try {
-    parseOfficialFreeformDescriptorJson(output.stdout)
+    descriptor = parseOfficialFreeformDescriptorJson(output.stdout)
   }
   catch {
     throw new Error(`npm package descriptor is not descriptor v1: ${descriptorPath}`)
+  }
+  assertTarballDescriptorRefs(files, officialFreeformPackageRoot, [
+    { kind: 'file', ref: descriptor.workbench.entry },
+    { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
+    { kind: 'dir', ref: descriptor.engine.skills?.source },
+    ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
+  ])
+}
+
+function assertTarballDescriptorRefs(
+  files: string[],
+  appRoot: string,
+  refs: Array<{ kind: 'dir' | 'file', ref?: string }>,
+): void {
+  for (const item of refs) {
+    if (!item.ref)
+      continue
+    const packagedRef = `${appRoot}/${item.ref.replace(/^\/+/, '')}`
+    const hasRef = item.kind === 'dir'
+      ? files.some(file => file === packagedRef || file === `${packagedRef}/` || file.startsWith(`${packagedRef}/`))
+      : files.includes(packagedRef)
+    if (!hasRef)
+      throw new Error(`npm package descriptor references missing ${item.kind}: ${packagedRef}`)
   }
 }
 
