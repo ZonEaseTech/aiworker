@@ -56,6 +56,7 @@ async function main(): Promise<number> {
     })
     await waitForHealth(port)
     await assertDaemonRuntimeVersion(port, expectedVersion)
+    await assertDaemonOpenApiWorkerConfigEnvelope(port)
     const html = await assertHttpText(`http://127.0.0.1:${port}/`, /<!doctype html>/i)
     await assertWorkerWebAsset(port, html)
     const doctor = await assertCli(cli, ['doctor'], { env, label: 'doctor' })
@@ -210,6 +211,30 @@ async function assertDaemonRuntimeVersion(port: number, expectedVersion: string)
   const info = await getJson<{ runtimeVersion: string }>(`http://127.0.0.1:${port}/api/info`)
   if (info.runtimeVersion !== expectedVersion)
     throw new Error(`Expected daemon runtimeVersion ${expectedVersion}, got ${info.runtimeVersion}`)
+}
+
+async function assertDaemonOpenApiWorkerConfigEnvelope(port: number): Promise<void> {
+  const openapi = await getJson<{ paths?: Record<string, unknown> }>(`http://127.0.0.1:${port}/openapi.json`)
+  const serialized = JSON.stringify(openapi)
+  for (const forbidden of ['[mcp_servers', 'mcpServers', 'literal-secret', 'sk-', 'candidateId', 'artifactContent']) {
+    if (serialized.includes(forbidden))
+      throw new Error(`dist daemon OpenAPI must not expose ${forbidden}`)
+  }
+
+  const workerConfigPath = openapi.paths?.['/api/workers/{workerId}/config/{configKey}'] as {
+    patch?: { requestBody?: unknown }
+    put?: { requestBody?: unknown }
+  } | undefined
+  const putBody = JSON.stringify(workerConfigPath?.put?.requestBody)
+  const patchBody = JSON.stringify(workerConfigPath?.patch?.requestBody)
+  if (!workerConfigPath?.put?.requestBody || !workerConfigPath.patch?.requestBody)
+    throw new Error('dist daemon OpenAPI must document worker config PUT/PATCH request bodies')
+  if (!putBody.includes('WorkerConfigValueInput') || patchBody !== putBody)
+    throw new Error(`dist daemon OpenAPI worker config routes must share WorkerConfigValueInput request bodies: ${putBody} / ${patchBody}`)
+  for (const required of ['WorkerConfigValueInput', 'configValueJson envelope', 'skill-overlay', 'descriptor://engine/skills/freeform-session', 'updatedBy', 'web']) {
+    if (!serialized.includes(required))
+      throw new Error(`dist daemon OpenAPI worker config envelope is missing ${required}`)
+  }
 }
 
 function assertCatalogApps(apps: Array<{ appId: string, status: string }>): void {

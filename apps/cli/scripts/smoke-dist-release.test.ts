@@ -15,4 +15,17 @@ describe('dist release smoke script contract', () => {
     expect(source).toContain('soul.descriptor.json')
     expect(source).toContain('descriptor refs')
   })
+
+  it('validates packaged daemon OpenAPI worker config envelope examples', async () => {
+    const source = await readFile(join(import.meta.dirname, 'smoke-dist-release.ts'), 'utf8')
+
+    expect(source).toContain('assertDaemonOpenApiWorkerConfigEnvelope')
+    expect(source).toContain('/openapi.json')
+    expect(source).toContain('/api/workers/{workerId}/config/{configKey}')
+    expect(source).toContain('WorkerConfigValueInput')
+    expect(source).toContain('configValueJson envelope')
+    expect(source).toContain('literal-secret')
+    expect(source).toContain('candidateId')
+    expect(source).toContain('artifactContent')
+  })
 })
