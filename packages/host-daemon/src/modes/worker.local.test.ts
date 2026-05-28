@@ -2586,6 +2586,26 @@ describe('local daemon API', () => {
     expect(serializedOpenApi).not.toContain('mcpServers')
     expect(serializedOpenApi).not.toContain('literal-secret')
     expect(serializedOpenApi).not.toContain('sk-')
+    expect(serializedOpenApi).not.toContain('candidateId')
+    expect(serializedOpenApi).not.toContain('artifactContent')
+    const workerConfigOperation = (openapi.paths['/api/workers/{workerId}/config/{configKey}'] as {
+      patch?: { requestBody?: unknown }
+      put?: { requestBody?: unknown }
+    }).put
+    expect(workerConfigOperation?.requestBody).toBeTruthy()
+    const serializedWorkerConfigOperation = JSON.stringify(workerConfigOperation)
+    expect(serializedWorkerConfigOperation).toContain('WorkerConfigValueInput')
+    expect(serializedOpenApi).toContain('configValueJson envelope')
+    expect(serializedOpenApi).toContain('skill-overlay')
+    expect(serializedOpenApi).toContain('descriptor://engine/skills/freeform-session')
+    expect(serializedOpenApi).toContain('updatedBy')
+    expect(serializedOpenApi).toContain('web')
+    expect(serializedWorkerConfigOperation).not.toContain('candidateId')
+    expect(serializedWorkerConfigOperation).not.toContain('artifactContent')
+    expect((openapi.paths['/api/workers/{workerId}/config/{configKey}'] as {
+      patch?: { requestBody?: unknown }
+      put?: { requestBody?: unknown }
+    }).patch?.requestBody).toEqual(workerConfigOperation?.requestBody)
 
     const invalidWorker = await target.request('/api/workers', {
       body: JSON.stringify({ soulId: FREEFORM_APP_ID }),

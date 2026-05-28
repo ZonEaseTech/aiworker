@@ -3,6 +3,47 @@ import { z } from '@hono/zod-openapi'
 
 export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
   const responseSchema = z.object({}).passthrough().openapi('LocalResponse')
+  const workerConfigValueInputSchema = z.object({
+    checksum: z.string().nullable().optional(),
+    enabled: z.boolean(),
+    kind: z.enum([
+      'engine-selection',
+      'projection-overlay',
+      'skill-overlay',
+      'mcp-overlay',
+      'entry-file-overlay',
+      'workbench-preference',
+      'sdk-extension',
+    ]),
+    options: z.record(z.string(), z.unknown()).optional(),
+    sourceRef: z.string().nullable().optional(),
+    target: z.enum(['codex', 'claude-code', 'all', 'none']),
+    updatedAt: z.string().datetime().optional(),
+    updatedBy: z.enum(['cli', 'web', 'app-owned-api']).optional(),
+  }).openapi('WorkerConfigValueInput', {
+    description: 'SDK-standard configValueJson envelope. Values must use refs and non-secret operational options; do not send literal secrets, full native MCP files, Soul domain records, business state, or artifact content.',
+    example: {
+      checksum: 'sha256:freeform-session-overlay',
+      enabled: true,
+      kind: 'skill-overlay',
+      options: {
+        replaces: 'descriptor://engine/skills/freeform-session',
+      },
+      sourceRef: 'descriptor://engine/skills/freeform-session',
+      target: 'codex',
+      updatedBy: 'web',
+    },
+  })
+  const workerConfigRequest = {
+    body: {
+      content: {
+        'application/json': {
+          schema: workerConfigValueInputSchema,
+        },
+      },
+      required: true,
+    },
+  } as const
   const okJson = {
     200: {
       description: 'OK',
@@ -85,6 +126,9 @@ export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     app.openAPIRegistry.registerPath({
       method: path.method,
       path: path.path,
+      ...(path.path === '/api/workers/{workerId}/config/{configKey}' && ['patch', 'put'].includes(path.method)
+        ? { request: workerConfigRequest }
+        : {}),
       summary: path.summary,
       tags: path.tags,
       responses: path.created ? createdJson : okJson,
