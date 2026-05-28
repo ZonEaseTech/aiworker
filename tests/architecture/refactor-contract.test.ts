@@ -2051,6 +2051,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(releaseCheckScript).toBeTruthy()
     for (const command of releaseGateCommands)
       expect(releaseCheckScript).toContain(command)
+    expect(releaseCheckScript.split(' && ')).toEqual(releaseGateCommands)
+    expect(readRepoFile('scripts/check-doc-contract.ts')).toContain('release:check must match Current Release Gates exactly')
     expect(releaseCheckScript.indexOf('bun run build')).toBeLessThan(releaseCheckScript.indexOf('bun run smoke:dist-release'))
     expect(releaseCheckScript.indexOf('bun run build')).toBeLessThan(releaseCheckScript.indexOf('bun run smoke:standalone-release'))
     expect(releaseCheckScript.indexOf('bun run build')).toBeLessThan(releaseCheckScript.indexOf('bun run smoke:standalone-runtime'))

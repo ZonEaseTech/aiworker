@@ -239,6 +239,13 @@ for (const command of releaseGateCommands) {
   if (!packageJson.scripts?.[scriptName])
     issues.push({ file: 'package.json', message: `Current Release Gates references missing root script: ${scriptName}` })
 }
+const releaseCheckCommands = packageJson.scripts?.['release:check']?.split(' && ') ?? []
+if (JSON.stringify(releaseCheckCommands) !== JSON.stringify(releaseGateCommands)) {
+  issues.push({
+    file: 'package.json',
+    message: 'release:check must match Current Release Gates exactly',
+  })
+}
 for (const testPath of documentedTestingPaths()) {
   for (const finding of documentedTestingCoverageFindings(testPath, packageJson)) {
     issues.push({
