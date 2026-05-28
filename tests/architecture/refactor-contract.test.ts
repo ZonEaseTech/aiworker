@@ -1957,6 +1957,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(freeformCliBrowserProof).toContain('assertInvocationEventProof')
     expect(freeformCliBrowserProof).toContain('invocation.output.delta')
     expect(freeformCliBrowserProof).toContain("serialized.includes('/turns/')")
+    expect(freeformCliBrowserProof).toContain('/api/sessions/${id}/archive')
+    expect(freeformCliBrowserProof).toContain('assertSessionArchiveProof')
   })
 
   test('dist release smoke reads installed apps through canonical app-installation route', () => {

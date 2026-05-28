@@ -163,6 +163,9 @@ try {
   }
   assertNoUnexpectedBrowserEvents(browserEvents)
 
+  const sessionArchiveProof = await readSessionArchiveProofFromBrowser(page, sessionResult.session.id)
+  assertSessionArchiveProof(sessionArchiveProof, sessionResult.session.id)
+
   await page.screenshot({ fullPage: true, path: join(evidenceRoot, 'freeform-cli-golden-path.png') })
   await writeEvidence('golden-path.json', {
     baseUrl,
@@ -173,6 +176,7 @@ try {
     mountProof,
     mountedSurface,
     invocationEventProof,
+    sessionArchiveProof,
     routeUrl,
   })
 }
@@ -339,8 +343,67 @@ function assertInvocationEventProof(proof: Record<string, unknown>, invocationId
     throw new Error(`Invocation event proof exposed retired turn semantics: ${serialized}`)
 }
 
+async function readSessionArchiveProofFromBrowser(page: Page, sessionId: string): Promise<Record<string, unknown>> {
+  return await page.evaluate(async (id) => {
+    const archiveResponse = await fetch(`/api/sessions/${id}/archive`, { method: 'POST' })
+    const archiveBody = await archiveResponse.text()
+    const sessionResponse = await fetch(`/api/sessions/${id}`)
+    const sessionBody = await sessionResponse.text()
+    const blockedFollowUpResponse = await fetch(`/api/sessions/${id}/invocations`, {
+      body: JSON.stringify({ input: 'This follow-up should be blocked after archive.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    const blockedFollowUpBody = await blockedFollowUpResponse.text()
+    return {
+      archive: {
+        body: JSON.parse(archiveBody) as Record<string, unknown>,
+        status: archiveResponse.status,
+      },
+      blockedFollowUp: {
+        body: blockedFollowUpBody,
+        status: blockedFollowUpResponse.status,
+      },
+      session: {
+        body: JSON.parse(sessionBody) as Record<string, unknown>,
+        status: sessionResponse.status,
+      },
+    }
+  }, sessionId)
+}
+
+function assertSessionArchiveProof(proof: Record<string, unknown>, sessionId: string): void {
+  const archive = readRecord(proof.archive)
+  const session = readRecord(proof.session)
+  const blockedFollowUp = readRecord(proof.blockedFollowUp)
+  if (archive.status !== 200)
+    throw new Error(`Session archive failed in browser proof: ${JSON.stringify(proof)}`)
+  if (readRecord(archive.body).session === undefined)
+    throw new Error(`Session archive proof missed archived session body: ${JSON.stringify(proof)}`)
+  if (session.status !== 200)
+    throw new Error(`Archived session read failed in browser proof: ${JSON.stringify(proof)}`)
+
+  const archivedSession = readRecord(readRecord(session.body).session)
+  if (archivedSession.id !== sessionId || archivedSession.status !== 'archived')
+    throw new Error(`Browser archive proof did not persist archived lifecycle: ${JSON.stringify(proof)}`)
+  if (typeof blockedFollowUp.status !== 'number' || blockedFollowUp.status < 400)
+    throw new Error(`Archived session accepted a follow-up invocation: ${JSON.stringify(proof)}`)
+
+  const serialized = JSON.stringify(proof)
+  if (!serialized.includes('archived'))
+    throw new Error(`Archive proof missed archived diagnostic: ${serialized}`)
+  if (serialized.includes('/turns/') || serialized.includes('"turn"'))
+    throw new Error(`Archive proof exposed retired turn semantics: ${serialized}`)
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  if (!isRecord(value))
+    throw new Error(`Expected record, received ${JSON.stringify(value)}`)
+  return value
 }
 
 async function readBrowserDiagnostics(page: Page): Promise<unknown> {
