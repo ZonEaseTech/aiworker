@@ -111,6 +111,8 @@ POST   /api/app-installation/apps/:appId/enable
 POST   /api/app-installation/apps/:appId/archive
 DELETE /api/app-installation/apps/:appId
 
+GET    /api/capabilities
+
 POST   /api/workers
 GET    /api/workers
 GET    /api/workers/:workerId

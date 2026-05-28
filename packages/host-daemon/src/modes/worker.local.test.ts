@@ -224,7 +224,7 @@ describe('local daemon API', () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'capability-route-worker')
 
-    const capabilitiesRes = await target.request('/api/local/capabilities')
+    const capabilitiesRes = await target.request('/api/capabilities')
     expect(capabilitiesRes.status).toBe(200)
     const capabilitiesBody = await capabilitiesRes.json() as { capabilities: Array<{ id: string }> }
     expect(capabilitiesBody.capabilities.map(capability => capability.id)).toContain(FREEFORM_CAPABILITY)

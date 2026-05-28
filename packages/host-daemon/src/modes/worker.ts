@@ -246,6 +246,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.post('/api/local/apps/:appId/healthcheck', c => c.json({ app: state.host.healthcheckApp(c.req.param('appId')) }))
   app.get('/api/local/souls', c => c.json({ souls: state.host.listSouls() }))
   app.get('/api/local/capabilities', c => c.json({ capabilities: state.host.listCapabilities() }))
+  app.get('/api/capabilities', c => c.json({ capabilities: state.host.listCapabilities() }))
   app.get('/api/app-installation/apps', c => c.json({ apps: state.host.listApps() }))
   app.post('/api/app-installation/install', async (c) => {
     const result = await parseJsonBody(c, installAppBodySchema, 'INSTALL_APP_INVALID')

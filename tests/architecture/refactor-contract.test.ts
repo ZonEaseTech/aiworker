@@ -337,6 +337,7 @@ describe('destructive refactor contract bootstrap', () => {
       'GET    /api/app-installation/apps/:appId',
       'POST   /api/app-installation/apps/:appId/archive',
       'DELETE /api/app-installation/apps/:appId',
+      'GET    /api/capabilities',
       'PATCH  /api/workers/:workerId',
       'POST   /api/workers/:workerId/archive',
       'DELETE /api/workers/:workerId',

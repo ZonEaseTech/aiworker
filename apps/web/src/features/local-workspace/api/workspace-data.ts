@@ -15,7 +15,7 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
     localJson<{ apps: LocalHostedSoulApp[] }>('/api/app-installation/apps'),
     localJson<{ workers: LocalWorker[] }>('/api/workers'),
     localJson<{ souls: VerticalSoul[] }>('/api/local/souls'),
-    localJson<{ capabilities: WorkspaceCapability[] }>('/api/local/capabilities'),
+    localJson<{ capabilities: WorkspaceCapability[] }>('/api/capabilities'),
     localJson<{ workspaces: LocalWorkspace[] }>('/api/workspace-locators'),
     localJson<{ sessions: LocalSession[] }>('/api/sessions'),
     localJson<{ settings: LocalSettingsConfig }>('/api/local/settings'),

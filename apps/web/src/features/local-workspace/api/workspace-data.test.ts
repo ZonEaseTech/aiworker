@@ -7,7 +7,7 @@ const responses: Record<string, unknown> = {
   '/api/sessions': { sessions: [] },
   '/api/local/settings': { settings: { language: 'en' } },
   '/api/local/souls': { souls: [] },
-  '/api/local/capabilities': {
+  '/api/capabilities': {
     capabilities: [{
       description: 'Freeform session work',
       id: 'aiworker-freeform.default',
@@ -49,11 +49,12 @@ describe('loadLocalWorkspaceData', () => {
     expect(paths).not.toContain('/api/local/workers')
     expect(paths).not.toContain('/api/local/workspaces')
     expect(paths).not.toContain('/api/local/sessions')
+    expect(paths).not.toContain('/api/local/capabilities')
     expect(paths).toContain('/api/app-installation/apps')
+    expect(paths).toContain('/api/capabilities')
     expect(paths).toContain('/api/workers')
     expect(paths).toContain('/api/workspace-locators')
     expect(paths).toContain('/api/sessions')
-    expect(paths).toContain('/api/local/capabilities')
     expect(data).not.toHaveProperty('turns')
     expect(data).not.toHaveProperty('templates')
     expect(data.capabilities.map(capability => capability.id)).toEqual(['aiworker-freeform.default'])
