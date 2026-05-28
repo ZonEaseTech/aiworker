@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { chmod, copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { dirname, relative, resolve } from 'node:path'
+import { chmod, copyFile, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import process from 'node:process'
 
 import { spawn } from 'bun'
@@ -74,7 +74,7 @@ async function assertDescriptorV1(rootDir: string, distDir: string, resource: st
       : 'is not descriptor v1'
     throw new Error(`invalid release resource: ${relative(rootDir, resourcePath)} ${reason}`)
   }
-  await assertDescriptorRefs(rootDir, descriptorRoot, [
+  await assertDescriptorRefs(rootDir, resourcePath, descriptorRoot, [
     { kind: 'file', ref: descriptor.workbench.entry },
     { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
     { kind: 'dir', ref: descriptor.engine.skills?.source },
@@ -84,13 +84,26 @@ async function assertDescriptorV1(rootDir: string, distDir: string, resource: st
 
 async function assertDescriptorRefs(
   rootDir: string,
+  descriptorPath: string,
   descriptorRoot: string,
   refs: Array<{ kind: 'dir' | 'file', ref?: string }>,
 ): Promise<void> {
+  const descriptorRootPath = await realpath(descriptorRoot)
   for (const item of refs) {
     if (!item.ref)
       continue
     const resourcePath = resolve(descriptorRoot, item.ref)
+    let resolvedResourcePath: string
+    try {
+      resolvedResourcePath = await realpath(resourcePath)
+    }
+    catch {
+      throw new Error(`missing release resource: ${relative(rootDir, resourcePath)}`)
+    }
+    const relativeRef = relative(descriptorRootPath, resolvedResourcePath)
+    if (relativeRef.startsWith('..') || isAbsolute(relativeRef)) {
+      throw new Error(`invalid release resource: ${relative(rootDir, descriptorPath)} descriptor reference escapes official app root: ${item.ref}`)
+    }
     try {
       const info = await stat(resourcePath)
       if (item.kind === 'dir' && !info.isDirectory())

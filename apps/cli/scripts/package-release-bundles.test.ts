@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -130,6 +130,22 @@ describe('release bundle packager', () => {
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
     ).rejects.toThrow('missing release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/engine-assets/mcp/codex/config.toml')
+    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
+  })
+
+  it('rejects standalone bundles before staging when descriptor references resolve outside the official app root', async () => {
+    await writeFixtureDist(root)
+    const workbenchEntry = path.join(root, 'apps', 'cli', 'dist', 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html')
+    const escapedWorkbench = path.join(root, 'apps', 'cli', 'dist', 'official-apps', 'escaped-workbench.html')
+    await writeFile(escapedWorkbench, '<!doctype html>\n')
+    await rm(workbenchEntry)
+    await symlink(escapedWorkbench, workbenchEntry)
+    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
+    await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
+
+    await expect(
+      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json descriptor reference escapes official app root: dist/web/workbench/index.html')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 })
