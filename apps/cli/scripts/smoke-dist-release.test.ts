@@ -28,4 +28,16 @@ describe('dist release smoke script contract', () => {
     expect(source).toContain('candidateId')
     expect(source).toContain('artifactContent')
   })
+
+  it('validates packaged daemon projection receipt broker boundary', async () => {
+    const source = await readFile(join(import.meta.dirname, 'smoke-dist-release.ts'), 'utf8')
+
+    expect(source).toContain('assertDaemonProjectionReceiptBoundary')
+    expect(source).toContain('/api/projections/receipts/')
+    expect(source).toContain('smoke-missing-receipt')
+    expect(source).toContain('/cleanup')
+    expect(source).toContain('PROJECTION_RECEIPT_MISSING')
+    expect(source).toContain('sk-smoke-projection-secret')
+    expect(source).toContain('receipt-owned projection')
+  })
 })

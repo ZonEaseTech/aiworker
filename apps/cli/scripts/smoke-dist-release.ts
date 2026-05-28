@@ -57,6 +57,7 @@ async function main(): Promise<number> {
     await waitForHealth(port)
     await assertDaemonRuntimeVersion(port, expectedVersion)
     await assertDaemonOpenApiWorkerConfigEnvelope(port)
+    await assertDaemonProjectionReceiptBoundary(port)
     const html = await assertHttpText(`http://127.0.0.1:${port}/`, /<!doctype html>/i)
     await assertWorkerWebAsset(port, html)
     const doctor = await assertCli(cli, ['doctor'], { env, label: 'doctor' })
@@ -235,6 +236,31 @@ async function assertDaemonOpenApiWorkerConfigEnvelope(port: number): Promise<vo
     if (!serialized.includes(required))
       throw new Error(`dist daemon OpenAPI worker config envelope is missing ${required}`)
   }
+}
+
+async function assertDaemonProjectionReceiptBoundary(port: number): Promise<void> {
+  const receiptId = 'smoke-missing-receipt'
+  const secretCanary = 'sk-smoke-projection-secret'
+  await assertReceiptMissingResponse(
+    `http://127.0.0.1:${port}/api/projections/receipts/${receiptId}?debug=${secretCanary}`,
+    'read missing receipt-owned projection receipt',
+    secretCanary,
+  )
+  await assertReceiptMissingResponse(
+    `http://127.0.0.1:${port}/api/projections/receipts/${receiptId}/cleanup?debug=${secretCanary}`,
+    'cleanup missing receipt-owned projection receipt',
+    secretCanary,
+    { method: 'POST' },
+  )
+}
+
+async function assertReceiptMissingResponse(url: string, label: string, secretCanary: string, init?: RequestInit): Promise<void> {
+  const res = await fetch(url, init)
+  const body = await res.text()
+  if (res.status !== 404 || !body.includes('PROJECTION_RECEIPT_MISSING'))
+    throw new Error(`dist daemon projection receipt ${label} must return PROJECTION_RECEIPT_MISSING, got ${res.status}: ${body.slice(0, 500)}`)
+  if (body.includes(secretCanary))
+    throw new Error(`dist daemon projection receipt ${label} leaked secret-like request data`)
 }
 
 function assertCatalogApps(apps: Array<{ appId: string, status: string }>): void {
