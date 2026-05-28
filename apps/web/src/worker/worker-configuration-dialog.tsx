@@ -90,7 +90,9 @@ export function WorkerConfigurationDialog({
     }
     return map
   }, [assets])
-  const selectedAsset = selectedPanel === 'workbench' ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
+  const canShowWorkbenchPanel = Boolean(workbenchTabs && workbenchTabs.length > 1)
+  const effectiveSelectedPanel = selectedPanel === 'workbench' && canShowWorkbenchPanel ? selectedPanel : null
+  const selectedAsset = effectiveSelectedPanel === 'workbench' ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
   const defaultNewAsset = useMemo(() => activeCategory ? createDefaultAssetDraft(activeCategory, assets) : null, [activeCategory, assets])
   const effectiveNewAsset = newAsset?.kind === activeCategory ? newAsset : defaultNewAsset
 
@@ -278,11 +280,6 @@ export function WorkerConfigurationDialog({
     return () => window.clearTimeout(timeout)
   }, [autosave])
 
-  useEffect(() => {
-    if (selectedPanel === 'workbench' && (!workbenchTabs || workbenchTabs.length <= 1))
-      setSelectedPanel(null)
-  }, [selectedPanel, workbenchTabs])
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-dvh flex-col gap-0 overflow-hidden p-0 sm:h-5/6 sm:max-w-5xl" showCloseButton={false}>
@@ -400,12 +397,12 @@ export function WorkerConfigurationDialog({
                     </CollapsibleGroup>
                   )
                 })}
-                {workbenchTabs && workbenchTabs.length > 1
+                {canShowWorkbenchPanel
                   ? (
                       <SidebarMenu>
                         <SidebarMenuItem>
                           <SidebarMenuButton
-                            isActive={selectedPanel === 'workbench'}
+                            isActive={effectiveSelectedPanel === 'workbench'}
                             size="lg"
                             className="h-11 items-start py-1.5"
                             onClick={() => {
@@ -465,7 +462,7 @@ export function WorkerConfigurationDialog({
                           : null}
                       </ItemGroup>
                     )
-                  : selectedPanel === 'workbench'
+                  : effectiveSelectedPanel === 'workbench'
                     ? (
                         <ItemGroup className="gap-3">
                           <Item variant="muted">
