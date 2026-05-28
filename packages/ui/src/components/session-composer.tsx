@@ -740,16 +740,4 @@ function SessionComposerStatusAction({ action }: { action: SessionComposerAction
   )
 }
 
-export {
-  ManagedSessionComposer,
-  useSessionComposerDraft,
-} from './managed-session-composer'
-export type {
-  ManagedSessionComposerAttachment,
-  ManagedSessionComposerAttachmentLabels,
-  ManagedSessionComposerDraft,
-  ManagedSessionComposerProps,
-  UseSessionComposerDraftOptions,
-  UseSessionComposerDraftResult,
-} from './managed-session-composer'
 export type { SessionComposerMaterial, SessionComposerMaterialEncoding } from './session-composer-attachments'
