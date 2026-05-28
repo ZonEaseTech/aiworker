@@ -7,11 +7,13 @@ import { join } from 'node:path'
 
 import { chromium } from 'playwright'
 import { namespaceSoulAppCapabilityId } from '../../packages/soul-protocol/src/index'
+import { closeWorkerDb, createEngineInvocation, initWorkerDb } from '../../packages/storage-sqlite/src/worker/index'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const appId = 'aiworker-freeform'
 const workerId = 'freeform-cli-golden-worker'
 const capabilityId = namespaceSoulAppCapabilityId(appId, 'default')
+const cancelInvocationId = 'freeform-browser-cancel-invocation'
 const descriptorPath = join(repoRoot, 'souls/aiworker-freeform/dist/soul.descriptor.json')
 const evidenceRoot = join(repoRoot, 'tmp', `freeform-cli-golden-path-${new Date().toISOString().replace(/[:.]/g, '-')}`)
 const workRoot = await mkdtemp(join(tmpdir(), 'aiworker-freeform-browser-golden-'))
@@ -93,6 +95,8 @@ try {
   if (followUpResult.invocation.inputRef !== `aiworker://sessions/${sessionResult.session.id}/invocations/${followUpResult.invocation.id}/input`)
     throw new Error(`Follow-up did not use session-level invocation inputRef: ${JSON.stringify(followUpResult.invocation)}`)
 
+  seedQueuedInvocationForBrowserCancel(sessionResult.session.id)
+
   const port = reservePort()
   daemon = Bun.spawn({
     cmd: [
@@ -166,6 +170,9 @@ try {
   const projectionRefreshProof = await readProjectionRefreshProofFromBrowser(page, workerId, workspaceResult.workspace.id)
   assertProjectionRefreshProof(projectionRefreshProof, workspaceResult.workspace.id)
 
+  const invocationCancelProof = await readInvocationCancelProofFromBrowser(page, cancelInvocationId)
+  assertInvocationCancelProof(invocationCancelProof, cancelInvocationId, sessionResult.session.id)
+
   const sessionArchiveProof = await readSessionArchiveProofFromBrowser(page, sessionResult.session.id)
   assertSessionArchiveProof(sessionArchiveProof, sessionResult.session.id)
 
@@ -178,6 +185,7 @@ try {
     mountAttributes,
     mountProof,
     mountedSurface,
+    invocationCancelProof,
     invocationEventProof,
     projectionRefreshProof,
     sessionArchiveProof,
@@ -223,6 +231,25 @@ function runCliJson<T = unknown>(...args: string[]): T {
     ].join('\n'))
   }
   return JSON.parse(stdout) as T
+}
+
+function seedQueuedInvocationForBrowserCancel(sessionId: string): void {
+  initWorkerDb(dbPath)
+  try {
+    createEngineInvocation({
+      engineCommand: 'codex',
+      engineId: 'codex',
+      id: cancelInvocationId,
+      inputRef: `aiworker://sessions/${sessionId}/invocations/${cancelInvocationId}/input`,
+      processState: 'not_spawned',
+      seq: 3,
+      sessionId,
+      status: 'queued',
+    })
+  }
+  finally {
+    closeWorkerDb()
+  }
 }
 
 async function writeFakeCodexCommand(): Promise<void> {
@@ -487,6 +514,71 @@ function assertProjectionRefreshProof(proof: Record<string, unknown>, workspaceI
     if (serialized.includes(forbidden))
       throw new Error(`Projection proof exposed forbidden content ${forbidden}: ${serialized}`)
   }
+}
+
+async function readInvocationCancelProofFromBrowser(page: Page, invocationId: string): Promise<Record<string, unknown>> {
+  return await page.evaluate(async (id) => {
+    const cancelResponse = await fetch(`/api/engine/invocations/${id}/cancel`, { method: 'POST' })
+    const cancelBody = await cancelResponse.text()
+    const invocationResponse = await fetch(`/api/engine/invocations/${id}`)
+    const invocationBody = await invocationResponse.text()
+    const eventsResponse = await fetch(`/api/engine/invocations/${id}/events?after=0&limit=20`)
+    const eventsBody = await eventsResponse.text()
+    return {
+      cancel: {
+        body: JSON.parse(cancelBody) as Record<string, unknown>,
+        status: cancelResponse.status,
+      },
+      events: {
+        body: JSON.parse(eventsBody) as Record<string, unknown>,
+        status: eventsResponse.status,
+      },
+      invocation: {
+        body: JSON.parse(invocationBody) as Record<string, unknown>,
+        status: invocationResponse.status,
+      },
+    }
+  }, invocationId)
+}
+
+function assertInvocationCancelProof(proof: Record<string, unknown>, invocationId: string, sessionId: string): void {
+  const cancel = readRecord(proof.cancel)
+  const invocationRead = readRecord(proof.invocation)
+  const eventsRead = readRecord(proof.events)
+  if (cancel.status !== 201)
+    throw new Error(`Invocation cancel failed in browser proof: ${JSON.stringify(proof)}`)
+  if (invocationRead.status !== 200)
+    throw new Error(`Cancelled invocation read failed in browser proof: ${JSON.stringify(proof)}`)
+  if (eventsRead.status !== 200)
+    throw new Error(`Cancelled invocation events read failed in browser proof: ${JSON.stringify(proof)}`)
+
+  const cancelledInvocation = readRecord(readRecord(cancel.body).invocation)
+  const readBackInvocation = readRecord(readRecord(invocationRead.body).invocation)
+  for (const candidate of [cancelledInvocation, readBackInvocation]) {
+    if (candidate.id !== invocationId || candidate.sessionId !== sessionId)
+      throw new Error(`Invocation cancel proof returned the wrong invocation: ${JSON.stringify(proof)}`)
+    if (candidate.status !== 'cancelled' || candidate.processState !== 'not_spawned')
+      throw new Error(`Invocation cancel proof missed queued cancellation state: ${JSON.stringify(proof)}`)
+    if (candidate.summary !== 'Invocation cancelled.')
+      throw new Error(`Invocation cancel proof missed cancellation summary: ${JSON.stringify(proof)}`)
+  }
+  if (readRecord(readRecord(cancel.body).session).status !== 'active')
+    throw new Error(`Invocation cancel changed session lifecycle: ${JSON.stringify(proof)}`)
+
+  const bridgeEvents = Array.isArray(readRecord(eventsRead.body).bridgeEvents) ? readRecord(eventsRead.body).bridgeEvents : []
+  if (!bridgeEvents.some(event =>
+    isRecord(event)
+    && event.invocationId === invocationId
+    && event.processState === 'not_spawned'
+    && event.status === 'cancelled'
+    && event.type === 'invocation.cancelled',
+  )) {
+    throw new Error(`Invocation cancel proof missed normalized cancellation event: ${JSON.stringify(proof)}`)
+  }
+
+  const serialized = JSON.stringify(proof)
+  if (serialized.includes('/turns/') || serialized.includes('"turn"'))
+    throw new Error(`Invocation cancel proof exposed retired turn semantics: ${serialized}`)
 }
 
 async function readSessionArchiveProofFromBrowser(page: Page, sessionId: string): Promise<Record<string, unknown>> {
