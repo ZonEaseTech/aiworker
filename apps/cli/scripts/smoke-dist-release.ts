@@ -27,6 +27,10 @@ interface DoctorOutput {
   }
 }
 
+interface OpenApiBrokerRouteDocument {
+  paths?: Record<string, Record<string, unknown>>
+}
+
 const officialFreeformDistRoot = resolve(import.meta.dirname, '..', 'dist', 'official-apps', 'aiworker-freeform')
 const officialFreeformDescriptorPath = resolve(officialFreeformDistRoot, 'dist', 'soul.descriptor.json')
 
@@ -254,7 +258,11 @@ async function assertDaemonOpenApiWorkerConfigEnvelope(port: number): Promise<vo
 }
 
 async function assertDaemonOpenApiBrokerRoutes(port: number): Promise<void> {
-  const openapi = await getJson<{ paths?: Record<string, Record<string, unknown>> }>(`http://127.0.0.1:${port}/openapi.json`)
+  const openapi = await getJson<OpenApiBrokerRouteDocument>(`http://127.0.0.1:${port}/openapi.json`)
+  assertOpenApiBrokerRouteDocument(openapi)
+}
+
+export function assertOpenApiBrokerRouteDocument(openapi: OpenApiBrokerRouteDocument): void {
   const expectedBrokerRoutes = [
     'POST /api/app-installation/install',
     'GET /api/app-installation/apps',
