@@ -1,28 +1,92 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
-
 import { describe, expect, it } from 'bun:test'
 
-describe('npm package smoke script contract', () => {
-  it('validates the packaged official Freeform descriptor refs from the npm tarball', async () => {
-    const source = await readFile(join(import.meta.dirname, 'smoke-npm-package.ts'), 'utf8')
+import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
+import { assertTarballDescriptorRefs } from './smoke-npm-package'
 
-    expect(source).toContain('assertTarballOfficialFreeformDescriptor')
-    expect(source).toContain('assertTarballDescriptorRefs')
-    expect(source).toContain('parseOfficialFreeformDescriptorJson')
-    expect(source).toContain('package/official-apps/aiworker-freeform/dist/soul.descriptor.json')
-    expect(source).toContain('package/official-apps/aiworker-freeform')
-    expect(source).toContain('descriptor refs')
-    expect(source).toContain('app\', \'bootstrap\', \'official')
-    expect(source).toContain('app\', \'list')
-    expect(source).toContain('assertPackagedFreeform')
-    expect(source).toContain('sourceRef')
-    expect(source).toContain('repository')
-    expect(source).toContain('publishConfig')
-    expect(source).toContain('access')
-    expect(source).toContain('node_modules/@zonease/aiworker-cli/official-apps')
-    expect(source).toContain('tar')
-    expect(source).toContain('-xOzf')
-    expect(source).toContain('npm package descriptor reference escapes package root')
+describe('npm package smoke script contract', () => {
+  it('validates parsed descriptor refs against real npm tarball entries', () => {
+    const descriptor = parseOfficialFreeformDescriptorJson(JSON.stringify({
+      protocol: 'soul/v1',
+      identity: {
+        appId: 'aiworker-freeform',
+        description: 'Open-ended Soul for freeform local work.',
+        name: 'AIWorker Freeform',
+        soulId: 'freeform',
+        version: '0.1.0',
+      },
+      compatibility: {
+        engines: ['codex', 'claude-code'],
+        host: '>=1.0.0',
+        sdk: '>=1.0.0',
+      },
+      capabilities: [
+        {
+          id: 'default',
+          name: 'Freeform Session',
+          prompt: {
+            ref: 'dist/product/capabilities/default/prompt.md',
+            type: 'packaged-file',
+          },
+          purpose: 'Start an open-ended engine-backed AIWorker session inside a workspace locator.',
+        },
+      ],
+      configuration: {
+        defaults: { engine: 'codex' },
+        features: {
+          engine: true,
+          mcp: true,
+          skills: true,
+          workbench: true,
+          workspaceAssets: true,
+        },
+        scope: 'worker',
+        version: '1',
+      },
+      workbench: {
+        entry: 'dist/web/workbench/index.html',
+        mode: 'sdk-common',
+        router: { mode: 'search' },
+        type: 'micro-app',
+      },
+      api: null,
+      engine: {
+        workspaceAssets: { source: 'dist/engine-assets/workspace' },
+        skills: { source: 'dist/engine-assets/skills' },
+        mcp: {
+          targets: {
+            'claude-code': { file: 'dist/engine-assets/mcp/claude-code/.mcp.json' },
+            codex: { file: 'dist/engine-assets/mcp/codex/config.toml' },
+          },
+        },
+      },
+      health: {
+        ready: true,
+        type: 'static',
+      },
+      extensions: {},
+      external: {},
+    }))
+    const files = [
+      'package/official-apps/aiworker-freeform/dist/web/workbench/index.html',
+      'package/official-apps/aiworker-freeform/dist/engine-assets/workspace/README.md',
+      'package/official-apps/aiworker-freeform/dist/engine-assets/skills/freeform/SKILL.md',
+      'package/official-apps/aiworker-freeform/dist/engine-assets/mcp/claude-code/.mcp.json',
+      'package/official-apps/aiworker-freeform/dist/engine-assets/mcp/codex/config.toml',
+    ]
+
+    expect(() => assertTarballDescriptorRefs(files, 'package/official-apps/aiworker-freeform', [
+      { kind: 'file', ref: descriptor.workbench.entry },
+      { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
+      { kind: 'dir', ref: descriptor.engine.skills?.source },
+      ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
+    ])).not.toThrow()
+
+    expect(() => assertTarballDescriptorRefs(files, 'package/official-apps/aiworker-freeform', [
+      { kind: 'file', ref: '../outside.txt' },
+    ])).toThrow('npm package descriptor reference escapes package root: ../outside.txt')
+
+    expect(() => assertTarballDescriptorRefs(files, 'package/official-apps/aiworker-freeform', [
+      { kind: 'file', ref: 'dist/web/workbench/missing.html' },
+    ])).toThrow('npm package descriptor references missing file: package/official-apps/aiworker-freeform/dist/web/workbench/missing.html')
   })
 })

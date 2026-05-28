@@ -116,7 +116,7 @@ async function assertTarballOfficialFreeformDescriptor(archivePath: string, desc
   ])
 }
 
-function assertTarballDescriptorRefs(
+export function assertTarballDescriptorRefs(
   files: string[],
   appRoot: string,
   refs: Array<{ kind: 'dir' | 'file', ref?: string }>,
@@ -239,9 +239,11 @@ async function run(command: string[], options: { cwd: string, env?: NodeJS.Proce
   return { stderr, stdout }
 }
 
-main()
-  .then(code => process.exit(code))
-  .catch((err) => {
-    consola.error(`[smoke-npm-package] FAIL: ${err instanceof Error ? err.message : String(err)}`)
-    process.exit(1)
-  })
+if (import.meta.main) {
+  main()
+    .then(code => process.exit(code))
+    .catch((err) => {
+      consola.error(`[smoke-npm-package] FAIL: ${err instanceof Error ? err.message : String(err)}`)
+      process.exit(1)
+    })
+}
