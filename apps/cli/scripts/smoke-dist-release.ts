@@ -31,6 +31,10 @@ interface OpenApiBrokerRouteDocument {
   paths?: Record<string, Record<string, unknown>>
 }
 
+interface OpenApiWorkerConfigEnvelopeDocument {
+  paths?: Record<string, unknown>
+}
+
 interface ProjectionReceiptMissingResponse {
   body: string
   label: string
@@ -242,7 +246,11 @@ async function assertDaemonRuntimeVersion(port: number, expectedVersion: string)
 }
 
 async function assertDaemonOpenApiWorkerConfigEnvelope(port: number): Promise<void> {
-  const openapi = await getJson<{ paths?: Record<string, unknown> }>(`http://127.0.0.1:${port}/openapi.json`)
+  const openapi = await getJson<OpenApiWorkerConfigEnvelopeDocument>(`http://127.0.0.1:${port}/openapi.json`)
+  assertOpenApiWorkerConfigEnvelopeDocument(openapi)
+}
+
+export function assertOpenApiWorkerConfigEnvelopeDocument(openapi: OpenApiWorkerConfigEnvelopeDocument): void {
   const serialized = JSON.stringify(openapi)
   for (const forbidden of ['[mcp_servers', 'mcpServers', 'literal-secret', 'sk-', 'candidateId', 'artifactContent']) {
     if (serialized.includes(forbidden))
@@ -258,7 +266,34 @@ async function assertDaemonOpenApiWorkerConfigEnvelope(port: number): Promise<vo
   assertDistOpenApiFreshness(workerConfigPath)
   if (!putBody.includes('WorkerConfigValueInput') || patchBody !== putBody)
     throw new Error(`dist daemon OpenAPI worker config routes must share WorkerConfigValueInput request bodies: ${putBody} / ${patchBody}`)
-  for (const required of ['WorkerConfigValueInput', 'configValueJson envelope', 'skill-overlay', 'descriptor://engine/skills/freeform-session', 'updatedBy', 'web']) {
+  const requiredEnvelopeSignals = [
+    'WorkerConfigValueInput',
+    'configValueJson envelope',
+    'kind',
+    'target',
+    'enabled',
+    'sourceRef',
+    'checksum',
+    'options',
+    'updatedAt',
+    'updatedBy',
+    'engine-selection',
+    'projection-overlay',
+    'skill-overlay',
+    'mcp-overlay',
+    'entry-file-overlay',
+    'workbench-preference',
+    'sdk-extension',
+    'codex',
+    'claude-code',
+    'all',
+    'none',
+    'cli',
+    'web',
+    'app-owned-api',
+    'descriptor://engine/skills/freeform-session',
+  ]
+  for (const required of requiredEnvelopeSignals) {
     if (!serialized.includes(required))
       throw new Error(`dist daemon OpenAPI worker config envelope is missing ${required}`)
   }

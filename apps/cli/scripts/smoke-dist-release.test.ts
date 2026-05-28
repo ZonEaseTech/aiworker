@@ -1,11 +1,16 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'bun:test'
 
 import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
-import { assertDistDescriptorRefsForRoot, assertOpenApiBrokerRouteDocument, assertProjectionReceiptMissingResponseText } from './smoke-dist-release'
+import {
+  assertDistDescriptorRefsForRoot,
+  assertOpenApiBrokerRouteDocument,
+  assertOpenApiWorkerConfigEnvelopeDocument,
+  assertProjectionReceiptMissingResponseText,
+} from './smoke-dist-release'
 import { assertDistOpenApiFreshness } from './smoke-dist-release-contract'
 
 describe('dist release smoke script contract', () => {
@@ -104,21 +109,30 @@ describe('dist release smoke script contract', () => {
     }
   })
 
-  it('validates packaged daemon OpenAPI worker config envelope examples', async () => {
-    const source = await readFile(join(import.meta.dirname, 'smoke-dist-release.ts'), 'utf8')
-    const contract = await readFile(join(import.meta.dirname, 'smoke-dist-release-contract.ts'), 'utf8')
+  it('validates packaged daemon OpenAPI worker config envelope from the document', () => {
+    const document = workerConfigOpenApiDocument()
 
-    expect(source).toContain('assertDaemonOpenApiWorkerConfigEnvelope')
-    expect(source).toContain('assertDistOpenApiFreshness')
-    expect(source).toContain('/openapi.json')
-    expect(source).toContain('/api/workers/{workerId}/config/{configKey}')
-    expect(source).toContain('WorkerConfigValueInput')
-    expect(source).toContain('configValueJson envelope')
-    expect(contract).toContain('dist OpenAPI is stale')
-    expect(contract).toContain('Run bun run build before smoke:dist-release')
-    expect(source).toContain('literal-secret')
-    expect(source).toContain('candidateId')
-    expect(source).toContain('artifactContent')
+    expect(() => assertOpenApiWorkerConfigEnvelopeDocument(document)).not.toThrow()
+
+    delete document.paths['/api/workers/{workerId}/config/{configKey}']?.patch?.requestBody
+    expect(() => assertOpenApiWorkerConfigEnvelopeDocument(document)).toThrow('dist OpenAPI is stale')
+
+    document.paths['/api/workers/{workerId}/config/{configKey}']!.patch!.requestBody = { schema: 'DifferentInput' }
+    expect(() => assertOpenApiWorkerConfigEnvelopeDocument(document)).toThrow(
+      'dist daemon OpenAPI worker config routes must share WorkerConfigValueInput request bodies',
+    )
+
+    document.paths['/api/workers/{workerId}/config/{configKey}']!.patch!.requestBody = document.paths['/api/workers/{workerId}/config/{configKey}']!.put!.requestBody
+    delete document.components.schemas.WorkerConfigValueInput.properties.updatedAt
+    delete document.components.examples.workerConfig.value.configValueJson.updatedAt
+    expect(() => assertOpenApiWorkerConfigEnvelopeDocument(document)).toThrow(
+      'dist daemon OpenAPI worker config envelope is missing updatedAt',
+    )
+
+    document.components.schemas.WorkerConfigValueInput.properties.updatedAt = { type: 'string' }
+    document.components.examples.workerConfig.value.configValueJson.updatedAt = '2026-05-28T00:00:00.000Z'
+    document.components.examples.workerConfig.value.configValueJson.options.literal = 'literal-secret'
+    expect(() => assertOpenApiWorkerConfigEnvelopeDocument(document)).toThrow('dist daemon OpenAPI must not expose literal-secret')
   })
 
   it('validates packaged daemon OpenAPI canonical broker routes from the document', () => {
@@ -244,4 +258,72 @@ function routesToOpenApiPaths(routes: string[]): Record<string, Record<string, u
     paths[routePath][method.toLowerCase()] = {}
   }
   return paths
+}
+
+function workerConfigOpenApiDocument(): {
+  components: {
+    examples: {
+      workerConfig: {
+        value: {
+          configValueJson: {
+            kind: string
+            options: Record<string, unknown>
+            sourceRef: string
+            target: string
+            updatedBy: string
+          }
+        }
+      }
+    }
+    schemas: {
+      WorkerConfigValueInput: {
+        description: string
+        properties: Record<string, unknown>
+      }
+    }
+  }
+  paths: Record<string, { patch?: { requestBody?: unknown }, put?: { requestBody?: unknown } }>
+} {
+  const requestBody = { schema: 'WorkerConfigValueInput', description: 'configValueJson envelope' }
+  return {
+    components: {
+      examples: {
+        workerConfig: {
+          value: {
+            configValueJson: {
+              checksum: 'sha256:freeform-session-overlay',
+              enabled: true,
+              kind: 'skill-overlay',
+              options: { mode: 'append' },
+              sourceRef: 'descriptor://engine/skills/freeform-session',
+              target: 'codex',
+              updatedAt: '2026-05-28T00:00:00.000Z',
+              updatedBy: 'web',
+            },
+          },
+        },
+      },
+      schemas: {
+        WorkerConfigValueInput: {
+          description: 'configValueJson envelope',
+          properties: {
+            checksum: { type: 'string' },
+            enabled: { type: 'boolean' },
+            kind: { enum: ['engine-selection', 'projection-overlay', 'skill-overlay', 'mcp-overlay', 'entry-file-overlay', 'workbench-preference', 'sdk-extension'] },
+            options: { type: 'object' },
+            sourceRef: { type: 'string' },
+            target: { enum: ['codex', 'claude-code', 'all', 'none'] },
+            updatedAt: { type: 'string' },
+            updatedBy: { enum: ['cli', 'web', 'app-owned-api'] },
+          },
+        },
+      },
+    },
+    paths: {
+      '/api/workers/{workerId}/config/{configKey}': {
+        patch: { requestBody },
+        put: { requestBody },
+      },
+    },
+  }
 }
