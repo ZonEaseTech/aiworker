@@ -10,11 +10,14 @@ import { soulAppServiceEnv } from '@zonease/aiworker-host-runtime'
 import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
 import {
   closeWorkerDb,
+  createEngineInvocation,
   createSession,
   createWorkspace,
   engineInvocations,
+  getEngineInvocation,
   getWorkerDb,
   initWorkerDb,
+  listSessionEvents,
   runWorkerMigrations,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
@@ -426,6 +429,71 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('workspace create|list|projection refresh|archive|delete')
     expect(output).toContain('session start|invoke|list|show|archive|delete')
     expect(output).not.toContain('run start')
+  })
+
+  it('cancels an active running engine invocation through CLI by invocation id', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('worker', 'create', '--id', 'cancel-worker', '--name', 'Cancel Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'select', 'cancel-worker'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('workspace', 'create', '--name', 'Cancel Workspace', '--type', 'freeform', '--worker', 'cancel-worker'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
+    output = ''
+
+    closeWorkerDb()
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    const session = createSession({
+      capabilityId: FREEFORM_CAPABILITY_ID,
+      id: 'cancel-session-1',
+      metadataJson: {},
+      title: 'Cancel running invocation',
+      workerId: 'cancel-worker',
+      workspaceId: workspace.id,
+      at: '2026-05-28T00:00:00.000Z',
+    })
+    const invocation = createEngineInvocation({
+      engineCommand: 'codex',
+      engineId: 'codex',
+      id: 'cancel-running-invocation-1',
+      inputRef: `aiworker://sessions/${session.id}/invocations/cancel-running-invocation-1/input`,
+      processState: 'spawned',
+      seq: 1,
+      sessionId: session.id,
+      status: 'running',
+    })
+    closeWorkerDb()
+
+    expect(await runCli(argv('session', 'cancel', invocation.id, '--reason', 'operator pressed Ctrl+C token=sk-cli-active-cancel-secret'))).toBe(0)
+
+    const cancelled = JSON.parse(output) as {
+      invocation: { id: string, processState: string, sessionId: string, status: string, summary: string | null }
+      session: { id: string, status: string }
+    }
+    expect(cancelled.invocation).toMatchObject({
+      id: invocation.id,
+      processState: 'killed',
+      sessionId: session.id,
+      status: 'cancelled',
+      summary: 'Invocation cancelled.',
+    })
+    expect(cancelled.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(output).not.toContain('sk-cli-active-cancel-secret')
+
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    const persisted = getEngineInvocation(invocation.id)
+    expect(persisted).toMatchObject({ status: 'cancelled', processState: 'killed' })
+    const events = listSessionEvents(session.id).filter(event => event.invocationId === invocation.id)
+    expect(events.at(-1)?.payloadJson).toMatchObject({
+      bridgeEvent: 'invocation.cancelled',
+      invocationId: invocation.id,
+      processState: 'killed',
+      status: 'cancelled',
+    })
+    closeWorkerDb()
   })
 
   it('archives worker config envelopes through CLI commands', async () => {
