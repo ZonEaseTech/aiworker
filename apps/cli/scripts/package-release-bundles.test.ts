@@ -78,6 +78,17 @@ describe('release bundle packager', () => {
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
+  it('rejects standalone bundles before staging when the packaged Freeform descriptor drops the default capability', async () => {
+    await writeFixtureDist(root, { descriptorText: fixtureDescriptorText({ capabilities: [] }) })
+    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
+    await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
+
+    await expect(
+      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
+    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
+  })
+
   it('rejects standalone bundles before staging when descriptor-declared workbench assets are missing', async () => {
     await writeFixtureDist(root, { includeWorkbenchEntry: false })
     await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
@@ -135,7 +146,7 @@ async function writeFixtureDist(
   await writeFile(path.join(dist, 'README.md'), '# AIWorker\n')
 }
 
-function fixtureDescriptorText(options: { appId?: string } = {}): string {
+function fixtureDescriptorText(options: { appId?: string, capabilities?: unknown[] } = {}): string {
   return `${JSON.stringify({
     protocol: 'soul/v1',
     identity: {
@@ -149,7 +160,16 @@ function fixtureDescriptorText(options: { appId?: string } = {}): string {
       host: '>=1.0.0',
       sdk: '>=1.0.0',
     },
-    capabilities: [],
+    capabilities: options.capabilities ?? [
+      {
+        id: 'default',
+        name: 'Freeform Session',
+        prompt: {
+          ref: 'dist/product/capabilities/default/prompt.md',
+          type: 'packaged-file',
+        },
+      },
+    ],
     configuration: {},
     workbench: {
       entry: 'dist/web/workbench/index.html',

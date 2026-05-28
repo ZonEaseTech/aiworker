@@ -68,7 +68,7 @@ async function assertDescriptorV1(rootDir: string, distDir: string, resource: st
     descriptor = parseOfficialFreeformDescriptorJson(await readFile(resourcePath, 'utf8'))
   }
   catch (err) {
-    const reason = err instanceof Error && err.message.includes('expected aiworker-freeform')
+    const reason = err instanceof Error && err.message.startsWith('expected ')
       ? 'is not the official Freeform descriptor'
       : 'is not descriptor v1'
     throw new Error(`invalid release resource: ${relative(rootDir, resourcePath)} ${reason}`)

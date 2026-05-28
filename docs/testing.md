@@ -108,6 +108,7 @@ apps/cli/scripts/smoke-standalone-runtime.test.ts
 CLI release packaging contract tests:
 
 ```text
+apps/cli/src/official-freeform-descriptor.test.ts
 apps/cli/scripts/build-publish-manifest.test.ts
 apps/cli/scripts/package-release-bundles.test.ts
 ```

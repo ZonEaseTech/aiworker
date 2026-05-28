@@ -2100,6 +2100,7 @@ describe('destructive refactor contract bootstrap', () => {
   test('release packaging contract tests guard descriptor-only official apps', () => {
     const testing = readRepoFile('docs/testing.md')
     const releasePackagingContractTests = [
+      'apps/cli/src/official-freeform-descriptor.test.ts',
       'apps/cli/scripts/build-publish-manifest.test.ts',
       'apps/cli/scripts/package-release-bundles.test.ts',
     ]
