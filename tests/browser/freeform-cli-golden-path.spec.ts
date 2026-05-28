@@ -148,6 +148,18 @@ try {
     if (!mountedUrl.includes(expected))
       throw new Error(`Mounted URL missed ${expected}: ${mountedUrl}`)
   }
+  assertMountedMicroAppHostData(
+    readRecord(readRecord(mountProof).microApp).data,
+    workerId,
+    workspaceResult.workspace.id,
+    sessionResult.session.id,
+  )
+  assertMountedMicroAppHostData(
+    mountAttributes.data,
+    workerId,
+    workspaceResult.workspace.id,
+    sessionResult.session.id,
+  )
 
   await waitForFreeformWorkbench(page)
   const mountedSurface = await readMountedSurface(page)
@@ -932,6 +944,25 @@ function readRecord(value: unknown): Record<string, unknown> {
   if (!isRecord(value))
     throw new Error(`Expected record, received ${JSON.stringify(value)}`)
   return value
+}
+
+function assertMountedMicroAppHostData(value: unknown, workerId: string, workspaceId: string, sessionId: string): void {
+  const data = readRecord(value)
+  if (data.appId !== appId || data.workerId !== workerId || data.workspaceId !== workspaceId || data.sessionId !== sessionId)
+    throw new Error(`Mounted micro-app data missed locator context: ${JSON.stringify(data)}`)
+  if (data.routePrefix !== `/api/apps/${appId}` || data.surfaceId !== 'workbench' || data.surfaceKind !== 'route' || data.surfaceScope !== 'app')
+    throw new Error(`Mounted micro-app data missed app-owned route metadata: ${JSON.stringify(data)}`)
+  if (typeof data.mountTokenPresent !== 'boolean')
+    throw new Error(`Mounted micro-app data did not report app API token availability as a boolean: ${JSON.stringify(data)}`)
+  for (const forbiddenKey of ['mountToken', 'mountSignature', 'mountContext']) {
+    if (forbiddenKey in data)
+      throw new Error(`Mounted micro-app data exposed Host mount credential material ${forbiddenKey}: ${JSON.stringify(data)}`)
+  }
+  const serialized = JSON.stringify(data)
+  for (const forbiddenHeader of ['x-aiworker-mount-token', 'x-aiworker-mount-signature', 'x-aiworker-mount-context']) {
+    if (serialized.includes(forbiddenHeader))
+      throw new Error(`Mounted micro-app data exposed Host mount credential header ${forbiddenHeader}: ${serialized}`)
+  }
 }
 
 async function readBrowserDiagnostics(page: Page): Promise<unknown> {
