@@ -27,6 +27,7 @@ export async function packageReleaseBundles(options: PackageReleaseBundlesOption
   const releaseDir = resolve(rootDir, 'release')
 
   await assertRequiredDistResources(rootDir, distDir)
+  await assertTargetBinaries(rootDir, targets)
   await mkdir(releaseDir, { recursive: true })
   for (const target of targets) {
     const bundle = `aiworker-${target}`
@@ -41,6 +42,18 @@ export async function packageReleaseBundles(options: PackageReleaseBundlesOption
     await copyFile(resolve(distDir, 'README.md'), resolve(bundleDir, 'README.md'))
     await createTarball(rootDir, releaseDir, bundle)
     await writeChecksum(rootDir, `${bundle}.tar.gz`)
+  }
+}
+
+async function assertTargetBinaries(rootDir: string, targets: readonly string[]): Promise<void> {
+  for (const target of targets) {
+    const binary = `aiworker-${target}`
+    try {
+      await stat(resolve(rootDir, binary))
+    }
+    catch {
+      throw new Error(`missing release binary: ${binary}`)
+    }
   }
 }
 

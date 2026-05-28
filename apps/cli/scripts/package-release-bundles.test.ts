@@ -46,6 +46,15 @@ describe('release bundle packager', () => {
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
     ).rejects.toThrow('missing release resource: apps/cli/dist/drizzle/worker/meta/_journal.json')
   })
+
+  it('rejects standalone bundles before staging when the compiled target binary is missing', async () => {
+    await writeFixtureDist(root)
+
+    await expect(
+      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('missing release binary: aiworker-darwin-arm64')
+    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
+  })
 })
 
 async function writeFixtureDist(root: string, options: { includeMigrationJournal?: boolean } = {}): Promise<void> {
