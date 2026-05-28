@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { spawn } from 'bun'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { packageReleaseBundles } from './package-release-bundles'
@@ -30,6 +32,14 @@ describe('release artifact smoke', () => {
     await expect(
       verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
     ).rejects.toThrow('release checksum mismatch for aiworker-darwin-arm64.tar.gz')
+  })
+
+  it('rejects attach artifacts when descriptor-declared resources are missing from the tarball', async () => {
+    await writeMalformedReleaseArtifact(root, 'darwin-arm64')
+
+    await expect(
+      verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz descriptor references missing file: aiworker-darwin-arm64/official-apps/aiworker-freeform/dist/web/workbench/index.html')
   })
 
   it('is wired into the tag release workflow before GitHub Release attach', async () => {
@@ -75,4 +85,44 @@ async function writeFixtureDist(root: string): Promise<void> {
     workbench: { entry: 'dist/web/workbench/index.html', mode: 'sdk-common', router: { mode: 'search' }, type: 'micro-app' },
   })}\n`)
   await writeFile(path.join(dist, 'README.md'), '# AIWorker\n')
+}
+
+async function writeMalformedReleaseArtifact(root: string, target: string): Promise<void> {
+  const bundle = `aiworker-${target}`
+  const bundleRoot = path.join(root, bundle)
+  await mkdir(path.join(bundleRoot, 'web', 'worker'), { recursive: true })
+  await mkdir(path.join(bundleRoot, 'drizzle', 'worker', 'meta'), { recursive: true })
+  await mkdir(path.join(bundleRoot, 'official-apps', 'aiworker-freeform', 'dist'), { recursive: true })
+  await writeFile(path.join(bundleRoot, 'aiworker'), '#!/bin/sh\necho aiworker\n')
+  await chmod(path.join(bundleRoot, 'aiworker'), 0o755)
+  await writeFile(path.join(bundleRoot, 'web', 'worker', 'index.html'), '<!doctype html>\n')
+  await writeFile(path.join(bundleRoot, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
+  await writeFile(path.join(bundleRoot, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), `${JSON.stringify({
+    api: null,
+    capabilities: [],
+    compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
+    configuration: {},
+    engine: {},
+    extensions: {},
+    external: {},
+    health: { ready: true, type: 'static' },
+    identity: { appId: 'aiworker-freeform', name: 'AIWorker Freeform', soulId: 'freeform', version: '0.1.0' },
+    protocol: 'soul/v1',
+    workbench: { entry: 'dist/web/workbench/index.html', mode: 'sdk-common', router: { mode: 'search' }, type: 'micro-app' },
+  })}\n`)
+  await writeFile(path.join(bundleRoot, 'README.md'), '# AIWorker\n')
+  await run(['tar', '-C', root, '-czf', path.join(root, `${bundle}.tar.gz`), bundle])
+  const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
+  const checksum = createHash('sha256').update(archive).digest('hex')
+  await writeFile(path.join(root, `${bundle}.tar.gz.sha256`), `${checksum}  ${bundle}.tar.gz\n`)
+}
+
+async function run(command: string[]): Promise<void> {
+  const proc = spawn(command, { stderr: 'pipe', stdout: 'ignore' })
+  const [stderr, code] = await Promise.all([
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  if (code !== 0)
+    throw new Error(`${command.join(' ')} failed: ${stderr}`)
 }
