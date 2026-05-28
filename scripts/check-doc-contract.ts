@@ -301,6 +301,68 @@ for (const requiredAppOwnedApiCoverageText of [
     })
   }
 }
+const workerConfigCoverageNeedles: Array<[string, string]> = [
+  [
+    'docs/testing.md',
+    '| Worker config envelope and Host metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, host-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |',
+  ],
+  [
+    'docs/protocol.md',
+    'Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.',
+  ],
+  [
+    'docs/runtime.md',
+    'Worker-scoped overlay records live in Host metadata',
+  ],
+  [
+    'packages/storage-sqlite/src/worker/index.test.ts',
+    'Soul-owned config payloads are not allowed in Host metadata',
+  ],
+  [
+    'packages/storage-sqlite/src/worker/index.test.ts',
+    'Full native MCP files are not allowed in Host metadata',
+  ],
+  [
+    'packages/storage-sqlite/src/worker/index.test.ts',
+    'Invalid Host worker config envelope updatedBy',
+  ],
+  [
+    'packages/host-daemon/src/modes/worker.local.test.ts',
+    'stores worker config envelopes with secret references but rejects literal secrets',
+  ],
+  [
+    'packages/host-daemon/src/modes/worker.local.test.ts',
+    'WORKER_CONFIG_SECRET',
+  ],
+  [
+    'packages/host-daemon/src/modes/worker.local.test.ts',
+    'config.value.updatedBy).toBe(\'web\')',
+  ],
+  [
+    'apps/cli/src/aiworker.test.ts',
+    'rejects literal secrets in worker config envelopes through CLI commands',
+  ],
+  [
+    'apps/web/src/features/local-workspace/api/worker-config.test.ts',
+    '/api/workers/worker-1/config/skill-overlay%3Afreeform-session',
+  ],
+  [
+    'apps/web/src/features/local-workspace/api/worker-config.test.ts',
+    'updatedBy: \'web\'',
+  ],
+  [
+    'apps/web/src/features/local-workspace/api/worker-overlay-config.test.ts',
+    '/api/workers/worker-1/config/skill-overlay%3Ainterview-brief',
+  ],
+]
+for (const [file, needle] of workerConfigCoverageNeedles) {
+  if (!read(file).includes(needle)) {
+    issues.push({
+      file,
+      message: 'worker config envelope security must stay covered',
+    })
+  }
+}
 if (!packageJson.workspaces?.includes('souls/*'))
   issues.push({ file: 'package.json', message: 'workspaces must include souls/*' })
 const expectedNodeEngineRange = '>=20.19.0 <21 || >=22.12.0'

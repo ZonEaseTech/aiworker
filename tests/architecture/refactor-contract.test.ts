@@ -2144,6 +2144,33 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemonTest).toContain('not.toContain(\'sk-\')')
   })
 
+  test('canonical testing docs track worker config envelope security guardrails', () => {
+    const testing = readRepoFile('docs/testing.md')
+    const protocol = readRepoFile('docs/protocol.md')
+    const runtime = readRepoFile('docs/runtime.md')
+    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
+    const storageTest = readRepoFile('packages/storage-sqlite/src/worker/index.test.ts')
+    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
+    const webConfigTest = readRepoFile('apps/web/src/features/local-workspace/api/worker-config.test.ts')
+    const webOverlayConfigTest = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlay-config.test.ts')
+
+    expect(testing).toContain('Worker config envelope and Host metadata security')
+    expect(docCheck).toContain('worker config envelope security must stay covered')
+    expect(protocol).toContain('Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.')
+    expect(runtime).toContain('Worker-scoped overlay records live in Host metadata')
+    expect(storageTest).toContain('Soul-owned config payloads are not allowed in Host metadata')
+    expect(storageTest).toContain('Full native MCP files are not allowed in Host metadata')
+    expect(storageTest).toContain('Invalid Host worker config envelope updatedBy')
+    expect(daemonTest).toContain('stores worker config envelopes with secret references but rejects literal secrets')
+    expect(daemonTest).toContain('WORKER_CONFIG_SECRET')
+    expect(daemonTest).toContain('config.value.updatedBy).toBe(\'web\')')
+    expect(cliTest).toContain('rejects literal secrets in worker config envelopes through CLI commands')
+    expect(webConfigTest).toContain('/api/workers/worker-1/config/skill-overlay%3Afreeform-session')
+    expect(webConfigTest).toContain('updatedBy: \'web\'')
+    expect(webOverlayConfigTest).toContain('/api/workers/worker-1/config/skill-overlay%3Ainterview-brief')
+  })
+
   test('canonical testing docs track Freeform browser proof scope', () => {
     const testing = readRepoFile('docs/testing.md')
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')

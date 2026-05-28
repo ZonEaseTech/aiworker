@@ -154,6 +154,7 @@ Coverage status values:
 | Runtime and bridge contract | `docs/runtime.md` | engine bridge and projection tests | docs+tests |
 | OpenAPI and redaction boundary | `docs/runtime.md`, `AGENTS.md` | host-daemon OpenAPI tests, storage redaction tests, engine bridge redaction tests, projection receipt tests | docs+tests |
 | App-owned API proxy | `docs/protocol.md`, `docs/runtime.md` | host-daemon app-owned API proxy test and docs check | docs+tests |
+| Worker config envelope and Host metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, host-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |
 | Soul authoring contract | `docs/soul-authoring.md` | SDK and Freeform contract tests | docs+tests |
 | Host metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
 | Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
