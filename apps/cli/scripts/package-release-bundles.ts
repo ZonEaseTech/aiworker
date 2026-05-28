@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { chmod, copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { relative, resolve } from 'node:path'
+import { dirname, relative, resolve } from 'node:path'
 import process from 'node:process'
 
 import { spawn } from 'bun'
@@ -62,14 +62,44 @@ async function assertTargetBinaries(rootDir: string, targets: readonly string[])
 
 async function assertDescriptorV1(rootDir: string, distDir: string, resource: string): Promise<void> {
   const resourcePath = resolve(distDir, resource)
+  const descriptorRoot = dirname(dirname(resourcePath))
+  let descriptor: ReturnType<typeof parseOfficialFreeformDescriptorJson>
   try {
-    parseOfficialFreeformDescriptorJson(await readFile(resourcePath, 'utf8'))
+    descriptor = parseOfficialFreeformDescriptorJson(await readFile(resourcePath, 'utf8'))
   }
   catch (err) {
     const reason = err instanceof Error && err.message.includes('expected aiworker-freeform')
       ? 'is not the official Freeform descriptor'
       : 'is not descriptor v1'
     throw new Error(`invalid release resource: ${relative(rootDir, resourcePath)} ${reason}`)
+  }
+  await assertDescriptorRefs(rootDir, descriptorRoot, [
+    { kind: 'file', ref: descriptor.workbench.entry },
+    { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
+    { kind: 'dir', ref: descriptor.engine.skills?.source },
+    ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
+  ])
+}
+
+async function assertDescriptorRefs(
+  rootDir: string,
+  descriptorRoot: string,
+  refs: Array<{ kind: 'dir' | 'file', ref?: string }>,
+): Promise<void> {
+  for (const item of refs) {
+    if (!item.ref)
+      continue
+    const resourcePath = resolve(descriptorRoot, item.ref)
+    try {
+      const info = await stat(resourcePath)
+      if (item.kind === 'dir' && !info.isDirectory())
+        throw new Error('not a directory')
+      if (item.kind === 'file' && !info.isFile())
+        throw new Error('not a file')
+    }
+    catch {
+      throw new Error(`missing release resource: ${relative(rootDir, resourcePath)}`)
+    }
   }
 }
 

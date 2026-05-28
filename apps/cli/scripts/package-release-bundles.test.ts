@@ -77,18 +77,60 @@ describe('release bundle packager', () => {
     ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
+
+  it('rejects standalone bundles before staging when descriptor-declared workbench assets are missing', async () => {
+    await writeFixtureDist(root, { includeWorkbenchEntry: false })
+    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
+    await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
+
+    await expect(
+      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('missing release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/web/workbench/index.html')
+    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
+  })
+
+  it('rejects standalone bundles before staging when descriptor-declared MCP assets are missing', async () => {
+    await writeFixtureDist(root, { includeCodexMcpFile: false })
+    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
+    await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
+
+    await expect(
+      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('missing release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/engine-assets/mcp/codex/config.toml')
+    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
+  })
 })
 
-async function writeFixtureDist(root: string, options: { descriptorText?: string, includeMigrationJournal?: boolean } = {}): Promise<void> {
+async function writeFixtureDist(
+  root: string,
+  options: {
+    descriptorText?: string
+    includeCodexMcpFile?: boolean
+    includeMigrationJournal?: boolean
+    includeWorkbenchEntry?: boolean
+  } = {},
+): Promise<void> {
+  const includeCodexMcpFile = options.includeCodexMcpFile ?? true
   const includeMigrationJournal = options.includeMigrationJournal ?? true
+  const includeWorkbenchEntry = options.includeWorkbenchEntry ?? true
   const dist = path.join(root, 'apps', 'cli', 'dist')
   await mkdir(path.join(dist, 'web', 'worker'), { recursive: true })
   await mkdir(path.join(dist, 'drizzle', 'worker', 'meta'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist'), { recursive: true })
+  await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench'), { recursive: true })
+  await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'workspace'), { recursive: true })
+  await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'skills'), { recursive: true })
+  await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
+  await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code'), { recursive: true })
   await writeFile(path.join(dist, 'web', 'worker', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(dist, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
   if (includeMigrationJournal)
     await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
+  if (includeWorkbenchEntry)
+    await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
+  if (includeCodexMcpFile)
+    await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex\n')
+  await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code', '.mcp.json'), '{}\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), options.descriptorText ?? fixtureDescriptorText())
   await writeFile(path.join(dist, 'README.md'), '# AIWorker\n')
 }
@@ -111,10 +153,31 @@ function fixtureDescriptorText(options: { appId?: string } = {}): string {
     configuration: {},
     workbench: {
       entry: 'dist/web/workbench/index.html',
+      mode: 'sdk-common',
+      router: {
+        mode: 'search',
+      },
       type: 'micro-app',
     },
     api: null,
-    engine: {},
+    engine: {
+      mcp: {
+        targets: {
+          'claude-code': {
+            file: 'dist/engine-assets/mcp/claude-code/.mcp.json',
+          },
+          codex: {
+            file: 'dist/engine-assets/mcp/codex/config.toml',
+          },
+        },
+      },
+      skills: {
+        source: 'dist/engine-assets/skills',
+      },
+      workspaceAssets: {
+        source: 'dist/engine-assets/workspace',
+      },
+    },
     health: {
       ready: true,
       type: 'static',
