@@ -1474,10 +1474,6 @@ function ensureScaffoldSdkLink(targetDir: string): void {
 
 function registerCommands(): void {
   cli.command('init', 'initialize host-local AIWorker home and Soul workers').action(runInit)
-  cli.command('dev', 'source-checkout alias for daemon foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => {
-    consola.warn('aiworker dev is a source-checkout compatibility alias; prefer `bun run dev` in the repository or `aiworker daemon start` after installation.')
-    return daemonForeground({ host: opts.host, port: optionalNumber(opts.port) })
-  })
   cli.command('doctor', 'inspect host-local daemon readiness').action(runDoctor)
   cli.command('update', 'check or apply an AIWorker CLI update')
     .option('--check', 'check for updates without changing files')
@@ -1614,7 +1610,6 @@ const OPERATOR_COMMAND_INDEX = [
 const FULL_COMMAND_INDEX = [
   'aiworker command index',
   'init',
-  'dev',
   'update|upgrade',
   'daemon start|foreground|status|stop|restart|logs|check',
   'app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke',

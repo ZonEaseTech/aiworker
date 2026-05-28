@@ -209,7 +209,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('commands', '--all'))).toBe(0)
 
     expect(output).toContain('aiworker command index')
-    expect(output).toContain('dev')
+    expect(output).not.toContain('dev')
     expect(output).toContain('daemon start|foreground|status|stop|restart|logs|check')
     expect(output).toContain('app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke')
     expect(output).toContain('worker create|list|show|select|config list|config set|config archive|archive|delete')

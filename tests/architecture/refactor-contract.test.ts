@@ -426,6 +426,28 @@ describe('destructive refactor contract bootstrap', () => {
     expect(cliTest).toContain(').toBe(1)')
   })
 
+  test('CLI does not preserve the source-checkout dev compatibility alias', () => {
+    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
+    const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
+    const forbidden = [
+      'cli.command(\'dev\'',
+      'source-checkout alias for daemon foreground',
+      'source-checkout compatibility alias',
+      '\'dev\',',
+      'expect(output).toContain(\'dev\')',
+    ]
+    const findings = [
+      ...forbidden
+        .filter(snippet => cliSource.includes(snippet))
+        .map(snippet => `apps/cli/src/aiworker.ts: ${snippet}`),
+      ...forbidden
+        .filter(snippet => cliTest.includes(snippet))
+        .map(snippet => `apps/cli/src/aiworker.test.ts: ${snippet}`),
+    ]
+
+    expect(findings, 'CLI should use bun run dev in source checkouts and daemon foreground/start in the product CLI').toEqual([])
+  })
+
   test('CLI app lifecycle surface uses archive command without disable alias', () => {
     const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
     const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
