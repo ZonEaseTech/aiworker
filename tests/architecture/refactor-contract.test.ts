@@ -2039,11 +2039,13 @@ describe('destructive refactor contract bootstrap', () => {
     expect(testing).toContain('bun run release:check')
     expect(testing).toContain('bun run smoke:dist-release')
     expect(testing).toContain('bun run smoke:standalone-release')
+    expect(testing).toContain('bun run smoke:npm-package')
     expect(releaseCheckScript).toBeTruthy()
     for (const command of releaseGateCommands)
       expect(releaseCheckScript).toContain(command)
     expect(releaseCheckScript.indexOf('bun run build')).toBeLessThan(releaseCheckScript.indexOf('bun run smoke:dist-release'))
     expect(releaseCheckScript.indexOf('bun run build')).toBeLessThan(releaseCheckScript.indexOf('bun run smoke:standalone-release'))
+    expect(releaseCheckScript.indexOf('bun run build')).toBeLessThan(releaseCheckScript.indexOf('bun run smoke:npm-package'))
     expect(releaseCheckScript).not.toContain('tmp/refactor')
   })
 
