@@ -32,12 +32,14 @@ import {
   deleteWorker,
   deleteWorkerConfigValue,
   deleteWorkspace,
+  getEngineInvocation,
   getSession,
   getWorker,
   getWorkspace,
   initWorkerDb,
   listEngineInvocations,
   listFiles,
+  listSessionEvents,
   listSessions,
   listSettings,
   listWorkerConfigValues,
@@ -1245,6 +1247,28 @@ async function showSession(id: string): Promise<void> {
   })
 }
 
+async function showInvocationEventsCommand(invocationId: string, opts: { after?: number[], limit?: number[] }): Promise<void> {
+  await ensureAllWorkers()
+  const invocation = getEngineInvocation(invocationId)
+  if (!invocation)
+    throw new Error(`invocation not found: ${invocationId}`)
+  const after = optionalNumber(opts.after)
+  const limit = optionalNumber(opts.limit)
+  const events = listSessionEvents(invocation.sessionId, {
+    ...(after !== undefined ? { after } : {}),
+    ...(limit !== undefined ? { limit } : {}),
+  }).filter(event => event.invocationId === invocationId)
+  printJson({
+    events,
+    invocation: {
+      id: invocation.id,
+      processState: invocation.processState,
+      sessionId: invocation.sessionId,
+      status: invocation.status,
+    },
+  })
+}
+
 async function archiveSessionCommand(id: string): Promise<void> {
   await ensureDb()
   const session = getSession(id)
@@ -1741,6 +1765,7 @@ function registerCommands(): void {
   cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').action(listSessionCommand)
   cli.command('session show <id>', 'show one session').action(showSession)
   cli.command('session invoke', 'create a session-level engine invocation').option('--session <id>', 'session id').option('--input <text>', 'invocation input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(invokeSessionCommand)
+  cli.command('session events <invocationId>', 'list normalized bridge events for an engine invocation').option('--after <seq>', 'return only events after this seq', { type: [Number] }).option('--limit <n>', 'maximum events to return', { type: [Number] }).action(showInvocationEventsCommand)
   cli.command('session archive <id>', 'archive an AIWorker session').action(archiveSessionCommand)
   cli.command('session delete <id>', 'hard-delete AIWorker session metadata').action(deleteSessionCommand)
 

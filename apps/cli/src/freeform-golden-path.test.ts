@@ -204,6 +204,32 @@ describe('Freeform CLI golden path', () => {
     ])
     expect(shown.invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded', 'succeeded'])
 
+    const cliEvents = await runCliJson<{
+      events: Array<{ invocationId: string, payloadJson: Record<string, unknown>, sessionId: string, type: string }>
+      invocation: { id: string, processState: string, sessionId: string, status: string }
+    }>('session', 'events', started.invocation.id)
+    expect(cliEvents.invocation).toEqual({
+      id: started.invocation.id,
+      processState: 'exited',
+      sessionId: started.session.id,
+      status: 'succeeded',
+    })
+    expect(cliEvents.events.every(event => event.invocationId === started.invocation.id)).toBe(true)
+    expect(cliEvents.events.every(event => event.sessionId === started.session.id)).toBe(true)
+    expect(cliEvents.events.map(event => event.type)).toEqual(expect.arrayContaining(['tool', 'assistant_delta', 'status']))
+    expect(JSON.stringify(cliEvents)).not.toContain('literal-secret-value')
+    expect(JSON.stringify(cliEvents)).not.toContain('/turns/')
+
+    const missingInvocationExit = await runCli([
+      '/usr/bin/bun',
+      '/repo/apps/cli/src/aiworker.ts',
+      'session',
+      'events',
+      'invocation-does-not-exist',
+    ])
+    expect(missingInvocationExit).toBe(1)
+    expect(errorOutput).toContain('invocation not found: invocation-does-not-exist')
+
     initWorkerDb(process.env.WORKER_DB_PATH!)
     const invocations = listEngineInvocations(started.session.id).sort((left, right) => left.seq - right.seq)
     const bridgeEvents = listSessionEvents(started.session.id)
