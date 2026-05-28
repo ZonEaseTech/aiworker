@@ -781,13 +781,6 @@ beforeEach(() => {
         },
       }, 201)
     }
-    if ((url.endsWith('/api/local/workers/people-worker/workspaces/workspace-created/sessions') || url.endsWith('/api/local/workspaces/workspace-created/sessions')) && method === 'POST') {
-      const createdSession = { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created', title: 'New candidate workspace' }
-      const createdArtifact = { ...artifactRecord, id: 'artifact-created', sessionId: 'session-created', workspaceId: 'workspace-created' }
-      currentSessions = [createdSession, ...currentSessions]
-      currentArtifacts = [createdArtifact, ...currentArtifacts]
-      return json({ artifacts: [createdArtifact], events: [], files: [], session: createdSession }, 201)
-    }
     if (url.endsWith('/api/sessions/session-1/invocations') && method === 'POST') {
       lastMessageRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
       currentEvents = [...currentEvents, { ...eventRecord, id: 2, seq: 1 }]

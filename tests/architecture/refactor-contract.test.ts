@@ -1448,6 +1448,22 @@ describe('destructive refactor contract bootstrap', () => {
     expect(runtimeTest).toContain('/invocations/')
   })
 
+  test('WorkerStudio test harness does not accept legacy nested session create routes', () => {
+    const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const forbidden = [
+      '/api/local/workers/people-worker/workspaces/workspace-created/sessions',
+      '/api/local/workspaces/workspace-created/sessions',
+      'createdArtifact = { ...artifactRecord, id: \'artifact-created\', sessionId: \'session-created\'',
+    ]
+    const findings = forbidden
+      .filter(snippet => workerStudioTest.includes(snippet))
+      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+
+    expect(findings, 'Web tests should not keep local nested session create compatibility once broker /api/sessions exists').toEqual([])
+    expect(workerStudioTest).toContain('/api/sessions')
+    expect(workerStudioTest).toContain('/api/sessions/session-1/invocations')
+  })
+
   test('Freeform v1 has CLI-first and browser golden path gates', () => {
     const rootPackage = JSON.parse(readRepoFile('package.json')) as {
       scripts?: Record<string, string>
