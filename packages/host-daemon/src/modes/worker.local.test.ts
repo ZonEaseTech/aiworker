@@ -2014,6 +2014,10 @@ describe('local daemon API', () => {
     const rescan = await target.request('/api/local/settings/engines/rescan', { method: 'POST' })
     expect(rescan.status).toBe(200)
 
+    const targets = await target.request('/api/engine/targets')
+    expect(targets.status).toBe(200)
+    expect((await target.request('/api/local/settings/engines')).status).toBe(404)
+
     const test = await target.request('/api/local/settings/engines/test', {
       body: JSON.stringify({ engineId: 'codex' }),
       headers: { 'content-type': 'application/json' },

@@ -621,10 +621,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const settings = loadLocalSettings()
     return c.json({ settings })
   })
-  app.get('/api/local/settings/engines', (c) => {
-    const settings = readLocalEngineSettings()
-    return c.json(settings)
-  })
   app.patch('/api/local/settings', async (c) => {
     const result = await parseJsonBody(c, patchSettingsBodySchema, 'PATCH_SETTINGS_INVALID')
     if (!result.ok)
