@@ -711,10 +711,11 @@ beforeEach(() => {
       const workerId = requestUrl.pathname.split('/')[4]!
       return json({ overlay: { assets: currentWorkerOverlayAssets, workerId } })
     }
-    const workerProjectionMatch = requestUrl.pathname.match(/^\/api\/local\/workers\/([^/]+)\/workspaces\/([^/]+)\/projection$/)
-    if (workerProjectionMatch && method === 'POST') {
-      const workerId = workerProjectionMatch[1]!
-      const workspaceId = workerProjectionMatch[2]!
+    const projectionRefreshMatch = requestUrl.pathname.match(/^\/api\/projections\/([^/]+)\/refresh$/)
+    if (projectionRefreshMatch && method === 'POST') {
+      const body = init?.body ? JSON.parse(String(init.body)) as { workerId?: string, workspaceId?: string } : {}
+      const workerId = body.workerId ?? ''
+      const workspaceId = body.workspaceId ?? ''
       const workspace = currentWorkspaces.find(item => item.id === workspaceId && item.workerId === workerId)
       if (!workspace)
         return json({}, 404)
@@ -744,6 +745,7 @@ beforeEach(() => {
           },
           workspace: projected,
         },
+        target: projectionRefreshMatch[1],
       })
     }
     if (url.endsWith('/api/local/souls'))

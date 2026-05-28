@@ -17,16 +17,23 @@ describe('worker overlay API', () => {
     expect(source).not.toContain('method: \'PUT\'')
   })
 
-  it('projects worker overlay assets into a worker workspace through the worker scoped endpoint', async () => {
+  it('refreshes workspace projection through the canonical target broker route', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       projection: {
         receipt: null,
         workspace: { id: 'workspace-1' },
       },
+      target: 'codex',
     }))))
 
     await projectWorkerWorkspaceOverlay('worker-1', 'workspace-1')
 
-    expect(fetch).toHaveBeenCalledWith('/api/local/workers/worker-1/workspaces/workspace-1/projection', expect.objectContaining({ method: 'POST' }))
+    expect(fetch).toHaveBeenCalledWith('/api/projections/codex/refresh', expect.objectContaining({
+      body: JSON.stringify({
+        workerId: 'worker-1',
+        workspaceId: 'workspace-1',
+      }),
+      method: 'POST',
+    }))
   })
 })
