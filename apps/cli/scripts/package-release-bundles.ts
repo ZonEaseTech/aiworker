@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { chmod, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { chmod, copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { relative, resolve } from 'node:path'
 import process from 'node:process'
 
 import { spawn } from 'bun'
@@ -8,6 +8,12 @@ import { spawn } from 'bun'
 import { copyDir } from './build-publish-manifest'
 
 const DEFAULT_TARGETS = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'] as const
+const REQUIRED_DIST_RESOURCES = [
+  'web/worker/index.html',
+  'drizzle/worker/meta/_journal.json',
+  'official-apps/aiworker-freeform/dist/soul.descriptor.json',
+  'README.md',
+] as const
 
 export interface PackageReleaseBundlesOptions {
   rootDir?: string
@@ -20,6 +26,7 @@ export async function packageReleaseBundles(options: PackageReleaseBundlesOption
   const distDir = resolve(rootDir, 'apps/cli/dist')
   const releaseDir = resolve(rootDir, 'release')
 
+  await assertRequiredDistResources(rootDir, distDir)
   await mkdir(releaseDir, { recursive: true })
   for (const target of targets) {
     const bundle = `aiworker-${target}`
@@ -34,6 +41,18 @@ export async function packageReleaseBundles(options: PackageReleaseBundlesOption
     await copyFile(resolve(distDir, 'README.md'), resolve(bundleDir, 'README.md'))
     await createTarball(rootDir, releaseDir, bundle)
     await writeChecksum(rootDir, `${bundle}.tar.gz`)
+  }
+}
+
+async function assertRequiredDistResources(rootDir: string, distDir: string): Promise<void> {
+  for (const resource of REQUIRED_DIST_RESOURCES) {
+    const resourcePath = resolve(distDir, resource)
+    try {
+      await stat(resourcePath)
+    }
+    catch {
+      throw new Error(`missing release resource: ${relative(rootDir, resourcePath)}`)
+    }
   }
 }
 
