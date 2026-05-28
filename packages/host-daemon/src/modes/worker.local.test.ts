@@ -108,7 +108,7 @@ describe('local daemon API', () => {
   }
 
   async function createFreeformWorker(target: Awaited<ReturnType<typeof app>>, id = 'freeform-worker') {
-    const res = await target.request('/api/local/workers', {
+    const res = await target.request('/api/workers', {
       body: JSON.stringify({ id, name: 'Freeform', soulId: FREEFORM_APP_ID }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',

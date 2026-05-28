@@ -638,9 +638,16 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('host daemon capability route tests name the Freeform capability fixture as a capability', () => {
     const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const helperStart = daemonTest.indexOf('async function createFreeformWorker')
+    const helperEnd = daemonTest.indexOf('async function createWorkspaceAndSession')
+    const createFreeformWorkerHelper = helperStart >= 0 && helperEnd > helperStart
+      ? daemonTest.slice(helperStart, helperEnd)
+      : daemonTest
 
     expect(daemonTest).not.toContain('FREEFORM_TEMPLATE')
     expect(daemonTest).toContain('FREEFORM_CAPABILITY')
+    expect(createFreeformWorkerHelper).toContain('/api/workers')
+    expect(createFreeformWorkerHelper).not.toContain('/api/local/workers')
   })
 
   test('host daemon capability helpers do not preserve retired template helper names', () => {
