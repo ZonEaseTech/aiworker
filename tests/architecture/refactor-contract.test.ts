@@ -2072,6 +2072,30 @@ describe('destructive refactor contract bootstrap', () => {
     }
   })
 
+  test('release packaging contract tests guard descriptor-only official apps', () => {
+    const testing = readRepoFile('docs/testing.md')
+    const releasePackagingContractTests = [
+      'apps/cli/scripts/build-publish-manifest.test.ts',
+      'apps/cli/scripts/package-release-bundles.test.ts',
+    ]
+
+    for (const testPath of releasePackagingContractTests) {
+      expect(testing).toContain(testPath)
+      expect(existsSync(join(repoRoot, testPath))).toBe(true)
+    }
+
+    const publishManifestTest = readRepoFile('apps/cli/scripts/build-publish-manifest.test.ts')
+    const packageReleaseBundlesTest = readRepoFile('apps/cli/scripts/package-release-bundles.test.ts')
+
+    expect(publishManifestTest).toContain('descriptor-only official Soul dist tree')
+    expect(publishManifestTest).toContain('host-adapter')
+    expect(publishManifestTest).toContain('AGENTS.test.ts')
+    expect(packageReleaseBundlesTest).toContain('official descriptor Soul Apps')
+    expect(packageReleaseBundlesTest).toContain('missing Drizzle metadata')
+    expect(packageReleaseBundlesTest).toContain('descriptor-declared workbench assets are missing')
+    expect(packageReleaseBundlesTest).toContain('descriptor-declared MCP assets are missing')
+  })
+
   test('canonical testing docs track Freeform browser proof scope', () => {
     const testing = readRepoFile('docs/testing.md')
 

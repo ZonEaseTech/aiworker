@@ -104,6 +104,13 @@ apps/cli/scripts/smoke-standalone-release.test.ts
 apps/cli/scripts/smoke-standalone-runtime.test.ts
 ```
 
+CLI release packaging contract tests:
+
+```text
+apps/cli/scripts/build-publish-manifest.test.ts
+apps/cli/scripts/package-release-bundles.test.ts
+```
+
 ## Current Bootstrap Gate
 
 The first guardrail is:
