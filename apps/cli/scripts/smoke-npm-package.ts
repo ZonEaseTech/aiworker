@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import process from 'node:process'
@@ -9,6 +9,16 @@ import consola from 'consola'
 
 interface NpmPackEntry {
   filename?: string
+}
+
+interface DoctorOutput {
+  installation?: {
+    resources?: {
+      migrationsReady?: boolean
+      officialAppsReady?: boolean
+      workerWebReady?: boolean
+    }
+  }
 }
 
 const cliDistDir = resolve(import.meta.dirname, '..', 'dist')
@@ -36,7 +46,8 @@ async function main(): Promise<number> {
       if (file.includes('/node_modules/') || file.includes('/host-adapter/') || /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file))
         throw new Error(`npm package includes non-release file: ${file}`)
     }
-    consola.success('[smoke-npm-package] PASS: npm package tarball includes CLI, Host assets, and descriptor-only official Soul Apps')
+    await assertInstalledPackageDoctor(tempDir, archivePath)
+    consola.success('[smoke-npm-package] PASS: npm package installs, runs doctor, and includes Host assets plus descriptor-only official Soul Apps')
     return 0
   }
   finally {
@@ -72,9 +83,33 @@ async function listTarball(archivePath: string): Promise<string[]> {
   return output.stdout.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
 }
 
-async function run(command: string[], options: { cwd: string }): Promise<{ stderr: string, stdout: string }> {
+async function assertInstalledPackageDoctor(tempDir: string, archivePath: string): Promise<void> {
+  const installRoot = resolve(tempDir, 'install-root')
+  await mkdir(installRoot, { recursive: true })
+  await run(['npm', 'install', '--ignore-scripts', '--no-audit', '--no-fund', archivePath], { cwd: installRoot })
+  const home = resolve(tempDir, 'home')
+  const doctor = await run([resolve(installRoot, 'node_modules/.bin/aiworker'), 'doctor'], {
+    cwd: installRoot,
+    env: {
+      ...process.env,
+      AIWORKER_HOME: home,
+      WORKER_DB_PATH: resolve(home, 'aiworker.db'),
+    },
+  })
+  const body = JSON.parse(doctor.stdout) as DoctorOutput
+  const resources = body.installation?.resources
+  if (resources?.officialAppsReady !== true)
+    throw new Error(`installed npm package doctor must report packaged official apps ready: ${doctor.stdout}`)
+  if (resources?.workerWebReady !== true)
+    throw new Error(`installed npm package doctor must report packaged Worker Web ready: ${doctor.stdout}`)
+  if (resources?.migrationsReady !== true)
+    throw new Error(`installed npm package doctor must report packaged migrations ready: ${doctor.stdout}`)
+}
+
+async function run(command: string[], options: { cwd: string, env?: NodeJS.ProcessEnv }): Promise<{ stderr: string, stdout: string }> {
   const proc = spawn(command, {
     cwd: options.cwd,
+    env: options.env,
     stderr: 'pipe',
     stdout: 'pipe',
   })
