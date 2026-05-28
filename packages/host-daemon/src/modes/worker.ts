@@ -348,7 +348,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.get('/api/workers/:workerId/config', async (c) => {
     const worker = requireWorker(c.req.param('workerId'))
-    return c.json({ config: workerConfigResponse(worker.id), workerId: worker.id })
+    return c.json({
+      config: workerConfigResponse(worker.id),
+      overlay: await workerOverlayResponse(state, worker.id),
+      workerId: worker.id,
+    })
   })
   app.put('/api/workers/:workerId/config/:configKey', async (c) => {
     return workerConfigMutationResponse(c, state, false)
@@ -359,11 +363,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.post('/api/workers/:workerId/config/:configKey/archive', async (c) => {
     return workerConfigMutationResponse(c, state, true)
   })
-  app.get('/api/local/workers/:workerId/overlay', async (c) => {
-    const worker = requireWorker(c.req.param('workerId'))
-    return c.json({ overlay: await workerOverlayResponse(state, worker.id) })
-  })
-
   app.get('/api/workspace-locators', (c) => {
     const workerId = c.req.query('workerId')
     if (!workerId)

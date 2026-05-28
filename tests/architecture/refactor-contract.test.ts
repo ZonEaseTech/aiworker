@@ -525,6 +525,17 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.patch(\'/api/local/workers/:workerId\',')
   })
 
+  test('daemon worker overlay read is served by canonical worker config', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const webOverlayApi = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlays.ts')
+
+    expect(daemon).toContain('app.get(\'/api/workers/:workerId/config\'')
+    expect(daemon).toContain('overlay: await workerOverlayResponse')
+    expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/overlay\'')
+    expect(webOverlayApi).toContain(['/api/workers/', '{encodeURIComponent(workerId)}/config'].join('$'))
+    expect(webOverlayApi).not.toContain('/api/local/workers/')
+  })
+
   test('daemon capability surface does not preserve worker-local broker aliases', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
     const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')

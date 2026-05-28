@@ -1294,11 +1294,11 @@ describe('local daemon API', () => {
     })
   })
 
-  it('keeps legacy worker overlay route read-only while writes use worker config values', async () => {
+  it('serves worker overlay through canonical worker config while legacy overlay route is gone', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)
 
-    const readRes = await target.request(`/api/local/workers/${worker.id}/overlay`)
+    const readRes = await target.request(`/api/workers/${worker.id}/config`)
     expect(readRes.status).toBe(200)
     expect(await readRes.json()).toMatchObject({
       overlay: {
@@ -1306,6 +1306,7 @@ describe('local daemon API', () => {
       },
     })
 
+    expect((await target.request(`/api/local/workers/${worker.id}/overlay`)).status).toBe(404)
     const legacyWriteRes = await target.request(`/api/local/workers/${worker.id}/overlay`, {
       body: JSON.stringify({
         assets: [{
@@ -1823,7 +1824,7 @@ describe('local daemon API', () => {
     })
     expect(configRes.status).toBe(200)
 
-    const overlayRes = await target.request(`/api/local/workers/${worker.id}/overlay`)
+    const overlayRes = await target.request(`/api/workers/${worker.id}/config`)
     expect(overlayRes.status).toBe(200)
     expect(await overlayRes.json()).toMatchObject({
       overlay: {

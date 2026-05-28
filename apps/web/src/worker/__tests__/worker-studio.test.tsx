@@ -667,6 +667,15 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/workers'))
       return json({ workers: currentWorkers })
+    const workerConfigReadMatch = requestUrl.pathname.match(/^\/api\/workers\/([^/]+)\/config$/)
+    if (workerConfigReadMatch && method === 'GET') {
+      const workerId = decodeURIComponent(workerConfigReadMatch[1]!)
+      return json({
+        config: { values: [] },
+        overlay: { assets: currentWorkerOverlayAssets, workerId },
+        workerId,
+      })
+    }
     const workerConfigMatch = requestUrl.pathname.match(/^\/api\/workers\/([^/]+)\/config\/([^/]+)(?:\/archive)?$/)
     if (workerConfigMatch) {
       const workerId = decodeURIComponent(workerConfigMatch[1]!)
@@ -706,10 +715,6 @@ beforeEach(() => {
           },
         })
       }
-    }
-    if (requestUrl.pathname.match(/^\/api\/local\/workers\/[^/]+\/overlay$/)) {
-      const workerId = requestUrl.pathname.split('/')[4]!
-      return json({ overlay: { assets: currentWorkerOverlayAssets, workerId } })
     }
     const projectionRefreshMatch = requestUrl.pathname.match(/^\/api\/projections\/([^/]+)\/refresh$/)
     if (projectionRefreshMatch && method === 'POST') {
@@ -1160,7 +1165,7 @@ describe('worker studio', () => {
     expect(screen.getByRole('dialog', { name: 'Worker configuration' })).toBeTruthy()
     expect(screen.getByText('QA worker overlay')).toBeTruthy()
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/workers/release-worker/overlay', expect.objectContaining({
+      expect(fetch).toHaveBeenCalledWith('/api/workers/release-worker/config', expect.objectContaining({
         headers: {},
       }))
     })

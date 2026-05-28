@@ -3,7 +3,7 @@ import type { WorkerOverlayResponse, WorkerWorkspaceProjectionResponse } from '.
 import { localJson } from '../../../shared/api/local-client'
 
 export function loadWorkerOverlay(workerId: string): Promise<WorkerOverlayResponse> {
-  return localJson<WorkerOverlayResponse>(`/api/local/workers/${workerId}/overlay`)
+  return localJson<WorkerOverlayResponse>(`/api/workers/${encodeURIComponent(workerId)}/config`)
 }
 
 export function projectWorkerWorkspaceOverlay(workerId: string, workspaceId: string, target: 'claude-code' | 'codex' = 'codex'): Promise<WorkerWorkspaceProjectionResponse> {
