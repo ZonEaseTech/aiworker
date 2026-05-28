@@ -154,7 +154,7 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 async function assertDaemonRuntimeVersion(port: number, expectedVersion: string): Promise<void> {
-  const info = await getJson<{ runtimeVersion: string }>(`http://127.0.0.1:${port}/api/local/info`)
+  const info = await getJson<{ runtimeVersion: string }>(`http://127.0.0.1:${port}/api/info`)
   if (info.runtimeVersion !== expectedVersion)
     throw new Error(`Expected daemon runtimeVersion ${expectedVersion}, got ${info.runtimeVersion}`)
 }

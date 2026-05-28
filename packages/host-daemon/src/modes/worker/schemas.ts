@@ -98,7 +98,7 @@ export const patchWorkspaceBodySchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
-// PATCH /api/local/settings
+// PATCH /api/settings
 // 复用已有的 localSettingsConfigSchema.partial()，不重造
 // ---------------------------------------------------------------------------
 

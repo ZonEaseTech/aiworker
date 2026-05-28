@@ -3,7 +3,7 @@ import type { LocalSettingsConfig } from '@zonease/aiworker-soul-protocol'
 import { localJson } from '../../../shared/api/local-client'
 
 export function saveSettings(input: Partial<LocalSettingsConfig>): Promise<{ settings: LocalSettingsConfig }> {
-  return localJson('/api/local/settings', { method: 'PATCH', body: JSON.stringify(input) })
+  return localJson('/api/settings', { method: 'PATCH', body: JSON.stringify(input) })
 }
 
 export function rescanEngines(): Promise<{ engines: LocalSettingsConfig['engines'], settings: LocalSettingsConfig }> {

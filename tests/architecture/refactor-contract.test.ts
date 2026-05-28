@@ -337,6 +337,9 @@ describe('destructive refactor contract bootstrap', () => {
       'GET    /api/app-installation/apps/:appId',
       'POST   /api/app-installation/apps/:appId/archive',
       'DELETE /api/app-installation/apps/:appId',
+      'GET    /api/info',
+      'GET    /api/settings',
+      'PATCH  /api/settings',
       'GET    /api/capabilities',
       'PATCH  /api/workers/:workerId',
       'POST   /api/workers/:workerId/archive',
@@ -358,6 +361,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(protocol).toContain('configValueJson envelope')
     expect(protocol).toContain('kind, target, enabled, sourceRef, checksum, options, updatedAt, updatedBy')
     expect(protocol).toContain('Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.')
+    expect(protocol).not.toContain('/api/local/info')
+    expect(protocol).not.toContain('/api/local/settings')
     expect(protocol).toContain('GET /api/workspace-locators` may receive `workerId`')
     expect(protocol).toContain('POST /api/workspace-locators` receives `workerId`, may receive `rootPath`')
     expect(protocol).toContain('GET /api/sessions` may receive `workerId` and `workspaceId`')
@@ -697,14 +702,26 @@ describe('destructive refactor contract bootstrap', () => {
   test('daemon engine target broker surface does not preserve local settings engines aliases', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
     const webSettingsApi = readRepoFile('apps/web/src/features/local-workspace/api/settings.ts')
+    const webWorkspaceDataApi = readRepoFile('apps/web/src/features/local-workspace/api/workspace-data.ts')
 
     expect(daemon).toContain('app.get(\'/api/engine/targets\',')
     expect(daemon).toContain('app.get(\'/api/engine/targets/:target/readiness\',')
     expect(daemon).toContain('app.post(\'/api/engine/targets/rescan\',')
     expect(daemon).toContain('app.post(\'/api/engine/targets/:target/test\',')
+    expect(daemon).toContain('app.get(\'/api/info\',')
+    expect(daemon).toContain('app.get(\'/api/settings\',')
+    expect(daemon).toContain('app.patch(\'/api/settings\',')
+    expect(daemon).not.toContain('/api/local/info')
+    expect(daemon).not.toContain('/api/local/settings')
     expect(daemon).not.toContain('/api/local/settings/engines')
+    expect(webSettingsApi).toContain('/api/settings')
     expect(webSettingsApi).toContain('/api/engine/targets/rescan')
     expect(webSettingsApi).toContain(['/api/engine/targets/', '{encodeURIComponent(engineId)}/test'].join('$'))
+    expect(webSettingsApi).not.toContain('/api/local/settings')
+    expect(webWorkspaceDataApi).toContain('/api/info')
+    expect(webWorkspaceDataApi).toContain('/api/settings')
+    expect(webWorkspaceDataApi).not.toContain('/api/local/info')
+    expect(webWorkspaceDataApi).not.toContain('/api/local/settings')
     expect(webSettingsApi).not.toContain('/api/local/settings/engines')
   })
 
@@ -1874,6 +1891,8 @@ describe('destructive refactor contract bootstrap', () => {
     const smokeScript = readRepoFile('apps/cli/scripts/smoke-dist-release.ts')
 
     expect(smokeScript).toContain('/api/app-installation/apps')
+    expect(smokeScript).toContain('/api/info')
+    expect(smokeScript).not.toContain('/api/local/info')
     expect(smokeScript).not.toContain('/api/local/apps')
   })
 

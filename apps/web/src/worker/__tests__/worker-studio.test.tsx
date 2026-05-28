@@ -566,7 +566,7 @@ beforeEach(() => {
       status,
     })
 
-    if (url.endsWith('/api/local/info'))
+    if (url.endsWith('/api/info'))
       return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
     if (url.endsWith('/api/app-installation/apps'))
       return json({ apps: currentApps })
@@ -777,7 +777,7 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/sessions'))
       return json({ sessions: currentSessions })
-    if (url.endsWith('/api/local/settings') && method === 'PATCH') {
+    if (url.endsWith('/api/settings') && method === 'PATCH') {
       const patch = init?.body ? JSON.parse(String(init.body)) as Partial<typeof baseSettings> : {}
       currentSettings = {
         ...currentSettings,
@@ -787,7 +787,7 @@ beforeEach(() => {
       }
       return json({ settings: currentSettings })
     }
-    if (url.endsWith('/api/local/settings'))
+    if (url.endsWith('/api/settings'))
       return json({ settings: currentSettings })
     if (url.endsWith('/api/engine/targets/rescan'))
       return json({ engines: currentSettings.engines, settings: currentSettings })
@@ -1995,7 +1995,7 @@ describe('worker studio', () => {
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/engine/targets/codex/test', expect.objectContaining({ method: 'POST' }))
       expect(fetch).toHaveBeenCalledWith('/api/engine/targets/rescan', expect.objectContaining({ method: 'POST' }))
-      expect(fetch).toHaveBeenCalledWith('/api/local/settings', expect.objectContaining({ method: 'PATCH' }))
+      expect(fetch).toHaveBeenCalledWith('/api/settings', expect.objectContaining({ method: 'PATCH' }))
       expect(document.documentElement.lang).toBe('zh-CN')
     })
     const localizedSettingsDialog = screen.getByRole('dialog', { name: '本地 Host 设置' })
@@ -2085,7 +2085,7 @@ describe('worker studio', () => {
       expect(screen.getByTestId('worker-studio-shell').getAttribute('data-appearance')).toBe('dark')
       expect(screen.getByTestId('worker-studio-shell').getAttribute('data-theme')).toBe('dark')
       expect(document.documentElement.classList.contains('dark')).toBe(true)
-      expect(fetch).toHaveBeenCalledWith('/api/local/settings', expect.objectContaining({
+      expect(fetch).toHaveBeenCalledWith('/api/settings', expect.objectContaining({
         body: JSON.stringify({ appearance: 'dark' }),
         method: 'PATCH',
       }))

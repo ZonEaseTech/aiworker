@@ -2094,7 +2094,7 @@ describe('local daemon API', () => {
     writeFakeEngineCommand('codex')
     const target = await app()
 
-    const patch = await target.request('/api/local/settings', {
+    const patch = await target.request('/api/settings', {
       body: JSON.stringify({ executionMode: 'local-cli', engineId: 'codex' }),
       headers: { 'content-type': 'application/json' },
       method: 'PATCH',
@@ -2119,13 +2119,14 @@ describe('local daemon API', () => {
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })).status).toBe(404)
+    expect((await target.request('/api/local/settings')).status).toBe(404)
     expect(listSettings().some(setting => setting.key === 'local-settings')).toBe(true)
   })
 
   it('rejects literal BYOK API keys in local settings', async () => {
     const target = await app()
 
-    const response = await target.request('/api/local/settings', {
+    const response = await target.request('/api/settings', {
       body: JSON.stringify({
         byok: {
           apiKeyRef: 'sk-local-settings-secret',
@@ -2150,7 +2151,7 @@ describe('local daemon API', () => {
   it('rejects literal secrets and full native MCP files in local settings payloads', async () => {
     const target = await app()
 
-    const secretResponse = await target.request('/api/local/settings', {
+    const secretResponse = await target.request('/api/settings', {
       body: JSON.stringify({
         externalMcpServers: [{
           command: 'node team-context.js --token=sk-local-mcp-secret',
@@ -2169,7 +2170,7 @@ describe('local daemon API', () => {
       error: { code: 'LOCAL_SETTINGS_SECRET' },
     })
 
-    const nativeMcpResponse = await target.request('/api/local/settings', {
+    const nativeMcpResponse = await target.request('/api/settings', {
       body: JSON.stringify({
         externalMcpServers: [{
           command: '[mcp_servers.local]\ncommand = "node"\n',
@@ -2195,6 +2196,9 @@ describe('local daemon API', () => {
 
   it('documents broker routes and rejects invalid write bodies', async () => {
     const target = await app()
+
+    expect((await target.request('/api/info')).status).toBe(200)
+    expect((await target.request('/api/local/info')).status).toBe(404)
 
     const openapi = await (await target.request('/openapi.json')).json() as { paths: Record<string, unknown> }
     const expectedBrokerRoutes: Array<[method: string, path: string]> = [
@@ -2239,6 +2243,9 @@ describe('local daemon API', () => {
       ['post', '/api/projections/{target}/refresh'],
       ['get', '/api/projections/receipts/{receiptId}'],
       ['post', '/api/projections/receipts/{receiptId}/cleanup'],
+      ['get', '/api/info'],
+      ['get', '/api/settings'],
+      ['patch', '/api/settings'],
       ['get', '/api/mount/workbench'],
       ['get', '/api/apps/{appId}'],
       ['post', '/api/apps/{appId}'],
@@ -2264,6 +2271,8 @@ describe('local daemon API', () => {
     expect(Object.keys(openapi.paths)).toContain('/api/apps/{appId}')
     expect(Object.keys(openapi.paths)).toContain('/api/apps/{appId}/{path}')
     expect(Object.keys(openapi.paths)).not.toContain(localWorkerEngineInvocationPath)
+    expect(Object.keys(openapi.paths)).not.toContain('/api/local/info')
+    expect(Object.keys(openapi.paths)).not.toContain('/api/local/settings')
     expect(Object.keys(openapi.paths)).not.toContain('/api/local/apps/{appId}/actions/{actionId}')
     const retiredCapabilityField = ['capability', 'TemplateId'].join('')
     const serializedOpenApi = JSON.stringify(openapi)

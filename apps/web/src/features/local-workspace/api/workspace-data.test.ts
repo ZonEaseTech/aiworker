@@ -19,9 +19,9 @@ const responses: Record<string, unknown> = {
       status: 'enabled',
     }],
   },
-  '/api/local/info': { runtimeVersion: 'test', startedAt: '2026-05-09T00:00:00.000Z', workers: [] },
+  '/api/info': { runtimeVersion: 'test', startedAt: '2026-05-09T00:00:00.000Z', workers: [] },
   '/api/sessions': { sessions: [] },
-  '/api/local/settings': { settings: { language: 'en' } },
+  '/api/settings': { settings: { language: 'en' } },
   '/api/capabilities': {
     capabilities: [{
       description: 'Freeform session work',
@@ -61,6 +61,8 @@ describe('loadLocalWorkspaceData', () => {
     expect(paths).not.toContain('/api/local/turns')
     expect(paths).not.toContain('/api/local/templates')
     expect(paths).not.toContain('/api/local/apps')
+    expect(paths).not.toContain('/api/local/info')
+    expect(paths).not.toContain('/api/local/settings')
     expect(paths).not.toContain('/api/local/workers')
     expect(paths).not.toContain('/api/local/workspaces')
     expect(paths).not.toContain('/api/local/sessions')
@@ -68,6 +70,8 @@ describe('loadLocalWorkspaceData', () => {
     expect(paths).not.toContain(retiredLocalSoulsPath)
     expect(paths).toContain('/api/app-installation/apps')
     expect(paths).toContain('/api/capabilities')
+    expect(paths).toContain('/api/info')
+    expect(paths).toContain('/api/settings')
     expect(paths).toContain('/api/workers')
     expect(paths).toContain('/api/workspace-locators')
     expect(paths).toContain('/api/sessions')

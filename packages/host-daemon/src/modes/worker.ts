@@ -208,7 +208,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     checkedAt: new Date().toISOString(),
   }))
 
-  app.get('/api/local/info', c => c.json({
+  app.get('/api/info', c => c.json({
     runtimeVersion: state.runtimeVersion,
     startedAt: state.startedAt,
     workers: listWorkers(),
@@ -659,11 +659,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     })
   })
 
-  app.get('/api/local/settings', (c) => {
+  app.get('/api/settings', (c) => {
     const settings = loadLocalSettings()
     return c.json({ settings })
   })
-  app.patch('/api/local/settings', async (c) => {
+  app.patch('/api/settings', async (c) => {
     const result = await parseJsonBody(c, patchSettingsBodySchema, 'PATCH_SETTINGS_INVALID')
     if (!result.ok)
       return result.response
