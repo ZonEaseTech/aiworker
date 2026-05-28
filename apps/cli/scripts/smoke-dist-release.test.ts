@@ -16,6 +16,7 @@ describe('dist release smoke script contract', () => {
     expect(source).toContain('aiworker-freeform')
     expect(source).toContain('soul.descriptor.json')
     expect(source).toContain('descriptor refs')
+    expect(source).toContain('dist Freeform descriptor reference escapes package root')
   })
 
   it('validates packaged daemon OpenAPI worker config envelope examples', async () => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 
 import { spawn } from 'bun'
@@ -121,18 +121,24 @@ function assertDistOfficialFreeformDescriptor(): void {
 }
 
 function assertDistDescriptorRefs(refs: Array<{ kind: 'dir' | 'file', ref?: string }>): void {
+  const appRoot = realpathSync(officialFreeformDistRoot)
   for (const item of refs) {
     if (!item.ref)
       continue
     const resourcePath = resolve(officialFreeformDistRoot, item.ref)
     try {
+      const relativeResourcePath = relative(appRoot, realpathSync(resourcePath))
+      if (!relativeResourcePath || relativeResourcePath.startsWith('..') || isAbsolute(relativeResourcePath))
+        throw new Error(`dist Freeform descriptor reference escapes package root: ${item.ref}`)
       const info = statSync(resourcePath)
       if (item.kind === 'dir' && !info.isDirectory())
         throw new Error('not a directory')
       if (item.kind === 'file' && !info.isFile())
         throw new Error('not a file')
     }
-    catch {
+    catch (err) {
+      if (err instanceof Error && err.message.includes('descriptor reference escapes package root'))
+        throw err
       throw new Error(`dist Freeform descriptor references missing ${item.kind}: ${resourcePath}`)
     }
   }
