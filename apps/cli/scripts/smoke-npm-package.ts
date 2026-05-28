@@ -69,7 +69,13 @@ async function assertDistPackageMetadata(): Promise<void> {
   const pkg = JSON.parse(await readFile(resolve(cliDistDir, 'package.json'), 'utf8')) as {
     bin?: Record<string, unknown>
     files?: unknown
+    publishConfig?: { access?: unknown }
+    repository?: { type?: unknown, url?: unknown }
   }
+  if (pkg.repository?.type !== 'git' || typeof pkg.repository.url !== 'string' || !pkg.repository.url.startsWith('git+https://'))
+    throw new Error('dist package.json must expose a public git repository for npm provenance')
+  if (pkg.publishConfig?.access !== 'public')
+    throw new Error('dist package.json must set publishConfig.access to public')
   if (pkg.bin?.aiworker !== 'aiworker.js')
     throw new Error('dist package.json must expose bin.aiworker as aiworker.js')
   const files = Array.isArray(pkg.files) ? pkg.files : []
