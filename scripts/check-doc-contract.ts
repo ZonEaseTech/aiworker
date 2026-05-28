@@ -217,6 +217,7 @@ const expectedReleaseGateCommands = [
   'bun run lint',
   'bun run build',
   'bun run smoke:dist-release',
+  'bun run smoke:standalone-release',
   'bun run test',
   'bun run check',
 ]
