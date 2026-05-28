@@ -10,9 +10,14 @@ export interface AssistantMarkdownProps {
 
 type MarkdownBlock
   = | { code: string, kind: 'code', language?: string }
-    | { items: string[], kind: 'ordered-list' | 'unordered-list' }
+    | { items: MarkdownListItem[], kind: 'ordered-list' | 'unordered-list' }
     | { kind: 'paragraph', text: string }
     | { kind: 'quote', text: string }
+
+interface MarkdownListItem {
+  id: string
+  text: string
+}
 
 export function AssistantMarkdown({ className, markdown, streaming = false }: AssistantMarkdownProps) {
   const repaired = repairStreamingMarkdown(markdown, streaming)
@@ -28,6 +33,7 @@ export function AssistantMarkdown({ className, markdown, streaming = false }: As
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- exported for focused parser tests.
 export function repairStreamingMarkdown(markdown: string, streaming: boolean): string {
   if (!streaming)
     return markdown
@@ -88,9 +94,12 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     }
 
     if (/^\s*[-*]\s+/.test(line)) {
-      const items: string[] = []
+      const items: MarkdownListItem[] = []
       while (index < lines.length && /^\s*[-*]\s+/.test(lines[index] ?? '')) {
-        items.push((lines[index] ?? '').replace(/^\s*[-*]\s+/, ''))
+        items.push({
+          id: `ul-line-${index}`,
+          text: (lines[index] ?? '').replace(/^\s*[-*]\s+/, ''),
+        })
         index += 1
       }
       blocks.push({ items, kind: 'unordered-list' })
@@ -98,9 +107,12 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     }
 
     if (/^\s*\d+\.\s+/.test(line)) {
-      const items: string[] = []
+      const items: MarkdownListItem[] = []
       while (index < lines.length && /^\s*\d+\.\s+/.test(lines[index] ?? '')) {
-        items.push((lines[index] ?? '').replace(/^\s*\d+\.\s+/, ''))
+        items.push({
+          id: `ol-line-${index}`,
+          text: (lines[index] ?? '').replace(/^\s*\d+\.\s+/, ''),
+        })
         index += 1
       }
       blocks.push({ items, kind: 'ordered-list' })
@@ -153,7 +165,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
   if (block.kind === 'ordered-list') {
     return (
       <ol key={`ol-${index}`} className="list-decimal space-y-1 pl-5">
-        {block.items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item, `ol-${index}-${itemIndex}`)}</li>)}
+        {block.items.map(item => <li key={item.id}>{renderInlineMarkdown(item.text, item.id)}</li>)}
       </ol>
     )
   }
@@ -161,7 +173,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
   if (block.kind === 'unordered-list') {
     return (
       <ul key={`ul-${index}`} className="list-disc space-y-1 pl-5">
-        {block.items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item, `ul-${index}-${itemIndex}`)}</li>)}
+        {block.items.map(item => <li key={item.id}>{renderInlineMarkdown(item.text, item.id)}</li>)}
       </ul>
     )
   }
