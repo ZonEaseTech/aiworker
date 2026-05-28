@@ -92,7 +92,7 @@ async function assertStandaloneBundleOfficialFreeformDescriptor(rootDir: string,
   ])
 }
 
-async function assertStandaloneBundleDescriptorRefs(
+export async function assertStandaloneBundleDescriptorRefs(
   appRoot: string,
   refs: Array<{ kind: 'dir' | 'file', ref?: string }>,
 ): Promise<void> {

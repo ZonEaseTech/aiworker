@@ -1,8 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+
+import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
+import { assertStandaloneBundleDescriptorRefs } from './smoke-standalone-release'
 
 describe('standalone release smoke script contract', () => {
   let root: string
@@ -16,20 +19,33 @@ describe('standalone release smoke script contract', () => {
   })
 
   it('validates official Freeform descriptor refs from final standalone bundles', async () => {
-    const source = await readFile(join(import.meta.dirname, 'smoke-standalone-release.ts'), 'utf8')
+    const descriptor = parseOfficialFreeformDescriptorJson(fixtureDescriptorText())
+    const appRoot = join(root, 'release', 'aiworker-test-target', 'official-apps', 'aiworker-freeform')
+    await mkdir(join(appRoot, 'dist', 'web', 'workbench'), { recursive: true })
+    await mkdir(join(appRoot, 'dist', 'engine-assets', 'workspace'), { recursive: true })
+    await mkdir(join(appRoot, 'dist', 'engine-assets', 'skills'), { recursive: true })
+    await mkdir(join(appRoot, 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
+    await mkdir(join(appRoot, 'dist', 'engine-assets', 'mcp', 'claude-code'), { recursive: true })
+    await writeFile(join(appRoot, 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
+    await writeFile(join(appRoot, 'dist', 'engine-assets', 'workspace', 'README.md'), 'workspace\n')
+    await writeFile(join(appRoot, 'dist', 'engine-assets', 'skills', 'SKILL.md'), 'skill\n')
+    await writeFile(join(appRoot, 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex\n')
+    await writeFile(join(appRoot, 'dist', 'engine-assets', 'mcp', 'claude-code', '.mcp.json'), '{}\n')
 
-    expect(source).toContain('runStandaloneReleaseSmoke')
-    expect(source).toContain('verifyReleaseArtifacts')
-    expect(source).toContain('readDistPackageVersion')
-    expect(source).toContain('currentTarget')
-    expect(source).toContain('aiworker/${version}')
-    expect(source).toContain('assertStandaloneBundleOfficialFreeformDescriptor')
-    expect(source).toContain('assertStandaloneBundleDescriptorRefs')
-    expect(source).toContain('parseOfficialFreeformDescriptorJson')
-    expect(source).toContain(['release/', '{bundle}/official-apps/aiworker-freeform'].join('$'))
-    expect(source).toContain('soul.descriptor.json')
-    expect(source).toContain('descriptor refs')
-    expect(source).toContain('descriptor reference escapes package root')
+    await expect(assertStandaloneBundleDescriptorRefs(appRoot, [
+      { kind: 'file', ref: descriptor.workbench.entry },
+      { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
+      { kind: 'dir', ref: descriptor.engine.skills?.source },
+      ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
+    ])).resolves.toBeUndefined()
+
+    await expect(assertStandaloneBundleDescriptorRefs(appRoot, [
+      { kind: 'file', ref: '../outside.txt' },
+    ])).rejects.toThrow('standalone bundle Freeform descriptor reference escapes package root: ../outside.txt')
+
+    await expect(assertStandaloneBundleDescriptorRefs(appRoot, [
+      { kind: 'file', ref: 'dist/web/workbench/missing.html' },
+    ])).rejects.toThrow('standalone bundle Freeform descriptor references missing file:')
   })
 
   it('rejects the current-platform standalone bundle when its version output does not match the dist package', async () => {
