@@ -13,6 +13,16 @@ interface CommandResult {
   stdout: string
 }
 
+interface DoctorOutput {
+  installation?: {
+    resources?: {
+      migrationsReady?: boolean
+      officialAppsReady?: boolean
+      workerWebReady?: boolean
+    }
+  }
+}
+
 async function main(): Promise<number> {
   const cli = resolve(import.meta.dirname, '..', 'dist', 'aiworker.js')
   if (!existsSync(cli))
@@ -41,6 +51,8 @@ async function main(): Promise<number> {
     await assertDaemonRuntimeVersion(port, expectedVersion)
     const html = await assertHttpText(`http://127.0.0.1:${port}/`, /<!doctype html>/i)
     await assertWorkerWebAsset(port, html)
+    const doctor = await assertCli(cli, ['doctor'], { env, label: 'doctor' })
+    assertPackagedResourcesReady(doctor.stdout)
 
     const apps = await getJson<{ apps: Array<{ appId: string, status: string }> }>(`http://127.0.0.1:${port}/api/app-installation/apps`)
     assertCatalogApps(apps.apps)
@@ -54,7 +66,7 @@ async function main(): Promise<number> {
     assertJsonIncludes(capabilities.stdout, 'aiworker-freeform.default')
     await assertWorkbenchMountRequiresLocator(port)
 
-    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API and bootstraps the descriptor-only Freeform Soul')
+    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API, reports packaged resources, and bootstraps the descriptor-only Freeform Soul')
     return 0
   }
   finally {
@@ -165,6 +177,17 @@ function assertCatalogApps(apps: Array<{ appId: string, status: string }>): void
     throw new Error(`Catalog is missing aiworker-freeform: ${JSON.stringify(apps)}`)
   if (app.status !== 'enabled')
     throw new Error(`aiworker-freeform should be enabled, got ${app.status}`)
+}
+
+function assertPackagedResourcesReady(stdout: string): void {
+  const body = JSON.parse(stdout) as DoctorOutput
+  const resources = body.installation?.resources
+  if (resources?.officialAppsReady !== true)
+    throw new Error(`dist doctor must report packaged official apps ready: ${stdout}`)
+  if (resources?.workerWebReady !== true)
+    throw new Error(`dist doctor must report packaged Worker Web ready: ${stdout}`)
+  if (resources?.migrationsReady !== true)
+    throw new Error(`dist doctor must report packaged migrations ready: ${stdout}`)
 }
 
 async function assertWorkbenchMountRequiresLocator(port: number): Promise<void> {
