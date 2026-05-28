@@ -1838,7 +1838,7 @@ const OPERATOR_COMMAND_INDEX = [
   'app list|show|install|enable|archive|delete|bootstrap',
   'worker create|list|select|config|archive|delete',
   'workspace create|list|projection refresh|archive|delete',
-  'session start|invoke|list|show|archive|delete',
+  'session start|invoke|events|reconcile|cancel|list|show|archive|delete',
   '',
   'Run `aiworker commands --all` for authoring and diagnostics commands.',
 ]
@@ -1852,7 +1852,7 @@ const FULL_COMMAND_INDEX = [
   'soul list',
   'worker create|list|show|select|config list|config set|config archive|archive|delete',
   'workspace create|list|show|projection refresh|archive|delete',
-  'session start|invoke|list|show|archive|delete',
+  'session start|invoke|events|reconcile|cancel|list|show|archive|delete',
   'capability list',
   'files list|show',
   'settings list',

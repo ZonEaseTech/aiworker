@@ -427,7 +427,7 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('app list|show|install|enable|archive|delete|bootstrap')
     expect(output).toContain('worker create|list|select|config|archive|delete')
     expect(output).toContain('workspace create|list|projection refresh|archive|delete')
-    expect(output).toContain('session start|invoke|list|show|archive|delete')
+    expect(output).toContain('session start|invoke|events|reconcile|cancel|list|show|archive|delete')
     expect(output).not.toContain('run start')
   })
 
