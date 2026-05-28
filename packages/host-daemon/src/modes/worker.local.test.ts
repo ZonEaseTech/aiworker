@@ -250,14 +250,13 @@ describe('local daemon API', () => {
 
     expect((await target.request('/api/local/capabilities')).status).toBe(404)
 
-    const workerCapabilitiesRes = await target.request(`/api/local/workers/${worker.id}/capabilities`)
+    const workerCapabilitiesRes = await target.request(`/api/capabilities?workerId=${worker.id}`)
     expect(workerCapabilitiesRes.status).toBe(200)
     const workerCapabilitiesBody = await workerCapabilitiesRes.json() as { capabilities: Array<{ id: string }> }
     expect(workerCapabilitiesBody.capabilities.map(capability => capability.id)).toEqual([FREEFORM_CAPABILITY])
 
-    const capabilityRes = await target.request(`/api/local/workers/${worker.id}/capabilities/${FREEFORM_CAPABILITY}`)
-    expect(capabilityRes.status).toBe(200)
-    expect(await capabilityRes.json()).toMatchObject({ capability: { id: FREEFORM_CAPABILITY } })
+    expect((await target.request(`/api/local/workers/${worker.id}/capabilities`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/capabilities/${FREEFORM_CAPABILITY}`)).status).toBe(404)
 
     expect((await target.request('/api/local/templates')).status).toBe(404)
     expect((await target.request(`/api/local/workers/${worker.id}/templates`)).status).toBe(404)
@@ -2057,6 +2056,7 @@ describe('local daemon API', () => {
       ['post', '/api/app-installation/apps/{appId}/enable'],
       ['post', '/api/app-installation/apps/{appId}/archive'],
       ['delete', '/api/app-installation/apps/{appId}'],
+      ['get', '/api/capabilities'],
       ['post', '/api/workers'],
       ['get', '/api/workers'],
       ['get', '/api/workers/{workerId}'],

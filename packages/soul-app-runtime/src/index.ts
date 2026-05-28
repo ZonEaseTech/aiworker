@@ -339,7 +339,7 @@ export function mountSessionApiProxy(request: Request, options: {
   const workspaceId = url.searchParams.get('workspaceId') ?? options.workspaceId ?? null
 
   if (url.pathname === '/api/capabilities' && request.method === 'GET')
-    return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/capabilities`)
+    return proxyJsonRequest(request, `${hostApi}/api/capabilities?workerId=${encodeURIComponent(workerId)}`)
 
   if (url.pathname === '/api/workspaces' && request.method === 'GET')
     return proxyJsonRequest(request, `${hostApi}/api/local/workers/${workerId}/workspaces`)

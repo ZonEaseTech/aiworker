@@ -166,6 +166,8 @@ into a product backend.
 - hard delete removes Host metadata and receipt-owned projections only.
 - session follow-up always uses `POST /api/sessions/:sessionId/invocations`.
 - engine cancel and event stream target an invocation id.
+- `GET /api/capabilities` may receive `workerId` to filter capabilities to the
+  worker's Soul App for mounted app contexts.
 - app-owned API proxy attaches locator context when present and does not
   interpret domain route names. It strips client credentials before proxying and
   strips app-owned cookies plus Host mount credentials before returning.

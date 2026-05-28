@@ -29,6 +29,7 @@ export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'post', path: '/api/app-installation/apps/{appId}/enable', summary: 'Enable installed Soul App as worker', tags: ['app-installation'], created: true },
     { method: 'post', path: '/api/app-installation/apps/{appId}/archive', summary: 'Archive installed Soul App metadata', tags: ['app-installation'], created: true },
     { method: 'delete', path: '/api/app-installation/apps/{appId}', summary: 'Delete installed Soul App metadata', tags: ['app-installation'] },
+    { method: 'get', path: '/api/capabilities', summary: 'List Host capabilities', tags: ['capabilities'] },
     { method: 'post', path: '/api/workers', summary: 'Create Soul worker', tags: ['workers'], created: true },
     { method: 'get', path: '/api/workers', summary: 'List Soul workers', tags: ['workers'] },
     { method: 'get', path: '/api/workers/{workerId}', summary: 'Show Soul worker', tags: ['workers'] },

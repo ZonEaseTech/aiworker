@@ -218,7 +218,10 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   }))
 
   app.get('/api/local/souls', c => c.json({ souls: state.host.listSouls() }))
-  app.get('/api/capabilities', c => c.json({ capabilities: state.host.listCapabilities() }))
+  app.get('/api/capabilities', (c) => {
+    const workerId = c.req.query('workerId')
+    return c.json({ capabilities: workerId ? state.host.listCapabilitiesForWorker(workerId) : state.host.listCapabilities() })
+  })
   app.get('/api/app-installation/apps', c => c.json({ apps: state.host.listApps() }))
   app.post('/api/app-installation/install', async (c) => {
     const result = await parseJsonBody(c, installAppBodySchema, 'INSTALL_APP_INVALID')
@@ -361,13 +364,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/api/local/workers/:workerId/overlay', async (c) => {
     const worker = requireWorker(c.req.param('workerId'))
     return c.json({ overlay: await workerOverlayResponse(state, worker.id) })
-  })
-  app.get('/api/local/workers/:workerId/capabilities', (c) => {
-    return c.json({ capabilities: state.host.listCapabilitiesForWorker(c.req.param('workerId')) })
-  })
-  app.get('/api/local/workers/:workerId/capabilities/:capabilityId', (c) => {
-    const capability = requireCapabilityForWorker(state, c.req.param('workerId'), c.req.param('capabilityId'))
-    return c.json({ capability })
   })
 
   app.get('/api/local/workspaces', c => c.json({ workspaces: listWorkspaces() }))

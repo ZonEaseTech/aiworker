@@ -176,7 +176,7 @@ describe('descriptor Soul runtime harness', () => {
 
       expect(response).not.toBeNull()
       expect(await response!.json()).toEqual({ capabilities: [] })
-      expect(calls).toEqual([{ method: 'GET', url: 'http://host.test/api/local/workers/worker-1/capabilities' }])
+      expect(calls).toEqual([{ method: 'GET', url: 'http://host.test/api/capabilities?workerId=worker-1' }])
       expect(mountSessionApiProxy(new Request('http://soul.test/api/templates'), {
         hostApiBaseUrl: 'http://host.test',
         workerId: 'worker-1',

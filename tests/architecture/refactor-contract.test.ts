@@ -509,6 +509,17 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.patch(\'/api/local/workers/:workerId\',')
   })
 
+  test('daemon capability surface does not preserve worker-local broker aliases', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
+
+    expect(daemon).toContain('app.get(\'/api/capabilities\'')
+    expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/capabilities\'')
+    expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/capabilities/:capabilityId\'')
+    expect(soulAppRuntime).toContain('/api/capabilities?workerId=')
+    expect(soulAppRuntime).not.toContain(['/api/local/workers/', '{workerId}/capabilities'].join('$'))
+  })
+
   test('Host runtime and UI app lifecycle APIs use archive naming internally', () => {
     const sources = [
       'apps/cli/src/aiworker.ts',
