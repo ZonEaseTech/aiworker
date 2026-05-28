@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
-import { chmod, rm, stat, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { chmod, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { isAbsolute, relative, resolve } from 'node:path'
 import process from 'node:process'
 
 import consola from 'consola'
 
 import { packageReleaseBundles } from './package-release-bundles'
+import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
 
 const TARGETS = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'] as const
 const GENERATED_PATHS = [
@@ -34,12 +35,13 @@ async function main(): Promise<number> {
       await assertExists(`release/${bundle}/web/worker/index.html`)
       await assertExists(`release/${bundle}/drizzle`)
       await assertExists(`release/${bundle}/official-apps/aiworker-freeform/dist/soul.descriptor.json`)
+      await assertStandaloneBundleOfficialFreeformDescriptor(`release/${bundle}/official-apps/aiworker-freeform`)
       await assertExists(`release/${bundle}/README.md`)
       await assertExists(`${bundle}.tar.gz`)
       await assertExists(`${bundle}.tar.gz.sha256`)
     }
 
-    consola.success('[smoke-standalone-release] PASS: standalone bundles include packaged Host assets and descriptor-only official Soul Apps')
+    consola.success('[smoke-standalone-release] PASS: standalone bundles include packaged Host assets and official Soul Apps descriptor refs')
     return 0
   }
   finally {
@@ -49,6 +51,48 @@ async function main(): Promise<number> {
 
 async function assertExists(path: string): Promise<void> {
   await stat(resolve(path))
+}
+
+async function assertStandaloneBundleOfficialFreeformDescriptor(freeformRoot: string): Promise<void> {
+  const appRoot = resolve(freeformRoot)
+  const descriptorPath = resolve(appRoot, 'dist', 'soul.descriptor.json')
+  let descriptor: ReturnType<typeof parseOfficialFreeformDescriptorJson>
+  try {
+    descriptor = parseOfficialFreeformDescriptorJson(await readFile(descriptorPath, 'utf8'))
+  }
+  catch {
+    throw new Error(`standalone bundle Freeform descriptor must use protocol soul/v1: ${descriptorPath}`)
+  }
+  await assertStandaloneBundleDescriptorRefs(appRoot, [
+    { kind: 'file', ref: descriptor.workbench.entry },
+    { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
+    { kind: 'dir', ref: descriptor.engine.skills?.source },
+    ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
+  ])
+}
+
+async function assertStandaloneBundleDescriptorRefs(
+  appRoot: string,
+  refs: Array<{ kind: 'dir' | 'file', ref?: string }>,
+): Promise<void> {
+  for (const item of refs) {
+    if (!item.ref)
+      continue
+    const resourcePath = resolve(appRoot, item.ref)
+    const relativeResourcePath = relative(appRoot, resourcePath)
+    if (!relativeResourcePath || relativeResourcePath.startsWith('..') || isAbsolute(relativeResourcePath))
+      throw new Error(`standalone bundle Freeform descriptor reference escapes package root: ${item.ref}`)
+    try {
+      const info = await stat(resourcePath)
+      if (item.kind === 'dir' && !info.isDirectory())
+        throw new Error('not a directory')
+      if (item.kind === 'file' && !info.isFile())
+        throw new Error('not a file')
+    }
+    catch {
+      throw new Error(`standalone bundle Freeform descriptor references missing ${item.kind}: ${resourcePath}`)
+    }
+  }
 }
 
 async function cleanup(): Promise<void> {
