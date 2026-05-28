@@ -95,6 +95,15 @@ tests/browser/freeform-cli-golden-path.spec.ts
 tests/browser/freeform-mounted-workbench.spec.ts
 ```
 
+CLI release smoke contract tests:
+
+```text
+apps/cli/scripts/smoke-dist-release.test.ts
+apps/cli/scripts/smoke-npm-package.test.ts
+apps/cli/scripts/smoke-standalone-release.test.ts
+apps/cli/scripts/smoke-standalone-runtime.test.ts
+```
+
 ## Current Bootstrap Gate
 
 The first guardrail is:

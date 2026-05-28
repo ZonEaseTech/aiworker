@@ -2051,6 +2051,23 @@ describe('destructive refactor contract bootstrap', () => {
     expect(releaseCheckScript).not.toContain('tmp/refactor')
   })
 
+  test('release smoke contract tests guard official Freeform descriptor refs', () => {
+    const testing = readRepoFile('docs/testing.md')
+    const releaseSmokeContractTests = [
+      'apps/cli/scripts/smoke-dist-release.test.ts',
+      'apps/cli/scripts/smoke-npm-package.test.ts',
+      'apps/cli/scripts/smoke-standalone-release.test.ts',
+      'apps/cli/scripts/smoke-standalone-runtime.test.ts',
+    ]
+
+    for (const testPath of releaseSmokeContractTests) {
+      expect(testing).toContain(testPath)
+      expect(existsSync(join(repoRoot, testPath))).toBe(true)
+      expect(readRepoFile(testPath)).toContain('descriptor refs')
+      expect(readRepoFile(testPath)).toContain('parseOfficialFreeformDescriptorJson')
+    }
+  })
+
   test('tag release workflow runs the canonical release gate before publishing', () => {
     const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
     const releaseCheckIndex = releaseWorkflow.indexOf('bun run release:check')
