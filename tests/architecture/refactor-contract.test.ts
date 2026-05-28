@@ -491,6 +491,15 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.post(\'/api/local/apps/:appId/healthcheck\'')
   })
 
+  test('daemon worker collection surface does not preserve local broker aliases', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+
+    expect(daemon).toContain('app.get(\'/api/workers\'')
+    expect(daemon).toContain('app.post(\'/api/workers\'')
+    expect(daemon).not.toContain('app.get(\'/api/local/workers\'')
+    expect(daemon).not.toContain('app.post(\'/api/local/workers\'')
+  })
+
   test('Host runtime and UI app lifecycle APIs use archive naming internally', () => {
     const sources = [
       'apps/cli/src/aiworker.ts',

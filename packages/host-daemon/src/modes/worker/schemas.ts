@@ -36,7 +36,7 @@ export async function parseJsonBody<T extends z.ZodTypeAny>(
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/local/apps/install
+// POST /api/app-installation/install
 // ---------------------------------------------------------------------------
 
 export const installAppBodySchema = z.object({
@@ -45,7 +45,7 @@ export const installAppBodySchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
-// POST /api/local/workers
+// POST /api/workers
 // ---------------------------------------------------------------------------
 
 export const createWorkerBodySchema = z.object({
@@ -57,7 +57,7 @@ export const createWorkerBodySchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
-// PATCH /api/local/workers/:workerId
+// PATCH /api/workers/:workerId
 // ---------------------------------------------------------------------------
 
 export const patchWorkerBodySchema = z.object({

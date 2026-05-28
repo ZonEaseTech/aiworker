@@ -212,7 +212,15 @@ describe('local daemon API', () => {
     expect(appsBody.apps).toEqual([expect.objectContaining({ appId: FREEFORM_APP_ID, status: 'enabled' })])
     expect((await target.request('/api/local/apps')).status).toBe(404)
 
-    const legacyRes = await target.request('/api/local/workers', {
+    expect((await target.request('/api/local/workers')).status).toBe(404)
+    const legacyCollectionWriteRes = await target.request('/api/local/workers', {
+      body: JSON.stringify({ id: 'legacy-collection-worker', name: 'Legacy Collection', soulId: FREEFORM_APP_ID }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(legacyCollectionWriteRes.status).toBe(404)
+
+    const legacyRes = await target.request('/api/workers', {
       body: JSON.stringify({ id: 'legacy-hr-worker', name: 'Legacy HR', soulId: 'hr' }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -275,7 +283,7 @@ describe('local daemon API', () => {
     expect(archiveRes.status).toBe(200)
 
     const restarted = await app()
-    const workerRes = await restarted.request('/api/local/workers', {
+    const workerRes = await restarted.request('/api/workers', {
       body: JSON.stringify({ id: 'disabled-freeform-worker', name: 'Disabled Freeform', soulId: FREEFORM_APP_ID }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -288,7 +296,7 @@ describe('local daemon API', () => {
     seedLegacyHrMetadata()
 
     const target = await app()
-    const workersBody = await (await target.request('/api/local/workers')).json() as { workers: Array<{ id: string }> }
+    const workersBody = await (await target.request('/api/workers')).json() as { workers: Array<{ id: string }> }
     expect(workersBody.workers.some(worker => worker.id === 'legacy-hr-worker')).toBe(false)
 
     const worker = await createFreeformWorker(target, 'freeform-after-discard')
@@ -1251,7 +1259,7 @@ describe('local daemon API', () => {
   it('rejects full native MCP files in broker metadata write bodies', async () => {
     const target = await app()
 
-    const workerMetadataRes = await target.request('/api/local/workers', {
+    const workerMetadataRes = await target.request('/api/workers', {
       body: JSON.stringify({
         metadata: {
           configToml: '[mcp_servers.local]\ncommand = "node"\n',
@@ -1430,7 +1438,7 @@ describe('local daemon API', () => {
   it('rejects Soul-owned payloads in broker metadata write bodies', async () => {
     const target = await app()
 
-    const workerMetadataRes = await target.request('/api/local/workers', {
+    const workerMetadataRes = await target.request('/api/workers', {
       body: JSON.stringify({
         metadata: {
           reviewRecord: { decision: 'approved' },
@@ -1854,7 +1862,7 @@ describe('local daemon API', () => {
     })
     expect((await target.request('/api/apps/demo-api/?workerId=worker-1')).status).toBe(200)
 
-    const workerRes = await target.request('/api/local/workers', {
+    const workerRes = await target.request('/api/workers', {
       body: JSON.stringify({ id: 'demo-api-worker', name: 'Demo API Worker', soulId: 'demo-api' }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -2108,14 +2116,14 @@ describe('local daemon API', () => {
     expect(serializedOpenApi).not.toContain('literal-secret')
     expect(serializedOpenApi).not.toContain('sk-')
 
-    const invalidWorker = await target.request('/api/local/workers', {
+    const invalidWorker = await target.request('/api/workers', {
       body: JSON.stringify({ soulId: FREEFORM_APP_ID }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(invalidWorker.status).toBe(400)
 
-    const validWorker = await target.request('/api/local/workers', {
+    const validWorker = await target.request('/api/workers', {
       body: JSON.stringify({ extraField: 'ignored', name: 'Freeform Extra', soulId: FREEFORM_APP_ID }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',

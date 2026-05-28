@@ -257,30 +257,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ app, catalog: state.host.listCatalog(), deleted: true })
   })
 
-  app.get('/api/local/workers', c => c.json({ workers: listWorkers() }))
-  app.post('/api/local/workers', async (c) => {
-    const result = await parseJsonBody(c, createWorkerBodySchema, 'CREATE_WORKER_INVALID')
-    if (!result.ok)
-      return result.response
-    let created
-    try {
-      created = await state.host.createSoulWorker({
-        defaultEngineId: result.data.defaultEngineId,
-        id: result.data.id,
-        metadata: result.data.metadata,
-        name: result.data.name,
-        soulId: result.data.soulId,
-      })
-    }
-    catch (error) {
-      const response = hostMetadataValidationResponse(c, 'CREATE_WORKER_INVALID', error)
-      if (response)
-        return response
-      throw error
-    }
-    state.runtimes.set(created.worker.id, created.runtime)
-    return c.json({ worker: created.worker, snapshot: created.snapshot }, 201)
-  })
   app.get('/api/workers', c => c.json({ workers: listWorkers() }))
   app.post('/api/workers', async (c) => {
     const result = await parseJsonBody(c, createWorkerBodySchema, 'CREATE_WORKER_INVALID')
