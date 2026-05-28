@@ -2069,6 +2069,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(testing).toContain('Tag release handoff must run post-compile artifact proof after `release:check`')
     expect(testing).toContain('bun apps/cli/scripts/package-release-bundles.ts')
     expect(testing).toContain('bun apps/cli/scripts/smoke-release-artifacts.ts')
+    expect(testing).toContain('The artifact smoke must verify checksums, required resources, descriptor references, executable mode, and current-platform `aiworker --version` startup.')
     expect(testing.indexOf('## Current Release Gates')).toBeLessThan(testing.indexOf('## Release Exit Criteria'))
     expect(docCheck).toContain('Release Exit Criteria must document post-compile artifact proof')
   })

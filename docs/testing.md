@@ -194,6 +194,8 @@ bun apps/cli/scripts/package-release-bundles.ts
 bun apps/cli/scripts/smoke-release-artifacts.ts
 ```
 
+The artifact smoke must verify checksums, required resources, descriptor references, executable mode, and current-platform `aiworker --version` startup.
+
 ## Browser Proof Scope
 
 The v1 browser proof is Freeform-only:

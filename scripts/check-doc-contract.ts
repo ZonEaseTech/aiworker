@@ -265,6 +265,7 @@ for (const requiredReleaseExitText of [
   'Tag release handoff must run post-compile artifact proof after `release:check`',
   'bun apps/cli/scripts/package-release-bundles.ts',
   'bun apps/cli/scripts/smoke-release-artifacts.ts',
+  'The artifact smoke must verify checksums, required resources, descriptor references, executable mode, and current-platform `aiworker --version` startup.',
 ]) {
   if (!testingDoc.includes(requiredReleaseExitText)) {
     issues.push({
