@@ -373,6 +373,7 @@ if (packageJson.scripts?.['test:protocol'] !== 'bun run --filter \'@zonease/aiwo
   issues.push({ file: 'package.json', message: 'test:protocol must run the soul-protocol package test' })
 const testCliScript = packageJson.scripts?.['test:cli'] ?? ''
 const testBrowserFreeformScript = packageJson.scripts?.['test:browser:freeform'] ?? ''
+const hostDaemonWorkerLocalTest = read('packages/host-daemon/src/modes/worker.local.test.ts')
 const freeformCliBrowserProof = read('tests/browser/freeform-cli-golden-path.spec.ts')
 const freeformBuildScript = 'bun run --filter \'@zonease/aiworker-freeform\' build'
 const webBuildScript = 'bun run --filter \'@zonease/aiworker-web\' build'
@@ -396,6 +397,26 @@ if (!testBrowserFreeformScript.includes('tests/browser/freeform-cli-golden-path.
   issues.push({ file: 'package.json', message: 'test:browser:freeform must include the Freeform CLI browser golden path proof' })
 if (!testBrowserFreeformScript.includes('tests/browser/freeform-mounted-workbench.spec.ts'))
   issues.push({ file: 'package.json', message: 'test:browser:freeform must include the mounted workbench browser proof' })
+requireAppOwnedApiProxyGuardrails([
+  ['docs/protocol.md', read('docs/protocol.md'), [
+    'ANY    /api/apps/:appId',
+    'ANY    /api/apps/:appId/*',
+    'strips client credentials before proxying',
+    'strips app-owned cookies plus Host mount credentials before returning',
+  ]],
+  ['packages/host-daemon/src/modes/worker.local.test.ts', hostDaemonWorkerLocalTest, [
+    'client-spoofed-token',
+    'hasAuthorization: false',
+    'hasCookie: false',
+    'hasForwardedFor: false',
+    'isMountSignatureValid: true',
+    'x-aiworker-mount-context',
+    'x-aiworker-mount-signature',
+    'x-aiworker-mount-token',
+    'set-cookie',
+    '/api/apps/demo-api/candidates/123/reports',
+  ]],
+])
 requireFreeformBrowserProofIncludes([
   'readSessionFollowUpProofFromBrowser',
   ['/api/sessions/', '{id}/invocations'].join('$'),
@@ -602,6 +623,19 @@ function requireFreeformBrowserProofIncludes(needles: string[]): void {
         file: 'tests/browser/freeform-cli-golden-path.spec.ts',
         message: 'browser proof must cover Freeform v1 scope',
       })
+    }
+  }
+}
+
+function requireAppOwnedApiProxyGuardrails(entries: Array<[file: string, content: string, needles: string[]]>): void {
+  for (const [file, content, needles] of entries) {
+    for (const needle of needles) {
+      if (!content.includes(needle)) {
+        issues.push({
+          file,
+          message: 'app-owned API proxy must strip credentials',
+        })
+      }
     }
   }
 }

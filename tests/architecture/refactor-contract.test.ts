@@ -580,6 +580,7 @@ describe('destructive refactor contract bootstrap', () => {
   test('daemon app-owned API proxy does not preserve local catch-all alias', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
     const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
     const protocol = readRepoFile('docs/protocol.md')
 
     expect(protocol).toContain('ANY    /api/apps/:appId')
@@ -595,6 +596,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemonTest).toContain('x-aiworker-mount-context')
     expect(daemonTest).toContain('x-aiworker-mount-signature')
     expect(daemonTest).toContain('set-cookie')
+    expect(docCheck).toContain('app-owned API proxy must strip credentials')
   })
 
   test('daemon worker collection surface does not preserve local broker aliases', () => {
