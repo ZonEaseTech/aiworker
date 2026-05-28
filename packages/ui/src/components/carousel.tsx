@@ -11,6 +11,10 @@ type CarouselApi = UseEmblaCarouselType[1]
 type UseCarouselParameters = Parameters<typeof useEmblaCarousel>
 type CarouselOptions = UseCarouselParameters[0]
 type CarouselPlugin = UseCarouselParameters[1]
+interface CarouselScrollState {
+  canScrollNext: boolean
+  canScrollPrev: boolean
+}
 
 interface CarouselProps {
   opts?: CarouselOptions
@@ -29,6 +33,15 @@ type CarouselContextProps = {
 } & CarouselProps
 
 const CarouselContext = React.createContext<CarouselContextProps | null>(null)
+
+const defaultScrollState: CarouselScrollState = {
+  canScrollNext: false,
+  canScrollPrev: false,
+}
+
+function scrollStateReducer(_state: CarouselScrollState, nextState: CarouselScrollState) {
+  return nextState
+}
 
 function useCarousel() {
   const context = React.use(CarouselContext)
@@ -56,14 +69,18 @@ function Carousel({
     },
     plugins,
   )
-  const [canScrollPrev, setCanScrollPrev] = React.useState(false)
-  const [canScrollNext, setCanScrollNext] = React.useState(false)
+  const [{ canScrollNext, canScrollPrev }, dispatchScrollState] = React.useReducer(
+    scrollStateReducer,
+    defaultScrollState,
+  )
 
   const onSelect = React.useCallback((api: CarouselApi) => {
     if (!api)
       return
-    setCanScrollPrev(api.canScrollPrev())
-    setCanScrollNext(api.canScrollNext())
+    dispatchScrollState({
+      canScrollNext: api.canScrollNext(),
+      canScrollPrev: api.canScrollPrev(),
+    })
   }, [])
 
   const scrollPrev = React.useCallback(() => {
@@ -102,23 +119,38 @@ function Carousel({
     api.on('select', onSelect)
 
     return () => {
+      api?.off('reInit', onSelect)
       api?.off('select', onSelect)
     }
   }, [api, onSelect])
 
+  const carouselContextValue = React.useMemo<CarouselContextProps>(() => ({
+    api,
+    canScrollNext,
+    canScrollPrev,
+    carouselRef,
+    opts,
+    orientation: orientation || (opts?.axis === 'y' ? 'vertical' : 'horizontal'),
+    plugins,
+    scrollNext,
+    scrollPrev,
+    setApi,
+  }), [
+    api,
+    canScrollNext,
+    canScrollPrev,
+    carouselRef,
+    opts,
+    orientation,
+    plugins,
+    scrollNext,
+    scrollPrev,
+    setApi,
+  ])
+
   return (
     <CarouselContext
-      value={{
-        carouselRef,
-        api,
-        opts,
-        orientation:
-          orientation || (opts?.axis === 'y' ? 'vertical' : 'horizontal'),
-        scrollPrev,
-        scrollNext,
-        canScrollPrev,
-        canScrollNext,
-      }}
+      value={carouselContextValue}
     >
       <div
         onKeyDownCapture={handleKeyDown}
@@ -240,5 +272,6 @@ export {
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
+  // eslint-disable-next-line react-refresh/only-export-components -- keep the shadcn carousel hook available with its component family.
   useCarousel,
 }
