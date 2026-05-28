@@ -305,6 +305,41 @@ describe('Freeform CLI golden path', () => {
       secondFollowed.invocation.id,
     ])
     expect(archivedShown.invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded', 'succeeded'])
+
+    const reconciled = await runCliJson<{
+      invocation: { failureCode: string | null, id: string, processState: string, sessionId: string, status: string, summary: string | null }
+      session: { id: string, status: string, workspaceId: string }
+    }>(
+      'session',
+      'reconcile',
+      secondFollowed.invocation.id,
+      '--diagnostic',
+      'native process vanished token=sk-cli-reconcile-secret',
+    )
+    expect(reconciled.invocation).toMatchObject({
+      id: secondFollowed.invocation.id,
+      processState: 'lost',
+      sessionId: started.session.id,
+      status: 'lost',
+      summary: 'Native engine process was lost.',
+    })
+    expect(reconciled.session).toMatchObject({
+      id: started.session.id,
+      status: 'archived',
+      workspaceId: workspace.workspace.id,
+    })
+    expect(JSON.stringify(reconciled)).not.toContain('sk-cli-reconcile-secret')
+    expect(JSON.stringify(reconciled)).not.toContain('/turns/')
+
+    const missingReconcileExit = await runCli([
+      '/usr/bin/bun',
+      '/repo/apps/cli/src/aiworker.ts',
+      'session',
+      'reconcile',
+      'invocation-does-not-exist',
+    ])
+    expect(missingReconcileExit).toBe(1)
+    expect(errorOutput).toContain('invocation not found: invocation-does-not-exist')
   })
 
   async function runCliJson<T>(...args: string[]): Promise<T> {
