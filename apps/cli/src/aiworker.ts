@@ -310,6 +310,44 @@ function registryContext() {
   return { hostVersion: packageJson.version }
 }
 
+function currentInstallSource() {
+  const argv1 = resolveArgv1(process.argv[1])
+  return detectInstallSource({
+    argv1,
+    bunGlobalBinDirs: bunGlobalBinDirs(),
+    moduleDir: CLI_MODULE_DIR,
+    npmGlobalBinDirs: npmGlobalBinDirs(),
+    realArgv1: safeRealpath(argv1),
+  })
+}
+
+function cliInstallationDiagnostics(): {
+  resources: {
+    migrationsFolder: null | string
+    migrationsReady: boolean
+    officialAppsReady: boolean
+    officialAppsRoot: null | string
+    workerWebReady: boolean
+    workerWebStaticDir: null | string
+  }
+  source: ReturnType<typeof detectInstallSource>
+} {
+  const officialAppsRoot = resolveCliOfficialAppsRoot() ?? null
+  const workerWebStaticDir = resolveCliWorkerWebStaticDir() ?? null
+  const migrationsFolder = getWorkerEnv().WORKER_MIGRATIONS_FOLDER || null
+  return {
+    resources: {
+      migrationsFolder,
+      migrationsReady: Boolean(migrationsFolder && existsSync(path.join(migrationsFolder, 'meta', '_journal.json'))),
+      officialAppsReady: Boolean(officialAppsRoot && existsSync(path.join(officialAppsRoot, 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME))),
+      officialAppsRoot,
+      workerWebReady: Boolean(workerWebStaticDir && existsSync(path.join(workerWebStaticDir, 'index.html'))),
+      workerWebStaticDir,
+    },
+    source: currentInstallSource(),
+  }
+}
+
 function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, officialAppsRoot?: string, registryContext?: () => SoulAppRegistryContext } = {}): HostRuntime {
   return createHostRuntime({
     executor: options.executor,
@@ -405,6 +443,7 @@ async function runDoctor(): Promise<void> {
     workers: listWorkers(),
     workspaces: listWorkspaces(),
     daemon: daemonStatus(),
+    installation: cliInstallationDiagnostics(),
     settings: listSettings(),
     updateNotice,
   })
@@ -412,14 +451,7 @@ async function runDoctor(): Promise<void> {
 
 async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptions): Promise<void> {
   const options = parseUpdateCommandOptions(command, opts)
-  const argv1 = resolveArgv1(process.argv[1])
-  const source = detectInstallSource({
-    argv1,
-    bunGlobalBinDirs: bunGlobalBinDirs(),
-    moduleDir: CLI_MODULE_DIR,
-    npmGlobalBinDirs: npmGlobalBinDirs(),
-    realArgv1: safeRealpath(argv1),
-  })
+  const source = currentInstallSource()
   const target = await resolveReleaseTarget({
     fetch: url => fetch(url),
     options,

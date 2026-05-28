@@ -1274,6 +1274,34 @@ describe('aiworker local CLI', () => {
     expect(noticeSetting?.valueJson.errorMessage).toBe('network down')
   })
 
+  it('reports install source and packaged resource readiness in doctor output', async () => {
+    globalThis.fetch = (async () => {
+      throw new Error('network down')
+    }) as unknown as typeof fetch
+
+    expect(await runCli(argv('doctor'))).toBe(0)
+    const body = JSON.parse(output) as {
+      installation: {
+        resources: {
+          migrationsFolder: string | null
+          migrationsReady: boolean
+          officialAppsReady: boolean
+          workerWebReady: boolean
+        }
+        source: { canAutoUpgrade: boolean, kind: string }
+      }
+    }
+
+    expect(body.installation.source).toMatchObject({
+      canAutoUpgrade: false,
+      kind: 'source-checkout',
+    })
+    expect(body.installation.resources.migrationsFolder).toContain('drizzle/worker')
+    expect(body.installation.resources.migrationsReady).toBe(true)
+    expect(typeof body.installation.resources.officialAppsReady).toBe('boolean')
+    expect(typeof body.installation.resources.workerWebReady).toBe('boolean')
+  })
+
   it('prints equivalent check reports for update and upgrade aliases', async () => {
     expect(await runCli(argv('update', '--check', '--target', '99.0.0'))).toBe(0)
     const updateOutput = output
