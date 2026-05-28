@@ -58,6 +58,7 @@ async function main(): Promise<number> {
     await waitForHealth(port)
     await assertDaemonRuntimeVersion(port, expectedVersion)
     await assertDaemonOpenApiWorkerConfigEnvelope(port)
+    await assertDaemonOpenApiBrokerRoutes(port)
     await assertDaemonProjectionReceiptBoundary(port)
     const html = await assertHttpText(`http://127.0.0.1:${port}/`, /<!doctype html>/i)
     await assertWorkerWebAsset(port, html)
@@ -241,6 +242,88 @@ async function assertDaemonOpenApiWorkerConfigEnvelope(port: number): Promise<vo
   for (const required of ['WorkerConfigValueInput', 'configValueJson envelope', 'skill-overlay', 'descriptor://engine/skills/freeform-session', 'updatedBy', 'web']) {
     if (!serialized.includes(required))
       throw new Error(`dist daemon OpenAPI worker config envelope is missing ${required}`)
+  }
+}
+
+async function assertDaemonOpenApiBrokerRoutes(port: number): Promise<void> {
+  const openapi = await getJson<{ paths?: Record<string, Record<string, unknown>> }>(`http://127.0.0.1:${port}/openapi.json`)
+  const expectedBrokerRoutes = [
+    'POST /api/app-installation/install',
+    'GET /api/app-installation/apps',
+    'GET /api/app-installation/apps/{appId}',
+    'POST /api/app-installation/apps/{appId}/enable',
+    'POST /api/app-installation/apps/{appId}/archive',
+    'DELETE /api/app-installation/apps/{appId}',
+    'GET /api/info',
+    'GET /api/settings',
+    'PATCH /api/settings',
+    'GET /api/capabilities',
+    'POST /api/workers',
+    'GET /api/workers',
+    'GET /api/workers/{workerId}',
+    'PATCH /api/workers/{workerId}',
+    'POST /api/workers/{workerId}/archive',
+    'DELETE /api/workers/{workerId}',
+    'GET /api/workers/{workerId}/config',
+    'PUT /api/workers/{workerId}/config/{configKey}',
+    'PATCH /api/workers/{workerId}/config/{configKey}',
+    'POST /api/workers/{workerId}/config/{configKey}/archive',
+    'POST /api/workspace-locators',
+    'GET /api/workspace-locators',
+    'GET /api/workspace-locators/{workspaceId}',
+    'PATCH /api/workspace-locators/{workspaceId}',
+    'POST /api/workspace-locators/{workspaceId}/archive',
+    'DELETE /api/workspace-locators/{workspaceId}',
+    'POST /api/sessions',
+    'GET /api/sessions',
+    'GET /api/sessions/{sessionId}',
+    'PATCH /api/sessions/{sessionId}',
+    'POST /api/sessions/{sessionId}/archive',
+    'DELETE /api/sessions/{sessionId}',
+    'POST /api/sessions/{sessionId}/invocations',
+    'GET /api/engine/targets',
+    'GET /api/engine/targets/{target}/readiness',
+    'POST /api/engine/targets/rescan',
+    'POST /api/engine/targets/{target}/test',
+    'POST /api/engine/invocations',
+    'GET /api/engine/invocations/{invocationId}',
+    'GET /api/engine/invocations/{invocationId}/events',
+    'POST /api/engine/invocations/{invocationId}/cancel',
+    'POST /api/engine/invocations/{invocationId}/reconcile',
+    'POST /api/projections/{target}/refresh',
+    'GET /api/projections/receipts/{receiptId}',
+    'POST /api/projections/receipts/{receiptId}/cleanup',
+    'GET /api/mount/workbench',
+    'GET /api/apps/{appId}',
+    'OPTIONS /api/apps/{appId}',
+    'POST /api/apps/{appId}',
+    'PUT /api/apps/{appId}',
+    'PATCH /api/apps/{appId}',
+    'DELETE /api/apps/{appId}',
+    'GET /api/apps/{appId}/{path}',
+    'OPTIONS /api/apps/{appId}/{path}',
+    'POST /api/apps/{appId}/{path}',
+    'PUT /api/apps/{appId}/{path}',
+    'PATCH /api/apps/{appId}/{path}',
+    'DELETE /api/apps/{appId}/{path}',
+  ]
+  const missingBrokerRoutes = expectedBrokerRoutes.flatMap((route) => {
+    const [method, path] = route.split(' ', 2)
+    return openapi.paths?.[path]?.[method.toLowerCase()] ? [] : [route]
+  })
+  if (missingBrokerRoutes.length > 0)
+    throw new Error(`dist daemon OpenAPI is missing canonical broker routes: ${missingBrokerRoutes.join(', ')}`)
+
+  const retiredBrokerRouteSegments = [
+    ['api', 'local', 'info'],
+    ['api', 'local', 'settings'],
+    ['api', 'local', 'apps', '{appId}', 'actions', '{actionId}'],
+    ['api', 'local', 'workers', '{workerId}', 'engine', 'invocations'],
+  ]
+  for (const segments of retiredBrokerRouteSegments) {
+    const retiredPath = `/${segments.join('/')}`
+    if (openapi.paths?.[retiredPath])
+      throw new Error(`dist daemon OpenAPI exposed retired local broker route: ${retiredPath}`)
   }
 }
 

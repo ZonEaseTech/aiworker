@@ -36,6 +36,20 @@ describe('dist release smoke script contract', () => {
     expect(source).toContain('artifactContent')
   })
 
+  it('validates packaged daemon OpenAPI canonical broker routes', async () => {
+    const source = await readFile(join(import.meta.dirname, 'smoke-dist-release.ts'), 'utf8')
+
+    expect(source).toContain('assertDaemonOpenApiBrokerRoutes')
+    expect(source).toContain('OPTIONS /api/apps/{appId}')
+    expect(source).toContain('OPTIONS /api/apps/{appId}/{path}')
+    expect(source).toContain('/api/sessions/{sessionId}/invocations')
+    expect(source).toContain('/api/engine/invocations/{invocationId}/reconcile')
+    expect(source).toContain('/api/projections/receipts/{receiptId}/cleanup')
+    expect(source).toContain('retiredBrokerRouteSegments')
+    expect(source).toContain('actions')
+    expect(source).toContain('{actionId}')
+  })
+
   it('reports stale dist OpenAPI when packaged worker config request bodies are missing', () => {
     expect(() => assertDistOpenApiFreshness(undefined)).toThrow('dist OpenAPI is stale')
     expect(() => assertDistOpenApiFreshness({ put: {}, patch: { requestBody: {} } })).toThrow(

@@ -2520,6 +2520,13 @@ describe('local daemon API', () => {
       path: '/',
     })
     expect((await target.request('/api/apps/demo-api/?workerId=demo-api-worker')).status).toBe(200)
+    const preflightRoot = await target.request('/api/apps/demo-api?workerId=demo-api-worker', { method: 'OPTIONS' })
+    expect(preflightRoot.status).toBe(200)
+    expect(await preflightRoot.json()).toMatchObject({
+      appId: 'demo-api',
+      hasMountToken: true,
+      path: '/',
+    })
     const mountRes = await target.request('/api/mount/workbench?workerId=demo-api-worker')
     expect(mountRes.status).toBe(200)
     const mountBody = await mountRes.json() as { microApp: { data: Record<string, unknown> } }
@@ -2855,11 +2862,13 @@ describe('local daemon API', () => {
       ['patch', '/api/settings'],
       ['get', '/api/mount/workbench'],
       ['get', '/api/apps/{appId}'],
+      ['options', '/api/apps/{appId}'],
       ['post', '/api/apps/{appId}'],
       ['put', '/api/apps/{appId}'],
       ['patch', '/api/apps/{appId}'],
       ['delete', '/api/apps/{appId}'],
       ['get', '/api/apps/{appId}/{path}'],
+      ['options', '/api/apps/{appId}/{path}'],
       ['post', '/api/apps/{appId}/{path}'],
       ['put', '/api/apps/{appId}/{path}'],
       ['patch', '/api/apps/{appId}/{path}'],
