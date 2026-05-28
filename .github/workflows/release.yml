@@ -47,7 +47,7 @@ jobs:
         working-directory: apps/cli/dist
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: npm publish --provenance --access public
 
       - name: Attach binaries to GitHub Release
         uses: softprops/action-gh-release@v3
