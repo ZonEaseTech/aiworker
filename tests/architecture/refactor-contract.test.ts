@@ -1181,6 +1181,31 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'capability-derived session metadata should not be named as native engine skills').toEqual([])
   })
 
+  test('Host runtime session fixtures stay generic instead of preserving retired domain workflow terms', () => {
+    const activeSources = [
+      'packages/host-runtime/src/worker/runtime.test.ts',
+    ]
+    const forbidden = [
+      'candidate-screen',
+      'candidate-profile',
+      'Candidate Screen',
+      'Screen candidate',
+      'Candidate pool',
+      'interview-brief',
+      'Interview brief',
+      'resume',
+      'candidate',
+      'employee',
+      'alumni',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'Host runtime tests should use Freeform/protocol-generic fixtures, not retired HR workflow language').toEqual([])
+  })
+
   test('session capability selection uses capabilityId outside historical migrations', () => {
     const protocol = readRepoFile('docs/protocol.md')
     const runtimeDoc = readRepoFile('docs/runtime.md')

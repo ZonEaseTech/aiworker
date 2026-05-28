@@ -275,11 +275,11 @@ describe('LocalWorkerRuntime', () => {
     })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'candidate-screen',
-      title: 'Screen candidate',
+      capabilityId: 'freeform-summary',
+      title: 'Summarize freeform session',
       metadata: {
-        outputKind: 'candidate-screen',
-        capabilityName: 'Candidate Screen',
+        outputKind: 'freeform-summary',
+        capabilityName: 'Freeform Summary',
       },
     })
 
@@ -289,8 +289,8 @@ describe('LocalWorkerRuntime', () => {
       engineId: 'codex',
       engineCommand: 'codex',
       metadata: {
-        outputKind: 'candidate-screen',
-        capabilityName: 'Candidate Screen',
+        outputKind: 'freeform-summary',
+        capabilityName: 'Freeform Summary',
       },
     })
 
@@ -305,11 +305,11 @@ describe('LocalWorkerRuntime', () => {
     const snapshot = workerRuntime.snapshot()
     expect(snapshot.worker.soulId).toBe('demo-soul')
     expect(snapshot.workspaces).toHaveLength(1)
-    expect(snapshot.sessions[0]?.capabilityId).toBe('candidate-screen')
+    expect(snapshot.sessions[0]?.capabilityId).toBe('freeform-summary')
     expect(snapshot.sessions[0]?.status).toBe('active')
     expect(snapshot.sessions[0]?.endedAt).toBeNull()
     expect(snapshot).not.toHaveProperty('turns')
-    expect(snapshot.invocations[0]).toMatchObject({ metadataJson: { outputKind: 'candidate-screen' }, processState: 'exited', status: 'succeeded' })
+    expect(snapshot.invocations[0]).toMatchObject({ metadataJson: { outputKind: 'freeform-summary' }, processState: 'exited', status: 'succeeded' })
     expect(snapshot).not.toHaveProperty('reviews')
     expect(snapshot).not.toHaveProperty('lessons')
   })
@@ -675,14 +675,14 @@ describe('LocalWorkerRuntime', () => {
     })
     upsertWorkerConfigValue({
       workerId: workerRuntime.workerId,
-      configKey: 'skill-overlay:candidate-profile',
+      configKey: 'skill-overlay:freeform-context',
       source: 'web',
       configValueJson: {
         checksum: 'sha256:config-overlay',
         enabled: true,
         kind: 'skill-overlay',
         options: {
-          replaces: 'descriptor://engine/skills/candidate-profile',
+          replaces: 'descriptor://engine/skills/freeform-context',
         },
         sourceRef: 'descriptor://engine/skills/config-overlay',
         target: 'codex',
@@ -741,7 +741,7 @@ describe('LocalWorkerRuntime', () => {
       capabilityId: 'freeform',
       title: 'Stale descriptor receipt session',
     })
-    await writeFile(join(appRoot, 'engine-assets', 'skills', 'candidate-profile', 'SKILL.md'), '# Changed Descriptor Skill\n')
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'freeform-context', 'SKILL.md'), '# Changed Descriptor Skill\n')
 
     const staleResult = await workerRuntime.startInvocation({
       sessionId: staleSession.id,
@@ -1060,8 +1060,8 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'candidate-screen',
-      title: 'Screen candidate',
+      capabilityId: 'freeform-summary',
+      title: 'Summarize freeform session',
       metadata: {
         engineCommand: 'codex',
         engineId: 'codex',
@@ -1116,7 +1116,7 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Legacy BYOK Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'candidate-screen',
+      capabilityId: 'freeform-summary',
       title: 'Legacy BYOK session',
     })
     updateSession({
@@ -1169,10 +1169,10 @@ describe('LocalWorkerRuntime', () => {
           summary: `Finished ${input.invocationId}`,
           artifacts: [
             {
-              path: `artifacts/${input.sessionId}/${input.invocationId}-candidate-screen.md`,
-              kind: 'candidate-screen',
-              title: 'Candidate Screen',
-              content: '# Candidate Screen\n\nEvidence attached.\n',
+              path: `artifacts/${input.sessionId}/${input.invocationId}-freeform-summary.md`,
+              kind: 'freeform-summary',
+              title: 'Freeform Summary',
+              content: '# Freeform Summary\n\nEvidence attached.\n',
             },
           ],
         }
@@ -1182,11 +1182,11 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'candidate-screen',
-      title: 'Screen candidate',
+      capabilityId: 'freeform-summary',
+      title: 'Summarize freeform session',
       metadata: {
-        outputKind: 'candidate-screen',
-        capabilityName: 'Candidate Screen',
+        outputKind: 'freeform-summary',
+        capabilityName: 'Freeform Summary',
       },
     })
 
@@ -1197,10 +1197,10 @@ describe('LocalWorkerRuntime', () => {
       metadata: { executionMode: 'local-cli' },
     })
 
-    expect(prompts[0]).toContain('Capability: candidate-screen')
+    expect(prompts[0]).toContain('Capability: freeform-summary')
     expect(prompts[0]).not.toContain('Capability template:')
-    expect(prompts[0]).toContain('Output kind: candidate-screen')
-    expect(result.invocation.metadataJson).toMatchObject({ capabilityName: 'Candidate Screen', executionMode: 'local-cli', outputKind: 'candidate-screen' })
+    expect(prompts[0]).toContain('Output kind: freeform-summary')
+    expect(result.invocation.metadataJson).toMatchObject({ capabilityName: 'Freeform Summary', executionMode: 'local-cli', outputKind: 'freeform-summary' })
   })
 
   it('records explicit skill mention metadata while preserving natural language input', async () => {
@@ -1215,30 +1215,30 @@ describe('LocalWorkerRuntime', () => {
       },
     })
     await workerRuntime.init()
-    const workspace = await workerRuntime.createWorkspace({ name: 'Candidate pool' })
+    const workspace = await workerRuntime.createWorkspace({ name: 'Freeform workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'candidate-profile',
-      title: 'Candidate pool',
+      capabilityId: 'freeform-context',
+      title: 'Freeform workspace',
       metadata: {
-        mentions: [{ id: 'interview-brief', kind: 'skill', label: 'Interview brief' }],
+        mentions: [{ id: 'freeform-brief', kind: 'skill', label: 'Freeform brief' }],
       },
     })
 
     const result = await workerRuntime.startInvocation({
       sessionId: session.id,
-      input: 'Use $interview-brief for this resume.',
+      input: 'Use $freeform-brief for this request.',
       engineId: 'codex',
       metadata: {
-        mentions: [{ id: 'interview-brief', kind: 'skill', label: 'Interview brief' }],
+        mentions: [{ id: 'freeform-brief', kind: 'skill', label: 'Freeform brief' }],
       },
     })
 
     expect(result.invocation.metadataJson).toMatchObject({
-      mentions: [{ id: 'interview-brief', kind: 'skill' }],
+      mentions: [{ id: 'freeform-brief', kind: 'skill' }],
     })
-    expect(prompts[0]).toContain('Explicit skill mentions:\n- skill: interview-brief')
-    expect(prompts[0]).toContain('Invocation request:\nUse $interview-brief for this resume.')
+    expect(prompts[0]).toContain('Explicit skill mentions:\n- skill: freeform-brief')
+    expect(prompts[0]).toContain('Invocation request:\nUse $freeform-brief for this request.')
   })
 
   it('uses a protocol-generic output kind when session metadata does not provide one', async () => {
@@ -1282,8 +1282,8 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'candidate-screen',
-      title: 'Screen candidate',
+      capabilityId: 'freeform-summary',
+      title: 'Summarize freeform session',
     })
 
     const result = await workerRuntime.startInvocation({
@@ -2008,10 +2008,10 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'demo-soul-app.interview-brief',
-      title: 'Interview brief',
+      capabilityId: 'demo-soul-app.freeform-brief',
+      title: 'Freeform brief',
       metadata: {
-        outputKind: 'interview-brief',
+        outputKind: 'freeform-brief',
       },
     })
 
@@ -2049,10 +2049,10 @@ describe('LocalWorkerRuntime', () => {
   it('projects worker overlay source refs without storing projected content in Host metadata', async () => {
     const appRoot = join(dir, 'souls', 'demo-soul-app-overlay-skill')
     await writeProfileEngineAssets(appRoot)
-    await mkdir(join(appRoot, 'engine-assets', 'skills', 'interview-brief'), { recursive: true })
-    await writeFile(join(appRoot, 'engine-assets', 'skills', 'interview-brief', 'SKILL.md'), '# Baseline Interview Brief\n')
+    await mkdir(join(appRoot, 'engine-assets', 'skills', 'freeform-brief'), { recursive: true })
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'freeform-brief', 'SKILL.md'), '# Baseline Freeform Brief\n')
     await mkdir(join(appRoot, 'engine-assets', 'skills', 'overlay-brief'), { recursive: true })
-    await writeFile(join(appRoot, 'engine-assets', 'skills', 'overlay-brief', 'SKILL.md'), '# Overlay Interview Brief\n')
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'overlay-brief', 'SKILL.md'), '# Overlay Freeform Brief\n')
 
     const workerRuntime = runtimeWithEngineAssets(appRoot, {
       async invoke() {
@@ -2061,65 +2061,65 @@ describe('LocalWorkerRuntime', () => {
     })
 
     await workerRuntime.init()
-    const existingWorkspace = await workerRuntime.createWorkspace({ name: 'Existing candidate pool' })
-    await expect(readFile(join(existingWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-interview-brief', 'SKILL.md'), 'utf8'))
+    const existingWorkspace = await workerRuntime.createWorkspace({ name: 'Existing freeform workspace' })
+    await expect(readFile(join(existingWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-freeform-brief', 'SKILL.md'), 'utf8'))
       .resolves
-      .toContain('Baseline Interview Brief')
+      .toContain('Baseline Freeform Brief')
 
     upsertWorkerConfigValue({
       workerId: workerRuntime.workerId,
-      configKey: 'skill-overlay:interview-brief',
+      configKey: 'skill-overlay:freeform-brief',
       source: 'web',
       configValueJson: {
         checksum: 'sha256:overlay',
         enabled: true,
         kind: 'skill-overlay',
         options: {
-          replaces: 'descriptor://engine/skills/interview-brief',
+          replaces: 'descriptor://engine/skills/freeform-brief',
         },
         sourceRef: 'descriptor://engine/skills/overlay-brief',
         target: 'codex',
       },
     })
-    expect(JSON.stringify(getWorkerConfigValue(workerRuntime.workerId, 'skill-overlay:interview-brief'))).not.toContain('Overlay Interview Brief')
+    expect(JSON.stringify(getWorkerConfigValue(workerRuntime.workerId, 'skill-overlay:freeform-brief'))).not.toContain('Overlay Freeform Brief')
 
     await workerRuntime.init()
-    await expect(readFile(join(existingWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-interview-brief', 'SKILL.md'), 'utf8'))
+    await expect(readFile(join(existingWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-freeform-brief', 'SKILL.md'), 'utf8'))
       .resolves
-      .toContain('Baseline Interview Brief')
+      .toContain('Baseline Freeform Brief')
 
     const reprojected = await workerRuntime.reprojectWorkspaceAssets(existingWorkspace.id)
-    await expect(readFile(join(existingWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-interview-brief', 'SKILL.md'), 'utf8'))
+    await expect(readFile(join(existingWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-freeform-brief', 'SKILL.md'), 'utf8'))
       .resolves
-      .toContain('Overlay Interview Brief')
+      .toContain('Overlay Freeform Brief')
     expect(reprojected.receipt?.projections).toContainEqual(expect.objectContaining({
       source: 'worker-overlay',
-      target: '.agents/skills/demo-soul-app-interview-brief/SKILL.md',
+      target: '.agents/skills/demo-soul-app-freeform-brief/SKILL.md',
     }))
     expect(reprojected.workspace.metadataJson.engineAssetProjection).toMatchObject({
       projectionManifestPath: '.aiworker/projections.json',
     })
 
-    const newWorkspace = await workerRuntime.createWorkspace({ name: 'New candidate pool' })
-    await expect(readFile(join(newWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-interview-brief', 'SKILL.md'), 'utf8'))
+    const newWorkspace = await workerRuntime.createWorkspace({ name: 'New freeform workspace' })
+    await expect(readFile(join(newWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-freeform-brief', 'SKILL.md'), 'utf8'))
       .resolves
-      .toContain('Overlay Interview Brief')
+      .toContain('Overlay Freeform Brief')
     const receipt = JSON.parse(await readFile(join(newWorkspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
       projections: Array<{ source: string, target: string }>
     }
     expect(receipt.projections).toContainEqual(expect.objectContaining({
       source: 'worker-overlay',
-      target: '.agents/skills/demo-soul-app-interview-brief/SKILL.md',
+      target: '.agents/skills/demo-soul-app-freeform-brief/SKILL.md',
     }))
   })
 
   it('projects standard worker config skill overlays into workspace assets', async () => {
     const appRoot = join(dir, 'souls', 'demo-soul-app-config-overlay-skill')
     await writeProfileEngineAssets(appRoot)
-    await mkdir(join(appRoot, 'engine-assets', 'skills', 'interview-brief'), { recursive: true })
-    await writeFile(join(appRoot, 'engine-assets', 'skills', 'interview-brief', 'SKILL.md'), '# Baseline Interview Brief\n')
+    await mkdir(join(appRoot, 'engine-assets', 'skills', 'freeform-brief'), { recursive: true })
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'freeform-brief', 'SKILL.md'), '# Baseline Freeform Brief\n')
     await mkdir(join(appRoot, 'engine-assets', 'skills', 'overlay-brief'), { recursive: true })
-    await writeFile(join(appRoot, 'engine-assets', 'skills', 'overlay-brief', 'SKILL.md'), '# Config Overlay Interview Brief\n')
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'overlay-brief', 'SKILL.md'), '# Config Overlay Freeform Brief\n')
 
     const workerRuntime = runtimeWithEngineAssets(appRoot, {
       async invoke() {
@@ -2130,32 +2130,32 @@ describe('LocalWorkerRuntime', () => {
     await workerRuntime.init()
     upsertWorkerConfigValue({
       workerId: workerRuntime.workerId,
-      configKey: 'skill-overlay:interview-brief',
+      configKey: 'skill-overlay:freeform-brief',
       source: 'web',
       configValueJson: {
         checksum: 'sha256:config-overlay',
         enabled: true,
         kind: 'skill-overlay',
         options: {
-          replaces: 'descriptor://engine/skills/interview-brief',
+          replaces: 'descriptor://engine/skills/freeform-brief',
         },
         sourceRef: 'descriptor://engine/skills/overlay-brief',
         target: 'codex',
       },
     })
-    expect(JSON.stringify(getWorkerConfigValue(workerRuntime.workerId, 'skill-overlay:interview-brief'))).not.toContain('Config Overlay Interview Brief')
+    expect(JSON.stringify(getWorkerConfigValue(workerRuntime.workerId, 'skill-overlay:freeform-brief'))).not.toContain('Config Overlay Freeform Brief')
 
     const workspace = await workerRuntime.createWorkspace({ name: 'Config overlay workspace' })
 
-    await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'demo-soul-app-interview-brief', 'SKILL.md'), 'utf8'))
+    await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'demo-soul-app-freeform-brief', 'SKILL.md'), 'utf8'))
       .resolves
-      .toContain('Config Overlay Interview Brief')
+      .toContain('Config Overlay Freeform Brief')
     const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
       projections: Array<{ source: string, target: string }>
     }
     expect(receipt.projections).toContainEqual(expect.objectContaining({
       source: 'worker-overlay',
-      target: '.agents/skills/demo-soul-app-interview-brief/SKILL.md',
+      target: '.agents/skills/demo-soul-app-freeform-brief/SKILL.md',
     }))
   })
 
@@ -2235,13 +2235,13 @@ describe('LocalWorkerRuntime', () => {
     await workerRuntime.init()
     upsertWorkerConfigValue({
       workerId: workerRuntime.workerId,
-      configKey: 'skill-overlay:disable-candidate-profile',
+      configKey: 'skill-overlay:disable-freeform-context',
       source: 'web',
       configValueJson: {
         enabled: false,
         kind: 'skill-overlay',
         options: {
-          replaces: 'descriptor://engine/skills/candidate-profile',
+          replaces: 'descriptor://engine/skills/freeform-context',
         },
         target: 'codex',
       },
@@ -2265,11 +2265,11 @@ describe('LocalWorkerRuntime', () => {
       projections: Array<{ target: string }>
     }
 
-    await expect(stat(join(workspace.rootPath, '.agents', 'skills', 'demo-soul-app-candidate-profile', 'SKILL.md'))).rejects.toThrow()
-    await expect(readFile(join(workspace.rootPath, '.claude', 'skills', 'demo-soul-app-candidate-profile', 'SKILL.md'), 'utf8')).resolves.toContain('Candidate Profile')
+    await expect(stat(join(workspace.rootPath, '.agents', 'skills', 'demo-soul-app-freeform-context', 'SKILL.md'))).rejects.toThrow()
+    await expect(readFile(join(workspace.rootPath, '.claude', 'skills', 'demo-soul-app-freeform-context', 'SKILL.md'), 'utf8')).resolves.toContain('Freeform Context')
     await expect(stat(join(workspace.rootPath, '.codex', 'config.toml'))).rejects.toThrow()
     expect(receipt.projections).not.toContainEqual(expect.objectContaining({
-      target: '.agents/skills/demo-soul-app-candidate-profile/SKILL.md',
+      target: '.agents/skills/demo-soul-app-freeform-context/SKILL.md',
     }))
     expect(receipt.projections).not.toContainEqual(expect.objectContaining({
       target: '.codex/config.toml',
@@ -2291,14 +2291,14 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Escaping overlay workspace' })
     upsertWorkerConfigValue({
       workerId: workerRuntime.workerId,
-      configKey: 'skill-overlay:candidate-profile',
+      configKey: 'skill-overlay:freeform-context',
       source: 'web',
       configValueJson: {
         checksum: 'sha256:outside',
         enabled: true,
         kind: 'skill-overlay',
         options: {
-          replaces: 'descriptor://engine/skills/candidate-profile',
+          replaces: 'descriptor://engine/skills/freeform-context',
         },
         sourceRef: 'descriptor://engine/skills/../../../outside-secret',
         target: 'codex',
@@ -2499,16 +2499,16 @@ describe('LocalWorkerRuntime', () => {
 
 async function writeProfileEngineAssets(appRoot: string): Promise<void> {
   await writeWorkspaceEngineAssets(appRoot)
-  await mkdir(join(appRoot, 'engine-assets', 'skills', 'candidate-profile'), { recursive: true })
-  await writeFile(join(appRoot, 'engine-assets', 'skills', 'candidate-profile', 'SKILL.md'), [
+  await mkdir(join(appRoot, 'engine-assets', 'skills', 'freeform-context'), { recursive: true })
+  await writeFile(join(appRoot, 'engine-assets', 'skills', 'freeform-context', 'SKILL.md'), [
     '---',
-    'name: candidate-profile',
-    'description: Maintain a source-backed candidate profile.',
+    'name: freeform-context',
+    'description: Maintain a source-backed freeform context.',
     '---',
     '',
-    '# Candidate Profile',
+    '# Freeform Context',
     '',
-    'Use candidate, employee, and alumni lifecycle language.',
+    'Use freeform, workspace, and session lifecycle language.',
     '',
   ].join('\n'))
 }

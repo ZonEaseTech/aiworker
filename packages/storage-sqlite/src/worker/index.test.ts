@@ -558,6 +558,74 @@ describe('greenfield local worker session schema', () => {
     })
   })
 
+  it('persists canonical normalized bridge event classes in the storage event_type column', () => {
+    const worker = upsertWorker({
+      id: 'worker-normalized-bridge-events',
+      soulId: 'freeform',
+      name: 'Freeform',
+      defaultEngineId: 'codex',
+      at: '2026-05-27T01:10:00.000Z',
+    })
+    const workspace = createWorkspace({
+      id: 'workspace-normalized-bridge-events',
+      workerId: worker.id,
+      name: 'Normalized bridge events workspace',
+      rootPath: '/tmp/normalized-bridge-events',
+      at: '2026-05-27T01:11:00.000Z',
+    })
+    const session = createSession({
+      id: 'session-normalized-bridge-events',
+      workerId: worker.id,
+      workspaceId: workspace.id,
+      capabilityId: 'default',
+      title: 'Normalized bridge events session',
+      at: '2026-05-27T01:12:00.000Z',
+    })
+    const invocation = createEngineInvocation({
+      id: 'invocation-normalized-bridge-events',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: 'aiworker://sessions/session-normalized-bridge-events/invocations/invocation-normalized-bridge-events/input',
+      status: 'running',
+      at: '2026-05-27T01:13:00.000Z',
+    })
+
+    for (const [index, type] of (['status', 'assistant_delta', 'tool', 'error', 'log'] as const).entries()) {
+      appendSessionEvent({
+        sessionId: session.id,
+        invocationId: invocation.id,
+        seq: index + 1,
+        type,
+        payloadJson: { message: type },
+        at: `2026-05-27T01:13:0${index}.000Z`,
+      })
+    }
+
+    const eventTypes = getWorkerDb()
+      .select({ eventType: bridgeEvents.eventType })
+      .from(bridgeEvents)
+      .orderBy(bridgeEvents.id)
+      .all()
+      .map(row => row.eventType)
+
+    expect(eventTypes).toEqual([
+      'invocation.progress',
+      'invocation.output.delta',
+      'invocation.tool.observed',
+      'invocation.error',
+      'invocation.progress',
+    ])
+    expect(listSessionEvents(session.id).map(event => event.type)).toEqual([
+      'status',
+      'assistant_delta',
+      'tool',
+      'error',
+      'log',
+    ])
+  })
+
   it('rejects secret-like assignment strings in persisted engine diagnostics', () => {
     const worker = upsertWorker({
       id: 'worker-engine-diagnostics-secret',

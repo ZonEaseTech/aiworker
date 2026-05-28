@@ -948,34 +948,32 @@ export function listInvocationEvents(invocationId: string, options: { after?: nu
 
 function bridgeEventTypeFromSessionEventType(type: SessionEventRow['type']): BridgeEventRow['eventType'] {
   if (type === 'status')
-    return 'invocation.status'
+    return 'invocation.progress'
   if (type === 'assistant_delta')
-    return 'engine.output'
+    return 'invocation.output.delta'
   if (type === 'tool')
-    return 'engine.tool'
+    return 'invocation.tool.observed'
   if (type === 'error')
-    return 'error'
-  if (type === 'log')
-    return 'diagnostic'
-  return 'process.event'
+    return 'invocation.error'
+  return 'invocation.progress'
 }
 
-function sessionEventTypeFromBridgeEventType(type: BridgeEventRow['eventType']): SessionEventRow['type'] {
-  if (type === 'invocation.status')
-    return 'status'
-  if (type === 'engine.output')
+function sessionEventTypeFromBridgeEventType(type: string): SessionEventRow['type'] {
+  if (type === 'invocation.output.delta' || type === 'invocation.output.snapshot' || type === 'engine.output')
     return 'assistant_delta'
-  if (type === 'engine.tool')
+  if (type === 'invocation.tool.observed' || type === 'engine.tool')
     return 'tool'
-  if (type === 'error')
+  if (type === 'invocation.error' || type === 'error')
     return 'error'
+  if (type === 'invocation.progress' || type === 'invocation.status')
+    return 'status'
   return 'log'
 }
 
 function mapBridgeEventToSessionEvent(row: {
   createdAt: string
   eventJson: Record<string, unknown>
-  eventType: BridgeEventRow['eventType']
+  eventType: string
   id: number
   invocationId: string
   sessionId: string
