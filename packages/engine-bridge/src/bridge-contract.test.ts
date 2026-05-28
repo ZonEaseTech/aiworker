@@ -616,6 +616,22 @@ describe('engine-bridge cancel contract', () => {
     expect(processManager.terminateGroup).not.toHaveBeenCalled()
   })
 
+  test('does not hard-kill a newer invocation after the cancel grace period', async () => {
+    const { engineBridge, processManager } = createContractHarness()
+    const handle = { invocationId: 'older-invocation', pid: 101 }
+    processManager.softInterrupt.mockImplementationOnce(async () => {
+      handle.invocationId = 'newer-invocation'
+    })
+
+    await expect(engineBridge.cancelInvocation({
+      handle,
+      invocationId: 'older-invocation',
+      reason: 'user-request',
+    })).rejects.toMatchObject({ code: 'ENGINE_CANCEL_FAILED' })
+    expect(processManager.softInterrupt).toHaveBeenCalledTimes(1)
+    expect(processManager.terminateGroup).not.toHaveBeenCalled()
+  })
+
   test('redacts adapter cancellation failure diagnostics', async () => {
     const { engineBridge } = createContractHarness({ cancelFails: true })
 

@@ -218,6 +218,8 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
         await options.processManager?.softInterrupt?.(handle, { invocationId })
         if ((options.cancelGracePeriodMs ?? 0) > 0)
           await sleep(options.cancelGracePeriodMs ?? 0)
+        if (handle.invocationId !== invocationId)
+          throw bridgeFailure('ENGINE_CANCEL_FAILED', 'Process handle no longer belongs to the requested invocation.')
         await options.processManager?.terminateGroup?.(handle, { invocationId })
         return {
           invocationId,
