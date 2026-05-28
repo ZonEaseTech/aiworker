@@ -537,6 +537,18 @@ if (!testBrowserFreeformScript.includes('tests/browser/freeform-cli-golden-path.
   issues.push({ file: 'package.json', message: 'test:browser:freeform must include the Freeform CLI browser golden path proof' })
 if (!testBrowserFreeformScript.includes('tests/browser/freeform-mounted-workbench.spec.ts'))
   issues.push({ file: 'package.json', message: 'test:browser:freeform must include the mounted workbench browser proof' })
+for (const needle of [
+  'resolves custom descriptor workbench without SDK common fallback',
+  'data-custom-workbench="true"',
+  'data-aiworker-common-workbench="true"',
+]) {
+  if (!hostDaemonWorkerLocalTest.includes(needle)) {
+    issues.push({
+      file: 'packages/host-daemon/src/modes/worker.local.test.ts',
+      message: 'custom descriptor workbench must bypass SDK common fallback',
+    })
+  }
+}
 requireWorkerConfigBrokerRoutesComplete([
   ['docs/protocol.md', read('docs/protocol.md'), [
     'GET    /api/workers/:workerId/config',

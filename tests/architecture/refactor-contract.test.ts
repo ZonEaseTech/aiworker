@@ -2308,6 +2308,13 @@ describe('destructive refactor contract bootstrap', () => {
     })
 
     expect(findings, 'descriptor workbench mount must not depend on legacy surface shim').toEqual([])
+
+    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
+    expect(daemonTest).toContain('resolves custom descriptor workbench without SDK common fallback')
+    expect(daemonTest).toContain('data-custom-workbench="true"')
+    expect(daemonTest).toContain('data-aiworker-common-workbench="true"')
+    expect(docCheck).toContain('custom descriptor workbench must bypass SDK common fallback')
   })
 
   test('WorkerStudio derives production workbench routes from descriptor v1 only', () => {

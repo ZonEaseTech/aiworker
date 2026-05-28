@@ -175,6 +175,35 @@ describe('local daemon API', () => {
     writeFileSync(join(distRoot, 'web', 'workbench', 'index.html'), '<main data-aiworker-common-workbench="true"></main>\n')
   }
 
+  function writeCustomWorkbenchSoul(root: string): void {
+    const descriptor = parseSoulDescriptorV1({
+      ...freeformDescriptor,
+      identity: {
+        appId: 'demo-custom-workbench',
+        description: 'Descriptor-only custom workbench Soul.',
+        name: 'Demo Custom Workbench Soul',
+        soulId: 'demo-custom-workbench',
+        version: '0.1.0',
+      },
+      workbench: {
+        entry: 'dist/web/workbench/custom.html',
+        mode: 'custom',
+        router: { mode: 'search' },
+        type: 'micro-app',
+      },
+    })
+    const distRoot = join(root, 'dist')
+    mkdirSync(join(distRoot, 'engine-assets', 'workspace'), { recursive: true })
+    mkdirSync(join(distRoot, 'engine-assets', 'skills'), { recursive: true })
+    mkdirSync(join(distRoot, 'engine-assets', 'mcp', 'codex'), { recursive: true })
+    mkdirSync(join(distRoot, 'web', 'workbench'), { recursive: true })
+    writeFileSync(join(distRoot, 'soul.descriptor.json'), `${JSON.stringify(descriptor, null, 2)}\n`)
+    writeFileSync(join(distRoot, 'engine-assets', 'workspace', 'AGENTS.md'), '# Demo Custom Workbench Workspace\n')
+    writeFileSync(join(distRoot, 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex mcp\n')
+    writeFileSync(join(distRoot, 'web', 'workbench', 'custom.html'), '<main data-custom-workbench="true"></main>\n')
+    writeFileSync(join(distRoot, 'web', 'workbench', 'index.html'), '<main data-aiworker-common-workbench="true"></main>\n')
+  }
+
   function seedLegacyHrMetadata() {
     const seedNow = '2026-05-13T13:04:00.000Z'
     closeWorkerDb()
@@ -1551,6 +1580,60 @@ describe('local daemon API', () => {
     expect(htmlRes.status).toBe(200)
     expect(htmlRes.headers.get('content-type')).toContain('text/html')
     expect(await htmlRes.text()).toContain('data-aiworker-common-workbench="true"')
+  })
+
+  it('resolves custom descriptor workbench without SDK common fallback', async () => {
+    const target = await app()
+    const appRoot = join(dir, 'custom-workbench-soul')
+    writeCustomWorkbenchSoul(appRoot)
+
+    const installRes = await target.request('/api/app-installation/install', {
+      body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(installRes.status).toBe(201)
+    expect((await target.request('/api/app-installation/apps/demo-custom-workbench/enable', { method: 'POST' })).status).toBe(200)
+
+    const workerRes = await target.request('/api/workers', {
+      body: JSON.stringify({ id: 'custom-workbench-worker', name: 'Custom Workbench', soulId: 'demo-custom-workbench' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(workerRes.status).toBe(201)
+
+    const res = await target.request('/api/mount/workbench?workerId=custom-workbench-worker&theme=dark')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      locator: {
+        sessionId: null,
+        workerId: 'custom-workbench-worker',
+        workspaceId: null,
+      },
+      microApp: {
+        data: {
+          mountTokenPresent: false,
+          surfaceId: 'workbench',
+          theme: 'dark',
+          workerId: 'custom-workbench-worker',
+        },
+        name: 'demo-custom-workbench--workbench',
+        url: '/api/apps/demo-custom-workbench/micro-app/workbench?workerId=custom-workbench-worker&theme=dark',
+      },
+      mount: {
+        appId: 'demo-custom-workbench',
+        entry: '/api/apps/demo-custom-workbench/micro-app/workbench',
+        surfaceId: 'workbench',
+        type: 'micro-app',
+      },
+      routerMode: 'search',
+    })
+
+    const htmlRes = await target.request('/api/apps/demo-custom-workbench/micro-app/workbench?workerId=custom-workbench-worker')
+    expect(htmlRes.status).toBe(200)
+    const html = await htmlRes.text()
+    expect(html).toContain('data-custom-workbench="true"')
+    expect(html).not.toContain('data-aiworker-common-workbench="true"')
   })
 
   it('rejects descriptor workbench mount without worker locator', async () => {
