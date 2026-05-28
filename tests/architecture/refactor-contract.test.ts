@@ -2007,6 +2007,10 @@ describe('destructive refactor contract bootstrap', () => {
     expect(freeformCliBrowserProof).toContain(`/api/projections/receipts/\${workspaceId}`)
     expect(freeformCliBrowserProof).toContain('assertProjectionRefreshProof')
     expect(freeformCliBrowserProof).toContain('worker-overlay')
+    expect(freeformCliBrowserProof).toContain(`/api/workspace-locators/\${workspaceId}/archive`)
+    expect(freeformCliBrowserProof).toContain(`/api/workers/\${workerId}/archive`)
+    expect(freeformCliBrowserProof).toContain('assertHostLifecycleArchiveProof')
+    expect(freeformCliBrowserProof).toContain('WORKER_ARCHIVED')
   })
 
   test('dist release smoke reads installed apps through canonical app-installation route', () => {
@@ -2066,6 +2070,19 @@ describe('destructive refactor contract bootstrap', () => {
       expect(readRepoFile(testPath)).toContain('descriptor refs')
       expect(readRepoFile(testPath)).toContain('parseOfficialFreeformDescriptorJson')
     }
+  })
+
+  test('canonical testing docs track Freeform browser proof scope', () => {
+    const testing = readRepoFile('docs/testing.md')
+
+    expect(testing).toContain('-> starts the first invocation and session-level follow-up')
+    expect(testing).toContain('-> shows bridge event refs to the mounted surface')
+    expect(testing).toContain('-> cancels a queued invocation without changing session lifecycle')
+    expect(testing).toContain('-> reattaches and reconciles engine bridge events')
+    expect(testing).toContain('-> refreshes projection receipts from mounted context')
+    expect(testing).toContain('-> applies worker config overlay and observes worker-overlay projection receipts')
+    expect(testing).toContain('-> archives the session and rejects follow-up')
+    expect(testing).toContain('-> archives workspace and worker lifecycle, blocking new work on archived worker')
   })
 
   test('tag release workflow runs the canonical release gate before publishing', () => {

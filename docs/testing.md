@@ -172,7 +172,14 @@ Host Web opens worker/workspace/session locator
 -> resolves Freeform workbench
 -> mounts via micro-app router-mode=search
 -> SDK common workbench renders
--> bridge event refs are visible to the mounted surface
+-> starts the first invocation and session-level follow-up
+-> shows bridge event refs to the mounted surface
+-> cancels a queued invocation without changing session lifecycle
+-> reattaches and reconciles engine bridge events
+-> refreshes projection receipts from mounted context
+-> applies worker config overlay and observes worker-overlay projection receipts
+-> archives the session and rejects follow-up
+-> archives workspace and worker lifecycle, blocking new work on archived worker
 ```
 
 Do not modify the new architecture to satisfy old E2E assumptions. Delete or
