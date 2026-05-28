@@ -1127,6 +1127,28 @@ describe('worker studio', () => {
     expect(within(dialog).getByRole('button', { name: 'Toggle Skills' })).toBeTruthy()
   })
 
+  it('refreshes selected workspace projection from the fallback workspace toolbar', async () => {
+    window.history.replaceState(null, '', '/workers/people-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh workspace' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/projections/codex/refresh', expect.objectContaining({
+        body: JSON.stringify({
+          workerId: 'people-worker',
+          workspaceId: 'workspace-1',
+        }),
+        method: 'POST',
+      }))
+    })
+    expect(currentWorkspaces.find(item => item.id === 'workspace-1')?.metadataJson).toMatchObject({
+      engineAssetProjection: {
+        projectionManifestPath: '.aiworker/projections.json',
+      },
+    })
+  })
+
   it('opens configuration for the worker row that owns the hovered more action', async () => {
     window.history.replaceState(null, '', '/workers/people-worker')
     render(<WorkerStudio />)

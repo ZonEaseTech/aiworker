@@ -18,7 +18,7 @@ import {
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
-import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, saveWorkerOverlayConfigValues } from '../features/local-workspace/api'
+import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, projectWorkerWorkspaceOverlay, saveWorkerOverlayConfigValues } from '../features/local-workspace/api'
 import { CreateWorkerDialog, CreateWorkspaceDialog } from '../features/local-workspace/components'
 import { projectNamePlaceholder } from '../features/local-workspace/model'
 import { SettingsDialog } from '../features/settings'
@@ -167,6 +167,23 @@ export function WorkerStudio() {
     setSelectedWorkspaceId(selectedWorkspace.id)
     navigateWorkerRoute({ kind: 'workspace', workerId, workspaceId: selectedWorkspace.id })
   }, [refresh])
+  const refreshSelectedWorkspaceProjection = useCallback(async (): Promise<void> => {
+    if (!selectedWorker || !selectedWorkspace) {
+      await refresh()
+      return
+    }
+    try {
+      await projectWorkerWorkspaceOverlay(selectedWorker.id, selectedWorkspace.id)
+      await refresh()
+    }
+    catch (error) {
+      setState(current => ({
+        ...current,
+        error: error instanceof Error ? error.message : String(error),
+        loading: false,
+      }))
+    }
+  }, [refresh, selectedWorker, selectedWorkspace])
   const soulAppForWorker = useCallback((worker: typeof selectedWorker) => {
     if (!worker)
       return null
@@ -533,7 +550,7 @@ export function WorkerStudio() {
                     selectedSoulCopy={selectedSoulCopy}
                     selectedWorkspace={selectedWorkspace}
                     onOpenSettings={() => openSettings()}
-                    onRefresh={() => void refresh()}
+                    onRefresh={() => void refreshSelectedWorkspaceProjection()}
                   />
                 )
               : null}
