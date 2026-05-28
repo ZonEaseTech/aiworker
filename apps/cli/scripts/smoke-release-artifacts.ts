@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { createHash } from 'node:crypto'
-import { readFile, stat } from 'node:fs/promises'
-import { posix, relative, resolve } from 'node:path'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, posix, relative, resolve } from 'node:path'
 import process from 'node:process'
 
 import { spawn } from 'bun'
@@ -41,6 +42,7 @@ export async function verifyReleaseArtifacts(options: VerifyReleaseArtifactsOpti
         throw new Error(`release artifact ${archive} is missing ${archivedPath}`)
     }
     assertExecutableBinary(archive, `${bundle}/aiworker`, verboseEntries)
+    await smokeCurrentTargetBinary(rootDir, archive, target)
     await assertOfficialFreeformDescriptorRefs(rootDir, archive, bundle, entries)
   }
 }
@@ -151,6 +153,56 @@ function assertExecutableBinary(archive: string, file: string, verboseEntries: r
   const mode = entry?.split(/\s+/, 1)[0]
   if (!mode || mode[3] !== 'x')
     throw new Error(`release artifact ${archive} binary is not executable: ${file}`)
+}
+
+async function smokeCurrentTargetBinary(rootDir: string, archive: string, target: string): Promise<void> {
+  if (target !== currentTarget())
+    return
+
+  const bundle = `aiworker-${target}`
+  const tempDir = await mkdtemp(join(tmpdir(), 'aiworker-release-artifact-smoke-'))
+  try {
+    await runTar(['-xzf', resolve(rootDir, archive), '-C', tempDir, `${bundle}/aiworker`], archive)
+    await runBinarySmoke(resolve(tempDir, bundle, 'aiworker'), archive, `${bundle}/aiworker`)
+  }
+  finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+}
+
+function currentTarget(): string {
+  const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : null
+  const arch = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : null
+  return platform && arch ? `${platform}-${arch}` : ''
+}
+
+async function runTar(args: string[], archive: string): Promise<void> {
+  const proc = spawn(['tar', ...args], {
+    stderr: 'pipe',
+    stdout: 'ignore',
+  })
+  const [stderr, code] = await Promise.all([
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  if (code !== 0)
+    throw new Error(`tar extract failed for ${archive}: ${stderr}`)
+}
+
+async function runBinarySmoke(binary: string, archive: string, archivedFile: string): Promise<void> {
+  const proc = spawn([binary, '--version'], {
+    stderr: 'pipe',
+    stdout: 'pipe',
+  })
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  if (code !== 0)
+    throw new Error(`release artifact ${archive} binary smoke failed: ${archivedFile} --version exited ${code}`)
+  if (stdout.trim().length === 0)
+    throw new Error(`release artifact ${archive} binary smoke failed: ${archivedFile} --version produced no output${stderr ? `: ${stderr}` : ''}`)
 }
 
 function hasDirectoryEntry(entries: Set<string>, directory: string): boolean {

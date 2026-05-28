@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 
 import { spawn } from 'bun'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
@@ -48,6 +49,17 @@ describe('release artifact smoke', () => {
     await expect(
       verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
     ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz binary is not executable: aiworker-darwin-arm64/aiworker')
+  })
+
+  it('rejects the current-platform attach artifact when its binary does not boot', async () => {
+    const target = currentTestTarget()
+    await writeFixtureReleaseArtifact(root, target, {
+      binaryText: '#!/bin/sh\nexit 9\n',
+    })
+
+    await expect(
+      verifyReleaseArtifacts({ rootDir: root, targets: [target] }),
+    ).rejects.toThrow(`release artifact aiworker-${target}.tar.gz binary smoke failed: aiworker-${target}/aiworker --version exited 9`)
   })
 
   it('is wired into the tag release workflow before GitHub Release attach', async () => {
@@ -130,13 +142,13 @@ async function writeMalformedReleaseArtifact(root: string, target: string): Prom
 async function writeFixtureReleaseArtifact(
   root: string,
   target: string,
-  options: { binaryMode?: number } = {},
+  options: { binaryMode?: number, binaryText?: string } = {},
 ): Promise<void> {
   await writeFixtureDist(root)
   const bundle = `aiworker-${target}`
   const bundleRoot = path.join(root, bundle)
   await mkdir(bundleRoot, { recursive: true })
-  await writeFile(path.join(bundleRoot, 'aiworker'), '#!/bin/sh\necho aiworker\n')
+  await writeFile(path.join(bundleRoot, 'aiworker'), options.binaryText ?? '#!/bin/sh\necho 0.0.0-test\n')
   await chmod(path.join(bundleRoot, 'aiworker'), options.binaryMode ?? 0o755)
   await cp(path.join(root, 'apps', 'cli', 'dist', 'web'), path.join(bundleRoot, 'web'), { recursive: true })
   await cp(path.join(root, 'apps', 'cli', 'dist', 'drizzle'), path.join(bundleRoot, 'drizzle'), { recursive: true })
@@ -146,6 +158,14 @@ async function writeFixtureReleaseArtifact(
   const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
   const checksum = createHash('sha256').update(archive).digest('hex')
   await writeFile(path.join(root, `${bundle}.tar.gz.sha256`), `${checksum}  ${bundle}.tar.gz\n`)
+}
+
+function currentTestTarget(): string {
+  const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : null
+  const arch = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : null
+  if (!platform || !arch)
+    throw new Error(`unsupported test target: ${process.platform}-${process.arch}`)
+  return `${platform}-${arch}`
 }
 
 async function run(command: string[]): Promise<void> {
