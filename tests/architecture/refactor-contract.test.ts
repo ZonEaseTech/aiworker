@@ -2197,6 +2197,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(docCheck).toContain('browser proof must cover Freeform v1 scope')
     expect(docCheck).toContain('assertInvocationExternalSessionRefProof')
     expect(docCheck).toContain('externalSessionRef')
+    expect(docCheck).toContain('assertArchivedMountRejectionProof')
+    expect(docCheck).toContain('MOUNT_CONTEXT_INVALID')
     expect(browserProof).toContain('readArchivedMountRejectionProofFromBrowser')
     expect(browserProof).toContain('assertArchivedMountRejectionProof')
     expect(browserProof).toContain('cannot mount workbench')
