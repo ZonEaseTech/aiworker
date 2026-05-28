@@ -152,6 +152,7 @@ POST   /api/engine/invocations
 GET    /api/engine/invocations/:invocationId
 GET    /api/engine/invocations/:invocationId/events
 POST   /api/engine/invocations/:invocationId/cancel
+POST   /api/engine/invocations/:invocationId/reconcile
 
 POST   /api/projections/:target/refresh
 GET    /api/projections/receipts/:receiptId
@@ -179,7 +180,7 @@ into a product backend.
   mounted app context session lists.
 - `POST /api/sessions` receives `workerId` and `workspaceId` as locator context.
 - session follow-up always uses `POST /api/sessions/:sessionId/invocations`.
-- engine cancel and event stream target an invocation id.
+- engine cancel, event stream, and reconciler target an invocation id.
 - engine target discovery and test actions live under `/api/engine/targets`,
   not local settings route aliases.
 - `GET /api/capabilities` may receive `workerId` to filter capabilities to the

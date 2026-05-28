@@ -64,6 +64,7 @@ export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/engine/invocations/{invocationId}', summary: 'Show engine invocation', tags: ['engine'] },
     { method: 'get', path: '/api/engine/invocations/{invocationId}/events', summary: 'Read engine invocation events', tags: ['engine'] },
     { method: 'post', path: '/api/engine/invocations/{invocationId}/cancel', summary: 'Cancel engine invocation', tags: ['engine'], created: true },
+    { method: 'post', path: '/api/engine/invocations/{invocationId}/reconcile', summary: 'Reconcile engine invocation process state', tags: ['engine'], created: true },
     { method: 'post', path: '/api/projections/{target}/refresh', summary: 'Refresh engine projection', tags: ['projections'], created: true },
     { method: 'get', path: '/api/projections/receipts/{receiptId}', summary: 'Show projection receipt', tags: ['projections'] },
     { method: 'post', path: '/api/projections/receipts/{receiptId}/cleanup', summary: 'Clean up receipt-owned projection files', tags: ['projections'], created: true },

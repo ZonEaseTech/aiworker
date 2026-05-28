@@ -1217,6 +1217,79 @@ describe('local daemon API', () => {
     })
   })
 
+  it('reconciles lost engine invocations by invocation id and keeps session lifecycle active', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+    const invocation = createEngineInvocation({
+      id: 'daemon-reconcile-invocation-1',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-reconcile-invocation-1/input`,
+      processState: 'spawned',
+      status: 'running',
+    })
+
+    const reconcileRes = await target.request(`/api/engine/invocations/${invocation.id}/reconcile`, {
+      body: JSON.stringify({
+        diagnostic: 'native process vanished token=sk-daemon-reconcile-secret',
+        handle: { invocationId: invocation.id, pid: 404 },
+        state: 'lost',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(reconcileRes.status).toBe(201)
+    const body = await reconcileRes.json()
+    expect(body).toMatchObject({
+      bridgeEvents: [
+        {
+          diagnostic: 'native process vanished token=[REDACTED]',
+          failureCode: 'ENGINE_PROCESS_LOST',
+          invocationId: invocation.id,
+          processState: 'lost',
+          type: 'process.lost',
+        },
+      ],
+      events: [
+        {
+          invocationId: invocation.id,
+          payloadJson: {
+            bridgeEvent: 'process.lost',
+            diagnostic: 'native process vanished token=[REDACTED]',
+            failureCode: 'ENGINE_PROCESS_LOST',
+            invocationId: invocation.id,
+            processState: 'lost',
+            status: 'lost',
+          },
+          type: 'status',
+        },
+      ],
+      invocation: {
+        failureCode: 'ENGINE_PROCESS_LOST',
+        id: invocation.id,
+        processState: 'lost',
+        sessionId: session.id,
+        status: 'lost',
+        summary: 'Native engine process was lost.',
+      },
+      session: {
+        id: session.id,
+        status: 'active',
+      },
+    })
+    expect(JSON.stringify(body)).not.toContain('sk-daemon-reconcile-secret')
+    expect(getSession(session.id)?.status).toBe('active')
+    expect(listSessionEvents(session.id).at(-1)?.payloadJson).toMatchObject({
+      bridgeEvent: 'process.lost',
+      invocationId: invocation.id,
+      processState: 'lost',
+    })
+  })
+
   it('reattaches invocation events from an invocation-scoped cursor', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)
@@ -2450,6 +2523,7 @@ describe('local daemon API', () => {
       ['get', '/api/engine/invocations/{invocationId}'],
       ['get', '/api/engine/invocations/{invocationId}/events'],
       ['post', '/api/engine/invocations/{invocationId}/cancel'],
+      ['post', '/api/engine/invocations/{invocationId}/reconcile'],
       ['post', '/api/projections/{target}/refresh'],
       ['get', '/api/projections/receipts/{receiptId}'],
       ['post', '/api/projections/receipts/{receiptId}/cleanup'],

@@ -68,6 +68,7 @@ import {
   patchWorkerBodySchema,
   patchWorkspaceBodySchema,
   projectionRefreshBodySchema,
+  reconcileEngineInvocationBodySchema,
   workerConfigValueBodySchema,
 } from './worker/schemas'
 import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
@@ -539,6 +540,16 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const session = requireSession(invocation.sessionId)
     const result = await requireRuntime(state, session.workerId).cancelEngineInvocation(invocation.id)
     return c.json(result, 201)
+  })
+  app.post('/api/engine/invocations/:invocationId/reconcile', async (c) => {
+    const invocation = getEngineInvocation(c.req.param('invocationId'))
+    if (!invocation)
+      return notFound(c, 'engine invocation')
+    const result = await parseJsonBody(c, reconcileEngineInvocationBodySchema, 'RECONCILE_ENGINE_INVOCATION_INVALID')
+    if (!result.ok)
+      return result.response
+    const session = requireSession(invocation.sessionId)
+    return c.json(redactBrokerOutput(await requireRuntime(state, session.workerId).reconcileEngineInvocation(invocation.id, result.data)), 201)
   })
 
   app.get('/api/engine/targets', (c) => {

@@ -283,6 +283,9 @@ describe('destructive refactor contract bootstrap', () => {
     expect(runtime).toContain('invocation.tool.observed')
     expect(runtime).toContain('process.lost')
     expect(runtime).toContain('Delayed hard kill must never terminate a newer invocation.')
+    expect(readRepoFile('docs/protocol.md')).toContain('POST   /api/engine/invocations/:invocationId/reconcile')
+    expect(readRepoFile('packages/host-daemon/src/modes/worker.ts')).toContain('/api/engine/invocations/:invocationId/reconcile')
+    expect(readRepoFile('packages/host-daemon/src/modes/worker/openapi.ts')).toContain('/api/engine/invocations/{invocationId}/reconcile')
     expect(runtimeTests).toContain('assertMissingNativeResumeFailureProof')
   })
 

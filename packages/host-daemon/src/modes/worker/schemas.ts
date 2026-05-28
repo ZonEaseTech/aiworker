@@ -143,6 +143,12 @@ export const createBrokerEngineInvocationBodySchema = createSessionInvocationBod
   sessionId: z.string().trim().min(1),
 })
 
+export const reconcileEngineInvocationBodySchema = z.object({
+  diagnostic: z.string().optional(),
+  handle: z.record(z.string(), z.unknown()).optional(),
+  state: z.enum(['not_spawned', 'spawned', 'exited', 'killed', 'lost']).optional(),
+})
+
 export const patchSessionBodySchema = z.object({
   context: z.never().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
