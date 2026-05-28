@@ -45,6 +45,33 @@ Use Superpowers as the workflow engine:
 
 Superpowers are process guidance. Canonical docs remain architecture authority.
 
+## Zero-Trust Review Contract
+
+Use a zero-trust posture at two gates: startup and completion.
+
+At startup, treat previous summaries, memory, old final responses, cached test
+results, subagent claims, and uncommitted diffs as untrusted until current
+evidence confirms them.
+
+- Re-read authority from current files, not recalled conversation.
+- Verify git state before choosing a slice.
+- Re-run required preflight checks instead of trusting old pass results.
+- Re-check P0/P1 drift against current code and canonical docs.
+- Pick the next slice from current evidence, not from stale plans.
+
+At completion, review the work as if the implementation is wrong until proven
+otherwise.
+
+- Confirm the changed files match the declared slice scope.
+- Confirm tests or verification actually cover the touched behavior.
+- Confirm no old docs/E2E/retired drafts were used as authority.
+- Confirm Host/Soul, protocol, runtime, and monorepo boundaries did not drift.
+- Confirm no unrelated files are staged and no secret-bearing data is copied into
+  descriptor, DB, receipt, log, diagnostic output, OpenAPI example, or UI.
+- Confirm owned subagents are joined and closed before commit or final response.
+- If a claim cannot be backed by fresh evidence, do not claim it and do not
+  commit it.
+
 If the active user prompt or goal explicitly authorizes subagents, use them by
 default for independent exploration, implementation, or verification sidecars.
 Keep the main agent on the critical path and integrate subagent findings before
@@ -103,11 +130,12 @@ rehydrate from current project state before choosing work:
 2. Read the five canonical docs.
 3. Read this skill.
 4. Inspect `git status --short` and preserve user or concurrent-session changes.
-5. Reconcile any known owned subagents from the previous turn by joining or
+5. Apply the startup side of the Zero-Trust Review Contract.
+6. Reconcile any known owned subagents from the previous turn by joining or
    closing them before spawning new ones.
-6. Run `bun run docs:check` and `bun run test:contracts`.
-7. Check the Drift Gate.
-8. Choose the next smallest verifiable slice from current code state.
+7. Run `bun run docs:check` and `bun run test:contracts`.
+8. Check the Drift Gate.
+9. Choose the next smallest verifiable slice from current code state.
 
 Never reconstruct architecture from memory, retired `tmp/refactor` drafts, old
 E2E assumptions, or stale conversation summaries.
@@ -224,9 +252,10 @@ For the selected slice:
 9. Do not add temporary design docs under `docs/`; use `tmp/`.
 10. For code changes, run code-review-graph before final response. For docs-only,
    instruction-only, or pure formatting changes, state that it was skipped.
-11. Apply the Subagent Reclamation Contract: every current-turn owned subagent
+11. Apply the completion side of the Zero-Trust Review Contract.
+12. Apply the Subagent Reclamation Contract: every current-turn owned subagent
    is joined and closed before moving on.
-12. Apply the Phase Commit Contract before the final response.
+13. Apply the Phase Commit Contract before the final response.
 
 ## Minimum Completion
 
@@ -245,6 +274,7 @@ Use this concise shape:
 Goal: active/complete/blocked, and why.
 Preflight: pass/fail, with key commands.
 Slice: chosen development slice.
+Zero-Trust: startup checks and completion review result.
 Superpowers/Subagents: workflows used; subagents spawned/joined/closed; open
 owned subagents must be 0, or explain recovery.
 Changes: files changed.
