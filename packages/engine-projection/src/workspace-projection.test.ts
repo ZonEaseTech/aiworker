@@ -269,6 +269,7 @@ describe('workspace engine asset projection', () => {
     })
 
     await expect(readFile(path.join(workspaceRoot, '.codex', 'config.toml'), 'utf8')).resolves.toContain('sk-test-literal-secret')
+    await expect(readFile(path.join(workspaceRoot, '.aiworker', 'projections.json'), 'utf8')).resolves.not.toContain('sk-test-literal-secret')
     expect(JSON.stringify(receipt)).not.toContain('sk-test-literal-secret')
     expect(receipt.projections).toContainEqual(expect.objectContaining({
       engineTarget: 'codex',
