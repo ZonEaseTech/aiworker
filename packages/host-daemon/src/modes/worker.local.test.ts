@@ -862,7 +862,8 @@ describe('local daemon API', () => {
     })
     expect(workspaceStreamRes.status).toBe(404)
 
-    const sessionsBody = await (await target.request('/api/local/sessions')).json() as { sessions: unknown[] }
+    expect((await target.request('/api/local/sessions')).status).toBe(404)
+    const sessionsBody = await (await target.request('/api/sessions')).json() as { sessions: unknown[] }
     expect(sessionsBody.sessions).toEqual([])
   })
 

@@ -511,7 +511,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       throw error
     }
   })
-  app.get('/api/local/sessions', c => c.json({ sessions: listSessions() }))
   app.get('/api/sessions', c => c.json({ sessions: listSessions() }))
   app.get('/api/local/workers/:workerId/workspaces/:workspaceId/sessions', (c) => {
     const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
