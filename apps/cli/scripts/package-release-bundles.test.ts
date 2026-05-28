@@ -66,6 +66,17 @@ describe('release bundle packager', () => {
     ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not descriptor v1')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
+
+  it('rejects standalone bundles before staging when the packaged Freeform descriptor has the wrong app id', async () => {
+    await writeFixtureDist(root, { descriptorText: fixtureDescriptorText({ appId: 'wrong-freeform' }) })
+    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
+    await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
+
+    await expect(
+      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
+    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
+  })
 })
 
 async function writeFixtureDist(root: string, options: { descriptorText?: string, includeMigrationJournal?: boolean } = {}): Promise<void> {
@@ -78,6 +89,37 @@ async function writeFixtureDist(root: string, options: { descriptorText?: string
   await writeFile(path.join(dist, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
   if (includeMigrationJournal)
     await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
-  await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), options.descriptorText ?? '{"protocol":"soul/v1"}\n')
+  await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), options.descriptorText ?? fixtureDescriptorText())
   await writeFile(path.join(dist, 'README.md'), '# AIWorker\n')
+}
+
+function fixtureDescriptorText(options: { appId?: string } = {}): string {
+  return `${JSON.stringify({
+    protocol: 'soul/v1',
+    identity: {
+      appId: options.appId ?? 'aiworker-freeform',
+      name: 'AIWorker Freeform',
+      soulId: 'freeform',
+      version: '0.1.0',
+    },
+    compatibility: {
+      engines: ['codex'],
+      host: '>=1.0.0',
+      sdk: '>=1.0.0',
+    },
+    capabilities: [],
+    configuration: {},
+    workbench: {
+      entry: 'dist/web/workbench/index.html',
+      type: 'micro-app',
+    },
+    api: null,
+    engine: {},
+    health: {
+      ready: true,
+      type: 'static',
+    },
+    extensions: {},
+    external: {},
+  })}\n`
 }

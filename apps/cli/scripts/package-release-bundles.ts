@@ -6,6 +6,7 @@ import process from 'node:process'
 import { spawn } from 'bun'
 
 import { copyDir } from './build-publish-manifest'
+import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
 
 const DEFAULT_TARGETS = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'] as const
 const REQUIRED_DIST_RESOURCES = [
@@ -62,12 +63,13 @@ async function assertTargetBinaries(rootDir: string, targets: readonly string[])
 async function assertDescriptorV1(rootDir: string, distDir: string, resource: string): Promise<void> {
   const resourcePath = resolve(distDir, resource)
   try {
-    const descriptor = JSON.parse(await readFile(resourcePath, 'utf8')) as { protocol?: unknown }
-    if (descriptor.protocol !== 'soul/v1')
-      throw new Error('invalid protocol')
+    parseOfficialFreeformDescriptorJson(await readFile(resourcePath, 'utf8'))
   }
-  catch {
-    throw new Error(`invalid release resource: ${relative(rootDir, resourcePath)} is not descriptor v1`)
+  catch (err) {
+    const reason = err instanceof Error && err.message.includes('expected aiworker-freeform')
+      ? 'is not the official Freeform descriptor'
+      : 'is not descriptor v1'
+    throw new Error(`invalid release resource: ${relative(rootDir, resourcePath)} ${reason}`)
   }
 }
 

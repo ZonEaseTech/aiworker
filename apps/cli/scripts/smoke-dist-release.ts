@@ -7,6 +7,8 @@ import process from 'node:process'
 import { spawn } from 'bun'
 import consola from 'consola'
 
+import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
+
 interface CommandResult {
   code: number
   stderr: string
@@ -106,9 +108,12 @@ function assertDistDescriptorV1(): void {
     'dist',
     'soul.descriptor.json',
   )
-  const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8')) as { protocol?: unknown }
-  if (descriptor.protocol !== 'soul/v1')
+  try {
+    parseOfficialFreeformDescriptorJson(readFileSync(descriptorPath, 'utf8'))
+  }
+  catch {
     throw new Error(`dist Freeform descriptor must use protocol soul/v1: ${descriptorPath}`)
+  }
 }
 
 async function assertCli(cli: string, args: string[], options: { env: NodeJS.ProcessEnv, label: string }): Promise<CommandResult> {

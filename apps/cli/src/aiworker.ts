@@ -79,6 +79,7 @@ import {
   readDailyUpdateNoticeState,
   resolveReleaseTarget,
 } from './updater'
+import { isOfficialFreeformDescriptorFile, parseOfficialFreeformDescriptorJson } from './official-freeform-descriptor'
 
 export interface LocalPaths {
   home: string
@@ -200,21 +201,11 @@ export function inspectCliOfficialAppsResource(moduleDir = CLI_MODULE_DIR, optio
   const descriptorPath = officialAppsRoot
     ? path.join(officialAppsRoot, 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME)
     : null
-  const officialFreeformDescriptorReady = Boolean(descriptorPath && isOfficialFreeformDescriptor(descriptorPath))
+  const officialFreeformDescriptorReady = Boolean(descriptorPath && isOfficialFreeformDescriptorFile(descriptorPath))
   return {
     officialAppsReady: Boolean(officialAppsRoot && officialFreeformDescriptorReady),
     officialAppsRoot,
     officialFreeformDescriptorReady,
-  }
-}
-
-function isOfficialFreeformDescriptor(descriptorPath: string): boolean {
-  try {
-    const descriptor = parseSoulDescriptorV1(JSON.parse(readFileSync(descriptorPath, 'utf8')))
-    return descriptor.identity.appId === 'aiworker-freeform'
-  }
-  catch {
-    return false
   }
 }
 
@@ -645,11 +636,11 @@ function spawnStderrText(stderr: ArrayBufferView | string | undefined): string {
 
 function assertPackagedDescriptorV1(descriptorPath: string): void {
   try {
-    const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8')) as { protocol?: unknown }
-    if (descriptor.protocol !== 'soul/v1')
-      throw new Error('invalid protocol')
+    parseOfficialFreeformDescriptorJson(readFileSync(descriptorPath, 'utf8'))
   }
-  catch {
+  catch (err) {
+    if (err instanceof Error && err.message.includes('expected aiworker-freeform'))
+      throw new Error('staging_failed: official Freeform descriptor is not the official Freeform descriptor')
     throw new Error('staging_failed: official Freeform descriptor is not descriptor v1')
   }
 }

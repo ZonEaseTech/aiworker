@@ -7,6 +7,8 @@ import process from 'node:process'
 import { spawn } from 'bun'
 import consola from 'consola'
 
+import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
+
 interface NpmPackEntry {
   filename?: string
 }
@@ -88,9 +90,7 @@ async function listTarball(archivePath: string): Promise<string[]> {
 async function assertTarballDescriptorV1(archivePath: string, descriptorPath: string): Promise<void> {
   const output = await run(['tar', '-xOzf', archivePath, descriptorPath], { cwd: process.cwd() })
   try {
-    const descriptor = JSON.parse(output.stdout) as { protocol?: unknown }
-    if (descriptor.protocol !== 'soul/v1')
-      throw new Error('invalid protocol')
+    parseOfficialFreeformDescriptorJson(output.stdout)
   }
   catch {
     throw new Error(`npm package descriptor is not descriptor v1: ${descriptorPath}`)

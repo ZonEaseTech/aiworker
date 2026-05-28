@@ -137,7 +137,7 @@ describe('aiworker local CLI', () => {
     if (includeMigrationJournal)
       await writeFile(path.join(bundleDir, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
     if (includeOfficialApp)
-      await writeFile(path.join(bundleDir, 'official-apps', FREEFORM_APP_ID, 'dist', 'soul.descriptor.json'), options.descriptorText ?? '{"protocol":"soul/v1"}\n')
+      await writeFile(path.join(bundleDir, 'official-apps', FREEFORM_APP_ID, 'dist', 'soul.descriptor.json'), options.descriptorText ?? await readFile(freeformDescriptorPath(), 'utf8'))
     await writeFile(path.join(bundleDir, 'README.md'), `${marker} readme\n`)
   }
 
@@ -1225,6 +1225,28 @@ describe('aiworker local CLI', () => {
       currentPath: path.join(currentBundleDir, 'aiworker'),
       fetch: mockReleaseFetch(archiveBytes),
     })).rejects.toThrow('staging_failed: official Freeform descriptor is not descriptor v1')
+
+    expect(await readFile(path.join(currentBundleDir, 'web', 'worker', 'index.html'), 'utf8')).toContain('old')
+    expect(await updateScratchEntries(installParent)).toEqual([])
+  })
+
+  it('rejects GitHub release bundles with the wrong packaged Freeform app id', async () => {
+    const installParent = path.join(root, 'install')
+    const currentBundleDir = path.join(installParent, 'aiworker-darwin-arm64')
+    const releaseBundleDir = path.join(root, 'release', 'aiworker-darwin-arm64')
+    const descriptor = JSON.parse(await readFile(freeformDescriptorPath(), 'utf8')) as { identity: { appId: string } }
+    descriptor.identity.appId = 'wrong-freeform'
+    await writeFakeBundle(currentBundleDir, 'old')
+    await writeFakeBundle(releaseBundleDir, 'new', { descriptorText: `${JSON.stringify(descriptor)}\n` })
+    const archiveBytes = await createTarGz(releaseBundleDir)
+
+    await expect(downloadAndReplaceGitHubBundle({
+      checksumUrl: 'https://example.test/aiworker.tar.gz.sha256',
+      downloadUrl: 'https://example.test/aiworker.tar.gz',
+    }, {
+      currentPath: path.join(currentBundleDir, 'aiworker'),
+      fetch: mockReleaseFetch(archiveBytes),
+    })).rejects.toThrow('staging_failed: official Freeform descriptor is not the official Freeform descriptor')
 
     expect(await readFile(path.join(currentBundleDir, 'web', 'worker', 'index.html'), 'utf8')).toContain('old')
     expect(await updateScratchEntries(installParent)).toEqual([])
