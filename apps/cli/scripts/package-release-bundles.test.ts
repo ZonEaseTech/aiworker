@@ -166,7 +166,7 @@ function fixtureDescriptorText(options: { appId?: string } = {}): string {
           'claude-code': {
             file: 'dist/engine-assets/mcp/claude-code/.mcp.json',
           },
-          codex: {
+          'codex': {
             file: 'dist/engine-assets/mcp/codex/config.toml',
           },
         },

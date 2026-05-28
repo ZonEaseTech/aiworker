@@ -46,6 +46,9 @@ jobs:
       - name: Package binary release bundles
         run: bun apps/cli/scripts/package-release-bundles.ts
 
+      - name: Smoke release artifacts
+        run: bun apps/cli/scripts/smoke-release-artifacts.ts
+
       - name: Attach binaries to GitHub Release
         uses: softprops/action-gh-release@v3
         with:

@@ -99,6 +99,7 @@ CLI release smoke contract tests:
 
 ```text
 apps/cli/scripts/smoke-dist-release.test.ts
+apps/cli/scripts/smoke-release-artifacts.test.ts
 apps/cli/scripts/smoke-npm-package.test.ts
 apps/cli/scripts/smoke-standalone-release.test.ts
 apps/cli/scripts/smoke-standalone-runtime.test.ts

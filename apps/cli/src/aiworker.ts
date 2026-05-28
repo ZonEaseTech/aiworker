@@ -54,6 +54,7 @@ import cac from 'cac'
 
 import consola from 'consola'
 import packageJson from '../package.json' with { type: 'json' }
+import { isOfficialFreeformDescriptorFile, parseOfficialFreeformDescriptorJson } from './official-freeform-descriptor'
 import {
   createScaffoldPackageJson,
   createScaffoldTsconfig,
@@ -79,7 +80,6 @@ import {
   readDailyUpdateNoticeState,
   resolveReleaseTarget,
 } from './updater'
-import { isOfficialFreeformDescriptorFile, parseOfficialFreeformDescriptorJson } from './official-freeform-descriptor'
 
 export interface LocalPaths {
   home: string

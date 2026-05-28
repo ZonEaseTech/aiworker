@@ -7,8 +7,8 @@ import process from 'node:process'
 import { spawn } from 'bun'
 import consola from 'consola'
 
-import { packageReleaseBundles } from './package-release-bundles'
 import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
+import { packageReleaseBundles } from './package-release-bundles'
 
 interface CommandResult {
   stderr: string

@@ -10,7 +10,7 @@ describe('standalone release smoke script contract', () => {
     expect(source).toContain('assertStandaloneBundleOfficialFreeformDescriptor')
     expect(source).toContain('assertStandaloneBundleDescriptorRefs')
     expect(source).toContain('parseOfficialFreeformDescriptorJson')
-    expect(source).toContain('release/${bundle}/official-apps/aiworker-freeform')
+    expect(source).toContain(['release/', '{bundle}/official-apps/aiworker-freeform'].join('$'))
     expect(source).toContain('soul.descriptor.json')
     expect(source).toContain('descriptor refs')
     expect(source).toContain('descriptor reference escapes package root')

@@ -2110,14 +2110,14 @@ describe('destructive refactor contract bootstrap', () => {
     expect(testing).toContain('packages/storage-sqlite/src/worker/index.test.ts')
     expect(testing).toContain('packages/engine-bridge/src/bridge-contract.test.ts')
     expect(testing).toContain('packages/engine-projection/src/workspace-projection.test.ts')
-    expect(daemonTest).toContain("target.request('/openapi.json')")
-    expect(daemonTest).toContain("'/api/sessions/{sessionId}/invocations'")
-    expect(daemonTest).toContain("'/api/local/info'")
-    expect(daemonTest).toContain("serializedOpenApi")
-    expect(daemonTest).toContain("not.toContain('[mcp_servers')")
-    expect(daemonTest).toContain("not.toContain('mcpServers')")
-    expect(daemonTest).toContain("not.toContain('literal-secret')")
-    expect(daemonTest).toContain("not.toContain('sk-')")
+    expect(daemonTest).toContain('target.request(\'/openapi.json\')')
+    expect(daemonTest).toContain('\'/api/sessions/{sessionId}/invocations\'')
+    expect(daemonTest).toContain('\'/api/local/info\'')
+    expect(daemonTest).toContain('serializedOpenApi')
+    expect(daemonTest).toContain('not.toContain(\'[mcp_servers\')')
+    expect(daemonTest).toContain('not.toContain(\'mcpServers\')')
+    expect(daemonTest).toContain('not.toContain(\'literal-secret\')')
+    expect(daemonTest).toContain('not.toContain(\'sk-\')')
   })
 
   test('canonical testing docs track Freeform browser proof scope', () => {
@@ -2137,10 +2137,16 @@ describe('destructive refactor contract bootstrap', () => {
     const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
     const releaseCheckIndex = releaseWorkflow.indexOf('bun run release:check')
     const publishIndex = releaseWorkflow.indexOf('npm publish --access public')
+    const packageIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/package-release-bundles.ts')
+    const artifactSmokeIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/smoke-release-artifacts.ts')
+    const attachIndex = releaseWorkflow.indexOf('softprops/action-gh-release')
 
     expect(releaseCheckIndex).toBeGreaterThanOrEqual(0)
     expect(publishIndex).toBeGreaterThanOrEqual(0)
     expect(releaseCheckIndex).toBeLessThan(publishIndex)
+    expect(packageIndex).toBeGreaterThanOrEqual(0)
+    expect(artifactSmokeIndex).toBeGreaterThan(packageIndex)
+    expect(artifactSmokeIndex).toBeLessThan(attachIndex)
   })
 
   test('standalone release bundles include descriptor-only official Soul Apps', () => {
@@ -2148,6 +2154,7 @@ describe('destructive refactor contract bootstrap', () => {
     const releasePackager = readRepoFile('apps/cli/scripts/package-release-bundles.ts')
 
     expect(releaseWorkflow).toContain('bun apps/cli/scripts/package-release-bundles.ts')
+    expect(releaseWorkflow).toContain('bun apps/cli/scripts/smoke-release-artifacts.ts')
     expect(releasePackager).toContain('official-apps')
     expect(releasePackager.indexOf('official-apps')).toBeLessThan(releasePackager.indexOf('createTarball'))
   })

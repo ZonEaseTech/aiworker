@@ -5,8 +5,8 @@ import process from 'node:process'
 
 import { spawn } from 'bun'
 
-import { copyDir } from './build-publish-manifest'
 import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
+import { copyDir } from './build-publish-manifest'
 
 const DEFAULT_TARGETS = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'] as const
 const REQUIRED_DIST_RESOURCES = [

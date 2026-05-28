@@ -5,8 +5,8 @@ import process from 'node:process'
 
 import consola from 'consola'
 
-import { packageReleaseBundles } from './package-release-bundles'
 import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
+import { packageReleaseBundles } from './package-release-bundles'
 
 const TARGETS = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'] as const
 const GENERATED_PATHS = [
