@@ -141,6 +141,17 @@ describe('CLI updater core', () => {
     })
   })
 
+  it('detects GitHub tarball installs from standalone executable evidence', () => {
+    expect(detectInstallSource({
+      argv1: '/$bunfs/root/aiworker',
+      moduleDir: '/$bunfs/root',
+      realArgv1: '/opt/aiworker-darwin-arm64/aiworker',
+    })).toMatchObject({
+      canAutoUpgrade: true,
+      kind: 'github-tarball',
+    })
+  })
+
   it('builds read-only unsupported-source check plans without actions or confirmation', () => {
     const plan = buildUpgradePlan({
       currentVersion: '1.0.0',

@@ -18,6 +18,19 @@ interface AppListOutput {
   apps?: Array<{ appId?: string, sourceRef?: string }>
 }
 
+interface DoctorOutput {
+  installation?: {
+    resources?: {
+      migrationsReady?: boolean
+      officialAppsReady?: boolean
+      workerWebReady?: boolean
+    }
+    source?: {
+      kind?: string
+    }
+  }
+}
+
 const target = currentTarget()
 const bundle = `aiworker-${target}`
 const generatedPaths = [
@@ -45,6 +58,8 @@ async function main(): Promise<number> {
     }
     delete env.WORKER_MIGRATIONS_FOLDER
 
+    const doctor = await run([binary, 'doctor'], { env })
+    assertStandaloneDoctor(doctor.stdout)
     await run([binary, 'app', 'bootstrap', 'official'], { env })
     const list = await run([binary, 'app', 'list'], { env })
     await assertPackagedFreeform(list.stdout, await realpath(resolve(tempDir, bundle, 'official-apps')))
@@ -64,6 +79,19 @@ function currentTarget(): string {
   if (!platform || !arch)
     throw new Error(`unsupported standalone smoke platform: ${process.platform}-${process.arch}`)
   return `${platform}-${arch}`
+}
+
+function assertStandaloneDoctor(stdout: string): void {
+  const body = JSON.parse(stdout) as DoctorOutput
+  const installation = body.installation
+  if (installation?.source?.kind !== 'github-tarball')
+    throw new Error(`standalone doctor must report github-tarball install source: ${stdout}`)
+  if (installation.resources?.officialAppsReady !== true)
+    throw new Error(`standalone doctor must report packaged official apps ready: ${stdout}`)
+  if (installation.resources?.workerWebReady !== true)
+    throw new Error(`standalone doctor must report packaged Worker Web ready: ${stdout}`)
+  if (installation.resources?.migrationsReady !== true)
+    throw new Error(`standalone doctor must report packaged migrations ready: ${stdout}`)
 }
 
 async function assertPackagedFreeform(stdout: string, expectedOfficialAppsRoot: string): Promise<void> {

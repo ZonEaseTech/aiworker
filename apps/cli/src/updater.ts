@@ -196,7 +196,7 @@ export function detectInstallSource(input: InstallSourceInput): InstallSource {
     return { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' }
   }
 
-  if (moduleDir.includes('/aiworker-darwin-') || moduleDir.includes('/aiworker-linux-')) {
+  if (evidence.includes('/aiworker-darwin-') || evidence.includes('/aiworker-linux-')) {
     return { canAutoUpgrade: true, kind: 'github-tarball' }
   }
 

@@ -160,11 +160,15 @@ interface CliResourceResolutionOptions {
 }
 
 function cliExecutableDirs(): string[] {
+  return cliExecutablePaths().map(value => path.dirname(value))
+}
+
+function cliExecutablePaths(): string[] {
   return uniqueTruthy([
     resolveArgv1(process.argv[1]),
     resolveArgv1(process.argv[0]),
     resolveArgv1(process.execPath),
-  ].filter((value): value is string => typeof value === 'string' && existsSync(value)).map(value => path.dirname(value)))
+  ].filter((value): value is string => typeof value === 'string' && existsSync(value)))
 }
 
 function packagedResourceRoots(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string[] {
@@ -312,12 +316,13 @@ function registryContext() {
 
 function currentInstallSource() {
   const argv1 = resolveArgv1(process.argv[1])
+  const realArgv1 = cliExecutablePaths().find(value => !value.includes('/$bunfs/')) ?? argv1
   return detectInstallSource({
     argv1,
     bunGlobalBinDirs: bunGlobalBinDirs(),
     moduleDir: CLI_MODULE_DIR,
     npmGlobalBinDirs: npmGlobalBinDirs(),
-    realArgv1: safeRealpath(argv1),
+    realArgv1: safeRealpath(realArgv1),
   })
 }
 
