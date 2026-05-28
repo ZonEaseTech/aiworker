@@ -155,32 +155,67 @@ const cli = cac('aiworker')
 const CLI_MODULE_DIR = path.dirname(fileURLToPath(import.meta.url))
 const OFFICIAL_APP_DESCRIPTOR_FILENAME = 'dist/soul.descriptor.json'
 
-export function resolveCliOfficialAppsRoot(moduleDir = CLI_MODULE_DIR): string | undefined {
-  const packaged = path.resolve(moduleDir, 'official-apps')
-  if (existsSync(path.join(packaged, 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME)))
-    return packaged
+interface CliResourceResolutionOptions {
+  executableDir?: string
+}
+
+function cliExecutableDirs(): string[] {
+  return uniqueTruthy([
+    resolveArgv1(process.argv[1]),
+    resolveArgv1(process.argv[0]),
+    resolveArgv1(process.execPath),
+  ].filter((value): value is string => typeof value === 'string' && existsSync(value)).map(value => path.dirname(value)))
+}
+
+function packagedResourceRoots(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string[] {
+  return uniqueTruthy([
+    moduleDir,
+    options.executableDir,
+    ...cliExecutableDirs(),
+  ])
+}
+
+export function resolveCliOfficialAppsRoot(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string | undefined {
+  for (const root of packagedResourceRoots(moduleDir, options)) {
+    const packaged = path.resolve(root, 'official-apps')
+    if (existsSync(path.join(packaged, 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME)))
+      return packaged
+  }
   const source = path.resolve(moduleDir, '../../../souls')
   if (existsSync(path.join(source, 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME)))
     return source
   return undefined
 }
 
-export function resolveCliWorkerWebStaticDir(moduleDir = CLI_MODULE_DIR): string | undefined {
-  const packaged = path.resolve(moduleDir, 'web', 'worker')
-  if (existsSync(path.join(packaged, 'index.html')))
-    return packaged
+export function resolveCliWorkerWebStaticDir(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string | undefined {
+  for (const root of packagedResourceRoots(moduleDir, options)) {
+    const packaged = path.resolve(root, 'web', 'worker')
+    if (existsSync(path.join(packaged, 'index.html')))
+      return packaged
+  }
   const source = path.resolve(moduleDir, '../../web/dist/worker')
   if (existsSync(path.join(source, 'index.html')))
     return source
   return undefined
 }
 
+export function resolveCliMigrationsFolder(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string | undefined {
+  for (const root of packagedResourceRoots(moduleDir, options)) {
+    const packaged = path.resolve(root, 'drizzle', 'worker')
+    if (existsSync(path.join(packaged, 'meta', '_journal.json')))
+      return packaged
+  }
+  return undefined
+}
+
 const SOURCE_CHECKOUT_DEFAULT_HOME_DIR = '.aiworker-dev'
 const PACKAGED_DEFAULT_HOME_DIR = '.aiworker'
 
-export function resolveCliDefaultHomeDir(moduleDir = CLI_MODULE_DIR): string {
-  const hasPackagedOfficialApps = existsSync(path.join(moduleDir, 'official-apps'))
-  const hasPackagedWeb = existsSync(path.join(moduleDir, 'web', 'worker'))
+export function resolveCliDefaultHomeDir(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string {
+  const hasPackagedOfficialApps = packagedResourceRoots(moduleDir, options)
+    .some(root => existsSync(path.join(root, 'official-apps', 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME)))
+  const hasPackagedWeb = packagedResourceRoots(moduleDir, options)
+    .some(root => existsSync(path.join(root, 'web', 'worker', 'index.html')))
   return hasPackagedOfficialApps || hasPackagedWeb
     ? PACKAGED_DEFAULT_HOME_DIR
     : SOURCE_CHECKOUT_DEFAULT_HOME_DIR
@@ -202,6 +237,7 @@ export function resolveCliLocalPaths(moduleDir = CLI_MODULE_DIR): LocalPaths {
 function applyLocalPathEnv(paths: LocalPaths): void {
   process.env.AIWORKER_HOME ??= paths.home
   process.env.WORKER_DB_PATH ??= paths.dbPath
+  process.env.WORKER_MIGRATIONS_FOLDER ??= resolveCliMigrationsFolder()
 }
 
 function localPaths(): LocalPaths {

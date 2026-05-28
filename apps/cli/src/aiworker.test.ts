@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { mkdirSync, realpathSync, renameSync } from 'node:fs'
+import { mkdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
 import { chmod, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -25,6 +25,7 @@ import {
   preprocessArgv,
   resolveCliDefaultHomeDir,
   resolveCliLocalPaths,
+  resolveCliMigrationsFolder,
   resolveCliOfficialAppsRoot,
   resolveCliWorkerWebStaticDir,
   runCli,
@@ -302,6 +303,26 @@ describe('aiworker local CLI', () => {
     expect(resolveCliWorkerWebStaticDir(moduleDir)).toBe(workerWebRoot)
   })
 
+  it('resolves standalone bundle resources next to the executable', async () => {
+    const moduleDir = path.join(root, 'bunfs', 'apps', 'cli', 'src')
+    const executableDir = path.join(root, 'aiworker-darwin-arm64')
+    const officialAppsRoot = path.join(executableDir, 'official-apps')
+    const workerWebRoot = path.join(executableDir, 'web', 'worker')
+    const migrationsRoot = path.join(executableDir, 'drizzle', 'worker')
+    mkdirSync(path.join(officialAppsRoot, FREEFORM_APP_ID, 'dist'), { recursive: true })
+    mkdirSync(workerWebRoot, { recursive: true })
+    mkdirSync(path.join(migrationsRoot, 'meta'), { recursive: true })
+    await writeFile(path.join(officialAppsRoot, FREEFORM_APP_ID, 'dist', 'soul.descriptor.json'), '{}')
+    await writeFile(path.join(workerWebRoot, 'index.html'), '<!doctype html>')
+    await writeFile(path.join(migrationsRoot, 'meta', '_journal.json'), '{"entries":[]}')
+
+    const options = { executableDir }
+    expect(resolveCliOfficialAppsRoot(moduleDir, options)).toBe(officialAppsRoot)
+    expect(resolveCliWorkerWebStaticDir(moduleDir, options)).toBe(workerWebRoot)
+    expect(resolveCliMigrationsFolder(moduleDir, options)).toBe(migrationsRoot)
+    expect(resolveCliDefaultHomeDir(moduleDir, options)).toBe('.aiworker')
+  })
+
   it('defaults source-checkout local paths to ~/.aiworker-dev when no home env exists', () => {
     delete process.env.AIWORKER_HOME
     delete process.env.WORKER_DB_PATH
@@ -324,7 +345,8 @@ describe('aiworker local CLI', () => {
     process.env.HOME = root
 
     const moduleDir = path.join(root, 'package', 'dist')
-    mkdirSync(path.join(moduleDir, 'official-apps'), { recursive: true })
+    mkdirSync(path.join(moduleDir, 'official-apps', FREEFORM_APP_ID, 'dist'), { recursive: true })
+    writeFileSync(path.join(moduleDir, 'official-apps', FREEFORM_APP_ID, 'dist', 'soul.descriptor.json'), '{}')
     const paths = resolveCliLocalPaths(moduleDir)
 
     expect(resolveCliDefaultHomeDir(moduleDir)).toBe('.aiworker')
