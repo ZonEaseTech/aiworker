@@ -200,17 +200,17 @@ export function SessionComposer({
     () => filteredMentionOptions.filter(option => !option.disabled),
     [filteredMentionOptions],
   )
-  const [activeMentionOptionIndex, setActiveMentionOptionIndex] = useState(0)
+  const enabledMentionOptionKey = enabledMentionOptions.map(option => option.id).join('\0')
+  const [activeMentionOptionState, setActiveMentionOptionState] = useState({ index: 0, optionKey: '' })
+  const activeMentionOptionIndex = activeMentionOptionState.optionKey === enabledMentionOptionKey
+    ? activeMentionOptionState.index
+    : 0
   const activeMentionOption = mentionTypeaheadOpen
     ? enabledMentionOptions[activeMentionOptionIndex] ?? enabledMentionOptions[0]
     : undefined
   const activeMentionOptionDomId = activeMentionOption
     ? getMentionOptionDomId(mentionListboxId, activeMentionOption)
     : undefined
-
-  useEffect(() => {
-    setActiveMentionOptionIndex(0)
-  }, [enabledMentionOptions])
 
   return (
     <form
@@ -274,7 +274,7 @@ export function SessionComposer({
             isOpen: mentionTypeaheadOpen,
             onDismiss: onMentionDismiss,
             onSelect: onMentionSelect,
-            setActiveIndex: setActiveMentionOptionIndex,
+            setActiveIndex: index => setActiveMentionOptionState({ index, optionKey: enabledMentionOptionKey }),
           })}
           onPaste={event => handleAttachmentPaste(event, onAddAttachmentFiles)}
         />
