@@ -18,6 +18,14 @@ describe('CLI publish manifest builder', () => {
     await rm(root, { recursive: true, force: true })
   })
 
+  it('declares the Node runtime floor required by packaged Web assets', async () => {
+    const pkg = JSON.parse(await readFile(path.resolve(import.meta.dirname, '..', 'package.json'), 'utf8')) as {
+      engines?: Record<string, string>
+    }
+
+    expect(pkg.engines?.node).toBe('>=20.19.0 <21 || >=22.12.0')
+  })
+
   it('copies release resources while excluding test-only files', async () => {
     const src = path.join(root, 'src')
     const dst = path.join(root, 'dst')
