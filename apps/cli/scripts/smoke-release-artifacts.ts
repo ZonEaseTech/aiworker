@@ -30,6 +30,7 @@ export interface VerifyReleaseArtifactsOptions {
 export async function verifyReleaseArtifacts(options: VerifyReleaseArtifactsOptions = {}): Promise<void> {
   const rootDir = resolve(options.rootDir ?? process.cwd())
   const targets = options.targets ?? DEFAULT_TARGETS
+  const expectedVersion = await readDistPackageVersion(rootDir)
 
   for (const target of targets) {
     const bundle = `aiworker-${target}`
@@ -43,9 +44,16 @@ export async function verifyReleaseArtifacts(options: VerifyReleaseArtifactsOpti
         throw new Error(`release artifact ${archive} is missing ${archivedPath}`)
     }
     assertExecutableBinary(archive, `${bundle}/aiworker`, verboseEntries)
-    await smokeCurrentTargetBinary(rootDir, archive, target)
     await assertOfficialFreeformDescriptorRefs(rootDir, archive, bundle, entries)
+    await smokeCurrentTargetBinary(rootDir, archive, target, expectedVersion)
   }
+}
+
+async function readDistPackageVersion(rootDir: string): Promise<string> {
+  const pkg = JSON.parse(await readFile(resolve(rootDir, 'apps/cli/dist/package.json'), 'utf8')) as { version?: unknown }
+  if (typeof pkg.version !== 'string' || pkg.version.length === 0)
+    throw new Error('release artifact smoke requires apps/cli/dist/package.json with a version')
+  return pkg.version
 }
 
 async function assertOfficialFreeformDescriptorRefs(
@@ -159,7 +167,7 @@ function assertExecutableBinary(archive: string, file: string, verboseEntries: r
     throw new Error(`release artifact ${archive} binary is not executable: ${file}`)
 }
 
-async function smokeCurrentTargetBinary(rootDir: string, archive: string, target: string): Promise<void> {
+async function smokeCurrentTargetBinary(rootDir: string, archive: string, target: string, expectedVersion: string): Promise<void> {
   if (target !== currentTarget())
     return
 
@@ -167,7 +175,7 @@ async function smokeCurrentTargetBinary(rootDir: string, archive: string, target
   const tempDir = await mkdtemp(join(tmpdir(), 'aiworker-release-artifact-smoke-'))
   try {
     await runTar(['-xzf', resolve(rootDir, archive), '-C', tempDir, `${bundle}/aiworker`], archive)
-    await runBinarySmoke(resolve(tempDir, bundle, 'aiworker'), archive, `${bundle}/aiworker`)
+    await runBinarySmoke(resolve(tempDir, bundle, 'aiworker'), archive, `${bundle}/aiworker`, expectedVersion)
   }
   finally {
     await rm(tempDir, { recursive: true, force: true })
@@ -193,7 +201,7 @@ async function runTar(args: string[], archive: string): Promise<void> {
     throw new Error(`tar extract failed for ${archive}: ${stderr}`)
 }
 
-async function runBinarySmoke(binary: string, archive: string, archivedFile: string): Promise<void> {
+async function runBinarySmoke(binary: string, archive: string, archivedFile: string, expectedVersion: string): Promise<void> {
   const proc = spawn([binary, '--version'], {
     stderr: 'pipe',
     stdout: 'pipe',
@@ -207,6 +215,8 @@ async function runBinarySmoke(binary: string, archive: string, archivedFile: str
     throw new Error(`release artifact ${archive} binary smoke failed: ${archivedFile} --version exited ${code}`)
   if (stdout.trim().length === 0)
     throw new Error(`release artifact ${archive} binary smoke failed: ${archivedFile} --version produced no output${stderr ? `: ${stderr}` : ''}`)
+  if (stdout.trim() !== expectedVersion)
+    throw new Error(`release artifact ${archive} binary smoke failed: ${archivedFile} --version did not report ${expectedVersion}`)
 }
 
 function hasDirectoryEntry(entries: Set<string>, directory: string): boolean {

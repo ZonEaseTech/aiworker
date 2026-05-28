@@ -23,7 +23,7 @@ describe('release artifact smoke', () => {
 
   it('accepts packaged release tarballs only when attach artifacts include checksums and required resources', async () => {
     await writeFixtureDist(root)
-    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
+    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho 0.19.3\n')
     await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
     await packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] })
 
@@ -90,6 +90,17 @@ describe('release artifact smoke', () => {
     ).rejects.toThrow(`release artifact aiworker-${target}.tar.gz binary smoke failed: aiworker-${target}/aiworker --version exited 9`)
   })
 
+  it('rejects the current-platform attach artifact when its version output does not match the dist package', async () => {
+    const target = currentTestTarget()
+    await writeFixtureReleaseArtifact(root, target, {
+      binaryText: '#!/bin/sh\necho 9.9.9-wrong\n',
+    })
+
+    await expect(
+      verifyReleaseArtifacts({ rootDir: root, targets: [target] }),
+    ).rejects.toThrow(`release artifact aiworker-${target}.tar.gz binary smoke failed: aiworker-${target}/aiworker --version did not report 0.19.3`)
+  })
+
   it('is wired into the tag release workflow before GitHub Release attach', async () => {
     const workflow = await readFile(path.join(import.meta.dirname, '..', '..', '..', '.github', 'workflows', 'release.yml'), 'utf8')
     const packageIndex = workflow.indexOf('bun apps/cli/scripts/package-release-bundles.ts')
@@ -114,6 +125,7 @@ async function writeFixtureDist(root: string, options: { descriptorText?: string
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'skills'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code'), { recursive: true })
+  await writeFile(path.join(dist, 'package.json'), '{"version":"0.19.3"}\n')
   await writeFile(path.join(dist, 'web', 'worker', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(dist, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
   await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
@@ -127,6 +139,7 @@ async function writeFixtureDist(root: string, options: { descriptorText?: string
 async function writeMalformedReleaseArtifact(root: string, target: string): Promise<void> {
   const bundle = `aiworker-${target}`
   const bundleRoot = path.join(root, bundle)
+  await writeFixturePackageMetadata(root)
   await mkdir(path.join(bundleRoot, 'web', 'worker'), { recursive: true })
   await mkdir(path.join(bundleRoot, 'drizzle', 'worker', 'meta'), { recursive: true })
   await mkdir(path.join(bundleRoot, 'official-apps', 'aiworker-freeform', 'dist'), { recursive: true })
@@ -141,6 +154,12 @@ async function writeMalformedReleaseArtifact(root: string, target: string): Prom
   const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
   const checksum = createHash('sha256').update(archive).digest('hex')
   await writeFile(path.join(root, `${bundle}.tar.gz.sha256`), `${checksum}  ${bundle}.tar.gz\n`)
+}
+
+async function writeFixturePackageMetadata(root: string): Promise<void> {
+  const dist = path.join(root, 'apps', 'cli', 'dist')
+  await mkdir(dist, { recursive: true })
+  await writeFile(path.join(dist, 'package.json'), '{"version":"0.19.3"}\n')
 }
 
 async function writeReleaseArtifactWithoutMigrationSql(root: string, target: string): Promise<void> {
