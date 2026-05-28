@@ -2020,6 +2020,9 @@ describe('destructive refactor contract bootstrap', () => {
     expect(freeformCliBrowserProof).toContain(`/api/workers/\${workerId}/archive`)
     expect(freeformCliBrowserProof).toContain('assertHostLifecycleArchiveProof')
     expect(freeformCliBrowserProof).toContain('WORKER_ARCHIVED')
+    const hostDaemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    expect(hostDaemonTest).toContain('Start session after worker archive.')
+    expect(hostDaemonTest).toContain('Continue after worker archive.')
   })
 
   test('dist release smoke reads installed apps through canonical app-installation route', () => {

@@ -937,7 +937,7 @@ describe('local daemon API', () => {
   it('archives worker metadata with archived status', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'archive-worker')
-    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Archived Worker Existing Workspace' })
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
 
     const archiveRes = await target.request(`/api/workers/${worker.id}/archive`, { method: 'POST' })
 
@@ -971,6 +971,38 @@ describe('local daemon API', () => {
     })
     expect(blockedProjectionRes.status).toBe(400)
     expect(await blockedProjectionRes.json()).toMatchObject({
+      error: {
+        code: 'WORKER_ARCHIVED',
+        message: `Worker ${worker.id} is archived and cannot start new work.`,
+      },
+    })
+
+    const blockedSessionRes = await target.request('/api/sessions', {
+      body: JSON.stringify({
+        capabilityId: FREEFORM_CAPABILITY,
+        input: 'Start session after worker archive.',
+        title: 'Blocked archived worker session',
+        workerId: worker.id,
+        workspaceId: workspace.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(blockedSessionRes.status).toBe(400)
+    expect(await blockedSessionRes.json()).toMatchObject({
+      error: {
+        code: 'WORKER_ARCHIVED',
+        message: `Worker ${worker.id} is archived and cannot start new work.`,
+      },
+    })
+
+    const blockedInvocationRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Continue after worker archive.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(blockedInvocationRes.status).toBe(400)
+    expect(await blockedInvocationRes.json()).toMatchObject({
       error: {
         code: 'WORKER_ARCHIVED',
         message: `Worker ${worker.id} is archived and cannot start new work.`,
