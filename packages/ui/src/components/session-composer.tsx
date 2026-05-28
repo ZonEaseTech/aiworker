@@ -20,7 +20,7 @@ import {
   MailSend02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 
 export type SessionComposerMaterialEncoding = 'base64' | 'utf8'
 
@@ -622,14 +622,9 @@ export function SessionAttachmentList({
   removeDisabled?: boolean
 }) {
   const [previewAttachment, setPreviewAttachment] = useState<SessionComposerAttachmentItem | null>(null)
-
-  useEffect(() => {
-    setPreviewAttachment((current) => {
-      if (!current)
-        return null
-      return attachments.find(attachment => attachment.id === current.id && attachment.previewUrl === current.previewUrl) ?? null
-    })
-  }, [attachments])
+  const visiblePreviewAttachment = previewAttachment
+    ? attachments.find(attachment => attachment.id === previewAttachment.id && attachment.previewUrl === previewAttachment.previewUrl) ?? null
+    : null
 
   if (attachments.length === 0)
     return null
@@ -694,15 +689,15 @@ export function SessionAttachmentList({
           )
         })}
       </InputGroupAddon>
-      <Dialog open={Boolean(previewAttachment?.previewUrl)} onOpenChange={open => !open && setPreviewAttachment(null)}>
-        {previewAttachment?.previewUrl
+      <Dialog open={Boolean(visiblePreviewAttachment?.previewUrl)} onOpenChange={open => !open && setPreviewAttachment(null)}>
+        {visiblePreviewAttachment?.previewUrl
           ? (
-              <DialogContent className="max-w-3xl p-3" closeButtonLabel={previewAttachment.closePreviewLabel}>
-                <DialogTitle className="sr-only">{previewAttachment.previewTitle ?? previewAttachment.name}</DialogTitle>
-                <DialogDescription className="sr-only">{previewAttachment.name}</DialogDescription>
-                <img className="max-h-dvh w-full object-contain" src={previewAttachment.previewUrl} alt={previewAttachment.previewAlt ?? previewAttachment.name} />
+              <DialogContent className="max-w-3xl p-3" closeButtonLabel={visiblePreviewAttachment.closePreviewLabel}>
+                <DialogTitle className="sr-only">{visiblePreviewAttachment.previewTitle ?? visiblePreviewAttachment.name}</DialogTitle>
+                <DialogDescription className="sr-only">{visiblePreviewAttachment.name}</DialogDescription>
+                <img className="max-h-dvh w-full object-contain" src={visiblePreviewAttachment.previewUrl} alt={visiblePreviewAttachment.previewAlt ?? visiblePreviewAttachment.name} />
                 <ItemDescription asChild className="max-w-full truncate">
-                  <span>{previewAttachment.name}</span>
+                  <span>{visiblePreviewAttachment.name}</span>
                 </ItemDescription>
               </DialogContent>
             )
