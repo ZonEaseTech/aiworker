@@ -480,6 +480,17 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.get(\'/api/local/apps\'')
   })
 
+  test('daemon app installation surface does not preserve local lifecycle aliases', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+
+    expect(daemon).toContain('app.post(\'/api/app-installation/install\'')
+    expect(daemon).toContain('app.post(\'/api/app-installation/apps/:appId/enable\'')
+    expect(daemon).not.toContain('app.post(\'/api/local/apps/install\'')
+    expect(daemon).not.toContain('app.get(\'/api/local/apps/:appId\'')
+    expect(daemon).not.toContain('app.post(\'/api/local/apps/:appId/enable\'')
+    expect(daemon).not.toContain('app.post(\'/api/local/apps/:appId/healthcheck\'')
+  })
+
   test('Host runtime and UI app lifecycle APIs use archive naming internally', () => {
     const sources = [
       'apps/cli/src/aiworker.ts',

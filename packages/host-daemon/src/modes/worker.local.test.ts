@@ -1805,13 +1805,15 @@ describe('local daemon API', () => {
     const appRoot = join(dir, 'api-soul')
     writeApiSoul(appRoot)
 
-    const installRes = await target.request('/api/local/apps/install', {
+    const installRes = await target.request('/api/app-installation/install', {
       body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(installRes.status).toBe(201)
-    expect((await target.request('/api/local/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
+    expect((await target.request('/api/local/apps/install', { method: 'POST' })).status).toBe(404)
+    expect((await target.request('/api/app-installation/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
+    expect((await target.request('/api/local/apps/demo-api/enable', { method: 'POST' })).status).toBe(404)
 
     const proxied = await target.request('/api/apps/demo-api/echo?workerId=worker-1&workspaceId=workspace-1&sessionId=session-1', {
       headers: {
@@ -1872,13 +1874,13 @@ describe('local daemon API', () => {
     const appRoot = join(dir, 'failing-api-soul')
     writeFailingApiSoul(appRoot)
 
-    const installRes = await target.request('/api/local/apps/install', {
+    const installRes = await target.request('/api/app-installation/install', {
       body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(installRes.status).toBe(201)
-    expect((await target.request('/api/local/apps/demo-failing-api/enable', { method: 'POST' })).status).toBe(200)
+    expect((await target.request('/api/app-installation/apps/demo-failing-api/enable', { method: 'POST' })).status).toBe(200)
 
     const response = await target.request('/api/apps/demo-failing-api/echo')
     expect(response.status).toBe(502)

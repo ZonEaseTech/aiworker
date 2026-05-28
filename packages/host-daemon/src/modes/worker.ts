@@ -217,32 +217,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     workers: listWorkers(),
   }))
 
-  app.post('/api/local/apps/install', async (c) => {
-    const result = await parseJsonBody(c, installAppBodySchema, 'INSTALL_APP_INVALID')
-    if (!result.ok)
-      return result.response
-    const { descriptor, descriptorPath } = result.data
-    const app = typeof descriptorPath === 'string' && descriptorPath.trim()
-      ? await state.host.installAppFromPath(descriptorPath)
-      : state.host.installAppDescriptor({
-          descriptor,
-          sourceKind: 'inline',
-          sourceRef: 'api:inline',
-        })
-    return c.json({ app, catalog: state.host.listCatalog() }, 201)
-  })
-  app.get('/api/local/apps/:appId', (c) => {
-    const app = state.host.getApp(c.req.param('appId'))
-    if (!app)
-      return notFound(c, 'Soul App')
-    return c.json({ app })
-  })
-  app.post('/api/local/apps/:appId/enable', (c) => {
-    const appId = c.req.param('appId')
-    const app = state.host.enableApp(appId)
-    return c.json({ app, catalog: state.host.listCatalog() })
-  })
-  app.post('/api/local/apps/:appId/healthcheck', c => c.json({ app: state.host.healthcheckApp(c.req.param('appId')) }))
   app.get('/api/local/souls', c => c.json({ souls: state.host.listSouls() }))
   app.get('/api/capabilities', c => c.json({ capabilities: state.host.listCapabilities() }))
   app.get('/api/app-installation/apps', c => c.json({ apps: state.host.listApps() }))
