@@ -9,7 +9,6 @@ import {
   ensureWorkerHome,
   resolveAiworkerHome,
   resolveAiworkerScope,
-  resolveProjectRoot,
   resolveWorkerHome,
   resolveWorkspacesRoot,
 } from './index'
@@ -100,8 +99,7 @@ describe('host-local AIWorker home resolution', () => {
       process.env.HOME = tmp
       await mkdir(path.join(tmp, 'project', '.aiworker'), { recursive: true })
 
-      expect(resolveProjectRoot(path.join(tmp, 'project'))).toBe(null)
-      expect(resolveAiworkerScope({ cwd: path.join(tmp, 'project') })).toEqual({
+      expect(resolveAiworkerScope()).toEqual({
         scope: 'user',
         home: path.join(tmp, '.aiworker'),
         source: 'user-default',

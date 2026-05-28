@@ -24,14 +24,10 @@ export interface AiworkerScopeResult {
 }
 
 export interface ResolveScopeOptions {
-  /** Deprecated compatibility input. CWD never affects scope resolution. */
-  cwd?: string
   /** Explicit `--aiworker-home <path>` from a CLI flag. Highest priority. */
   explicitHome?: string
   /** Caller-selected fallback directory name when neither flag nor env exists. */
   defaultHomeDir?: string
-  /** Deprecated compatibility input. Project detection is always disabled. */
-  disableProjectDetect?: boolean
 }
 
 function currentHomeDir(): string {
@@ -48,15 +44,6 @@ function hostHomePath(p: string): string {
 
 function defaultHomePath(defaultHomeDir: string): string {
   return path.resolve(currentHomeDir(), expandTilde(defaultHomeDir))
-}
-
-/**
- * Project-scope autodetection is removed. The function remains exported so old
- * callers fail closed to host-local behaviour instead of silently binding a
- * daemon to an arbitrary cwd.
- */
-export function resolveProjectRoot(_cwd?: string): string | null {
-  return null
 }
 
 /**

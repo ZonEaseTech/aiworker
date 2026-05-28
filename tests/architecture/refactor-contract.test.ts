@@ -1314,6 +1314,28 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'fs-layout must describe only Host filesystem responsibilities').toEqual([])
   })
 
+  test('fs-layout scope API does not preserve project autodetect compatibility inputs', () => {
+    const source = readRepoFile('packages/fs-layout/src/index.ts')
+    const testSource = readRepoFile('packages/fs-layout/src/index.test.ts')
+    const forbidden = [
+      'cwd?: string',
+      'disableProjectDetect?: boolean',
+      'Deprecated compatibility input',
+      'resolveProjectRoot',
+      'resolveAiworkerScope({ cwd:',
+    ]
+    const findings = [
+      ...forbidden
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `packages/fs-layout/src/index.ts: ${snippet}`),
+      ...forbidden
+        .filter(snippet => testSource.includes(snippet))
+        .map(snippet => `packages/fs-layout/src/index.test.ts: ${snippet}`),
+    ]
+
+    expect(findings, 'fs-layout should expose only host-home resolution inputs after project autodetect removal').toEqual([])
+  })
+
   test('fs-layout worker path tests use generic worker fixture ids', () => {
     const source = readRepoFile('packages/fs-layout/src/index.test.ts')
     const forbidden = [
