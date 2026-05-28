@@ -104,6 +104,21 @@ describe('SDK descriptor build conventions', () => {
     expect(readFileSync(join(rootDir, 'dist/engine-assets/mcp/codex/config.toml'), 'utf8')).toContain('literal-test-secret')
   })
 
+  test('keeps app-owned API source out of convention discovery and build output', async () => {
+    const rootDir = await createFreeformSoulFixture()
+    await mkdir(join(rootDir, 'api/src'), { recursive: true })
+    writeFileSync(join(rootDir, 'api/src/index.ts'), 'export function handler() { return new Response("ok") }\n')
+
+    const validation = await validateSoul(rootDir)
+    const result = await buildSoul(rootDir)
+
+    expect(validation.discovery.generatedSections).not.toContain('api')
+    expect(result.discovery.generatedSections).not.toContain('api')
+    expect(result.descriptor).toMatchObject({ api: null })
+    expect(JSON.stringify(result.descriptor)).not.toContain('api/src/index.ts')
+    expect(existsSync(join(rootDir, 'dist/api'))).toBe(false)
+  })
+
   test('redacts secret-like values from SDK validation diagnostics', async () => {
     const rootDir = await createFreeformSoulFixture()
     writeFileSync(join(rootDir, 'soul.config.ts'), `throw new Error('token=sk-sdk-config-secret')

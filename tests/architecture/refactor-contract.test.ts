@@ -123,6 +123,8 @@ describe('destructive refactor contract bootstrap', () => {
   test('soul authoring and testing docs expose coverage ledger details', () => {
     const authoring = readRepoFile('docs/soul-authoring.md')
     const testing = readRepoFile('docs/testing.md')
+    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
+    const sdkDescriptorBuildTest = readRepoFile('packages/soul-app-sdk/src/descriptor-build.test.ts')
 
     for (const phrase of [
       'Convention discovery',
@@ -139,6 +141,13 @@ describe('destructive refactor contract bootstrap', () => {
     expect(authoring).not.toContain('product/artifacts/*')
     expect(authoring).not.toContain('dist/api/')
     expect(authoring).not.toContain('  web/\n  api/\n  engine-assets/')
+    expect(authoring).toContain('Custom API and artifact helpers are explicit SDK or configuration surfaces')
+    expect(authoring).toContain('not part of current')
+    expect(authoring).toContain('convention discovery or build output')
+    expect(docCheck).toContain('SDK API convention discovery must stay explicit')
+    expect(sdkDescriptorBuildTest).toContain('api/src/index.ts')
+    expect(sdkDescriptorBuildTest).toContain('not.toContain(\'api\')')
+    expect(sdkDescriptorBuildTest).toContain('api: null')
 
     for (const phrase of [
       'Canonical Coverage Ledger',

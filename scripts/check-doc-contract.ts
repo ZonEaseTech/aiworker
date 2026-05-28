@@ -163,6 +163,9 @@ requireIncludes('docs/soul-authoring.md', [
   'engine/mcp/codex/config.toml',
   'engine/mcp/claude-code/.mcp.json',
   'dist/engine-assets/',
+  'Custom API and artifact helpers are explicit SDK or configuration surfaces',
+  'not part of current',
+  'convention discovery or build output',
 ])
 forbidIncludes('docs/soul-authoring.md', [
   'product/api/index.ts',
@@ -170,6 +173,17 @@ forbidIncludes('docs/soul-authoring.md', [
   'dist/api/',
   '  web/\n  api/\n  engine-assets/',
 ])
+requireIncludes('packages/soul-app-sdk/src/descriptor-build.test.ts', [
+  'api/src/index.ts',
+  'not.toContain(\'api\')',
+  'api: null',
+])
+if (!read('packages/soul-app-sdk/src/descriptor-build.test.ts').includes('keeps app-owned API source out of convention discovery and build output')) {
+  issues.push({
+    file: 'packages/soul-app-sdk/src/descriptor-build.test.ts',
+    message: 'SDK API convention discovery must stay explicit',
+  })
+}
 
 requireIncludes('docs/testing.md', [
   'bun run test:contracts',
