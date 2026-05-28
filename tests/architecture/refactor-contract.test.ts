@@ -2099,6 +2099,25 @@ describe('destructive refactor contract bootstrap', () => {
     expect(packageReleaseBundlesTest).toContain('descriptor-declared MCP assets are missing')
   })
 
+  test('canonical testing docs track OpenAPI and redaction guardrails', () => {
+    const testing = readRepoFile('docs/testing.md')
+    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+
+    expect(testing).toContain('OpenAPI and redaction contract tests')
+    expect(testing).toContain('packages/host-daemon/src/modes/worker.local.test.ts')
+    expect(testing).toContain('packages/storage-sqlite/src/worker/index.test.ts')
+    expect(testing).toContain('packages/engine-bridge/src/bridge-contract.test.ts')
+    expect(testing).toContain('packages/engine-projection/src/workspace-projection.test.ts')
+    expect(daemonTest).toContain("target.request('/openapi.json')")
+    expect(daemonTest).toContain("'/api/sessions/{sessionId}/invocations'")
+    expect(daemonTest).toContain("'/api/local/info'")
+    expect(daemonTest).toContain("serializedOpenApi")
+    expect(daemonTest).toContain("not.toContain('[mcp_servers')")
+    expect(daemonTest).toContain("not.toContain('mcpServers')")
+    expect(daemonTest).toContain("not.toContain('literal-secret')")
+    expect(daemonTest).toContain("not.toContain('sk-')")
+  })
+
   test('canonical testing docs track Freeform browser proof scope', () => {
     const testing = readRepoFile('docs/testing.md')
 

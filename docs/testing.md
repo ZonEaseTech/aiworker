@@ -111,6 +111,15 @@ apps/cli/scripts/build-publish-manifest.test.ts
 apps/cli/scripts/package-release-bundles.test.ts
 ```
 
+OpenAPI and redaction contract tests:
+
+```text
+packages/host-daemon/src/modes/worker.local.test.ts
+packages/storage-sqlite/src/worker/index.test.ts
+packages/engine-bridge/src/bridge-contract.test.ts
+packages/engine-projection/src/workspace-projection.test.ts
+```
+
 ## Current Bootstrap Gate
 
 The first guardrail is:
@@ -142,6 +151,7 @@ Coverage status values:
 | Session lifecycle and invocation state split | `docs/runtime.md` | architecture tests and engine bridge tests | docs+tests |
 | Protocol implementation contract | `docs/protocol.md` | docs check and architecture tests | docs+tests |
 | Runtime and bridge contract | `docs/runtime.md` | engine bridge and projection tests | docs+tests |
+| OpenAPI and redaction boundary | `docs/runtime.md`, `AGENTS.md` | host-daemon OpenAPI tests, storage redaction tests, engine bridge redaction tests, projection receipt tests | docs+tests |
 | Soul authoring contract | `docs/soul-authoring.md` | SDK and Freeform contract tests | docs+tests |
 | Host metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
 | Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
