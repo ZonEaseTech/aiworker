@@ -563,6 +563,18 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.patch(\'/api/local/workers/:workerId/workspaces/:workspaceId\',')
   })
 
+  test('Web workspace locator API does not expose retired raw file helpers', () => {
+    const workspaceApi = readRepoFile('apps/web/src/features/local-workspace/api/workspaces.ts')
+    const workspaceApiIndex = readRepoFile('apps/web/src/features/local-workspace/api/index.ts')
+
+    expect(workspaceApi).toContain('/api/workspace-locators')
+    expect(workspaceApi).not.toContain('/api/local/workspaces/')
+    expect(workspaceApi).not.toContain('export function readFile')
+    expect(workspaceApi).not.toContain('export function writeFile')
+    expect(workspaceApiIndex).not.toContain('readFile,')
+    expect(workspaceApiIndex).not.toContain('writeFile,')
+  })
+
   test('daemon session collection surface does not preserve local broker alias', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
     const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')

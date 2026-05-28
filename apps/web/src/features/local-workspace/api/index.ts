@@ -34,6 +34,4 @@ export {
 } from './workspace-data'
 export {
   createWorkspace,
-  readFile,
-  writeFile,
 } from './workspaces'
