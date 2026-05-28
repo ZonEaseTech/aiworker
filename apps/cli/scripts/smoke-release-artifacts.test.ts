@@ -50,7 +50,7 @@ describe('release artifact smoke', () => {
 
     await expect(
       verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz official Freeform descriptor must use protocol soul/v1')
+    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz must include the official Freeform descriptor')
   })
 
   it('rejects attach artifacts when the packaged Freeform descriptor drops the Claude Code MCP target', async () => {
@@ -60,7 +60,7 @@ describe('release artifact smoke', () => {
 
     await expect(
       verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz official Freeform descriptor must use protocol soul/v1')
+    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz must include the official Freeform descriptor')
   })
 
   it('rejects attach artifacts when the tarball binary is not executable', async () => {

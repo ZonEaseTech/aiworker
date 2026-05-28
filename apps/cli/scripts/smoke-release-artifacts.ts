@@ -58,8 +58,11 @@ async function assertOfficialFreeformDescriptorRefs(
   try {
     descriptor = parseOfficialFreeformDescriptorJson(descriptorText)
   }
-  catch {
-    throw new Error(`release artifact ${archive} official Freeform descriptor must use protocol soul/v1`)
+  catch (err) {
+    const reason = err instanceof Error && err.message.startsWith('expected ')
+      ? 'must include the official Freeform descriptor'
+      : 'official Freeform descriptor must use protocol soul/v1'
+    throw new Error(`release artifact ${archive} ${reason}`)
   }
 
   const refs = [
