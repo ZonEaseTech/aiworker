@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import process from 'node:process'
@@ -8,6 +8,7 @@ import { spawn } from 'bun'
 import consola from 'consola'
 
 import { packageReleaseBundles } from './package-release-bundles'
+import { parseOfficialFreeformDescriptorJson } from '../src/official-freeform-descriptor'
 
 interface CommandResult {
   stderr: string
@@ -63,9 +64,11 @@ async function main(): Promise<number> {
     assertStandaloneDoctor(doctor.stdout)
     await run([binary, 'app', 'bootstrap', 'official'], { env })
     const list = await run([binary, 'app', 'list'], { env })
-    await assertPackagedFreeform(list.stdout, await realpath(resolve(tempDir, bundle, 'official-apps')))
+    const officialAppsRoot = await realpath(resolve(tempDir, bundle, 'official-apps'))
+    await assertPackagedFreeform(list.stdout, officialAppsRoot)
+    await assertStandaloneOfficialFreeformDescriptor(officialAppsRoot)
 
-    consola.success('[smoke-standalone-runtime] PASS: unpacked standalone binary boots with packaged migrations and official Soul Apps')
+    consola.success('[smoke-standalone-runtime] PASS: unpacked standalone binary boots with packaged migrations and official Soul Apps descriptor refs')
     return 0
   }
   finally {
@@ -106,6 +109,48 @@ async function assertPackagedFreeform(stdout: string, expectedOfficialAppsRoot: 
   const relativeSourceRef = relative(expectedOfficialAppsRoot, sourceRef)
   if (!relativeSourceRef || relativeSourceRef.startsWith('..') || isAbsolute(relativeSourceRef))
     throw new Error(`aiworker-freeform must resolve from packaged official-apps; got ${app.sourceRef}`)
+}
+
+async function assertStandaloneOfficialFreeformDescriptor(officialAppsRoot: string): Promise<void> {
+  const freeformRoot = resolve(officialAppsRoot, 'aiworker-freeform')
+  const descriptorPath = resolve(freeformRoot, 'dist', 'soul.descriptor.json')
+  let descriptor: ReturnType<typeof parseOfficialFreeformDescriptorJson>
+  try {
+    descriptor = parseOfficialFreeformDescriptorJson(await readFile(descriptorPath, 'utf8'))
+  }
+  catch {
+    throw new Error(`standalone Freeform descriptor must use protocol soul/v1: ${descriptorPath}`)
+  }
+  await assertStandaloneDescriptorRefs(freeformRoot, [
+    { kind: 'file', ref: descriptor.workbench.entry },
+    { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
+    { kind: 'dir', ref: descriptor.engine.skills?.source },
+    ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
+  ])
+}
+
+async function assertStandaloneDescriptorRefs(
+  freeformRoot: string,
+  refs: Array<{ kind: 'dir' | 'file', ref?: string }>,
+): Promise<void> {
+  for (const item of refs) {
+    if (!item.ref)
+      continue
+    const resourcePath = resolve(freeformRoot, item.ref)
+    const relativeResourcePath = relative(freeformRoot, resourcePath)
+    if (!relativeResourcePath || relativeResourcePath.startsWith('..') || isAbsolute(relativeResourcePath))
+      throw new Error(`standalone Freeform descriptor reference escapes package root: ${item.ref}`)
+    try {
+      const info = await stat(resourcePath)
+      if (item.kind === 'dir' && !info.isDirectory())
+        throw new Error('not a directory')
+      if (item.kind === 'file' && !info.isFile())
+        throw new Error('not a file')
+    }
+    catch {
+      throw new Error(`standalone Freeform descriptor references missing ${item.kind}: ${resourcePath}`)
+    }
+  }
 }
 
 async function cleanup(): Promise<void> {
