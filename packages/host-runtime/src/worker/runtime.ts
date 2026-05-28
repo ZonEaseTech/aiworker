@@ -687,7 +687,19 @@ export class LocalWorkerRuntime {
       )
     }
 
-    const receipt = await this.readWorkspaceProjectionReceipt(workspace.id)
+    let receipt: WorkspaceProjectionReceiptResult | null
+    try {
+      receipt = await this.readWorkspaceProjectionReceipt(workspace.id)
+    }
+    catch (error) {
+      if (isMalformedProjectionReceiptError(error)) {
+        throw localEngineBridgeFailure(
+          'PROJECTION_RECEIPT_STALE',
+          `Projection receipt is invalid for workspace ${workspace.id}.`,
+        )
+      }
+      throw error
+    }
     if (!receipt) {
       throw localEngineBridgeFailure(
         'PROJECTION_RECEIPT_MISSING',
@@ -1470,4 +1482,8 @@ function localEngineBridgeFailure(code: EngineBridgeFailureCode, message: string
 
 function isNoEntryError(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
+function isMalformedProjectionReceiptError(error: unknown): boolean {
+  return error instanceof SyntaxError
 }
