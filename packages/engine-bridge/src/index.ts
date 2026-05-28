@@ -272,11 +272,17 @@ export function createEngineBridge(options: EngineBridgeOptions): EngineBridge {
       const invocationId = readInvocationId(request)
       const after = readNonNegativeInteger(request.after, 0)
       const limit = readPositiveInteger(request.limit, 500)
-      const storedEvents = await options.bridgeEventStore?.list?.({ after, invocationId, limit }) ?? []
-      const events = normalizeEvents(storedEvents
-        .map(event => redactValue(event))
-        .filter(isRecord)
-        .filter(event => readInvocationIdFromEvent(event) === invocationId))
+      let events: Array<Record<string, unknown>>
+      try {
+        const storedEvents = await options.bridgeEventStore?.list?.({ after, invocationId, limit }) ?? []
+        events = normalizeEvents(storedEvents
+          .map(event => redactValue(event))
+          .filter(isRecord)
+          .filter(event => readInvocationIdFromEvent(event) === invocationId))
+      }
+      catch (error) {
+        throw bridgeFailureFromError(error, 'ENGINE_OUTPUT_PARSE_FAILED')
+      }
       return {
         after,
         events,

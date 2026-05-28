@@ -67,6 +67,7 @@ function createContractHarness(options: {
   discoverFails?: boolean
   followUpFails?: boolean
   inspectFails?: boolean
+  listBridgeEventsFails?: boolean
   processBelongsToInvocation?: boolean
   rawChunkStoreFails?: boolean
   startFails?: boolean
@@ -95,7 +96,11 @@ function createContractHarness(options: {
       type: 'process.exited',
     },
   ]
-  const listBridgeEvents = mock(async () => listedBridgeEvents)
+  const listBridgeEvents = mock(async () => {
+    if (options.listBridgeEventsFails)
+      throw new Error('bridge event list failed with token=sk-test-secret')
+    return listedBridgeEvents
+  })
 
   const adapter = {
     target: 'codex',
@@ -699,6 +704,25 @@ describe('engine-bridge event reattach contract', () => {
       limit: 2,
     })
     expect(JSON.stringify(result)).not.toContain('sk-test-secret')
+  })
+
+  test('redacts bridge event store failures during reattach', async () => {
+    const { engineBridge } = createContractHarness({ listBridgeEventsFails: true })
+
+    try {
+      await engineBridge.reattachInvocationEvents({
+        after: 2,
+        invocationId: 'invocation-follow-up',
+        limit: 2,
+      })
+      throw new Error('expected reattachInvocationEvents to fail')
+    }
+    catch (error) {
+      expect(error).toMatchObject({ code: 'ENGINE_OUTPUT_PARSE_FAILED' })
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('[REDACTED]')
+      expect(message).not.toContain('sk-test-secret')
+    }
   })
 })
 
