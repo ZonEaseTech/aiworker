@@ -28,6 +28,7 @@ async function main(): Promise<number> {
   if (!existsSync(cli))
     throw new Error(`Dist CLI not found: ${cli}. Run bun run build:bundle first.`)
   const expectedVersion = readDistPackageVersion()
+  assertDistDescriptorV1()
 
   const root = mkdtempSync(join(tmpdir(), 'aiworker-dist-release-'))
   const home = join(root, 'home')
@@ -92,6 +93,21 @@ function readDistPackageVersion(): string {
   if (typeof pkg.version !== 'string' || pkg.version.length === 0)
     throw new Error('dist package.json must include a version')
   return pkg.version
+}
+
+function assertDistDescriptorV1(): void {
+  const descriptorPath = resolve(
+    import.meta.dirname,
+    '..',
+    'dist',
+    'official-apps',
+    'aiworker-freeform',
+    'dist',
+    'soul.descriptor.json',
+  )
+  const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8')) as { protocol?: unknown }
+  if (descriptor.protocol !== 'soul/v1')
+    throw new Error(`dist Freeform descriptor must use protocol soul/v1: ${descriptorPath}`)
 }
 
 async function assertCli(cli: string, args: string[], options: { env: NodeJS.ProcessEnv, label: string }): Promise<CommandResult> {
