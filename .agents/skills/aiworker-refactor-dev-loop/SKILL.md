@@ -50,6 +50,31 @@ default for independent exploration, implementation, or verification sidecars.
 Keep the main agent on the critical path and integrate subagent findings before
 the final response.
 
+## Subagent Reclamation Contract
+
+Subagents are short-lived sidecars, not durable background workers.
+
+Every subagent spawned during the current turn must have an owned-agent ledger:
+agent id, task, expected output, spawned time, result status, and close status.
+
+- Do not ask a subagent to wait around for manual cleanup. The main agent owns
+  cleanup.
+- When a subagent reaches a final status, collect the result and immediately
+  call `close_agent` for that agent id.
+- Do not start the next slice, phase commit, or final response while any
+  current-turn owned subagent is still open.
+- Before compaction-sensitive handoff, final response, or phase commit, reconcile
+  the ledger: every owned subagent must be joined and closed, or explicitly
+  cancelled/closed if it no longer matters.
+- If a subagent cannot be joined or closed, keep the goal active, report the
+  agent id and reason, and do not spawn more subagents until recovery is clear.
+- After compaction recovery, do not assume old subagents are valid progress
+  sources. If their ids are known, close stale owned agents before spawning new
+  ones. If their ids are unknown, avoid new subagents until the turn can proceed
+  safely with local work.
+- Reuse or close; never leave a subagent open merely because its answer was
+  already read.
+
 ## Anti-Exit Contract
 
 When this skill is used inside an active long-running goal, keep the goal active
@@ -78,9 +103,11 @@ rehydrate from current project state before choosing work:
 2. Read the five canonical docs.
 3. Read this skill.
 4. Inspect `git status --short` and preserve user or concurrent-session changes.
-5. Run `bun run docs:check` and `bun run test:contracts`.
-6. Check the Drift Gate.
-7. Choose the next smallest verifiable slice from current code state.
+5. Reconcile any known owned subagents from the previous turn by joining or
+   closing them before spawning new ones.
+6. Run `bun run docs:check` and `bun run test:contracts`.
+7. Check the Drift Gate.
+8. Choose the next smallest verifiable slice from current code state.
 
 Never reconstruct architecture from memory, retired `tmp/refactor` drafts, old
 E2E assumptions, or stale conversation summaries.
@@ -187,7 +214,8 @@ For the selected slice:
 2. Invoke the relevant Superpowers workflow for the slice type.
 3. When subagents are authorized, dispatch independent sidecars for parallel
    codebase reading, test-gap discovery, or verification while the main agent
-   proceeds on the critical path.
+   proceeds on the critical path. Record each spawned id in the owned-agent
+   ledger.
 4. Add or update the focused contract test first when behavior is changing.
 5. Implement the smallest code change that satisfies the contract.
 6. Run the smallest fresh verification that proves the touched surface.
@@ -196,7 +224,9 @@ For the selected slice:
 9. Do not add temporary design docs under `docs/`; use `tmp/`.
 10. For code changes, run code-review-graph before final response. For docs-only,
    instruction-only, or pure formatting changes, state that it was skipped.
-11. Apply the Phase Commit Contract before the final response.
+11. Apply the Subagent Reclamation Contract: every current-turn owned subagent
+   is joined and closed before moving on.
+12. Apply the Phase Commit Contract before the final response.
 
 ## Minimum Completion
 
@@ -215,7 +245,8 @@ Use this concise shape:
 Goal: active/complete/blocked, and why.
 Preflight: pass/fail, with key commands.
 Slice: chosen development slice.
-Superpowers/Subagents: workflows used and sidecars dispatched, or why none.
+Superpowers/Subagents: workflows used; subagents spawned/joined/closed; open
+owned subagents must be 0, or explain recovery.
 Changes: files changed.
 Verification: commands and results.
 Drift: found/fixed/none.
