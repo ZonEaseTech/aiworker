@@ -572,8 +572,10 @@ export async function downloadAndReplaceGitHubBundle(action: { checksumUrl: stri
       throw new Error('staging_failed: drizzle migrations not found')
     if (!existsSync(path.join(extractedDir, 'drizzle', 'worker', 'meta', '_journal.json')))
       throw new Error('staging_failed: drizzle migration journal not found')
-    if (!existsSync(path.join(extractedDir, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json')))
+    const freeformDescriptorPath = path.join(extractedDir, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json')
+    if (!existsSync(freeformDescriptorPath))
       throw new Error('staging_failed: official Freeform descriptor not found')
+    assertPackagedDescriptorV1(freeformDescriptorPath)
 
     rmSync(nextBundleDir, { force: true, recursive: true })
     rmSync(backupPath, { force: true, recursive: true })
@@ -610,6 +612,17 @@ function spawnStderrText(stderr: ArrayBufferView | string | undefined): string {
   if (typeof stderr === 'string')
     return stderr.trim()
   return Buffer.from(stderr.buffer, stderr.byteOffset, stderr.byteLength).toString('utf8').trim()
+}
+
+function assertPackagedDescriptorV1(descriptorPath: string): void {
+  try {
+    const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8')) as { protocol?: unknown }
+    if (descriptor.protocol !== 'soul/v1')
+      throw new Error('invalid protocol')
+  }
+  catch {
+    throw new Error('staging_failed: official Freeform descriptor is not descriptor v1')
+  }
 }
 
 async function fetchUpdateBytes(url: string, fetchImpl: typeof fetch = fetch): Promise<Buffer> {
