@@ -497,7 +497,7 @@ function assertInvocationExternalSessionRefProof(proof: Record<string, unknown>,
 
 async function readProjectionRefreshProofFromBrowser(page: Page, workerId: string, workspaceId: string): Promise<Record<string, unknown>> {
   return await page.evaluate(async ({ workerId, workspaceId }) => {
-    const configResponse = await fetch(`/api/workers/${workerId}/config/skill-overlay%3Afreeform-session`, {
+    const skillConfigResponse = await fetch(`/api/workers/${workerId}/config/skill-overlay%3Afreeform-session`, {
       body: JSON.stringify({
         checksum: 'sha256:freeform-browser-overlay',
         enabled: true,
@@ -511,7 +511,37 @@ async function readProjectionRefreshProofFromBrowser(page: Page, workerId: strin
       headers: { 'content-type': 'application/json' },
       method: 'PUT',
     })
-    const configBody = await configResponse.text()
+    const skillConfigBody = await skillConfigResponse.text()
+    const entryFileConfigResponse = await fetch(`/api/workers/${workerId}/config/entry-file-overlay%3Acontext`, {
+      body: JSON.stringify({
+        checksum: 'sha256:freeform-browser-entry-file-overlay',
+        enabled: true,
+        kind: 'entry-file-overlay',
+        options: {
+          targetPath: 'CONTEXT.md',
+        },
+        sourceRef: 'descriptor://engine/workspaceAssets/AGENTS.md',
+        target: 'all',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    const entryFileConfigBody = await entryFileConfigResponse.text()
+    const mcpConfigResponse = await fetch(`/api/workers/${workerId}/config/mcp-overlay%3Acodex`, {
+      body: JSON.stringify({
+        checksum: 'sha256:freeform-browser-mcp-overlay',
+        enabled: true,
+        kind: 'mcp-overlay',
+        options: {
+          replaces: 'descriptor://engine/mcp/codex',
+        },
+        sourceRef: 'descriptor://engine/mcp/codex',
+        target: 'codex',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    const mcpConfigBody = await mcpConfigResponse.text()
     const refreshResponse = await fetch('/api/projections/codex/refresh', {
       body: JSON.stringify({ workerId, workspaceId }),
       headers: { 'content-type': 'application/json' },
@@ -521,9 +551,13 @@ async function readProjectionRefreshProofFromBrowser(page: Page, workerId: strin
     const receiptResponse = await fetch(`/api/projections/receipts/${workspaceId}`)
     const receiptBody = await receiptResponse.text()
     return {
-      config: {
-        body: JSON.parse(configBody) as Record<string, unknown>,
-        status: configResponse.status,
+      entryFileConfig: {
+        body: JSON.parse(entryFileConfigBody) as Record<string, unknown>,
+        status: entryFileConfigResponse.status,
+      },
+      mcpConfig: {
+        body: JSON.parse(mcpConfigBody) as Record<string, unknown>,
+        status: mcpConfigResponse.status,
       },
       receipt: {
         body: JSON.parse(receiptBody) as Record<string, unknown>,
@@ -533,27 +567,44 @@ async function readProjectionRefreshProofFromBrowser(page: Page, workerId: strin
         body: JSON.parse(refreshBody) as Record<string, unknown>,
         status: refreshResponse.status,
       },
+      skillConfig: {
+        body: JSON.parse(skillConfigBody) as Record<string, unknown>,
+        status: skillConfigResponse.status,
+      },
     }
   }, { workerId, workspaceId })
 }
 
 function assertProjectionRefreshProof(proof: Record<string, unknown>, workspaceId: string): void {
-  const config = readRecord(proof.config)
+  const entryFileConfig = readRecord(proof.entryFileConfig)
+  const mcpConfig = readRecord(proof.mcpConfig)
   const refresh = readRecord(proof.refresh)
   const receipt = readRecord(proof.receipt)
-  if (config.status !== 200)
-    throw new Error(`Worker config overlay write failed in browser proof: ${JSON.stringify(proof)}`)
+  const skillConfig = readRecord(proof.skillConfig)
+  if (skillConfig.status !== 200 || entryFileConfig.status !== 200 || mcpConfig.status !== 200)
+    throw new Error(`Worker config overlay writes failed in browser proof: ${JSON.stringify(proof)}`)
   if (refresh.status !== 200)
     throw new Error(`Projection refresh failed in browser proof: ${JSON.stringify(proof)}`)
   if (receipt.status !== 200)
     throw new Error(`Projection receipt read failed in browser proof: ${JSON.stringify(proof)}`)
 
-  const savedConfig = readRecord(readRecord(config.body).config)
-  if (savedConfig.configKey !== 'skill-overlay:freeform-session')
-    throw new Error(`Worker config overlay proof saved the wrong config key: ${JSON.stringify(proof)}`)
-  const savedValue = readRecord(savedConfig.value)
-  if (savedValue.kind !== 'skill-overlay' || savedValue.target !== 'codex' || savedValue.updatedBy !== 'web')
-    throw new Error(`Worker config overlay proof missed SDK-standard envelope fields: ${JSON.stringify(proof)}`)
+  const savedConfigs = [
+    readRecord(readRecord(skillConfig.body).config),
+    readRecord(readRecord(entryFileConfig.body).config),
+    readRecord(readRecord(mcpConfig.body).config),
+  ]
+  const savedValuesByKey = new Map(savedConfigs.map(config => [config.configKey, readRecord(config.value)]))
+  const savedSkillValue = savedValuesByKey.get('skill-overlay:freeform-session')
+  const savedEntryFileValue = savedValuesByKey.get('entry-file-overlay:context')
+  const savedMcpValue = savedValuesByKey.get('mcp-overlay:codex')
+  if (!savedSkillValue || !savedEntryFileValue || !savedMcpValue)
+    throw new Error(`Worker config overlay proof missed config keys: ${JSON.stringify(proof)}`)
+  if (savedSkillValue.kind !== 'skill-overlay' || savedSkillValue.target !== 'codex' || savedSkillValue.updatedBy !== 'web')
+    throw new Error(`Skill overlay proof missed SDK-standard envelope fields: ${JSON.stringify(proof)}`)
+  if (savedEntryFileValue.kind !== 'entry-file-overlay' || savedEntryFileValue.target !== 'all' || savedEntryFileValue.updatedBy !== 'web')
+    throw new Error(`Entry-file overlay proof missed SDK-standard envelope fields: ${JSON.stringify(proof)}`)
+  if (savedMcpValue.kind !== 'mcp-overlay' || savedMcpValue.target !== 'codex' || savedMcpValue.updatedBy !== 'web')
+    throw new Error(`MCP overlay proof missed SDK-standard envelope fields: ${JSON.stringify(proof)}`)
 
   const refreshReceipt = readRecord(readRecord(readRecord(refresh.body).projection).receipt)
   const readBackReceipt = readRecord(readRecord(receipt.body).receipt)
@@ -566,8 +617,25 @@ function assertProjectionRefreshProof(proof: Record<string, unknown>, workspaceI
       && item.source === 'worker-overlay'
       && item.target === '.agents/skills/aiworker-freeform-freeform-session/SKILL.md',
     )
+    const hasWorkerOverlayEntryFile = projections.some(item =>
+      isRecord(item)
+      && item.kind === 'workspace-file'
+      && item.source === 'worker-overlay'
+      && item.target === 'CONTEXT.md',
+    )
+    const hasWorkerOverlayMcp = projections.some(item =>
+      isRecord(item)
+      && item.engineTarget === 'codex'
+      && item.kind === 'mcp-client'
+      && item.source === 'worker-overlay'
+      && item.target === '.codex/config.toml',
+    )
     if (!hasWorkerOverlaySkill)
       throw new Error(`Projection proof missed worker-overlay native skill receipt entry: ${JSON.stringify(proof)}`)
+    if (!hasWorkerOverlayEntryFile)
+      throw new Error(`Projection proof missed worker-overlay entry-file receipt entry: ${JSON.stringify(proof)}`)
+    if (!hasWorkerOverlayMcp)
+      throw new Error(`Projection proof missed worker-overlay MCP receipt entry: ${JSON.stringify(proof)}`)
   }
   if (readRecord(receipt.body).receiptId !== workspaceId)
     throw new Error(`Projection receipt proof returned the wrong receipt id: ${JSON.stringify(proof)}`)
