@@ -2276,6 +2276,7 @@ describe('local daemon API', () => {
       hasCookie: false,
       hasForwardedFor: false,
       hasMountToken: true,
+      isMountSignatureValid: true,
       mountTokenHeader: expect.not.stringContaining('client-spoofed-token'),
       mountContext: {
         appId: 'demo-api',
@@ -2641,6 +2642,15 @@ describe('local daemon API', () => {
     writeFileSync(join(distRoot, 'engine-assets', 'workspace', 'AGENTS.md'), '# Demo API Workspace\n')
     writeFileSync(join(distRoot, 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex mcp\n')
     writeFileSync(join(distRoot, 'api', 'server.js'), `
+const { createHmac } = require('node:crypto')
+function isValidMountSignature(request) {
+  const context = request.headers.get('x-aiworker-mount-context')
+  const signature = request.headers.get('x-aiworker-mount-signature')
+  const token = request.headers.get('x-aiworker-mount-token')
+  if (!context || !signature || !token)
+    return false
+  return createHmac('sha256', token).update(context).digest('hex') === signature
+}
 const server = Bun.serve({
   async fetch(request) {
     const url = new URL(request.url)
@@ -2657,6 +2667,7 @@ const server = Bun.serve({
         hasCookie: Boolean(request.headers.get('cookie')),
         hasForwardedFor: Boolean(request.headers.get('x-forwarded-for')),
         hasMountToken: Boolean(request.headers.get('x-aiworker-mount-token')),
+        isMountSignatureValid: isValidMountSignature(request),
         mountContextHeader: request.headers.get('x-aiworker-mount-context'),
         mountContext,
         mountSignatureHeader: request.headers.get('x-aiworker-mount-signature'),
