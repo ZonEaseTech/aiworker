@@ -6,7 +6,7 @@ import { Button } from '#components/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '#components/collapsible'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '#components/item'
 import { cn } from '#lib/utils'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useReducer } from 'react'
 
 import { CommandBlock } from './command-block'
 
@@ -21,6 +21,12 @@ function isFailedActivity(activity: TranscriptActivityModel) {
   return activity.status === 'failed' || activity.command?.status === 'failed'
 }
 
+type OpenAction = boolean | ((current: boolean) => boolean)
+
+function openReducer(current: boolean, action: OpenAction) {
+  return typeof action === 'function' ? action(current) : action
+}
+
 export function TranscriptActivityGroup({
   activities,
   className,
@@ -28,18 +34,18 @@ export function TranscriptActivityGroup({
   summary,
 }: TranscriptActivityGroupProps) {
   const hasFailedActivity = activities.some(isFailedActivity)
-  const [open, setOpen] = useState(hasFailedActivity || !defaultCollapsed)
+  const [open, dispatchOpen] = useReducer(openReducer, hasFailedActivity || !defaultCollapsed)
   const contentId = useId()
 
   useEffect(() => {
     if (hasFailedActivity)
-      setOpen(true)
+      dispatchOpen(true)
   }, [hasFailedActivity])
 
   return (
     <Collapsible
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={dispatchOpen}
       data-transcript-slot="activity-group"
       className={cn('min-w-0 rounded-md border border-border bg-muted/20', className)}
     >
