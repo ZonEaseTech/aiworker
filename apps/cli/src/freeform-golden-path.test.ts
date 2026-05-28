@@ -248,6 +248,8 @@ describe('Freeform CLI golden path', () => {
     }))
     expect(bridgeEvents.every(event => event.sessionId === started.session.id)).toBe(true)
     expect(JSON.stringify(bridgeEvents)).not.toContain('/turns/')
+    for (const invocation of invocations)
+      await assertRedactedEngineLogProof(invocation.metadataJson)
 
     await expect(readFile(path.join(workspace.workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('AIWorker Freeform Workspace')
     await expect(stat(path.join(workspace.workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'))).resolves.toBeTruthy()
@@ -269,6 +271,7 @@ describe('Freeform CLI golden path', () => {
       '#!/usr/bin/env bash',
       'set -euo pipefail',
       'cat >/dev/null',
+      'printf \'authorization = "literal-secret-value"\\n\' >&2',
       'printf \'%s\\n\' \'{"type":"thread.started"}\'',
       'printf \'%s\\n\' \'{"type":"turn.started"}\'',
       'printf \'%s\\n\' \'{"type":"item.started","item":{"type":"command_execution","id":"tool-1","command":"printf bridge"}}\'',
@@ -281,6 +284,14 @@ describe('Freeform CLI golden path', () => {
     process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`
   }
 })
+
+async function assertRedactedEngineLogProof(metadataJson: Record<string, unknown>): Promise<void> {
+  const stderrLog = metadataJson.stderrLog
+  expect(typeof stderrLog).toBe('string')
+  const stderr = await readFile(stderrLog as string, 'utf8')
+  expect(stderr).toContain('[REDACTED]')
+  expect(stderr).not.toContain('literal-secret-value')
+}
 
 function freeformDescriptorPath(): string {
   return path.resolve(import.meta.dir, '..', '..', '..', 'souls', FREEFORM_APP_ID, 'dist', 'soul.descriptor.json')
