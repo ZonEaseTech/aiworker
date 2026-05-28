@@ -34,11 +34,13 @@ export async function verifyReleaseArtifacts(options: VerifyReleaseArtifactsOpti
     const archive = `${bundle}.tar.gz`
     await assertChecksum(rootDir, archive)
     const entries = await tarEntries(rootDir, archive)
+    const verboseEntries = await tarVerboseEntries(rootDir, archive)
     for (const entry of REQUIRED_BUNDLE_ENTRIES) {
       const archivedPath = `${bundle}/${entry}`
       if (!entries.has(archivedPath))
         throw new Error(`release artifact ${archive} is missing ${archivedPath}`)
     }
+    assertExecutableBinary(archive, `${bundle}/aiworker`, verboseEntries)
     await assertOfficialFreeformDescriptorRefs(rootDir, archive, bundle, entries)
   }
 }
@@ -114,6 +116,21 @@ async function tarEntries(rootDir: string, archive: string): Promise<Set<string>
   return new Set(stdout.split(/\r?\n/).map(line => line.replace(/\/$/, '')).filter(Boolean))
 }
 
+async function tarVerboseEntries(rootDir: string, archive: string): Promise<string[]> {
+  const proc = spawn(['tar', '-tvzf', resolve(rootDir, archive)], {
+    stderr: 'pipe',
+    stdout: 'pipe',
+  })
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  if (code !== 0)
+    throw new Error(`tar list failed for ${archive}: ${stderr}`)
+  return stdout.split(/\r?\n/).filter(Boolean)
+}
+
 async function tarFile(rootDir: string, archive: string, file: string): Promise<string> {
   const proc = spawn(['tar', '-xOzf', resolve(rootDir, archive), file], {
     stderr: 'pipe',
@@ -127,6 +144,13 @@ async function tarFile(rootDir: string, archive: string, file: string): Promise<
   if (code !== 0)
     throw new Error(`tar read failed for ${archive}:${file}: ${stderr}`)
   return stdout
+}
+
+function assertExecutableBinary(archive: string, file: string, verboseEntries: readonly string[]): void {
+  const entry = verboseEntries.find(line => line.endsWith(file))
+  const mode = entry?.split(/\s+/, 1)[0]
+  if (!mode || mode[3] !== 'x')
+    throw new Error(`release artifact ${archive} binary is not executable: ${file}`)
 }
 
 function hasDirectoryEntry(entries: Set<string>, directory: string): boolean {

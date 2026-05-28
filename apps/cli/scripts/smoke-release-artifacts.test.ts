@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -40,6 +40,14 @@ describe('release artifact smoke', () => {
     await expect(
       verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
     ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz descriptor references missing file: aiworker-darwin-arm64/official-apps/aiworker-freeform/dist/web/workbench/index.html')
+  })
+
+  it('rejects attach artifacts when the tarball binary is not executable', async () => {
+    await writeFixtureReleaseArtifact(root, 'darwin-arm64', { binaryMode: 0o644 })
+
+    await expect(
+      verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz binary is not executable: aiworker-darwin-arm64/aiworker')
   })
 
   it('is wired into the tag release workflow before GitHub Release attach', async () => {
@@ -113,6 +121,27 @@ async function writeMalformedReleaseArtifact(root: string, target: string): Prom
     workbench: { entry: 'dist/web/workbench/index.html', mode: 'sdk-common', router: { mode: 'search' }, type: 'micro-app' },
   })}\n`)
   await writeFile(path.join(bundleRoot, 'README.md'), '# AIWorker\n')
+  await run(['tar', '-C', root, '-czf', path.join(root, `${bundle}.tar.gz`), bundle])
+  const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
+  const checksum = createHash('sha256').update(archive).digest('hex')
+  await writeFile(path.join(root, `${bundle}.tar.gz.sha256`), `${checksum}  ${bundle}.tar.gz\n`)
+}
+
+async function writeFixtureReleaseArtifact(
+  root: string,
+  target: string,
+  options: { binaryMode?: number } = {},
+): Promise<void> {
+  await writeFixtureDist(root)
+  const bundle = `aiworker-${target}`
+  const bundleRoot = path.join(root, bundle)
+  await mkdir(bundleRoot, { recursive: true })
+  await writeFile(path.join(bundleRoot, 'aiworker'), '#!/bin/sh\necho aiworker\n')
+  await chmod(path.join(bundleRoot, 'aiworker'), options.binaryMode ?? 0o755)
+  await cp(path.join(root, 'apps', 'cli', 'dist', 'web'), path.join(bundleRoot, 'web'), { recursive: true })
+  await cp(path.join(root, 'apps', 'cli', 'dist', 'drizzle'), path.join(bundleRoot, 'drizzle'), { recursive: true })
+  await cp(path.join(root, 'apps', 'cli', 'dist', 'official-apps'), path.join(bundleRoot, 'official-apps'), { recursive: true })
+  await cp(path.join(root, 'apps', 'cli', 'dist', 'README.md'), path.join(bundleRoot, 'README.md'))
   await run(['tar', '-C', root, '-czf', path.join(root, `${bundle}.tar.gz`), bundle])
   const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
   const checksum = createHash('sha256').update(archive).digest('hex')
