@@ -10,25 +10,25 @@ describe('deriveWorkerStudioLocatorState', () => {
   it('selectable workers only include available Souls with at least one capability', () => {
     const data = createData({
       souls: [
-        soul({ id: 'aiworker-demo-people', status: 'available' }),
-        soul({ id: 'aiworker-demo-release', status: 'coming_soon' }),
+        soul({ id: 'aiworker-demo-primary', status: 'available' }),
+        soul({ id: 'aiworker-demo-secondary', status: 'coming_soon' }),
         soul({ id: 'aiworker-empty', status: 'available' }),
       ],
       capabilities: [
-        capability({ id: 'aiworker-demo-people.profile', soulId: 'aiworker-demo-people' }),
-        capability({ id: 'aiworker-demo-release.release', soulId: 'aiworker-demo-release' }),
+        capability({ id: 'aiworker-demo-primary.context', soulId: 'aiworker-demo-primary' }),
+        capability({ id: 'aiworker-demo-secondary.release', soulId: 'aiworker-demo-secondary' }),
       ],
       workers: [
-        worker({ id: 'people-worker', soulId: 'aiworker-demo-people' }),
-        worker({ id: 'release-worker', soulId: 'aiworker-demo-release' }),
+        worker({ id: 'primary-worker', soulId: 'aiworker-demo-primary' }),
+        worker({ id: 'secondary-worker', soulId: 'aiworker-demo-secondary' }),
         worker({ id: 'empty-worker', soulId: 'aiworker-empty' }),
       ],
     })
 
     const state = deriveWorkerStudioLocatorState({ data, route: { kind: 'home' } })
 
-    expect(state.selectableWorkers.map(item => item.id)).toEqual(['people-worker'])
-    expect(state.selectedWorker?.id).toBe('people-worker')
+    expect(state.selectableWorkers.map(item => item.id)).toEqual(['primary-worker'])
+    expect(state.selectedWorker?.id).toBe('primary-worker')
   })
 
   it('defaults the new-worker Soul selection to the first available Soul when no preference is supplied', () => {
@@ -52,89 +52,89 @@ describe('deriveWorkerStudioLocatorState', () => {
   it('uses workspace and session routes as opaque locators for worker, workspace, and session selection', () => {
     const data = createData({
       souls: [
-        soul({ id: 'aiworker-demo-people', status: 'available' }),
-        soul({ id: 'aiworker-demo-release', status: 'available' }),
+        soul({ id: 'aiworker-demo-primary', status: 'available' }),
+        soul({ id: 'aiworker-demo-secondary', status: 'available' }),
       ],
       capabilities: [
-        capability({ id: 'aiworker-demo-people.profile', soulId: 'aiworker-demo-people' }),
-        capability({ id: 'aiworker-demo-release.release', soulId: 'aiworker-demo-release' }),
+        capability({ id: 'aiworker-demo-primary.context', soulId: 'aiworker-demo-primary' }),
+        capability({ id: 'aiworker-demo-secondary.release', soulId: 'aiworker-demo-secondary' }),
       ],
       workers: [
-        worker({ id: 'people-worker', soulId: 'aiworker-demo-people' }),
-        worker({ id: 'release-worker', soulId: 'aiworker-demo-release' }),
+        worker({ id: 'primary-worker', soulId: 'aiworker-demo-primary' }),
+        worker({ id: 'secondary-worker', soulId: 'aiworker-demo-secondary' }),
       ],
       workspaces: [
-        workspace({ id: 'people-workspace', name: 'People Workspace', workerId: 'people-worker' }),
-        workspace({ id: 'release-workspace', name: 'Release Workspace', workerId: 'release-worker' }),
+        workspace({ id: 'primary-workspace', name: 'Primary Workspace', workerId: 'primary-worker' }),
+        workspace({ id: 'secondary-workspace', name: 'Secondary Workspace', workerId: 'secondary-worker' }),
       ],
       sessions: [
         session({
-          capabilityId: 'aiworker-demo-release.release',
-          id: 'qa-session',
-          workerId: 'release-worker',
-          workspaceId: 'release-workspace',
+          capabilityId: 'aiworker-demo-secondary.release',
+          id: 'secondary-session',
+          workerId: 'secondary-worker',
+          workspaceId: 'secondary-workspace',
         }),
       ],
     })
 
     const workspaceState = deriveWorkerStudioLocatorState({
       data,
-      route: { kind: 'workspace', workerId: 'release-worker', workspaceId: 'release-workspace' },
+      route: { kind: 'workspace', workerId: 'secondary-worker', workspaceId: 'secondary-workspace' },
     })
     expect(workspaceState.isWorkspaceContextRoute).toBe(true)
-    expect(workspaceState.selectedWorker?.id).toBe('release-worker')
-    expect(workspaceState.selectedWorkspace?.id).toBe('release-workspace')
+    expect(workspaceState.selectedWorker?.id).toBe('secondary-worker')
+    expect(workspaceState.selectedWorkspace?.id).toBe('secondary-workspace')
     expect(workspaceState.selectedSession).toBeNull()
 
     const sessionState = deriveWorkerStudioLocatorState({
       data,
       route: {
         kind: 'session',
-        sessionId: 'qa-session',
-        workerId: 'release-worker',
-        workspaceId: 'release-workspace',
+        sessionId: 'secondary-session',
+        workerId: 'secondary-worker',
+        workspaceId: 'secondary-workspace',
       },
     })
     expect(sessionState.isWorkspaceContextRoute).toBe(true)
-    expect(sessionState.selectedWorker?.id).toBe('release-worker')
-    expect(sessionState.selectedWorkspace?.id).toBe('release-workspace')
-    expect(sessionState.selectedSession?.id).toBe('qa-session')
+    expect(sessionState.selectedWorker?.id).toBe('secondary-worker')
+    expect(sessionState.selectedWorkspace?.id).toBe('secondary-workspace')
+    expect(sessionState.selectedSession?.id).toBe('secondary-session')
   })
 
   it('filters workspaces by workspace name and capability display without reading app-owned session content', () => {
     const data = createData({
       settings: { language: 'en' } as LocalWorkspaceData['settings'],
-      souls: [soul({ id: 'aiworker-demo-people', status: 'available' })],
+      souls: [soul({ id: 'aiworker-demo-primary', status: 'available' })],
       capabilities: [
-        capability({ id: 'aiworker-demo-people.profile', name: 'Profile Capability', soulId: 'aiworker-demo-people' }),
-        capability({ id: 'aiworker-demo-people.screen', name: 'Screening Capability', soulId: 'aiworker-demo-people' }),
+        capability({ id: 'aiworker-demo-primary.context', name: 'Context Capability', soulId: 'aiworker-demo-primary' }),
+        capability({ id: 'aiworker-demo-primary.summary', name: 'Summary Capability', soulId: 'aiworker-demo-primary' }),
       ],
-      workers: [worker({ id: 'people-worker', soulId: 'aiworker-demo-people' })],
+      workers: [worker({ id: 'primary-worker', soulId: 'aiworker-demo-primary' })],
       workspaces: [
-        workspace({ id: 'quiet-workspace', name: 'Quiet Workspace', workerId: 'people-worker' }),
-        workspace({ id: 'named-workspace', name: 'People Pipeline', workerId: 'people-worker' }),
-        workspace({ id: 'capability-workspace', name: 'Operations Board', workerId: 'people-worker' }),
+        workspace({ id: 'quiet-workspace', name: 'Quiet Workspace', workerId: 'primary-worker' }),
+        workspace({ id: 'named-workspace', name: 'Primary Pipeline', workerId: 'primary-worker' }),
+        workspace({ id: 'capability-workspace', name: 'Operations Board', workerId: 'primary-worker' }),
       ],
       sessions: [
         session({
-          capabilityId: 'aiworker-demo-people.profile',
+          capabilityId: 'aiworker-demo-primary.context',
           id: 'quiet-session',
-          title: 'confidential compensation review',
-          workerId: 'people-worker',
+          title: 'private source note',
+          workerId: 'primary-worker',
           workspaceId: 'quiet-workspace',
         }),
         session({
-          capabilityId: 'aiworker-demo-people.screen',
+          capabilityId: 'aiworker-demo-primary.summary',
           id: 'capability-session',
-          workerId: 'people-worker',
+          workerId: 'primary-worker',
           workspaceId: 'capability-workspace',
         }),
       ],
     })
 
     expect(workspaceIds(data, 'pipeline')).toEqual(['named-workspace'])
-    expect(workspaceIds(data, 'screening capability')).toEqual(['capability-workspace'])
-    expect(workspaceIds(data, 'confidential compensation')).toEqual([])
+    expect(workspaceIds(data, 'summary capability')).toEqual(['capability-workspace'])
+    expect(workspaceIds(data, 'private source')).toEqual([])
   })
 })
 
@@ -142,7 +142,7 @@ function workspaceIds(data: LocalWorkspaceData, query: string): string[] {
   return deriveWorkerStudioLocatorState({
     data,
     query,
-    route: { kind: 'worker', workerId: 'people-worker' },
+    route: { kind: 'worker', workerId: 'primary-worker' },
   }).filteredWorkspaces.map(item => item.id)
 }
 
@@ -168,8 +168,8 @@ function soul(overrides: Partial<LocalWorkspaceData['souls'][number]> = {}): Loc
   return {
     defaultCapabilities: [],
     description: 'Soul for tests',
-    id: 'aiworker-demo-people',
-    name: 'Demo People',
+    id: 'aiworker-demo-primary',
+    name: 'Demo Primary',
     status: 'available',
     ...overrides,
   }
@@ -178,12 +178,12 @@ function soul(overrides: Partial<LocalWorkspaceData['souls'][number]> = {}): Loc
 function capability(overrides: Partial<LocalWorkspaceData['capabilities'][number]> = {}): LocalWorkspaceData['capabilities'][number] {
   return {
     description: 'Capability for tests',
-    id: 'aiworker-demo-people.profile',
+    id: 'aiworker-demo-primary.context',
     inputHints: [],
-    name: 'Profile Capability',
-    outputKind: 'profile',
-    promptRef: './product/workflows/profile/prompt.md',
-    soulId: 'aiworker-demo-people',
+    name: 'Context Capability',
+    outputKind: 'context',
+    promptRef: './product/workflows/context/prompt.md',
+    soulId: 'aiworker-demo-primary',
     ...overrides,
   }
 }
@@ -192,10 +192,10 @@ function worker(overrides: Partial<LocalWorkspaceData['workers'][number]> = {}):
   return {
     createdAt: now,
     defaultEngineId: 'codex',
-    id: 'people-worker',
+    id: 'primary-worker',
     metadataJson: {},
-    name: 'HR Worker',
-    soulId: 'aiworker-demo-people',
+    name: 'Primary Worker',
+    soulId: 'aiworker-demo-primary',
     status: 'active',
     updatedAt: now,
     ...overrides,
@@ -213,14 +213,14 @@ function workspace(overrides: Partial<LocalWorkspaceData['workspaces'][number]> 
     status: 'active',
     type: 'workspace',
     updatedAt: now,
-    workerId: 'people-worker',
+    workerId: 'primary-worker',
     ...overrides,
   }
 }
 
 function session(overrides: Partial<LocalWorkspaceData['sessions'][number]> = {}): LocalWorkspaceData['sessions'][number] {
   return {
-    capabilityId: 'aiworker-demo-people.profile',
+    capabilityId: 'aiworker-demo-primary.context',
     createdAt: now,
     endedAt: null,
     id: 'session-1',
@@ -229,7 +229,7 @@ function session(overrides: Partial<LocalWorkspaceData['sessions'][number]> = {}
     status: 'active',
     title: 'Session',
     updatedAt: now,
-    workerId: 'people-worker',
+    workerId: 'primary-worker',
     workspaceId: 'workspace-1',
     ...overrides,
   }

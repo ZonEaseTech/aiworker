@@ -2031,6 +2031,11 @@ describe('destructive refactor contract bootstrap', () => {
       'aiworker-hr',
       'hr-home',
       '\'/hr',
+      '/outside/release',
+      'item-ben',
+      'item-stella',
+      'item-ada',
+      'tab=review',
     ]
 
     const findings = retiredRouteSnippets
@@ -2046,6 +2051,12 @@ describe('destructive refactor contract bootstrap', () => {
       'aiworker-hr',
       'hr-home',
       '\'/hr',
+      'aiworker-demo-people',
+      'aiworker-demo-release',
+      'item-ben',
+      'item-stella',
+      'item-ada',
+      'tab=review',
     ]
 
     const findings = retiredRouteSnippets
@@ -2096,6 +2107,17 @@ describe('destructive refactor contract bootstrap', () => {
     const retiredWorkspaceSnippets = [
       'Hiring Workspace',
       'Hiring Pipeline',
+      'aiworker-demo-people',
+      'aiworker-demo-release',
+      'people-worker',
+      'release-worker',
+      'People Workspace',
+      'Release Workspace',
+      'People Pipeline',
+      'Profile Capability',
+      'Screening Capability',
+      'confidential compensation review',
+      'HR Worker',
     ]
 
     const findings = retiredWorkspaceSnippets
