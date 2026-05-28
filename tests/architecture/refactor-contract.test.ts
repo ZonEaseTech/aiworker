@@ -694,12 +694,18 @@ describe('destructive refactor contract bootstrap', () => {
     expect(projectWorkspaceProjection).not.toContain('/api/local/workers/')
   })
 
-  test('daemon engine target read surface does not preserve local settings engines alias', () => {
+  test('daemon engine target broker surface does not preserve local settings engines aliases', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const webSettingsApi = readRepoFile('apps/web/src/features/local-workspace/api/settings.ts')
 
     expect(daemon).toContain('app.get(\'/api/engine/targets\',')
     expect(daemon).toContain('app.get(\'/api/engine/targets/:target/readiness\',')
-    expect(daemon).not.toContain('app.get(\'/api/local/settings/engines\',')
+    expect(daemon).toContain('app.post(\'/api/engine/targets/rescan\',')
+    expect(daemon).toContain('app.post(\'/api/engine/targets/:target/test\',')
+    expect(daemon).not.toContain('/api/local/settings/engines')
+    expect(webSettingsApi).toContain('/api/engine/targets/rescan')
+    expect(webSettingsApi).toContain(['/api/engine/targets/', '{encodeURIComponent(engineId)}/test'].join('$'))
+    expect(webSettingsApi).not.toContain('/api/local/settings/engines')
   })
 
   test('mounted session events are derived without daemon local broker aliases', () => {

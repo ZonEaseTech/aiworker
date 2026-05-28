@@ -2011,20 +2011,24 @@ describe('local daemon API', () => {
     })
     expect(patch.status).toBe(200)
 
-    const rescan = await target.request('/api/local/settings/engines/rescan', { method: 'POST' })
+    const rescan = await target.request('/api/engine/targets/rescan', { method: 'POST' })
     expect(rescan.status).toBe(200)
 
     const targets = await target.request('/api/engine/targets')
     expect(targets.status).toBe(200)
     expect((await target.request('/api/local/settings/engines')).status).toBe(404)
+    expect((await target.request('/api/local/settings/engines/rescan', { method: 'POST' })).status).toBe(404)
 
-    const test = await target.request('/api/local/settings/engines/test', {
-      body: JSON.stringify({ engineId: 'codex' }),
-      headers: { 'content-type': 'application/json' },
+    const test = await target.request('/api/engine/targets/codex/test', {
       method: 'POST',
     })
     expect(test.status).toBe(200)
     expect(await test.json()).toMatchObject({ result: { status: 'pass' } })
+    expect((await target.request('/api/local/settings/engines/test', {
+      body: JSON.stringify({ engineId: 'codex' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })).status).toBe(404)
     expect(listSettings().some(setting => setting.key === 'local-settings')).toBe(true)
   })
 
@@ -2136,6 +2140,8 @@ describe('local daemon API', () => {
       ['post', '/api/sessions/{sessionId}/invocations'],
       ['get', '/api/engine/targets'],
       ['get', '/api/engine/targets/{target}/readiness'],
+      ['post', '/api/engine/targets/rescan'],
+      ['post', '/api/engine/targets/{target}/test'],
       ['post', '/api/engine/invocations'],
       ['get', '/api/engine/invocations/{invocationId}'],
       ['get', '/api/engine/invocations/{invocationId}/events'],

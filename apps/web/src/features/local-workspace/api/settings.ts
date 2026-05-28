@@ -7,9 +7,9 @@ export function saveSettings(input: Partial<LocalSettingsConfig>): Promise<{ set
 }
 
 export function rescanEngines(): Promise<{ engines: LocalSettingsConfig['engines'], settings: LocalSettingsConfig }> {
-  return localJson('/api/local/settings/engines/rescan', { method: 'POST', body: JSON.stringify({}) })
+  return localJson('/api/engine/targets/rescan', { method: 'POST', body: JSON.stringify({}) })
 }
 
 export function testEngine(engineId: string): Promise<{ result: { engineId: string, message: string, status: 'fail' | 'pass' } }> {
-  return localJson('/api/local/settings/engines/test', { method: 'POST', body: JSON.stringify({ engineId }) })
+  return localJson(`/api/engine/targets/${encodeURIComponent(engineId)}/test`, { method: 'POST', body: JSON.stringify({}) })
 }

@@ -105,14 +105,6 @@ export const patchWorkspaceBodySchema = z.object({
 export const patchSettingsBodySchema = localSettingsConfigSchema.partial()
 
 // ---------------------------------------------------------------------------
-// POST /api/local/settings/engines/test
-// ---------------------------------------------------------------------------
-
-export const testEngineBodySchema = z.object({
-  engineId: z.string().optional(),
-})
-
-// ---------------------------------------------------------------------------
 // POST /api/sessions
 // 对应 createWorkspaceSessionFromBody 内的 body：
 // title 被 requireString 强制：必填

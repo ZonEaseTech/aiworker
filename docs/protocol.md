@@ -142,6 +142,8 @@ POST   /api/sessions/:sessionId/invocations
 
 GET    /api/engine/targets
 GET    /api/engine/targets/:target/readiness
+POST   /api/engine/targets/rescan
+POST   /api/engine/targets/:target/test
 POST   /api/engine/invocations
 GET    /api/engine/invocations/:invocationId
 GET    /api/engine/invocations/:invocationId/events
@@ -174,6 +176,8 @@ into a product backend.
 - `POST /api/sessions` receives `workerId` and `workspaceId` as locator context.
 - session follow-up always uses `POST /api/sessions/:sessionId/invocations`.
 - engine cancel and event stream target an invocation id.
+- engine target discovery and test actions live under `/api/engine/targets`,
+  not local settings route aliases.
 - `GET /api/capabilities` may receive `workerId` to filter capabilities to the
   worker's Soul App for mounted app contexts.
 - app-owned API proxy attaches locator context when present and does not

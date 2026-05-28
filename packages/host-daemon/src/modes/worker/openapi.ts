@@ -55,6 +55,8 @@ export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'post', path: '/api/sessions/{sessionId}/invocations', summary: 'Create session-level engine invocation', tags: ['sessions', 'engine'], created: true },
     { method: 'get', path: '/api/engine/targets', summary: 'List engine targets', tags: ['engine'] },
     { method: 'get', path: '/api/engine/targets/{target}/readiness', summary: 'Read engine target readiness', tags: ['engine'] },
+    { method: 'post', path: '/api/engine/targets/rescan', summary: 'Rescan engine target readiness', tags: ['engine'], created: true },
+    { method: 'post', path: '/api/engine/targets/{target}/test', summary: 'Test engine target readiness', tags: ['engine'], created: true },
     { method: 'post', path: '/api/engine/invocations', summary: 'Create low-level engine invocation', tags: ['engine'], created: true },
     { method: 'get', path: '/api/engine/invocations/{invocationId}', summary: 'Show engine invocation', tags: ['engine'] },
     { method: 'get', path: '/api/engine/invocations/{invocationId}/events', summary: 'Read engine invocation events', tags: ['engine'] },

@@ -789,9 +789,9 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/local/settings'))
       return json({ settings: currentSettings })
-    if (url.endsWith('/api/local/settings/engines/rescan'))
+    if (url.endsWith('/api/engine/targets/rescan'))
       return json({ engines: currentSettings.engines, settings: currentSettings })
-    if (url.endsWith('/api/local/settings/engines/test'))
+    if (url.endsWith('/api/engine/targets/codex/test'))
       return json({ result: { engineId: 'codex', message: 'Codex CLI responded.', status: 'pass' } })
 
     return json({}, 404)
@@ -1971,8 +1971,8 @@ describe('worker studio', () => {
     fireEvent.click(zhLanguageButton)
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/settings/engines/test', expect.objectContaining({ method: 'POST' }))
-      expect(fetch).toHaveBeenCalledWith('/api/local/settings/engines/rescan', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).toHaveBeenCalledWith('/api/engine/targets/codex/test', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).toHaveBeenCalledWith('/api/engine/targets/rescan', expect.objectContaining({ method: 'POST' }))
       expect(fetch).toHaveBeenCalledWith('/api/local/settings', expect.objectContaining({ method: 'PATCH' }))
       expect(document.documentElement.lang).toBe('zh-CN')
     })

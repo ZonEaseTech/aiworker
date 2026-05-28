@@ -68,7 +68,6 @@ import {
   patchWorkerBodySchema,
   patchWorkspaceBodySchema,
   projectionRefreshBodySchema,
-  testEngineBodySchema,
   workerConfigValueBodySchema,
 } from './worker/schemas'
 import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
@@ -535,6 +534,25 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return c.json({ error: { code: 'ENGINE_TARGET_NOT_FOUND', message: 'Engine target not found.' } }, 404)
     return c.json({ target })
   })
+  app.post('/api/engine/targets/rescan', (c) => {
+    const current = loadLocalSettings()
+    const settings = saveLocalSettings({
+      ...current,
+      engines: scanLocalEngines(),
+      updatedAt: new Date().toISOString(),
+    })
+    return c.json({ engines: settings.engines, settings })
+  })
+  app.post('/api/engine/targets/:target/test', (c) => {
+    const settings = loadLocalSettings()
+    const engineId = c.req.param('target')
+    const engine = settings.engines.find(engine => engine.id === engineId)
+    if (!engine)
+      return c.json({ result: { engineId, message: 'Engine is not known in local settings.', status: 'fail' } }, 404)
+    if (!engine.installed)
+      return c.json({ result: { engineId, message: `${engine.name} is not installed on PATH.`, status: 'fail' } })
+    return c.json({ result: { engineId, message: `${engine.name} responded as ${engine.version ?? engine.path}.`, status: 'pass' } })
+  })
 
   app.post('/api/projections/:target/refresh', async (c) => {
     const target = readProjectionTarget(c.req.param('target'))
@@ -634,28 +652,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       updatedAt: new Date().toISOString(),
     })
     return c.json({ settings })
-  })
-  app.post('/api/local/settings/engines/rescan', (c) => {
-    const current = loadLocalSettings()
-    const settings = saveLocalSettings({
-      ...current,
-      engines: scanLocalEngines(),
-      updatedAt: new Date().toISOString(),
-    })
-    return c.json({ engines: settings.engines, settings })
-  })
-  app.post('/api/local/settings/engines/test', async (c) => {
-    const result = await parseJsonBody(c, testEngineBodySchema, 'TEST_ENGINE_INVALID')
-    if (!result.ok)
-      return result.response
-    const settings = loadLocalSettings()
-    const engineId = result.data.engineId ?? settings.engineId
-    const engine = settings.engines.find(engine => engine.id === engineId)
-    if (!engine)
-      return c.json({ result: { engineId, message: 'Engine is not known in local settings.', status: 'fail' } }, 404)
-    if (!engine.installed)
-      return c.json({ result: { engineId, message: `${engine.name} is not installed on PATH.`, status: 'fail' } })
-    return c.json({ result: { engineId, message: `${engine.name} responded as ${engine.version ?? engine.path}.`, status: 'pass' } })
   })
 
   app.all('/api/apps/:appId', (c) => {
