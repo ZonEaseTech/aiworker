@@ -28,6 +28,7 @@
     "ui:check": "bun scripts/check-web-ui-components.ts",
     "docs:check": "bun scripts/check-doc-contract.ts",
     "check": "bun run typecheck && bun run lint",
+    "release:check": "bun run docs:check && bun run test:contracts && bun run test:protocol && bun run test:cli && bun run test:browser:freeform && bun run typecheck && bun run lint && bun run build && bun run test && bun run check",
     "crg:status": "uvx code-review-graph status --repo .",
     "crg:update": "uvx code-review-graph update --repo . --base HEAD",
     "crg:review": "uvx code-review-graph detect-changes --repo . --base HEAD --brief",

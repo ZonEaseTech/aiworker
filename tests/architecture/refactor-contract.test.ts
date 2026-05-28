@@ -80,6 +80,13 @@ function documentedTestingPaths(): string[] {
   return [...new Set(paths)].sort()
 }
 
+function documentedReleaseGateCommands(): string[] {
+  const testing = readRepoFile('docs/testing.md')
+  const match = testing.match(/## Current Release Gates[\s\S]*?```text\n([\s\S]*?)```/)
+  expect(match, 'docs/testing.md must document current release gates in a text fence').toBeTruthy()
+  return match![1].split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+}
+
 describe('destructive refactor contract bootstrap', () => {
   test('canonical docs are promoted as the only architecture authority set', () => {
     const canonicalDocs = [
@@ -2019,6 +2026,21 @@ describe('destructive refactor contract bootstrap', () => {
 
     expect(contractScript).toContain('tests/architecture')
     expect(contractScript).toContain('scripts/check-soul-app-boundaries.test.ts')
+  })
+
+  test('release gate script tracks canonical testing docs', () => {
+    const rootPackage = JSON.parse(readRepoFile('package.json')) as {
+      scripts?: Record<string, string>
+    }
+    const releaseGateCommands = documentedReleaseGateCommands()
+    const releaseCheckScript = rootPackage.scripts?.['release:check'] ?? ''
+    const testing = readRepoFile('docs/testing.md')
+
+    expect(testing).toContain('bun run release:check')
+    expect(releaseCheckScript).toBeTruthy()
+    for (const command of releaseGateCommands)
+      expect(releaseCheckScript).toContain(command)
+    expect(releaseCheckScript).not.toContain('tmp/refactor')
   })
 
   test('package guardrails reject broad replacement buckets', () => {

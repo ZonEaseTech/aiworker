@@ -147,6 +147,9 @@ bun run test
 bun run check
 ```
 
+`bun run release:check` is the aggregator for this current release gate list.
+It must stay in sync with the commands above.
+
 ## Browser Proof Scope
 
 The v1 browser proof is Freeform-only:
