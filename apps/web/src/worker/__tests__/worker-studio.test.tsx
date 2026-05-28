@@ -232,20 +232,6 @@ const sessionRecord = {
   workspaceId: 'workspace-1',
 }
 
-const artifactRecord = {
-  createdAt: now,
-  id: 'artifact-1',
-  kind: 'candidate-screen',
-  metadataJson: {},
-  path: 'artifacts/session-1/candidate-screen.md',
-  invocationId: 'invocation-1',
-  sessionId: 'session-1',
-  status: 'available',
-  title: 'Candidate Screen',
-  updatedAt: now,
-  workspaceId: 'workspace-1',
-}
-
 const eventRecord = {
   createdAt: now,
   id: 1,
@@ -256,7 +242,6 @@ const eventRecord = {
   type: 'status',
 } satisfies LocalSessionEvent
 
-let currentArtifacts: typeof artifactRecord[]
 let currentEvents: LocalSessionEvent[]
 let currentSettings: typeof baseSettings
 let currentSessions: typeof sessionRecord[]
@@ -417,7 +402,6 @@ function resetSettings() {
     ...capability,
     inputHints: [...capability.inputHints],
   }))
-  currentArtifacts = [{ ...artifactRecord }]
   currentEvents = [{ ...eventRecord }]
   currentWorkers = workers.map(worker => ({ ...worker }))
   currentWorkerOverlayAssets = [{
@@ -814,18 +798,12 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/sessions'))
       return json({ sessions: currentSessions })
-    if (url.endsWith('/api/local/files'))
-      return json({ files: [] })
     if (url.includes('/api/local/workspaces/') && url.includes('/files/raw/')) {
       return new Response(currentArtifactRawContent, {
         headers: { 'content-type': 'text/plain' },
         status: currentArtifactRawStatus,
       })
     }
-    if (url.endsWith('/api/local/artifacts'))
-      return json({ artifacts: currentArtifacts })
-    if (url.endsWith('/api/local/events'))
-      return json({ events: currentEvents })
     if (url.endsWith('/api/local/settings') && method === 'PATCH') {
       const patch = init?.body ? JSON.parse(String(init.body)) as Partial<typeof baseSettings> : {}
       currentSettings = {
@@ -1424,7 +1402,6 @@ describe('worker studio', () => {
 
   it('does not reinterpret session engine state when a Soul App owns the mounted route', async () => {
     currentApps = [hostedApp({ appId: 'aiworker-demo-people', appName: 'Demo People' })]
-    currentArtifacts = []
     currentEvents = [{
       ...eventRecord,
       id: 12,
@@ -1761,7 +1738,6 @@ describe('worker studio', () => {
     currentWorkers = []
     currentWorkspaces = []
     currentSessions = []
-    currentArtifacts = []
     currentApps = [
       hostedApp({ appId: 'aiworker-demo-people', appName: 'Demo People' }),
       hostedApp({ appId: 'aiworker-demo-release', appName: 'Demo Release' }),
@@ -1836,7 +1812,6 @@ describe('worker studio', () => {
   it('keeps workspace routes on app-owned mounted surfaces when a Soul App route exists', async () => {
     currentApps = [hostedApp({ appId: 'aiworker-demo-people', appName: 'Demo People' })]
     currentSessions = []
-    currentArtifacts = []
     currentEvents = []
     window.history.replaceState(null, '', '/workers/people-worker/workspaces/workspace-1')
 

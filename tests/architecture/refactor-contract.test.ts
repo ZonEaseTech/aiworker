@@ -1644,7 +1644,21 @@ describe('destructive refactor contract bootstrap', () => {
 
     expect(findings, 'Web tests should model app-owned mounted sessions through sessions/events only').toEqual([])
     expect(workerStudioTest).toContain('/api/sessions')
-    expect(workerStudioTest).toContain('/api/local/events')
+    expect(workerStudioTest).toContain('/api/sessions/session-1/invocations')
+  })
+
+  test('WorkerStudio test harness does not preserve local aggregate file and event feeds', () => {
+    const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const forbidden = [
+      '/api/local/files',
+      '/api/local/artifacts',
+      '/api/local/events',
+    ]
+    const findings = forbidden
+      .filter(snippet => workerStudioTest.includes(snippet))
+      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+
+    expect(findings, 'Web tests should rely on canonical session and invocation responses instead of retired local aggregate feeds').toEqual([])
   })
 
   test('host runtime tests seed invocation-native input refs only', () => {
