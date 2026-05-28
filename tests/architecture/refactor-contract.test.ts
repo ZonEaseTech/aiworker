@@ -2122,7 +2122,9 @@ describe('destructive refactor contract bootstrap', () => {
     expect(packageReleaseBundlesTest).toContain('missing migration SQL')
     expect(packageReleaseBundlesTest).toContain('descriptor-declared workbench assets are missing')
     expect(packageReleaseBundlesTest).toContain('descriptor-declared MCP assets are missing')
+    expect(packageReleaseBundlesTest).toContain('descriptor references resolve outside the official app root')
     expect(docCheck).toContain('release artifact required resources must stay aligned')
+    expect(docCheck).toContain('release artifact descriptor references must not escape official app root')
     expect(docCheck).toContain('drizzle/worker/migration.sql')
   })
 

@@ -472,6 +472,23 @@ if (!smokeReleaseArtifactsScript.includes('official-apps/aiworker-freeform') || 
     message: 'release artifact required resources must stay aligned',
   })
 }
+for (const [file, source] of [
+  ['apps/cli/scripts/package-release-bundles.ts', packageReleaseBundlesScript],
+  ['apps/cli/scripts/smoke-release-artifacts.ts', smokeReleaseArtifactsScript],
+] as const) {
+  if (!source.includes('descriptor reference escapes official app root')) {
+    issues.push({
+      file,
+      message: 'release artifact descriptor references must not escape official app root',
+    })
+  }
+}
+if (!read('apps/cli/scripts/package-release-bundles.test.ts').includes('descriptor references resolve outside the official app root')) {
+  issues.push({
+    file: 'apps/cli/scripts/package-release-bundles.test.ts',
+    message: 'release artifact descriptor references must not escape official app root',
+  })
+}
 const testContractsScript = packageJson.scripts?.['test:contracts'] ?? ''
 if (!testContractsScript.includes('bun test tests/architecture'))
   issues.push({ file: 'package.json', message: 'test:contracts must run the refactor contract test' })
