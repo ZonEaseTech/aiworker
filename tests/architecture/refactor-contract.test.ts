@@ -563,6 +563,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('daemon workspace locator collection surface does not preserve local broker alias', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemonSchemas = readRepoFile('packages/host-daemon/src/modes/worker/schemas.ts')
     const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
     const mountedWorkspaceProxy = soulAppRuntime.slice(
       soulAppRuntime.indexOf('url.pathname === \'/api/workspaces\''),
@@ -573,6 +574,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.get(\'/api/local/workspaces\',')
     expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/workspaces\',')
     expect(daemon).not.toContain('app.post(\'/api/local/workers/:workerId/workspaces\',')
+    expect(daemonSchemas).toContain('POST /api/workspace-locators')
+    expect(daemonSchemas).not.toContain('POST /api/local/workers/:workerId/workspaces')
     expect(mountedWorkspaceProxy).toContain('/api/workspace-locators?workerId=')
     expect(mountedWorkspaceProxy).not.toContain(['/api/local/workers/', '{workerId}/workspaces'].join('$'))
   })

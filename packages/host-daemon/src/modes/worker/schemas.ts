@@ -69,7 +69,7 @@ export const patchWorkerBodySchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
-// POST /api/local/workers/:workerId/workspaces
+// POST /api/workspace-locators
 // ---------------------------------------------------------------------------
 
 export const createWorkspaceBodySchema = z.object({
