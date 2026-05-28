@@ -47,6 +47,17 @@ describe('release bundle packager', () => {
     ).rejects.toThrow('missing release resource: apps/cli/dist/drizzle/worker/meta/_journal.json')
   })
 
+  it('rejects standalone bundles when packaged migrations are missing migration SQL', async () => {
+    await writeFixtureDist(root, { includeMigrationSql: false })
+    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
+    await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
+
+    await expect(
+      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
+    ).rejects.toThrow('missing release resource: apps/cli/dist/drizzle/worker/migration.sql')
+    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
+  })
+
   it('rejects standalone bundles before staging when the compiled target binary is missing', async () => {
     await writeFixtureDist(root)
 
@@ -129,11 +140,13 @@ async function writeFixtureDist(
     descriptorText?: string
     includeCodexMcpFile?: boolean
     includeMigrationJournal?: boolean
+    includeMigrationSql?: boolean
     includeWorkbenchEntry?: boolean
   } = {},
 ): Promise<void> {
   const includeCodexMcpFile = options.includeCodexMcpFile ?? true
   const includeMigrationJournal = options.includeMigrationJournal ?? true
+  const includeMigrationSql = options.includeMigrationSql ?? true
   const includeWorkbenchEntry = options.includeWorkbenchEntry ?? true
   const dist = path.join(root, 'apps', 'cli', 'dist')
   await mkdir(path.join(dist, 'web', 'worker'), { recursive: true })
@@ -145,7 +158,8 @@ async function writeFixtureDist(
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code'), { recursive: true })
   await writeFile(path.join(dist, 'web', 'worker', 'index.html'), '<!doctype html>\n')
-  await writeFile(path.join(dist, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
+  if (includeMigrationSql)
+    await writeFile(path.join(dist, 'drizzle', 'worker', 'migration.sql'), '-- migration\n')
   if (includeMigrationJournal)
     await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[]}\n')
   if (includeWorkbenchEntry)

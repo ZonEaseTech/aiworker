@@ -11,6 +11,7 @@ import { copyDir } from './build-publish-manifest'
 const DEFAULT_TARGETS = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'] as const
 const REQUIRED_DIST_RESOURCES = [
   'web/worker/index.html',
+  'drizzle/worker/migration.sql',
   'drizzle/worker/meta/_journal.json',
   'official-apps/aiworker-freeform/dist/soul.descriptor.json',
   'README.md',
