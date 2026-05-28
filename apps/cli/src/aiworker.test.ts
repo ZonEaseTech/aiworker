@@ -509,6 +509,75 @@ describe('aiworker local CLI', () => {
     expect(afterFirst.events.map(event => event.id)).toEqual(ids.slice(1))
   })
 
+  it('reconciles an active running engine invocation as lost through CLI without changing session lifecycle', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('worker', 'create', '--id', 'reconcile-worker', '--name', 'Reconcile Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'select', 'reconcile-worker'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('workspace', 'create', '--name', 'Reconcile Workspace', '--type', 'freeform', '--worker', 'reconcile-worker'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
+    output = ''
+
+    closeWorkerDb()
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    const session = createSession({
+      capabilityId: FREEFORM_CAPABILITY_ID,
+      id: 'reconcile-session-1',
+      metadataJson: {},
+      title: 'Reconcile running invocation',
+      workerId: 'reconcile-worker',
+      workspaceId: workspace.id,
+      at: '2026-05-28T00:00:00.000Z',
+    })
+    const invocation = createEngineInvocation({
+      engineCommand: 'codex',
+      engineId: 'codex',
+      id: 'reconcile-running-invocation-1',
+      inputRef: `aiworker://sessions/${session.id}/invocations/reconcile-running-invocation-1/input`,
+      processState: 'spawned',
+      seq: 1,
+      sessionId: session.id,
+      status: 'running',
+    })
+    closeWorkerDb()
+
+    expect(await runCli(argv(
+      'session',
+      'reconcile',
+      invocation.id,
+      '--state',
+      'lost',
+      '--diagnostic',
+      'native process vanished token=sk-cli-active-reconcile-secret',
+    ))).toBe(0)
+
+    const reconciled = JSON.parse(output) as {
+      invocation: { failureCode: string | null, id: string, processState: string, sessionId: string, status: string, summary: string | null }
+      session: { id: string, status: string }
+    }
+    expect(reconciled.invocation).toMatchObject({
+      id: invocation.id,
+      processState: 'lost',
+      sessionId: session.id,
+      status: 'lost',
+      summary: 'Native engine process was lost.',
+    })
+    expect(reconciled.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(output).not.toContain('sk-cli-active-reconcile-secret')
+
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    const persisted = getEngineInvocation(invocation.id)
+    expect(persisted).toMatchObject({ status: 'lost', processState: 'lost' })
+    const events = listSessionEvents(session.id).filter(event => event.invocationId === invocation.id)
+    expect(events.length).toBeGreaterThan(0)
+    expect(JSON.stringify(events)).not.toContain('sk-cli-active-reconcile-secret')
+    closeWorkerDb()
+  })
+
   it('cancels an active running engine invocation through CLI by invocation id', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
