@@ -54,6 +54,7 @@ jobs:
             chmod +x "release/${bundle}/aiworker"
             cp -R apps/cli/dist/web "release/${bundle}/web"
             cp -R apps/cli/dist/drizzle "release/${bundle}/drizzle"
+            cp -R apps/cli/dist/official-apps "release/${bundle}/official-apps"
             cp apps/cli/dist/README.md "release/${bundle}/README.md"
             tar -C release -czf "${bundle}.tar.gz" "${bundle}"
             shasum -a 256 "${bundle}.tar.gz" > "${bundle}.tar.gz.sha256"

@@ -2055,6 +2055,13 @@ describe('destructive refactor contract bootstrap', () => {
     expect(releaseCheckIndex).toBeLessThan(publishIndex)
   })
 
+  test('standalone release bundles include descriptor-only official Soul Apps', () => {
+    const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
+
+    expect(releaseWorkflow).toContain('cp -R apps/cli/dist/official-apps "release/${bundle}/official-apps"')
+    expect(releaseWorkflow.indexOf('cp -R apps/cli/dist/official-apps')).toBeLessThan(releaseWorkflow.indexOf('tar -C release -czf "${bundle}.tar.gz" "${bundle}"'))
+  })
+
   test('package guardrails reject broad replacement buckets', () => {
     expect(existsSync(join(repoRoot, 'packages/core-v2'))).toBe(false)
     expect(existsSync(join(repoRoot, 'packages/shared-v2'))).toBe(false)
