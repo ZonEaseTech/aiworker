@@ -366,14 +366,8 @@ export function mountSessionApiProxy(request: Request, options: {
     return proxyJsonRequest(request, `${hostApi}/api/sessions/${sessionMatch[1]}`)
 
   const sessionEventsMatch = /^\/api\/sessions\/([^/]+)\/events$/.exec(url.pathname)
-  if (sessionEventsMatch && request.method === 'GET') {
-    const params = new URLSearchParams()
-    const after = url.searchParams.get('after')
-    if (after !== null)
-      params.set('after', after)
-    const query = params.size > 0 ? `?${params.toString()}` : ''
-    return proxyJsonRequest(request, `${hostApi}/api/local/sessions/${sessionEventsMatch[1]}/events${query}`)
-  }
+  if (sessionEventsMatch && request.method === 'GET')
+    return proxyMountedSessionEventsRequest(request, `${hostApi}/api/sessions/${sessionEventsMatch[1]}`)
 
   const sessionInvocationsMatch = /^\/api\/sessions\/([^/]+)\/invocations$/.exec(url.pathname)
   if (sessionInvocationsMatch && request.method === 'POST') {
@@ -390,6 +384,30 @@ function proxyJsonRequest(request: Request, target: string): Promise<Response> {
     headers: request.headers,
     method: request.method,
   }).then(r => new Response(r.body, { status: r.status, headers: r.headers }))
+}
+
+async function proxyMountedSessionEventsRequest(request: Request, target: string): Promise<Response> {
+  const sourceUrl = new URL(request.url)
+  const parsedAfter = Number(sourceUrl.searchParams.get('after') ?? request.headers.get('last-event-id') ?? 0)
+  const after = Number.isFinite(parsedAfter) ? parsedAfter : 0
+  const response = await fetch(target, {
+    headers: request.headers,
+    method: 'GET',
+  })
+  if (!response.ok)
+    return new Response(response.body, { status: response.status, headers: response.headers })
+
+  const body = await response.json().catch(() => ({})) as { events?: unknown }
+  const events = Array.isArray(body.events) ? body.events : []
+  return Response.json({
+    events: events.filter(event => sessionEventId(event) > after),
+  }, { status: response.status })
+}
+
+function sessionEventId(event: unknown): number {
+  if (!event || typeof event !== 'object')
+    return Number.NaN
+  return Number((event as { id?: unknown }).id)
 }
 
 async function proxyMountedWorkspaceCreateRequest(request: Request, target: string, workerId: string): Promise<Response> {

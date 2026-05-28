@@ -501,18 +501,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     deleteSession(session.id)
     return c.json({ deleted: true, session })
   })
-  app.get('/api/local/workers/:workerId/sessions/:sessionId/events', (c) => {
-    const session = requireWorkerSession(c.req.param('workerId'), c.req.param('sessionId'))
-    const after = Number(c.req.query('after') ?? c.req.header('last-event-id') ?? 0)
-    const events = listSessionEvents(session.id, { after: Number.isFinite(after) ? after : 0 })
-    return c.json(redactBrokerOutput({ events }))
-  })
-  app.get('/api/local/sessions/:sessionId/events', (c) => {
-    const session = requireSession(c.req.param('sessionId'))
-    const after = Number(c.req.query('after') ?? c.req.header('last-event-id') ?? 0)
-    const events = listSessionEvents(session.id, { after: Number.isFinite(after) ? after : 0 })
-    return c.json(redactBrokerOutput({ events }))
-  })
   app.post('/api/sessions/:sessionId/invocations', async (c) => {
     const session = requireSession(c.req.param('sessionId'))
     return createSessionInvocationResponse(c, state, session)

@@ -1095,7 +1095,7 @@ describe('local daemon API', () => {
 
     const invocationRes = await target.request('/api/engine/invocations/daemon-read-secret-invocation')
     const sessionRes = await target.request(`/api/sessions/${session.id}`)
-    const eventsRes = await target.request(`/api/local/sessions/${session.id}/events`)
+    const eventsRes = await target.request('/api/engine/invocations/daemon-read-secret-invocation/events')
 
     for (const res of [invocationRes, sessionRes, eventsRes]) {
       expect(res.status).toBe(200)
@@ -1104,6 +1104,8 @@ describe('local daemon API', () => {
       expect(body).not.toContain('literal-secret-value')
       expect(body).toContain('[REDACTED]')
     }
+    expect((await target.request(`/api/local/sessions/${session.id}/events`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}/events`)).status).toBe(404)
   })
 
   it('resolves one descriptor workbench mount from locator context only', async () => {

@@ -578,6 +578,21 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/sessions/:sessionId\',')
   })
 
+  test('mounted session events are derived without daemon local broker aliases', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
+    const mountedSessionEventsProxy = soulAppRuntime.slice(
+      soulAppRuntime.indexOf('const sessionEventsMatch'),
+      soulAppRuntime.indexOf('const sessionInvocationsMatch'),
+    )
+
+    expect(daemon).toContain('app.get(\'/api/sessions/:sessionId\',')
+    expect(daemon).not.toContain('app.get(\'/api/local/sessions/:sessionId/events\',')
+    expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/sessions/:sessionId/events\',')
+    expect(mountedSessionEventsProxy).toContain(['/api/sessions/', '{sessionEventsMatch[1]}'].join('$'))
+    expect(mountedSessionEventsProxy).not.toContain('/api/local/sessions/')
+  })
+
   test('Host runtime and UI app lifecycle APIs use archive naming internally', () => {
     const sources = [
       'apps/cli/src/aiworker.ts',

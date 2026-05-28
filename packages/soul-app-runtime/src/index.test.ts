@@ -270,6 +270,40 @@ describe('descriptor Soul runtime harness', () => {
     }
   })
 
+  it('maps mounted session events through canonical session reads', async () => {
+    const calls: Array<{ method: string, url: string }> = []
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ method: init?.method ?? 'GET', url: String(url) })
+      return Response.json({
+        events: [
+          { id: 1, type: 'start' },
+          { id: 2, type: 'progress' },
+          { id: '3', type: 'done' },
+        ],
+        session: { id: 'session-1' },
+      })
+    }) as typeof fetch
+    try {
+      const response = await mountSessionApiProxy(new Request('http://soul.test/api/sessions/session-1/events?after=1'), {
+        hostApiBaseUrl: 'http://host.test',
+        workerId: 'worker-1',
+      })
+
+      expect(response).not.toBeNull()
+      expect(await response!.json()).toEqual({
+        events: [
+          { id: 2, type: 'progress' },
+          { id: '3', type: 'done' },
+        ],
+      })
+      expect(calls).toEqual([{ method: 'GET', url: 'http://host.test/api/sessions/session-1' }])
+    }
+    finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
   function tempRoot(label: string): string {
     const root = mkdtempSync(path.join(tmpdir(), `aiworker-runtime-${label}-`))
     roots.push(root)
