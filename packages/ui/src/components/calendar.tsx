@@ -3,8 +3,7 @@
 /* eslint-disable react/no-nested-component-definitions */
 
 import type { DayButton, Locale } from 'react-day-picker'
-import { Button, buttonVariants } from '#components/button'
-
+import { Button } from '#components/button'
 import { cn } from '#lib/utils'
 import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -15,6 +14,7 @@ import {
   getDefaultClassNames,
 
 } from 'react-day-picker'
+import { buttonVariants } from './button-variants'
 
 function Calendar({
   className,
