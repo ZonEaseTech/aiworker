@@ -458,6 +458,82 @@ describe('local daemon API', () => {
     })
   })
 
+  it('surfaces missing projection receipt failures through the low-level engine invocation API', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'missing-receipt-engine-invocation-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    await rm(join(workspace.rootPath, '.aiworker', 'projections.json'), { force: true })
+
+    const engineInvocationRes = await target.request('/api/engine/invocations', {
+      body: JSON.stringify({
+        input: 'Continue through low-level broker without a projection receipt.',
+        sessionId: session.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(engineInvocationRes.status).toBe(201)
+    const body = await engineInvocationRes.json() as {
+      events: Array<{ payloadJson: Record<string, unknown>, type: string }>
+      invocation: { failureCode: string, processState: string, sessionId: string, status: string }
+      session: { id: string, status: string }
+    }
+    expect(body.invocation).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_MISSING',
+      processState: 'not_spawned',
+      sessionId: session.id,
+      status: 'failed',
+    })
+    expect(body.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(body.events.at(-1)).toMatchObject({
+      payloadJson: {
+        failureCode: 'PROJECTION_RECEIPT_MISSING',
+        invocationId: expect.any(String),
+      },
+      type: 'error',
+    })
+  })
+
+  it('surfaces stale projection receipt failures through the low-level engine invocation API', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'stale-receipt-engine-invocation-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+    const receiptPath = join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    await writeFile(receiptPath, `${JSON.stringify({ ...receipt, receiptId: 'stale-receipt' }, null, 2)}\n`)
+
+    const engineInvocationRes = await target.request('/api/engine/invocations', {
+      body: JSON.stringify({
+        input: 'Continue through low-level broker with a stale projection receipt.',
+        sessionId: session.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(engineInvocationRes.status).toBe(201)
+    const body = await engineInvocationRes.json() as {
+      events: Array<{ payloadJson: Record<string, unknown>, type: string }>
+      invocation: { failureCode: string, processState: string, sessionId: string, status: string }
+      session: { id: string, status: string }
+    }
+    expect(body.invocation).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_STALE',
+      processState: 'not_spawned',
+      sessionId: session.id,
+      status: 'failed',
+    })
+    expect(body.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(body.events.at(-1)).toMatchObject({
+      payloadJson: {
+        failureCode: 'PROJECTION_RECEIPT_STALE',
+        invocationId: expect.any(String),
+      },
+      type: 'error',
+    })
+  })
+
   it('records missing native resume refs through the session invocation broker route', async () => {
     const callOrder: string[] = []
     const target = await app(undefined, undefined, undefined, {
