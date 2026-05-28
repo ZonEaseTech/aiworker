@@ -868,7 +868,15 @@ async function deleteWorkerCommand(id: string): Promise<void> {
   const runtime = createHost(paths).createRuntimeForWorker(worker)
   const cleanedTargets: string[] = []
   for (const workspace of listWorkspaces(worker.id, Number.MAX_SAFE_INTEGER)) {
-    const cleanup = await runtime.cleanupWorkspaceProjectionReceipt(workspace.id)
+    let cleanup
+    try {
+      cleanup = await runtime.cleanupWorkspaceProjectionReceipt(workspace.id)
+    }
+    catch (error) {
+      if (isProjectionReceiptStaleError(error))
+        throw projectionReceiptStaleCliError(workspace.id)
+      throw error
+    }
     cleanedTargets.push(...cleanup?.cleanedTargets ?? [])
   }
   deleteWorker(worker.id)
@@ -967,13 +975,32 @@ async function deleteWorkspaceCommand(id: string): Promise<void> {
   if (!workspace)
     throw new Error(`workspace not found: ${id}`)
   const runtime = createHost(paths).createRuntimeForWorker(requireWorkerRow(workspace.workerId))
-  const cleanup = await runtime.cleanupWorkspaceProjectionReceipt(workspace.id)
+  let cleanup
+  try {
+    cleanup = await runtime.cleanupWorkspaceProjectionReceipt(workspace.id)
+  }
+  catch (error) {
+    if (isProjectionReceiptStaleError(error))
+      throw projectionReceiptStaleCliError(workspace.id)
+    throw error
+  }
   deleteWorkspace(workspace.id)
   printJson({
     cleanedTargets: cleanup?.cleanedTargets ?? [],
     deleted: true,
     workspace,
   })
+}
+
+function isProjectionReceiptStaleError(error: unknown): boolean {
+  return error != null
+    && typeof error === 'object'
+    && 'code' in error
+    && error.code === 'PROJECTION_RECEIPT_STALE'
+}
+
+function projectionReceiptStaleCliError(workspaceId: string): Error {
+  return new Error(`PROJECTION_RECEIPT_STALE: Projection receipt is invalid for workspace ${workspaceId}.`)
 }
 
 async function startSessionCommand(opts: { capability?: string, engine?: string, input?: string, model?: string, reasoning?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {

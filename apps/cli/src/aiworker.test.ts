@@ -529,6 +529,61 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { app: { appId: string, status: string } }).app).toMatchObject({ appId: FREEFORM_APP_ID, status: 'disabled' })
   })
 
+  it('rejects CLI workspace hard delete when its projection receipt schema is invalid', async () => {
+    expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'cli-delete-workspace-worker', '--name', 'CLI Delete Workspace Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'CLI Delete Workspace', '--type', 'freeform', '--worker', 'cli-delete-workspace-worker'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
+    const receiptPath = path.join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    const { freshnessMarker: _freshnessMarker, ...legacyReceipt } = receipt
+    await writeFile(receiptPath, `${JSON.stringify({ ...legacyReceipt, secret: 'sk-cli-workspace-delete-receipt' }, null, 2)}\n`)
+    output = ''
+    errorOutput = ''
+
+    expect(await runCli(argv('workspace', 'delete', workspace.id))).toBe(1)
+
+    expect(errorOutput).toContain('PROJECTION_RECEIPT_STALE')
+    expect(errorOutput).not.toContain('sk-cli-workspace-delete-receipt')
+    expect(errorOutput).not.toContain('freshnessMarker')
+    errorOutput = ''
+    expect(await runCli(argv('workspace', 'show', workspace.id))).toBe(0)
+    expect((JSON.parse(output) as { workspace: { id: string } }).workspace.id).toBe(workspace.id)
+  })
+
+  it('rejects CLI worker hard delete when a workspace projection receipt schema is invalid', async () => {
+    expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'cli-delete-worker-invalid-receipt', '--name', 'CLI Delete Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'CLI Delete Worker Workspace', '--type', 'freeform', '--worker', 'cli-delete-worker-invalid-receipt'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
+    const receiptPath = path.join(workspace.rootPath, '.aiworker', 'projections.json')
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>
+    const { freshnessMarker: _freshnessMarker, ...legacyReceipt } = receipt
+    await writeFile(receiptPath, `${JSON.stringify({ ...legacyReceipt, secret: 'sk-cli-worker-delete-receipt' }, null, 2)}\n`)
+    output = ''
+    errorOutput = ''
+
+    expect(await runCli(argv('worker', 'delete', 'cli-delete-worker-invalid-receipt'))).toBe(1)
+
+    expect(errorOutput).toContain('PROJECTION_RECEIPT_STALE')
+    expect(errorOutput).not.toContain('sk-cli-worker-delete-receipt')
+    expect(errorOutput).not.toContain('freshnessMarker')
+    errorOutput = ''
+    expect(await runCli(argv('worker', 'show', 'cli-delete-worker-invalid-receipt'))).toBe(0)
+    expect((JSON.parse(output) as { worker: { id: string } }).worker.id).toBe('cli-delete-worker-invalid-receipt')
+    output = ''
+    expect(await runCli(argv('workspace', 'show', workspace.id))).toBe(0)
+    expect((JSON.parse(output) as { workspace: { id: string } }).workspace.id).toBe(workspace.id)
+  })
+
   it('blocks CLI session work for existing workers when the Soul App is archived', async () => {
     await writeFakeCodexCommand()
 
