@@ -179,7 +179,7 @@ Host Web opens worker/workspace/session locator
 -> resolves Freeform workbench
 -> mounts via micro-app router-mode=search
 -> SDK common workbench renders
--> starts the first invocation and session-level follow-up
+-> verifies the first invocation and starts a session-level follow-up from browser context
 -> shows bridge event refs to the mounted surface
 -> cancels a queued invocation without changing session lifecycle
 -> reattaches and reconciles engine bridge events

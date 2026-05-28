@@ -1993,6 +1993,9 @@ describe('destructive refactor contract bootstrap', () => {
     expect(freeformCliBrowserProof).toContain('invocation.output.delta')
     expect(freeformCliBrowserProof).toContain('invocation.tool.observed')
     expect(freeformCliBrowserProof).toContain('invocation.usage.observed')
+    expect(freeformCliBrowserProof).toContain('readSessionFollowUpProofFromBrowser')
+    expect(freeformCliBrowserProof).toContain(`/api/sessions/\${id}/invocations`)
+    expect(freeformCliBrowserProof).toContain('assertBrowserSessionFollowUpProof')
     expect(freeformCliBrowserProof).toContain('assertInvocationExternalSessionRefProof')
     expect(freeformCliBrowserProof).toContain('reattached')
     expect(freeformCliBrowserProof).toContain(`/api/engine/invocations/\${id}/cancel`)
@@ -2099,7 +2102,7 @@ describe('destructive refactor contract bootstrap', () => {
   test('canonical testing docs track Freeform browser proof scope', () => {
     const testing = readRepoFile('docs/testing.md')
 
-    expect(testing).toContain('-> starts the first invocation and session-level follow-up')
+    expect(testing).toContain('-> verifies the first invocation and starts a session-level follow-up from browser context')
     expect(testing).toContain('-> shows bridge event refs to the mounted surface')
     expect(testing).toContain('-> cancels a queued invocation without changing session lifecycle')
     expect(testing).toContain('-> reattaches and reconciles engine bridge events')

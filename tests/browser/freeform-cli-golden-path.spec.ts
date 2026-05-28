@@ -167,10 +167,13 @@ try {
     throw new Error(`Freeform common workbench root did not render: ${mountedSurface.text}`)
   if (!mountedSurface.bridgeRefs || !mountedSurface.text.includes('Bridge event refs'))
     throw new Error(`Bridge event refs were not visible to the mounted surface: ${mountedSurface.text}`)
-  const invocationEventProof = await readInvocationEventProofFromBrowser(page, followUpResult.invocation.id)
-  assertInvocationEventProof(invocationEventProof, followUpResult.invocation.id)
-  const invocationExternalSessionRefProof = await readInvocationExternalSessionRefProofFromBrowser(page, followUpResult.invocation.id)
-  assertInvocationExternalSessionRefProof(invocationExternalSessionRefProof, followUpResult.invocation.id)
+  const browserSessionFollowUpProof = await readSessionFollowUpProofFromBrowser(page, sessionResult.session.id)
+  assertBrowserSessionFollowUpProof(browserSessionFollowUpProof, sessionResult.session.id)
+  const browserFollowUpInvocationId = String(readRecord(browserSessionFollowUpProof.invocation).id)
+  const invocationEventProof = await readInvocationEventProofFromBrowser(page, browserFollowUpInvocationId)
+  assertInvocationEventProof(invocationEventProof, browserFollowUpInvocationId)
+  const invocationExternalSessionRefProof = await readInvocationExternalSessionRefProofFromBrowser(page, browserFollowUpInvocationId)
+  assertInvocationExternalSessionRefProof(invocationExternalSessionRefProof, browserFollowUpInvocationId)
   for (const expectedSection of [
     'Worker configuration summary',
     'Session controls',
@@ -206,6 +209,7 @@ try {
     mountAttributes,
     mountProof,
     mountedSurface,
+    browserSessionFollowUpProof,
     invocationCancelProof,
     invocationEventProof,
     invocationExternalSessionRefProof,
@@ -411,6 +415,41 @@ async function readInvocationEventProofFromBrowser(page: Page, invocationId: str
       reattached: JSON.parse(reattachBody) as Record<string, unknown>,
     }
   }, invocationId)
+}
+
+async function readSessionFollowUpProofFromBrowser(page: Page, sessionId: string): Promise<Record<string, unknown>> {
+  return await page.evaluate(async (id) => {
+    const response = await fetch(`/api/sessions/${id}/invocations`, {
+      body: JSON.stringify({ input: 'Continue the Freeform browser golden path from Host Web.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    const body = await response.text()
+    if (!response.ok)
+      throw new Error(`browser session follow-up request failed ${response.status}: ${body}`)
+    return JSON.parse(body) as Record<string, unknown>
+  }, sessionId)
+}
+
+function assertBrowserSessionFollowUpProof(proof: Record<string, unknown>, sessionId: string): void {
+  const invocation = readRecord(proof.invocation)
+  const session = readRecord(proof.session)
+  if (session.id !== sessionId)
+    throw new Error(`Browser session follow-up returned the wrong session: ${JSON.stringify(proof)}`)
+  if (invocation.sessionId !== sessionId)
+    throw new Error(`Browser session follow-up returned the wrong invocation session: ${JSON.stringify(proof)}`)
+  if (invocation.status !== 'succeeded')
+    throw new Error(`Browser session follow-up invocation did not succeed: ${JSON.stringify(proof)}`)
+  if (invocation.inputRef !== `aiworker://sessions/${sessionId}/invocations/${invocation.id}/input`)
+    throw new Error(`Browser session follow-up did not use session-level inputRef: ${JSON.stringify(proof)}`)
+  if (!Array.isArray(proof.events) || proof.events.length === 0)
+    throw new Error(`Browser session follow-up missed invocation events: ${JSON.stringify(proof)}`)
+
+  const serialized = JSON.stringify(proof)
+  for (const forbidden of ['/turns/', '"turn"', 'sk-', 'literal-secret-value']) {
+    if (serialized.includes(forbidden))
+      throw new Error(`Browser session follow-up exposed forbidden content ${forbidden}: ${serialized}`)
+  }
 }
 
 async function readInvocationExternalSessionRefProofFromBrowser(page: Page, invocationId: string): Promise<Record<string, unknown>> {
