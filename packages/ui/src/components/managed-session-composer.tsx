@@ -2,19 +2,19 @@ import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 
 import type {
   SessionComposerAttachmentItem,
-  SessionComposerMaterial,
   SessionComposerMentionOption,
   SessionComposerMentionQuery,
   SessionComposerProps,
 } from './session-composer'
+import type { SessionComposerMaterial } from './session-composer-attachments'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { SessionComposer } from './session-composer'
 import {
   createComposerAttachment,
   formatSessionAttachmentKind,
   formatSessionAttachmentSize,
   isSessionAttachmentImage,
-  SessionComposer,
-} from './session-composer'
+} from './session-composer-attachments'
 
 type ManagedSessionComposerOwnedProps
   = | 'attachmentCountLabel'
