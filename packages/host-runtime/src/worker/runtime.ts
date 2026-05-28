@@ -420,6 +420,7 @@ export class LocalWorkerRuntime {
         status: 'failed',
         processState,
         failureCode,
+        eventLogRef: `aiworker://sessions/${session.id}/invocations/${invocation.id}/events`,
         error: message,
         metadataJson: { ...metadata, ...recoveredMetadata },
         summary: isLocalExecutorFailureLike(error) ? redactEngineNullableString(error.partialResult?.summary ?? null) : null,

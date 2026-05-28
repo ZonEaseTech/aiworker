@@ -271,6 +271,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('runtime doc promotes projection, assets CRUD, and bridge hard rules', () => {
     const runtime = readRepoFile('docs/runtime.md')
+    const runtimeTests = readRepoFile('packages/host-runtime/src/worker/runtime.test.ts')
 
     expect(runtime).toContain('Host orchestrates projection; engine-projection executes projection; SDK and protocol define projection inputs.')
     expect(runtime).toContain('Runtime skills, MCP, and entry-file CRUD')
@@ -282,6 +283,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(runtime).toContain('invocation.tool.observed')
     expect(runtime).toContain('process.lost')
     expect(runtime).toContain('Delayed hard kill must never terminate a newer invocation.')
+    expect(runtimeTests).toContain('assertMissingNativeResumeFailureProof')
   })
 
   test('worker-scoped engine invocation storage and APIs stay removed from current surfaces', () => {

@@ -91,6 +91,30 @@ describe('LocalWorkerRuntime', () => {
     })
   }
 
+  function assertMissingNativeResumeFailureProof(
+    result: Awaited<ReturnType<LocalWorkerRuntime['startInvocation']>>,
+    sessionId: string,
+  ) {
+    expect('turn' in result).toBe(false)
+    expect(result.invocation).toMatchObject({
+      eventLogRef: `aiworker://sessions/${sessionId}/invocations/${result.invocation.id}/events`,
+      failureCode: 'ENGINE_SESSION_REF_MISSING',
+      inputRef: `aiworker://sessions/${sessionId}/invocations/${result.invocation.id}/input`,
+      processState: 'not_spawned',
+      status: 'failed',
+    })
+    expect(result.session).toMatchObject({ endedAt: null, status: 'active' })
+    expect(result.events.every(event => event.invocationId === result.invocation.id)).toBe(true)
+    expect(result.events.at(-1)).toMatchObject({
+      type: 'error',
+      payloadJson: {
+        failureCode: 'ENGINE_SESSION_REF_MISSING',
+        invocationId: result.invocation.id,
+      },
+    })
+    expect(JSON.stringify(result)).not.toContain(['', 'turns', ''].join('/'))
+  }
+
   describe('session engine metadata helpers', () => {
     it('session engine metadata helpers freezes and reads session engine metadata', () => {
       const metadata = freezeSessionEngineMetadata({}, {
@@ -1037,11 +1061,7 @@ describe('LocalWorkerRuntime', () => {
       processState: 'not_spawned',
       status: 'failed',
     })
-    expect(result.session.status).toBe('active')
-    expect(result.events.at(-1)?.payloadJson).toMatchObject({
-      failureCode: 'ENGINE_SESSION_REF_MISSING',
-      invocationId: result.invocation.id,
-    })
+    assertMissingNativeResumeFailureProof(result, session.id)
   })
 
   it('freezes the session engine and date context across continuation invocations', async () => {
