@@ -1,26 +1,12 @@
 import type { OpenAPIHono } from '@hono/zod-openapi'
+import { localWorkerConfigValueInputSchema } from '@zonease/aiworker-soul-protocol'
 import { z } from '@hono/zod-openapi'
 
 export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
   const responseSchema = z.object({}).passthrough().openapi('LocalResponse')
-  const workerConfigValueInputSchema = z.object({
-    checksum: z.string().nullable().optional(),
-    enabled: z.boolean(),
-    kind: z.enum([
-      'engine-selection',
-      'projection-overlay',
-      'skill-overlay',
-      'mcp-overlay',
-      'entry-file-overlay',
-      'workbench-preference',
-      'sdk-extension',
-    ]),
-    options: z.record(z.string(), z.unknown()).optional(),
-    sourceRef: z.string().nullable().optional(),
-    target: z.enum(['codex', 'claude-code', 'all', 'none']),
-    updatedAt: z.string().datetime().optional(),
-    updatedBy: z.enum(['cli', 'web', 'app-owned-api']).optional(),
-  }).openapi('WorkerConfigValueInput', {
+  // envelope shape (kind/target/updatedBy enums, options, checksum, sourceRef) 由
+  // packages/soul-protocol 单一来源定义；这里只挂 OpenAPI 元数据，避免与 protocol drift。
+  const workerConfigValueInputSchema = localWorkerConfigValueInputSchema.openapi('WorkerConfigValueInput', {
     description: 'SDK-standard configValueJson envelope. Values must use refs and non-secret operational options; do not send literal secrets, full native MCP files, Soul domain records, business state, or artifact content.',
     example: {
       checksum: 'sha256:freeform-session-overlay',
