@@ -1603,6 +1603,35 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'storage fixtures should not name custom capabilities as templates').toEqual([])
   })
 
+  test('retired built-in Soul cleanup does not expose legacy-named current APIs', () => {
+    const activeSources = [
+      'packages/storage-sqlite/src/worker/index.ts',
+      'packages/storage-sqlite/src/worker/index.test.ts',
+      'packages/host-runtime/src/soul-app/official.ts',
+      'packages/host-runtime/src/host/runtime.ts',
+      'packages/host-runtime/src/host/runtime.test.ts',
+      'packages/host-runtime/src/index.ts',
+      'packages/host-daemon/src/modes/worker.local.test.ts',
+      'apps/cli/src/aiworker.test.ts',
+    ]
+    const forbidden = [
+      'DiscardLegacySoulMetadata',
+      'OfficialLegacyMetadataDiscard',
+      'discardLegacySoulMetadata',
+      'discardOfficialSoulAppLegacyMetadata',
+      'legacyMetadataDiscard',
+      'legacySoulIds',
+    ]
+    const findings = activeSources.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbidden
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'current cleanup surface should use retired built-in Soul naming, not legacy API names').toEqual([])
+  })
+
   test('storage worker tests use generic non-legacy worker fixtures instead of retired HR worker ids', () => {
     const storageTest = readRepoFile('packages/storage-sqlite/src/worker/index.test.ts')
       .replace(/ {2}it\('discards legacy[\s\S]*?\n {2}\}\)/, '')

@@ -4,7 +4,7 @@ import type { SoulAppRegistryContext } from './registry'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { discardLegacySoulMetadata, getSoulApp } from '@zonease/aiworker-storage-sqlite/worker'
+import { discardRetiredSoulMetadata, getSoulApp } from '@zonease/aiworker-storage-sqlite/worker'
 
 import {
   archiveSoulApp,
@@ -34,8 +34,8 @@ export interface OfficialSoulAppBootstrapResult {
   descriptorPath: string
 }
 
-export interface OfficialLegacyMetadataDiscardResult {
-  legacySoulIds: string[]
+export interface OfficialRetiredMetadataDiscardResult {
+  retiredSoulIds: string[]
   workersDeleted: number
 }
 
@@ -111,8 +111,8 @@ function getHostedSoulAppSafely(appId: string): HostedSoulApp | null {
   }
 }
 
-export function discardOfficialSoulAppLegacyMetadata(at?: string): OfficialLegacyMetadataDiscardResult {
-  return discardLegacySoulMetadata({
+export function discardOfficialSoulAppRetiredMetadata(at?: string): OfficialRetiredMetadataDiscardResult {
+  return discardRetiredSoulMetadata({
     at,
     soulIds: ['hr', 'qa'],
   })

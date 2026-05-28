@@ -470,13 +470,13 @@ export interface UpdateSoulAppLifecycleInput {
   at?: string
 }
 
-export interface DiscardLegacySoulMetadataInput {
+export interface DiscardRetiredSoulMetadataInput {
   soulIds: readonly string[]
   at?: string
 }
 
-export interface DiscardLegacySoulMetadataResult {
-  legacySoulIds: string[]
+export interface DiscardRetiredSoulMetadataResult {
+  retiredSoulIds: string[]
   workersDeleted: number
 }
 
@@ -731,28 +731,28 @@ export function listSessions(workspaceId?: string, limit = 200): SessionRow[] {
   return query.orderBy(desc(schema.sessions.updatedAt)).limit(limit).all()
 }
 
-export function discardLegacySoulMetadata(input: DiscardLegacySoulMetadataInput): DiscardLegacySoulMetadataResult {
-  const legacySoulIds = [...new Set(input.soulIds)].sort()
+export function discardRetiredSoulMetadata(input: DiscardRetiredSoulMetadataInput): DiscardRetiredSoulMetadataResult {
+  const retiredSoulIds = [...new Set(input.soulIds)].sort()
   let workersDeleted = 0
 
-  for (const soulId of legacySoulIds) {
-    const legacyWorkers = getWorkerDb()
+  for (const soulId of retiredSoulIds) {
+    const retiredWorkers = getWorkerDb()
       .select({ id: schema.workers.id })
       .from(schema.workers)
       .where(eq(schema.workers.soulId, soulId))
       .all()
-    if (legacyWorkers.length === 0)
+    if (retiredWorkers.length === 0)
       continue
 
     getWorkerDb()
       .delete(schema.workers)
       .where(eq(schema.workers.soulId, soulId))
       .run()
-    workersDeleted += legacyWorkers.length
+    workersDeleted += retiredWorkers.length
   }
 
   return {
-    legacySoulIds,
+    retiredSoulIds,
     workersDeleted,
   }
 }

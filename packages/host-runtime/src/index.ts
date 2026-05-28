@@ -36,9 +36,9 @@ export {
 } from './host/runtime'
 export {
   bootstrapOfficialSoulApps,
-  discardOfficialSoulAppLegacyMetadata,
+  discardOfficialSoulAppRetiredMetadata,
   OFFICIAL_SOUL_APPS,
-  type OfficialLegacyMetadataDiscardResult,
+  type OfficialRetiredMetadataDiscardResult,
   type OfficialSoulAppBootstrapAction,
   type OfficialSoulAppBootstrapOptions,
   type OfficialSoulAppBootstrapResult,

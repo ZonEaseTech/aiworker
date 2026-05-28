@@ -115,7 +115,7 @@ describe('Host runtime boundary', () => {
     expect(bootstrap.scope).toBe('official')
     expect(bootstrap.status).toBe('pass')
     expect(bootstrap.results.map(result => result.appId)).toEqual([FREEFORM_APP_ID])
-    expect(bootstrap.legacyMetadataDiscard).toMatchObject({ workersDeleted: 1 })
+    expect(bootstrap.retiredMetadataDiscard).toMatchObject({ workersDeleted: 1 })
     expect(getWorker('legacy-hr-worker')).toBeNull()
     expect(runtime.findSoul(FREEFORM_APP_ID)?.status).toBe('available')
     expect(runtime.findSoul('hr')).toBeUndefined()

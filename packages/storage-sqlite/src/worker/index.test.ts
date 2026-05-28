@@ -14,7 +14,7 @@ import {
   createEngineInvocation,
   createSession,
   createWorkspace,
-  discardLegacySoulMetadata,
+  discardRetiredSoulMetadata,
   engineInvocations,
   files,
   getSession,
@@ -797,13 +797,13 @@ describe('greenfield local worker session schema', () => {
       at: '2026-05-13T13:04:03.000Z',
     })
 
-    const result = discardLegacySoulMetadata({
+    const result = discardRetiredSoulMetadata({
       at: '2026-05-13T13:05:00.000Z',
       soulIds: ['hr'],
     })
 
     expect(result).toEqual({
-      legacySoulIds: ['hr'],
+      retiredSoulIds: ['hr'],
       workersDeleted: 1,
     })
     expect(getWorker(worker.id)).toBeNull()

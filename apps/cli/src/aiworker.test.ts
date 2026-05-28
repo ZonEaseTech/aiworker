@@ -1154,11 +1154,11 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     const body = JSON.parse(output) as {
       bootstrap: {
-        legacyMetadataDiscard: { workersDeleted: number }
+        retiredMetadataDiscard: { workersDeleted: number }
       }
       catalog: { souls: Array<{ id: string }> }
     }
-    expect(body.bootstrap.legacyMetadataDiscard).toMatchObject({ workersDeleted: 1 })
+    expect(body.bootstrap.retiredMetadataDiscard).toMatchObject({ workersDeleted: 1 })
     expect(body.catalog.souls.map(soul => soul.id)).toContain(FREEFORM_APP_ID)
     output = ''
 

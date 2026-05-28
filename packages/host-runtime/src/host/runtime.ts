@@ -1,6 +1,6 @@
 import type { HostedSoulApp } from '@zonease/aiworker-soul-protocol'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
-import type { OfficialLegacyMetadataDiscardResult, OfficialSoulAppBootstrapResult } from '../soul-app/official'
+import type { OfficialRetiredMetadataDiscardResult, OfficialSoulAppBootstrapResult } from '../soul-app/official'
 import type { HostSoulCatalog, SoulAppRegistryContext, SoulDescriptorInstallInput } from '../soul-app/registry'
 import type { LocalExecutor } from '../worker/executor'
 import type { LocalWorkerRuntime, LocalWorkerRuntimeOptions, LocalWorkerSnapshot } from '../worker/runtime'
@@ -17,7 +17,7 @@ import {
 
 import {
   bootstrapOfficialSoulApps as bootstrapOfficialSoulAppRegistry,
-  discardOfficialSoulAppLegacyMetadata,
+  discardOfficialSoulAppRetiredMetadata,
 } from '../soul-app/official'
 import {
   archiveSoulApp,
@@ -64,7 +64,7 @@ export interface HostRuntimeOptions {
 
 export interface HostOfficialSoulAppBootstrap {
   catalog: HostSoulCatalog
-  legacyMetadataDiscard: OfficialLegacyMetadataDiscardResult
+  retiredMetadataDiscard: OfficialRetiredMetadataDiscardResult
   results: OfficialSoulAppBootstrapResult[]
   scope: 'official'
   status: 'fail' | 'pass'
@@ -132,10 +132,10 @@ export class HostRuntime {
       ...this.registryContext(),
       officialAppsRoot: this.options.officialAppsRoot,
     })
-    const legacyMetadataDiscard = discardOfficialSoulAppLegacyMetadata(this.options.now?.())
+    const retiredMetadataDiscard = discardOfficialSoulAppRetiredMetadata(this.options.now?.())
     return {
       catalog: this.listCatalog(),
-      legacyMetadataDiscard,
+      retiredMetadataDiscard,
       results,
       scope: 'official',
       status: results.some(result => result.action === 'error') ? 'fail' : 'pass',
