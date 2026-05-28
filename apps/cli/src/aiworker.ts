@@ -125,6 +125,8 @@ interface SessionContinuationContext {
   sessionId: string
 }
 
+type CliProjectionEngineTarget = 'claude-code' | 'codex'
+
 interface DaemonStartResult {
   logFile: string
   pid: number
@@ -246,6 +248,14 @@ function resolveInvocationEngineMetadata(sessionMetadata: Record<string, unknown
   }
   const selectedEngineId = selectedCliEngineId()
   return resolveCliEngineMetadata(selectedEngineId)
+}
+
+function cliProjectionEngineTarget(engineId: string): CliProjectionEngineTarget | null {
+  if (engineId === 'codex' || engineId.startsWith('codex/'))
+    return 'codex'
+  if (engineId === 'claude-code' || engineId.startsWith('claude-code/'))
+    return 'claude-code'
+  return null
 }
 
 function registryContext() {
@@ -1011,7 +1021,8 @@ async function resolveSessionContinuationContext(opts: SessionContinuationComman
   createHost(paths).requireEnabledAppForWorker(runtime.workerId)
   const engineMetadata = resolveInvocationEngineMetadata(session.metadataJson)
   const frozen = readFrozenSessionEngine(session.metadataJson)
-  const currentSession = frozen?.executionMode === 'local-cli' && frozen.engineCommand !== engineMetadata.engineCommand
+  const needsLegacyEngineRepair = frozen?.executionMode === 'local-cli' && frozen.engineCommand !== engineMetadata.engineCommand
+  const currentSession = needsLegacyEngineRepair
     ? updateSession({
         id: session.id,
         metadataJson: {
@@ -1020,6 +1031,11 @@ async function resolveSessionContinuationContext(opts: SessionContinuationComman
         },
       })
     : session
+  if (needsLegacyEngineRepair) {
+    await runtime.reprojectWorkspaceAssets(currentSession.workspaceId, {
+      engineTarget: cliProjectionEngineTarget(engineMetadata.engineId),
+    })
+  }
   const metadata = {
     ...(currentSession.metadataJson ?? {}),
     ...cliEngineOverrideMetadata(opts),

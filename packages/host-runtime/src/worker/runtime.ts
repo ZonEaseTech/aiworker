@@ -17,6 +17,7 @@ import path from 'node:path'
 import { createEngineBridge, ENGINE_BRIDGE_FAILURE_CODES, redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
 import {
   cleanupWorkspaceProjectionReceipt as cleanupProjectedWorkspaceReceipt,
+  computeWorkspaceProjectionFreshnessMarker,
   engineAssetProjectionReceiptPath,
   projectEngineAssetsToWorkspace,
   resolveSoulAppEngineTarget,
@@ -701,6 +702,25 @@ export class LocalWorkerRuntime {
         `Projection receipt id changed for workspace ${workspace.id}.`,
       )
     }
+
+    if (!this.#engineAssetSource)
+      return
+
+    const engineTarget = resolveSoulAppEngineTarget(readNullableString(request.engineTarget))
+    const expectedFreshnessMarker = await computeWorkspaceProjectionFreshnessMarker({
+      appId: this.#engineAssetSource.appId,
+      engineAssets: this.#engineAssetSource.engineAssets,
+      engineTarget,
+      sourceRoot: this.#engineAssetSource.sourceRoot,
+      variables: this.projectionVariables(workspace.name),
+      workerOverlayAssets: await this.resolveCurrentWorkerOverlayProjectionAssets(engineTarget),
+    })
+    if (receipt.receipt.freshnessMarker !== expectedFreshnessMarker) {
+      throw localEngineBridgeFailure(
+        'PROJECTION_RECEIPT_STALE',
+        `Projection receipt freshness marker changed for workspace ${workspace.id}.`,
+      )
+    }
   }
 
   private appendEvent(sessionId: string, type: SessionEventRow['type'], payloadJson: Record<string, unknown>, invocationId: string): SessionEventRow {
@@ -881,10 +901,7 @@ export class LocalWorkerRuntime {
   }> {
     const engineTarget = input.engineTarget ?? resolveSoulAppEngineTarget(this.#workerInput.defaultEngineId)
     const workerOverlayAssets = this.#engineAssetSource && input.projectWorkerOverlayAssets
-      ? [
-          ...await this.resolveWorkerOverlayProjectionAssets(this.#engineAssetSource.sourceRoot),
-          ...await this.resolveWorkerConfigOverlayProjectionAssets(this.#engineAssetSource.sourceRoot, engineTarget),
-        ]
+      ? await this.resolveCurrentWorkerOverlayProjectionAssets(engineTarget)
       : []
     const engineAssets = this.#engineAssetSource && input.projectEngineAssets
       ? await projectEngineAssetsToWorkspace({
@@ -894,17 +911,30 @@ export class LocalWorkerRuntime {
           now: this.#now(),
           preserveUnownedExistingTargets: input.preserveUnownedExistingTargets,
           sourceRoot: this.#engineAssetSource.sourceRoot,
-          variables: {
-            appId: this.#engineAssetSource.appId,
-            soulId: this.#workerInput.soulId,
-            workerName: this.#workerInput.name,
-            workspaceName: input.name,
-          },
+          variables: this.projectionVariables(input.name),
           workerOverlayAssets,
           workspaceRoot: input.rootPath,
         })
       : null
     return { engineAssets }
+  }
+
+  private async resolveCurrentWorkerOverlayProjectionAssets(engineTarget: SoulAppEngineTarget | null): Promise<WorkerOverlayProjectionAsset[]> {
+    if (!this.#engineAssetSource)
+      return []
+    return [
+      ...await this.resolveWorkerOverlayProjectionAssets(this.#engineAssetSource.sourceRoot),
+      ...await this.resolveWorkerConfigOverlayProjectionAssets(this.#engineAssetSource.sourceRoot, engineTarget),
+    ]
+  }
+
+  private projectionVariables(workspaceName: string): Record<string, string> {
+    return {
+      appId: this.#engineAssetSource?.appId ?? '',
+      soulId: this.#workerInput.soulId,
+      workerName: this.#workerInput.name,
+      workspaceName,
+    }
   }
 
   private async resolveWorkerOverlayProjectionAssets(sourceRoot: string): Promise<WorkerOverlayProjectionAsset[]> {

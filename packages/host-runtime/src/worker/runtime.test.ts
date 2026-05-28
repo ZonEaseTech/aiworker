@@ -571,6 +571,130 @@ describe('LocalWorkerRuntime', () => {
     })
   })
 
+  it('rejects default bridge invocations before executor spawn when worker config makes projection receipts stale', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-default-bridge-config-stale')
+    await writeProfileEngineAssets(appRoot)
+    await mkdir(join(appRoot, 'engine-assets', 'skills', 'config-overlay'), { recursive: true })
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'config-overlay', 'SKILL.md'), '# Config Overlay Skill\n')
+    const executorInputs: string[] = []
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke(input) {
+        executorInputs.push(input.invocationId)
+        return { summary: 'fresh projection ran' }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Config Stale Receipt Workspace' })
+    const staleSession = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Stale config receipt session',
+    })
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'skill-overlay:candidate-profile',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:config-overlay',
+        enabled: true,
+        kind: 'skill-overlay',
+        options: {
+          replaces: 'descriptor://engine/skills/candidate-profile',
+        },
+        sourceRef: 'descriptor://engine/skills/config-overlay',
+        target: 'codex',
+      },
+    })
+
+    const staleResult = await workerRuntime.startInvocation({
+      sessionId: staleSession.id,
+      input: 'Run with stale projection config.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(executorInputs).toEqual([])
+    expect(staleResult.invocation).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_STALE',
+      processState: 'not_spawned',
+      status: 'failed',
+    })
+
+    await workerRuntime.reprojectWorkspaceAssets(workspace.id, { engineTarget: 'codex' })
+    const freshSession = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Fresh config receipt session',
+    })
+    const freshResult = await workerRuntime.startInvocation({
+      sessionId: freshSession.id,
+      input: 'Run after projection refresh.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(executorInputs).toEqual([freshResult.invocation.id])
+    expect(freshResult.invocation).toMatchObject({
+      processState: 'exited',
+      status: 'succeeded',
+      summary: 'fresh projection ran',
+    })
+  })
+
+  it('rejects default bridge invocations before executor spawn when descriptor engine assets make projection receipts stale', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-default-bridge-descriptor-stale')
+    await writeProfileEngineAssets(appRoot)
+    const executorInputs: string[] = []
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke(input) {
+        executorInputs.push(input.invocationId)
+        return { summary: 'fresh descriptor projection ran' }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Descriptor Stale Receipt Workspace' })
+    const staleSession = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Stale descriptor receipt session',
+    })
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'candidate-profile', 'SKILL.md'), '# Changed Descriptor Skill\n')
+
+    const staleResult = await workerRuntime.startInvocation({
+      sessionId: staleSession.id,
+      input: 'Run with stale descriptor projection.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(executorInputs).toEqual([])
+    expect(staleResult.invocation).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_STALE',
+      processState: 'not_spawned',
+      status: 'failed',
+    })
+
+    await workerRuntime.reprojectWorkspaceAssets(workspace.id, { engineTarget: 'codex' })
+    const freshSession = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Fresh descriptor receipt session',
+    })
+    const freshResult = await workerRuntime.startInvocation({
+      sessionId: freshSession.id,
+      input: 'Run after descriptor projection refresh.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(executorInputs).toEqual([freshResult.invocation.id])
+    expect(freshResult.invocation).toMatchObject({
+      processState: 'exited',
+      status: 'succeeded',
+      summary: 'fresh descriptor projection ran',
+    })
+  })
+
   it('starts first session-level engine invocations through the engine bridge when adapters are configured', async () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({

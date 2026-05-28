@@ -45,6 +45,15 @@ export interface EngineAssetProjectionInput {
   workspaceRoot: string
 }
 
+export interface WorkspaceProjectionFreshnessInput {
+  appId: string
+  engineAssets?: SoulAppEngineAssets
+  engineTarget?: SoulAppEngineTarget | null
+  sourceRoot: string
+  variables: Record<string, string>
+  workerOverlayAssets?: WorkerOverlayProjectionAsset[]
+}
+
 export interface WorkspaceProjectionReceiptCleanupInput {
   receipt: SoulAppProjectionReceipt
   workspaceRoot: string
@@ -78,6 +87,14 @@ export async function projectEngineAssetsToWorkspace(input: EngineAssetProjectio
 
   const receipt: SoulAppProjectionReceipt = {
     appId: input.appId,
+    freshnessMarker: await computeWorkspaceProjectionFreshnessMarker({
+      appId: input.appId,
+      engineAssets: input.engineAssets,
+      engineTarget: input.engineTarget,
+      sourceRoot,
+      variables: input.variables,
+      workerOverlayAssets: input.workerOverlayAssets,
+    }),
     generatedAt,
     projections,
     version: 1,
@@ -88,6 +105,24 @@ export async function projectEngineAssetsToWorkspace(input: EngineAssetProjectio
 
 export function engineAssetProjectionReceiptPath(): string {
   return PROJECTION_RECEIPT
+}
+
+export async function computeWorkspaceProjectionFreshnessMarker(input: WorkspaceProjectionFreshnessInput): Promise<string> {
+  const sourceRoot = path.resolve(input.sourceRoot)
+  const payload = stableJson({
+    appId: input.appId,
+    baselineAssets: await baselineAssetFingerprints({
+      engineAssets: input.engineAssets,
+      engineTarget: input.engineTarget ?? null,
+      sourceRoot,
+      variables: input.variables,
+    }),
+    engineAssets: engineAssetsFingerprint(input.engineAssets),
+    engineTarget: input.engineTarget ?? null,
+    variables: variableFingerprints(input.variables),
+    workerOverlayAssets: workerOverlayAssetFingerprints(input.workerOverlayAssets ?? [], input.variables),
+  })
+  return contentChecksum(payload)
 }
 
 export async function cleanupWorkspaceProjectionReceipt(input: WorkspaceProjectionReceiptCleanupInput): Promise<WorkspaceProjectionReceiptCleanupResult> {
@@ -251,6 +286,121 @@ async function projectMcpClients(input: EngineAssetProjectionContext): Promise<S
   }
 
   return entries
+}
+
+async function baselineAssetFingerprints(input: {
+  engineAssets?: SoulAppEngineAssets
+  engineTarget: SoulAppEngineTarget | null
+  sourceRoot: string
+  variables: Record<string, string>
+}): Promise<Array<Record<string, unknown>>> {
+  const fingerprints: Array<Record<string, unknown>> = []
+
+  const workspaceSource = appLocalSourcePath(input.engineAssets?.workspace?.source ?? DEFAULT_WORKSPACE_ASSET_SOURCE)
+  const workspaceRoot = path.join(input.sourceRoot, ...workspaceSource.split('/'))
+  for (const file of await listFiles(workspaceRoot)) {
+    const relative = path.relative(workspaceRoot, file).split(path.sep).join('/')
+    const content = renderTemplate(await readFile(file, 'utf8'), input.variables)
+    fingerprints.push({
+      kind: 'workspace-file',
+      sha256: contentChecksum(content),
+      source: path.posix.join(workspaceSource, relative),
+    })
+  }
+
+  const skillsSource = appLocalSourcePath(input.engineAssets?.skills?.source ?? DEFAULT_SKILL_ASSET_SOURCE)
+  const skillsRoot = path.join(input.sourceRoot, ...skillsSource.split('/'))
+  const configuredTargets = configuredSkillTargets(input.engineAssets)
+  for (const dirent of await readdirOrEmpty(skillsRoot)) {
+    if (!dirent.isDirectory() || !SKILL_ID_RE.test(dirent.name))
+      continue
+    const file = path.join(skillsRoot, dirent.name, SKILL_FILE)
+    if (!await isFile(file))
+      continue
+    const content = await readFile(file, 'utf8')
+    for (const target of configuredTargets) {
+      fingerprints.push({
+        engineTarget: target,
+        kind: 'native-skill',
+        sha256: contentChecksum(content),
+        source: path.posix.join(skillsSource, dirent.name, SKILL_FILE),
+      })
+    }
+  }
+
+  if (input.engineTarget) {
+    const clients = (input.engineAssets?.mcpClients ?? [])
+      .filter(client => client.target === input.engineTarget)
+      .sort((left, right) => left.source.localeCompare(right.source))
+    for (const client of clients) {
+      const adapter = mcpClientAdapter(input.engineTarget)
+      const sourceDir = appLocalSourcePath(client.source)
+      const source = path.posix.join(sourceDir, adapter.sourceFile)
+      const file = path.join(input.sourceRoot, ...source.split('/'))
+      fingerprints.push({
+        engineTarget: input.engineTarget,
+        kind: 'mcp-client',
+        sha256: await sourceFileChecksum(file),
+        source,
+      })
+    }
+  }
+
+  return fingerprints.sort((left, right) => stableJson(left).localeCompare(stableJson(right)))
+}
+
+async function sourceFileChecksum(file: string): Promise<string | null> {
+  try {
+    return contentChecksum(await readFile(file, 'utf8'))
+  }
+  catch (error) {
+    if (isNoEntryError(error))
+      return null
+    throw error
+  }
+}
+
+function engineAssetsFingerprint(engineAssets: SoulAppEngineAssets | undefined): Record<string, unknown> {
+  return {
+    mcpClients: (engineAssets?.mcpClients ?? [])
+      .map(client => ({
+        source: appLocalSourcePath(client.source),
+        target: client.target,
+      }))
+      .sort((left, right) => `${left.target}:${left.source}`.localeCompare(`${right.target}:${right.source}`)),
+    skills: {
+      source: appLocalSourcePath(engineAssets?.skills?.source ?? DEFAULT_SKILL_ASSET_SOURCE),
+      targets: configuredSkillTargets(engineAssets),
+    },
+    workspace: {
+      source: appLocalSourcePath(engineAssets?.workspace?.source ?? DEFAULT_WORKSPACE_ASSET_SOURCE),
+    },
+  }
+}
+
+function configuredSkillTargets(engineAssets: SoulAppEngineAssets | undefined): SoulAppEngineTarget[] {
+  return [...(engineAssets?.skills?.targets ?? ['codex', 'claude-code'])]
+    .sort((left, right) => left.localeCompare(right))
+}
+
+function workerOverlayAssetFingerprints(assets: WorkerOverlayProjectionAsset[], variables: Record<string, string>): Array<Record<string, unknown>> {
+  return assets
+    .map(asset => ({
+      contentSha256: asset.enabled
+        ? contentChecksum(asset.kind === 'entry-file' ? renderTemplate(asset.content, variables) : asset.content)
+        : null,
+      enabled: asset.enabled,
+      id: asset.id,
+      kind: asset.kind,
+      target: asset.target,
+    }))
+    .sort((left, right) => `${left.kind}:${left.target}:${left.id}`.localeCompare(`${right.kind}:${right.target}:${right.id}`))
+}
+
+function variableFingerprints(variables: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(variables)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => [key, contentChecksum(value)]))
 }
 
 async function readPreviousProjectionTargets(workspaceRoot: string): Promise<ReadonlySet<string>> {
@@ -499,6 +649,18 @@ export async function listBaselineAssets(source: EngineAssetSource): Promise<Loc
 
 function contentChecksum(content: string): string {
   return `sha256:${createHash('sha256').update(content).digest('hex')}`
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value))
+    return `[${value.map(item => stableJson(item)).join(',')}]`
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`)
+    return `{${entries.join(',')}}`
+  }
+  return JSON.stringify(value)
 }
 
 function isNoEntryError(error: unknown): boolean {

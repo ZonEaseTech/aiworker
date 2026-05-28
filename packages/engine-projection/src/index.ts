@@ -4,6 +4,7 @@ import path from 'node:path'
 
 export {
   cleanupWorkspaceProjectionReceipt,
+  computeWorkspaceProjectionFreshnessMarker,
   engineAssetProjectionReceiptPath,
   listBaselineAssets,
   projectEngineAssetsToWorkspace,
@@ -13,6 +14,7 @@ export type {
   EngineAssetProjectionInput,
   EngineAssetSource,
   WorkerOverlayProjectionAsset,
+  WorkspaceProjectionFreshnessInput,
   WorkspaceProjectionReceiptCleanupInput,
   WorkspaceProjectionReceiptCleanupResult,
 } from './workspace-projection'

@@ -52,6 +52,7 @@ export type SoulAppProjectionReceiptEntry = z.infer<typeof soulAppProjectionRece
 
 export const soulAppProjectionReceiptSchema = zod.object({
   appId: soulAppIdSchema,
+  freshnessMarker: zod.string().regex(/^sha256:[a-f0-9]{64}$/),
   generatedAt: zod.string().min(1),
   projections: zod.array(soulAppProjectionReceiptEntrySchema).readonly(),
   version: zod.literal(1),

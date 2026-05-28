@@ -327,6 +327,52 @@ describe('workspace engine asset projection', () => {
     expect(JSON.stringify(receipt)).not.toContain('secretref:codex/default-profile')
   })
 
+  it('records freshness markers without copying overlay content into receipts', async () => {
+    const sourceRoot = tempRoot('freshness-source')
+    const workspaceRoot = tempRoot('freshness-workspace')
+    const changedWorkspaceRoot = tempRoot('freshness-changed-workspace')
+    await writeEngineAssetSource(sourceRoot, 'command = "baseline-mcp"\n')
+
+    const receipt = await projectEngineAssetsToWorkspace({
+      appId: 'demo-soul-app',
+      engineAssets: mcpEngineAssets(['codex']),
+      engineTarget: 'codex',
+      now: '2026-05-16T00:00:00.000Z',
+      sourceRoot,
+      variables: { workspaceName: 'Fresh workspace' },
+      workerOverlayAssets: [{
+        content: 'api_key = "secretref:codex/default-profile"\n',
+        enabled: true,
+        id: 'codex-ats',
+        kind: 'mcp-client',
+        target: 'codex',
+      }],
+      workspaceRoot,
+    })
+    const changedReceipt = await projectEngineAssetsToWorkspace({
+      appId: 'demo-soul-app',
+      engineAssets: mcpEngineAssets(['codex']),
+      engineTarget: 'codex',
+      now: '2026-05-16T00:00:01.000Z',
+      sourceRoot,
+      variables: { workspaceName: 'Fresh workspace' },
+      workerOverlayAssets: [{
+        content: 'api_key = "secretref:codex/changed-profile"\n',
+        enabled: true,
+        id: 'codex-ats',
+        kind: 'mcp-client',
+        target: 'codex',
+      }],
+      workspaceRoot: changedWorkspaceRoot,
+    })
+    const receiptJson = await readFile(path.join(workspaceRoot, '.aiworker', 'projections.json'), 'utf8')
+
+    expect(receipt.freshnessMarker).toMatch(/^sha256:[a-f0-9]{64}$/)
+    expect(changedReceipt.freshnessMarker).not.toBe(receipt.freshnessMarker)
+    expect(receiptJson).toContain(`"freshnessMarker": "${receipt.freshnessMarker}"`)
+    expect(receiptJson).not.toContain('secretref:codex/default-profile')
+  })
+
   it('cleans up only receipt-owned workspace projection files', async () => {
     const sourceRoot = tempRoot('cleanup-source')
     const workspaceRoot = tempRoot('cleanup-workspace')
@@ -361,6 +407,7 @@ describe('workspace engine asset projection', () => {
     await expect(cleanupWorkspaceProjectionReceipt({
       receipt: {
         appId: 'demo-soul-app',
+        freshnessMarker: `sha256:${'0'.repeat(64)}`,
         generatedAt: '2026-05-16T00:00:00.000Z',
         projections: [{
           appId: 'demo-soul-app',
