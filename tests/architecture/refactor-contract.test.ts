@@ -527,6 +527,17 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.get(\'/api/local/workspaces\',')
   })
 
+  test('daemon workspace locator member surface does not preserve local broker aliases', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+
+    expect(daemon).toContain('app.get(\'/api/workspace-locators/:workspaceId\',')
+    expect(daemon).toContain('app.patch(\'/api/workspace-locators/:workspaceId\',')
+    expect(daemon).not.toContain('app.get(\'/api/local/workspaces/:workspaceId\',')
+    expect(daemon).not.toContain('app.patch(\'/api/local/workspaces/:workspaceId\',')
+    expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/workspaces/:workspaceId\',')
+    expect(daemon).not.toContain('app.patch(\'/api/local/workers/:workerId/workspaces/:workspaceId\',')
+  })
+
   test('daemon session collection surface does not preserve local broker alias', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
 

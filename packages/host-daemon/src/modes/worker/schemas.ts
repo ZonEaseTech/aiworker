@@ -85,8 +85,7 @@ export const createWorkspaceLocatorBodySchema = createWorkspaceBodySchema.extend
 })
 
 // ---------------------------------------------------------------------------
-// PATCH /api/local/workers/:workerId/workspaces/:workspaceId
-// PATCH /api/local/workspaces/:workspaceId
+// PATCH /api/workspace-locators/:workspaceId
 // 白名单字段（对应 Pick<WorkspaceRow, 'metadataJson' | 'name' | 'sourcePointersJson' | 'status'>）
 // status 枚举值来自 @zonease/aiworker-soul-protocol localWorkspaceStatusSchema：['active','archived']
 // ---------------------------------------------------------------------------

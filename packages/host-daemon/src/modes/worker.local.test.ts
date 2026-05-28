@@ -562,6 +562,18 @@ describe('local daemon API', () => {
     const fetched = await getRes.json() as { workspace: { rootPath: string } }
     expect(fetched.workspace.rootPath).toBe(requestedRootPath)
     expect((await target.request('/api/local/workspaces')).status).toBe(404)
+    expect((await target.request(`/api/local/workspaces/${body.workspace.id}`)).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/workspaces/${body.workspace.id}`)).status).toBe(404)
+    expect((await target.request(`/api/local/workspaces/${body.workspace.id}`, {
+      body: JSON.stringify({ name: 'Legacy Direct Workspace Patch' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })).status).toBe(404)
+    expect((await target.request(`/api/local/workers/${worker.id}/workspaces/${body.workspace.id}`, {
+      body: JSON.stringify({ name: 'Legacy Worker Workspace Patch' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })).status).toBe(404)
     await expect(readFile(join(requestedRootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Freeform')
   })
 
@@ -1386,8 +1398,7 @@ describe('local daemon API', () => {
       headers: { 'content-type': 'application/json' },
       method: 'PATCH',
     })
-    expect(localWorkspacePatchRes.status).toBe(422)
-    expect(await localWorkspacePatchRes.json()).toMatchObject({ error: { code: 'PATCH_WORKSPACE_INVALID' } })
+    expect(localWorkspacePatchRes.status).toBe(404)
 
     const localWorkspaceSourcePointersPatchRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}`, {
       body: JSON.stringify({
@@ -1398,8 +1409,7 @@ describe('local daemon API', () => {
       headers: { 'content-type': 'application/json' },
       method: 'PATCH',
     })
-    expect(localWorkspaceSourcePointersPatchRes.status).toBe(422)
-    expect(await localWorkspaceSourcePointersPatchRes.json()).toMatchObject({ error: { code: 'PATCH_WORKSPACE_INVALID' } })
+    expect(localWorkspaceSourcePointersPatchRes.status).toBe(404)
 
     const sessionMetadataRes = await target.request(`/api/sessions/${session.id}`, {
       body: JSON.stringify({

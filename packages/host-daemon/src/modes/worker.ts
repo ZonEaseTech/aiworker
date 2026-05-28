@@ -459,25 +459,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     }
     return c.json({ workspace }, 201)
   })
-  app.get('/api/local/workers/:workerId/workspaces/:workspaceId', (c) => {
-    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
-    return c.json({ workspace })
-  })
-  app.patch('/api/local/workers/:workerId/workspaces/:workspaceId', async (c) => {
-    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
-    const result = await parseJsonBody(c, patchWorkspaceBodySchema, 'PATCH_WORKSPACE_INVALID')
-    if (!result.ok)
-      return result.response
-    try {
-      return c.json({ workspace: updateWorkspace({ id: workspace.id, ...result.data }) })
-    }
-    catch (error) {
-      const response = hostMetadataValidationResponse(c, 'PATCH_WORKSPACE_INVALID', error)
-      if (response)
-        return response
-      throw error
-    }
-  })
   app.post('/api/local/workers/:workerId/workspaces/:workspaceId/projection', async (c) => {
     const workerId = c.req.param('workerId')
     if (!getWorker(workerId))
@@ -490,26 +471,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return unavailableApp
     const projection = await requireRuntime(state, workerId).reprojectWorkspaceAssets(workspace.id)
     return c.json({ projection })
-  })
-  app.get('/api/local/workspaces/:workspaceId', (c) => {
-    const workspace = getWorkspace(c.req.param('workspaceId'))
-    if (!workspace)
-      return notFound(c, 'workspace')
-    return c.json({ workspace })
-  })
-  app.patch('/api/local/workspaces/:workspaceId', async (c) => {
-    const result = await parseJsonBody(c, patchWorkspaceBodySchema, 'PATCH_WORKSPACE_INVALID')
-    if (!result.ok)
-      return result.response
-    try {
-      return c.json({ workspace: updateWorkspace({ id: c.req.param('workspaceId'), ...result.data }) })
-    }
-    catch (error) {
-      const response = hostMetadataValidationResponse(c, 'PATCH_WORKSPACE_INVALID', error)
-      if (response)
-        return response
-      throw error
-    }
   })
   app.get('/api/sessions', c => c.json({ sessions: listSessions() }))
   app.get('/api/local/workers/:workerId/workspaces/:workspaceId/sessions', (c) => {
