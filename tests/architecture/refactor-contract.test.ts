@@ -599,6 +599,8 @@ describe('destructive refactor contract bootstrap', () => {
       'apps/web/src/worker/__tests__/worker-studio.test.tsx',
     ]
     const forbidden = [
+      'app.get(\'/api/local/capabilities\'',
+      'url.endsWith(\'/api/local/capabilities\')',
       '/api/local/templates',
       '/api/local/workers/:workerId/templates',
       ['/api/local/workers/', '{workerId}/templates'].join('$'),

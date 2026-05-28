@@ -229,6 +229,8 @@ describe('local daemon API', () => {
     const capabilitiesBody = await capabilitiesRes.json() as { capabilities: Array<{ id: string }> }
     expect(capabilitiesBody.capabilities.map(capability => capability.id)).toContain(FREEFORM_CAPABILITY)
 
+    expect((await target.request('/api/local/capabilities')).status).toBe(404)
+
     const workerCapabilitiesRes = await target.request(`/api/local/workers/${worker.id}/capabilities`)
     expect(workerCapabilitiesRes.status).toBe(200)
     const workerCapabilitiesBody = await workerCapabilitiesRes.json() as { capabilities: Array<{ id: string }> }
