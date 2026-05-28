@@ -578,6 +578,19 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/sessions/:sessionId\',')
   })
 
+  test('daemon projection refresh surface does not preserve local broker alias', () => {
+    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const webProjectionApi = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlays.ts')
+    const projectWorkspaceProjection = webProjectionApi.slice(
+      webProjectionApi.indexOf('export function projectWorkerWorkspaceOverlay'),
+    )
+
+    expect(daemon).toContain('app.post(\'/api/projections/:target/refresh\',')
+    expect(daemon).not.toContain('app.post(\'/api/local/workers/:workerId/workspaces/:workspaceId/projection\',')
+    expect(projectWorkspaceProjection).toContain(['/api/projections/', '{target}/refresh'].join('$'))
+    expect(projectWorkspaceProjection).not.toContain('/api/local/workers/')
+  })
+
   test('mounted session events are derived without daemon local broker aliases', () => {
     const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
     const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')

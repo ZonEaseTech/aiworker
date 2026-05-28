@@ -1244,13 +1244,7 @@ describe('local daemon API', () => {
     })
 
     const localProjectionRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/projection`, { method: 'POST' })
-    expect(localProjectionRes.status).toBe(409)
-    expect(await localProjectionRes.json()).toMatchObject({
-      error: {
-        code: 'SOUL_APP_DISABLED',
-        message: `Soul App is not enabled: ${FREEFORM_APP_ID}`,
-      },
-    })
+    expect(localProjectionRes.status).toBe(404)
 
     const sessionCreateRes = await target.request('/api/sessions', {
       body: JSON.stringify({

@@ -432,19 +432,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       workspace,
     })
   })
-  app.post('/api/local/workers/:workerId/workspaces/:workspaceId/projection', async (c) => {
-    const workerId = c.req.param('workerId')
-    if (!getWorker(workerId))
-      return notFound(c, 'worker')
-    const workspace = getWorkspace(c.req.param('workspaceId'))
-    if (!workspace || workspace.workerId !== workerId)
-      return notFound(c, 'workspace')
-    const unavailableApp = unavailableSoulAppResponse(c, state, workerId)
-    if (unavailableApp)
-      return unavailableApp
-    const projection = await requireRuntime(state, workerId).reprojectWorkspaceAssets(workspace.id)
-    return c.json({ projection })
-  })
   app.get('/api/sessions', (c) => {
     const workerId = c.req.query('workerId')
     const workspaceId = c.req.query('workspaceId')
