@@ -196,6 +196,9 @@ requireIncludes('docs/runtime.md', [
   'process.lost',
   'Delayed hard kill must never terminate a newer invocation.',
   'Author-owned native MCP files may contain literal secrets',
+  'AIWorker does not manage engine login, token refresh, account selection, or\nengine profiles.',
+  'Author-owned native MCP files may contain literal secrets. AIWorker must not copy\nthose values into descriptors, Host DB, projection receipts, logs, diagnostics,\nOpenAPI examples, or UI.',
+  'Anything emitted by CLI, Web, logs, API errors, event\nstreams, or diagnostics must be redacted before persistence or display.',
 ])
 
 requireIncludes('docs/soul-authoring.md', [
