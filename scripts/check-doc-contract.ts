@@ -232,6 +232,7 @@ requireIncludes('docs/testing.md', [
   '`bun run release:check` is the aggregator for this current release gate list.',
   'Contract tests are the primary guardrail',
   'The v1 browser proof is Freeform-only',
+  'Host Web opens worker/workspace/session locator\n-> resolves Freeform workbench\n-> mounts via micro-app router-mode=search\n-> SDK common workbench renders\n-> verifies the first invocation and starts a session-level follow-up from browser context\n-> shows bridge event refs to the mounted surface\n-> cancels a queued invocation without changing session lifecycle\n-> reattaches and reconciles engine bridge events\n-> refreshes projection receipts from mounted context\n-> applies worker config overlay and observes worker-overlay projection receipts\n-> archives the session and rejects follow-up\n-> archives workspace and worker lifecycle, blocking new work on archived worker',
   'tests/browser/freeform-cli-golden-path.spec.ts',
   'Canonical Coverage Ledger',
   'docs+tests',
