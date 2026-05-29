@@ -191,6 +191,8 @@ forbidIncludes('docs/protocol.md', [
 requireIncludes('docs/runtime.md', [
   'The runtime is seven chains:',
   '1. Soul authoring and descriptor build.\n2. Descriptor install and worker enablement.\n3. Session start and first invocation.\n4. Runtime skills, MCP, and entry-file CRUD.\n5. Web workbench mount.\n6. App-owned API proxy.\n7. Archive and delete.',
+  '`packages/host-daemon` owns the local broker API used by CLI, Web, and mounted\nSoul Apps. It forwards orchestration to `packages/host-runtime`.',
+  'The daemon is not a product backend and does not own domain routes.',
   'session lifecycle: active | archived | deleted',
   'execution/process state belongs to engine_invocations',
   'POST /api/sessions/:sessionId/invocations',
