@@ -120,6 +120,7 @@ requireIncludes('AGENTS.md', [
   'canonical docs',
   'Superpowers',
   'Host is shell / locator / mount / bridge',
+  'Host is shell / locator / mount / bridge。',
   'CLI-first',
   'descriptor-only',
   'POST /api/sessions/:sessionId/invocations',
