@@ -269,7 +269,8 @@ Each development turn must complete at least one:
 
 ## Final Response Shape
 
-Use this concise shape:
+Use the evaluator-visible labels required by the active prompt. If the active
+prompt does not specify labels, use this concise shape:
 
 ```text
 Objective: active/complete/blocked, and why.
