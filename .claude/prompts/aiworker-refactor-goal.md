@@ -1,76 +1,13 @@
-/goal Use the Claude Code skill named `aiworker-refactor-dev-loop`.
+/goal Using the Claude Code skill named `aiworker-refactor-dev-loop`, AIWorker has reached canonical architecture release readiness, and Claude has surfaced fresh transcript evidence from the current repo state that all of the following are true:
 
-Continue the AIWorker destructive refactor as long-running implementation work
-toward canonical architecture release readiness. Freeform v1 is the first strong
-acceptance vertical, not the end of the refactor.
+1. `AGENTS.md` and the canonical docs (`docs/architecture.md`, `docs/protocol.md`, `docs/runtime.md`, `docs/soul-authoring.md`, `docs/testing.md`) match the implementation and remain the only architecture authority.
+2. Freeform v1 is proven as the first strong acceptance vertical through CLI, Web, host-daemon, mounted workbench, engine bridge, and projection/lifecycle behavior.
+3. Host/Soul descriptor-only boundaries are enforced by tests: Host consumes built descriptors/assets/API proxy only, and does not import Soul source, interpret Soul domain fields, or own Soul domain UI/API/state.
+4. Monorepo boundaries are enforced by tests: runnable shells stay in `apps/*`, descriptor-producing Soul Apps stay in `souls/*`, reusable capability stays in `packages/*`, and old authority paths such as `apps/api`, `apps/aiworker-*`, `packages/core`, `packages/shared`, `core-v2`, and `shared-v2` cannot return without failing guardrails.
+5. Runtime boundaries are enforced by tests: sessions keep lifecycle only, execution state lives in invocations, follow-up is session-level, mounted workbench production routing uses `router-mode="search"`, and secret-bearing native MCP data is not copied into descriptors, DB, receipts, logs, diagnostics, OpenAPI examples, or UI.
+6. Required verification has passed with fresh output, including `bun run docs:check`, `bun run test:contracts`, and the relevant CLI/Web/host-daemon/mounted-workbench/engine/release gates needed to prove the current release-readiness claim.
+7. No P0/P1 architecture drift remains.
 
-Worktree:
+This goal is not satisfied by any single verified slice, any single conventional commit, passing preflight, passing `docs:check` and `test:contracts` alone, a broad audit/finding list, a synthesis/status report, or a `Next` target. Those are progress checkpoints only.
 
-```text
-/Users/ben/projects/aiworker
-```
-
-Before selecting work, do one zero-trust progress calibration because the prior
-round may have drifted or misread the refactor as complete.
-
-This `/goal` authorizes:
-
-- standard Superpowers workflow use;
-- short-lived subagents as sidecars;
-- strict Subagent Reclamation Contract: record each spawned subagent, collect its
-  result, immediately close it, and keep owned open subagents at 0 before final
-  response, phase commit, or the next slice;
-- Phase Commit Contract with conventional commits after verified progress;
-- Zero-Trust Review Contract at startup and completion.
-
-Hard constraints:
-
-- Canonical authority is only `AGENTS.md`, `docs/architecture.md`,
-  `docs/protocol.md`, `docs/runtime.md`, `docs/soul-authoring.md`, and
-  `docs/testing.md`.
-- Do not use `tmp/refactor`, old E2E, old changelog, or old project-local skills
-  as architecture authority.
-- The work is development progress, not an audit report.
-- If there is no P0/P1 drift, each round must complete one smallest verifiable
-  development slice.
-- Do not treat one completed slice as goal completion.
-- Complete only when the skill Exit Criteria are satisfied.
-- Block only after the same blocker repeats across multiple rounds and no
-  alternate slice can make meaningful progress.
-
-Every round starts by:
-
-1. Reading `AGENTS.md`, the five canonical docs, and the
-   `aiworker-refactor-dev-loop` skill.
-2. Re-checking current git state, canonical contracts, and P0/P1 drift from a
-   zero-trust posture.
-3. Reconciling any known owned subagents before considering new subagents.
-4. Running `bun run docs:check` and `bun run test:contracts`.
-5. Choosing the next smallest verifiable slice from current code evidence.
-
-Every round executes by:
-
-- following the skill slice priority;
-- using the relevant Superpowers workflow for design, planning, TDD, debugging,
-  or completion verification;
-- keeping subagents as independent sidecars while the main agent stays on the
-  critical path;
-- adding or updating focused contract tests first for behavior changes;
-- running completion review from a zero-trust posture;
-- ensuring all owned subagents are joined and closed;
-- committing verified progress with a conventional commit;
-- staging only current-slice files and never using `git add .`.
-
-End each round with:
-
-```text
-Preflight
-Slice
-Zero-Trust
-Superpowers/Subagents
-Changes
-Verification
-Drift
-Commit
-Next
-```
+While this condition is not satisfied, continue development instead of closing the goal: use the skill loop, pick the next bounded implementation target from current evidence, implement or remove old architecture residue, run fresh verification, run code-review-graph for code changes unless unavailable, stage only current-slice files, create a conventional commit for verified progress, and then continue to the next bounded target. Block only after the same unsafe or user-decision blocker repeats across multiple rounds and no alternate slice can make meaningful progress.
