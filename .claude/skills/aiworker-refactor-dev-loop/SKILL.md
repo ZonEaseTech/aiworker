@@ -1,16 +1,16 @@
 ---
 name: aiworker-refactor-dev-loop
-description: Use when running long AIWorker destructive refactor work in Claude Code, especially Dynamic workflows, canonical architecture migration, Freeform v1 progress, host-daemon/runtime/protocol/projection/engine-bridge work, checkpointed development, or multi-round continuation.
+description: Use when continuing AIWorker destructive refactor work in Claude Code, canonical architecture migration, Freeform v1 progress, host-daemon/runtime/protocol/projection/engine-bridge work, checkpointed development, or multi-round continuation.
 ---
 
-# AIWorker Refactor Dynamic Workflow Entry
+# AIWorker Refactor Claude Dev Loop
 
-This skill routes long AIWorker refactor work into Claude Code Dynamic
-workflows.
+This skill keeps Claude Code on a checkpointed development loop for AIWorker
+refactor work.
 
-It is not an architecture authority. It is not a fixed workflow plan. The
-Dynamic workflow owns orchestration, decomposition, intermediate state, and
-continuation decisions.
+It is not an architecture authority. It is not a fixed workflow plan. It decides
+whether the current task should use the normal Claude Code development loop or a
+Dynamic workflow. The normal development loop is the default.
 
 ## Authority
 
@@ -26,6 +26,32 @@ Canonical authority is:
 Do not use `tmp/refactor`, old E2E, old changelog, historical local skills,
 conversation summaries, cached test results, or stale agent claims as
 architecture authority.
+
+## Execution Mode Selection
+
+Do not create a Dynamic workflow merely because the task is long.
+
+Default to the normal Claude Code development loop for:
+
+- implementation;
+- refactor;
+- API or runtime changes;
+- focused tests;
+- verification;
+- conventional commits;
+- one-package or few-package development slices.
+
+Use a Dynamic workflow only when current evidence shows the selected task is
+inherently parallel, mechanical, or cross-check heavy, such as:
+
+- broad independent codebase audit;
+- large mechanical migration across disjoint write surfaces;
+- adversarial verification where independent agents materially reduce risk;
+- cross-package research where many independent findings must be reconciled.
+
+If unsure, choose the normal development loop.
+
+Do not use `/goal` unless the user explicitly asks for goal mode.
 
 ## Long Task Discovery
 
@@ -43,9 +69,9 @@ Treat it as a long task when any of these are true:
 - the user mentions continuing refactor, migration, Freeform v1, host-daemon,
   engine bridge, projection, mounted workbench, or canonical architecture work.
 
-For long tasks, create and run a Dynamic workflow. Do not simulate long-running
-work as one ordinary chat turn. Do not use `/goal` unless the user explicitly
-asks for it.
+Long tasks require checkpointed progress, not automatic Dynamic workflows. For
+long tasks, choose the execution mode from current evidence, then run the
+development mainline below.
 
 ## Boundary Setting
 
@@ -62,20 +88,35 @@ boundary must include:
 - commit or checkpoint expectation;
 - stop conditions.
 
-The selected target should be large enough to justify a Dynamic workflow and
-small enough to produce verified commits.
+The selected target should be small enough to produce verified commits.
 
 Prefer targets that advance implementation. Tests are verification gates, not
 the main product. Do not spend a round only expanding tests unless the test
 directly proves or unlocks the selected development target.
 
-## Non-Audit Development Contract
+## Development Mainline
 
-A Dynamic workflow run is invalid if it only performs discovery, audit,
-verification, synthesis, or recommendation.
+Every run must move through this chain unless blocked or explicitly asked for
+status, audit, review, or planning only:
 
-A valid long-task workflow must include a write-capable development lane unless
-it stops as blocked, unsafe, or fully complete.
+1. zero-trust preflight;
+2. choose one bounded implementation target;
+3. implement or remove old architecture residue;
+4. run fresh verification;
+5. perform zero-trust completion review;
+6. create a conventional commit for verified progress, unless unsafe;
+7. report the next target or exact stop reason.
+
+If preflight finds no P0/P1 drift, select the next implementation target and
+make development progress.
+
+## Non-Audit Contract
+
+A run is invalid if it only performs discovery, audit, verification, synthesis,
+or recommendation.
+
+A valid long-task run must include write-capable development work unless it
+stops as blocked, unsafe, or fully complete.
 
 Baseline green is not a stopping condition. If preflight and verification are
 green, select the next implementation target and make development progress.
@@ -91,7 +132,7 @@ A completed development round must produce at least one of:
 Test-only work is valid only when it unlocks or proves the selected
 implementation target.
 
-Do not report workflow success with only:
+Do not report run success with only:
 
 - drift audit;
 - Exit Criteria audit;
@@ -104,8 +145,7 @@ decision or unsafe state.
 
 ## Superpowers
 
-Dynamic workflows own orchestration. Superpowers provide process discipline
-inside the workflow.
+Superpowers provide process discipline inside the selected execution mode.
 
 Use relevant Superpowers when their trigger applies:
 
@@ -118,23 +158,23 @@ Use relevant Superpowers when their trigger applies:
 - use `superpowers:systematic-debugging` for failures, unexpected behavior,
   flaky verification, or unclear root cause;
 - use `superpowers:verification-before-completion` before claiming a round,
-  commit, or full workflow is complete.
+  commit, or long task is complete.
 
-Superpowers are quality gates, not the workflow plan. Do not let them turn the
-run into audit-only or test-only work. Development progress remains the
-mainline.
+Superpowers are quality gates, not an excuse to stop at audit-only or test-only
+output. Development progress remains the mainline.
 
 ## Operating Mode
 
-The workflow should discover current state, review prior development output with
-zero trust, choose the next bounded development target, and then design its own
-orchestration.
+The selected execution mode should discover current state, review prior
+development output with zero trust, choose the next bounded development target,
+and then execute.
 
-This skill defines invariants. The Dynamic workflow defines the actual plan.
+This skill defines invariants. The selected execution mode defines the concrete
+plan.
 
-The workflow must not choose a read-only audit plan when implementation progress
-is safe. Discovery and verification are setup and gates for development, not the
-main output.
+Do not choose a read-only audit plan when implementation progress is safe.
+Discovery and verification are setup and gates for development, not the main
+output.
 
 Prefer development progress in these areas:
 
@@ -148,12 +188,12 @@ Prefer development progress in these areas:
 
 ## Required Guards
 
-The Dynamic workflow must enforce:
+Every execution mode must enforce:
 
 - zero-trust startup review from current files and commands;
 - zero-trust completion review before reporting or committing;
 - P0/P1 architecture drift is fixed before ordinary feature progress;
-- workflow agents and subagents are bounded, joined, and not left as unmanaged
+- agents and subagents are bounded, joined, and not left as unmanaged
   background work;
 - verified development progress is committed with conventional commits;
 - unrelated user or concurrent-session changes are not staged;
@@ -163,8 +203,8 @@ The Dynamic workflow must enforce:
 
 ## Round Invariants
 
-The workflow may choose its own structure, but each completed round must leave
-the repo easier to resume.
+The selected execution mode may choose its own structure, but each completed
+round must leave the repo easier to resume.
 
 Each round must produce:
 
@@ -187,8 +227,7 @@ Continue while:
 - repo and agent resource state are safe;
 - run budget remains.
 
-If the workflow stops before full completion, report why and provide a resume
-prompt.
+If the run stops before full completion, report why and provide a resume prompt.
 
 ## Exit Criteria
 
