@@ -71,6 +71,8 @@ requireIncludes('docs/architecture.md', [
   'Host owns only platform metadata:',
   '- installed app descriptors;\n- worker metadata and worker-scoped SDK-standard configuration envelopes;\n- workspace locator metadata;\n- session lifecycle metadata;\n- engine invocation references;\n- projection receipts;\n- normalized bridge event references;\n- redacted diagnostic references.',
   'Host DB must not store Soul domain objects, artifact content, review/profile\nrecords, business confirmation state, engine secrets, engine profile files, or\nnative MCP secret values.',
+  'Contract and guardrails come first:',
+  '1. Promote canonical docs.\n2. Rewrite `AGENTS.md` as a short bootstrap.\n3. Add contract test skeleton before deleting old authority.\n4. Create target package skeleton.\n5. Move protocol/schema.\n6. Move daemon/API boundary.\n7. Build strict Host metadata schema.\n8. Build SDK descriptor and Freeform Soul.\n9. Build projection and engine bridge.\n10. Wire Web mount.\n11. Delete old authority and paths.\n12. Migrate QA/HR as samples.',
 ])
 
 requireIncludes('AGENTS.md', [
