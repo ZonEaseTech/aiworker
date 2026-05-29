@@ -60,6 +60,12 @@ if (JSON.stringify(superpowersEntries) !== JSON.stringify(['plans', 'specs'])) {
 requireIncludes('docs/architecture.md', [
   'Decision Coverage Index',
   'tmp/refactor decisions are evidence until promoted',
+  'Accepted refactor decisions\nbecome active authority only when they are represented in the canonical docs,\nguarded by tests, or both.',
+  '- docs/architecture.md owns product position, Host/Soul ownership, monorepo\n  boundaries, data ownership, Freeform v1 scope, and destructive migration\n  constraints.',
+  '- docs/protocol.md owns descriptor, broker route, configuration envelope, mounted workbench, and app-owned API contracts.',
+  '- docs/runtime.md owns projection, runtime assets CRUD, engine bridge, lifecycle, cleanup, and redaction contracts.',
+  '- docs/soul-authoring.md owns SDK authoring, convention discovery, build output,\n  native MCP source layout, and Freeform source contract.',
+  '- docs/testing.md owns the coverage ledger and guardrail mapping.',
   'Host is shell / locator / mount / bridge',
   'CLI-first',
   'AIWorker is a CLI-first local product for running Soul Apps through native\nengines.',
