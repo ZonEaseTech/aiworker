@@ -76,6 +76,8 @@ requireIncludes('docs/architecture.md', [
   'packages/core and packages/shared disappear',
   'apps/api` migrates to `packages/host-daemon',
   '`souls/aiworker-freeform` is the only strong v1 acceptance Soul',
+  '`souls/aiworker-freeform` is the only strong v1 acceptance Soul. It proves the\nframework loop: SDK authoring, descriptor build, descriptor-only install, worker\ncreate, workspace locator create, worker config overlay, projection refresh,\nsession create, first invocation, session follow-up, cancel or completion,\nmounted common workbench with `router-mode="search"`, and archive.',
+  'HR and QA remain first-party Soul identities, but they migrate after Freeform and\ndo not block the v1 framework loop.',
   'The target top-level shape is:',
   'apps/\n  cli/\n  web/\n\nsouls/\n  aiworker-freeform/\n\npackages/\n  host-runtime/\n  host-daemon/\n  soul-protocol/\n  soul-app-sdk/\n  soul-app-runtime/\n  soul-workbench/\n  engine-bridge/\n  engine-projection/\n  storage-sqlite/\n  fs-layout/\n  ui/',
   'Host owns only platform metadata:',
