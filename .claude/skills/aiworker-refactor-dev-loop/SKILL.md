@@ -51,7 +51,15 @@ inherently parallel, mechanical, or cross-check heavy, such as:
 
 If unsure, choose the normal development loop.
 
-Do not use `/goal` unless the user explicitly asks for goal mode.
+Goal mode is an outer session contract, not an execution mode this skill turns
+on or off.
+
+- If the user starts Claude Code with `/goal`, obey the active goal and make
+  each round produce transcript-visible evidence the goal evaluator can judge.
+- If no goal is active, run one checkpointed development round and report the
+  next target.
+- Do not clear, ignore, or work around an active goal unless the user explicitly
+  asks.
 
 ## Long Task Discovery
 
