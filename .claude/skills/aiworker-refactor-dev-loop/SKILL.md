@@ -69,6 +69,28 @@ Prefer targets that advance implementation. Tests are verification gates, not
 the main product. Do not spend a round only expanding tests unless the test
 directly proves or unlocks the selected development target.
 
+## Superpowers
+
+Dynamic workflows own orchestration. Superpowers provide process discipline
+inside the workflow.
+
+Use relevant Superpowers when their trigger applies:
+
+- use `superpowers:brainstorming` when changing architecture, product shape,
+  user workflow, or behavior not already fixed by canonical docs;
+- use `superpowers:writing-plans` when creating a multi-step or multi-agent
+  implementation plan;
+- use `superpowers:test-driven-development` when a behavior change can be proven
+  by a focused test before implementation;
+- use `superpowers:systematic-debugging` for failures, unexpected behavior,
+  flaky verification, or unclear root cause;
+- use `superpowers:verification-before-completion` before claiming a round,
+  commit, or full workflow is complete.
+
+Superpowers are quality gates, not the workflow plan. Do not let them turn the
+run into audit-only or test-only work. Development progress remains the
+mainline.
+
 ## Operating Mode
 
 The workflow should discover current state, review prior development output with
