@@ -284,6 +284,7 @@ requireIncludes('docs/runtime.md', [
   'WORKSPACE_ROOT_MISSING',
   'BRIDGE_REDACTION_FAILED',
   'Allowed bridge event classes',
+  'Allowed bridge event classes are generic invocation and process observations:',
   'invocation.started',
   'invocation.progress',
   'invocation.output.delta',
