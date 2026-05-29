@@ -89,6 +89,10 @@ requireIncludes('AGENTS.md', [
   'Author-owned native MCP files may contain literal secrets',
   'tmp/refactor accepted decisions must be promoted to canonical docs or tests before implementation',
   'shadcn',
+  'AIWorker -> Soul App -> workspace locator -> session -> app-owned work',
+  '禁止创建 `core-v2` / `shared-v2`。`packages/core` 与 `packages/shared` 最终消失。`apps/api` 迁移为 `packages/host-daemon`。',
+  'Host/Soul 是 descriptor-only：Host 只消费 `dist/soul.descriptor.json`、built mounted assets 和 app-owned API proxy。Host 不读 Soul source、不 import Soul 私有模块、不解释领域字段。',
+  'Production mounted workbench 必须使用 micro-app `router-mode="search"`',
 ])
 requireMaxLines('AGENTS.md', 90)
 
