@@ -215,6 +215,7 @@ requireIncludes('docs/runtime.md', [
   '`packages/host-daemon` owns the local broker API used by CLI, Web, and mounted\nSoul Apps. It forwards orchestration to `packages/host-runtime`.',
   'The daemon is not a product backend and does not own domain routes.',
   'session lifecycle: active | archived | deleted',
+  '## Session And Invocation State',
   'execution/process state belongs to engine_invocations',
   'POST /api/sessions/:sessionId/invocations',
   'Session lifecycle describes whether the locator remains available in AIWorker.\nIt does not describe engine execution.',
