@@ -1,4 +1,4 @@
-[$aiworker-refactor-dev-loop](/Users/ben/projects/aiworker/.agents/skills/aiworker-refactor-dev-loop/SKILL.md)
+$aiworker-refactor-dev-loop
 
 请开启 goal 模式，长期推进 AIWorker 破坏性重构实现。
 
@@ -6,9 +6,6 @@
 
 Objective:
 把 AIWorker 推进到 canonical architecture 可发布状态。Freeform v1 是第一条强验收纵切，不是重构终点。
-
-工作目录：
-/Users/ben/projects/aiworker
 
 本 goal 显式授权：
 - 使用规范的 Superpowers 流程；
