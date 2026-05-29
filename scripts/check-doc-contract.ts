@@ -58,6 +58,9 @@ if (JSON.stringify(superpowersEntries) !== JSON.stringify(['plans', 'specs'])) {
 }
 
 requireIncludes('docs/architecture.md', [
+  '# AIWorker Architecture',
+  'This document is the canonical architecture contract for AIWorker after the\ndestructive refactor.',
+  'Older PMA notes, changelogs, historical audits, old local\nskills, and temporary drafts are evidence only. They do not override this file.',
   'Decision Coverage Index',
   'tmp/refactor decisions are evidence until promoted',
   'Accepted refactor decisions\nbecome active authority only when they are represented in the canonical docs,\nguarded by tests, or both.',
@@ -94,6 +97,8 @@ requireIncludes('docs/architecture.md', [
 ])
 
 requireIncludes('AGENTS.md', [
+  '# AIWorker Agent Bootstrap',
+  '默认用中文与用户交流。文档、代码注释、commit message、PR title/description 也默认中文，除非用户另有要求。',
   'canonical docs',
   'Superpowers',
   'Host is shell / locator / mount / bridge',
@@ -146,6 +151,8 @@ for (const file of ['README.md', 'README.zh-CN.md']) {
 }
 
 requireIncludes('docs/protocol.md', [
+  '# AIWorker Protocol',
+  'This document defines the canonical Host/Soul protocol contract.',
   'dist/soul.descriptor.json',
   'Soul Apps are installed through:',
   'Host validates and caches the descriptor, then routes local operations through\ngeneric broker APIs. Host does not read app source, import app-private modules,\nor interpret domain semantics.',
@@ -199,6 +206,8 @@ forbidIncludes('docs/protocol.md', [
 ])
 
 requireIncludes('docs/runtime.md', [
+  '# AIWorker Runtime',
+  'This document defines canonical runtime behavior.',
   'The runtime is seven chains:',
   '1. Soul authoring and descriptor build.\n2. Descriptor install and worker enablement.\n3. Session start and first invocation.\n4. Runtime skills, MCP, and entry-file CRUD.\n5. Web workbench mount.\n6. App-owned API proxy.\n7. Archive and delete.',
   '`packages/host-daemon` owns the local broker API used by CLI, Web, and mounted\nSoul Apps. It forwards orchestration to `packages/host-runtime`.',
@@ -269,6 +278,8 @@ requireIncludes('docs/runtime.md', [
 ])
 
 requireIncludes('docs/soul-authoring.md', [
+  '# AIWorker Soul Authoring',
+  'This document defines the canonical Soul App authoring contract.',
   'Soul authoring is SDK-centered and CLI-first. The 30-second path should be:',
   'aiworker soul create my-soul\ncd souls/my-soul\naiworker soul build\naiworker app install dist/soul.descriptor.json',
   'The SDK uses directory conventions for the common path and a small\n`soul.config.ts` for identity and explicit overrides.',
@@ -331,6 +342,8 @@ if (!read('packages/soul-app-sdk/src/descriptor-build.test.ts').includes('keeps 
 }
 
 requireIncludes('docs/testing.md', [
+  '# AIWorker Testing',
+  'This document defines the canonical verification contract.',
   'bun run test:contracts',
   'Current release confidence is built from these gates:',
   'bun run docs:check\nbun run test:contracts\nbun run test:protocol\nbun run test:cli\nbun run test:browser:freeform\nbun run typecheck\nbun run lint\nbun run build\nbun run smoke:dist-release\nbun run smoke:standalone-release\nbun run smoke:standalone-runtime\nbun run smoke:npm-package\nbun run test\nbun run check',
