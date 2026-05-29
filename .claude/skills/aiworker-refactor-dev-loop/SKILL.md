@@ -69,6 +69,39 @@ Prefer targets that advance implementation. Tests are verification gates, not
 the main product. Do not spend a round only expanding tests unless the test
 directly proves or unlocks the selected development target.
 
+## Non-Audit Development Contract
+
+A Dynamic workflow run is invalid if it only performs discovery, audit,
+verification, synthesis, or recommendation.
+
+A valid long-task workflow must include a write-capable development lane unless
+it stops as blocked, unsafe, or fully complete.
+
+Baseline green is not a stopping condition. If preflight and verification are
+green, select the next implementation target and make development progress.
+
+A completed development round must produce at least one of:
+
+- implementation change;
+- removal of old architecture residue;
+- canonical contract implementation;
+- user-facing or runtime behavior improvement;
+- focused guardrail tied directly to a concrete implementation target.
+
+Test-only work is valid only when it unlocks or proves the selected
+implementation target.
+
+Do not report workflow success with only:
+
+- drift audit;
+- Exit Criteria audit;
+- test matrix verification;
+- synthesis of next-step recommendations;
+- coverage gap list.
+
+If no safe implementation target exists, stop as blocked and explain the missing
+decision or unsafe state.
+
 ## Superpowers
 
 Dynamic workflows own orchestration. Superpowers provide process discipline
@@ -98,6 +131,10 @@ zero trust, choose the next bounded development target, and then design its own
 orchestration.
 
 This skill defines invariants. The Dynamic workflow defines the actual plan.
+
+The workflow must not choose a read-only audit plan when implementation progress
+is safe. Discovery and verification are setup and gates for development, not the
+main output.
 
 Prefer development progress in these areas:
 
