@@ -72,6 +72,7 @@ requireIncludes('docs/architecture.md', [
   'The default product path is:',
   'AIWorker -> Soul App -> workspace locator -> session -> app-owned work',
   'Host is not a domain workflow layer, a product backend, an agent\nruntime, a repository dashboard, or a Soul App configuration center.',
+  'Host starts local infrastructure, locates worker/workspace/session context,\nmounts app-owned UI/API, prepares engine invocation context, and observes native\nengine output.',
   'descriptor-only',
   'packages/core and packages/shared disappear',
   'apps/api` migrates to `packages/host-daemon',
