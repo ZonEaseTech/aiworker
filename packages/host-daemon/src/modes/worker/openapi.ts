@@ -1,6 +1,6 @@
 import type { OpenAPIHono } from '@hono/zod-openapi'
-import { localWorkerConfigValueInputSchema } from '@zonease/aiworker-soul-protocol'
 import { z } from '@hono/zod-openapi'
+import { localWorkerConfigValueInputSchema } from '@zonease/aiworker-soul-protocol'
 
 export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
   const responseSchema = z.object({}).passthrough().openapi('LocalResponse')

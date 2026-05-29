@@ -102,7 +102,7 @@ function fixtureDescriptorText(): string {
       mcp: {
         targets: {
           'claude-code': { file: 'dist/engine-assets/mcp/claude-code/.mcp.json' },
-          codex: { file: 'dist/engine-assets/mcp/codex/config.toml' },
+          'codex': { file: 'dist/engine-assets/mcp/codex/config.toml' },
         },
       },
       skills: { source: 'dist/engine-assets/skills' },
