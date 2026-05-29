@@ -157,7 +157,7 @@ requireIncludes('docs/protocol.md', [
   'dist/soul.descriptor.json',
   'Soul Apps are installed through:',
   'Host validates and caches the descriptor, then routes local operations through\ngeneric broker APIs. Host does not read app source, import app-private modules,\nor interpret domain semantics.',
-  'Configuration is worker-scoped and SDK-standard.',
+  'Configuration is worker-scoped and SDK-standard. Values use stable envelopes\nstored in Host metadata.',
   'Configuration may contain non-secret operational\noptions, source refs, checksums, caller class, and projection-affecting state.',
   'Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.',
   'Descriptor v1 contains only these top-level sections:',
