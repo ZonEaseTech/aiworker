@@ -94,6 +94,7 @@ requireIncludes('docs/architecture.md', [
   'Host DB must not store Soul domain objects, artifact content, review/profile\nrecords, business confirmation state, engine secrets, engine profile files, or\nnative MCP secret values.',
   'Contract and guardrails come first:',
   '1. Promote canonical docs.\n2. Rewrite `AGENTS.md` as a short bootstrap.\n3. Add contract test skeleton before deleting old authority.\n4. Create target package skeleton.\n5. Move protocol/schema.\n6. Move daemon/API boundary.\n7. Build strict Host metadata schema.\n8. Build SDK descriptor and Freeform Soul.\n9. Build projection and engine bridge.\n10. Wire Web mount.\n11. Delete old authority and paths.\n12. Migrate QA/HR as samples.',
+  'Do not modify the new architecture to satisfy old E2E assumptions. Legacy\napp-local adapter exports are removed, not migrated.',
 ])
 
 requireIncludes('AGENTS.md', [
@@ -383,6 +384,7 @@ requireIncludes('docs/testing.md', [
   'packages/host-daemon/src/modes/worker.local.test.ts\npackages/storage-sqlite/src/worker/index.test.ts\npackages/engine-bridge/src/bridge-contract.test.ts\npackages/engine-projection/src/workspace-projection.test.ts',
   'The v1 browser proof is Freeform-only',
   'Host Web opens worker/workspace/session locator\n-> resolves Freeform workbench\n-> mounts via micro-app router-mode=search\n-> SDK common workbench renders\n-> verifies the first invocation and starts a session-level follow-up from browser context\n-> shows bridge event refs to the mounted surface\n-> cancels a queued invocation without changing session lifecycle\n-> reattaches and reconciles engine bridge events\n-> refreshes projection receipts from mounted context\n-> applies worker config overlay and observes worker-overlay projection receipts\n-> archives the session and rejects follow-up\n-> archives workspace and worker lifecycle, blocking new work on archived worker',
+  'Do not modify the new architecture to satisfy old E2E assumptions. Delete or\nrewrite tests that require Host to import Soul source, expect old daemon product\nbackend behavior, or encode `router-mode="pure"` as production behavior.',
   'tests/browser/freeform-cli-golden-path.spec.ts',
   'Canonical Coverage Ledger',
   'Coverage status values:',
