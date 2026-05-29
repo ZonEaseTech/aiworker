@@ -97,6 +97,18 @@ describe('greenfield local worker session schema', () => {
     return rows.map(r => r.detail).join('\n')
   }
 
+  it('opens the worker database with a positive busy_timeout so concurrent CLI and daemon writes wait instead of failing immediately', () => {
+    const [row] = getWorkerDb().all<{ timeout: number }>(sql.raw('PRAGMA busy_timeout'))
+    expect(row?.timeout).toBeGreaterThan(0)
+  })
+
+  it('closes the underlying sqlite connection on closeWorkerDb so a spawned daemon can acquire the worker database lock', () => {
+    const handle = getWorkerDb()
+    expect(() => handle.all(sql.raw('SELECT 1'))).not.toThrow()
+    closeWorkerDb()
+    expect(() => handle.all(sql.raw('SELECT 1'))).toThrow()
+  })
+
   it('creates only Host metadata tables without token-like identity storage', () => {
     const rows = getWorkerDb().all<{ name: string }>(
       sql.raw('SELECT name FROM sqlite_master WHERE type=\'table\' ORDER BY name'),

@@ -30,6 +30,7 @@ function resolveMigrationsFolder(rel: string): string {
 export const defaultWorkerMigrationsFolder: string = resolveMigrationsFolder('worker')
 
 let db: ReturnType<typeof createDb> | null = null
+let sqliteHandle: Database | null = null
 const LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|token=[^\s"']+|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["'][^"'\n]+["']/gi
 const REDACTED_LITERAL_SECRET_RE = /Bearer\s+\[REDACTED\]|sk-\[REDACTED\]|token=\[REDACTED\]|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["']\[REDACTED\]["']/i
 const NATIVE_MCP_FILE_RE = /(?:^|\n)\s*\[mcp_servers(?:\.|\])|["']mcpServers["']\s*:/i
@@ -38,11 +39,14 @@ const SOUL_OWNED_PAYLOAD_KEY_RE = /^(?:artifact|artifactBody|artifactContent|art
 function createDb(dbPath: string) {
   const sqlite = new Database(dbPath, { create: true })
   sqlite.exec('PRAGMA journal_mode = WAL')
+  sqlite.exec('PRAGMA busy_timeout = 5000')
   sqlite.exec('PRAGMA foreign_keys = ON')
+  sqliteHandle = sqlite
   return drizzle(sqlite, { schema })
 }
 
 export function initWorkerDb(dbPath: string) {
+  closeWorkerDb()
   db = createDb(dbPath)
   return db
 }
@@ -54,6 +58,10 @@ export function getWorkerDb() {
 }
 
 export function closeWorkerDb() {
+  if (sqliteHandle) {
+    sqliteHandle.close(false)
+    sqliteHandle = null
+  }
   db = null
 }
 
