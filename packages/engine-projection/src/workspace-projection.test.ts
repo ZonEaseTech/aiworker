@@ -7,7 +7,7 @@ import path from 'node:path'
 
 import { afterEach, describe, expect, it } from 'bun:test'
 
-import { cleanupWorkspaceProjectionReceipt, listBaselineAssets, projectEngineAssetsToWorkspace, resolveSoulAppEngineTarget } from './index'
+import { cleanupWorkspaceProjectionReceipt, computeWorkspaceProjectionFreshnessMarker, listBaselineAssets, projectEngineAssetsToWorkspace, resolveSoulAppEngineTarget } from './index'
 
 describe('workspace engine asset projection', () => {
   let roots: string[] = []
@@ -372,6 +372,49 @@ describe('workspace engine asset projection', () => {
     expect(changedReceipt.freshnessMarker).not.toBe(receipt.freshnessMarker)
     expect(receiptJson).toContain(`"freshnessMarker": "${receipt.freshnessMarker}"`)
     expect(receiptJson).not.toContain('secretref:codex/default-profile')
+  })
+
+  it('lets a reserved projection-overlay config participate in the freshness marker but project no file', async () => {
+    const sourceRoot = tempRoot('reserved-overlay-source')
+    const baselineWorkspaceRoot = tempRoot('reserved-overlay-baseline')
+    const reservedWorkspaceRoot = tempRoot('reserved-overlay-changed')
+    await writeEngineAssetSource(sourceRoot, 'command = "baseline-mcp"\n')
+
+    const baseInput = {
+      appId: 'demo-soul-app',
+      engineAssets: mcpEngineAssets(['codex']),
+      engineTarget: 'codex' as const,
+      sourceRoot,
+      variables: { workspaceName: 'Reserved overlay workspace' },
+    }
+    // A reserved projection-overlay crafted to look like it could add a file
+    // (real workspace-asset sourceRef plus a targetPath). Reserved means engine
+    // projection emits no file but the marker must still move.
+    const reservedOverlayConfigs = [{
+      checksum: 'sha256:reserved-projection-overlay',
+      enabled: true,
+      kind: 'projection-overlay',
+      options: { targetPath: 'RESERVED.md' },
+      sourceRef: 'descriptor://engine/workspaceAssets/AGENTS.md',
+      target: 'codex',
+    }]
+
+    const baseline = await projectEngineAssetsToWorkspace({ ...baseInput, now: '2026-05-16T00:00:00.000Z', workspaceRoot: baselineWorkspaceRoot })
+    const reserved = await projectEngineAssetsToWorkspace({ ...baseInput, now: '2026-05-16T00:00:01.000Z', reservedOverlayConfigs, workspaceRoot: reservedWorkspaceRoot })
+
+    // Participates in the freshness marker.
+    expect(reserved.freshnessMarker).not.toBe(baseline.freshnessMarker)
+    // No projected-file change: identical projection targets and no RESERVED.md.
+    expect(reserved.projections.map(entry => entry.target).sort()).toEqual(baseline.projections.map(entry => entry.target).sort())
+    await expect(stat(path.join(reservedWorkspaceRoot, 'RESERVED.md'))).rejects.toThrow()
+
+    // Direct freshness API: reserved config moves the marker; an empty reserved
+    // set is a byte-identical no-op (no freshness regression for normal workers).
+    const markerNoField = await computeWorkspaceProjectionFreshnessMarker(baseInput)
+    const markerEmptyReserved = await computeWorkspaceProjectionFreshnessMarker({ ...baseInput, reservedOverlayConfigs: [] })
+    const markerReserved = await computeWorkspaceProjectionFreshnessMarker({ ...baseInput, reservedOverlayConfigs })
+    expect(markerEmptyReserved).toBe(markerNoField)
+    expect(markerReserved).not.toBe(markerNoField)
   })
 
   it('cleans up only receipt-owned workspace projection files', async () => {

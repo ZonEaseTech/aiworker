@@ -13,6 +13,7 @@ export {
 export type {
   EngineAssetProjectionInput,
   EngineAssetSource,
+  ReservedOverlayProjectionConfig,
   WorkerOverlayProjectionAsset,
   WorkspaceProjectionFreshnessInput,
   WorkspaceProjectionReceiptCleanupInput,

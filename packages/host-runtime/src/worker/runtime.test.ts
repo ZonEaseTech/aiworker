@@ -748,6 +748,80 @@ describe('LocalWorkerRuntime', () => {
     })
   })
 
+  it('lets a reserved projection-overlay worker config make receipts stale but projects no file', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-reserved-projection-overlay')
+    await writeProfileEngineAssets(appRoot)
+    const executorInputs: string[] = []
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke(input) {
+        executorInputs.push(input.invocationId)
+        return { summary: 'fresh projection ran' }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Reserved Overlay Workspace' })
+    const staleSession = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Stale reserved overlay session',
+    })
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'projection-overlay:reserved',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:reserved-projection-overlay',
+        enabled: true,
+        kind: 'projection-overlay',
+        options: {
+          targetPath: 'RESERVED.md',
+        },
+        sourceRef: 'descriptor://engine/workspaceAssets/AGENTS.md',
+        target: 'codex',
+      },
+    })
+
+    // A reserved projection-overlay participates in the freshness marker, so the
+    // existing receipt is now stale even though it projects no file.
+    const staleResult = await workerRuntime.startInvocation({
+      sessionId: staleSession.id,
+      input: 'Run with a reserved projection-overlay config.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(executorInputs).toEqual([])
+    expect(staleResult.invocation).toMatchObject({
+      failureCode: 'PROJECTION_RECEIPT_STALE',
+      processState: 'not_spawned',
+      status: 'failed',
+    })
+
+    // No projected-file change: reprojection emits nothing for the reserved overlay.
+    const reprojected = await workerRuntime.reprojectWorkspaceAssets(workspace.id, { engineTarget: 'codex' })
+    expect(reprojected.receipt?.projections.some(entry => entry.target === 'RESERVED.md')).toBe(false)
+    await expect(readFile(join(workspace.rootPath, 'RESERVED.md'), 'utf8')).rejects.toThrow()
+
+    const freshSession = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityId: 'freeform',
+      title: 'Fresh reserved overlay session',
+    })
+    const freshResult = await workerRuntime.startInvocation({
+      sessionId: freshSession.id,
+      input: 'Run after reserved overlay reprojection.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(executorInputs).toEqual([freshResult.invocation.id])
+    expect(freshResult.invocation).toMatchObject({
+      processState: 'exited',
+      status: 'succeeded',
+      summary: 'fresh projection ran',
+    })
+  })
+
   it('rejects default bridge invocations before executor spawn when descriptor engine assets make projection receipts stale', async () => {
     const appRoot = join(dir, 'souls', 'demo-soul-app-default-bridge-descriptor-stale')
     await writeProfileEngineAssets(appRoot)
