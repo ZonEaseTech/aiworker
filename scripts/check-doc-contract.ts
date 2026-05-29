@@ -217,6 +217,9 @@ requireIncludes('docs/runtime.md', [
 ])
 
 requireIncludes('docs/soul-authoring.md', [
+  'Soul authoring is SDK-centered and CLI-first. The 30-second path should be:',
+  'aiworker soul create my-soul\ncd souls/my-soul\naiworker soul build\naiworker app install dist/soul.descriptor.json',
+  'The SDK uses directory conventions for the common path and a small\n`soul.config.ts` for identity and explicit overrides.',
   'souls/*',
   'soul.config.ts',
   'packages/soul-workbench',
