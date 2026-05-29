@@ -93,6 +93,14 @@ requireIncludes('AGENTS.md', [
   '禁止创建 `core-v2` / `shared-v2`。`packages/core` 与 `packages/shared` 最终消失。`apps/api` 迁移为 `packages/host-daemon`。',
   'Host/Soul 是 descriptor-only：Host 只消费 `dist/soul.descriptor.json`、built mounted assets 和 app-owned API proxy。Host 不读 Soul source、不 import Soul 私有模块、不解释领域字段。',
   'Production mounted workbench 必须使用 micro-app `router-mode="search"`',
+  'Session 只保留 lifecycle：`active | archived | deleted`。Execution/process 状态属于 `engine_invocations`。',
+  'Native engine 采用 B+ structured bridge。AIWorker 管 projection、process observation、redacted raw chunks、normalized bridge events、opaque external refs、cancel、reattach、reconciler；native engine 自己管理模型、tool loop、approval、sandbox、auth/profile 和 native session。',
+  'Use Superpowers for brainstorming, non-trivial planning, TDD, systematic debugging, and verification before completion.',
+  'Destructive refactor is allowed before 1.0. Keep changes scoped to the current phase. Do not change the new architecture to satisfy old E2E assumptions.',
+  'Code changes need focused contract tests appropriate to scope.',
+  'For code changes, run code-review-graph unless the change is docs-only, instruction-only, or pure formatting.',
+  'UI work must use shadcn-managed primitives and `packages/ui` as the shared UI source.',
+  'Host must not render Soul domain UI; Soul-specific UI stays in `souls/*`.',
 ])
 requireMaxLines('AGENTS.md', 90)
 
