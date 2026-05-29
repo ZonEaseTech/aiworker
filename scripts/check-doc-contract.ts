@@ -66,6 +66,8 @@ requireIncludes('docs/architecture.md', [
   'packages/core and packages/shared disappear',
   'apps/api` migrates to `packages/host-daemon',
   '`souls/aiworker-freeform` is the only strong v1 acceptance Soul',
+  'The target top-level shape is:',
+  'apps/\n  cli/\n  web/\n\nsouls/\n  aiworker-freeform/\n\npackages/\n  host-runtime/\n  host-daemon/\n  soul-protocol/\n  soul-app-sdk/\n  soul-app-runtime/\n  soul-workbench/\n  engine-bridge/\n  engine-projection/\n  storage-sqlite/\n  fs-layout/\n  ui/',
   'Host owns only platform metadata:',
   '- installed app descriptors;\n- worker metadata and worker-scoped SDK-standard configuration envelopes;\n- workspace locator metadata;\n- session lifecycle metadata;\n- engine invocation references;\n- projection receipts;\n- normalized bridge event references;\n- redacted diagnostic references.',
   'Host DB must not store Soul domain objects, artifact content, review/profile\nrecords, business confirmation state, engine secrets, engine profile files, or\nnative MCP secret values.',
