@@ -199,6 +199,9 @@ requireIncludes('docs/runtime.md', [
   'AIWorker does not manage engine login, token refresh, account selection, or\nengine profiles.',
   'Author-owned native MCP files may contain literal secrets. AIWorker must not copy\nthose values into descriptors, Host DB, projection receipts, logs, diagnostics,\nOpenAPI examples, or UI.',
   'Anything emitted by CLI, Web, logs, API errors, event\nstreams, or diagnostics must be redacted before persistence or display.',
+  'Archive is the default lifecycle operation for workers, workspace locators, and\nsessions.',
+  'Hard delete is explicit and removes Host metadata plus receipt-owned\nprojection files only.',
+  'Physical workspace root deletion is a separate dangerous\naction and is not the default Host lifecycle behavior.',
 ])
 
 requireIncludes('docs/soul-authoring.md', [
