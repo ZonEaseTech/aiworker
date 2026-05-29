@@ -164,6 +164,7 @@ requireIncludes('docs/protocol.md', [
   'protocol\nidentity\ncompatibility\ncapabilities\nconfiguration\nworkbench\napi\nengine\nhealth\nextensions\nexternal',
   'Core sections are strict. `extensions` and `external` are opaque to Host unless a\nfuture protocol version promotes a field into the standard contract.',
   'Descriptor v1 must not introduce memory, lesson, governance, repository workflow,\nor domain business concepts as platform primitives.',
+  'Production mounted workbench surfaces use micro-app with:',
   'router-mode="search"',
   'Host resolves one workbench entry:',
   '- custom Soul workbench when the descriptor exposes one;\n- SDK common workbench fallback when no custom workbench exists.',
