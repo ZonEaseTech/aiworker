@@ -218,6 +218,7 @@ requireIncludes('docs/runtime.md', [
   'Engine process state:',
   'not_spawned\nspawned\nexited\nkilled\nlost',
   'B+ structured native engine bridge',
+  'AIWorker uses B+ structured native engine bridge.',
   '`packages/engine-bridge` owns:',
   '- adapter registry;\n- discover/start/follow-up/cancel contract;\n- process manager;\n- raw chunk redaction;\n- normalized bridge event pipeline;\n- event stream reattach;\n- reconciler;\n- opaque external session refs.',
   'Native engines own:',
