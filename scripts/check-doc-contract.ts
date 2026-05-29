@@ -108,6 +108,13 @@ requireIncludes('docs/architecture.md', [
 requireIncludes('AGENTS.md', [
   '# AIWorker Agent Bootstrap',
   '默认用中文与用户交流。文档、代码注释、commit message、PR title/description 也默认中文，除非用户另有要求。',
+  '## Authority',
+  '## Product Boundary',
+  '## Monorepo Boundary',
+  '## Protocol Boundary',
+  '## Runtime Boundary',
+  '## Workflow',
+  '## UI',
   'canonical docs',
   'Superpowers',
   'Host is shell / locator / mount / bridge',
