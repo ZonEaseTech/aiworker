@@ -78,6 +78,7 @@ requireIncludes('docs/architecture.md', [
   '- docs/soul-authoring.md owns SDK authoring, convention discovery, build output,\n  native MCP source layout, and Freeform source contract.',
   '- docs/testing.md owns the coverage ledger and guardrail mapping.',
   'Host is shell / locator / mount / bridge',
+  'Host is shell / locator / mount / bridge.',
   'CLI-first',
   'AIWorker is a CLI-first local product for running Soul Apps through native\nengines.',
   'The default product path is:',
