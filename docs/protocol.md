@@ -64,6 +64,13 @@ fields `kind, target, enabled, sourceRef, checksum, options, updatedAt, updatedB
 non-secret operational object. `updatedBy` records caller class such as `cli`,
 `web`, or `app-owned-api`, not user identity.
 
+`projection-overlay` is reserved in descriptor v1. It is a valid stored
+configuration kind and participates in the projection freshness marker, but
+engine projection applies no projected-file change for it. Per-asset projection
+overlays use `entry-file-overlay`, `skill-overlay`, and `mcp-overlay`. A concrete
+`projection-overlay` projection behavior is defined only when a real consumer
+requires it and is promoted into these canonical docs first.
+
 Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.
 
 ## Mounted Workbench

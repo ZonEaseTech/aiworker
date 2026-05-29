@@ -290,6 +290,59 @@ describe('engine-projection contract', () => {
     expect(JSON.stringify(receipt)).not.toContain('Overlay context file')
   })
 
+  test('projection-overlay is reserved: it changes no projected file but participates in the freshness marker', async () => {
+    const projectEngineAssets = requireExport<ProjectEngineAssets>('projectEngineAssets')
+    const computeProjectionFreshnessMarker = requireExport<ComputeProjectionFreshnessMarker>('computeProjectionFreshnessMarker')
+    const descriptorRoot = await writeDescriptorAssets(tempRoot('reserved-overlay-descriptor'))
+    const baselineWorkspace = tempRoot('reserved-overlay-baseline')
+    const overlayWorkspace = tempRoot('reserved-overlay-workspace')
+
+    const emptyConfig = { values: [] }
+    // A reserved projection-overlay crafted to look like it could trigger the
+    // entry-file add path (real workspace-asset sourceRef plus targetPath).
+    // Reserved means engine projection must ignore it and emit no extra file.
+    const reservedConfig = {
+      values: [
+        {
+          checksum: 'sha256:reserved-projection-overlay',
+          enabled: true,
+          kind: 'projection-overlay',
+          options: {
+            targetPath: 'RESERVED.md',
+          },
+          sourceRef: 'descriptor://engine/workspaceAssets/AGENTS.md',
+          target: 'codex',
+          updatedAt: '2026-05-29T00:00:00.000Z',
+          updatedBy: 'web',
+        },
+      ],
+    }
+
+    const baseline = await projectEngineAssets({
+      descriptor: descriptorFor(),
+      descriptorRoot,
+      target: 'codex',
+      workerConfig: emptyConfig,
+      workspaceRoot: baselineWorkspace,
+    })
+    const overlaid = await projectEngineAssets({
+      descriptor: descriptorFor(),
+      descriptorRoot,
+      target: 'codex',
+      workerConfig: reservedConfig,
+      workspaceRoot: overlayWorkspace,
+    })
+
+    const fileKey = (file: ProjectionReceipt['projectedFiles'][number]): string => `${file.sourceRef}::${file.targetPath}`
+    expect(overlaid.projectedFiles.map(fileKey).sort()).toEqual(baseline.projectedFiles.map(fileKey).sort())
+    expect(overlaid.projectedFiles.some(file => file.sourceRef.includes('projection-overlay'))).toBe(false)
+    await expect(stat(path.join(overlayWorkspace, 'RESERVED.md'))).rejects.toThrow()
+
+    const markerFor = (workerConfig: unknown): string =>
+      computeProjectionFreshnessMarker({ descriptor: descriptorFor(), target: 'codex', workerConfig } as Parameters<ComputeProjectionFreshnessMarker>[0])
+    expect(markerFor(reservedConfig)).not.toBe(markerFor(emptyConfig))
+  })
+
   test('cleanupReceipt deletes only receipt-owned projected files', async () => {
     const projectEngineAssets = requireExport<ProjectEngineAssets>('projectEngineAssets')
     const cleanupReceipt = requireExport<CleanupReceipt>('cleanupReceipt')
