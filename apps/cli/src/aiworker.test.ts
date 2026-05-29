@@ -227,6 +227,7 @@ describe('aiworker local CLI', () => {
     expect(output).not.toContain('dev')
     expect(output).toContain('daemon start|foreground|status|stop|restart|logs|check')
     expect(output).toContain('app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke')
+    expect(output).toContain('soul list|create|build')
     expect(output).toContain('worker create|list|show|select|config list|config set|config archive|archive|delete')
     expect(output).toContain('capability list')
     expect(output).toContain('files list|show')
@@ -1677,6 +1678,24 @@ describe('aiworker local CLI', () => {
     output = ''
 
     expect(await runCli(argv('template', 'list', '--soul', FREEFORM_APP_ID))).toBe(1)
+  })
+
+  it('exposes the canonical soul authoring path: soul create scaffolds and soul build rebuilds', async () => {
+    const appDir = path.join(root, 'authoring-soul')
+
+    expect(await runCli(argv('soul', 'create', 'authoring-soul', '--dir', appDir))).toBe(0)
+    const created = JSON.parse(output) as { appId: string, descriptorPath: string, files: string[], path: string }
+    const descriptorPath = path.join(appDir, 'dist', 'soul.descriptor.json')
+    expect(created).toMatchObject({ appId: 'authoring-soul', descriptorPath, path: appDir })
+    expect(created.files).toContain('soul.config.ts')
+    expect(created.files).toContain('dist/soul.descriptor.json')
+    await expect(stat(descriptorPath)).resolves.toBeTruthy()
+
+    output = ''
+    expect(await runCli(argv('soul', 'build', appDir))).toBe(0)
+    const built = JSON.parse(output) as { appId: string, descriptorPath: string, status: string }
+    expect(built).toMatchObject({ appId: 'authoring-soul', descriptorPath, status: 'built' })
+    await expect(stat(descriptorPath)).resolves.toBeTruthy()
   })
 
   it('scaffolds, validates, and smokes a descriptor-only SDK Soul App', async () => {

@@ -1460,6 +1460,25 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
   })
 }
 
+async function buildSoulCommand(dir?: string): Promise<void> {
+  const rootDir = path.resolve(dir ?? process.cwd())
+  const { buildSoul } = await loadSoulAppSdk()
+  const build = await buildSoul(rootDir)
+  const descriptorFile = portableRelativePath(rootDir, build.outputPath)
+
+  printJson({
+    appId: descriptorIdentityString(build.descriptor, 'appId'),
+    descriptorPath: build.outputPath,
+    files: [descriptorFile],
+    next: [
+      `aiworker app validate ${descriptorFile}`,
+      'aiworker app install dist/soul.descriptor.json',
+    ],
+    path: rootDir,
+    status: build.status,
+  })
+}
+
 async function validateAppCommand(inputPath: string): Promise<void> {
   const result = await validateAppAtPath(inputPath)
   printJson({ validation: validationReport(result) })
@@ -1745,6 +1764,8 @@ function registerCommands(): void {
   cli.command('app validate <path>', 'validate a Soul directory or dist/soul.descriptor.json').action(validateAppCommand)
   cli.command('app smoke <path>', 'run descriptor-only Soul App smoke checks').action(smokeAppCommand)
 
+  cli.command('soul create <name>', 'scaffold a descriptor-only SDK Soul').option('--dir <path>', 'target directory').action(createAppScaffoldCommand)
+  cli.command('soul build [dir]', 'build a Soul descriptor from source').action((dir?: string) => buildSoulCommand(dir))
   cli.command('soul list', 'list installed app-projected vertical Souls').action(async () => {
     const paths = await ensureDb()
     printJson({ souls: createHost(paths).listSouls() })
@@ -1849,7 +1870,7 @@ const FULL_COMMAND_INDEX = [
   'update|upgrade',
   'daemon start|foreground|status|stop|restart|logs|check',
   'app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke',
-  'soul list',
+  'soul list|create|build',
   'worker create|list|show|select|config list|config set|config archive|archive|delete',
   'workspace create|list|show|projection refresh|archive|delete',
   'session start|invoke|events|reconcile|cancel|list|show|archive|delete',
