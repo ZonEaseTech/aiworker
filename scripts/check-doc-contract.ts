@@ -97,6 +97,7 @@ requireIncludes('docs/architecture.md', [
   '`packages/*` own reusable protocol,\nruntime, daemon, storage, projection, engine bridge, SDK, workbench, filesystem,\nand UI capabilities.',
   'Do not create\n`core-v2`, `shared-v2`, or any replacement dumping ground.',
   'A future `apps/daemon` may exist\nonly as a thin executable wrapper if a separate daemon binary becomes a product\ntarget.',
+  'Soul Apps own domain state, domain UI/API, business outputs, confirmation\nactions, app-owned history, standalone experience, and mounted product\nexperience.',
   'Host owns only platform metadata:',
   '- installed app descriptors;\n- worker metadata and worker-scoped SDK-standard configuration envelopes;\n- workspace locator metadata;\n- session lifecycle metadata;\n- engine invocation references;\n- projection receipts;\n- normalized bridge event references;\n- redacted diagnostic references.',
   'Host DB must not store Soul domain objects, artifact content, review/profile\nrecords, business confirmation state, engine secrets, engine profile files, or\nnative MCP secret values.',
