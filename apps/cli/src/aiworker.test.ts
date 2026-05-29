@@ -1693,8 +1693,9 @@ describe('aiworker local CLI', () => {
 
     output = ''
     expect(await runCli(argv('soul', 'build', appDir))).toBe(0)
-    const built = JSON.parse(output) as { appId: string, descriptorPath: string, status: string }
+    const built = JSON.parse(output) as { appId: string, descriptorPath: string, generatedSections: string[], status: string }
     expect(built).toMatchObject({ appId: 'authoring-soul', descriptorPath, status: 'built' })
+    expect(built.generatedSections).toEqual(expect.arrayContaining(['capabilities', 'workbench']))
     await expect(stat(descriptorPath)).resolves.toBeTruthy()
   })
 

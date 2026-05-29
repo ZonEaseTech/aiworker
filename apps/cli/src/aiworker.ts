@@ -1470,6 +1470,7 @@ async function buildSoulCommand(dir?: string): Promise<void> {
     appId: descriptorIdentityString(build.descriptor, 'appId'),
     descriptorPath: build.outputPath,
     files: [descriptorFile],
+    generatedSections: build.discovery.generatedSections,
     next: [
       `aiworker app validate ${descriptorFile}`,
       'aiworker app install dist/soul.descriptor.json',
