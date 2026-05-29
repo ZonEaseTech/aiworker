@@ -126,6 +126,29 @@ Cancel targets an invocation id. The bridge sends adapter-level protocol cancel
 when supported, then soft interrupt, then process-group termination after the
 grace period. Delayed hard kill must never terminate a newer invocation.
 
+## Accepted Execution-Mode Deviation
+
+The canonical contract is that native engines own model calls and AIWorker does
+not manage engine login. Local execution has two modes. `local-cli` spawns the
+selected native engine CLI and is fully aligned with this contract.
+
+`byok` is an accepted P2 deviation, not P0/P1 drift. When no native engine CLI is
+installed, `byok` is the fallback execution mode and `packages/host-runtime`
+issues an OpenAI-compatible `chat/completions` request directly so a worker
+without a native engine can still run. This deviates from native-engine
+model-call ownership and is recorded here so the deviation is explicit rather
+than silent default behavior.
+
+The secret boundary is preserved. `byok` stores only an `apiKeyRef` such as
+`env:OPENAI_API_KEY`; literal API keys are rejected at the settings layer; the
+resolved key is read from the environment at call time and is never persisted to
+Host DB, projection receipts, logs, diagnostics, OpenAPI examples, or UI.
+
+The ownership-safe resolution is to re-home `byok` behind an engine-bridge
+adapter or to remove it. Neither is required for the current release. This
+deviation must not be cited to justify any new Host-owned model call or any
+engine-secret persistence.
+
 ## Projection
 
 Host orchestrates projection; engine-projection executes projection; SDK and protocol define projection inputs.

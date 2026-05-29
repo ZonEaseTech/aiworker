@@ -159,6 +159,7 @@ Coverage status values:
 | Soul authoring contract | `docs/soul-authoring.md` | SDK and Freeform contract tests | docs+tests |
 | Host metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
 | Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
+| BYOK execution-mode deviation and secret boundary | `docs/runtime.md` | settings literal-secret rejection test, host-daemon worker config tests, docs check | docs+tests |
 
 ## Current Release Gates
 
