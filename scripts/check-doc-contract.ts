@@ -377,6 +377,13 @@ if (!read('packages/soul-app-sdk/src/descriptor-build.test.ts').includes('keeps 
 requireIncludes('docs/testing.md', [
   '# AIWorker Testing',
   'This document defines the canonical verification contract.',
+  '## Testing Model',
+  '## Required Test Areas',
+  '## Current Bootstrap Gate',
+  '## Canonical Coverage Ledger',
+  '## Current Release Gates',
+  '## Release Exit Criteria',
+  '## Browser Proof Scope',
   'bun run test:contracts',
   'Current release confidence is built from these gates:',
   'bun run docs:check\nbun run test:contracts\nbun run test:protocol\nbun run test:cli\nbun run test:browser:freeform\nbun run typecheck\nbun run lint\nbun run build\nbun run smoke:dist-release\nbun run smoke:standalone-release\nbun run smoke:standalone-runtime\nbun run smoke:npm-package\nbun run test\nbun run check',
