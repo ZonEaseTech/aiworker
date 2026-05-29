@@ -33,12 +33,28 @@ export interface WorkerOverlayProjectionAsset {
   target: string
 }
 
+/**
+ * A worker config value that participates in the projection freshness marker
+ * but produces no projected file — the v1-reserved `projection-overlay` kind
+ * per docs/protocol.md. It moves the marker (marking the workspace stale) yet
+ * applies no projected-file change.
+ */
+export interface ReservedOverlayProjectionConfig {
+  checksum?: string | null
+  enabled: boolean
+  kind: string
+  options?: Record<string, unknown>
+  sourceRef?: string | null
+  target: string
+}
+
 export interface EngineAssetProjectionInput {
   appId: string
   engineAssets?: SoulAppEngineAssets
   engineTarget?: SoulAppEngineTarget | null
   now: string
   preserveUnownedExistingTargets?: boolean
+  reservedOverlayConfigs?: ReservedOverlayProjectionConfig[]
   sourceRoot: string
   variables: Record<string, string>
   workerOverlayAssets?: WorkerOverlayProjectionAsset[]
@@ -49,6 +65,7 @@ export interface WorkspaceProjectionFreshnessInput {
   appId: string
   engineAssets?: SoulAppEngineAssets
   engineTarget?: SoulAppEngineTarget | null
+  reservedOverlayConfigs?: ReservedOverlayProjectionConfig[]
   sourceRoot: string
   variables: Record<string, string>
   workerOverlayAssets?: WorkerOverlayProjectionAsset[]
@@ -91,6 +108,7 @@ export async function projectEngineAssetsToWorkspace(input: EngineAssetProjectio
       appId: input.appId,
       engineAssets: input.engineAssets,
       engineTarget: input.engineTarget,
+      reservedOverlayConfigs: input.reservedOverlayConfigs,
       sourceRoot,
       variables: input.variables,
       workerOverlayAssets: input.workerOverlayAssets,
@@ -109,6 +127,7 @@ export function engineAssetProjectionReceiptPath(): string {
 
 export async function computeWorkspaceProjectionFreshnessMarker(input: WorkspaceProjectionFreshnessInput): Promise<string> {
   const sourceRoot = path.resolve(input.sourceRoot)
+  const reservedOverlayConfigs = input.reservedOverlayConfigs ?? []
   const payload = stableJson({
     appId: input.appId,
     baselineAssets: await baselineAssetFingerprints({
@@ -119,6 +138,12 @@ export async function computeWorkspaceProjectionFreshnessMarker(input: Workspace
     }),
     engineAssets: engineAssetsFingerprint(input.engineAssets),
     engineTarget: input.engineTarget ?? null,
+    // Reserved overlays (e.g. the v1-reserved projection-overlay) move the
+    // freshness marker yet are never projected. Omitted entirely when empty so
+    // normal workers keep their previous marker and never reproject spuriously.
+    ...(reservedOverlayConfigs.length > 0
+      ? { reservedOverlayConfigs: reservedOverlayConfigFingerprints(reservedOverlayConfigs) }
+      : {}),
     variables: variableFingerprints(input.variables),
     workerOverlayAssets: workerOverlayAssetFingerprints(input.workerOverlayAssets ?? [], input.variables),
   })
@@ -395,6 +420,23 @@ function workerOverlayAssetFingerprints(assets: WorkerOverlayProjectionAsset[], 
       target: asset.target,
     }))
     .sort((left, right) => `${left.kind}:${left.target}:${left.id}`.localeCompare(`${right.kind}:${right.target}:${right.id}`))
+}
+
+function reservedOverlayConfigFingerprints(configs: ReservedOverlayProjectionConfig[]): Array<Record<string, unknown>> {
+  return [...configs]
+    .sort((left, right) => reservedOverlayConfigKey(left).localeCompare(reservedOverlayConfigKey(right)))
+    .map(config => ({
+      checksum: config.checksum ?? null,
+      enabled: config.enabled,
+      kind: config.kind,
+      options: config.options ?? {},
+      sourceRef: config.sourceRef ?? null,
+      target: config.target,
+    }))
+}
+
+function reservedOverlayConfigKey(config: ReservedOverlayProjectionConfig): string {
+  return `${config.kind}:${config.target}:${config.sourceRef ?? ''}:${config.checksum ?? ''}`
 }
 
 function variableFingerprints(variables: Record<string, string>): Record<string, string> {

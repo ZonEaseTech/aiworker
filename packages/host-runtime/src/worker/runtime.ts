@@ -1,5 +1,5 @@
 import type { EngineAdapter, EngineBridgeFailureCode, EngineBridgeOptions, EngineEventSink } from '@zonease/aiworker-engine-bridge'
-import type { EngineAssetSource, WorkerOverlayProjectionAsset } from '@zonease/aiworker-engine-projection'
+import type { EngineAssetSource, ReservedOverlayProjectionConfig, WorkerOverlayProjectionAsset } from '@zonease/aiworker-engine-projection'
 import type { LocalExecutionMode, SoulAppEngineTarget, SoulAppProjectionReceipt } from '@zonease/aiworker-soul-protocol'
 import type {
   EngineInvocationRow,
@@ -732,6 +732,7 @@ export class LocalWorkerRuntime {
       appId: this.#engineAssetSource.appId,
       engineAssets: this.#engineAssetSource.engineAssets,
       engineTarget,
+      reservedOverlayConfigs: this.resolveReservedOverlayProjectionConfigs(),
       sourceRoot: this.#engineAssetSource.sourceRoot,
       variables: this.projectionVariables(workspace.name),
       workerOverlayAssets: await this.resolveCurrentWorkerOverlayProjectionAssets(engineTarget),
@@ -931,6 +932,7 @@ export class LocalWorkerRuntime {
           engineTarget,
           now: this.#now(),
           preserveUnownedExistingTargets: input.preserveUnownedExistingTargets,
+          reservedOverlayConfigs: this.resolveReservedOverlayProjectionConfigs(),
           sourceRoot: this.#engineAssetSource.sourceRoot,
           variables: this.projectionVariables(input.name),
           workerOverlayAssets,
@@ -988,6 +990,24 @@ export class LocalWorkerRuntime {
       }
     }
     return assets
+  }
+
+  private resolveReservedOverlayProjectionConfigs(): ReservedOverlayProjectionConfig[] {
+    const configs: ReservedOverlayProjectionConfig[] = []
+    for (const row of listWorkerConfigValues(this.workerId)) {
+      const value = row.configValueJson
+      if (this.workerConfigString(value.kind) !== 'projection-overlay')
+        continue
+      configs.push({
+        checksum: this.workerConfigString(value.checksum),
+        enabled: value.enabled !== false,
+        kind: 'projection-overlay',
+        options: this.workerConfigOptions(value.options),
+        sourceRef: this.workerConfigString(value.sourceRef),
+        target: this.workerConfigString(value.target) ?? 'all',
+      })
+    }
+    return configs
   }
 
   private workerConfigProjectionAssetRefs(value: Record<string, unknown>, engineTarget: SoulAppEngineTarget | null): WorkerConfigProjectionAssetRef[] {
