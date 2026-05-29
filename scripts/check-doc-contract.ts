@@ -297,6 +297,13 @@ requireIncludes('docs/soul-authoring.md', [
   'Custom API and artifact helpers are explicit SDK or configuration surfaces',
   'not part of current',
   'convention discovery or build output',
+  'Custom API and artifact helpers are explicit SDK or configuration surfaces; they\nare not current convention-discovery inputs.',
+  'Custom app-owned API entries must be\nexplicit descriptor/build inputs when supported; they are not part of current\nconvention discovery or build output.',
+  'Discovery output must tell the author what the SDK found and which descriptor\nsections it generated.',
+  '`soul.config.ts` owns identity, version, display name,\ncompatibility overrides, explicit include/exclude choices, advanced build\noverrides, and SDK module opt-ins.',
+  'It must not become a Host integration file, a\nhandwritten descriptor, or arbitrary Host-readable configuration.',
+  'Build output is installed through descriptor references.',
+  'dist/\n  soul.descriptor.json\n  web/\n  engine-assets/\n    workspace/\n    skills/\n    mcp/\n      codex/config.toml\n      claude-code/.mcp.json',
 ])
 forbidIncludes('docs/soul-authoring.md', [
   'product/api/index.ts',
