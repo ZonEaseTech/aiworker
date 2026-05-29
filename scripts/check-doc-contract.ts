@@ -214,6 +214,8 @@ requireIncludes('docs/soul-authoring.md', [
   'packages/soul-workbench',
   'author-owned native MCP files may contain literal secrets',
   '`souls/aiworker-freeform` is the v1 acceptance Soul',
+  '- app id `aiworker-freeform`;\n- soul id `freeform`;\n- display name `AIWorker Freeform`;\n- one default capability named `Freeform Session`;\n- SDK common workbench;\n- one minimal projected skill;\n- Codex native MCP placeholder at `engine/mcp/codex/config.toml`;\n- Claude Code native MCP placeholder at `engine/mcp/claude-code/.mcp.json`.',
+  'Freeform must use SDK authoring, descriptor-only install, projection, engine\nbridge, session-level follow-up, and mounted routing.',
   'Convention discovery',
   'Convention discovery uses the common authoring path from:',
   'product/capabilities/*/prompt.md\nproduct/workbench/index.tsx\nengine/workspace/*\nengine/skills/*\nengine/mcp/codex/config.toml\nengine/mcp/claude-code/.mcp.json',
