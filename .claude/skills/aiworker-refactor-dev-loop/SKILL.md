@@ -1,20 +1,34 @@
 ---
 name: aiworker-refactor-dev-loop
-description: Use when continuing AIWorker destructive refactor work in Claude Code, canonical architecture migration, Freeform v1 progress, host-daemon/runtime/protocol/projection/engine-bridge work, checkpointed development, or multi-round continuation.
+description: Use when continuing AIWorker destructive refactor work in Claude Code, canonical architecture migration, Freeform v1 progress, host-daemon/runtime/protocol/projection/engine-bridge work, checkpointed development, or multi-round goal continuation.
 ---
 
-# AIWorker Refactor Claude Dev Loop
+# AIWorker Refactor Dev Loop
 
-This skill keeps Claude Code on a checkpointed development loop for AIWorker
-refactor work.
+Execute the loop. Do not explain the loop unless asked.
 
-It is not an architecture authority. It is not a fixed workflow plan. It decides
-whether the current task should use the normal Claude Code development loop or a
-Dynamic workflow. The normal development loop is the default.
+## Contract
 
-## Authority
+- Mainline is development progress.
+- Use current repo evidence before choosing work.
+- Do not stop with only discovery, audit, verification, synthesis, status, or
+  next-step advice when implementation is safe.
+- Each round must produce implementation, old-architecture removal, canonical
+  contract implementation, runtime/user behavior improvement, or a focused
+  guardrail tied to the chosen target.
+- Tests are gates. Test-only work is valid only when it proves or unlocks the
+  chosen target.
+- Commit verified progress with a conventional commit unless unsafe or
+  explicitly forbidden.
+- Never stage unrelated files. Never use `git add .`.
+- If `/goal` is active, treat it as the outer loop and print evaluator-visible
+  evidence: slice, files, verification, drift, commit, next target.
+- If no goal is active, complete one checkpointed development round and report
+  the next target.
 
-Canonical authority is:
+## Start
+
+Read:
 
 - `AGENTS.md`
 - `docs/architecture.md`
@@ -23,229 +37,126 @@ Canonical authority is:
 - `docs/soul-authoring.md`
 - `docs/testing.md`
 
-Do not use `tmp/refactor`, old E2E, old changelog, historical local skills,
-conversation summaries, cached test results, or stale agent claims as
-architecture authority.
+Run:
 
-## Execution Mode Selection
+```bash
+git status --short
+bun run docs:check
+bun run test:contracts
+```
 
-Do not create a Dynamic workflow merely because the task is long.
+Treat memory, summaries, cached tests, stale agent claims, retired `tmp/refactor`
+drafts, old E2E, old changelog, and historical local skills as untrusted. They
+are evidence only, never authority.
 
-Default to the normal Claude Code development loop for:
+Preserve user or concurrent-session changes.
 
-- implementation;
-- refactor;
-- API or runtime changes;
-- focused tests;
-- verification;
-- conventional commits;
-- one-package or few-package development slices.
+## Mode
 
-Use a Dynamic workflow only when current evidence shows the selected task is
-inherently parallel, mechanical, or cross-check heavy, such as:
+Default to normal Claude Code development.
 
-- broad independent codebase audit;
-- large mechanical migration across disjoint write surfaces;
-- adversarial verification where independent agents materially reduce risk;
-- cross-package research where many independent findings must be reconciled.
+Use Dynamic workflow only for inherently parallel work: broad independent audit,
+large mechanical migration across disjoint surfaces, adversarial verification,
+or cross-package research. A Dynamic workflow must still produce development
+progress or an explicit blocker, and must not leave unmanaged agents.
 
-If unsure, choose the normal development loop.
+## Drift
 
-Goal mode is an outer session contract, not an execution mode this skill turns
-on or off.
+Fix P0/P1 drift before ordinary progress.
 
-- If the user starts Claude Code with `/goal`, obey the active goal and make
-  each round produce transcript-visible evidence the goal evaluator can judge.
-- If no goal is active, run one checkpointed development round and report the
-  next target.
-- Do not clear, ignore, or work around an active goal unless the user explicitly
-  asks.
+P0/P1 drift means any violation of current `AGENTS.md` or canonical docs,
+especially Host/Soul descriptor-only boundaries, CLI-first shape,
+apps/packages/souls monorepo ownership, protocol/runtime boundaries,
+secret-handling rules, mounted workbench `router-mode="search"`, or resurrection
+of `apps/api`, `apps/aiworker-*`, `packages/core`, `packages/shared`, `core-v2`,
+or `shared-v2`.
 
-## Long Task Discovery
+## Select
 
-When asked to continue AIWorker refactor work, first determine whether the work
-is a long task from current disk state.
+Choose exactly one bounded target:
 
-Treat it as a long task when any of these are true:
+1. Freeform v1 golden path.
+2. host-daemon broker routes.
+3. `worker_config` envelope / Host metadata schema.
+4. engine-projection receipts.
+5. engine-bridge invocation lifecycle.
+6. mounted workbench `router-mode="search"` proof.
+7. contract gap tied to one item above.
 
-- work spans more than one package, app, or Soul;
-- canonical architecture boundaries affect the next decision;
-- completion likely needs multiple verified commits;
-- current repo state must be inspected before choosing work;
-- previous sessions, compaction, or parallel work may have changed context;
-- the next action is unclear until current implementation is reviewed;
-- the user mentions continuing refactor, migration, Freeform v1, host-daemon,
-  engine bridge, projection, mounted workbench, or canonical architecture work.
+Before editing, state target, allowed files/packages, forbidden files/packages,
+verification commands, and expected commit scope.
 
-Long tasks require checkpointed progress, not automatic Dynamic workflows. For
-long tasks, choose the execution mode from current evidence, then run the
-development mainline below.
+## Execute
 
-## Boundary Setting
+- Use available Superpowers for their trigger: brainstorming, writing-plans,
+  test-driven-development, systematic-debugging,
+  verification-before-completion.
+- For behavior changes, write or update the focused contract test first when
+  feasible.
+- Implement the smallest passing change.
+- Keep app code in `apps/*`, reusable capability in `packages/*`, and descriptor
+  producing Soul products in `souls/*`.
+- Keep UI on shadcn-managed primitives and shared `packages/ui`.
+- Do not add scratch design notes to `docs/`; use `tmp/`.
+- Do not copy secret-bearing data into persisted or displayed AIWorker outputs.
+- Spawn subagents only for bounded sidecar work. Collect promptly. End no round
+  with unmanaged agents or workflows.
 
-Before implementation starts, set a task boundary from current evidence. The
-boundary must include:
+## Verify
 
-- current verified state;
-- dirty or uncommitted state;
-- architecture drift, if any;
-- one selected long-task target;
-- allowed write surface;
-- forbidden write surface;
-- verification gates;
-- commit or checkpoint expectation;
-- stop conditions.
+Run the smallest fresh verification that proves the touched surface.
 
-The selected target should be small enough to produce verified commits.
+For code changes, run code-review-graph unless unavailable. Skip it only for
+docs-only, instruction-only, or pure formatting changes, and say why.
 
-Prefer targets that advance implementation. Tests are verification gates, not
-the main product. Do not spend a round only expanding tests unless the test
-directly proves or unlocks the selected development target.
+Before commit, confirm:
 
-## Development Mainline
+- changed files match the target;
+- verification covers touched behavior;
+- canonical docs remain authority;
+- Host/Soul, protocol, runtime, monorepo, UI, and secret boundaries hold;
+- unrelated files are unstaged;
+- subagents/workflows are finished, stopped, or intentionally absent;
+- all claims are backed by fresh output.
 
-Every run must move through this chain unless blocked or explicitly asked for
-status, audit, review, or planning only:
+## Commit
 
-1. zero-trust preflight;
-2. choose one bounded implementation target;
-3. implement or remove old architecture residue;
-4. run fresh verification;
-5. perform zero-trust completion review;
-6. create a conventional commit for verified progress, unless unsafe;
-7. report the next target or exact stop reason.
+After verification:
 
-If preflight finds no P0/P1 drift, select the next implementation target and
-make development progress.
+```bash
+git add <only-current-slice-files>
+git diff --cached --check
+git commit -m "<conventional commit>"
+```
 
-## Non-Audit Contract
+Do not commit failed verification, mixed scope, unrelated staged files, or unsafe
+changes.
 
-A run is invalid if it only performs discovery, audit, verification, synthesis,
-or recommendation.
+## Report
 
-A valid long-task run must include write-capable development work unless it
-stops as blocked, unsafe, or fully complete.
+End every round with:
 
-Baseline green is not a stopping condition. If preflight and verification are
-green, select the next implementation target and make development progress.
+- Preflight
+- Slice
+- Changes
+- Verification
+- Drift
+- Commit
+- Next
 
-A completed development round must produce at least one of:
-
-- implementation change;
-- removal of old architecture residue;
-- canonical contract implementation;
-- user-facing or runtime behavior improvement;
-- focused guardrail tied directly to a concrete implementation target.
-
-Test-only work is valid only when it unlocks or proves the selected
+If `/goal` is active and Exit Criteria are not met, `Next` must be a bounded
 implementation target.
 
-Do not report run success with only:
+## Exit
 
-- drift audit;
-- Exit Criteria audit;
-- test matrix verification;
-- synthesis of next-step recommendations;
-- coverage gap list.
+Long refactor completion requires fresh evidence that canonical docs match
+implementation, Freeform v1 works through CLI/Web/host-daemon/mounted
+workbench/engine bridge, descriptor-only and monorepo boundaries are tested,
+old authority cannot return without failing guardrails, required verification
+passes, and no P0/P1 drift remains.
 
-If no safe implementation target exists, stop as blocked and explain the missing
-decision or unsafe state.
+Until then, one completed slice is progress, not completion.
 
-## Superpowers
-
-Superpowers provide process discipline inside the selected execution mode.
-
-Use relevant Superpowers when their trigger applies:
-
-- use `superpowers:brainstorming` when changing architecture, product shape,
-  user workflow, or behavior not already fixed by canonical docs;
-- use `superpowers:writing-plans` when creating a multi-step or multi-agent
-  implementation plan;
-- use `superpowers:test-driven-development` when a behavior change can be proven
-  by a focused test before implementation;
-- use `superpowers:systematic-debugging` for failures, unexpected behavior,
-  flaky verification, or unclear root cause;
-- use `superpowers:verification-before-completion` before claiming a round,
-  commit, or long task is complete.
-
-Superpowers are quality gates, not an excuse to stop at audit-only or test-only
-output. Development progress remains the mainline.
-
-## Operating Mode
-
-The selected execution mode should discover current state, review prior
-development output with zero trust, choose the next bounded development target,
-and then execute.
-
-This skill defines invariants. The selected execution mode defines the concrete
-plan.
-
-Do not choose a read-only audit plan when implementation progress is safe.
-Discovery and verification are setup and gates for development, not the main
-output.
-
-Prefer development progress in these areas:
-
-- Freeform v1 golden path;
-- host-daemon broker routes;
-- `worker_config` envelope / Host metadata schema;
-- engine-projection receipts;
-- engine-bridge invocation lifecycle;
-- mounted workbench `router-mode="search"` proof;
-- contract gaps tied to one of the above.
-
-## Required Guards
-
-Every execution mode must enforce:
-
-- zero-trust startup review from current files and commands;
-- zero-trust completion review before reporting or committing;
-- P0/P1 architecture drift is fixed before ordinary feature progress;
-- agents and subagents are bounded, joined, and not left as unmanaged
-  background work;
-- verified development progress is committed with conventional commits;
-- unrelated user or concurrent-session changes are not staged;
-- `git add .` is forbidden;
-- no secret-bearing data is copied into descriptor, DB, receipt, log,
-  diagnostic output, OpenAPI example, or UI.
-
-## Round Invariants
-
-The selected execution mode may choose its own structure, but each completed
-round must leave the repo easier to resume.
-
-Each round must produce:
-
-- evidence used to choose the target;
-- implementation or architecture-residue removal, unless blocked;
-- fresh verification evidence;
-- zero-trust completion notes;
-- joined or closed agent resources;
-- a conventional commit for verified progress, unless unsafe;
-- the next boundary or exact stop reason.
-
-## Continuation
-
-A completed slice, phase, test, or commit is not completion of the long task.
-
-Continue while:
-
-- canonical Exit Criteria are not satisfied;
-- no user decision is required;
-- repo and agent resource state are safe;
-- run budget remains.
-
-If the run stops before full completion, report why and provide a resume prompt.
-
-## Exit Criteria
-
-The refactor is complete only when fresh evidence proves:
-
-- canonical docs match the implemented architecture;
-- Freeform v1 golden path is verified through CLI, Web, host-daemon, mounted
-  workbench, and engine bridge;
-- Host/Soul descriptor-only boundaries are enforced by tests;
-- monorepo app/package/soul boundaries are enforced by tests;
-- old app/package authority cannot return without failing guardrails;
-- `docs:check`, `test:contracts`, and relevant slice verification pass;
-- no P0/P1 architecture drift remains.
+After compaction, resume, interruption, or a new goal turn: restart at `Start`,
+distrust stale context, re-check drift, choose the next bounded target, and
+continue unless a user decision or unsafe state blocks work.
