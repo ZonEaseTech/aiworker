@@ -88,6 +88,16 @@
         "typescript": "^5.8.3",
       },
     },
+    "packages/host-control": {
+      "name": "@zonease/aiworker-host-control",
+      "dependencies": {
+        "@zonease/aiworker-worker-control-protocol": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
     "packages/soul-app-runtime": {
       "name": "@zonease/aiworker-soul-app-runtime",
       "dependencies": {
@@ -836,6 +846,8 @@
     "@zonease/aiworker-freeform": ["@zonease/aiworker-freeform@workspace:souls/aiworker-freeform"],
 
     "@zonease/aiworker-fs-layout": ["@zonease/aiworker-fs-layout@workspace:packages/fs-layout"],
+
+    "@zonease/aiworker-host-control": ["@zonease/aiworker-host-control@workspace:packages/host-control"],
 
     "@zonease/aiworker-soul-app-runtime": ["@zonease/aiworker-soul-app-runtime@workspace:packages/soul-app-runtime"],
 
