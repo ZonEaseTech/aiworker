@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { namespaceSoulAppCapabilityId } from '../../packages/soul-protocol/src/index'
 import { closeWorkerDb, createEngineInvocation, initWorkerDb } from '../../packages/storage-sqlite/src/worker/index'
+import { MOUNT_TIMEOUT_MS } from './mount-wait'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const appId = 'aiworker-freeform'
@@ -129,7 +130,7 @@ try {
   const routeUrl = `${baseUrl}/workers/${workerId}/workspaces/${workspaceResult.workspace.id}/sessions/${sessionResult.session.id}`
   await page.goto(routeUrl, { waitUntil: 'domcontentloaded' })
   const microApp = page.locator('micro-app[data-slot="soul-app-mounted-micro-app"]')
-  await microApp.waitFor({ state: 'attached', timeout: 15_000 })
+  await microApp.waitFor({ state: 'attached', timeout: MOUNT_TIMEOUT_MS })
 
   const mountAttributes = await microApp.evaluate(element => ({
     data: (element as HTMLElement & { data?: unknown }).data,
@@ -373,7 +374,8 @@ async function waitForFreeformWorkbench(page: Page): Promise<void> {
         || text.includes('Bridge event refs')
         || Boolean(document.querySelector('[data-aiworker-common-workbench="true"]'))
         || Boolean(microApp?.shadowRoot?.querySelector('[data-aiworker-common-workbench="true"]'))
-    }, undefined, { timeout: 15_000 })
+        || Boolean(document.querySelector('micro-app[data-slot="soul-app-mounted-micro-app"][data-child-ready="true"]'))
+    }, undefined, { timeout: MOUNT_TIMEOUT_MS })
   }
   catch (error) {
     throw new Error(`Freeform workbench did not render: ${JSON.stringify({

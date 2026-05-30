@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { chromium } from 'playwright'
 
 import { parseSoulDescriptorV1 } from '../../packages/soul-protocol/src/index'
+import { MOUNT_TIMEOUT_MS } from './mount-wait'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const workerId = 'freeform-worker'
@@ -114,7 +115,7 @@ try {
     page.on('requestfailed', request => browserEvents.push(`requestfailed:${request.url()}:${request.failure()?.errorText ?? 'unknown'}`))
     await page.goto(`http://127.0.0.1:${server.port}/workers/${workerId}/workspaces/${workspaceId}/sessions/${sessionId}`)
     const microApp = page.locator('micro-app[data-slot="soul-app-mounted-micro-app"]')
-    await microApp.waitFor({ state: 'attached' })
+    await microApp.waitFor({ state: 'attached', timeout: MOUNT_TIMEOUT_MS })
 
     const mountAttributes = await microApp.evaluate(element => ({
       data: (element as HTMLElement & { data?: unknown }).data,
@@ -134,7 +135,8 @@ try {
           || text.includes('Bridge event refs')
           || Boolean(document.querySelector('[data-aiworker-common-workbench="true"]'))
           || Boolean(microApp?.shadowRoot?.querySelector('[data-aiworker-common-workbench="true"]'))
-      }, undefined, { timeout: 5_000 })
+          || Boolean(document.querySelector('micro-app[data-slot="soul-app-mounted-micro-app"][data-child-ready="true"]'))
+      }, undefined, { timeout: MOUNT_TIMEOUT_MS })
     }
     catch (error) {
       const diagnostics = await page.evaluate(() => {
