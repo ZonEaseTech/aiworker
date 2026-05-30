@@ -10,7 +10,7 @@ Soul Apps are installed through:
 dist/soul.descriptor.json
 ```
 
-Host validates and caches the descriptor, then routes local operations through
+The Worker validates and caches the descriptor, then routes local operations through
 generic broker APIs. Host does not read app source, import app-private modules,
 or interpret domain semantics.
 

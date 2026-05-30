@@ -120,7 +120,7 @@ descriptor-producing `souls/*` packages.
 
 ## Protocol Boundary
 
-The Host/Soul boundary is descriptor-only. Host installs and runs Soul Apps from
+The Host/Soul boundary is descriptor-only. A Worker installs and runs Soul Apps from
 `dist/soul.descriptor.json`. Host must not read Soul source, import Soul private
 modules, or interpret domain fields.
 
