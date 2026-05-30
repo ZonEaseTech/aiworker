@@ -96,9 +96,9 @@ descriptor 产出、micro-app、composer、能力声明、engine target 声明�
 - **C3** Host 仅控制面：分发 / 管理 / 授权 / connector + management-mount。Host 不得拥有
   session、invocation、projection、engine、domain state、secrets。
 - **C4** Soul = Template 仅定义（descriptor-producing）；worker 是其运行实例。
-- **C5** Host↔Worker 只经最小控制协议 + 管理 micro-app mount 通信；Host 不得越过控制契约
-  读 worker 运行时 / 领域内部。**worker 是被动控制 server，Host 是 client，worker 永不主动
-  连 Host。**
+- **C5** Host↔Worker 只经最小控制契约通信；契约 **transport-agnostic**，**当前唯一载体是
+  mounted 配置 micro-app**，预留未来非 web transport（不得写死成"必须走 web"）。Host 不得
+  越过契约读 worker 运行时 / 领域内部。**worker 被动、Host 发起、worker 永不主动连 Host。**
 - **C6** secret 边界不变：两个面都不得把 secret 落进 descriptor / DB / receipt / log /
   diagnostic / UI。
 
@@ -114,10 +114,10 @@ apps/
 packages/
   # worker 面
   worker-runtime/           ← rename host-runtime（其 src/worker/* + soul-app/ + config/ 是主体）
-  worker-daemon/            ← rename host-daemon（broker API，服务 worker 自己的 cli/web/mounted app；并 host 控制协议 server，即 /control/* 端点）
+  worker-daemon/            ← rename host-daemon（broker API，服务 worker 自己的 cli/web/mounted app；并暴露 worker 侧控制契约面，今由 mounted 配置 micro-app 驱动，契约 transport-agnostic 故未来可直连绑定）
   # host 面
-  host-control/             ← NEW（从 host-runtime/src/host/* 抽出的真控制面：registry/分发/授权 + 控制协议 client）
-  worker-control-protocol/  ← NEW（Host↔Worker 控制契约的类型/路由/校验 schema，被 worker-daemon server 与 host-control client 共同消费）
+  host-control/             ← NEW（从 host-runtime/src/host/* 抽出的真控制面：registry/分发/授权；经载体消费控制契约，今经 mounted micro-app，未来可非 web 直连）
+  worker-control-protocol/  ← NEW（Host↔Worker 控制契约：transport-agnostic 的 verb/shape/校验 schema；今由 mounted 配置 micro-app 承载，被 worker-daemon 侧与 host-control 侧消费；预留非 web transport 绑定）
   # 能力包（保留原名，consumer 翻转为 worker / 文档重新定性）
   engine-bridge/            engine 启动机制 —— 文档改写为「worker 拥有 engine 启动权，经此包」
   engine-projection/        被 worker-runtime 消费
@@ -150,20 +150,37 @@ souls/
 - 包目录 `apps/cli → apps/worker-cli`，binary 名 `aiworker` 不变。
 - 协议包名定为 `worker-control-protocol`（已确认）。
 
-## 7. Host↔Worker 最小控制协议（`worker-control-protocol`）
+## 7. Host↔Worker 最小控制契约（`worker-control-protocol`）
 
-方向约束：**worker = 被动控制 server，Host = client**；worker 永不主动连 Host（保证 C1，
-控制端点闲置即可独立运行）。本 spec 只定**最小面**，connectors / delivery 数据模型 deferred：
+### 契约（transport-agnostic）
 
-- `GET /control/worker` — worker 自描述：身份、所跑 soul/template、版本、能力摘要、health
-  （Host registry 消费）；自描述中暴露**配置 workbench entry**（复用 soul-workbench
-  `router-mode="search"`），host-web 据此 mount。
-- `GET /control/health` — 存活。
-- `POST /control/lifecycle` — **实例级**生命周期（provision 后的 stop / decommission 等），
+worker-control-protocol 只定义**逻辑 verb 与消息形状**，类型里不得 hardcode 任何 transport。
+本 spec 只定**最小面**，connectors / delivery 数据模型 deferred：
+
+- **worker.describe** — worker 自描述：身份、所跑 soul/template、版本、能力摘要、health
+  （Host registry 消费）；自描述中暴露**配置 micro-app entry**（复用 soul-workbench
+  `router-mode="search"`）。
+- **worker.health** — 存活。
+- **worker.lifecycle** — **实例级**生命周期（provision 后的 stop / decommission 等），
   **不含** session/invocation（那是 worker 内部、员工驱动）。
-- `PUT /control/assignment` — 分配信封：authorized connectors / permissions / gateway
-  profile ref。**本 spec 只定信封形状 + 版本，不实现 connector**。
+- **worker.assignment** — 分配信封：authorized connectors / permissions / gateway profile
+  ref。**本 spec 只定信封形状 + 版本，不实现 connector**。
 
+### 当前载体 = mounted 配置 micro-app（唯一通道）
+
+今天 Host↔Worker 通信的**载体就是 mounted 的配置 micro-app**：host-web mount worker 的配置
+micro-app（worker-owned UI），上面的契约经此 micro-app 面承载。**目前不存在其他直接
+Host↔Worker 通道。**
+
+### 预留 transport 扩展（不要写死）
+
+契约与 transport 刻意解耦。未来 `aiworker-host` 可用**非 web transport**（直连控制 API /
+RPC / 消息总线…）绑定同一契约，无需改契约本身。实现期必须预留 transport-binding seam；
+contract 类型里不得把 micro-app / web 当成唯一 transport。非 web 绑定实现本身 deferred（见 §11）。
+
+### 方向与边界
+
+worker = 被动方，Host = 发起方；worker 永不主动连 Host（保证 C1，载体闲置即可独立运行）。
 domain / runtime 一律不上这条契约（C5）。
 
 ## 8. 文档/约束重写清单
@@ -201,7 +218,8 @@ memory `refactor-state-2026-05` / BYOK 两条在实现启动时更新，标记�
 - **G2 ↔ C2** engine 启动符号只被 worker-\* import；host-\* 不得引用 engine 启动。
 - **G3 ↔ D6** 依赖方向：worker-\* 的 deps/imports 永不指向 host-\*。
 - **G4 ↔ C3** host-control 不暴露 session/invocation/projection/engine/domain/secret 归属。
-- **G5 ↔ C5** 唯一 Host→Worker 面是 worker-control-protocol；其余耦合为零。
+- **G5 ↔ C5** 唯一 Host→Worker 契约是 worker-control-protocol（今经 mounted 配置 micro-app
+  载体）；其余耦合为零；契约类型不得 hardcode transport。
 - **G6 ↔ C6** secret redaction 守卫覆盖两面。
 
 ## 11. 范围边界与 Roadmap
@@ -219,6 +237,8 @@ memory `refactor-state-2026-05` / BYOK 两条在实现启动时更新，标记�
 - **隔离 driver**：dev container / prod VM，1 worker instance = 1 独立 worker server。
 - **Engine gateway 鉴权细化**：native engine + 官方 env/settings 把 base URL+key 指向企业/
   第三方模型网关（替代账号池/登录官方账号）。
+- **Host↔Worker 非 web transport 绑定**：契约已 transport-agnostic 预留；直连控制 API /
+  RPC / 消息总线等绑定实现 deferred（micro-app 仍是当前唯一载体）。
 
 ## 12. 连带影响
 
