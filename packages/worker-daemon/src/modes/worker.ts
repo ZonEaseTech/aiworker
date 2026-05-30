@@ -44,6 +44,10 @@ import {
   upsertWorkerConfigValue,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import {
+  parseWorkerAssignmentEnvelope,
+  parseWorkerLifecycle,
+} from '@zonease/aiworker-worker-control-protocol'
+import {
   createHostRuntime,
   createLocalBearerAuthProvider,
   LocalEngineResolutionError,
@@ -210,6 +214,44 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     startedAt: state.startedAt,
     checkedAt: new Date().toISOString(),
   }))
+
+  // Host↔Worker 控制契约面（被动 server；Host 是 client）。今由 mounted 配置
+  // micro-app 承载，契约 transport-agnostic（worker-control-protocol）。这些端点只
+  // 读/接收控制信封，不得触碰 session/invocation/projection/engine 逻辑（C5）。
+  app.get('/api/control/health', c => c.json({ ready: true }))
+
+  app.get('/api/control/worker', (c) => {
+    const worker = listWorkers()[0]
+    if (!worker)
+      return c.json({ error: { code: 'WORKER_NOT_FOUND', message: 'no worker registered' } }, 404)
+    return c.json({
+      workerId: worker.id,
+      soulId: worker.soulId,
+      version: state.runtimeVersion,
+      health: { ready: true },
+      configMicroAppEntry: '/api/mount/workbench',
+    })
+  })
+
+  app.put('/api/control/assignment', async (c) => {
+    try {
+      const envelope = parseWorkerAssignmentEnvelope(await c.req.json())
+      return c.json({ assignment: envelope })
+    }
+    catch (error) {
+      return c.json({ error: { code: 'CONTROL_ASSIGNMENT_INVALID', message: error instanceof Error ? error.message : String(error) } }, 400)
+    }
+  })
+
+  app.post('/api/control/lifecycle', async (c) => {
+    try {
+      const lifecycle = parseWorkerLifecycle(await c.req.json())
+      return c.json({ workerId: lifecycle.workerId, action: lifecycle.action })
+    }
+    catch (error) {
+      return c.json({ error: { code: 'CONTROL_LIFECYCLE_INVALID', message: error instanceof Error ? error.message : String(error) } }, 400)
+    }
+  })
 
   app.get('/api/info', c => c.json({
     runtimeVersion: state.runtimeVersion,

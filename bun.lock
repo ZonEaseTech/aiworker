@@ -213,6 +213,7 @@
         "@zonease/aiworker-fs-layout": "workspace:*",
         "@zonease/aiworker-soul-protocol": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
+        "@zonease/aiworker-worker-control-protocol": "workspace:*",
         "@zonease/aiworker-worker-runtime": "workspace:*",
         "consola": "^3.4.2",
         "drizzle-orm": "^0.44.1",
