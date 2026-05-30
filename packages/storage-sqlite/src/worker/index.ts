@@ -31,7 +31,7 @@ export const defaultWorkerMigrationsFolder: string = resolveMigrationsFolder('wo
 
 let db: ReturnType<typeof createDb> | null = null
 let sqliteHandle: Database | null = null
-const LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|token=[^\s"']+|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["'][^"'\n]+["']/gi
+const LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,}|eyJ[\w-]+\.[\w-]+\.[\w-]+|-----BEGIN[A-Z ]*PRIVATE KEY-----|token=[^\s"']+|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["'][^"'\n]+["']/gi
 const REDACTED_LITERAL_SECRET_RE = /Bearer\s+\[REDACTED\]|sk-\[REDACTED\]|token=\[REDACTED\]|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["']\[REDACTED\]["']/i
 const NATIVE_MCP_FILE_RE = /(?:^|\n)\s*\[mcp_servers(?:\.|\])|["']mcpServers["']\s*:/i
 const SOUL_OWNED_PAYLOAD_KEY_RE = /^(?:artifact|artifactBody|artifactContent|artifactJson|artifactPayload|artifactRecord|businessActionState|candidate|candidateBody|candidateContent|candidateId|candidateJson|candidatePayload|candidateRecord|confirmationState|content|contentBody|contentJson|contentPayload|entryFileBody|entryFileContent|history|historyEntries|historyJson|profile|profileBody|profileContent|profileId|profileJson|profilePayload|profileRecord|prompt|promptBody|promptContent|promptText|review|reviewBody|reviewContent|reviewId|reviewJson|reviewPayload|reviewRecord|skillBody|skillMarkdown)$/i
@@ -156,9 +156,22 @@ function isSecretKey(key: string): boolean {
   return /api[_-]?key|authorization|password|secret|token/i.test(key)
 }
 
+const SECRET_REFERENCE_PREFIXES = ['$', 'env:', 'secretref:'] as const
+
 function isSecretReference(value: string): boolean {
   const trimmed = value.trim()
-  return trimmed.length === 0 || trimmed === '[REDACTED]' || trimmed.startsWith('$') || trimmed.startsWith('env:') || trimmed.startsWith('secretref:')
+  if (trimmed.length === 0 || trimmed === '[REDACTED]')
+    return true
+  const prefix = SECRET_REFERENCE_PREFIXES.find(candidate => trimmed.startsWith(candidate))
+  if (!prefix)
+    return false
+  // Guard against prefix disguise, e.g. 'env:OPENAI_API_KEY=sk-...' or '$X=literal':
+  // the reference body must name a lookup target, not embed an assignment or a
+  // literal secret value.
+  const body = trimmed.slice(prefix.length)
+  if (body.includes('='))
+    return false
+  return !containsLiteralSecret(body)
 }
 
 function normalizeWorkerConfigEnvelope(

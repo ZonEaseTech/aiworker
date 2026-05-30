@@ -35,6 +35,22 @@ describe('host-control worker registry', () => {
     })).toThrow()
   })
 
+  test('rejects an assignment carrying a literal-secret gatewayProfileRef (C6: Host plane never persists a literal key)', () => {
+    const reg = createWorkerRegistry()
+    reg.register({ workerId: 'w1', soulId: 'freeform', endpoint: 'http://x', health: { ready: true } })
+    // Otherwise-valid envelope; the ONLY defect is a literal secret in gatewayProfileRef,
+    // so the throw can only come from the control-protocol's reference-shape refine.
+    expect(() => reg.assign('w1', {
+      version: 1,
+      templateId: 'freeform',
+      connectors: [],
+      permissions: ['read'],
+      gatewayProfileRef: 'sk-proj-LITERALSECRETVALUE0123456789',
+    })).toThrow(/gatewayProfileRef|reference|secret/)
+    // The rejected literal must not have leaked into the registry.
+    expect(reg.get('w1')?.assignment).toBeUndefined()
+  })
+
   test('rejects assignment for an unknown worker', () => {
     const reg = createWorkerRegistry()
     expect(() => reg.assign('missing', {

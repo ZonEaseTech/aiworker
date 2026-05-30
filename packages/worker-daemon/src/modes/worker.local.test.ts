@@ -2895,6 +2895,68 @@ describe('local daemon API', () => {
     expect(serialized).not.toContain('sk-local-settings-secret')
   })
 
+  it('rejects prefixed BYOK API key references that embed literal values', async () => {
+    const target = await app()
+
+    // Prefix disguise: passes startsWith('env:') but embeds a plaintext literal
+    // that storage-layer redaction cannot recognize, so the settings predicate is
+    // the only gate. Must be rejected.
+    const envAssignment = await target.request('/api/settings', {
+      body: JSON.stringify({
+        byok: {
+          apiKeyRef: 'env:OPENAI_API_KEY=plaintextsecretvalue',
+          baseUrl: 'https://api.example.test/v1',
+          model: 'gpt-test',
+          provider: 'openai-compatible',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(envAssignment.status).toBe(422)
+    expect(await envAssignment.json()).toMatchObject({ error: { code: 'LOCAL_SETTINGS_SECRET' } })
+
+    const dollarAssignment = await target.request('/api/settings', {
+      body: JSON.stringify({
+        byok: {
+          apiKeyRef: '$OPENAI_API_KEY=literalplaintext',
+          baseUrl: 'https://api.example.test/v1',
+          model: 'gpt-test',
+          provider: 'openai-compatible',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(dollarAssignment.status).toBe(422)
+    expect(await dollarAssignment.json()).toMatchObject({ error: { code: 'LOCAL_SETTINGS_SECRET' } })
+
+    const serialized = JSON.stringify(listSettings())
+    expect(serialized).not.toContain('plaintextsecretvalue')
+    expect(serialized).not.toContain('literalplaintext')
+  })
+
+  it('still accepts plain prefixed BYOK API key references', async () => {
+    writeFakeEngineCommand('codex')
+    const target = await app()
+
+    const response = await target.request('/api/settings', {
+      body: JSON.stringify({
+        byok: {
+          apiKeyRef: 'env:OPENAI_API_KEY',
+          baseUrl: 'https://api.example.test/v1',
+          model: 'gpt-test',
+          provider: 'openai-compatible',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(response.status).toBe(200)
+    const stored = listSettings().find(setting => setting.key === 'local-settings')
+    expect(JSON.stringify(stored)).toContain('env:OPENAI_API_KEY')
+  })
+
   it('rejects literal secrets and full native MCP files in local settings payloads', async () => {
     const target = await app()
 

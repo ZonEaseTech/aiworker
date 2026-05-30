@@ -85,9 +85,23 @@ function assertSafeSecretRefs(settings: LocalSettingsConfig): void {
   )
 }
 
+const SECRET_REFERENCE_PREFIXES = ['$', 'env:', 'secretref:'] as const
+const LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,}|eyJ[\w-]+\.[\w-]+\.[\w-]+|-----BEGIN[A-Z ]*PRIVATE KEY-----/
+
 function isSafeSecretReference(value: string): boolean {
   const trimmed = value.trim()
-  return trimmed.length === 0 || trimmed === '[REDACTED]' || trimmed.startsWith('$') || trimmed.startsWith('env:') || trimmed.startsWith('secretref:')
+  if (trimmed.length === 0 || trimmed === '[REDACTED]')
+    return true
+  const prefix = SECRET_REFERENCE_PREFIXES.find(candidate => trimmed.startsWith(candidate))
+  if (!prefix)
+    return false
+  // Guard against prefix disguise, e.g. 'env:OPENAI_API_KEY=sk-...' or '$X=literal':
+  // the reference body must name a lookup target, not embed an assignment or a
+  // literal secret value.
+  const body = trimmed.slice(prefix.length)
+  if (body.includes('='))
+    return false
+  return !LITERAL_SECRET_RE.test(body)
 }
 
 function normalizeLocalSettingsPersistenceError(error: unknown): unknown {

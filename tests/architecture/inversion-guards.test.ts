@@ -1,6 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
+// G6 行为腿：经相对路径直接 import 控制契约源（worktree 根 node_modules 无该包符号链接，
+// workspace 包名解析不到——故走源文件相对路径，仅触及本测试文件）。
+import { parseWorkerAssignmentEnvelope, WORKER_CONTROL_PROTOCOL_VERSION } from '../../packages/worker-control-protocol/src/index'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 function read(path: string): string {
@@ -71,8 +74,54 @@ describe('worker-autonomy inversion guards (Plan 1)', () => {
   })
 })
 
-// G6 ↔ C6：secret 边界文档双面覆盖（现在可证：文档已写）
+// G6 ↔ C6：engine-secret 持久化在「两面」都被禁。re-home 为「行为 + 机制源码」断言——
+// 删/改任一脱敏/拒绝机制即应变红（旧版纯文档字符串断言对 C6 行为 vacuous：删光脱敏代码、
+// 留文档句仍绿）。证非空：把 worker-control-protocol 的 refine 改成恒真（neuter-while-keeping
+// -the-name）即让行为腿变红；删 storage-sqlite/error-handler 机制即让源码腿变红；docs 句不动。
 test('G6: docs forbid engine-secret persistence on both planes', () => {
+  // (1) 行为腿——控制契约平面（Host→Worker assignment 信封）：
+  //     字面密钥形态的 gatewayProfileRef 必须被 refine 拒绝（throw）；引用形态必须放行。
+  //     这条经真实 import + invoke，故 refine 被 neuter（改成 return true）即变红——
+  //     纯源码字符串断言抓不到「保留标识符名但改实现」的 vacuity，这条能抓。
+  const baseEnvelope = {
+    version: WORKER_CONTROL_PROTOCOL_VERSION,
+    templateId: 'tpl-g6',
+    connectors: [] as { id: string, authorized: boolean }[],
+    permissions: [] as string[],
+    gatewayProfileRef: 'env:GATEWAY_PROFILE',
+  }
+  // 隔离字段：base 在每个字段都合法（先确认 env: 引用整体放行），再只变 gatewayProfileRef，
+  // 确保 throw 来自 refine 而非别的必填校验（否则删 refine 仍绿 = 假非空）。
+  expect(() => parseWorkerAssignmentEnvelope(baseEnvelope)).not.toThrow()
+  expect(() => parseWorkerAssignmentEnvelope({ ...baseEnvelope, gatewayProfileRef: 'sk-literal-engine-secret-abcdef123456' }))
+    .toThrow(/gatewayProfileRef must be a reference/)
+
+  // (2) 机制源码腿——storage / daemon 平面无法在本文件不接 DB 地 invoke，故断言「稳定标识符」
+  //     存在（identifier 名 + throw 消息 + [REDACTED] token；不绑定正则 alternation 内容——
+  //     兄弟 agent 正在硬化这些正则[ghp_/AKIA/AIza/JWT/PEM]，绑定内容会在 merge 冲突）。
+  //     删任一机制（如 rename assertNoLiteralSecrets / 删 SECRET_VALUE_RE 脱敏）即变红。
+  const storage = read('packages/storage-sqlite/src/worker/index.ts')
+  expect(storage, 'storage-sqlite must keep the literal-secret rejection regex').toContain('LITERAL_SECRET_RE')
+  expect(storage, 'storage-sqlite must keep the assertNoLiteralSecrets mechanism').toContain('assertNoLiteralSecrets')
+  expect(storage, 'storage-sqlite must throw on literal secrets in Worker metadata')
+    .toContain('Literal secrets are not allowed in Worker metadata')
+
+  const errorHandler = read('packages/worker-daemon/src/shared/middleware/error-handler.ts')
+  expect(errorHandler, 'worker-daemon error-handler must keep the secret-value redaction regex').toContain('SECRET_VALUE_RE')
+  expect(errorHandler, 'worker-daemon error-handler must redact to [REDACTED]').toContain('[REDACTED]')
+
+  const settings = read('packages/worker-daemon/src/modes/worker/settings.ts')
+  expect(settings, 'worker settings must keep the safe-secret-reference gate').toContain('isSafeSecretReference')
+
+  // (3) wiring 腿——既有行为测试文件存在（被 `bun run --filter '*' test` / release:check 执行），
+  //     它们精确断言 throw / [REDACTED] 输出；本守卫确保它们不被悄悄删掉。
+  for (const behavioralTest of [
+    'packages/storage-sqlite/src/worker/index.test.ts',
+    'packages/worker-daemon/src/shared/middleware/error-handler.test.ts',
+  ])
+    expect(existsSync(join(repoRoot, behavioralTest)), `${behavioralTest} (behavioral secret evidence) must exist`).toBe(true)
+
+  // (4) 保留原 docs 双面句检查（两面禁 engine-secret 持久化的文档证据）。
   const runtime = read('docs/runtime.md')
   expect(runtime).toContain('any engine-secret persistence on either plane')
 })
@@ -133,6 +182,23 @@ test('G5: the only Host->Worker contract is worker-control-protocol', () => {
     for (const dep of workerDeps)
       expect(dep, `${dir} may only cross to worker-* via the control protocol`).toBe('@zonease/aiworker-worker-control-protocol')
   }
+})
+
+// G5 clause-2 ↔ C5：唯一 Host→Worker 契约 worker-control-protocol 必须 transport-agnostic——
+// 契约源不得 hardcode transport（往 schema 加 httpUrl/wsEndpoint 等不该被任何测试漏过）。
+// 剥注释后断言不出现 transport token（注释合法地提到 "transport"，故须剥注释，与 G4 同法）。
+// 证非空：往任一 schema 加 `httpUrl: z.string()` 字段即变红。
+test('G5 clause-2: the control protocol contract type hardcodes no transport', () => {
+  const contractPath = 'packages/worker-control-protocol/src/index.ts'
+  const code = stripComments(read(contractPath))
+  // 子串 token（大小写不敏感）——抓 camelCase 字段名如 httpUrl/wsEndpoint/baseUrl。
+  for (const token of ['httpUrl', 'wsUrl', 'wsEndpoint', 'baseUrl', 'endpoint', 'socket']) {
+    expect(code.toLowerCase().includes(token.toLowerCase()), `${contractPath} must not hardcode transport token '${token}'`).toBe(false)
+  }
+  // 词边界 / scheme：\bport\b（避免误伤 import/export/transport）、http:// 与 ws:// scheme 字面量。
+  expect(/\bport\b/i.test(code), `${contractPath} must not hardcode a 'port' field`).toBe(false)
+  expect(/https?:\/\//i.test(code), `${contractPath} must not hardcode an http(s):// transport literal`).toBe(false)
+  expect(/wss?:\/\//i.test(code), `${contractPath} must not hardcode a ws(s):// transport literal`).toBe(false)
 })
 
 // G1 ↔ C1：worker standalone 金路径行为证据存在、host-free、且被 release:check 执行（经 test:cli）。

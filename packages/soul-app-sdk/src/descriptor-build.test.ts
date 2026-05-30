@@ -138,6 +138,33 @@ describe('SDK descriptor build conventions', () => {
     expect(diagnostics).toContain('[REDACTED]')
   })
 
+  test('redacts extended provider token shapes from SDK validation diagnostics', async () => {
+    // For the PEM block, the base64 key body is the secret, so the whole multiline
+    // block (not just the header) must be masked from diagnostics.
+    const pemBlock = '-----BEGIN RSA PRIVATE KEY-----\\nMIIEpAIBAAKCAQEAabcdef0123456789\\n-----END RSA PRIVATE KEY-----'
+    const cases: Array<{ label: string, secret: string, leakSubstring: string }> = [
+      { label: 'github-pat', secret: 'ghp_0123456789abcdefghijklmnopqrstuvwxyz', leakSubstring: 'ghp_0123456789abcdefghijklmnopqrstuvwxyz' },
+      { label: 'github-oauth', secret: 'gho_0123456789abcdefghijklmnopqrstuvwxyz', leakSubstring: 'gho_0123456789abcdefghijklmnopqrstuvwxyz' },
+      { label: 'github-fine-grained', secret: 'github_pat_0123456789abcdefghijklmnopqrstuvwxyz', leakSubstring: 'github_pat_0123456789abcdefghijklmnopqrstuvwxyz' },
+      { label: 'aws-access-key', secret: 'AKIAIOSFODNN7EXAMPLE', leakSubstring: 'AKIAIOSFODNN7EXAMPLE' },
+      { label: 'google-api-key', secret: 'AIzaSyA1234567890abcdefghijklmnopqrstuvw', leakSubstring: 'AIzaSyA1234567890abcdefghijklmnopqrstuvw' },
+      { label: 'jwt', secret: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U', leakSubstring: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U' },
+      { label: 'pem-multiline', secret: pemBlock, leakSubstring: 'MIIEpAIBAAKCAQEAabcdef0123456789' },
+    ]
+
+    for (const { label, secret, leakSubstring } of cases) {
+      const rootDir = await createFreeformSoulFixture()
+      writeFileSync(join(rootDir, 'soul.config.ts'), `throw new Error('engine boot failed: ${secret}')\n`)
+
+      const result = await validateSoul(rootDir)
+
+      expect(result.status, label).toBe('invalid')
+      const diagnostics = JSON.stringify(result.issues)
+      expect(diagnostics, label).not.toContain(leakSubstring)
+      expect(diagnostics, label).toContain('[REDACTED]')
+    }
+  })
+
   test('validates conventions before Host ever reads Soul source at runtime', async () => {
     const rootDir = await createFreeformSoulFixture()
 

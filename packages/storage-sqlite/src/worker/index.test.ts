@@ -815,6 +815,59 @@ describe('greenfield local worker session schema', () => {
     ).toThrow('Full native MCP files are not allowed in Worker metadata: bridge_events.eventJson.payload.message')
   })
 
+  it('rejects extended literal secret token shapes in persisted Worker metadata', () => {
+    const literals = [
+      'ghp_0123456789abcdefghijklmnopqrstuvwxyz',
+      'gho_0123456789abcdefghijklmnopqrstuvwxyz',
+      'github_pat_0123456789abcdefghijklmnopqrstuvwxyz',
+      'AKIAIOSFODNN7EXAMPLE',
+      'AIzaSyA1234567890abcdefghijklmnopqrstuvw',
+      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U',
+      '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA\n-----END RSA PRIVATE KEY-----',
+    ]
+    literals.forEach((literal, index) => {
+      expect(() =>
+        upsertWorker({
+          id: `worker-extended-secret-${index}`,
+          soulId: 'demo-soul-app',
+          name: 'Extended secret worker',
+          metadataJson: { diagnostic: `engine output: ${literal}` },
+        }),
+      ).toThrow('Literal secrets are not allowed in Worker metadata: workers.metadataJson.diagnostic')
+    })
+  })
+
+  it('rejects prefixed secret-key references that embed assignments or literal values', () => {
+    // A secret-key value that startsWith('env:') but embeds an assignment used to
+    // slip past isSecretReference; the prefix must name a lookup target only.
+    expect(() =>
+      upsertWorker({
+        id: 'worker-prefixed-assignment-secret',
+        soulId: 'demo-soul-app',
+        name: 'Prefixed assignment worker',
+        metadataJson: { apiKeyRef: 'env:OPENAI_API_KEY=plaintextvalue' },
+      }),
+    ).toThrow('Literal secrets are not allowed in Worker metadata: workers.metadataJson.apiKeyRef')
+    expect(() =>
+      upsertWorker({
+        id: 'worker-prefixed-dollar-secret',
+        soulId: 'demo-soul-app',
+        name: 'Prefixed dollar worker',
+        metadataJson: { authorization: '$OPENAI_API_KEY=literalplaintext' },
+      }),
+    ).toThrow('Literal secrets are not allowed in Worker metadata: workers.metadataJson.authorization')
+
+    // Plain prefixed references with no embedded value stay valid.
+    expect(() =>
+      upsertWorker({
+        id: 'worker-prefixed-valid-ref',
+        soulId: 'demo-soul-app',
+        name: 'Prefixed valid worker',
+        metadataJson: { apiKeyRef: 'secretref:codex/default-profile' },
+      }),
+    ).not.toThrow()
+  })
+
   it('filters session events by id in SQL before applying the limit so long sessions keep streaming', () => {
     const worker = upsertWorker({
       id: 'worker-events',
