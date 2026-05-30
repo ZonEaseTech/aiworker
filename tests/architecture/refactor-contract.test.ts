@@ -425,7 +425,7 @@ describe('destructive refactor contract bootstrap', () => {
     const activeSources = [
       'packages/soul-protocol/src/soul-app/registry.ts',
       'packages/worker-runtime/src/soul-app/registry.ts',
-      'packages/worker-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.ts',
       'packages/soul-app-runtime/src/index.ts',
       'apps/worker-web/src/features/local-workspace/model-types.ts',
     ]
@@ -793,7 +793,7 @@ describe('destructive refactor contract bootstrap', () => {
       'apps/worker-web/src/features/i18n/locales/ja.ts',
       'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
       'packages/worker-daemon/src/modes/worker.ts',
-      'packages/worker-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.ts',
       'packages/worker-runtime/src/index.ts',
       'packages/worker-runtime/src/soul-app/official.ts',
       'packages/worker-runtime/src/soul-app/registry.ts',
@@ -816,8 +816,8 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('Host identity grants name the broker API without local route namespace residue', () => {
-    const identityProvider = readRepoFile('packages/worker-runtime/src/host/identity-provider.ts')
-    const identityProviderTest = readRepoFile('packages/worker-runtime/src/host/identity-provider.test.ts')
+    const identityProvider = readRepoFile('packages/worker-runtime/src/orchestration/identity-provider.ts')
+    const identityProviderTest = readRepoFile('packages/worker-runtime/src/orchestration/identity-provider.test.ts')
 
     expect(identityProvider).toContain('target: \'api/broker\'')
     expect(identityProvider).not.toContain('target: \'api/local\'')
@@ -986,7 +986,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/soul-protocol/src/soul-app/registry.ts',
       'packages/soul-protocol/src/soul-app/index.ts',
       'packages/worker-runtime/src/soul-app/registry.ts',
-      'packages/worker-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.ts',
       'packages/soul-app-runtime/src/index.ts',
       'apps/worker-web/src/features/local-workspace/model-types.ts',
       'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
@@ -1002,7 +1002,7 @@ describe('destructive refactor contract bootstrap', () => {
   test('Host Soul catalog exposes capabilities instead of a template collection', () => {
     const activeSources = [
       'packages/worker-runtime/src/soul-app/registry.ts',
-      'packages/worker-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.ts',
       'packages/soul-app-runtime/src/index.ts',
       'packages/soul-app-runtime/src/index.test.ts',
       'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
@@ -1301,7 +1301,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/storage-sqlite/src/worker/index.test.ts',
       'packages/worker-runtime/src/worker/runtime.ts',
       'packages/worker-runtime/src/worker/runtime.test.ts',
-      'packages/worker-runtime/src/host/runtime.test.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.test.ts',
       'packages/worker-daemon/src/modes/worker.ts',
       'packages/worker-daemon/src/modes/worker/schemas.ts',
       'packages/worker-daemon/src/modes/worker.local.test.ts',
@@ -1338,8 +1338,8 @@ describe('destructive refactor contract bootstrap', () => {
   test('Host runtime capability lookup APIs do not expose retired template helper names', () => {
     const activeSources = [
       'packages/worker-runtime/src/index.ts',
-      'packages/worker-runtime/src/host/runtime.ts',
-      'packages/worker-runtime/src/host/runtime.test.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.test.ts',
       'packages/worker-runtime/src/soul-app/registry.ts',
       'packages/worker-runtime/src/soul-app/registry.test.ts',
       'packages/worker-daemon/src/modes/worker.ts',
@@ -1422,7 +1422,7 @@ describe('destructive refactor contract bootstrap', () => {
     const activeSources = [
       'packages/soul-protocol/src/soul-app/registry.ts',
       'packages/worker-runtime/src/soul-app/registry.ts',
-      'packages/worker-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.ts',
       'apps/worker-web/src/features/local-workspace/model-types.ts',
       'apps/worker-web/src/features/i18n/index.ts',
       'apps/worker-web/src/features/i18n/types.ts',
@@ -1745,8 +1745,8 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/storage-sqlite/src/worker/index.ts',
       'packages/storage-sqlite/src/worker/index.test.ts',
       'packages/worker-runtime/src/soul-app/official.ts',
-      'packages/worker-runtime/src/host/runtime.ts',
-      'packages/worker-runtime/src/host/runtime.test.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.test.ts',
       'packages/worker-runtime/src/index.ts',
       'packages/worker-daemon/src/modes/worker.local.test.ts',
       'apps/worker-cli/src/aiworker.test.ts',

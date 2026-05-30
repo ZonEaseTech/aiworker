@@ -46,9 +46,9 @@ Worker runtime tests:
 ```text
 packages/worker-runtime/src/
   config/worker.test.ts
-  host/identity-provider.test.ts
-  host/runtime.test.ts
   index.test.ts
+  orchestration/identity-provider.test.ts
+  orchestration/orchestrator.test.ts
   soul-app/registry.test.ts
   worker/engine-env.test.ts
   worker/executor.test.ts

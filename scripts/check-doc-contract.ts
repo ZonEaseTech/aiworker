@@ -429,7 +429,7 @@ requireIncludes('docs/testing.md', [
   'SDK tests:',
   'packages/soul-app-sdk/src/\n  descriptor-build.test.ts',
   'Worker runtime tests:',
-  'packages/worker-runtime/src/\n  config/worker.test.ts\n  host/identity-provider.test.ts\n  host/runtime.test.ts\n  index.test.ts\n  soul-app/registry.test.ts\n  worker/engine-env.test.ts\n  worker/executor.test.ts\n  worker/local-engine-resolver.test.ts\n  worker/runtime.test.ts',
+  'packages/worker-runtime/src/\n  config/worker.test.ts\n  index.test.ts\n  orchestration/identity-provider.test.ts\n  orchestration/orchestrator.test.ts\n  soul-app/registry.test.ts\n  worker/engine-env.test.ts\n  worker/executor.test.ts\n  worker/local-engine-resolver.test.ts\n  worker/runtime.test.ts',
   'Engine projection tests:',
   'packages/engine-projection/src/\n  index.test.ts\n  projection-contract.test.ts\n  workspace-projection.test.ts',
   'Engine bridge tests:',

@@ -15,7 +15,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { createHostRuntime } from './runtime'
+import { createHostRuntime } from './orchestrator'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
 const FREEFORM_DEFAULT = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'default')

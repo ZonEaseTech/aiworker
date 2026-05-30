@@ -25,7 +25,7 @@ export {
   type HostIdentity,
   type HostIdentityGrant,
   type LocalBearerAuthProviderOptions,
-} from './host/identity-provider'
+} from './orchestration/identity-provider'
 export {
   createHostRuntime,
   type CreateHostSoulWorkerInput,
@@ -33,7 +33,7 @@ export {
   type HostOfficialSoulAppBootstrap,
   HostRuntime,
   type HostRuntimeOptions,
-} from './host/runtime'
+} from './orchestration/orchestrator'
 export {
   bootstrapOfficialSoulApps,
   discardOfficialSoulAppRetiredMetadata,
