@@ -1,6 +1,6 @@
 # AIWorker Protocol
 
-This document defines the canonical Host/Soul protocol contract.
+This document defines the canonical Host/Soul protocol contract and the Host-to-Worker control contract.
 
 ## Descriptor-Only Install And Runtime
 
@@ -181,7 +181,7 @@ into a product backend.
 - `GET /api/workspace-locators` may receive `workerId` to filter locators for
   mounted app contexts.
 - `POST /api/workspace-locators` receives `workerId`, may receive `rootPath`,
-  and creates Host workspace locator metadata plus projection-owned bootstrap
+  and creates Worker workspace locator metadata plus projection-owned bootstrap
   files.
 - `GET /api/sessions` may receive `workerId` and `workspaceId` to filter
   mounted app context session lists.

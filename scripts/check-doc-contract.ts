@@ -179,7 +179,7 @@ for (const file of ['README.md', 'README.zh-CN.md']) {
 
 requireIncludes('docs/protocol.md', [
   '# AIWorker Protocol',
-  'This document defines the canonical Host/Soul protocol contract.',
+  'This document defines the canonical Host/Soul protocol contract and the Host-to-Worker control contract.',
   '## Descriptor-Only Install And Runtime',
   '## Descriptor V1 Shape',
   '## Capabilities',
@@ -321,11 +321,11 @@ requireIncludes('docs/runtime.md', [
   'Delayed hard kill must never terminate a newer invocation.',
   'Author-owned native MCP files may contain literal secrets',
   'AIWorker does not manage engine login, token refresh, account selection, or\nengine profiles.',
-  'Author-owned native MCP files may contain literal secrets. AIWorker must not copy\nthose values into descriptors, Host DB, projection receipts, logs, diagnostics,\nOpenAPI examples, or UI.',
+  'Author-owned native MCP files may contain literal secrets. AIWorker must not copy\nthose values into descriptors, DB, projection receipts, logs, diagnostics,\nOpenAPI examples, or UI.',
   'Anything emitted by CLI, Web, logs, API errors, event\nstreams, or diagnostics must be redacted before persistence or display.',
   'Archive is the default lifecycle operation for workers, workspace locators, and\nsessions.',
   'Hard delete is explicit and removes Worker metadata plus receipt-owned\nprojection files only.',
-  'Physical workspace root deletion is a separate dangerous\naction and is not the default Host lifecycle behavior.',
+  'Physical workspace root deletion is a separate dangerous\naction and is not the default lifecycle behavior.',
 ])
 
 requireIncludes('docs/soul-authoring.md', [
@@ -351,7 +351,7 @@ requireIncludes('docs/soul-authoring.md', [
   'If a Soul App exposes a custom mounted workbench, Host mounts that one entry. If\nit does not, Host mounts the SDK common workbench. Production runtime has one\nresolved workbench.',
   'Custom workbench code may compose SDK common modules. It may not create a second\nHost-readable configuration system or ask Host chrome to render domain UI.',
   'Workspace files, skills, native MCP files, and entry files are authored by the\nSoul App and projected at runtime by engine projection.',
-  'AIWorker validates syntax and target names, derives lightweight non-secret\nsummaries, and projects native files. It must not copy secret-like values into\ndescriptor summaries, Host DB, receipts, logs, diagnostics, inspect output, or\nUI.',
+  'AIWorker validates syntax and target names, derives lightweight non-secret\nsummaries, and projects native files. It must not copy secret-like values into\ndescriptor summaries, DB, receipts, logs, diagnostics, inspect output, or\nUI.',
   'author-owned native MCP files may contain literal secrets',
   '`souls/aiworker-freeform` is the v1 acceptance Soul',
   '- app id `aiworker-freeform`;\n- soul id `freeform`;\n- display name `AIWorker Freeform`;\n- one default capability named `Freeform Session`;\n- SDK common workbench;\n- one minimal projected skill;\n- Codex native MCP placeholder at `engine/mcp/codex/config.toml`;\n- Claude Code native MCP placeholder at `engine/mcp/claude-code/.mcp.json`.',

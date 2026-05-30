@@ -127,7 +127,7 @@ author-owned native MCP files may contain literal secrets
 
 AIWorker validates syntax and target names, derives lightweight non-secret
 summaries, and projects native files. It must not copy secret-like values into
-descriptor summaries, Host DB, receipts, logs, diagnostics, inspect output, or
+descriptor summaries, DB, receipts, logs, diagnostics, inspect output, or
 UI.
 
 ## Freeform V1

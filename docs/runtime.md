@@ -144,7 +144,7 @@ than silent default behavior.
 The secret boundary is preserved. `byok` stores only an `apiKeyRef` such as
 `env:OPENAI_API_KEY`; literal API keys are rejected at the settings layer; the
 resolved key is read from the environment at call time and is never persisted to
-Host DB, projection receipts, logs, diagnostics, OpenAPI examples, or UI.
+DB, projection receipts, logs, diagnostics, OpenAPI examples, or UI.
 
 The ownership-safe resolution is to re-home `byok` behind an engine-bridge
 adapter or to remove it. Neither is required for the current release. This
@@ -194,7 +194,7 @@ AIWorker does not manage engine login, token refresh, account selection, or
 engine profiles.
 
 Author-owned native MCP files may contain literal secrets. AIWorker must not copy
-those values into descriptors, Host DB, projection receipts, logs, diagnostics,
+those values into descriptors, DB, projection receipts, logs, diagnostics,
 OpenAPI examples, or UI. Anything emitted by CLI, Web, logs, API errors, event
 streams, or diagnostics must be redacted before persistence or display.
 
@@ -203,4 +203,4 @@ streams, or diagnostics must be redacted before persistence or display.
 Archive is the default lifecycle operation for workers, workspace locators, and
 sessions. Hard delete is explicit and removes Worker metadata plus receipt-owned
 projection files only. Physical workspace root deletion is a separate dangerous
-action and is not the default Host lifecycle behavior.
+action and is not the default lifecycle behavior.

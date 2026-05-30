@@ -108,8 +108,8 @@ function forbiddenCurrentSchemaFindings(snapshot: DrizzleSnapshot): string[] {
   return findings.sort()
 }
 
-describe('Host DB forbidden domain schema contract', () => {
-  test('Drizzle worker schema source does not define forbidden Host-owned domain storage', () => {
+describe('Worker DB forbidden domain schema contract', () => {
+  test('Drizzle worker schema source does not define forbidden domain storage', () => {
     expect(existsSync(join(repoRoot, workerSchemaPath)), `${workerSchemaPath} should exist`).toBe(true)
 
     const source = readRepoFile(workerSchemaPath)
@@ -172,7 +172,7 @@ describe('Host DB forbidden domain schema contract', () => {
     expect(sessionColumns).not.toContain('capability_template_id')
   })
 
-  test('latest worker migration does not introduce forbidden Host-owned prompt/history/content columns', () => {
+  test('latest worker migration does not introduce forbidden prompt/history/content columns', () => {
     const { path, sql } = latestWorkerMigrationSql()
     const rules = [
       ['session_events table creation', /CREATE\s+TABLE\s+`?(?:__new_)?session_events`?/i],
