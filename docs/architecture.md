@@ -80,15 +80,19 @@ The target top-level shape is:
 
 ```text
 apps/
-  cli/
-  web/
+  worker-cli/
+  worker-web/
+  host-cli/
+  host-web/
 
 souls/
   aiworker-freeform/
 
 packages/
-  host-runtime/
-  host-daemon/
+  worker-runtime/
+  worker-daemon/
+  host-control/
+  worker-control-protocol/
   soul-protocol/
   soul-app-sdk/
   soul-app-runtime/
@@ -101,18 +105,17 @@ packages/
 ```
 
 `apps/*` are runnable product shells. `souls/*` are descriptor-producing Soul App
-product packages. For v1 strong acceptance, Freeform is the only shipped Soul;
+product packages. Package and app names are plane-prefixed: `worker-*` owns the autonomous runtime;
+`host-*` owns the control plane; capability packages keep capability names and are
+consumed mostly by Workers. `worker-*` packages must not import `host-*` packages. For v1 strong acceptance, Freeform is the only shipped Soul;
 retired HR/QA app-local source trees stay deleted until they are re-authored as
-descriptor-producing `souls/*` packages. `packages/*` own reusable protocol,
-runtime, daemon, storage, projection, engine bridge, SDK, workbench, filesystem,
-and UI capabilities.
+descriptor-producing `souls/*` packages.
 
 `packages/core and packages/shared disappear` as broad buckets. Do not create
 `core-v2`, `shared-v2`, or any replacement dumping ground.
 
-`apps/api` migrates to `packages/host-daemon`. A future `apps/daemon` may exist
-only as a thin executable wrapper if a separate daemon binary becomes a product
-target.
+`apps/api` migrated into `packages/worker-daemon`. The control plane lives in
+`packages/host-control` with `apps/host-cli` and `apps/host-web` shells.
 
 ## Protocol Boundary
 
