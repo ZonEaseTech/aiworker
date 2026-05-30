@@ -73,9 +73,9 @@ export default antfu({
   },
 }, {
   // REFACTOR: apps/cli 改名为 apps/worker-cli 后，antfu 默认对 `**/cli/**` 目录的
-  // top-level await 豁免不再匹配。CLI 入口 aiworker.ts 用 `process.exit(await runCli())`
-  // 是标准模式，这里恢复该豁免（忠实复现 rename 前行为）。
-  files: ['apps/worker-cli/**/*.ts'],
+  // top-level await 豁免不再匹配。CLI 入口（worker-cli 的 aiworker.ts、host-cli 的
+  // aiworker-host.ts）用 `process.exit(await runCli())` 是标准模式，这里恢复该豁免。
+  files: ['apps/worker-cli/**/*.ts', 'apps/host-cli/**/*.ts'],
   rules: {
     'antfu/no-top-level-await': 'off',
   },

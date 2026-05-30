@@ -15,6 +15,21 @@
         "typescript": "^5.8.3",
       },
     },
+    "apps/host-cli": {
+      "name": "@zonease/aiworker-host-cli",
+      "version": "0.0.0",
+      "bin": {
+        "aiworker-host": "./dist/aiworker-host.js",
+      },
+      "dependencies": {
+        "@zonease/aiworker-host-control": "workspace:*",
+        "cac": "^6.7.14",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
     "apps/worker-cli": {
       "name": "@zonease/aiworker-cli",
       "version": "0.19.3",
@@ -847,6 +862,8 @@
     "@zonease/aiworker-freeform": ["@zonease/aiworker-freeform@workspace:souls/aiworker-freeform"],
 
     "@zonease/aiworker-fs-layout": ["@zonease/aiworker-fs-layout@workspace:packages/fs-layout"],
+
+    "@zonease/aiworker-host-cli": ["@zonease/aiworker-host-cli@workspace:apps/host-cli"],
 
     "@zonease/aiworker-host-control": ["@zonease/aiworker-host-control@workspace:packages/host-control"],
 
