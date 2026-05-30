@@ -423,7 +423,7 @@ requireIncludes('docs/testing.md', [
   'The first guardrail is:',
   'It verifies that canonical docs exist, root workspaces include `souls/*`,\n`AGENTS.md` is a short bootstrap, session lifecycle is separate from invocation\nstate, protocol/authoring remain descriptor-only and native-MCP based, and broad\nreplacement buckets such as `core-v2` and `shared-v2` do not appear.',
   'Architecture tests:',
-  'tests/architecture/\n  forbidden-host-domain-schema.test.ts\n  freeform-mounted-workbench-contract.test.ts\n  freeform-soul-contract.test.ts\n  package-ownership.test.ts\n  refactor-contract.test.ts',
+  'tests/architecture/\n  forbidden-host-domain-schema.test.ts\n  freeform-mounted-workbench-contract.test.ts\n  freeform-soul-contract.test.ts\n  inversion-guards.test.ts\n  package-ownership.test.ts\n  refactor-contract.test.ts',
   'Protocol tests:',
   'packages/soul-protocol/src/\n  descriptor-v1.test.ts\n  index.test.ts\n  lib/ids.test.ts\n  mounted-routing-contract.test.ts',
   'SDK tests:',
@@ -474,6 +474,12 @@ requireIncludes('docs/testing.md', [
   'Protocol implementation contract',
   'Runtime and bridge contract',
   'Soul authoring contract',
+  '## Worker Autonomy Inversion Guards',
+  'tests/architecture/inversion-guards.test.ts',
+  'C1 worker runs standalone with Host absent',
+  'C2 engine launch lives only in worker-*',
+  'C3 host-control owns no runtime/domain/secret state',
+  'C5 only Host->Worker surface is worker-control-protocol',
 ])
 for (const testPath of documentedTestingPaths()) {
   if (!existsSync(abs(testPath))) {

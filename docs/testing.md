@@ -19,6 +19,7 @@ tests/architecture/
   forbidden-host-domain-schema.test.ts
   freeform-mounted-workbench-contract.test.ts
   freeform-soul-contract.test.ts
+  inversion-guards.test.ts
   package-ownership.test.ts
   refactor-contract.test.ts
 ```
@@ -160,6 +161,20 @@ Coverage status values:
 | Host metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
 | Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
 | BYOK execution-mode deviation and secret boundary | `docs/runtime.md` | settings literal-secret rejection test, host-daemon worker config tests, docs check | docs+tests |
+
+## Worker Autonomy Inversion Guards
+
+The worker-autonomy inversion is guarded by `tests/architecture/inversion-guards.test.ts`:
+
+- C1 worker runs standalone with Host absent — G1 (Worker standalone golden path).
+- C2 engine launch lives only in worker-* — G2.
+- C3 host-control owns no runtime/domain/secret state — G4.
+- C4 Soul = Template definition; Worker is its instance — covered by package/doc gates.
+- C5 only Host->Worker surface is worker-control-protocol — G5.
+- C6 secret redaction holds on both planes — G6.
+
+Guards whose code lands in later inversion plans start as `test.todo` and are
+promoted to real assertions when that plan lands.
 
 ## Current Release Gates
 
