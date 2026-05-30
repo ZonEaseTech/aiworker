@@ -45,24 +45,34 @@ guarded by tests, or both.
 
 ## Ownership
 
-Soul Apps own domain state, domain UI/API, business outputs, confirmation
-actions, app-owned history, standalone experience, and mounted product
-experience.
+Soul Apps, also called Templates, own domain state, domain UI/API, business
+outputs, confirmation actions, app-owned history, standalone experience, mounted
+product experience, descriptor production, and engine target declaration.
+A Worker is a running instance of a Soul App.
 
-Host owns only platform metadata:
+A Worker owns its runtime state:
 
-- installed app descriptors;
-- worker metadata and worker-scoped SDK-standard configuration envelopes;
-- workspace locator metadata;
+- the Soul descriptor or template it runs;
+- workspace locator and workspace root;
 - session lifecycle metadata;
-- engine invocation references;
-- projection receipts;
-- normalized bridge event references;
-- redacted diagnostic references.
+- engine invocations and engine process state;
+- engine launch via the engine bridge;
+- projection, projection receipts, and receipt-based cleanup;
+- worker-scoped configuration overlays;
+- its own employee web and app-owned API proxy;
+- its own storage and filesystem root;
+- redaction of its own output.
 
-Host DB must not store Soul domain objects, artifact content, review/profile
-records, business confirmation state, engine secrets, engine profile files, or
-native MCP secret values.
+Host owns only control-plane metadata:
+
+- the worker registry: which workers exist, identity, endpoint, health;
+- assignment metadata: assigned template/soul, connectors, engine/gateway profile, permissions;
+- permission allocation and connector authorization;
+- worker distribution and provisioning records.
+
+Host must not own session, invocation, projection, engine processes, domain
+state, or secrets. A Worker must not depend on Host to run. Worker packages must
+not import Host packages.
 
 ## Monorepo Boundary
 
