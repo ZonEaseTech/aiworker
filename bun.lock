@@ -30,6 +30,29 @@
         "typescript": "^5.8.3",
       },
     },
+    "apps/host-web": {
+      "name": "@zonease/aiworker-host-web",
+      "dependencies": {
+        "@micro-zoe/micro-app": "^1.0.0-rc.30",
+        "@tailwindcss/vite": "^4.2.2",
+        "@zonease/aiworker-ui": "workspace:*",
+        "react": "^19.1.0",
+        "react-dom": "^19.1.0",
+        "tailwindcss": "^4.2.2",
+      },
+      "devDependencies": {
+        "@testing-library/dom": "10",
+        "@testing-library/react": "16",
+        "@types/node": "^25.6.0",
+        "@types/react": "^19.1.2",
+        "@types/react-dom": "^19.1.2",
+        "@vitejs/plugin-react": "^6.0.1",
+        "happy-dom": "20",
+        "typescript": "^5.8.3",
+        "vite": "^8",
+        "vitest": "4",
+      },
+    },
     "apps/worker-cli": {
       "name": "@zonease/aiworker-cli",
       "version": "0.19.3",
@@ -866,6 +889,8 @@
     "@zonease/aiworker-host-cli": ["@zonease/aiworker-host-cli@workspace:apps/host-cli"],
 
     "@zonease/aiworker-host-control": ["@zonease/aiworker-host-control@workspace:packages/host-control"],
+
+    "@zonease/aiworker-host-web": ["@zonease/aiworker-host-web@workspace:apps/host-web"],
 
     "@zonease/aiworker-soul-app-runtime": ["@zonease/aiworker-soul-app-runtime@workspace:packages/soul-app-runtime"],
 
