@@ -109,7 +109,7 @@ describe('greenfield local worker session schema', () => {
     expect(() => handle.all(sql.raw('SELECT 1'))).toThrow()
   })
 
-  it('creates only Host metadata tables without token-like identity storage', () => {
+  it('creates only Worker metadata tables without token-like identity storage', () => {
     const rows = getWorkerDb().all<{ name: string }>(
       sql.raw('SELECT name FROM sqlite_master WHERE type=\'table\' ORDER BY name'),
     ).map(row => row.name)
@@ -202,7 +202,7 @@ describe('greenfield local worker session schema', () => {
         },
         at: '2026-05-12T22:22:00.000Z',
       }),
-    ).toThrow('Literal secrets are not allowed in Host metadata: soul_apps.descriptorJson.external.businessWorkflow.apiKey')
+    ).toThrow('Literal secrets are not allowed in Worker metadata: soul_apps.descriptorJson.external.businessWorkflow.apiKey')
 
     expect(() =>
       upsertSoulApp({
@@ -224,7 +224,7 @@ describe('greenfield local worker session schema', () => {
         },
         at: '2026-05-12T22:22:00.000Z',
       }),
-    ).toThrow('Literal secrets are not allowed in Host metadata: soul_apps.descriptorJson.extensions.demo.example/review.token')
+    ).toThrow('Literal secrets are not allowed in Worker metadata: soul_apps.descriptorJson.extensions.demo.example/review.token')
   })
 
   it('normalizes retired worker lifecycle rows to archived', () => {
@@ -239,7 +239,7 @@ describe('greenfield local worker session schema', () => {
     expect(getWorker('legacy-paused-worker')?.status).toBe('archived')
   })
 
-  it('persists worker config envelopes and rejects malformed Host metadata', () => {
+  it('persists worker config envelopes and rejects malformed Worker metadata', () => {
     const worker = upsertWorker({ id: 'worker-config-1', name: 'Config worker', soulId: 'demo-soul-app' })
 
     const saved = upsertWorkerConfigValue({
@@ -328,7 +328,7 @@ describe('greenfield local worker session schema', () => {
           target: 'none',
         },
       }),
-    ).toThrow('Soul-owned config payloads are not allowed in Host metadata: worker_config.domain-option.configValueJson.options.candidateId')
+    ).toThrow('Soul-owned config payloads are not allowed in Worker metadata: worker_config.domain-option.configValueJson.options.candidateId')
     expect(() =>
       upsertWorkerConfigValue({
         workerId: worker.id,
@@ -342,7 +342,7 @@ describe('greenfield local worker session schema', () => {
           target: 'codex',
         },
       }),
-    ).toThrow('Soul-owned config payloads are not allowed in Host metadata: worker_config.artifact-content-option.configValueJson.options.artifactContent')
+    ).toThrow('Soul-owned config payloads are not allowed in Worker metadata: worker_config.artifact-content-option.configValueJson.options.artifactContent')
     expect(() =>
       upsertWorkerConfigValue({
         workerId: worker.id,
@@ -356,7 +356,7 @@ describe('greenfield local worker session schema', () => {
           target: 'codex',
         },
       }),
-    ).toThrow('Soul-owned config payloads are not allowed in Host metadata: worker_config.skill-body-option.configValueJson.options.skillBody')
+    ).toThrow('Soul-owned config payloads are not allowed in Worker metadata: worker_config.skill-body-option.configValueJson.options.skillBody')
     expect(() =>
       upsertWorkerConfigValue({
         workerId: worker.id,
@@ -370,7 +370,7 @@ describe('greenfield local worker session schema', () => {
           target: 'codex',
         },
       }),
-    ).toThrow('Soul-owned config payloads are not allowed in Host metadata: worker_config.entry-file-content-option.configValueJson.options.entryFileContent')
+    ).toThrow('Soul-owned config payloads are not allowed in Worker metadata: worker_config.entry-file-content-option.configValueJson.options.entryFileContent')
     expect(() =>
       upsertWorkerConfigValue({
         workerId: worker.id,
@@ -384,7 +384,7 @@ describe('greenfield local worker session schema', () => {
           target: 'codex',
         },
       }),
-    ).toThrow('Full native MCP files are not allowed in Host metadata')
+    ).toThrow('Full native MCP files are not allowed in Worker metadata')
     expect(() =>
       upsertWorkerConfigValue({
         workerId: worker.id,
@@ -718,7 +718,7 @@ describe('greenfield local worker session schema', () => {
         error: 'authorization = "literal-secret-value"',
         inputRef: 'aiworker://sessions/session-engine-diagnostics-secret/invocations/invocation-diagnostic-secret/input',
       }),
-    ).toThrow('Literal secrets are not allowed in Host metadata: engine_invocations.error')
+    ).toThrow('Literal secrets are not allowed in Worker metadata: engine_invocations.error')
     expect(() =>
       createWorkspace({
         id: 'workspace-embedded-mcp-file',
@@ -729,7 +729,7 @@ describe('greenfield local worker session schema', () => {
           configToml: '[mcp_servers.local]\ncommand = "node"\n',
         },
       }),
-    ).toThrow('Full native MCP files are not allowed in Host metadata: workspaces.metadataJson.configToml')
+    ).toThrow('Full native MCP files are not allowed in Worker metadata: workspaces.metadataJson.configToml')
     expect(() =>
       upsertWorker({
         id: 'worker-domain-metadata',
@@ -737,7 +737,7 @@ describe('greenfield local worker session schema', () => {
         name: 'Domain metadata worker',
         metadataJson: { reviewRecord: { decision: 'approved' } },
       }),
-    ).toThrow('Soul-owned payloads are not allowed in Host metadata: workers.metadataJson.reviewRecord')
+    ).toThrow('Soul-owned payloads are not allowed in Worker metadata: workers.metadataJson.reviewRecord')
     expect(() =>
       createWorkspace({
         id: 'workspace-domain-metadata',
@@ -746,7 +746,7 @@ describe('greenfield local worker session schema', () => {
         rootPath: '/tmp/domain-metadata-workspace',
         metadataJson: { artifactContent: '# Generated report\n' },
       }),
-    ).toThrow('Soul-owned payloads are not allowed in Host metadata: workspaces.metadataJson.artifactContent')
+    ).toThrow('Soul-owned payloads are not allowed in Worker metadata: workspaces.metadataJson.artifactContent')
     expect(() =>
       createSession({
         id: 'session-domain-metadata',
@@ -756,7 +756,7 @@ describe('greenfield local worker session schema', () => {
         title: 'Domain metadata session',
         metadataJson: { promptText: 'Summarize the business artifact.' },
       }),
-    ).toThrow('Soul-owned payloads are not allowed in Host metadata: sessions.metadataJson.promptText')
+    ).toThrow('Soul-owned payloads are not allowed in Worker metadata: sessions.metadataJson.promptText')
     expect(() =>
       createEngineInvocation({
         id: 'invocation-domain-metadata',
@@ -767,7 +767,7 @@ describe('greenfield local worker session schema', () => {
         inputRef: 'aiworker://sessions/session-engine-diagnostics-secret/invocations/invocation-domain-metadata/input',
         metadataJson: { candidateId: 'candidate-1' },
       }),
-    ).toThrow('Soul-owned payloads are not allowed in Host metadata: engine_invocations.metadataJson.candidateId')
+    ).toThrow('Soul-owned payloads are not allowed in Worker metadata: engine_invocations.metadataJson.candidateId')
 
     const invocation = createEngineInvocation({
       id: 'invocation-diagnostic-safe',
@@ -799,7 +799,7 @@ describe('greenfield local worker session schema', () => {
         payloadJson: { message: 'token = "literal-secret-value"' },
         at: '2026-05-27T02:03:01.000Z',
       }),
-    ).toThrow('Literal secrets are not allowed in Host metadata: bridge_events.eventJson.payload.message')
+    ).toThrow('Literal secrets are not allowed in Worker metadata: bridge_events.eventJson.payload.message')
 
     expect(() =>
       appendSessionEvent({
@@ -812,7 +812,7 @@ describe('greenfield local worker session schema', () => {
         },
         at: '2026-05-27T02:03:02.000Z',
       }),
-    ).toThrow('Full native MCP files are not allowed in Host metadata: bridge_events.eventJson.payload.message')
+    ).toThrow('Full native MCP files are not allowed in Worker metadata: bridge_events.eventJson.payload.message')
   })
 
   it('filters session events by id in SQL before applying the limit so long sessions keep streaming', () => {

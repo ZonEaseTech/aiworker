@@ -705,7 +705,7 @@ describe('aiworker local CLI', () => {
       '--options-json',
       '{"apiKey":"sk-cli-worker-config-secret"}',
     ))).toBe(1)
-    expect(errorOutput).toContain('Literal secrets are not allowed in Host metadata')
+    expect(errorOutput).toContain('Literal secrets are not allowed in Worker metadata')
     expect(errorOutput).not.toContain('sk-cli-worker-config-secret')
 
     output = ''

@@ -282,7 +282,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(protocol).toContain('localWorkerStatusSchema = z.enum([\'active\', \'archived\'])')
     expect(cliArchiveWorker).toContain('status: \'archived\'')
     expect(daemonArchiveWorker).toContain('status: \'archived\'')
-    expect(findings, 'Local Worker lifecycle should archive/delete Host metadata; Soul App disabled remains a separate app registry state').toEqual([])
+    expect(findings, 'Local Worker lifecycle should archive/delete Worker metadata; Soul App disabled remains a separate app registry state').toEqual([])
   })
 
   test('runtime doc promotes projection, assets CRUD, and bridge hard rules', () => {
@@ -2182,12 +2182,12 @@ describe('destructive refactor contract bootstrap', () => {
     const webConfigTest = readRepoFile('apps/worker-web/src/features/local-workspace/api/worker-config.test.ts')
     const webOverlayConfigTest = readRepoFile('apps/worker-web/src/features/local-workspace/api/worker-overlay-config.test.ts')
 
-    expect(testing).toContain('Worker config envelope and Host metadata security')
+    expect(testing).toContain('Worker config envelope and Worker metadata security')
     expect(docCheck).toContain('worker config envelope security must stay covered')
     expect(protocol).toContain('Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.')
     expect(runtime).toContain('Worker-scoped overlay records live in Worker metadata')
-    expect(storageTest).toContain('Soul-owned config payloads are not allowed in Host metadata')
-    expect(storageTest).toContain('Full native MCP files are not allowed in Host metadata')
+    expect(storageTest).toContain('Soul-owned config payloads are not allowed in Worker metadata')
+    expect(storageTest).toContain('Full native MCP files are not allowed in Worker metadata')
     expect(storageTest).toContain('Invalid Host worker config envelope updatedBy')
     expect(daemonTest).toContain('stores worker config envelopes with secret references but rejects literal secrets')
     expect(daemonTest).toContain('WORKER_CONFIG_SECRET')

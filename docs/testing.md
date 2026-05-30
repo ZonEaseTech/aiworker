@@ -148,7 +148,7 @@ Coverage status values:
 
 | Decision area | Canonical home | Guardrail | Status |
 | --- | --- | --- | --- |
-| Host shell / locator / mount / bridge | `docs/architecture.md`, `AGENTS.md` | `bun run docs:check`, `bun run test:contracts` | docs+tests |
+| Worker autonomy / Host control plane | `docs/architecture.md`, `AGENTS.md` | `bun run docs:check`, `bun run test:contracts` | docs+tests |
 | Descriptor-only Host/Soul boundary | `docs/protocol.md`, `docs/soul-authoring.md` | `packages/soul-protocol` tests, architecture tests | docs+tests |
 | Production mounted workbench routing | `docs/protocol.md`, `docs/runtime.md` | browser Freeform proof, mounted routing contract tests | docs+tests |
 | Session lifecycle and invocation state split | `docs/runtime.md` | architecture tests and engine bridge tests | docs+tests |
@@ -156,9 +156,9 @@ Coverage status values:
 | Runtime and bridge contract | `docs/runtime.md` | engine bridge and projection tests | docs+tests |
 | OpenAPI and redaction boundary | `docs/runtime.md`, `AGENTS.md` | worker-daemon OpenAPI tests, storage redaction tests, engine bridge redaction tests, projection receipt tests | docs+tests |
 | App-owned API proxy | `docs/protocol.md`, `docs/runtime.md` | worker-daemon app-owned API proxy test and docs check | docs+tests |
-| Worker config envelope and Host metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, worker-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |
+| Worker config envelope and Worker metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, worker-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |
 | Soul authoring contract | `docs/soul-authoring.md` | SDK and Freeform contract tests | docs+tests |
-| Host metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
+| Worker metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
 | Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
 | BYOK execution-mode deviation and secret boundary | `docs/runtime.md` | settings literal-secret rejection test, worker-daemon worker config tests, docs check | docs+tests |
 

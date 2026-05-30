@@ -92,9 +92,9 @@ function repairWorkerLifecycleStatuses() {
 function assertNoLiteralSecrets(value: unknown, context: string): void {
   if (typeof value === 'string') {
     if (NATIVE_MCP_FILE_RE.test(value))
-      throw new Error(`Full native MCP files are not allowed in Host metadata: ${context}`)
+      throw new Error(`Full native MCP files are not allowed in Worker metadata: ${context}`)
     if (containsLiteralSecret(value))
-      throw new Error(`Literal secrets are not allowed in Host metadata: ${context}`)
+      throw new Error(`Literal secrets are not allowed in Worker metadata: ${context}`)
     return
   }
   if (!value || typeof value !== 'object')
@@ -105,7 +105,7 @@ function assertNoLiteralSecrets(value: unknown, context: string): void {
   }
   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
     if (typeof nested === 'string' && isSecretKey(key) && !isSecretReference(nested))
-      throw new Error(`Literal secrets are not allowed in Host metadata: ${context}.${key}`)
+      throw new Error(`Literal secrets are not allowed in Worker metadata: ${context}.${key}`)
     assertNoLiteralSecrets(nested, `${context}.${key}`)
   }
 }
@@ -113,7 +113,7 @@ function assertNoLiteralSecrets(value: unknown, context: string): void {
 function assertNoFullNativeMcpFiles(value: unknown, context: string): void {
   if (typeof value === 'string') {
     if (NATIVE_MCP_FILE_RE.test(value))
-      throw new Error(`Full native MCP files are not allowed in Host metadata: ${context}`)
+      throw new Error(`Full native MCP files are not allowed in Worker metadata: ${context}`)
     return
   }
   if (!value || typeof value !== 'object')
@@ -135,7 +135,7 @@ function assertNoSoulOwnedPayloads(value: unknown, context: string, label = 'Sou
   }
   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
     if (SOUL_OWNED_PAYLOAD_KEY_RE.test(key))
-      throw new Error(`${label} are not allowed in Host metadata: ${context}.${key}`)
+      throw new Error(`${label} are not allowed in Worker metadata: ${context}.${key}`)
     assertNoSoulOwnedPayloads(nested, `${context}.${key}`, label)
   }
 }

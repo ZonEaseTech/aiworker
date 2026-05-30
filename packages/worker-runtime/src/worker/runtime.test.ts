@@ -2140,7 +2140,7 @@ describe('LocalWorkerRuntime', () => {
     expect(talentRuntime.snapshot().workspaces.map(workspace => workspace.id)).toEqual([talentWorkspace.id])
   })
 
-  it('projects worker overlay source refs without storing projected content in Host metadata', async () => {
+  it('projects worker overlay source refs without storing projected content in Worker metadata', async () => {
     const appRoot = join(dir, 'souls', 'demo-soul-app-overlay-skill')
     await writeProfileEngineAssets(appRoot)
     await mkdir(join(appRoot, 'engine-assets', 'skills', 'freeform-brief'), { recursive: true })
@@ -2523,7 +2523,7 @@ describe('LocalWorkerRuntime', () => {
     await expect(stat(join(workspace.rootPath, '.codex', 'config.toml'))).rejects.toThrow()
   })
 
-  it('projects author-owned MCP client config secrets without copying them into Host metadata or receipts', async () => {
+  it('projects author-owned MCP client config secrets without copying them into Worker metadata or receipts', async () => {
     const appRoot = join(dir, 'souls', 'demo-soul-app-mcp-secret')
     await writeMcpClientEngineAssets(appRoot)
     await writeFile(join(appRoot, 'engine-assets', 'mcp', 'codex', 'config.toml'), 'token = "sk-test-literal-secret"\n')

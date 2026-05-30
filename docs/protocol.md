@@ -53,7 +53,7 @@ migration, but they must not leak into broker contracts.
 ## Configuration
 
 Configuration is worker-scoped and SDK-standard. Values use stable envelopes
-stored in Host metadata. Configuration may contain non-secret operational
+stored in Worker metadata. Configuration may contain non-secret operational
 options, source refs, checksums, caller class, and projection-affecting state.
 
 Worker configuration values use a `configValueJson envelope` with the standard
@@ -176,8 +176,8 @@ Route methods make the local broker deterministic. They do not turn the daemon
 into a product backend.
 
 - `enable` creates a worker from an installed descriptor.
-- archive operations mark Host metadata unavailable for new work.
-- hard delete removes Host metadata and receipt-owned projections only.
+- archive operations mark Worker metadata unavailable for new work.
+- hard delete removes Worker metadata and receipt-owned projections only.
 - `GET /api/workspace-locators` may receive `workerId` to filter locators for
   mounted app contexts.
 - `POST /api/workspace-locators` receives `workerId`, may receive `rootPath`,

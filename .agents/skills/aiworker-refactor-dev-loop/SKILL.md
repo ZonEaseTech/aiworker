@@ -1,6 +1,6 @@
 ---
 name: aiworker-refactor-dev-loop
-description: Use when continuing AIWorker destructive refactor implementation toward release readiness, Freeform v1 golden path, host-daemon broker routes, worker_config envelope, Host metadata schema, engine projection, engine bridge, mounted workbench proof, or contract-test driven migration work. This skill treats each invocation as one slice of a standing release objective and prevents audit-only status reports.
+description: Use when continuing AIWorker destructive refactor implementation toward release readiness, Freeform v1 golden path, host-daemon broker routes, worker_config envelope, Worker metadata schema, engine projection, engine bridge, mounted workbench proof, or contract-test driven migration work. This skill treats each invocation as one slice of a standing release objective and prevents audit-only status reports.
 ---
 
 # AIWorker Refactor Dev Loop
@@ -226,7 +226,7 @@ loop. Prefer, in order:
 
 1. Freeform v1 golden path;
 2. host-daemon broker routes;
-3. `worker_config` envelope / Host metadata schema;
+3. `worker_config` envelope / Worker metadata schema;
 4. engine-projection receipts;
 5. engine-bridge invocation lifecycle;
 6. mounted workbench `router-mode="search"` proof;

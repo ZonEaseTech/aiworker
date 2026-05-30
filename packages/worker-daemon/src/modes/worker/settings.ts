@@ -94,7 +94,7 @@ function normalizeLocalSettingsPersistenceError(error: unknown): unknown {
   if (!(error instanceof Error))
     return error
 
-  if (error.message.startsWith('Literal secrets are not allowed in Host metadata:')) {
+  if (error.message.startsWith('Literal secrets are not allowed in Worker metadata:')) {
     return new AppError(
       'LOCAL_SETTINGS_SECRET',
       422,
@@ -102,7 +102,7 @@ function normalizeLocalSettingsPersistenceError(error: unknown): unknown {
     )
   }
 
-  if (error.message.startsWith('Full native MCP files are not allowed in Host metadata:')) {
+  if (error.message.startsWith('Full native MCP files are not allowed in Worker metadata:')) {
     return new AppError(
       'LOCAL_SETTINGS_INVALID',
       422,

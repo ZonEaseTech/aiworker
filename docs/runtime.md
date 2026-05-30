@@ -201,6 +201,6 @@ streams, or diagnostics must be redacted before persistence or display.
 ## Lifecycle
 
 Archive is the default lifecycle operation for workers, workspace locators, and
-sessions. Hard delete is explicit and removes Host metadata plus receipt-owned
+sessions. Hard delete is explicit and removes Worker metadata plus receipt-owned
 projection files only. Physical workspace root deletion is a separate dangerous
 action and is not the default Host lifecycle behavior.

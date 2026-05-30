@@ -191,7 +191,7 @@ requireIncludes('docs/protocol.md', [
   'dist/soul.descriptor.json',
   'Soul Apps are installed through:',
   'Host validates and caches the descriptor, then routes local operations through\ngeneric broker APIs. Host does not read app source, import app-private modules,\nor interpret domain semantics.',
-  'Configuration is worker-scoped and SDK-standard. Values use stable envelopes\nstored in Host metadata.',
+  'Configuration is worker-scoped and SDK-standard. Values use stable envelopes\nstored in Worker metadata.',
   'Configuration may contain non-secret operational\noptions, source refs, checksums, caller class, and projection-affecting state.',
   'Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.',
   'Descriptor v1 contains only these top-level sections:',
@@ -324,7 +324,7 @@ requireIncludes('docs/runtime.md', [
   'Author-owned native MCP files may contain literal secrets. AIWorker must not copy\nthose values into descriptors, Host DB, projection receipts, logs, diagnostics,\nOpenAPI examples, or UI.',
   'Anything emitted by CLI, Web, logs, API errors, event\nstreams, or diagnostics must be redacted before persistence or display.',
   'Archive is the default lifecycle operation for workers, workspace locators, and\nsessions.',
-  'Hard delete is explicit and removes Host metadata plus receipt-owned\nprojection files only.',
+  'Hard delete is explicit and removes Worker metadata plus receipt-owned\nprojection files only.',
   'Physical workspace root deletion is a separate dangerous\naction and is not the default Host lifecycle behavior.',
 ])
 
@@ -454,7 +454,7 @@ requireIncludes('docs/testing.md', [
   'Coverage status values:',
   '- `docs+tests`: preferred for high-risk architecture boundaries.\n- `docs-only`: acceptable for explanatory or low-risk guidance.\n- `tests-only`: acceptable for mechanical constraints where docs would be noisy.\n- `tmp-only`: evidence only. tmp-only is not acceptable for closed hard decisions.\n  Use it only when the ledger explains that the idea was exploratory or rejected.',
   '| Decision area | Canonical home | Guardrail | Status |',
-  'Host shell / locator / mount / bridge',
+  'Worker autonomy / Host control plane',
   'Descriptor-only Host/Soul boundary',
   'Production mounted workbench routing',
   'Session lifecycle and invocation state split',
@@ -462,9 +462,9 @@ requireIncludes('docs/testing.md', [
   'Runtime and bridge contract',
   'OpenAPI and redaction boundary',
   'App-owned API proxy',
-  'Worker config envelope and Host metadata security',
+  'Worker config envelope and Worker metadata security',
   'Soul authoring contract',
-  'Host metadata and forbidden domain schema',
+  'Worker metadata and forbidden domain schema',
   'Freeform v1 acceptance Soul',
   'docs+tests',
   'docs-only',
@@ -599,7 +599,7 @@ for (const requiredAppOwnedApiCoverageText of [
 const workerConfigCoverageNeedles: Array<[string, string]> = [
   [
     'docs/testing.md',
-    '| Worker config envelope and Host metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, worker-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |',
+    '| Worker config envelope and Worker metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, worker-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |',
   ],
   [
     'docs/protocol.md',
@@ -611,11 +611,11 @@ const workerConfigCoverageNeedles: Array<[string, string]> = [
   ],
   [
     'packages/storage-sqlite/src/worker/index.test.ts',
-    'Soul-owned config payloads are not allowed in Host metadata',
+    'Soul-owned config payloads are not allowed in Worker metadata',
   ],
   [
     'packages/storage-sqlite/src/worker/index.test.ts',
-    'Full native MCP files are not allowed in Host metadata',
+    'Full native MCP files are not allowed in Worker metadata',
   ],
   [
     'packages/storage-sqlite/src/worker/index.test.ts',
