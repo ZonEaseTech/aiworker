@@ -134,10 +134,11 @@ not manage engine login. Local execution has two modes. `local-cli` spawns the
 selected native engine CLI and is fully aligned with this contract.
 
 `byok` is an accepted P2 deviation, not P0/P1 drift. When no native engine CLI is
-installed, `byok` is the fallback execution mode and `packages/host-runtime`
-issues an OpenAI-compatible `chat/completions` request directly so a worker
-without a native engine can still run. This deviates from native-engine
-model-call ownership and is recorded here so the deviation is explicit rather
+installed, `byok` is the fallback execution mode and `packages/worker-runtime`
+issues an OpenAI-compatible `chat/completions` request directly so a Worker
+without a native engine can still run. This is a worker-internal non-native-engine
+fallback, not a Host-owned model call: it deviates from native-engine model-call
+ownership and is recorded here so the deviation is explicit rather
 than silent default behavior.
 
 The secret boundary is preserved. `byok` stores only an `apiKeyRef` such as
@@ -147,8 +148,7 @@ Host DB, projection receipts, logs, diagnostics, OpenAPI examples, or UI.
 
 The ownership-safe resolution is to re-home `byok` behind an engine-bridge
 adapter or to remove it. Neither is required for the current release. This
-deviation must not be cited to justify any new Host-owned model call or any
-engine-secret persistence.
+deviation must not be cited to justify any Host-owned model call or any engine-secret persistence on either plane.
 
 ## Projection
 
