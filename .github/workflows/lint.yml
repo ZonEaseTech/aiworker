@@ -29,16 +29,16 @@ jobs:
         run: bun run lint
 
       - name: Web lint
-        run: bun run --filter '@zonease/aiworker-web' lint
+        run: bun run --filter '@zonease/aiworker-worker-web' lint
 
       - name: Web test
-        run: bun run --filter '@zonease/aiworker-web' test
+        run: bun run --filter '@zonease/aiworker-worker-web' test
 
       - name: Web build
-        run: bun run --filter '@zonease/aiworker-web' build
+        run: bun run --filter '@zonease/aiworker-worker-web' build
 
       - name: Web shared cycle check
-        run: bun run --filter '@zonease/aiworker-web' check:shared-cycles
+        run: bun run --filter '@zonease/aiworker-worker-web' check:shared-cycles
 
       - name: Web bundle size report
-        run: bun run --filter '@zonease/aiworker-web' size:report
+        run: bun run --filter '@zonease/aiworker-worker-web' size:report

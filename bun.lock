@@ -15,7 +15,7 @@
         "typescript": "^5.8.3",
       },
     },
-    "apps/cli": {
+    "apps/worker-cli": {
       "name": "@zonease/aiworker-cli",
       "version": "0.19.3",
       "bin": {
@@ -35,8 +35,8 @@
         "yaml": "^2.7.1",
       },
     },
-    "apps/web": {
-      "name": "@zonease/aiworker-web",
+    "apps/worker-web": {
+      "name": "@zonease/aiworker-worker-web",
       "dependencies": {
         "@hugeicons/core-free-icons": "^4.1.4",
         "@hugeicons/react": "^1.1.6",
@@ -817,7 +817,7 @@
 
     "@vue/shared": ["@vue/shared@3.5.32", "", {}, "sha512-ksNyrmRQzWJJ8n3cRDuSF7zNNontuJg1YHnmWRJd2AMu8Ij2bqwiiri2lH5rHtYPZjj4STkNcgcmiQqlOjiYGg=="],
 
-    "@zonease/aiworker-cli": ["@zonease/aiworker-cli@workspace:apps/cli"],
+    "@zonease/aiworker-cli": ["@zonease/aiworker-cli@workspace:apps/worker-cli"],
 
     "@zonease/aiworker-engine-bridge": ["@zonease/aiworker-engine-bridge@workspace:packages/engine-bridge"],
 
@@ -839,11 +839,11 @@
 
     "@zonease/aiworker-ui": ["@zonease/aiworker-ui@workspace:packages/ui"],
 
-    "@zonease/aiworker-web": ["@zonease/aiworker-web@workspace:apps/web"],
-
     "@zonease/aiworker-worker-daemon": ["@zonease/aiworker-worker-daemon@workspace:packages/worker-daemon"],
 
     "@zonease/aiworker-worker-runtime": ["@zonease/aiworker-worker-runtime@workspace:packages/worker-runtime"],
+
+    "@zonease/aiworker-worker-web": ["@zonease/aiworker-worker-web@workspace:apps/worker-web"],
 
     "accepts": ["accepts@2.0.0", "", { "dependencies": { "mime-types": "^3.0.0", "negotiator": "^1.0.0" } }, "sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng=="],
 

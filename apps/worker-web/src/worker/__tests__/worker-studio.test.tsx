@@ -1032,7 +1032,7 @@ describe('worker studio', () => {
     expect(source).not.toContain('activeMountedRoute?.id !== \'universal-workbench\'')
   })
 
-  it('keeps apps/web free of retired Host-owned session product surfaces', () => {
+  it('keeps apps/worker-web free of retired Host-owned session product surfaces', () => {
     const files = listWebSourceFiles('src')
     const sources = files.map(file => ({
       file: path.relative(process.cwd(), file).replaceAll('\\', '/'),

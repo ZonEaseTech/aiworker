@@ -20,7 +20,7 @@
 - schema 变更必须走 packages/storage-sqlite 的 Drizzle schema 与 migration 生成，不手写应用层绕过。
 
 前端约定：
-- 新组件优先复用 `apps/web/src/shared/components/ui/` 和已有 shared primitives。
+- 新组件优先复用 `apps/worker-web/src/shared/components/ui/` 和已有 shared primitives。
 - 交互组件使用成熟 headless UI，不手写 focus trap、scroll lock、ARIA、键盘导航。
 - 视觉值来自根目录 DESIGN.md 并通过 Tailwind CSS v4 `@theme` 接入；禁止新增 hex 字面量和 arbitrary value。
 - Fleet UI 只走 gateway WS；Worker UI 只走 worker REST/SSE + bearer-auth；两边源码边界不能交叉。

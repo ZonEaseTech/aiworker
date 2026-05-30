@@ -46,7 +46,7 @@ async function main(): Promise<number> {
   const tempDir = await mkdtemp(join(tmpdir(), 'aiworker-standalone-runtime-'))
   try {
     await cleanup()
-    await run(['bun', 'build', '--compile', `--target=bun-${target}`, `--outfile=${bundle}`, 'apps/cli/src/aiworker.ts'])
+    await run(['bun', 'build', '--compile', `--target=bun-${target}`, `--outfile=${bundle}`, 'apps/worker-cli/src/aiworker.ts'])
     const expectedVersion = await readDistPackageVersion()
     await packageReleaseBundles({ targets: [target] })
     await run(['tar', '-xzf', `${bundle}.tar.gz`, '-C', tempDir])
@@ -80,9 +80,9 @@ async function main(): Promise<number> {
 }
 
 async function readDistPackageVersion(): Promise<string> {
-  const pkg = JSON.parse(await readFile(resolve('apps/cli/dist/package.json'), 'utf8')) as { version?: unknown }
+  const pkg = JSON.parse(await readFile(resolve('apps/worker-cli/dist/package.json'), 'utf8')) as { version?: unknown }
   if (typeof pkg.version !== 'string' || pkg.version.length === 0)
-    throw new Error('standalone runtime smoke requires apps/cli/dist/package.json with a version')
+    throw new Error('standalone runtime smoke requires apps/worker-cli/dist/package.json with a version')
   return pkg.version
 }
 

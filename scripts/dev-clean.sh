@@ -12,7 +12,7 @@ export AIWORKER_HOME
 cd "$ROOT_DIR"
 
 echo "[dev:clean] AIWORKER_HOME=$AIWORKER_HOME"
-bun apps/cli/src/aiworker.ts daemon stop || true
+bun apps/worker-cli/src/aiworker.ts daemon stop || true
 
 process_cwd() {
   lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1
@@ -23,15 +23,15 @@ is_aiworker_dev_process() {
   local command="$2"
   local cwd="$3"
 
-  if [[ "$command" == *"apps/cli/src/aiworker.ts daemon foreground"* ]]; then
+  if [[ "$command" == *"apps/worker-cli/src/aiworker.ts daemon foreground"* ]]; then
     return 0
   fi
 
-  if [[ "$cwd" == "$ROOT_DIR/apps/web"* && "$command" == *"vite"* ]]; then
+  if [[ "$cwd" == "$ROOT_DIR/apps/worker-web"* && "$command" == *"vite"* ]]; then
     return 0
   fi
 
-  if [[ "$cwd" == "$ROOT_DIR"* && "$command" == *"apps/cli/src/aiworker.ts"* ]]; then
+  if [[ "$cwd" == "$ROOT_DIR"* && "$command" == *"apps/worker-cli/src/aiworker.ts"* ]]; then
     return 0
   fi
 

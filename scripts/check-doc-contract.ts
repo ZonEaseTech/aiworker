@@ -415,7 +415,7 @@ requireIncludes('docs/testing.md', [
   '`bun run release:check` is the aggregator for this current release gate list.',
   '`bun run release:check` must exactly aggregate the Current Release Gates.',
   'Tag release handoff must run post-compile artifact proof after `release:check`\nand before npm publish or GitHub release attachment.',
-  'bun apps/cli/scripts/package-release-bundles.ts\nbun apps/cli/scripts/smoke-release-artifacts.ts',
+  'bun apps/worker-cli/scripts/package-release-bundles.ts\nbun apps/worker-cli/scripts/smoke-release-artifacts.ts',
   'The artifact smoke must verify checksums, required resources, descriptor references, executable mode, and current-platform `aiworker --version` startup.',
   'Contract tests are the primary guardrail',
   'Contract tests are the primary guardrail for this destructive refactor. Old E2E\nvolume is not architecture proof.',
@@ -439,11 +439,11 @@ requireIncludes('docs/testing.md', [
   'Boundary guard tests:',
   'scripts/check-soul-app-boundaries.test.ts',
   'CLI and browser tests:',
-  'apps/cli/src/freeform-golden-path.test.ts\napps/cli/src/aiworker.test.ts\ntests/browser/freeform-cli-golden-path.spec.ts\ntests/browser/freeform-mounted-workbench.spec.ts',
+  'apps/worker-cli/src/freeform-golden-path.test.ts\napps/worker-cli/src/aiworker.test.ts\ntests/browser/freeform-cli-golden-path.spec.ts\ntests/browser/freeform-mounted-workbench.spec.ts',
   'CLI release smoke contract tests:',
-  'apps/cli/scripts/smoke-dist-release.test.ts\napps/cli/scripts/smoke-release-artifacts.test.ts\napps/cli/scripts/smoke-npm-package.test.ts\napps/cli/scripts/smoke-standalone-release.test.ts\napps/cli/scripts/smoke-standalone-runtime.test.ts',
+  'apps/worker-cli/scripts/smoke-dist-release.test.ts\napps/worker-cli/scripts/smoke-release-artifacts.test.ts\napps/worker-cli/scripts/smoke-npm-package.test.ts\napps/worker-cli/scripts/smoke-standalone-release.test.ts\napps/worker-cli/scripts/smoke-standalone-runtime.test.ts',
   'CLI release packaging contract tests:',
-  'apps/cli/src/official-freeform-descriptor.test.ts\napps/cli/scripts/build-publish-manifest.test.ts\napps/cli/scripts/package-release-bundles.test.ts',
+  'apps/worker-cli/src/official-freeform-descriptor.test.ts\napps/worker-cli/scripts/build-publish-manifest.test.ts\napps/worker-cli/scripts/package-release-bundles.test.ts',
   'OpenAPI and redaction contract tests:',
   'packages/worker-daemon/src/modes/worker.local.test.ts\npackages/storage-sqlite/src/worker/index.test.ts\npackages/engine-bridge/src/bridge-contract.test.ts\npackages/engine-projection/src/workspace-projection.test.ts',
   'The v1 browser proof is Freeform-only',
@@ -503,7 +503,7 @@ const packageJson = JSON.parse(read('package.json')) as {
   scripts?: Record<string, string>
   workspaces?: string[]
 }
-const cliPackageJson = JSON.parse(read('apps/cli/package.json')) as {
+const cliPackageJson = JSON.parse(read('apps/worker-cli/package.json')) as {
   engines?: Record<string, string>
 }
 const expectedReleaseGateCommands = [
@@ -558,8 +558,8 @@ for (const requiredReleaseExitText of [
   '## Release Exit Criteria',
   '`bun run release:check` must exactly aggregate the Current Release Gates',
   'Tag release handoff must run post-compile artifact proof after `release:check`',
-  'bun apps/cli/scripts/package-release-bundles.ts',
-  'bun apps/cli/scripts/smoke-release-artifacts.ts',
+  'bun apps/worker-cli/scripts/package-release-bundles.ts',
+  'bun apps/worker-cli/scripts/smoke-release-artifacts.ts',
   'The artifact smoke must verify checksums, required resources, descriptor references, executable mode, and current-platform `aiworker --version` startup.',
 ]) {
   if (!testingDoc.includes(requiredReleaseExitText)) {
@@ -634,19 +634,19 @@ const workerConfigCoverageNeedles: Array<[string, string]> = [
     'config.value.updatedBy).toBe(\'web\')',
   ],
   [
-    'apps/cli/src/aiworker.test.ts',
+    'apps/worker-cli/src/aiworker.test.ts',
     'rejects literal secrets in worker config envelopes through CLI commands',
   ],
   [
-    'apps/web/src/features/local-workspace/api/worker-config.test.ts',
+    'apps/worker-web/src/features/local-workspace/api/worker-config.test.ts',
     '/api/workers/worker-1/config/skill-overlay%3Afreeform-session',
   ],
   [
-    'apps/web/src/features/local-workspace/api/worker-config.test.ts',
+    'apps/worker-web/src/features/local-workspace/api/worker-config.test.ts',
     'updatedBy: \'web\'',
   ],
   [
-    'apps/web/src/features/local-workspace/api/worker-overlay-config.test.ts',
+    'apps/worker-web/src/features/local-workspace/api/worker-overlay-config.test.ts',
     '/api/workers/worker-1/config/skill-overlay%3Ainterview-brief',
   ],
 ]
@@ -668,16 +668,16 @@ const releaseWorkflow = read('.github/workflows/release.yml')
 const lintWorkflow = read('.github/workflows/lint.yml')
 const releaseWorkflowReleaseCheckIndex = releaseWorkflow.indexOf('bun run release:check')
 const releaseWorkflowCompileIndex = releaseWorkflow.indexOf('Compile single-file binaries')
-const releaseWorkflowPackageIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/package-release-bundles.ts')
-const releaseWorkflowArtifactSmokeIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/smoke-release-artifacts.ts')
+const releaseWorkflowPackageIndex = releaseWorkflow.indexOf('bun apps/worker-cli/scripts/package-release-bundles.ts')
+const releaseWorkflowArtifactSmokeIndex = releaseWorkflow.indexOf('bun apps/worker-cli/scripts/smoke-release-artifacts.ts')
 const releaseWorkflowPublishIndex = releaseWorkflow.indexOf('npm publish --provenance --access public')
 const releaseWorkflowAttachIndex = releaseWorkflow.indexOf('softprops/action-gh-release')
-const packageReleaseBundlesScript = read('apps/cli/scripts/package-release-bundles.ts')
-const smokeReleaseArtifactsScript = read('apps/cli/scripts/smoke-release-artifacts.ts')
+const packageReleaseBundlesScript = read('apps/worker-cli/scripts/package-release-bundles.ts')
+const smokeReleaseArtifactsScript = read('apps/worker-cli/scripts/smoke-release-artifacts.ts')
 if (packageJson.engines?.node !== expectedNodeEngineRange)
   issues.push({ file: 'package.json', message: `root package must declare Node engine ${expectedNodeEngineRange}` })
 if (cliPackageJson.engines?.node !== expectedNodeEngineRange)
-  issues.push({ file: 'apps/cli/package.json', message: `published CLI package must declare Node engine ${expectedNodeEngineRange}` })
+  issues.push({ file: 'apps/worker-cli/package.json', message: `published CLI package must declare Node engine ${expectedNodeEngineRange}` })
 if (!releaseWorkflow.includes(`node-version: '${expectedWorkflowNodeVersion}'`))
   issues.push({ file: '.github/workflows/release.yml', message: 'GitHub workflows must use Node 24 for release reproducibility' })
 if (!lintWorkflow.includes(`node-version: '${expectedWorkflowNodeVersion}'`))
@@ -721,13 +721,13 @@ requireExactList(
 )
 if (!packageReleaseBundlesScript.includes(`const DEFAULT_TARGETS = ${expectedReleaseTargetsLiteral} as const`)) {
   issues.push({
-    file: 'apps/cli/scripts/package-release-bundles.ts',
+    file: 'apps/worker-cli/scripts/package-release-bundles.ts',
     message: 'release target list must stay aligned',
   })
 }
 if (!smokeReleaseArtifactsScript.includes(`const DEFAULT_TARGETS = ${expectedReleaseTargetsLiteral} as const`)) {
   issues.push({
-    file: 'apps/cli/scripts/smoke-release-artifacts.ts',
+    file: 'apps/worker-cli/scripts/smoke-release-artifacts.ts',
     message: 'release target list must stay aligned',
   })
 }
@@ -748,7 +748,7 @@ const requiredReleaseSmokeResources = [
 for (const resource of requiredReleasePackageResources) {
   if (!packageReleaseBundlesScript.includes(resource)) {
     issues.push({
-      file: 'apps/cli/scripts/package-release-bundles.ts',
+      file: 'apps/worker-cli/scripts/package-release-bundles.ts',
       message: 'release artifact required resources must stay aligned',
     })
   }
@@ -756,20 +756,20 @@ for (const resource of requiredReleasePackageResources) {
 for (const resource of requiredReleaseSmokeResources) {
   if (!smokeReleaseArtifactsScript.includes(resource)) {
     issues.push({
-      file: 'apps/cli/scripts/smoke-release-artifacts.ts',
+      file: 'apps/worker-cli/scripts/smoke-release-artifacts.ts',
       message: 'release artifact required resources must stay aligned',
     })
   }
 }
 if (!smokeReleaseArtifactsScript.includes('official-apps/aiworker-freeform') || !smokeReleaseArtifactsScript.includes('dist/soul.descriptor.json')) {
   issues.push({
-    file: 'apps/cli/scripts/smoke-release-artifacts.ts',
+    file: 'apps/worker-cli/scripts/smoke-release-artifacts.ts',
     message: 'release artifact required resources must stay aligned',
   })
 }
 for (const [file, source] of [
-  ['apps/cli/scripts/package-release-bundles.ts', packageReleaseBundlesScript],
-  ['apps/cli/scripts/smoke-release-artifacts.ts', smokeReleaseArtifactsScript],
+  ['apps/worker-cli/scripts/package-release-bundles.ts', packageReleaseBundlesScript],
+  ['apps/worker-cli/scripts/smoke-release-artifacts.ts', smokeReleaseArtifactsScript],
 ] as const) {
   if (!source.includes('descriptor reference escapes official app root')) {
     issues.push({
@@ -778,9 +778,9 @@ for (const [file, source] of [
     })
   }
 }
-if (!read('apps/cli/scripts/package-release-bundles.test.ts').includes('descriptor references resolve outside the official app root')) {
+if (!read('apps/worker-cli/scripts/package-release-bundles.test.ts').includes('descriptor references resolve outside the official app root')) {
   issues.push({
-    file: 'apps/cli/scripts/package-release-bundles.test.ts',
+    file: 'apps/worker-cli/scripts/package-release-bundles.test.ts',
     message: 'release artifact descriptor references must not escape official app root',
   })
 }
@@ -797,12 +797,12 @@ const hostDaemonOpenApi = read('packages/worker-daemon/src/modes/worker/openapi.
 const hostDaemonWorkerLocalTest = read('packages/worker-daemon/src/modes/worker.local.test.ts')
 const freeformCliBrowserProof = read('tests/browser/freeform-cli-golden-path.spec.ts')
 const freeformBuildScript = 'bun run --filter \'@zonease/aiworker-freeform\' build'
-const webBuildScript = 'bun run --filter \'@zonease/aiworker-web\' build'
+const webBuildScript = 'bun run --filter \'@zonease/aiworker-worker-web\' build'
 const browserFreeformProofs = [
   'tests/browser/freeform-cli-golden-path.spec.ts',
   'tests/browser/freeform-mounted-workbench.spec.ts',
 ]
-if (!testCliScript.includes('apps/cli/src/freeform-golden-path.test.ts'))
+if (!testCliScript.includes('apps/worker-cli/src/freeform-golden-path.test.ts'))
   issues.push({ file: 'package.json', message: 'test:cli must include the Freeform CLI golden path test' })
 if (!testCliScript.includes(freeformBuildScript))
   issues.push({ file: 'package.json', message: 'test:cli must rebuild the Freeform Soul App before CLI golden path tests' })
@@ -1031,7 +1031,7 @@ function documentedTestingCoverageFindings(testPath: string, rootPackageJson: { 
     return findings
   }
 
-  if (testPath === 'apps/cli/src/freeform-golden-path.test.ts' || testPath === 'apps/cli/src/aiworker.test.ts') {
+  if (testPath === 'apps/worker-cli/src/freeform-golden-path.test.ts' || testPath === 'apps/worker-cli/src/aiworker.test.ts') {
     if (!scripts['test:cli']?.includes(testPath))
       findings.push(`listed CLI proof is not covered by test:cli: ${testPath}`)
   }

@@ -6,12 +6,12 @@ const soulAppHostPrivateImportPatterns = [
   { group: ['@zonease/aiworker-worker-daemon', '@zonease/aiworker-worker-daemon/**'], message: 'Soul App code must not import Host daemon internals; use SDK descriptors or mounted broker routes.' },
   { group: ['@zonease/aiworker-soul-protocol', '@zonease/aiworker-soul-protocol/**'], message: 'Soul App code must not import Host/Soul protocol internals directly; use @zonease/aiworker-soul-app-sdk exports.' },
   { group: ['@zonease/aiworker-storage-sqlite', '@zonease/aiworker-storage-sqlite/**'], message: 'Soul App code must not access Host storage directly; use local runtime or brokered routes.' },
-  { group: ['@zonease/aiworker-web', '@zonease/aiworker-web/**'], message: 'Soul App code must not import Host Web internals; declare UI through the descriptor.' },
+  { group: ['@zonease/aiworker-worker-web', '@zonease/aiworker-worker-web/**'], message: 'Soul App code must not import Host Web internals; declare UI through the descriptor.' },
   { group: ['@zonease/aiworker-api', '@zonease/aiworker-api/**'], message: 'Soul App code must not import the retired apps/api package; use the Soul App SDK or mounted broker routes.' },
   { group: ['@zonease/aiworker-core', '@zonease/aiworker-core/**'], message: 'Soul App code must not import retired Host core internals; use @zonease/aiworker-soul-app-sdk.' },
   { group: ['@zonease/aiworker-shared', '@zonease/aiworker-shared/**'], message: 'Soul App code must not import retired shared Host contracts; use @zonease/aiworker-soul-app-sdk exports.' },
   { group: ['@zonease/aiworker-soul-app-workbench', '@zonease/aiworker-soul-app-workbench/**'], message: 'Soul App code must not import the retired Soul App workbench package; use descriptor-owned workbench assets.' },
-  { group: ['apps/api/**', 'apps/cli/**', 'apps/web/**', 'packages/core/**', 'packages/shared/**', 'packages/soul-app-workbench/**', 'packages/storage-sqlite/**'], message: 'Soul App code must stay inside the public SDK boundary; listed legacy paths are forbidden only as retired imports.' },
+  { group: ['apps/api/**', 'apps/worker-cli/**', 'apps/worker-web/**', 'packages/core/**', 'packages/shared/**', 'packages/soul-app-workbench/**', 'packages/storage-sqlite/**'], message: 'Soul App code must stay inside the public SDK boundary; listed legacy paths are forbidden only as retired imports.' },
 ]
 
 export default antfu({
@@ -28,7 +28,7 @@ export default antfu({
     }],
   },
 }, {
-  files: ['apps/cli/**/*.{ts,tsx}', 'apps/web/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
+  files: ['apps/worker-cli/**/*.{ts,tsx}', 'apps/worker-web/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
   ignores: ['souls/**/*'],
   rules: {
     'no-restricted-imports': ['error', {
@@ -38,9 +38,9 @@ export default antfu({
     }],
   },
 }, {
-  // REFACTOR-038：apps/web 是 worker-only local studio。不要把停掉的
+  // REFACTOR-038：apps/worker-web 是 worker-only local studio。不要把停掉的
   // fleet/admin/shared shell 或文件路由再带回 Web。
-  files: ['apps/web/src/worker/**/*.{ts,tsx}'],
+  files: ['apps/worker-web/src/worker/**/*.{ts,tsx}'],
   rules: {
     'no-restricted-imports': ['error', {
       patterns: [

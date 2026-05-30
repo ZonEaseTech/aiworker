@@ -78,7 +78,7 @@ describe('aiworker local CLI', () => {
   })
 
   function argv(...args: string[]): string[] {
-    return ['/usr/bin/bun', '/repo/apps/cli/src/aiworker.ts', ...args]
+    return ['/usr/bin/bun', '/repo/apps/worker-cli/src/aiworker.ts', ...args]
   }
 
   const FREEFORM_APP_ID = 'aiworker-freeform'

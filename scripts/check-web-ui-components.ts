@@ -138,181 +138,181 @@ const customVisualPropertyPattern = /^\s*(?:background|border(?:-(?:bottom|color
 const hostEmbeddedSoulRendererDebts: HostEmbeddedSoulRendererDebt[] = []
 const acceptedResidualVisualUtilities: AcceptedResidualVisualUtility[] = [
   {
-    file: 'apps/web/src/worker/components/studio-shell.tsx',
+    file: 'apps/worker-web/src/worker/components/studio-shell.tsx',
     token: 'bg-background',
     reason: 'Host shell canvas must bind to the shadcn background surface token',
   },
   {
-    file: 'apps/web/src/worker/components/studio-shell.tsx',
+    file: 'apps/worker-web/src/worker/components/studio-shell.tsx',
     token: 'bg-sidebar',
     reason: 'Host left rail must bind to the shadcn sidebar surface token',
   },
   {
-    file: 'apps/web/src/worker/components/studio-shell.tsx',
+    file: 'apps/worker-web/src/worker/components/studio-shell.tsx',
     token: 'text-foreground',
     reason: 'Host shell canvas must use the shadcn foreground pair for bg-background',
   },
   {
-    file: 'apps/web/src/worker/components/studio-shell.tsx',
+    file: 'apps/worker-web/src/worker/components/studio-shell.tsx',
     token: 'text-sidebar-foreground',
     reason: 'Host left rail must use the shadcn foreground pair for bg-sidebar',
   },
   {
-    file: 'apps/web/src/worker/studio/host-chrome.tsx',
+    file: 'apps/worker-web/src/worker/studio/host-chrome.tsx',
     token: 'bg-sidebar',
     reason: 'HostTopBar is Host chrome and must visually align with the shadcn sidebar surface token',
   },
   {
-    file: 'apps/web/src/worker/studio/host-chrome.tsx',
+    file: 'apps/worker-web/src/worker/studio/host-chrome.tsx',
     token: 'text-sidebar-foreground',
     reason: 'HostTopBar must use the shadcn foreground pair for bg-sidebar',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'bg-sidebar',
     reason: 'Worker Configuration segmented controls bind to the shadcn sidebar token used by Host chrome',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'font-medium',
     reason: 'Worker Configuration section labels use medium text weight for shell preference hierarchy',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'font-normal',
     reason: 'Worker Configuration helper copy keeps normal weight inside compact shell controls',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'rounded-md',
     reason: 'Worker Configuration compact controls stay on the shadcn radius scale',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'shadow-sm\'',
     reason: 'Worker Configuration selected segment keeps the small shadcn shadow scale',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'text-center',
     reason: 'Worker Configuration segmented control labels are centered within fixed shell controls',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'text-foreground',
     reason: 'Worker Configuration active text uses the shadcn foreground token',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'text-foreground\'',
     reason: 'Worker Configuration selected segment text uses the shadcn foreground token',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'text-sidebar-foreground',
     reason: 'Worker Configuration active segment text matches Host sidebar foreground tokens',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'text-sidebar-foreground/60',
     reason: 'Worker Configuration inactive segment text uses muted Host sidebar foreground contrast',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'text-xs',
     reason: 'Worker Configuration compact metadata labels use the small shadcn text scale',
   },
   {
-    file: 'apps/web/src/worker/worker-workbench-tree.tsx',
+    file: 'apps/worker-web/src/worker/worker-workbench-tree.tsx',
     token: 'font-normal',
     reason: 'Host workbench tree secondary rows keep normal weight for locator hierarchy',
   },
   {
-    file: 'apps/web/src/worker/worker-workbench-tree.tsx',
+    file: 'apps/worker-web/src/worker/worker-workbench-tree.tsx',
     token: 'text-sidebar-foreground/60',
     reason: 'Host workbench tree metadata uses muted sidebar foreground contrast',
   },
 ]
 const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
   {
-    file: 'apps/web/src/features/local-workspace/components/creation-dialogs.tsx',
+    file: 'apps/worker-web/src/features/local-workspace/components/creation-dialogs.tsx',
     category: 'input-frame',
     reason: 'create-worker and create-workspace dialogs are form surfaces; generated Field/Input/Select controls own the frames',
   },
   {
-    file: 'apps/web/src/features/local-workspace/components/worker-identity.tsx',
+    file: 'apps/worker-web/src/features/local-workspace/components/worker-identity.tsx',
     category: 'card',
     reason: 'worker identity is a compact Host object summary surface and is intentionally a shadcn Card',
   },
   {
-    file: 'apps/web/src/features/settings/components/settings-dialog.tsx',
+    file: 'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
     category: 'alert',
     reason: 'Settings engine test and Soul App security-block feedback are status callouts and should render through shadcn Alert',
   },
   {
-    file: 'apps/web/src/features/settings/components/settings-dialog.tsx',
+    file: 'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
     category: 'card',
     reason: 'installed Soul App rows are app object cards inside Settings and use generated shadcn Card composition',
   },
   {
-    file: 'apps/web/src/features/settings/components/settings-dialog.tsx',
+    file: 'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
     category: 'input-frame',
     reason: 'Settings BYOK and external-MCP fields are form controls; generated shadcn Input frames are expected',
   },
   {
-    file: 'apps/web/src/worker/components/studio-shell.tsx',
+    file: 'apps/worker-web/src/worker/components/studio-shell.tsx',
     category: 'scoped-native-layout',
     reason: 'Host shell viewport uses semantic native layout with data-host-slot markers; shadcn primitives own inner chrome',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     category: 'alert',
     reason: 'Worker Configuration status and validation feedback are Host shell callouts rendered through shadcn Alert',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     category: 'input-frame',
     reason: 'Worker Configuration worker-scoped shell preferences use generated shadcn form frames',
   },
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     category: 'slotless-native-class',
     reason: 'Worker Configuration uses native wrappers only for dialog layout around shadcn primitives',
   },
   {
-    file: 'apps/web/src/worker/studio/first-run-soul-app-home.tsx',
+    file: 'apps/worker-web/src/worker/studio/first-run-soul-app-home.tsx',
     category: 'card',
     reason: 'first-run Soul App rows are app object cards inside the Host start-worker surface',
   },
   {
-    file: 'apps/web/src/worker/studio/mounted-surface.tsx',
+    file: 'apps/worker-web/src/worker/studio/mounted-surface.tsx',
     category: 'alert',
     reason: 'generic mounted surface errors are Host bridge status callouts rendered through shadcn Alert',
   },
   {
-    file: 'apps/web/src/worker/studio/workspace-fallback.tsx',
+    file: 'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
     category: 'input-frame',
     reason: 'Host workspace fallback search uses generated shadcn InputGroup frames',
   },
   {
-    file: 'apps/web/src/worker/worker-workbench-tree.tsx',
+    file: 'apps/worker-web/src/worker/worker-workbench-tree.tsx',
     category: 'scoped-native-layout',
     reason: 'Host workbench tree uses semantic layout markers for locator structure around shadcn rows',
   },
   {
-    file: 'apps/web/src/worker/worker-workbench-tree.tsx',
+    file: 'apps/worker-web/src/worker/worker-workbench-tree.tsx',
     category: 'slotless-native-class',
     reason: 'Host workbench tree native wrappers provide non-visual hierarchy layout around shadcn controls',
   },
   {
-    file: 'apps/web/src/worker/worker-studio.tsx',
+    file: 'apps/worker-web/src/worker/worker-studio.tsx',
     category: 'alert',
     reason: 'Host-displayed Soul App action results are protocol status callouts and should use shadcn Alert instead of raw text wrappers',
   },
 ]
 const acceptedRawNativeControlClassifications: AcceptedRawNativeControlClassification[] = [
   {
-    file: 'apps/web/src/worker/worker-configuration-dialog.tsx',
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     category: 'raw-button',
     reason: 'Worker Configuration uses native buttons only for compact Host shell segmented controls with shadcn-compatible state styling',
   },
@@ -742,7 +742,7 @@ function reportHostEmbeddedSoulRendererDebt(): void {
 }
 
 function listHostEmbeddedSoulRendererPaths(): string[] {
-  const root = 'apps/web/src/worker/souls'
+  const root = 'apps/worker-web/src/worker/souls'
   if (!existsSync(abs(root)))
     return []
 
@@ -1112,14 +1112,14 @@ function customUiClassTokens(values: string[], keywordPattern: RegExp): string[]
 
 function listChangedFiles(): string[] {
   return unique([
-    ...gitLines(['diff', '--name-only', '--diff-filter=ACMR', 'HEAD', '--', 'apps/web/src']),
-    ...gitLines(['ls-files', '--others', '--exclude-standard', '--', 'apps/web/src']),
+    ...gitLines(['diff', '--name-only', '--diff-filter=ACMR', 'HEAD', '--', 'apps/worker-web/src']),
+    ...gitLines(['ls-files', '--others', '--exclude-standard', '--', 'apps/worker-web/src']),
   ]).filter(file => isRelevantFile(file))
 }
 
 function listAllUiFiles(): string[] {
   return [
-    ...listFiles('apps/web/src'),
+    ...listFiles('apps/worker-web/src'),
   ].filter(file => isRelevantFile(file))
 }
 
@@ -1178,7 +1178,7 @@ function isUiCssFile(file: string): boolean {
 }
 
 function isUiFile(file: string): boolean {
-  return file.startsWith('apps/web/src/')
+  return file.startsWith('apps/worker-web/src/')
 }
 
 function isOfficialSoulProductWebFile(file: string): boolean {

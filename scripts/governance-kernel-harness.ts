@@ -393,7 +393,7 @@ function resolveProduct(options: HarnessOptions): AiworkerCommand {
     })
     if (build.code !== 0)
       throw new Error(`source CLI build failed; see ${build.logPath}`)
-    const bundle = path.join(SCRIPT_ROOT, 'apps/cli/dist/aiworker-bun.js')
+    const bundle = path.join(SCRIPT_ROOT, 'apps/worker-cli/dist/aiworker-bun.js')
     if (!existsSync(bundle))
       throw new Error(`source CLI bundle not found: ${bundle}`)
     return { argsPrefix: [bundle], command: 'bun', display: `bun ${bundle}` }

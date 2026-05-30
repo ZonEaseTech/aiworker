@@ -222,7 +222,7 @@ describe('Freeform CLI golden path', () => {
 
     const missingInvocationExit = await runCli([
       '/usr/bin/bun',
-      '/repo/apps/cli/src/aiworker.ts',
+      '/repo/apps/worker-cli/src/aiworker.ts',
       'session',
       'events',
       'invocation-does-not-exist',
@@ -333,7 +333,7 @@ describe('Freeform CLI golden path', () => {
 
     const missingReconcileExit = await runCli([
       '/usr/bin/bun',
-      '/repo/apps/cli/src/aiworker.ts',
+      '/repo/apps/worker-cli/src/aiworker.ts',
       'session',
       'reconcile',
       'invocation-does-not-exist',
@@ -365,7 +365,7 @@ describe('Freeform CLI golden path', () => {
 
     const missingCancelExit = await runCli([
       '/usr/bin/bun',
-      '/repo/apps/cli/src/aiworker.ts',
+      '/repo/apps/worker-cli/src/aiworker.ts',
       'session',
       'cancel',
       'invocation-does-not-exist',
@@ -377,7 +377,7 @@ describe('Freeform CLI golden path', () => {
   async function runCliJson<T>(...args: string[]): Promise<T> {
     errorOutput = ''
     output = ''
-    const exitCode = await runCli(['/usr/bin/bun', '/repo/apps/cli/src/aiworker.ts', ...args])
+    const exitCode = await runCli(['/usr/bin/bun', '/repo/apps/worker-cli/src/aiworker.ts', ...args])
     expect(output).not.toContain('[error]')
     expect(errorOutput).not.toContain('[error]')
     expect(exitCode).toBe(0)
@@ -389,7 +389,7 @@ describe('Freeform CLI golden path', () => {
     output = ''
     const exitCode = await runCli([
       '/usr/bin/bun',
-      '/repo/apps/cli/src/aiworker.ts',
+      '/repo/apps/worker-cli/src/aiworker.ts',
       'session',
       'invoke',
       '--session',

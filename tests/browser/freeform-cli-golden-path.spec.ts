@@ -102,7 +102,7 @@ try {
   daemon = Bun.spawn({
     cmd: [
       process.execPath,
-      'apps/cli/src/aiworker.ts',
+      'apps/worker-cli/src/aiworker.ts',
       'daemon',
       'foreground',
       '--host',
@@ -251,7 +251,7 @@ finally {
 
 function runCliJson<T = unknown>(...args: string[]): T {
   const result = Bun.spawnSync({
-    cmd: [process.execPath, 'apps/cli/src/aiworker.ts', ...args],
+    cmd: [process.execPath, 'apps/worker-cli/src/aiworker.ts', ...args],
     cwd: repoRoot,
     env: baseEnv,
     stderr: 'pipe',

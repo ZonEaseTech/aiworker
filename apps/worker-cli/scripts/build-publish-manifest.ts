@@ -52,10 +52,10 @@ export async function buildPublishManifest(): Promise<void> {
   const drizzleDst = resolve(distDir, 'drizzle')
   await copyDir(drizzleSrc, drizzleDst)
 
-  // 把 apps/web/dist/worker 拷到 dist/web/，让 npm-installed CLI 能通过
+  // 把 apps/worker-web/dist/worker 拷到 dist/web/，让 npm-installed CLI 能通过
   // local daemon 托管 Worker Web。只复制生产 bundle，避免旧 hash chunks
-  // 从 apps/web/dist 根目录漏进发布包。
-  const webDistSrc = resolve(repoRoot, 'apps/web/dist')
+  // 从 apps/worker-web/dist 根目录漏进发布包。
+  const webDistSrc = resolve(repoRoot, 'apps/worker-web/dist')
   const webDistDst = resolve(distDir, 'web')
   await rm(webDistDst, { recursive: true, force: true })
   const workerWebSrc = resolve(webDistSrc, 'worker')

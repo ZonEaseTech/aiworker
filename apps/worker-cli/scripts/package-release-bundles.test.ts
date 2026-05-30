@@ -45,7 +45,7 @@ describe('release bundle packager', () => {
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('missing release resource: apps/cli/dist/drizzle/worker/meta/_journal.json')
+    ).rejects.toThrow('missing release resource: apps/worker-cli/dist/drizzle/worker/meta/_journal.json')
   })
 
   it('rejects standalone bundles when packaged migrations are missing journal SQL files', async () => {
@@ -55,7 +55,7 @@ describe('release bundle packager', () => {
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('missing release resource: apps/cli/dist/drizzle/worker/0000_fixture.sql')
+    ).rejects.toThrow('missing release resource: apps/worker-cli/dist/drizzle/worker/0000_fixture.sql')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
@@ -75,7 +75,7 @@ describe('release bundle packager', () => {
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not descriptor v1')
+    ).rejects.toThrow('invalid release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not descriptor v1')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
@@ -86,7 +86,7 @@ describe('release bundle packager', () => {
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
+    ).rejects.toThrow('invalid release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
@@ -97,7 +97,7 @@ describe('release bundle packager', () => {
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
+    ).rejects.toThrow('invalid release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
@@ -108,7 +108,7 @@ describe('release bundle packager', () => {
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
+    ).rejects.toThrow('invalid release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
@@ -119,7 +119,7 @@ describe('release bundle packager', () => {
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('missing release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/web/workbench/index.html')
+    ).rejects.toThrow('missing release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/web/workbench/index.html')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
@@ -130,7 +130,7 @@ describe('release bundle packager', () => {
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('missing release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/engine-assets/mcp/codex/config.toml')
+    ).rejects.toThrow('missing release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/engine-assets/mcp/codex/config.toml')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
@@ -146,7 +146,7 @@ describe('release bundle packager', () => {
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('invalid release resource: apps/cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json descriptor reference escapes official app root: dist/web/workbench/index.html')
+    ).rejects.toThrow('invalid release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json descriptor reference escapes official app root: dist/web/workbench/index.html')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 })

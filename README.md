@@ -35,7 +35,7 @@ workspace/session 只作为不透明 locator/context 传给 mounted Soul surface
 | --- | --- |
 | Host daemon/API、registry、local enablement、storage metadata | `docs/architecture.md` + `docs/protocol.md` + `docs/runtime.md` |
 | Host Web Shell、Settings、Worker Configuration、mounted workbench | `docs/architecture.md` + `docs/runtime.md`；shadcn/ui 相关改动再用 `.agents/skills/shadcn/SKILL.md` |
-| CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/runtime.md` + `docs/testing.md`，再对照 `apps/cli` 当前实现 |
+| CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/runtime.md` + `docs/testing.md`，再对照 `apps/worker-cli` 当前实现 |
 | 官方 Freeform Soul、descriptor、standalone、Host mounted | `docs/soul-authoring.md` + `docs/protocol.md` |
 | 新第三方 Soul App | `docs/soul-authoring.md` + `docs/protocol.md`；创建和验证命令以当前 CLI help 为准 |
 | Host/Soul App 边界、shared protocol、descriptor-declared route/context | 先读五份 canonical docs，判断 ownership 后再改代码 |
@@ -161,8 +161,8 @@ standalone SDK/runtime npm publication 仍是 preview surface，不是 1.0 承�
 Source checkout 调试也走同一个 daemon；先构建一次 Web 静态资源，然后以前台 daemon 托管 Web/API：
 
 ```bash
-bun run --filter '@zonease/aiworker-web' build
-bun apps/cli/src/aiworker.ts daemon foreground --port 9217
+bun run --filter '@zonease/aiworker-worker-web' build
+bun apps/worker-cli/src/aiworker.ts daemon foreground --port 9217
 ```
 
 源码态默认使用 `~/.aiworker-dev` 作为开发 profile；发布包和 npm preview
@@ -217,7 +217,7 @@ bun run build
 ```bash
 bun run --filter '@zonease/aiworker-worker-runtime' test
 bun run --filter '@zonease/aiworker-worker-daemon' build
-bun run --filter '@zonease/aiworker-web' build
+bun run --filter '@zonease/aiworker-worker-web' build
 bun run --filter '@zonease/aiworker-cli' build:bundle
 ```
 

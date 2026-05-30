@@ -20,7 +20,7 @@ export const HOST_PRIVATE_IMPORT_PREFIXES = [
   '@zonease/aiworker-worker-daemon',
   '@zonease/aiworker-soul-protocol',
   '@zonease/aiworker-storage-sqlite',
-  '@zonease/aiworker-web',
+  '@zonease/aiworker-worker-web',
 ]
 
 const FORBIDDEN_LEGACY_IMPORT_PREFIXES = [
@@ -38,8 +38,8 @@ const ALLOWED_SHARED_PACKAGES = new Set([
 ])
 
 const CURRENT_HOST_PRIVATE_ROOTS = [
-  'apps/cli',
-  'apps/web',
+  'apps/worker-cli',
+  'apps/worker-web',
   'packages/fs-layout',
   'packages/worker-daemon',
   'packages/worker-runtime',

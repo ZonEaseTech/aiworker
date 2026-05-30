@@ -6,7 +6,7 @@
 - 至少考虑：`bun run typecheck`、`bun run lint`、`bun run test`、`bun run build`、`bun run check` 中哪些与本次改动相关。
 - 文档/配置单文件改动可按需只跑 `git diff --check`，但需要说明未跑更宽 gate 的原因。
 - schema 改动必须通过 Drizzle schema/migration 流程，并验证 fleet/worker migration 没混用。
-- 前端改动需要关注 fleet/worker 边界、设计 token、响应式和构建；必要时跑 `bun run --filter '@zonease/aiworker-web' build`。
+- 前端改动需要关注 fleet/worker 边界、设计 token、响应式和构建；必要时跑 `bun run --filter '@zonease/aiworker-worker-web' build`。
 - CLI/API/runtime 改动优先补聚焦测试；涉及发布产物时跑 CLI bundle 和必要 smoke。
 
 交付给用户时：

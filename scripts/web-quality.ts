@@ -43,7 +43,7 @@ const retiredLegacyStudioSelectors = [
 ] as const
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
-const webRoot = path.join(repoRoot, 'apps/web')
+const webRoot = path.join(repoRoot, 'apps/worker-web')
 const sharedRoot = path.join(webRoot, 'src/shared')
 const baselinePath = path.join(webRoot, 'bundle-size-baseline.json')
 

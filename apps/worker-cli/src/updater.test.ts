@@ -60,8 +60,8 @@ describe('CLI updater core', () => {
 
   it('detects source checkouts and refuses self modification', () => {
     expect(detectInstallSource({
-      argv1: '/repo/apps/cli/src/aiworker.ts',
-      moduleDir: '/repo/apps/cli/src',
+      argv1: '/repo/apps/worker-cli/src/aiworker.ts',
+      moduleDir: '/repo/apps/worker-cli/src',
     })).toMatchObject({
       kind: 'source-checkout',
       canAutoUpgrade: false,
@@ -70,7 +70,7 @@ describe('CLI updater core', () => {
     expect(detectInstallSource({
       argv1: '/tmp/link-aiworker',
       moduleDir: '/repo/packages/cli/dist',
-      realArgv1: '/repo/apps/cli/src/aiworker.ts',
+      realArgv1: '/repo/apps/worker-cli/src/aiworker.ts',
     })).toMatchObject({
       kind: 'source-checkout',
       canAutoUpgrade: false,
@@ -681,7 +681,7 @@ describe('CLI updater safety helpers', () => {
     })).toMatchObject({ allowed: true })
 
     expect(canRestartManagedDaemon({
-      command: 'bun apps/cli/src/aiworker.ts dev --port 9217',
+      command: 'bun apps/worker-cli/src/aiworker.ts dev --port 9217',
       expectedHome: '/Users/ben/.aiworker',
       pid: 123,
       pidFileHome: '/Users/ben/.aiworker',
@@ -699,7 +699,7 @@ describe('CLI updater safety helpers', () => {
 
     expect(canRestartManagedDaemon({
       ...baseProbe,
-      command: 'bun apps/cli/src/aiworker.ts daemon foreground --port 9217',
+      command: 'bun apps/worker-cli/src/aiworker.ts daemon foreground --port 9217',
     })).toMatchObject({ allowed: false, reason: 'not-managed-daemon' })
 
     expect(canRestartManagedDaemon({

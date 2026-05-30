@@ -32,19 +32,19 @@ jobs:
       - name: Compile single-file binaries
         run: |
           set -euo pipefail
-          bun build --compile --target=bun-linux-x64    --outfile=aiworker-linux-x64    apps/cli/src/aiworker.ts
-          bun build --compile --target=bun-linux-arm64  --outfile=aiworker-linux-arm64  apps/cli/src/aiworker.ts
-          bun build --compile --target=bun-darwin-x64   --outfile=aiworker-darwin-x64   apps/cli/src/aiworker.ts
-          bun build --compile --target=bun-darwin-arm64 --outfile=aiworker-darwin-arm64 apps/cli/src/aiworker.ts
+          bun build --compile --target=bun-linux-x64    --outfile=aiworker-linux-x64    apps/worker-cli/src/aiworker.ts
+          bun build --compile --target=bun-linux-arm64  --outfile=aiworker-linux-arm64  apps/worker-cli/src/aiworker.ts
+          bun build --compile --target=bun-darwin-x64   --outfile=aiworker-darwin-x64   apps/worker-cli/src/aiworker.ts
+          bun build --compile --target=bun-darwin-arm64 --outfile=aiworker-darwin-arm64 apps/worker-cli/src/aiworker.ts
 
       - name: Package binary release bundles
-        run: bun apps/cli/scripts/package-release-bundles.ts
+        run: bun apps/worker-cli/scripts/package-release-bundles.ts
 
       - name: Smoke release artifacts
-        run: bun apps/cli/scripts/smoke-release-artifacts.ts
+        run: bun apps/worker-cli/scripts/smoke-release-artifacts.ts
 
       - name: Publish to npm
-        working-directory: apps/cli/dist
+        working-directory: apps/worker-cli/dist
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public

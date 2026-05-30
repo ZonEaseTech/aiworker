@@ -90,8 +90,8 @@ scripts/check-soul-app-boundaries.test.ts
 CLI and browser tests:
 
 ```text
-apps/cli/src/freeform-golden-path.test.ts
-apps/cli/src/aiworker.test.ts
+apps/worker-cli/src/freeform-golden-path.test.ts
+apps/worker-cli/src/aiworker.test.ts
 tests/browser/freeform-cli-golden-path.spec.ts
 tests/browser/freeform-mounted-workbench.spec.ts
 ```
@@ -99,19 +99,19 @@ tests/browser/freeform-mounted-workbench.spec.ts
 CLI release smoke contract tests:
 
 ```text
-apps/cli/scripts/smoke-dist-release.test.ts
-apps/cli/scripts/smoke-release-artifacts.test.ts
-apps/cli/scripts/smoke-npm-package.test.ts
-apps/cli/scripts/smoke-standalone-release.test.ts
-apps/cli/scripts/smoke-standalone-runtime.test.ts
+apps/worker-cli/scripts/smoke-dist-release.test.ts
+apps/worker-cli/scripts/smoke-release-artifacts.test.ts
+apps/worker-cli/scripts/smoke-npm-package.test.ts
+apps/worker-cli/scripts/smoke-standalone-release.test.ts
+apps/worker-cli/scripts/smoke-standalone-runtime.test.ts
 ```
 
 CLI release packaging contract tests:
 
 ```text
-apps/cli/src/official-freeform-descriptor.test.ts
-apps/cli/scripts/build-publish-manifest.test.ts
-apps/cli/scripts/package-release-bundles.test.ts
+apps/worker-cli/src/official-freeform-descriptor.test.ts
+apps/worker-cli/scripts/build-publish-manifest.test.ts
+apps/worker-cli/scripts/package-release-bundles.test.ts
 ```
 
 OpenAPI and redaction contract tests:
@@ -209,8 +209,8 @@ and before npm publish or GitHub release attachment. The post-compile artifact
 proof is:
 
 ```text
-bun apps/cli/scripts/package-release-bundles.ts
-bun apps/cli/scripts/smoke-release-artifacts.ts
+bun apps/worker-cli/scripts/package-release-bundles.ts
+bun apps/worker-cli/scripts/smoke-release-artifacts.ts
 ```
 
 The artifact smoke must verify checksums, required resources, descriptor references, executable mode, and current-platform `aiworker --version` startup.

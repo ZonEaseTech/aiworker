@@ -11,7 +11,7 @@
 聚焦 workspace：
 - Core 测试：`bun run --filter '@zonease/aiworker-core' test`
 - API 构建：`bun run --filter '@zonease/aiworker-api' build`
-- Web 构建：`bun run --filter '@zonease/aiworker-web' build`
+- Web 构建：`bun run --filter '@zonease/aiworker-worker-web' build`
 - CLI bundle：`bun run --filter '@zonease/aiworker-cli' build:bundle`
 - Storage 测试：`bun run --filter '@zonease/aiworker-storage-sqlite' test`
 

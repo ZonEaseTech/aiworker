@@ -261,7 +261,7 @@ describe('destructive refactor contract bootstrap', () => {
     const protocol = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
     const storageSchema = readRepoFile('packages/storage-sqlite/src/worker/schema.ts')
     const daemonSchemas = readRepoFile('packages/worker-daemon/src/modes/worker/schemas.ts')
-    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
+    const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
     const daemonSource = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const cliArchiveWorker = cliSource.slice(
       cliSource.indexOf('async function archiveWorkerCommand'),
@@ -427,7 +427,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/worker-runtime/src/soul-app/registry.ts',
       'packages/worker-runtime/src/host/runtime.ts',
       'packages/soul-app-runtime/src/index.ts',
-      'apps/web/src/features/local-workspace/model-types.ts',
+      'apps/worker-web/src/features/local-workspace/model-types.ts',
     ]
 
     const findings = activeSources
@@ -438,9 +438,9 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('CLI exposes capability listing without the retired template list command', () => {
-    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
-    const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
-    const cliSmoke = readRepoFile('apps/cli/scripts/smoke-dist-release.ts')
+    const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
+    const cliTest = readRepoFile('apps/worker-cli/src/aiworker.test.ts')
+    const cliSmoke = readRepoFile('apps/worker-cli/scripts/smoke-dist-release.ts')
     const sourceForbidden = [
       'cli.command(\'template list\'',
       'compatibility inspection: template list',
@@ -465,8 +465,8 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('CLI does not preserve the source-checkout dev compatibility alias', () => {
-    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
-    const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
+    const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
+    const cliTest = readRepoFile('apps/worker-cli/src/aiworker.test.ts')
     const forbidden = [
       'cli.command(\'dev\'',
       'source-checkout alias for daemon foreground',
@@ -477,19 +477,19 @@ describe('destructive refactor contract bootstrap', () => {
     const findings = [
       ...forbidden
         .filter(snippet => cliSource.includes(snippet))
-        .map(snippet => `apps/cli/src/aiworker.ts: ${snippet}`),
+        .map(snippet => `apps/worker-cli/src/aiworker.ts: ${snippet}`),
       ...forbidden
         .filter(snippet => cliTest.includes(snippet))
-        .map(snippet => `apps/cli/src/aiworker.test.ts: ${snippet}`),
+        .map(snippet => `apps/worker-cli/src/aiworker.test.ts: ${snippet}`),
     ]
 
     expect(findings, 'CLI should use bun run dev in source checkouts and daemon foreground/start in the product CLI').toEqual([])
   })
 
   test('CLI updater does not preserve confirmation compatibility flags', () => {
-    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
-    const updaterSource = readRepoFile('apps/cli/src/updater.ts')
-    const updaterTest = readRepoFile('apps/cli/src/updater.test.ts')
+    const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
+    const updaterSource = readRepoFile('apps/worker-cli/src/updater.ts')
+    const updaterTest = readRepoFile('apps/worker-cli/src/updater.test.ts')
     const forbidden = [
       '.option(\'--yes\'',
       'accepted for compatibility',
@@ -503,21 +503,21 @@ describe('destructive refactor contract bootstrap', () => {
     const findings = [
       ...forbidden
         .filter(snippet => cliSource.includes(snippet))
-        .map(snippet => `apps/cli/src/aiworker.ts: ${snippet}`),
+        .map(snippet => `apps/worker-cli/src/aiworker.ts: ${snippet}`),
       ...forbidden
         .filter(snippet => updaterSource.includes(snippet))
-        .map(snippet => `apps/cli/src/updater.ts: ${snippet}`),
+        .map(snippet => `apps/worker-cli/src/updater.ts: ${snippet}`),
       ...forbidden
         .filter(snippet => updaterTest.includes(snippet))
-        .map(snippet => `apps/cli/src/updater.test.ts: ${snippet}`),
+        .map(snippet => `apps/worker-cli/src/updater.test.ts: ${snippet}`),
     ]
 
     expect(findings, 'update and upgrade apply by default and should not keep --yes compatibility state').toEqual([])
   })
 
   test('CLI app lifecycle surface uses archive command without disable alias', () => {
-    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
-    const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
+    const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
+    const cliTest = readRepoFile('apps/worker-cli/src/aiworker.test.ts')
 
     const findings = [
       ...[
@@ -526,13 +526,13 @@ describe('destructive refactor contract bootstrap', () => {
         'app list|show|install|enable|archive|disable|delete',
       ]
         .filter(snippet => cliSource.includes(snippet))
-        .map(snippet => `apps/cli/src/aiworker.ts: ${snippet}`),
+        .map(snippet => `apps/worker-cli/src/aiworker.ts: ${snippet}`),
       ...[
         'argv(\'app\', \'disable\'',
         'installs, enables, lists, and disables local Soul descriptors',
       ]
         .filter(snippet => cliTest.includes(snippet))
-        .map(snippet => `apps/cli/src/aiworker.test.ts: ${snippet}`),
+        .map(snippet => `apps/worker-cli/src/aiworker.test.ts: ${snippet}`),
     ]
 
     expect(findings, 'CLI should expose app archive/delete lifecycle commands without the retired disable alias').toEqual([])
@@ -545,9 +545,9 @@ describe('destructive refactor contract bootstrap', () => {
     const sources = [
       'packages/worker-daemon/src/modes/worker.ts',
       'packages/worker-daemon/src/modes/worker.local.test.ts',
-      'apps/web/src/features/local-workspace/api/workspace-data.ts',
-      'apps/web/src/features/settings/components/settings-dialog.tsx',
-      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
+      'apps/worker-web/src/features/local-workspace/api/workspace-data.ts',
+      'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
+      'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
     ].map(path => [path, readRepoFile(path)] as const)
     const forbidden = [
       '/api/local/apps/:appId/disable',
@@ -575,9 +575,9 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('Web derives Host-visible souls from app-installation apps without local souls alias', () => {
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
-    const workspaceData = readRepoFile('apps/web/src/features/local-workspace/api/workspace-data.ts')
-    const workspaceDataTest = readRepoFile('apps/web/src/features/local-workspace/api/workspace-data.test.ts')
-    const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const workspaceData = readRepoFile('apps/worker-web/src/features/local-workspace/api/workspace-data.ts')
+    const workspaceDataTest = readRepoFile('apps/worker-web/src/features/local-workspace/api/workspace-data.test.ts')
+    const workerStudioTest = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
 
     expect(daemon).toContain('app.get(\'/api/app-installation/apps\'')
     expect(daemon).not.toContain('app.get(\'/api/local/souls\'')
@@ -640,7 +640,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('daemon worker overlay read is served by canonical worker config', () => {
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
-    const webOverlayApi = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlays.ts')
+    const webOverlayApi = readRepoFile('apps/worker-web/src/features/local-workspace/api/worker-overlays.ts')
 
     expect(daemon).toContain('app.get(\'/api/workers/:workerId/config\'')
     expect(daemon).toContain('overlay: await workerOverlayResponse')
@@ -691,8 +691,8 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('Web workspace locator API does not expose retired raw file helpers', () => {
-    const workspaceApi = readRepoFile('apps/web/src/features/local-workspace/api/workspaces.ts')
-    const workspaceApiIndex = readRepoFile('apps/web/src/features/local-workspace/api/index.ts')
+    const workspaceApi = readRepoFile('apps/worker-web/src/features/local-workspace/api/workspaces.ts')
+    const workspaceApiIndex = readRepoFile('apps/worker-web/src/features/local-workspace/api/index.ts')
 
     expect(workspaceApi).toContain('/api/workspace-locators')
     expect(workspaceApi).not.toContain('/api/local/workspaces/')
@@ -731,7 +731,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('daemon projection refresh surface does not preserve local broker alias', () => {
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
-    const webProjectionApi = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlays.ts')
+    const webProjectionApi = readRepoFile('apps/worker-web/src/features/local-workspace/api/worker-overlays.ts')
     const projectWorkspaceProjection = webProjectionApi.slice(
       webProjectionApi.indexOf('export function projectWorkerWorkspaceOverlay'),
     )
@@ -744,8 +744,8 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('daemon engine target broker surface does not preserve local settings engines aliases', () => {
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
-    const webSettingsApi = readRepoFile('apps/web/src/features/local-workspace/api/settings.ts')
-    const webWorkspaceDataApi = readRepoFile('apps/web/src/features/local-workspace/api/workspace-data.ts')
+    const webSettingsApi = readRepoFile('apps/worker-web/src/features/local-workspace/api/settings.ts')
+    const webWorkspaceDataApi = readRepoFile('apps/worker-web/src/features/local-workspace/api/workspace-data.ts')
 
     expect(daemon).toContain('app.get(\'/api/engine/targets\',')
     expect(daemon).toContain('app.get(\'/api/engine/targets/:target/readiness\',')
@@ -785,13 +785,13 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('Host runtime and UI app lifecycle APIs use archive naming internally', () => {
     const sources = [
-      'apps/cli/src/aiworker.ts',
-      'apps/web/src/features/i18n/types.ts',
-      'apps/web/src/features/i18n/locales/en.ts',
-      'apps/web/src/features/i18n/locales/zh-CN.ts',
-      'apps/web/src/features/i18n/locales/de.ts',
-      'apps/web/src/features/i18n/locales/ja.ts',
-      'apps/web/src/features/settings/components/settings-dialog.tsx',
+      'apps/worker-cli/src/aiworker.ts',
+      'apps/worker-web/src/features/i18n/types.ts',
+      'apps/worker-web/src/features/i18n/locales/en.ts',
+      'apps/worker-web/src/features/i18n/locales/zh-CN.ts',
+      'apps/worker-web/src/features/i18n/locales/de.ts',
+      'apps/worker-web/src/features/i18n/locales/ja.ts',
+      'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
       'packages/worker-daemon/src/modes/worker.ts',
       'packages/worker-runtime/src/host/runtime.ts',
       'packages/worker-runtime/src/index.ts',
@@ -826,10 +826,10 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('CLI session start selects a capability without the retired skill option', () => {
-    const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
+    const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
     const cliTests = [
-      'apps/cli/src/aiworker.test.ts',
-      'apps/cli/src/freeform-golden-path.test.ts',
+      'apps/worker-cli/src/aiworker.test.ts',
+      'apps/worker-cli/src/freeform-golden-path.test.ts',
       'tests/browser/freeform-cli-golden-path.spec.ts',
     ].map(path => [path, readRepoFile(path)] as const)
 
@@ -843,7 +843,7 @@ describe('destructive refactor contract bootstrap', () => {
     const findings = [
       ...sourceForbidden
         .filter(snippet => cliSource.includes(snippet))
-        .map(snippet => `apps/cli/src/aiworker.ts: ${snippet}`),
+        .map(snippet => `apps/worker-cli/src/aiworker.ts: ${snippet}`),
       ...cliTests.flatMap(([path, source]) => source.includes('\'--skill\'') ? [`${path}: '--skill'`] : []),
     ]
 
@@ -854,7 +854,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('session creation surfaces do not accept Host-owned context text', () => {
     const sources = [
-      'apps/cli/src/aiworker.ts',
+      'apps/worker-cli/src/aiworker.ts',
       'packages/worker-daemon/src/modes/worker/schemas.ts',
       'packages/worker-daemon/src/modes/worker.ts',
       'packages/worker-runtime/src/worker/runtime.ts',
@@ -914,9 +914,9 @@ describe('destructive refactor contract bootstrap', () => {
     const activeSources = [
       'packages/worker-daemon/src/modes/worker.ts',
       'packages/soul-app-runtime/src/index.ts',
-      'apps/cli/scripts/smoke-dist-release.ts',
-      'apps/web/src/features/local-workspace/api/workspace-data.ts',
-      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
+      'apps/worker-cli/scripts/smoke-dist-release.ts',
+      'apps/worker-web/src/features/local-workspace/api/workspace-data.ts',
+      'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
     ]
     const forbidden = [
       'app.get(\'/api/local/capabilities\'',
@@ -988,8 +988,8 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/worker-runtime/src/soul-app/registry.ts',
       'packages/worker-runtime/src/host/runtime.ts',
       'packages/soul-app-runtime/src/index.ts',
-      'apps/web/src/features/local-workspace/model-types.ts',
-      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
+      'apps/worker-web/src/features/local-workspace/model-types.ts',
+      'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
     ]
     const findings = activeSources.flatMap((path) => {
       const source = readRepoFile(path)
@@ -1005,7 +1005,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/worker-runtime/src/host/runtime.ts',
       'packages/soul-app-runtime/src/index.ts',
       'packages/soul-app-runtime/src/index.test.ts',
-      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
+      'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
     ]
     const forbidden = [
       'templates: CapabilityTemplate[]',
@@ -1029,16 +1029,16 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('Web local workspace model exposes capabilities instead of templates', () => {
     const activeSources = [
-      'apps/web/src/features/local-workspace/model-types.ts',
-      'apps/web/src/features/local-workspace/api/types.ts',
-      'apps/web/src/features/local-workspace/api/workspace-data.ts',
-      'apps/web/src/features/local-workspace/components/workspace-card.tsx',
-      'apps/web/src/features/settings/components/settings-dialog.tsx',
-      'apps/web/src/features/i18n/display.test.ts',
-      'apps/web/src/features/i18n/index.ts',
-      'apps/web/src/worker/worker-studio.tsx',
-      'apps/web/src/worker/studio/locator.ts',
-      'apps/web/src/worker/studio/workspace-fallback.tsx',
+      'apps/worker-web/src/features/local-workspace/model-types.ts',
+      'apps/worker-web/src/features/local-workspace/api/types.ts',
+      'apps/worker-web/src/features/local-workspace/api/workspace-data.ts',
+      'apps/worker-web/src/features/local-workspace/components/workspace-card.tsx',
+      'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
+      'apps/worker-web/src/features/i18n/display.test.ts',
+      'apps/worker-web/src/features/i18n/index.ts',
+      'apps/worker-web/src/worker/worker-studio.tsx',
+      'apps/worker-web/src/worker/studio/locator.ts',
+      'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
     ]
     const forbidden = [
       'templates: CapabilityTemplate[]',
@@ -1061,7 +1061,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('Web local workspace model tests use generic soul ids instead of retired HR and QA identities', () => {
-    const source = readRepoFile('apps/web/src/features/local-workspace/model.test.ts')
+    const source = readRepoFile('apps/worker-web/src/features/local-workspace/model.test.ts')
     const retiredFixtureSnippets = [
       'aiworker-hr',
       'aiworker-qa',
@@ -1071,13 +1071,13 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredFixtureSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/features/local-workspace/model.test.ts: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/features/local-workspace/model.test.ts: ${snippet}`)
 
     expect(findings, 'local workspace model tests should use neutral soul ids when proving Host-generic placeholder behavior').toEqual([])
   })
 
   test('Web local workspace dialog tests use generic descriptor fixtures instead of retired HR and QA identities', () => {
-    const source = readRepoFile('apps/web/src/features/local-workspace/components/creation-dialogs.test.tsx')
+    const source = readRepoFile('apps/worker-web/src/features/local-workspace/components/creation-dialogs.test.tsx')
     const retiredFixtureSnippets = [
       'aiworker-hr',
       'aiworker-qa',
@@ -1088,13 +1088,13 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredFixtureSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/features/local-workspace/components/creation-dialogs.test.tsx: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/features/local-workspace/components/creation-dialogs.test.tsx: ${snippet}`)
 
     expect(findings, 'local workspace dialog tests should not use old app-local product identities as generic descriptor fixtures').toEqual([])
   })
 
   test('WorkerStudio capability fixtures use capability collection names', () => {
-    const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const source = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
     const forbidden = [
       'const templates =',
       'currentTemplates',
@@ -1104,7 +1104,7 @@ describe('destructive refactor contract bootstrap', () => {
     ]
     const findings = forbidden
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
 
     expect(findings, 'WorkerStudio fixtures should name Host-visible startable units as capabilities').toEqual([])
     expect(source).toContain('const capabilities =')
@@ -1112,7 +1112,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('WorkerStudio primary capability fixture uses generic descriptor wording instead of person-profile residue', () => {
-    const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const source = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
     const fixtureHeader = source.slice(0, source.indexOf('const themeMediaQuery'))
     const retiredCapabilitySnippets = [
       'HR_PERSON_PROFILE',
@@ -1129,13 +1129,13 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredCapabilitySnippets
       .filter(snippet => fixtureHeader.includes(snippet))
-      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx fixture header: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx fixture header: ${snippet}`)
 
     expect(findings, 'WorkerStudio positive descriptor fixture should not keep the retired HR person-profile capability').toEqual([])
   })
 
   test('WorkerStudio tests use generic mounted Soul fixtures instead of retired HR QA workflow language', () => {
-    const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const source = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
     const retiredFixtureSnippets = [
       'HR_SOUL_ID',
       'QA_SOUL_ID',
@@ -1171,24 +1171,24 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredFixtureSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
 
     expect(findings, 'WorkerStudio tests should prove Host-generic mounted behavior without old HR/QA domain fixtures').toEqual([])
   })
 
   test('Web i18n helpers expose capability names instead of template helpers', () => {
     const activeSources = [
-      'apps/web/src/features/i18n/index.ts',
-      'apps/web/src/features/i18n/types.ts',
-      'apps/web/src/features/i18n/display.test.ts',
-      'apps/web/src/features/i18n/locales/en.ts',
-      'apps/web/src/features/i18n/locales/zh-CN.ts',
-      'apps/web/src/features/i18n/locales/ja.ts',
-      'apps/web/src/features/i18n/locales/de.ts',
-      'apps/web/src/features/settings/components/settings-dialog.tsx',
-      'apps/web/src/features/local-workspace/components/workspace-card.tsx',
-      'apps/web/src/worker/studio/locator.ts',
-      'apps/web/src/worker/studio/workspace-fallback.tsx',
+      'apps/worker-web/src/features/i18n/index.ts',
+      'apps/worker-web/src/features/i18n/types.ts',
+      'apps/worker-web/src/features/i18n/display.test.ts',
+      'apps/worker-web/src/features/i18n/locales/en.ts',
+      'apps/worker-web/src/features/i18n/locales/zh-CN.ts',
+      'apps/worker-web/src/features/i18n/locales/ja.ts',
+      'apps/worker-web/src/features/i18n/locales/de.ts',
+      'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
+      'apps/worker-web/src/features/local-workspace/components/workspace-card.tsx',
+      'apps/worker-web/src/worker/studio/locator.ts',
+      'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
     ]
     const forbidden = [
       'displayTemplate',
@@ -1205,7 +1205,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('Web i18n display tests use generic descriptor fixtures instead of retired HR identity', () => {
-    const source = readRepoFile('apps/web/src/features/i18n/display.test.ts')
+    const source = readRepoFile('apps/worker-web/src/features/i18n/display.test.ts')
     const retiredFixtureSnippets = [
       'aiworker-hr',
       'Manifest HR',
@@ -1214,20 +1214,20 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredFixtureSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/features/i18n/display.test.ts: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/features/i18n/display.test.ts: ${snippet}`)
 
     expect(findings, 'Web i18n display tests should prove generic descriptor projection without old HR/person fixtures').toEqual([])
   })
 
   test('Web shell copy schema uses capability keys for startable units', () => {
     const activeSources = [
-      'apps/web/src/features/i18n/types.ts',
-      'apps/web/src/features/i18n/locales/en.ts',
-      'apps/web/src/features/i18n/locales/zh-CN.ts',
-      'apps/web/src/features/i18n/locales/ja.ts',
-      'apps/web/src/features/i18n/locales/de.ts',
-      'apps/web/src/features/i18n/locales/local-shell-copy.test.ts',
-      'apps/web/src/worker/studio/workspace-fallback.tsx',
+      'apps/worker-web/src/features/i18n/types.ts',
+      'apps/worker-web/src/features/i18n/locales/en.ts',
+      'apps/worker-web/src/features/i18n/locales/zh-CN.ts',
+      'apps/worker-web/src/features/i18n/locales/ja.ts',
+      'apps/worker-web/src/features/i18n/locales/de.ts',
+      'apps/worker-web/src/features/i18n/locales/local-shell-copy.test.ts',
+      'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
     ]
     const forbidden = [
       'capabilityTemplate:',
@@ -1307,13 +1307,13 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/worker-daemon/src/modes/worker.local.test.ts',
       'packages/soul-app-runtime/src/index.ts',
       'packages/soul-app-runtime/src/index.test.ts',
-      'apps/cli/src/aiworker.ts',
-      'apps/cli/src/aiworker.test.ts',
-      'apps/web/src/worker/studio/locator.ts',
-      'apps/web/src/worker/studio/locator.test.ts',
-      'apps/web/src/worker/studio/workspace-fallback.tsx',
-      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
-      'apps/web/src/features/local-workspace/components/workspace-card.tsx',
+      'apps/worker-cli/src/aiworker.ts',
+      'apps/worker-cli/src/aiworker.test.ts',
+      'apps/worker-web/src/worker/studio/locator.ts',
+      'apps/worker-web/src/worker/studio/locator.test.ts',
+      'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
+      'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
+      'apps/worker-web/src/features/local-workspace/components/workspace-card.tsx',
     ]
     const findings = activeSources.flatMap((path) => {
       const source = readRepoFile(path)
@@ -1343,7 +1343,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/worker-runtime/src/soul-app/registry.ts',
       'packages/worker-runtime/src/soul-app/registry.test.ts',
       'packages/worker-daemon/src/modes/worker.ts',
-      'apps/cli/src/aiworker.ts',
+      'apps/worker-cli/src/aiworker.ts',
     ]
     const forbidden = [
       'findHostCapabilityTemplate',
@@ -1423,12 +1423,12 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/soul-protocol/src/soul-app/registry.ts',
       'packages/worker-runtime/src/soul-app/registry.ts',
       'packages/worker-runtime/src/host/runtime.ts',
-      'apps/web/src/features/local-workspace/model-types.ts',
-      'apps/web/src/features/i18n/index.ts',
-      'apps/web/src/features/i18n/types.ts',
-      'apps/web/src/features/local-workspace/components/creation-dialogs.tsx',
-      'apps/web/src/features/settings/components/settings-dialog.tsx',
-      'apps/web/src/worker/studio/first-run-soul-app-home.tsx',
+      'apps/worker-web/src/features/local-workspace/model-types.ts',
+      'apps/worker-web/src/features/i18n/index.ts',
+      'apps/worker-web/src/features/i18n/types.ts',
+      'apps/worker-web/src/features/local-workspace/components/creation-dialogs.tsx',
+      'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
+      'apps/worker-web/src/worker/studio/first-run-soul-app-home.tsx',
     ]
     const forbidden = [
       'domain: zod.string',
@@ -1450,8 +1450,8 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('Web local workspace model does not preserve removed protocol compat shims', () => {
-    const compatPath = 'apps/web/src/features/local-workspace/types.compat.ts'
-    const activeWebSources = listSourceFiles('apps/web/src')
+    const compatPath = 'apps/worker-web/src/features/local-workspace/types.compat.ts'
+    const activeWebSources = listSourceFiles('apps/worker-web/src')
       .filter(path => !/\.(?:test|spec)\.[cm]?[tj]sx?$/.test(path))
     const importFindings = activeWebSources.flatMap((path) => {
       const source = readRepoFile(path)
@@ -1702,9 +1702,9 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('WorkerStudio test harness does not accept legacy overlay write routes', () => {
-    const workerOverlayConfigApi = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlay-config.ts')
-    const workerOverlayConfigTest = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlay-config.test.ts')
-    const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const workerOverlayConfigApi = readRepoFile('apps/worker-web/src/features/local-workspace/api/worker-overlay-config.ts')
+    const workerOverlayConfigTest = readRepoFile('apps/worker-web/src/features/local-workspace/api/worker-overlay-config.test.ts')
+    const workerStudioTest = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
     const forbidden = [
       'const requestBody = init?.body ? JSON.parse(String(init.body)) as { assets?: LocalWorkerOverlayAsset[] } : {}',
       'currentWorkerOverlayAssets = requestBody.assets?.map',
@@ -1713,9 +1713,9 @@ describe('destructive refactor contract bootstrap', () => {
       'overlay%3Askill%3Acodex',
     ]
     const sources = [
-      ['apps/web/src/features/local-workspace/api/worker-overlay-config.ts', workerOverlayConfigApi],
-      ['apps/web/src/features/local-workspace/api/worker-overlay-config.test.ts', workerOverlayConfigTest],
-      ['apps/web/src/worker/__tests__/worker-studio.test.tsx', workerStudioTest],
+      ['apps/worker-web/src/features/local-workspace/api/worker-overlay-config.ts', workerOverlayConfigApi],
+      ['apps/worker-web/src/features/local-workspace/api/worker-overlay-config.test.ts', workerOverlayConfigTest],
+      ['apps/worker-web/src/worker/__tests__/worker-studio.test.tsx', workerStudioTest],
     ]
     const findings = sources.flatMap(([path, source]) =>
       forbidden
@@ -1749,7 +1749,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/worker-runtime/src/host/runtime.test.ts',
       'packages/worker-runtime/src/index.ts',
       'packages/worker-daemon/src/modes/worker.local.test.ts',
-      'apps/cli/src/aiworker.test.ts',
+      'apps/worker-cli/src/aiworker.test.ts',
     ]
     const forbidden = [
       'DiscardLegacySoulMetadata',
@@ -1792,7 +1792,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('CLI tests use generic non-legacy worker and workspace fixtures', () => {
-    const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
+    const cliTest = readRepoFile('apps/worker-cli/src/aiworker.test.ts')
       .replace(/ {2}function seedLegacyHrMetadata\(\) \{[\s\S]*?\n {2}\}/, '')
     const forbidden = [
       'hr-recruiting',
@@ -1809,7 +1809,7 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = forbidden
       .filter(snippet => cliTest.includes(snippet))
-      .map(snippet => `apps/cli/src/aiworker.test.ts: ${snippet}`)
+      .map(snippet => `apps/worker-cli/src/aiworker.test.ts: ${snippet}`)
 
     expect(findings, 'CLI positive fixtures should not encode retired HR domain worker/workspace names').toEqual([])
   })
@@ -1829,7 +1829,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('CLI follow-up command surface uses session invocation language only', () => {
-    const cli = readRepoFile('apps/cli/src/aiworker.ts')
+    const cli = readRepoFile('apps/worker-cli/src/aiworker.ts')
     const forbidden = [
       'resolveTurnEngineMetadata',
       'sendTurnCommand',
@@ -1840,7 +1840,7 @@ describe('destructive refactor contract bootstrap', () => {
     ]
     const findings = forbidden
       .filter(snippet => cli.includes(snippet))
-      .map(snippet => `apps/cli/src/aiworker.ts: ${snippet}`)
+      .map(snippet => `apps/worker-cli/src/aiworker.ts: ${snippet}`)
 
     expect(findings, 'CLI should route follow-ups through session invoke, not legacy turn send').toEqual([])
     expect(cli).toContain('cli.command(\'session invoke\'')
@@ -1901,7 +1901,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('WorkerStudio test harness does not preserve transient turn fixtures', () => {
-    const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const workerStudioTest = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
     const forbidden = [
       'LegacyTurnFixture',
       'turnRecord',
@@ -1919,7 +1919,7 @@ describe('destructive refactor contract bootstrap', () => {
     ]
     const findings = forbidden
       .filter(snippet => workerStudioTest.includes(snippet))
-      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
 
     expect(findings, 'Web tests should model app-owned mounted sessions through sessions/events only').toEqual([])
     expect(workerStudioTest).toContain('/api/sessions')
@@ -1927,7 +1927,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('WorkerStudio test harness does not preserve local aggregate file and event feeds', () => {
-    const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const workerStudioTest = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
     const forbidden = [
       '/api/local/files',
       '/api/local/artifacts',
@@ -1938,7 +1938,7 @@ describe('destructive refactor contract bootstrap', () => {
     ]
     const findings = forbidden
       .filter(snippet => workerStudioTest.includes(snippet))
-      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
 
     expect(findings, 'Web tests should rely on canonical session and invocation responses instead of retired local aggregate feeds').toEqual([])
   })
@@ -1959,7 +1959,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('WorkerStudio test harness does not accept legacy nested session create routes', () => {
-    const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const workerStudioTest = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
     const forbidden = [
       '/api/local/workers/people-worker/workspaces/workspace-created/sessions',
       '/api/local/workspaces/workspace-created/sessions',
@@ -1967,7 +1967,7 @@ describe('destructive refactor contract bootstrap', () => {
     ]
     const findings = forbidden
       .filter(snippet => workerStudioTest.includes(snippet))
-      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
 
     expect(findings, 'Web tests should not keep local nested session create compatibility once broker /api/sessions exists').toEqual([])
     expect(workerStudioTest).toContain('/api/sessions')
@@ -1980,19 +1980,19 @@ describe('destructive refactor contract bootstrap', () => {
     }
     const browserFreeformScript = rootPackage.scripts?.['test:browser:freeform'] ?? ''
     const freeformBuildScript = 'bun run --filter \'@zonease/aiworker-freeform\' build'
-    const webBuildScript = 'bun run --filter \'@zonease/aiworker-web\' build'
+    const webBuildScript = 'bun run --filter \'@zonease/aiworker-worker-web\' build'
     const browserProofs = [
       'tests/browser/freeform-cli-golden-path.spec.ts',
       'tests/browser/freeform-mounted-workbench.spec.ts',
     ]
-    const freeformCliProof = readRepoFile('apps/cli/src/freeform-golden-path.test.ts')
+    const freeformCliProof = readRepoFile('apps/worker-cli/src/freeform-golden-path.test.ts')
     const freeformCliBrowserProof = readRepoFile('tests/browser/freeform-cli-golden-path.spec.ts')
 
-    expect(existsSync(join(repoRoot, 'apps/cli/src/freeform-golden-path.test.ts'))).toBe(true)
+    expect(existsSync(join(repoRoot, 'apps/worker-cli/src/freeform-golden-path.test.ts'))).toBe(true)
     expect(existsSync(join(repoRoot, 'tests/browser/freeform-cli-golden-path.spec.ts'))).toBe(true)
     expect(existsSync(join(repoRoot, 'tests/browser/freeform-mounted-workbench.spec.ts'))).toBe(true)
     expect(rootPackage.scripts?.['test:cli']).toContain('bun run --filter \'@zonease/aiworker-freeform\' build')
-    expect(rootPackage.scripts?.['test:cli']).toContain('apps/cli/src/freeform-golden-path.test.ts')
+    expect(rootPackage.scripts?.['test:cli']).toContain('apps/worker-cli/src/freeform-golden-path.test.ts')
     expect(freeformCliProof).toContain('listSessionEvents')
     expect(freeformCliProof).toContain('type: \'tool\'')
     expect(freeformCliProof).toContain('phase: \'result\'')
@@ -2043,7 +2043,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('dist release smoke reads installed apps through canonical app-installation route', () => {
-    const smokeScript = readRepoFile('apps/cli/scripts/smoke-dist-release.ts')
+    const smokeScript = readRepoFile('apps/worker-cli/scripts/smoke-dist-release.ts')
 
     expect(smokeScript).toContain('/api/app-installation/apps')
     expect(smokeScript).toContain('/api/info')
@@ -2093,8 +2093,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(testing).toContain('## Release Exit Criteria')
     expect(testing).toContain('`bun run release:check` must exactly aggregate the Current Release Gates')
     expect(testing).toContain('Tag release handoff must run post-compile artifact proof after `release:check`')
-    expect(testing).toContain('bun apps/cli/scripts/package-release-bundles.ts')
-    expect(testing).toContain('bun apps/cli/scripts/smoke-release-artifacts.ts')
+    expect(testing).toContain('bun apps/worker-cli/scripts/package-release-bundles.ts')
+    expect(testing).toContain('bun apps/worker-cli/scripts/smoke-release-artifacts.ts')
     expect(testing).toContain('The artifact smoke must verify checksums, required resources, descriptor references, executable mode, and current-platform `aiworker --version` startup.')
     expect(testing.indexOf('## Current Release Gates')).toBeLessThan(testing.indexOf('## Release Exit Criteria'))
     expect(docCheck).toContain('Release Exit Criteria must document post-compile artifact proof')
@@ -2103,10 +2103,10 @@ describe('destructive refactor contract bootstrap', () => {
   test('release smoke contract tests guard official Freeform descriptor refs', () => {
     const testing = readRepoFile('docs/testing.md')
     const releaseSmokeContractTests = [
-      'apps/cli/scripts/smoke-dist-release.test.ts',
-      'apps/cli/scripts/smoke-npm-package.test.ts',
-      'apps/cli/scripts/smoke-standalone-release.test.ts',
-      'apps/cli/scripts/smoke-standalone-runtime.test.ts',
+      'apps/worker-cli/scripts/smoke-dist-release.test.ts',
+      'apps/worker-cli/scripts/smoke-npm-package.test.ts',
+      'apps/worker-cli/scripts/smoke-standalone-release.test.ts',
+      'apps/worker-cli/scripts/smoke-standalone-runtime.test.ts',
     ]
 
     for (const testPath of releaseSmokeContractTests) {
@@ -2120,9 +2120,9 @@ describe('destructive refactor contract bootstrap', () => {
   test('release packaging contract tests guard descriptor-only official apps', () => {
     const testing = readRepoFile('docs/testing.md')
     const releasePackagingContractTests = [
-      'apps/cli/src/official-freeform-descriptor.test.ts',
-      'apps/cli/scripts/build-publish-manifest.test.ts',
-      'apps/cli/scripts/package-release-bundles.test.ts',
+      'apps/worker-cli/src/official-freeform-descriptor.test.ts',
+      'apps/worker-cli/scripts/build-publish-manifest.test.ts',
+      'apps/worker-cli/scripts/package-release-bundles.test.ts',
     ]
 
     for (const testPath of releasePackagingContractTests) {
@@ -2130,8 +2130,8 @@ describe('destructive refactor contract bootstrap', () => {
       expect(existsSync(join(repoRoot, testPath))).toBe(true)
     }
 
-    const publishManifestTest = readRepoFile('apps/cli/scripts/build-publish-manifest.test.ts')
-    const packageReleaseBundlesTest = readRepoFile('apps/cli/scripts/package-release-bundles.test.ts')
+    const publishManifestTest = readRepoFile('apps/worker-cli/scripts/build-publish-manifest.test.ts')
+    const packageReleaseBundlesTest = readRepoFile('apps/worker-cli/scripts/package-release-bundles.test.ts')
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')
 
     expect(publishManifestTest).toContain('descriptor-only official Soul dist tree')
@@ -2178,9 +2178,9 @@ describe('destructive refactor contract bootstrap', () => {
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')
     const storageTest = readRepoFile('packages/storage-sqlite/src/worker/index.test.ts')
     const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
-    const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
-    const webConfigTest = readRepoFile('apps/web/src/features/local-workspace/api/worker-config.test.ts')
-    const webOverlayConfigTest = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlay-config.test.ts')
+    const cliTest = readRepoFile('apps/worker-cli/src/aiworker.test.ts')
+    const webConfigTest = readRepoFile('apps/worker-web/src/features/local-workspace/api/worker-config.test.ts')
+    const webOverlayConfigTest = readRepoFile('apps/worker-web/src/features/local-workspace/api/worker-overlay-config.test.ts')
 
     expect(testing).toContain('Worker config envelope and Host metadata security')
     expect(docCheck).toContain('worker config envelope security must stay covered')
@@ -2227,8 +2227,8 @@ describe('destructive refactor contract bootstrap', () => {
     const releaseCheckIndex = releaseWorkflow.indexOf('bun run release:check')
     const compileIndex = releaseWorkflow.indexOf('Compile single-file binaries')
     const publishIndex = releaseWorkflow.indexOf('npm publish --provenance --access public')
-    const packageIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/package-release-bundles.ts')
-    const artifactSmokeIndex = releaseWorkflow.indexOf('bun apps/cli/scripts/smoke-release-artifacts.ts')
+    const packageIndex = releaseWorkflow.indexOf('bun apps/worker-cli/scripts/package-release-bundles.ts')
+    const artifactSmokeIndex = releaseWorkflow.indexOf('bun apps/worker-cli/scripts/smoke-release-artifacts.ts')
     const attachIndex = releaseWorkflow.indexOf('softprops/action-gh-release')
     const compileTargets = Array.from(releaseWorkflow.matchAll(/--target=bun-([a-z0-9-]+)/g), match => match[1])
     const outfileTargets = Array.from(releaseWorkflow.matchAll(/--outfile=aiworker-([a-z0-9-]+)/g), match => match[1])
@@ -2251,8 +2251,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(outfileTargets).toEqual(expectedReleaseTargets)
     expect(attachedBundleTargets).toEqual(expectedReleaseTargets)
     expect(attachedChecksumTargets).toEqual(expectedReleaseTargets)
-    expect(readRepoFile('apps/cli/scripts/package-release-bundles.ts')).toContain(`const DEFAULT_TARGETS = ${expectedTargetsLiteral} as const`)
-    expect(readRepoFile('apps/cli/scripts/smoke-release-artifacts.ts')).toContain(`const DEFAULT_TARGETS = ${expectedTargetsLiteral} as const`)
+    expect(readRepoFile('apps/worker-cli/scripts/package-release-bundles.ts')).toContain(`const DEFAULT_TARGETS = ${expectedTargetsLiteral} as const`)
+    expect(readRepoFile('apps/worker-cli/scripts/smoke-release-artifacts.ts')).toContain(`const DEFAULT_TARGETS = ${expectedTargetsLiteral} as const`)
     expect(readRepoFile('scripts/check-doc-contract.ts')).toContain('release target list must stay aligned')
   })
 
@@ -2260,7 +2260,7 @@ describe('destructive refactor contract bootstrap', () => {
     const rootPackage = JSON.parse(readRepoFile('package.json')) as {
       engines?: Record<string, string>
     }
-    const cliPackage = JSON.parse(readRepoFile('apps/cli/package.json')) as {
+    const cliPackage = JSON.parse(readRepoFile('apps/worker-cli/package.json')) as {
       engines?: Record<string, string>
     }
     const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
@@ -2277,10 +2277,10 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('standalone release bundles include descriptor-only official Soul Apps', () => {
     const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
-    const releasePackager = readRepoFile('apps/cli/scripts/package-release-bundles.ts')
+    const releasePackager = readRepoFile('apps/worker-cli/scripts/package-release-bundles.ts')
 
-    expect(releaseWorkflow).toContain('bun apps/cli/scripts/package-release-bundles.ts')
-    expect(releaseWorkflow).toContain('bun apps/cli/scripts/smoke-release-artifacts.ts')
+    expect(releaseWorkflow).toContain('bun apps/worker-cli/scripts/package-release-bundles.ts')
+    expect(releaseWorkflow).toContain('bun apps/worker-cli/scripts/smoke-release-artifacts.ts')
     expect(releasePackager).toContain('official-apps')
     expect(releasePackager.indexOf('official-apps')).toBeLessThan(releasePackager.indexOf('createTarball'))
   })
@@ -2293,10 +2293,10 @@ describe('destructive refactor contract bootstrap', () => {
   test('production mounted workbench chain uses descriptor v1 without legacy surface shim', () => {
     const activeProductionSources = [
       'packages/worker-daemon/src/modes/worker.ts',
-      'apps/web/src/features/local-workspace/api/workspace-data.ts',
-      'apps/web/src/features/local-workspace/api/index.ts',
-      'apps/web/src/worker/studio/mounted-surface.tsx',
-      'apps/web/src/worker/worker-studio.tsx',
+      'apps/worker-web/src/features/local-workspace/api/workspace-data.ts',
+      'apps/worker-web/src/features/local-workspace/api/index.ts',
+      'apps/worker-web/src/worker/studio/mounted-surface.tsx',
+      'apps/worker-web/src/worker/worker-studio.tsx',
     ]
     const forbiddenSnippets = [
       '/api/local/apps/:appId/surfaces/:surfaceId',
@@ -2326,7 +2326,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('WorkerStudio derives production workbench routes from descriptor v1 only', () => {
-    const source = readRepoFile('apps/web/src/worker/worker-studio.tsx')
+    const source = readRepoFile('apps/worker-web/src/worker/worker-studio.tsx')
     const match = source.match(/function descriptorWorkbenchRoutes[\s\S]*?\n\}\n/)
     expect(match, 'descriptorWorkbenchRoutes should stay a small explicit descriptor adapter').not.toBeNull()
 
@@ -2345,7 +2345,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('mounted child route tests use generic workbench paths instead of retired HR routes', () => {
-    const source = readRepoFile('apps/web/src/worker/mounted-child-route.test.ts')
+    const source = readRepoFile('apps/worker-web/src/worker/mounted-child-route.test.ts')
     const retiredRouteSnippets = [
       'aiworker-hr',
       'hr-home',
@@ -2359,13 +2359,13 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredRouteSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/worker/mounted-child-route.test.ts: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/mounted-child-route.test.ts: ${snippet}`)
 
     expect(findings, 'mounted child route tests should prove generic mounted routing without HR route fixtures').toEqual([])
   })
 
   test('micro-app runtime tests use generic workbench routes instead of retired HR routes', () => {
-    const source = readRepoFile('apps/web/src/lib/micro-app-runtime.test.ts')
+    const source = readRepoFile('apps/worker-web/src/lib/micro-app-runtime.test.ts')
     const retiredRouteSnippets = [
       'aiworker-hr',
       'hr-home',
@@ -2380,13 +2380,13 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredRouteSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/lib/micro-app-runtime.test.ts: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/lib/micro-app-runtime.test.ts: ${snippet}`)
 
     expect(findings, 'micro-app runtime tests should prove generic route plumbing without HR route fixtures').toEqual([])
   })
 
   test('mounted route preference tests use generic worker and route ids instead of retired HR routes', () => {
-    const source = readRepoFile('apps/web/src/worker/studio/mounted-route-preferences.test.ts')
+    const source = readRepoFile('apps/worker-web/src/worker/studio/mounted-route-preferences.test.ts')
     const retiredRouteSnippets = [
       'worker-hr',
       'hr-profile',
@@ -2394,15 +2394,15 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredRouteSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/worker/studio/mounted-route-preferences.test.ts: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/studio/mounted-route-preferences.test.ts: ${snippet}`)
 
     expect(findings, 'mounted route preference tests should use neutral worker ids and route ids').toEqual([])
   })
 
   test('Web worker tests use generic descriptor fixtures instead of retired HR and QA app ids', () => {
     const webWorkerTestSources = [
-      'apps/web/src/worker/__tests__/worker-studio.test.tsx',
-      'apps/web/src/worker/studio/locator.test.ts',
+      'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
+      'apps/worker-web/src/worker/studio/locator.test.ts',
     ]
     const retiredFixtureSnippets = [
       'aiworker-hr',
@@ -2422,7 +2422,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('Web locator tests use neutral workspace names', () => {
-    const source = readRepoFile('apps/web/src/worker/studio/locator.test.ts')
+    const source = readRepoFile('apps/worker-web/src/worker/studio/locator.test.ts')
     const retiredWorkspaceSnippets = [
       'Hiring Workspace',
       'Hiring Pipeline',
@@ -2441,13 +2441,13 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredWorkspaceSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/worker/studio/locator.test.ts: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/studio/locator.test.ts: ${snippet}`)
 
     expect(findings, 'locator tests should keep workspace names product-neutral').toEqual([])
   })
 
   test('WorkerStudio tests use neutral workspace fixture names', () => {
-    const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const source = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
     const retiredWorkspaceSnippets = [
       'Hiring Workspace',
       'Second Hiring Workspace',
@@ -2456,20 +2456,20 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredWorkspaceSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
 
     expect(findings, 'WorkerStudio tests should keep workspace names product-neutral').toEqual([])
   })
 
   test('WorkerStudio fetch mocks use neutral app-owned widget paths', () => {
-    const source = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
+    const source = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
     const retiredWidgetSnippets = [
       'hr-people-widget',
     ]
 
     const findings = retiredWidgetSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
 
     expect(findings, 'WorkerStudio app-owned widget mock paths should not preserve retired HR prefixes').toEqual([])
   })
@@ -2498,7 +2498,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('shared Web studio shell tests use neutral fixture copy', () => {
-    const source = readRepoFile('apps/web/src/shared/__tests__/studio-collapsible-group.test.tsx')
+    const source = readRepoFile('apps/worker-web/src/shared/__tests__/studio-collapsible-group.test.tsx')
     const forbidden = [
       'profile-section-candidates',
       'Candidates',
@@ -2511,7 +2511,7 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = forbidden
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/web/src/shared/__tests__/studio-collapsible-group.test.tsx: ${snippet}`)
+      .map(snippet => `apps/worker-web/src/shared/__tests__/studio-collapsible-group.test.tsx: ${snippet}`)
 
     expect(findings, 'shared studio shell tests should use neutral fixture labels').toEqual([])
   })

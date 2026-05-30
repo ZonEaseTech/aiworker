@@ -103,8 +103,8 @@ describe('release artifact smoke', () => {
 
   it('is wired into the tag release workflow before GitHub Release attach', async () => {
     const workflow = await readFile(path.join(import.meta.dirname, '..', '..', '..', '.github', 'workflows', 'release.yml'), 'utf8')
-    const packageIndex = workflow.indexOf('bun apps/cli/scripts/package-release-bundles.ts')
-    const smokeIndex = workflow.indexOf('bun apps/cli/scripts/smoke-release-artifacts.ts')
+    const packageIndex = workflow.indexOf('bun apps/worker-cli/scripts/package-release-bundles.ts')
+    const smokeIndex = workflow.indexOf('bun apps/worker-cli/scripts/smoke-release-artifacts.ts')
     const publishIndex = workflow.indexOf('npm publish --provenance --access public')
     const attachIndex = workflow.indexOf('softprops/action-gh-release')
 

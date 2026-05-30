@@ -81,7 +81,7 @@ echo "[dev] starting daemon on http://${AIWORKER_HOST}:${PORT}"
   AIWORKER_HOME="$AIWORKER_HOME" \
     AIWORKER_WORKER_HOST="$AIWORKER_WORKER_HOST" \
     PORT="$PORT" \
-    bun apps/cli/src/aiworker.ts daemon foreground --host "$AIWORKER_HOST" --port "$PORT"
+    bun apps/worker-cli/src/aiworker.ts daemon foreground --host "$AIWORKER_HOST" --port "$PORT"
 ) &
 DAEMON_PID=$!
 
@@ -89,7 +89,7 @@ wait_for_health
 
 echo "[dev] starting Worker Web on http://${AIWORKER_HOST}:${AIWORKER_WEB_PORT}"
 (
-  cd "$ROOT_DIR/apps/web"
+  cd "$ROOT_DIR/apps/worker-web"
   AIWORKER_API_URL="$AIWORKER_API_URL" \
     bun run dev --host "$AIWORKER_HOST" --port "$AIWORKER_WEB_PORT"
 ) &

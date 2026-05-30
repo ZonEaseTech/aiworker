@@ -17,13 +17,13 @@ describe('check-soul-app-boundaries', () => {
 
     expect(result.status).toBe(0)
     expect(result.stdout).not.toContain('Host-embedded renderer debt')
-    expect(result.stderr).not.toContain('apps/web/src/worker/souls')
+    expect(result.stderr).not.toContain('apps/worker-web/src/worker/souls')
   })
 
   test('blocks Host Web imports of the retired shared workbench package', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
     try {
-      const sourceDir = join(tempRoot, 'apps/web/src/worker')
+      const sourceDir = join(tempRoot, 'apps/worker-web/src/worker')
       mkdirSync(sourceDir, { recursive: true })
       writeFileSync(join(sourceDir, 'bad.tsx'), [
         'import { UniversalWorkbenchApp } from "@zonease/aiworker-soul-app-workbench"',
@@ -38,7 +38,7 @@ describe('check-soul-app-boundaries', () => {
       })
 
       expect(result.status).not.toBe(0)
-      expect(result.stderr).toContain('apps/web/src/worker/bad.tsx')
+      expect(result.stderr).toContain('apps/worker-web/src/worker/bad.tsx')
       expect(result.stderr).toContain('@zonease/aiworker-soul-app-workbench')
     }
     finally {
@@ -92,7 +92,7 @@ describe('check-soul-app-boundaries', () => {
       writeFileSync(join(appDir, 'soul.config.ts'), 'export default {}\n')
       writeFileSync(join(appDir, 'product/api/index.ts'), 'export const api = 1\n')
 
-      const webDir = join(tempRoot, 'apps/web/src')
+      const webDir = join(tempRoot, 'apps/worker-web/src')
       mkdirSync(webDir, { recursive: true })
       writeFileSync(
         join(webDir, 'bad.ts'),
@@ -105,7 +105,7 @@ describe('check-soul-app-boundaries', () => {
       })
 
       expect(result.status).not.toBe(0)
-      expect(result.stderr).toContain('apps/web/src/bad.ts')
+      expect(result.stderr).toContain('apps/worker-web/src/bad.ts')
     }
     finally {
       rmSync(tempRoot, { force: true, recursive: true })

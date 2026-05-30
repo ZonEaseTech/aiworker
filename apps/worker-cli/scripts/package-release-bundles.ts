@@ -25,7 +25,7 @@ export interface PackageReleaseBundlesOptions {
 export async function packageReleaseBundles(options: PackageReleaseBundlesOptions = {}): Promise<void> {
   const rootDir = resolve(options.rootDir ?? process.cwd())
   const targets = options.targets ?? DEFAULT_TARGETS
-  const distDir = resolve(rootDir, 'apps/cli/dist')
+  const distDir = resolve(rootDir, 'apps/worker-cli/dist')
   const releaseDir = resolve(rootDir, 'release')
 
   await assertRequiredDistResources(rootDir, distDir)

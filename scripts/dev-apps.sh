@@ -11,7 +11,7 @@ echo "[dev:apps] AIWORKER_HOME=$AIWORKER_HOME"
 
 run_cli() {
   local output
-  if ! output="$(bun apps/cli/src/aiworker.ts "$@" 2>&1)"; then
+  if ! output="$(bun apps/worker-cli/src/aiworker.ts "$@" 2>&1)"; then
     echo "$output"
     exit 1
   fi
@@ -38,4 +38,4 @@ for (const app of apps) {
 run_cli app bootstrap official
 
 echo "[dev:apps] enabled apps:"
-bun apps/cli/src/aiworker.ts app list | format_apps
+bun apps/worker-cli/src/aiworker.ts app list | format_apps

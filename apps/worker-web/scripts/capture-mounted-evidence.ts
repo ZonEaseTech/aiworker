@@ -81,7 +81,7 @@ function readFlag(args: string[], name: string): string | undefined {
 }
 
 function printUsage(): never {
-  console.error('Usage: bun apps/web/scripts/capture-mounted-evidence.ts --url <url> --out <dir> --label <name> [--allow-missing-mounted]')
+  console.error('Usage: bun apps/worker-web/scripts/capture-mounted-evidence.ts --url <url> --out <dir> --label <name> [--allow-missing-mounted]')
   process.exit(2)
 }
 

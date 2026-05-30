@@ -1,5 +1,5 @@
 {
-  "name": "@zonease/aiworker-web",
+  "name": "@zonease/aiworker-worker-web",
   "type": "module",
   "private": true,
   "license": "MIT",

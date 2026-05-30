@@ -45,7 +45,7 @@ describe('Freeform mounted workbench contract', () => {
   })
 
   test('Host Web mounts production Soul workbenches through micro-app search routing', () => {
-    const source = readRepoFile('apps/web/src/worker/studio/mounted-surface.tsx')
+    const source = readRepoFile('apps/worker-web/src/worker/studio/mounted-surface.tsx')
 
     expect(source).toContain('data-slot="soul-app-mounted-micro-app"')
     expect(source).toContain('router-mode="search"')
@@ -57,7 +57,7 @@ describe('Freeform mounted workbench contract', () => {
 
   test('mounted surface scopes stay protocol-generic and do not encode review domain concepts', () => {
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
-    const web = readRepoFile('apps/web/src/worker/studio/mounted-surface.tsx')
+    const web = readRepoFile('apps/worker-web/src/worker/studio/mounted-surface.tsx')
     const protocol = readRepoFile('packages/soul-protocol/src/soul-app/manifest.ts')
     const microAppProtocol = readRepoFile('packages/soul-protocol/src/soul-app/micro-app.ts')
 

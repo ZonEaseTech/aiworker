@@ -11,7 +11,7 @@ export async function serveWorkerWeb(c: Context, webStaticDir?: string): Promise
     })
   }
   catch {
-    return c.text('Worker Web build not found. Run `bun run --filter \'@zonease/aiworker-web\' build` first.', 404)
+    return c.text('Worker Web build not found. Run `bun run --filter \'@zonease/aiworker-worker-web\' build` first.', 404)
   }
 }
 

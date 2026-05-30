@@ -77,7 +77,7 @@ describe('target package ownership', () => {
     expect(existsSync(join(repoRoot, 'apps/api'))).toBe(false)
 
     const rootPackage = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as PackageJson
-    const cliPackage = JSON.parse(readFileSync(join(repoRoot, 'apps/cli/package.json'), 'utf8')) as PackageJson
+    const cliPackage = JSON.parse(readFileSync(join(repoRoot, 'apps/worker-cli/package.json'), 'utf8')) as PackageJson
 
     expect(rootPackage.scripts?.build).toContain('@zonease/aiworker-worker-daemon')
     expect(rootPackage.scripts?.build).not.toContain('@zonease/aiworker-api')

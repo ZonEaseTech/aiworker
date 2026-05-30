@@ -5,8 +5,8 @@ AIWorker 是自托管 worker/fleet runtime。Gateway 是 WebSocket 控制面，�
 主要形态：
 - apps/api：worker HTTP API、OpenAPIHono 文档、worker admin 静态托管。只负责 worker 数据面路由、middleware 和 bootstrap 装配。
 - apps/gateway：fleet WebSocket gateway，Bun.serve 默认 :9218，/ws 处理 operator/node 控制帧，/health 做 readiness。
-- apps/cli：发布单一 aiworker CLI，覆盖 worker-local、operator-remote、gateway 生命周期和 install systemd。
-- apps/web：React 19 双视角 SPA，fleet bundle 只走 gateway WS，worker bundle 只走 worker REST/SSE + bearer-auth。
+- apps/worker-cli：发布单一 aiworker CLI，覆盖 worker-local、operator-remote、gateway 生命周期和 install systemd。
+- apps/worker-web：React 19 双视角 SPA，fleet bundle 只走 gateway WS，worker bundle 只走 worker REST/SSE + bearer-auth。
 - packages/core：transport-agnostic worker runtime，封装 brain、executor、channels、orchestrator、cron、approvals、gateway-client、secrets、runtime 等业务态。
 - packages/gateway-proto：gateway WS 协议类型和 zod 校验。
 - packages/storage-sqlite：fleet.db 和 worker.db 的 Drizzle schema、配置和迁移。

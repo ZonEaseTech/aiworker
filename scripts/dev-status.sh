@@ -50,4 +50,4 @@ for (const app of apps) {
 '
 }
 
-bun apps/cli/src/aiworker.ts app list | format_apps
+bun apps/worker-cli/src/aiworker.ts app list | format_apps

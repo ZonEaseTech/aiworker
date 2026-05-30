@@ -58,9 +58,9 @@ async function main(): Promise<number> {
 }
 
 async function readDistPackageVersion(rootDir: string): Promise<string> {
-  const pkg = JSON.parse(await readFile(resolve(rootDir, 'apps/cli/dist/package.json'), 'utf8')) as { version?: unknown }
+  const pkg = JSON.parse(await readFile(resolve(rootDir, 'apps/worker-cli/dist/package.json'), 'utf8')) as { version?: unknown }
   if (typeof pkg.version !== 'string' || pkg.version.length === 0)
-    throw new Error('standalone release smoke requires apps/cli/dist/package.json with a version')
+    throw new Error('standalone release smoke requires apps/worker-cli/dist/package.json with a version')
   return pkg.version
 }
 

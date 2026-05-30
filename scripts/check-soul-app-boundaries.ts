@@ -25,7 +25,7 @@ const hostPrivatePackages = [
   '@zonease/aiworker-worker-daemon',
   '@zonease/aiworker-soul-protocol',
   '@zonease/aiworker-storage-sqlite',
-  '@zonease/aiworker-web',
+  '@zonease/aiworker-worker-web',
 ]
 const forbiddenLegacyPackages = [
   '@zonease/aiworker-api',
@@ -34,8 +34,8 @@ const forbiddenLegacyPackages = [
   '@zonease/aiworker-soul-app-workbench',
 ]
 const hostPrivateRoots = [
-  'apps/cli',
-  'apps/web',
+  'apps/worker-cli',
+  'apps/worker-web',
   'packages/fs-layout',
   'packages/worker-daemon',
   'packages/worker-runtime',
@@ -169,8 +169,8 @@ function scanSoulAppImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
 
 function scanHostImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
   const hostRoots = [
-    path.join(repoRoot, 'apps/cli'),
-    path.join(repoRoot, 'apps/web'),
+    path.join(repoRoot, 'apps/worker-cli'),
+    path.join(repoRoot, 'apps/worker-web'),
     path.join(repoRoot, 'packages'),
     path.join(repoRoot, 'scripts'),
   ].filter(existsSync)
@@ -217,7 +217,7 @@ function scanHostEmbeddedSoulRenderers(): BoundaryIssue[] {
 }
 
 function scanHostWebPackageImports(): BoundaryIssue[] {
-  const webRoot = path.join(repoRoot, 'apps/web')
+  const webRoot = path.join(repoRoot, 'apps/worker-web')
   if (!existsSync(webRoot))
     return []
   const issues: BoundaryIssue[] = []
@@ -238,7 +238,7 @@ function scanHostWebPackageImports(): BoundaryIssue[] {
 function scanHostWebRetiredProductSurfaces(): BoundaryIssue[] {
   if (!completionAudit)
     return []
-  const webRoot = path.join(repoRoot, 'apps/web')
+  const webRoot = path.join(repoRoot, 'apps/worker-web')
   if (!existsSync(webRoot))
     return []
   const issues: BoundaryIssue[] = []
@@ -277,7 +277,7 @@ function reportHostEmbeddedSoulRendererDebt(): void {
 }
 
 function listHostEmbeddedSoulRendererPaths(): string[] {
-  const root = 'apps/web/src/worker/souls'
+  const root = 'apps/worker-web/src/worker/souls'
   const rootAbs = path.join(repoRoot, root)
   if (!existsSync(rootAbs))
     return []

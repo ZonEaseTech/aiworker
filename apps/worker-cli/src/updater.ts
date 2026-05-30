@@ -172,7 +172,7 @@ export function detectInstallSource(input: InstallSourceInput): InstallSource {
   const moduleDir = normalizePath(input.moduleDir)
   const evidence = [argv1, realArgv1, moduleDir].filter(Boolean).join('\n')
 
-  if (moduleDir.includes('/apps/cli/src') || realArgv1.endsWith('/apps/cli/src/aiworker.ts')) {
+  if (moduleDir.includes('/apps/worker-cli/src') || realArgv1.endsWith('/apps/worker-cli/src/aiworker.ts')) {
     return { canAutoUpgrade: false, kind: 'source-checkout', reason: 'source checkout cannot self-modify' }
   }
 
@@ -355,7 +355,7 @@ export function canRestartManagedDaemon(input: ManagedDaemonProbe): ManagedDaemo
   const hasDaemonForeground = daemonIndex >= 0 && commandTokens[daemonIndex + 1] === 'foreground'
 
   if (
-    input.command.includes('apps/cli/src/aiworker.ts')
+    input.command.includes('apps/worker-cli/src/aiworker.ts')
     || commandTokens.includes('dev')
     || !hasManagedBinary
     || !hasDaemonForeground
