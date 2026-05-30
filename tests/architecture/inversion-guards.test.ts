@@ -72,8 +72,22 @@ test('G3: worker-* packages never depend on host-* packages', () => {
   }
 })
 
-// G4 ↔ C3：host-control 无 runtime/domain/secret 归属。host-control 建包后（Plan 3）可证。
-test.todo('G4: host-control exposes no session/invocation/projection/engine/domain/secret ownership')
+// G4 ↔ C3：host-control 仅控制面——deps 不含 engine/worker 运行时包，源码不出现
+// session/invocation/projection/engine/secret 归属符号。Plan 3 建包 + Plan 4 carve 对账后可证。
+test('G4: host-control exposes no session/invocation/projection/engine/domain/secret ownership', () => {
+  const deps = zonaseDependencyNames('packages/host-control')
+  for (const forbiddenDep of [
+    '@zonease/aiworker-engine-bridge',
+    '@zonease/aiworker-engine-projection',
+    '@zonease/aiworker-worker-runtime',
+    '@zonease/aiworker-worker-daemon',
+  ])
+    expect(deps, `host-control must not depend on ${forbiddenDep}`).not.toContain(forbiddenDep)
+
+  const source = read('packages/host-control/src/index.ts')
+  for (const forbiddenOwnership of [/\bsession\b/i, /\binvocation\b/i, /\bprojection\b/i, /\bengine\b/i, /\bsecret\b/i])
+    expect(source, `host-control source must not own ${forbiddenOwnership.source}`).not.toMatch(forbiddenOwnership)
+})
 
 // G5 ↔ C5：唯一 Host→Worker 契约是 worker-control-protocol——host-* 包除该契约外
 // 不得依赖任何 worker-* 运行时包（worker-runtime/worker-daemon 等）。Plan 3 起可证。
