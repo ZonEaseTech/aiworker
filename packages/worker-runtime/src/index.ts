@@ -17,14 +17,14 @@ export {
 } from './config/worker'
 export {
   createLocalBearerAuthProvider,
-  type HostAuthInput,
-  type HostAuthMethod,
-  type HostAuthProvider,
-  type HostAuthProviderKind,
-  type HostAuthResult,
-  type HostIdentity,
-  type HostIdentityGrant,
   type LocalBearerAuthProviderOptions,
+  type WorkerApiAuthInput,
+  type WorkerApiAuthMethod,
+  type WorkerApiAuthProvider,
+  type WorkerApiAuthProviderKind,
+  type WorkerApiAuthResult,
+  type WorkerApiIdentity,
+  type WorkerApiIdentityGrant,
 } from './orchestration/identity-provider'
 export {
   type CreateSoulWorkerInput,

@@ -1,36 +1,36 @@
 import { Buffer } from 'node:buffer'
 import { timingSafeEqual } from 'node:crypto'
 
-export type HostAuthProviderKind = 'local-bearer' | 'logto'
-export type HostAuthMethod = 'local-bearer' | 'logto'
+export type WorkerApiAuthProviderKind = 'local-bearer' | 'logto'
+export type WorkerApiAuthMethod = 'local-bearer' | 'logto'
 
-export interface HostIdentityGrant {
+export interface WorkerApiIdentityGrant {
   action: string
   kind: string
   target: string
 }
 
-export interface HostIdentity {
-  authMethod: HostAuthMethod
-  grants: readonly HostIdentityGrant[]
+export interface WorkerApiIdentity {
+  authMethod: WorkerApiAuthMethod
+  grants: readonly WorkerApiIdentityGrant[]
   operatorId: string
   providerId: string
   subject: string
 }
 
-export interface HostAuthInput {
+export interface WorkerApiAuthInput {
   authorization?: string | null
 }
 
-export type HostAuthResult
-  = | { identity: HostIdentity, status: 'authenticated' }
+export type WorkerApiAuthResult
+  = | { identity: WorkerApiIdentity, status: 'authenticated' }
     | { status: 'anonymous' }
     | { reason: string, status: 'denied' }
 
-export interface HostAuthProvider {
-  authenticate: (input: HostAuthInput) => HostAuthResult
+export interface WorkerApiAuthProvider {
+  authenticate: (input: WorkerApiAuthInput) => WorkerApiAuthResult
   id: string
-  kind: HostAuthProviderKind
+  kind: WorkerApiAuthProviderKind
 }
 
 export interface LocalBearerAuthProviderOptions {
@@ -38,7 +38,7 @@ export interface LocalBearerAuthProviderOptions {
   token?: string | null
 }
 
-export function createLocalBearerAuthProvider(options: LocalBearerAuthProviderOptions = {}): HostAuthProvider {
+export function createLocalBearerAuthProvider(options: LocalBearerAuthProviderOptions = {}): WorkerApiAuthProvider {
   const token = options.token ?? null
   const operatorId = options.operatorId ?? 'operator-local'
   return {

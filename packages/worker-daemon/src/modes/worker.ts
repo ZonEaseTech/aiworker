@@ -1,6 +1,6 @@
 import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppEngineTarget } from '@zonease/aiworker-soul-protocol'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
-import type { HostAuthProvider, HostIdentity, LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
+import type { LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerApiAuthProvider, WorkerApiIdentity, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 
 import type { Context } from 'hono'
 import type { ChildProcessByStdio } from 'node:child_process'
@@ -79,7 +79,7 @@ import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings,
 import { serveWorkerWeb, serveWorkerWebAsset } from './worker/web-static'
 
 const DEFAULT_RUNTIME_VERSION = 'dev'
-const REQUEST_IDENTITIES = new WeakMap<Context, HostIdentity>()
+const REQUEST_IDENTITIES = new WeakMap<Context, WorkerApiIdentity>()
 
 export interface BootstrapWorkerAppOptions {
   dbPath?: string
@@ -95,7 +95,7 @@ export interface BootstrapWorkerAppOptions {
 }
 
 export interface LocalDaemonState {
-  authProvider: HostAuthProvider
+  authProvider: WorkerApiAuthProvider
   host: WorkerOrchestrator
   mountingAppServices: Map<string, Promise<MountedSoulAppService | null>>
   mountedAppServices: Map<string, MountedSoulAppService>
@@ -1345,11 +1345,11 @@ function applyMountedProxyContextHeaders(
   headers.set('x-aiworker-route-prefix', appOwnedApiRoutePrefix(app))
 }
 
-function requestIdentity(c: Context): HostIdentity | null {
+function requestIdentity(c: Context): WorkerApiIdentity | null {
   return REQUEST_IDENTITIES.get(c) ?? null
 }
 
-function publicHostIdentity(identity: HostIdentity): HostIdentity {
+function publicHostIdentity(identity: WorkerApiIdentity): WorkerApiIdentity {
   return {
     authMethod: identity.authMethod,
     grants: identity.grants,
