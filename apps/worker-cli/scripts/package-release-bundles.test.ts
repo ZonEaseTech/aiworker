@@ -136,8 +136,8 @@ describe('release bundle packager', () => {
 
   it('rejects standalone bundles before staging when descriptor references resolve outside the official app root', async () => {
     await writeFixtureDist(root)
-    const workbenchEntry = path.join(root, 'apps', 'cli', 'dist', 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html')
-    const escapedWorkbench = path.join(root, 'apps', 'cli', 'dist', 'official-apps', 'escaped-workbench.html')
+    const workbenchEntry = path.join(root, 'apps', 'worker-cli', 'dist', 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html')
+    const escapedWorkbench = path.join(root, 'apps', 'worker-cli', 'dist', 'official-apps', 'escaped-workbench.html')
     await writeFile(escapedWorkbench, '<!doctype html>\n')
     await rm(workbenchEntry)
     await symlink(escapedWorkbench, workbenchEntry)
@@ -165,7 +165,7 @@ async function writeFixtureDist(
   const includeJournalMigrationSql = options.includeJournalMigrationSql ?? true
   const includeMigrationJournal = options.includeMigrationJournal ?? true
   const includeWorkbenchEntry = options.includeWorkbenchEntry ?? true
-  const dist = path.join(root, 'apps', 'cli', 'dist')
+  const dist = path.join(root, 'apps', 'worker-cli', 'dist')
   await mkdir(path.join(dist, 'web', 'worker'), { recursive: true })
   await mkdir(path.join(dist, 'drizzle', 'worker', 'meta'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist'), { recursive: true })

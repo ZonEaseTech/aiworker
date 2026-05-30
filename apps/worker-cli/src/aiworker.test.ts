@@ -318,7 +318,7 @@ describe('aiworker local CLI', () => {
   })
 
   it('resolves standalone bundle resources next to the executable', async () => {
-    const moduleDir = path.join(root, 'bunfs', 'apps', 'cli', 'src')
+    const moduleDir = path.join(root, 'bunfs', 'apps', 'worker-cli', 'src')
     const executableDir = path.join(root, 'aiworker-darwin-arm64')
     const officialAppsRoot = path.join(executableDir, 'official-apps')
     const workerWebRoot = path.join(executableDir, 'web', 'worker')
@@ -342,7 +342,7 @@ describe('aiworker local CLI', () => {
     delete process.env.WORKER_DB_PATH
     process.env.HOME = root
 
-    const moduleDir = path.join(root, 'repo', 'apps', 'cli', 'src')
+    const moduleDir = path.join(root, 'repo', 'apps', 'worker-cli', 'src')
     const paths = resolveCliLocalPaths(moduleDir)
 
     expect(resolveCliDefaultHomeDir(moduleDir)).toBe('.aiworker-dev')
@@ -374,7 +374,7 @@ describe('aiworker local CLI', () => {
     process.env.AIWORKER_HOME = path.join(root, 'explicit-home')
     process.env.WORKER_DB_PATH = path.join(root, 'explicit-home', 'custom.db')
 
-    const moduleDir = path.join(root, 'repo', 'apps', 'cli', 'src')
+    const moduleDir = path.join(root, 'repo', 'apps', 'worker-cli', 'src')
     const paths = resolveCliLocalPaths(moduleDir)
 
     expect(resolveCliDefaultHomeDir(moduleDir)).toBe('.aiworker-dev')

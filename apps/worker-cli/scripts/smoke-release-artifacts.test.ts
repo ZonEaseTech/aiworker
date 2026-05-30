@@ -116,7 +116,7 @@ describe('release artifact smoke', () => {
 })
 
 async function writeFixtureDist(root: string, options: { descriptorText?: string } = {}): Promise<void> {
-  const dist = path.join(root, 'apps', 'cli', 'dist')
+  const dist = path.join(root, 'apps', 'worker-cli', 'dist')
   await mkdir(path.join(dist, 'web', 'worker'), { recursive: true })
   await mkdir(path.join(dist, 'drizzle', 'worker', 'meta'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist'), { recursive: true })
@@ -157,7 +157,7 @@ async function writeMalformedReleaseArtifact(root: string, target: string): Prom
 }
 
 async function writeFixturePackageMetadata(root: string): Promise<void> {
-  const dist = path.join(root, 'apps', 'cli', 'dist')
+  const dist = path.join(root, 'apps', 'worker-cli', 'dist')
   await mkdir(dist, { recursive: true })
   await writeFile(path.join(dist, 'package.json'), '{"version":"0.19.3"}\n')
 }
@@ -169,11 +169,11 @@ async function writeReleaseArtifactWithoutJournalMigrationSql(root: string, targ
   await mkdir(bundleRoot, { recursive: true })
   await writeFile(path.join(bundleRoot, 'aiworker'), '#!/bin/sh\necho 0.0.0-test\n')
   await chmod(path.join(bundleRoot, 'aiworker'), 0o755)
-  await cp(path.join(root, 'apps', 'cli', 'dist', 'web'), path.join(bundleRoot, 'web'), { recursive: true })
+  await cp(path.join(root, 'apps', 'worker-cli', 'dist', 'web'), path.join(bundleRoot, 'web'), { recursive: true })
   await mkdir(path.join(bundleRoot, 'drizzle', 'worker', 'meta'), { recursive: true })
-  await cp(path.join(root, 'apps', 'cli', 'dist', 'drizzle', 'worker', 'meta'), path.join(bundleRoot, 'drizzle', 'worker', 'meta'), { recursive: true })
-  await cp(path.join(root, 'apps', 'cli', 'dist', 'official-apps'), path.join(bundleRoot, 'official-apps'), { recursive: true })
-  await cp(path.join(root, 'apps', 'cli', 'dist', 'README.md'), path.join(bundleRoot, 'README.md'))
+  await cp(path.join(root, 'apps', 'worker-cli', 'dist', 'drizzle', 'worker', 'meta'), path.join(bundleRoot, 'drizzle', 'worker', 'meta'), { recursive: true })
+  await cp(path.join(root, 'apps', 'worker-cli', 'dist', 'official-apps'), path.join(bundleRoot, 'official-apps'), { recursive: true })
+  await cp(path.join(root, 'apps', 'worker-cli', 'dist', 'README.md'), path.join(bundleRoot, 'README.md'))
   await run(['tar', '-C', root, '-czf', path.join(root, `${bundle}.tar.gz`), bundle])
   const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
   const checksum = createHash('sha256').update(archive).digest('hex')
@@ -191,10 +191,10 @@ async function writeFixtureReleaseArtifact(
   await mkdir(bundleRoot, { recursive: true })
   await writeFile(path.join(bundleRoot, 'aiworker'), options.binaryText ?? '#!/bin/sh\necho 0.0.0-test\n')
   await chmod(path.join(bundleRoot, 'aiworker'), options.binaryMode ?? 0o755)
-  await cp(path.join(root, 'apps', 'cli', 'dist', 'web'), path.join(bundleRoot, 'web'), { recursive: true })
-  await cp(path.join(root, 'apps', 'cli', 'dist', 'drizzle'), path.join(bundleRoot, 'drizzle'), { recursive: true })
-  await cp(path.join(root, 'apps', 'cli', 'dist', 'official-apps'), path.join(bundleRoot, 'official-apps'), { recursive: true })
-  await cp(path.join(root, 'apps', 'cli', 'dist', 'README.md'), path.join(bundleRoot, 'README.md'))
+  await cp(path.join(root, 'apps', 'worker-cli', 'dist', 'web'), path.join(bundleRoot, 'web'), { recursive: true })
+  await cp(path.join(root, 'apps', 'worker-cli', 'dist', 'drizzle'), path.join(bundleRoot, 'drizzle'), { recursive: true })
+  await cp(path.join(root, 'apps', 'worker-cli', 'dist', 'official-apps'), path.join(bundleRoot, 'official-apps'), { recursive: true })
+  await cp(path.join(root, 'apps', 'worker-cli', 'dist', 'README.md'), path.join(bundleRoot, 'README.md'))
   await run(['tar', '-C', root, '-czf', path.join(root, `${bundle}.tar.gz`), bundle])
   const archive = await readFile(path.join(root, `${bundle}.tar.gz`))
   const checksum = createHash('sha256').update(archive).digest('hex')

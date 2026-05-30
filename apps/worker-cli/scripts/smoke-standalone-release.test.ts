@@ -64,7 +64,7 @@ describe('standalone release smoke script contract', () => {
 })
 
 async function writeFixtureDist(root: string): Promise<void> {
-  const dist = join(root, 'apps', 'cli', 'dist')
+  const dist = join(root, 'apps', 'worker-cli', 'dist')
   await mkdir(join(dist, 'web', 'worker'), { recursive: true })
   await mkdir(join(dist, 'drizzle', 'worker', 'meta'), { recursive: true })
   await mkdir(join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench'), { recursive: true })
