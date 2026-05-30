@@ -30,6 +30,32 @@ function zonaseDependencyNames(dir: string): string[] {
   ].filter(name => name.startsWith('@zonease/'))
 }
 
+// 递归枚举某目录下的非 test 源文件（.ts/.tsx），排除 node_modules/dist/.d.ts/.test。
+function sourceFilesUnder(dir: string): string[] {
+  const root = join(repoRoot, dir)
+  if (!existsSync(root))
+    return []
+  const out: string[] = []
+  const walk = (absDir: string, relDir: string): void => {
+    for (const entry of readdirSync(absDir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === 'dist')
+        continue
+      const childRel = `${relDir}/${entry.name}`
+      if (entry.isDirectory())
+        walk(join(absDir, entry.name), childRel)
+      else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) && !entry.name.endsWith('.d.ts'))
+        out.push(childRel)
+    }
+  }
+  walk(root, dir)
+  return out
+}
+
+// 剥离 // 行注释与 /* */ 块注释——避免合法边界注释（如 host-web「Soul owns domain UI」）误判。
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
+}
+
 describe('worker-autonomy inversion guards (Plan 1)', () => {
   test('G0: inversion vocabulary is no longer forbidden in active docs', () => {
     const checker = read('scripts/check-doc-contract.ts')
@@ -72,9 +98,11 @@ test('G3: worker-* packages never depend on host-* packages', () => {
   }
 })
 
-// G4 ↔ C3：host-control 仅控制面——deps 不含 engine/worker 运行时包，源码不出现
-// session/invocation/projection/engine/secret 归属符号。Plan 3 建包 + Plan 4 carve 对账后可证。
-test('G4: host-control exposes no session/invocation/projection/engine/domain/secret ownership', () => {
+// G4 ↔ C3：host-control 仅控制面——deps 不含 engine/worker 运行时包；且所有 host-* 控制面源
+// （host-control + 壳 host-cli/host-web）剥注释后不出现 session/invocation/projection/engine/
+// domain/secret 归属。子串匹配（非 \b）以抓 camelCase（createSession/EngineInvocation/startEngine），
+// 全文件递归（非仅 index.ts），含 domain（C3 领域归属）。
+test('G4: host-control deps + all host-* source carry no session/invocation/projection/engine/domain/secret ownership', () => {
   const deps = zonaseDependencyNames('packages/host-control')
   for (const forbiddenDep of [
     '@zonease/aiworker-engine-bridge',
@@ -84,9 +112,15 @@ test('G4: host-control exposes no session/invocation/projection/engine/domain/se
   ])
     expect(deps, `host-control must not depend on ${forbiddenDep}`).not.toContain(forbiddenDep)
 
-  const source = read('packages/host-control/src/index.ts')
-  for (const forbiddenOwnership of [/\bsession\b/i, /\binvocation\b/i, /\bprojection\b/i, /\bengine\b/i, /\bsecret\b/i])
-    expect(source, `host-control source must not own ${forbiddenOwnership.source}`).not.toMatch(forbiddenOwnership)
+  const forbiddenTokens = ['session', 'invocation', 'projection', 'engine', 'domain', 'secret']
+  const ownershipDirs = ['packages/host-control/src', 'apps/host-cli/src', 'apps/host-web/src']
+  for (const dir of ownershipDirs) {
+    for (const file of sourceFilesUnder(dir)) {
+      const code = stripComments(read(file)).toLowerCase()
+      for (const token of forbiddenTokens)
+        expect(code.includes(token), `${file} must not carry '${token}' ownership (host-* control plane)`).toBe(false)
+    }
+  }
 })
 
 // G5 ↔ C5：唯一 Host→Worker 契约是 worker-control-protocol——host-* 包除该契约外

@@ -241,6 +241,8 @@ requireIncludes('docs/protocol.md', [
   'The Worker is the passive control server; Host is the client.',
   'The mounted configuration micro-app is the only current transport; non-web\ntransports are reserved.',
   'The control contract must not carry session, invocation, projection, engine, or\ndomain data.',
+  // 钉死倒置后归属:workspace locator metadata 归 Worker（a6c75512,验收 #3 补 pin 防静默 revert）。
+  'creates Worker workspace locator metadata plus projection-owned bootstrap\n  files.',
 ])
 forbidIncludes('docs/protocol.md', [
   'host-adapter',
@@ -326,6 +328,8 @@ requireIncludes('docs/runtime.md', [
   'Archive is the default lifecycle operation for workers, workspace locators, and\nsessions.',
   'Hard delete is explicit and removes Worker metadata plus receipt-owned\nprojection files only.',
   'Physical workspace root deletion is a separate dangerous\naction and is not the default lifecycle behavior.',
+  // 钉死 BYOK 密钥脱敏边界用泛化 DB（非 Host DB）（a6c75512,验收 #3 补 pin 防静默 revert）。
+  'resolved key is read from the environment at call time and is never persisted to\nDB, projection receipts, logs, diagnostics, OpenAPI examples, or UI.',
 ])
 
 requireIncludes('docs/soul-authoring.md', [

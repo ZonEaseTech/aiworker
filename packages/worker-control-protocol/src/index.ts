@@ -22,12 +22,23 @@ export const workerLifecycleSchema = z.object({
   action: z.enum(['stop', 'decommission']),
 }).strict()
 
+// C6：assignment 信封只携带「引用」,不得携带字面密钥。gatewayProfileRef 必须是引用形态
+// (env:/secretref:/$…),与 worker-runtime 的 isSafeSecretReference 同源,杜绝把字面 key
+// 经控制契约落进 host-control registry / host-web assignment。
+const GATEWAY_PROFILE_REF_PREFIXES = ['env:', 'secretref:', '$'] as const
+function isReferenceShapedGatewayProfileRef(value: string): boolean {
+  const trimmed = value.trim()
+  return GATEWAY_PROFILE_REF_PREFIXES.some(prefix => trimmed.startsWith(prefix))
+}
+
 export const workerAssignmentEnvelopeSchema = z.object({
   version: z.literal(WORKER_CONTROL_PROTOCOL_VERSION),
   templateId: z.string().min(1),
   connectors: z.array(z.object({ id: z.string().min(1), authorized: z.boolean() }).strict()),
   permissions: z.array(z.string()),
-  gatewayProfileRef: z.string().min(1),
+  gatewayProfileRef: z.string().min(1).refine(isReferenceShapedGatewayProfileRef, {
+    message: 'gatewayProfileRef must be a reference (env:/secretref:/$…), not a literal secret',
+  }),
 }).strict()
 
 export type WorkerHealth = z.infer<typeof workerHealthSchema>

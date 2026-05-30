@@ -39,4 +39,27 @@ describe('worker-control-protocol contract', () => {
       sessionId: 'leak',
     } as never)).toThrow()
   })
+
+  test('rejects a literal-secret gatewayProfileRef (C6: assignment carries a reference, not a literal secret)', () => {
+    expect(() => parseWorkerAssignmentEnvelope({
+      version: WORKER_CONTROL_PROTOCOL_VERSION,
+      templateId: 'freeform',
+      connectors: [],
+      permissions: [],
+      gatewayProfileRef: 'sk-proj-LITERALSECRETVALUE0123456789',
+    })).toThrow()
+  })
+
+  test('accepts only reference-shaped gatewayProfileRef (env:/secretref:/$)', () => {
+    for (const ref of ['env:GATEWAY_KEY', 'secretref:prod/gateway', '$GATEWAY_PROFILE']) {
+      const env = parseWorkerAssignmentEnvelope({
+        version: WORKER_CONTROL_PROTOCOL_VERSION,
+        templateId: 'freeform',
+        connectors: [],
+        permissions: [],
+        gatewayProfileRef: ref,
+      })
+      expect(env.gatewayProfileRef).toBe(ref)
+    }
+  })
 })
