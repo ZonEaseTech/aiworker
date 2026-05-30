@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { soulAppServiceEnv } from '@zonease/aiworker-worker-runtime'
 import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
 import {
   appendSessionEvent,
@@ -22,6 +21,7 @@ import {
   runWorkerMigrations,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
+import { soulAppServiceEnv } from '@zonease/aiworker-worker-runtime'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {

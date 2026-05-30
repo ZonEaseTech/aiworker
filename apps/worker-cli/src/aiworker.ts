@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
-import type { HostRuntime, LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext } from '@zonease/aiworker-worker-runtime'
 import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { HostRuntime, LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext } from '@zonease/aiworker-worker-runtime'
 import type { SoulDiscovery, SoulValidationIssue } from '../../../packages/soul-app-sdk/src/index'
 import type { UpdateCliOptions, UpdateCommandName } from './updater'
 import { Buffer } from 'node:buffer'
@@ -14,13 +14,6 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
-import {
-  createHostRuntime,
-  getWorkerEnv,
-  readFrozenSessionEngine,
-  resolveLocalCliEngine,
-  scanLocalEngines,
-} from '@zonease/aiworker-worker-runtime'
 import {
   parseSoulDescriptorV1,
   SOUL_DESCRIPTOR_OUTPUT_PATH,
@@ -52,6 +45,13 @@ import {
   upsertWorker,
   upsertWorkerConfigValue,
 } from '@zonease/aiworker-storage-sqlite/worker'
+import {
+  createHostRuntime,
+  getWorkerEnv,
+  readFrozenSessionEngine,
+  resolveLocalCliEngine,
+  scanLocalEngines,
+} from '@zonease/aiworker-worker-runtime'
 import cac from 'cac'
 
 import consola from 'consola'

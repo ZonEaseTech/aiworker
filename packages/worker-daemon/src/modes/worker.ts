@@ -1,6 +1,6 @@
-import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions } from '@zonease/aiworker-worker-runtime'
 import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppEngineTarget } from '@zonease/aiworker-soul-protocol'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions } from '@zonease/aiworker-worker-runtime'
 
 import type { Context } from 'hono'
 import type { ChildProcessByStdio } from 'node:child_process'
@@ -15,14 +15,6 @@ import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
 import { listBaselineAssets } from '@zonease/aiworker-engine-projection'
-import {
-  createHostRuntime,
-  createLocalBearerAuthProvider,
-  LocalEngineResolutionError,
-  resolveLocalCliEngine,
-  soulAppServiceEnv,
-  workerEnv,
-} from '@zonease/aiworker-worker-runtime'
 import {
   AppError,
   isLoopbackMountedServiceUrl,
@@ -51,6 +43,14 @@ import {
   upsertWorker,
   upsertWorkerConfigValue,
 } from '@zonease/aiworker-storage-sqlite/worker'
+import {
+  createHostRuntime,
+  createLocalBearerAuthProvider,
+  LocalEngineResolutionError,
+  resolveLocalCliEngine,
+  soulAppServiceEnv,
+  workerEnv,
+} from '@zonease/aiworker-worker-runtime'
 
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'

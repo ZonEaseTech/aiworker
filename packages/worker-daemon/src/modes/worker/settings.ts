@@ -1,7 +1,7 @@
 import type { LocalEngineReadinessSettings, LocalSettingsConfig } from '@zonease/aiworker-soul-protocol'
-import { scanLocalEngines } from '@zonease/aiworker-worker-runtime'
 import { AppError, localSettingsConfigSchema } from '@zonease/aiworker-soul-protocol'
 import { getSetting, listSettings, setSetting } from '@zonease/aiworker-storage-sqlite/worker'
+import { scanLocalEngines } from '@zonease/aiworker-worker-runtime'
 
 export const LOCAL_SETTINGS_KEY = 'local-settings'
 export { scanLocalEngines }

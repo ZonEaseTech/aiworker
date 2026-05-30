@@ -1,24 +1,18 @@
 import type {
-  HostSoulCatalog,
-  LocalExecutor,
-  LocalWorkerRuntime,
-} from '@zonease/aiworker-worker-runtime'
-import type {
   HostedSoulApp,
   SoulAppEngineAssets,
   SoulAppEngineTarget,
   SoulDescriptorV1,
 } from '@zonease/aiworker-soul-protocol'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type {
+  HostSoulCatalog,
+  LocalExecutor,
+  LocalWorkerRuntime,
+} from '@zonease/aiworker-worker-runtime'
 
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
-import {
-  createLocalWorkerRuntime,
-  enableSoulApp,
-  installSoulDescriptor,
-  listHostSoulCatalog,
-} from '@zonease/aiworker-worker-runtime'
 import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
 import {
   closeWorkerDb,
@@ -26,6 +20,12 @@ import {
   runWorkerMigrations,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
+import {
+  createLocalWorkerRuntime,
+  enableSoulApp,
+  installSoulDescriptor,
+  listHostSoulCatalog,
+} from '@zonease/aiworker-worker-runtime'
 
 export { renderUniversalWorkbenchHtml } from './universal-workbench-html'
 
