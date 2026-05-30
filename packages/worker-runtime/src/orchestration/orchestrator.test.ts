@@ -53,7 +53,7 @@ const freeformDescriptor = parseSoulDescriptorV1({
   },
 })
 
-describe('Host runtime boundary', () => {
+describe('Worker orchestrator boundary', () => {
   let dir: string
 
   beforeEach(() => {
@@ -68,7 +68,7 @@ describe('Host runtime boundary', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  function host() {
+  function orchestrator() {
     return createWorkerOrchestrator({
       registryContext: () => ({
         availableConnectorIds: ['ats', 'calendar', 'ci', 'issue-tracker'],
@@ -109,7 +109,7 @@ describe('Host runtime boundary', () => {
   it('bootstraps official apps, rejects legacy Souls, creates app-scoped workers, and rejects duplicate ids', async () => {
     seedLegacyHrWorker()
 
-    const runtime = host()
+    const runtime = orchestrator()
     const bootstrap = await runtime.bootstrapOfficialSoulApps()
 
     expect(bootstrap.scope).toBe('official')
@@ -166,7 +166,7 @@ describe('Host runtime boundary', () => {
     await writeFile(path.join(appRoot, 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '[mcp_servers.ats]\ncommand = "uvx"\n')
     await writeFile(path.join(appRoot, 'dist', 'soul.descriptor.json'), `${JSON.stringify(freeformDescriptor, null, 2)}\n`)
 
-    const runtime = host()
+    const runtime = orchestrator()
     await runtime.installAppFromPath(appRoot)
     runtime.enableApp(FREEFORM_APP_ID)
     const created = await runtime.createSoulWorker({
@@ -182,7 +182,7 @@ describe('Host runtime boundary', () => {
   })
 
   it('validates worker capability ownership', async () => {
-    const runtime = host()
+    const runtime = orchestrator()
     await runtime.bootstrapOfficialSoulApps()
     const created = await runtime.createSoulWorker({
       id: 'freeform-worker',
@@ -201,7 +201,7 @@ describe('Host runtime boundary', () => {
   })
 
   it('validates that a worker Soul App is enabled before new work', async () => {
-    const runtime = host()
+    const runtime = orchestrator()
     await runtime.bootstrapOfficialSoulApps()
     const created = await runtime.createSoulWorker({
       id: 'archive-app-worker',
