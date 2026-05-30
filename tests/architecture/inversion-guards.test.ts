@@ -101,5 +101,17 @@ test('G5: the only Host->Worker contract is worker-control-protocol', () => {
   }
 })
 
-// G1 ↔ C1：worker standalone 金路径，Host 缺席全通。Plan 5 真证；此处先文档锚点。
-test.todo('G1: worker standalone golden path passes with Host absent')
+// G1 ↔ C1：worker standalone 金路径行为证据存在、host-free、且被 release:check 执行（经 test:cli）。
+// 与 G3（包依赖方向）区分：锚定「自治行为证据存在且 host-free 且真的跑」。
+test('G1: worker standalone golden path passes with Host absent', () => {
+  const goldenPath = 'apps/worker-cli/src/freeform-golden-path.test.ts'
+  // (1) 行为自治证据存在
+  expect(existsSync(join(repoRoot, goldenPath)), `${goldenPath} must exist`).toBe(true)
+  // (2) 金路径 host-free：不引用任何 host-* 控制面包 / host-control / aiworker-host 二进制
+  const source = read(goldenPath)
+  for (const hostRef of ['@zonease/aiworker-host-', 'host-control', 'aiworker-host '])
+    expect(source, `golden path must not reference Host plane via ${hostRef}`).not.toContain(hostRef)
+  // (3) wired 进 test:cli（release:check 真的会跑这条自治证据）
+  const rootPkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
+  expect(rootPkg.scripts?.['test:cli'] ?? '', 'test:cli must run the standalone golden path').toContain('freeform-golden-path.test.ts')
+})
