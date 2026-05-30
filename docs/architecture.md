@@ -34,7 +34,7 @@ tmp/refactor decisions are evidence until promoted. Accepted refactor decisions
 become active authority only when they are represented in the canonical docs,
 guarded by tests, or both.
 
-- docs/architecture.md owns product position, Host/Soul ownership, monorepo
+- docs/architecture.md owns worker autonomy, Host control-plane ownership, monorepo
   boundaries, data ownership, Freeform v1 scope, and destructive migration
   constraints.
 - docs/protocol.md owns descriptor, broker route, configuration envelope, mounted workbench, and app-owned API contracts.
@@ -42,6 +42,7 @@ guarded by tests, or both.
 - docs/soul-authoring.md owns SDK authoring, convention discovery, build output,
   native MCP source layout, and Freeform source contract.
 - docs/testing.md owns the coverage ledger and guardrail mapping.
+- worker-control-protocol owns the transport-agnostic Host↔Worker control contract.
 
 ## Ownership
 
@@ -145,9 +146,10 @@ transport; non-web transports are reserved and must not be hardcoded out.
 
 ## Runtime Boundary
 
-Session lifecycle is separate from native engine execution. A session is a Host
-locator for worker, workspace locator, selected capability, and invocation
-references. Engine execution lives in `engine_invocations`.
+Session lifecycle is separate from native engine execution. A session is a Worker locator for workspace locator, selected capability, and
+invocation references. Engine execution lives in `engine_invocations` and is
+owned by the Worker. The Worker, not Host, prepares engine invocation context and observes native
+engine output.
 
 Follow-up is session-level:
 
@@ -184,18 +186,16 @@ do not block the v1 framework loop.
 
 Contract and guardrails come first:
 
-1. Promote canonical docs.
-2. Rewrite `AGENTS.md` as a short bootstrap.
-3. Add contract test skeleton before deleting old authority.
-4. Create target package skeleton.
-5. Move protocol/schema.
-6. Move daemon/API boundary.
-7. Build strict Host metadata schema.
-8. Build SDK descriptor and Freeform Soul.
-9. Build projection and engine bridge.
-10. Wire Web mount.
-11. Delete old authority and paths.
-12. Migrate QA/HR as samples.
+1. Promote canonical docs and doc gates to worker autonomy.
+2. Add red inversion guards (G1-G6).
+3. Create target package skeletons: worker-control-protocol, host-control, apps/host-cli, apps/host-web.
+4. Rename host-runtime to worker-runtime, host-daemon to worker-daemon, apps/cli to worker-cli, apps/web to worker-web.
+5. Carve the host/worker split points into worker-runtime and host-control.
+6. Implement the minimal Host↔Worker control contract.
+7. Wire host-web management mount of the Worker configuration micro-app.
+8. Make the Worker standalone golden path pass with Host absent.
+9. Delete old authority and old names.
+10. Update roadmap and memory.
 
 Do not modify the new architecture to satisfy old E2E assumptions. Legacy
 app-local adapter exports are removed, not migrated.
