@@ -1,5 +1,5 @@
 export const hostRuntimePackage = {
-  name: '@zonease/aiworker-host-runtime',
+  name: '@zonease/aiworker-worker-runtime',
   owns: [
     'worker-locator',
     'workspace-locator',

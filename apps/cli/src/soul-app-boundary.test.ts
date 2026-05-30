@@ -18,10 +18,10 @@ describe('scanPrivateImports', () => {
   it('detects Host-private import in a directory outside the legacy 4-dir allowlist', () => {
     const root = makeApp({
       'soul.config.ts': 'export default {}\n',
-      'lib/api.ts': `import { createRuntimeForWorker } from '@zonease/aiworker-host-runtime'\n`,
+      'lib/api.ts': `import { createRuntimeForWorker } from '@zonease/aiworker-worker-runtime'\n`,
     })
     const issues = scanPrivateImports(root)
-    expect(issues.some(issue => issue.importPath === '@zonease/aiworker-host-runtime')).toBe(true)
+    expect(issues.some(issue => issue.importPath === '@zonease/aiworker-worker-runtime')).toBe(true)
   })
 
   it('does not false-positive on unrelated packages whose name contains a host root substring', () => {
@@ -78,16 +78,16 @@ describe('scanPrivateImports', () => {
   // #6: scanPrivateImports skips test source files.
   it('does not flag Host-private imports in test source files', () => {
     const root = makeApp({
-      'src/x.test.ts': `import { createRuntimeForWorker } from '@zonease/aiworker-host-runtime'\n`,
+      'src/x.test.ts': `import { createRuntimeForWorker } from '@zonease/aiworker-worker-runtime'\n`,
     })
     expect(scanPrivateImports(root)).toEqual([])
   })
 
   it('still flags Host-private imports in non-test source files (regression)', () => {
     const root = makeApp({
-      'src/x.ts': `import { createRuntimeForWorker } from '@zonease/aiworker-host-runtime'\n`,
+      'src/x.ts': `import { createRuntimeForWorker } from '@zonease/aiworker-worker-runtime'\n`,
     })
     const issues = scanPrivateImports(root)
-    expect(issues.some(issue => issue.importPath === '@zonease/aiworker-host-runtime')).toBe(true)
+    expect(issues.some(issue => issue.importPath === '@zonease/aiworker-worker-runtime')).toBe(true)
   })
 })

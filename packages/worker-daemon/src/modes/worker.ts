@@ -1,4 +1,4 @@
-import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions } from '@zonease/aiworker-host-runtime'
+import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions } from '@zonease/aiworker-worker-runtime'
 import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppEngineTarget } from '@zonease/aiworker-soul-protocol'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
@@ -22,7 +22,7 @@ import {
   resolveLocalCliEngine,
   soulAppServiceEnv,
   workerEnv,
-} from '@zonease/aiworker-host-runtime'
+} from '@zonease/aiworker-worker-runtime'
 import {
   AppError,
   isLoopbackMountedServiceUrl,

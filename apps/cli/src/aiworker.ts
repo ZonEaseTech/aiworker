@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import type { HostRuntime, LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext } from '@zonease/aiworker-host-runtime'
+import type { HostRuntime, LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext } from '@zonease/aiworker-worker-runtime'
 import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { SoulDiscovery, SoulValidationIssue } from '../../../packages/soul-app-sdk/src/index'
@@ -20,7 +20,7 @@ import {
   readFrozenSessionEngine,
   resolveLocalCliEngine,
   scanLocalEngines,
-} from '@zonease/aiworker-host-runtime'
+} from '@zonease/aiworker-worker-runtime'
 import {
   parseSoulDescriptorV1,
   SOUL_DESCRIPTOR_OUTPUT_PATH,
@@ -905,7 +905,7 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
   if (updateNotice) {
     consola.info(`[aiworker-daemon] update available: ${updateNotice.currentVersion} -> ${updateNotice.targetVersion}; run ${updateNotice.command}`)
   }
-  const { bootstrapWorkerApp, localApiExposureWarning } = await import('@zonease/aiworker-host-daemon/bootstrap')
+  const { bootstrapWorkerApp, localApiExposureWarning } = await import('@zonease/aiworker-worker-daemon/bootstrap')
   const { app, port } = await bootstrapWorkerApp({
     officialAppsRoot: resolveCliOfficialAppsRoot(),
     runtimeVersion: packageJson.version,

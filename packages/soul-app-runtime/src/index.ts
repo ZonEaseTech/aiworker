@@ -2,7 +2,7 @@ import type {
   HostSoulCatalog,
   LocalExecutor,
   LocalWorkerRuntime,
-} from '@zonease/aiworker-host-runtime'
+} from '@zonease/aiworker-worker-runtime'
 import type {
   HostedSoulApp,
   SoulAppEngineAssets,
@@ -18,7 +18,7 @@ import {
   enableSoulApp,
   installSoulDescriptor,
   listHostSoulCatalog,
-} from '@zonease/aiworker-host-runtime'
+} from '@zonease/aiworker-worker-runtime'
 import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
 import {
   closeWorkerDb,
@@ -326,7 +326,7 @@ export type {
   LocalExecutorInput,
   LocalExecutorResult,
   LocalWorkerRuntime,
-} from '@zonease/aiworker-host-runtime'
+} from '@zonease/aiworker-worker-runtime'
 
 export function mountSessionApiProxy(request: Request, options: {
   hostApiBaseUrl: string

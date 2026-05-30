@@ -1,7 +1,7 @@
 import { access, chmod, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { OFFICIAL_SOUL_APPS } from '@zonease/aiworker-host-runtime'
+import { OFFICIAL_SOUL_APPS } from '@zonease/aiworker-worker-runtime'
 
 const cliDir = resolve(import.meta.dirname, '..')
 const repoRoot = resolve(cliDir, '..', '..')

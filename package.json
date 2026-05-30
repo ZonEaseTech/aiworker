@@ -22,7 +22,7 @@
     "lint": "eslint . && bun scripts/check-soul-app-boundaries.ts && bun run ui:check && bun run docs:check",
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
-    "build": "bun run --filter '@zonease/aiworker-host-daemon' build && bun run --filter '@zonease/aiworker-web' build && bun run --filter '@zonease/aiworker-cli' build:bundle",
+    "build": "bun run --filter '@zonease/aiworker-worker-daemon' build && bun run --filter '@zonease/aiworker-web' build && bun run --filter '@zonease/aiworker-cli' build:bundle",
     "smoke:dist-release": "bun run --filter '@zonease/aiworker-cli' smoke:dist-release",
     "smoke:standalone-release": "bun apps/cli/scripts/smoke-standalone-release.ts",
     "smoke:standalone-runtime": "bun apps/cli/scripts/smoke-standalone-runtime.ts",

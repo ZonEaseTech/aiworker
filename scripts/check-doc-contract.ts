@@ -428,14 +428,14 @@ requireIncludes('docs/testing.md', [
   'packages/soul-protocol/src/\n  descriptor-v1.test.ts\n  index.test.ts\n  lib/ids.test.ts\n  mounted-routing-contract.test.ts',
   'SDK tests:',
   'packages/soul-app-sdk/src/\n  descriptor-build.test.ts',
-  'Host runtime tests:',
-  'packages/host-runtime/src/\n  config/worker.test.ts\n  host/identity-provider.test.ts\n  host/runtime.test.ts\n  index.test.ts\n  soul-app/registry.test.ts\n  worker/engine-env.test.ts\n  worker/executor.test.ts\n  worker/local-engine-resolver.test.ts\n  worker/runtime.test.ts',
+  'Worker runtime tests:',
+  'packages/worker-runtime/src/\n  config/worker.test.ts\n  host/identity-provider.test.ts\n  host/runtime.test.ts\n  index.test.ts\n  soul-app/registry.test.ts\n  worker/engine-env.test.ts\n  worker/executor.test.ts\n  worker/local-engine-resolver.test.ts\n  worker/runtime.test.ts',
   'Engine projection tests:',
   'packages/engine-projection/src/\n  index.test.ts\n  projection-contract.test.ts\n  workspace-projection.test.ts',
   'Engine bridge tests:',
   'packages/engine-bridge/src/\n  bridge-contract.test.ts\n  index.test.ts',
-  'Host daemon tests:',
-  'packages/host-daemon/src/\n  modes/worker.local.test.ts\n  shared/middleware/error-handler.test.ts',
+  'Worker daemon tests:',
+  'packages/worker-daemon/src/\n  modes/worker.local.test.ts\n  shared/middleware/error-handler.test.ts',
   'Boundary guard tests:',
   'scripts/check-soul-app-boundaries.test.ts',
   'CLI and browser tests:',
@@ -445,7 +445,7 @@ requireIncludes('docs/testing.md', [
   'CLI release packaging contract tests:',
   'apps/cli/src/official-freeform-descriptor.test.ts\napps/cli/scripts/build-publish-manifest.test.ts\napps/cli/scripts/package-release-bundles.test.ts',
   'OpenAPI and redaction contract tests:',
-  'packages/host-daemon/src/modes/worker.local.test.ts\npackages/storage-sqlite/src/worker/index.test.ts\npackages/engine-bridge/src/bridge-contract.test.ts\npackages/engine-projection/src/workspace-projection.test.ts',
+  'packages/worker-daemon/src/modes/worker.local.test.ts\npackages/storage-sqlite/src/worker/index.test.ts\npackages/engine-bridge/src/bridge-contract.test.ts\npackages/engine-projection/src/workspace-projection.test.ts',
   'The v1 browser proof is Freeform-only',
   'Host Web opens worker/workspace/session locator\n-> resolves Freeform workbench\n-> mounts via micro-app router-mode=search\n-> SDK common workbench renders\n-> verifies the first invocation and starts a session-level follow-up from browser context\n-> shows bridge event refs to the mounted surface\n-> cancels a queued invocation without changing session lifecycle\n-> reattaches and reconciles engine bridge events\n-> refreshes projection receipts from mounted context\n-> applies worker config overlay and observes worker-overlay projection receipts\n-> archives the session and rejects follow-up\n-> archives workspace and worker lifecycle, blocking new work on archived worker',
   'Do not modify the new architecture to satisfy old E2E assumptions. Delete or\nrewrite tests that require Host to import Soul source, expect old daemon product\nbackend behavior, or encode `router-mode="pure"` as production behavior.',
@@ -587,7 +587,7 @@ for (const requiredBrowserProofScopeText of [
   }
 }
 for (const requiredAppOwnedApiCoverageText of [
-  '| App-owned API proxy | `docs/protocol.md`, `docs/runtime.md` | host-daemon app-owned API proxy test and docs check | docs+tests |',
+  '| App-owned API proxy | `docs/protocol.md`, `docs/runtime.md` | worker-daemon app-owned API proxy test and docs check | docs+tests |',
 ]) {
   if (!testingDoc.includes(requiredAppOwnedApiCoverageText)) {
     issues.push({
@@ -599,7 +599,7 @@ for (const requiredAppOwnedApiCoverageText of [
 const workerConfigCoverageNeedles: Array<[string, string]> = [
   [
     'docs/testing.md',
-    '| Worker config envelope and Host metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, host-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |',
+    '| Worker config envelope and Host metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, worker-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |',
   ],
   [
     'docs/protocol.md',
@@ -622,15 +622,15 @@ const workerConfigCoverageNeedles: Array<[string, string]> = [
     'Invalid Host worker config envelope updatedBy',
   ],
   [
-    'packages/host-daemon/src/modes/worker.local.test.ts',
+    'packages/worker-daemon/src/modes/worker.local.test.ts',
     'stores worker config envelopes with secret references but rejects literal secrets',
   ],
   [
-    'packages/host-daemon/src/modes/worker.local.test.ts',
+    'packages/worker-daemon/src/modes/worker.local.test.ts',
     'WORKER_CONFIG_SECRET',
   ],
   [
-    'packages/host-daemon/src/modes/worker.local.test.ts',
+    'packages/worker-daemon/src/modes/worker.local.test.ts',
     'config.value.updatedBy).toBe(\'web\')',
   ],
   [
@@ -793,8 +793,8 @@ if (packageJson.scripts?.['test:protocol'] !== 'bun run --filter \'@zonease/aiwo
   issues.push({ file: 'package.json', message: 'test:protocol must run the soul-protocol package test' })
 const testCliScript = packageJson.scripts?.['test:cli'] ?? ''
 const testBrowserFreeformScript = packageJson.scripts?.['test:browser:freeform'] ?? ''
-const hostDaemonOpenApi = read('packages/host-daemon/src/modes/worker/openapi.ts')
-const hostDaemonWorkerLocalTest = read('packages/host-daemon/src/modes/worker.local.test.ts')
+const hostDaemonOpenApi = read('packages/worker-daemon/src/modes/worker/openapi.ts')
+const hostDaemonWorkerLocalTest = read('packages/worker-daemon/src/modes/worker.local.test.ts')
 const freeformCliBrowserProof = read('tests/browser/freeform-cli-golden-path.spec.ts')
 const freeformBuildScript = 'bun run --filter \'@zonease/aiworker-freeform\' build'
 const webBuildScript = 'bun run --filter \'@zonease/aiworker-web\' build'
@@ -825,7 +825,7 @@ for (const needle of [
 ]) {
   if (!hostDaemonWorkerLocalTest.includes(needle)) {
     issues.push({
-      file: 'packages/host-daemon/src/modes/worker.local.test.ts',
+      file: 'packages/worker-daemon/src/modes/worker.local.test.ts',
       message: 'custom descriptor workbench must bypass SDK common fallback',
     })
   }
@@ -837,7 +837,7 @@ requireWorkerConfigBrokerRoutesComplete([
     'PATCH  /api/workers/:workerId/config/:configKey',
     'POST   /api/workers/:workerId/config/:configKey/archive',
   ]],
-  ['packages/host-daemon/src/modes/worker/openapi.ts', hostDaemonOpenApi, [
+  ['packages/worker-daemon/src/modes/worker/openapi.ts', hostDaemonOpenApi, [
     'path: \'/api/workers/{workerId}/config\'',
     'path: \'/api/workers/{workerId}/config/{configKey}\'',
     'path: \'/api/workers/{workerId}/config/{configKey}/archive\'',
@@ -846,7 +846,7 @@ requireWorkerConfigBrokerRoutesComplete([
     'method: \'patch\'',
     'method: \'post\'',
   ]],
-  ['packages/host-daemon/src/modes/worker.local.test.ts', hostDaemonWorkerLocalTest, [
+  ['packages/worker-daemon/src/modes/worker.local.test.ts', hostDaemonWorkerLocalTest, [
     '[\'get\', \'/api/workers/{workerId}/config\']',
     '[\'put\', \'/api/workers/{workerId}/config/{configKey}\']',
     '[\'patch\', \'/api/workers/{workerId}/config/{configKey}\']',
@@ -860,7 +860,7 @@ requireAppOwnedApiProxyGuardrails([
     'strips client credentials before proxying',
     'strips app-owned cookies plus Host mount credentials before returning',
   ]],
-  ['packages/host-daemon/src/modes/worker.local.test.ts', hostDaemonWorkerLocalTest, [
+  ['packages/worker-daemon/src/modes/worker.local.test.ts', hostDaemonWorkerLocalTest, [
     'client-spoofed-token',
     'hasAuthorization: false',
     'hasCookie: false',
@@ -905,7 +905,7 @@ if (packageJson.scripts?.['docs:check'] !== 'bun scripts/check-doc-contract.ts')
   issues.push({ file: 'package.json', message: 'docs:check must run scripts/check-doc-contract.ts' })
 if (packageJson.scripts?.['ui:check'] !== 'bun scripts/check-web-ui-components.ts')
   issues.push({ file: 'package.json', message: 'ui:check must run scripts/check-web-ui-components.ts' })
-if (!packageJson.scripts?.build?.includes('@zonease/aiworker-host-daemon'))
+if (!packageJson.scripts?.build?.includes('@zonease/aiworker-worker-daemon'))
   issues.push({ file: 'package.json', message: 'build must include the final host-daemon package' })
 if (packageJson.scripts?.build?.includes('@zonease/aiworker-api'))
   issues.push({ file: 'package.json', message: 'build must not reference retired apps/api package' })

@@ -1,4 +1,4 @@
-import type { LocalWorkerRuntimeOptions } from '@zonease/aiworker-host-runtime'
+import type { LocalWorkerRuntimeOptions } from '@zonease/aiworker-worker-runtime'
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

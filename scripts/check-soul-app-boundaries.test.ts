@@ -67,7 +67,7 @@ describe('check-soul-app-boundaries', () => {
       writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: '@demo/soul' }))
       writeFileSync(
         join(appDir, 'product/capabilities/default/bad.ts'),
-        'import { thing } from "@zonease/aiworker-host-runtime"\nexport const y = thing\n',
+        'import { thing } from "@zonease/aiworker-worker-runtime"\nexport const y = thing\n',
       )
 
       const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
@@ -77,7 +77,7 @@ describe('check-soul-app-boundaries', () => {
 
       expect(result.status).not.toBe(0)
       expect(result.stderr).toContain('souls/demo-soul/product/capabilities/default/bad.ts')
-      expect(result.stderr).toContain('@zonease/aiworker-host-runtime')
+      expect(result.stderr).toContain('@zonease/aiworker-worker-runtime')
     }
     finally {
       rmSync(tempRoot, { force: true, recursive: true })
@@ -120,7 +120,7 @@ describe('check-soul-app-boundaries', () => {
       writeFileSync(join(appDir, 'soul.config.ts'), 'export default {}\n')
       writeFileSync(
         join(appDir, 'product/api/index.test.ts'),
-        'import { thing } from "@zonease/aiworker-host-runtime"\nexport const y = thing\n',
+        'import { thing } from "@zonease/aiworker-worker-runtime"\nexport const y = thing\n',
       )
 
       const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {

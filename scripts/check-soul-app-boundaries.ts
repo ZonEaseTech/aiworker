@@ -20,9 +20,9 @@ const soulRoot = path.join(repoRoot, 'souls')
 const completionAudit = process.argv.includes('--completion-audit')
 const hostPrivatePackages = [
   '@zonease/aiworker-cli',
-  '@zonease/aiworker-host-runtime',
+  '@zonease/aiworker-worker-runtime',
   '@zonease/aiworker-fs-layout',
-  '@zonease/aiworker-host-daemon',
+  '@zonease/aiworker-worker-daemon',
   '@zonease/aiworker-soul-protocol',
   '@zonease/aiworker-storage-sqlite',
   '@zonease/aiworker-web',
@@ -37,8 +37,8 @@ const hostPrivateRoots = [
   'apps/cli',
   'apps/web',
   'packages/fs-layout',
-  'packages/host-daemon',
-  'packages/host-runtime',
+  'packages/worker-daemon',
+  'packages/worker-runtime',
   'packages/soul-protocol',
   'packages/storage-sqlite',
 ]

@@ -183,8 +183,8 @@ apps/
 souls/
   aiworker-freeform/ v1 strong-acceptance descriptor Soul
 packages/
-  host-runtime/      Host locator/runtime orchestration
-  host-daemon/       local daemon API and Worker Web host
+  worker-runtime/      Host locator/runtime orchestration
+  worker-daemon/       local daemon API and Worker Web host
   soul-protocol/     descriptor and shared Host/Soul protocol
   storage-sqlite/    worker.db schema, migrations and repositories
   fs-layout/         AIWORKER_HOME, worker and workspace path helpers
@@ -215,8 +215,8 @@ bun run build
 聚焦命令：
 
 ```bash
-bun run --filter '@zonease/aiworker-host-runtime' test
-bun run --filter '@zonease/aiworker-host-daemon' build
+bun run --filter '@zonease/aiworker-worker-runtime' test
+bun run --filter '@zonease/aiworker-worker-daemon' build
 bun run --filter '@zonease/aiworker-web' build
 bun run --filter '@zonease/aiworker-cli' build:bundle
 ```

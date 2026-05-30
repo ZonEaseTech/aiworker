@@ -41,10 +41,10 @@ packages/soul-app-sdk/src/
   descriptor-build.test.ts
 ```
 
-Host runtime tests:
+Worker runtime tests:
 
 ```text
-packages/host-runtime/src/
+packages/worker-runtime/src/
   config/worker.test.ts
   host/identity-provider.test.ts
   host/runtime.test.ts
@@ -73,10 +73,10 @@ packages/engine-bridge/src/
   index.test.ts
 ```
 
-Host daemon tests:
+Worker daemon tests:
 
 ```text
-packages/host-daemon/src/
+packages/worker-daemon/src/
   modes/worker.local.test.ts
   shared/middleware/error-handler.test.ts
 ```
@@ -117,7 +117,7 @@ apps/cli/scripts/package-release-bundles.test.ts
 OpenAPI and redaction contract tests:
 
 ```text
-packages/host-daemon/src/modes/worker.local.test.ts
+packages/worker-daemon/src/modes/worker.local.test.ts
 packages/storage-sqlite/src/worker/index.test.ts
 packages/engine-bridge/src/bridge-contract.test.ts
 packages/engine-projection/src/workspace-projection.test.ts
@@ -154,13 +154,13 @@ Coverage status values:
 | Session lifecycle and invocation state split | `docs/runtime.md` | architecture tests and engine bridge tests | docs+tests |
 | Protocol implementation contract | `docs/protocol.md` | docs check and architecture tests | docs+tests |
 | Runtime and bridge contract | `docs/runtime.md` | engine bridge and projection tests | docs+tests |
-| OpenAPI and redaction boundary | `docs/runtime.md`, `AGENTS.md` | host-daemon OpenAPI tests, storage redaction tests, engine bridge redaction tests, projection receipt tests | docs+tests |
-| App-owned API proxy | `docs/protocol.md`, `docs/runtime.md` | host-daemon app-owned API proxy test and docs check | docs+tests |
-| Worker config envelope and Host metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, host-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |
+| OpenAPI and redaction boundary | `docs/runtime.md`, `AGENTS.md` | worker-daemon OpenAPI tests, storage redaction tests, engine bridge redaction tests, projection receipt tests | docs+tests |
+| App-owned API proxy | `docs/protocol.md`, `docs/runtime.md` | worker-daemon app-owned API proxy test and docs check | docs+tests |
+| Worker config envelope and Host metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, worker-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |
 | Soul authoring contract | `docs/soul-authoring.md` | SDK and Freeform contract tests | docs+tests |
 | Host metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
 | Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
-| BYOK execution-mode deviation and secret boundary | `docs/runtime.md` | settings literal-secret rejection test, host-daemon worker config tests, docs check | docs+tests |
+| BYOK execution-mode deviation and secret boundary | `docs/runtime.md` | settings literal-secret rejection test, worker-daemon worker config tests, docs check | docs+tests |
 
 ## Worker Autonomy Inversion Guards
 

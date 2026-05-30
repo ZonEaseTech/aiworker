@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { soulAppServiceEnv } from '@zonease/aiworker-host-runtime'
+import { soulAppServiceEnv } from '@zonease/aiworker-worker-runtime'
 import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
 import {
   appendSessionEvent,

@@ -31,7 +31,7 @@ describe('Freeform mounted workbench contract', () => {
   })
 
   test('Host daemon mount resolver is locator-driven and does not expose source paths', () => {
-    const source = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const source = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
 
     expect(source).toContain('app.get(\'/api/mount/workbench\'')
     expect(source).toContain('c.req.query(\'workerId\')')
@@ -56,7 +56,7 @@ describe('Freeform mounted workbench contract', () => {
   })
 
   test('mounted surface scopes stay protocol-generic and do not encode review domain concepts', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const web = readRepoFile('apps/web/src/worker/studio/mounted-surface.tsx')
     const protocol = readRepoFile('packages/soul-protocol/src/soul-app/manifest.ts')
     const microAppProtocol = readRepoFile('packages/soul-protocol/src/soul-app/micro-app.ts')

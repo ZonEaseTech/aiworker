@@ -260,9 +260,9 @@ describe('destructive refactor contract bootstrap', () => {
   test('worker lifecycle uses archive status without disabled or paused worker states', () => {
     const protocol = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
     const storageSchema = readRepoFile('packages/storage-sqlite/src/worker/schema.ts')
-    const daemonSchemas = readRepoFile('packages/host-daemon/src/modes/worker/schemas.ts')
+    const daemonSchemas = readRepoFile('packages/worker-daemon/src/modes/worker/schemas.ts')
     const cliSource = readRepoFile('apps/cli/src/aiworker.ts')
-    const daemonSource = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemonSource = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const cliArchiveWorker = cliSource.slice(
       cliSource.indexOf('async function archiveWorkerCommand'),
       cliSource.indexOf('async function deleteWorkerCommand'),
@@ -287,7 +287,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('runtime doc promotes projection, assets CRUD, and bridge hard rules', () => {
     const runtime = readRepoFile('docs/runtime.md')
-    const runtimeTests = readRepoFile('packages/host-runtime/src/worker/runtime.test.ts')
+    const runtimeTests = readRepoFile('packages/worker-runtime/src/worker/runtime.test.ts')
 
     expect(runtime).toContain('Worker orchestrates projection; engine-projection executes projection; SDK and protocol define projection inputs.')
     expect(runtime).toContain('Runtime skills, MCP, and entry-file CRUD')
@@ -300,8 +300,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(runtime).toContain('process.lost')
     expect(runtime).toContain('Delayed hard kill must never terminate a newer invocation.')
     expect(readRepoFile('docs/protocol.md')).toContain('POST   /api/engine/invocations/:invocationId/reconcile')
-    expect(readRepoFile('packages/host-daemon/src/modes/worker.ts')).toContain('/api/engine/invocations/:invocationId/reconcile')
-    expect(readRepoFile('packages/host-daemon/src/modes/worker/openapi.ts')).toContain('/api/engine/invocations/{invocationId}/reconcile')
+    expect(readRepoFile('packages/worker-daemon/src/modes/worker.ts')).toContain('/api/engine/invocations/:invocationId/reconcile')
+    expect(readRepoFile('packages/worker-daemon/src/modes/worker/openapi.ts')).toContain('/api/engine/invocations/{invocationId}/reconcile')
     expect(runtimeTests).toContain('assertMissingNativeResumeFailureProof')
   })
 
@@ -309,9 +309,9 @@ describe('destructive refactor contract bootstrap', () => {
     const currentSources = [
       'packages/storage-sqlite/src/worker/schema.ts',
       latestNumberedFile('packages/storage-sqlite/drizzle/worker/meta', '_snapshot.json'),
-      'packages/host-daemon/src/modes/worker.ts',
-      'packages/host-daemon/src/modes/worker/openapi.ts',
-      'packages/host-daemon/src/modes/worker/schemas.ts',
+      'packages/worker-daemon/src/modes/worker.ts',
+      'packages/worker-daemon/src/modes/worker/openapi.ts',
+      'packages/worker-daemon/src/modes/worker/schemas.ts',
     ]
     const forbiddenPatterns = [
       new RegExp(['worker', 'engine', 'invocations'].join('_')),
@@ -337,7 +337,7 @@ describe('destructive refactor contract bootstrap', () => {
     const authoring = readRepoFile('docs/soul-authoring.md')
     const soulAppEngineAssets = readRepoFile('packages/soul-protocol/src/soul-app/manifest.ts')
     const registry = readRepoFile('packages/soul-protocol/src/soul-app/registry.ts')
-    const hostRuntimeRegistryTest = readRepoFile('packages/host-runtime/src/soul-app/registry.test.ts')
+    const hostRuntimeRegistryTest = readRepoFile('packages/worker-runtime/src/soul-app/registry.test.ts')
 
     expect(protocol).toContain('dist/soul.descriptor.json')
     expect(protocol).toContain('router-mode="search"')
@@ -424,8 +424,8 @@ describe('destructive refactor contract bootstrap', () => {
   test('capability template projections stay generic and do not expose review rubric fields', () => {
     const activeSources = [
       'packages/soul-protocol/src/soul-app/registry.ts',
-      'packages/host-runtime/src/soul-app/registry.ts',
-      'packages/host-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/soul-app/registry.ts',
+      'packages/worker-runtime/src/host/runtime.ts',
       'packages/soul-app-runtime/src/index.ts',
       'apps/web/src/features/local-workspace/model-types.ts',
     ]
@@ -543,8 +543,8 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('daemon and Web app lifecycle surfaces use archive without disable alias', () => {
     const sources = [
-      'packages/host-daemon/src/modes/worker.ts',
-      'packages/host-daemon/src/modes/worker.local.test.ts',
+      'packages/worker-daemon/src/modes/worker.ts',
+      'packages/worker-daemon/src/modes/worker.local.test.ts',
       'apps/web/src/features/local-workspace/api/workspace-data.ts',
       'apps/web/src/features/settings/components/settings-dialog.tsx',
       'apps/web/src/worker/__tests__/worker-studio.test.tsx',
@@ -567,14 +567,14 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon app list surface does not preserve local lifecycle alias', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
 
     expect(daemon).toContain('app.get(\'/api/app-installation/apps\'')
     expect(daemon).not.toContain('app.get(\'/api/local/apps\'')
   })
 
   test('Web derives Host-visible souls from app-installation apps without local souls alias', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const workspaceData = readRepoFile('apps/web/src/features/local-workspace/api/workspace-data.ts')
     const workspaceDataTest = readRepoFile('apps/web/src/features/local-workspace/api/workspace-data.test.ts')
     const workerStudioTest = readRepoFile('apps/web/src/worker/__tests__/worker-studio.test.tsx')
@@ -588,7 +588,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon app installation surface does not preserve local lifecycle aliases', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
 
     expect(daemon).toContain('app.post(\'/api/app-installation/install\'')
     expect(daemon).toContain('app.post(\'/api/app-installation/apps/:appId/enable\'')
@@ -599,8 +599,8 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon app-owned API proxy does not preserve local catch-all alias', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
-    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
+    const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')
     const protocol = readRepoFile('docs/protocol.md')
 
@@ -621,7 +621,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon worker collection surface does not preserve local broker aliases', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
 
     expect(daemon).toContain('app.get(\'/api/workers\'')
     expect(daemon).toContain('app.post(\'/api/workers\'')
@@ -630,7 +630,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon worker member surface does not preserve local broker aliases', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
 
     expect(daemon).toContain('app.get(\'/api/workers/:workerId\'')
     expect(daemon).toContain('app.patch(\'/api/workers/:workerId\'')
@@ -639,7 +639,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon worker overlay read is served by canonical worker config', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const webOverlayApi = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlays.ts')
 
     expect(daemon).toContain('app.get(\'/api/workers/:workerId/config\'')
@@ -650,7 +650,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon capability surface does not preserve worker-local broker aliases', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
 
     expect(daemon).toContain('app.get(\'/api/capabilities\'')
@@ -661,8 +661,8 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon workspace locator collection surface does not preserve local broker alias', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
-    const daemonSchemas = readRepoFile('packages/host-daemon/src/modes/worker/schemas.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
+    const daemonSchemas = readRepoFile('packages/worker-daemon/src/modes/worker/schemas.ts')
     const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
     const mountedWorkspaceProxy = soulAppRuntime.slice(
       soulAppRuntime.indexOf('url.pathname === \'/api/workspaces\''),
@@ -680,7 +680,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon workspace locator member surface does not preserve local broker aliases', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
 
     expect(daemon).toContain('app.get(\'/api/workspace-locators/:workspaceId\',')
     expect(daemon).toContain('app.patch(\'/api/workspace-locators/:workspaceId\',')
@@ -703,7 +703,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon session collection surface does not preserve local broker alias', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
     const mountedSessionProxy = soulAppRuntime.slice(
       soulAppRuntime.indexOf('url.pathname === \'/api/sessions\''),
@@ -722,7 +722,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon session read surface does not preserve local broker aliases', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
 
     expect(daemon).toContain('app.get(\'/api/sessions/:sessionId\',')
     expect(daemon).not.toContain('app.get(\'/api/local/sessions/:sessionId\',')
@@ -730,7 +730,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon projection refresh surface does not preserve local broker alias', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const webProjectionApi = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlays.ts')
     const projectWorkspaceProjection = webProjectionApi.slice(
       webProjectionApi.indexOf('export function projectWorkerWorkspaceOverlay'),
@@ -743,7 +743,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('daemon engine target broker surface does not preserve local settings engines aliases', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const webSettingsApi = readRepoFile('apps/web/src/features/local-workspace/api/settings.ts')
     const webWorkspaceDataApi = readRepoFile('apps/web/src/features/local-workspace/api/workspace-data.ts')
 
@@ -769,7 +769,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('mounted session events are derived without daemon local broker aliases', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
     const mountedSessionEventsProxy = soulAppRuntime.slice(
       soulAppRuntime.indexOf('const sessionEventsMatch'),
@@ -792,11 +792,11 @@ describe('destructive refactor contract bootstrap', () => {
       'apps/web/src/features/i18n/locales/de.ts',
       'apps/web/src/features/i18n/locales/ja.ts',
       'apps/web/src/features/settings/components/settings-dialog.tsx',
-      'packages/host-daemon/src/modes/worker.ts',
-      'packages/host-runtime/src/host/runtime.ts',
-      'packages/host-runtime/src/index.ts',
-      'packages/host-runtime/src/soul-app/official.ts',
-      'packages/host-runtime/src/soul-app/registry.ts',
+      'packages/worker-daemon/src/modes/worker.ts',
+      'packages/worker-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/index.ts',
+      'packages/worker-runtime/src/soul-app/official.ts',
+      'packages/worker-runtime/src/soul-app/registry.ts',
       'packages/soul-protocol/src/soul-app/protocol.ts',
     ].map(path => [path, readRepoFile(path)] as const)
     const forbidden = [
@@ -816,8 +816,8 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('Host identity grants name the broker API without local route namespace residue', () => {
-    const identityProvider = readRepoFile('packages/host-runtime/src/host/identity-provider.ts')
-    const identityProviderTest = readRepoFile('packages/host-runtime/src/host/identity-provider.test.ts')
+    const identityProvider = readRepoFile('packages/worker-runtime/src/host/identity-provider.ts')
+    const identityProviderTest = readRepoFile('packages/worker-runtime/src/host/identity-provider.test.ts')
 
     expect(identityProvider).toContain('target: \'api/broker\'')
     expect(identityProvider).not.toContain('target: \'api/local\'')
@@ -855,9 +855,9 @@ describe('destructive refactor contract bootstrap', () => {
   test('session creation surfaces do not accept Host-owned context text', () => {
     const sources = [
       'apps/cli/src/aiworker.ts',
-      'packages/host-daemon/src/modes/worker/schemas.ts',
-      'packages/host-daemon/src/modes/worker.ts',
-      'packages/host-runtime/src/worker/runtime.ts',
+      'packages/worker-daemon/src/modes/worker/schemas.ts',
+      'packages/worker-daemon/src/modes/worker.ts',
+      'packages/worker-runtime/src/worker/runtime.ts',
       'packages/soul-protocol/src/local-workspace.ts',
       'packages/storage-sqlite/src/worker/index.ts',
     ].map(path => [path, readRepoFile(path)] as const)
@@ -884,7 +884,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('engine invocation prompts use capability language without retired template copy', () => {
     const sources = [
-      'packages/host-runtime/src/worker/runtime.ts',
+      'packages/worker-runtime/src/worker/runtime.ts',
     ].map(path => [path, readRepoFile(path)] as const)
     const forbidden = [
       'Capability template:',
@@ -912,7 +912,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('local broker capability routes do not preserve retired template route aliases', () => {
     const activeSources = [
-      'packages/host-daemon/src/modes/worker.ts',
+      'packages/worker-daemon/src/modes/worker.ts',
       'packages/soul-app-runtime/src/index.ts',
       'apps/cli/scripts/smoke-dist-release.ts',
       'apps/web/src/features/local-workspace/api/workspace-data.ts',
@@ -939,7 +939,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('host daemon capability route tests name the Freeform capability fixture as a capability', () => {
-    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
     const helperStart = daemonTest.indexOf('async function createFreeformWorker')
     const helperEnd = daemonTest.indexOf('async function createWorkspaceAndSession')
     const createFreeformWorkerHelper = helperStart >= 0 && helperEnd > helperStart
@@ -953,7 +953,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('host daemon workspace session fixture uses canonical broker routes', () => {
-    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
     const helperStart = daemonTest.indexOf('async function createWorkspaceLocator')
     const helperEnd = daemonTest.indexOf('function writePackagedFreeform')
     const createWorkspaceAndSessionHelper = helperStart >= 0 && helperEnd > helperStart
@@ -967,14 +967,14 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('host daemon capability helpers do not preserve retired template helper names', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const forbidden = [
       'requireTemplateForWorker',
       'enrichTemplateMetadata',
     ]
     const findings = forbidden
       .filter(snippet => daemon.includes(snippet))
-      .map(snippet => `packages/host-daemon/src/modes/worker.ts: ${snippet}`)
+      .map(snippet => `packages/worker-daemon/src/modes/worker.ts: ${snippet}`)
 
     expect(findings, 'daemon internals should use capability language for current broker helpers').toEqual([])
     expect(daemon).toContain('requireCapabilityForWorker')
@@ -985,8 +985,8 @@ describe('destructive refactor contract bootstrap', () => {
     const activeSources = [
       'packages/soul-protocol/src/soul-app/registry.ts',
       'packages/soul-protocol/src/soul-app/index.ts',
-      'packages/host-runtime/src/soul-app/registry.ts',
-      'packages/host-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/soul-app/registry.ts',
+      'packages/worker-runtime/src/host/runtime.ts',
       'packages/soul-app-runtime/src/index.ts',
       'apps/web/src/features/local-workspace/model-types.ts',
       'apps/web/src/worker/__tests__/worker-studio.test.tsx',
@@ -1001,8 +1001,8 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('Host Soul catalog exposes capabilities instead of a template collection', () => {
     const activeSources = [
-      'packages/host-runtime/src/soul-app/registry.ts',
-      'packages/host-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/soul-app/registry.ts',
+      'packages/worker-runtime/src/host/runtime.ts',
       'packages/soul-app-runtime/src/index.ts',
       'packages/soul-app-runtime/src/index.test.ts',
       'apps/web/src/worker/__tests__/worker-studio.test.tsx',
@@ -1248,8 +1248,8 @@ describe('destructive refactor contract bootstrap', () => {
   test('runtime session metadata names capability display without skillName compatibility', () => {
     const activeSources = [
       'packages/soul-app-runtime/src/index.ts',
-      'packages/host-runtime/src/worker/runtime.test.ts',
-      'packages/host-runtime/src/worker/executor.test.ts',
+      'packages/worker-runtime/src/worker/runtime.test.ts',
+      'packages/worker-runtime/src/worker/executor.test.ts',
     ]
     const findings = activeSources.flatMap((path) => {
       const source = readRepoFile(path)
@@ -1268,7 +1268,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('Host runtime session fixtures stay generic instead of preserving retired domain workflow terms', () => {
     const activeSources = [
-      'packages/host-runtime/src/worker/runtime.test.ts',
+      'packages/worker-runtime/src/worker/runtime.test.ts',
     ]
     const forbidden = [
       'candidate-screen',
@@ -1299,12 +1299,12 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/storage-sqlite/src/worker/schema.ts',
       'packages/storage-sqlite/src/worker/index.ts',
       'packages/storage-sqlite/src/worker/index.test.ts',
-      'packages/host-runtime/src/worker/runtime.ts',
-      'packages/host-runtime/src/worker/runtime.test.ts',
-      'packages/host-runtime/src/host/runtime.test.ts',
-      'packages/host-daemon/src/modes/worker.ts',
-      'packages/host-daemon/src/modes/worker/schemas.ts',
-      'packages/host-daemon/src/modes/worker.local.test.ts',
+      'packages/worker-runtime/src/worker/runtime.ts',
+      'packages/worker-runtime/src/worker/runtime.test.ts',
+      'packages/worker-runtime/src/host/runtime.test.ts',
+      'packages/worker-daemon/src/modes/worker.ts',
+      'packages/worker-daemon/src/modes/worker/schemas.ts',
+      'packages/worker-daemon/src/modes/worker.local.test.ts',
       'packages/soul-app-runtime/src/index.ts',
       'packages/soul-app-runtime/src/index.test.ts',
       'apps/cli/src/aiworker.ts',
@@ -1318,7 +1318,7 @@ describe('destructive refactor contract bootstrap', () => {
     const findings = activeSources.flatMap((path) => {
       const source = readRepoFile(path)
         .split('\n')
-        .filter(line => !(path === 'packages/host-daemon/src/modes/worker.local.test.ts'
+        .filter(line => !(path === 'packages/worker-daemon/src/modes/worker.local.test.ts'
           && (line.includes('rejects legacy session create bodies that still send capabilityTemplateId')
             || line.includes('capabilityTemplateId: FREEFORM_CAPABILITY'))))
         .filter(line => !(path === 'packages/storage-sqlite/src/worker/index.test.ts'
@@ -1337,12 +1337,12 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('Host runtime capability lookup APIs do not expose retired template helper names', () => {
     const activeSources = [
-      'packages/host-runtime/src/index.ts',
-      'packages/host-runtime/src/host/runtime.ts',
-      'packages/host-runtime/src/host/runtime.test.ts',
-      'packages/host-runtime/src/soul-app/registry.ts',
-      'packages/host-runtime/src/soul-app/registry.test.ts',
-      'packages/host-daemon/src/modes/worker.ts',
+      'packages/worker-runtime/src/index.ts',
+      'packages/worker-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/host/runtime.test.ts',
+      'packages/worker-runtime/src/soul-app/registry.ts',
+      'packages/worker-runtime/src/soul-app/registry.test.ts',
+      'packages/worker-daemon/src/modes/worker.ts',
       'apps/cli/src/aiworker.ts',
     ]
     const forbidden = [
@@ -1365,7 +1365,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('Host runtime tests use generic worker fixtures instead of retired HR worker ids', () => {
-    const source = readRepoFile('packages/host-runtime/src/worker/runtime.test.ts')
+    const source = readRepoFile('packages/worker-runtime/src/worker/runtime.test.ts')
     const retiredWorkerSnippets = [
       'worker-hr',
       'AIWorker HR',
@@ -1378,7 +1378,7 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredWorkerSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `packages/host-runtime/src/worker/runtime.test.ts: ${snippet}`)
+      .map(snippet => `packages/worker-runtime/src/worker/runtime.test.ts: ${snippet}`)
 
     expect(findings, 'Host runtime tests should keep worker fixtures generic').toEqual([])
   })
@@ -1421,8 +1421,8 @@ describe('destructive refactor contract bootstrap', () => {
   test('Host-visible Soul catalog does not expose domain as a platform field', () => {
     const activeSources = [
       'packages/soul-protocol/src/soul-app/registry.ts',
-      'packages/host-runtime/src/soul-app/registry.ts',
-      'packages/host-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/soul-app/registry.ts',
+      'packages/worker-runtime/src/host/runtime.ts',
       'apps/web/src/features/local-workspace/model-types.ts',
       'apps/web/src/features/i18n/index.ts',
       'apps/web/src/features/i18n/types.ts',
@@ -1513,11 +1513,11 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('public package entrypoints no longer export legacy turn runtime surfaces', () => {
-    const hostRuntimeEntrypoint = readRepoFile('packages/host-runtime/src/index.ts')
+    const hostRuntimeEntrypoint = readRepoFile('packages/worker-runtime/src/index.ts')
     const soulProtocolEntrypoint = readRepoFile('packages/soul-protocol/src/index.ts')
     const forbiddenExports = [
-      ['packages/host-runtime/src/index.ts', 'StartLocalTurnInput', hostRuntimeEntrypoint],
-      ['packages/host-runtime/src/index.ts', 'LocalTurnStartResult', hostRuntimeEntrypoint],
+      ['packages/worker-runtime/src/index.ts', 'StartLocalTurnInput', hostRuntimeEntrypoint],
+      ['packages/worker-runtime/src/index.ts', 'LocalTurnStartResult', hostRuntimeEntrypoint],
       ['packages/soul-protocol/src/index.ts', 'LocalTurn', soulProtocolEntrypoint],
       ['packages/soul-protocol/src/index.ts', 'LocalTurnStatus', soulProtocolEntrypoint],
       ['packages/soul-protocol/src/index.ts', 'localTurnSchema', soulProtocolEntrypoint],
@@ -1615,7 +1615,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('host runtime creates session invocations without legacy startTurn compatibility', () => {
-    const runtime = readRepoFile('packages/host-runtime/src/worker/runtime.ts')
+    const runtime = readRepoFile('packages/worker-runtime/src/worker/runtime.ts')
     const forbidden = [
       'StartLocalTurnInput',
       'LocalTurnStartResult',
@@ -1629,7 +1629,7 @@ describe('destructive refactor contract bootstrap', () => {
     ]
     const findings = forbidden
       .filter(snippet => runtime.includes(snippet))
-      .map(snippet => `packages/host-runtime/src/worker/runtime.ts: ${snippet}`)
+      .map(snippet => `packages/worker-runtime/src/worker/runtime.ts: ${snippet}`)
 
     expect(findings, 'runtime follow-up must be session invocation-native, with no turn compatibility writer').toEqual([])
     expect(runtime).toContain('async startInvocation(')
@@ -1637,19 +1637,19 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('host daemon exposes session invocation follow-up without legacy message aliases', () => {
-    const daemon = readRepoFile('packages/host-daemon/src/modes/worker.ts')
-    const daemonTests = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
-    const schemas = readRepoFile('packages/host-daemon/src/modes/worker/schemas.ts')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
+    const daemonTests = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
+    const schemas = readRepoFile('packages/worker-daemon/src/modes/worker/schemas.ts')
     const forbidden = [
-      ['packages/host-daemon/src/modes/worker.ts', '/api/local/workers/:workerId/sessions/:sessionId/messages', daemon],
-      ['packages/host-daemon/src/modes/worker.ts', '/api/local/workers/:workerId/workspaces/:workspaceId/sessions/stream', daemon],
-      ['packages/host-daemon/src/modes/worker.ts', '/api/local/workspaces/:workspaceId/sessions/stream', daemon],
-      ['packages/host-daemon/src/modes/worker.ts', 'createSessionMessageResponse', daemon],
-      ['packages/host-daemon/src/modes/worker.ts', 'streamSessionInvocation', daemon],
-      ['packages/host-daemon/src/modes/worker.ts', 'turnInput', daemon],
-      ['packages/host-daemon/src/modes/worker/schemas.ts', 'createSessionMessageBodySchema', schemas],
-      ['packages/host-daemon/src/modes/worker/schemas.ts', '/messages', schemas],
-      ['packages/host-daemon/src/modes/worker/schemas.ts', 'sessions/stream', schemas],
+      ['packages/worker-daemon/src/modes/worker.ts', '/api/local/workers/:workerId/sessions/:sessionId/messages', daemon],
+      ['packages/worker-daemon/src/modes/worker.ts', '/api/local/workers/:workerId/workspaces/:workspaceId/sessions/stream', daemon],
+      ['packages/worker-daemon/src/modes/worker.ts', '/api/local/workspaces/:workspaceId/sessions/stream', daemon],
+      ['packages/worker-daemon/src/modes/worker.ts', 'createSessionMessageResponse', daemon],
+      ['packages/worker-daemon/src/modes/worker.ts', 'streamSessionInvocation', daemon],
+      ['packages/worker-daemon/src/modes/worker.ts', 'turnInput', daemon],
+      ['packages/worker-daemon/src/modes/worker/schemas.ts', 'createSessionMessageBodySchema', schemas],
+      ['packages/worker-daemon/src/modes/worker/schemas.ts', '/messages', schemas],
+      ['packages/worker-daemon/src/modes/worker/schemas.ts', 'sessions/stream', schemas],
     ]
     const findings = forbidden
       .filter(([, snippet, source]) => source.includes(snippet))
@@ -1744,11 +1744,11 @@ describe('destructive refactor contract bootstrap', () => {
     const activeSources = [
       'packages/storage-sqlite/src/worker/index.ts',
       'packages/storage-sqlite/src/worker/index.test.ts',
-      'packages/host-runtime/src/soul-app/official.ts',
-      'packages/host-runtime/src/host/runtime.ts',
-      'packages/host-runtime/src/host/runtime.test.ts',
-      'packages/host-runtime/src/index.ts',
-      'packages/host-daemon/src/modes/worker.local.test.ts',
+      'packages/worker-runtime/src/soul-app/official.ts',
+      'packages/worker-runtime/src/host/runtime.ts',
+      'packages/worker-runtime/src/host/runtime.test.ts',
+      'packages/worker-runtime/src/index.ts',
+      'packages/worker-daemon/src/modes/worker.local.test.ts',
       'apps/cli/src/aiworker.test.ts',
     ]
     const forbidden = [
@@ -1848,14 +1848,14 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('host runtime event bus no longer exposes turn event kind', () => {
-    const events = readRepoFile('packages/host-runtime/src/worker/events.ts')
+    const events = readRepoFile('packages/worker-runtime/src/worker/events.ts')
     const forbidden = [
       '\'turn\'',
       'turnId?:',
     ]
     const findings = forbidden
       .filter(snippet => events.includes(snippet))
-      .map(snippet => `packages/host-runtime/src/worker/events.ts: ${snippet}`)
+      .map(snippet => `packages/worker-runtime/src/worker/events.ts: ${snippet}`)
 
     expect(findings, 'runtime bus should publish session and invocation events only').toEqual([])
     expect(events).toContain('\'session\' | \'event\'')
@@ -1863,11 +1863,11 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('local executor input is invocation-native without turnId', () => {
-    const executor = readRepoFile('packages/host-runtime/src/worker/executor.ts')
-    const runtime = readRepoFile('packages/host-runtime/src/worker/runtime.ts')
+    const executor = readRepoFile('packages/worker-runtime/src/worker/executor.ts')
+    const runtime = readRepoFile('packages/worker-runtime/src/worker/runtime.ts')
     const forbidden = [
-      ['packages/host-runtime/src/worker/executor.ts', 'turnId', executor],
-      ['packages/host-runtime/src/worker/runtime.ts', 'turnId: readNullableString(request.turnId)', runtime],
+      ['packages/worker-runtime/src/worker/executor.ts', 'turnId', executor],
+      ['packages/worker-runtime/src/worker/runtime.ts', 'turnId: readNullableString(request.turnId)', runtime],
     ]
     const findings = forbidden
       .filter(([, snippet, source]) => source.includes(snippet))
@@ -1881,15 +1881,15 @@ describe('destructive refactor contract bootstrap', () => {
   test('session event contracts are invocation-native without turnId compatibility', () => {
     const storage = readRepoFile('packages/storage-sqlite/src/worker/index.ts')
     const protocol = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
-    const runtime = readRepoFile('packages/host-runtime/src/worker/runtime.ts')
+    const runtime = readRepoFile('packages/worker-runtime/src/worker/runtime.ts')
     const forbidden = [
       ['packages/storage-sqlite/src/worker/index.ts', 'turnId:', storage],
       ['packages/storage-sqlite/src/worker/index.ts', 'turnId?', storage],
       ['packages/storage-sqlite/src/worker/index.ts', 'eventJson.turnId', storage],
       ['packages/soul-protocol/src/local-workspace.ts', 'turnId:', protocol],
-      ['packages/host-runtime/src/worker/runtime.ts', 'turnId: null', runtime],
-      ['packages/host-runtime/src/worker/runtime.ts', 'turnId: string | null', runtime],
-      ['packages/host-runtime/src/worker/runtime.ts', 'input.turnId', runtime],
+      ['packages/worker-runtime/src/worker/runtime.ts', 'turnId: null', runtime],
+      ['packages/worker-runtime/src/worker/runtime.ts', 'turnId: string | null', runtime],
+      ['packages/worker-runtime/src/worker/runtime.ts', 'input.turnId', runtime],
     ]
     const findings = forbidden
       .filter(([, snippet, source]) => source.includes(snippet))
@@ -1944,7 +1944,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('host runtime tests seed invocation-native input refs only', () => {
-    const runtimeTest = readRepoFile('packages/host-runtime/src/worker/runtime.test.ts')
+    const runtimeTest = readRepoFile('packages/worker-runtime/src/worker/runtime.test.ts')
     const forbidden = [
       '/turns/',
       'legacy-turn',
@@ -1952,7 +1952,7 @@ describe('destructive refactor contract bootstrap', () => {
     ]
     const findings = forbidden
       .filter(snippet => runtimeTest.includes(snippet))
-      .map(snippet => `packages/host-runtime/src/worker/runtime.test.ts: ${snippet}`)
+      .map(snippet => `packages/worker-runtime/src/worker/runtime.test.ts: ${snippet}`)
 
     expect(findings, 'runtime fixtures should not normalize old turn inputRef shapes').toEqual([])
     expect(runtimeTest).toContain('/invocations/')
@@ -2037,7 +2037,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(freeformCliBrowserProof).toContain(`/api/workers/\${workerId}/archive`)
     expect(freeformCliBrowserProof).toContain('assertHostLifecycleArchiveProof')
     expect(freeformCliBrowserProof).toContain('WORKER_ARCHIVED')
-    const hostDaemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const hostDaemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
     expect(hostDaemonTest).toContain('Start session after worker archive.')
     expect(hostDaemonTest).toContain('Continue after worker archive.')
   })
@@ -2150,11 +2150,11 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('canonical testing docs track OpenAPI and redaction guardrails', () => {
     const testing = readRepoFile('docs/testing.md')
-    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')
 
     expect(testing).toContain('OpenAPI and redaction contract tests')
-    expect(testing).toContain('packages/host-daemon/src/modes/worker.local.test.ts')
+    expect(testing).toContain('packages/worker-daemon/src/modes/worker.local.test.ts')
     expect(testing).toContain('packages/storage-sqlite/src/worker/index.test.ts')
     expect(testing).toContain('packages/engine-bridge/src/bridge-contract.test.ts')
     expect(testing).toContain('packages/engine-projection/src/workspace-projection.test.ts')
@@ -2177,7 +2177,7 @@ describe('destructive refactor contract bootstrap', () => {
     const runtime = readRepoFile('docs/runtime.md')
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')
     const storageTest = readRepoFile('packages/storage-sqlite/src/worker/index.test.ts')
-    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
     const cliTest = readRepoFile('apps/cli/src/aiworker.test.ts')
     const webConfigTest = readRepoFile('apps/web/src/features/local-workspace/api/worker-config.test.ts')
     const webOverlayConfigTest = readRepoFile('apps/web/src/features/local-workspace/api/worker-overlay-config.test.ts')
@@ -2292,7 +2292,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('production mounted workbench chain uses descriptor v1 without legacy surface shim', () => {
     const activeProductionSources = [
-      'packages/host-daemon/src/modes/worker.ts',
+      'packages/worker-daemon/src/modes/worker.ts',
       'apps/web/src/features/local-workspace/api/workspace-data.ts',
       'apps/web/src/features/local-workspace/api/index.ts',
       'apps/web/src/worker/studio/mounted-surface.tsx',
@@ -2317,7 +2317,7 @@ describe('destructive refactor contract bootstrap', () => {
 
     expect(findings, 'descriptor workbench mount must not depend on legacy surface shim').toEqual([])
 
-    const daemonTest = readRepoFile('packages/host-daemon/src/modes/worker.local.test.ts')
+    const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')
     expect(daemonTest).toContain('resolves custom descriptor workbench without SDK common fallback')
     expect(daemonTest).toContain('data-custom-workbench="true"')

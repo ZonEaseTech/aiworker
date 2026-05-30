@@ -12,8 +12,8 @@ interface PackageJson {
 }
 
 const targetPackages = [
-  ['packages/host-runtime', '@zonease/aiworker-host-runtime'],
-  ['packages/host-daemon', '@zonease/aiworker-host-daemon'],
+  ['packages/worker-runtime', '@zonease/aiworker-worker-runtime'],
+  ['packages/worker-daemon', '@zonease/aiworker-worker-daemon'],
   ['packages/soul-protocol', '@zonease/aiworker-soul-protocol'],
   ['packages/engine-bridge', '@zonease/aiworker-engine-bridge'],
   ['packages/engine-projection', '@zonease/aiworker-engine-projection'],
@@ -41,10 +41,10 @@ describe('target package ownership', () => {
     )
 
     expect(packages['packages/soul-protocol']?.dependencies ?? {}).not.toHaveProperty('react')
-    expect(packages['packages/soul-protocol']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-host-runtime')
-    expect(packages['packages/host-runtime']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-soul-workbench')
-    expect(packages['packages/host-runtime']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-soul-app-sdk')
-    expect(packages['packages/soul-app-sdk']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-host-runtime')
+    expect(packages['packages/soul-protocol']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-worker-runtime')
+    expect(packages['packages/worker-runtime']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-soul-workbench')
+    expect(packages['packages/worker-runtime']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-soul-app-sdk')
+    expect(packages['packages/soul-app-sdk']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-worker-runtime')
   })
 
   test('broad replacement buckets are not introduced', () => {
@@ -79,19 +79,19 @@ describe('target package ownership', () => {
     const rootPackage = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as PackageJson
     const cliPackage = JSON.parse(readFileSync(join(repoRoot, 'apps/cli/package.json'), 'utf8')) as PackageJson
 
-    expect(rootPackage.scripts?.build).toContain('@zonease/aiworker-host-daemon')
+    expect(rootPackage.scripts?.build).toContain('@zonease/aiworker-worker-daemon')
     expect(rootPackage.scripts?.build).not.toContain('@zonease/aiworker-api')
-    expect(cliPackage.devDependencies ?? {}).toHaveProperty('@zonease/aiworker-host-daemon')
+    expect(cliPackage.devDependencies ?? {}).toHaveProperty('@zonease/aiworker-worker-daemon')
     expect(cliPackage.devDependencies ?? {}).not.toHaveProperty('@zonease/aiworker-api')
   })
 
   test('host runtime delegates engine asset projection to the engine-projection package', () => {
-    const hostRuntimeEntrypoint = readFileSync(join(repoRoot, 'packages/host-runtime/src/index.ts'), 'utf8')
-    const hostRuntimeSource = readFileSync(join(repoRoot, 'packages/host-runtime/src/worker/runtime.ts'), 'utf8')
-    const hostDaemonPackage = JSON.parse(readFileSync(join(repoRoot, 'packages/host-daemon/package.json'), 'utf8')) as PackageJson
+    const hostRuntimeEntrypoint = readFileSync(join(repoRoot, 'packages/worker-runtime/src/index.ts'), 'utf8')
+    const hostRuntimeSource = readFileSync(join(repoRoot, 'packages/worker-runtime/src/worker/runtime.ts'), 'utf8')
+    const hostDaemonPackage = JSON.parse(readFileSync(join(repoRoot, 'packages/worker-daemon/package.json'), 'utf8')) as PackageJson
 
-    expect(existsSync(join(repoRoot, 'packages/host-runtime/src/worker/engine-assets.ts'))).toBe(false)
-    expect(existsSync(join(repoRoot, 'packages/host-runtime/src/worker/engine-assets.test.ts'))).toBe(false)
+    expect(existsSync(join(repoRoot, 'packages/worker-runtime/src/worker/engine-assets.ts'))).toBe(false)
+    expect(existsSync(join(repoRoot, 'packages/worker-runtime/src/worker/engine-assets.test.ts'))).toBe(false)
     expect(hostRuntimeEntrypoint).not.toContain('projectEngineAssetsToWorkspace')
     expect(hostRuntimeEntrypoint).not.toContain('listBaselineAssets')
     expect(hostRuntimeSource).toContain('@zonease/aiworker-engine-projection')
@@ -101,10 +101,10 @@ describe('target package ownership', () => {
   })
 
   test('host runtime does not retain a local native engine bridge implementation', () => {
-    const hostRuntimeEntrypoint = readFileSync(join(repoRoot, 'packages/host-runtime/src/index.ts'), 'utf8')
+    const hostRuntimeEntrypoint = readFileSync(join(repoRoot, 'packages/worker-runtime/src/index.ts'), 'utf8')
 
-    expect(existsSync(join(repoRoot, 'packages/host-runtime/src/worker/engine-bridge.ts'))).toBe(false)
-    expect(existsSync(join(repoRoot, 'packages/host-runtime/src/worker/engine-bridge.test.ts'))).toBe(false)
+    expect(existsSync(join(repoRoot, 'packages/worker-runtime/src/worker/engine-bridge.ts'))).toBe(false)
+    expect(existsSync(join(repoRoot, 'packages/worker-runtime/src/worker/engine-bridge.test.ts'))).toBe(false)
     expect(hostRuntimeEntrypoint).not.toContain('invokeNativeEngine')
     expect(hostRuntimeEntrypoint).not.toContain('NativeEngineBridge')
   })

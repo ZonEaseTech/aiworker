@@ -2,8 +2,8 @@ import antfu from '@antfu/eslint-config'
 
 const soulAppHostPrivateImportPatterns = [
   { group: ['@zonease/aiworker-cli', '@zonease/aiworker-cli/**'], message: 'Soul App code must not import Host CLI internals; use app scripts and the SDK boundary.' },
-  { group: ['@zonease/aiworker-host-runtime', '@zonease/aiworker-host-runtime/**'], message: 'Soul App code must not import Host runtime internals; use @zonease/aiworker-soul-app-sdk.' },
-  { group: ['@zonease/aiworker-host-daemon', '@zonease/aiworker-host-daemon/**'], message: 'Soul App code must not import Host daemon internals; use SDK descriptors or mounted broker routes.' },
+  { group: ['@zonease/aiworker-worker-runtime', '@zonease/aiworker-worker-runtime/**'], message: 'Soul App code must not import Host runtime internals; use @zonease/aiworker-soul-app-sdk.' },
+  { group: ['@zonease/aiworker-worker-daemon', '@zonease/aiworker-worker-daemon/**'], message: 'Soul App code must not import Host daemon internals; use SDK descriptors or mounted broker routes.' },
   { group: ['@zonease/aiworker-soul-protocol', '@zonease/aiworker-soul-protocol/**'], message: 'Soul App code must not import Host/Soul protocol internals directly; use @zonease/aiworker-soul-app-sdk exports.' },
   { group: ['@zonease/aiworker-storage-sqlite', '@zonease/aiworker-storage-sqlite/**'], message: 'Soul App code must not access Host storage directly; use local runtime or brokered routes.' },
   { group: ['@zonease/aiworker-web', '@zonease/aiworker-web/**'], message: 'Soul App code must not import Host Web internals; declare UI through the descriptor.' },
