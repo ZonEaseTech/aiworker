@@ -51,8 +51,16 @@ test('G6: docs forbid engine-secret persistence on both planes', () => {
   expect(runtime).toContain('any engine-secret persistence on either plane')
 })
 
-// G2 ↔ C2：engine 启动只在 worker-*。rename 落地前（Plan 2/4）目录还是 host-*，故 todo。
-test.todo('G2: engine launch symbols are imported only by worker-* packages')
+// G2 ↔ C2：engine 启动机制（engine-bridge）只被 worker-* 包依赖；host-* 不得引用 engine 启动。
+// （包级断言，与 worker-runtime 内目录名无关——故 rename 与本守卫可分离。）
+test('G2: engine launch symbols are imported only by worker-* packages', () => {
+  const hostDirs = packageDirsWithPrefix('host-')
+  expect(hostDirs.length, 'expected at least one host-* package directory').toBeGreaterThan(0)
+  for (const dir of hostDirs) {
+    const deps = zonaseDependencyNames(dir)
+    expect(deps, `${dir} must not depend on the engine-launch package`).not.toContain('@zonease/aiworker-engine-bridge')
+  }
+})
 
 // G3 ↔ D6：worker-* 不得依赖 host-*（Worker 必须能脱离 Host 独立运行）。Plan 3 起可证。
 test('G3: worker-* packages never depend on host-* packages', () => {
