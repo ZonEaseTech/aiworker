@@ -132,6 +132,17 @@ Production mounted workbench surfaces use micro-app with
 `router-mode="search"`. Host resolves one workbench entry and passes locator
 context. Soul owns internal routes and domain rendering.
 
+The Host-to-Worker boundary is a transport-agnostic control contract owned by
+`packages/worker-control-protocol`. A Worker is the passive control server; Host is the client; a Worker never
+initiates a connection to Host. The control contract covers worker describe, health, instance lifecycle, and an
+assignment envelope. It must not carry session, invocation, projection, engine,
+or domain data.
+
+Management mount lets Host configure a Worker through the Worker configuration
+micro-app. Management mount is distinct from the employee mount that serves
+workspace/session/composer; employees connect to the Worker web directly. The mounted configuration micro-app is the only current control-contract
+transport; non-web transports are reserved and must not be hardcoded out.
+
 ## Runtime Boundary
 
 Session lifecycle is separate from native engine execution. A session is a Host
