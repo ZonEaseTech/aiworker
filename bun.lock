@@ -183,6 +183,16 @@
         "vitest": "4",
       },
     },
+    "packages/worker-control-protocol": {
+      "name": "@zonease/aiworker-worker-control-protocol",
+      "dependencies": {
+        "zod": "^3.24.4",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
     "packages/worker-daemon": {
       "name": "@zonease/aiworker-worker-daemon",
       "dependencies": {
@@ -838,6 +848,8 @@
     "@zonease/aiworker-storage-sqlite": ["@zonease/aiworker-storage-sqlite@workspace:packages/storage-sqlite"],
 
     "@zonease/aiworker-ui": ["@zonease/aiworker-ui@workspace:packages/ui"],
+
+    "@zonease/aiworker-worker-control-protocol": ["@zonease/aiworker-worker-control-protocol@workspace:packages/worker-control-protocol"],
 
     "@zonease/aiworker-worker-daemon": ["@zonease/aiworker-worker-daemon@workspace:packages/worker-daemon"],
 
