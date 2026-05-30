@@ -14,6 +14,8 @@ interface PackageJson {
 const targetPackages = [
   ['packages/worker-runtime', '@zonease/aiworker-worker-runtime'],
   ['packages/worker-daemon', '@zonease/aiworker-worker-daemon'],
+  ['packages/worker-control-protocol', '@zonease/aiworker-worker-control-protocol'],
+  ['packages/host-control', '@zonease/aiworker-host-control'],
   ['packages/soul-protocol', '@zonease/aiworker-soul-protocol'],
   ['packages/engine-bridge', '@zonease/aiworker-engine-bridge'],
   ['packages/engine-projection', '@zonease/aiworker-engine-projection'],
@@ -45,6 +47,13 @@ describe('target package ownership', () => {
     expect(packages['packages/worker-runtime']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-soul-workbench')
     expect(packages['packages/worker-runtime']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-soul-app-sdk')
     expect(packages['packages/soul-app-sdk']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-worker-runtime')
+
+    // 控制契约方向：host-control 经 worker-control-protocol 单向消费契约，
+    // 不得依赖任何 worker-* 运行时包；契约包本身保持纯净（不回指 host-*）。
+    expect(packages['packages/host-control']?.dependencies ?? {}).toHaveProperty('@zonease/aiworker-worker-control-protocol')
+    expect(packages['packages/host-control']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-worker-runtime')
+    expect(packages['packages/host-control']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-worker-daemon')
+    expect(packages['packages/worker-control-protocol']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-host-control')
   })
 
   test('broad replacement buckets are not introduced', () => {

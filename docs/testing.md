@@ -78,7 +78,17 @@ Worker daemon tests:
 ```text
 packages/worker-daemon/src/
   modes/worker.local.test.ts
+  modes/worker/control.test.ts
   shared/middleware/error-handler.test.ts
+```
+
+Worker autonomy control-plane tests:
+
+```text
+packages/worker-control-protocol/src/index.test.ts
+packages/host-control/src/registry.test.ts
+apps/host-cli/src/aiworker-host.test.ts
+apps/host-web/src/app.test.tsx
 ```
 
 Boundary guard tests:

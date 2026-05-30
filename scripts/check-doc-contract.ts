@@ -435,7 +435,7 @@ requireIncludes('docs/testing.md', [
   'Engine bridge tests:',
   'packages/engine-bridge/src/\n  bridge-contract.test.ts\n  index.test.ts',
   'Worker daemon tests:',
-  'packages/worker-daemon/src/\n  modes/worker.local.test.ts\n  shared/middleware/error-handler.test.ts',
+  'packages/worker-daemon/src/\n  modes/worker.local.test.ts\n  modes/worker/control.test.ts\n  shared/middleware/error-handler.test.ts',
   'Boundary guard tests:',
   'scripts/check-soul-app-boundaries.test.ts',
   'CLI and browser tests:',
