@@ -54,7 +54,7 @@ interface VerticalSoul {
   status: 'available' | 'coming_soon'
 }
 
-export interface HostRuntimeOptions {
+export interface WorkerOrchestratorOptions {
   engineBridge?: LocalWorkerRuntimeOptions['engineBridge']
   executor?: LocalExecutor
   now?: () => string
@@ -63,7 +63,7 @@ export interface HostRuntimeOptions {
   workersRoot: string
 }
 
-export interface HostOfficialSoulAppBootstrap {
+export interface OfficialSoulAppBootstrap {
   catalog: HostSoulCatalog
   retiredMetadataDiscard: OfficialRetiredMetadataDiscardResult
   results: OfficialSoulAppBootstrapResult[]
@@ -71,7 +71,7 @@ export interface HostOfficialSoulAppBootstrap {
   status: 'fail' | 'pass'
 }
 
-export interface CreateHostSoulWorkerInput {
+export interface CreateSoulWorkerInput {
   defaultEngineId?: string | null
   id?: string
   metadata?: Record<string, unknown>
@@ -79,18 +79,18 @@ export interface CreateHostSoulWorkerInput {
   soulId: string
 }
 
-export interface CreateHostSoulWorkerResult {
+export interface CreateSoulWorkerResult {
   runtime: LocalWorkerRuntime
   snapshot: LocalWorkerSnapshot
   worker: WorkerRow
 }
 
-export function createHostRuntime(options: HostRuntimeOptions): HostRuntime {
-  return new HostRuntime(options)
+export function createWorkerOrchestrator(options: WorkerOrchestratorOptions): WorkerOrchestrator {
+  return new WorkerOrchestrator(options)
 }
 
-export class HostRuntime {
-  constructor(private readonly options: HostRuntimeOptions) {}
+export class WorkerOrchestrator {
+  constructor(private readonly options: WorkerOrchestratorOptions) {}
 
   listCatalog(): HostSoulCatalog {
     return listHostSoulCatalog()
@@ -128,7 +128,7 @@ export class HostRuntime {
     return runSoulAppHealthcheck(appId, this.registryContext())
   }
 
-  async bootstrapOfficialSoulApps(): Promise<HostOfficialSoulAppBootstrap> {
+  async bootstrapOfficialSoulApps(): Promise<OfficialSoulAppBootstrap> {
     const results = await bootstrapOfficialSoulAppRegistry({
       ...this.registryContext(),
       officialAppsRoot: this.options.officialAppsRoot,
@@ -189,7 +189,7 @@ export class HostRuntime {
     return app
   }
 
-  async createSoulWorker(input: CreateHostSoulWorkerInput): Promise<CreateHostSoulWorkerResult> {
+  async createSoulWorker(input: CreateSoulWorkerInput): Promise<CreateSoulWorkerResult> {
     const soul = this.requireAvailableSoul(input.soulId)
     const name = requireText(input.name, 'name')
     const workerId = input.id ? requireText(input.id, 'id') : mintWorkerId()

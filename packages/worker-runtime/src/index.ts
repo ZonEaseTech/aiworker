@@ -1,4 +1,4 @@
-export const hostRuntimePackage = {
+export const workerRuntimePackage = {
   name: '@zonease/aiworker-worker-runtime',
   owns: [
     'worker-locator',
@@ -27,12 +27,12 @@ export {
   type LocalBearerAuthProviderOptions,
 } from './orchestration/identity-provider'
 export {
-  createHostRuntime,
-  type CreateHostSoulWorkerInput,
-  type CreateHostSoulWorkerResult,
-  type HostOfficialSoulAppBootstrap,
-  HostRuntime,
-  type HostRuntimeOptions,
+  type CreateSoulWorkerInput,
+  type CreateSoulWorkerResult,
+  createWorkerOrchestrator,
+  type OfficialSoulAppBootstrap,
+  WorkerOrchestrator,
+  type WorkerOrchestratorOptions,
 } from './orchestration/orchestrator'
 export {
   bootstrapOfficialSoulApps,

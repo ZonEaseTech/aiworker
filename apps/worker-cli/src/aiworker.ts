@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
-import type { HostRuntime, LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext } from '@zonease/aiworker-worker-runtime'
+import type { LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 import type { SoulDiscovery, SoulValidationIssue } from '../../../packages/soul-app-sdk/src/index'
 import type { UpdateCliOptions, UpdateCommandName } from './updater'
 import { Buffer } from 'node:buffer'
@@ -46,7 +46,7 @@ import {
   upsertWorkerConfigValue,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import {
-  createHostRuntime,
+  createWorkerOrchestrator,
   getWorkerEnv,
   readFrozenSessionEngine,
   resolveLocalCliEngine,
@@ -375,8 +375,8 @@ function cliInstallationDiagnostics(): {
   }
 }
 
-function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, officialAppsRoot?: string, registryContext?: () => SoulAppRegistryContext } = {}): HostRuntime {
-  return createHostRuntime({
+function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, officialAppsRoot?: string, registryContext?: () => SoulAppRegistryContext } = {}): WorkerOrchestrator {
+  return createWorkerOrchestrator({
     executor: options.executor,
     officialAppsRoot: options.officialAppsRoot ?? resolveCliOfficialAppsRoot(),
     registryContext: options.registryContext ?? registryContext,
@@ -1394,7 +1394,7 @@ async function bootstrapAppCommand(scope: string): Promise<void> {
     process.exitCode = 1
 }
 
-export async function convergeHostAfterCliUpgrade(): Promise<{ bootstrap: Awaited<ReturnType<HostRuntime['bootstrapOfficialSoulApps']>>, home: string }> {
+export async function convergeHostAfterCliUpgrade(): Promise<{ bootstrap: Awaited<ReturnType<WorkerOrchestrator['bootstrapOfficialSoulApps']>>, home: string }> {
   const paths = await ensureDb()
   const host = createHost(paths)
   const bootstrap = await host.bootstrapOfficialSoulApps()

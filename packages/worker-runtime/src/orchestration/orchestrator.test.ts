@@ -15,7 +15,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { createHostRuntime } from './orchestrator'
+import { createWorkerOrchestrator } from './orchestrator'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
 const FREEFORM_DEFAULT = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'default')
@@ -69,7 +69,7 @@ describe('Host runtime boundary', () => {
   })
 
   function host() {
-    return createHostRuntime({
+    return createWorkerOrchestrator({
       registryContext: () => ({
         availableConnectorIds: ['ats', 'calendar', 'ci', 'issue-tracker'],
         enabledConnectorIds: ['ats', 'ci'],

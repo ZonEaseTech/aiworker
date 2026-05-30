@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { hostRuntimePackage } from './index'
+import { workerRuntimePackage } from './index'
 
 describe('host-runtime package boundary', () => {
   test('declares locator and orchestration ownership', () => {
-    expect(hostRuntimePackage.owns).toContain('session-lifecycle')
-    expect(hostRuntimePackage.owns).toContain('engine-invocation-orchestration')
+    expect(workerRuntimePackage.owns).toContain('session-lifecycle')
+    expect(workerRuntimePackage.owns).toContain('engine-invocation-orchestration')
   })
 })

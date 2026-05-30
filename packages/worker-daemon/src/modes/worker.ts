@@ -1,6 +1,6 @@
 import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppEngineTarget } from '@zonease/aiworker-soul-protocol'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
-import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions } from '@zonease/aiworker-worker-runtime'
+import type { HostAuthProvider, HostIdentity, LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 
 import type { Context } from 'hono'
 import type { ChildProcessByStdio } from 'node:child_process'
@@ -48,8 +48,8 @@ import {
   parseWorkerLifecycle,
 } from '@zonease/aiworker-worker-control-protocol'
 import {
-  createHostRuntime,
   createLocalBearerAuthProvider,
+  createWorkerOrchestrator,
   LocalEngineResolutionError,
   resolveLocalCliEngine,
   soulAppServiceEnv,
@@ -96,7 +96,7 @@ export interface BootstrapWorkerAppOptions {
 
 export interface LocalDaemonState {
   authProvider: HostAuthProvider
-  host: HostRuntime
+  host: WorkerOrchestrator
   mountingAppServices: Map<string, Promise<MountedSoulAppService | null>>
   mountedAppServices: Map<string, MountedSoulAppService>
   startedAt: string
@@ -160,7 +160,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const runtimeVersion = options.runtimeVersion ?? DEFAULT_RUNTIME_VERSION
   const workersRoot = options.workersRoot ?? path.join(path.dirname(dbPath), 'workers')
   const runtimes = new Map<string, LocalWorkerRuntime>()
-  const host = createHostRuntime({
+  const host = createWorkerOrchestrator({
     engineBridge: options.engineBridge,
     executor: options.executor,
     now: options.now,
