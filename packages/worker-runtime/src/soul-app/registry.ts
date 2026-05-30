@@ -23,7 +23,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 
 // -- inlined from deleted shared types --
-interface HostCapability {
+interface SoulCapability {
   description: string
   id: string
   inputHints: readonly string[]
@@ -56,9 +56,9 @@ export interface SoulDescriptorInstallInput {
   sourceRef: string
 }
 
-export interface HostSoulCatalog {
+export interface SoulCatalog {
   apps: HostedSoulApp[]
-  capabilities: HostCapability[]
+  capabilities: SoulCapability[]
   souls: VerticalSoul[]
 }
 
@@ -181,7 +181,7 @@ export function getHostedSoulApp(appId: string): HostedSoulApp | null {
   return row ? hostedSoulAppFromRow(row) : null
 }
 
-export function listHostSoulCatalog(): HostSoulCatalog {
+export function listSoulCatalog(): SoulCatalog {
   const apps = listHostedSoulApps()
   const appSouls = apps.map(app => app.projectedSoul)
   const appCapabilities = apps
@@ -194,16 +194,16 @@ export function listHostSoulCatalog(): HostSoulCatalog {
   }
 }
 
-export function findHostSoul(id: string): VerticalSoul | undefined {
-  return listHostSoulCatalog().souls.find(soul => soul.id === id)
+export function findCatalogSoul(id: string): VerticalSoul | undefined {
+  return listSoulCatalog().souls.find(soul => soul.id === id)
 }
 
-export function findHostCapability(id: string): HostCapability | undefined {
-  return listHostSoulCatalog().capabilities.find(capability => capability.id === id)
+export function findCapability(id: string): SoulCapability | undefined {
+  return listSoulCatalog().capabilities.find(capability => capability.id === id)
 }
 
-export function listHostCapabilitiesForSoul(soulId: string): HostCapability[] {
-  return listHostSoulCatalog().capabilities.filter(capability => capability.soulId === soulId)
+export function listCapabilitiesForSoul(soulId: string): SoulCapability[] {
+  return listSoulCatalog().capabilities.filter(capability => capability.soulId === soulId)
 }
 
 export function hostedSoulAppFromRow(row: SoulAppRow): HostedSoulApp {

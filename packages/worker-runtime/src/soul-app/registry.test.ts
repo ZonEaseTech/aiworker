@@ -11,13 +11,13 @@ import { bootstrapOfficialSoulApps } from './official'
 import {
   archiveSoulApp,
   enableSoulApp,
-  findHostCapability,
-  findHostSoul,
+  findCapability,
+  findCatalogSoul,
   installSoulAppFromPath,
   installSoulDescriptor,
-  listHostCapabilitiesForSoul,
+  listCapabilitiesForSoul,
   listHostedSoulApps,
-  listHostSoulCatalog,
+  listSoulCatalog,
   runSoulAppHealthcheck,
 } from './registry'
 
@@ -72,11 +72,11 @@ describe('Host Soul descriptor registry', () => {
 
   it('starts with an app-only empty Host catalog', () => {
     expect(listHostedSoulApps()).toHaveLength(0)
-    expect(listHostSoulCatalog().capabilities).toEqual([])
-    expect(listHostSoulCatalog().souls).toEqual([])
-    expect(findHostSoul('hr')).toBeUndefined()
-    expect(findHostCapability('candidate-screen')).toBeUndefined()
-    expect(listHostCapabilitiesForSoul('hr')).toEqual([])
+    expect(listSoulCatalog().capabilities).toEqual([])
+    expect(listSoulCatalog().souls).toEqual([])
+    expect(findCatalogSoul('hr')).toBeUndefined()
+    expect(findCapability('candidate-screen')).toBeUndefined()
+    expect(listCapabilitiesForSoul('hr')).toEqual([])
   })
 
   it('installs, enables, projects, healthchecks, and archives a descriptor', async () => {
@@ -107,7 +107,7 @@ describe('Host Soul descriptor registry', () => {
       version: '0.1.0',
     })
     expect(listHostedSoulApps()).toHaveLength(1)
-    expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
+    expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
 
     const enabled = enableSoulApp(FREEFORM_APP_ID, {
       hostVersion: '0.19.3',
@@ -116,18 +116,18 @@ describe('Host Soul descriptor registry', () => {
     expect(enabled.status).toBe('enabled')
     expect(enabled.healthStatus).toBe('pass')
 
-    expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('available')
-    expect(findHostCapability(FREEFORM_DEFAULT)?.soulId).toBe(FREEFORM_APP_ID)
-    expect(listHostCapabilitiesForSoul(FREEFORM_APP_ID).map(capability => capability.id)).toEqual([FREEFORM_DEFAULT])
-    expect(listHostSoulCatalog().souls.some(soul => soul.id === 'hr')).toBe(false)
+    expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('available')
+    expect(findCapability(FREEFORM_DEFAULT)?.soulId).toBe(FREEFORM_APP_ID)
+    expect(listCapabilitiesForSoul(FREEFORM_APP_ID).map(capability => capability.id)).toEqual([FREEFORM_DEFAULT])
+    expect(listSoulCatalog().souls.some(soul => soul.id === 'hr')).toBe(false)
 
     const checked = runSoulAppHealthcheck(FREEFORM_APP_ID, { hostVersion: '0.19.3' })
     expect(checked.healthMessage).toContain('No Soul App code was executed')
 
     const disabled = archiveSoulApp(FREEFORM_APP_ID, { now: () => '2026-05-12T22:24:00.000Z' })
     expect(disabled.status).toBe('disabled')
-    expect(findHostCapability(FREEFORM_DEFAULT)).toBeUndefined()
-    expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
+    expect(findCapability(FREEFORM_DEFAULT)).toBeUndefined()
+    expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
 
     const reinstalled = await installSoulAppFromPath(descriptorPath, {
       hostVersion: '0.19.3',
@@ -166,7 +166,7 @@ describe('Host Soul descriptor registry', () => {
       hostVersion: '0.19.3',
       now: () => '2026-05-12T22:23:00.000Z',
     })
-    const catalog = listHostSoulCatalog()
+    const catalog = listSoulCatalog()
 
     expect(installed.descriptor.extensions).toEqual(descriptor.extensions)
     expect(installed.descriptor.external).toEqual(descriptor.external)
@@ -195,8 +195,8 @@ describe('Host Soul descriptor registry', () => {
     expect(first.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'installed_enabled'],
     ])
-    expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('available')
-    expect(findHostSoul('hr')).toBeUndefined()
+    expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('available')
+    expect(findCatalogSoul('hr')).toBeUndefined()
 
     const second = await bootstrapOfficialSoulApps({
       hostVersion: '0.19.3',
@@ -214,8 +214,8 @@ describe('Host Soul descriptor registry', () => {
     expect(third.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'preserved_disabled'],
     ])
-    expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
-    expect(listHostCapabilitiesForSoul(FREEFORM_APP_ID)).toEqual([])
+    expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
+    expect(listCapabilitiesForSoul(FREEFORM_APP_ID)).toEqual([])
   })
 
   it('bootstraps official descriptors from an explicit packaged app root', async () => {
@@ -234,7 +234,7 @@ describe('Host Soul descriptor registry', () => {
       [FREEFORM_APP_ID, 'installed_enabled'],
     ])
     expect(results.every(result => result.descriptorPath.startsWith(packagedRoot))).toBe(true)
-    expect(findHostSoul(FREEFORM_APP_ID)?.status).toBe('available')
+    expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('available')
   })
 
   it('stores descriptor validation failures as registry error state', async () => {

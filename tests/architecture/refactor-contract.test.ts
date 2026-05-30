@@ -1010,7 +1010,7 @@ describe('destructive refactor contract bootstrap', () => {
     const forbidden = [
       'templates: CapabilityTemplate[]',
       'templates: appTemplates',
-      'listHostSoulCatalog().templates',
+      'listSoulCatalog().templates',
       'this.listCatalog().templates',
       'catalog.templates',
       'input.catalog.templates',

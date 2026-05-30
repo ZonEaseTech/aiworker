@@ -1,7 +1,7 @@
 import type { HostedSoulApp } from '@zonease/aiworker-soul-protocol'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { OfficialRetiredMetadataDiscardResult, OfficialSoulAppBootstrapResult } from '../soul-app/official'
-import type { HostSoulCatalog, SoulAppRegistryContext, SoulDescriptorInstallInput } from '../soul-app/registry'
+import type { SoulAppRegistryContext, SoulCatalog, SoulDescriptorInstallInput } from '../soul-app/registry'
 import type { LocalExecutor } from '../worker/executor'
 import type { LocalWorkerRuntime, LocalWorkerRuntimeOptions, LocalWorkerSnapshot } from '../worker/runtime'
 
@@ -23,20 +23,20 @@ import {
   archiveSoulApp,
   deleteSoulApp,
   enableSoulApp,
-  findHostCapability,
-  findHostSoul,
+  findCapability,
+  findCatalogSoul,
   getHostedSoulApp,
   installSoulAppFromPath,
   installSoulDescriptor,
-  listHostCapabilitiesForSoul,
+  listCapabilitiesForSoul,
   listHostedSoulApps,
-  listHostSoulCatalog,
+  listSoulCatalog,
   runSoulAppHealthcheck,
 } from '../soul-app/registry'
 import { createLocalWorkerRuntime } from '../worker/runtime'
 
 // -- inlined from deleted shared types --
-interface HostCapability {
+interface SoulCapability {
   description: string
   id: string
   inputHints: readonly string[]
@@ -64,7 +64,7 @@ export interface WorkerOrchestratorOptions {
 }
 
 export interface OfficialSoulAppBootstrap {
-  catalog: HostSoulCatalog
+  catalog: SoulCatalog
   retiredMetadataDiscard: OfficialRetiredMetadataDiscardResult
   results: OfficialSoulAppBootstrapResult[]
   scope: 'official'
@@ -92,8 +92,8 @@ export function createWorkerOrchestrator(options: WorkerOrchestratorOptions): Wo
 export class WorkerOrchestrator {
   constructor(private readonly options: WorkerOrchestratorOptions) {}
 
-  listCatalog(): HostSoulCatalog {
-    return listHostSoulCatalog()
+  listCatalog(): SoulCatalog {
+    return listSoulCatalog()
   }
 
   listApps(): HostedSoulApp[] {
@@ -148,30 +148,30 @@ export class WorkerOrchestrator {
   }
 
   findSoul(soulId: string): VerticalSoul | undefined {
-    return findHostSoul(soulId)
+    return findCatalogSoul(soulId)
   }
 
   requireAvailableSoul(soulId: unknown): VerticalSoul {
     const id = requireText(soulId, 'soulId')
-    const soul = findHostSoul(id)
+    const soul = findCatalogSoul(id)
     if (!soul || soul.status !== 'available')
       throw AppError.badRequest(`Available Soul not found: ${id}`, 'SOUL_NOT_AVAILABLE')
     return soul
   }
 
-  listCapabilities(soulId?: string): HostCapability[] {
-    return soulId ? listHostCapabilitiesForSoul(soulId) : this.listCatalog().capabilities
+  listCapabilities(soulId?: string): SoulCapability[] {
+    return soulId ? listCapabilitiesForSoul(soulId) : this.listCatalog().capabilities
   }
 
-  listCapabilitiesForWorker(workerId: string): HostCapability[] {
+  listCapabilitiesForWorker(workerId: string): SoulCapability[] {
     const worker = this.requireWorker(workerId)
-    return listHostCapabilitiesForSoul(worker.soulId)
+    return listCapabilitiesForSoul(worker.soulId)
   }
 
-  requireCapabilityForWorker(workerId: string, capabilityId: unknown): HostCapability {
+  requireCapabilityForWorker(workerId: string, capabilityId: unknown): SoulCapability {
     const worker = this.requireWorker(workerId)
     const id = requireText(capabilityId, 'capabilityId')
-    const capability = findHostCapability(id)
+    const capability = findCapability(id)
     if (!capability || capability.soulId !== worker.soulId)
       throw AppError.badRequest(`Capability ${id} does not belong to worker ${workerId}.`, 'CAPABILITY_NOT_AVAILABLE')
     return capability

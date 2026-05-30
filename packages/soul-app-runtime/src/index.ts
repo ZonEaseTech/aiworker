@@ -6,9 +6,9 @@ import type {
 } from '@zonease/aiworker-soul-protocol'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type {
-  HostSoulCatalog,
   LocalExecutor,
   LocalWorkerRuntime,
+  SoulCatalog,
 } from '@zonease/aiworker-worker-runtime'
 
 import { mkdirSync } from 'node:fs'
@@ -24,7 +24,7 @@ import {
   createLocalWorkerRuntime,
   enableSoulApp,
   installSoulDescriptor,
-  listHostSoulCatalog,
+  listSoulCatalog,
 } from '@zonease/aiworker-worker-runtime'
 
 export { renderUniversalWorkbenchHtml } from './universal-workbench-html'
@@ -63,7 +63,7 @@ export interface MountedSoulAppTestRuntimeOptions {
 }
 
 export interface SoulAppRuntimeHarness {
-  catalog: HostSoulCatalog
+  catalog: SoulCatalog
   descriptor: SoulDescriptorV1
   dispose: () => void
   hostedApp: HostedSoulApp
@@ -133,7 +133,7 @@ export async function createMountedSoulAppTestRuntime(
     workersRoot: options.workersRoot,
   })
   return harness({
-    catalog: listHostSoulCatalog(),
+    catalog: listSoulCatalog(),
     descriptor,
     hostedApp,
     runtime,
@@ -289,7 +289,7 @@ function isSoulAppEngineTarget(value: string): value is SoulAppEngineTarget {
 }
 
 function harness(input: {
-  catalog: HostSoulCatalog
+  catalog: SoulCatalog
   descriptor: SoulDescriptorV1
   hostedApp: HostedSoulApp
   runtime: LocalWorkerRuntime
@@ -313,7 +313,7 @@ function publicWorkerSnapshot(worker: WorkerRow): SoulAppRuntimeWorkerSnapshot {
   }
 }
 
-function scopedCatalog(app: HostedSoulApp): HostSoulCatalog {
+function scopedCatalog(app: HostedSoulApp): SoulCatalog {
   return {
     apps: [app],
     capabilities: [...app.projectedCapabilities],
