@@ -102,7 +102,7 @@ describe('destructive refactor contract bootstrap', () => {
     }
 
     const architecture = readRepoFile('docs/architecture.md')
-    expect(architecture).toContain('Host is shell / locator / mount / bridge')
+    expect(architecture).toContain('Host is an optional control plane: distributor, manager, permission allocator,\nand connector authorizer.')
     expect(architecture).toContain('CLI-first')
     expect(architecture).toContain('descriptor-only')
     expect(architecture).toContain('packages/core and packages/shared disappear')

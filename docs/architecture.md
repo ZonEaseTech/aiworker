@@ -6,20 +6,26 @@ skills, and temporary drafts are evidence only. They do not override this file.
 
 ## Position
 
-AIWorker is a CLI-first local product for running Soul Apps through native
-engines.
+AIWorker is a worker-centric product. A Worker is an autonomous, CLI-first
+runtime that runs one Soul App through a native engine and owns engine launch.
 
-Host is shell / locator / mount / bridge.
+A Worker runs fully standalone. Host is never on the runtime hot path.
 
-The default product path is:
+Host is an optional control plane: distributor, manager, permission allocator,
+and connector authorizer.
+
+The default product paths are:
 
 ```text
-AIWorker -> Soul App -> workspace locator -> session -> app-owned work
+Worker -> Soul App -> workspace locator -> session -> app-owned work
+Host -> distribute / manage / authorize / connector -> mount worker config micro-app
 ```
 
-Host starts local infrastructure, locates worker/workspace/session context,
-mounts app-owned UI/API, prepares engine invocation context, and observes native
-engine output. Host is not a domain workflow layer, a product backend, an agent
+A Worker starts its own local infrastructure, locates workspace/session context,
+serves its own employee web, owns projection and the engine bridge, launches and
+observes the native engine, and exposes a control surface. Host distributes,
+manages, allocates permissions, authorizes connectors, and mounts a Worker's
+configuration micro-app to configure it. Host does not spawn, observe, or hold engine processes. Host is not a domain workflow layer, a product backend, an agent
 runtime, a repository dashboard, or a Soul App configuration center.
 
 ## Decision Coverage Index
