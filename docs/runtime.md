@@ -16,8 +16,9 @@ The runtime is seven chains:
 
 ## Local Daemon
 
-`packages/host-daemon` owns the local broker API used by CLI, Web, and mounted
-Soul Apps. It forwards orchestration to `packages/host-runtime`.
+`packages/worker-daemon` owns the local broker API used by the Worker CLI, the
+Worker web, and mounted Soul Apps. It forwards orchestration to
+`packages/worker-runtime`.
 
 The daemon is not a product backend and does not own domain routes.
 
@@ -151,11 +152,11 @@ engine-secret persistence.
 
 ## Projection
 
-Host orchestrates projection; engine-projection executes projection; SDK and protocol define projection inputs.
+Worker orchestrates projection; engine-projection executes projection; SDK and protocol define projection inputs.
 
 `packages/engine-projection` materializes engine-facing files from descriptor
-asset refs and worker-scoped configuration overlays. Host runtime calls it
-because Host owns worker, workspace locator, session, selected engine, worker
+asset refs and worker-scoped configuration overlays. Worker runtime calls it
+because the Worker owns workspace locator, session, selected engine, worker
 configuration, and filesystem root facts. Host does not define skill format, MCP
 semantics, or domain files.
 
@@ -175,10 +176,10 @@ remain Soul/user-owned.
 
 Runtime skills, MCP, and entry-file CRUD is a first-class runtime chain.
 
-- CLI, Web, or app-owned UI requests an SDK-standard worker configuration
-  action.
-- Host validates and stores worker-scoped overlay records.
-- Worker-scoped overlay records live in Host metadata; projected file contents do not.
+- The Worker CLI, the Worker web, or app-owned UI requests an SDK-standard worker
+  configuration action.
+- The Worker validates and stores worker-scoped overlay records.
+- Worker-scoped overlay records live in Worker metadata; projected file contents do not.
 - `engine-projection` materializes descriptor assets plus overlays for one
   selected engine target.
 - Projection writes a receipt for cleanup, freshness, and diagnostics.
