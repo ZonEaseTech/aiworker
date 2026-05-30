@@ -195,3 +195,16 @@ into a product backend.
 - app-owned API proxy attaches locator context when present and does not
   interpret domain route names. It strips client credentials before proxying and
   strips app-owned cookies plus Host mount credentials before returning.
+
+## Host-to-Worker Control Contract
+
+`packages/worker-control-protocol` defines a transport-agnostic control contract.
+It covers worker.describe, worker.health, worker.lifecycle, and a worker.assignment envelope.
+The Worker is the passive control server; Host is the client. A Worker
+never initiates a connection to Host.
+
+The mounted configuration micro-app is the only current transport; non-web
+transports are reserved. The control contract must not carry session, invocation, projection, engine, or
+domain data. The assignment envelope carries authorized
+connectors, permissions, and an engine/gateway profile ref by shape and version
+only; connector behavior is out of contract scope.

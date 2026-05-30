@@ -235,6 +235,12 @@ requireIncludes('docs/protocol.md', [
   '`engine-selection`, `projection-overlay`,\n`skill-overlay`, `mcp-overlay`, `entry-file-overlay`, `workbench-preference`, or\n`sdk-extension`',
   '`target` is an engine target, `all`, or `none`.',
   '`updatedBy` records caller class such as `cli`,\n`web`, or `app-owned-api`',
+  '## Host-to-Worker Control Contract',
+  '`packages/worker-control-protocol` defines a transport-agnostic control contract.',
+  'worker.describe, worker.health, worker.lifecycle, and a worker.assignment envelope',
+  'The Worker is the passive control server; Host is the client.',
+  'The mounted configuration micro-app is the only current transport; non-web\ntransports are reserved.',
+  'The control contract must not carry session, invocation, projection, engine, or\ndomain data.',
 ])
 forbidIncludes('docs/protocol.md', [
   'host-adapter',
