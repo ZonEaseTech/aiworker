@@ -16,15 +16,16 @@ Temporary drafts live in `tmp/`。旧 changelog、历史 E2E、旧 project-local
 
 ## Product Boundary
 
-Host is shell / locator / mount / bridge。
+Worker 是自治 CLI-first 运行体，拥有 engine 启动权；Host 是可选控制面：分发 / 管理 / 权限分配 / connector 授权，并 mount worker 配置 micro-app。
 
-AIWorker 是 CLI-first local product。默认路径：
+AIWorker 是 worker-centric local product。默认路径：
 
 ```text
-AIWorker -> Soul App -> workspace locator -> session -> app-owned work
+Worker -> Soul App -> workspace locator -> session -> app-owned work
+Host -> distribute / manage / authorize / connector -> mount worker config micro-app
 ```
 
-Host 只负责启动本地壳、定位 worker/workspace/session、挂载 app-owned UI/API、准备 cwd/context/engine invocation，并观察 native engine。Host 不是领域工作流、产品后端、通用 agent runtime、仓库 dashboard 或 Soul App 上层配置中心。
+Worker 启动本地壳、定位 workspace/session、serve 员工 web、拥有 projection 与 engine bridge、启动并观察 native engine、暴露控制面。Host 分发、管理、分配权限、授权 connector，并 mount worker 配置 micro-app 来配置它。Host 不 spawn/观察/持有 engine 进程，也不是领域工作流、产品后端、通用 agent runtime、仓库 dashboard 或 Soul App 配置中心。
 
 ## Monorepo Boundary
 
@@ -32,7 +33,9 @@ Host 只负责启动本地壳、定位 worker/workspace/session、挂载 app-own
 - `souls/*`：descriptor-producing Soul App 产品包。
 - `packages/*`：协议、runtime、daemon、storage、projection、engine bridge、SDK、workbench、fs layout、UI 等可复用能力。
 
-禁止创建 `core-v2` / `shared-v2`。`packages/core` 与 `packages/shared` 最终消失。`apps/api` 迁移为 `packages/host-daemon`。
+禁止创建 `core-v2` / `shared-v2`。`packages/core` 与 `packages/shared` 最终消失。`apps/api` 迁移为 `packages/worker-daemon`。
+
+`worker-*` 包禁止 import `host-*` 包。Worker 必须能脱离 Host 独立运行。
 
 ## Protocol Boundary
 
@@ -50,7 +53,7 @@ Follow-up API 是 session-level：
 POST /api/sessions/:sessionId/invocations
 ```
 
-Native engine 采用 B+ structured bridge。AIWorker 管 projection、process observation、redacted raw chunks、normalized bridge events、opaque external refs、cancel、reattach、reconciler；native engine 自己管理模型、tool loop、approval、sandbox、auth/profile 和 native session。
+Native engine 采用 B+ structured bridge。Worker 管 projection、process observation、redacted raw chunks、normalized bridge events、opaque external refs、cancel、reattach、reconciler、engine 启动；native engine 自己管理模型、tool loop、approval、sandbox、auth/profile 和 native session。
 
 Author-owned native MCP files may contain literal secrets, but AIWorker must not copy secrets into descriptor, DB, receipt, log, diagnostic output, OpenAPI example, or UI.
 

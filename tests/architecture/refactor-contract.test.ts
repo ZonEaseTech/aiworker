@@ -192,7 +192,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(lineCount).toBeLessThanOrEqual(90)
     expect(agents).toContain('canonical docs')
     expect(agents).toContain('Superpowers')
-    expect(agents).toContain('Host is shell / locator / mount / bridge')
+    expect(agents).toContain('Worker 是自治 CLI-first 运行体，拥有 engine 启动权；Host 是可选控制面')
     expect(agents).not.toContain('docs/plan')
     expect(agents).not.toContain('docs/task')
     expect(agents).not.toContain('docs/superpowers')
