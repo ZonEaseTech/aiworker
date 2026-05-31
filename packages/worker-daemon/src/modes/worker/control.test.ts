@@ -42,7 +42,7 @@ describe('worker-daemon control contract endpoints', () => {
 
   async function createFreeformWorker(target: Awaited<ReturnType<typeof app>>, id = 'freeform-worker') {
     const res = await target.request('/api/workers', {
-      body: JSON.stringify({ id, name: 'Freeform', soulId: FREEFORM_APP_ID }),
+      body: JSON.stringify({ id, name: 'Freeform', appId: FREEFORM_APP_ID }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
@@ -64,7 +64,7 @@ describe('worker-daemon control contract endpoints', () => {
     const body = await res.json()
     // 必须满足 worker-control-protocol 的 describe 形状（含 configMicroAppEntry）
     const describe = parseWorkerDescribe(body)
-    expect(describe.soulId).toBe(FREEFORM_APP_ID)
+    expect(describe.templateId).toBe(FREEFORM_APP_ID)
     expect(describe.configMicroAppEntry).toContain('/api/mount/workbench')
   })
 

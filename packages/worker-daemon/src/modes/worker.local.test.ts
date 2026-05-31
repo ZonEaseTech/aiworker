@@ -116,12 +116,12 @@ describe('local daemon API', () => {
 
   async function createFreeformWorker(target: Awaited<ReturnType<typeof app>>, id = 'freeform-worker') {
     const res = await target.request('/api/workers', {
-      body: JSON.stringify({ id, name: 'Freeform', soulId: FREEFORM_APP_ID }),
+      body: JSON.stringify({ id, name: 'Freeform', appId: FREEFORM_APP_ID }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(res.status).toBe(201)
-    return (await res.json() as { worker: { id: string, soulId: string } }).worker
+    return (await res.json() as { worker: { id: string, appId: string } }).worker
   }
 
   async function createWorkspaceLocator(
@@ -214,7 +214,7 @@ describe('local daemon API', () => {
       defaultEngineId: 'codex',
       id: 'legacy-hr-worker',
       name: 'Legacy HR',
-      soulId: 'hr',
+      appId: 'hr',
     })
     createWorkspace({
       at: seedNow,
@@ -267,14 +267,14 @@ describe('local daemon API', () => {
 
     expect((await target.request('/api/local/workers')).status).toBe(404)
     const legacyCollectionWriteRes = await target.request('/api/local/workers', {
-      body: JSON.stringify({ id: 'legacy-collection-worker', name: 'Legacy Collection', soulId: FREEFORM_APP_ID }),
+      body: JSON.stringify({ id: 'legacy-collection-worker', name: 'Legacy Collection', appId: FREEFORM_APP_ID }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(legacyCollectionWriteRes.status).toBe(404)
 
     const legacyRes = await target.request('/api/workers', {
-      body: JSON.stringify({ id: 'legacy-hr-worker', name: 'Legacy HR', soulId: 'hr' }),
+      body: JSON.stringify({ id: 'legacy-hr-worker', name: 'Legacy HR', appId: 'hr' }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
@@ -282,7 +282,7 @@ describe('local daemon API', () => {
     expect(await legacyRes.json()).toMatchObject({ error: { code: 'SOUL_NOT_AVAILABLE' } })
 
     const worker = await createFreeformWorker(target, 'official-freeform-worker')
-    expect(worker.soulId).toBe(FREEFORM_APP_ID)
+    expect(worker.appId).toBe(FREEFORM_APP_ID)
     expect((await target.request(`/api/local/workers/${worker.id}`)).status).toBe(404)
     const legacyMemberWriteRes = await target.request(`/api/local/workers/${worker.id}`, {
       body: JSON.stringify({ name: 'Legacy Member' }),
@@ -343,7 +343,7 @@ describe('local daemon API', () => {
 
     const restarted = await app()
     const workerRes = await restarted.request('/api/workers', {
-      body: JSON.stringify({ id: 'disabled-freeform-worker', name: 'Disabled Freeform', soulId: FREEFORM_APP_ID }),
+      body: JSON.stringify({ id: 'disabled-freeform-worker', name: 'Disabled Freeform', appId: FREEFORM_APP_ID }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
@@ -359,7 +359,7 @@ describe('local daemon API', () => {
     expect(workersBody.workers.some(worker => worker.id === 'legacy-hr-worker')).toBe(false)
 
     const worker = await createFreeformWorker(target, 'freeform-after-discard')
-    expect(worker.soulId).toBe(FREEFORM_APP_ID)
+    expect(worker.appId).toBe(FREEFORM_APP_ID)
   })
 
   it('serves the workspace/session loop and session-level follow-up invocations', async () => {
@@ -1596,7 +1596,7 @@ describe('local daemon API', () => {
     expect((await target.request('/api/app-installation/apps/demo-custom-workbench/enable', { method: 'POST' })).status).toBe(200)
 
     const workerRes = await target.request('/api/workers', {
-      body: JSON.stringify({ id: 'custom-workbench-worker', name: 'Custom Workbench', soulId: 'demo-custom-workbench' }),
+      body: JSON.stringify({ id: 'custom-workbench-worker', name: 'Custom Workbench', appId: 'demo-custom-workbench' }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
@@ -1852,7 +1852,7 @@ describe('local daemon API', () => {
           configToml: '[mcp_servers.local]\ncommand = "node"\n',
         },
         name: 'Embedded MCP Worker',
-        soulId: FREEFORM_APP_ID,
+        appId: FREEFORM_APP_ID,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -2031,7 +2031,7 @@ describe('local daemon API', () => {
           reviewRecord: { decision: 'approved' },
         },
         name: 'Domain Payload Worker',
-        soulId: FREEFORM_APP_ID,
+        appId: FREEFORM_APP_ID,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -2582,7 +2582,7 @@ describe('local daemon API', () => {
     expect((await target.request('/api/local/apps/demo-api/enable', { method: 'POST' })).status).toBe(404)
 
     const workerRes = await target.request('/api/workers', {
-      body: JSON.stringify({ id: 'demo-api-worker', name: 'Demo API Worker', soulId: 'demo-api' }),
+      body: JSON.stringify({ id: 'demo-api-worker', name: 'Demo API Worker', appId: 'demo-api' }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
@@ -2705,7 +2705,7 @@ describe('local daemon API', () => {
     expect((await target.request('/api/app-installation/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
 
     const workerRes = await target.request('/api/workers', {
-      body: JSON.stringify({ id: 'demo-api-archive-worker', name: 'Demo API Archive Worker', soulId: 'demo-api' }),
+      body: JSON.stringify({ id: 'demo-api-archive-worker', name: 'Demo API Archive Worker', appId: 'demo-api' }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
@@ -3115,14 +3115,14 @@ describe('local daemon API', () => {
     }).patch?.requestBody).toEqual(workerConfigOperation?.requestBody)
 
     const invalidWorker = await target.request('/api/workers', {
-      body: JSON.stringify({ soulId: FREEFORM_APP_ID }),
+      body: JSON.stringify({ appId: FREEFORM_APP_ID }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
     expect(invalidWorker.status).toBe(400)
 
     const validWorker = await target.request('/api/workers', {
-      body: JSON.stringify({ extraField: 'ignored', name: 'Freeform Extra', soulId: FREEFORM_APP_ID }),
+      body: JSON.stringify({ extraField: 'ignored', name: 'Freeform Extra', appId: FREEFORM_APP_ID }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })

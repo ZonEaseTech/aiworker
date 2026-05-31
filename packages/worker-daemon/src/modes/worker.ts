@@ -209,7 +209,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/health', c => c.json({
     mode: 'soul-workspace',
     status: 'ok',
-    workers: listWorkers().map(worker => ({ id: worker.id, soulId: worker.soulId, status: worker.status })),
+    workers: listWorkers().map(worker => ({ id: worker.id, appId: worker.appId, status: worker.status })),
     runtimeVersion: state.runtimeVersion,
     startedAt: state.startedAt,
     checkedAt: new Date().toISOString(),
@@ -226,7 +226,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return c.json({ error: { code: 'WORKER_NOT_FOUND', message: 'no worker registered' } }, 404)
     return c.json({
       workerId: worker.id,
-      soulId: worker.soulId,
+      templateId: worker.appId,
       version: state.runtimeVersion,
       health: { ready: true },
       configMicroAppEntry: '/api/mount/workbench',
@@ -313,7 +313,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
         id: result.data.id,
         metadata: result.data.metadata,
         name: result.data.name,
-        soulId: result.data.soulId,
+        appId: result.data.appId,
       })
     }
     catch (error) {
@@ -342,7 +342,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     try {
       worker = upsertWorker({
         id: existing.id,
-        soulId: existing.soulId,
+        appId: existing.appId,
         name: result.data.name ?? existing.name,
         status: result.data.status ?? existing.status,
         defaultEngineId: result.data.defaultEngineId ?? existing.defaultEngineId,
@@ -366,7 +366,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return notFound(c, 'worker')
     const worker = upsertWorker({
       id: existing.id,
-      soulId: existing.soulId,
+      appId: existing.appId,
       name: existing.name,
       status: 'archived',
       defaultEngineId: existing.defaultEngineId,
@@ -685,7 +685,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Workspace ${workspace.id} is archived and cannot mount workbench.` } }, 400)
     if (session?.status === 'archived')
       return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} is archived and cannot mount workbench.` } }, 400)
-    const app = state.host.getApp(worker.soulId)
+    const app = state.host.getApp(worker.appId)
     if (!app)
       return notFound(c, 'Soul App')
     if (app.status !== 'enabled')
@@ -1248,14 +1248,14 @@ function mountedProxyLocatorContextError(c: Context, app: HostedSoulApp): Respon
     return mountContextInvalid(c, `Workspace ${workspace.id} is archived and cannot proxy app-owned API requests.`)
   if (session?.status === 'archived')
     return mountContextInvalid(c, `Session ${session.id} is archived and cannot proxy app-owned API requests.`)
-  if (worker && worker.soulId !== app.appId)
+  if (worker && worker.appId !== app.appId)
     return mountContextInvalid(c, `Worker ${worker.id} does not belong to Soul App ${app.appId}`)
   if (workspace && workspace.workerId) {
     if (worker && workspace.workerId !== worker.id)
       return mountContextInvalid(c, `Workspace ${workspace.id} does not belong to worker ${worker.id}`)
     if (!worker && workspace.workerId) {
       const workspaceWorker = getWorker(workspace.workerId)
-      if (!workspaceWorker || workspaceWorker.soulId !== app.appId)
+      if (!workspaceWorker || workspaceWorker.appId !== app.appId)
         return mountContextInvalid(c, `Workspace ${workspace.id} does not belong to Soul App ${app.appId}`)
     }
   }
@@ -1266,7 +1266,7 @@ function mountedProxyLocatorContextError(c: Context, app: HostedSoulApp): Respon
       return mountContextInvalid(c, `Session ${session.id} does not belong to workspace ${workspace.id}`)
     if (!worker) {
       const sessionWorker = getWorker(session.workerId)
-      if (!sessionWorker || sessionWorker.soulId !== app.appId)
+      if (!sessionWorker || sessionWorker.appId !== app.appId)
         return mountContextInvalid(c, `Session ${session.id} does not belong to Soul App ${app.appId}`)
     }
   }

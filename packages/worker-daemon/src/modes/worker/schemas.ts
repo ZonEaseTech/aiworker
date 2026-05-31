@@ -53,7 +53,7 @@ export const createWorkerBodySchema = z.object({
   id: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   name: z.string().trim().min(1),
-  soulId: z.string().trim().min(1),
+  appId: z.string().trim().min(1),
 })
 
 // ---------------------------------------------------------------------------
