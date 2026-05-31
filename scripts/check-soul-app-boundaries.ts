@@ -171,6 +171,8 @@ function scanHostImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
   const hostRoots = [
     path.join(repoRoot, 'apps/worker-cli'),
     path.join(repoRoot, 'apps/worker-web'),
+    path.join(repoRoot, 'apps/host-cli'),
+    path.join(repoRoot, 'apps/host-web'),
     path.join(repoRoot, 'packages'),
     path.join(repoRoot, 'scripts'),
   ].filter(existsSync)

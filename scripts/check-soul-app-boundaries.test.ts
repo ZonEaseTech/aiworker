@@ -135,6 +135,64 @@ describe('check-soul-app-boundaries', () => {
     }
   })
 
+  test('catches host-cli importing Soul internals (C-HS coverage guard)', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
+    try {
+      const appDir = join(tempRoot, 'souls/demo-soul')
+      mkdirSync(join(appDir, 'product/api'), { recursive: true })
+      writeFileSync(join(appDir, 'soul.config.ts'), 'export default {}\n')
+      writeFileSync(join(appDir, 'product/api/index.ts'), 'export const api = 1\n')
+
+      const hostCliDir = join(tempRoot, 'apps/host-cli/src')
+      mkdirSync(hostCliDir, { recursive: true })
+      writeFileSync(
+        join(hostCliDir, 'bad.ts'),
+        'import { api } from "../../../souls/demo-soul/product/api"\nexport const z = api\n',
+      )
+
+      const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
+        cwd: tempRoot,
+        encoding: 'utf8',
+      })
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('apps/host-cli/src/bad.ts')
+      expect(result.stderr).toContain('Host code must not import Soul App internals')
+    }
+    finally {
+      rmSync(tempRoot, { force: true, recursive: true })
+    }
+  })
+
+  test('catches host-web importing Soul internals (C-HS coverage guard)', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
+    try {
+      const appDir = join(tempRoot, 'souls/demo-soul')
+      mkdirSync(join(appDir, 'product/api'), { recursive: true })
+      writeFileSync(join(appDir, 'soul.config.ts'), 'export default {}\n')
+      writeFileSync(join(appDir, 'product/api/index.ts'), 'export const api = 1\n')
+
+      const hostWebDir = join(tempRoot, 'apps/host-web/src')
+      mkdirSync(hostWebDir, { recursive: true })
+      writeFileSync(
+        join(hostWebDir, 'bad.ts'),
+        'import { api } from "../../../souls/demo-soul/product/api"\nexport const z = api\n',
+      )
+
+      const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
+        cwd: tempRoot,
+        encoding: 'utf8',
+      })
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('apps/host-web/src/bad.ts')
+      expect(result.stderr).toContain('Host code must not import Soul App internals')
+    }
+    finally {
+      rmSync(tempRoot, { force: true, recursive: true })
+    }
+  })
+
   test('blocks Soul App imports of the Host fs-layout package', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
     try {
