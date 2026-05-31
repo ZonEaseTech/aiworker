@@ -81,7 +81,7 @@ Production mounted workbench surfaces use micro-app with:
 router-mode="search"
 ```
 
-Host resolves one workbench entry:
+Worker daemon resolves one workbench entry:
 
 - custom Soul workbench when the descriptor exposes one;
 - SDK common workbench fallback when no custom workbench exists.

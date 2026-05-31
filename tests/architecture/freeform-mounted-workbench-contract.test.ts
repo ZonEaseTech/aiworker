@@ -30,7 +30,7 @@ describe('Freeform mounted workbench contract', () => {
     expect(commonWorkbench).toContain('data-module="bridge-event-stream"')
   })
 
-  test('Host daemon mount resolver is locator-driven and does not expose source paths', () => {
+  test('Worker daemon mount resolver is locator-driven and does not expose source paths', () => {
     const source = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
 
     expect(source).toContain('app.get(\'/api/mount/workbench\'')

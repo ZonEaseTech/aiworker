@@ -200,7 +200,7 @@ requireIncludes('docs/protocol.md', [
   'Descriptor v1 must not introduce memory, lesson, governance, repository workflow,\nor domain business concepts as platform primitives.',
   'Production mounted workbench surfaces use micro-app with:',
   'router-mode="search"',
-  'Host resolves one workbench entry:',
+  'Worker daemon resolves one workbench entry:',
   '- custom Soul workbench when the descriptor exposes one;\n- SDK common workbench fallback when no custom workbench exists.',
   'Host passes locator context and mount data only. Soul owns internal routes,\ndomain rendering, app-owned actions, and app-owned API usage.',
   'POST   /api/sessions/:sessionId/invocations',

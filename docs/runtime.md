@@ -204,3 +204,7 @@ Archive is the default lifecycle operation for workers, workspace locators, and
 sessions. Hard delete is explicit and removes Worker metadata plus receipt-owned
 projection files only. Physical workspace root deletion is a separate dangerous
 action and is not the default lifecycle behavior.
+
+In v1, the Host→Worker assignment envelope is validate-and-echo only; Host→Worker lifecycle signals (stop, decommission) are acknowledge-only; neither affects Worker runtime execution.
+
+Session and invocation context files under `.aiworker/sessions/*` are cleaned only when the physical workspace root is deleted; session lifecycle delete intentionally preserves them.
