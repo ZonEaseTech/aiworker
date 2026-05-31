@@ -4,7 +4,11 @@
 
 **Goal:** 落实统一边界 spec §3 D1 / §4.1:把系统性承载 **appId 值却命名为 soulId** 的寻址字段收敛为单一 `appId`,域 `soulId` 降级为 descriptor identity 元数据;一并消解控制契约 `describe.soulId`(装 appId)vs `assignment.templateId` 的双键名不一致。
 
-**Architecture:** 这是**跨层契约级**迁移(G5 Host↔Worker 契约 + OpenAPI + DB 列迁移 + 投影 + CLI + 契约测试 pin),独立于 boundary-cleanup 计划。严格 TDD + 逐层推进 + 每层一次提交,保证任意中间提交可通过 typecheck。**先 Task 0 向用户确认命名子决策**,再动代码。
+**Architecture:** 这是**跨层契约级**迁移(G5 Host↔Worker 契约 + OpenAPI + DB 列迁移 + 投影 + CLI + 契约测试 pin),独立于 boundary-cleanup 计划。严格 TDD + 逐层推进。
+
+> **⚠️ 中间态非全绿(执行者必读):** C-ID **Tasks 1–6 是一次原子重构序列**。rename 的上下游跨多个 task(如 Task 2 改 `upsertWorker` 签名,消费方在 Task 4/5 才修),所以**每个 task 提交后只保证该 task 的 `--filter <pkg> typecheck`/`test` 绿;全量 `typecheck`/`release:check` 在序列中途必然红**,仅在 **Task 7 之后**作为最终门跑一次。subagent-driven 执行时,**Tasks 1–6 之间的 review checkpoint 只跑 scoped 检查,切勿在序列中途跑 `release:check` 或全量 `typecheck`**(会误报中途断裂)。每个 task 仍单独提交以便回滚,但"可通过全量门"只在序列末尾成立。
+
+**先 Task 0 向用户确认命名子决策**,再动代码。
 
 **Tech Stack:** drizzle(SQLite RENAME COLUMN 迁移)、zod、Hono OpenAPI、Bun test、ripgrep。门:`bun run release:check`。
 
@@ -165,7 +169,7 @@ CREATE INDEX `workers_app_idx` ON `workers` (`app_id`);
 
 **Files:** `tests/architecture/refactor-contract.test.ts`、`docs/protocol.md`、`scripts/check-doc-contract.ts`。
 
-- [ ] **Step 1: 同步 refactor-contract pin** — 读 `:1365-1382` 与 `:1770-1784`,把 `retiredWorkerSnippets` 里的 `'soulId: \'hr\''`/`'"soulId": "hr"'` 改为收敛后的字段名形态(`'appId: \'hr\''` 等),保持"断言退役 HR fixture 缺席"的语义。跑 `bun test tests/architecture/refactor-contract.test.ts` 确认仍绿(被测源文件已在 Task2/5 去 HR)。
+- [ ] **Step 1: 先确认 pin 是否真需改** — `:1770-1784` 的 storage 用例先把 `discards/repairs legacy` 的 `it(...)` 块 `.replace()` 剥离再扫描,故那些块内被改名的 fixture **可能已豁免**。先跑 `bun test tests/architecture/refactor-contract.test.ts`(在 Task2/5 完成后);**若已绿则跳过本 task 的 pin 改动**。仅当因 Task2/5 改名导致这两个测试红时,才把 `retiredWorkerSnippets` 里的 `'soulId: \'hr\''`/`'"soulId": "hr"'` 改为收敛后的字段名形态(`'appId: \'hr\''` 等),保持"断言退役 HR fixture 缺席"的语义,并确认仍绿。
 - [ ] **Step 2: 改 canon protocol.md** — 在控制契约节明确:`workerDescribeSchema.templateId` 与 `workerAssignmentEnvelopeSchema.templateId` 同指 Soul-App/Template 身份,承载值是 descriptor `appId`(不透明 key);并加一句 **协议变更说明**(pre-1.0:`describe.soulId` 已更名 `templateId`,`WORKER_CONTROL_PROTOCOL_VERSION` 维持 `1` 或按需 bump——读 wcp 决定是否 bump)。
 - [ ] **Step 3: 同步 check-doc-contract pin** — `scripts/check-doc-contract.ts` 中与上句对应的 pin 串改为逐字一致。
 - [ ] **Step 4: 跑绿** — `bun run docs:check && bun test tests/architecture/refactor-contract.test.ts`。

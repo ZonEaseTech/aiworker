@@ -8,7 +8,7 @@
 
 **Tech Stack:** Bun test、drizzle、zod、ripgrep;契约测试在 `tests/architecture/`,跑 `bun run test:contracts`。
 
-**前置(计划起点必做):** 向用户逐条确认 spec §7 的 6 个 product-bet 是否纳入。本计划默认**不**实现任何 product-bet(它们不是渗漏)。
+**前置:** 本计划默认**不**实现 spec §7 的任何 product-bet(它们不是渗漏)。唯一耦合点:**只有 product-bet #3(session `deleted` 软/硬态)阻塞 Task 8 的 session-deleted canon 子步**——执行到 Task 8 前确认 #3 即可。其余 5 个 bet 与本计划独立,无需起点统一确认,可随时延后。
 
 **检测口径护栏(spec §1,新增扫描类测试必须遵守):** ① 捕获动态 `import()`;② 扫 src 外消费;③ 排除 test/fixture 与字符串字面量;④ exports-aware;⑤ doc-contract 逐字严格——改 canon 必须同步 `check-doc-contract.ts` pin 串。
 
@@ -16,81 +16,47 @@
 
 ## P1
 
-### Task 1: F1 — 断 `soul-protocol` 类型-only barrel 环
+### Task 1: F1 — 锁 `soul-protocol` value-import 无环(类型-only barrel 环视为良性)
 
-**事实:** `packages/soul-protocol/src/soul-app/registry.ts:2` 是 `import type { SoulDescriptorV1 } from '..'`(根 barrel),而 barrel `index.ts:307` 又 `export * from './soul-app'` → soul-app/index.ts → registry.ts,构成环。该环是 **type-only**(运行时已擦除,无运行时环),但 madge 报告且属命名/结构异味。`SoulDescriptorV1` 定义在 `index.ts:217`,其 schema `soulDescriptorV1Schema`(:201-215)只依赖 index.ts 内的 `hostInterpretedObjectSchema/workbenchSchema/appOwnedApiSchema/engineSchema/externalObjectSchema`,**不依赖 soul-app**,故可整簇抽到叶子模块。
+**事实(调查已降级):** `packages/soul-protocol/src/soul-app/registry.ts:2` 是 `import type { SoulDescriptorV1 } from '..'`——**type-only,编译期擦除,无运行时环**。barrel `index.ts:307 export * from './soul-app'` → soul-app/index.ts → registry.ts → `..` 闭合的这条环**只存在于类型图**;运行时 value import 图已无环。madge 报的 "1 circular" 即这条类型 edge。**spec 标 P1 系严重度高估;调查后的等价事实是运行时无环。** 故采 YAGNI:**锁住 value-import 无环这一真不变量**,把类型-only barrel import 视为良性,**不做大抽取**(抽 `soulDescriptorV1Schema` 簇风险高:若其传递闭包引用 `./soul-app/*` 会重建环,且收益仅为类型洁癖)。
 
-**Files:**
-- Create: `packages/soul-protocol/src/descriptor.ts`
-- Modify: `packages/soul-protocol/src/index.ts`(移出 descriptor 簇 + 改为 re-export)
-- Modify: `packages/soul-protocol/src/soul-app/registry.ts:2`(import 从 `..` 改 `../descriptor`)
-- Test: `tests/architecture/package-ownership.test.ts`(加 no-barrel-cycle 守卫)
+**Files:** `tests/architecture/package-ownership.test.ts`(加 value-only no-barrel 守卫)。
 
-- [ ] **Step 1: 写失败的守卫测试**(锁"soul-app 子模块不得 import 根 barrel")
+- [ ] **Step 1: 写守卫测试**(只禁 **value** import 根 barrel,允许 `import type`)
 
-在 `tests/architecture/package-ownership.test.ts` 末尾的 `describe('target package ownership', ...)` 内追加:
+在 `package-ownership.test.ts` 的 `describe('target package ownership', ...)` 内追加:
 
 ```ts
-test('soul-protocol/soul-app modules do not import the package root barrel (no type-only cycle)', () => {
+test('soul-protocol/soul-app modules have no VALUE import of the package root barrel (runtime acyclic)', () => {
   const dir = join(repoRoot, 'packages/soul-protocol/src/soul-app')
   const offenders: string[] = []
   for (const file of readdirSync(dir)) {
     if (!file.endsWith('.ts') || file.endsWith('.test.ts'))
       continue
     const src = readFileSync(join(dir, file), 'utf8')
-    // 匹配 `from '..'` 或 `from '../index'`(根 barrel),含 `import type`
-    if (/from\s+['"]\.\.(?:\/index)?['"]/.test(src))
+    // 匹配 value import（排除 `import type ...`）from '..' / '../index'
+    if (/^\s*import\s+(?!type[\s{])[^;\n]*\sfrom\s+['"]\.\.(?:\/index)?['"]/m.test(src))
       offenders.push(`packages/soul-protocol/src/soul-app/${file}`)
   }
-  expect(offenders, 'soul-app modules must import leaf modules, not the root barrel').toEqual([])
+  expect(offenders, 'soul-app modules must not VALUE-import the root barrel (would create a runtime cycle)').toEqual([])
 })
 ```
 
 确认顶部已 import `readdirSync`(若无则加进现有 `node:fs` import)。
 
-- [ ] **Step 2: 跑测试确认失败**
+- [ ] **Step 2: 跑测试 — 今天即 PASS**
 
-Run: `bun test tests/architecture/package-ownership.test.ts -t "do not import the package root barrel"`
-Expected: FAIL,offenders 含 `.../soul-app/registry.ts`。
+Run: `bun test tests/architecture/package-ownership.test.ts -t "runtime acyclic"`
+Expected: PASS(registry.ts:2 是 `import type`,被豁免)。这是**绿守卫**,锁住已干净的运行时态、防未来引入 value 级 barrel 环(对 F1 这是 red→green 的反向:先确立"运行时本就无环"的事实,再加锁)。
 
-- [ ] **Step 3: 抽 descriptor 簇到叶子模块**
-
-先读 `packages/soul-protocol/src/index.ts:1-220` 枚举 `soulDescriptorV1Schema` 引用到的本地 schema(`SOUL_DESCRIPTOR_V1_PROTOCOL`、`hostInterpretedObjectSchema`、`hostInterpretedArraySchema`、`workbenchSchema`、`appOwnedApiSchema`、`engineSchema`、`externalObjectSchema`、`rejectForbiddenHostInterpretedFields` 及它们各自的依赖)。把这一簇 + `soulDescriptorV1Schema` + `SoulDescriptorV1` + `parseSoulDescriptorV1` 整体**剪切**进新建 `packages/soul-protocol/src/descriptor.ts` 并 `export`。该叶子**不得** import `./soul-app`。
-
-- [ ] **Step 4: index.ts 改为 re-export**
-
-在 `packages/soul-protocol/src/index.ts` 原位置替换为:
-
-```ts
-export * from './descriptor'
-```
-
-(保留原有 `export * from './soul-app'` 等不动。)确认无其它文件因路径变化报错。
-
-- [ ] **Step 5: registry.ts 指向叶子**
-
-`packages/soul-protocol/src/soul-app/registry.ts:2`:
-
-```ts
-import type { SoulDescriptorV1 } from '../descriptor'
-```
-
-- [ ] **Step 6: 跑守卫 + 类型 + 全包测试确认绿**
-
-Run: `bun test tests/architecture/package-ownership.test.ts -t "root barrel" && bun run --filter '@zonease/aiworker-soul-protocol' typecheck && bun run --filter '@zonease/aiworker-soul-protocol' test`
-Expected: 全 PASS。
-
-- [ ] **Step 7: 可选复核环已断**
-
-Run: `bunx madge --circular --extensions ts packages/soul-protocol/src 2>&1 | tail -3`
-Expected: `No circular dependency found` 或不再含 index→soul-app→registry 环。
-
-- [ ] **Step 8: 提交**
+- [ ] **Step 3: 提交**
 
 ```bash
-git add packages/soul-protocol/src/descriptor.ts packages/soul-protocol/src/index.ts packages/soul-protocol/src/soul-app/registry.ts tests/architecture/package-ownership.test.ts
-git commit -m "refactor(soul-protocol): 抽 descriptor 簇到叶子模块断 type-only barrel 环(F1)"
+git add tests/architecture/package-ownership.test.ts
+git commit -m "test(soul-protocol): 锁 value-import 无环(F1;类型-only barrel 环视为良性)"
 ```
+
+> **可选后续(deferred,非本计划):** 若要连类型 edge 也清(纯结构洁癖),可把 `soulDescriptorV1Schema` 簇抽到叶子 `descriptor.ts` 并让 registry 从 `../descriptor` import——**但先验证该簇传递闭包(`engineSchema`/`appOwnedApiSchema`/`hostInterpretedObjectSchema` 等)不引用 `./soul-app/*`,否则抽取会重建环**。收益低(类型 edge 无运行时影响),默认不做。
 
 ### Task 2: F2 — worker-cli 声明 soul-app-sdk + 去深穿 import
 
@@ -195,6 +161,8 @@ test('engine-projection and worker-daemon declare no unused internal deps', () =
   expect(offenders, 'declared runtime deps must be referenced in src').toEqual([])
 })
 ```
+
+> **局限注记:** `srcText.includes(dep)` 也会命中注释/字符串里的包名,作为**长期守卫**会 false-negative(漏报注释里提及的真未用 dep)。本计划只用它清除已坐实的 fs-layout/soul-app-sdk 已知项,够用;若要做长期严守,后续可换 AST/`import` 语句解析。
 
 - [ ] **Step 2: 跑确认失败** → Expected: FAIL,offenders = 两条 `... -> @zonease/aiworker-fs-layout`。
 - [ ] **Step 3: 删依赖** — 从两个 package.json 的 `dependencies` 删 `@zonease/aiworker-fs-layout` 行。
@@ -309,37 +277,34 @@ git commit -m "refactor(worker-cli): HOST_PRIVATE_* → WORKER_PRIVATE_*(倒置�
 
 **事实:** `scripts/check-soul-app-boundaries.ts` 与 `apps/worker-cli/src/soul-app-boundary.ts` 手工并行重实现同一套 soul-app import 扫描。需先读两文件确认共享子集(importSpecifiers / resolveRelativeImport / 禁前缀判定 / rawWebStorage 检测)。
 
-**Files:** Create `packages/soul-app-sdk/src/boundary-scan.ts`(或 worker-cli/src 下的共享模块,取决于谁能被双方 import——脚本在 repo 根、CLI 在 apps,二者都能 import 一个 package);Modify 两个使用点;新守卫。
+**事实补充(家是个边界决策):****不要**为去重而扩张产品包 `soul-app-sdk` 的公开 `exports`(当前仅 `["."]`)——那是用 lint/build 关注污染产品公开面,正是本轮要消的归属不洁。worker-cli `soul-app-boundary.ts` 与 `scripts/check-soul-app-boundaries.ts` 都在 dev/test 跑。
 
-- [ ] **Step 1: 写失败守卫**(single-source:两处都 import 同一模块)
+**Files:** 取决于 Step 0 决策;新守卫在 `tests/architecture` 或 `scripts/*.test.ts`。
 
-```ts
-test('soul-app boundary scan logic has a single source', () => {
-  const sharedModule = '@zonease/aiworker-soul-app-sdk/boundary-scan'
-  const cli = readFileSync(join(repoRoot, 'apps/worker-cli/src/soul-app-boundary.ts'), 'utf8')
-  const script = readFileSync(join(repoRoot, 'scripts/check-soul-app-boundaries.ts'), 'utf8')
-  expect(cli.includes(sharedModule) && script.includes(sharedModule), 'both must import the shared scanner').toBe(true)
-})
-```
-
+- [ ] **Step 0: 决定去重形态(边界决策)** — 先确认 worker-cli `soul-app-boundary.ts` 是 runtime 还是仅 test 消费(`rg -n "soul-app-boundary" apps/worker-cli/src`)。再二选一:
+  - **A(推荐,不增公开面):dedup-by-contract** — 不强制物理共享模块,加一个**行为一致性(parity)守卫**:同一组 fixture 输入下,断言 worker-cli 扫描器与脚本扫描器产出**逐条相同**,锁住"二者不漂移"。
+  - **B:物理单源到中性内部位置** — 仅当存在不跨 root、不扩张产品包公开面的中性家(如标注 internal 的 `scripts/lib/` 模块**且** worker-cli 能不深穿地 import)时才选;**禁止**放进 `soul-app-sdk` 公开 `exports`。
+- [ ] **Step 1: 写失败守卫**
+  - A:构造 fixture import 串数组,分别喂 worker-cli 的 `scanPrivateImports`/`scanRawWebStorageUsage` 与脚本等价入口,`expect(cliResult).toEqual(scriptResult)`;若两实现已完全一致则先注入一个已知差异 fixture 使其 FAIL,再对齐。
+  - B:single-source 守卫——断言两处都 import 同一中性模块路径。
 - [ ] **Step 2: 跑确认失败** → FAIL。
-- [ ] **Step 3: 抽共享 scanner** — 读 `scripts/check-soul-app-boundaries.ts` 与 `apps/worker-cli/src/soul-app-boundary.ts`,把共有的纯函数(`importSpecifiers`、`normalizedImport`、`resolveRelativeImport`、`isInside`、`rawWebStorageSymbols`、禁前缀/roots 常量与判定)抽到新建 `packages/soul-app-sdk/src/boundary-scan.ts` 并 export;在 `packages/soul-app-sdk/package.json` 的 `exports` 加 `"./boundary-scan"` 子路径。
-- [ ] **Step 4: 两处改为 import 共享模块** — 删两文件内的重复实现,改 `import { ... } from '@zonease/aiworker-soul-app-sdk/boundary-scan'`;worker-cli package.json 已在 Task 2 声明 soul-app-sdk;`scripts/` 由根 package 解析 workspace。
+- [ ] **Step 3: 对齐/抽取** — A:把两扫描器差异对齐到同一逻辑(就地或共享一个**非公开** util);B:抽共有纯函数(`importSpecifiers`/`normalizedImport`/`resolveRelativeImport`/`isInside`/`rawWebStorageSymbols`/禁前缀常量)到中性内部模块,两处 import。
+- [ ] **Step 4:** A:确认 parity 绿;B:删两处重复实现。
 - [ ] **Step 5: 跑绿**
 
 ```bash
-bun install
-bun test tests/architecture/package-ownership.test.ts -t "single source"
+bun install   # 仅 B 且新增/改动了 package 时需要
+bun test tests/architecture   # 含新 parity/single-source 守卫
 bun run lint   # 含 check-soul-app-boundaries.ts
 bun test scripts/check-soul-app-boundaries.test.ts apps/worker-cli/src/soul-app-boundary.test.ts
 ```
-Expected: PASS(行为不变,逻辑单源)。
+Expected: PASS(行为不变;A 锁 parity,B 锁单源)。
 
-- [ ] **Step 6: 提交**
+- [ ] **Step 6: 提交**(只暂存实际改动的文件,按 A/B 不同;**不**暂存 `packages/soul-app-sdk` 除非 Step 0 选了一个不扩张其公开 `exports` 的中性家)
 
 ```bash
-git add packages/soul-app-sdk apps/worker-cli/src/soul-app-boundary.ts scripts/check-soul-app-boundaries.ts tests/architecture/package-ownership.test.ts bun.lock
-git commit -m "refactor(boundary): 抽单一 soul-app boundary scanner,去 worker-cli/script 重复(F8)"
+git add -p   # 逐块确认实际改动
+git commit -m "refactor(boundary): soul-app boundary scan 去 worker-cli/script 漂移(F8)"
 ```
 
 ### Task 8: C-CANON — canon 文案显式化(配合 doc-contract pin)
