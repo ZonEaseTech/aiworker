@@ -9,7 +9,8 @@ export const workerHealthSchema = z.object({
 
 export const workerDescribeSchema = z.object({
   workerId: z.string().min(1),
-  soulId: z.string().min(1),
+  // templateId 承载 descriptor appId，与 assignment.templateId 同指；Host 侧统一用 Template 术语。
+  templateId: z.string().min(1),
   version: z.string().min(1),
   health: workerHealthSchema,
   // 配置 micro-app entry：host-web 据此 mount（载体 = micro-app）。契约不绑定 transport

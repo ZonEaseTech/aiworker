@@ -10,12 +10,12 @@ describe('worker-control-protocol contract', () => {
   test('describe accepts a valid worker self-description', () => {
     const ok = parseWorkerDescribe({
       workerId: 'w1',
-      soulId: 'freeform',
+      templateId: 'aiworker-freeform',
       version: '0.1.0',
       health: { ready: true },
       configMicroAppEntry: '/api/mount/workbench',
     })
-    expect(ok.soulId).toBe('freeform')
+    expect(ok.templateId).toBe('aiworker-freeform')
   })
 
   test('assignment envelope is shape+version only, no connector behavior', () => {

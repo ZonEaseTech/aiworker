@@ -4,7 +4,8 @@ import { parseWorkerAssignmentEnvelope } from '@zonease/aiworker-worker-control-
 
 export interface WorkerRegistryEntry {
   workerId: string
-  soulId: string
+  // templateId 存 describe 响应的 appId，与 assignment.templateId 同指；Host 侧统一 Template 术语。
+  templateId: string
   endpoint: string
   health: WorkerHealth
   assignment?: WorkerAssignmentEnvelope

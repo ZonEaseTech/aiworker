@@ -5,14 +5,14 @@ import { createWorkerRegistry } from './index'
 describe('host-control worker registry', () => {
   test('registers and lists workers', () => {
     const reg = createWorkerRegistry()
-    reg.register({ workerId: 'w1', soulId: 'freeform', endpoint: 'http://127.0.0.1:9217', health: { ready: true } })
+    reg.register({ workerId: 'w1', templateId: 'aiworker-freeform', endpoint: 'http://127.0.0.1:9217', health: { ready: true } })
     expect(reg.list().map(w => w.workerId)).toEqual(['w1'])
-    expect(reg.get('w1')?.soulId).toBe('freeform')
+    expect(reg.get('w1')?.templateId).toBe('aiworker-freeform')
   })
 
   test('stores an assignment envelope validated by the control protocol', () => {
     const reg = createWorkerRegistry()
-    reg.register({ workerId: 'w1', soulId: 'freeform', endpoint: 'http://x', health: { ready: true } })
+    reg.register({ workerId: 'w1', templateId: 'aiworker-freeform', endpoint: 'http://x', health: { ready: true } })
     reg.assign('w1', {
       version: 1,
       templateId: 'freeform',
@@ -25,7 +25,7 @@ describe('host-control worker registry', () => {
 
   test('rejects an assignment that violates the control protocol', () => {
     const reg = createWorkerRegistry()
-    reg.register({ workerId: 'w1', soulId: 'freeform', endpoint: 'http://x', health: { ready: true } })
+    reg.register({ workerId: 'w1', templateId: 'aiworker-freeform', endpoint: 'http://x', health: { ready: true } })
     expect(() => reg.assign('w1', {
       version: 1,
       templateId: '',
@@ -37,7 +37,7 @@ describe('host-control worker registry', () => {
 
   test('rejects an assignment carrying a literal-secret gatewayProfileRef (C6: Host plane never persists a literal key)', () => {
     const reg = createWorkerRegistry()
-    reg.register({ workerId: 'w1', soulId: 'freeform', endpoint: 'http://x', health: { ready: true } })
+    reg.register({ workerId: 'w1', templateId: 'aiworker-freeform', endpoint: 'http://x', health: { ready: true } })
     // Otherwise-valid envelope; the ONLY defect is a literal secret in gatewayProfileRef,
     // so the throw can only come from the control-protocol's reference-shape refine.
     expect(() => reg.assign('w1', {
