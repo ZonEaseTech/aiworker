@@ -98,7 +98,7 @@ describe('target package ownership', () => {
     }
   })
 
-  test('local daemon lives in the final host-daemon package', () => {
+  test('local daemon lives in the final worker-daemon package', () => {
     expect(existsSync(join(repoRoot, 'apps/api'))).toBe(false)
 
     const rootPackage = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as PackageJson
@@ -113,7 +113,7 @@ describe('target package ownership', () => {
   test('host runtime delegates engine asset projection to the engine-projection package', () => {
     const hostRuntimeEntrypoint = readFileSync(join(repoRoot, 'packages/worker-runtime/src/index.ts'), 'utf8')
     const hostRuntimeSource = readFileSync(join(repoRoot, 'packages/worker-runtime/src/worker/runtime.ts'), 'utf8')
-    const hostDaemonPackage = JSON.parse(readFileSync(join(repoRoot, 'packages/worker-daemon/package.json'), 'utf8')) as PackageJson
+    const workerDaemonPackage = JSON.parse(readFileSync(join(repoRoot, 'packages/worker-daemon/package.json'), 'utf8')) as PackageJson
 
     expect(existsSync(join(repoRoot, 'packages/worker-runtime/src/worker/engine-assets.ts'))).toBe(false)
     expect(existsSync(join(repoRoot, 'packages/worker-runtime/src/worker/engine-assets.test.ts'))).toBe(false)
@@ -122,7 +122,7 @@ describe('target package ownership', () => {
     expect(hostRuntimeSource).toContain('@zonease/aiworker-engine-projection')
     expect(hostRuntimeSource).toContain('cleanupWorkspaceProjectionReceipt')
     expect(hostRuntimeSource).not.toContain('resolveWorkspaceProjectionTarget')
-    expect(hostDaemonPackage.dependencies ?? {}).toHaveProperty('@zonease/aiworker-engine-projection')
+    expect(workerDaemonPackage.dependencies ?? {}).toHaveProperty('@zonease/aiworker-engine-projection')
   })
 
   test('host runtime does not retain a local native engine bridge implementation', () => {
