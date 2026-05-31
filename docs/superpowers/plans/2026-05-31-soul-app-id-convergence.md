@@ -147,6 +147,27 @@ CREATE INDEX `workers_app_idx` ON `workers` (`app_id`);
 - [ ] **Step 5: 跑绿** — `bun run --filter '@zonease/aiworker-worker-runtime' test && bun run --filter '@zonease/aiworker-soul-app-runtime' typecheck`。
 - [ ] **Step 6: 提交** — `git commit -m "refactor(runtime): worker 寻址键 soulId → appId,域 soulId 降级为 metadata(C-ID Task5)"`。
 
+> **Task 0 站点补充(权威 rename map 由 controller 持有,逐 task 投喂精确行)。§4.1 之外确认的承载点,已分配到各 task:**
+> - soul-protocol `local-workspace.ts:118` `localWorkerSchema.soulId` → `appId`;内联 `SoulCapability`(`worker-runtime/src/soul-app/registry.ts:33`)→ 并入 Task 1/5。
+> - **host-control `src/index.ts:7` `WorkerRegistryEntry.soulId` → `templateId`**(它存 describe 响应,随 Task 3/4 的契约改名)。
+> - daemon `worker.ts:212`(/health 响应)、`:1251/1258/1269`(worker.soulId 比较)→ `appId`,并入 Task 4。
+> - soul-app-runtime `RuntimeCapability.soulId`(:39)、`SoulAppRuntimeWorkerSnapshot.soulId`(:81)、`worker.soulId`(:213,312)→ `appId`,并入 Task 5。
+> - **worker-web UI 整条链 → 新增 Task 5b(下)。**
+> - 域 soulId 保留点(不改):`soul_apps.soul_id`、`HostedSoulApp.soulId`(降级为元数据)、`metadata.domainSoulId`、descriptor authoring(SDK/scaffold/soul.config)、official-freeform 校验。
+
+---
+
+## Task 5b:worker-web UI 字段消费收敛(soulId→appId)
+
+**事实:** worker-web 多处消费 `worker.soulId`/`capability.soulId`/`app.soulId`(装 appId 值),且经 Task 4 改名后 daemon API 响应字段已是 `appId`,故这些读取点会 typecheck 红。纯消费侧改名,UI 语义不变。
+
+**Files:** `apps/worker-web/src/features/local-workspace/api/workers.ts:9`、`worker/worker-workbench-tree.tsx:30-52`(`worker.soulId`/`bySoulId`/`toggleSoulGroup`)、`worker/worker-studio.tsx:195,305-338,516-517`、`worker/studio/locator.ts:56,61,63,105,106`、`features/settings/components/settings-dialog.tsx:560,562,585`、`worker/studio/first-run-soul-app-home.tsx:68,79`。
+
+- [ ] **Step 1:** `rg -n "soulId|bySoulId|toggleSoulGroup|SoulGroup" apps/worker-web/src` 列全;读 worker-web 是否有相关测试(有则改 fixture 断言为门;无则以 typecheck 为门——Task 4 改名后 `worker.soulId` 读取应已红)。
+- [ ] **Step 2:** 把上述读取/分组标识从 `soulId`/`bySoulId`/`toggleSoulGroup(soulId)` 改为 `appId`/`byAppId`/`toggleAppGroup(appId)`(纯改名,不动 UI 行为/布局)。响应类型 `api/workers.ts:9` 的 `soulId` → `appId` 与 Task 4 daemon 响应一致。
+- [ ] **Step 3: 跑绿** — `bun run --filter '@zonease/aiworker-worker-web' typecheck`(+ 若有 worker-web 测试则跑;build 在最终门 test:browser:freeform 覆盖)。
+- [ ] **Step 4: 提交** — **并发共享树**只 add worker-web 改的文件;`git commit -m "refactor(worker-web): UI 消费 soulId → appId(C-ID Task5b)"`。
+
 ---
 
 ## Task 6:CLI `--soul` UX papercut
@@ -183,5 +204,5 @@ CREATE INDEX `workers_app_idx` ON `workers` (`app_id`);
 
 ## Self-Review 覆盖核对(spec §4.1 surface → task)
 
-- 存储 workers.soul_id→app_id → Task2 ✓ · 投影 ProjectedCapability.soulId → Task1 ✓ · 控制契约 describe.soulId → Task3 ✓ · daemon/OpenAPI → Task4 ✓ · runtime/soul-app-runtime → Task5 ✓ · CLI --soul → Task6 ✓ · refactor-contract pin + 协议版本 → Task7 ✓ · 域 soulId 降级(metadata.domainSoulId 保留)→ Task5 ✓ · 命名子决策 → Task0(用户确认)✓
+- 存储 workers.soul_id→app_id → Task2 ✓ · 投影 ProjectedCapability.soulId + localWorkerSchema → Task1 ✓ · 控制契约 describe.soulId→templateId + host-control WorkerRegistryEntry → Task3 ✓ · daemon/OpenAPI(含 /health + 比较点) → Task4 ✓ · runtime/soul-app-runtime(含内联 Capability/Snapshot 类型) → Task5 ✓ · **worker-web UI 整条链 → Task5b ✓** · CLI --soul → Task6 ✓ · refactor-contract pin + 协议版本 → Task7 ✓ · 域 soulId 降级(metadata.domainSoulId 保留)→ Task5 ✓ · 命名子决策 → Task0(用户确认,commit 88996f13)✓
 - 类型一致:内部统一 `appId`、控制契约统一 `templateId`(Task0 决策),Task1-6 一致采用;`upsertWorker` 入参从 `soulId` 改 `appId` 在 Task2 定义、Task5 调用方同步 ✓
