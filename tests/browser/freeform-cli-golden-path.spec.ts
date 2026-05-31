@@ -47,7 +47,7 @@ try {
     workerId,
     '--name',
     'Freeform CLI Golden Worker',
-    '--soul',
+    '--app',
     appId,
   )
   const workspaceResult = runCliJson<{ workspace: { id: string, rootPath: string } }>(

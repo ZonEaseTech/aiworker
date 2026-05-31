@@ -86,7 +86,7 @@ async function main(): Promise<number> {
     await assertCli(cli, ['app', 'bootstrap', 'official'], { env, label: 'app bootstrap official' })
     const list = await assertCli(cli, ['app', 'list'], { env, label: 'app list' })
     const souls = await assertCli(cli, ['soul', 'list'], { env, label: 'soul list' })
-    const capabilities = await assertCli(cli, ['capability', 'list', '--soul', 'aiworker-freeform'], { env, label: 'capability list' })
+    const capabilities = await assertCli(cli, ['capability', 'list', '--app', 'aiworker-freeform'], { env, label: 'capability list' })
     assertJsonIncludes(list.stdout, 'aiworker-freeform')
     assertJsonIncludes(souls.stdout, 'aiworker-freeform')
     assertJsonIncludes(capabilities.stdout, 'aiworker-freeform.default')
