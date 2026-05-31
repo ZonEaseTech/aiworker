@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
@@ -116,5 +116,19 @@ describe('target package ownership', () => {
     expect(existsSync(join(repoRoot, 'packages/worker-runtime/src/worker/engine-bridge.test.ts'))).toBe(false)
     expect(hostRuntimeEntrypoint).not.toContain('invokeNativeEngine')
     expect(hostRuntimeEntrypoint).not.toContain('NativeEngineBridge')
+  })
+
+  test('soul-protocol/soul-app modules have no VALUE import of the package root barrel (runtime acyclic)', () => {
+    const dir = join(repoRoot, 'packages/soul-protocol/src/soul-app')
+    const offenders: string[] = []
+    for (const file of readdirSync(dir)) {
+      if (!file.endsWith('.ts') || file.endsWith('.test.ts'))
+        continue
+      const src = readFileSync(join(dir, file), 'utf8')
+      // 匹配 value import（排除 `import type ...`）from '..' / '../index'
+      if (/^\s*import\s+(?!type[\s{])[^;\n]*\sfrom\s+['"]\.\.(?:\/index)?['"]/m.test(src))
+        offenders.push(`packages/soul-protocol/src/soul-app/${file}`)
+    }
+    expect(offenders, 'soul-app modules must not VALUE-import the root barrel (would create a runtime cycle)').toEqual([])
   })
 })
