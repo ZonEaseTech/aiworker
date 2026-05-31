@@ -2117,7 +2117,7 @@ describe('LocalWorkerRuntime', () => {
     ).resolves.toContain('"engineId": "codex"')
     await expect(
       workerRuntime.files(workspace.id).read(`.aiworker/sessions/${session.id}/context/soul-app.json`),
-    ).resolves.toContain('"soulId": "demo-soul"')
+    ).resolves.toContain('"appId": "demo-soul"')
   })
 
   it('keeps runtime workspaces isolated when two workers share one Soul', async () => {
@@ -2668,7 +2668,7 @@ async function writeWorkspaceEngineAssets(appRoot: string): Promise<void> {
     '## Workspace Identity',
     '',
     '- Soul worker: {{workerName}}',
-    '- Soul id: {{soulId}}',
+    '- Soul id: {{appId}}',
     '- Workspace profile: {{workspaceName}}',
     '',
     '## Accepted State',

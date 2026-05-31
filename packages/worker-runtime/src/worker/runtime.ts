@@ -800,10 +800,10 @@ export class LocalWorkerRuntime {
       engineCommand: sessionEngine?.engineCommand ?? null,
       engineId: sessionEngine?.engineId ?? this.#workerInput.defaultEngineId ?? 'codex',
       executionMode: sessionEngine?.executionMode ?? 'local-cli',
-      soulId: this.#workerInput.appId,
+      appId: this.#workerInput.appId,
     }, null, 2), 'utf8')
     await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'soul-app.json')), JSON.stringify({
-      soulId: this.#workerInput.appId,
+      appId: this.#workerInput.appId,
       name: this.#workerInput.name,
     }, null, 2), 'utf8')
     await mkdir(files.resolve(path.posix.join(sessionRoot, 'invocations')), { recursive: true })
@@ -954,7 +954,6 @@ export class LocalWorkerRuntime {
   private projectionVariables(workspaceName: string): Record<string, string> {
     return {
       appId: this.#engineAssetSource?.appId ?? '',
-      soulId: this.#workerInput.appId,
       workerName: this.#workerInput.name,
       workspaceName,
     }
