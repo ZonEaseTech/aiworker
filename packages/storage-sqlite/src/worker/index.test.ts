@@ -978,11 +978,11 @@ describe('greenfield local worker session schema', () => {
 
     const result = discardRetiredSoulMetadata({
       at: '2026-05-13T13:05:00.000Z',
-      soulIds: ['hr'],
+      appIds: ['hr'],
     })
 
     expect(result).toEqual({
-      retiredSoulIds: ['hr'],
+      retiredAppIds: ['hr'],
       workersDeleted: 1,
     })
     expect(getWorker(worker.id)).toBeNull()

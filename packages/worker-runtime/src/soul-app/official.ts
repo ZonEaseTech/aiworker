@@ -35,7 +35,7 @@ export interface OfficialSoulAppBootstrapResult {
 }
 
 export interface OfficialRetiredMetadataDiscardResult {
-  retiredSoulIds: string[]
+  retiredAppIds: string[]
   workersDeleted: number
 }
 
@@ -114,7 +114,7 @@ function getHostedSoulAppSafely(appId: string): HostedSoulApp | null {
 export function discardOfficialSoulAppRetiredMetadata(at?: string): OfficialRetiredMetadataDiscardResult {
   return discardRetiredSoulMetadata({
     at,
-    soulIds: ['hr', 'qa'],
+    appIds: ['hr', 'qa'],
   })
 }
 

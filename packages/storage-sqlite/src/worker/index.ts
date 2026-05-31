@@ -492,12 +492,12 @@ export interface UpdateSoulAppLifecycleInput {
 }
 
 export interface DiscardRetiredSoulMetadataInput {
-  soulIds: readonly string[]
+  appIds: readonly string[]
   at?: string
 }
 
 export interface DiscardRetiredSoulMetadataResult {
-  retiredSoulIds: string[]
+  retiredAppIds: string[]
   workersDeleted: number
 }
 
@@ -753,27 +753,27 @@ export function listSessions(workspaceId?: string, limit = 200): SessionRow[] {
 }
 
 export function discardRetiredSoulMetadata(input: DiscardRetiredSoulMetadataInput): DiscardRetiredSoulMetadataResult {
-  const retiredSoulIds = [...new Set(input.soulIds)].sort()
+  const retiredAppIds = [...new Set(input.appIds)].sort()
   let workersDeleted = 0
 
-  for (const soulId of retiredSoulIds) {
+  for (const appId of retiredAppIds) {
     const retiredWorkers = getWorkerDb()
       .select({ id: schema.workers.id })
       .from(schema.workers)
-      .where(eq(schema.workers.appId, soulId))
+      .where(eq(schema.workers.appId, appId))
       .all()
     if (retiredWorkers.length === 0)
       continue
 
     getWorkerDb()
       .delete(schema.workers)
-      .where(eq(schema.workers.appId, soulId))
+      .where(eq(schema.workers.appId, appId))
       .run()
     workersDeleted += retiredWorkers.length
   }
 
   return {
-    retiredSoulIds,
+    retiredAppIds,
     workersDeleted,
   }
 }
