@@ -74,7 +74,7 @@ interface WorkerConfigProjectionAssetRef {
 export interface LocalWorkerRuntimeOptions {
   worker: {
     id: string
-    soulId: string
+    appId: string
     name: string
     defaultEngineId?: string | null
     metadata?: Record<string, unknown>
@@ -200,7 +200,7 @@ export class LocalWorkerRuntime {
     await mkdir(this.#workspacesRoot, { recursive: true })
     const worker = upsertWorker({
       id: this.#workerInput.id,
-      soulId: this.#workerInput.soulId,
+      appId: this.#workerInput.appId,
       name: this.#workerInput.name,
       defaultEngineId: this.#workerInput.defaultEngineId ?? null,
       metadataJson: this.#workerInput.metadata ?? {},
@@ -777,7 +777,7 @@ export class LocalWorkerRuntime {
     const lines = [
       `Current date: ${this.#now().slice(0, 10)}`,
       `Soul worker: ${this.#workerInput.name}`,
-      `Soul id: ${this.#workerInput.soulId}`,
+      `App id: ${this.#workerInput.appId}`,
       `Workspace session: ${session.title}`,
       `Capability: ${session.capabilityId}`,
       `Output kind: ${readString(metadata.outputKind, 'session')}`,
@@ -800,10 +800,10 @@ export class LocalWorkerRuntime {
       engineCommand: sessionEngine?.engineCommand ?? null,
       engineId: sessionEngine?.engineId ?? this.#workerInput.defaultEngineId ?? 'codex',
       executionMode: sessionEngine?.executionMode ?? 'local-cli',
-      soulId: this.#workerInput.soulId,
+      soulId: this.#workerInput.appId,
     }, null, 2), 'utf8')
     await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'soul-app.json')), JSON.stringify({
-      soulId: this.#workerInput.soulId,
+      soulId: this.#workerInput.appId,
       name: this.#workerInput.name,
     }, null, 2), 'utf8')
     await mkdir(files.resolve(path.posix.join(sessionRoot, 'invocations')), { recursive: true })
@@ -954,7 +954,7 @@ export class LocalWorkerRuntime {
   private projectionVariables(workspaceName: string): Record<string, string> {
     return {
       appId: this.#engineAssetSource?.appId ?? '',
-      soulId: this.#workerInput.soulId,
+      soulId: this.#workerInput.appId,
       workerName: this.#workerInput.name,
       workspaceName,
     }

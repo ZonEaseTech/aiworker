@@ -84,7 +84,7 @@ describe('Worker orchestrator boundary', () => {
     const at = '2026-05-13T17:53:00.000Z'
     upsertWorker({
       id: 'legacy-hr-worker',
-      soulId: 'hr',
+      appId: 'hr',
       name: 'Legacy HR',
       defaultEngineId: 'codex',
       at,
@@ -123,20 +123,20 @@ describe('Worker orchestrator boundary', () => {
     await expect(runtime.createSoulWorker({
       id: 'legacy-hr',
       name: 'Legacy HR',
-      soulId: 'hr',
+      appId: 'hr',
     })).rejects.toMatchObject({ code: 'SOUL_NOT_AVAILABLE', status: 400 })
 
     const created = await runtime.createSoulWorker({
       id: 'freeform-worker',
       metadata: { owner: 'operator' },
       name: 'Freeform',
-      soulId: FREEFORM_APP_ID,
+      appId: FREEFORM_APP_ID,
     })
 
     expect(created.worker).toMatchObject({
       id: 'freeform-worker',
       name: 'Freeform',
-      soulId: FREEFORM_APP_ID,
+      appId: FREEFORM_APP_ID,
     })
     expect(created.worker.metadataJson).toMatchObject({
       defaultCapabilities: expect.any(Array),
@@ -154,7 +154,7 @@ describe('Worker orchestrator boundary', () => {
     await expect(runtime.createSoulWorker({
       id: 'freeform-worker',
       name: 'Duplicate Freeform',
-      soulId: FREEFORM_APP_ID,
+      appId: FREEFORM_APP_ID,
     })).rejects.toMatchObject({ code: 'CONFLICT', status: 409 })
   })
 
@@ -173,7 +173,7 @@ describe('Worker orchestrator boundary', () => {
       defaultEngineId: 'codex',
       id: 'freeform-mcp-worker',
       name: 'Freeform MCP',
-      soulId: FREEFORM_APP_ID,
+      appId: FREEFORM_APP_ID,
     })
     const workspace = await created.runtime.createWorkspace({ name: 'MCP Workspace', type: 'workspace' })
 
@@ -187,13 +187,13 @@ describe('Worker orchestrator boundary', () => {
     const created = await runtime.createSoulWorker({
       id: 'freeform-worker',
       name: 'Freeform',
-      soulId: FREEFORM_APP_ID,
+      appId: FREEFORM_APP_ID,
     })
 
     const capability = runtime.requireCapabilityForWorker(created.worker.id, FREEFORM_DEFAULT)
     expect(capability).toMatchObject({
       id: FREEFORM_DEFAULT,
-      soulId: FREEFORM_APP_ID,
+      appId: FREEFORM_APP_ID,
     })
 
     expect(() => runtime.requireCapabilityForWorker(created.worker.id, 'other-soul.release-gate'))
@@ -206,7 +206,7 @@ describe('Worker orchestrator boundary', () => {
     const created = await runtime.createSoulWorker({
       id: 'archive-app-worker',
       name: 'Archive App Worker',
-      soulId: FREEFORM_APP_ID,
+      appId: FREEFORM_APP_ID,
     })
 
     expect(runtime.requireEnabledAppForWorker(created.worker.id)).toMatchObject({

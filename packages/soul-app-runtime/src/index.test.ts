@@ -52,6 +52,7 @@ describe('descriptor Soul runtime harness', () => {
     expect(standalone.catalog.capabilities.map(item => item.id)).toEqual([capabilityId])
     expect(standalone.catalog.souls.map(item => item.id)).toEqual(['demo-soul-app'])
     expect(standalone.worker).toEqual({
+      appId: 'demo-soul-app',
       defaultEngineId: 'codex',
       id: 'demo-worker',
       metadata: expect.objectContaining({
@@ -60,7 +61,6 @@ describe('descriptor Soul runtime harness', () => {
         soulAppId: 'demo-soul-app',
       }),
       name: 'Demo Worker',
-      soulId: 'demo-soul-app',
     })
 
     const workspace = await standalone.runtime.createWorkspace({ name: 'Standalone workspace', type: 'workspace' })
@@ -107,7 +107,7 @@ describe('descriptor Soul runtime harness', () => {
     })
 
     expect(mounted.catalog.apps.map(app => app.appId)).toEqual(['demo-soul-app'])
-    expect(mounted.worker.soulId).toBe('demo-soul-app')
+    expect(mounted.worker.appId).toBe('demo-soul-app')
   })
 
   it('renders the universal workbench with public descriptor route prefix', () => {

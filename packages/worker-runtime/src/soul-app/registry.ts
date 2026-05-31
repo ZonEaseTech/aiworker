@@ -24,13 +24,13 @@ import {
 
 // -- inlined from deleted shared types --
 interface SoulCapability {
+  appId: string
   description: string
   id: string
   inputHints: readonly string[]
   name: string
   outputKind: string
   promptRef: string
-  soulId: string
 }
 
 interface VerticalSoul {
@@ -202,8 +202,8 @@ export function findCapability(id: string): SoulCapability | undefined {
   return listSoulCatalog().capabilities.find(capability => capability.id === id)
 }
 
-export function listCapabilitiesForSoul(soulId: string): SoulCapability[] {
-  return listSoulCatalog().capabilities.filter(capability => capability.soulId === soulId)
+export function listCapabilitiesForSoul(appId: string): SoulCapability[] {
+  return listSoulCatalog().capabilities.filter(capability => capability.appId === appId)
 }
 
 export function hostedSoulAppFromRow(row: SoulAppRow): HostedSoulApp {

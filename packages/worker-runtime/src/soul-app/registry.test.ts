@@ -117,7 +117,7 @@ describe('Host Soul descriptor registry', () => {
     expect(enabled.healthStatus).toBe('pass')
 
     expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('available')
-    expect(findCapability(FREEFORM_DEFAULT)?.soulId).toBe(FREEFORM_APP_ID)
+    expect(findCapability(FREEFORM_DEFAULT)?.appId).toBe(FREEFORM_APP_ID)
     expect(listCapabilitiesForSoul(FREEFORM_APP_ID).map(capability => capability.id)).toEqual([FREEFORM_DEFAULT])
     expect(listSoulCatalog().souls.some(soul => soul.id === 'hr')).toBe(false)
 

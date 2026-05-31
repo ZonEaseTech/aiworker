@@ -37,13 +37,13 @@ import { createLocalWorkerRuntime } from '../worker/runtime'
 
 // -- inlined from deleted shared types --
 interface SoulCapability {
+  appId: string
   description: string
   id: string
   inputHints: readonly string[]
   name: string
   outputKind: string
   promptRef: string
-  soulId: string
 }
 
 interface VerticalSoul {
@@ -72,11 +72,11 @@ export interface OfficialSoulAppBootstrap {
 }
 
 export interface CreateSoulWorkerInput {
+  appId: string
   defaultEngineId?: string | null
   id?: string
   metadata?: Record<string, unknown>
   name: string
-  soulId: string
 }
 
 export interface CreateSoulWorkerResult {
@@ -147,32 +147,32 @@ export class WorkerOrchestrator {
     return this.listCatalog().souls
   }
 
-  findSoul(soulId: string): VerticalSoul | undefined {
-    return findCatalogSoul(soulId)
+  findSoul(appId: string): VerticalSoul | undefined {
+    return findCatalogSoul(appId)
   }
 
-  requireAvailableSoul(soulId: unknown): VerticalSoul {
-    const id = requireText(soulId, 'soulId')
+  requireAvailableSoul(appId: unknown): VerticalSoul {
+    const id = requireText(appId, 'appId')
     const soul = findCatalogSoul(id)
     if (!soul || soul.status !== 'available')
       throw AppError.badRequest(`Available Soul not found: ${id}`, 'SOUL_NOT_AVAILABLE')
     return soul
   }
 
-  listCapabilities(soulId?: string): SoulCapability[] {
-    return soulId ? listCapabilitiesForSoul(soulId) : this.listCatalog().capabilities
+  listCapabilities(appId?: string): SoulCapability[] {
+    return appId ? listCapabilitiesForSoul(appId) : this.listCatalog().capabilities
   }
 
   listCapabilitiesForWorker(workerId: string): SoulCapability[] {
     const worker = this.requireWorker(workerId)
-    return listCapabilitiesForSoul(worker.soulId)
+    return listCapabilitiesForSoul(worker.appId)
   }
 
   requireCapabilityForWorker(workerId: string, capabilityId: unknown): SoulCapability {
     const worker = this.requireWorker(workerId)
     const id = requireText(capabilityId, 'capabilityId')
     const capability = findCapability(id)
-    if (!capability || capability.soulId !== worker.soulId)
+    if (!capability || capability.appId !== worker.appId)
       throw AppError.badRequest(`Capability ${id} does not belong to worker ${workerId}.`, 'CAPABILITY_NOT_AVAILABLE')
     return capability
   }
@@ -181,16 +181,16 @@ export class WorkerOrchestrator {
     const worker = getWorker(workerId)
     if (!worker)
       throw AppError.notFound(`Worker not found: ${workerId}`)
-    const app = getHostedSoulApp(worker.soulId)
+    const app = getHostedSoulApp(worker.appId)
     if (!app)
-      throw AppError.notFound(`Soul App not found: ${worker.soulId}`)
+      throw AppError.notFound(`Soul App not found: ${worker.appId}`)
     if (app.status !== 'enabled')
       throw new AppError('SOUL_APP_DISABLED', 409, `Soul App is not enabled: ${app.appId}`)
     return app
   }
 
   async createSoulWorker(input: CreateSoulWorkerInput): Promise<CreateSoulWorkerResult> {
-    const soul = this.requireAvailableSoul(input.soulId)
+    const soul = this.requireAvailableSoul(input.appId)
     const name = requireText(input.name, 'name')
     const workerId = input.id ? requireText(input.id, 'id') : mintWorkerId()
     if (getWorker(workerId))
@@ -198,7 +198,7 @@ export class WorkerOrchestrator {
 
     const worker = upsertWorker({
       id: workerId,
-      soulId: soul.id,
+      appId: soul.id,
       name,
       defaultEngineId: input.defaultEngineId ?? 'codex',
       metadataJson: {
@@ -221,7 +221,7 @@ export class WorkerOrchestrator {
     return createLocalWorkerRuntime({
       worker: {
         id: worker.id,
-        soulId: worker.soulId,
+        appId: worker.appId,
         name: worker.name,
         defaultEngineId: worker.defaultEngineId,
         metadata: worker.metadataJson,
@@ -242,7 +242,7 @@ export class WorkerOrchestrator {
   }
 
   engineAssetSourceForWorker(worker: WorkerRow): LocalWorkerRuntimeOptions['engineAssetSource'] {
-    const app = getHostedSoulApp(worker.soulId)
+    const app = getHostedSoulApp(worker.appId)
     if (!app || app.status !== 'enabled' || app.sourceKind !== 'descriptor-path')
       return null
     return {

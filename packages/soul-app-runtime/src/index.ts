@@ -30,13 +30,13 @@ import {
 export { renderUniversalWorkbenchHtml } from './universal-workbench-html'
 
 interface RuntimeCapability {
+  appId: string
   description: string
   id: string
   inputHints: readonly string[]
   name: string
   outputKind: string
   promptRef: string
-  soulId: string
 }
 
 export interface StandaloneSoulAppRuntimeOptions {
@@ -74,11 +74,11 @@ export interface SoulAppRuntimeHarness {
 }
 
 export interface SoulAppRuntimeWorkerSnapshot {
+  appId: string
   defaultEngineId: string | null
   id: string
   metadata: Record<string, unknown>
   name: string
-  soulId: string
 }
 
 export async function createStandaloneSoulAppRuntime(
@@ -184,7 +184,7 @@ async function createRuntimeForDescriptor(input: {
   const capabilities = descriptorCapabilities(descriptor)
   const worker = upsertWorker({
     id: input.workerId,
-    soulId: identity.appId,
+    appId: identity.appId,
     name: input.workerName,
     defaultEngineId: descriptorDefaultEngine(descriptor),
     metadataJson: {
@@ -206,11 +206,11 @@ async function createRuntimeForDescriptor(input: {
     executor: input.executor,
     now: input.now,
     worker: {
+      appId: worker.appId,
       defaultEngineId: worker.defaultEngineId,
       id: worker.id,
       metadata: worker.metadataJson,
       name: worker.name,
-      soulId: worker.soulId,
     },
     workspacesRoot: path.join(input.workersRoot, worker.id, 'workspaces'),
   })
@@ -305,11 +305,11 @@ function harness(input: {
 
 function publicWorkerSnapshot(worker: WorkerRow): SoulAppRuntimeWorkerSnapshot {
   return {
+    appId: worker.appId,
     defaultEngineId: worker.defaultEngineId,
     id: worker.id,
     metadata: worker.metadataJson,
     name: worker.name,
-    soulId: worker.soulId,
   }
 }
 

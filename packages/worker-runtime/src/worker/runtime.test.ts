@@ -44,7 +44,7 @@ describe('LocalWorkerRuntime', () => {
     return new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul',
+        appId: 'demo-soul',
         name: 'Demo',
         defaultEngineId: 'codex',
       },
@@ -62,7 +62,7 @@ describe('LocalWorkerRuntime', () => {
     return new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul-app',
+        appId: 'demo-soul-app',
         name: 'Demo Worker',
         defaultEngineId: options.defaultEngineId ?? 'codex',
       },
@@ -77,11 +77,11 @@ describe('LocalWorkerRuntime', () => {
     })
   }
 
-  function runtimeFor(worker: { id: string, name: string, soulId: string }, executor: ConstructorParameters<typeof LocalWorkerRuntime>[0]['executor']) {
+  function runtimeFor(worker: { id: string, name: string, appId: string }, executor: ConstructorParameters<typeof LocalWorkerRuntime>[0]['executor']) {
     return new LocalWorkerRuntime({
       worker: {
         id: worker.id,
-        soulId: worker.soulId,
+        appId: worker.appId,
         name: worker.name,
         defaultEngineId: 'codex',
       },
@@ -195,7 +195,7 @@ describe('LocalWorkerRuntime', () => {
     upsertWorker({
       id: 'worker-demo',
       name: 'Demo',
-      soulId: 'demo-soul',
+      appId: 'demo-soul',
       defaultEngineId: 'codex',
       status: 'archived',
     })
@@ -327,7 +327,7 @@ describe('LocalWorkerRuntime', () => {
     expect(result.events.map(event => event.type)).toEqual(['status', 'status'])
 
     const snapshot = workerRuntime.snapshot()
-    expect(snapshot.worker.soulId).toBe('demo-soul')
+    expect(snapshot.worker.appId).toBe('demo-soul')
     expect(snapshot.workspaces).toHaveLength(1)
     expect(snapshot.sessions[0]?.capabilityId).toBe('freeform-summary')
     expect(snapshot.sessions[0]?.status).toBe('active')
@@ -343,7 +343,7 @@ describe('LocalWorkerRuntime', () => {
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul',
+        appId: 'demo-soul',
         name: 'Demo',
         defaultEngineId: 'codex',
       },
@@ -881,7 +881,7 @@ describe('LocalWorkerRuntime', () => {
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul',
+        appId: 'demo-soul',
         name: 'Demo',
         defaultEngineId: 'codex',
       },
@@ -971,7 +971,7 @@ describe('LocalWorkerRuntime', () => {
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul',
+        appId: 'demo-soul',
         name: 'Demo',
         defaultEngineId: 'codex',
       },
@@ -1064,7 +1064,7 @@ describe('LocalWorkerRuntime', () => {
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul',
+        appId: 'demo-soul',
         name: 'Demo',
         defaultEngineId: 'codex',
       },
@@ -1452,7 +1452,7 @@ describe('LocalWorkerRuntime', () => {
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul',
+        appId: 'demo-soul',
         name: 'Demo',
         defaultEngineId: 'codex',
       },
@@ -1643,7 +1643,7 @@ describe('LocalWorkerRuntime', () => {
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul',
+        appId: 'demo-soul',
         name: 'Demo',
         defaultEngineId: 'codex',
       },
@@ -1733,7 +1733,7 @@ describe('LocalWorkerRuntime', () => {
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul',
+        appId: 'demo-soul',
         name: 'Demo',
         defaultEngineId: 'codex',
       },
@@ -1823,7 +1823,7 @@ describe('LocalWorkerRuntime', () => {
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul',
+        appId: 'demo-soul',
         name: 'Demo',
         defaultEngineId: 'codex',
       },
@@ -1902,7 +1902,7 @@ describe('LocalWorkerRuntime', () => {
     const workerRuntime = new LocalWorkerRuntime({
       worker: {
         id: 'worker-demo',
-        soulId: 'demo-soul',
+        appId: 'demo-soul',
         name: 'Demo',
         defaultEngineId: 'codex',
       },
@@ -2126,16 +2126,16 @@ describe('LocalWorkerRuntime', () => {
         return { summary: 'ok' }
       },
     }
-    const recruitingRuntime = runtimeFor({ id: 'worker-demo-primary', soulId: 'demo-soul', name: 'Demo Primary' }, executor)
-    const talentRuntime = runtimeFor({ id: 'worker-demo-secondary', soulId: 'demo-soul', name: 'Demo Secondary' }, executor)
+    const recruitingRuntime = runtimeFor({ id: 'worker-demo-primary', appId: 'demo-soul', name: 'Demo Primary' }, executor)
+    const talentRuntime = runtimeFor({ id: 'worker-demo-secondary', appId: 'demo-soul', name: 'Demo Secondary' }, executor)
 
     await recruitingRuntime.init()
     await talentRuntime.init()
     const recruitingWorkspace = await recruitingRuntime.createWorkspace({ name: 'Open roles' })
     const talentWorkspace = await talentRuntime.createWorkspace({ name: 'Talent pool' })
 
-    expect(recruitingRuntime.snapshot().worker.soulId).toBe('demo-soul')
-    expect(talentRuntime.snapshot().worker.soulId).toBe('demo-soul')
+    expect(recruitingRuntime.snapshot().worker.appId).toBe('demo-soul')
+    expect(talentRuntime.snapshot().worker.appId).toBe('demo-soul')
     expect(recruitingRuntime.snapshot().workspaces.map(workspace => workspace.id)).toEqual([recruitingWorkspace.id])
     expect(talentRuntime.snapshot().workspaces.map(workspace => workspace.id)).toEqual([talentWorkspace.id])
   })
