@@ -25,12 +25,12 @@ export function WorkerSwitcher({
   const [collapsedSoulIds, setCollapsedSoulIds] = useState<Set<string>>(() => new Set())
   const soulGroups = useMemo(() => {
     const groups: Array<{ id: string, name: string, workers: LocalWorker[] }> = []
-    const bySoulId = new Map<string, { id: string, name: string, workers: LocalWorker[] }>()
+    const byAppId = new Map<string, { id: string, name: string, workers: LocalWorker[] }>()
     for (const worker of workers) {
-      let group = bySoulId.get(worker.soulId)
+      let group = byAppId.get(worker.appId)
       if (!group) {
-        group = { id: worker.soulId, name: soulNameForWorker(worker), workers: [] }
-        bySoulId.set(worker.soulId, group)
+        group = { id: worker.appId, name: soulNameForWorker(worker), workers: [] }
+        byAppId.set(worker.appId, group)
         groups.push(group)
       }
       group.workers.push(worker)
@@ -43,13 +43,13 @@ export function WorkerSwitcher({
       counts.set(worker.name, (counts.get(worker.name) ?? 0) + 1)
     return counts
   }, [workers])
-  const toggleSoulGroup = (soulId: string) => {
+  const toggleAppGroup = (appId: string) => {
     setCollapsedSoulIds((current) => {
       const next = new Set(current)
-      if (next.has(soulId))
-        next.delete(soulId)
+      if (next.has(appId))
+        next.delete(appId)
       else
-        next.add(soulId)
+        next.add(appId)
       return next
     })
   }
@@ -70,7 +70,7 @@ export function WorkerSwitcher({
                     meta={group.workers.length}
                     title={group.name}
                     toggleAriaLabel={`${collapsed ? 'Expand' : 'Collapse'} ${group.name}`}
-                    onToggle={() => toggleSoulGroup(group.id)}
+                    onToggle={() => toggleAppGroup(group.id)}
                   >
                     <SidebarMenu aria-label={`${group.name} workers`}>
                       {group.workers.map((worker) => {

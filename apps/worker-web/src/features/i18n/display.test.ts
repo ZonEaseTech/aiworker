@@ -22,7 +22,7 @@ describe('displaySoul/displayCapability 泛化消费 manifest', () => {
       id: 'aiworker-demo-source.context-capture',
       name: 'Manifest Capability',
       description: 'Manifest tdesc',
-      soulId: 'aiworker-demo-source',
+      appId: 'aiworker-demo-source',
       outputKind: 'workspace-note',
       inputHints: ['a'],
       promptRef: './product/capabilities/context-capture/prompt.md',

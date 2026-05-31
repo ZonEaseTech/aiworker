@@ -15,13 +15,13 @@ describe('deriveWorkerStudioLocatorState', () => {
         soul({ id: 'aiworker-empty', status: 'available' }),
       ],
       capabilities: [
-        capability({ id: 'aiworker-demo-primary.context', soulId: 'aiworker-demo-primary' }),
-        capability({ id: 'aiworker-demo-secondary.release', soulId: 'aiworker-demo-secondary' }),
+        capability({ id: 'aiworker-demo-primary.context', appId: 'aiworker-demo-primary' }),
+        capability({ id: 'aiworker-demo-secondary.release', appId: 'aiworker-demo-secondary' }),
       ],
       workers: [
-        worker({ id: 'primary-worker', soulId: 'aiworker-demo-primary' }),
-        worker({ id: 'secondary-worker', soulId: 'aiworker-demo-secondary' }),
-        worker({ id: 'empty-worker', soulId: 'aiworker-empty' }),
+        worker({ id: 'primary-worker', appId: 'aiworker-demo-primary' }),
+        worker({ id: 'secondary-worker', appId: 'aiworker-demo-secondary' }),
+        worker({ id: 'empty-worker', appId: 'aiworker-empty' }),
       ],
     })
 
@@ -56,12 +56,12 @@ describe('deriveWorkerStudioLocatorState', () => {
         soul({ id: 'aiworker-demo-secondary', status: 'available' }),
       ],
       capabilities: [
-        capability({ id: 'aiworker-demo-primary.context', soulId: 'aiworker-demo-primary' }),
-        capability({ id: 'aiworker-demo-secondary.release', soulId: 'aiworker-demo-secondary' }),
+        capability({ id: 'aiworker-demo-primary.context', appId: 'aiworker-demo-primary' }),
+        capability({ id: 'aiworker-demo-secondary.release', appId: 'aiworker-demo-secondary' }),
       ],
       workers: [
-        worker({ id: 'primary-worker', soulId: 'aiworker-demo-primary' }),
-        worker({ id: 'secondary-worker', soulId: 'aiworker-demo-secondary' }),
+        worker({ id: 'primary-worker', appId: 'aiworker-demo-primary' }),
+        worker({ id: 'secondary-worker', appId: 'aiworker-demo-secondary' }),
       ],
       workspaces: [
         workspace({ id: 'primary-workspace', name: 'Primary Workspace', workerId: 'primary-worker' }),
@@ -106,10 +106,10 @@ describe('deriveWorkerStudioLocatorState', () => {
       settings: { language: 'en' } as LocalWorkspaceData['settings'],
       souls: [soul({ id: 'aiworker-demo-primary', status: 'available' })],
       capabilities: [
-        capability({ id: 'aiworker-demo-primary.context', name: 'Context Capability', soulId: 'aiworker-demo-primary' }),
-        capability({ id: 'aiworker-demo-primary.summary', name: 'Summary Capability', soulId: 'aiworker-demo-primary' }),
+        capability({ id: 'aiworker-demo-primary.context', name: 'Context Capability', appId: 'aiworker-demo-primary' }),
+        capability({ id: 'aiworker-demo-primary.summary', name: 'Summary Capability', appId: 'aiworker-demo-primary' }),
       ],
-      workers: [worker({ id: 'primary-worker', soulId: 'aiworker-demo-primary' })],
+      workers: [worker({ id: 'primary-worker', appId: 'aiworker-demo-primary' })],
       workspaces: [
         workspace({ id: 'quiet-workspace', name: 'Quiet Workspace', workerId: 'primary-worker' }),
         workspace({ id: 'named-workspace', name: 'Primary Pipeline', workerId: 'primary-worker' }),
@@ -183,7 +183,7 @@ function capability(overrides: Partial<LocalWorkspaceData['capabilities'][number
     name: 'Context Capability',
     outputKind: 'context',
     promptRef: './product/workflows/context/prompt.md',
-    soulId: 'aiworker-demo-primary',
+    appId: 'aiworker-demo-primary',
     ...overrides,
   }
 }
@@ -195,7 +195,7 @@ function worker(overrides: Partial<LocalWorkspaceData['workers'][number]> = {}):
     id: 'primary-worker',
     metadataJson: {},
     name: 'Primary Worker',
-    soulId: 'aiworker-demo-primary',
+    appId: 'aiworker-demo-primary',
     status: 'active',
     updatedAt: now,
     ...overrides,

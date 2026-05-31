@@ -192,7 +192,7 @@ export function WorkerStudio() {
   const soulAppForWorker = useCallback((worker: typeof selectedWorker) => {
     if (!worker)
       return null
-    return data?.apps.find(app => app.appId === worker.soulId || app.projectedSoul?.id === worker.soulId) ?? null
+    return data?.apps.find(app => app.appId === worker.appId || app.projectedSoul?.id === worker.appId) ?? null
   }, [data?.apps])
   const workerConfigurationSoulApp = useMemo(
     () => soulAppForWorker(workerConfigurationWorker),
@@ -318,7 +318,7 @@ export function WorkerStudio() {
       return
     const result = await createWorker({
       name: newWorkerName.trim(),
-      soulId: newWorkerSoulId,
+      appId: newWorkerSoulId,
     })
     setSelectedWorkerId(result.worker.id)
     setNewWorkerName('')
@@ -513,8 +513,8 @@ export function WorkerStudio() {
               selectedWorkerId={selectedWorker?.id ?? null}
               workers={selectableWorkers}
               soulNameForWorker={(worker) => {
-                const soul = data.souls.find(item => item.id === worker.soulId)
-                return soul ? displaySoul(soul, activeLocale).name : worker.soulId
+                const soul = data.souls.find(item => item.id === worker.appId)
+                return soul ? displaySoul(soul, activeLocale).name : worker.appId
               }}
               onConfigureWorker={(worker) => {
                 setWorkerConfigurationWorkerId(worker.id)

@@ -16,16 +16,16 @@ describe('worker API', () => {
         id: 'worker-created',
         metadataJson: {},
         name: 'Created worker',
-        soulId: 'demo-soul-app',
+        appId: 'demo-soul-app',
         status: 'active',
         updatedAt: '2026-05-27T00:00:00.000Z',
       },
     }))))
 
-    await createWorker({ name: 'Created worker', soulId: 'demo-soul-app' })
+    await createWorker({ name: 'Created worker', appId: 'demo-soul-app' })
 
     expect(fetch).toHaveBeenCalledWith('/api/workers', expect.objectContaining({
-      body: JSON.stringify({ name: 'Created worker', soulId: 'demo-soul-app' }),
+      body: JSON.stringify({ name: 'Created worker', appId: 'demo-soul-app' }),
       method: 'POST',
     }))
   })

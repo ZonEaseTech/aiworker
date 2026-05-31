@@ -557,7 +557,7 @@ function SoulAppsSettings({
           ? apps.map((app) => {
               const permissionCount = app.permissions.length
               const workbenchCount = app.mountedWorkbench ? 1 : 0
-              const capabilityCount = capabilities.filter(capability => capability.soulId === app.appId || capability.soulId === app.projectedSoul?.id).length
+              const capabilityCount = capabilities.filter(capability => capability.appId === app.appId || capability.appId === app.projectedSoul?.id).length
               const apiRoutePrefix = app.api.routePrefix
               const soulId = app.soulId || app.projectedSoul?.id || app.appId
               const permissionLabels = app.permissions.map(permissionLabel).filter(isString)

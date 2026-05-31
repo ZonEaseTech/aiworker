@@ -53,14 +53,14 @@ export function deriveWorkerStudioLocatorState({
     ?? selectableWorkers[0]
     ?? null
   const selectedSoul = selectedWorker
-    ? data?.souls.find(soul => soul.id === selectedWorker.soulId) ?? null
+    ? data?.souls.find(soul => soul.id === selectedWorker.appId) ?? null
     : data?.souls.find(soul => soul.id === newWorkerSoulId && soul.status === 'available')
       ?? data?.souls.find(soul => soul.status === 'available')
       ?? null
   const selectedSoulApp = selectedWorker && data
-    ? data.apps.find(app => app.appId === selectedWorker.soulId || app.projectedSoul?.id === selectedWorker.soulId) ?? null
+    ? data.apps.find(app => app.appId === selectedWorker.appId || app.projectedSoul?.id === selectedWorker.appId) ?? null
     : null
-  const capabilities = data?.capabilities.filter(capability => capability.soulId === selectedWorker?.soulId) ?? []
+  const capabilities = data?.capabilities.filter(capability => capability.appId === selectedWorker?.appId) ?? []
   const soulWorkspaces = data?.workspaces.filter(item => item.workerId === selectedWorker?.id) ?? []
   const soulSessions = deriveSoulSessions(allSessions, soulWorkspaces)
   const filteredWorkspaces = deriveFilteredWorkspaces({
@@ -102,8 +102,8 @@ export function deriveWorkerStudioLocatorState({
 
 function deriveSelectableWorkers(data: LocalWorkspaceData): LocalWorkspaceData['workers'] {
   const availableSoulIds = new Set(data.souls.filter(soul => soul.status === 'available').map(soul => soul.id))
-  const capabilitySoulIds = new Set(data.capabilities.map(capability => capability.soulId))
-  return data.workers.filter(worker => availableSoulIds.has(worker.soulId) && capabilitySoulIds.has(worker.soulId))
+  const capabilityAppIds = new Set(data.capabilities.map(capability => capability.appId))
+  return data.workers.filter(worker => availableSoulIds.has(worker.appId) && capabilityAppIds.has(worker.appId))
 }
 
 function deriveSoulSessions(

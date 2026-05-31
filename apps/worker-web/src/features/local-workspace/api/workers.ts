@@ -6,7 +6,7 @@ export function createWorker(input: {
   id?: string
   metadata?: Record<string, unknown>
   name: string
-  soulId: string
+  appId: string
 }): Promise<{ worker: LocalWorker }> {
   return localJson('/api/workers', { method: 'POST', body: JSON.stringify(input) })
 }

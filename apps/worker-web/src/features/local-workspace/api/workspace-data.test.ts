@@ -30,7 +30,7 @@ const responses: Record<string, unknown> = {
       name: 'Freeform',
       outputKind: 'session',
       promptRef: 'dist/product/capabilities/default/prompt.md',
-      soulId: 'aiworker-freeform',
+      appId: 'aiworker-freeform',
     }],
   },
   '/api/workers': { workers: [] },

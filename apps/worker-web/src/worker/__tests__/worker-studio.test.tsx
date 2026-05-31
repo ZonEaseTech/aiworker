@@ -80,8 +80,8 @@ const workspace = {
 }
 
 const workers = [
-  { createdAt: now, defaultEngineId: 'codex', id: 'primary-worker', metadataJson: {}, name: 'Primary', soulId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
-  { createdAt: now, defaultEngineId: 'codex', id: 'secondary-worker', metadataJson: {}, name: 'Secondary', soulId: SECONDARY_SOUL_ID, status: 'active', updatedAt: now },
+  { createdAt: now, defaultEngineId: 'codex', id: 'primary-worker', metadataJson: {}, name: 'Primary', appId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
+  { createdAt: now, defaultEngineId: 'codex', id: 'secondary-worker', metadataJson: {}, name: 'Secondary', appId: SECONDARY_SOUL_ID, status: 'active', updatedAt: now },
 ]
 
 const souls = [
@@ -97,7 +97,7 @@ const capabilities = [
     name: 'Context Capture',
     outputKind: 'context-capture',
     promptRef: './product/capabilities/context-capture/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Draft an inspectable request context update.',
@@ -106,7 +106,7 @@ const capabilities = [
     name: 'Context Update Draft',
     outputKind: 'context-update-draft',
     promptRef: './product/workflows/context-update-draft/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Prepare the next Primary touchpoint.',
@@ -115,7 +115,7 @@ const capabilities = [
     name: 'Lifecycle Next Step',
     outputKind: 'lifecycle-next-step',
     promptRef: './product/workflows/lifecycle-next-step/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Prepare a role rubric.',
@@ -124,7 +124,7 @@ const capabilities = [
     name: 'Evaluation Guide',
     outputKind: 'evaluation-guide',
     promptRef: './product/workflows/evaluation-guide/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Screen a request against a role.',
@@ -133,7 +133,7 @@ const capabilities = [
     name: 'Request Screen',
     outputKind: 'request-screen',
     promptRef: './product/workflows/request-screen/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Draft an briefing brief.',
@@ -142,7 +142,7 @@ const capabilities = [
     name: 'Briefing Brief',
     outputKind: 'briefing-brief',
     promptRef: './product/workflows/briefing-brief/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Draft an action plan.',
@@ -151,7 +151,7 @@ const capabilities = [
     name: 'Action Plan',
     outputKind: 'action-plan',
     promptRef: './product/workflows/action-plan/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Prepare a handoff summary.',
@@ -160,7 +160,7 @@ const capabilities = [
     name: 'Handoff Summary',
     outputKind: 'handoff-summary',
     promptRef: './product/workflows/handoff-summary/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Compare requests against the role rubric.',
@@ -169,7 +169,7 @@ const capabilities = [
     name: 'Evidence Matrix',
     outputKind: 'evidence-matrix',
     promptRef: './product/workflows/evidence-matrix/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Prepare a roundup packet.',
@@ -178,7 +178,7 @@ const capabilities = [
     name: 'Roundup Packet',
     outputKind: 'roundup-packet',
     promptRef: './product/workflows/roundup-packet/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Check operational quality.',
@@ -187,7 +187,7 @@ const capabilities = [
     name: 'Quality Check',
     outputKind: 'quality-check',
     promptRef: './product/workflows/quality-check/prompt.md',
-    soulId: PRIMARY_SOUL_ID,
+    appId: PRIMARY_SOUL_ID,
   },
   {
     description: 'Summarize secondary readiness.',
@@ -196,7 +196,7 @@ const capabilities = [
     name: 'Secondary Check',
     outputKind: 'secondary-check',
     promptRef: './product/workflows/secondary-check/prompt.md',
-    soulId: SECONDARY_SOUL_ID,
+    appId: SECONDARY_SOUL_ID,
   },
 ]
 
@@ -323,7 +323,7 @@ function hostedApp({
       name: `${appName} Default`,
       outputKind: 'session',
       promptRef: 'dist/product/capabilities/default/prompt.md',
-      soulId: appId,
+      appId,
     }],
     projectedSoul: {
       defaultCapabilities: [`${appId}.default`],
@@ -354,7 +354,7 @@ function catalogOnlyAppForSoul(
       workbench: null,
     } as unknown as HostedSoulApp['descriptor'],
     projectedCapabilities: projectedCapabilities
-      .filter(capability => capability.soulId === soul.id)
+      .filter(capability => capability.appId === soul.id)
       .map(capability => ({ ...capability, inputHints: [...capability.inputHints] })),
     projectedSoul: {
       ...soul,
@@ -591,7 +591,7 @@ beforeEach(() => {
       const workerId = requestUrl.searchParams.get('workerId')
       const worker = currentWorkers.find(item => item.id === workerId)
       const mountedApp = currentApps
-        .find(app => app.appId === worker?.soulId || app.appId === worker?.id || app.appId === PRIMARY_SOUL_ID)
+        .find(app => app.appId === worker?.appId || app.appId === worker?.id || app.appId === PRIMARY_SOUL_ID)
         ?? currentApps.find(app => app.descriptor?.workbench?.type === 'micro-app')
       const surfaceId = 'workbench'
       const routePath = '/workbench'
@@ -637,14 +637,14 @@ beforeEach(() => {
       })
     }
     if (url.endsWith('/api/workers') && method === 'POST') {
-      const body = init?.body ? JSON.parse(String(init.body)) as { name: string, soulId: string } : { name: 'Created worker', soulId: PRIMARY_SOUL_ID }
+      const body = init?.body ? JSON.parse(String(init.body)) as { name: string, appId: string } : { name: 'Created worker', appId: PRIMARY_SOUL_ID }
       const created = {
         createdAt: now,
         defaultEngineId: 'codex',
         id: 'worker-created',
         metadataJson: {},
         name: body.name,
-        soulId: body.soulId,
+        appId: body.appId,
         status: 'active',
         updatedAt: now,
       }
@@ -813,7 +813,7 @@ describe('worker studio', () => {
 
   it('skips legacy workers whose Souls are no longer projected', async () => {
     currentWorkers = [
-      { createdAt: now, defaultEngineId: 'codex', id: 'devops-worker', metadataJson: {}, name: 'DevOps', soulId: 'devops', status: 'active', updatedAt: now },
+      { createdAt: now, defaultEngineId: 'codex', id: 'devops-worker', metadataJson: {}, name: 'DevOps', appId: 'devops', status: 'active', updatedAt: now },
       ...workers.map(worker => ({ ...worker })),
     ]
 
@@ -947,7 +947,7 @@ describe('worker studio', () => {
 
   it('updates Host workspace locator when a mounted app selects a workspace', async () => {
     currentWorkers = [
-      { createdAt: now, defaultEngineId: 'codex', id: 'secondary-worker', metadataJson: {}, name: 'Secondary', soulId: SECONDARY_SOUL_ID, status: 'active', updatedAt: now },
+      { createdAt: now, defaultEngineId: 'codex', id: 'secondary-worker', metadataJson: {}, name: 'Secondary', appId: SECONDARY_SOUL_ID, status: 'active', updatedAt: now },
     ]
     currentApps = [
       hostedApp({
@@ -1186,12 +1186,12 @@ describe('worker studio', () => {
         name: 'Explore',
         outputKind: 'custom-exploration',
         promptRef: './product/workflows/explore/prompt.md',
-        soulId: CUSTOM_SOUL_ID,
+        appId: CUSTOM_SOUL_ID,
       },
     ]
     currentWorkers = [
       ...currentWorkers,
-      { createdAt: now, defaultEngineId: 'codex', id: 'custom-worker', metadataJson: {}, name: 'Custom', soulId: CUSTOM_SOUL_ID, status: 'active', updatedAt: now },
+      { createdAt: now, defaultEngineId: 'codex', id: 'custom-worker', metadataJson: {}, name: 'Custom', appId: CUSTOM_SOUL_ID, status: 'active', updatedAt: now },
     ]
     currentApps = [
       hostedApp({
@@ -1228,9 +1228,9 @@ describe('worker studio', () => {
 
   it('keeps descriptor workbench resolution single-entry across workers', async () => {
     currentWorkers = [
-      { createdAt: now, defaultEngineId: 'codex', id: 'primary-worker', metadataJson: {}, name: 'Primary A', soulId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
-      { createdAt: now, defaultEngineId: 'codex', id: 'primary-worker-secondary', metadataJson: {}, name: 'Primary B', soulId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
-      { createdAt: now, defaultEngineId: 'codex', id: 'secondary-worker', metadataJson: {}, name: 'Secondary', soulId: SECONDARY_SOUL_ID, status: 'active', updatedAt: now },
+      { createdAt: now, defaultEngineId: 'codex', id: 'primary-worker', metadataJson: {}, name: 'Primary A', appId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
+      { createdAt: now, defaultEngineId: 'codex', id: 'primary-worker-secondary', metadataJson: {}, name: 'Primary B', appId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
+      { createdAt: now, defaultEngineId: 'codex', id: 'secondary-worker', metadataJson: {}, name: 'Secondary', appId: SECONDARY_SOUL_ID, status: 'active', updatedAt: now },
     ]
     currentApps = [
       hostedApp({
@@ -1254,7 +1254,7 @@ describe('worker studio', () => {
 
   it('falls back to first-run Soul App home when every persisted worker is orphaned', async () => {
     currentWorkers = [
-      { createdAt: now, defaultEngineId: 'codex', id: 'devops-worker', metadataJson: {}, name: 'DevOps', soulId: 'devops', status: 'active', updatedAt: now },
+      { createdAt: now, defaultEngineId: 'codex', id: 'devops-worker', metadataJson: {}, name: 'DevOps', appId: 'devops', status: 'active', updatedAt: now },
     ]
     currentApps = []
 
@@ -1618,8 +1618,8 @@ describe('worker studio', () => {
 
   it('disambiguates duplicate worker names with stable ids in the Host worker switcher', async () => {
     currentWorkers = [
-      { createdAt: '2026-05-24T06:49:06.848Z', defaultEngineId: 'codex', id: 'e2e-people-codex-20260524', metadataJson: {}, name: 'e2e-people-codex', soulId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
-      { createdAt: '2026-05-25T06:49:06.848Z', defaultEngineId: 'codex', id: 'e2e-people-codex-20260525', metadataJson: {}, name: 'e2e-people-codex', soulId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
+      { createdAt: '2026-05-24T06:49:06.848Z', defaultEngineId: 'codex', id: 'e2e-people-codex-20260524', metadataJson: {}, name: 'e2e-people-codex', appId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
+      { createdAt: '2026-05-25T06:49:06.848Z', defaultEngineId: 'codex', id: 'e2e-people-codex-20260525', metadataJson: {}, name: 'e2e-people-codex', appId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
     ]
     currentWorkspaces = [
       { ...workspace, id: 'workspace-20260524', workerId: 'e2e-people-codex-20260524' },
@@ -1722,7 +1722,7 @@ describe('worker studio', () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/workers', expect.objectContaining({
-        body: expect.stringContaining(`"soulId":"${SECONDARY_SOUL_ID}"`),
+        body: expect.stringContaining(`"appId":"${SECONDARY_SOUL_ID}"`),
         method: 'POST',
       }))
       expect(window.location.pathname).toBe('/workers/worker-created')
@@ -1763,7 +1763,7 @@ describe('worker studio', () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/workers', expect.objectContaining({
-        body: expect.stringContaining(`"soulId":"${PRIMARY_SOUL_ID}"`),
+        body: expect.stringContaining(`"appId":"${PRIMARY_SOUL_ID}"`),
         method: 'POST',
       }))
       expect(window.location.pathname).toBe('/workers/worker-created')
