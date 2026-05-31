@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
@@ -6,12 +6,16 @@ const repoRoot = join(import.meta.dir, '..', '..')
 
 function walkTsFiles(dir: string): string[] {
   const out: string[] = []
-  if (!existsSync(dir)) return out
+  if (!existsSync(dir))
+    return out
   for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === 'node_modules' || e.name === 'dist') continue
+    if (e.name === 'node_modules' || e.name === 'dist')
+      continue
     const p = join(dir, e.name)
-    if (e.isDirectory()) out.push(...walkTsFiles(p))
-    else if (/\.tsx?$/.test(e.name)) out.push(p)
+    if (e.isDirectory())
+      out.push(...walkTsFiles(p))
+    else if (/\.tsx?$/.test(e.name))
+      out.push(p)
   }
   return out
 }
@@ -152,8 +156,9 @@ describe('target package ownership', () => {
       const pkg = JSON.parse(readFileSync(join(repoRoot, pkgDir, 'package.json'), 'utf8')) as PackageJson
       const declared = Object.keys({ ...(pkg.dependencies ?? {}) }).filter(d => d.startsWith('@zonease/aiworker'))
       const srcText = walkTsFiles(join(repoRoot, pkgDir, 'src'))
-        .filter(f => !/\.(test|spec)\.[cm]?tsx?$/.test(f))
-        .map(f => readFileSync(f, 'utf8')).join('\n')
+        .filter(f => !/\.(?:test|spec)\.[cm]?tsx?$/.test(f))
+        .map(f => readFileSync(f, 'utf8'))
+        .join('\n')
       for (const dep of declared) {
         if (!srcText.includes(dep))
           offenders.push(`${pkgDir} -> ${dep}`)
@@ -175,7 +180,7 @@ describe('target package ownership', () => {
         continue
       const src = readFileSync(join(dir, file), 'utf8')
       // 匹配 value import（排除 `import type ...`）from '..' / '../index'
-      if (/^\s*import\s+(?!type[\s{])[^;\n]*\sfrom\s+['"]\.\.(?:\/index)?['"]/m.test(src))
+      if (/^\s*import\s+(?!type[\s{])\S[^\n;]*from\s+['"]\.\.(?:\/index)?['"]/m.test(src))
         offenders.push(`packages/soul-protocol/src/soul-app/${file}`)
     }
     expect(offenders, 'soul-app modules must not VALUE-import the root barrel (would create a runtime cycle)').toEqual([])

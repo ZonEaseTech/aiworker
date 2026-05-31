@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
+import type { SoulDiscovery, SoulValidationIssue } from '@zonease/aiworker-soul-app-sdk'
 import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
-import type { SoulDiscovery, SoulValidationIssue } from '@zonease/aiworker-soul-app-sdk'
 import type { UpdateCliOptions, UpdateCommandName } from './updater'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
