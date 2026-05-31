@@ -26,6 +26,8 @@ The daemon is not a product backend and does not own domain routes.
 
 session lifecycle: active | archived | deleted
 
+`deleted` is a reserved terminal enum value; v1 has no soft-delete producer — no code path sets session status to `deleted`. `archived` is the only soft lifecycle transition. Session DELETE (`DELETE /api/sessions/:sessionId`) is a hard delete that physically removes the session row; it does not set status to `deleted`.
+
 Session lifecycle describes whether the locator remains available in AIWorker.
 It does not describe engine execution.
 

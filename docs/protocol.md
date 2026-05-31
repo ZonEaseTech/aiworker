@@ -182,7 +182,9 @@ into a product backend.
   mounted app contexts.
 - `POST /api/workspace-locators` receives `workerId`, may receive `rootPath`,
   and creates Worker workspace locator metadata plus projection-owned bootstrap
-  files.
+  files. `rootPath` is deliberately unconstrained — it is not restricted to the
+  Worker home directory; this open semantic is intentional for the
+  single-operator local model and must not be silently tightened.
 - `GET /api/sessions` may receive `workerId` and `workspaceId` to filter
   mounted app context session lists.
 - `POST /api/sessions` receives `workerId` and `workspaceId` as locator context.

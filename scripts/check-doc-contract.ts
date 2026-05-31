@@ -107,6 +107,8 @@ requireIncludes('docs/architecture.md', [
   'A Worker is the passive control server; Host is the client; a Worker never\ninitiates a connection to Host.',
   'The control contract covers worker describe, health, instance lifecycle, and an\nassignment envelope. It must not carry session, invocation, projection, engine,\nor domain data.',
   'Management mount lets Host configure a Worker through the Worker configuration\nmicro-app. Management mount is distinct from the employee mount that serves\nworkspace/session/composer; employees connect to the Worker web directly.',
+  // #6 v1 mount 拓扑区分: 共用 /api/mount/workbench, 区分是拓扑性非 URL 性
+  'distinction is topological — Host frames the config micro-app in a managed',
   'The mounted configuration micro-app is the only current control-contract\ntransport; non-web transports are reserved and must not be hardcoded out.',
   'A session is a Worker locator for workspace locator, selected capability, and\ninvocation references. Engine execution lives in `engine_invocations` and is\nowned by the Worker.',
   'The Worker, not Host, prepares engine invocation context and observes native\nengine output.',
@@ -243,6 +245,8 @@ requireIncludes('docs/protocol.md', [
   'The control contract must not carry session, invocation, projection, engine, or\ndomain data.',
   // 钉死倒置后归属:workspace locator metadata 归 Worker（a6c75512,验收 #3 补 pin 防静默 revert）。
   'creates Worker workspace locator metadata plus projection-owned bootstrap\n  files.',
+  // #4 rootPath 开放语义: 刻意不约束(单 operator 本机模型)
+  'rootPath` is deliberately unconstrained — it is not restricted to the',
 ])
 forbidIncludes('docs/protocol.md', [
   'host-adapter',
@@ -325,6 +329,9 @@ requireIncludes('docs/runtime.md', [
   'AIWorker does not manage engine login, token refresh, account selection, or\nengine profiles.',
   'Author-owned native MCP files may contain literal secrets. AIWorker must not copy\nthose values into descriptors, DB, projection receipts, logs, diagnostics,\nOpenAPI examples, or UI.',
   'Anything emitted by CLI, Web, logs, API errors, event\nstreams, or diagnostics must be redacted before persistence or display.',
+  // #3 session deleted 消歧: reserved enum vs hard-delete operation
+  'v1 has no soft-delete producer — no code path sets session status to',
+  'Session DELETE (`DELETE /api/sessions/:sessionId`) is a hard delete that physically removes the session row',
   'Archive is the default lifecycle operation for workers, workspace locators, and\nsessions.',
   'Hard delete is explicit and removes Worker metadata plus receipt-owned\nprojection files only.',
   'Physical workspace root deletion is a separate dangerous\naction and is not the default lifecycle behavior.',

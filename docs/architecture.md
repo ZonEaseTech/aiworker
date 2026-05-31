@@ -142,7 +142,11 @@ or domain data.
 
 Management mount lets Host configure a Worker through the Worker configuration
 micro-app. Management mount is distinct from the employee mount that serves
-workspace/session/composer; employees connect to the Worker web directly. The mounted configuration micro-app is the only current control-contract
+workspace/session/composer; employees connect to the Worker web directly. In v1,
+both share the single broker endpoint `GET /api/mount/workbench`; the
+distinction is topological — Host frames the config micro-app in a managed
+context, while employees connect directly to the same broker — not a different
+URL. The mounted configuration micro-app is the only current control-contract
 transport; non-web transports are reserved and must not be hardcoded out.
 
 ## Runtime Boundary
