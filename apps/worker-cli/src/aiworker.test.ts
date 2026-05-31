@@ -317,6 +317,16 @@ describe('aiworker local CLI', () => {
     expect(resolveCliWorkerWebStaticDir(moduleDir)).toBe(workerWebRoot)
   })
 
+  it('resolves source-checkout Worker Web static from the worker-web app build', async () => {
+    const moduleDir = path.join(root, 'apps', 'worker-cli', 'src')
+    const workerWebRoot = path.join(root, 'apps', 'worker-web', 'dist', 'worker')
+    mkdirSync(moduleDir, { recursive: true })
+    mkdirSync(workerWebRoot, { recursive: true })
+    await writeFile(path.join(workerWebRoot, 'index.html'), '<!doctype html>')
+
+    expect(resolveCliWorkerWebStaticDir(moduleDir)).toBe(workerWebRoot)
+  })
+
   it('resolves standalone bundle resources next to the executable', async () => {
     const moduleDir = path.join(root, 'bunfs', 'apps', 'worker-cli', 'src')
     const executableDir = path.join(root, 'aiworker-darwin-arm64')

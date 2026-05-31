@@ -217,7 +217,7 @@ export function resolveCliWorkerWebStaticDir(moduleDir = CLI_MODULE_DIR, options
     if (existsSync(path.join(packaged, 'index.html')))
       return packaged
   }
-  const source = path.resolve(moduleDir, '../../web/dist/worker')
+  const source = path.resolve(moduleDir, '../../worker-web/dist/worker')
   if (existsSync(path.join(source, 'index.html')))
     return source
   return undefined
