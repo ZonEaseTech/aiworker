@@ -172,9 +172,9 @@ function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean 
     return true
   if (isSiblingSoulAppImport(rootDir, importPath))
     return true
-  // #4: @scope パッケージは WORKER_PRIVATE_IMPORT_PREFIXES / sibling 判定で処理済み。
-  // path-root 部分文字列ヒューリスティックは非 @scope import(相対パス等)にのみ適用し、
-  // @acme/packages/shared/types のような第三者 scoped パッケージの誤検知を防ぐ。
+  // #4: @scope 包已由 WORKER_PRIVATE_IMPORT_PREFIXES / sibling 判定处理完毕。
+  // path-root 子串启发式仅对非 @scope import(相对路径等)生效，
+  // 避免对 @acme/packages/shared/types 这类第三方 scoped 包产生误判。
   if (!importPath.startsWith('@')) {
     const normalized = normalizedImport(importPath)
     if ([...CURRENT_WORKER_PRIVATE_ROOTS, ...FORBIDDEN_LEGACY_ROOTS].some(root => normalized.includes(`${root}/`))) {
@@ -184,8 +184,8 @@ function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean 
   return false
 }
 
-// #3: package.json の name フィールドを読む(CI gate の readPackageName と同じ戦略)
-// 読み取れない場合は @zonease/<dirname> にフォールバック
+// #3: 读取 package.json 的 name 字段(与 CI gate 的 readPackageName 策略一致)
+// 读取失败时回退为 @zonease/<dirname>
 function readOwnPackageName(rootDir: string): string {
   const packagePath = path.join(rootDir, 'package.json')
   if (existsSync(packagePath)) {
@@ -195,14 +195,14 @@ function readOwnPackageName(rootDir: string): string {
         return parsed.name
     }
     catch {
-      // フォールバックへ
+      // 回退处理
     }
   }
   return `@zonease/${path.basename(rootDir)}`
 }
 
 function isSiblingSoulAppImport(rootDir: string, importPath: string): boolean {
-  // #3: ディレクトリ名ではなく package.json の name で自身を判定
+  // #3: 不靠目录名，而用 package.json 的 name 判定自身
   const ownPackageName = readOwnPackageName(rootDir)
   const normalized = normalizedImport(importPath)
   const scopeMatch = normalized.match(/^(@zonease\/aiworker-[^/]+)/)
