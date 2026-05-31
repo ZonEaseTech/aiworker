@@ -8,7 +8,7 @@ export const workers = sqliteTable(
   'workers',
   {
     id: text('id').primaryKey(),
-    soulId: text('soul_id').notNull(),
+    appId: text('app_id').notNull(),
     name: text('name').notNull(),
     status: text('status', { enum: ['active', 'archived'] }).notNull().default('active'),
     defaultEngineId: text('default_engine_id'),
@@ -17,7 +17,7 @@ export const workers = sqliteTable(
     updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    soulIdx: index('workers_soul_idx').on(table.soulId),
+    appIdx: index('workers_app_idx').on(table.appId),
     statusUpdatedAtIdx: index('workers_status_updated_at_idx').on(table.status, table.updatedAt),
   }),
 )

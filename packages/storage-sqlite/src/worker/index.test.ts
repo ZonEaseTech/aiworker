@@ -228,8 +228,8 @@ describe('greenfield local worker session schema', () => {
   })
 
   it('normalizes retired worker lifecycle rows to archived', () => {
-    upsertWorker({ id: 'legacy-disabled-worker', name: 'Legacy Disabled Worker', soulId: 'demo-soul-app' })
-    upsertWorker({ id: 'legacy-paused-worker', name: 'Legacy Paused Worker', soulId: 'demo-soul-app' })
+    upsertWorker({ id: 'legacy-disabled-worker', name: 'Legacy Disabled Worker', appId: 'demo-soul-app' })
+    upsertWorker({ id: 'legacy-paused-worker', name: 'Legacy Paused Worker', appId: 'demo-soul-app' })
     getWorkerDb().run(sql.raw('UPDATE workers SET status = \'disabled\' WHERE id = \'legacy-disabled-worker\''))
     getWorkerDb().run(sql.raw('UPDATE workers SET status = \'paused\' WHERE id = \'legacy-paused-worker\''))
 
@@ -240,7 +240,7 @@ describe('greenfield local worker session schema', () => {
   })
 
   it('persists worker config envelopes and rejects malformed Worker metadata', () => {
-    const worker = upsertWorker({ id: 'worker-config-1', name: 'Config worker', soulId: 'demo-soul-app' })
+    const worker = upsertWorker({ id: 'worker-config-1', name: 'Config worker', appId: 'demo-soul-app' })
 
     const saved = upsertWorkerConfigValue({
       workerId: worker.id,
@@ -400,7 +400,7 @@ describe('greenfield local worker session schema', () => {
   })
 
   it('projects standard worker config overlays into legacy overlay asset rows', () => {
-    const worker = upsertWorker({ id: 'worker-config-overlay-1', name: 'Config overlay worker', soulId: 'demo-soul-app' })
+    const worker = upsertWorker({ id: 'worker-config-overlay-1', name: 'Config overlay worker', appId: 'demo-soul-app' })
 
     upsertWorkerConfigValue({
       workerId: worker.id,
@@ -496,12 +496,12 @@ describe('greenfield local worker session schema', () => {
   it('persists the worker -> workspace -> session -> invocation loop without Host review or lesson rows', () => {
     const worker = upsertWorker({
       id: 'worker-demo',
-      soulId: 'demo-soul',
+      appId: 'demo-soul',
       name: 'Demo',
       defaultEngineId: 'codex',
       at: '2026-05-09T01:00:00.000Z',
     })
-    expect(worker.soulId).toBe('demo-soul')
+    expect(worker.appId).toBe('demo-soul')
 
     const workspace = createWorkspace({
       id: 'workspace-1',
@@ -564,7 +564,7 @@ describe('greenfield local worker session schema', () => {
   it('persists session-level engine invocations without turn execution rows', () => {
     const worker = upsertWorker({
       id: 'worker-invocation-only',
-      soulId: 'freeform',
+      appId: 'freeform',
       name: 'Freeform',
       defaultEngineId: 'codex',
       at: '2026-05-27T01:00:00.000Z',
@@ -619,7 +619,7 @@ describe('greenfield local worker session schema', () => {
   it('persists canonical normalized bridge event classes in the storage event_type column', () => {
     const worker = upsertWorker({
       id: 'worker-normalized-bridge-events',
-      soulId: 'freeform',
+      appId: 'freeform',
       name: 'Freeform',
       defaultEngineId: 'codex',
       at: '2026-05-27T01:10:00.000Z',
@@ -687,7 +687,7 @@ describe('greenfield local worker session schema', () => {
   it('rejects secret-like assignment strings in persisted engine diagnostics', () => {
     const worker = upsertWorker({
       id: 'worker-engine-diagnostics-secret',
-      soulId: 'freeform',
+      appId: 'freeform',
       name: 'Freeform',
       defaultEngineId: 'codex',
       at: '2026-05-27T02:00:00.000Z',
@@ -733,7 +733,7 @@ describe('greenfield local worker session schema', () => {
     expect(() =>
       upsertWorker({
         id: 'worker-domain-metadata',
-        soulId: 'demo-soul-app',
+        appId: 'demo-soul-app',
         name: 'Domain metadata worker',
         metadataJson: { reviewRecord: { decision: 'approved' } },
       }),
@@ -829,7 +829,7 @@ describe('greenfield local worker session schema', () => {
       expect(() =>
         upsertWorker({
           id: `worker-extended-secret-${index}`,
-          soulId: 'demo-soul-app',
+          appId: 'demo-soul-app',
           name: 'Extended secret worker',
           metadataJson: { diagnostic: `engine output: ${literal}` },
         }),
@@ -843,7 +843,7 @@ describe('greenfield local worker session schema', () => {
     expect(() =>
       upsertWorker({
         id: 'worker-prefixed-assignment-secret',
-        soulId: 'demo-soul-app',
+        appId: 'demo-soul-app',
         name: 'Prefixed assignment worker',
         metadataJson: { apiKeyRef: 'env:OPENAI_API_KEY=plaintextvalue' },
       }),
@@ -851,7 +851,7 @@ describe('greenfield local worker session schema', () => {
     expect(() =>
       upsertWorker({
         id: 'worker-prefixed-dollar-secret',
-        soulId: 'demo-soul-app',
+        appId: 'demo-soul-app',
         name: 'Prefixed dollar worker',
         metadataJson: { authorization: '$OPENAI_API_KEY=literalplaintext' },
       }),
@@ -861,7 +861,7 @@ describe('greenfield local worker session schema', () => {
     expect(() =>
       upsertWorker({
         id: 'worker-prefixed-valid-ref',
-        soulId: 'demo-soul-app',
+        appId: 'demo-soul-app',
         name: 'Prefixed valid worker',
         metadataJson: { apiKeyRef: 'secretref:codex/default-profile' },
       }),
@@ -871,7 +871,7 @@ describe('greenfield local worker session schema', () => {
   it('filters session events by id in SQL before applying the limit so long sessions keep streaming', () => {
     const worker = upsertWorker({
       id: 'worker-events',
-      soulId: 'demo-soul',
+      appId: 'demo-soul',
       name: 'Events worker',
       defaultEngineId: 'codex',
       at: '2026-05-23T00:00:00.000Z',
@@ -941,7 +941,7 @@ describe('greenfield local worker session schema', () => {
   it('discards legacy built-in Soul worker metadata and cascaded local records', () => {
     const worker = upsertWorker({
       id: 'legacy-hr-worker',
-      soulId: 'hr',
+      appId: 'hr',
       name: 'Legacy HR',
       defaultEngineId: 'codex',
       at: '2026-05-13T13:04:00.000Z',
@@ -995,14 +995,14 @@ describe('greenfield local worker session schema', () => {
   it('allows multiple workers to bind the same Soul while isolating workspaces by worker', () => {
     const recruiting = upsertWorker({
       id: 'worker-demo-primary',
-      soulId: 'demo-soul',
+      appId: 'demo-soul',
       name: 'Demo Primary',
       defaultEngineId: 'codex',
       at: '2026-05-09T02:00:00.000Z',
     })
     const talentPool = upsertWorker({
       id: 'worker-demo-secondary',
-      soulId: 'demo-soul',
+      appId: 'demo-soul',
       name: 'Demo Secondary',
       defaultEngineId: 'codex',
       at: '2026-05-09T02:01:00.000Z',
@@ -1023,37 +1023,37 @@ describe('greenfield local worker session schema', () => {
       at: '2026-05-09T02:03:00.000Z',
     })
 
-    expect(recruiting.soulId).toBe(talentPool.soulId)
+    expect(recruiting.appId).toBe(talentPool.appId)
     expect(recruiting.id).not.toBe(talentPool.id)
     expect(listWorkspaces(recruiting.id)).toEqual([recruitingWorkspace])
     expect(listWorkspaces(talentPool.id)).toEqual([talentWorkspace])
   })
 
   it('repairs legacy unique worker Soul index during migration', () => {
-    getWorkerDb().run(sql.raw('DROP INDEX IF EXISTS workers_soul_idx'))
-    getWorkerDb().run(sql.raw('CREATE UNIQUE INDEX workers_soul_idx ON workers (soul_id)'))
+    getWorkerDb().run(sql.raw('DROP INDEX IF EXISTS workers_app_idx'))
+    getWorkerDb().run(sql.raw('CREATE UNIQUE INDEX workers_app_idx ON workers (app_id)'))
 
     runWorkerMigrations()
 
     const indexes = getWorkerDb().all<{ name: string, unique: number }>(sql.raw('PRAGMA index_list("workers")'))
-    expect(indexes.find(index => index.name === 'workers_soul_idx')?.unique).toBe(0)
+    expect(indexes.find(index => index.name === 'workers_app_idx')?.unique).toBe(0)
 
     upsertWorker({
       id: 'worker-hr-legacy-a',
-      soulId: 'hr',
+      appId: 'hr',
       name: 'HR Legacy A',
       defaultEngineId: 'codex',
       at: '2026-05-09T02:10:00.000Z',
     })
     upsertWorker({
       id: 'worker-hr-legacy-b',
-      soulId: 'hr',
+      appId: 'hr',
       name: 'HR Legacy B',
       defaultEngineId: 'codex',
       at: '2026-05-09T02:11:00.000Z',
     })
 
-    expect(listWorkers().filter(worker => worker.soulId === 'hr').map(worker => worker.id)).toContain('worker-hr-legacy-b')
+    expect(listWorkers().filter(worker => worker.appId === 'hr').map(worker => worker.id)).toContain('worker-hr-legacy-b')
   })
 
   it('keeps indexes aligned with the session workspace query paths', () => {

@@ -78,11 +78,11 @@ function discardLegacyWorkerOverlayAssets() {
 
 function repairWorkerIndexes() {
   const rows = getWorkerDb().all<{ name: string, unique: number }>(sql.raw('PRAGMA index_list("workers")'))
-  const soulIndex = rows.find(row => row.name === 'workers_soul_idx')
-  if (soulIndex?.unique === 1)
-    getWorkerDb().run(sql.raw('DROP INDEX IF EXISTS workers_soul_idx'))
-  if (!soulIndex || soulIndex.unique === 1)
-    getWorkerDb().run(sql.raw('CREATE INDEX IF NOT EXISTS workers_soul_idx ON workers (soul_id)'))
+  const appIndex = rows.find(row => row.name === 'workers_app_idx')
+  if (appIndex?.unique === 1)
+    getWorkerDb().run(sql.raw('DROP INDEX IF EXISTS workers_app_idx'))
+  if (!appIndex || appIndex.unique === 1)
+    getWorkerDb().run(sql.raw('CREATE INDEX IF NOT EXISTS workers_app_idx ON workers (app_id)'))
 }
 
 function repairWorkerLifecycleStatuses() {
@@ -340,7 +340,7 @@ export interface SessionEventRow {
 
 export interface UpsertWorkerInput {
   id: string
-  soulId: string
+  appId: string
   name: string
   status?: WorkerRow['status']
   defaultEngineId?: string | null
@@ -511,7 +511,7 @@ export function upsertWorker(input: UpsertWorkerInput): WorkerRow {
   if (!existing) {
     getWorkerDb().insert(schema.workers).values({
       id: input.id,
-      soulId: input.soulId,
+      appId: input.appId,
       name: input.name,
       status: input.status ?? 'active',
       defaultEngineId: input.defaultEngineId ?? null,
@@ -525,7 +525,7 @@ export function upsertWorker(input: UpsertWorkerInput): WorkerRow {
       defaultEngineId: input.defaultEngineId ?? existing.defaultEngineId,
       metadataJson: input.metadataJson ?? existing.metadataJson,
       name: input.name,
-      soulId: input.soulId,
+      appId: input.appId,
       status: input.status ?? existing.status,
       updatedAt: now,
     }).where(eq(schema.workers.id, input.id)).run()
@@ -760,14 +760,14 @@ export function discardRetiredSoulMetadata(input: DiscardRetiredSoulMetadataInpu
     const retiredWorkers = getWorkerDb()
       .select({ id: schema.workers.id })
       .from(schema.workers)
-      .where(eq(schema.workers.soulId, soulId))
+      .where(eq(schema.workers.appId, soulId))
       .all()
     if (retiredWorkers.length === 0)
       continue
 
     getWorkerDb()
       .delete(schema.workers)
-      .where(eq(schema.workers.soulId, soulId))
+      .where(eq(schema.workers.appId, soulId))
       .run()
     workersDeleted += retiredWorkers.length
   }
