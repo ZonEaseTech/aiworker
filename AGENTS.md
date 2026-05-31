@@ -41,7 +41,7 @@ Worker 启动本地壳、定位 workspace/session、serve 员工 web、拥有 pr
 
 Host/Soul 是 descriptor-only：Host 只消费 `dist/soul.descriptor.json`、built mounted assets 和 app-owned API proxy。Host 不读 Soul source、不 import Soul 私有模块、不解释领域字段。
 
-Production mounted workbench 必须使用 micro-app `router-mode="search"`。Worker daemon 解析 workbench entry 并传 locator context；Host 负责 mount；Soul 拥有内部 routes、领域 UI 和 app-owned API。
+Production mounted workbench 必须使用 micro-app `router-mode="search"`。Worker daemon 解析 workbench entry；Host 传 locator context 并 mount；Soul 拥有内部 routes、领域 UI 和 app-owned API。
 
 ## Runtime Boundary
 

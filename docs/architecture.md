@@ -130,8 +130,9 @@ Extensions are namespaced and opaque unless a future protocol version promotes
 them into the standard contract.
 
 Production mounted workbench surfaces use micro-app with
-`router-mode="search"`. Worker daemon resolves one workbench entry and passes
-locator context. Soul owns internal routes and domain rendering.
+`router-mode="search"`. The Worker daemon resolves one workbench entry; Host
+passes locator context and mounts. Soul owns internal routes and domain
+rendering.
 
 The Host-to-Worker boundary is a transport-agnostic control contract owned by
 `packages/worker-control-protocol`. A Worker is the passive control server; Host is the client; a Worker never
