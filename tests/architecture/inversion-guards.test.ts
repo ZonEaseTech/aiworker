@@ -22,15 +22,36 @@ function packageDirsWithPrefix(prefix: string): string[] {
   return dirs
 }
 
+// 读全 4 类 dependency（deps/devDeps/peerDeps/optionalDeps）——只读 deps+devDeps 会漏过
+// peer/optional 形态的越界引用（如 worker-* 把 host-* 列为 peerDependencies），那条同样违反
+// C2/C3/D6 边界却被旧 helper 漏掉。
 function zonaseDependencyNames(dir: string): string[] {
   const pkg = JSON.parse(read(`${dir}/package.json`)) as {
     dependencies?: Record<string, string>
     devDependencies?: Record<string, string>
+    peerDependencies?: Record<string, string>
+    optionalDependencies?: Record<string, string>
   }
   return [
     ...Object.keys(pkg.dependencies ?? {}),
     ...Object.keys(pkg.devDependencies ?? {}),
+    ...Object.keys(pkg.peerDependencies ?? {}),
+    ...Object.keys(pkg.optionalDependencies ?? {}),
   ].filter(name => name.startsWith('@zonease/'))
+}
+
+// 枚举 souls/ 下所有含 package.json 的顶层 Soul App 包目录（无前缀过滤——领域定义包不共享
+// host-/worker- 命名前缀，故 packageDirsWithPrefix 抓不到，须独立枚举）。
+function soulPackageDirs(): string[] {
+  const base = join(repoRoot, 'souls')
+  if (!existsSync(base))
+    return []
+  const dirs: string[] = []
+  for (const entry of readdirSync(base)) {
+    if (existsSync(join(base, entry, 'package.json')))
+      dirs.push(`souls/${entry}`)
+  }
+  return dirs
 }
 
 // 递归枚举某目录下的非 test 源文件（.ts/.tsx），排除 node_modules/dist/.d.ts/.test。
@@ -137,13 +158,21 @@ test('G2: engine launch symbols are imported only by worker-* packages', () => {
   }
 })
 
-// G3 ↔ D6：worker-* 不得依赖 host-*（Worker 必须能脱离 Host 独立运行）。Plan 3 起可证。
-test('G3: worker-* packages never depend on host-* packages', () => {
+// G3 ↔ D6：worker-* 与 souls/* 均不得依赖 host-*——Worker 必须能脱离 Host 独立运行，且
+// 领域定义包（souls/*）镜像同一方向：descriptor-producing Soul App 不依赖控制面。Plan 3 起可证。
+test('G3: worker-* packages and souls never depend on host-* packages', () => {
   const workerDirs = packageDirsWithPrefix('worker-')
   expect(workerDirs.length, 'expected at least one worker-* package directory').toBeGreaterThan(0)
   for (const dir of workerDirs) {
     const hostDeps = zonaseDependencyNames(dir).filter(name => name.startsWith('@zonease/aiworker-host-'))
     expect(hostDeps, `${dir} must not depend on host-* packages`).toEqual([])
+  }
+  // souls/* 镜像 worker-* 方向：领域定义包同样不得跨向控制面（host-*）。
+  const soulDirs = soulPackageDirs()
+  expect(soulDirs.length, 'expected at least one souls/* package directory').toBeGreaterThan(0)
+  for (const dir of soulDirs) {
+    const hostDeps = zonaseDependencyNames(dir).filter(name => name.startsWith('@zonease/aiworker-host-'))
+    expect(hostDeps, `${dir} (Soul App) must not depend on host-* packages`).toEqual([])
   }
 })
 
