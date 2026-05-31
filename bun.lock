@@ -139,7 +139,6 @@
     "packages/soul-app-runtime": {
       "name": "@zonease/aiworker-soul-app-runtime",
       "dependencies": {
-        "@zonease/aiworker-soul-app-sdk": "workspace:*",
         "@zonease/aiworker-soul-protocol": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
         "@zonease/aiworker-worker-runtime": "workspace:*",
