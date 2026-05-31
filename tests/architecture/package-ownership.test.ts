@@ -1,8 +1,20 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
 const repoRoot = join(import.meta.dir, '..', '..')
+
+function walkTsFiles(dir: string): string[] {
+  const out: string[] = []
+  if (!existsSync(dir)) return out
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.name === 'node_modules' || e.name === 'dist') continue
+    const p = join(dir, e.name)
+    if (e.isDirectory()) out.push(...walkTsFiles(p))
+    else if (/\.tsx?$/.test(e.name)) out.push(p)
+  }
+  return out
+}
 
 interface PackageJson {
   name?: string
@@ -116,6 +128,21 @@ describe('target package ownership', () => {
     expect(existsSync(join(repoRoot, 'packages/worker-runtime/src/worker/engine-bridge.test.ts'))).toBe(false)
     expect(hostRuntimeEntrypoint).not.toContain('invokeNativeEngine')
     expect(hostRuntimeEntrypoint).not.toContain('NativeEngineBridge')
+  })
+
+  test('worker-cli declares soul-app-sdk and uses no deep sibling-source imports', () => {
+    const cliPkg = JSON.parse(readFileSync(join(repoRoot, 'apps/worker-cli/package.json'), 'utf8')) as PackageJson
+    const allDeps = { ...(cliPkg.dependencies ?? {}), ...(cliPkg.devDependencies ?? {}) }
+    expect(allDeps, 'worker-cli must declare its soul-app-sdk usage').toHaveProperty('@zonease/aiworker-soul-app-sdk')
+
+    const deepImports: string[] = []
+    for (const root of ['apps/worker-cli/src', 'apps/worker-web/src', 'packages']) {
+      for (const file of walkTsFiles(join(repoRoot, root))) {
+        if (/from\s+['"][^'"]*\.\.\/[^'"]*packages\/[^'"]+\/src\//.test(readFileSync(file, 'utf8')))
+          deepImports.push(relative(repoRoot, file))
+      }
+    }
+    expect(deepImports, 'no module may deep-import a sibling package /src').toEqual([])
   })
 
   test('soul-protocol/soul-app modules have no VALUE import of the package root barrel (runtime acyclic)', () => {
