@@ -950,12 +950,12 @@ async function showLogs(opts: { tail?: number } = {}): Promise<void> {
   process.stdout.write(`${redactCliInspectOutput(lines.slice(-(opts.tail ?? 80)).join('\n'))}\n`)
 }
 
-async function createWorkerCommand(opts: { id?: string, name?: string, soul?: string }): Promise<void> {
+async function createWorkerCommand(opts: { id?: string, name?: string, app?: string }): Promise<void> {
   const paths = await ensureDb()
   const created = await createHost(paths).createSoulWorker({
     id: opts.id,
     name: requireText(opts.name, 'name'),
-    soulId: requireText(opts.soul, 'soul'),
+    appId: requireText(opts.app, 'app'),
   })
   printJson({ worker: created.snapshot.worker })
 }
@@ -978,7 +978,7 @@ async function archiveWorkerCommand(id: string): Promise<void> {
     id: existing.id,
     metadataJson: existing.metadataJson,
     name: existing.name,
-    soulId: existing.soulId,
+    appId: existing.appId,
     status: 'archived',
   })
   printJson({ worker })
@@ -1771,7 +1771,7 @@ function registerCommands(): void {
     const paths = await ensureDb()
     printJson({ souls: createHost(paths).listSouls() })
   })
-  cli.command('worker create', 'create a local Soul worker').option('--id <id>', 'worker id').option('--name <text>', 'worker name').option('--soul <id>', 'Soul id').action(createWorkerCommand)
+  cli.command('worker create', 'create a local Soul worker').option('--id <id>', 'worker id').option('--name <text>', 'worker name').option('--app <appId>', 'Soul App id (appId, e.g. aiworker-freeform)').action(createWorkerCommand)
   cli.command('worker list', 'list local Soul workers').action(async () => {
     await ensureAllWorkers()
     printJson({ workers: listWorkers() })
@@ -1793,9 +1793,9 @@ function registerCommands(): void {
   cli.command('worker config archive <workerId> <configKey>', 'archive a worker-scoped Host config envelope').action(archiveWorkerConfigCommand)
   cli.command('worker archive <id>', 'archive a local Soul worker').action(archiveWorkerCommand)
   cli.command('worker delete <id>', 'hard-delete local Soul worker metadata').action(deleteWorkerCommand)
-  cli.command('capability list', 'list app-declared capabilities').option('--soul <id>', 'Soul id').action(async (opts: { soul?: string }) => {
+  cli.command('capability list', 'list app-declared capabilities').option('--app <appId>', 'Soul App id (appId, e.g. aiworker-freeform)').action(async (opts: { app?: string }) => {
     const paths = await ensureDb()
-    const capabilities = createHost(paths).listCapabilities(opts.soul)
+    const capabilities = createHost(paths).listCapabilities(opts.app)
     printJson({ capabilities })
   })
 

@@ -95,7 +95,7 @@ describe('aiworker local CLI', () => {
     runWorkerMigrations()
     upsertWorker({
       id: 'legacy-hr-worker',
-      soulId: 'hr',
+      appId: 'hr',
       name: 'Legacy HR',
       defaultEngineId: 'codex',
       at: '2026-05-13T13:04:00.000Z',
@@ -409,7 +409,7 @@ describe('aiworker local CLI', () => {
 
   it('initializes host-local daemon state without auto-creating Soul workers', async () => {
     expect(await runCli(argv('init'))).toBe(0)
-    const body = JSON.parse(output) as { dbPath: string, home: string, workers: Array<{ soulId: string }>, workersRoot: string }
+    const body = JSON.parse(output) as { dbPath: string, home: string, workers: Array<{ appId: string }>, workersRoot: string }
 
     expect(body.home).toBe(path.join(root, 'home'))
     expect(body.dbPath).toBe(path.join(root, 'home', 'aiworker.db'))
@@ -422,8 +422,8 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'freeform-worker', '--name', 'Freeform Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
-    expect((JSON.parse(output) as { worker: { id: string, soulId: string } }).worker).toMatchObject({ id: 'freeform-worker', soulId: FREEFORM_APP_ID })
+    expect(await runCli(argv('worker', 'create', '--id', 'freeform-worker', '--name', 'Freeform Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    expect((JSON.parse(output) as { worker: { id: string, appId: string } }).worker).toMatchObject({ id: 'freeform-worker', appId: FREEFORM_APP_ID })
     output = ''
 
     expect(await runCli(argv('worker', 'select', 'freeform-worker'))).toBe(0)
@@ -447,7 +447,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'events-worker', '--name', 'Events Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'events-worker', '--name', 'Events Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('worker', 'select', 'events-worker'))).toBe(0)
     output = ''
@@ -524,7 +524,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'reconcile-worker', '--name', 'Reconcile Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'reconcile-worker', '--name', 'Reconcile Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('worker', 'select', 'reconcile-worker'))).toBe(0)
     output = ''
@@ -593,7 +593,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'cancel-worker', '--name', 'Cancel Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'cancel-worker', '--name', 'Cancel Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('worker', 'select', 'cancel-worker'))).toBe(0)
     output = ''
@@ -658,7 +658,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'config-worker', '--name', 'Config Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'config-worker', '--name', 'Config Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
 
     expect(await runCli(argv(
@@ -698,7 +698,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'secret-config-worker', '--name', 'Secret Config Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'secret-config-worker', '--name', 'Secret Config Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     errorOutput = ''
 
@@ -730,7 +730,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'lifecycle-worker', '--name', 'Lifecycle Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'lifecycle-worker', '--name', 'Lifecycle Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Lifecycle Workspace', '--type', 'freeform', '--worker', 'lifecycle-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -792,7 +792,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'cli-delete-workspace-worker', '--name', 'CLI Delete Workspace Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'cli-delete-workspace-worker', '--name', 'CLI Delete Workspace Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'CLI Delete Workspace', '--type', 'freeform', '--worker', 'cli-delete-workspace-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -818,7 +818,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'cli-delete-worker-invalid-receipt', '--name', 'CLI Delete Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'cli-delete-worker-invalid-receipt', '--name', 'CLI Delete Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'CLI Delete Worker Workspace', '--type', 'freeform', '--worker', 'cli-delete-worker-invalid-receipt'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -847,7 +847,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'cli-refresh-worker', '--name', 'CLI Refresh Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'cli-refresh-worker', '--name', 'CLI Refresh Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'CLI Refresh Workspace', '--type', 'freeform', '--worker', 'cli-refresh-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -889,7 +889,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'archive-app-cli-worker', '--name', 'Archive App CLI Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'archive-app-cli-worker', '--name', 'Archive App CLI Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Archive App CLI Workspace', '--type', 'freeform', '--worker', 'archive-app-cli-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -948,7 +948,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'demo-worker', '--name', 'Demo Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'demo-worker', '--name', 'Demo Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'demo-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -984,7 +984,7 @@ describe('aiworker local CLI', () => {
     runWorkerMigrations()
     upsertWorker({
       id: 'inspect-worker',
-      soulId: FREEFORM_APP_ID,
+      appId: FREEFORM_APP_ID,
       name: 'Inspect Worker',
       defaultEngineId: 'codex',
       at: '2026-05-27T08:00:00.000Z',
@@ -1019,7 +1019,7 @@ describe('aiworker local CLI', () => {
     runWorkerMigrations()
     upsertWorker({
       id: 'session-inspect-worker',
-      soulId: FREEFORM_APP_ID,
+      appId: FREEFORM_APP_ID,
       name: 'Session Inspect Worker',
       defaultEngineId: 'codex',
       at: '2026-05-27T08:10:00.000Z',
@@ -1070,7 +1070,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'demo-worker', '--name', 'Demo Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'demo-worker', '--name', 'Demo Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'demo-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -1167,7 +1167,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'claude-worker', '--name', 'Claude Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'claude-worker', '--name', 'Claude Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'claude-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -1207,7 +1207,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'frozen-worker', '--name', 'Frozen Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'frozen-worker', '--name', 'Frozen Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'frozen-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -1271,7 +1271,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'legacy-engine-worker', '--name', 'Legacy Engine Worker', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'legacy-engine-worker', '--name', 'Legacy Engine Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'legacy-engine-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -1630,11 +1630,11 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed'])
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'legacy-hr', '--name', 'Legacy HR', '--soul', 'hr'))).toBe(1)
+    expect(await runCli(argv('worker', 'create', '--id', 'legacy-hr', '--name', 'Legacy HR', '--app', 'hr'))).toBe(1)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'official-freeform', '--name', 'Official Freeform', '--soul', FREEFORM_APP_ID))).toBe(0)
-    expect((JSON.parse(output) as { worker: { soulId: string } }).worker.soulId).toBe(FREEFORM_APP_ID)
+    expect(await runCli(argv('worker', 'create', '--id', 'official-freeform', '--name', 'Official Freeform', '--app', FREEFORM_APP_ID))).toBe(0)
+    expect((JSON.parse(output) as { worker: { appId: string } }).worker.appId).toBe(FREEFORM_APP_ID)
   })
 
   it('discards legacy HR metadata during official app bootstrap', async () => {
@@ -1670,24 +1670,24 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { souls: Array<{ id: string, status: string }> }).souls).toEqual(expect.arrayContaining([expect.objectContaining({ id: FREEFORM_APP_ID, status: 'available' })]))
     output = ''
 
-    expect(await runCli(argv('capability', 'list', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('capability', 'list', '--app', FREEFORM_APP_ID))).toBe(0)
     const capabilityId = FREEFORM_CAPABILITY_ID
     expect((JSON.parse(output) as { capabilities: Array<{ id: string }> }).capabilities.map(capability => capability.id)).toContain(capabilityId)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'mounted-hr', '--name', 'Mounted HR', '--soul', FREEFORM_APP_ID))).toBe(0)
-    expect((JSON.parse(output) as { worker: { metadata: Record<string, unknown>, soulId: string } }).worker.soulId).toBe(FREEFORM_APP_ID)
+    expect(await runCli(argv('worker', 'create', '--id', 'mounted-hr', '--name', 'Mounted HR', '--app', FREEFORM_APP_ID))).toBe(0)
+    expect((JSON.parse(output) as { worker: { metadata: Record<string, unknown>, appId: string } }).worker.appId).toBe(FREEFORM_APP_ID)
     output = ''
 
     expect(await runCli(argv('app', 'archive', FREEFORM_APP_ID))).toBe(0)
     expect((JSON.parse(output) as { app: { status: string } }).app.status).toBe('disabled')
     output = ''
 
-    expect(await runCli(argv('capability', 'list', '--soul', FREEFORM_APP_ID))).toBe(0)
+    expect(await runCli(argv('capability', 'list', '--app', FREEFORM_APP_ID))).toBe(0)
     expect((JSON.parse(output) as { capabilities: unknown[] }).capabilities).toEqual([])
     output = ''
 
-    expect(await runCli(argv('template', 'list', '--soul', FREEFORM_APP_ID))).toBe(1)
+    expect(await runCli(argv('template', 'list', '--app', FREEFORM_APP_ID))).toBe(1)
   })
 
   it('exposes the canonical soul authoring path: soul create scaffolds and soul build rebuilds', async () => {

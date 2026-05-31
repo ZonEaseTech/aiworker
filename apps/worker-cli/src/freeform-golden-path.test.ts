@@ -58,17 +58,17 @@ describe('Freeform CLI golden path', () => {
     const enabled = await runCliJson<{ app: { appId: string, status: string } }>('app', 'enable', FREEFORM_APP_ID)
     expect(enabled.app).toMatchObject({ appId: FREEFORM_APP_ID, status: 'enabled' })
 
-    const worker = await runCliJson<{ worker: { id: string, soulId: string } }>(
+    const worker = await runCliJson<{ worker: { id: string, appId: string } }>(
       'worker',
       'create',
       '--id',
       'freeform-golden-worker',
       '--name',
       'Freeform Golden Worker',
-      '--soul',
+      '--app',
       FREEFORM_APP_ID,
     )
-    expect(worker.worker).toMatchObject({ id: 'freeform-golden-worker', soulId: FREEFORM_APP_ID })
+    expect(worker.worker).toMatchObject({ id: 'freeform-golden-worker', appId: FREEFORM_APP_ID })
 
     const savedConfig = await runCliJson<{
       config: {
