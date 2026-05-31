@@ -13,7 +13,7 @@ export interface WebStorageIssue {
   symbol: string
 }
 
-export const HOST_PRIVATE_IMPORT_PREFIXES = [
+export const WORKER_PRIVATE_IMPORT_PREFIXES = [
   '@zonease/aiworker-cli',
   '@zonease/aiworker-worker-runtime',
   '@zonease/aiworker-fs-layout',
@@ -37,7 +37,7 @@ const ALLOWED_SHARED_PACKAGES = new Set([
   '@zonease/aiworker-ui',
 ])
 
-const CURRENT_HOST_PRIVATE_ROOTS = [
+const CURRENT_WORKER_PRIVATE_ROOTS = [
   'apps/worker-cli',
   'apps/worker-web',
   'packages/fs-layout',
@@ -166,18 +166,18 @@ function normalizedImport(importPath: string): string {
 }
 
 function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean {
-  if (HOST_PRIVATE_IMPORT_PREFIXES.some(prefix => importPath === prefix || importPath.startsWith(`${prefix}/`)))
+  if (WORKER_PRIVATE_IMPORT_PREFIXES.some(prefix => importPath === prefix || importPath.startsWith(`${prefix}/`)))
     return true
   if (FORBIDDEN_LEGACY_IMPORT_PREFIXES.some(prefix => importPath === prefix || importPath.startsWith(`${prefix}/`)))
     return true
   if (isSiblingSoulAppImport(rootDir, importPath))
     return true
-  // #4: @scope パッケージは HOST_PRIVATE_IMPORT_PREFIXES / sibling 判定で処理済み。
+  // #4: @scope パッケージは WORKER_PRIVATE_IMPORT_PREFIXES / sibling 判定で処理済み。
   // path-root 部分文字列ヒューリスティックは非 @scope import(相対パス等)にのみ適用し、
   // @acme/packages/shared/types のような第三者 scoped パッケージの誤検知を防ぐ。
   if (!importPath.startsWith('@')) {
     const normalized = normalizedImport(importPath)
-    if ([...CURRENT_HOST_PRIVATE_ROOTS, ...FORBIDDEN_LEGACY_ROOTS].some(root => normalized.includes(`${root}/`))) {
+    if ([...CURRENT_WORKER_PRIVATE_ROOTS, ...FORBIDDEN_LEGACY_ROOTS].some(root => normalized.includes(`${root}/`))) {
       return true
     }
   }

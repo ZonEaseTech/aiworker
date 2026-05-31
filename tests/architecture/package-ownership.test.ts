@@ -162,6 +162,11 @@ describe('target package ownership', () => {
     expect(offenders, 'declared runtime deps must be referenced in src').toEqual([])
   })
 
+  test('worker-cli boundary module uses worker-plane naming, not stale HOST_PRIVATE', () => {
+    const src = readFileSync(join(repoRoot, 'apps/worker-cli/src/soul-app-boundary.ts'), 'utf8')
+    expect(src.includes('HOST_PRIVATE'), 'post-inversion these are WORKER_PRIVATE packages').toBe(false)
+  })
+
   test('soul-protocol/soul-app modules have no VALUE import of the package root barrel (runtime acyclic)', () => {
     const dir = join(repoRoot, 'packages/soul-protocol/src/soul-app')
     const offenders: string[] = []
