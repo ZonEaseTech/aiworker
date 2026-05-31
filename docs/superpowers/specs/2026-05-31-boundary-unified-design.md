@@ -33,6 +33,7 @@
 
 - **D1 — soulId/appId 收敛为单一 appId 身份**(用户拍板,= synth 推荐 A):
   `worker.soulId` 列 / `projectedSoul.id` / `ProjectedCapability.soulId` / control 契约 `describe.soulId` 当前**系统性承载 appId 值**,而域 `soulId`(`freeform`)被持久化三份却 live 路径**零回读**。收敛动作:把这些承载 appId 值的字段**更名为 `appId`/`templateId`**,显式承认 v1 worker↔soul/capability 寻址键即 `appId`(它是 descriptor 主身份、唯一、有 kebab 守卫);**域 `soulId` 降级为 descriptor identity 元数据**(停止运行时三处持久化/回读,或保留为纯元数据)。同时修 CLI `--soul` 的 UX papercut(标注 "Soul id" 实需 appId)。**不引入复合键。**
+  - **C-ID 命名子决策(2026-05-31 拍板)**:内部寻址键统一 `appId`;G5 控制契约 `describe`/`assignment` 统一 `templateId`;域 `soulId` 降级为 descriptor identity 元数据(`metadata.domainSoulId` 保留为纯元数据)。
 - **D2 — common workbench 归属以 SDK 为准**(承接上一轮 F4 决策,与运行时一致:mounted 走 SDK common workbench)。
 
 ## 4. 收口项 — 概念层(severity-ordered + locking test)
