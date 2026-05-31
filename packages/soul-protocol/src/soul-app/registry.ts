@@ -19,7 +19,7 @@ const projectedCapabilitySchema = zod.object({
   name: zod.string().min(1),
   outputKind: zod.string().min(1),
   promptRef: zod.string().min(1),
-  soulId: zod.string().min(1),
+  appId: zod.string().min(1),
 })
 type ProjectedCapability = zod.infer<typeof projectedCapabilitySchema>
 
@@ -150,7 +150,7 @@ export function projectSoulAppCapability(descriptor: SoulDescriptorV1, capabilit
     name: record.name,
     outputKind: 'session',
     promptRef: record.promptRef,
-    soulId: identity.appId,
+    appId: identity.appId,
   }
 }
 

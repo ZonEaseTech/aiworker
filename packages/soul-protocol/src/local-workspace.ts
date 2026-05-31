@@ -115,7 +115,7 @@ export type LocalComposerMention = z.infer<typeof localComposerMentionSchema>
 
 export const localWorkerSchema = z.object({
   id: idSchema,
-  soulId: idSchema,
+  appId: idSchema,
   name: z.string().min(1),
   status: localWorkerStatusSchema,
   defaultEngineId: z.string().nullable(),
