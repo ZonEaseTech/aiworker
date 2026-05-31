@@ -15,14 +15,9 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test --timeout=15000"
   },
-  "dependencies": {
-    "@zonease/aiworker-soul-protocol": "workspace:*",
-    "@zonease/aiworker-ui": "workspace:*",
-    "react": "^19.1.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/bun": "^1.2.13",
-    "@types/react": "^19.1.2",
     "typescript": "^5.8.3"
   }
 }

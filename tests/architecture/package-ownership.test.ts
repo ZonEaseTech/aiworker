@@ -146,8 +146,7 @@ describe('target package ownership', () => {
   })
 
   test('engine-projection and worker-daemon declare no unused internal deps', () => {
-    // cases 数组后续 Task 5 会扩展(加 soul-workbench)
-    const cases = ['packages/engine-projection', 'packages/worker-daemon', 'packages/soul-app-runtime']
+    const cases = ['packages/engine-projection', 'packages/worker-daemon', 'packages/soul-app-runtime', 'packages/soul-workbench']
     const offenders: string[] = []
     for (const pkgDir of cases) {
       const pkg = JSON.parse(readFileSync(join(repoRoot, pkgDir, 'package.json'), 'utf8')) as PackageJson

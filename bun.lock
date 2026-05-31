@@ -170,14 +170,8 @@
     },
     "packages/soul-workbench": {
       "name": "@zonease/aiworker-soul-workbench",
-      "dependencies": {
-        "@zonease/aiworker-soul-protocol": "workspace:*",
-        "@zonease/aiworker-ui": "workspace:*",
-        "react": "^19.1.0",
-      },
       "devDependencies": {
         "@types/bun": "^1.2.13",
-        "@types/react": "^19.1.2",
         "typescript": "^5.8.3",
       },
     },

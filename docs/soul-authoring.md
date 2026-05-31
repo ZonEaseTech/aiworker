@@ -103,9 +103,7 @@ dist/
 - SDK-standard worker configuration model;
 - build output under `dist/`.
 
-`packages/soul-workbench` owns common workbench modules, common configuration UI,
-skills/MCP UI, artifact primitives, mounted client helpers, and React components
-for Soul workbench authors.
+`packages/soul-workbench` is a thin shell pending consolidation; in v1 the common workbench modules, configuration UI, skills/MCP UI, artifact primitives, and mounted client helpers live in `packages/soul-app-sdk`.
 
 `packages/soul-app-runtime` owns standalone and Host-mounted runtime harnesses.
 

@@ -1,11 +1,4 @@
 export const soulWorkbenchPackage = {
   name: '@zonease/aiworker-soul-workbench',
-  owns: [
-    'common-workbench-modules',
-    'common-configuration-ui',
-    'skills-ui',
-    'mcp-ui',
-    'artifact-primitives',
-    'mounted-workbench-client-helpers',
-  ],
+  owns: [], // v1 薄壳:common workbench 归 soul-app-sdk(见 docs/soul-authoring.md)
 } as const
