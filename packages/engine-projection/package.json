@@ -16,7 +16,6 @@
     "test": "bun test --timeout=15000"
   },
   "dependencies": {
-    "@zonease/aiworker-fs-layout": "workspace:*",
     "@zonease/aiworker-soul-protocol": "workspace:*"
   },
   "devDependencies": {

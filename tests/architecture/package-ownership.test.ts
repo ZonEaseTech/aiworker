@@ -145,6 +145,24 @@ describe('target package ownership', () => {
     expect(deepImports, 'no module may deep-import a sibling package /src').toEqual([])
   })
 
+  test('engine-projection and worker-daemon declare no unused internal deps', () => {
+    // cases 数组后续 Task 4/5 会扩展(加 soul-app-runtime、soul-workbench)
+    const cases = ['packages/engine-projection', 'packages/worker-daemon']
+    const offenders: string[] = []
+    for (const pkgDir of cases) {
+      const pkg = JSON.parse(readFileSync(join(repoRoot, pkgDir, 'package.json'), 'utf8')) as PackageJson
+      const declared = Object.keys({ ...(pkg.dependencies ?? {}) }).filter(d => d.startsWith('@zonease/aiworker'))
+      const srcText = walkTsFiles(join(repoRoot, pkgDir, 'src'))
+        .filter(f => !/\.(test|spec)\.[cm]?tsx?$/.test(f))
+        .map(f => readFileSync(f, 'utf8')).join('\n')
+      for (const dep of declared) {
+        if (!srcText.includes(dep))
+          offenders.push(`${pkgDir} -> ${dep}`)
+      }
+    }
+    expect(offenders, 'declared runtime deps must be referenced in src').toEqual([])
+  })
+
   test('soul-protocol/soul-app modules have no VALUE import of the package root barrel (runtime acyclic)', () => {
     const dir = join(repoRoot, 'packages/soul-protocol/src/soul-app')
     const offenders: string[] = []
