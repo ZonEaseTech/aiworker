@@ -82,7 +82,7 @@ D1 的真实爆炸半径(grep 实测)。严重度仍是 P2(命名/清晰,非违�
 
 均为 v1-完成度或建模偏好,非渗漏。每条带 synth 建议供拍板:
 
-1. **一 daemon 一 worker?** `/api/control/worker` 用 `listWorkers()[0]` 自描述,多 worker 下静默取第一个并漂移。建议:若 single-operator 本地壳则 A(POST /api/workers 已有 worker 时拒绝);若多 worker broker 则 B(control 加 workerId 选择器)。
+1. **一 daemon 一 worker?** ✅ **DECIDED(2026-06-01)→ `2026-06-01-product-bet-1-daemon-per-worker-fleet-design.md`**。结论:**daemon-per-worker fleet**——Host:worker=1:N(可选控制面 broker),daemon:worker=1:1(每 worker 自有 daemon 进程 + storage root),Host 按 endpoint broker。机制取 "A 类" reject 守卫,落为 **daemon 层不变量 + 进程内 async 创建锁**(daemon-per-worker = 单写者,故进程内锁即完整串行化,不用存储 schema 全局索引);`/api/control/worker` 去 `listWorkers()[0]` 漂移取唯一 active worker。load-bearing:**Worker 纯净不变量**——fleet 是即插即用外部外壳,worker 零 fleet 感知、永不注册到 Host。原始二分(A/B)被消歧为正交两维(信任 vs 基数;Host:worker vs daemon:worker)。〔历史原文:`listWorkers()[0]` 多 worker 下静默漂移;A=single-operator reject / B=workerId 选择器。〕
 2. **assignment/lifecycle 是否落地运行?** 当前 validate-and-echo。建议 A:v1 保持并文档化为有意(canon 已列 connector out-of-scope);B 为后续 feature 接线。
 3. **session `deleted` 软态 vs 硬删结果?** 建议 A(统一硬删、'deleted' 收为 reserved 枚举 + 注释),减状态机复杂度;B 仅在需软删审计/恢复时。
 4. **rootPath 是否约束在 worker root 内?** `protocol.md:183` 已明许 may-receive-rootPath。建议 B(把开放语义提为 canon 明文);未来多租户再选 A 约束。
