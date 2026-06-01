@@ -898,6 +898,43 @@ describe('local daemon API', () => {
     await expect(bootstrapWorkerApp(bootOptions)).rejects.toThrow(/more than one active worker/i)
   })
 
+  it('POST /api/workspace-locators rejects a ghost workerId that is not the active worker', async () => {
+    const target = await app()
+    await createFreeformWorker(target, 'real-worker')
+    const res = await target.request('/api/workspace-locators', {
+      // name 必填:省略会先撞 schema 校验,测不到 workerId 路径(实测钉死为 404 NOT_FOUND)。
+      body: JSON.stringify({ name: 'Ghost Workspace', workerId: 'ghost-worker', rootPath: mkdtempSync(join(dir, 'ghost-')) }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(res.status).toBe(404)
+    expect(await res.json()).toMatchObject({ error: { code: 'NOT_FOUND' } })
+  })
+
+  it('POST /api/workspace-locators rejects an archived (existing, non-active) workerId', async () => {
+    const target = await app()
+    await createFreeformWorker(target, 'real-worker')
+    upsertWorker({ id: 'archived-sibling', appId: FREEFORM_APP_ID, name: 'Archived', status: 'archived' })
+    const res = await target.request('/api/workspace-locators', {
+      body: JSON.stringify({ name: 'Archived Workspace', workerId: 'archived-sibling', rootPath: mkdtempSync(join(dir, 'arch-')) }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    // present 但非 active(archived)→ 被拒(client error)。机制无关(WORKER_ARCHIVED),
+    // 锁定的不变量是"非-active present workerId 必被拒",不锁具体码。
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    expect(res.status).toBeLessThan(500)
+  })
+
+  it('GET /api/capabilities without workerId resolves to the single active worker', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'cap-worker')
+    const all = await (await target.request('/api/capabilities')).json() as { capabilities: unknown[] }
+    const scoped = await (await target.request(`/api/capabilities?workerId=${worker.id}`)).json() as { capabilities: unknown[] }
+    // 单 active worker 下,absent 与 present(self)结果一致
+    expect(all.capabilities).toEqual(scoped.capabilities)
+  })
+
   it('honors workspace locator rootPath for app-owned workspace projection', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'requested-root-worker')
