@@ -1,7 +1,9 @@
 import { fileURLToPath, URL } from 'node:url'
 
+import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import cssInjectedByJsPlugin from 'vite-plugin-css-injected-by-js'
 
 const packageRoot = fileURLToPath(new URL('.', import.meta.url))
 const entry = fileURLToPath(new URL('./src/main.tsx', import.meta.url))
@@ -19,7 +21,11 @@ const workbenchDist = fileURLToPath(new URL('./dist/web/workbench', import.meta.
 export default defineConfig({
   root: packageRoot,
   base: './',
-  plugins: [react()],
+  // tailwindcss(): build the packages/ui design system + workbench classes.
+  // cssInjectedByJsPlugin(): inline the emitted CSS into the IIFE bundle so the
+  // classic-script mounted shell needs no separate stylesheet link (the mount
+  // serves only the entry html + the JS bundle).
+  plugins: [react(), tailwindcss(), cssInjectedByJsPlugin()],
   // Vite lib mode does NOT replace `process.env.NODE_ENV` (it assumes the
   // consumer's bundler does). The micro-app sandbox has no `process`, so React's
   // production checks throw `ReferenceError: process is not defined`. Replace the

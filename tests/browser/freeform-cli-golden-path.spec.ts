@@ -205,6 +205,23 @@ try {
     })
     throw new Error(`Interactive React workbench-ready marker absent in real mount. browserEvents=${JSON.stringify(browserEvents)} microApp=${JSON.stringify(micro).slice(0, 4000)}`)
   }
+  // Verify the bundled packages/ui (Tailwind) stylesheet is injected AND applied
+  // inside the micro-app sandbox — a live-only signal that text assertions miss.
+  // The shadcn Button renders `display: inline-flex`; a native unstyled <button>
+  // is `inline-block`, so inline-flex can only come from the injected Tailwind CSS.
+  const uiProbe = await page.evaluate(() => {
+    const fromRoot = (root: Document | ShadowRoot | null | undefined) => root?.querySelector('[data-aiworker-ui-probe="true"]') ?? null
+    const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
+    const probe = fromRoot(document) ?? fromRoot(micro?.shadowRoot)
+    if (!probe)
+      return { found: false as const }
+    const style = getComputedStyle(probe)
+    return { backgroundColor: style.backgroundColor, display: style.display, found: true as const }
+  })
+  if (!uiProbe.found)
+    throw new Error('packages/ui Button probe missing in real mount.')
+  if (uiProbe.display !== 'inline-flex' || uiProbe.backgroundColor === 'rgba(0, 0, 0, 0)')
+    throw new Error(`packages/ui Button unstyled in real mount (Tailwind CSS not injected/applied): ${JSON.stringify(uiProbe)}`)
   assertNoUnexpectedBrowserEvents(browserEvents)
 
   const projectionRefreshProof = await readProjectionRefreshProofFromBrowser(page, workerId, workspaceResult.workspace.id)
