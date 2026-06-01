@@ -1033,6 +1033,19 @@ describe('worker studio', () => {
   })
 
   it('keeps apps/worker-web free of retired Host-owned session product surfaces', () => {
+    // Boundary scope (Model A, docs/architecture.md): this guard forbids the
+    // *retired Host-owned session product module* from returning — the specific
+    // pre-inversion symbols (WorkspaceSessionComposer / createSessionTurn /
+    // continueSessionTurn / buildSessionProgress / MarkdownPreview) and exact
+    // paths (features/session/*, worker/session-progress.ts,
+    // features/local-workspace/api/sessions.ts, components/session-composer.tsx)
+    // deleted in d3f26fb2 "删除 Host session UI 残留".
+    //
+    // It does NOT forbid the new platform-generic employee chat surface that
+    // worker-web legitimately renders under Model A — that lives at non-retired
+    // paths (worker/studio/chat/*, features/local-workspace/api/session-invocations.ts)
+    // and composes packages/ui primitives (SessionComposer / ChatThread /
+    // ArtifactStrip), none of which appear in the blocklist below.
     const files = listWebSourceFiles('src')
     const sources = files.map(file => ({
       file: path.relative(process.cwd(), file).replaceAll('\\', '/'),
