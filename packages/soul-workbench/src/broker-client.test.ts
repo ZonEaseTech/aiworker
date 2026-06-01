@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { fetchEngineTargets, fetchProjectionReceipt, fetchWorkerConfig, fetchWorkerOverlay, fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
+import { archiveSession, fetchEngineTargets, fetchProjectionReceipt, fetchSession, fetchWorkerConfig, fetchWorkerOverlay, fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
 
 describe('broker-client', () => {
   it('POSTs a session-level invocation and returns the new invocation id', async () => {
@@ -106,5 +106,23 @@ describe('broker-client', () => {
   it('returns a not_found receipt status (404) without throwing', async () => {
     const fetchImpl = (async () => new Response(JSON.stringify({ receiptId: 'ws-1', status: 'not_found' }), { status: 404 })) as unknown as typeof fetch
     expect(await fetchProjectionReceipt('ws-1', fetchImpl)).toEqual({ receiptId: 'ws-1', status: 'not_found' })
+  })
+
+  it('reads the session lifecycle state', async () => {
+    const fetchImpl = (async (url: string) => {
+      expect(url).toBe('/api/sessions/sess-1')
+      return new Response(JSON.stringify({ session: { id: 'sess-1', status: 'active' } }), { headers: { 'content-type': 'application/json' }, status: 200 })
+    }) as unknown as typeof fetch
+    expect(await fetchSession('sess-1', fetchImpl)).toEqual({ id: 'sess-1', status: 'active' })
+  })
+
+  it('archives the session and returns its updated state', async () => {
+    const calls: Array<{ method?: string, url: string }> = []
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      calls.push({ method: init?.method, url })
+      return new Response(JSON.stringify({ session: { id: 'sess-1', status: 'archived' } }), { headers: { 'content-type': 'application/json' }, status: 200 })
+    }) as unknown as typeof fetch
+    expect(await archiveSession('sess-1', fetchImpl)).toEqual({ id: 'sess-1', status: 'archived' })
+    expect(calls).toEqual([{ method: 'POST', url: '/api/sessions/sess-1/archive' }])
   })
 })

@@ -12,6 +12,11 @@ export interface ProjectionReceiptStatus {
   workspaceId?: string
 }
 
+export interface WorkbenchSession {
+  id?: string
+  status?: string
+}
+
 export interface ProjectionReceiptRow {
   receiptId: string
   status: string

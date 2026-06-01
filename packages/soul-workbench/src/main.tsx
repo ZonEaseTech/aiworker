@@ -32,7 +32,7 @@ export function WorkbenchRoot() {
       data-aiworker-locator={`${locator.workerId ?? ''}/${locator.workspaceId ?? ''}/${locator.sessionId ?? ''}`}
     >
       <WorkbenchConfig workerId={locator.workerId} />
-      <WorkbenchLifecycle workspaceId={locator.workspaceId} />
+      <WorkbenchLifecycle sessionId={locator.sessionId} workspaceId={locator.workspaceId} />
       <WorkbenchChat sessionId={locator.sessionId} workspaceId={locator.workspaceId} />
     </div>
   )

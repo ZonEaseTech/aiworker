@@ -8,7 +8,7 @@
  */
 
 import type { EngineTarget, WorkerConfigValue, WorkerOverlayAsset } from './config-mapper'
-import type { ProjectionReceiptStatus } from './lifecycle-mapper'
+import type { ProjectionReceiptStatus, WorkbenchSession } from './lifecycle-mapper'
 import type { WorkbenchFile } from './transcript-mapper'
 
 export interface SubmitInvocationResult {
@@ -83,6 +83,30 @@ export async function fetchProjectionReceipt(
   if (!response.ok && response.status !== 404 && response.status !== 409)
     throw new Error(`fetchProjectionReceipt failed: ${response.status}`)
   return await response.json() as ProjectionReceiptStatus
+}
+
+/** Read the session lifecycle state (active/archived) for the lifecycle module. */
+export async function fetchSession(
+  sessionId: string,
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<WorkbenchSession> {
+  const response = await fetchImpl(`/api/sessions/${sessionId}`)
+  if (!response.ok)
+    throw new Error(`fetchSession failed: ${response.status}`)
+  const body = await response.json() as { session?: WorkbenchSession }
+  return body.session ?? {}
+}
+
+/** Archive the session (lifecycle mutation) and return its updated state. */
+export async function archiveSession(
+  sessionId: string,
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<WorkbenchSession> {
+  const response = await fetchImpl(`/api/sessions/${sessionId}/archive`, { method: 'POST' })
+  if (!response.ok)
+    throw new Error(`archiveSession failed: ${response.status}`)
+  const body = await response.json() as { session?: WorkbenchSession }
+  return body.session ?? {}
 }
 
 /**

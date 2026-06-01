@@ -375,6 +375,29 @@ try {
   if (receiptStatus === null || !receiptStatus.includes('found'))
     throw new Error(`Mounted workbench projection-receipt-status did not render a found receipt. got=${JSON.stringify(receiptStatus)}`)
 
+  // The session-lifecycle module renders the active session state plus an archive
+  // control. `data-aiworker-session-status="active"` + the archive button are
+  // live-only — they appear only when the workbench fetched the session
+  // (GET /api/sessions/:id). The archive mutation route is exercised end-to-end by
+  // the session-archive proof below; here we assert the module's display + control.
+  const sessionLifecycle = await page.evaluate(async () => {
+    const deadline = Date.now() + 8000
+    let found = false
+    while (Date.now() < deadline) {
+      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
+      const status = document.querySelector('[data-aiworker-session-status="active"]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-session-status="active"]')
+      const archive = document.querySelector('[data-aiworker-session-archive="true"]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-session-archive="true"]')
+      if (status && archive) {
+        found = true
+        return found
+      }
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    return found
+  })
+  if (!sessionLifecycle)
+    throw new Error('Mounted workbench session-lifecycle module did not render the active session status and archive control.')
+
   assertNoUnexpectedBrowserEvents(browserEvents)
 
   const projectionRefreshProof = await readProjectionRefreshProofFromBrowser(page, workerId, workspaceResult.workspace.id)
