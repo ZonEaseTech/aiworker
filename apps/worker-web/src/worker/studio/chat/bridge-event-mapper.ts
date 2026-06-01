@@ -15,9 +15,15 @@ function readString(value: unknown): string {
 
 /**
  * Map a session's normalized engine-bridge events into packages/ui transcript
- * turns for the worker-web chat view (Model A: worker-web renders the generic
- * chat surface). Pure and transport-independent — the same mapping serves a poll
- * or an SSE source.
+ * turns. Pure and transport-independent — the same mapping serves a poll or an
+ * SSE source.
+ *
+ * STATUS: unwired reusable foundation. The canonical architecture is
+ * mounted-owns-chat — the session experience renders in the mounted soul
+ * workbench, NOT worker-web (guards worker-studio.test.tsx:1786/1807 + the
+ * Freeform browser proof). Chat's proper home is the soul-app-sdk sdk-common
+ * workbench; this pure mapper is the most directly portable piece. See memory
+ * worker-standalone-release-map-2026-06-01.
  *
  * v1 semantics (one turn per invocation):
  * - `assistant_delta` (`payloadJson.data.text`) accumulates into one

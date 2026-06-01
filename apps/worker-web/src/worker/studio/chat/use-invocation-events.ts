@@ -26,11 +26,14 @@ export interface UseInvocationEventsResult {
 const EMPTY_STATE: InvocationEventsState = { events: [], forInvocationId: null, invocation: null }
 
 /**
- * Live event source for the worker-web chat view (Model A: worker-web renders the
- * generic chat). Polls `GET /api/engine/invocations/:id/events` from an `after`
- * event-id cursor, accumulates events, and stops once the invocation reaches a
- * terminal status. The transport is deliberately behind this hook: a future SSE
- * endpoint can replace the poll loop without changing the chat surface.
+ * Live event source for a chat view. Polls `GET /api/engine/invocations/:id/events`
+ * from an `after` event-id cursor, accumulates events, and stops once the
+ * invocation reaches a terminal status. The transport is deliberately behind this
+ * hook: a future SSE endpoint can replace the poll loop without changing callers.
+ *
+ * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
+ * (session → mounted soul workbench, not worker-web); home is the soul-app-sdk
+ * sdk-common workbench. See memory worker-standalone-release-map-2026-06-01.
  *
  * State carries the invocation id it belongs to; switching invocations (or
  * clearing it) derives empty until the new id's first poll lands, so no stale

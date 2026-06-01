@@ -18,11 +18,14 @@ export interface ChatComposerProps {
 }
 
 /**
- * Composer side of the worker-web chat surface (Model A): submits the composed
- * message as a session-level follow-up invocation and reports the new invocation
- * id so the surface can point its transcript at it. Labels are injected by the
- * caller (worker-studio wires them from i18n), keeping this component free of any
- * locale dependency and trivially testable.
+ * Composer side of a chat surface: submits the composed message as a
+ * session-level follow-up invocation and reports the new invocation id so the
+ * surface can point its transcript at it. Labels are injected by the caller,
+ * keeping this component free of any locale dependency and trivially testable.
+ *
+ * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
+ * (session → mounted soul workbench, not worker-web); home is the soul-app-sdk
+ * sdk-common workbench. See memory worker-standalone-release-map-2026-06-01.
  */
 export function ChatComposer({ labels, onSubmitted, sessionId }: ChatComposerProps) {
   return (

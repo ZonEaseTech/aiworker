@@ -9,11 +9,14 @@ export interface ChatTranscriptProps {
 }
 
 /**
- * View side of the worker-web chat surface (Model A): renders the live engine
- * transcript for the selected invocation. It owns no transport — `useInvocationEvents`
- * polls and maps engine-bridge events into packages/ui transcript turns, and
- * `ChatThread` renders them. With no invocation selected it renders an empty,
- * labelled log so the composer still has a stable surface to sit above.
+ * View side of a chat surface: renders the live engine transcript for the
+ * selected invocation. It owns no transport — `useInvocationEvents` polls and
+ * maps engine-bridge events into packages/ui transcript turns, and `ChatThread`
+ * renders them. With no invocation selected it renders an empty, labelled log.
+ *
+ * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
+ * (session → mounted soul workbench, not worker-web); home is the soul-app-sdk
+ * sdk-common workbench. See memory worker-standalone-release-map-2026-06-01.
  */
 export function ChatTranscript({ ariaLabel, intervalMs, invocationId }: ChatTranscriptProps) {
   const { turns } = useInvocationEvents(invocationId, intervalMs === undefined ? {} : { intervalMs })

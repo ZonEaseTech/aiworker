@@ -11,15 +11,18 @@ export interface ChatSurfaceProps {
 }
 
 /**
- * worker-web employee chat surface (Model A): the platform-generic session
- * experience rendered by worker-web itself. Composes the transcript view above
- * the composer; submitting a message points the live transcript at the new
- * invocation.
+ * Employee chat surface: composes the transcript view above the composer;
+ * submitting a message points the live transcript at the new invocation.
  *
  * State here is the currently-followed invocation only. Switching sessions must
  * reset it — callers render this keyed by `sessionId`
  * (`<ChatSurface key={sessionId} ... />`) so a session change remounts with a
  * fresh follow state and no stale transcript leaks across sessions.
+ *
+ * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
+ * (session → mounted soul workbench, not worker-web; guards 1786/1807 + browser
+ * proof); home is the soul-app-sdk sdk-common workbench. NOT wired into
+ * worker-studio. See memory worker-standalone-release-map-2026-06-01.
  */
 export function ChatSurface({ composerLabels, sessionId, transcriptAriaLabel }: ChatSurfaceProps) {
   const [activeInvocationId, setActiveInvocationId] = useState<string | null>(null)

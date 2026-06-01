@@ -25,16 +25,16 @@ export interface InvocationEventsResponse {
 }
 
 /**
- * Submit a session-level follow-up invocation — the worker-web chat composer's
- * submit target. Canonical follow-up route is `POST /api/sessions/:id/invocations`
- * (docs/runtime.md); employees connect to the Worker web directly, so this hits
- * the local broker with no Host on the path.
+ * Submit a session-level follow-up invocation. Canonical follow-up route is
+ * `POST /api/sessions/:id/invocations` (docs/runtime.md); this hits the local
+ * broker with no Host on the path.
  *
- * This is the platform-generic session surface (composer → invocation), owned by
- * worker-web per the Model A boundary (generic chat = worker-web; Soul domain UI =
- * mounted workbench). It is a new surface at a non-retired path; the retired
- * Host-era session module (`api/sessions.ts`, `session-composer.tsx`, etc.) stays
- * removed and guard-blocked.
+ * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
+ * (the session experience renders in the mounted soul workbench, not worker-web;
+ * guards worker-studio.test.tsx:1786/1807 + Freeform browser proof). Chat's home
+ * is the soul-app-sdk sdk-common workbench. This client is at a non-retired path
+ * and does not resurrect the retired Host-era session module. See memory
+ * worker-standalone-release-map-2026-06-01.
  */
 export function submitSessionInvocation(
   sessionId: string,
