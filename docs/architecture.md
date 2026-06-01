@@ -165,13 +165,8 @@ assignment envelope. It must not carry session, invocation, projection, engine,
 or domain data.
 
 Management mount lets Host configure a Worker through the Worker configuration
-micro-app. The Worker web (`apps/worker-web`) renders the platform-generic
-session surface itself — chat composer, engine-event chat view, and session
-artifacts — from `packages/ui` shared primitives, because invocation, bridge
-events, and artifacts are generic engine-interaction concepts rather than Soul
-domain UI. Management mount is distinct from the employee mount that adds the
-Soul's domain workbench of internal routes and domain rendering; employees
-connect to the Worker web directly. In v1,
+micro-app. Management mount is distinct from the employee mount that serves
+workspace/session/composer; employees connect to the Worker web directly. In v1,
 both share the single broker endpoint `GET /api/mount/workbench`; the
 distinction is topological — Host frames the config micro-app in a managed
 context, while employees connect directly to the same broker — not a different
