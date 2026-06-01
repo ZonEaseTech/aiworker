@@ -938,7 +938,10 @@ describe('local daemon API', () => {
   it('honors workspace locator rootPath for app-owned workspace projection', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'requested-root-worker')
-    const siblingWorker = await createFreeformWorker(target, 'sibling-root-worker')
+    // daemon-per-worker:一 daemon 至多一 active worker(C2)。sibling 作 archived 元数据
+    // 直插存在(绕过 C2 路由守卫),仅用于证明 scoped 列举按 workerId 隔离——其 workspace
+    // 不出现在 active worker 的 scoped 列表。
+    upsertWorker({ id: 'sibling-root-worker', appId: FREEFORM_APP_ID, name: 'Sibling', status: 'archived' })
     const requestedRootPath = join(dir, 'requested-workspace-root')
 
     const createRes = await target.request('/api/workspace-locators', {
@@ -993,16 +996,15 @@ describe('local daemon API', () => {
     const defaultRootBody = await defaultRootCreateRes.json() as { workspace: { id: string, workerId: string } }
     expect(defaultRootBody.workspace.workerId).toBe(worker.id)
 
-    const siblingCreateRes = await target.request('/api/workspace-locators', {
-      body: JSON.stringify({
-        name: 'Sibling Workspace',
-        type: 'workspace',
-        workerId: siblingWorker.id,
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
+    // archived worker 不能经路由建 workspace(WORKER_ARCHIVED)。直插一行属 sibling 的
+    // workspace,验证它被 active worker 的 scoped 列表排除(隔离按 workerId)。
+    createWorkspace({
+      id: 'sibling-workspace',
+      workerId: 'sibling-root-worker',
+      name: 'Sibling Workspace',
+      rootPath: join(dir, 'sibling-root'),
+      at: new Date().toISOString(),
     })
-    expect(siblingCreateRes.status).toBe(201)
 
     const scopedListRes = await target.request(`/api/workspace-locators?workerId=${worker.id}`)
     expect(scopedListRes.status).toBe(200)
