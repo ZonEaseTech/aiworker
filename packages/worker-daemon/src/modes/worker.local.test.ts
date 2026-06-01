@@ -1628,6 +1628,9 @@ describe('local daemon API', () => {
     const body = await sseRes.text()
     const frames = parseSseFrames(body)
     const dataFrames = frames.filter(f => f.event !== 'done')
+    // data frames are default `message` events (no `event:` field) so an
+    // EventSource consumer receives them all via onmessage without per-type listeners.
+    expect(dataFrames.every(f => f.event === undefined)).toBe(true)
     // one SSE frame per bridge event, carrying the JSON-identical redacted payload,
     // with the session-event id as the SSE id so EventSource can resume from it.
     expect(dataFrames.map(f => JSON.parse(f.data))).toEqual(jsonBody.bridgeEvents)

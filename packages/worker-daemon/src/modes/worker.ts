@@ -980,9 +980,11 @@ function streamEngineInvocationEvents(
         await runtime.reattachEngineInvocationEvents(invocationId, { after: cursor }),
       ) as { bridgeEvents?: Array<Record<string, unknown>>, invocation?: { status?: string }, nextAfter?: number }
       for (const bridgeEvent of snapshot.bridgeEvents ?? []) {
+        // Default `message` event (no `event:` field) so an EventSource consumer
+        // receives every bridge event via `onmessage` without pre-registering a
+        // listener per dynamic bridge type; the type stays inside the data JSON.
         await stream.writeSSE({
           data: JSON.stringify(bridgeEvent),
-          event: typeof bridgeEvent.type === 'string' ? bridgeEvent.type : 'event',
           id: String(readNonNegativeInteger(bridgeEvent.id, cursor)),
         })
       }

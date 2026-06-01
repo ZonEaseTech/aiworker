@@ -1,7 +1,7 @@
-import { Button } from '@zonease/aiworker-ui/components/button'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
+import { WorkbenchChat } from './chat'
 import { readWorkbenchLocator } from './locator'
 import './styles.css'
 
@@ -15,11 +15,12 @@ import './styles.css'
  * here. For the build foundation it records the resolved locator so consumers can
  * see the micro-app booted with the daemon-injected context.
  *
- * It renders a real `packages/ui` (shadcn/Tailwind) Button so the mount proof can
- * assert — via computed style, not text — that the bundled Tailwind stylesheet is
- * injected and applied inside the micro-app sandbox. The stylesheet is inlined
- * into this IIFE bundle (vite-plugin-css-injected-by-js) because lib mode emits a
- * separate CSS file that the classic-script shell would not link.
+ * It renders the live chat surface (WorkbenchChat), whose submit control is a real
+ * `packages/ui` (shadcn/Tailwind) Button so the mount proof can assert — via
+ * computed style, not text — that the bundled Tailwind stylesheet is injected and
+ * applied inside the micro-app sandbox. The stylesheet is inlined into this IIFE
+ * bundle (vite-plugin-css-injected-by-js) because lib mode emits a separate CSS
+ * file that the classic-script shell would not link.
  */
 export function WorkbenchRoot() {
   const locator = readWorkbenchLocator(globalThis.location?.search ?? '')
@@ -28,7 +29,7 @@ export function WorkbenchRoot() {
       data-aiworker-workbench-ready="true"
       data-aiworker-locator={`${locator.workerId ?? ''}/${locator.workspaceId ?? ''}/${locator.sessionId ?? ''}`}
     >
-      <Button data-aiworker-ui-probe="true">Common workbench ready</Button>
+      <WorkbenchChat sessionId={locator.sessionId} />
     </div>
   )
 }

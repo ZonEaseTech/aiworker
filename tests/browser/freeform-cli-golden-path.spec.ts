@@ -222,6 +222,28 @@ try {
     throw new Error('packages/ui Button probe missing in real mount.')
   if (uiProbe.display !== 'inline-flex' || uiProbe.backgroundColor === 'rgba(0, 0, 0, 0)')
     throw new Error(`packages/ui Button unstyled in real mount (Tailwind CSS not injected/applied): ${JSON.stringify(uiProbe)}`)
+
+  // Drive the live engine loop through the mounted composer: submit an input, then
+  // assert the transcript renders an engine event streamed over the US-005 SSE
+  // endpoint (EventSource) inside the micro-app sandbox. The streamed-event marker
+  // is live-only — the static shell cannot produce it, so this proves the real
+  // composer -> broker -> SSE -> transcript path, not a baked placeholder.
+  await page.locator('micro-app [data-aiworker-composer-input="true"]').fill('Stream a follow-up turn from the mounted workbench.')
+  await page.locator('micro-app [data-aiworker-composer-submit="true"]').click()
+  const streamedEventType = await page.evaluate(async () => {
+    const deadline = Date.now() + 8000
+    while (Date.now() < deadline) {
+      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
+      const probe = document.querySelector('[data-aiworker-stream-event]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-stream-event]')
+      if (probe)
+        return probe.getAttribute('data-aiworker-stream-event')
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    return null
+  })
+  if (!streamedEventType)
+    throw new Error('Mounted workbench transcript rendered no SSE-streamed engine event after composer submit.')
+
   assertNoUnexpectedBrowserEvents(browserEvents)
 
   const projectionRefreshProof = await readProjectionRefreshProofFromBrowser(page, workerId, workspaceResult.workspace.id)
