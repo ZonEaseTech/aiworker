@@ -1,7 +1,9 @@
 export {
+  fetchInvocationEvents,
   submitSessionInvocation,
 } from './session-invocations'
 export type {
+  InvocationEventsResponse,
   SessionInvocationResponse,
   SubmitSessionInvocationBody,
 } from './session-invocations'

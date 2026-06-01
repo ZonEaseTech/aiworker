@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { submitSessionInvocation } from './session-invocations'
+import { fetchInvocationEvents, submitSessionInvocation } from './session-invocations'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -42,5 +42,28 @@ describe('session invocations API', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/sessions/session-1/invocations', expect.objectContaining({
       body: JSON.stringify({ input: 'continue', metadata: { source: 'composer' } }),
     }))
+  })
+
+  it('fetches invocation events with optional after/limit paging through the canonical engine route', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      events: [{ createdAt: '2026-06-01T00:00:00.000Z', id: 1, invocationId: 'inv-1', payloadJson: {}, seq: 1, sessionId: 'session-1', type: 'assistant_delta' }],
+      invocation: { id: 'inv-1', status: 'running' },
+    })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchInvocationEvents('inv 1', { after: 3, limit: 10 })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/engine/invocations/inv%201/events?after=3&limit=10', expect.any(Object))
+    expect(result.events).toHaveLength(1)
+    expect(result.invocation).toMatchObject({ id: 'inv-1', status: 'running' })
+  })
+
+  it('fetches invocation events without query params when paging is omitted', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ events: [], invocation: { id: 'inv-1', status: 'queued' } })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchInvocationEvents('inv-1')
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/engine/invocations/inv-1/events', expect.any(Object))
   })
 })
