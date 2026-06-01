@@ -109,7 +109,7 @@ requireIncludes('docs/architecture.md', [
   'The Host-to-Worker boundary is a transport-agnostic control contract owned by\n`packages/worker-control-protocol`.',
   'A Worker is the passive control server; Host is the client; a Worker never\ninitiates a connection to Host.',
   'The control contract covers worker describe, health, instance lifecycle, and an\nassignment envelope. It must not carry session, invocation, projection, engine,\nor domain data.',
-  'Management mount lets Host configure a Worker through the Worker configuration\nmicro-app. Management mount is distinct from the employee mount that serves\nworkspace/session/composer; employees connect to the Worker web directly.',
+  'Management mount lets Host configure a Worker through the Worker configuration\nmicro-app. The Worker web (`apps/worker-web`) renders the platform-generic\nsession surface itself — chat composer, engine-event chat view, and session\nartifacts — from `packages/ui` shared primitives',
   // #6 v1 mount 拓扑区分: 共用 /api/mount/workbench, 区分是拓扑性非 URL 性
   'distinction is topological — Host frames the config micro-app in a managed',
   'The mounted configuration micro-app is the only current control-contract\ntransport; non-web transports are reserved and must not be hardcoded out.',
