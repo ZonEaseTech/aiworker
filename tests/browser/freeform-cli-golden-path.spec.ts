@@ -224,25 +224,26 @@ try {
     throw new Error(`packages/ui Button unstyled in real mount (Tailwind CSS not injected/applied): ${JSON.stringify(uiProbe)}`)
 
   // Drive the live engine loop through the mounted composer: submit an input, then
-  // assert the transcript renders an engine event streamed over the US-005 SSE
-  // endpoint (EventSource) inside the micro-app sandbox. The streamed-event marker
-  // is live-only — the static shell cannot produce it, so this proves the real
-  // composer -> broker -> SSE -> transcript path, not a baked placeholder.
+  // assert the packages/ui ChatThread renders a transcript turn built from events
+  // streamed over the US-005 SSE endpoint (EventSource) inside the micro-app
+  // sandbox. `data-transcript-slot="transcript-turn"` is live-only — it is emitted
+  // only when streamed bridge events map into ChatThread turns, so this proves the
+  // real composer -> broker -> SSE -> mapper -> ChatThread path, not a static shell.
   await page.locator('micro-app [data-aiworker-composer-input="true"]').fill('Stream a follow-up turn from the mounted workbench.')
   await page.locator('micro-app [data-aiworker-composer-submit="true"]').click()
-  const streamedEventType = await page.evaluate(async () => {
+  const transcriptTurnText = await page.evaluate(async () => {
     const deadline = Date.now() + 8000
     while (Date.now() < deadline) {
       const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      const probe = document.querySelector('[data-aiworker-stream-event]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-stream-event]')
-      if (probe)
-        return probe.getAttribute('data-aiworker-stream-event')
+      const turn = document.querySelector('[data-transcript-slot="transcript-turn"]') ?? micro?.shadowRoot?.querySelector('[data-transcript-slot="transcript-turn"]')
+      if (turn)
+        return (turn.textContent ?? '').trim()
       await new Promise(resolve => setTimeout(resolve, 100))
     }
     return null
   })
-  if (!streamedEventType)
-    throw new Error('Mounted workbench transcript rendered no SSE-streamed engine event after composer submit.')
+  if (transcriptTurnText === null)
+    throw new Error('Mounted workbench ChatThread rendered no transcript turn from the SSE engine stream after composer submit.')
 
   assertNoUnexpectedBrowserEvents(browserEvents)
 

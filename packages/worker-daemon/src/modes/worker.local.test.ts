@@ -1665,6 +1665,29 @@ describe('local daemon API', () => {
     expect(dataFrames.map(f => (JSON.parse(f.data) as { id: number }).id)).toEqual([secondEvent.id])
   })
 
+  it('answers a reconnecting SSE stream past a finished invocation cursor with 204', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+    const invocation = createEngineInvocation({
+      id: 'daemon-sse-invocation-3',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-sse-invocation-3/input`,
+      status: 'succeeded',
+    })
+    const lastEvent = appendSessionEvent({ invocationId: invocation.id, payloadJson: { index: 1 }, seq: 1, sessionId: session.id, type: 'status' })
+
+    // EventSource reconnects with Last-Event-ID past the final event of a finished
+    // invocation; 204 No Content makes it stop instead of reconnect-looping.
+    const res = await target.request(`/api/engine/invocations/${invocation.id}/events`, {
+      headers: { 'accept': 'text/event-stream', 'last-event-id': String(lastEvent.id) },
+    })
+    expect(res.status).toBe(204)
+  })
+
   it('redacts legacy secret-like diagnostics from broker read responses', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)

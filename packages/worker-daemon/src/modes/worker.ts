@@ -593,7 +593,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     // SSE tail; everyone else keeps the snapshot JSON. Both reuse the same
     // reattach + redaction so SSE frames never leak what JSON would not.
     if ((c.req.header('accept') ?? '').includes('text/event-stream'))
-      return streamEngineInvocationEvents(c, runtime, invocation.id, after)
+      return engineInvocationEventsResponse(c, runtime, invocation.id, after)
     return c.json(redactBrokerOutput(await runtime.reattachEngineInvocationEvents(invocation.id, { after, limit })))
   })
   app.post('/api/engine/invocations/:invocationId/cancel', async (c) => {
@@ -967,18 +967,34 @@ const ENGINE_TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'l
 // `id` is the session-event id so EventSource resumes via Last-Event-ID, and a
 // final `done` frame carries the next cursor. Reuses redactBrokerOutput so SSE
 // never exposes secrets the JSON snapshot would redact.
-function streamEngineInvocationEvents(
+interface EngineInvocationEventsSnapshot {
+  bridgeEvents?: Array<Record<string, unknown>>
+  invocation?: { status?: string }
+  nextAfter?: number
+}
+
+async function engineInvocationEventsResponse(
   c: Context,
   runtime: LocalWorkerRuntime,
   invocationId: string,
   after: number,
-) {
+): Promise<Response> {
+  const readSnapshot = async (cursor: number): Promise<EngineInvocationEventsSnapshot> =>
+    redactBrokerOutput(await runtime.reattachEngineInvocationEvents(invocationId, { after: cursor })) as EngineInvocationEventsSnapshot
+  const snapshotStatus = (snapshot: EngineInvocationEventsSnapshot): string =>
+    typeof snapshot.invocation?.status === 'string' ? snapshot.invocation.status : ''
+
+  const initial = await readSnapshot(after)
+  // A reconnecting EventSource for a finished invocation with nothing past its
+  // cursor gets 204 No Content: per the SSE spec the client then stops WITHOUT a
+  // client-side close() (which would abort the in-flight connection and surface as
+  // a spurious request failure). This is how a terminal stream ends cleanly.
+  if (ENGINE_TERMINAL_STATUSES.has(snapshotStatus(initial)) && (initial.bridgeEvents ?? []).length === 0)
+    return c.body(null, 204)
+
   return streamSSE(c, async (stream) => {
     let cursor = after
-    const flush = async (): Promise<string> => {
-      const snapshot = redactBrokerOutput(
-        await runtime.reattachEngineInvocationEvents(invocationId, { after: cursor }),
-      ) as { bridgeEvents?: Array<Record<string, unknown>>, invocation?: { status?: string }, nextAfter?: number }
+    const writeSnapshot = async (snapshot: EngineInvocationEventsSnapshot): Promise<string> => {
       for (const bridgeEvent of snapshot.bridgeEvents ?? []) {
         // Default `message` event (no `event:` field) so an EventSource consumer
         // receives every bridge event via `onmessage` without pre-registering a
@@ -989,11 +1005,11 @@ function streamEngineInvocationEvents(
         })
       }
       cursor = readNonNegativeInteger(snapshot.nextAfter, cursor)
-      return typeof snapshot.invocation?.status === 'string' ? snapshot.invocation.status : ''
+      return snapshotStatus(snapshot)
     }
-    const close = () => stream.writeSSE({ data: String(cursor), event: 'done' })
-    if (ENGINE_TERMINAL_STATUSES.has(await flush())) {
-      await close()
+    const done = () => stream.writeSSE({ data: String(cursor), event: 'done' })
+    if (ENGINE_TERMINAL_STATUSES.has(await writeSnapshot(initial))) {
+      await done()
       return
     }
     // Still running: tail the bus until terminal. Serialise flushes via a promise
@@ -1014,8 +1030,8 @@ function streamEngineInvocationEvents(
         pending = pending.then(async () => {
           if (settled)
             return
-          if (ENGINE_TERMINAL_STATUSES.has(await flush())) {
-            await close()
+          if (ENGINE_TERMINAL_STATUSES.has(await writeSnapshot(await readSnapshot(cursor)))) {
+            await done()
             finish(unsubscribe)
           }
         })
