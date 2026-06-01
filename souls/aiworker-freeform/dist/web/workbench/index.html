@@ -4,16 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AIWorker Common Workbench</title>
-  <script type="module" crossorigin src="./assets/index.js"></script>
 </head>
 <body>
   <!--
     Static workbench shell (方案 C build foundation): the module sections and the
     markers the mount proofs assert are static HTML, so they render the moment the
-    bundle's index.html mounts — independent of React runtime/timing inside the
-    micro-app sandbox. The Vite-built bundle loads and progressively enhances the
-    interactive modules (chat, config, lifecycle) into #aiworker-workbench-root in
-    later sub-projects.
+    bundle's index.html mounts. The bundle is a classic IIFE (not an ES module) so
+    micro-app's `new Function` sandbox can execute it in the mounted micro-app; it
+    progressively enhances the interactive modules into #aiworker-workbench-root.
   -->
   <main
     data-aiworker-common-workbench="true"
@@ -34,5 +32,6 @@
     <section data-module="archive-controls"><h2>Archive controls</h2></section>
     <div id="aiworker-workbench-root"></div>
   </main>
+  <script src="./assets/index.js"></script>
 </body>
 </html>

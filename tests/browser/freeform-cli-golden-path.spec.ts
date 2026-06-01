@@ -184,6 +184,27 @@ try {
     if (!mountedSurface.text.includes(expectedSection))
       throw new Error(`Mounted Freeform workbench missed ${expectedSection}: ${mountedSurface.text}`)
   }
+  // Verify the interactive React bundle actually renders in the real mount (not
+  // just the static shell). Poll for the React-rendered ready marker; on absence
+  // dump console events + the mounted micro-app HTML so a real React-in-mount
+  // blocker can be told apart from a test-timing artifact.
+  const reactWorkbenchReady = await page.evaluate(async () => {
+    const deadline = Date.now() + 5000
+    while (Date.now() < deadline) {
+      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
+      if (document.querySelector('[data-aiworker-workbench-ready="true"]') || micro?.shadowRoot?.querySelector('[data-aiworker-workbench-ready="true"]'))
+        return true
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    return false
+  })
+  if (!reactWorkbenchReady) {
+    const micro = await page.evaluate(() => {
+      const node = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
+      return { light: node?.innerHTML ?? null, shadow: node?.shadowRoot?.innerHTML ?? null }
+    })
+    throw new Error(`Interactive React workbench-ready marker absent in real mount. browserEvents=${JSON.stringify(browserEvents)} microApp=${JSON.stringify(micro).slice(0, 4000)}`)
+  }
   assertNoUnexpectedBrowserEvents(browserEvents)
 
   const projectionRefreshProof = await readProjectionRefreshProofFromBrowser(page, workerId, workspaceResult.workspace.id)

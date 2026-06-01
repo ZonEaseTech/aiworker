@@ -1658,11 +1658,13 @@ describe('local daemon API', () => {
     // rendered marker is verified by the Freeform browser proof.
     const entryHtml = await htmlRes.text()
     expect(entryHtml).toContain('data-aiworker-common-workbench="true"')
-    // The bundle's sibling assets must also be served (under the virtual workbench
-    // directory) so the micro-app can load its JS; otherwise it renders nothing.
+    // The bundle's sibling assets must also be served so the micro-app can load
+    // its JS; otherwise it renders nothing. micro-app resolves the `./assets/...`
+    // ref against the entry treated as a directory, so the real browser request is
+    // `micro-app/workbench/assets/index.js` — the daemon must serve that exact path.
     const assetMatch = entryHtml.match(/src="\.\/(assets\/[^"]+\.js)"/)
     expect(assetMatch).not.toBeNull()
-    const assetRes = await target.request(`/api/apps/${FREEFORM_APP_ID}/micro-app/${assetMatch![1]}`)
+    const assetRes = await target.request(`/api/apps/${FREEFORM_APP_ID}/micro-app/workbench/${assetMatch![1]}`)
     expect(assetRes.status).toBe(200)
     expect(assetRes.headers.get('content-type')).toContain('javascript')
   })
