@@ -104,7 +104,8 @@ describe('SDK descriptor build conventions', () => {
     // (方案 C): a React mount point + the bundled asset script. The runtime markers
     // (data-aiworker-common-workbench / bridge-event-refs) render in the browser and
     // are verified by the Freeform browser proof, not statically here.
-    expect(commonWorkbench).toContain('id="aiworker-common-workbench"')
+    expect(commonWorkbench).toContain('data-aiworker-common-workbench="true"')
+    expect(commonWorkbench).toContain('data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events"')
     expect(commonWorkbench).toMatch(/<script[^>]+src="\.\/assets\//)
     expect(existsSync(join(rootDir, 'dist/web/workbench/assets'))).toBe(true)
     expect(existsSync(join(rootDir, 'dist/engine-assets/skills/freeform-session/SKILL.md'))).toBe(true)

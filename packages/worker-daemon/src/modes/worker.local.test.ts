@@ -1653,7 +1653,18 @@ describe('local daemon API', () => {
     const htmlRes = await target.request(`/api/apps/${FREEFORM_APP_ID}/micro-app/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&theme=light`)
     expect(htmlRes.status).toBe(200)
     expect(htmlRes.headers.get('content-type')).toContain('text/html')
-    expect(await htmlRes.text()).toContain('data-aiworker-common-workbench="true"')
+    // sdk-common workbench is the built soul-workbench micro-app bundle (方案 C):
+    // the entry serves its index.html (React mount point + bundled script). The
+    // rendered marker is verified by the Freeform browser proof.
+    const entryHtml = await htmlRes.text()
+    expect(entryHtml).toContain('data-aiworker-common-workbench="true"')
+    // The bundle's sibling assets must also be served (under the virtual workbench
+    // directory) so the micro-app can load its JS; otherwise it renders nothing.
+    const assetMatch = entryHtml.match(/src="\.\/(assets\/[^"]+\.js)"/)
+    expect(assetMatch).not.toBeNull()
+    const assetRes = await target.request(`/api/apps/${FREEFORM_APP_ID}/micro-app/${assetMatch![1]}`)
+    expect(assetRes.status).toBe(200)
+    expect(assetRes.headers.get('content-type')).toContain('javascript')
   })
 
   it('resolves custom descriptor workbench without SDK common fallback', async () => {

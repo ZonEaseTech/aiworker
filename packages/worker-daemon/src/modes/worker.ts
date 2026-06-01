@@ -1424,15 +1424,30 @@ async function descriptorMountedAssetResponse(c: Context, app: HostedSoulApp): P
   const appPrefix = `/api/apps/${app.appId}/`
   const relativeRequestPath = decodeURIComponent(sourceUrl.pathname.slice(appPrefix.length))
   const contribution = descriptorWorkbenchContribution(app)
-  if (!contribution || relativeRequestPath !== contribution.surface.entry.replace(/^\//, ''))
+  if (!contribution)
     return null
 
   const workbenchEntry = app.descriptor?.workbench?.entry
   if (typeof workbenchEntry !== 'string' || workbenchEntry.length === 0)
     return null
 
+  // The mounted workbench is a built micro-app bundle (方案 C): serve its entry
+  // AND its sibling bundle assets. The contribution entry is a virtual path
+  // (e.g. `micro-app/workbench`) whose directory maps to the descriptor workbench
+  // directory (e.g. `web/workbench`): the entry maps to the descriptor entry file,
+  // other paths under the virtual directory map to same-named bundle assets.
+  const entryRelative = contribution.surface.entry.replace(/^\//, '')
+  const virtualDir = path.posix.dirname(entryRelative)
+  const workbenchDirRelative = path.posix.dirname(workbenchEntry.replace(/^dist\//, ''))
+  let descriptorAssetPath: null | string = null
+  if (relativeRequestPath === entryRelative)
+    descriptorAssetPath = workbenchEntry.replace(/^dist\//, '')
+  else if (virtualDir !== '.' && relativeRequestPath.startsWith(`${virtualDir}/`))
+    descriptorAssetPath = path.posix.join(workbenchDirRelative, relativeRequestPath.slice(virtualDir.length + 1))
+  if (!descriptorAssetPath)
+    return null
+
   const descriptorRoot = path.dirname(app.sourceRef)
-  const descriptorAssetPath = workbenchEntry.replace(/^dist\//, '')
   const resolvedAsset = path.resolve(descriptorRoot, descriptorAssetPath)
   const resolvedRoot = path.resolve(descriptorRoot)
   if (!isPathInside(resolvedAsset, resolvedRoot)) {

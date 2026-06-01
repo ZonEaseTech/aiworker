@@ -3,51 +3,38 @@ import { createRoot } from 'react-dom/client'
 
 import { readWorkbenchLocator } from './locator'
 
-const MODULES = [
-  { id: 'worker-configuration-summary', title: 'Worker configuration summary' },
-  { id: 'engine-target-readiness', title: 'Engine target readiness' },
-  { id: 'skills-overlay-summary', title: 'Skills overlay summary' },
-  { id: 'mcp-overlay-summary', title: 'MCP overlay summary' },
-  { id: 'entry-workspace-files-summary', title: 'Entry workspace files summary' },
-  { id: 'session-controls', title: 'Session controls' },
-  { id: 'bridge-event-stream', title: 'Bridge event refs' },
-  { id: 'projection-receipt-status', title: 'Projection receipt status' },
-  { id: 'archive-controls', title: 'Archive controls' },
-] as const
-
 /**
- * SDK common workbench micro-app (方案 C). Mounted by the Worker/Host web shell
- * via micro-app `router-mode="search"`; the daemon injects the locator into the
- * URL query. This shell renders the module sections (filled out by later
- * sub-projects: chat, config, lifecycle). It preserves the markers the Freeform
- * browser proof asserts so the static→micro-app migration keeps the proof green.
+ * Progressive-enhancement entry for the SDK common workbench micro-app (方案 C).
+ *
+ * The workbench shell (markers + module sections) is static HTML so the mount
+ * proofs are robust against React timing inside the micro-app sandbox. This
+ * bundle hydrates the interactive surface into #aiworker-workbench-root; later
+ * sub-projects render the chat composer/transcript and the live config modules
+ * here. For the build foundation it records the resolved locator so consumers can
+ * see the micro-app booted with the daemon-injected context.
  */
-export function CommonWorkbench() {
+export function WorkbenchRoot() {
   const locator = readWorkbenchLocator(globalThis.location?.search ?? '')
   return (
-    <main
-      data-aiworker-common-workbench="true"
-      data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events"
+    <div
+      data-aiworker-workbench-ready="true"
       data-aiworker-locator={`${locator.workerId ?? ''}/${locator.workspaceId ?? ''}/${locator.sessionId ?? ''}`}
-    >
-      <h1>AIWorker Common Workbench</h1>
-      {MODULES.map(module => (
-        <section key={module.id} data-module={module.id}>
-          <h2>{module.title}</h2>
-          {module.id === 'bridge-event-stream'
-            ? <p>engine_invocations / engine invocation events</p>
-            : null}
-        </section>
-      ))}
-    </main>
+    />
   )
 }
 
-const host = document.querySelector('#aiworker-common-workbench')
-if (host) {
-  createRoot(host).render(
-    <StrictMode>
-      <CommonWorkbench />
-    </StrictMode>,
-  )
+function mount(): void {
+  const host = document.querySelector('#aiworker-workbench-root')
+  if (host) {
+    createRoot(host).render(
+      <StrictMode>
+        <WorkbenchRoot />
+      </StrictMode>,
+    )
+  }
 }
+
+if (document.readyState === 'loading')
+  document.addEventListener('DOMContentLoaded', mount, { once: true })
+else
+  mount()

@@ -10,7 +10,6 @@ const workerId = 'freeform-worker'
 const workspaceId = 'freeform-workspace'
 const sessionId = 'freeform-session'
 const descriptor = parseSoulDescriptorV1(JSON.parse(readFileSync(join(repoRoot, 'souls/aiworker-freeform/dist/soul.descriptor.json'), 'utf8')))
-const workbenchHtml = readFileSync(join(repoRoot, 'souls/aiworker-freeform', descriptor.workbench.entry), 'utf8')
 const microAppRuntime = readFileSync(join(repoRoot, 'node_modules/.bun/@micro-zoe+micro-app@1.0.0-rc.30/node_modules/@micro-zoe/micro-app/lib/index.esm.js'), 'utf8')
 
 function hostPage(): string {
@@ -95,10 +94,22 @@ const server = Bun.serve({
       })
     }
 
-    if (url.pathname === `/api/apps/${descriptor.identity.appId}/${descriptor.workbench.entry}`) {
-      return new Response(workbenchHtml, {
-        headers: { 'content-type': 'text/html; charset=utf-8' },
-      })
+    // Serve the built common workbench micro-app bundle (index.html + assets/*)
+    // from disk so the micro-app can load its JS bundle (方案 C: workbench is a
+    // Vite build, not a static HTML string).
+    const workbenchPrefix = `/api/apps/${descriptor.identity.appId}/dist/web/workbench/`
+    if (url.pathname.startsWith(workbenchPrefix)) {
+      const relPath = url.pathname.slice(workbenchPrefix.length) || 'index.html'
+      try {
+        const body = readFileSync(join(repoRoot, 'souls/aiworker-freeform/dist/web/workbench', relPath))
+        const contentType = relPath.endsWith('.js')
+          ? 'text/javascript; charset=utf-8'
+          : relPath.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/html; charset=utf-8'
+        return new Response(body, { headers: { 'content-type': contentType } })
+      }
+      catch {
+        return new Response('Not found', { status: 404 })
+      }
     }
 
     return new Response('Not found', { status: 404 })
