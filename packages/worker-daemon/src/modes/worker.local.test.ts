@@ -879,6 +879,25 @@ describe('local daemon API', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'WORKER_ALREADY_ACTIVE' } })
   })
 
+  it('bootstrap fails fast when the DB holds more than one active worker', async () => {
+    const bootOptions = {
+      dbPath: join(dir, 'worker.db'),
+      executor: {
+        async invoke(input: { onEvent?: (event: { kind: string, text: string }) => void }) {
+          input.onEvent?.({ kind: 'text', text: 'done' })
+          return { artifacts: [], summary: 'done' }
+        },
+      },
+      runtimeVersion: 'test',
+      workersRoot: join(dir, 'workers'),
+    } satisfies Parameters<typeof bootstrapWorkerApp>[0]
+    await bootstrapWorkerApp(bootOptions)
+    upsertWorker({ id: 'dirty-a', appId: FREEFORM_APP_ID, name: 'A', status: 'active' })
+    upsertWorker({ id: 'dirty-b', appId: FREEFORM_APP_ID, name: 'B', status: 'active' })
+    closeWorkerDb()
+    await expect(bootstrapWorkerApp(bootOptions)).rejects.toThrow(/more than one active worker/i)
+  })
+
   it('honors workspace locator rootPath for app-owned workspace projection', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'requested-root-worker')

@@ -186,7 +186,17 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     now: options.now,
   }
   await state.host.bootstrapOfficialSoulApps()
-  for (const worker of listWorkers()) {
+  // C4:daemon 至多重建一个 active worker。>1 active 仅来自旧多路复用脏 DB →
+  // fail-fast(loud > silent;静默 archive 是有后果的数据决策,应让操作者显式处理)。
+  const activeWorkers = listWorkers().filter(worker => worker.status === 'active')
+  if (activeWorkers.length > 1) {
+    throw new AppError(
+      'DAEMON_MULTIPLE_ACTIVE_WORKERS',
+      500,
+      `Daemon DB holds more than one active worker (${activeWorkers.map(w => w.id).join(', ')}); a daemon hosts at most one active worker.`,
+    )
+  }
+  for (const worker of activeWorkers) {
     const runtime = state.host.createRuntimeForWorker(worker)
     await runtime.init()
     runtimes.set(worker.id, runtime)
