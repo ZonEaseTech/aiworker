@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { fetchEngineTargets, fetchWorkerConfig, fetchWorkerOverlay, fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
+import { fetchEngineTargets, fetchProjectionReceipt, fetchWorkerConfig, fetchWorkerOverlay, fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
 
 describe('broker-client', () => {
   it('POSTs a session-level invocation and returns the new invocation id', async () => {
@@ -87,5 +87,24 @@ describe('broker-client', () => {
 
     expect(await fetchWorkerOverlay('w-1', fetchImpl)).toEqual([{ enabled: true, id: 'freeform-session', kind: 'skill' }])
     expect(calls).toEqual(['/api/workers/w-1/config'])
+  })
+
+  it('reads a found projection receipt', async () => {
+    const calls: string[] = []
+    const fetchImpl = (async (url: string) => {
+      calls.push(url)
+      return new Response(JSON.stringify({ receiptId: 'ws-1', status: 'found', workspaceId: 'ws-1' }), {
+        headers: { 'content-type': 'application/json' },
+        status: 200,
+      })
+    }) as unknown as typeof fetch
+
+    expect(await fetchProjectionReceipt('ws-1', fetchImpl)).toEqual({ receiptId: 'ws-1', status: 'found', workspaceId: 'ws-1' })
+    expect(calls).toEqual(['/api/projections/receipts/ws-1'])
+  })
+
+  it('returns a not_found receipt status (404) without throwing', async () => {
+    const fetchImpl = (async () => new Response(JSON.stringify({ receiptId: 'ws-1', status: 'not_found' }), { status: 404 })) as unknown as typeof fetch
+    expect(await fetchProjectionReceipt('ws-1', fetchImpl)).toEqual({ receiptId: 'ws-1', status: 'not_found' })
   })
 })

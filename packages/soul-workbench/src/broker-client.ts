@@ -8,6 +8,7 @@
  */
 
 import type { EngineTarget, WorkerConfigValue, WorkerOverlayAsset } from './config-mapper'
+import type { ProjectionReceiptStatus } from './lifecycle-mapper'
 import type { WorkbenchFile } from './transcript-mapper'
 
 export interface SubmitInvocationResult {
@@ -70,6 +71,18 @@ export async function fetchWorkerOverlay(
     throw new Error(`fetchWorkerOverlay failed: ${response.status}`)
   const body = await response.json() as { overlay?: { assets?: unknown } }
   return Array.isArray(body.overlay?.assets) ? body.overlay.assets as WorkerOverlayAsset[] : []
+}
+
+/** Read the workspace projection receipt status for the mounted lifecycle module. */
+export async function fetchProjectionReceipt(
+  workspaceId: string,
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<ProjectionReceiptStatus> {
+  const response = await fetchImpl(`/api/projections/receipts/${workspaceId}`)
+  // 404 (not_found) and 409 (stale) carry a valid receipt status, not a hard error.
+  if (!response.ok && response.status !== 404 && response.status !== 409)
+    throw new Error(`fetchProjectionReceipt failed: ${response.status}`)
+  return await response.json() as ProjectionReceiptStatus
 }
 
 /**

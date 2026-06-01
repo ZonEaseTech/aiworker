@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 
 import { WorkbenchChat } from './chat'
 import { WorkbenchConfig } from './config'
+import { WorkbenchLifecycle } from './lifecycle'
 import { readWorkbenchLocator } from './locator'
 import './styles.css'
 
@@ -31,6 +32,7 @@ export function WorkbenchRoot() {
       data-aiworker-locator={`${locator.workerId ?? ''}/${locator.workspaceId ?? ''}/${locator.sessionId ?? ''}`}
     >
       <WorkbenchConfig workerId={locator.workerId} />
+      <WorkbenchLifecycle workspaceId={locator.workspaceId} />
       <WorkbenchChat sessionId={locator.sessionId} workspaceId={locator.workspaceId} />
     </div>
   )

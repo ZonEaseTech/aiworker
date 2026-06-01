@@ -124,6 +124,13 @@ try {
   // Populate engine targets before mount: the daemon's rescan scans the fake codex
   // on PATH so the mounted engine-readiness module has a target to render.
   await fetch(`${baseUrl}/api/engine/targets/rescan`, { method: 'POST' })
+  // Materialise a workspace projection receipt before mount so the mounted
+  // projection-receipt-status lifecycle module has a 'found' receipt to render.
+  await fetch(`${baseUrl}/api/projections/codex/refresh`, {
+    body: JSON.stringify({ workerId, workspaceId: workspaceResult.workspace.id }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
 
   browser = await chromium.launch({ headless: true })
   const page = await browser.newPage()
@@ -348,6 +355,25 @@ try {
     if (!overlaySections.includes(config))
       throw new Error(`Mounted workbench overlay module '${config}' rendered no baseline asset. rendered=${JSON.stringify(overlaySections)}`)
   }
+
+  // The materialised workspace projection receipt renders 'found' in the mounted
+  // projection-receipt-status lifecycle module. `data-aiworker-projection-receipt
+  // ="found"` is live-only — it appears only when the workbench fetched the receipt
+  // (GET /api/projections/receipts/:workspaceId) and mapped it through
+  // summarizeProjectionReceipt.
+  const receiptStatus = await page.evaluate(async () => {
+    const deadline = Date.now() + 8000
+    while (Date.now() < deadline) {
+      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
+      const node = document.querySelector('[data-aiworker-projection-receipt="found"]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-projection-receipt="found"]')
+      if (node)
+        return (node.textContent ?? '').trim()
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    return null
+  })
+  if (receiptStatus === null || !receiptStatus.includes('found'))
+    throw new Error(`Mounted workbench projection-receipt-status did not render a found receipt. got=${JSON.stringify(receiptStatus)}`)
 
   assertNoUnexpectedBrowserEvents(browserEvents)
 
