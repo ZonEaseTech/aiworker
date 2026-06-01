@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
+import { closeWorkerDb, upsertWorker } from '@zonease/aiworker-storage-sqlite/worker'
 import {
   parseWorkerDescribe,
 } from '@zonease/aiworker-worker-control-protocol'
@@ -66,6 +66,24 @@ describe('worker-daemon control contract endpoints', () => {
     const describe = parseWorkerDescribe(body)
     expect(describe.templateId).toBe(FREEFORM_APP_ID)
     expect(describe.configMicroAppEntry).toContain('/api/mount/workbench')
+  })
+
+  it('GET /api/control/worker returns the single active worker, not listWorkers()[0]', async () => {
+    const target = await app()
+    await createFreeformWorker(target, 'the-active-worker')
+    // 直插一个 id 排序在前的 archived worker:listWorkers()[0]（按 id 排序）会错取它,
+    // find(active) 恒取唯一 active worker。
+    upsertWorker({ id: 'aaa-archived-worker', appId: FREEFORM_APP_ID, name: 'Archived', status: 'archived' })
+    const res = await target.request('/api/control/worker')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ workerId: 'the-active-worker' })
+  })
+
+  it('GET /api/control/worker returns 404 when no active worker exists (zero-active)', async () => {
+    const target = await app() // fresh daemon, 未创建任何 worker
+    const res = await target.request('/api/control/worker')
+    expect(res.status).toBe(404)
+    expect(await res.json()).toMatchObject({ error: { code: 'WORKER_NOT_FOUND' } })
   })
 
   it('PUT /api/control/assignment accepts a valid envelope', async () => {

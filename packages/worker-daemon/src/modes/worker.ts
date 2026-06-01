@@ -231,9 +231,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/api/control/health', c => c.json({ ready: true }))
 
   app.get('/api/control/worker', (c) => {
-    const worker = listWorkers()[0]
+    // C3:取该 daemon 唯一 active worker(去 listWorkers()[0] 漂移——后者按 id 排序
+    // 可能错取 archived worker)。zero-active(fresh / 全 archived)→ 404。
+    const worker = listWorkers().find(candidate => candidate.status === 'active')
     if (!worker)
-      return c.json({ error: { code: 'WORKER_NOT_FOUND', message: 'no worker registered' } }, 404)
+      return c.json({ error: { code: 'WORKER_NOT_FOUND', message: 'no active worker registered' } }, 404)
     return c.json({
       workerId: worker.id,
       templateId: worker.appId,
