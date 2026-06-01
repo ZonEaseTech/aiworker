@@ -31,9 +31,19 @@ export function MountWorkerConfig({ entry, label = 'Worker configuration', name 
   )
 }
 
-// Control-plane web shell skeleton. Plan 3 ships the management-mount seam only;
-// worker registry/assignment surfaces are wired in later plans.
-export function HostControlPlane() {
+export interface HostControlPlaneProps {
+  // The Worker's config micro-app entry as reported by the control-protocol
+  // `worker.describe` verb (configMicroAppEntry). Defaults to the canonical v1
+  // broker endpoint `/api/mount/workbench` (architecture.md: management and
+  // employee mounts share the single endpoint; the distinction is topological).
+  // The host daemon supplies the resolved per-worker entry in later plans.
+  configMicroAppEntry?: string
+}
+
+// Control-plane web shell: frames the Worker configuration micro-app in the Host's
+// managed context (architecture.md Management mount). Worker registry/assignment
+// surfaces are wired in later plans.
+export function HostControlPlane({ configMicroAppEntry = '/api/mount/workbench' }: HostControlPlaneProps = {}) {
   return (
     <main className="mx-auto flex min-h-svh max-w-3xl flex-col gap-4 p-6">
       <header className="flex flex-col gap-1">
@@ -42,6 +52,7 @@ export function HostControlPlane() {
           Distribute, manage, authorize connectors, and mount worker configuration micro-apps.
         </p>
       </header>
+      <MountWorkerConfig entry={configMicroAppEntry} />
     </main>
   )
 }
