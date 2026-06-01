@@ -1023,6 +1023,12 @@ async function engineInvocationEventsResponse(
     }
     // Still running: tail the bus until terminal. Serialise flushes via a promise
     // chain so concurrent emits cannot double-send the same events.
+    //
+    // unverified: no test exercises this live-tail branch — the local synchronous
+    // executor drives every invocation to a terminal status before an EventSource
+    // can connect, so reads always take the replay-then-close path above. This is
+    // defensive code for a future asynchronous engine; verifying it requires a
+    // controllable long-running invocation.
     await new Promise<void>((resolve) => {
       let pending = Promise.resolve()
       let settled = false

@@ -234,33 +234,44 @@ try {
   if (uiProbe.display !== 'inline-flex' || uiProbe.backgroundColor === 'rgba(0, 0, 0, 0)')
     throw new Error(`packages/ui Button unstyled in real mount (Tailwind CSS not injected/applied): ${JSON.stringify(uiProbe)}`)
 
-  // Drive the live engine loop through the mounted composer: submit an input, then
-  // assert the packages/ui ChatThread renders a transcript turn containing the
-  // user's exact submitted message (a user-message item the chat surface adds) —
-  // streamed over the US-005 SSE endpoint inside the micro-app sandbox. Both the
-  // `data-transcript-slot="transcript-turn"` marker and the verbatim composer text
-  // are live-only, proving the real composer -> broker -> SSE -> mapper ->
-  // ChatThread path rendered, not a static shell.
+  // Drive the live engine loop through the mounted composer: submit an input and
+  // assert two distinct, live-only renders inside the micro-app sandbox:
+  //  - a `user-message` item carrying the verbatim composer text (the chat surface
+  //    echoes the submission via withUserMessageTurn) — proves composer -> ChatThread;
+  //  - an engine-streamed transcript item (assistant output, tool activity, or a
+  //    status, depending on the invocation outcome) produced ONLY by mapping events
+  //    streamed over the US-005 SSE endpoint through bridgeEventsToTranscriptTurns —
+  //    proves the real broker -> SSE -> mapper -> ChatThread render path, distinct
+  //    from the echoed user message (which withUserMessageTurn adds unconditionally).
+  // The static shell produces neither slot.
   const composerMessage = 'Stream a follow-up turn from the mounted workbench.'
   await page.locator('micro-app [data-aiworker-composer-input="true"]').fill(composerMessage)
   await page.locator('micro-app [data-aiworker-composer-submit="true"]').click()
-  const transcriptTurnText = await page.evaluate(async (needle) => {
+  const transcript = await page.evaluate(async (needle) => {
+    // Engine-streamed items the bridge mapper can produce, each from a distinct
+    // bridge event kind — any one proves the SSE -> mapper -> ChatThread path.
+    const streamedSlots = ['assistant-markdown', 'activity-group', 'status-message', 'command']
     const deadline = Date.now() + 8000
-    let lastText: null | string = null
+    let userText: null | string = null
+    let slots: string[] = []
     while (Date.now() < deadline) {
       const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      const turn = document.querySelector('[data-transcript-slot="transcript-turn"]') ?? micro?.shadowRoot?.querySelector('[data-transcript-slot="transcript-turn"]')
-      if (turn) {
-        lastText = (turn.textContent ?? '').trim()
-        if (lastText.includes(needle))
-          return lastText
-      }
+      const roots: Array<Document | ShadowRoot> = micro?.shadowRoot ? [document, micro.shadowRoot] : [document]
+      const query = (selector: string) => roots.map(root => root.querySelector(selector)).find(node => node != null) ?? null
+      const userMessage = query('[data-transcript-slot="user-message"]')
+      if (userMessage)
+        userText = (userMessage.textContent ?? '').trim()
+      slots = streamedSlots.filter(slot => query(`[data-transcript-slot="${slot}"]`))
+      if (userText?.includes(needle) && slots.length > 0)
+        return { slots, userText }
       await new Promise(resolve => setTimeout(resolve, 100))
     }
-    return lastText
+    return { slots, userText }
   }, composerMessage)
-  if (transcriptTurnText === null || !transcriptTurnText.includes(composerMessage))
-    throw new Error(`Mounted workbench ChatThread did not render the composer's user message in a transcript turn. got=${JSON.stringify(transcriptTurnText)}`)
+  if (transcript.userText === null || !transcript.userText.includes(composerMessage))
+    throw new Error(`Mounted workbench ChatThread did not render the composer's user message. got=${JSON.stringify(transcript.userText)}`)
+  if (transcript.slots.length === 0)
+    throw new Error(`Mounted workbench ChatThread rendered no SSE-streamed engine item (assistant-markdown/activity-group/status-message) from the invocation, only the echoed user message.`)
 
   // The seeded workspace file renders as a session artifact in the mounted
   // ArtifactStrip. Both `data-transcript-slot="artifact-strip"` and the file name
