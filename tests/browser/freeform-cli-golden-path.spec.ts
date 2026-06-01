@@ -248,9 +248,10 @@ try {
   await page.locator('micro-app [data-aiworker-composer-input="true"]').fill(composerMessage)
   await page.locator('micro-app [data-aiworker-composer-submit="true"]').click()
   const transcript = await page.evaluate(async (needle) => {
-    // Engine-streamed items the bridge mapper can produce, each from a distinct
-    // bridge event kind — any one proves the SSE -> mapper -> ChatThread path.
-    const streamedSlots = ['assistant-markdown', 'activity-group', 'status-message', 'command']
+    // Transcript slots bridgeEventsToTranscriptTurns can produce, each from a
+    // distinct bridge event kind (output.delta / tool.observed / error) — any one
+    // rendering proves the SSE -> mapper -> ChatThread path.
+    const streamedSlots = ['assistant-markdown', 'activity-group', 'status-message']
     const deadline = Date.now() + 8000
     let userText: null | string = null
     let slots: string[] = []
