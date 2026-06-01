@@ -927,12 +927,15 @@ describe('local daemon API', () => {
     expect(res.status).toBeLessThan(500)
   })
 
-  it('GET /api/capabilities without workerId resolves to the single active worker', async () => {
+  it('GET /api/capabilities omits workerId → unscoped list (single-active daemon ⇒ that Worker scope)', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'cap-worker')
+    // absent → unscoped 全局列举(existence-filter 语义,见 protocol.md);standalone client
+    // 省略 workerId 必须拿到非空能力,这是 standalone 读路径不依赖 Host 的保证。
     const all = await (await target.request('/api/capabilities')).json() as { capabilities: unknown[] }
+    expect(all.capabilities.length).toBeGreaterThan(0)
+    // 单 active worker 下,unscoped 与 present(self)scoped 结果一致(coincidence = standalone 保证)。
     const scoped = await (await target.request(`/api/capabilities?workerId=${worker.id}`)).json() as { capabilities: unknown[] }
-    // 单 active worker 下,absent 与 present(self)结果一致
     expect(all.capabilities).toEqual(scoped.capabilities)
   })
 

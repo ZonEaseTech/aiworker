@@ -178,9 +178,18 @@ into a product backend.
 - `enable` creates a worker from an installed descriptor.
 - `POST /api/workers` rejects creation when the daemon already hosts an active
   Worker (409); a daemon hosts at most one active Worker. archive-then-recreate
-  is permitted (archived rows do not count). When a route receives `workerId`, it
-  must equal the daemon's active Worker; when omitted, it resolves to that single
-  active Worker.
+  is permitted (archived rows do not count).
+- Routes that take a `workerId` for new work resolve it to the daemon's single
+  active Worker: a present `workerId` that does not name the active Worker is
+  rejected — an archived Worker fails with `WORKER_ARCHIVED`, an unknown Worker
+  is not found. List and filter routes (`GET /api/capabilities`,
+  `GET /api/workspace-locators`, `GET /api/sessions`) instead treat `workerId` as
+  an existence filter — present scopes the result to that Worker, omitted returns
+  the unscoped list, which on a single-active daemon is that active Worker's. A
+  standalone CLI or web client discovers the active `workerId` from
+  `/api/control/worker` (or `/api/info`). Strict read-path validate-to-self —
+  rejecting any non-active `workerId` on read routes to guard Host broker
+  mis-routing — is Phase 2.
 - archive operations mark Worker metadata unavailable for new work.
 - hard delete removes Worker metadata and receipt-owned projections only.
 - `GET /api/workspace-locators` may receive `workerId` to filter locators for
