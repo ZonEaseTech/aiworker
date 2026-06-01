@@ -10,6 +10,7 @@ import {
   createWorkspace,
   getWorker,
   initWorkerDb,
+  listWorkers,
   runWorkerMigrations,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
@@ -220,5 +221,38 @@ describe('Worker orchestrator boundary', () => {
       .toThrow(`Soul App is not enabled: ${FREEFORM_APP_ID}`)
     expect(() => runtime.requireEnabledAppForWorker(created.worker.id))
       .toThrow(expect.objectContaining({ code: 'SOUL_APP_DISABLED', status: 409 }))
+  })
+
+  it('rejects creating a second active worker (one active per daemon)', async () => {
+    const runtime = orchestrator()
+    await runtime.bootstrapOfficialSoulApps()
+    const created = await runtime.createSoulWorker({ appId: FREEFORM_APP_ID, name: 'First' })
+    expect(created.worker.status).toBe('active')
+    await expect(
+      runtime.createSoulWorker({ appId: FREEFORM_APP_ID, name: 'Second' }),
+    ).rejects.toMatchObject({ code: 'WORKER_ALREADY_ACTIVE', status: 409 })
+  })
+
+  it('allows archive-then-recreate (archived worker does not count as active)', async () => {
+    const runtime = orchestrator()
+    await runtime.bootstrapOfficialSoulApps()
+    const first = await runtime.createSoulWorker({ appId: FREEFORM_APP_ID, name: 'First' })
+    upsertWorker({ id: first.worker.id, appId: first.worker.appId, name: first.worker.name, status: 'archived' })
+    const second = await runtime.createSoulWorker({ appId: FREEFORM_APP_ID, name: 'Second' })
+    expect(second.worker.status).toBe('active')
+  })
+
+  it('concurrent createSoulWorker yields exactly one active worker (invariant)', async () => {
+    // 不变量测试:今天 check+insert 同步即原子,此处钉死"并发也只得一个 active",
+    // 防未来在 check 与 insert 间引入 await 时破坏(锁是前向保险,见 async-lock.ts)。
+    const runtime = orchestrator()
+    await runtime.bootstrapOfficialSoulApps()
+    const results = await Promise.allSettled([
+      runtime.createSoulWorker({ appId: FREEFORM_APP_ID, name: 'A' }),
+      runtime.createSoulWorker({ appId: FREEFORM_APP_ID, name: 'B' }),
+    ])
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter(r => r.status === 'rejected')).toHaveLength(1)
+    expect(listWorkers().filter(w => w.status === 'active')).toHaveLength(1)
   })
 })

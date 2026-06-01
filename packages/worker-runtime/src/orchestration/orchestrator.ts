@@ -12,6 +12,7 @@ import {
 } from '@zonease/aiworker-soul-protocol'
 import {
   getWorker,
+  listWorkers,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
 
@@ -34,6 +35,7 @@ import {
   runSoulAppHealthcheck,
 } from '../soul-app/registry'
 import { createLocalWorkerRuntime } from '../worker/runtime'
+import { AsyncLock } from './async-lock'
 
 // -- inlined from deleted shared types --
 interface SoulCapability {
@@ -91,6 +93,8 @@ export function createWorkerOrchestrator(options: WorkerOrchestratorOptions): Wo
 
 export class WorkerOrchestrator {
   constructor(private readonly options: WorkerOrchestratorOptions) {}
+
+  private readonly createWorkerLock = new AsyncLock()
 
   listCatalog(): SoulCatalog {
     return listSoulCatalog()
@@ -190,31 +194,38 @@ export class WorkerOrchestrator {
   }
 
   async createSoulWorker(input: CreateSoulWorkerInput): Promise<CreateSoulWorkerResult> {
-    const soul = this.requireAvailableSoul(input.appId)
-    const name = requireText(input.name, 'name')
-    const workerId = input.id ? requireText(input.id, 'id') : mintWorkerId()
-    if (getWorker(workerId))
-      throw new AppError('CONFLICT', 409, `Worker already exists: ${workerId}`)
+    // C1:进程内锁串行化 check-active → insert 临界区(daemon-per-worker 单写者世界,
+    // 完整串行化即 TOCTOU 防护,无需存储 schema 全局索引)。
+    return this.createWorkerLock.run(async () => {
+      const soul = this.requireAvailableSoul(input.appId)
+      const name = requireText(input.name, 'name')
+      const workerId = input.id ? requireText(input.id, 'id') : mintWorkerId()
+      if (getWorker(workerId))
+        throw new AppError('CONFLICT', 409, `Worker already exists: ${workerId}`)
+      // C2:每个 daemon 至多一个 active worker(archived 不计)。
+      if (listWorkers().some(existing => existing.status === 'active'))
+        throw new AppError('WORKER_ALREADY_ACTIVE', 409, 'A daemon hosts at most one active worker.')
 
-    const worker = upsertWorker({
-      id: workerId,
-      appId: soul.id,
-      name,
-      defaultEngineId: input.defaultEngineId ?? 'codex',
-      metadataJson: {
-        defaultCapabilities: [...soul.defaultCapabilities],
-        description: soul.description,
-        soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
-        ...(input.metadata ?? {}),
-      },
+      const worker = upsertWorker({
+        id: workerId,
+        appId: soul.id,
+        name,
+        defaultEngineId: input.defaultEngineId ?? 'codex',
+        metadataJson: {
+          defaultCapabilities: [...soul.defaultCapabilities],
+          description: soul.description,
+          soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
+          ...(input.metadata ?? {}),
+        },
+      })
+      const runtime = this.createRuntimeForWorker(worker)
+      await runtime.init()
+      return {
+        runtime,
+        snapshot: runtime.snapshot(),
+        worker,
+      }
     })
-    const runtime = this.createRuntimeForWorker(worker)
-    await runtime.init()
-    return {
-      runtime,
-      snapshot: runtime.snapshot(),
-      worker,
-    }
   }
 
   createRuntimeForWorker(worker: WorkerRow): LocalWorkerRuntime {

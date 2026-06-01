@@ -867,6 +867,18 @@ describe('local daemon API', () => {
     expect(await rejectedPatchRes.json()).toMatchObject({ error: { code: 'PATCH_SESSION_INVALID' } })
   })
 
+  it('POST /api/workers rejects a second active worker with 409', async () => {
+    const target = await app()
+    await createFreeformWorker(target, 'first-active-worker')
+    const res = await target.request('/api/workers', {
+      body: JSON.stringify({ id: 'second-active-worker', name: 'Second', appId: FREEFORM_APP_ID }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ error: { code: 'WORKER_ALREADY_ACTIVE' } })
+  })
+
   it('honors workspace locator rootPath for app-owned workspace projection', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'requested-root-worker')
