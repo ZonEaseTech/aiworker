@@ -224,26 +224,32 @@ try {
     throw new Error(`packages/ui Button unstyled in real mount (Tailwind CSS not injected/applied): ${JSON.stringify(uiProbe)}`)
 
   // Drive the live engine loop through the mounted composer: submit an input, then
-  // assert the packages/ui ChatThread renders a transcript turn built from events
-  // streamed over the US-005 SSE endpoint (EventSource) inside the micro-app
-  // sandbox. `data-transcript-slot="transcript-turn"` is live-only — it is emitted
-  // only when streamed bridge events map into ChatThread turns, so this proves the
-  // real composer -> broker -> SSE -> mapper -> ChatThread path, not a static shell.
-  await page.locator('micro-app [data-aiworker-composer-input="true"]').fill('Stream a follow-up turn from the mounted workbench.')
+  // assert the packages/ui ChatThread renders a transcript turn containing the
+  // user's exact submitted message (a user-message item the chat surface adds) —
+  // streamed over the US-005 SSE endpoint inside the micro-app sandbox. Both the
+  // `data-transcript-slot="transcript-turn"` marker and the verbatim composer text
+  // are live-only, proving the real composer -> broker -> SSE -> mapper ->
+  // ChatThread path rendered, not a static shell.
+  const composerMessage = 'Stream a follow-up turn from the mounted workbench.'
+  await page.locator('micro-app [data-aiworker-composer-input="true"]').fill(composerMessage)
   await page.locator('micro-app [data-aiworker-composer-submit="true"]').click()
-  const transcriptTurnText = await page.evaluate(async () => {
+  const transcriptTurnText = await page.evaluate(async (needle) => {
     const deadline = Date.now() + 8000
+    let lastText: null | string = null
     while (Date.now() < deadline) {
       const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
       const turn = document.querySelector('[data-transcript-slot="transcript-turn"]') ?? micro?.shadowRoot?.querySelector('[data-transcript-slot="transcript-turn"]')
-      if (turn)
-        return (turn.textContent ?? '').trim()
+      if (turn) {
+        lastText = (turn.textContent ?? '').trim()
+        if (lastText.includes(needle))
+          return lastText
+      }
       await new Promise(resolve => setTimeout(resolve, 100))
     }
-    return null
-  })
-  if (transcriptTurnText === null)
-    throw new Error('Mounted workbench ChatThread rendered no transcript turn from the SSE engine stream after composer submit.')
+    return lastText
+  }, composerMessage)
+  if (transcriptTurnText === null || !transcriptTurnText.includes(composerMessage))
+    throw new Error(`Mounted workbench ChatThread did not render the composer's user message in a transcript turn. got=${JSON.stringify(transcriptTurnText)}`)
 
   assertNoUnexpectedBrowserEvents(browserEvents)
 

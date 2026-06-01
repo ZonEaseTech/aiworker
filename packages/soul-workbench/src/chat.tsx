@@ -4,7 +4,7 @@ import { ChatThread } from '@zonease/aiworker-ui/components/chat-thread'
 
 import { useCallback, useEffect, useState } from 'react'
 import { invocationEventStreamPath, submitInvocation } from './broker-client'
-import { bridgeEventsToTranscriptTurns } from './transcript-mapper'
+import { bridgeEventsToTranscriptTurns, withUserMessageTurn } from './transcript-mapper'
 
 /**
  * Chat surface for the mounted SDK common workbench (方案 C).
@@ -19,17 +19,20 @@ import { bridgeEventsToTranscriptTurns } from './transcript-mapper'
 export function WorkbenchChat({ sessionId }: { sessionId: null | string }) {
   const [input, setInput] = useState('')
   const [activeInvocationId, setActiveInvocationId] = useState<null | string>(null)
+  const [submittedInput, setSubmittedInput] = useState('')
   const [streamedEvents, setStreamedEvents] = useState<WorkbenchBridgeEvent[]>([])
   const [error, setError] = useState<null | string>(null)
 
   const onSubmit = useCallback(async () => {
-    if (!sessionId || input.trim().length === 0)
+    const submitted = input.trim()
+    if (!sessionId || submitted.length === 0)
       return
     try {
       setError(null)
       setStreamedEvents([])
-      const { invocationId } = await submitInvocation(sessionId, input.trim())
+      const { invocationId } = await submitInvocation(sessionId, submitted)
       setInput('')
+      setSubmittedInput(submitted)
       setActiveInvocationId(invocationId)
     }
     catch (caught) {
@@ -58,9 +61,15 @@ export function WorkbenchChat({ sessionId }: { sessionId: null | string }) {
     return () => source.close()
   }, [activeInvocationId])
 
+  const turns = withUserMessageTurn(
+    bridgeEventsToTranscriptTurns(streamedEvents),
+    activeInvocationId ?? '',
+    submittedInput,
+  )
+
   return (
     <section data-aiworker-chat="true">
-      <ChatThread ariaLabel="Engine transcript" turns={bridgeEventsToTranscriptTurns(streamedEvents)} />
+      <ChatThread ariaLabel="Engine transcript" turns={turns} />
       {error ? <p data-aiworker-chat-error="true">{error}</p> : null}
       <textarea
         aria-label="Engine input"

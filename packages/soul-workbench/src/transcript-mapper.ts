@@ -107,3 +107,23 @@ export function bridgeEventsToTranscriptTurns(events: WorkbenchBridgeEvent[]): T
     return { id: invocationId, items }
   })
 }
+
+/**
+ * Merge the composer's submitted input into the transcript as a `user-message`
+ * item on the invocation it started. The user message is owned by the chat surface
+ * (the composer submission), not the engine event stream — mirroring the contract
+ * documented on bridgeEventsToTranscriptTurns. Prepends to the invocation's turn,
+ * or creates a user-only turn when the invocation has not streamed events yet.
+ */
+export function withUserMessageTurn(
+  turns: TranscriptTurnModel[],
+  invocationId: string,
+  body: string,
+): TranscriptTurnModel[] {
+  if (invocationId.length === 0 || body.length === 0)
+    return turns
+  const userItem: TranscriptItemModel = { body, id: `${invocationId}:user`, kind: 'user-message' }
+  if (turns.some(turn => turn.id === invocationId))
+    return turns.map(turn => (turn.id === invocationId ? { ...turn, items: [userItem, ...turn.items] } : turn))
+  return [...turns, { id: invocationId, items: [userItem] }]
+}
