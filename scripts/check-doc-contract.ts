@@ -362,7 +362,7 @@ requireIncludes('docs/soul-authoring.md', [
   'packages/soul-workbench',
   '`packages/soul-app-sdk` owns:',
   '- author-facing declarations;\n- convention discovery;\n- descriptor generation;\n- descriptor validation;\n- engine asset discovery;\n- SDK-standard worker configuration model;\n- build output under `dist/`.',
-  '`packages/soul-workbench` is a thin shell pending consolidation; in v1 the common workbench modules, configuration UI, skills/MCP UI, artifact primitives, and mounted client helpers live in `packages/soul-app-sdk`.',
+  '`packages/soul-workbench` owns the interactive SDK common workbench micro-app: the common workbench modules, configuration UI, skills/MCP UI, artifact primitives, chat surface, and mounted client helpers.',
   '`packages/soul-app-runtime` owns standalone and Host-mounted runtime harnesses.',
   'If a Soul App exposes a custom mounted workbench, Host mounts that one entry. If\nit does not, Host mounts the SDK common workbench. Production runtime has one\nresolved workbench.',
   'Custom workbench code may compose SDK common modules. It may not create a second\nHost-readable configuration system or ask Host chrome to render domain UI.',

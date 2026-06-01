@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'bun:test'
+
 import { soulWorkbenchPackage } from './index'
 
 describe('soul-workbench package boundary', () => {
-  // v1 薄壳：common workbench 归 soul-app-sdk，owns 为空（见 docs/soul-authoring.md）
-  test('is a thin shell with no owned modules in v1', () => {
+  // 方案 C: soul-workbench owns the interactive SDK common workbench micro-app
+  // (consolidated from soul-app-sdk; see docs/soul-authoring.md).
+  test('owns the interactive common workbench micro-app and its modules', () => {
     expect(soulWorkbenchPackage.name).toBe('@zonease/aiworker-soul-workbench')
-    expect(soulWorkbenchPackage.owns).toEqual([])
+    expect(soulWorkbenchPackage.owns).toContain('common-workbench-micro-app')
+    expect(soulWorkbenchPackage.owns).toContain('chat-surface')
+    expect(soulWorkbenchPackage.owns).toContain('mounted-client-helpers')
   })
 })

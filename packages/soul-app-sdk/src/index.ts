@@ -1,7 +1,7 @@
 import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { basename, join, relative } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { basename, dirname, join, relative } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
 
 const SECRET_ASSIGNMENT_RE = /(["']?[\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*["']?\s*[:=]\s*["']?)([^"'\s]+)/gi
@@ -446,57 +446,33 @@ function copyCapabilities(rootDir: string, capabilities: SoulDiscovery['capabili
   }
 }
 
+function commonWorkbenchDistDir(): string {
+  // soul-workbench is a sibling workspace package; resolve its built micro-app
+  // bundle by filesystem layout (robust across runtimes / node_modules linking).
+  const here = dirname(fileURLToPath(import.meta.url)) // packages/soul-app-sdk/src
+  return join(here, '..', '..', 'soul-workbench', 'dist', 'web', 'workbench')
+}
+
 function writeWorkbench(rootDir: string, workbench: SoulDiscovery['workbench']): void {
-  const outputPath = join(rootDir, 'dist/web/workbench/index.html')
-  mkdirSync(join(rootDir, 'dist/web/workbench'), { recursive: true })
+  const destination = join(rootDir, 'dist/web/workbench')
+  mkdirSync(destination, { recursive: true })
 
   if (workbench.source === 'web/mounted/index.html') {
-    copyDirectory(join(rootDir, 'web/mounted'), join(rootDir, 'dist/web/workbench'))
+    copyDirectory(join(rootDir, 'web/mounted'), destination)
     return
   }
 
-  writeFileSync(outputPath, `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AIWorker Soul Workbench</title>
-</head>
-<body>
-  <main data-aiworker-common-workbench="true" data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events">
-    <h1>AIWorker Common Workbench</h1>
-    <section data-module="worker-configuration-summary">
-      <h2>Worker configuration summary</h2>
-    </section>
-    <section data-module="engine-target-readiness">
-      <h2>Engine target readiness</h2>
-    </section>
-    <section data-module="skills-overlay-summary">
-      <h2>Skills overlay summary</h2>
-    </section>
-    <section data-module="mcp-overlay-summary">
-      <h2>MCP overlay summary</h2>
-    </section>
-    <section data-module="entry-workspace-files-summary">
-      <h2>Entry workspace files summary</h2>
-    </section>
-    <section data-module="session-controls">
-      <h2>Session controls</h2>
-    </section>
-    <section data-module="bridge-event-stream">
-      <h2>Bridge event refs</h2>
-      <p>engine_invocations / engine invocation events</p>
-    </section>
-    <section data-module="projection-receipt-status">
-      <h2>Projection receipt status</h2>
-    </section>
-    <section data-module="archive-controls">
-      <h2>Archive controls</h2>
-    </section>
-  </main>
-</body>
-</html>
-`)
+  // sdk-common fallback: copy the built interactive common workbench micro-app
+  // (packages/soul-workbench). It must be built first; the root build orders
+  // soul-workbench ahead of Souls.
+  const commonDir = commonWorkbenchDistDir()
+  if (!existsSync(join(commonDir, 'index.html'))) {
+    throw new Error(
+      `@zonease/aiworker-soul-workbench is not built: expected the common workbench bundle at ${commonDir}. `
+      + 'Run `bun run --filter \'@zonease/aiworker-soul-workbench\' build` before building Souls.',
+    )
+  }
+  copyDirectory(commonDir, destination)
 }
 
 function copyEngineAssets(rootDir: string, discovery: SoulDiscovery): void {

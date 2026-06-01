@@ -1,7 +1,8 @@
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import {
   artifact,
   buildSoul,
@@ -14,6 +15,18 @@ import {
 } from './index'
 
 const tempRoots: string[] = []
+
+// The sdk-common workbench is now the built packages/soul-workbench micro-app
+// bundle (方案 C); writeWorkbench copies it. Build it once if missing so the
+// copy source exists for these tests.
+beforeAll(() => {
+  const soulWorkbenchDir = join(import.meta.dir, '..', '..', 'soul-workbench')
+  if (!existsSync(join(soulWorkbenchDir, 'dist', 'web', 'workbench', 'index.html'))) {
+    const result = spawnSync('bun', ['run', 'build'], { cwd: soulWorkbenchDir, stdio: 'inherit' })
+    if (result.status !== 0)
+      throw new Error('failed to build @zonease/aiworker-soul-workbench for descriptor-build tests')
+  }
+})
 
 afterEach(() => {
   for (const root of tempRoots.splice(0)) {
@@ -87,8 +100,13 @@ describe('SDK descriptor build conventions', () => {
     expect(existsSync(join(rootDir, 'dist/soul.descriptor.json'))).toBe(true)
     expect(existsSync(join(rootDir, 'dist/web/workbench/index.html'))).toBe(true)
     const commonWorkbench = readFileSync(join(rootDir, 'dist/web/workbench/index.html'), 'utf8')
-    expect(commonWorkbench).toContain('data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events"')
-    expect(commonWorkbench).toContain('Bridge event refs')
+    // sdk-common workbench is the built packages/soul-workbench micro-app bundle
+    // (方案 C): a React mount point + the bundled asset script. The runtime markers
+    // (data-aiworker-common-workbench / bridge-event-refs) render in the browser and
+    // are verified by the Freeform browser proof, not statically here.
+    expect(commonWorkbench).toContain('id="aiworker-common-workbench"')
+    expect(commonWorkbench).toMatch(/<script[^>]+src="\.\/assets\//)
+    expect(existsSync(join(rootDir, 'dist/web/workbench/assets'))).toBe(true)
     expect(existsSync(join(rootDir, 'dist/engine-assets/skills/freeform-session/SKILL.md'))).toBe(true)
   })
 

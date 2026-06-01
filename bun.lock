@@ -152,6 +152,7 @@
       "name": "@zonease/aiworker-soul-app-sdk",
       "dependencies": {
         "@zonease/aiworker-soul-protocol": "workspace:*",
+        "@zonease/aiworker-soul-workbench": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
