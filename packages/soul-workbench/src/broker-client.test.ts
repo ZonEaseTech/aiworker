@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { invocationEventStreamPath, submitInvocation } from './broker-client'
+import { fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
 
 describe('broker-client', () => {
   it('POSTs a session-level invocation and returns the new invocation id', async () => {
@@ -26,5 +26,24 @@ describe('broker-client', () => {
 
   it('builds the invocation-scoped SSE event-stream path', () => {
     expect(invocationEventStreamPath('inv-42')).toBe('/api/engine/invocations/inv-42/events')
+  })
+
+  it('lists workspace files for the artifacts surface', async () => {
+    const calls: string[] = []
+    const fetchImpl = (async (url: string) => {
+      calls.push(url)
+      return new Response(JSON.stringify({ files: [{ id: 'f1', kind: 'generated', path: 'out/a.md' }] }), {
+        headers: { 'content-type': 'application/json' },
+        status: 200,
+      })
+    }) as unknown as typeof fetch
+
+    expect(await fetchWorkspaceFiles('ws-1', fetchImpl)).toEqual([{ id: 'f1', kind: 'generated', path: 'out/a.md' }])
+    expect(calls).toEqual(['/api/workspace-locators/ws-1/files'])
+  })
+
+  it('throws when the workspace files request fails', async () => {
+    const fetchImpl = (async () => new Response('nope', { status: 404 })) as unknown as typeof fetch
+    await expect(fetchWorkspaceFiles('ws-1', fetchImpl)).rejects.toThrow()
   })
 })

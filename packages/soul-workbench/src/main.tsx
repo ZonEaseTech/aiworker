@@ -29,7 +29,7 @@ export function WorkbenchRoot() {
       data-aiworker-workbench-ready="true"
       data-aiworker-locator={`${locator.workerId ?? ''}/${locator.workspaceId ?? ''}/${locator.sessionId ?? ''}`}
     >
-      <WorkbenchChat sessionId={locator.sessionId} />
+      <WorkbenchChat sessionId={locator.sessionId} workspaceId={locator.workspaceId} />
     </div>
   )
 }

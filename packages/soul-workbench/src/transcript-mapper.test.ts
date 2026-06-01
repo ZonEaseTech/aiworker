@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { bridgeEventsToTranscriptTurns } from './transcript-mapper'
+import { bridgeEventsToTranscriptTurns, filesToArtifacts } from './transcript-mapper'
 
 describe('bridgeEventsToTranscriptTurns', () => {
   it('accumulates output.delta text into one assistant-markdown item per invocation', () => {
@@ -74,5 +74,27 @@ describe('bridgeEventsToTranscriptTurns', () => {
       { id: 4, invocationId: 'inv-1', type: 'invocation.completed' },
     ])
     expect(turns).toEqual([{ id: 'inv-1', items: [] }])
+  })
+})
+
+describe('filesToArtifacts', () => {
+  it('maps workspace files into artifact models titled by basename with the kind as description', () => {
+    expect(filesToArtifacts([
+      { id: 'file-1', kind: 'generated', path: 'output/report.md', size: 42 },
+      { id: 'file-2', kind: 'uploaded', path: 'input.txt' },
+    ])).toEqual([
+      { description: 'generated', id: 'file-1', title: 'report.md' },
+      { description: 'uploaded', id: 'file-2', title: 'input.txt' },
+    ])
+  })
+
+  it('falls back to the path for a missing id and to "file" for a missing kind', () => {
+    expect(filesToArtifacts([{ path: 'notes/todo.md' }])).toEqual([
+      { description: 'file', id: 'notes/todo.md', title: 'todo.md' },
+    ])
+  })
+
+  it('returns an empty list for no files', () => {
+    expect(filesToArtifacts([])).toEqual([])
   })
 })

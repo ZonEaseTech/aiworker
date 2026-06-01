@@ -2,10 +2,12 @@
  * Minimal broker client for the mounted SDK common workbench (方案 C).
  *
  * The workbench talks to the worker daemon broker over same-origin HTTP using the
- * locator-injected session id. It owns only the calls the chat surface needs:
- * submitting a session-level follow-up invocation and locating the invocation's
- * SSE event stream (consumed via EventSource in the browser).
+ * locator-injected session/workspace ids. It owns only the calls the chat surface
+ * needs: submitting a session-level follow-up invocation, locating the invocation's
+ * SSE event stream (consumed via EventSource), and listing workspace artifacts.
  */
+
+import type { WorkbenchFile } from './transcript-mapper'
 
 export interface SubmitInvocationResult {
   invocationId: string
@@ -14,6 +16,21 @@ export interface SubmitInvocationResult {
 /** Path of the invocation-scoped SSE event stream (US-005 text/event-stream). */
 export function invocationEventStreamPath(invocationId: string): string {
   return `/api/engine/invocations/${invocationId}/events`
+}
+
+/**
+ * List the workspace's files for the mounted artifacts surface. Workspace-scoped
+ * because session artifacts live in the workspace, not on a single invocation.
+ */
+export async function fetchWorkspaceFiles(
+  workspaceId: string,
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<WorkbenchFile[]> {
+  const response = await fetchImpl(`/api/workspace-locators/${workspaceId}/files`)
+  if (!response.ok)
+    throw new Error(`fetchWorkspaceFiles failed: ${response.status}`)
+  const body = await response.json() as { files?: unknown }
+  return Array.isArray(body.files) ? body.files as WorkbenchFile[] : []
 }
 
 /**

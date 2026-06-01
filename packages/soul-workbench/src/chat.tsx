@@ -1,10 +1,13 @@
+import type { TranscriptArtifactModel } from '@zonease/aiworker-ui/components/transcript-types'
 import type { WorkbenchBridgeEvent } from './transcript-mapper'
+
+import { ArtifactStrip } from '@zonease/aiworker-ui/components/artifact-strip'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { ChatThread } from '@zonease/aiworker-ui/components/chat-thread'
-
 import { useCallback, useEffect, useState } from 'react'
-import { invocationEventStreamPath, submitInvocation } from './broker-client'
-import { bridgeEventsToTranscriptTurns, withUserMessageTurn } from './transcript-mapper'
+
+import { fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
+import { bridgeEventsToTranscriptTurns, filesToArtifacts, withUserMessageTurn } from './transcript-mapper'
 
 /**
  * Chat surface for the mounted SDK common workbench (方案 C).
@@ -14,13 +17,15 @@ import { bridgeEventsToTranscriptTurns, withUserMessageTurn } from './transcript
  * transcript consumes that invocation's events over the US-005 SSE endpoint via
  * EventSource. Each streamed normalized bridge event is mapped
  * (bridgeEventsToTranscriptTurns) into packages/ui transcript turns and rendered
- * with the shared ChatThread. Session artifacts layer on in a later slice.
+ * with the shared ChatThread. Workspace files render as session artifacts via
+ * ArtifactStrip (fetched workspace-scoped, refreshed after each invocation).
  */
-export function WorkbenchChat({ sessionId }: { sessionId: null | string }) {
+export function WorkbenchChat({ sessionId, workspaceId }: { sessionId: null | string, workspaceId: null | string }) {
   const [input, setInput] = useState('')
   const [activeInvocationId, setActiveInvocationId] = useState<null | string>(null)
   const [submittedInput, setSubmittedInput] = useState('')
   const [streamedEvents, setStreamedEvents] = useState<WorkbenchBridgeEvent[]>([])
+  const [artifacts, setArtifacts] = useState<TranscriptArtifactModel[]>([])
   const [error, setError] = useState<null | string>(null)
 
   const onSubmit = useCallback(async () => {
@@ -61,6 +66,24 @@ export function WorkbenchChat({ sessionId }: { sessionId: null | string }) {
     return () => source.close()
   }, [activeInvocationId])
 
+  useEffect(() => {
+    if (!workspaceId)
+      return undefined
+    let cancelled = false
+    fetchWorkspaceFiles(workspaceId)
+      .then((files) => {
+        if (!cancelled)
+          setArtifacts(filesToArtifacts(files))
+      })
+      .catch(() => {
+        // Artifacts are a best-effort surface; a failed fetch leaves them empty
+        // rather than tearing down the chat.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [workspaceId, activeInvocationId])
+
   const turns = withUserMessageTurn(
     bridgeEventsToTranscriptTurns(streamedEvents),
     activeInvocationId ?? '',
@@ -70,6 +93,7 @@ export function WorkbenchChat({ sessionId }: { sessionId: null | string }) {
   return (
     <section data-aiworker-chat="true">
       <ChatThread ariaLabel="Engine transcript" turns={turns} />
+      <ArtifactStrip artifacts={artifacts} />
       {error ? <p data-aiworker-chat-error="true">{error}</p> : null}
       <textarea
         aria-label="Engine input"

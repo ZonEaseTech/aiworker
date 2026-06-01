@@ -31,6 +31,7 @@ import {
   getWorkspace,
   initWorkerDb,
   listEngineInvocations,
+  listFiles,
   listSessionEvents,
   listSessions,
   listWorkerConfigValues,
@@ -469,6 +470,14 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     if (!workspace)
       return notFound(c, 'workspace')
     return c.json({ workspace })
+  })
+  app.get('/api/workspace-locators/:workspaceId/files', (c) => {
+    const workspace = getWorkspace(c.req.param('workspaceId'))
+    if (!workspace)
+      return notFound(c, 'workspace')
+    // Workspace-scoped files back the mounted workbench artifacts surface (session
+    // artifacts live in the workspace, not on a single invocation result).
+    return c.json(redactBrokerOutput({ files: listFiles(workspace.id) }))
   })
   app.patch('/api/workspace-locators/:workspaceId', async (c) => {
     const result = await parseJsonBody(c, patchWorkspaceBodySchema, 'PATCH_WORKSPACE_LOCATOR_INVALID')

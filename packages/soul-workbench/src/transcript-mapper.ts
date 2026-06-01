@@ -1,5 +1,6 @@
 import type {
   TranscriptActivityModel,
+  TranscriptArtifactModel,
   TranscriptItemModel,
   TranscriptTurnModel,
 } from '@zonease/aiworker-ui/components/transcript-types'
@@ -126,4 +127,33 @@ export function withUserMessageTurn(
   if (turns.some(turn => turn.id === invocationId))
     return turns.map(turn => (turn.id === invocationId ? { ...turn, items: [userItem, ...turn.items] } : turn))
   return [...turns, { id: invocationId, items: [userItem] }]
+}
+
+/** A workspace file as returned by `GET /api/workspace-locators/:id/files`. */
+export interface WorkbenchFile {
+  id?: string
+  kind?: string
+  path?: string
+  size?: null | number
+}
+
+function artifactTitle(path: string): string {
+  const segments = path.split('/').filter(segment => segment.length > 0)
+  return segments.at(-1) ?? path
+}
+
+/**
+ * Map workspace files into packages/ui artifact models for the mounted artifacts
+ * surface. Session artifacts are a workspace dimension (the invocation result never
+ * carries files), so they are fetched workspace-scoped and rendered via ArtifactStrip.
+ */
+export function filesToArtifacts(files: WorkbenchFile[]): TranscriptArtifactModel[] {
+  return files.map((file) => {
+    const path = readString(file.path)
+    return {
+      description: readString(file.kind) || 'file',
+      id: readString(file.id) || path,
+      title: artifactTitle(path),
+    }
+  })
 }

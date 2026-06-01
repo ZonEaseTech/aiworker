@@ -7,7 +7,7 @@ import { join } from 'node:path'
 
 import { chromium } from 'playwright'
 import { namespaceSoulAppCapabilityId } from '../../packages/soul-protocol/src/index'
-import { closeWorkerDb, createEngineInvocation, initWorkerDb } from '../../packages/storage-sqlite/src/worker/index'
+import { closeWorkerDb, createEngineInvocation, initWorkerDb, upsertFile } from '../../packages/storage-sqlite/src/worker/index'
 import { MOUNT_TIMEOUT_MS } from './mount-wait'
 
 const repoRoot = join(import.meta.dir, '..', '..')
@@ -98,6 +98,7 @@ try {
     throw new Error(`Follow-up did not use session-level invocation inputRef: ${JSON.stringify(followUpResult.invocation)}`)
 
   seedInvocationsForBrowserEngineActions(sessionResult.session.id)
+  seedWorkspaceArtifactFile(workspaceResult.workspace.id)
 
   const port = reservePort()
   daemon = Bun.spawn({
@@ -251,6 +252,28 @@ try {
   if (transcriptTurnText === null || !transcriptTurnText.includes(composerMessage))
     throw new Error(`Mounted workbench ChatThread did not render the composer's user message in a transcript turn. got=${JSON.stringify(transcriptTurnText)}`)
 
+  // The seeded workspace file renders as a session artifact in the mounted
+  // ArtifactStrip. Both `data-transcript-slot="artifact-strip"` and the file name
+  // are live-only — they appear only when the workbench fetched workspace files
+  // (GET /api/workspace-locators/:id/files) and mapped them through filesToArtifacts.
+  const artifactStripText = await page.evaluate(async () => {
+    const deadline = Date.now() + 8000
+    let lastText: null | string = null
+    while (Date.now() < deadline) {
+      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
+      const strip = document.querySelector('[data-transcript-slot="artifact-strip"]') ?? micro?.shadowRoot?.querySelector('[data-transcript-slot="artifact-strip"]')
+      if (strip) {
+        lastText = (strip.textContent ?? '').trim()
+        if (lastText.includes('report.md'))
+          return lastText
+      }
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    return lastText
+  })
+  if (artifactStripText === null || !artifactStripText.includes('report.md'))
+    throw new Error(`Mounted workbench ArtifactStrip did not render the seeded workspace artifact. got=${JSON.stringify(artifactStripText)}`)
+
   assertNoUnexpectedBrowserEvents(browserEvents)
 
   const projectionRefreshProof = await readProjectionRefreshProofFromBrowser(page, workerId, workspaceResult.workspace.id)
@@ -361,6 +384,18 @@ function seedInvocationsForBrowserEngineActions(sessionId: string): void {
       sessionId,
       status: 'running',
     })
+  }
+  finally {
+    closeWorkerDb()
+  }
+}
+
+function seedWorkspaceArtifactFile(workspaceId: string): void {
+  // Session artifacts are a workspace dimension (the invocation result never
+  // carries files), so seed a workspace file the mounted ArtifactStrip will render.
+  initWorkerDb(dbPath)
+  try {
+    upsertFile({ id: 'workbench-artifact-report', kind: 'generated', path: 'output/report.md', size: 128, source: 'session', workspaceId })
   }
   finally {
     closeWorkerDb()

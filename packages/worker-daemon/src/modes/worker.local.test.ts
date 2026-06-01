@@ -20,6 +20,7 @@ import {
   listSessionEvents,
   listSettings,
   runWorkerMigrations,
+  upsertFile,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
@@ -1686,6 +1687,24 @@ describe('local daemon API', () => {
       headers: { 'accept': 'text/event-stream', 'last-event-id': String(lastEvent.id) },
     })
     expect(res.status).toBe(204)
+  })
+
+  it('lists workspace files for the mounted artifacts surface', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { workspace } = await createWorkspaceAndSession(target, worker.id)
+    upsertFile({ id: 'artifact-file-1', kind: 'generated', path: 'output/report.md', size: 42, source: 'session', workspaceId: workspace.id })
+
+    const res = await target.request(`/api/workspace-locators/${workspace.id}/files`)
+
+    expect(res.status).toBe(200)
+    const body = await res.json() as { files: Array<{ id: string, kind: string, path: string }> }
+    expect(body.files).toEqual([expect.objectContaining({ id: 'artifact-file-1', kind: 'generated', path: 'output/report.md' })])
+  })
+
+  it('returns 404 listing files for an unknown workspace', async () => {
+    const target = await app()
+    expect((await target.request('/api/workspace-locators/missing-workspace/files')).status).toBe(404)
   })
 
   it('redacts legacy secret-like diagnostics from broker read responses', async () => {
