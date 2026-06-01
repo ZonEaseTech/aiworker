@@ -17,5 +17,15 @@ export default defineConfig({
   build: {
     outDir: workbenchDist,
     emptyOutDir: true,
+    // Stable, content-hash-free asset names: a Soul's committed
+    // dist/web/workbench/index.html references these, so a non-deterministic hash
+    // would churn the tracked file on every build.
+    rollupOptions: {
+      output: {
+        assetFileNames: 'assets/[name][extname]',
+        chunkFileNames: 'assets/[name].js',
+        entryFileNames: 'assets/[name].js',
+      },
+    },
   },
 })
