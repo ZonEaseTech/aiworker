@@ -56,6 +56,7 @@ import {
   soulAppServiceEnv,
   workerEnv,
 } from '@zonease/aiworker-worker-runtime'
+import { streamSSE } from 'hono/streaming'
 
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
@@ -587,7 +588,13 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const after = readNonNegativeInteger(c.req.query('after') ?? c.req.header('last-event-id'), 0)
     const limit = readPositiveInteger(c.req.query('limit'), 500)
     const session = requireSession(invocation.sessionId)
-    return c.json(redactBrokerOutput(await requireRuntime(state, session.workerId).reattachEngineInvocationEvents(invocation.id, { after, limit })))
+    const runtime = requireRuntime(state, session.workerId)
+    // text/event-stream consumers (EventSource in the mounted workbench) get a live
+    // SSE tail; everyone else keeps the snapshot JSON. Both reuse the same
+    // reattach + redaction so SSE frames never leak what JSON would not.
+    if ((c.req.header('accept') ?? '').includes('text/event-stream'))
+      return streamEngineInvocationEvents(c, runtime, invocation.id, after)
+    return c.json(redactBrokerOutput(await runtime.reattachEngineInvocationEvents(invocation.id, { after, limit })))
   })
   app.post('/api/engine/invocations/:invocationId/cancel', async (c) => {
     const invocation = getEngineInvocation(c.req.param('invocationId'))
@@ -950,6 +957,70 @@ function workerConfigResponse(workerId: string) {
 
 function sessionInvocations(sessionId: string) {
   return listEngineInvocations(sessionId).sort((left, right) => left.seq - right.seq)
+}
+
+const ENGINE_TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'lost'])
+
+// Stream an invocation's bridge events as text/event-stream frames. Replays
+// everything past the resume cursor, then — if the invocation is still running —
+// tails the runtime event bus until it reaches a terminal status. Each frame's
+// `id` is the session-event id so EventSource resumes via Last-Event-ID, and a
+// final `done` frame carries the next cursor. Reuses redactBrokerOutput so SSE
+// never exposes secrets the JSON snapshot would redact.
+function streamEngineInvocationEvents(
+  c: Context,
+  runtime: LocalWorkerRuntime,
+  invocationId: string,
+  after: number,
+) {
+  return streamSSE(c, async (stream) => {
+    let cursor = after
+    const flush = async (): Promise<string> => {
+      const snapshot = redactBrokerOutput(
+        await runtime.reattachEngineInvocationEvents(invocationId, { after: cursor }),
+      ) as { bridgeEvents?: Array<Record<string, unknown>>, invocation?: { status?: string }, nextAfter?: number }
+      for (const bridgeEvent of snapshot.bridgeEvents ?? []) {
+        await stream.writeSSE({
+          data: JSON.stringify(bridgeEvent),
+          event: typeof bridgeEvent.type === 'string' ? bridgeEvent.type : 'event',
+          id: String(readNonNegativeInteger(bridgeEvent.id, cursor)),
+        })
+      }
+      cursor = readNonNegativeInteger(snapshot.nextAfter, cursor)
+      return typeof snapshot.invocation?.status === 'string' ? snapshot.invocation.status : ''
+    }
+    const close = () => stream.writeSSE({ data: String(cursor), event: 'done' })
+    if (ENGINE_TERMINAL_STATUSES.has(await flush())) {
+      await close()
+      return
+    }
+    // Still running: tail the bus until terminal. Serialise flushes via a promise
+    // chain so concurrent emits cannot double-send the same events.
+    await new Promise<void>((resolve) => {
+      let pending = Promise.resolve()
+      let settled = false
+      const finish = (unsubscribe: () => void) => {
+        if (settled)
+          return
+        settled = true
+        unsubscribe()
+        resolve()
+      }
+      const unsubscribe = runtime.bus.subscribe((event) => {
+        if (event.invocationId !== invocationId)
+          return
+        pending = pending.then(async () => {
+          if (settled)
+            return
+          if (ENGINE_TERMINAL_STATUSES.has(await flush())) {
+            await close()
+            finish(unsubscribe)
+          }
+        })
+      })
+      c.req.raw.signal.addEventListener('abort', () => finish(unsubscribe))
+    })
+  })
 }
 
 function redactBrokerOutput<T>(value: T): T {

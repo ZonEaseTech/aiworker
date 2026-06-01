@@ -65,6 +65,34 @@ const freeformDescriptor = parseSoulDescriptorV1({
   },
 })
 
+// Parse a text/event-stream body into frames, tolerant of field order and
+// multi-line data. Each frame is separated by a blank line.
+function parseSseFrames(body: string): Array<{ data: string, event?: string, id?: string }> {
+  return body
+    .split('\n\n')
+    .map(block => block.trim())
+    .filter(block => block.length > 0)
+    .map((block) => {
+      const dataLines: string[] = []
+      const frame: { data: string, event?: string, id?: string } = { data: '' }
+      for (const line of block.split('\n')) {
+        const idx = line.indexOf(':')
+        if (idx < 0)
+          continue
+        const field = line.slice(0, idx)
+        const value = line.slice(idx + 1).replace(/^ /, '')
+        if (field === 'data')
+          dataLines.push(value)
+        else if (field === 'event')
+          frame.event = value
+        else if (field === 'id')
+          frame.id = value
+      }
+      frame.data = dataLines.join('\n')
+      return frame
+    })
+}
+
 describe('local daemon API', () => {
   let dir: string
   let originalPath: string | undefined
@@ -1567,6 +1595,71 @@ describe('local daemon API', () => {
       invocationId: invocation.id,
       nextAfter: secondEvent.id,
     })
+  })
+
+  it('streams invocation events as SSE frames with the same redacted bridge events as JSON', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+    const invocation = createEngineInvocation({
+      id: 'daemon-sse-invocation-1',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-sse-invocation-1/input`,
+      status: 'succeeded',
+    })
+    const firstEvent = appendSessionEvent({ invocationId: invocation.id, payloadJson: { index: 1 }, seq: 1, sessionId: session.id, type: 'status' })
+    const secondEvent = appendSessionEvent({ invocationId: invocation.id, payloadJson: { index: 2 }, seq: 2, sessionId: session.id, type: 'status' })
+
+    // JSON endpoint provides the redaction reference (the bridge events the SSE
+    // frames must carry verbatim — proves SSE reuses the same redaction).
+    const jsonBody = await (await target.request(`/api/engine/invocations/${invocation.id}/events`)).json() as {
+      bridgeEvents: Array<Record<string, unknown>>
+      nextAfter: number
+    }
+
+    const sseRes = await target.request(`/api/engine/invocations/${invocation.id}/events`, {
+      headers: { accept: 'text/event-stream' },
+    })
+    expect(sseRes.status).toBe(200)
+    expect(sseRes.headers.get('content-type')).toContain('text/event-stream')
+    const body = await sseRes.text()
+    const frames = parseSseFrames(body)
+    const dataFrames = frames.filter(f => f.event !== 'done')
+    // one SSE frame per bridge event, carrying the JSON-identical redacted payload,
+    // with the session-event id as the SSE id so EventSource can resume from it.
+    expect(dataFrames.map(f => JSON.parse(f.data))).toEqual(jsonBody.bridgeEvents)
+    expect(dataFrames.map(f => f.id)).toEqual([String(firstEvent.id), String(secondEvent.id)])
+    // a terminal invocation closes the stream with a done frame carrying the cursor.
+    const doneFrame = frames.find(f => f.event === 'done')
+    expect(doneFrame?.data).toBe(String(jsonBody.nextAfter))
+  })
+
+  it('resumes the SSE stream from Last-Event-ID', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target)
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+    const invocation = createEngineInvocation({
+      id: 'daemon-sse-invocation-2',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-sse-invocation-2/input`,
+      status: 'succeeded',
+    })
+    const firstEvent = appendSessionEvent({ invocationId: invocation.id, payloadJson: { index: 1 }, seq: 1, sessionId: session.id, type: 'status' })
+    const secondEvent = appendSessionEvent({ invocationId: invocation.id, payloadJson: { index: 2 }, seq: 2, sessionId: session.id, type: 'status' })
+
+    const sseRes = await target.request(`/api/engine/invocations/${invocation.id}/events`, {
+      headers: { 'accept': 'text/event-stream', 'last-event-id': String(firstEvent.id) },
+    })
+    const dataFrames = parseSseFrames(await sseRes.text()).filter(f => f.event !== 'done')
+    // resume delivers only events after the cursor.
+    expect(dataFrames.map(f => f.id)).toEqual([String(secondEvent.id)])
+    expect(dataFrames.map(f => (JSON.parse(f.data) as { id: number }).id)).toEqual([secondEvent.id])
   })
 
   it('redacts legacy secret-like diagnostics from broker read responses', async () => {
