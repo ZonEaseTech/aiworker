@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
+import { fetchWorkerConfig, fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
 
 describe('broker-client', () => {
   it('POSTs a session-level invocation and returns the new invocation id', async () => {
@@ -45,5 +45,19 @@ describe('broker-client', () => {
   it('throws when the workspace files request fails', async () => {
     const fetchImpl = (async () => new Response('nope', { status: 404 })) as unknown as typeof fetch
     await expect(fetchWorkspaceFiles('ws-1', fetchImpl)).rejects.toThrow()
+  })
+
+  it('reads worker config values from the config response', async () => {
+    const calls: string[] = []
+    const fetchImpl = (async (url: string) => {
+      calls.push(url)
+      return new Response(JSON.stringify({ config: { values: [{ configKey: 'engine-selection', source: 'web', value: { kind: 'engine-selection' } }] }, workerId: 'w-1' }), {
+        headers: { 'content-type': 'application/json' },
+        status: 200,
+      })
+    }) as unknown as typeof fetch
+
+    expect(await fetchWorkerConfig('w-1', fetchImpl)).toEqual([{ configKey: 'engine-selection', source: 'web', value: { kind: 'engine-selection' } }])
+    expect(calls).toEqual(['/api/workers/w-1/config'])
   })
 })

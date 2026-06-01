@@ -7,6 +7,7 @@
  * SSE event stream (consumed via EventSource), and listing workspace artifacts.
  */
 
+import type { WorkerConfigValue } from './config-mapper'
 import type { WorkbenchFile } from './transcript-mapper'
 
 export interface SubmitInvocationResult {
@@ -31,6 +32,18 @@ export async function fetchWorkspaceFiles(
     throw new Error(`fetchWorkspaceFiles failed: ${response.status}`)
   const body = await response.json() as { files?: unknown }
   return Array.isArray(body.files) ? body.files as WorkbenchFile[] : []
+}
+
+/** Read the worker's configuration values for the mounted configuration modules. */
+export async function fetchWorkerConfig(
+  workerId: string,
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<WorkerConfigValue[]> {
+  const response = await fetchImpl(`/api/workers/${workerId}/config`)
+  if (!response.ok)
+    throw new Error(`fetchWorkerConfig failed: ${response.status}`)
+  const body = await response.json() as { config?: { values?: unknown } }
+  return Array.isArray(body.config?.values) ? body.config.values as WorkerConfigValue[] : []
 }
 
 /**
