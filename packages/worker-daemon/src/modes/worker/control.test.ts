@@ -86,6 +86,21 @@ describe('worker-daemon control contract endpoints', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'WORKER_NOT_FOUND' } })
   })
 
+  it('standalone discovery chain: /api/control/worker → configMicroAppEntry mounts without Host', async () => {
+    const target = await app()
+    await createFreeformWorker(target, 'standalone-worker')
+    // 1. 控制契约自描述:standalone client 无先验地发现 workerId + 配置 micro-app 入口
+    const describeRes = await target.request('/api/control/worker')
+    expect(describeRes.status).toBe(200)
+    const describe = parseWorkerDescribe(await describeRes.json())
+    expect(describe.workerId).toBe('standalone-worker')
+    expect(describe.configMicroAppEntry).toContain('/api/mount/workbench')
+    // 2. 用发现到的 workerId + configMicroAppEntry mount 配置 micro-app(无 Host 参与)
+    const mountRes = await target.request(`${describe.configMicroAppEntry}?workerId=${describe.workerId}`)
+    expect(mountRes.status).toBe(200)
+    expect(await mountRes.json()).toMatchObject({ routerMode: 'search', mount: { appId: FREEFORM_APP_ID } })
+  })
+
   it('PUT /api/control/assignment accepts a valid envelope', async () => {
     const target = await app()
     await createFreeformWorker(target, 'control-worker')

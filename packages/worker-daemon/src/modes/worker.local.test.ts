@@ -1,4 +1,4 @@
-import type { LocalWorkerRuntimeOptions } from '@zonease/aiworker-worker-runtime'
+import type { LocalExecutor, LocalWorkerRuntimeOptions } from '@zonease/aiworker-worker-runtime'
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -880,17 +880,18 @@ describe('local daemon API', () => {
   })
 
   it('bootstrap fails fast when the DB holds more than one active worker', async () => {
+    const noopExecutor: LocalExecutor = {
+      async invoke(input) {
+        input.onEvent?.({ kind: 'text', text: 'done' })
+        return { artifacts: [], summary: 'done' }
+      },
+    }
     const bootOptions = {
       dbPath: join(dir, 'worker.db'),
-      executor: {
-        async invoke(input: { onEvent?: (event: { kind: string, text: string }) => void }) {
-          input.onEvent?.({ kind: 'text', text: 'done' })
-          return { artifacts: [], summary: 'done' }
-        },
-      },
+      executor: noopExecutor,
       runtimeVersion: 'test',
       workersRoot: join(dir, 'workers'),
-    } satisfies Parameters<typeof bootstrapWorkerApp>[0]
+    }
     await bootstrapWorkerApp(bootOptions)
     upsertWorker({ id: 'dirty-a', appId: FREEFORM_APP_ID, name: 'A', status: 'active' })
     upsertWorker({ id: 'dirty-b', appId: FREEFORM_APP_ID, name: 'B', status: 'active' })
