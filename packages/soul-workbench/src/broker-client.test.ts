@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { fetchEngineTargets, fetchWorkerConfig, fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
+import { fetchEngineTargets, fetchWorkerConfig, fetchWorkerOverlay, fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
 
 describe('broker-client', () => {
   it('POSTs a session-level invocation and returns the new invocation id', async () => {
@@ -73,5 +73,19 @@ describe('broker-client', () => {
 
     expect(await fetchEngineTargets(fetchImpl)).toEqual([{ id: 'codex', installed: true, name: 'Codex' }])
     expect(calls).toEqual(['/api/engine/targets'])
+  })
+
+  it('reads worker overlay assets from the config response', async () => {
+    const calls: string[] = []
+    const fetchImpl = (async (url: string) => {
+      calls.push(url)
+      return new Response(JSON.stringify({ overlay: { assets: [{ enabled: true, id: 'freeform-session', kind: 'skill' }], workerId: 'w-1' } }), {
+        headers: { 'content-type': 'application/json' },
+        status: 200,
+      })
+    }) as unknown as typeof fetch
+
+    expect(await fetchWorkerOverlay('w-1', fetchImpl)).toEqual([{ enabled: true, id: 'freeform-session', kind: 'skill' }])
+    expect(calls).toEqual(['/api/workers/w-1/config'])
   })
 })

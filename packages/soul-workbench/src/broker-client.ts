@@ -7,7 +7,7 @@
  * SSE event stream (consumed via EventSource), and listing workspace artifacts.
  */
 
-import type { EngineTarget, WorkerConfigValue } from './config-mapper'
+import type { EngineTarget, WorkerConfigValue, WorkerOverlayAsset } from './config-mapper'
 import type { WorkbenchFile } from './transcript-mapper'
 
 export interface SubmitInvocationResult {
@@ -55,6 +55,21 @@ export async function fetchEngineTargets(
     throw new Error(`fetchEngineTargets failed: ${response.status}`)
   const body = await response.json() as { engines?: unknown }
   return Array.isArray(body.engines) ? body.engines as EngineTarget[] : []
+}
+
+/**
+ * Read the worker's overlay assets (skills / MCP clients / entry files) from the
+ * worker-config response for the mounted overlay modules.
+ */
+export async function fetchWorkerOverlay(
+  workerId: string,
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<WorkerOverlayAsset[]> {
+  const response = await fetchImpl(`/api/workers/${workerId}/config`)
+  if (!response.ok)
+    throw new Error(`fetchWorkerOverlay failed: ${response.status}`)
+  const body = await response.json() as { overlay?: { assets?: unknown } }
+  return Array.isArray(body.overlay?.assets) ? body.overlay.assets as WorkerOverlayAsset[] : []
 }
 
 /**

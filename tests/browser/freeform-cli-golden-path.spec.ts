@@ -323,6 +323,32 @@ try {
   if (engineRowText === null || !isInstalled(engineRowText))
     throw new Error(`Mounted workbench engine-target readiness did not render the rescanned codex engine as installed. got=${JSON.stringify(engineRowText)}`)
 
+  // The Freeform descriptor's baseline overlay assets (skill / mcp-client /
+  // entry-file) render in the mounted skills/mcp/entry sections. Each
+  // `data-aiworker-config` overlay section is live-only — it renders only when the
+  // workbench fetched the worker overlay and selectOverlayAssets found assets of
+  // that kind (the sections hide themselves when empty).
+  const overlaySections = await page.evaluate(async () => {
+    const configs = ['skills-overlay', 'mcp-overlay', 'entry-files']
+    const deadline = Date.now() + 8000
+    let present: string[] = []
+    while (Date.now() < deadline) {
+      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
+      const find = (config: string) =>
+        document.querySelector(`[data-aiworker-config="${config}"] [data-aiworker-overlay-asset]`)
+        ?? micro?.shadowRoot?.querySelector(`[data-aiworker-config="${config}"] [data-aiworker-overlay-asset]`)
+      present = configs.filter(config => find(config))
+      if (present.length === configs.length)
+        return present
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    return present
+  })
+  for (const config of ['skills-overlay', 'mcp-overlay', 'entry-files']) {
+    if (!overlaySections.includes(config))
+      throw new Error(`Mounted workbench overlay module '${config}' rendered no baseline asset. rendered=${JSON.stringify(overlaySections)}`)
+  }
+
   assertNoUnexpectedBrowserEvents(browserEvents)
 
   const projectionRefreshProof = await readProjectionRefreshProofFromBrowser(page, workerId, workspaceResult.workspace.id)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { summarizeEngineTargets, summarizeWorkerConfig } from './config-mapper'
+import { selectOverlayAssets, summarizeEngineTargets, summarizeWorkerConfig } from './config-mapper'
 
 describe('summarizeWorkerConfig', () => {
   it('summarizes config values by key, kind, enabled flag and source', () => {
@@ -43,5 +43,24 @@ describe('summarizeEngineTargets', () => {
 
   it('returns an empty list for no engines', () => {
     expect(summarizeEngineTargets([])).toEqual([])
+  })
+})
+
+describe('selectOverlayAssets', () => {
+  const assets = [
+    { enabled: true, id: 'freeform-session', kind: 'skill', target: 'codex' },
+    { enabled: true, id: 'codex', kind: 'mcp-client', target: 'codex' },
+    { enabled: false, id: 'AGENTS.md', kind: 'entry-file', target: '' },
+  ]
+
+  it('selects overlay asset rows for the requested kind', () => {
+    expect(selectOverlayAssets(assets, 'skill')).toEqual([{ enabled: true, id: 'freeform-session', target: 'codex' }])
+    expect(selectOverlayAssets(assets, 'mcp-client')).toEqual([{ enabled: true, id: 'codex', target: 'codex' }])
+    expect(selectOverlayAssets(assets, 'entry-file')).toEqual([{ enabled: false, id: 'AGENTS.md', target: '' }])
+  })
+
+  it('returns an empty list when no asset matches the kind', () => {
+    expect(selectOverlayAssets(assets, 'native-mcp-file')).toEqual([])
+    expect(selectOverlayAssets([], 'skill')).toEqual([])
   })
 })

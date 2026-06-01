@@ -61,3 +61,31 @@ export function summarizeEngineTargets(engines: EngineTarget[]): EngineReadiness
     name: readString(engine.name) || readString(engine.id),
   }))
 }
+
+export interface WorkerOverlayAsset {
+  enabled?: unknown
+  id?: string
+  kind?: string
+  target?: string
+}
+
+export interface OverlayAssetRow {
+  enabled: boolean
+  id: string
+  target: string
+}
+
+/**
+ * Select the worker overlay assets of one kind (`skill` / `mcp-client` /
+ * `entry-file`) from the worker-config `overlay.assets` for the skills, MCP and
+ * entry-files modules. Read-only.
+ */
+export function selectOverlayAssets(assets: WorkerOverlayAsset[], kind: string): OverlayAssetRow[] {
+  return assets
+    .filter(asset => asset.kind === kind)
+    .map(asset => ({
+      enabled: asset.enabled === true,
+      id: readString(asset.id),
+      target: readString(asset.target),
+    }))
+}
