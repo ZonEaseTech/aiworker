@@ -20,7 +20,9 @@ describe('AsyncLock', () => {
 
   it('releases the lock even if the critical section throws', async () => {
     const lock = new AsyncLock()
-    await expect(lock.run(async () => { throw new Error('boom') })).rejects.toThrow('boom')
+    await expect(lock.run(async () => {
+      throw new Error('boom')
+    })).rejects.toThrow('boom')
     const ok = await lock.run(async () => 'recovered')
     expect(ok).toBe('recovered')
   })
