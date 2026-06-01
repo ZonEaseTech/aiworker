@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { summarizeWorkerConfig } from './config-mapper'
+import { summarizeEngineTargets, summarizeWorkerConfig } from './config-mapper'
 
 describe('summarizeWorkerConfig', () => {
   it('summarizes config values by key, kind, enabled flag and source', () => {
@@ -21,5 +21,27 @@ describe('summarizeWorkerConfig', () => {
 
   it('returns an empty list for no values', () => {
     expect(summarizeWorkerConfig([])).toEqual([])
+  })
+})
+
+describe('summarizeEngineTargets', () => {
+  it('summarizes engine targets by id, name and installed flag', () => {
+    expect(summarizeEngineTargets([
+      { id: 'codex', installed: true, name: 'Codex', version: '1.2.3' },
+      { id: 'claude', installed: false, name: 'Claude Code' },
+    ])).toEqual([
+      { id: 'codex', installed: true, name: 'Codex' },
+      { id: 'claude', installed: false, name: 'Claude Code' },
+    ])
+  })
+
+  it('falls back to the id for a missing name and treats a missing installed flag as false', () => {
+    expect(summarizeEngineTargets([{ id: 'codex' }])).toEqual([
+      { id: 'codex', installed: false, name: 'codex' },
+    ])
+  })
+
+  it('returns an empty list for no engines', () => {
+    expect(summarizeEngineTargets([])).toEqual([])
   })
 })

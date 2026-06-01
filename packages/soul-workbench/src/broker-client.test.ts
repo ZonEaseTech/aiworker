@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { fetchWorkerConfig, fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
+import { fetchEngineTargets, fetchWorkerConfig, fetchWorkspaceFiles, invocationEventStreamPath, submitInvocation } from './broker-client'
 
 describe('broker-client', () => {
   it('POSTs a session-level invocation and returns the new invocation id', async () => {
@@ -59,5 +59,19 @@ describe('broker-client', () => {
 
     expect(await fetchWorkerConfig('w-1', fetchImpl)).toEqual([{ configKey: 'engine-selection', source: 'web', value: { kind: 'engine-selection' } }])
     expect(calls).toEqual(['/api/workers/w-1/config'])
+  })
+
+  it('reads engine targets from the engine settings response', async () => {
+    const calls: string[] = []
+    const fetchImpl = (async (url: string) => {
+      calls.push(url)
+      return new Response(JSON.stringify({ engines: [{ id: 'codex', installed: true, name: 'Codex' }] }), {
+        headers: { 'content-type': 'application/json' },
+        status: 200,
+      })
+    }) as unknown as typeof fetch
+
+    expect(await fetchEngineTargets(fetchImpl)).toEqual([{ id: 'codex', installed: true, name: 'Codex' }])
+    expect(calls).toEqual(['/api/engine/targets'])
   })
 })

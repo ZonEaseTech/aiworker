@@ -121,6 +121,9 @@ try {
   const health = await waitForHealth(baseUrl)
   const mountProof = await fetchJson(`${baseUrl}/api/mount/workbench?workerId=${workerId}&workspaceId=${workspaceResult.workspace.id}&sessionId=${sessionResult.session.id}&theme=light`)
   await writeEvidence('mount-proof.json', mountProof)
+  // Populate engine targets before mount: the daemon's rescan scans the fake codex
+  // on PATH so the mounted engine-readiness module has a target to render.
+  await fetch(`${baseUrl}/api/engine/targets/rescan`, { method: 'POST' })
 
   browser = await chromium.launch({ headless: true })
   const page = await browser.newPage()
@@ -295,6 +298,30 @@ try {
   })
   if (configRowText === null || !configRowText.includes('engine-selection'))
     throw new Error(`Mounted workbench configuration summary did not render the seeded worker config. got=${JSON.stringify(configRowText)}`)
+
+  // The rescanned codex engine renders in the mounted engine-readiness module.
+  // `data-aiworker-engine-target="codex"` is live-only — it appears only when the
+  // workbench fetched engine targets (GET /api/engine/targets) and mapped them
+  // through summarizeEngineTargets into a packages/ui row.
+  const isInstalled = (text: string) => text.includes('installed') && !text.includes('not installed')
+  const engineRowText = await page.evaluate(async () => {
+    const deadline = Date.now() + 8000
+    let lastText: null | string = null
+    while (Date.now() < deadline) {
+      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
+      const row = document.querySelector('[data-aiworker-engine-target="codex"]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-engine-target="codex"]')
+      if (row) {
+        const text = (row.textContent ?? '').trim()
+        lastText = text
+        if (text.includes('installed') && !text.includes('not installed'))
+          return text
+      }
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    return lastText
+  })
+  if (engineRowText === null || !isInstalled(engineRowText))
+    throw new Error(`Mounted workbench engine-target readiness did not render the rescanned codex engine as installed. got=${JSON.stringify(engineRowText)}`)
 
   assertNoUnexpectedBrowserEvents(browserEvents)
 

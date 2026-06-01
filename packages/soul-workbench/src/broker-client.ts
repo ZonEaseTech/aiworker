@@ -7,7 +7,7 @@
  * SSE event stream (consumed via EventSource), and listing workspace artifacts.
  */
 
-import type { WorkerConfigValue } from './config-mapper'
+import type { EngineTarget, WorkerConfigValue } from './config-mapper'
 import type { WorkbenchFile } from './transcript-mapper'
 
 export interface SubmitInvocationResult {
@@ -44,6 +44,17 @@ export async function fetchWorkerConfig(
     throw new Error(`fetchWorkerConfig failed: ${response.status}`)
   const body = await response.json() as { config?: { values?: unknown } }
   return Array.isArray(body.config?.values) ? body.config.values as WorkerConfigValue[] : []
+}
+
+/** Read the local engine targets for the mounted engine-readiness module. */
+export async function fetchEngineTargets(
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<EngineTarget[]> {
+  const response = await fetchImpl('/api/engine/targets')
+  if (!response.ok)
+    throw new Error(`fetchEngineTargets failed: ${response.status}`)
+  const body = await response.json() as { engines?: unknown }
+  return Array.isArray(body.engines) ? body.engines as EngineTarget[] : []
 }
 
 /**

@@ -1,20 +1,24 @@
-import type { WorkerConfigSummaryRow } from './config-mapper'
-import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
+import type { EngineReadinessRow, WorkerConfigSummaryRow } from './config-mapper'
 
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
 import { useEffect, useState } from 'react'
-import { fetchWorkerConfig } from './broker-client'
-import { summarizeWorkerConfig } from './config-mapper'
+
+import { fetchEngineTargets, fetchWorkerConfig } from './broker-client'
+import { summarizeEngineTargets, summarizeWorkerConfig } from './config-mapper'
 
 /**
  * Configuration modules for the mounted SDK common workbench (方案 C, US-007).
  *
- * Read-only worker configuration summary: reads the broker worker-config response
- * (`GET /api/workers/:id/config`) via the locator-injected worker id and renders
- * one packages/ui row per config key. Engine readiness and the skills/mcp/entry
- * overlays layer on here in later slices.
+ * Read-only configuration surface, one section per broker route:
+ * - worker-configuration-summary ← `GET /api/workers/:id/config` (locator worker id);
+ * - engine-target-readiness ← `GET /api/engine/targets` (daemon-global).
+ *
+ * Each section renders packages/ui rows and hides itself when empty. The
+ * skills/mcp/entry overlay sections layer on here in later slices.
  */
 export function WorkbenchConfig({ workerId }: { workerId: null | string }) {
-  const [rows, setRows] = useState<WorkerConfigSummaryRow[]>([])
+  const [configRows, setConfigRows] = useState<WorkerConfigSummaryRow[]>([])
+  const [engineRows, setEngineRows] = useState<EngineReadinessRow[]>([])
 
   useEffect(() => {
     if (!workerId)
@@ -23,30 +27,61 @@ export function WorkbenchConfig({ workerId }: { workerId: null | string }) {
     fetchWorkerConfig(workerId)
       .then((values) => {
         if (!cancelled)
-          setRows(summarizeWorkerConfig(values))
+          setConfigRows(summarizeWorkerConfig(values))
       })
       .catch(() => {
-        // The config summary is a best-effort read-only surface; a failed fetch
-        // leaves it empty rather than tearing down the workbench.
+        // Best-effort read-only surface; a failed fetch leaves it empty.
       })
     return () => {
       cancelled = true
     }
   }, [workerId])
 
-  if (rows.length === 0)
-    return null
+  useEffect(() => {
+    let cancelled = false
+    fetchEngineTargets()
+      .then((engines) => {
+        if (!cancelled)
+          setEngineRows(summarizeEngineTargets(engines))
+      })
+      .catch(() => {
+        // Best-effort read-only surface; a failed fetch leaves it empty.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
-    <ItemGroup data-aiworker-config="worker-configuration-summary">
-      {rows.map(row => (
-        <Item data-aiworker-config-key={row.configKey} key={row.configKey}>
-          <ItemContent>
-            <ItemTitle>{row.configKey}</ItemTitle>
-            <ItemDescription>{`${row.kind} · ${row.enabled ? 'enabled' : 'disabled'} · ${row.source}`}</ItemDescription>
-          </ItemContent>
-        </Item>
-      ))}
-    </ItemGroup>
+    <>
+      {configRows.length > 0
+        ? (
+            <ItemGroup data-aiworker-config="worker-configuration-summary">
+              {configRows.map(row => (
+                <Item data-aiworker-config-key={row.configKey} key={row.configKey}>
+                  <ItemContent>
+                    <ItemTitle>{row.configKey}</ItemTitle>
+                    <ItemDescription>{`${row.kind} · ${row.enabled ? 'enabled' : 'disabled'} · ${row.source}`}</ItemDescription>
+                  </ItemContent>
+                </Item>
+              ))}
+            </ItemGroup>
+          )
+        : null}
+      {engineRows.length > 0
+        ? (
+            <ItemGroup data-aiworker-config="engine-target-readiness">
+              {engineRows.map(row => (
+                <Item data-aiworker-engine-target={row.id} key={row.id}>
+                  <ItemContent>
+                    <ItemTitle>{row.name}</ItemTitle>
+                    <ItemDescription>{row.installed ? 'installed' : 'not installed'}</ItemDescription>
+                  </ItemContent>
+                </Item>
+              ))}
+            </ItemGroup>
+          )
+        : null}
+    </>
   )
 }

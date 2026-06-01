@@ -36,3 +36,28 @@ export function summarizeWorkerConfig(values: WorkerConfigValue[]): WorkerConfig
     source: readString(value.source) || 'unknown',
   }))
 }
+
+export interface EngineTarget {
+  id?: string
+  installed?: unknown
+  name?: string
+  version?: string
+}
+
+export interface EngineReadinessRow {
+  id: string
+  installed: boolean
+  name: string
+}
+
+/**
+ * Summarise local engine targets (`GET /api/engine/targets`) into readiness rows.
+ * Read-only — engine selection/mutation is a separate concern.
+ */
+export function summarizeEngineTargets(engines: EngineTarget[]): EngineReadinessRow[] {
+  return engines.map(engine => ({
+    id: readString(engine.id),
+    installed: engine.installed === true,
+    name: readString(engine.name) || readString(engine.id),
+  }))
+}
