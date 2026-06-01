@@ -75,6 +75,30 @@ Host must not own session, invocation, projection, engine processes, domain
 state, or secrets. A Worker must not depend on Host to run. Worker packages must
 not import Host packages.
 
+## Daemon Topology (daemon-per-worker)
+
+A Worker daemon hosts at most one active Worker. The fleet is N worker daemon
+processes, each with its own storage root; an optional Host control plane brokers
+across worker endpoints by endpoint. A Worker daemon carries zero fleet/Host
+awareness: it is a passive control server, and Host is the active client that
+discovers and connects in. The Worker never registers with or pushes to Host.
+`worker-*` packages must not import `host-*` packages — a runtime direction rule,
+not only a build-time dependency rule.
+
+The fleet is a plug-in shell layered from outside; the Worker stays pure. Fleet
+membership state lives entirely on the Host side. Plugging a Worker into a fleet
+means Host learns its endpoint from out-of-band configuration; unplugging means
+Host forgets the endpoint while the Worker keeps running standalone. The Worker
+binary and behavior do not change whether a fleet is present or absent. The
+`workerId` is the Worker's own minted identity, not a fleet-imposed handle.
+
+Phase 1 scope: the standalone single-daemon path is complete and usable — one
+daemon is one Worker with its own CLI, web, and configuration micro-app. Fleet
+brokering (Host endpoint registry persistence and endpoint discovery) is Phase 2
+and not yet available; an in-memory registry without endpoint discovery means the
+fleet is not yet operable. This is a self-consistent intermediate state only
+because this document says so.
+
 ## Monorepo Boundary
 
 The target top-level shape is:

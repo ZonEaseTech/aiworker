@@ -2552,4 +2552,22 @@ describe('destructive refactor contract bootstrap', () => {
 
     expect(findings, 'descriptor-only active code must not expose the legacy SoulAppManifest compatibility layer').toEqual([])
   })
+
+  test('product-bet #1: daemon-per-worker + worker purity is documented and enforced', () => {
+    const architecture = readRepoFile('docs/architecture.md')
+    const protocol = readRepoFile('docs/protocol.md')
+    const runtime = readRepoFile('docs/runtime.md')
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
+    const orchestrator = readRepoFile('packages/worker-runtime/src/orchestration/orchestrator.ts')
+
+    // canon 明文(needle 须 backtick-free + 不跨换行,与写入文本逐字一致)
+    expect(architecture).toContain('A Worker daemon hosts at most one active Worker.')
+    expect(architecture).toContain('The Worker never registers with or pushes to Host.')
+    expect(protocol).toContain('rejects creation when the daemon already hosts an active')
+    expect(runtime).toContain('A daemon reconstitutes at most one active Worker at bootstrap')
+
+    // 代码:C3 去漂移(worker.ts 不再用 listWorkers()[0]);C2 守卫在 orchestrator(worker-runtime),非 worker.ts
+    expect(daemon).not.toContain('listWorkers()[0]')
+    expect(orchestrator).toContain('WORKER_ALREADY_ACTIVE')
+  })
 })

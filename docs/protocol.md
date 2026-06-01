@@ -176,6 +176,11 @@ Route methods make the local broker deterministic. They do not turn the daemon
 into a product backend.
 
 - `enable` creates a worker from an installed descriptor.
+- `POST /api/workers` rejects creation when the daemon already hosts an active
+  Worker (409); a daemon hosts at most one active Worker. archive-then-recreate
+  is permitted (archived rows do not count). When a route receives `workerId`, it
+  must equal the daemon's active Worker; when omitted, it resolves to that single
+  active Worker.
 - archive operations mark Worker metadata unavailable for new work.
 - hard delete removes Worker metadata and receipt-owned projections only.
 - `GET /api/workspace-locators` may receive `workerId` to filter locators for

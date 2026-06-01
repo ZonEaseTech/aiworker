@@ -22,6 +22,13 @@ Worker web, and mounted Soul Apps. It forwards orchestration to
 
 The daemon is not a product backend and does not own domain routes.
 
+A daemon reconstitutes at most one active Worker at bootstrap; finding more than
+one active Worker is a violation and the daemon refuses to boot (fail-fast).
+Archived Workers are not reconstituted eagerly; their runtime is rebuilt on
+demand. A standalone CLI or web client may omit `workerId` and the daemon
+resolves it to that single active Worker, so the standalone path never depends on
+Host or fleet context.
+
 ## Session And Invocation State
 
 session lifecycle: active | archived | deleted
