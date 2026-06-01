@@ -38,6 +38,7 @@ import {
   listWorkerConfigValues,
   listWorkers,
   listWorkspaces,
+  resolveSingleActiveWorker,
   runWorkerMigrations,
   setSetting,
   updateSession,
@@ -384,11 +385,25 @@ function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, offi
   })
 }
 
+function resolveStandaloneWorkerId(): string {
+  // Standalone single-daemon path: a daemon hosts at most one active Worker, so
+  // omitting --worker and `selected-worker` resolves to that lone active Worker
+  // without depending on Host or fleet context. Mirrors the daemon's
+  // `/api/control/worker` resolver so CLI and daemon agree on "active".
+  const resolution = resolveSingleActiveWorker()
+  if (resolution.kind === 'single')
+    return resolution.worker.id
+  if (resolution.kind === 'multiple') {
+    throw new Error(
+      `cannot resolve a standalone worker: the DB holds more than one active worker (${resolution.workers.map(worker => worker.id).join(', ')}); a daemon hosts at most one active worker. Pass --worker to disambiguate.`,
+    )
+  }
+  throw new Error('no active worker; run `aiworker worker create` or pass --worker')
+}
+
 async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerRuntime> {
   const paths = await ensureDb()
-  const workerId = options.worker ?? selectedWorkerId()
-  if (!workerId)
-    throw new Error('worker is required; pass --worker or run `aiworker worker select <id>`')
+  const workerId = options.worker ?? selectedWorkerId() ?? resolveStandaloneWorkerId()
   const worker = getWorker(workerId)
   if (!worker)
     throw new Error(`worker not found: ${workerId}`)

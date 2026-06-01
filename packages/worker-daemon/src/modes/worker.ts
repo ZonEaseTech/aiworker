@@ -37,6 +37,7 @@ import {
   listWorkerOverlayAssets,
   listWorkers,
   listWorkspaces,
+  resolveSingleActiveWorker,
   runWorkerMigrations,
   updateSession,
   updateWorkspace,
@@ -188,18 +189,19 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   await state.host.bootstrapOfficialSoulApps()
   // C4:daemon 至多重建一个 active worker。>1 active 仅来自旧多路复用脏 DB →
   // fail-fast(loud > silent;静默 archive 是有后果的数据决策,应让操作者显式处理)。
-  const activeWorkers = listWorkers().filter(worker => worker.status === 'active')
-  if (activeWorkers.length > 1) {
+  // 复用共享 resolver,使 bootstrap/control-route/CLI 对 "active" 的定义同源。
+  const activeResolution = resolveSingleActiveWorker()
+  if (activeResolution.kind === 'multiple') {
     throw new AppError(
       'DAEMON_MULTIPLE_ACTIVE_WORKERS',
       500,
-      `Daemon DB holds more than one active worker (${activeWorkers.map(w => w.id).join(', ')}); a daemon hosts at most one active worker.`,
+      `Daemon DB holds more than one active worker (${activeResolution.workers.map(w => w.id).join(', ')}); a daemon hosts at most one active worker.`,
     )
   }
-  for (const worker of activeWorkers) {
-    const runtime = state.host.createRuntimeForWorker(worker)
+  if (activeResolution.kind === 'single') {
+    const runtime = state.host.createRuntimeForWorker(activeResolution.worker)
     await runtime.init()
-    runtimes.set(worker.id, runtime)
+    runtimes.set(activeResolution.worker.id, runtime)
   }
 
   const app = new OpenAPIHono()
@@ -231,11 +233,13 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/api/control/health', c => c.json({ ready: true }))
 
   app.get('/api/control/worker', (c) => {
-    // C3:取该 daemon 唯一 active worker。旧实现按 id 排序取首元素,可能错取 archived
-    // worker;改用 find(active) 恒取唯一 active。zero-active(fresh / 全 archived)→ 404。
-    const worker = listWorkers().find(candidate => candidate.status === 'active')
-    if (!worker)
+    // C3:取该 daemon 唯一 active worker。复用共享 resolver(与 bootstrap/CLI 同源):
+    // 恒取唯一 active,绝不在脏多-active DB 上静默取首元素;zero-active(fresh /
+    // 全 archived)与 multiple-active 都 → 404,绝不猜。
+    const resolution = resolveSingleActiveWorker()
+    if (resolution.kind !== 'single')
       return c.json({ error: { code: 'WORKER_NOT_FOUND', message: 'no active worker registered' } }, 404)
+    const worker = resolution.worker
     return c.json({
       workerId: worker.id,
       templateId: worker.appId,

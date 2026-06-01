@@ -443,6 +443,48 @@ describe('aiworker local CLI', () => {
     expect(output).not.toContain('run start')
   })
 
+  it('resolves the single active worker for standalone commands when --worker and selected-worker are absent', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'solo-worker', '--name', 'Solo Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+
+    // Standalone single-daemon path: no `worker select`, no `--worker` flag.
+    // A daemon hosts at most one active Worker, so omitting workerId resolves to it.
+    expect(await runCli(argv('workspace', 'create', '--name', 'Scratch', '--type', 'freeform'))).toBe(0)
+    expect((JSON.parse(output) as { workspace: { type: string, workerId: string } }).workspace)
+      .toMatchObject({ type: 'freeform', workerId: 'solo-worker' })
+  })
+
+  it('errors clearly when no active worker exists and --worker is omitted', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+    errorOutput = ''
+
+    // Zero active workers: the standalone path cannot guess a worker.
+    expect(await runCli(argv('workspace', 'create', '--name', 'Scratch', '--type', 'freeform'))).toBe(1)
+    expect(errorOutput).toContain('no active worker')
+  })
+
+  it('refuses to guess a worker when the DB holds more than one active worker', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'active-a', '--name', 'A', '--app', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+
+    // Inject a second active worker directly to simulate a dirty multi-active DB
+    // (mirrors the daemon bootstrap fail-fast guard). The standalone resolver must
+    // refuse to silently pick one instead of erroring loudly.
+    closeWorkerDb()
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    upsertWorker({ id: 'active-b', appId: FREEFORM_APP_ID, name: 'B', status: 'active' })
+    closeWorkerDb()
+    errorOutput = ''
+
+    expect(await runCli(argv('workspace', 'create', '--name', 'Scratch', '--type', 'freeform'))).toBe(1)
+    expect(errorOutput).toContain('more than one active worker')
+  })
+
   it('streams session events for an active running engine invocation through CLI with after/limit paging', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''

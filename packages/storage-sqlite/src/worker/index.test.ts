@@ -34,6 +34,7 @@ import {
   listWorkers,
   listWorkspaces,
   nextEngineInvocationSeq,
+  resolveSingleActiveWorker,
   runWorkerMigrations,
   sessions,
   setSetting,
@@ -100,6 +101,29 @@ describe('greenfield local worker session schema', () => {
   it('opens the worker database with a positive busy_timeout so concurrent CLI and daemon writes wait instead of failing immediately', () => {
     const [row] = getWorkerDb().all<{ timeout: number }>(sql.raw('PRAGMA busy_timeout'))
     expect(row?.timeout).toBeGreaterThan(0)
+  })
+
+  it('resolveSingleActiveWorker returns none when no active worker exists (fresh or all archived)', () => {
+    expect(resolveSingleActiveWorker()).toEqual({ kind: 'none' })
+    upsertWorker({ id: 'archived-only', name: 'Archived', appId: 'demo-soul-app', status: 'archived' })
+    expect(resolveSingleActiveWorker()).toEqual({ kind: 'none' })
+  })
+
+  it('resolveSingleActiveWorker returns the lone active worker, ignoring archived siblings', () => {
+    upsertWorker({ id: 'archived-sibling', name: 'Archived', appId: 'demo-soul-app', status: 'archived' })
+    upsertWorker({ id: 'the-active', name: 'Active', appId: 'demo-soul-app', status: 'active' })
+    const resolution = resolveSingleActiveWorker()
+    expect(resolution).toMatchObject({ kind: 'single', worker: { id: 'the-active' } })
+  })
+
+  it('resolveSingleActiveWorker reports multiple so callers refuse to guess on a dirty multi-active DB', () => {
+    upsertWorker({ id: 'active-a', name: 'A', appId: 'demo-soul-app', status: 'active' })
+    upsertWorker({ id: 'active-b', name: 'B', appId: 'demo-soul-app', status: 'active' })
+    const resolution = resolveSingleActiveWorker()
+    expect(resolution.kind).toBe('multiple')
+    expect(
+      (resolution as { workers: Array<{ id: string }> }).workers.map(worker => worker.id).sort(),
+    ).toEqual(['active-a', 'active-b'])
   })
 
   it('closes the underlying sqlite connection on closeWorkerDb so a spawned daemon can acquire the worker database lock', () => {

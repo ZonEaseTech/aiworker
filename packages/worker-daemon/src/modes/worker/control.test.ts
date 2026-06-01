@@ -86,6 +86,18 @@ describe('worker-daemon control contract endpoints', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'WORKER_NOT_FOUND' } })
   })
 
+  it('GET /api/control/worker returns 404 on a dirty multi-active DB, refusing to guess (post-boot concurrent write)', async () => {
+    const target = await app()
+    await createFreeformWorker(target, 'active-primary')
+    // 并发 CLI/daemon 写可在 boot 之后插入第二个 active 行(busy_timeout 即为支持此),
+    // bootstrap 的 >1-active fail-fast 已过;control route 必须拒绝在脏多-active DB 上
+    // 静默取首元素,改为 404(与共享 resolveSingleActiveWorker 的 multiple 态一致)。
+    upsertWorker({ id: 'active-secondary', appId: FREEFORM_APP_ID, name: 'Second', status: 'active' })
+    const res = await target.request('/api/control/worker')
+    expect(res.status).toBe(404)
+    expect(await res.json()).toMatchObject({ error: { code: 'WORKER_NOT_FOUND' } })
+  })
+
   it('standalone discovery chain: /api/control/worker → configMicroAppEntry mounts without Host', async () => {
     const target = await app()
     await createFreeformWorker(target, 'standalone-worker')

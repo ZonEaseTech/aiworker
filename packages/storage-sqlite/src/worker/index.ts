@@ -552,6 +552,28 @@ export function listWorkers(limit = 100): WorkerRow[] {
   return getWorkerDb().select().from(schema.workers).orderBy(schema.workers.id).limit(limit).all()
 }
 
+export type SingleActiveWorkerResolution
+  = | { kind: 'none' }
+    | { kind: 'single', worker: WorkerRow }
+    | { kind: 'multiple', workers: WorkerRow[] }
+
+/**
+ * Resolve the single active Worker for the daemon-per-worker topology.
+ *
+ * A daemon hosts at most one active Worker. This is the shared source of truth
+ * for "the active worker" used by the daemon bootstrap, the `/api/control/worker`
+ * route, and the standalone CLI so all three agree byte-for-byte on what
+ * "active" means and never silently pick among a dirty multi-active DB.
+ */
+export function resolveSingleActiveWorker(workers: WorkerRow[] = listWorkers()): SingleActiveWorkerResolution {
+  const active = workers.filter(worker => worker.status === 'active')
+  if (active.length === 0)
+    return { kind: 'none' }
+  if (active.length > 1)
+    return { kind: 'multiple', workers: active }
+  return { kind: 'single', worker: active[0]! }
+}
+
 export function listWorkerOverlayAssets(workerId: string): (WorkerOverlayAssetRow & { source: 'overlay' })[] {
   return listWorkerConfigValues(workerId)
     .flatMap((row) => {
