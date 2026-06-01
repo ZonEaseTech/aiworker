@@ -1,4 +1,11 @@
 export {
+  submitSessionInvocation,
+} from './session-invocations'
+export type {
+  SessionInvocationResponse,
+  SubmitSessionInvocationBody,
+} from './session-invocations'
+export {
   rescanEngines,
   saveSettings,
   testEngine,
