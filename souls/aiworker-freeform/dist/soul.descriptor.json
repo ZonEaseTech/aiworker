@@ -29,14 +29,6 @@
     "scope": "worker",
     "version": "1"
   },
-  "workbench": {
-    "entry": "dist/web/workbench/index.html",
-    "mode": "sdk-common",
-    "router": {
-      "mode": "search"
-    },
-    "type": "micro-app"
-  },
   "engine": {
     "workspaceAssets": {
       "source": "dist/engine-assets/workspace"

@@ -20,10 +20,6 @@ const baseDescriptor = {
     engines: ['codex'],
   },
   configuration: {},
-  workbench: {
-    type: 'micro-app',
-    entry: 'dist/web/workbench/index.html',
-  },
   engine: {},
   health: {
     type: 'static',
@@ -55,8 +51,19 @@ describe('descriptor v1 schema', () => {
       'health',
       'identity',
       'protocol',
-      'workbench',
     ])
+  })
+
+  test('rejects a workbench section: descriptor v1 has no mounted workbench', () => {
+    expect(() =>
+      parseSoulDescriptorV1({
+        ...baseDescriptor,
+        workbench: {
+          type: 'micro-app',
+          entry: 'dist/web/workbench/index.html',
+        },
+      }),
+    ).toThrow()
   })
 
   test('rejects old manifest and runtime-governance fields', () => {
@@ -79,17 +86,17 @@ describe('descriptor v1 schema', () => {
   })
 
   test('rejects source hooks hidden inside descriptor fields', () => {
-    for (const workbenchEntry of [
-      './host-adapter/mounted/host-mounted.ts',
-      'dist/../host-adapter/workbench.html',
+    for (const assetSource of [
+      './host-adapter/mounted/host-mounted',
+      'dist/engine-assets/../host-adapter',
     ]) {
       expect(() =>
         parseSoulDescriptorV1({
           ...baseDescriptor,
-          workbench: {
-            type: 'micro-app',
-            mode: 'custom',
-            entry: workbenchEntry,
+          engine: {
+            workspaceAssets: {
+              source: assetSource,
+            },
           },
         }),
       ).toThrow()
@@ -229,10 +236,10 @@ describe('descriptor v1 schema', () => {
     ).toThrow()
   })
 
-  test('accepts the built mounted workbench entry', () => {
+  test('carries no workbench or app-owned API section', () => {
     const descriptor = parseSoulDescriptorV1(baseDescriptor)
 
-    expect(descriptor.workbench.entry).toBe('dist/web/workbench/index.html')
+    expect(descriptor).not.toHaveProperty('workbench')
     expect(descriptor).not.toHaveProperty('api')
   })
 

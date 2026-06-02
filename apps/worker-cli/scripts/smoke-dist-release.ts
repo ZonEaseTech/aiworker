@@ -88,7 +88,6 @@ async function main(): Promise<number> {
     const souls = await assertCli(cli, ['soul', 'list'], { env, label: 'soul list' })
     assertJsonIncludes(list.stdout, 'aiworker-freeform')
     assertJsonIncludes(souls.stdout, 'aiworker-freeform')
-    await assertWorkbenchMountRequiresLocator(port)
 
     consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API, reports packaged resources, and bootstraps official Soul Apps with descriptor refs')
     return 0
@@ -127,7 +126,6 @@ function assertDistOfficialFreeformDescriptor(): void {
     throw new Error(`dist Freeform descriptor must use protocol soul/v1: ${officialFreeformDescriptorPath}`)
   }
   assertDistDescriptorRefs([
-    { kind: 'file', ref: descriptor.workbench.entry },
     { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
     { kind: 'dir', ref: descriptor.engine.skills?.source },
     ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
@@ -348,19 +346,6 @@ export function assertOpenApiBrokerRouteDocument(openapi: OpenApiBrokerRouteDocu
     'POST /api/projections/{target}/refresh',
     'GET /api/projections/receipts/{receiptId}',
     'POST /api/projections/receipts/{receiptId}/cleanup',
-    'GET /api/mount/workbench',
-    'GET /api/apps/{appId}',
-    'OPTIONS /api/apps/{appId}',
-    'POST /api/apps/{appId}',
-    'PUT /api/apps/{appId}',
-    'PATCH /api/apps/{appId}',
-    'DELETE /api/apps/{appId}',
-    'GET /api/apps/{appId}/{path}',
-    'OPTIONS /api/apps/{appId}/{path}',
-    'POST /api/apps/{appId}/{path}',
-    'PUT /api/apps/{appId}/{path}',
-    'PATCH /api/apps/{appId}/{path}',
-    'DELETE /api/apps/{appId}/{path}',
   ]
   const missingBrokerRoutes = expectedBrokerRoutes.flatMap((route) => {
     const [method, path] = route.split(' ', 2)
@@ -374,6 +359,10 @@ export function assertOpenApiBrokerRouteDocument(openapi: OpenApiBrokerRouteDocu
     ['api', 'local', 'settings'],
     ['api', 'local', 'apps', '{appId}', 'actions', '{actionId}'],
     ['api', 'local', 'workers', '{workerId}', 'engine', 'invocations'],
+    // v1 has no mounted workbench: the Worker owns and directly renders its Workbench.
+    ['api', 'mount', 'workbench'],
+    ['api', 'apps', '{appId}'],
+    ['api', 'apps', '{appId}', '{path}'],
   ]
   for (const segments of retiredBrokerRouteSegments) {
     const retiredPath = `/${segments.join('/')}`
@@ -430,13 +419,6 @@ function assertPackagedResourcesReady(stdout: string): void {
     throw new Error(`dist doctor must report packaged Worker Web ready: ${stdout}`)
   if (resources?.migrationsReady !== true)
     throw new Error(`dist doctor must report packaged migrations ready: ${stdout}`)
-}
-
-async function assertWorkbenchMountRequiresLocator(port: number): Promise<void> {
-  const res = await fetch(`http://127.0.0.1:${port}/api/mount/workbench`)
-  const body = await res.text()
-  if (res.status !== 400 || !body.includes('MOUNT_CONTEXT_INVALID'))
-    throw new Error(`Workbench mount should require locator context, got ${res.status}: ${body.slice(0, 500)}`)
 }
 
 function assertJsonIncludes(stdout: string, expected: string): void {

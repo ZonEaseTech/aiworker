@@ -101,17 +101,6 @@ describe('release bundle packager', () => {
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
-  it('rejects standalone bundles before staging when descriptor-declared workbench assets are missing', async () => {
-    await writeFixtureDist(root, { includeWorkbenchEntry: false })
-    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
-    await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
-
-    await expect(
-      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('missing release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/web/workbench/index.html')
-    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
-  })
-
   it('rejects standalone bundles before staging when descriptor-declared MCP assets are missing', async () => {
     await writeFixtureDist(root, { includeCodexMcpFile: false })
     await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
@@ -125,17 +114,17 @@ describe('release bundle packager', () => {
 
   it('rejects standalone bundles before staging when descriptor references resolve outside the official app root', async () => {
     await writeFixtureDist(root)
-    const workbenchEntry = path.join(root, 'apps', 'worker-cli', 'dist', 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html')
-    const escapedWorkbench = path.join(root, 'apps', 'worker-cli', 'dist', 'official-apps', 'escaped-workbench.html')
-    await writeFile(escapedWorkbench, '<!doctype html>\n')
-    await rm(workbenchEntry)
-    await symlink(escapedWorkbench, workbenchEntry)
+    const mcpFile = path.join(root, 'apps', 'worker-cli', 'dist', 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml')
+    const escapedMcp = path.join(root, 'apps', 'worker-cli', 'dist', 'official-apps', 'escaped-config.toml')
+    await writeFile(escapedMcp, '# codex\n')
+    await rm(mcpFile)
+    await symlink(escapedMcp, mcpFile)
     await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
     await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
 
     await expect(
       packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('invalid release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json descriptor reference escapes official app root: dist/web/workbench/index.html')
+    ).rejects.toThrow('invalid release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json descriptor reference escapes official app root: dist/engine-assets/mcp/codex/config.toml')
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 })
@@ -147,18 +136,15 @@ async function writeFixtureDist(
     includeCodexMcpFile?: boolean
     includeJournalMigrationSql?: boolean
     includeMigrationJournal?: boolean
-    includeWorkbenchEntry?: boolean
   } = {},
 ): Promise<void> {
   const includeCodexMcpFile = options.includeCodexMcpFile ?? true
   const includeJournalMigrationSql = options.includeJournalMigrationSql ?? true
   const includeMigrationJournal = options.includeMigrationJournal ?? true
-  const includeWorkbenchEntry = options.includeWorkbenchEntry ?? true
   const dist = path.join(root, 'apps', 'worker-cli', 'dist')
   await mkdir(path.join(dist, 'web', 'worker'), { recursive: true })
   await mkdir(path.join(dist, 'drizzle', 'worker', 'meta'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist'), { recursive: true })
-  await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'workspace'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'skills'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
@@ -168,8 +154,6 @@ async function writeFixtureDist(
     await writeFile(path.join(dist, 'drizzle', 'worker', '0000_fixture.sql'), '-- migration\n')
   if (includeMigrationJournal)
     await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[{"tag":"0000_fixture"}]}\n')
-  if (includeWorkbenchEntry)
-    await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
   if (includeCodexMcpFile)
     await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code', '.mcp.json'), '{}\n')
@@ -196,14 +180,6 @@ function fixtureDescriptorText(options: {
       sdk: '>=1.0.0',
     },
     configuration: {},
-    workbench: {
-      entry: 'dist/web/workbench/index.html',
-      mode: 'sdk-common',
-      router: {
-        mode: 'search',
-      },
-      type: 'micro-app',
-    },
     engine: {
       mcp: {
         targets: Object.fromEntries(mcpTargets.map(target => [

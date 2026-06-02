@@ -35,7 +35,6 @@ const targetPackages = [
   ['packages/soul-descriptor', '@zonease/aiworker-soul-descriptor'],
   ['packages/engine-bridge', '@zonease/aiworker-engine-bridge'],
   ['packages/engine-projection', '@zonease/aiworker-engine-projection'],
-  ['packages/soul-workbench', '@zonease/aiworker-soul-workbench'],
 ] as const
 
 describe('target package ownership', () => {
@@ -85,6 +84,9 @@ describe('target package ownership', () => {
       'packages/core',
       'packages/shared',
       'packages/soul-app-workbench',
+      // Phase-B P3c: v1 has no Soul-provided UI and no mounted-workbench machinery.
+      'packages/soul-workbench',
+      'packages/soul-app-runtime',
     ]) {
       expect(existsSync(join(repoRoot, path)), `${path} should be removed in the destructive refactor`).toBe(false)
     }
@@ -150,7 +152,7 @@ describe('target package ownership', () => {
   })
 
   test('engine-projection and worker-daemon declare no unused internal deps', () => {
-    const cases = ['packages/engine-projection', 'packages/worker-daemon', 'packages/soul-app-runtime', 'packages/soul-workbench']
+    const cases = ['packages/engine-projection', 'packages/worker-daemon']
     const offenders: string[] = []
     for (const pkgDir of cases) {
       const pkg = JSON.parse(readFileSync(join(repoRoot, pkgDir, 'package.json'), 'utf8')) as PackageJson

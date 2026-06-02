@@ -52,10 +52,6 @@ const freeformDescriptor = parseSoulDescriptorV1({
     version: '0.1.0',
   },
   protocol: 'soul/v1',
-  workbench: {
-    entry: 'dist/web/workbench/index.html',
-    type: 'micro-app',
-  },
 })
 
 // Parse a text/event-stream body into frames, tolerant of field order and
@@ -187,41 +183,10 @@ describe('local daemon API', () => {
     mkdirSync(join(distRoot, 'engine-assets', 'workspace'), { recursive: true })
     mkdirSync(join(distRoot, 'engine-assets', 'skills', 'freeform-session'), { recursive: true })
     mkdirSync(join(distRoot, 'engine-assets', 'mcp', 'codex'), { recursive: true })
-    mkdirSync(join(distRoot, 'web', 'workbench'), { recursive: true })
     writeFileSync(join(distRoot, 'soul.descriptor.json'), `${JSON.stringify(freeformDescriptor, null, 2)}\n`)
     writeFileSync(join(distRoot, 'engine-assets', 'workspace', 'AGENTS.md'), '# Packaged Freeform Workspace\n')
     writeFileSync(join(distRoot, 'engine-assets', 'skills', 'freeform-session', 'SKILL.md'), '# Packaged Freeform Session\n')
     writeFileSync(join(distRoot, 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex mcp\n')
-    writeFileSync(join(distRoot, 'web', 'workbench', 'index.html'), '<main data-aiworker-common-workbench="true"></main>\n')
-  }
-
-  function writeCustomWorkbenchSoul(root: string): void {
-    const descriptor = parseSoulDescriptorV1({
-      ...freeformDescriptor,
-      identity: {
-        appId: 'demo-custom-workbench',
-        description: 'Descriptor-only custom workbench Soul.',
-        name: 'Demo Custom Workbench Soul',
-        soulId: 'demo-custom-workbench',
-        version: '0.1.0',
-      },
-      workbench: {
-        entry: 'dist/web/workbench/custom.html',
-        mode: 'custom',
-        router: { mode: 'search' },
-        type: 'micro-app',
-      },
-    })
-    const distRoot = join(root, 'dist')
-    mkdirSync(join(distRoot, 'engine-assets', 'workspace'), { recursive: true })
-    mkdirSync(join(distRoot, 'engine-assets', 'skills'), { recursive: true })
-    mkdirSync(join(distRoot, 'engine-assets', 'mcp', 'codex'), { recursive: true })
-    mkdirSync(join(distRoot, 'web', 'workbench'), { recursive: true })
-    writeFileSync(join(distRoot, 'soul.descriptor.json'), `${JSON.stringify(descriptor, null, 2)}\n`)
-    writeFileSync(join(distRoot, 'engine-assets', 'workspace', 'AGENTS.md'), '# Demo Custom Workbench Workspace\n')
-    writeFileSync(join(distRoot, 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex mcp\n')
-    writeFileSync(join(distRoot, 'web', 'workbench', 'custom.html'), '<main data-custom-workbench="true"></main>\n')
-    writeFileSync(join(distRoot, 'web', 'workbench', 'index.html'), '<main data-aiworker-common-workbench="true"></main>\n')
   }
 
   function seedLegacyHrMetadata() {
@@ -1691,198 +1656,6 @@ describe('local daemon API', () => {
     expect((await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}/events`)).status).toBe(404)
   })
 
-  it('resolves one descriptor workbench mount from locator context only', async () => {
-    const target = await app()
-    const worker = await createFreeformWorker(target)
-    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
-
-    const res = await target.request(`/api/mount/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&sessionId=${session.id}`)
-    expect(res.status).toBe(200)
-    expect(await res.json()).toMatchObject({
-      locator: {
-        sessionId: session.id,
-        workerId: worker.id,
-        workspaceId: workspace.id,
-      },
-      microApp: {
-        data: {
-          mountTokenPresent: false,
-          sessionId: session.id,
-          workerId: worker.id,
-          workspaceId: workspace.id,
-        },
-        name: `${FREEFORM_APP_ID}--workbench`,
-        url: `/api/apps/${FREEFORM_APP_ID}/micro-app/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&sessionId=${session.id}`,
-      },
-      mount: {
-        appId: FREEFORM_APP_ID,
-        entry: `/api/apps/${FREEFORM_APP_ID}/micro-app/workbench`,
-        surfaceId: 'workbench',
-        type: 'micro-app',
-      },
-      routerMode: 'search',
-    })
-
-    const htmlRes = await target.request(`/api/apps/${FREEFORM_APP_ID}/micro-app/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&theme=light`)
-    expect(htmlRes.status).toBe(200)
-    expect(htmlRes.headers.get('content-type')).toContain('text/html')
-    // sdk-common workbench is the built soul-workbench micro-app bundle (方案 C):
-    // the entry serves its index.html (React mount point + bundled script). The
-    // rendered marker is verified by the Freeform browser proof.
-    const entryHtml = await htmlRes.text()
-    expect(entryHtml).toContain('data-aiworker-common-workbench="true"')
-    // The bundle's sibling assets must also be served so the micro-app can load
-    // its JS; otherwise it renders nothing. micro-app resolves the `./assets/...`
-    // ref against the entry treated as a directory, so the real browser request is
-    // `micro-app/workbench/assets/index.js` — the daemon must serve that exact path.
-    const assetMatch = entryHtml.match(/src="\.\/(assets\/[^"]+\.js)"/)
-    expect(assetMatch).not.toBeNull()
-    const assetRes = await target.request(`/api/apps/${FREEFORM_APP_ID}/micro-app/workbench/${assetMatch![1]}`)
-    expect(assetRes.status).toBe(200)
-    expect(assetRes.headers.get('content-type')).toContain('javascript')
-  })
-
-  it('resolves custom descriptor workbench without SDK common fallback', async () => {
-    const target = await app()
-    const appRoot = join(dir, 'custom-workbench-soul')
-    writeCustomWorkbenchSoul(appRoot)
-
-    const installRes = await target.request('/api/app-installation/install', {
-      body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(installRes.status).toBe(201)
-    expect((await target.request('/api/app-installation/apps/demo-custom-workbench/enable', { method: 'POST' })).status).toBe(200)
-
-    const workerRes = await target.request('/api/workers', {
-      body: JSON.stringify({ id: 'custom-workbench-worker', name: 'Custom Workbench', appId: 'demo-custom-workbench' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workerRes.status).toBe(201)
-
-    const res = await target.request('/api/mount/workbench?workerId=custom-workbench-worker&theme=dark')
-    expect(res.status).toBe(200)
-    expect(await res.json()).toMatchObject({
-      locator: {
-        sessionId: null,
-        workerId: 'custom-workbench-worker',
-        workspaceId: null,
-      },
-      microApp: {
-        data: {
-          mountTokenPresent: false,
-          surfaceId: 'workbench',
-          theme: 'dark',
-          workerId: 'custom-workbench-worker',
-        },
-        name: 'demo-custom-workbench--workbench',
-        url: '/api/apps/demo-custom-workbench/micro-app/workbench?workerId=custom-workbench-worker&theme=dark',
-      },
-      mount: {
-        appId: 'demo-custom-workbench',
-        entry: '/api/apps/demo-custom-workbench/micro-app/workbench',
-        surfaceId: 'workbench',
-        type: 'micro-app',
-      },
-      routerMode: 'search',
-    })
-
-    const htmlRes = await target.request('/api/apps/demo-custom-workbench/micro-app/workbench?workerId=custom-workbench-worker')
-    expect(htmlRes.status).toBe(200)
-    const html = await htmlRes.text()
-    expect(html).toContain('data-custom-workbench="true"')
-    expect(html).not.toContain('data-aiworker-common-workbench="true"')
-  })
-
-  it('rejects descriptor workbench mount without worker locator', async () => {
-    const target = await app()
-
-    const res = await target.request('/api/mount/workbench')
-
-    expect(res.status).toBe(400)
-    expect(await res.json()).toMatchObject({
-      error: {
-        code: 'MOUNT_CONTEXT_INVALID',
-      },
-    })
-  })
-
-  it('rejects descriptor workbench mount when session and workspace locators mismatch', async () => {
-    const target = await app()
-    const worker = await createFreeformWorker(target)
-    const first = await createWorkspaceAndSession(target, worker.id)
-    const second = await createWorkspaceAndSession(target, worker.id)
-
-    const res = await target.request(`/api/mount/workbench?workerId=${worker.id}&workspaceId=${first.workspace.id}&sessionId=${second.session.id}`)
-
-    expect(res.status).toBe(400)
-    expect(await res.json()).toMatchObject({
-      error: {
-        code: 'MOUNT_CONTEXT_INVALID',
-      },
-    })
-  })
-
-  it('rejects descriptor workbench mount for archived locator context', async () => {
-    const target = await app()
-    const worker = await createFreeformWorker(target, 'archive-mount-worker')
-    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
-
-    await target.request(`/api/sessions/${session.id}/archive`, { method: 'POST' })
-    const archivedSession = await target.request(`/api/mount/workbench?workerId=${worker.id}&workspaceId=${workspace.id}&sessionId=${session.id}`)
-    expect(archivedSession.status).toBe(400)
-    expect(await archivedSession.json()).toMatchObject({
-      error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} is archived and cannot mount workbench.` },
-    })
-
-    const replacement = await createWorkspaceAndSession(target, worker.id)
-    await target.request(`/api/workspace-locators/${replacement.workspace.id}/archive`, { method: 'POST' })
-    const archivedWorkspace = await target.request(`/api/mount/workbench?workerId=${worker.id}&workspaceId=${replacement.workspace.id}&sessionId=${replacement.session.id}`)
-    expect(archivedWorkspace.status).toBe(400)
-    expect(await archivedWorkspace.json()).toMatchObject({
-      error: { code: 'MOUNT_CONTEXT_INVALID', message: `Workspace ${replacement.workspace.id} is archived and cannot mount workbench.` },
-    })
-
-    const active = await createWorkspaceAndSession(target, worker.id)
-    await target.request(`/api/workers/${worker.id}/archive`, { method: 'POST' })
-    const archivedWorker = await target.request(`/api/mount/workbench?workerId=${worker.id}&workspaceId=${active.workspace.id}&sessionId=${active.session.id}`)
-    expect(archivedWorker.status).toBe(400)
-    expect(await archivedWorker.json()).toMatchObject({
-      error: { code: 'MOUNT_CONTEXT_INVALID', message: `Worker ${worker.id} is archived and cannot mount workbench.` },
-    })
-  })
-
-  it('rejects descriptor workbench mount for an unknown worker', async () => {
-    const target = await app()
-
-    const res = await target.request('/api/mount/workbench?workerId=missing-worker')
-
-    expect(res.status).toBe(404)
-    expect(await res.json()).toMatchObject({
-      error: {
-        code: 'NOT_FOUND',
-      },
-    })
-  })
-
-  it('rejects descriptor workbench mount when the worker Soul App is disabled', async () => {
-    const target = await app()
-    const worker = await createFreeformWorker(target)
-    const archiveRes = await target.request(`/api/app-installation/apps/${FREEFORM_APP_ID}/archive`, { method: 'POST' })
-    expect(archiveRes.status).toBe(200)
-
-    const res = await target.request(`/api/mount/workbench?workerId=${worker.id}`)
-
-    expect(res.status).toBe(409)
-    expect(await res.json()).toMatchObject({
-      error: {
-        code: 'SOUL_APP_DISABLED',
-      },
-    })
-  })
-
   it('blocks new invocations for existing workers when the Soul App is archived', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'archive-app-invocation-worker')
@@ -2973,7 +2746,6 @@ describe('local daemon API', () => {
       ['get', '/api/info'],
       ['get', '/api/settings'],
       ['patch', '/api/settings'],
-      ['get', '/api/mount/workbench'],
     ]
     const missingBrokerRoutes = expectedBrokerRoutes.flatMap(([method, path]) =>
       (openapi.paths[path] as Record<string, unknown> | undefined)?.[method]
@@ -2988,6 +2760,8 @@ describe('local daemon API', () => {
     // A Soul has no app-owned API: the broker exposes no /api/apps proxy paths.
     expect(Object.keys(openapi.paths)).not.toContain('/api/apps/{appId}')
     expect(Object.keys(openapi.paths)).not.toContain('/api/apps/{appId}/{path}')
+    // v1 has no mounted workbench: the Worker owns and directly renders its Workbench.
+    expect(Object.keys(openapi.paths)).not.toContain('/api/mount/workbench')
     expect(Object.keys(openapi.paths)).not.toContain(localWorkerEngineInvocationPath)
     expect(Object.keys(openapi.paths)).not.toContain('/api/local/info')
     expect(Object.keys(openapi.paths)).not.toContain('/api/local/settings')

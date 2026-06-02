@@ -41,10 +41,10 @@ describe('scanPrivateImports', () => {
     expect(issues.some(issue => issue.importPath === '@zonease/aiworker-freeform')).toBe(true)
   })
 
-  it('does not flag allowed shared packages (sdk/runtime/ui/current workbench)', () => {
+  it('does not flag allowed shared packages (sdk/ui)', () => {
     const root = makeApp({
       'soul.config.ts': 'export default {}\n',
-      'src/x.ts': `import { defineSoul } from '@zonease/aiworker-soul-sdk'\nimport { Foo } from '@zonease/aiworker-ui'\nimport { Workbench } from '@zonease/aiworker-soul-workbench'\n`,
+      'src/x.ts': `import { defineSoul } from '@zonease/aiworker-soul-sdk'\nimport { Foo } from '@zonease/aiworker-ui'\n`,
     })
     expect(scanPrivateImports(root)).toEqual([])
   })

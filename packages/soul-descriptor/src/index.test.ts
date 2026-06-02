@@ -27,7 +27,7 @@ const CANONICAL_WORKER_CONFIG_UPDATED_BY = [
 describe('soul-descriptor package boundary', () => {
   test('declares descriptor-only v1 sections', () => {
     expect(soulProtocolPackage.descriptor).toBe('dist/soul.descriptor.json')
-    expect(soulProtocolPackage.sections).toContain('workbench')
+    expect(soulProtocolPackage.sections).not.toContain('workbench')
     expect(soulProtocolPackage.sections).not.toContain('exports')
   })
 

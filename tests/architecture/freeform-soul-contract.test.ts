@@ -101,17 +101,12 @@ describe('Freeform Soul descriptor contract', () => {
         version: '0.1.0',
       },
       protocol: 'soul/v1',
-      workbench: {
-        mode: 'sdk-common',
-        router: {
-          mode: 'search',
-        },
-        type: 'micro-app',
-      },
     })
-    // A Soul is a descriptor-only template of engine assets: no app-owned API.
+    // A Soul is a descriptor-only template of engine assets: no app-owned API and
+    // no mounted workbench (the Worker owns and directly renders its Workbench).
     expect(descriptor).not.toHaveProperty('api')
     expect(descriptor).not.toHaveProperty('capabilities')
+    expect(descriptor).not.toHaveProperty('workbench')
     expect(descriptor.engine).toMatchObject({
       mcp: {
         targets: {

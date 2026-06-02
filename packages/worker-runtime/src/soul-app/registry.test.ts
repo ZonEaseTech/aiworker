@@ -39,10 +39,6 @@ const freeformDescriptor = parseSoulDescriptorV1({
     version: '0.1.0',
   },
   protocol: 'soul/v1',
-  workbench: {
-    entry: 'dist/web/workbench/index.html',
-    type: 'micro-app',
-  },
 })
 
 describe('Host Soul descriptor registry', () => {

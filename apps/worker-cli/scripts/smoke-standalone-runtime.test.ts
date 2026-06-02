@@ -35,12 +35,6 @@ describe('standalone runtime smoke script contract', () => {
         scope: 'worker',
         version: '1',
       },
-      workbench: {
-        entry: 'dist/web/workbench/index.html',
-        mode: 'sdk-common',
-        router: { mode: 'search' },
-        type: 'micro-app',
-      },
       engine: {
         workspaceAssets: { source: 'dist/engine-assets/workspace' },
         skills: { source: 'dist/engine-assets/skills' },
@@ -60,19 +54,16 @@ describe('standalone runtime smoke script contract', () => {
     }))
     const root = await mkdtemp(join(tmpdir(), 'aiworker-standalone-ref-test-'))
     try {
-      await mkdir(join(root, 'dist/web/workbench'), { recursive: true })
       await mkdir(join(root, 'dist/engine-assets/workspace'), { recursive: true })
       await mkdir(join(root, 'dist/engine-assets/skills/freeform'), { recursive: true })
       await mkdir(join(root, 'dist/engine-assets/mcp/claude-code'), { recursive: true })
       await mkdir(join(root, 'dist/engine-assets/mcp/codex'), { recursive: true })
-      await writeFile(join(root, 'dist/web/workbench/index.html'), '<!doctype html>')
       await writeFile(join(root, 'dist/engine-assets/workspace/README.md'), 'workspace')
       await writeFile(join(root, 'dist/engine-assets/skills/freeform/SKILL.md'), 'skill')
       await writeFile(join(root, 'dist/engine-assets/mcp/claude-code/.mcp.json'), '{}')
       await writeFile(join(root, 'dist/engine-assets/mcp/codex/config.toml'), '')
 
       await expect(assertStandaloneDescriptorRefsForRoot(root, [
-        { kind: 'file', ref: descriptor.workbench.entry },
         { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
         { kind: 'dir', ref: descriptor.engine.skills?.source },
         ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
@@ -83,7 +74,7 @@ describe('standalone runtime smoke script contract', () => {
       ])).rejects.toThrow('standalone Freeform descriptor reference escapes package root: ../outside.txt')
 
       await expect(assertStandaloneDescriptorRefsForRoot(root, [
-        { kind: 'file', ref: 'dist/web/workbench/missing.html' },
+        { kind: 'file', ref: 'dist/engine-assets/mcp/codex/missing.toml' },
       ])).rejects.toThrow('standalone Freeform descriptor references missing file:')
     }
     finally {

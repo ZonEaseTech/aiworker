@@ -1516,7 +1516,6 @@ async function smokeAppCommand(inputPath: string): Promise<void> {
       engineAssets: smoke.engineAssets,
       sdkValidation: validation.sdkStatus ?? 'skipped',
       status: 'pass',
-      workbench: smoke.workbench,
     },
   })
 }
@@ -1643,18 +1642,17 @@ function descriptorIdentityString(descriptor: SoulDescriptorV1 | undefined, key:
   return typeof value === 'string' ? value : null
 }
 
-function smokeDescriptorAssets(rootDir: string, descriptorPath: string, descriptor: SoulDescriptorV1): { engineAssets: 'pass', workbench: 'pass' } {
+function smokeDescriptorAssets(rootDir: string, descriptorPath: string, descriptor: SoulDescriptorV1): { engineAssets: 'pass' } {
   const expectedDescriptorPath = path.join(rootDir, SOUL_DESCRIPTOR_OUTPUT_PATH)
   if (path.resolve(descriptorPath) !== path.resolve(expectedDescriptorPath))
     throw new Error(`Soul descriptor must be located at ${SOUL_DESCRIPTOR_OUTPUT_PATH}.`)
-  assertDescriptorFile(rootDir, descriptor.workbench.entry, 'workbench entry')
   if (descriptor.engine.workspaceAssets)
     assertDescriptorDirectory(rootDir, descriptor.engine.workspaceAssets.source, 'workspace assets')
   if (descriptor.engine.skills)
     assertDescriptorDirectory(rootDir, descriptor.engine.skills.source, 'skills')
   for (const [target, mcp] of Object.entries(descriptor.engine.mcp?.targets ?? {}))
     assertDescriptorFile(rootDir, mcp.file, `${target} native MCP file`)
-  return { engineAssets: 'pass', workbench: 'pass' }
+  return { engineAssets: 'pass' }
 }
 
 function assertDescriptorFile(rootDir: string, ref: string, label: string): void {

@@ -5,7 +5,6 @@ import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 export const OFFICIAL_FREEFORM_APP_ID = 'aiworker-freeform'
 const OFFICIAL_FREEFORM_SOUL_ID = 'freeform'
 const OFFICIAL_FREEFORM_NAME = 'AIWorker Freeform'
-const OFFICIAL_FREEFORM_WORKBENCH_ENTRY = 'dist/web/workbench/index.html'
 const OFFICIAL_FREEFORM_MCP_REFS = {
   'claude-code': 'dist/engine-assets/mcp/claude-code/.mcp.json',
   'codex': 'dist/engine-assets/mcp/codex/config.toml',
@@ -17,14 +16,6 @@ export function parseOfficialFreeformDescriptorJson(text: string): ReturnType<ty
     throw new Error(`expected ${OFFICIAL_FREEFORM_APP_ID}`)
   if (descriptor.identity.soulId !== OFFICIAL_FREEFORM_SOUL_ID || descriptor.identity.name !== OFFICIAL_FREEFORM_NAME)
     throw new Error('expected official Freeform identity')
-  if (
-    descriptor.workbench.entry !== OFFICIAL_FREEFORM_WORKBENCH_ENTRY
-    || descriptor.workbench.mode !== 'sdk-common'
-    || descriptor.workbench.router.mode !== 'search'
-    || descriptor.workbench.type !== 'micro-app'
-  ) {
-    throw new Error('expected official Freeform SDK common workbench')
-  }
   if (!hasOfficialFreeformMcpTargets(descriptor.engine.mcp?.targets))
     throw new Error('expected official Freeform native MCP targets')
   return descriptor

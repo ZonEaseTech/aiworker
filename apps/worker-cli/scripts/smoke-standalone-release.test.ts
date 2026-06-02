@@ -21,19 +21,16 @@ describe('standalone release smoke script contract', () => {
   it('validates official Freeform descriptor refs from final standalone bundles', async () => {
     const descriptor = parseOfficialFreeformDescriptorJson(fixtureDescriptorText())
     const appRoot = join(root, 'release', 'aiworker-test-target', 'official-apps', 'aiworker-freeform')
-    await mkdir(join(appRoot, 'dist', 'web', 'workbench'), { recursive: true })
     await mkdir(join(appRoot, 'dist', 'engine-assets', 'workspace'), { recursive: true })
     await mkdir(join(appRoot, 'dist', 'engine-assets', 'skills'), { recursive: true })
     await mkdir(join(appRoot, 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
     await mkdir(join(appRoot, 'dist', 'engine-assets', 'mcp', 'claude-code'), { recursive: true })
-    await writeFile(join(appRoot, 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
     await writeFile(join(appRoot, 'dist', 'engine-assets', 'workspace', 'README.md'), 'workspace\n')
     await writeFile(join(appRoot, 'dist', 'engine-assets', 'skills', 'SKILL.md'), 'skill\n')
     await writeFile(join(appRoot, 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex\n')
     await writeFile(join(appRoot, 'dist', 'engine-assets', 'mcp', 'claude-code', '.mcp.json'), '{}\n')
 
     await expect(assertStandaloneBundleDescriptorRefs(appRoot, [
-      { kind: 'file', ref: descriptor.workbench.entry },
       { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
       { kind: 'dir', ref: descriptor.engine.skills?.source },
       ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
@@ -44,7 +41,7 @@ describe('standalone release smoke script contract', () => {
     ])).rejects.toThrow('standalone bundle Freeform descriptor reference escapes package root: ../outside.txt')
 
     await expect(assertStandaloneBundleDescriptorRefs(appRoot, [
-      { kind: 'file', ref: 'dist/web/workbench/missing.html' },
+      { kind: 'file', ref: 'dist/engine-assets/mcp/codex/missing.toml' },
     ])).rejects.toThrow('standalone bundle Freeform descriptor references missing file:')
   })
 
@@ -67,7 +64,6 @@ async function writeFixtureDist(root: string): Promise<void> {
   const dist = join(root, 'apps', 'worker-cli', 'dist')
   await mkdir(join(dist, 'web', 'worker'), { recursive: true })
   await mkdir(join(dist, 'drizzle', 'worker', 'meta'), { recursive: true })
-  await mkdir(join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench'), { recursive: true })
   await mkdir(join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'workspace'), { recursive: true })
   await mkdir(join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'skills'), { recursive: true })
   await mkdir(join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
@@ -76,7 +72,6 @@ async function writeFixtureDist(root: string): Promise<void> {
   await writeFile(join(dist, 'web', 'worker', 'index.html'), '<!doctype html>\n')
   await writeFile(join(dist, 'drizzle', 'worker', '0000_fixture.sql'), '-- migration\n')
   await writeFile(join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[{"tag":"0000_fixture"}]}\n')
-  await writeFile(join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
   await writeFile(join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex\n')
   await writeFile(join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code', '.mcp.json'), '{}\n')
   await writeFile(join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), fixtureDescriptorText())
@@ -102,7 +97,6 @@ function fixtureDescriptorText(): string {
     health: { ready: true, type: 'static' },
     identity: { appId: 'aiworker-freeform', name: 'AIWorker Freeform', soulId: 'freeform', version: '0.1.0' },
     protocol: 'soul/v1',
-    workbench: { entry: 'dist/web/workbench/index.html', mode: 'sdk-common', router: { mode: 'search' }, type: 'micro-app' },
   })}\n`
 }
 

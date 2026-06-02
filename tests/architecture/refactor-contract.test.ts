@@ -357,14 +357,21 @@ describe('destructive refactor contract bootstrap', () => {
     expect(hostRuntimeRegistryTest).toContain('memoryPolicy')
   })
 
-  test.todo('protocol descriptor exposes mounted router-mode and opaque extensions/external sections', () => {
-    // Phase-B teardown: docs/testing.md Pending Implementation
-    // New model: descriptor v1 is protocol/identity/engine only — no mounted workbench
-    // (router-mode="search") and no extensions/external sections. These reversed-model
-    // assertions are reinstated only if/when the mounted workbench layer returns.
+  test('protocol descriptor has no mounted workbench or router-mode surface', () => {
+    // Phase-B P3c: descriptor v1 carries no `workbench` section and no mounted
+    // router-mode — the Worker owns and directly renders its Workbench. (The
+    // extensions/external opaque-section assertions remain P5 and stay deferred.)
     const protocol = readRepoFile('docs/protocol.md')
-    expect(protocol).toContain('router-mode="search"')
-    expect(protocol).toContain('`extensions` and `external` are opaque to Host')
+    const descriptorSource = readRepoFile('packages/soul-descriptor/src/index.ts')
+
+    expect(protocol).not.toContain('router-mode="search"')
+    expect(protocol).toContain('Descriptor v1 carries no workbench')
+
+    expect(descriptorSource).not.toContain('workbenchSchema')
+    expect(descriptorSource).not.toContain('workbenchRouterSchema')
+    expect(descriptorSource).not.toContain('workbench: workbenchSchema')
+    // The descriptor sections list (soulProtocolPackage.sections) must not name workbench.
+    expect(descriptorSource).not.toContain('\'workbench\',')
   })
 
   test('protocol doc promotes broker methods and worker config envelope details', () => {
@@ -564,20 +571,21 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.post(\'/api/local/apps/:appId/healthcheck\'')
   })
 
-  test('daemon exposes no app-owned API proxy: only a GET mounted-workbench asset route under /api/apps', () => {
-    // New model: a Soul is a descriptor-only template with no app-owned API. The
-    // daemon serves the mounted workbench micro-app bundle (GET-only) under
-    // /api/apps/:appId, but there is no proxy to any Soul-owned local service and
-    // no credential-stripping / mount-signature machinery.
+  test('daemon exposes no app-owned API proxy and no mounted-workbench asset route under /api/apps', () => {
+    // Phase-B P3c: a Soul is a descriptor-only template with no app-owned API and
+    // no mounted workbench. The daemon serves neither an /api/apps proxy nor an
+    // /api/apps mounted-bundle asset route — the Worker owns and directly renders
+    // its Workbench, and there is no mount-signature / mount-context machinery.
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
 
-    // The mounted-workbench asset route survives but is GET-only and is not a proxy.
-    expect(daemon).toContain('app.get(\'/api/apps/:appId/:path{.+}\'')
+    // No /api/apps asset/proxy route of any kind remains.
+    expect(daemon).not.toContain('/api/apps/:appId/:path{.+}')
     expect(daemon).not.toContain('app.all(\'/api/apps')
+    expect(daemon).not.toContain('app.get(\'/api/apps')
     expect(daemon).not.toContain('app.all(\'/api/local/apps/:appId/:path{.+}\'')
 
-    // No app-owned API proxy / mounted local-service machinery remains.
+    // No app-owned API proxy / mounted local-service / mounted-workbench machinery remains.
     for (const forbidden of [
       'proxyMountedSoulAppApi',
       'startMountedSoulAppService',
@@ -586,8 +594,12 @@ describe('destructive refactor contract bootstrap', () => {
       'x-aiworker-mount-signature',
       'authenticateMountedBrokerRequest',
       'SOUL_APP_SERVICE_UNREACHABLE',
+      'serveMountedWorkbenchAsset',
+      'descriptorMountedAssetResponse',
+      'descriptorWorkbenchContribution',
+      'mountedMicroAppData',
     ]) {
-      expect(daemon, `daemon must not retain app-owned API proxy machinery: ${forbidden}`).not.toContain(forbidden)
+      expect(daemon, `daemon must not retain app-owned API proxy or mounted-workbench machinery: ${forbidden}`).not.toContain(forbidden)
     }
 
     // The app-owned-API proxy tests are gone with the proxy they exercised.
@@ -628,11 +640,6 @@ describe('destructive refactor contract bootstrap', () => {
   test('daemon workspace locator collection surface does not preserve local broker alias', () => {
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const daemonSchemas = readRepoFile('packages/worker-daemon/src/modes/worker/schemas.ts')
-    const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
-    const mountedWorkspaceProxy = soulAppRuntime.slice(
-      soulAppRuntime.indexOf('url.pathname === \'/api/workspaces\''),
-      soulAppRuntime.indexOf('url.pathname === \'/api/sessions\''),
-    )
 
     expect(daemon).toContain('app.get(\'/api/workspace-locators\'')
     expect(daemon).not.toContain('app.get(\'/api/local/workspaces\',')
@@ -640,8 +647,6 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.post(\'/api/local/workers/:workerId/workspaces\',')
     expect(daemonSchemas).toContain('POST /api/workspace-locators')
     expect(daemonSchemas).not.toContain('POST /api/local/workers/:workerId/workspaces')
-    expect(mountedWorkspaceProxy).toContain('/api/workspace-locators?workerId=')
-    expect(mountedWorkspaceProxy).not.toContain(['/api/local/workers/', '{workerId}/workspaces'].join('$'))
   })
 
   test('daemon workspace locator member surface does not preserve local broker aliases', () => {
@@ -669,11 +674,6 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('daemon session collection surface does not preserve local broker alias', () => {
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
-    const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
-    const mountedSessionProxy = soulAppRuntime.slice(
-      soulAppRuntime.indexOf('url.pathname === \'/api/sessions\''),
-      soulAppRuntime.indexOf('const sessionMatch'),
-    )
 
     expect(daemon).toContain('app.get(\'/api/sessions\'')
     expect(daemon).toContain('app.post(\'/api/sessions\'')
@@ -682,8 +682,6 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.post(\'/api/local/workers/:workerId/workspaces/:workspaceId/sessions\',')
     expect(daemon).not.toContain('app.get(\'/api/local/workspaces/:workspaceId/sessions\',')
     expect(daemon).not.toContain('app.post(\'/api/local/workspaces/:workspaceId/sessions\',')
-    expect(mountedSessionProxy).toContain('/api/sessions?')
-    expect(mountedSessionProxy).not.toContain(['/api/local/workers/', '{workerId}/workspaces/'].join('$'))
   })
 
   test('daemon session read surface does not preserve local broker aliases', () => {
@@ -733,19 +731,12 @@ describe('destructive refactor contract bootstrap', () => {
     expect(webSettingsApi).not.toContain('/api/local/settings/engines')
   })
 
-  test('mounted session events are derived without daemon local broker aliases', () => {
+  test('daemon session events are derived without daemon local broker aliases', () => {
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
-    const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
-    const mountedSessionEventsProxy = soulAppRuntime.slice(
-      soulAppRuntime.indexOf('const sessionEventsMatch'),
-      soulAppRuntime.indexOf('const sessionInvocationsMatch'),
-    )
 
     expect(daemon).toContain('app.get(\'/api/sessions/:sessionId\',')
     expect(daemon).not.toContain('app.get(\'/api/local/sessions/:sessionId/events\',')
     expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/sessions/:sessionId/events\',')
-    expect(mountedSessionEventsProxy).toContain(['/api/sessions/', '{sessionEventsMatch[1]}'].join('$'))
-    expect(mountedSessionEventsProxy).not.toContain('/api/local/sessions/')
   })
 
   test('Host runtime and UI app lifecycle APIs use archive naming internally', () => {
@@ -994,7 +985,6 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/worker-daemon/src/modes/worker.ts',
       'packages/worker-daemon/src/modes/worker/schemas.ts',
       'packages/worker-daemon/src/modes/worker/openapi.ts',
-      'packages/soul-app-runtime/src/index.ts',
       'apps/worker-cli/src/aiworker.ts',
       'apps/worker-cli/src/scaffold.ts',
       'apps/worker-cli/src/official-freeform-descriptor.ts',
@@ -1777,7 +1767,8 @@ describe('destructive refactor contract bootstrap', () => {
     expect(packageReleaseBundlesTest).toContain('official descriptor Soul Apps')
     expect(packageReleaseBundlesTest).toContain('missing Drizzle metadata')
     expect(packageReleaseBundlesTest).toContain('missing journal SQL files')
-    expect(packageReleaseBundlesTest).toContain('descriptor-declared workbench assets are missing')
+    // v1 has no workbench artifact: the missing-resource path is now covered by the
+    // descriptor-declared MCP assets case.
     expect(packageReleaseBundlesTest).toContain('descriptor-declared MCP assets are missing')
     expect(packageReleaseBundlesTest).toContain('descriptor references resolve outside the official app root')
     expect(docCheck).toContain('release artifact required resources must stay aligned')
@@ -1835,31 +1826,42 @@ describe('destructive refactor contract bootstrap', () => {
     expect(webOverlayConfigTest).toContain('/api/workers/worker-1/config/skill-overlay%3Ainterview-brief')
   })
 
-  test.todo('canonical testing docs track Freeform browser proof scope', () => {
-    // Phase-B teardown: docs/testing.md Pending Implementation
-    // New model: the browser proof renders the session chat directly in the worker
-    // Workbench with no micro-app; the mounted-surface / archived-mount-rejection proof
-    // is removed. Restore when/if a Soul-provided mounted workbench returns.
+  test('canonical testing docs track the standalone worker-owned Freeform browser proof scope', () => {
+    // Phase-B P3c: the browser proof renders the session chat DIRECTLY in the worker
+    // Workbench with no micro-app. The mounted-surface / archived-mount-rejection
+    // proof is removed; the archived-session follow-up rejection covers the lifecycle.
     const testing = readRepoFile('docs/testing.md')
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')
     const browserProof = readRepoFile('tests/browser/freeform-cli-golden-path.spec.ts')
 
+    expect(testing).toContain('-> renders the session chat directly in the worker Workbench without any micro-app')
     expect(testing).toContain('-> verifies the first invocation and starts a session-level follow-up from browser context')
-    expect(testing).toContain('-> shows bridge event refs to the mounted surface')
+    expect(testing).toContain('-> shows bridge event refs in the session chat')
     expect(testing).toContain('-> cancels a queued invocation without changing session lifecycle')
     expect(testing).toContain('-> reattaches and reconciles engine bridge events')
-    expect(testing).toContain('-> refreshes projection receipts from mounted context')
+    expect(testing).toContain('-> refreshes projection receipts from the Workbench')
     expect(testing).toContain('-> applies worker config overlay and observes worker-overlay projection receipts')
     expect(testing).toContain('-> archives the session and rejects follow-up')
     expect(testing).toContain('-> archives workspace and worker lifecycle, blocking new work on archived worker')
+
     expect(docCheck).toContain('browser proof must cover Freeform v1 scope')
     expect(docCheck).toContain('assertInvocationExternalSessionRefProof')
     expect(docCheck).toContain('externalSessionRef')
-    expect(docCheck).toContain('assertArchivedMountRejectionProof')
-    expect(docCheck).toContain('MOUNT_CONTEXT_INVALID')
-    expect(browserProof).toContain('readArchivedMountRejectionProofFromBrowser')
-    expect(browserProof).toContain('assertArchivedMountRejectionProof')
-    expect(browserProof).toContain('cannot mount workbench')
+
+    // The new proof renders chat directly: it asserts no micro-app and drives the
+    // worker-web chat surface; it keeps the reusable broker-fetch lifecycle proofs.
+    expect(browserProof).toContain('data-chat-surface="true"')
+    expect(browserProof).toContain('readSessionFollowUpProofFromBrowser')
+    expect(browserProof).toContain('assertSessionArchiveProof')
+    expect(browserProof).toContain('assertHostLifecycleArchiveProof')
+
+    // The retired mounted-surface / archived-mount-rejection helpers are gone (the
+    // proof asserts the absence of a micro-app rather than resolving a mount). The
+    // new proof asserts no micro-app renders.
+    expect(browserProof).not.toContain('readArchivedMountRejectionProofFromBrowser')
+    expect(browserProof).not.toContain('assertArchivedMountRejectionProof')
+    expect(browserProof).not.toContain('assertMountedMicroAppHostData')
+    expect(browserProof).toContain('rendered a mounted micro-app')
   })
 
   test('tag release workflow runs the canonical release gate before publishing', () => {
@@ -1931,43 +1933,50 @@ describe('destructive refactor contract bootstrap', () => {
     expect(existsSync(join(repoRoot, 'packages/shared-v2'))).toBe(false)
   })
 
-  test.todo('production mounted workbench chain uses descriptor v1 without legacy surface shim', () => {
-    // Phase-B teardown: docs/testing.md Pending Implementation
-    // New model: the Worker owns and directly renders its Workbench — there is no mounted
-    // workbench resolution and no custom-vs-SDK-common fallback. Restore when/if a
-    // Soul-provided mounted workbench returns.
-    const activeProductionSources = [
+  test('there is no mounted workbench chain: no /api/mount/workbench, no soul-workbench package, no descriptor workbench', () => {
+    // Phase-B P3c: the Worker owns and directly renders its Workbench. The mounted
+    // micro-app chain is removed entirely — no mount route, no resolution, no
+    // custom-vs-SDK-common fallback, no Soul-provided workbench package.
+    // Scope: worker-plane sources only. The Phase-2 Host control plane
+    // (host-web, worker-control-protocol configMicroAppEntry) is intentionally
+    // out of scope and keeps its dormant default.
+    const workerPlaneSources = [
       'packages/worker-daemon/src/modes/worker.ts',
-      'apps/worker-web/src/features/local-workspace/api/workspace-data.ts',
-      'apps/worker-web/src/features/local-workspace/api/index.ts',
-      'apps/worker-web/src/worker/studio/mounted-surface.tsx',
+      'packages/worker-daemon/src/modes/worker/openapi.ts',
       'apps/worker-web/src/worker/worker-studio.tsx',
     ]
     const forbiddenSnippets = [
-      '/api/local/apps/:appId/surfaces/:surfaceId',
-      '/api/local/apps/$' + '{appId}/surfaces/$' + '{surfaceId}',
+      '/api/mount/workbench',
       'mountedSurfaceResponse',
       'findMountedSurfaceContribution',
       'findWorkbenchMountContributions',
-      'host-descriptor',
       'resolveMountedSurface',
+      'resolveMountedWorkbench',
+      'descriptorWorkbenchContribution',
     ]
 
-    const findings = activeProductionSources.flatMap((path) => {
+    const findings = workerPlaneSources.flatMap((path) => {
       const source = readRepoFile(path)
       return forbiddenSnippets
         .filter(snippet => source.includes(snippet))
         .map(snippet => `${path}: ${snippet}`)
     })
 
-    expect(findings, 'descriptor workbench mount must not depend on legacy surface shim').toEqual([])
+    expect(findings, 'worker plane must have no mounted workbench chain').toEqual([])
 
+    // The deleted Soul-provided workbench packages must be gone.
+    expect(existsSync(join(repoRoot, 'packages/soul-workbench'))).toBe(false)
+    expect(existsSync(join(repoRoot, 'packages/soul-app-runtime'))).toBe(false)
+
+    // The descriptor v1 parser carries no workbench section.
+    const descriptorSource = readRepoFile('packages/soul-descriptor/src/index.ts')
+    expect(descriptorSource).not.toContain('workbenchSchema')
+    expect(descriptorSource).not.toContain('\'workbench\',')
+
+    // The daemon's mounted-workbench resolution tests are gone with the chain.
     const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
-    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
-    expect(daemonTest).toContain('resolves custom descriptor workbench without SDK common fallback')
-    expect(daemonTest).toContain('data-custom-workbench="true"')
-    expect(daemonTest).toContain('data-aiworker-common-workbench="true"')
-    expect(docCheck).toContain('custom descriptor workbench must bypass SDK common fallback')
+    expect(daemonTest).not.toContain('resolves custom descriptor workbench without SDK common fallback')
+    expect(daemonTest).not.toContain('data-custom-workbench="true"')
   })
 
   test('WorkerStudio renders the session chat directly without mounted micro-app machinery', () => {

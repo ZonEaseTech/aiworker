@@ -31,12 +31,6 @@ describe('npm package smoke script contract', () => {
         scope: 'worker',
         version: '1',
       },
-      workbench: {
-        entry: 'dist/web/workbench/index.html',
-        mode: 'sdk-common',
-        router: { mode: 'search' },
-        type: 'micro-app',
-      },
       engine: {
         workspaceAssets: { source: 'dist/engine-assets/workspace' },
         skills: { source: 'dist/engine-assets/skills' },
@@ -55,7 +49,6 @@ describe('npm package smoke script contract', () => {
       external: {},
     }))
     const files = [
-      'package/official-apps/aiworker-freeform/dist/web/workbench/index.html',
       'package/official-apps/aiworker-freeform/dist/engine-assets/workspace/README.md',
       'package/official-apps/aiworker-freeform/dist/engine-assets/skills/freeform/SKILL.md',
       'package/official-apps/aiworker-freeform/dist/engine-assets/mcp/claude-code/.mcp.json',
@@ -63,7 +56,6 @@ describe('npm package smoke script contract', () => {
     ]
 
     expect(() => assertTarballDescriptorRefs(files, 'package/official-apps/aiworker-freeform', [
-      { kind: 'file', ref: descriptor.workbench.entry },
       { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
       { kind: 'dir', ref: descriptor.engine.skills?.source },
       ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),
@@ -74,7 +66,7 @@ describe('npm package smoke script contract', () => {
     ])).toThrow('npm package descriptor reference escapes package root: ../outside.txt')
 
     expect(() => assertTarballDescriptorRefs(files, 'package/official-apps/aiworker-freeform', [
-      { kind: 'file', ref: 'dist/web/workbench/missing.html' },
-    ])).toThrow('npm package descriptor references missing file: package/official-apps/aiworker-freeform/dist/web/workbench/missing.html')
+      { kind: 'file', ref: 'dist/engine-assets/mcp/codex/missing.toml' },
+    ])).toThrow('npm package descriptor references missing file: package/official-apps/aiworker-freeform/dist/engine-assets/mcp/codex/missing.toml')
   })
 })

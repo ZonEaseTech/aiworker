@@ -7,7 +7,7 @@ import { join } from 'node:path'
 
 import { chromium } from 'playwright'
 import { closeWorkerDb, createEngineInvocation, initWorkerDb, upsertFile, upsertWorkerConfigValue } from '../../packages/storage-sqlite/src/worker/index'
-import { MOUNT_TIMEOUT_MS } from './mount-wait'
+import { MOUNT_TIMEOUT_MS as WORKBENCH_RENDER_TIMEOUT_MS } from './mount-wait'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const appId = 'aiworker-freeform'
@@ -115,13 +115,11 @@ try {
   })
   const baseUrl = `http://127.0.0.1:${port}`
   const health = await waitForHealth(baseUrl)
-  const mountProof = await fetchJson(`${baseUrl}/api/mount/workbench?workerId=${workerId}&workspaceId=${workspaceResult.workspace.id}&sessionId=${sessionResult.session.id}&theme=light`)
-  await writeEvidence('mount-proof.json', mountProof)
-  // Populate engine targets before mount: the daemon's rescan scans the fake codex
-  // on PATH so the mounted engine-readiness module has a target to render.
+  // Populate engine targets: the daemon's rescan scans the fake codex on PATH so
+  // the Workbench has a ready engine target for the live session chat.
   await fetch(`${baseUrl}/api/engine/targets/rescan`, { method: 'POST' })
-  // Materialise a workspace projection receipt before mount so the mounted
-  // projection-receipt-status lifecycle module has a 'found' receipt to render.
+  // Materialise a workspace projection receipt so the Workbench can refresh and
+  // observe a 'found' worker-overlay projection receipt.
   await fetch(`${baseUrl}/api/projections/codex/refresh`, {
     body: JSON.stringify({ workerId, workspaceId: workspaceResult.workspace.id }),
     headers: { 'content-type': 'application/json' },
@@ -134,127 +132,63 @@ try {
   page.on('pageerror', error => browserEvents.push(`pageerror:${error.message}`))
   page.on('requestfailed', request => browserEvents.push(`requestfailed:${request.url()}:${request.failure()?.errorText ?? 'unknown'}`))
 
+  // Standalone worker-owned flow: the Worker Workbench opens with Host absent on a
+  // worker/workspace/session locator and renders the session chat DIRECTLY in
+  // worker-web. There is no mounted micro-app and no /api/mount/workbench.
   const routeUrl = `${baseUrl}/workers/${workerId}/workspaces/${workspaceResult.workspace.id}/sessions/${sessionResult.session.id}`
   await page.goto(routeUrl, { waitUntil: 'domcontentloaded' })
-  const microApp = page.locator('micro-app[data-slot="soul-app-mounted-micro-app"]')
-  await microApp.waitFor({ state: 'attached', timeout: MOUNT_TIMEOUT_MS })
 
-  const mountAttributes = await microApp.evaluate(element => ({
-    data: (element as HTMLElement & { data?: unknown }).data,
-    routerMode: element.getAttribute('router-mode'),
-    url: element.getAttribute('url'),
-  }))
-  if (mountAttributes.routerMode !== 'search')
-    throw new Error(`Expected router-mode=search, received ${mountAttributes.routerMode}`)
-  const mountedUrl = mountAttributes.url ?? ''
-  for (const expected of [
-    `/api/apps/${appId}/micro-app/workbench`,
-    `workerId=${workerId}`,
-    `workspaceId=${workspaceResult.workspace.id}`,
-    `sessionId=${sessionResult.session.id}`,
-  ]) {
-    if (!mountedUrl.includes(expected))
-      throw new Error(`Mounted URL missed ${expected}: ${mountedUrl}`)
-  }
-  assertMountedMicroAppHostData(
-    readRecord(readRecord(mountProof).microApp).data,
-    workerId,
-    workspaceResult.workspace.id,
-    sessionResult.session.id,
-  )
-  assertMountedMicroAppHostData(
-    mountAttributes.data,
-    workerId,
-    workspaceResult.workspace.id,
-    sessionResult.session.id,
-  )
+  // The worker-owned chat surface renders directly in worker-web (ChatSurface →
+  // ChatComposer + ChatTranscript), marked by `data-chat-surface="true"`. There is
+  // no `<micro-app>` element anywhere in the document.
+  const chatSurface = page.locator('[data-chat-surface="true"]')
+  await chatSurface.waitFor({ state: 'attached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 
-  await waitForFreeformWorkbench(page)
-  const mountedSurface = await readMountedSurface(page)
-  if (!mountedSurface.commonRoot)
-    throw new Error(`Freeform common workbench root did not render: ${mountedSurface.text}`)
-  if (!mountedSurface.bridgeRefs || !mountedSurface.text.includes('Bridge event refs'))
-    throw new Error(`Bridge event refs were not visible to the mounted surface: ${mountedSurface.text}`)
+  const microAppCount = await page.locator('micro-app').count()
+  if (microAppCount !== 0)
+    throw new Error(`Worker Workbench rendered a mounted micro-app (${microAppCount}); v1 has no micro-app, the Worker renders chat directly.`)
+
+  // The ChatTranscript (ChatThread) renders directly in the page light DOM — the
+  // transcript log slot must be present without any micro-app shadow root.
+  const transcriptLog = page.locator('[data-transcript-slot="chat-thread"]')
+  await transcriptLog.waitFor({ state: 'attached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+
+  // The employee starts a session-level follow-up from browser context: this
+  // exercises POST /api/sessions/:sessionId/invocations directly from the rendered
+  // Workbench, proving the worker-owned chat drives real invocations.
   const browserSessionFollowUpProof = await readSessionFollowUpProofFromBrowser(page, sessionResult.session.id)
   assertBrowserSessionFollowUpProof(browserSessionFollowUpProof, sessionResult.session.id)
   const browserFollowUpInvocationId = String(readRecord(browserSessionFollowUpProof.invocation).id)
+
+  // Bridge events stream into the chat: the follow-up invocation's bridge events
+  // are readable + reattachable, and carry the opaque external session ref. These
+  // are the bridge event refs the session chat shows.
   const invocationEventProof = await readInvocationEventProofFromBrowser(page, browserFollowUpInvocationId)
   assertInvocationEventProof(invocationEventProof, browserFollowUpInvocationId)
   const invocationExternalSessionRefProof = await readInvocationExternalSessionRefProofFromBrowser(page, browserFollowUpInvocationId)
   assertInvocationExternalSessionRefProof(invocationExternalSessionRefProof, browserFollowUpInvocationId)
-  for (const expectedSection of [
-    'Worker configuration summary',
-    'Session controls',
-    'Projection receipt status',
-    'Archive controls',
-  ]) {
-    if (!mountedSurface.text.includes(expectedSection))
-      throw new Error(`Mounted Freeform workbench missed ${expectedSection}: ${mountedSurface.text}`)
-  }
-  // Verify the interactive React bundle actually renders in the real mount (not
-  // just the static shell). Poll for the React-rendered ready marker; on absence
-  // dump console events + the mounted micro-app HTML so a real React-in-mount
-  // blocker can be told apart from a test-timing artifact.
-  const reactWorkbenchReady = await page.evaluate(async () => {
-    const deadline = Date.now() + 5000
-    while (Date.now() < deadline) {
-      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      if (document.querySelector('[data-aiworker-workbench-ready="true"]') || micro?.shadowRoot?.querySelector('[data-aiworker-workbench-ready="true"]'))
-        return true
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-    return false
-  })
-  if (!reactWorkbenchReady) {
-    const micro = await page.evaluate(() => {
-      const node = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      return { light: node?.innerHTML ?? null, shadow: node?.shadowRoot?.innerHTML ?? null }
-    })
-    throw new Error(`Interactive React workbench-ready marker absent in real mount. browserEvents=${JSON.stringify(browserEvents)} microApp=${JSON.stringify(micro).slice(0, 4000)}`)
-  }
-  // Verify the bundled packages/ui (Tailwind) stylesheet is injected AND applied
-  // inside the micro-app sandbox — a live-only signal that text assertions miss.
-  // The shadcn Button renders `display: inline-flex`; a native unstyled <button>
-  // is `inline-block`, so inline-flex can only come from the injected Tailwind CSS.
-  const uiProbe = await page.evaluate(() => {
-    const fromRoot = (root: Document | ShadowRoot | null | undefined) => root?.querySelector('[data-aiworker-ui-probe="true"]') ?? null
-    const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-    const probe = fromRoot(document) ?? fromRoot(micro?.shadowRoot)
-    if (!probe)
-      return { found: false as const }
-    const style = getComputedStyle(probe)
-    return { backgroundColor: style.backgroundColor, display: style.display, found: true as const }
-  })
-  if (!uiProbe.found)
-    throw new Error('packages/ui Button probe missing in real mount.')
-  if (uiProbe.display !== 'inline-flex' || uiProbe.backgroundColor === 'rgba(0, 0, 0, 0)')
-    throw new Error(`packages/ui Button unstyled in real mount (Tailwind CSS not injected/applied): ${JSON.stringify(uiProbe)}`)
 
-  // Drive the live engine loop through the mounted composer: submit an input and
-  // assert two distinct, live-only renders inside the micro-app sandbox:
-  //  - a `user-message` item carrying the verbatim composer text (the chat surface
-  //    echoes the submission via withUserMessageTurn) — proves composer -> ChatThread;
-  //  - an engine-streamed transcript item (assistant output, tool activity, or a
-  //    status, depending on the invocation outcome) produced ONLY by mapping events
-  //    streamed over the US-005 SSE endpoint through bridgeEventsToTranscriptTurns —
-  //    proves the real broker -> SSE -> mapper -> ChatThread render path, distinct
-  //    from the echoed user message (which withUserMessageTurn adds unconditionally).
-  // The static shell produces neither slot.
-  const composerMessage = 'Stream a follow-up turn from the mounted workbench.'
-  await page.locator('micro-app [data-aiworker-composer-input="true"]').fill(composerMessage)
-  await page.locator('micro-app [data-aiworker-composer-submit="true"]').click()
+  // Drive the live engine loop through the rendered composer: type a message and
+  // submit it. The chat surface echoes the submission as a `user-message` transcript
+  // turn (proves composer → ChatThread) and renders engine-streamed transcript
+  // turns mapped from the invocation's bridge events (proves broker → mapper →
+  // ChatThread). Both render directly in the page — no micro-app shadow root.
+  // browser-box-only: the composer textarea + submit-button (type="submit", rendered
+  // by packages/ui SessionComposer) are driven live; they cannot be confirmed
+  // without a browser.
+  const composerMessage = 'Stream a follow-up turn from the worker Workbench chat.'
+  await chatSurface.locator('textarea').first().fill(composerMessage)
+  await chatSurface.locator('button[type="submit"]').first().click()
   const transcript = await page.evaluate(async (needle) => {
-    // Transcript slots bridgeEventsToTranscriptTurns can produce, each from a
-    // distinct bridge event kind (output.delta / tool.observed / error) — any one
-    // rendering proves the SSE -> mapper -> ChatThread path.
-    const streamedSlots = ['assistant-markdown', 'activity-group', 'status-message']
+    // Any rendered transcript turn slot proves the chat surface mapped the
+    // invocation into the ChatThread. The user-message slot echoes the composer
+    // text; transcript-turn / status-message come from mapped bridge events.
+    const streamedSlots = ['transcript-turn', 'status-message']
     const deadline = Date.now() + 8000
     let userText: null | string = null
     let slots: string[] = []
     while (Date.now() < deadline) {
-      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      const roots: Array<Document | ShadowRoot> = micro?.shadowRoot ? [document, micro.shadowRoot] : [document]
-      const query = (selector: string) => roots.map(root => root.querySelector(selector)).find(node => node != null) ?? null
+      const query = (selector: string) => document.querySelector(selector)
       const userMessage = query('[data-transcript-slot="user-message"]')
       if (userMessage)
         userText = (userMessage.textContent ?? '').trim()
@@ -266,168 +200,30 @@ try {
     return { slots, userText }
   }, composerMessage)
   if (transcript.userText === null || !transcript.userText.includes(composerMessage))
-    throw new Error(`Mounted workbench ChatThread did not render the composer's user message. got=${JSON.stringify(transcript.userText)}`)
+    throw new Error(`Worker Workbench chat did not render the composer's user message. got=${JSON.stringify(transcript.userText)}`)
   if (transcript.slots.length === 0)
-    throw new Error(`Mounted workbench ChatThread rendered no SSE-streamed engine item (assistant-markdown/activity-group/status-message) from the invocation, only the echoed user message.`)
-
-  // The seeded workspace file renders as a session artifact in the mounted
-  // ArtifactStrip. Both `data-transcript-slot="artifact-strip"` and the file name
-  // are live-only — they appear only when the workbench fetched workspace files
-  // (GET /api/workspace-locators/:id/files) and mapped them through filesToArtifacts.
-  const artifactStripText = await page.evaluate(async () => {
-    const deadline = Date.now() + 8000
-    let lastText: null | string = null
-    while (Date.now() < deadline) {
-      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      const strip = document.querySelector('[data-transcript-slot="artifact-strip"]') ?? micro?.shadowRoot?.querySelector('[data-transcript-slot="artifact-strip"]')
-      if (strip) {
-        lastText = (strip.textContent ?? '').trim()
-        if (lastText.includes('report.md'))
-          return lastText
-      }
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-    return lastText
-  })
-  if (artifactStripText === null || !artifactStripText.includes('report.md'))
-    throw new Error(`Mounted workbench ArtifactStrip did not render the seeded workspace artifact. got=${JSON.stringify(artifactStripText)}`)
-
-  // The seeded worker config value renders in the mounted configuration summary
-  // module. `data-aiworker-config-key="engine-selection"` is live-only — it appears
-  // only when the workbench fetched worker config (GET /api/workers/:id/config) and
-  // mapped it through summarizeWorkerConfig into a packages/ui row.
-  const configRowText = await page.evaluate(async () => {
-    const deadline = Date.now() + 8000
-    let lastText: null | string = null
-    while (Date.now() < deadline) {
-      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      const row = document.querySelector('[data-aiworker-config-key="engine-selection"]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-config-key="engine-selection"]')
-      if (row) {
-        lastText = (row.textContent ?? '').trim()
-        if (lastText.includes('engine-selection'))
-          return lastText
-      }
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-    return lastText
-  })
-  if (configRowText === null || !configRowText.includes('engine-selection'))
-    throw new Error(`Mounted workbench configuration summary did not render the seeded worker config. got=${JSON.stringify(configRowText)}`)
-
-  // The rescanned codex engine renders in the mounted engine-readiness module.
-  // `data-aiworker-engine-target="codex"` is live-only — it appears only when the
-  // workbench fetched engine targets (GET /api/engine/targets) and mapped them
-  // through summarizeEngineTargets into a packages/ui row.
-  const isInstalled = (text: string) => text.includes('installed') && !text.includes('not installed')
-  const engineRowText = await page.evaluate(async () => {
-    const deadline = Date.now() + 8000
-    let lastText: null | string = null
-    while (Date.now() < deadline) {
-      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      const row = document.querySelector('[data-aiworker-engine-target="codex"]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-engine-target="codex"]')
-      if (row) {
-        const text = (row.textContent ?? '').trim()
-        lastText = text
-        if (text.includes('installed') && !text.includes('not installed'))
-          return text
-      }
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-    return lastText
-  })
-  if (engineRowText === null || !isInstalled(engineRowText))
-    throw new Error(`Mounted workbench engine-target readiness did not render the rescanned codex engine as installed. got=${JSON.stringify(engineRowText)}`)
-
-  // The Freeform descriptor's baseline overlay assets (skill / mcp-client /
-  // entry-file) render in the mounted skills/mcp/entry sections. Each
-  // `data-aiworker-config` overlay section is live-only — it renders only when the
-  // workbench fetched the worker overlay and selectOverlayAssets found assets of
-  // that kind (the sections hide themselves when empty).
-  const overlaySections = await page.evaluate(async () => {
-    const configs = ['skills-overlay', 'mcp-overlay', 'entry-files']
-    const deadline = Date.now() + 8000
-    let present: string[] = []
-    while (Date.now() < deadline) {
-      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      const find = (config: string) =>
-        document.querySelector(`[data-aiworker-config="${config}"] [data-aiworker-overlay-asset]`)
-        ?? micro?.shadowRoot?.querySelector(`[data-aiworker-config="${config}"] [data-aiworker-overlay-asset]`)
-      present = configs.filter(config => find(config))
-      if (present.length === configs.length)
-        return present
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-    return present
-  })
-  for (const config of ['skills-overlay', 'mcp-overlay', 'entry-files']) {
-    if (!overlaySections.includes(config))
-      throw new Error(`Mounted workbench overlay module '${config}' rendered no baseline asset. rendered=${JSON.stringify(overlaySections)}`)
-  }
-
-  // The materialised workspace projection receipt renders 'found' in the mounted
-  // projection-receipt-status lifecycle module. `data-aiworker-projection-receipt
-  // ="found"` is live-only — it appears only when the workbench fetched the receipt
-  // (GET /api/projections/receipts/:workspaceId) and mapped it through
-  // summarizeProjectionReceipt.
-  const receiptStatus = await page.evaluate(async () => {
-    const deadline = Date.now() + 8000
-    while (Date.now() < deadline) {
-      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      const node = document.querySelector('[data-aiworker-projection-receipt="found"]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-projection-receipt="found"]')
-      if (node)
-        return (node.textContent ?? '').trim()
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-    return null
-  })
-  if (receiptStatus === null || !receiptStatus.includes('found'))
-    throw new Error(`Mounted workbench projection-receipt-status did not render a found receipt. got=${JSON.stringify(receiptStatus)}`)
-
-  // The session-lifecycle module renders the active session state plus an archive
-  // control. `data-aiworker-session-status="active"` + the archive button are
-  // live-only — they appear only when the workbench fetched the session
-  // (GET /api/sessions/:id). The archive mutation route is exercised end-to-end by
-  // the session-archive proof below; here we assert the module's display + control.
-  const sessionLifecycle = await page.evaluate(async () => {
-    const deadline = Date.now() + 8000
-    let found = false
-    while (Date.now() < deadline) {
-      const micro = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      const status = document.querySelector('[data-aiworker-session-status="active"]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-session-status="active"]')
-      const archive = document.querySelector('[data-aiworker-session-archive="true"]') ?? micro?.shadowRoot?.querySelector('[data-aiworker-session-archive="true"]')
-      if (status && archive) {
-        found = true
-        return found
-      }
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-    return found
-  })
-  if (!sessionLifecycle)
-    throw new Error('Mounted workbench session-lifecycle module did not render the active session status and archive control.')
+    throw new Error(`Worker Workbench chat rendered no engine transcript turn (transcript-turn/status-message) from the invocation, only the echoed user message.`)
 
   assertNoUnexpectedBrowserEvents(browserEvents)
 
-  const projectionRefreshProof = await readProjectionRefreshProofFromBrowser(page, workerId, workspaceResult.workspace.id)
-  assertProjectionRefreshProof(projectionRefreshProof, workspaceResult.workspace.id)
-
+  // Cancel a queued invocation without changing session lifecycle.
   const invocationCancelProof = await readInvocationCancelProofFromBrowser(page, cancelInvocationId)
   assertInvocationCancelProof(invocationCancelProof, cancelInvocationId, sessionResult.session.id)
 
+  // Reattach and reconcile engine bridge events.
   const invocationReconcileProof = await readInvocationReconcileProofFromBrowser(page, reconcileInvocationId)
   assertInvocationReconcileProof(invocationReconcileProof, reconcileInvocationId, sessionResult.session.id)
 
+  // Refresh projection receipts from the Workbench and observe a found
+  // worker-overlay projection receipt.
+  const projectionRefreshProof = await readProjectionRefreshProofFromBrowser(page, workerId, workspaceResult.workspace.id)
+  assertProjectionRefreshProof(projectionRefreshProof, workspaceResult.workspace.id)
+
+  // Archive the session and reject a follow-up on the archived session.
   const sessionArchiveProof = await readSessionArchiveProofFromBrowser(page, sessionResult.session.id)
   assertSessionArchiveProof(sessionArchiveProof, sessionResult.session.id)
 
-  const archivedMountRejectionProof = await readArchivedMountRejectionProofFromBrowser(
-    page,
-    workerId,
-    workspaceResult.workspace.id,
-    sessionResult.session.id,
-  )
-  assertArchivedMountRejectionProof(archivedMountRejectionProof, sessionResult.session.id)
-
+  // Archive workspace and worker lifecycle, blocking new work on the archived worker.
   const hostLifecycleArchiveProof = await readHostLifecycleArchiveProofFromBrowser(page, workerId, workspaceResult.workspace.id)
   assertHostLifecycleArchiveProof(hostLifecycleArchiveProof, workerId, workspaceResult.workspace.id)
 
@@ -437,16 +233,15 @@ try {
     browserEvents,
     cliOutputs,
     health,
-    mountAttributes,
-    mountProof,
-    mountedSurface,
+    chatSurfaceRendered: true,
+    microAppCount,
+    transcript,
     browserSessionFollowUpProof,
     invocationCancelProof,
     invocationEventProof,
     invocationExternalSessionRefProof,
     invocationReconcileProof,
     projectionRefreshProof,
-    archivedMountRejectionProof,
     hostLifecycleArchiveProof,
     sessionArchiveProof,
     routeUrl,
@@ -605,54 +400,6 @@ async function waitForHealth(baseUrl: string): Promise<unknown> {
     await new Promise(resolve => setTimeout(resolve, 250))
   }
   throw new Error(`daemon did not become healthy: ${lastError instanceof Error ? lastError.message : String(lastError)}`)
-}
-
-async function fetchJson(url: string): Promise<unknown> {
-  const response = await fetch(url)
-  const body = await response.text()
-  if (!response.ok)
-    throw new Error(`${url} failed ${response.status}: ${body}`)
-  return JSON.parse(body)
-}
-
-async function waitForFreeformWorkbench(page: Page): Promise<void> {
-  try {
-    await page.waitForFunction(() => {
-      const text = document.body.textContent ?? ''
-      const microApp = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-      return text.includes('AIWorker Common Workbench')
-        || text.includes('Bridge event refs')
-        || Boolean(document.querySelector('[data-aiworker-common-workbench="true"]'))
-        || Boolean(microApp?.shadowRoot?.querySelector('[data-aiworker-common-workbench="true"]'))
-        || Boolean(document.querySelector('micro-app[data-slot="soul-app-mounted-micro-app"][data-child-ready="true"]'))
-    }, undefined, { timeout: MOUNT_TIMEOUT_MS })
-  }
-  catch (error) {
-    throw new Error(`Freeform workbench did not render: ${JSON.stringify({
-      browserEvents,
-      diagnostics: await readBrowserDiagnostics(page),
-      error: error instanceof Error ? error.message : String(error),
-    })}`)
-  }
-}
-
-async function readMountedSurface(page: Page): Promise<{ bridgeRefs: boolean, commonRoot: boolean, text: string }> {
-  return await page.evaluate(() => {
-    const microApp = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-    const hostText = document.body.textContent ?? ''
-    const shadowText = microApp?.shadowRoot?.textContent ?? ''
-    return {
-      bridgeRefs: Boolean(
-        document.querySelector('[data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events"]')
-        || microApp?.shadowRoot?.querySelector('[data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events"]'),
-      ),
-      commonRoot: Boolean(
-        document.querySelector('[data-aiworker-common-workbench="true"]')
-        || microApp?.shadowRoot?.querySelector('[data-aiworker-common-workbench="true"]'),
-      ),
-      text: `${hostText}\n${shadowText}`,
-    }
-  })
 }
 
 async function readInvocationEventProofFromBrowser(page: Page, invocationId: string): Promise<Record<string, unknown>> {
@@ -1153,39 +900,6 @@ function assertSessionArchiveProof(proof: Record<string, unknown>, sessionId: st
     throw new Error(`Archive proof exposed retired turn semantics: ${serialized}`)
 }
 
-async function readArchivedMountRejectionProofFromBrowser(
-  page: Page,
-  workerId: string,
-  workspaceId: string,
-  sessionId: string,
-): Promise<Record<string, unknown>> {
-  return await page.evaluate(async ({ sessionId, workerId, workspaceId }) => {
-    const response = await fetch(`/api/mount/workbench?workerId=${workerId}&workspaceId=${workspaceId}&sessionId=${sessionId}&theme=light`)
-    const body = await response.text()
-    return {
-      body: JSON.parse(body) as Record<string, unknown>,
-      status: response.status,
-    }
-  }, { sessionId, workerId, workspaceId })
-}
-
-function assertArchivedMountRejectionProof(proof: Record<string, unknown>, sessionId: string): void {
-  if (proof.status !== 400)
-    throw new Error(`Archived locator mounted a workbench from browser context: ${JSON.stringify(proof)}`)
-
-  const error = readRecord(readRecord(proof.body).error)
-  if (error.code !== 'MOUNT_CONTEXT_INVALID')
-    throw new Error(`Archived mount rejection used the wrong error code: ${JSON.stringify(proof)}`)
-  if (typeof error.message !== 'string' || !error.message.includes(`Session ${sessionId} is archived and cannot mount workbench.`))
-    throw new Error(`Archived mount rejection missed archived session diagnostic: ${JSON.stringify(proof)}`)
-
-  const serialized = JSON.stringify(proof)
-  for (const forbidden of ['/turns/', '"turn"', 'candidateId', 'reviewRecord', 'artifactContent', 'literal-secret-value']) {
-    if (serialized.includes(forbidden))
-      throw new Error(`Archived mount rejection exposed forbidden content ${forbidden}: ${serialized}`)
-  }
-}
-
 async function readHostLifecycleArchiveProofFromBrowser(page: Page, workerId: string, workspaceId: string): Promise<Record<string, unknown>> {
   return await page.evaluate(async ({ workerId, workspaceId }) => {
     const workspaceArchiveResponse = await fetch(`/api/workspace-locators/${workspaceId}/archive`, { method: 'POST' })
@@ -1277,36 +991,6 @@ function readRecord(value: unknown): Record<string, unknown> {
   if (!isRecord(value))
     throw new Error(`Expected record, received ${JSON.stringify(value)}`)
   return value
-}
-
-function assertMountedMicroAppHostData(value: unknown, workerId: string, workspaceId: string, sessionId: string): void {
-  const data = readRecord(value)
-  if (data.appId !== appId || data.workerId !== workerId || data.workspaceId !== workspaceId || data.sessionId !== sessionId)
-    throw new Error(`Mounted micro-app data missed locator context: ${JSON.stringify(data)}`)
-  if (data.routePrefix !== `/api/apps/${appId}` || data.surfaceId !== 'workbench' || data.surfaceKind !== 'route' || data.surfaceScope !== 'app')
-    throw new Error(`Mounted micro-app data missed app-owned route metadata: ${JSON.stringify(data)}`)
-  if (typeof data.mountTokenPresent !== 'boolean')
-    throw new Error(`Mounted micro-app data did not report app API token availability as a boolean: ${JSON.stringify(data)}`)
-  for (const forbiddenKey of ['mountToken', 'mountSignature', 'mountContext']) {
-    if (forbiddenKey in data)
-      throw new Error(`Mounted micro-app data exposed Host mount credential material ${forbiddenKey}: ${JSON.stringify(data)}`)
-  }
-  const serialized = JSON.stringify(data)
-  for (const forbiddenHeader of ['x-aiworker-mount-token', 'x-aiworker-mount-signature', 'x-aiworker-mount-context']) {
-    if (serialized.includes(forbiddenHeader))
-      throw new Error(`Mounted micro-app data exposed Host mount credential header ${forbiddenHeader}: ${serialized}`)
-  }
-}
-
-async function readBrowserDiagnostics(page: Page): Promise<unknown> {
-  return await page.evaluate(() => {
-    const microApp = document.querySelector('micro-app') as (HTMLElement & { shadowRoot?: ShadowRoot | null }) | null
-    return {
-      bodyText: document.body.textContent,
-      microAppHtml: microApp?.outerHTML,
-      shadowHtml: microApp?.shadowRoot?.innerHTML,
-    }
-  })
 }
 
 function assertNoUnexpectedBrowserEvents(events: string[]): void {

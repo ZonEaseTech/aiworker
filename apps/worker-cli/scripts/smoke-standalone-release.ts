@@ -85,7 +85,6 @@ async function assertStandaloneBundleOfficialFreeformDescriptor(rootDir: string,
     throw new Error(`standalone bundle Freeform descriptor must use protocol soul/v1: ${descriptorPath}`)
   }
   await assertStandaloneBundleDescriptorRefs(appRoot, [
-    { kind: 'file', ref: descriptor.workbench.entry },
     { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
     { kind: 'dir', ref: descriptor.engine.skills?.source },
     ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),

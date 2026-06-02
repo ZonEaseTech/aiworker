@@ -32,8 +32,6 @@ const FORBIDDEN_LEGACY_IMPORT_PREFIXES = [
 
 const ALLOWED_SHARED_PACKAGES = new Set([
   '@zonease/aiworker-soul-sdk',
-  '@zonease/aiworker-soul-app-runtime',
-  '@zonease/aiworker-soul-workbench',
   '@zonease/aiworker-ui',
 ])
 

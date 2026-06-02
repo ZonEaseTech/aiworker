@@ -1712,7 +1712,8 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('soul', 'build', appDir))).toBe(0)
     const built = JSON.parse(output) as { appId: string, descriptorPath: string, generatedSections: string[], status: string }
     expect(built).toMatchObject({ appId: 'authoring-soul', descriptorPath, status: 'built' })
-    expect(built.generatedSections).toEqual(expect.arrayContaining(['workbench']))
+    expect(built.generatedSections).toEqual(expect.arrayContaining(['engine.workspaceAssets']))
+    expect(built.generatedSections).not.toContain('workbench')
     expect(built.generatedSections).not.toContain('capabilities')
     await expect(stat(descriptorPath)).resolves.toBeTruthy()
   })
@@ -1757,7 +1758,6 @@ describe('aiworker local CLI', () => {
       }
       identity: { appId: string, name: string, soulId: string, version: string }
       protocol: string
-      workbench: { entry: string, router: { mode: string }, type: string }
     }
     expect(scaffoldPackageJson.dependencies['@zonease/aiworker-soul-sdk']).toBe('workspace:*')
     expect(scaffoldPackageJson.scripts.build).toBe('bun scripts/build.ts')
@@ -1775,12 +1775,8 @@ describe('aiworker local CLI', () => {
         version: '0.1.0',
       },
       protocol: 'soul/v1',
-      workbench: {
-        entry: 'dist/web/workbench/index.html',
-        router: { mode: 'search' },
-        type: 'micro-app',
-      },
     })
+    expect(descriptor).not.toHaveProperty('workbench')
     expect(descriptor.engine).toMatchObject({
       mcp: {
         targets: {
@@ -1869,8 +1865,8 @@ describe('aiworker local CLI', () => {
       engineAssets: 'pass',
       sdkValidation: 'valid',
       status: 'pass',
-      workbench: 'pass',
     })
+    expect(smoke.smoke).not.toHaveProperty('workbench')
     expect(smoke.smoke).not.toHaveProperty('standalone')
     expect(smoke.smoke).not.toHaveProperty('mountedService')
   })
@@ -1880,7 +1876,11 @@ describe('aiworker local CLI', () => {
     await writeFile(descriptorPath, JSON.stringify({
       compatibility: {},
       configuration: {},
-      engine: {},
+      engine: {
+        workspaceAssets: {
+          source: 'dist/engine-assets/../host-adapter',
+        },
+      },
       extensions: {},
       external: {},
       health: {},
@@ -1891,11 +1891,6 @@ describe('aiworker local CLI', () => {
         version: '0.1.0',
       },
       protocol: 'soul/v1',
-      workbench: {
-        entry: 'dist/../host-adapter/workbench.html',
-        router: { mode: 'search' },
-        type: 'micro-app',
-      },
     }))
 
     expect(await runCli(argv('app', 'validate', descriptorPath))).toBe(1)
@@ -1909,7 +1904,7 @@ describe('aiworker local CLI', () => {
     expect(validation.validation.descriptorIssues).toEqual(expect.arrayContaining([
       expect.objectContaining({
         code: 'invalid_descriptor',
-        path: 'workbench.entry',
+        path: 'engine.workspaceAssets.source',
       }),
     ]))
   })

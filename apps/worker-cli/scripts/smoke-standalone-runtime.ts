@@ -142,7 +142,6 @@ async function assertStandaloneOfficialFreeformDescriptor(officialAppsRoot: stri
     throw new Error(`standalone Freeform descriptor must use protocol soul/v1: ${descriptorPath}`)
   }
   await assertStandaloneDescriptorRefs(freeformRoot, [
-    { kind: 'file', ref: descriptor.workbench.entry },
     { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
     { kind: 'dir', ref: descriptor.engine.skills?.source },
     ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),

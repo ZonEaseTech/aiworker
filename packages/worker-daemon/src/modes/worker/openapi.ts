@@ -94,7 +94,6 @@ export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'post', path: '/api/projections/{target}/refresh', summary: 'Refresh engine projection', tags: ['projections'], created: true },
     { method: 'get', path: '/api/projections/receipts/{receiptId}', summary: 'Show projection receipt', tags: ['projections'] },
     { method: 'post', path: '/api/projections/receipts/{receiptId}/cleanup', summary: 'Clean up receipt-owned projection files', tags: ['projections'], created: true },
-    { method: 'get', path: '/api/mount/workbench', summary: 'Resolve mounted workbench', tags: ['mount'] },
   ]
 
   for (const path of paths) {

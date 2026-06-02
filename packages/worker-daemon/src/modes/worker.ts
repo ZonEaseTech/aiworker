@@ -1,9 +1,9 @@
-import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppEngineTarget } from '@zonease/aiworker-soul-descriptor'
+import type { LocalSettingsConfig, LocalWorkerOverlayAsset, SoulAppEngineTarget } from '@zonease/aiworker-soul-descriptor'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerApiAuthProvider, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 
 import type { Context } from 'hono'
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
@@ -97,20 +97,6 @@ export interface LocalDaemonState {
   now?: () => string
 }
 
-interface MountedSurfaceContribution {
-  id: string
-  kind: 'artifact-preview' | 'panel' | 'route' | 'workspace-widget'
-  label: string
-  path?: string
-  surface: {
-    entry: string
-    renderer: 'micro-app'
-    requiredPermissions?: readonly string[]
-    scope: 'app' | 'artifact' | 'session' | 'workspace'
-  }
-  target?: string
-}
-
 export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}): Promise<{
   app: OpenAPIHono
   port: number
@@ -185,9 +171,10 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     checkedAt: new Date().toISOString(),
   }))
 
-  // Host↔Worker 控制契约面（被动 server；Host 是 client）。今由 mounted 配置
-  // micro-app 承载，契约 transport-agnostic（worker-control-protocol）。这些端点只
-  // 读/接收控制信封，不得触碰 session/invocation/projection/engine 逻辑（C5）。
+  // Host↔Worker 控制契约面（被动 server；Host 是 client）。Phase-2 Host 控制面把
+  // Worker 自有的 Workbench web 当作 sandboxed micro-app 来 mount；契约 transport-
+  // agnostic（worker-control-protocol）。这些端点只读/接收控制信封，不得触碰
+  // session/invocation/projection/engine 逻辑（C5）。
   app.get('/api/control/health', c => c.json({ ready: true }))
 
   app.get('/api/control/worker', (c) => {
@@ -203,7 +190,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       templateId: worker.appId,
       version: state.runtimeVersion,
       health: { ready: true },
-      configMicroAppEntry: '/api/mount/workbench',
+      // Phase-2 Host control plane mounts the Worker's own Workbench web (served at
+      // the daemon root), not a Soul-provided micro-app. v1 has no mounted workbench.
+      configMicroAppEntry: '/',
     })
   })
 
@@ -425,7 +414,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const workspace = getWorkspace(c.req.param('workspaceId'))
     if (!workspace)
       return notFound(c, 'workspace')
-    // Workspace-scoped files back the mounted workbench artifacts surface (session
+    // Workspace-scoped files back the Workbench artifacts surface (session
     // artifacts live in the workspace, not on a single invocation result).
     return c.json(redactBrokerOutput({ files: listFiles(workspace.id) }))
   })
@@ -548,7 +537,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const limit = readPositiveInteger(c.req.query('limit'), 500)
     const session = requireSession(invocation.sessionId)
     const runtime = requireRuntime(state, session.workerId)
-    // text/event-stream consumers (EventSource in the mounted workbench) get a live
+    // text/event-stream consumers (EventSource in the Workbench chat) get a live
     // SSE tail; everyone else keeps the snapshot JSON. Both reuse the same
     // reattach + redaction so SSE frames never leak what JSON would not.
     if ((c.req.header('accept') ?? '').includes('text/event-stream'))
@@ -650,55 +639,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     }, 201)
   })
 
-  app.get('/api/mount/workbench', async (c) => {
-    const workerId = c.req.query('workerId')
-    const workspaceId = c.req.query('workspaceId')
-    const sessionId = c.req.query('sessionId')
-    if (!workerId)
-      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: 'workerId is required.' } }, 400)
-    const worker = requireWorker(workerId)
-    const workspace = workspaceId ? requireWorkerWorkspace(worker.id, workspaceId) : null
-    const session = sessionId ? requireWorkerSession(worker.id, sessionId) : null
-    if (workspace && session && session.workspaceId !== workspace.id)
-      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} does not belong to workspace ${workspace.id}` } }, 400)
-    if (worker.status === 'archived')
-      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Worker ${worker.id} is archived and cannot mount workbench.` } }, 400)
-    if (workspace?.status === 'archived')
-      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Workspace ${workspace.id} is archived and cannot mount workbench.` } }, 400)
-    if (session?.status === 'archived')
-      return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} is archived and cannot mount workbench.` } }, 400)
-    const app = state.host.getApp(worker.appId)
-    if (!app)
-      return notFound(c, 'Soul App')
-    if (app.status !== 'enabled')
-      return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-    const contribution = descriptorWorkbenchContribution(app)
-    if (!contribution)
-      return c.json({ error: { code: 'WORKBENCH_ENTRY_NOT_FOUND', message: `Soul App does not declare a mounted workbench entry: ${app.appId}` } }, 404)
-    const sourceUrl = new URL(c.req.url)
-    const entry = `${appOwnedApiRoutePrefix(app)}${contribution.surface.entry}`
-    return c.json({
-      locator: {
-        sessionId: session?.id ?? null,
-        workerId: worker.id,
-        workspaceId: workspace?.id ?? null,
-      },
-      microApp: {
-        data: mountedMicroAppData(c, state, app, contribution),
-        name: `${app.appId}--${contribution.id}`,
-        url: `${entry}${sourceUrl.search}`,
-      },
-      mount: {
-        appId: app.appId,
-        entry,
-        surfaceId: contribution.id,
-        type: contribution.surface.renderer,
-      },
-      routerMode: 'search',
-      surface: publicMountedSurfaceContribution(contribution),
-    })
-  })
-
   app.get('/api/settings', (c) => {
     const settings = loadLocalSettings()
     return c.json({ settings })
@@ -718,20 +658,13 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ settings })
   })
 
-  // A Soul has no app-owned API: this route is GET-only and serves the mounted
-  // workbench micro-app bundle (entry HTML + sibling assets) under the descriptor
-  // workbench directory. It is not a proxy to any Soul-owned local service.
-  app.get('/api/apps/:appId/:path{.+}', (c) => {
-    return serveMountedWorkbenchAsset(c, state)
-  })
-
   registerLocalOpenApiPaths(app)
   app.doc('/openapi.json', {
     openapi: '3.1.0',
     info: {
       title: 'AIWorker Local Daemon API',
       version: runtimeVersion,
-      description: 'Local Shell and Engine Bridge API for Soul Apps, Soul workers, workspaces, sessions, artifacts, files, the mounted workbench, native engine invocations, and settings.',
+      description: 'Local Shell and Engine Bridge API for Soul Apps, Soul workers, workspaces, sessions, artifacts, files, native engine invocations, and settings.',
     },
   })
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
@@ -1143,14 +1076,6 @@ function requireSession(sessionId: string): SessionRow {
   return session
 }
 
-function requireWorkerSession(workerId: string, sessionId: string): SessionRow {
-  requireWorker(workerId)
-  const session = requireSession(sessionId)
-  if (session.workerId !== workerId)
-    throw AppError.badRequest(`Session ${sessionId} does not belong to worker ${workerId}`)
-  return session
-}
-
 function unavailableSoulAppResponse(c: Context, state: LocalDaemonState, workerId: string): Response | null {
   try {
     state.host.requireEnabledAppForWorker(workerId)
@@ -1164,165 +1089,6 @@ function unavailableSoulAppResponse(c: Context, state: LocalDaemonState, workerI
       return c.json(error.toJSON(), status)
     }
     throw error
-  }
-}
-
-function serveMountedWorkbenchAsset(c: Context, state: LocalDaemonState): Promise<Response> | Response {
-  const appId = c.req.param('appId')
-  if (!appId)
-    return notFound(c, 'Soul App')
-  const app = state.host.getApp(appId)
-  if (!app)
-    return notFound(c, 'Soul App')
-  if (app.status !== 'enabled')
-    return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-  return serveMountedWorkbenchAssetForApp(c, app)
-}
-
-async function serveMountedWorkbenchAssetForApp(c: Context, app: HostedSoulApp): Promise<Response> {
-  // A Soul is a descriptor-only template with no app-owned API: the only thing
-  // served under /api/apps/:appId is the mounted workbench micro-app bundle.
-  const staticResponse = await descriptorMountedAssetResponse(c, app)
-  if (staticResponse)
-    return staticResponse
-  return notFound(c, 'mounted workbench asset')
-}
-
-function appOwnedApiRoutePrefix(app: HostedSoulApp): string {
-  return app.api.routePrefix ?? `/api/apps/${app.appId}`
-}
-
-function mountContextExpiry(state: LocalDaemonState): string {
-  const base = state.now ? Date.parse(state.now()) : Date.now()
-  return new Date(base + 5 * 60_000).toISOString()
-}
-
-function publicMountedSurfaceContribution(contribution: MountedSurfaceContribution) {
-  return {
-    id: contribution.id,
-    kind: contribution.kind,
-    label: contribution.label,
-    path: contribution.path ?? null,
-    renderer: contribution.surface.renderer,
-    requiredPermissions: contribution.surface.requiredPermissions ?? [],
-    scope: contribution.surface.scope,
-    target: contribution.target ?? null,
-  }
-}
-
-function mountedMicroAppData(
-  c: Context,
-  state: LocalDaemonState,
-  app: HostedSoulApp,
-  contribution: MountedSurfaceContribution,
-): MountedMicroAppHostData {
-  return {
-    appId: app.appId,
-    artifactId: c.req.query('artifactId') ?? null,
-    expiresAt: mountContextExpiry(state),
-    mountTokenPresent: false,
-    routePrefix: appOwnedApiRoutePrefix(app),
-    sessionId: c.req.query('sessionId') ?? null,
-    surfaceId: contribution.id,
-    surfaceKind: contribution.kind,
-    surfaceScope: contribution.surface.scope,
-    theme: c.req.query('theme') ?? null,
-    workerId: c.req.query('workerId') ?? null,
-    workspaceId: c.req.query('workspaceId') ?? null,
-  }
-}
-
-async function descriptorMountedAssetResponse(c: Context, app: HostedSoulApp): Promise<Response | null> {
-  if (app.sourceKind !== 'descriptor-path')
-    return null
-
-  const sourceUrl = new URL(c.req.url)
-  const appPrefix = `/api/apps/${app.appId}/`
-  const relativeRequestPath = decodeURIComponent(sourceUrl.pathname.slice(appPrefix.length))
-  const contribution = descriptorWorkbenchContribution(app)
-  if (!contribution)
-    return null
-
-  const workbenchEntry = app.descriptor?.workbench?.entry
-  if (typeof workbenchEntry !== 'string' || workbenchEntry.length === 0)
-    return null
-
-  // The mounted workbench is a built micro-app bundle (方案 C): serve its entry
-  // AND its sibling bundle assets. The contribution entry is a virtual path
-  // (e.g. `micro-app/workbench`). micro-app resolves the bundle's relative asset
-  // refs (`./assets/index.js`) against that entry treated as a DIRECTORY, so the
-  // browser requests `micro-app/workbench/assets/index.js`. That entry directory
-  // maps to the descriptor workbench directory (e.g. `web/workbench`): the entry
-  // itself maps to the descriptor entry file, and `<entry>/<asset>` maps to the
-  // same-named bundle asset under the workbench directory.
-  const entryRelative = contribution.surface.entry.replace(/^\//, '')
-  const workbenchDirRelative = path.posix.dirname(workbenchEntry.replace(/^dist\//, ''))
-  let descriptorAssetPath: null | string = null
-  if (relativeRequestPath === entryRelative)
-    descriptorAssetPath = workbenchEntry.replace(/^dist\//, '')
-  else if (relativeRequestPath.startsWith(`${entryRelative}/`))
-    descriptorAssetPath = path.posix.join(workbenchDirRelative, relativeRequestPath.slice(entryRelative.length + 1))
-  if (!descriptorAssetPath)
-    return null
-
-  const descriptorRoot = path.dirname(app.sourceRef)
-  const resolvedAsset = path.resolve(descriptorRoot, descriptorAssetPath)
-  const resolvedRoot = path.resolve(descriptorRoot)
-  if (!isPathInside(resolvedAsset, resolvedRoot)) {
-    return new Response(JSON.stringify({ error: { code: 'DESCRIPTOR_ASSET_PATH_INVALID', message: 'Descriptor mounted asset escapes descriptor root.' } }), {
-      headers: { 'content-type': 'application/json' },
-      status: 400,
-    })
-  }
-
-  try {
-    const body = await readFile(resolvedAsset)
-    return new Response(body, {
-      headers: { 'content-type': contentTypeForMountedAsset(resolvedAsset) },
-    })
-  }
-  catch {
-    return new Response(JSON.stringify({ error: { code: 'DESCRIPTOR_ASSET_NOT_FOUND', message: `Descriptor mounted asset not found: ${contribution.id}` } }), {
-      headers: { 'content-type': 'application/json' },
-      status: 404,
-    })
-  }
-}
-
-function isPathInside(candidate: string, root: string): boolean {
-  const relative = path.relative(root, candidate)
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
-}
-
-function contentTypeForMountedAsset(filePath: string): string {
-  const extension = path.extname(filePath).toLowerCase()
-  if (extension === '.html')
-    return 'text/html; charset=utf-8'
-  if (extension === '.css')
-    return 'text/css; charset=utf-8'
-  if (extension === '.js')
-    return 'text/javascript; charset=utf-8'
-  if (extension === '.json')
-    return 'application/json'
-  if (extension === '.svg')
-    return 'image/svg+xml'
-  return 'application/octet-stream'
-}
-
-function descriptorWorkbenchContribution(app: HostedSoulApp): MountedSurfaceContribution | null {
-  if (app.descriptor?.workbench?.type !== 'micro-app')
-    return null
-
-  return {
-    id: app.mountedWorkbench.id,
-    kind: 'route',
-    label: 'Workbench',
-    path: app.mountedWorkbench.path,
-    surface: {
-      entry: app.mountedWorkbench.entry,
-      renderer: app.mountedWorkbench.renderer,
-      scope: app.mountedWorkbench.scope,
-    },
   }
 }
 

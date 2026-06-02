@@ -12,19 +12,6 @@ describe('official Freeform descriptor parser', () => {
     ).toThrow('expected official Freeform identity')
   })
 
-  test('rejects descriptor v1 packages that drift from the canonical Freeform workbench', () => {
-    expect(() =>
-      parseOfficialFreeformDescriptorJson(fixtureDescriptorText({
-        workbench: {
-          entry: 'dist/web/workbench/index.html',
-          mode: 'custom',
-          router: { mode: 'search' },
-          type: 'micro-app',
-        },
-      })),
-    ).toThrow('expected official Freeform SDK common workbench')
-  })
-
   test('rejects descriptor v1 packages that drop canonical Freeform native MCP targets', () => {
     expect(() =>
       parseOfficialFreeformDescriptorJson(fixtureDescriptorText({
@@ -52,7 +39,6 @@ function fixtureDescriptorText(options: {
   engine?: unknown
   name?: string
   soulId?: string
-  workbench?: unknown
 } = {}): string {
   return `${JSON.stringify({
     protocol: 'soul/v1',
@@ -68,14 +54,6 @@ function fixtureDescriptorText(options: {
       sdk: '>=1.0.0',
     },
     configuration: {},
-    workbench: options.workbench ?? {
-      entry: 'dist/web/workbench/index.html',
-      mode: 'sdk-common',
-      router: {
-        mode: 'search',
-      },
-      type: 'micro-app',
-    },
     engine: options.engine ?? {
       mcp: {
         targets: {

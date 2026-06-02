@@ -63,11 +63,6 @@ describe('CLI publish manifest builder', () => {
         version: '0.1.0',
       },
       protocol: 'soul/v1',
-      workbench: {
-        entry: 'dist/web/workbench/index.html',
-        router: { mode: 'search' },
-        type: 'micro-app',
-      },
     }))
     await writeFile(path.join(appRoot, 'dist', 'engine-assets', 'workspace', 'AGENTS.md'), '# Demo\n')
     await writeFile(path.join(appRoot, 'dist', 'engine-assets', 'workspace', 'AGENTS.test.ts'), 'throw new Error("not shipped")\n')

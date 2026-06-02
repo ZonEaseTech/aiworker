@@ -40,7 +40,7 @@ describe('release artifact smoke', () => {
 
     await expect(
       verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz descriptor references missing file: aiworker-darwin-arm64/official-apps/aiworker-freeform/dist/web/workbench/index.html')
+    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz descriptor references missing dir: aiworker-darwin-arm64/official-apps/aiworker-freeform/dist/engine-assets/workspace')
   })
 
   it('rejects attach artifacts when required journal migration SQL files are missing from the tarball', async () => {
@@ -110,7 +110,6 @@ async function writeFixtureDist(root: string, options: { descriptorText?: string
   await mkdir(path.join(dist, 'web', 'worker'), { recursive: true })
   await mkdir(path.join(dist, 'drizzle', 'worker', 'meta'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist'), { recursive: true })
-  await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'workspace'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'skills'), { recursive: true })
   await mkdir(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex'), { recursive: true })
@@ -119,7 +118,6 @@ async function writeFixtureDist(root: string, options: { descriptorText?: string
   await writeFile(path.join(dist, 'web', 'worker', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(dist, 'drizzle', 'worker', '0000_fixture.sql'), '-- migration\n')
   await writeFile(path.join(dist, 'drizzle', 'worker', 'meta', '_journal.json'), '{"entries":[{"tag":"0000_fixture"}]}\n')
-  await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'web', 'workbench', 'index.html'), '<!doctype html>\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'engine-assets', 'mcp', 'claude-code', '.mcp.json'), '{}\n')
   await writeFile(path.join(dist, 'official-apps', 'aiworker-freeform', 'dist', 'soul.descriptor.json'), options.descriptorText ?? fixtureDescriptorText())
@@ -218,7 +216,6 @@ function fixtureDescriptorText(options: {
     health: { ready: true, type: 'static' },
     identity: { appId: 'aiworker-freeform', name: 'AIWorker Freeform', soulId: 'freeform', version: '0.1.0' },
     protocol: 'soul/v1',
-    workbench: { entry: 'dist/web/workbench/index.html', mode: 'sdk-common', router: { mode: 'search' }, type: 'micro-app' },
   })}\n`
 }
 

@@ -124,12 +124,6 @@ function hostedApp({
         version: '0.1.0',
       },
       protocol: 'soul/v1',
-      workbench: {
-        entry: 'dist/web/workbench/index.html',
-        mode: 'sdk-common',
-        router: { mode: 'search' },
-        type: 'micro-app',
-      },
     },
     descriptorDigest: `${appId}-digest`,
     engineAssets: {

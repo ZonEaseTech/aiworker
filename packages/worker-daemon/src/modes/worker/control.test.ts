@@ -65,7 +65,9 @@ describe('worker-daemon control contract endpoints', () => {
     // 必须满足 worker-control-protocol 的 describe 形状（含 configMicroAppEntry）
     const describe = parseWorkerDescribe(body)
     expect(describe.templateId).toBe(FREEFORM_APP_ID)
-    expect(describe.configMicroAppEntry).toContain('/api/mount/workbench')
+    // Phase-2 Host control plane mounts the Worker's own Workbench web (daemon root),
+    // not a Soul-provided micro-app. v1 has no /api/mount/workbench.
+    expect(describe.configMicroAppEntry).toBe('/')
   })
 
   it('GET /api/control/worker returns the single active worker, not listWorkers()[0]', async () => {
@@ -98,19 +100,18 @@ describe('worker-daemon control contract endpoints', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'WORKER_NOT_FOUND' } })
   })
 
-  it('standalone discovery chain: /api/control/worker → configMicroAppEntry mounts without Host', async () => {
+  it('standalone discovery: /api/control/worker self-describes workerId + Workbench entry without Host', async () => {
     const target = await app()
     await createFreeformWorker(target, 'standalone-worker')
-    // 1. 控制契约自描述:standalone client 无先验地发现 workerId + 配置 micro-app 入口
+    // 控制契约自描述:standalone client 无先验地发现 workerId + Worker 自有 Workbench 入口。
+    // v1 无 mounted micro-app:Phase-2 Host 控制面把 Worker 自有的 Workbench web(daemon
+    // 根)当作 sandboxed micro-app mount,Worker 直接渲染自己的 Workbench,不再有
+    // /api/mount/workbench 来 resolve Soul-provided micro-app。
     const describeRes = await target.request('/api/control/worker')
     expect(describeRes.status).toBe(200)
     const describe = parseWorkerDescribe(await describeRes.json())
     expect(describe.workerId).toBe('standalone-worker')
-    expect(describe.configMicroAppEntry).toContain('/api/mount/workbench')
-    // 2. 用发现到的 workerId + configMicroAppEntry mount 配置 micro-app(无 Host 参与)
-    const mountRes = await target.request(`${describe.configMicroAppEntry}?workerId=${describe.workerId}`)
-    expect(mountRes.status).toBe(200)
-    expect(await mountRes.json()).toMatchObject({ routerMode: 'search', mount: { appId: FREEFORM_APP_ID } })
+    expect(describe.configMicroAppEntry).toBe('/')
   })
 
   it('PUT /api/control/assignment accepts a valid envelope', async () => {

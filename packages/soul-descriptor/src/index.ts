@@ -114,11 +114,6 @@ function isSafeBuiltDistPath(
 const hostInterpretedObjectSchema = jsonObjectSchema.superRefine(rejectForbiddenHostInterpretedFields)
 const externalObjectSchema = jsonObjectSchema.superRefine(rejectForbiddenDescriptorSecrets)
 
-const builtHtmlEntrySchema = z.string().refine(
-  value => isSafeBuiltDistPath(value, { extension: '.html', prefix: 'dist/' }),
-  'mounted workbench entry must point to a built HTML file under dist/',
-)
-
 const engineAssetDirectorySchema = z.string().refine(
   value => isSafeBuiltDistPath(value, { prefix: 'dist/engine-assets/' }),
   'engine asset source must point to a built engine asset directory under dist/engine-assets/',
@@ -130,21 +125,6 @@ const engineMcpFileSchema = z.string().refine(
     || isSafeBuiltDistPath(value, { extension: '.json', prefix: 'dist/engine-assets/mcp/' }),
   'native MCP descriptor file must point to a built .toml or .json file under dist/engine-assets/mcp/',
 )
-
-const workbenchRouterSchema = z
-  .object({
-    mode: z.literal('search').default('search'),
-  })
-  .strict()
-
-const workbenchSchema = z
-  .object({
-    entry: builtHtmlEntrySchema,
-    mode: z.enum(['sdk-common', 'custom']).default('sdk-common'),
-    router: workbenchRouterSchema.default({ mode: 'search' }),
-    type: z.literal('micro-app'),
-  })
-  .strict()
 
 const engineAssetSourceSchema = z
   .object({
@@ -179,7 +159,6 @@ export const soulDescriptorV1Schema = z
     identity: hostInterpretedObjectSchema,
     compatibility: hostInterpretedObjectSchema,
     configuration: hostInterpretedObjectSchema,
-    workbench: workbenchSchema,
     engine: engineSchema,
     health: hostInterpretedObjectSchema,
     extensions: hostInterpretedObjectSchema,
@@ -201,7 +180,6 @@ export const soulProtocolPackage = {
     'identity',
     'compatibility',
     'configuration',
-    'workbench',
     'engine',
     'health',
     'extensions',

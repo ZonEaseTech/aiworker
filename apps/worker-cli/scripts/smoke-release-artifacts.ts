@@ -93,7 +93,6 @@ async function assertOfficialFreeformDescriptorRefs(
   }
 
   const refs = [
-    { kind: 'file', ref: descriptor.workbench.entry },
     { kind: 'dir', ref: descriptor.engine.workspaceAssets?.source },
     { kind: 'dir', ref: descriptor.engine.skills?.source },
     ...Object.values(descriptor.engine.mcp?.targets ?? {}).map(target => ({ kind: 'file' as const, ref: target.file })),

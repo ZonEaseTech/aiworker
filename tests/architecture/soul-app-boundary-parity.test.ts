@@ -83,8 +83,6 @@ const FORBIDDEN_LEGACY_PACKAGES = [
 
 const ALLOWED_SHARED_PACKAGES = [
   '@zonease/aiworker-soul-sdk',
-  '@zonease/aiworker-soul-app-runtime',
-  '@zonease/aiworker-soul-workbench',
   '@zonease/aiworker-ui',
 ]
 
