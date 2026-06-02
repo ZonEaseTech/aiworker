@@ -31,7 +31,7 @@
     "test:contracts": "bun test tests/architecture scripts/check-soul-app-boundaries.test.ts",
     "test:protocol": "bun run --filter '@zonease/aiworker-soul-protocol' test",
     "test:cli": "bun run --filter '@zonease/aiworker-soul-workbench' build && bun run --filter '@zonease/aiworker-freeform' build && bun test apps/worker-cli/src/aiworker.test.ts apps/worker-cli/src/freeform-golden-path.test.ts --timeout=30000",
-    "test:browser:freeform": "bun run --filter '@zonease/aiworker-soul-workbench' build && bun run --filter '@zonease/aiworker-freeform' build && bun run --filter '@zonease/aiworker-worker-web' build && bun tests/browser/freeform-cli-golden-path.spec.ts && bun tests/browser/freeform-mounted-workbench.spec.ts",
+    "test:browser:freeform": "bun run --filter '@zonease/aiworker-freeform' build && bun run --filter '@zonease/aiworker-worker-web' build && bun tests/browser/freeform-cli-golden-path.spec.ts",
     "ui:check": "bun scripts/check-web-ui-components.ts",
     "docs:check": "bun scripts/check-doc-contract.ts",
     "check": "bun run typecheck && bun run lint",

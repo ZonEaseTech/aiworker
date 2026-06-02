@@ -7,26 +7,36 @@ skills, and temporary drafts are evidence only. They do not override this file.
 ## Position
 
 AIWorker is a worker-centric product. A Worker is an autonomous, CLI-first
-runtime that runs one Soul App through a native engine and owns engine launch.
+runtime that runs one Soul through a native engine and owns engine launch.
 
-A Worker runs fully standalone. Host is never on the runtime hot path.
+A Worker runs fully standalone. v1 ships the standalone Worker only; the Host
+control plane is Phase 2 and is never on the runtime hot path.
 
-Host is an optional control plane: distributor, manager, permission allocator,
-and connector authorizer.
+A Worker is bound to exactly one Soul when it is created. The binding is fixed
+for the Worker's whole life: every workspace the Worker creates is governed by
+that one Soul.
 
-The default product paths are:
+A Worker owns and directly renders its Workbench — the Worker's own employee web.
+The Workbench is not a mounted micro-app and is not provided by the Soul. v1 has
+no micro-app anywhere. The Workbench manages the Worker's workspaces, the
+sessions nested under each workspace, the session chat, and the Worker's own
+configuration.
+
+The default product path is:
 
 ```text
-Worker -> Soul App -> workspace locator -> session -> app-owned work
-Host -> distribute / manage / authorize / connector -> mount worker config micro-app
+Worker -> Workbench -> workspace -> session (chat) -> native engine
 ```
 
 A Worker starts its own local infrastructure, locates workspace/session context,
-serves its own employee web, owns projection and the engine bridge, launches and
-observes the native engine, and exposes a control surface. Host distributes,
-manages, allocates permissions, authorizes connectors, and mounts a Worker's
-configuration micro-app to configure it. Host does not spawn, observe, or hold engine processes. Host is not a domain workflow layer, a product backend, an agent
-runtime, a repository dashboard, or a Soul App configuration center.
+serves its own Workbench web, owns projection and the engine bridge, launches and
+observes the native engine, and exposes a local broker API.
+
+Host is an optional control plane: distributor, manager, permission allocator,
+and connector authorizer. Host is Phase 2 and is never on the runtime hot path.
+Host does not spawn, observe, or hold engine processes. Host is not a domain
+workflow layer, a product backend, an agent runtime, a repository dashboard, or a
+Soul configuration center.
 
 ## Decision Coverage Index
 
@@ -34,81 +44,78 @@ tmp/refactor decisions are evidence until promoted. Accepted refactor decisions
 become active authority only when they are represented in the canonical docs,
 guarded by tests, or both.
 
-- docs/architecture.md owns worker autonomy, Host control-plane ownership, monorepo
-  boundaries, data ownership, Freeform v1 scope, and destructive migration
-  constraints.
-- docs/protocol.md owns descriptor, broker route, configuration envelope, mounted workbench, and app-owned API contracts.
+- docs/architecture.md owns worker autonomy, worker-owns-workbench, Soul-as-template,
+  Host control-plane ownership, monorepo boundaries, data ownership, Freeform v1
+  scope, and destructive migration constraints.
+- docs/protocol.md owns descriptor, broker route, configuration envelope, and the
+  Phase 2 Host↔Worker control contract.
 - docs/runtime.md owns projection, runtime assets CRUD, engine bridge, lifecycle, cleanup, and redaction contracts.
 - docs/soul-authoring.md owns SDK authoring, convention discovery, build output,
   native MCP source layout, and Freeform source contract.
-- docs/testing.md owns the coverage ledger and guardrail mapping.
-- worker-control-protocol owns the transport-agnostic Host↔Worker control contract.
+- docs/testing.md owns the coverage ledger, guardrail mapping, and the Phase 2
+  implementation-teardown debt.
 
 ## Ownership
 
-Soul Apps, also called Templates, own domain state, domain UI/API, business
-outputs, confirmation actions, app-owned history, standalone experience, mounted
-product experience, descriptor production, and engine target declaration.
-A Worker is a running instance of a Soul App.
+A Soul is a template: a named, descriptor-only bundle of engine assets —
+workspace files, skills, native MCP files, and entry files such as `AGENTS.md`
+and `CLAUDE.md` — targeting one or more native engines. "Soul" is the
+human-facing name; functionally it is a template. A Soul owns only that template
+definition and its descriptor production. A Soul has no UI, no app-owned API, no
+capability layer, and no domain backend; the work a session does comes from the
+projected skills and entry files the native engine reads, plus the employee's
+chat input.
 
-A Worker owns its runtime state:
+A Worker is a running instance bound to one Soul. A Worker owns its runtime state:
 
-- the Soul descriptor or template it runs;
-- workspace locator and workspace root;
+- the Soul descriptor it is bound to;
+- workspace locators and workspace roots;
 - session lifecycle metadata;
 - engine invocations and engine process state;
 - engine launch via the engine bridge;
 - projection, projection receipts, and receipt-based cleanup;
 - worker-scoped configuration overlays;
-- its own employee web and app-owned API proxy;
+- its own Workbench web and local broker API;
 - its own storage and filesystem root;
 - redaction of its own output.
 
-Host owns only control-plane metadata:
+Host (Phase 2) owns only control-plane metadata:
 
 - the worker registry: which workers exist, identity, endpoint, health;
-- assignment metadata: assigned template/soul, connectors, engine/gateway profile, permissions;
+- assignment metadata: assigned Soul, connectors, engine/gateway profile, permissions;
 - permission allocation and connector authorization;
 - worker distribution and provisioning records.
 
 Host must not own session, invocation, projection, engine processes, domain
 state, or secrets. A Worker must not depend on Host to run. Worker packages must
-not import Host packages.
+not import Host packages — a runtime-direction rule retained even while the Host
+plane is dormant in v1.
 
 ## Daemon Topology (daemon-per-worker)
 
-A Worker daemon hosts at most one active Worker. The fleet is N worker daemon
-processes, each with its own storage root; an optional Host control plane brokers
-across worker endpoints by endpoint. A Worker daemon carries zero fleet/Host
-awareness: it is a passive control server, and Host is the active client that
-discovers and connects in. The Worker never registers with or pushes to Host.
-`worker-*` packages must not import `host-*` packages — a runtime direction rule,
-not only a build-time dependency rule.
+A Worker daemon hosts at most one active Worker. A Worker daemon carries zero
+fleet/Host awareness: it is a passive local server that serves its own CLI,
+Workbench web, and configuration. The Worker never registers with or pushes to
+Host.
 
-The fleet is a plug-in shell layered from outside; the Worker stays pure. Fleet
-membership state lives entirely on the Host side. Plugging a Worker into a fleet
-means Host learns its endpoint from out-of-band configuration; unplugging means
-Host forgets the endpoint while the Worker keeps running standalone. The Worker
-binary and behavior do not change whether a fleet is present or absent. The
-`workerId` is the Worker's own minted identity, not a fleet-imposed handle.
-
-Phase 1 scope: the standalone single-daemon path is complete and usable — one
-daemon is one Worker with its own CLI, web, and configuration micro-app. Fleet
-brokering (Host endpoint registry persistence and endpoint discovery) is Phase 2
-and not yet available; an in-memory registry without endpoint discovery means the
-fleet is not yet operable. This is a self-consistent intermediate state only
-because this document says so.
+v1 scope: the standalone single-daemon path is the whole product — one daemon is
+one Worker with its own CLI, Workbench web, and configuration. The fleet — an
+optional Host control plane that discovers and brokers across worker endpoints —
+is Phase 2. In Phase 2 the fleet is a plug-in shell layered from outside; the
+Worker stays pure, its binary and behavior do not change whether a fleet is
+present or absent, and the `workerId` is the Worker's own minted identity, not a
+fleet-imposed handle.
 
 ## Monorepo Boundary
 
-The target top-level shape is:
+The v1 top-level shape is:
 
 ```text
 apps/
   worker-cli/
   worker-web/
-  host-cli/
-  host-web/
+  host-cli/      (Phase 2, dormant stub)
+  host-web/      (Phase 2, dormant stub)
 
 souls/
   aiworker-freeform/
@@ -116,12 +123,10 @@ souls/
 packages/
   worker-runtime/
   worker-daemon/
-  host-control/
-  worker-control-protocol/
-  soul-protocol/
-  soul-app-sdk/
-  soul-app-runtime/
-  soul-workbench/
+  host-control/             (Phase 2, dormant stub)
+  worker-control-protocol/  (Phase 2, dormant stub)
+  soul-descriptor/
+  soul-sdk/
   engine-bridge/
   engine-projection/
   storage-sqlite/
@@ -129,56 +134,65 @@ packages/
   ui/
 ```
 
-`apps/*` are runnable product shells. `souls/*` are descriptor-producing Soul App
-product packages. Package and app names are plane-prefixed: `worker-*` owns the autonomous runtime;
-`host-*` owns the control plane; capability packages keep capability names and are
-consumed mostly by Workers. `worker-*` packages must not import `host-*` packages. For v1 strong acceptance, Freeform is the only shipped Soul;
-retired HR/QA app-local source trees stay deleted until they are re-authored as
-descriptor-producing `souls/*` packages.
+`apps/*` are runnable product shells. `souls/*` are descriptor-producing Soul
+template packages. Package and app names are plane-prefixed: `worker-*` owns the
+autonomous runtime; `host-*` owns the Phase 2 control plane; shared capability
+packages keep their names and are consumed by Workers. The descriptor-protocol
+package is `soul-descriptor` and the authoring SDK is `soul-sdk`; both drop the
+retired `soul-protocol` / `soul-app-sdk` "soul-as-app" names (the physical rename
+is tracked Phase-B work). `worker-*` packages must not
+import `host-*` packages. For v1 strong acceptance, Freeform is the only shipped
+Soul; retired HR/QA app-local source trees stay deleted until they are re-authored
+as descriptor-producing `souls/*` packages.
+
+The Workbench has no package of its own: it lives in `apps/worker-web`, composed
+from `packages/ui` primitives. The retired `soul-workbench` and `soul-app-runtime`
+packages are removed; v1 has no Soul-provided UI and no mounted-workbench
+machinery.
 
 `packages/core and packages/shared disappear` as broad buckets. Do not create
 `core-v2`, `shared-v2`, or any replacement dumping ground.
 
-`apps/api` migrated into `packages/worker-daemon`. The control plane lives in
-`packages/host-control` with `apps/host-cli` and `apps/host-web` shells.
+`apps/api` migrated into `packages/worker-daemon`. The Phase 2 control plane lives
+in `packages/host-control` with `apps/host-cli` and `apps/host-web` shells.
 
 ## Protocol Boundary
 
-The Host/Soul boundary is descriptor-only. A Worker installs and runs Soul Apps from
-`dist/soul.descriptor.json`. Host must not read Soul source, import Soul private
-modules, or interpret domain fields.
+The Host/Soul boundary is descriptor-only. A Worker installs and runs a Soul from
+`dist/soul.descriptor.json`. Host (Phase 2) and the Workbench must not read Soul
+source, import Soul private modules, or interpret domain fields.
 
-Descriptor v1 is intentionally narrow: identity, compatibility, capabilities,
-configuration, workbench, api, engine, health, extensions, and external.
-Extensions are namespaced and opaque unless a future protocol version promotes
-them into the standard contract.
+Descriptor v1 is intentionally minimal: `protocol`, `identity`, `engine` asset
+refs and engine targets. It carries no workbench, no app-owned API, no
+capabilities, and no domain business concepts.
 
-Production mounted workbench surfaces use micro-app with
-`router-mode="search"`. The Worker daemon resolves one workbench entry; Host
-passes locator context and mounts. Soul owns internal routes and domain
-rendering.
+The Worker owns and renders its Workbench directly. v1 has no micro-app, no
+mounted-workbench resolution, and no Soul-provided UI. The session chat is
+rendered by `apps/worker-web` from `packages/ui` primitives, driven by the local
+broker API and the engine bridge event stream.
 
-The Host-to-Worker boundary is a transport-agnostic control contract owned by
-`packages/worker-control-protocol`. A Worker is the passive control server; Host is the client; a Worker never
-initiates a connection to Host. The control contract covers worker describe, health, instance lifecycle, and an
+Host↔Worker integration is Phase 2 and is over-the-wire only, with zero code
+intrusion in either direction:
+
+- a sandboxed micro-app loaded over HTTP, where Host frames the Worker's own
+  Workbench web — the Worker is unaware it is framed and keeps running standalone
+  if Host is absent;
+- the transport-agnostic control contract owned by
+  `packages/worker-control-protocol`, where a Worker is the passive control
+  server, Host is the client, and a Worker never initiates a connection to Host.
+
+The control contract covers worker describe, health, instance lifecycle, and an
 assignment envelope. It must not carry session, invocation, projection, engine,
-or domain data.
-
-Management mount lets Host configure a Worker through the Worker configuration
-micro-app. Management mount is distinct from the employee mount that serves
-workspace/session/composer; employees connect to the Worker web directly. In v1,
-both share the single broker endpoint `GET /api/mount/workbench`; the
-distinction is topological — Host frames the config micro-app in a managed
-context, while employees connect directly to the same broker — not a different
-URL. The mounted configuration micro-app is the only current control-contract
-transport; non-web transports are reserved and must not be hardcoded out.
+or domain data. Neither integration channel is on the v1 runtime path.
 
 ## Runtime Boundary
 
-Session lifecycle is separate from native engine execution. A session is a Worker locator for workspace locator, selected capability, and
-invocation references. Engine execution lives in `engine_invocations` and is
-owned by the Worker. The Worker, not Host, prepares engine invocation context and observes native
-engine output.
+Session lifecycle is separate from native engine execution. A session is a Worker
+locator for a workspace and its invocation references; it carries no capability.
+A session is, to the employee, a chat: a composer and a transcript over one
+workspace. Engine execution lives in `engine_invocations` and is owned by the
+Worker. The Worker, not Host, prepares engine invocation context and observes
+native engine output.
 
 Follow-up is session-level:
 
@@ -186,45 +200,44 @@ Follow-up is session-level:
 POST /api/sessions/:sessionId/invocations
 ```
 
-Native engine integration uses B+ structured bridge:
-
-- per-engine adapters;
-- process management;
-- redacted raw chunks;
-- normalized bridge events;
-- opaque external session refs;
-- protocol-first cancel;
-- reattach;
-- reconciler.
-
-The bridge does not own model calls, tool execution, approval flow, sandbox
-policy, login state, engine profile state, or engine-native sessions.
+The engine target defaults to the Worker's detected default engine and may be
+overridden per session. Native engine integration uses the B+ structured bridge:
+per-engine adapters, process management, redacted raw chunks, normalized bridge
+events, opaque external session refs, protocol-first cancel, reattach, and a
+reconciler. The bridge does not own model calls, tool execution, approval flow,
+sandbox policy, login state, engine profile state, or engine-native sessions.
 
 ## Freeform V1
 
 `souls/aiworker-freeform` is the only strong v1 acceptance Soul. It proves the
-framework loop: SDK authoring, descriptor build, descriptor-only install, worker
-create, workspace locator create, worker config overlay, projection refresh,
-session create, first invocation, session follow-up, cancel or completion,
-mounted common workbench with `router-mode="search"`, and archive.
+standalone framework loop with Host absent: SDK authoring, descriptor build,
+descriptor-only install, worker create bound to the Soul, workspace create, worker
+config overlay, projection refresh, session create, first invocation, session
+follow-up, cancel or completion, the worker-owned Workbench rendering the session
+chat, and archive.
 
-HR and QA remain first-party Soul identities, but they migrate after Freeform and
-do not block the v1 framework loop.
+HR and QA remain first-party Soul identities, but they migrate after Freeform as
+descriptor-producing templates and do not block the v1 framework loop.
 
 ## Destructive Migration Rules
 
-Contract and guardrails come first:
+This refactor is contract-first and runs in two phases.
 
-1. Promote canonical docs and doc gates to worker autonomy.
-2. Add red inversion guards (G1-G6).
-3. Create target package skeletons: worker-control-protocol, host-control, apps/host-cli, apps/host-web.
-4. Rename host-runtime to worker-runtime, host-daemon to worker-daemon, apps/cli to worker-cli, apps/web to worker-web.
-5. Carve the host/worker split points into worker-runtime and host-control.
-6. Implement the minimal Host↔Worker control contract.
-7. Wire host-web management mount of the Worker configuration micro-app.
-8. Make the Worker standalone golden path pass with Host absent.
-9. Delete old authority and old names.
-10. Update roadmap and memory.
+Phase A (this contract flip): promote the canonical docs and doc gates to the
+worker-owns-workbench, Soul-as-template, standalone-only v1 model; scrub every
+old-model assertion (mounted workbench, Soul-provided UI, app-owned API, and the
+capability layer) from the docs and doc gates; neutralize or `test.todo` the
+behavioral guards that assert the reversed model; and record the implementation
+teardown as tracked debt in docs/testing.md. The existing implementation is left
+running so `release:check` stays green; canon describes the target and the code
+follows in Phase B.
+
+Phase B (implementation teardown): remove the capability layer, the mounted
+micro-app and `/api/mount/workbench`, the `soul-workbench` and `soul-app-runtime`
+packages, the Host chrome in `apps/worker-web`, and the retired descriptor
+sections; collapse `appId`/`soulId` to a single Soul `id`; fold the session chat
+into the worker-owned Workbench with a workspace tree and nested sessions; and add
+worker-config overlay content editing. Each item is tracked in docs/testing.md.
 
 Do not modify the new architecture to satisfy old E2E assumptions. Legacy
 app-local adapter exports are removed, not migrated.

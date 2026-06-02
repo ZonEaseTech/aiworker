@@ -17,7 +17,6 @@ Architecture tests:
 ```text
 tests/architecture/
   forbidden-host-domain-schema.test.ts
-  freeform-mounted-workbench-contract.test.ts
   freeform-soul-contract.test.ts
   inversion-guards.test.ts
   package-ownership.test.ts
@@ -31,7 +30,6 @@ packages/soul-protocol/src/
   descriptor-v1.test.ts
   index.test.ts
   lib/ids.test.ts
-  mounted-routing-contract.test.ts
 ```
 
 SDK tests:
@@ -103,7 +101,6 @@ CLI and browser tests:
 apps/worker-cli/src/freeform-golden-path.test.ts
 apps/worker-cli/src/aiworker.test.ts
 tests/browser/freeform-cli-golden-path.spec.ts
-tests/browser/freeform-mounted-workbench.spec.ts
 ```
 
 CLI release smoke contract tests:
@@ -160,12 +157,11 @@ Coverage status values:
 | --- | --- | --- | --- |
 | Worker autonomy / Host control plane | `docs/architecture.md`, `AGENTS.md` | `bun run docs:check`, `bun run test:contracts` | docs+tests |
 | Descriptor-only Host/Soul boundary | `docs/protocol.md`, `docs/soul-authoring.md` | `packages/soul-protocol` tests, architecture tests | docs+tests |
-| Production mounted workbench routing | `docs/protocol.md`, `docs/runtime.md` | browser Freeform proof, mounted routing contract tests | docs+tests |
+| Worker-owned workbench | `docs/architecture.md`, `docs/runtime.md` | browser Freeform proof, refactor-contract tests | docs+tests |
 | Session lifecycle and invocation state split | `docs/runtime.md` | architecture tests and engine bridge tests | docs+tests |
 | Protocol implementation contract | `docs/protocol.md` | docs check and architecture tests | docs+tests |
 | Runtime and bridge contract | `docs/runtime.md` | engine bridge and projection tests | docs+tests |
 | OpenAPI and redaction boundary | `docs/runtime.md`, `AGENTS.md` | worker-daemon OpenAPI tests, storage redaction tests, engine bridge redaction tests, projection receipt tests | docs+tests |
-| App-owned API proxy | `docs/protocol.md`, `docs/runtime.md` | worker-daemon app-owned API proxy test and docs check | docs+tests |
 | Worker config envelope and Worker metadata security | `docs/protocol.md`, `docs/runtime.md`, `docs/architecture.md` | storage worker config envelope tests, worker-daemon worker config tests, CLI/Web worker config tests, docs check | docs+tests |
 | Soul authoring contract | `docs/soul-authoring.md` | SDK and Freeform contract tests | docs+tests |
 | Worker metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
@@ -227,18 +223,16 @@ The artifact smoke must verify checksums, required resources, descriptor referen
 
 ## Browser Proof Scope
 
-The v1 browser proof is Freeform-only:
+The v1 browser proof is Freeform-only and standalone:
 
 ```text
-Host Web opens worker/workspace/session locator
--> resolves Freeform workbench
--> mounts via micro-app router-mode=search
--> SDK common workbench renders
+Worker Workbench opens standalone with Host absent on worker/workspace/session locator
+-> renders the session chat directly in the worker Workbench without any micro-app
 -> verifies the first invocation and starts a session-level follow-up from browser context
--> shows bridge event refs to the mounted surface
+-> shows bridge event refs in the session chat
 -> cancels a queued invocation without changing session lifecycle
 -> reattaches and reconciles engine bridge events
--> refreshes projection receipts from mounted context
+-> refreshes projection receipts from the Workbench
 -> applies worker config overlay and observes worker-overlay projection receipts
 -> archives the session and rejects follow-up
 -> archives workspace and worker lifecycle, blocking new work on archived worker
@@ -246,4 +240,42 @@ Host Web opens worker/workspace/session locator
 
 Do not modify the new architecture to satisfy old E2E assumptions. Delete or
 rewrite tests that require Host to import Soul source, expect old daemon product
-backend behavior, or encode `router-mode="pure"` as production behavior.
+backend behavior, expect a Soul-provided mounted workbench, or encode
+`router-mode="pure"` as production behavior.
+
+## Pending Implementation (Phase-B Teardown)
+
+Phase A flipped the canonical docs and doc gates to the worker-owns-workbench,
+Soul-as-template, standalone-only v1 model. The implementation still carries the
+old model and is torn down in Phase B. `test.todo` guards point here. Tracked debt:
+
+- remove the capability layer: descriptor `capabilities`, session `capabilityId`,
+  `/api/capabilities`, CLI `--capability` / `capability list`, SDK `capability()`,
+  and Freeform `product/capabilities`;
+- remove the mounted micro-app: `/api/mount/workbench`, `mounted-surface`,
+  `@micro-zoe/micro-app`, and the descriptor `workbench` section plus its parser;
+- remove the app-owned API proxy: the `/api/apps/:appId` and `/api/apps/:appId/*`
+  runtime proxy routes and their credential-stripping handler, plus the descriptor
+  `api` section;
+- delete packages `soul-workbench` and `soul-app-runtime`; fold the session chat
+  into `apps/worker-web`, and de-reference `@zonease/aiworker-soul-workbench` from
+  the `test:cli` and `test:browser:freeform` build steps in `package.json`;
+- strip the Host chrome from `apps/worker-web` (New Soul worker, Soul Apps, worker
+  list); render the workspace tree with nested sessions and the session chat
+  directly in the worker Workbench;
+- collapse descriptor identity `appId`/`soulId` to a single Soul `id`, and prune
+  the retired descriptor sections from the parser;
+- rename packages to drop the "soul-as-app" naming: `soul-protocol` →
+  `soul-descriptor` and `soul-app-sdk` → `soul-sdk` (directories, `package.json`
+  names, `@zonease/aiworker-*` ids, all imports, tsconfig paths, the
+  `docs/architecture.md` monorepo shape, the `docs/testing.md` test paths, and gate
+  references such as `test:protocol` and `check-doc-contract.ts`);
+- remove SDK helpers `capability()` and `commonWorkbench()` (keep `defineSoul()`,
+  `skill()`, `nativeMcp()`, `workspaceAsset()`); replace residual "Soul App"
+  wording with "Soul" across source and output;
+- add worker-config overlay content editing for skills, MCP, and entry files;
+- keep the Host plane (`host-cli`, `host-web`, `host-control`,
+  `worker-control-protocol`) as dormant Phase 2 stubs;
+- reshape the `descriptor-v1` parser tests and the `apps/worker-web` mounted-render
+  guards to the worker-owned model;
+- add worker-owns-workbench and two-plane zero-intrusion architecture guards.

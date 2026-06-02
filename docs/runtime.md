@@ -4,29 +4,27 @@ This document defines canonical runtime behavior.
 
 ## Runtime Chains
 
-The runtime is seven chains:
+The runtime is six chains:
 
 1. Soul authoring and descriptor build.
 2. Descriptor install and worker enablement.
 3. Session start and first invocation.
 4. Runtime skills, MCP, and entry-file CRUD.
-5. Web workbench mount.
-6. App-owned API proxy.
-7. Archive and delete.
+5. Worker-owned Workbench: workspace and session chat.
+6. Archive and delete.
 
 ## Local Daemon
 
-`packages/worker-daemon` owns the local broker API used by the Worker CLI, the
-Worker web, and mounted Soul Apps. It forwards orchestration to
-`packages/worker-runtime`.
+`packages/worker-daemon` owns the local broker API used by the Worker CLI and the
+Worker Workbench web. It forwards orchestration to `packages/worker-runtime`.
 
 The daemon is not a product backend and does not own domain routes.
 
 A daemon reconstitutes at most one active Worker at bootstrap; finding more than
 one active Worker is a violation and the daemon refuses to boot (fail-fast).
 Archived Workers are not reconstituted eagerly; their runtime is rebuilt on
-demand. A standalone CLI or web client may omit `workerId` on list routes; the
-unscoped result on a single-active daemon is that active Worker's, so the
+demand. A standalone CLI or Workbench client may omit `workerId` on list routes;
+the unscoped result on a single-active daemon is that active Worker's, so the
 standalone path never depends on Host or fleet context.
 
 ## Session And Invocation State
@@ -38,10 +36,10 @@ session lifecycle: active | archived | deleted
 Session lifecycle describes whether the locator remains available in AIWorker.
 It does not describe engine execution.
 
-Session lifecycle metadata records the selected capability as `capabilityId`.
-Runtime APIs, snapshots, prompts, mounted context, CLI output, Web state, and
-diagnostics must use capability terminology. Historical SQLite column names may
-remain only behind the storage boundary while migrations are collapsed.
+A session is a chat over one workspace: a composer and a transcript. It records no
+capability. The engine target defaults to the Worker's detected default engine and
+may be overridden per session. Historical SQLite column names may remain only
+behind the storage boundary while migrations are collapsed.
 
 execution/process state belongs to engine_invocations
 
@@ -92,6 +90,9 @@ AIWorker uses B+ structured native engine bridge.
 - event stream reattach;
 - reconciler;
 - opaque external session refs.
+
+Concrete per-engine adapters (Codex, Claude Code) are provided by
+`packages/worker-runtime` and registered into the bridge registry.
 
 Native engines own:
 
@@ -185,7 +186,7 @@ remain Soul/user-owned.
 
 Runtime skills, MCP, and entry-file CRUD is a first-class runtime chain.
 
-- The Worker CLI, the Worker web, or app-owned UI requests an SDK-standard worker
+- The Worker CLI or the Worker Workbench web requests an SDK-standard worker
   configuration action.
 - The Worker validates and stores worker-scoped overlay records.
 - Worker-scoped overlay records live in Worker metadata; projected file contents do not.
@@ -214,6 +215,7 @@ sessions. Hard delete is explicit and removes Worker metadata plus receipt-owned
 projection files only. Physical workspace root deletion is a separate dangerous
 action and is not the default lifecycle behavior.
 
-In v1, the Host→Worker assignment envelope is validate-and-echo only; Host→Worker lifecycle signals (stop, decommission) are acknowledge-only; neither affects Worker runtime execution.
+Host→Worker assignment and lifecycle signals are Phase 2. In v1 the Worker runs
+standalone and no Host signal affects its runtime execution.
 
 Session and invocation context files under `.aiworker/sessions/*` are cleaned only when the physical workspace root is deleted; session lifecycle delete intentionally preserves them.

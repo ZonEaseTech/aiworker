@@ -1,105 +1,66 @@
 # AIWorker Protocol
 
-This document defines the canonical Host/Soul protocol contract and the Host-to-Worker control contract.
+This document defines the canonical Soul descriptor contract, the local broker
+routes, and the Phase 2 Host-to-Worker control contract.
 
 ## Descriptor-Only Install And Runtime
 
-Soul Apps are installed through:
+Souls are installed through:
 
 ```text
 dist/soul.descriptor.json
 ```
 
 The Worker validates and caches the descriptor, then routes local operations through
-generic broker APIs. Host does not read app source, import app-private modules,
-or interpret domain semantics.
+generic broker APIs. The Workbench and Host do not read Soul source, import Soul
+private modules, or interpret domain semantics.
 
 ## Descriptor V1 Shape
 
-Descriptor v1 contains only these top-level sections:
+A Soul is a template — a descriptor-only bundle of engine assets. Descriptor v1
+contains only these top-level sections:
 
 ```text
 protocol
 identity
-compatibility
-capabilities
-configuration
-workbench
-api
 engine
-health
-extensions
-external
 ```
 
-Core sections are strict. `extensions` and `external` are opaque to Host unless a
-future protocol version promotes a field into the standard contract.
+- `protocol` is the descriptor format version (`soul/v1`).
+- `identity` is the Soul `id` and display `name`.
+- `engine` declares engine targets and the packaged asset refs: workspace files,
+  skills, native MCP files, and entry files such as `AGENTS.md` and `CLAUDE.md`.
 
-Descriptor v1 must not introduce memory, lesson, governance, repository workflow,
-or domain business concepts as platform primitives.
-
-## Capabilities
-
-A capability is a generic startable unit. Host can list and select capabilities,
-but Soul App owns what the work means. Host may pass capability id and locator
-context to the engine bridge and mounted surfaces.
-
-Host-facing session creation bodies and local session protocol objects use
-`capabilityId` for the selected capability. `capabilityTemplateId` is not a
-current API, OpenAPI, CLI, Web, mounted-surface, or diagnostic contract. Legacy
-SQLite column names may remain as storage implementation details during
-migration, but they must not leak into broker contracts.
+Descriptor v1 carries no workbench, no app-owned API, no capabilities, and no
+configuration, health, compatibility, extensions, or external sections. It must
+not introduce memory, lesson, governance, repository workflow, or domain business
+concepts as platform primitives. The Worker owns and renders its Workbench; the
+Soul provides no UI.
 
 ## Configuration
 
-Configuration is worker-scoped and SDK-standard. Values use stable envelopes
-stored in Worker metadata. Configuration may contain non-secret operational
-options, source refs, checksums, caller class, and projection-affecting state.
+Worker configuration is worker-scoped and SDK-standard; it is not a descriptor
+section. Values use stable envelopes stored in Worker metadata, and may contain
+non-secret operational options, source refs, checksums, caller class, and
+projection-affecting state.
 
 Worker configuration values use a `configValueJson envelope` with the standard
 fields `kind, target, enabled, sourceRef, checksum, options, updatedAt, updatedBy`.
-`kind` is one of `engine-selection`, `projection-overlay`,
-`skill-overlay`, `mcp-overlay`, `entry-file-overlay`, `workbench-preference`, or
-`sdk-extension`. `target` is an engine target, `all`, or `none`. `options` is a
-non-secret operational object. `updatedBy` records caller class such as `cli`,
-`web`, or `app-owned-api`, not user identity.
+`kind` is one of `engine-selection`, `projection-overlay`, `skill-overlay`,
+`mcp-overlay`, `entry-file-overlay`, or `workbench-preference`. `target` is an
+engine target, `all`, or `none`. `options` is a non-secret operational object.
+`updatedBy` records caller class such as `cli` or `web`, not user identity.
 
 `projection-overlay` is reserved in descriptor v1. It is a valid stored
 configuration kind and participates in the projection freshness marker, but
 engine projection applies no projected-file change for it. Per-asset projection
-overlays use `entry-file-overlay`, `skill-overlay`, and `mcp-overlay`. A concrete
-`projection-overlay` projection behavior is defined only when a real consumer
-requires it and is promoted into these canonical docs first.
+overlays use `entry-file-overlay`, `skill-overlay`, and `mcp-overlay`.
 
 Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.
 
-## Mounted Workbench
-
-Production mounted workbench surfaces use micro-app with:
-
-```text
-router-mode="search"
-```
-
-Worker daemon resolves one workbench entry:
-
-- custom Soul workbench when the descriptor exposes one;
-- SDK common workbench fallback when no custom workbench exists.
-
-Host passes locator context and mount data only. Soul owns internal routes,
-domain rendering, app-owned actions, and app-owned API usage.
-
-## App-Owned API
-
-Descriptor v1 may expose an app-owned local API entry. Host may proxy it under a
-generic local path and attach worker/workspace/session context when present.
-
-Host does not interpret app-owned route names such as candidates, reports,
-releases, reviews, artifacts, or profiles.
-
 ## Engine And Projection References
 
-Descriptor engine sections describe packaged asset refs and target capabilities.
+Descriptor engine sections describe packaged asset refs and target engines.
 Runtime projection materializes workspace files, skills, native MCP files, and
 entry files for the selected engine target.
 
@@ -121,8 +82,6 @@ DELETE /api/app-installation/apps/:appId
 GET    /api/info
 GET    /api/settings
 PATCH  /api/settings
-
-GET    /api/capabilities
 
 POST   /api/workers
 GET    /api/workers
@@ -164,63 +123,47 @@ POST   /api/engine/invocations/:invocationId/reconcile
 POST   /api/projections/:target/refresh
 GET    /api/projections/receipts/:receiptId
 POST   /api/projections/receipts/:receiptId/cleanup
-
-GET    /api/mount/workbench
-ANY    /api/apps/:appId
-ANY    /api/apps/:appId/*
 ```
 
-These are broker routes, not business product APIs.
+These are broker routes, not business product APIs. Route methods make the local
+broker deterministic. They do not turn the daemon into a product backend.
 
-Route methods make the local broker deterministic. They do not turn the daemon
-into a product backend.
-
-- `enable` creates a worker from an installed descriptor.
+- `enable` creates a worker from an installed descriptor, bound to that one Soul.
 - `POST /api/workers` rejects creation when the daemon already hosts an active
   Worker (409); a daemon hosts at most one active Worker. archive-then-recreate
   is permitted (archived rows do not count).
 - Routes that take a `workerId` for new work resolve it to the daemon's single
   active Worker: a present `workerId` that does not name the active Worker is
-  rejected — an archived Worker fails with `WORKER_ARCHIVED`, an unknown Worker
-  is not found. List and filter routes (`GET /api/capabilities`,
-  `GET /api/workspace-locators`, `GET /api/sessions`) instead treat `workerId` as
-  an existence filter — present scopes the result to that Worker, omitted returns
-  the unscoped list, which on a single-active daemon is that active Worker's. A
-  standalone CLI or web client discovers the active `workerId` from
-  `/api/control/worker` (or `/api/info`). Strict read-path validate-to-self —
-  rejecting any non-active `workerId` on read routes to guard Host broker
-  mis-routing — is Phase 2.
-- archive operations mark Worker metadata unavailable for new work.
-- hard delete removes Worker metadata and receipt-owned projections only.
-- `GET /api/workspace-locators` may receive `workerId` to filter locators for
-  mounted app contexts.
+  rejected. List and filter routes instead treat `workerId` as an existence
+  filter — present scopes the result to that Worker, omitted returns the unscoped
+  list, which on a single-active daemon is that active Worker's. The standalone
+  CLI or Workbench web therefore never depends on Host or fleet context.
+- `GET /api/workspace-locators` may receive `workerId` to filter locators.
 - `POST /api/workspace-locators` receives `workerId`, may receive `rootPath`,
   and creates Worker workspace locator metadata plus projection-owned bootstrap
   files. `rootPath` is deliberately unconstrained — it is not restricted to the
   Worker home directory; this open semantic is intentional for the
   single-operator local model and must not be silently tightened.
-- `GET /api/sessions` may receive `workerId` and `workspaceId` to filter
-  mounted app context session lists.
+- `GET /api/sessions` may receive `workerId` and `workspaceId` to filter session
+  lists.
 - `POST /api/sessions` receives `workerId` and `workspaceId` as locator context.
 - session follow-up always uses `POST /api/sessions/:sessionId/invocations`.
+- engine target discovery and test actions live under `/api/engine/targets`. The
+  engine target defaults to the Worker default and may be overridden per session.
 - engine cancel, event stream, and reconciler target an invocation id.
-- engine target discovery and test actions live under `/api/engine/targets`,
-  not local settings route aliases.
-- `GET /api/capabilities` may receive `workerId` to filter capabilities to the
-  worker's Soul App for mounted app contexts.
-- app-owned API proxy attaches locator context when present and does not
-  interpret domain route names. It strips client credentials before proxying and
-  strips app-owned cookies plus Host mount credentials before returning.
 
 ## Host-to-Worker Control Contract
 
+The Host control plane is Phase 2 and is not on the v1 runtime path.
 `packages/worker-control-protocol` defines a transport-agnostic control contract.
-It covers worker.describe, worker.health, worker.lifecycle, and a worker.assignment envelope.
-The Worker is the passive control server; Host is the client. A Worker
+It covers worker.describe, worker.health, worker.lifecycle, and a worker.assignment
+envelope. The Worker is the passive control server; Host is the client. A Worker
 never initiates a connection to Host.
 
-The mounted configuration micro-app is the only current transport; non-web
-transports are reserved. The control contract must not carry session, invocation, projection, engine, or
-domain data. The assignment envelope carries authorized
-connectors, permissions, and an engine/gateway profile ref by shape and version
-only; connector behavior is out of contract scope.
+Phase 2 Host-to-Worker integration is over-the-wire only, with zero code
+intrusion in either direction: Host frames the Worker's own Workbench web as a
+sandboxed micro-app loaded over HTTP, and drives the control contract. The
+control contract must not carry session, invocation, projection, engine, or
+domain data. The assignment envelope carries authorized connectors, permissions,
+and an engine/gateway profile ref by shape and version only; connector behavior
+is out of contract scope.

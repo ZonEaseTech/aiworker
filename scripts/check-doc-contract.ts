@@ -62,61 +62,54 @@ requireIncludes('docs/architecture.md', [
   '## Ownership',
   '## Daemon Topology (daemon-per-worker)',
   'A Worker daemon hosts at most one active Worker.',
-  'The Worker never registers with or pushes to Host.',
+  'The Worker never registers with or pushes to\nHost.',
   '## Monorepo Boundary',
   '## Protocol Boundary',
   '## Runtime Boundary',
   '## Freeform V1',
   '## Destructive Migration Rules',
   'Older PMA notes, changelogs, historical audits, old local\nskills, and temporary drafts are evidence only. They do not override this file.',
-  'Decision Coverage Index',
   'tmp/refactor decisions are evidence until promoted',
   'Accepted refactor decisions\nbecome active authority only when they are represented in the canonical docs,\nguarded by tests, or both.',
-  '- docs/architecture.md owns worker autonomy, Host control-plane ownership, monorepo\n  boundaries, data ownership, Freeform v1 scope, and destructive migration\n  constraints.',
-  '- docs/protocol.md owns descriptor, broker route, configuration envelope, mounted workbench, and app-owned API contracts.',
+  '- docs/protocol.md owns descriptor, broker route, configuration envelope, and the\n  Phase 2 Host↔Worker control contract.',
   '- docs/runtime.md owns projection, runtime assets CRUD, engine bridge, lifecycle, cleanup, and redaction contracts.',
   '- docs/soul-authoring.md owns SDK authoring, convention discovery, build output,\n  native MCP source layout, and Freeform source contract.',
-  '- docs/testing.md owns the coverage ledger and guardrail mapping.',
-  '- worker-control-protocol owns the transport-agnostic Host↔Worker control contract.',
+  '- docs/testing.md owns the coverage ledger, guardrail mapping, and the Phase 2\n  implementation-teardown debt.',
   'CLI-first',
-  'AIWorker is a worker-centric product. A Worker is an autonomous, CLI-first\nruntime that runs one Soul App through a native engine and owns engine launch.',
-  'A Worker runs fully standalone. Host is never on the runtime hot path.',
-  'Host is an optional control plane: distributor, manager, permission allocator,\nand connector authorizer.',
-  'The default product paths are:',
-  'Worker -> Soul App -> workspace locator -> session -> app-owned work',
-  'Host -> distribute / manage / authorize / connector -> mount worker config micro-app',
+  // NEW MODEL: worker owns + directly renders its workbench, Soul = template, v1 standalone only, Host Phase 2 dormant
+  'AIWorker is a worker-centric product. A Worker is an autonomous, CLI-first\nruntime that runs one Soul through a native engine and owns engine launch.',
+  'A Worker runs fully standalone. v1 ships the standalone Worker only; the Host\ncontrol plane is Phase 2 and is never on the runtime hot path.',
+  'A Worker owns and directly renders its Workbench — the Worker\'s own employee web.\nThe Workbench is not a mounted micro-app and is not provided by the Soul. v1 has\nno micro-app anywhere.',
+  'Worker -> Workbench -> workspace -> session (chat) -> native engine',
+  'Host is an optional control plane: distributor, manager, permission allocator,\nand connector authorizer. Host is Phase 2 and is never on the runtime hot path.',
   'Host does not spawn, observe, or hold engine processes.',
-  'Host is not a domain workflow layer, a product backend, an agent\nruntime, a repository dashboard, or a Soul App configuration center.',
   'descriptor-only',
   'packages/core and packages/shared disappear',
-  '`souls/aiworker-freeform` is the only strong v1 acceptance Soul',
-  '`souls/aiworker-freeform` is the only strong v1 acceptance Soul. It proves the\nframework loop: SDK authoring, descriptor build, descriptor-only install, worker\ncreate, workspace locator create, worker config overlay, projection refresh,\nsession create, first invocation, session follow-up, cancel or completion,\nmounted common workbench with `router-mode="search"`, and archive.',
-  'HR and QA remain first-party Soul identities, but they migrate after Freeform and\ndo not block the v1 framework loop.',
-  'The target top-level shape is:',
-  'apps/\n  worker-cli/\n  worker-web/\n  host-cli/\n  host-web/\n\nsouls/\n  aiworker-freeform/\n\npackages/\n  worker-runtime/\n  worker-daemon/\n  host-control/\n  worker-control-protocol/\n  soul-protocol/\n  soul-app-sdk/\n  soul-app-runtime/\n  soul-workbench/\n  engine-bridge/\n  engine-projection/\n  storage-sqlite/\n  fs-layout/\n  ui/',
-  '`apps/*` are runnable product shells. `souls/*` are descriptor-producing Soul App\nproduct packages.',
-  'Package and app names are plane-prefixed: `worker-*` owns the autonomous runtime;\n`host-*` owns the control plane; capability packages keep capability names and are\nconsumed mostly by Workers.',
-  '`worker-*` packages must not import `host-*` packages.',
-  'For v1 strong acceptance, Freeform is the only shipped Soul;\nretired HR/QA app-local source trees stay deleted until they are re-authored as\ndescriptor-producing `souls/*` packages.',
+  // Soul = template
+  'A Soul is a template: a named, descriptor-only bundle of engine assets',
+  'A Soul has no UI, no app-owned API, no\ncapability layer, and no domain backend',
+  'A Worker is a running instance bound to one Soul.',
+  '`souls/aiworker-freeform` is the only strong v1 acceptance Soul. It proves the\nstandalone framework loop with Host absent:',
+  'HR and QA remain first-party Soul identities, but they migrate after Freeform as\ndescriptor-producing templates and do not block the v1 framework loop.',
+  // monorepo shape (no soul-workbench/soul-app-runtime; host-* are Phase 2 dormant stubs)
+  'The v1 top-level shape is:',
+  '`apps/*` are runnable product shells. `souls/*` are descriptor-producing Soul\ntemplate packages.',
+  '`worker-*` packages must not\nimport `host-*` packages.',
+  'The Workbench has no package of its own: it lives in `apps/worker-web`, composed\nfrom `packages/ui` primitives. The retired `soul-workbench` and `soul-app-runtime`\npackages are removed; v1 has no Soul-provided UI and no mounted-workbench\nmachinery.',
   'Do not create\n`core-v2`, `shared-v2`, or any replacement dumping ground.',
   '`apps/api` migrated into `packages/worker-daemon`.',
-  'A Worker is a running instance of a Soul App.',
-  'A Worker owns its runtime state:',
-  '- the Soul descriptor or template it runs;\n- workspace locator and workspace root;\n- session lifecycle metadata;\n- engine invocations and engine process state;\n- engine launch via the engine bridge;\n- projection, projection receipts, and receipt-based cleanup;\n- worker-scoped configuration overlays;\n- its own employee web and app-owned API proxy;\n- its own storage and filesystem root;\n- redaction of its own output.',
-  'Host owns only control-plane metadata:',
-  '- the worker registry: which workers exist, identity, endpoint, health;\n- assignment metadata: assigned template/soul, connectors, engine/gateway profile, permissions;\n- permission allocation and connector authorization;\n- worker distribution and provisioning records.',
-  'Host must not own session, invocation, projection, engine processes, domain\nstate, or secrets. A Worker must not depend on Host to run. Worker packages must\nnot import Host packages.',
-  'The Host-to-Worker boundary is a transport-agnostic control contract owned by\n`packages/worker-control-protocol`.',
-  'A Worker is the passive control server; Host is the client; a Worker never\ninitiates a connection to Host.',
-  'The control contract covers worker describe, health, instance lifecycle, and an\nassignment envelope. It must not carry session, invocation, projection, engine,\nor domain data.',
-  'Management mount lets Host configure a Worker through the Worker configuration\nmicro-app. Management mount is distinct from the employee mount that serves\nworkspace/session/composer; employees connect to the Worker web directly.',
-  // #6 v1 mount 拓扑区分: 共用 /api/mount/workbench, 区分是拓扑性非 URL 性
-  'distinction is topological — Host frames the config micro-app in a managed',
-  'The mounted configuration micro-app is the only current control-contract\ntransport; non-web transports are reserved and must not be hardcoded out.',
-  'A session is a Worker locator for workspace locator, selected capability, and\ninvocation references. Engine execution lives in `engine_invocations` and is\nowned by the Worker.',
-  'The Worker, not Host, prepares engine invocation context and observes native\nengine output.',
-  'Contract and guardrails come first:',
-  '1. Promote canonical docs and doc gates to worker autonomy.\n2. Add red inversion guards (G1-G6).\n3. Create target package skeletons: worker-control-protocol, host-control, apps/host-cli, apps/host-web.\n4. Rename host-runtime to worker-runtime, host-daemon to worker-daemon, apps/cli to worker-cli, apps/web to worker-web.\n5. Carve the host/worker split points into worker-runtime and host-control.\n6. Implement the minimal Host↔Worker control contract.\n7. Wire host-web management mount of the Worker configuration micro-app.\n8. Make the Worker standalone golden path pass with Host absent.\n9. Delete old authority and old names.\n10. Update roadmap and memory.',
+  // descriptor minimal
+  'Descriptor v1 is intentionally minimal: `protocol`, `identity`, `engine` asset\nrefs and engine targets. It carries no workbench, no app-owned API, no\ncapabilities, and no domain business concepts.',
+  'The Worker owns and renders its Workbench directly. v1 has no micro-app, no\nmounted-workbench resolution, and no Soul-provided UI.',
+  // Phase 2 control plane, passive worker
+  'the transport-agnostic control contract owned by\n  `packages/worker-control-protocol`, where a Worker is the passive control\n  server, Host is the client, and a Worker never initiates a connection to Host.',
+  'The control contract covers worker describe, health, instance lifecycle, and an\nassignment envelope. It must not carry session, invocation, projection, engine,\nor domain data. Neither integration channel is on the v1 runtime path.',
+  // session = chat, no capability
+  'A session is a Worker\nlocator for a workspace and its invocation references; it carries no capability.\nA session is, to the employee, a chat: a composer and a transcript over one\nworkspace.',
+  'The Worker, not Host, prepares engine invocation context and observes\nnative engine output.',
+  // two-phase migration
+  'This refactor is contract-first and runs in two phases.',
+  'Host must not own session, invocation, projection, engine processes, domain\nstate, or secrets. A Worker must not depend on Host to run.',
   'Do not modify the new architecture to satisfy old E2E assumptions. Legacy\napp-local adapter exports are removed, not migrated.',
 ])
 
@@ -132,26 +125,31 @@ requireIncludes('AGENTS.md', [
   '## UI',
   'canonical docs',
   'Superpowers',
-  'Worker 是自治 CLI-first 运行体，拥有 engine 启动权；Host 是可选控制面：分发 / 管理 / 权限分配 / connector 授权，并 mount worker 配置 micro-app。',
+  'Worker 是自治 CLI-first 运行体，拥有 engine 启动权；Host 是可选控制面：分发 / 管理 / 权限分配 / connector 授权（Phase 2）。',
   'CLI-first',
   'descriptor-only',
   'POST /api/sessions/:sessionId/invocations',
   'Author-owned native MCP files may contain literal secrets',
   'tmp/refactor accepted decisions must be promoted to canonical docs or tests before implementation',
   'shadcn',
-  'Worker -> Soul App -> workspace locator -> session -> app-owned work',
+  // NEW MODEL: v1 standalone only, worker owns + renders workbench, Soul = template, Host Phase 2
+  'v1 只发 standalone Worker：Host、micro-app、control-protocol 全是 Phase 2，永不在运行热路径上。Worker 创建时绑定一个 Soul（终生不变），拥有并直接渲染自己的 Workbench。默认路径：',
+  'Worker -> Workbench -> workspace -> session (chat) -> native engine',
+  'Soul 是 template：descriptor-only 的 skills / mcp / entry-file（如 AGENTS.md、CLAUDE.md）资产束，没有 UI、没有 app-owned API、没有 capability。',
   '禁止创建 `core-v2` / `shared-v2`。`packages/core` 与 `packages/shared` 最终消失。`apps/api` 迁移为 `packages/worker-daemon`。',
-  'Host/Soul 是 descriptor-only：Host 只消费 `dist/soul.descriptor.json`、built mounted assets 和 app-owned API proxy。Host 不读 Soul source、不 import Soul 私有模块、不解释领域字段。',
-  'Production mounted workbench 必须使用 micro-app `router-mode="search"`',
+  'Host/Soul 是 descriptor-only：Host 与 Workbench 只消费 `dist/soul.descriptor.json`，不读 Soul source、不 import Soul 私有模块、不解释领域字段。',
+  'Worker 拥有并直接渲染 Workbench；v1 没有 micro-app、没有 mounted-workbench、没有 Soul 提供的 UI。',
+  'Descriptor v1 极简：`protocol / identity / engine` 资产束，无 workbench / api / capability。',
   'Session 只保留 lifecycle：`active | archived | deleted`。Execution/process 状态属于 `engine_invocations`。',
   'Native engine 采用 B+ structured bridge。Worker 管 projection、process observation、redacted raw chunks、normalized bridge events、opaque external refs、cancel、reattach、reconciler、engine 启动；native engine 自己管理模型、tool loop、approval、sandbox、auth/profile 和 native session。',
   '`worker-*` 包禁止 import `host-*` 包。Worker 必须能脱离 Host 独立运行。',
+  'Workbench 并入 `apps/worker-web`，不再有 soul-workbench / soul-app-runtime 包。',
   'Use Superpowers for brainstorming, non-trivial planning, TDD, systematic debugging, and verification before completion.',
   'Destructive refactor is allowed before 1.0. Keep changes scoped to the current phase. Do not change the new architecture to satisfy old E2E assumptions.',
   'Code changes need focused contract tests appropriate to scope.',
   'For code changes, run code-review-graph unless the change is docs-only, instruction-only, or pure formatting.',
   'UI work must use shadcn-managed primitives and `packages/ui` as the shared UI source.',
-  'Host must not render Soul domain UI; Soul-specific UI stays in `souls/*`.',
+  'Soul provides no UI; the Worker owns and renders the Workbench. Host must not render Soul domain UI.',
 ])
 requireMaxLines('AGENTS.md', 90)
 
@@ -184,37 +182,28 @@ for (const file of ['README.md', 'README.zh-CN.md']) {
 
 requireIncludes('docs/protocol.md', [
   '# AIWorker Protocol',
-  'This document defines the canonical Host/Soul protocol contract and the Host-to-Worker control contract.',
+  'This document defines the canonical Soul descriptor contract, the local broker\nroutes, and the Phase 2 Host-to-Worker control contract.',
   '## Descriptor-Only Install And Runtime',
   '## Descriptor V1 Shape',
-  '## Capabilities',
   '## Configuration',
-  '## Mounted Workbench',
-  '## App-Owned API',
   '## Engine And Projection References',
   '## Broker Routes',
   'rejects creation when the daemon already hosts an active',
   'dist/soul.descriptor.json',
-  'Soul Apps are installed through:',
-  'The Worker validates and caches the descriptor, then routes local operations through\ngeneric broker APIs. Host does not read app source, import app-private modules,\nor interpret domain semantics.',
-  'Configuration is worker-scoped and SDK-standard. Values use stable envelopes\nstored in Worker metadata.',
-  'Configuration may contain non-secret operational\noptions, source refs, checksums, caller class, and projection-affecting state.',
+  'Souls are installed through:',
+  'The Worker validates and caches the descriptor, then routes local operations through\ngeneric broker APIs. The Workbench and Host do not read Soul source, import Soul\nprivate modules, or interpret domain semantics.',
+  'Worker configuration is worker-scoped and SDK-standard; it is not a descriptor\nsection. Values use stable envelopes stored in Worker metadata',
   'Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.',
-  'Descriptor v1 contains only these top-level sections:',
-  'protocol\nidentity\ncompatibility\ncapabilities\nconfiguration\nworkbench\napi\nengine\nhealth\nextensions\nexternal',
-  'Core sections are strict. `extensions` and `external` are opaque to Host unless a\nfuture protocol version promotes a field into the standard contract.',
-  'Descriptor v1 must not introduce memory, lesson, governance, repository workflow,\nor domain business concepts as platform primitives.',
-  'Production mounted workbench surfaces use micro-app with:',
-  'router-mode="search"',
-  'Worker daemon resolves one workbench entry:',
-  '- custom Soul workbench when the descriptor exposes one;\n- SDK common workbench fallback when no custom workbench exists.',
-  'Host passes locator context and mount data only. Soul owns internal routes,\ndomain rendering, app-owned actions, and app-owned API usage.',
+  // descriptor minimal: only protocol/identity/engine
+  'A Soul is a template — a descriptor-only bundle of engine assets. Descriptor v1\ncontains only these top-level sections:',
+  'protocol\nidentity\nengine',
+  'Descriptor v1 carries no workbench, no app-owned API, no capabilities, and no\nconfiguration, health, compatibility, extensions, or external sections.',
+  'The Worker owns and renders its Workbench; the\nSoul provides no UI.',
+  // broker route block (no /api/capabilities, /api/mount/workbench, /api/apps)
   'POST   /api/sessions/:sessionId/invocations',
   'The local daemon broker exposes platform routes, including:',
-  'POST   /api/app-installation/install\nGET    /api/app-installation/apps\nGET    /api/app-installation/apps/:appId\nPOST   /api/app-installation/apps/:appId/enable\nPOST   /api/app-installation/apps/:appId/archive\nDELETE /api/app-installation/apps/:appId\n\nGET    /api/info\nGET    /api/settings\nPATCH  /api/settings\n\nGET    /api/capabilities\n\nPOST   /api/workers\nGET    /api/workers\nGET    /api/workers/:workerId\nPATCH  /api/workers/:workerId\nPOST   /api/workers/:workerId/archive\nDELETE /api/workers/:workerId\n\nGET    /api/workers/:workerId/config\nPUT    /api/workers/:workerId/config/:configKey\nPATCH  /api/workers/:workerId/config/:configKey\nPOST   /api/workers/:workerId/config/:configKey/archive\n\nPOST   /api/workspace-locators\nGET    /api/workspace-locators\nGET    /api/workspace-locators/:workspaceId\nPATCH  /api/workspace-locators/:workspaceId\nPOST   /api/workspace-locators/:workspaceId/archive\nDELETE /api/workspace-locators/:workspaceId\n\nPOST   /api/sessions\nGET    /api/sessions\nGET    /api/sessions/:sessionId\nPATCH  /api/sessions/:sessionId\nPOST   /api/sessions/:sessionId/archive\nDELETE /api/sessions/:sessionId\nPOST   /api/sessions/:sessionId/invocations\n\nGET    /api/engine/targets\nGET    /api/engine/targets/:target/readiness\nPOST   /api/engine/targets/rescan\nPOST   /api/engine/targets/:target/test\nPOST   /api/engine/invocations\nGET    /api/engine/invocations/:invocationId\nGET    /api/engine/invocations/:invocationId/events\nPOST   /api/engine/invocations/:invocationId/cancel\nPOST   /api/engine/invocations/:invocationId/reconcile\n\nPOST   /api/projections/:target/refresh\nGET    /api/projections/receipts/:receiptId\nPOST   /api/projections/receipts/:receiptId/cleanup\n\nGET    /api/mount/workbench\nANY    /api/apps/:appId\nANY    /api/apps/:appId/*',
-  'Descriptor v1 may expose an app-owned local API entry. Host may proxy it under a\ngeneric local path and attach worker/workspace/session context when present.',
-  'Host does not interpret app-owned route names such as candidates, reports,\nreleases, reviews, artifacts, or profiles.',
-  'Descriptor engine sections describe packaged asset refs and target capabilities.',
+  'POST   /api/app-installation/install\nGET    /api/app-installation/apps\nGET    /api/app-installation/apps/:appId\nPOST   /api/app-installation/apps/:appId/enable\nPOST   /api/app-installation/apps/:appId/archive\nDELETE /api/app-installation/apps/:appId\n\nGET    /api/info\nGET    /api/settings\nPATCH  /api/settings\n\nPOST   /api/workers\nGET    /api/workers\nGET    /api/workers/:workerId\nPATCH  /api/workers/:workerId\nPOST   /api/workers/:workerId/archive\nDELETE /api/workers/:workerId\n\nGET    /api/workers/:workerId/config\nPUT    /api/workers/:workerId/config/:configKey\nPATCH  /api/workers/:workerId/config/:configKey\nPOST   /api/workers/:workerId/config/:configKey/archive\n\nPOST   /api/workspace-locators\nGET    /api/workspace-locators\nGET    /api/workspace-locators/:workspaceId\nPATCH  /api/workspace-locators/:workspaceId\nPOST   /api/workspace-locators/:workspaceId/archive\nDELETE /api/workspace-locators/:workspaceId\n\nPOST   /api/sessions\nGET    /api/sessions\nGET    /api/sessions/:sessionId\nPATCH  /api/sessions/:sessionId\nPOST   /api/sessions/:sessionId/archive\nDELETE /api/sessions/:sessionId\nPOST   /api/sessions/:sessionId/invocations\n\nGET    /api/engine/targets\nGET    /api/engine/targets/:target/readiness\nPOST   /api/engine/targets/rescan\nPOST   /api/engine/targets/:target/test\nPOST   /api/engine/invocations\nGET    /api/engine/invocations/:invocationId\nGET    /api/engine/invocations/:invocationId/events\nPOST   /api/engine/invocations/:invocationId/cancel\nPOST   /api/engine/invocations/:invocationId/reconcile\n\nPOST   /api/projections/:target/refresh\nGET    /api/projections/receipts/:receiptId\nPOST   /api/projections/receipts/:receiptId/cleanup',
+  'Descriptor engine sections describe packaged asset refs and target engines.',
   'Runtime projection materializes workspace files, skills, native MCP files, and\nentry files for the selected engine target.',
   'Descriptors may include lightweight summaries and refs. They must not copy\nsecret-like values from native files.',
   'These are broker routes, not business product APIs.',
@@ -232,21 +221,19 @@ requireIncludes('docs/protocol.md', [
   'PATCH  /api/sessions/:sessionId',
   'POST   /api/sessions/:sessionId/archive',
   'DELETE /api/sessions/:sessionId',
-  'A capability is a generic startable unit.',
-  'Host-facing session creation bodies and local session protocol objects use\n`capabilityId` for the selected capability.',
-  '`capabilityTemplateId` is not a\ncurrent API, OpenAPI, CLI, Web, mounted-surface, or diagnostic contract.',
-  'Legacy\nSQLite column names may remain as storage implementation details during\nmigration, but they must not leak into broker contracts.',
+  // worker config envelope
   'configValueJson envelope',
   'kind, target, enabled, sourceRef, checksum, options, updatedAt, updatedBy',
-  '`engine-selection`, `projection-overlay`,\n`skill-overlay`, `mcp-overlay`, `entry-file-overlay`, `workbench-preference`, or\n`sdk-extension`',
-  '`target` is an engine target, `all`, or `none`.',
-  '`updatedBy` records caller class such as `cli`,\n`web`, or `app-owned-api`',
+  '`kind` is one of `engine-selection`, `projection-overlay`, `skill-overlay`,\n`mcp-overlay`, `entry-file-overlay`, or `workbench-preference`.',
+  '`target` is an\nengine target, `all`, or `none`.',
+  '`updatedBy` records caller class such as `cli` or `web`, not user identity.',
+  // Phase 2 control contract
   '## Host-to-Worker Control Contract',
   '`packages/worker-control-protocol` defines a transport-agnostic control contract.',
-  'worker.describe, worker.health, worker.lifecycle, and a worker.assignment envelope',
-  'The Worker is the passive control server; Host is the client.',
-  'The mounted configuration micro-app is the only current transport; non-web\ntransports are reserved.',
-  'The control contract must not carry session, invocation, projection, engine, or\ndomain data.',
+  'It covers worker.describe, worker.health, worker.lifecycle, and a worker.assignment\nenvelope.',
+  'The Worker is the passive control server; Host is the client. A Worker\nnever initiates a connection to Host.',
+  'The Host control plane is Phase 2 and is not on the v1 runtime path.',
+  'The\ncontrol contract must not carry session, invocation, projection, engine, or\ndomain data.',
   // 钉死倒置后归属:workspace locator metadata 归 Worker（a6c75512,验收 #3 补 pin 防静默 revert）。
   'creates Worker workspace locator metadata plus projection-owned bootstrap\n  files.',
   // #4 rootPath 开放语义: 刻意不约束(单 operator 本机模型)
@@ -255,14 +242,18 @@ requireIncludes('docs/protocol.md', [
 forbidIncludes('docs/protocol.md', [
   'host-adapter',
   'source exports',
+  '/api/capabilities',
+  '/api/mount/workbench',
+  '/api/apps/:appId',
 ])
 
 requireIncludes('docs/runtime.md', [
   '# AIWorker Runtime',
   'This document defines canonical runtime behavior.',
-  'The runtime is seven chains:',
-  '1. Soul authoring and descriptor build.\n2. Descriptor install and worker enablement.\n3. Session start and first invocation.\n4. Runtime skills, MCP, and entry-file CRUD.\n5. Web workbench mount.\n6. App-owned API proxy.\n7. Archive and delete.',
-  '`packages/worker-daemon` owns the local broker API used by the Worker CLI, the\nWorker web, and mounted Soul Apps. It forwards orchestration to\n`packages/worker-runtime`.',
+  // NEW MODEL: six chains, chain 5 is worker-owned Workbench (no mounted workbench, no app-owned API proxy)
+  'The runtime is six chains:',
+  '1. Soul authoring and descriptor build.\n2. Descriptor install and worker enablement.\n3. Session start and first invocation.\n4. Runtime skills, MCP, and entry-file CRUD.\n5. Worker-owned Workbench: workspace and session chat.\n6. Archive and delete.',
+  '`packages/worker-daemon` owns the local broker API used by the Worker CLI and the\nWorker Workbench web. It forwards orchestration to `packages/worker-runtime`.',
   'The daemon is not a product backend and does not own domain routes.',
   'A daemon reconstitutes at most one active Worker at bootstrap',
   'session lifecycle: active | archived | deleted',
@@ -277,9 +268,9 @@ requireIncludes('docs/runtime.md', [
   'execution/process state belongs to engine_invocations',
   'POST /api/sessions/:sessionId/invocations',
   'Session lifecycle describes whether the locator remains available in AIWorker.\nIt does not describe engine execution.',
-  'Session lifecycle metadata records the selected capability as `capabilityId`.',
-  'Runtime APIs, snapshots, prompts, mounted context, CLI output, Web state, and\ndiagnostics must use capability terminology.',
-  'Historical SQLite column names may\nremain only behind the storage boundary while migrations are collapsed.',
+  // session = chat, no capability
+  'A session is a chat over one workspace: a composer and a transcript. It records no\ncapability.',
+  'Historical SQLite column names may remain only\nbehind the storage boundary while migrations are collapsed.',
   'Follow-up is session-level:',
   'Follow-up uses the same worker, workspace locator, AIWorker session, and engine\ntarget.',
   'Native resume uses the latest opaque external session ref when the\nadapter supports it. The bridge must not silently create a fresh native session\nwhen resume data is missing.',
@@ -302,7 +293,7 @@ requireIncludes('docs/runtime.md', [
   'Projection cleanup removes receipt-owned files only. Workspace business files\nremain Soul/user-owned.',
   'Runtime skills, MCP, and entry-file CRUD',
   'Runtime skills, MCP, and entry-file CRUD is a first-class runtime chain.',
-  '- The Worker CLI, the Worker web, or app-owned UI requests an SDK-standard worker\n  configuration action.\n- The Worker validates and stores worker-scoped overlay records.\n- Worker-scoped overlay records live in Worker metadata; projected file contents do not.\n- `engine-projection` materializes descriptor assets plus overlays for one\n  selected engine target.\n- Projection writes a receipt for cleanup, freshness, and diagnostics.',
+  '- The Worker CLI or the Worker Workbench web requests an SDK-standard worker\n  configuration action.\n- The Worker validates and stores worker-scoped overlay records.\n- Worker-scoped overlay records live in Worker metadata; projected file contents do not.\n- `engine-projection` materializes descriptor assets plus overlays for one\n  selected engine target.\n- Projection writes a receipt for cleanup, freshness, and diagnostics.',
   'Workspace assets are single-source. Skills are single-source by default with\nexplicit engine override only when necessary. MCP uses one native file per\nengine target, such as Codex `config.toml` and Claude Code `.mcp.json`.',
   'ENGINE_SESSION_REF_MISSING',
   'ENGINE_CANCEL_FAILED',
@@ -346,12 +337,11 @@ requireIncludes('docs/runtime.md', [
 
 requireIncludes('docs/soul-authoring.md', [
   '# AIWorker Soul Authoring',
-  'This document defines the canonical Soul App authoring contract.',
+  'This document defines the canonical Soul authoring contract.',
   '## Default Path',
   '## Source Layout',
   '## Convention Discovery',
   '## SDK Responsibilities',
-  '## Workbench',
   '## Engine Assets',
   '## Freeform V1',
   'Soul authoring is SDK-centered and CLI-first. The 30-second path should be:',
@@ -359,28 +349,23 @@ requireIncludes('docs/soul-authoring.md', [
   'The SDK uses directory conventions for the common path and a small\n`soul.config.ts` for identity and explicit overrides.',
   'souls/*',
   'soul.config.ts',
-  'packages/soul-workbench',
   '`packages/soul-app-sdk` owns:',
   '- author-facing declarations;\n- convention discovery;\n- descriptor generation;\n- descriptor validation;\n- engine asset discovery;\n- SDK-standard worker configuration model;\n- build output under `dist/`.',
-  '`packages/soul-workbench` owns the interactive SDK common workbench micro-app: the common workbench modules, configuration UI, skills/MCP UI, artifact primitives, chat surface, and mounted client helpers.',
-  '`packages/soul-app-runtime` owns standalone and Host-mounted runtime harnesses.',
-  'If a Soul App exposes a custom mounted workbench, Host mounts that one entry. If\nit does not, Host mounts the SDK common workbench. Production runtime has one\nresolved workbench.',
-  'Custom workbench code may compose SDK common modules. It may not create a second\nHost-readable configuration system or ask Host chrome to render domain UI.',
-  'Workspace files, skills, native MCP files, and entry files are authored by the\nSoul App and projected at runtime by engine projection.',
+  // Soul = template of engine assets only, no UI / no app-owned API; Worker owns + renders the Workbench
+  'A Soul is a template of engine assets only. It has no capabilities, no workbench\nsource, and no `web/` or `api/` surfaces: the Worker owns and renders the\nWorkbench, and the Soul provides no UI and no app-owned API.',
+  'The SDK builds the descriptor and the projected engine assets. It does not build a\nSoul workbench, a Soul UI, or an app-owned API; those are not part of the Soul\ncontract. The Worker owns and renders the Workbench from `apps/worker-web`.',
+  'Workspace files, skills, native MCP files, and entry files are authored by the\nSoul and projected at runtime by engine projection.',
   'AIWorker validates syntax and target names, derives lightweight non-secret\nsummaries, and projects native files. It must not copy secret-like values into\ndescriptor summaries, DB, receipts, logs, diagnostics, inspect output, or\nUI.',
   'author-owned native MCP files may contain literal secrets',
   '`souls/aiworker-freeform` is the v1 acceptance Soul',
-  '- app id `aiworker-freeform`;\n- soul id `freeform`;\n- display name `AIWorker Freeform`;\n- one default capability named `Freeform Session`;\n- SDK common workbench;\n- one minimal projected skill;\n- Codex native MCP placeholder at `engine/mcp/codex/config.toml`;\n- Claude Code native MCP placeholder at `engine/mcp/claude-code/.mcp.json`.',
-  'Freeform must use SDK authoring, descriptor-only install, projection, engine\nbridge, session-level follow-up, and mounted routing.',
+  '- soul id `aiworker-freeform`;\n- display name `AIWorker Freeform`;\n- one minimal projected skill;\n- Codex native MCP placeholder at `engine/mcp/codex/config.toml`;\n- Claude Code native MCP placeholder at `engine/mcp/claude-code/.mcp.json`;\n- one projected entry file `AGENTS.md`.',
+  'Freeform must use SDK authoring, descriptor-only install, projection, engine\nbridge, and session-level follow-up. The session experience is the worker-owned\nWorkbench rendering the session chat over the Freeform workspace.',
+  // source layout: engine assets only, no product/ web/ api/
   'Minimum useful layout:',
-  'souls/my-soul/\n  package.json\n  soul.config.ts\n  product/\n    capabilities/\n      default/\n        prompt.md\n  engine/\n    workspace/\n    skills/\n    mcp/\n      codex/\n        config.toml\n      claude-code/\n        .mcp.json',
-  'Optional custom surfaces:',
-  'souls/my-soul/\n  web/\n    mounted/\n      index.html\n      src/\n  api/\n    src/',
+  'souls/my-soul/\n  package.json\n  soul.config.ts\n  engine/\n    workspace/\n    skills/\n    mcp/\n      codex/\n        config.toml\n      claude-code/\n        .mcp.json',
   'Convention discovery',
   'Convention discovery uses the common authoring path from:',
-  'product/capabilities/*/prompt.md\nproduct/workbench/index.tsx\nengine/workspace/*\nengine/skills/*\nengine/mcp/codex/config.toml\nengine/mcp/claude-code/.mcp.json',
-  'product/capabilities/*/prompt.md',
-  'product/workbench/index.tsx',
+  'engine/workspace/*\nengine/skills/*\nengine/mcp/codex/config.toml\nengine/mcp/claude-code/.mcp.json',
   'engine/workspace/*',
   'engine/skills/*',
   'engine/mcp/codex/config.toml',
@@ -392,10 +377,11 @@ requireIncludes('docs/soul-authoring.md', [
   'Custom API and artifact helpers are explicit SDK or configuration surfaces; they\nare not current convention-discovery inputs.',
   'Custom app-owned API entries must be\nexplicit descriptor/build inputs when supported; they are not part of current\nconvention discovery or build output.',
   'Discovery output must tell the author what the SDK found and which descriptor\nsections it generated.',
-  '`soul.config.ts` owns identity, version, display name,\ncompatibility overrides, explicit include/exclude choices, advanced build\noverrides, and SDK module opt-ins.',
-  'It must not become a Host integration file, a\nhandwritten descriptor, or arbitrary Host-readable configuration.',
+  '`soul.config.ts` owns identity, display name, explicit\ninclude/exclude choices, advanced build overrides, and SDK module opt-ins.',
+  'It\nmust not become a Host integration file, a handwritten descriptor, or arbitrary\nHost-readable configuration.',
   'Build output is installed through descriptor references.',
-  'dist/\n  soul.descriptor.json\n  web/\n  engine-assets/\n    workspace/\n    skills/\n    mcp/\n      codex/config.toml\n      claude-code/.mcp.json',
+  // dist tree: engine-assets only, no web/
+  'dist/\n  soul.descriptor.json\n  engine-assets/\n    workspace/\n    skills/\n    mcp/\n      codex/config.toml\n      claude-code/.mcp.json',
 ])
 forbidIncludes('docs/soul-authoring.md', [
   'product/api/index.ts',
@@ -439,9 +425,9 @@ requireIncludes('docs/testing.md', [
   'The first guardrail is:',
   'It verifies that canonical docs exist, root workspaces include `souls/*`,\n`AGENTS.md` is a short bootstrap, session lifecycle is separate from invocation\nstate, protocol/authoring remain descriptor-only and native-MCP based, and broad\nreplacement buckets such as `core-v2` and `shared-v2` do not appear.',
   'Architecture tests:',
-  'tests/architecture/\n  forbidden-host-domain-schema.test.ts\n  freeform-mounted-workbench-contract.test.ts\n  freeform-soul-contract.test.ts\n  inversion-guards.test.ts\n  package-ownership.test.ts\n  refactor-contract.test.ts',
+  'tests/architecture/\n  forbidden-host-domain-schema.test.ts\n  freeform-soul-contract.test.ts\n  inversion-guards.test.ts\n  package-ownership.test.ts\n  refactor-contract.test.ts',
   'Protocol tests:',
-  'packages/soul-protocol/src/\n  descriptor-v1.test.ts\n  index.test.ts\n  lib/ids.test.ts\n  mounted-routing-contract.test.ts',
+  'packages/soul-protocol/src/\n  descriptor-v1.test.ts\n  index.test.ts\n  lib/ids.test.ts',
   'SDK tests:',
   'packages/soul-app-sdk/src/\n  descriptor-build.test.ts',
   'Worker runtime tests:',
@@ -455,29 +441,31 @@ requireIncludes('docs/testing.md', [
   'Boundary guard tests:',
   'scripts/check-soul-app-boundaries.test.ts',
   'CLI and browser tests:',
-  'apps/worker-cli/src/freeform-golden-path.test.ts\napps/worker-cli/src/aiworker.test.ts\ntests/browser/freeform-cli-golden-path.spec.ts\ntests/browser/freeform-mounted-workbench.spec.ts',
+  'apps/worker-cli/src/freeform-golden-path.test.ts\napps/worker-cli/src/aiworker.test.ts\ntests/browser/freeform-cli-golden-path.spec.ts',
   'CLI release smoke contract tests:',
   'apps/worker-cli/scripts/smoke-dist-release.test.ts\napps/worker-cli/scripts/smoke-release-artifacts.test.ts\napps/worker-cli/scripts/smoke-npm-package.test.ts\napps/worker-cli/scripts/smoke-standalone-release.test.ts\napps/worker-cli/scripts/smoke-standalone-runtime.test.ts',
   'CLI release packaging contract tests:',
   'apps/worker-cli/src/official-freeform-descriptor.test.ts\napps/worker-cli/scripts/build-publish-manifest.test.ts\napps/worker-cli/scripts/package-release-bundles.test.ts',
   'OpenAPI and redaction contract tests:',
   'packages/worker-daemon/src/modes/worker.local.test.ts\npackages/storage-sqlite/src/worker/index.test.ts\npackages/engine-bridge/src/bridge-contract.test.ts\npackages/engine-projection/src/workspace-projection.test.ts',
-  'The v1 browser proof is Freeform-only',
-  'Host Web opens worker/workspace/session locator\n-> resolves Freeform workbench\n-> mounts via micro-app router-mode=search\n-> SDK common workbench renders\n-> verifies the first invocation and starts a session-level follow-up from browser context\n-> shows bridge event refs to the mounted surface\n-> cancels a queued invocation without changing session lifecycle\n-> reattaches and reconciles engine bridge events\n-> refreshes projection receipts from mounted context\n-> applies worker config overlay and observes worker-overlay projection receipts\n-> archives the session and rejects follow-up\n-> archives workspace and worker lifecycle, blocking new work on archived worker',
-  'Do not modify the new architecture to satisfy old E2E assumptions. Delete or\nrewrite tests that require Host to import Soul source, expect old daemon product\nbackend behavior, or encode `router-mode="pure"` as production behavior.',
+  'The v1 browser proof is Freeform-only and standalone:',
+  'Worker Workbench opens standalone with Host absent on worker/workspace/session locator\n-> renders the session chat directly in the worker Workbench without any micro-app\n-> verifies the first invocation and starts a session-level follow-up from browser context\n-> shows bridge event refs in the session chat\n-> cancels a queued invocation without changing session lifecycle\n-> reattaches and reconciles engine bridge events\n-> refreshes projection receipts from the Workbench\n-> applies worker config overlay and observes worker-overlay projection receipts\n-> archives the session and rejects follow-up\n-> archives workspace and worker lifecycle, blocking new work on archived worker',
+  'Do not modify the new architecture to satisfy old E2E assumptions. Delete or\nrewrite tests that require Host to import Soul source, expect old daemon product\nbackend behavior, expect a Soul-provided mounted workbench, or encode\n`router-mode="pure"` as production behavior.',
   'tests/browser/freeform-cli-golden-path.spec.ts',
+  // Phase-B teardown debt tracked in testing.md
+  '## Pending Implementation (Phase-B Teardown)',
   'Canonical Coverage Ledger',
   'Coverage status values:',
   '- `docs+tests`: preferred for high-risk architecture boundaries.\n- `docs-only`: acceptable for explanatory or low-risk guidance.\n- `tests-only`: acceptable for mechanical constraints where docs would be noisy.\n- `tmp-only`: evidence only. tmp-only is not acceptable for closed hard decisions.\n  Use it only when the ledger explains that the idea was exploratory or rejected.',
   '| Decision area | Canonical home | Guardrail | Status |',
   'Worker autonomy / Host control plane',
   'Descriptor-only Host/Soul boundary',
-  'Production mounted workbench routing',
+  'Worker-owned workbench',
   'Session lifecycle and invocation state split',
   'Protocol implementation contract',
   'Runtime and bridge contract',
   'OpenAPI and redaction boundary',
-  'App-owned API proxy',
+  'BYOK execution-mode deviation and secret boundary',
   'Worker config envelope and Worker metadata security',
   'Soul authoring contract',
   'Worker metadata and forbidden domain schema',
@@ -586,11 +574,12 @@ for (const requiredReleaseExitText of [
   }
 }
 for (const requiredBrowserProofScopeText of [
+  '-> renders the session chat directly in the worker Workbench without any micro-app',
   '-> verifies the first invocation and starts a session-level follow-up from browser context',
-  '-> shows bridge event refs to the mounted surface',
+  '-> shows bridge event refs in the session chat',
   '-> cancels a queued invocation without changing session lifecycle',
   '-> reattaches and reconciles engine bridge events',
-  '-> refreshes projection receipts from mounted context',
+  '-> refreshes projection receipts from the Workbench',
   '-> applies worker config overlay and observes worker-overlay projection receipts',
   '-> archives the session and rejects follow-up',
   '-> archives workspace and worker lifecycle, blocking new work on archived worker',
@@ -599,16 +588,6 @@ for (const requiredBrowserProofScopeText of [
     issues.push({
       file: 'docs/testing.md',
       message: 'browser proof must cover Freeform v1 scope',
-    })
-  }
-}
-for (const requiredAppOwnedApiCoverageText of [
-  '| App-owned API proxy | `docs/protocol.md`, `docs/runtime.md` | worker-daemon app-owned API proxy test and docs check | docs+tests |',
-]) {
-  if (!testingDoc.includes(requiredAppOwnedApiCoverageText)) {
-    issues.push({
-      file: 'docs/testing.md',
-      message: 'Testing ledger must track app-owned API proxy coverage',
     })
   }
 }
@@ -816,7 +795,6 @@ const freeformBuildScript = 'bun run --filter \'@zonease/aiworker-freeform\' bui
 const webBuildScript = 'bun run --filter \'@zonease/aiworker-worker-web\' build'
 const browserFreeformProofs = [
   'tests/browser/freeform-cli-golden-path.spec.ts',
-  'tests/browser/freeform-mounted-workbench.spec.ts',
 ]
 if (!testCliScript.includes('apps/worker-cli/src/freeform-golden-path.test.ts'))
   issues.push({ file: 'package.json', message: 'test:cli must include the Freeform CLI golden path test' })
@@ -832,20 +810,6 @@ for (const proof of browserFreeformProofs) {
 }
 if (!testBrowserFreeformScript.includes('tests/browser/freeform-cli-golden-path.spec.ts'))
   issues.push({ file: 'package.json', message: 'test:browser:freeform must include the Freeform CLI browser golden path proof' })
-if (!testBrowserFreeformScript.includes('tests/browser/freeform-mounted-workbench.spec.ts'))
-  issues.push({ file: 'package.json', message: 'test:browser:freeform must include the mounted workbench browser proof' })
-for (const needle of [
-  'resolves custom descriptor workbench without SDK common fallback',
-  'data-custom-workbench="true"',
-  'data-aiworker-common-workbench="true"',
-]) {
-  if (!hostDaemonWorkerLocalTest.includes(needle)) {
-    issues.push({
-      file: 'packages/worker-daemon/src/modes/worker.local.test.ts',
-      message: 'custom descriptor workbench must bypass SDK common fallback',
-    })
-  }
-}
 requireWorkerConfigBrokerRoutesComplete([
   ['docs/protocol.md', read('docs/protocol.md'), [
     'GET    /api/workers/:workerId/config',
@@ -869,33 +833,12 @@ requireWorkerConfigBrokerRoutesComplete([
     '[\'post\', \'/api/workers/{workerId}/config/{configKey}/archive\']',
   ]],
 ])
-requireAppOwnedApiProxyGuardrails([
-  ['docs/protocol.md', read('docs/protocol.md'), [
-    'ANY    /api/apps/:appId',
-    'ANY    /api/apps/:appId/*',
-    'strips client credentials before proxying',
-    'strips app-owned cookies plus Host mount credentials before returning',
-  ]],
-  ['packages/worker-daemon/src/modes/worker.local.test.ts', hostDaemonWorkerLocalTest, [
-    'client-spoofed-token',
-    'hasAuthorization: false',
-    'hasCookie: false',
-    'hasForwardedFor: false',
-    'isMountSignatureValid: true',
-    'x-aiworker-mount-context',
-    'x-aiworker-mount-signature',
-    'x-aiworker-mount-token',
-    'set-cookie',
-    '/api/apps/demo-api/candidates/123/reports',
-  ]],
-])
 requireFreeformBrowserProofIncludes([
   'readSessionFollowUpProofFromBrowser',
   ['/api/sessions/', '{id}/invocations'].join('$'),
   'assertBrowserSessionFollowUpProof',
   'assertInvocationExternalSessionRefProof',
   'externalSessionRef',
-  'data-aiworker-bridge-event-refs="engine-invocations,engine-invocation-events"',
   ['/api/engine/invocations/', '{id}/cancel'].join('$'),
   'assertInvocationCancelProof',
   ['/api/engine/invocations/', '{id}/reconcile'].join('$'),
@@ -908,10 +851,6 @@ requireFreeformBrowserProofIncludes([
   'assertProjectionRefreshProof',
   ['/api/sessions/', '{id}/archive'].join('$'),
   'assertSessionArchiveProof',
-  'readArchivedMountRejectionProofFromBrowser',
-  'assertArchivedMountRejectionProof',
-  'MOUNT_CONTEXT_INVALID',
-  'cannot mount workbench',
   ['/api/workspace-locators/', '{workspaceId}/archive'].join('$'),
   ['/api/workers/', '{workerId}/archive'].join('$'),
   'assertHostLifecycleArchiveProof',
@@ -1112,19 +1051,6 @@ function requireWorkerConfigBrokerRoutesComplete(entries: Array<[file: string, c
         issues.push({
           file,
           message: 'worker config broker routes must stay complete',
-        })
-      }
-    }
-  }
-}
-
-function requireAppOwnedApiProxyGuardrails(entries: Array<[file: string, content: string, needles: string[]]>): void {
-  for (const [file, content, needles] of entries) {
-    for (const needle of needles) {
-      if (!content.includes(needle)) {
-        issues.push({
-          file,
-          message: 'app-owned API proxy must strip credentials',
         })
       }
     }
