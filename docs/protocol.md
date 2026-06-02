@@ -66,6 +66,18 @@ carries only `kind, target, enabled, sourceRef, checksum`.
 
 Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.
 
+Overlay asset content is read and written through dedicated content routes, never
+through the envelope. `GET /api/workers/:workerId/config/:configKey/content`
+returns the effective `{ content, source, checksum, editable }`: the worker
+overlay file when an enabled `worker-overlay://` overlay exists, otherwise the
+baseline Soul-dist asset. `skill-overlay` and `entry-file-overlay` content is
+editable; `mcp-overlay` content is view-only and redacted on display.
+`PUT /api/workers/:workerId/config/:configKey/content` writes editable content to
+the worker overlay file and upserts the envelope `sourceRef`/`checksum`; the
+content reaches only the file, never the stored envelope. MCP content is not
+editable and the PUT is rejected. A PUT to a not-yet-existing overlay `configKey`
+adds an additive overlay plus its content file.
+
 ## Engine And Projection References
 
 Descriptor engine sections describe packaged asset refs and target engines.
@@ -160,6 +172,10 @@ broker deterministic. They do not turn the daemon into a product backend.
 - engine target discovery and test actions live under `/api/engine/targets`. The
   engine target defaults to the Worker default and may be overridden per session.
 - engine cancel, event stream, and reconciler target an invocation id.
+- `GET /api/workers/:workerId/config/:configKey/content` and
+  `PUT /api/workers/:workerId/config/:configKey/content` read and write overlay
+  asset content (skills and entry-files editable, MCP view-only and redacted);
+  content lives in the worker overlay file, never the config envelope.
 
 ## Host-to-Worker Control Contract
 

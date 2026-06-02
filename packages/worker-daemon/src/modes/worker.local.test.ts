@@ -2495,6 +2495,128 @@ describe('local daemon API', () => {
       .toContain('Broker Config Overlay Session')
   })
 
+  it('reads, edits, and redacts worker overlay asset content through the config content routes', async () => {
+    const officialAppsRoot = join(dir, 'official-content-apps')
+    writePackagedFreeform(officialAppsRoot)
+    // Author-owned native MCP file carries a literal secret: GET must redact it
+    // and the route must never let it be edited (Option A view-only).
+    writeFileSync(
+      join(officialAppsRoot, FREEFORM_APP_ID, 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'),
+      'command = "freeform-mcp"\napi_key = "sk-baselineliteralsecret999"\n',
+    )
+    const target = await app(undefined, undefined, officialAppsRoot)
+    const worker = await createFreeformWorker(target, 'content-overlay-worker')
+
+    // GET baseline: no overlay yet → baseline Soul-dist skill content.
+    const baselineRes = await target.request(`/api/workers/${worker.id}/config/skill-overlay%3Afreeform-session/content`)
+    expect(baselineRes.status).toBe(200)
+    const baseline = await baselineRes.json() as { content: string, source: string, checksum: string, editable: boolean }
+    expect(baseline.source).toBe('baseline')
+    expect(baseline.editable).toBe(true)
+    expect(baseline.content).toContain('Packaged Freeform Session')
+    expect(baseline.checksum).toMatch(/^sha256:/)
+
+    // PUT editable content → written to the overlay file, envelope carries only ref+checksum.
+    const putRes = await target.request(`/api/workers/${worker.id}/config/skill-overlay%3Afreeform-session/content`, {
+      body: JSON.stringify({ content: '# Worker Edited Freeform Session\n' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(putRes.status).toBe(200)
+    const put = await putRes.json() as { config: { value: Record<string, unknown> }, sourceRef: string, checksum: string }
+    expect(put.sourceRef).toBe('worker-overlay://skills/freeform-session/SKILL.md')
+    // Envelope contains ONLY ref + checksum, never the bulk content.
+    expect(put.config.value).toMatchObject({
+      kind: 'skill-overlay',
+      enabled: true,
+      sourceRef: 'worker-overlay://skills/freeform-session/SKILL.md',
+      checksum: put.checksum,
+    })
+    expect(JSON.stringify(put.config.value)).not.toContain('Worker Edited Freeform Session')
+    // The file holds the content under the worker overlay store.
+    await expect(readFile(join(dir, 'workers', worker.id, 'overlays', 'skills', 'freeform-session', 'SKILL.md'), 'utf8'))
+      .resolves
+      .toContain('Worker Edited Freeform Session')
+
+    // GET after PUT → overlay content + source:overlay.
+    const overlayRes = await target.request(`/api/workers/${worker.id}/config/skill-overlay%3Afreeform-session/content`)
+    expect(overlayRes.status).toBe(200)
+    const overlay = await overlayRes.json() as { content: string, source: string }
+    expect(overlay.source).toBe('overlay')
+    expect(overlay.content).toContain('Worker Edited Freeform Session')
+
+    // Projected workspace file reflects the new overlay content after a refresh.
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Content Overlay Workspace' })
+    const refreshRes = await target.request('/api/projections/codex/refresh', {
+      body: JSON.stringify({ workerId: worker.id, workspaceId: workspace.id }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(refreshRes.status).toBe(200)
+    await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'), 'utf8'))
+      .resolves
+      .toContain('Worker Edited Freeform Session')
+
+    // MCP content is view-only and redacted; PUT is rejected.
+    const mcpRes = await target.request(`/api/workers/${worker.id}/config/mcp-overlay%3Acodex/content`)
+    expect(mcpRes.status).toBe(200)
+    const mcp = await mcpRes.json() as { content: string, editable: boolean, source: string }
+    expect(mcp.editable).toBe(false)
+    expect(mcp.content).toContain('[REDACTED]')
+    expect(mcp.content).not.toContain('sk-baselineliteralsecret999')
+
+    const mcpPutRes = await target.request(`/api/workers/${worker.id}/config/mcp-overlay%3Acodex/content`, {
+      body: JSON.stringify({ content: 'command = "edited"\n' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(mcpPutRes.status).toBe(422)
+    expect(await mcpPutRes.json()).toMatchObject({ error: { code: 'WORKER_CONFIG_CONTENT_READONLY' } })
+  })
+
+  it('rejects literal secrets in editable overlay content', async () => {
+    const officialAppsRoot = join(dir, 'official-secret-content-apps')
+    writePackagedFreeform(officialAppsRoot)
+    const target = await app(undefined, undefined, officialAppsRoot)
+    const worker = await createFreeformWorker(target, 'content-secret-worker')
+
+    const secretPutRes = await target.request(`/api/workers/${worker.id}/config/skill-overlay%3Afreeform-session/content`, {
+      body: JSON.stringify({ content: '# Skill\napi_key = "sk-literalsecretvalue123"\n' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(secretPutRes.status).toBe(422)
+    expect(await secretPutRes.json()).toMatchObject({ error: { code: 'WORKER_CONFIG_CONTENT_SECRET' } })
+    // No overlay file written for a rejected secret body.
+    await expect(readFile(join(dir, 'workers', worker.id, 'overlays', 'skills', 'freeform-session', 'SKILL.md'), 'utf8'))
+      .rejects
+      .toThrow()
+  })
+
+  it('adds an additive overlay and its content file for a new configKey', async () => {
+    const officialAppsRoot = join(dir, 'official-add-content-apps')
+    writePackagedFreeform(officialAppsRoot)
+    const target = await app(undefined, undefined, officialAppsRoot)
+    const worker = await createFreeformWorker(target, 'content-add-worker')
+
+    const addRes = await target.request(`/api/workers/${worker.id}/config/skill-overlay%3Afreeform-extra/content`, {
+      body: JSON.stringify({ content: '# Added Freeform Extra Skill\n' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    })
+    expect(addRes.status).toBe(200)
+    const added = await addRes.json() as { sourceRef: string }
+    expect(added.sourceRef).toBe('worker-overlay://skills/freeform-extra/SKILL.md')
+    await expect(readFile(join(dir, 'workers', worker.id, 'overlays', 'skills', 'freeform-extra', 'SKILL.md'), 'utf8'))
+      .resolves
+      .toContain('Added Freeform Extra Skill')
+
+    // The additive overlay surfaces in the config list and reads back as overlay content.
+    const readBackRes = await target.request(`/api/workers/${worker.id}/config/skill-overlay%3Afreeform-extra/content`)
+    expect(readBackRes.status).toBe(200)
+    expect(await readBackRes.json()).toMatchObject({ source: 'overlay', content: '# Added Freeform Extra Skill\n' })
+  })
+
   it('hard-deletes installed Soul App metadata without leaving a disabled app shell', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)

@@ -69,6 +69,8 @@ export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'put', path: '/api/workers/{workerId}/config/{configKey}', summary: 'Replace worker-scoped Host config value', tags: ['worker-config'] },
     { method: 'patch', path: '/api/workers/{workerId}/config/{configKey}', summary: 'Patch worker-scoped Host config value', tags: ['worker-config'] },
     { method: 'post', path: '/api/workers/{workerId}/config/{configKey}/archive', summary: 'Archive worker-scoped Host config value', tags: ['worker-config'], created: true },
+    { method: 'get', path: '/api/workers/{workerId}/config/{configKey}/content', summary: 'Read effective overlay asset content (baseline or worker overlay; MCP redacted)', tags: ['worker-config'] },
+    { method: 'put', path: '/api/workers/{workerId}/config/{configKey}/content', summary: 'Write editable overlay asset content to the worker overlay file', tags: ['worker-config'] },
     { method: 'post', path: '/api/workspace-locators', summary: 'Create workspace locator for a worker', tags: ['workspace-locators'], created: true },
     { method: 'get', path: '/api/workspace-locators', summary: 'List workspace locators, optionally filtered by workerId', tags: ['workspace-locators'] },
     { method: 'get', path: '/api/workspace-locators/{workspaceId}', summary: 'Show workspace locator', tags: ['workspace-locators'] },

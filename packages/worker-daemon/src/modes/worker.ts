@@ -1,16 +1,20 @@
+import type { BaselineAssetStoreKind } from '@zonease/aiworker-engine-projection'
 import type { LocalSettingsConfig, LocalWorkerOverlayAsset, SoulAppEngineTarget } from '@zonease/aiworker-soul-descriptor'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
-import type { LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerApiAuthProvider, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 
+import type { LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerApiAuthProvider, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 import type { Context } from 'hono'
-import { mkdir } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
-import { listBaselineAssets } from '@zonease/aiworker-engine-projection'
+import { listBaselineAssets, readBaselineAssetContent } from '@zonease/aiworker-engine-projection'
+import { resolveWorkerOverlayFile } from '@zonease/aiworker-fs-layout'
 import {
   AppError,
+  parseWorkerOverlaySourceRef,
 } from '@zonease/aiworker-soul-descriptor'
 import {
   closeWorkerDb,
@@ -68,6 +72,7 @@ import {
   patchWorkspaceBodySchema,
   projectionRefreshBodySchema,
   reconcileEngineInvocationBodySchema,
+  workerConfigContentBodySchema,
   workerConfigValueBodySchema,
 } from './worker/schemas'
 import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
@@ -94,6 +99,10 @@ export interface LocalDaemonState {
   startedAt: string
   runtimeVersion: string
   runtimes: Map<string, LocalWorkerRuntime>
+  // Worker home root the daemon and runtime/projection share: overlay content
+  // files live under `<workersRoot>/<workerId>/overlays`, the same root the
+  // orchestrator hands each runtime. Must NOT diverge from the runtime's view.
+  workersRoot: string
   now?: () => string
 }
 
@@ -132,6 +141,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     runtimes,
     startedAt: new Date().toISOString(),
     runtimeVersion,
+    workersRoot,
     now: options.now,
   }
   await state.host.bootstrapOfficialSoulApps()
@@ -370,6 +380,12 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.post('/api/workers/:workerId/config/:configKey/archive', async (c) => {
     return workerConfigMutationResponse(c, state, true)
+  })
+  app.get('/api/workers/:workerId/config/:configKey/content', async (c) => {
+    return workerConfigContentReadResponse(c, state)
+  })
+  app.put('/api/workers/:workerId/config/:configKey/content', async (c) => {
+    return workerConfigContentWriteResponse(c, state)
   })
   app.get('/api/workspace-locators', (c) => {
     const workerId = c.req.query('workerId')
@@ -803,6 +819,213 @@ async function workerConfigMutationResponse(c: Context, _state: LocalDaemonState
   return c.json({
     config: workerConfigValueResponse(saved, false),
   })
+}
+
+// configKey → overlay asset identity. The kind prefix selects the worker overlay
+// store kind; the suffix is the asset name (skill id / entry-file path / mcp
+// engine target). MCP is view-only (Option A): editable=false, redacted display.
+interface OverlayConfigTarget {
+  configKind: 'entry-file-overlay' | 'mcp-overlay' | 'skill-overlay'
+  editable: boolean
+  name: string
+  storeKind: BaselineAssetStoreKind
+  // The MCP engine target, only meaningful when storeKind === 'mcp'.
+  engineTarget: SoulAppEngineTarget | null
+}
+
+function parseOverlayConfigKey(configKey: string): OverlayConfigTarget | null {
+  const colon = configKey.indexOf(':')
+  if (colon === -1)
+    return null
+  const prefix = configKey.slice(0, colon)
+  const name = configKey.slice(colon + 1).trim()
+  if (!name)
+    return null
+  if (prefix === 'skill-overlay')
+    return { configKind: 'skill-overlay', editable: true, engineTarget: null, name, storeKind: 'skills' }
+  if (prefix === 'entry-file-overlay')
+    return { configKind: 'entry-file-overlay', editable: true, engineTarget: null, name, storeKind: 'entry-files' }
+  if (prefix === 'mcp-overlay') {
+    const engineTarget = name === 'codex' || name === 'claude-code' ? name : null
+    return { configKind: 'mcp-overlay', editable: false, engineTarget, name, storeKind: 'mcp' }
+  }
+  return null
+}
+
+// The worker-overlay store path for an editable asset. Skills store the SKILL.md
+// under `<name>/SKILL.md`; entry-files store at the raw path; the descriptor-side
+// sourceRef path follows the same shape.
+function overlayStorePath(asset: OverlayConfigTarget): string {
+  if (asset.storeKind === 'skills')
+    return path.posix.join(asset.name.replace(/\/SKILL\.md$/, ''), 'SKILL.md')
+  return asset.name
+}
+
+function overlaySourceRef(asset: OverlayConfigTarget): string {
+  return `worker-overlay://${asset.storeKind}/${overlayStorePath(asset)}`
+}
+
+// The worker overlay store root, derived from the daemon's configured workersRoot
+// so the daemon writes to the exact same `<workersRoot>/<workerId>/overlays` the
+// orchestrator hands the runtime/projection — fs-layout's global-home resolver
+// would diverge from a daemon configured with an explicit workersRoot.
+function workerOverlaysRoot(state: LocalDaemonState, workerId: string): string {
+  return path.join(state.workersRoot, workerId, 'overlays')
+}
+
+// Find an enabled worker-overlay config value for this configKey whose sourceRef
+// points into the worker overlay store. Direct configKey lookup (not the
+// kind:target:id baseline merge) — that is all the read path needs.
+function enabledWorkerOverlaySourceRef(workerId: string, configKey: string): string | null {
+  const row = listWorkerConfigValues(workerId).find(value => value.configKey === configKey)
+  if (!row)
+    return null
+  const envelope = row.configValueJson as { enabled?: unknown, sourceRef?: unknown }
+  if (envelope.enabled === false || typeof envelope.sourceRef !== 'string')
+    return null
+  return parseWorkerOverlaySourceRef(envelope.sourceRef) ? envelope.sourceRef : null
+}
+
+async function workerConfigContentReadResponse(c: Context, state: LocalDaemonState): Promise<Response> {
+  const worker = requireWorker(String(c.req.param('workerId') ?? ''))
+  const configKey = String(c.req.param('configKey') ?? '')
+  const asset = parseOverlayConfigKey(configKey)
+  if (!asset)
+    return c.json({ error: { code: 'WORKER_CONFIG_CONTENT_UNSUPPORTED', message: 'configKey does not address editable overlay content.' } }, 400)
+
+  const overlayRef = enabledWorkerOverlaySourceRef(worker.id, configKey)
+  if (overlayRef) {
+    const parsed = parseWorkerOverlaySourceRef(overlayRef)!
+    const file = resolveWorkerOverlayFile(workerOverlaysRoot(state, worker.id), parsed.kind, parsed.path)
+    const content = await readFile(file, 'utf8')
+    return c.json(workerConfigContentPayload(asset, content, 'overlay', overlayRef))
+  }
+
+  const source = state.host.engineAssetSourceForWorker(worker)
+  if (!source)
+    return notFound(c, 'baseline asset')
+  const baseline = await readBaselineAssetContent(source, {
+    name: asset.name,
+    storeKind: asset.storeKind,
+    target: asset.engineTarget,
+  })
+  if (!baseline)
+    return notFound(c, 'baseline asset')
+  return c.json(workerConfigContentPayload(asset, baseline.content, 'baseline', baseline.sourceRef))
+}
+
+function workerConfigContentPayload(
+  asset: OverlayConfigTarget,
+  content: string,
+  contentSource: 'baseline' | 'overlay',
+  sourceRef: string,
+) {
+  // MCP is view-only and may carry literal secrets in the author-owned native
+  // file: redact on display via the SAME engine-bridge boundary used for native
+  // MCP files everywhere else. Editable kinds never carry secrets (PUT rejects).
+  const displayContent = asset.editable ? content : redactMcpFileContent(content)
+  return {
+    checksum: `sha256:${createHash('sha256').update(content).digest('hex')}`,
+    content: displayContent,
+    editable: asset.editable,
+    source: contentSource,
+    sourceRef,
+  }
+}
+
+function redactMcpFileContent(content: string): string {
+  const redacted = redactEngineBridgeValue(content)
+  return typeof redacted === 'string' ? redacted : ''
+}
+
+async function workerConfigContentWriteResponse(c: Context, state: LocalDaemonState): Promise<Response> {
+  const worker = requireWorker(String(c.req.param('workerId') ?? ''))
+  const configKey = String(c.req.param('configKey') ?? '')
+  const asset = parseOverlayConfigKey(configKey)
+  if (!asset)
+    return c.json({ error: { code: 'WORKER_CONFIG_CONTENT_UNSUPPORTED', message: 'configKey does not address editable overlay content.' } }, 400)
+  if (!asset.editable)
+    return c.json({ error: { code: 'WORKER_CONFIG_CONTENT_READONLY', message: 'MCP overlay content is view-only and cannot be edited.' } }, 422)
+
+  const result = await parseJsonBody(c, workerConfigContentBodySchema, 'WORKER_CONFIG_CONTENT_INVALID')
+  if (!result.ok)
+    return result.response
+  const content = result.data.content
+  // Reuse the same literal-secret detector the config-envelope mutation uses;
+  // editable overlay bodies must not introduce secrets into worker-owned files.
+  if (containsLiteralSecret(content)) {
+    return c.json({
+      error: {
+        code: 'WORKER_CONFIG_CONTENT_SECRET',
+        message: 'literal secrets are not allowed in worker overlay content',
+      },
+    }, 422)
+  }
+
+  // Content lives ONLY in the worker overlay file; the envelope holds just the
+  // sourceRef + checksum (canon: no bulk content in worker metadata).
+  const overlaysRoot = workerOverlaysRoot(state, worker.id)
+  const storePath = overlayStorePath(asset)
+  const file = resolveWorkerOverlayFile(overlaysRoot, asset.storeKind, storePath)
+  await mkdir(path.dirname(file), { recursive: true })
+  await writeFile(file, content, 'utf8')
+
+  const checksum = `sha256:${createHash('sha256').update(content).digest('hex')}`
+  const sourceRef = overlaySourceRef(asset)
+  const updatedAt = new Date().toISOString()
+  // The overlay options point the projection at the descriptor asset this
+  // overlay replaces (additive ADD has no baseline → no replaces).
+  const baselineRef = baselineDescriptorRef(asset)
+  let saved
+  try {
+    saved = upsertWorkerConfigValue({
+      configKey,
+      configValueJson: {
+        checksum,
+        enabled: true,
+        kind: asset.configKind,
+        options: baselineRef ? { replaces: baselineRef } : {},
+        sourceRef,
+        target: 'all',
+        updatedAt,
+        updatedBy: 'web',
+      },
+      source: 'web',
+      workerId: worker.id,
+      at: updatedAt,
+    })
+  }
+  catch (error) {
+    return c.json({
+      error: {
+        code: 'WORKER_CONFIG_CONTENT_INVALID',
+        message: error instanceof Error ? error.message : 'Invalid worker overlay envelope.',
+      },
+    }, 422)
+  }
+
+  // Re-projection is lazy per the existing pattern: the new checksum moves the
+  // workspace freshness marker (stale), and the next /api/projections refresh
+  // materializes the edited content into every workspace (worker-scoped overlay).
+  return c.json({
+    checksum,
+    config: workerConfigValueResponse(saved, false),
+    content,
+    editable: true,
+    source: 'overlay',
+    sourceRef,
+  })
+}
+
+// Descriptor baseline sourceRef the overlay replaces, mirroring listBaselineAssets'
+// sourceRef shape. ADD (new name with no baseline) still records this; the
+// projection simply finds no matching baseline and applies the overlay additively.
+function baselineDescriptorRef(asset: OverlayConfigTarget): string | null {
+  if (asset.storeKind === 'skills')
+    return `descriptor://engine/skills/${asset.name.replace(/\/SKILL\.md$/, '')}`
+  if (asset.storeKind === 'entry-files')
+    return `descriptor://engine/workspaceAssets/${asset.name}`
+  return null
 }
 
 function workerConfigResponse(workerId: string) {

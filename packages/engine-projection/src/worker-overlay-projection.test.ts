@@ -252,7 +252,7 @@ describe('engine-projection worker-overlay:// scheme', () => {
         ],
       },
       workspaceRoot,
-    })).rejects.toThrow('Projection path must be relative')
+    })).rejects.toThrow('Invalid worker-overlay sourceRef')
   })
 })
 

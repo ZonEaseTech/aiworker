@@ -23,7 +23,7 @@ import {
   resolveSoulAppEngineTarget,
 } from '@zonease/aiworker-engine-projection'
 import { resolveWorkerOverlayFile } from '@zonease/aiworker-fs-layout'
-import { AppError, soulAppProjectionReceiptSchema } from '@zonease/aiworker-soul-descriptor'
+import { AppError, parseWorkerOverlaySourceRef, soulAppProjectionReceiptSchema } from '@zonease/aiworker-soul-descriptor'
 import {
   appendSessionEvent,
   createEngineInvocation,
@@ -1117,13 +1117,12 @@ export class LocalWorkerRuntime {
   }
 
   private resolveWorkerOverlayStorePath(sourceRef: string): string {
-    const rest = sourceRef.slice('worker-overlay://'.length)
-    const slash = rest.indexOf('/')
-    const storeKind = slash === -1 ? '' : rest.slice(0, slash)
-    const relativePath = slash === -1 ? '' : rest.slice(slash + 1)
-    if (!relativePath.trim())
+    // Single shared parser owns the `worker-overlay://<kind>/<path>` shape
+    // (soul-descriptor); fs-layout owns the safe store-path resolution.
+    const parsed = parseWorkerOverlaySourceRef(sourceRef)
+    if (!parsed)
       throw new Error(`Invalid worker overlay sourceRef: ${sourceRef}`)
-    return resolveWorkerOverlayFile(this.#overlaysRoot, storeKind, relativePath)
+    return resolveWorkerOverlayFile(this.#overlaysRoot, parsed.kind, parsed.path)
   }
 
   private workerOverlaySourceSegments(kind: WorkerOverlayProjectionAsset['kind'], sourceRef: string, target: string): string[] {

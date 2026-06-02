@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { cp, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
+import { isWorkerOverlaySourceRef, parseWorkerOverlaySourceRef } from '@zonease/aiworker-soul-descriptor'
 
 export {
   cleanupWorkspaceProjectionReceipt,
@@ -8,9 +9,12 @@ export {
   engineAssetProjectionReceiptPath,
   listBaselineAssets,
   projectEngineAssetsToWorkspace,
+  readBaselineAssetContent,
   resolveSoulAppEngineTarget,
 } from './workspace-projection'
 export type {
+  BaselineAssetContent,
+  BaselineAssetStoreKind,
   EngineAssetProjectionInput,
   EngineAssetSource,
   ReservedOverlayProjectionConfig,
@@ -51,30 +55,25 @@ export interface ProjectEngineAssetsInput {
   workspaceRoot: string
 }
 
-const WORKER_OVERLAY_SCHEME = 'worker-overlay://'
-
 /**
  * Scheme-aware overlay file resolution. `descriptor://…` refs resolve from the
  * descriptor source root (byte-identical to the baseline behavior, via the
  * provided `descriptorResolver`); `worker-overlay://<kind>/<path>` refs resolve
- * from `<overlayRoot>/<kind>/<path>`.
+ * from `<overlayRoot>/<kind>/<path>`. The `worker-overlay://` shape (kind + safe
+ * relative path) is parsed by the single shared `parseWorkerOverlaySourceRef`
+ * from soul-descriptor — no inline scheme parser here.
  */
 function resolveOverlaySourceFile(input: {
   descriptorResolver: (sourceRef: string) => string
   overlayRoot?: string
   sourceRef: string
 }): string {
-  if (!input.sourceRef.startsWith(WORKER_OVERLAY_SCHEME))
+  if (!isWorkerOverlaySourceRef(input.sourceRef))
     return input.descriptorResolver(input.sourceRef)
   if (!input.overlayRoot)
     throw new Error(`Worker overlay root is required to resolve sourceRef: ${input.sourceRef}`)
-  const rest = input.sourceRef.slice(WORKER_OVERLAY_SCHEME.length)
-  const slash = rest.indexOf('/')
-  const kind = slash === -1 ? '' : rest.slice(0, slash)
-  const relativePath = slash === -1 ? '' : rest.slice(slash + 1)
-  if (kind !== 'skills' && kind !== 'mcp' && kind !== 'entry-files')
-    throw new Error(`Unsupported worker overlay kind in sourceRef: ${input.sourceRef}`)
-  return path.join(path.resolve(input.overlayRoot), kind, ...safeRelativeSegments(relativePath))
+  const parsed = parseWorkerOverlaySourceRef(input.sourceRef)!
+  return path.join(path.resolve(input.overlayRoot), parsed.kind, ...safeRelativeSegments(parsed.path))
 }
 
 export interface CleanupReceiptInput {

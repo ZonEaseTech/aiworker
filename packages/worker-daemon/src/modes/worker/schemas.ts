@@ -163,3 +163,16 @@ export const projectionRefreshBodySchema = z.object({
 })
 
 export const workerConfigValueBodySchema = localWorkerConfigValueInputSchema
+
+// ---------------------------------------------------------------------------
+// PUT /api/workers/:workerId/config/:configKey/content
+// Editable overlay content travels transiently in the request body; it is
+// written to the worker overlay FILE and never stored in the config envelope.
+// `target` is accepted for API symmetry with the design but is advisory only
+// (overlays are worker-scoped: applied to all workspaces on projection).
+// ---------------------------------------------------------------------------
+
+export const workerConfigContentBodySchema = z.object({
+  content: z.string(),
+  target: z.string().optional(),
+})

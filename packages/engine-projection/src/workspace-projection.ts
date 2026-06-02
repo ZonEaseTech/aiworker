@@ -689,6 +689,71 @@ export async function listBaselineAssets(source: EngineAssetSource): Promise<Loc
   return assets
 }
 
+export type BaselineAssetStoreKind = 'entry-files' | 'mcp' | 'skills'
+
+export interface BaselineAssetContent {
+  checksum: string
+  content: string
+  sourceRef: string
+}
+
+/**
+ * Read a single baseline (Soul dist) asset's full content by overlay store kind
+ * and name. Mirrors the path layout `listBaselineAssets` uses (so the returned
+ * `checksum` is byte-identical to the listed baseline checksum) but returns the
+ * file bytes — `listBaselineAssets` discards them after checksumming. Returns
+ * null when the baseline file does not exist. `target` selects the MCP engine
+ * file (`config.toml` / `.mcp.json`); ignored for entry-files.
+ */
+export async function readBaselineAssetContent(
+  source: EngineAssetSource,
+  query: { name: string, storeKind: BaselineAssetStoreKind, target?: SoulAppEngineTarget | null },
+): Promise<BaselineAssetContent | null> {
+  const sourceRoot = path.resolve(source.sourceRoot)
+  const name = query.name.trim()
+  if (!name)
+    return null
+
+  if (query.storeKind === 'entry-files') {
+    const workspaceSource = appLocalSourcePath(source.engineAssets?.workspace?.source ?? DEFAULT_WORKSPACE_ASSET_SOURCE)
+    const file = path.join(sourceRoot, ...workspaceSource.split('/'), ...relativeAssetSegments(name))
+    return readBaselineFile(file, path.posix.join(workspaceSource, name))
+  }
+
+  if (query.storeKind === 'skills') {
+    const skillsSource = appLocalSourcePath(source.engineAssets?.skills?.source ?? DEFAULT_SKILL_ASSET_SOURCE)
+    const skillId = name.replace(/\/SKILL\.md$/, '')
+    const file = path.join(sourceRoot, ...skillsSource.split('/'), ...relativeAssetSegments(skillId), SKILL_FILE)
+    return readBaselineFile(file, path.posix.join(skillsSource, skillId, SKILL_FILE))
+  }
+
+  const target = query.target === 'codex' || query.target === 'claude-code' ? query.target : null
+  if (!target)
+    return null
+  const client = (source.engineAssets?.mcpClients ?? []).find(entry => entry.target === target)
+  if (!client)
+    return null
+  const adapter = mcpClientAdapter(target)
+  const sourceDir = appLocalSourcePath(client.source)
+  const relativePath = path.posix.join(sourceDir, adapter.sourceFile)
+  const file = path.join(sourceRoot, ...relativePath.split('/'))
+  return readBaselineFile(file, relativePath)
+}
+
+function relativeAssetSegments(value: string): string[] {
+  const segments = value.split(/[\\/]/).filter(Boolean)
+  if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value) || segments.some(segment => segment === '.' || segment === '..' || segment.includes('\0')))
+    throw new Error(`Baseline asset name must be a safe relative path: ${value}`)
+  return segments
+}
+
+async function readBaselineFile(file: string, sourceRef: string): Promise<BaselineAssetContent | null> {
+  if (!await isFile(file))
+    return null
+  const content = await readFile(file, 'utf8')
+  return { checksum: contentChecksum(content), content, sourceRef }
+}
+
 function contentChecksum(content: string): string {
   return `sha256:${createHash('sha256').update(content).digest('hex')}`
 }
