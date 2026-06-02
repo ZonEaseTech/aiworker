@@ -274,6 +274,25 @@ export interface StaticMessages {
     }
   }
   statuses: Record<StatusKey, string>
+  workerConfig: {
+    viewEdit: string
+    view: string
+    addSkill: string
+    addEntryFile: string
+    editorTitle: (assetId: string) => string
+    sourceBaseline: string
+    sourceOverlay: string
+    contentLabel: string
+    readonlyHint: string
+    save: string
+    saving: string
+    resetToBaseline: string
+    cancel: string
+    addNamePlaceholder: string
+    addContentPlaceholder: string
+    add: string
+    loadFailed: string
+  }
 }
 
 export interface BuiltinSoulCopy {

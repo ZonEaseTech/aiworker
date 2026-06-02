@@ -1,4 +1,5 @@
 import type { LocalWorker, LocalWorkerOverlayAsset, LocalWorkerOverlayAssetKind } from '@zonease/aiworker-soul-descriptor'
+import type { StaticMessages } from '../features/i18n/types'
 
 import { Cancel01Icon, MoreHorizontalCircle01Icon, RefreshIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -6,14 +7,18 @@ import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { CollapsibleGroup } from '@zonease/aiworker-ui/components/collapsible-group'
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@zonease/aiworker-ui/components/dropdown-menu'
 import { Input } from '@zonease/aiworker-ui/components/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
+import { Label } from '@zonease/aiworker-ui/components/label'
 import { ScrollArea } from '@zonease/aiworker-ui/components/scroll-area'
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '@zonease/aiworker-ui/components/sidebar'
 import { Switch } from '@zonease/aiworker-ui/components/switch'
+import { Textarea } from '@zonease/aiworker-ui/components/textarea'
 import { useEffect, useMemo, useState } from 'react'
+
+import { getOverlayContent, LocalApiError, putOverlayContent, resetOverlayContent } from '../features/local-workspace/api'
 
 type OverlayCategory = LocalWorkerOverlayAssetKind
 
@@ -33,7 +38,9 @@ interface NewAssetDraft {
 export function WorkerConfigurationDialog({
   activeWorkbenchTabId,
   assets,
+  copy,
   onOpenChange,
+  onReload,
   onSaveAssets,
   onSelectWorkbenchTab,
   open,
@@ -42,13 +49,18 @@ export function WorkerConfigurationDialog({
 }: {
   activeWorkbenchTabId?: string | null
   assets: LocalWorkerOverlayAsset[]
+  copy: StaticMessages
   onOpenChange: (open: boolean) => void
+  onReload?: () => Promise<void> | void
   onSaveAssets: (assets: LocalWorkerOverlayAsset[]) => Promise<void> | void
   onSelectWorkbenchTab?: (tab: { id: string, path: string }) => void
   open: boolean
   worker: LocalWorker | null
   workbenchTabs?: { id: string, label: string, path: string }[]
 }) {
+  const labels = copy.workerConfig
+  const [contentTarget, setContentTarget] = useState<LocalWorkerOverlayAsset | null>(null)
+  const [addCategory, setAddCategory] = useState<'entry-file' | 'skill' | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [activeCategory, setActiveCategory] = useState<OverlayCategory | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
@@ -307,6 +319,14 @@ export function WorkerConfigurationDialog({
           <Badge variant="secondary" className="w-fit">WORKER OVERLAY</Badge>
           <DialogTitle>Worker configuration</DialogTitle>
           <DialogDescription>{worker ? `${worker.name} worker overlay` : 'Worker overlay'}</DialogDescription>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button type="button" variant="outline" size="sm" onClick={() => setAddCategory('skill')}>
+              {`+ ${labels.addSkill}`}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setAddCategory('entry-file')}>
+              {`+ ${labels.addEntryFile}`}
+            </Button>
+          </div>
         </DialogHeader>
         <div data-testid="worker-configuration-body" className="flex flex-1 min-h-0 max-md:flex-col">
           <div data-testid="worker-overlay-sidebar" className="flex w-80 shrink-0 flex-col min-h-0 bg-sidebar text-sidebar-foreground max-md:max-h-64 max-md:w-full max-md:flex-none">
@@ -523,6 +543,14 @@ export function WorkerConfigurationDialog({
                                 </ItemDescription>
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setContentTarget(selectedAsset)}
+                                >
+                                  {selectedAsset.kind === 'mcp-client' ? labels.view : labels.viewEdit}
+                                </Button>
                                 <Switch
                                   checked={selectedAsset.enabled}
                                   disabled={saving}
@@ -565,6 +593,250 @@ export function WorkerConfigurationDialog({
             </ScrollArea>
           </div>
         </div>
+        {contentTarget && worker
+          ? (
+              <OverlayContentEditorDialog
+                key={`${contentTarget.kind}:${contentTarget.id}:${contentTarget.target}`}
+                asset={contentTarget}
+                labels={labels}
+                workerId={worker.id}
+                onClose={() => setContentTarget(null)}
+                onSaved={() => {
+                  setContentTarget(null)
+                  void onReload?.()
+                }}
+              />
+            )
+          : null}
+        {addCategory && worker
+          ? (
+              <OverlayContentAddDialog
+                key={addCategory}
+                kind={addCategory}
+                labels={labels}
+                workerId={worker.id}
+                onClose={() => setAddCategory(null)}
+                onAdded={() => {
+                  setAddCategory(null)
+                  void onReload?.()
+                }}
+              />
+            )
+          : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// configKey the content GET/PUT endpoints address. Skills/entry-files key on the
+// asset id; MCP keys on the engine target (codex/claude-code) the daemon resolves.
+function contentConfigKey(asset: LocalWorkerOverlayAsset): string {
+  if (asset.kind === 'entry-file')
+    return `entry-file-overlay:${asset.id}`
+  if (asset.kind === 'mcp-client')
+    return `mcp-overlay:${asset.target}`
+  return `skill-overlay:${asset.id}`
+}
+
+function OverlayContentEditorDialog({
+  asset,
+  labels,
+  onClose,
+  onSaved,
+  workerId,
+}: {
+  asset: LocalWorkerOverlayAsset
+  labels: StaticMessages['workerConfig']
+  onClose: () => void
+  onSaved: () => void
+  workerId: string
+}) {
+  const configKey = contentConfigKey(asset)
+  const target = asset.kind === 'skill' ? asset.target : undefined
+  const [content, setContent] = useState('')
+  const [editable, setEditable] = useState(false)
+  const [source, setSource] = useState<'baseline' | 'overlay'>('baseline')
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getOverlayContent(workerId, configKey, target)
+      .then((result) => {
+        if (cancelled)
+          return
+        setContent(result.content)
+        setEditable(result.editable)
+        setSource(result.source)
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled)
+          setError(caught instanceof Error ? caught.message : labels.loadFailed)
+      })
+      .finally(() => {
+        if (!cancelled)
+          setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [configKey, labels.loadFailed, target, workerId])
+
+  async function save() {
+    setBusy(true)
+    setError(null)
+    try {
+      await putOverlayContent(workerId, configKey, { content, target })
+      onSaved()
+    }
+    catch (caught) {
+      setError(caught instanceof LocalApiError ? caught.message : caught instanceof Error ? caught.message : labels.loadFailed)
+    }
+    finally {
+      setBusy(false)
+    }
+  }
+
+  async function reset() {
+    setBusy(true)
+    setError(null)
+    try {
+      await resetOverlayContent(workerId, configKey)
+      onSaved()
+    }
+    catch (caught) {
+      setError(caught instanceof Error ? caught.message : labels.loadFailed)
+    }
+    finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={openNext => openNext ? undefined : onClose()}>
+      <DialogContent className="flex max-h-[85dvh] flex-col gap-3 sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{labels.editorTitle(asset.id)}</DialogTitle>
+          <DialogDescription>
+            <Badge variant="outline" data-testid="overlay-content-source">
+              {source === 'overlay' ? labels.sourceOverlay : labels.sourceBaseline}
+            </Badge>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-2">
+          <Label htmlFor="overlay-content-textarea">{labels.contentLabel}</Label>
+          <Textarea
+            id="overlay-content-textarea"
+            aria-label={labels.contentLabel}
+            className="min-h-72 font-mono text-xs"
+            value={content}
+            readOnly={!editable}
+            disabled={loading}
+            onChange={event => setContent(event.currentTarget.value)}
+          />
+          {!editable
+            ? <p className="text-xs text-muted-foreground">{labels.readonlyHint}</p>
+            : null}
+        </div>
+        {error
+          ? (
+              <Alert variant="destructive">
+                <AlertDescription data-testid="overlay-content-error">{error}</AlertDescription>
+              </Alert>
+            )
+          : null}
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onClose}>{labels.cancel}</Button>
+          {editable && source === 'overlay'
+            ? (
+                <Button type="button" variant="outline" disabled={busy} onClick={() => void reset()}>
+                  {labels.resetToBaseline}
+                </Button>
+              )
+            : null}
+          {editable
+            ? (
+                <Button type="button" disabled={busy || loading} onClick={() => void save()}>
+                  {busy ? labels.saving : labels.save}
+                </Button>
+              )
+            : null}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function OverlayContentAddDialog({
+  kind,
+  labels,
+  onAdded,
+  onClose,
+  workerId,
+}: {
+  kind: 'entry-file' | 'skill'
+  labels: StaticMessages['workerConfig']
+  onAdded: () => void
+  onClose: () => void
+  workerId: string
+}) {
+  const [name, setName] = useState('')
+  const [content, setContent] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function add() {
+    if (!name.trim())
+      return
+    setBusy(true)
+    setError(null)
+    try {
+      await putOverlayContent(workerId, `${kind}-overlay:${name.trim()}`, { content })
+      onAdded()
+    }
+    catch (caught) {
+      setError(caught instanceof Error ? caught.message : labels.loadFailed)
+    }
+    finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={openNext => openNext ? undefined : onClose()}>
+      <DialogContent className="flex max-h-[85dvh] flex-col gap-3 sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{kind === 'skill' ? labels.addSkill : labels.addEntryFile}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-2">
+          <Input
+            aria-label={labels.addNamePlaceholder}
+            placeholder={labels.addNamePlaceholder}
+            value={name}
+            onChange={event => setName(event.currentTarget.value)}
+          />
+          <Textarea
+            aria-label={labels.addContentPlaceholder}
+            placeholder={labels.addContentPlaceholder}
+            className="min-h-48 font-mono text-xs"
+            value={content}
+            onChange={event => setContent(event.currentTarget.value)}
+          />
+        </div>
+        {error
+          ? (
+              <Alert variant="destructive">
+                <AlertDescription data-testid="overlay-add-error">{error}</AlertDescription>
+              </Alert>
+            )
+          : null}
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onClose}>{labels.cancel}</Button>
+          <Button type="button" disabled={busy || !name.trim()} onClick={() => void add()}>
+            {busy ? labels.saving : labels.add}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

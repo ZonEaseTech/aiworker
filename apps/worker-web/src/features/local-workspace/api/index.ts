@@ -1,3 +1,4 @@
+export { LocalApiError } from '../../../shared/api/local-client'
 export {
   fetchInvocationEvents,
   submitSessionInvocation,
@@ -28,6 +29,15 @@ export {
   saveWorkerConfigValue,
 } from './worker-config'
 export { saveWorkerOverlayConfigValues } from './worker-overlay-config'
+export {
+  getOverlayContent,
+  putOverlayContent,
+  resetOverlayContent,
+} from './worker-overlay-content'
+export type {
+  PutWorkerOverlayContentBody,
+  WorkerOverlayContentResponse,
+} from './worker-overlay-content'
 export {
   loadWorkerOverlay,
   projectWorkerWorkspaceOverlay,

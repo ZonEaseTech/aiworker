@@ -172,6 +172,13 @@ export function WorkerStudio() {
     dispatchWorkerOverlayAssets(result.overlay.assets)
   }
 
+  async function reloadWorkerOverlayAssets() {
+    if (!selectedWorker)
+      return
+    const result = await loadWorkerOverlay(selectedWorker.id)
+    dispatchWorkerOverlayAssets(result.overlay.assets)
+  }
+
   const selectSession = useCallback((workspace: LocalWorkspace, session: LocalSession) => {
     navigateWorkerRoute({
       kind: 'session',
@@ -348,10 +355,12 @@ export function WorkerStudio() {
       <WorkerConfigurationDialog
         activeWorkbenchTabId={null}
         assets={workerOverlayAssets}
+        copy={copy}
         open={workerConfigurationOpen}
         worker={selectedWorker}
         workbenchTabs={[]}
         onOpenChange={setWorkerConfigurationOpen}
+        onReload={reloadWorkerOverlayAssets}
         onSaveAssets={saveWorkerOverlayAssets}
         onSelectWorkbenchTab={() => {}}
       />
