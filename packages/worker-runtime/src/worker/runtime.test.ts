@@ -2162,6 +2162,103 @@ describe('LocalWorkerRuntime', () => {
     }))
   })
 
+  it('projects worker-overlay:// skill content from the worker overlay store', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-worker-overlay-skill')
+    await writeProfileEngineAssets(appRoot)
+    await mkdir(join(appRoot, 'engine-assets', 'skills', 'freeform-brief'), { recursive: true })
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'freeform-brief', 'SKILL.md'), '# Baseline Freeform Brief\n')
+
+    // Worker-owned overlay content lives under <worker-home>/overlays, the sibling
+    // of workspaces/. The config envelope only references it (no content).
+    const overlayStore = join(dir, 'workers', 'worker-demo', 'overlays', 'skills', 'freeform-brief')
+    await mkdir(overlayStore, { recursive: true })
+    await writeFile(join(overlayStore, 'SKILL.md'), '# Worker Edited Brief\n')
+
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    })
+
+    await workerRuntime.init()
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'skill-overlay:freeform-brief',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:worker-overlay',
+        enabled: true,
+        kind: 'skill-overlay',
+        options: {
+          replaces: 'descriptor://engine/skills/freeform-brief',
+        },
+        sourceRef: 'worker-overlay://skills/freeform-brief/SKILL.md',
+        target: 'codex',
+      },
+    })
+    // The envelope never stores the content body.
+    expect(JSON.stringify(getWorkerConfigValue(workerRuntime.workerId, 'skill-overlay:freeform-brief'))).not.toContain('Worker Edited Brief')
+
+    const workspace = await workerRuntime.createWorkspace({ name: 'Worker overlay skill workspace' })
+
+    await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'demo-soul-app-freeform-brief', 'SKILL.md'), 'utf8'))
+      .resolves
+      .toContain('Worker Edited Brief')
+    const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
+      projections: Array<{ source: string, target: string }>
+    }
+    expect(receipt.projections).toContainEqual(expect.objectContaining({
+      source: 'worker-overlay',
+      target: '.agents/skills/demo-soul-app-freeform-brief/SKILL.md',
+    }))
+  })
+
+  it('projects an additive worker-overlay:// entry-file from the worker overlay store', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-worker-overlay-entry')
+    await writeProfileEngineAssets(appRoot)
+
+    const overlayStore = join(dir, 'workers', 'worker-demo', 'overlays', 'entry-files')
+    await mkdir(overlayStore, { recursive: true })
+    await writeFile(join(overlayStore, 'NOTES.md'), '# Worker Overlay Notes\n')
+
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    })
+
+    await workerRuntime.init()
+    upsertWorkerConfigValue({
+      workerId: workerRuntime.workerId,
+      configKey: 'entry-file-overlay:notes',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:worker-overlay-notes',
+        enabled: true,
+        kind: 'entry-file-overlay',
+        options: {
+          targetPath: 'NOTES.md',
+        },
+        sourceRef: 'worker-overlay://entry-files/NOTES.md',
+        target: 'all',
+      },
+    })
+    expect(JSON.stringify(getWorkerConfigValue(workerRuntime.workerId, 'entry-file-overlay:notes'))).not.toContain('Worker Overlay Notes')
+
+    const workspace = await workerRuntime.createWorkspace({ name: 'Worker overlay entry workspace' })
+
+    await expect(readFile(join(workspace.rootPath, 'NOTES.md'), 'utf8'))
+      .resolves
+      .toContain('Worker Overlay Notes')
+    const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
+      projections: Array<{ source: string, target: string }>
+    }
+    expect(receipt.projections).toContainEqual(expect.objectContaining({
+      source: 'worker-overlay',
+      target: 'NOTES.md',
+    }))
+  })
+
   it('projects standard worker config skill overlays into workspace assets', async () => {
     const appRoot = join(dir, 'souls', 'demo-soul-app-config-overlay-skill')
     await writeProfileEngineAssets(appRoot)

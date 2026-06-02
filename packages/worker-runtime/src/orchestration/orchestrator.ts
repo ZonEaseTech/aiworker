@@ -210,6 +210,7 @@ export class WorkerOrchestrator {
       engineAssetSource: this.engineAssetSourceForWorker(worker),
       now: this.options.now,
       workspacesRoot: path.join(this.options.workersRoot, worker.id, 'workspaces'),
+      overlaysRoot: path.join(this.options.workersRoot, worker.id, 'overlays'),
     })
   }
 

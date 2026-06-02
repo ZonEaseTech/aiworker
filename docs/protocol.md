@@ -56,6 +56,14 @@ configuration kind and participates in the projection freshness marker, but
 engine projection applies no projected-file change for it. Per-asset projection
 overlays use `entry-file-overlay`, `skill-overlay`, and `mcp-overlay`.
 
+Overlay `sourceRef` values are scheme-qualified references, never content.
+`descriptor://…` resolves baseline assets from the Soul descriptor source.
+`worker-overlay://<kind>/<path>` (with `kind` one of `skills`, `mcp`, or
+`entry-files`) resolves worker-owned edited content from the worker overlay
+store at `<worker-home>/overlays/<kind>/<path>`, the sibling of `workspaces/`.
+Engine projection materializes the referenced file by scheme; the envelope still
+carries only `kind, target, enabled, sourceRef, checksum`.
+
 Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.
 
 ## Engine And Projection References

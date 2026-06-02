@@ -179,6 +179,16 @@ export const soulProtocolPackage = {
 export { AppError } from './errors'
 export { mintWorkerId, slugify, WORKER_ID_ALPHABET, WORKER_ID_PATTERN } from './lib/ids'
 export {
+  isWorkerOverlaySourceRef,
+  localWorkerOverlaySourceRefKindSchema,
+  parseWorkerOverlaySourceRef,
+  WORKER_OVERLAY_SOURCE_REF_SCHEME,
+} from './local-workspace'
+export type {
+  LocalWorkerOverlaySourceRefKind,
+  ParsedWorkerOverlaySourceRef,
+} from './local-workspace'
+export {
   localAppearanceSchema,
   localComposerMentionSchema,
   localEngineInvocationSchema,

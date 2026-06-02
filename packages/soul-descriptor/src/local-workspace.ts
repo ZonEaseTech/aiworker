@@ -64,6 +64,52 @@ export const localWorkerOverlaySchema = z.object({
 })
 export type LocalWorkerOverlay = z.infer<typeof localWorkerOverlaySchema>
 
+/**
+ * Worker-config overlay sourceRef schemes. The config envelope holds only a
+ * reference (`sourceRef` + `checksum`), never content:
+ * - `descriptor://…` resolves baseline assets from the Soul descriptor source.
+ * - `worker-overlay://<kind>/<path>` resolves worker-owned edited content from
+ *   the worker overlay store (`<worker-home>/overlays/<kind>/<path>`).
+ */
+export const localWorkerOverlaySourceRefKindSchema = z.enum(['skills', 'mcp', 'entry-files'])
+export type LocalWorkerOverlaySourceRefKind = z.infer<typeof localWorkerOverlaySourceRefKindSchema>
+
+export const WORKER_OVERLAY_SOURCE_REF_SCHEME = 'worker-overlay://'
+
+export interface ParsedWorkerOverlaySourceRef {
+  kind: LocalWorkerOverlaySourceRefKind
+  path: string
+}
+
+/**
+ * Parse a `worker-overlay://<kind>/<path>` sourceRef. Returns null for any other
+ * scheme (e.g. `descriptor://…`) so callers can keep descriptor handling
+ * unchanged. Throws when the scheme matches but the value is malformed.
+ */
+export function parseWorkerOverlaySourceRef(sourceRef: string): ParsedWorkerOverlaySourceRef | null {
+  const value = sourceRef.trim()
+  if (!value.startsWith(WORKER_OVERLAY_SOURCE_REF_SCHEME))
+    return null
+  const rest = value.slice(WORKER_OVERLAY_SOURCE_REF_SCHEME.length)
+  const slash = rest.indexOf('/')
+  const kind = slash === -1 ? '' : rest.slice(0, slash)
+  const relativePath = slash === -1 ? '' : rest.slice(slash + 1)
+  const parsedKind = localWorkerOverlaySourceRefKindSchema.safeParse(kind)
+  const segments = relativePath.split('/').filter(Boolean)
+  if (
+    !parsedKind.success
+    || segments.length === 0
+    || segments.some(segment => segment === '.' || segment === '..' || segment.includes('\0'))
+  ) {
+    throw new Error(`Invalid worker-overlay sourceRef: ${JSON.stringify(sourceRef)}`)
+  }
+  return { kind: parsedKind.data, path: segments.join('/') }
+}
+
+export function isWorkerOverlaySourceRef(sourceRef: string): boolean {
+  return sourceRef.trim().startsWith(WORKER_OVERLAY_SOURCE_REF_SCHEME)
+}
+
 export const localWorkerConfigKindSchema = z.enum([
   'engine-selection',
   'projection-overlay',

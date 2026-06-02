@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { localSessionSchema, localWorkerConfigKindSchema, localWorkerConfigTargetSchema, localWorkerConfigUpdatedBySchema, localWorkerConfigValueInputSchema, localWorkerConfigValueSchema, soulProtocolPackage } from './index'
+import { isWorkerOverlaySourceRef, localSessionSchema, localWorkerConfigKindSchema, localWorkerConfigTargetSchema, localWorkerConfigUpdatedBySchema, localWorkerConfigValueInputSchema, localWorkerConfigValueSchema, parseWorkerOverlaySourceRef, soulProtocolPackage } from './index'
 
 const CANONICAL_WORKER_CONFIG_KINDS = [
   'engine-selection',
@@ -124,5 +124,38 @@ describe('soul-descriptor package boundary', () => {
 
     expect(parsed).not.toHaveProperty('context')
     expect(parsed).not.toHaveProperty('capabilityId')
+  })
+
+  test('parses worker-overlay:// sourceRef scheme and leaves descriptor:// refs untouched', () => {
+    expect(parseWorkerOverlaySourceRef('worker-overlay://skills/freeform-session/SKILL.md'))
+      .toEqual({ kind: 'skills', path: 'freeform-session/SKILL.md' })
+    expect(parseWorkerOverlaySourceRef('worker-overlay://entry-files/NOTES.md'))
+      .toEqual({ kind: 'entry-files', path: 'NOTES.md' })
+    expect(parseWorkerOverlaySourceRef('worker-overlay://mcp/codex/config.toml'))
+      .toEqual({ kind: 'mcp', path: 'codex/config.toml' })
+
+    // descriptor:// refs are not this scheme — return null, keep them valid elsewhere.
+    expect(parseWorkerOverlaySourceRef('descriptor://engine/skills/freeform-session')).toBeNull()
+    expect(isWorkerOverlaySourceRef('descriptor://engine/skills/freeform-session')).toBe(false)
+    expect(isWorkerOverlaySourceRef('worker-overlay://skills/x/SKILL.md')).toBe(true)
+
+    // Malformed worker-overlay refs are rejected.
+    expect(() => parseWorkerOverlaySourceRef('worker-overlay://plugins/x.md')).toThrow()
+    expect(() => parseWorkerOverlaySourceRef('worker-overlay://skills/../escape')).toThrow()
+    expect(() => parseWorkerOverlaySourceRef('worker-overlay://skills')).toThrow()
+    expect(() => parseWorkerOverlaySourceRef('worker-overlay://skills/')).toThrow()
+  })
+
+  test('config envelope sourceRef accepts both descriptor:// and worker-overlay:// values', () => {
+    for (const sourceRef of ['descriptor://engine/skills/freeform-session', 'worker-overlay://skills/freeform-session/SKILL.md']) {
+      const parsed = localWorkerConfigValueInputSchema.parse({
+        checksum: 'sha256:overlay',
+        enabled: true,
+        kind: 'skill-overlay',
+        sourceRef,
+        target: 'codex',
+      })
+      expect(parsed.sourceRef).toBe(sourceRef)
+    }
   })
 })

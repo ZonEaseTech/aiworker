@@ -10,6 +10,8 @@ import {
   resolveAiworkerHome,
   resolveAiworkerScope,
   resolveWorkerHome,
+  resolveWorkerOverlayFile,
+  resolveWorkerOverlaysRoot,
   resolveWorkspacesRoot,
 } from './index'
 
@@ -143,6 +145,28 @@ describe('worker workspace roots', () => {
 
     expect(resolveWorkerHome('demo-worker')).toBe('/tmp/aiworker-home/workers/demo-worker')
     expect(resolveWorkspacesRoot('demo-worker')).toBe('/tmp/aiworker-home/workers/demo-worker/workspaces')
+  })
+
+  it('places the worker overlay store as a sibling of workspaces', () => {
+    process.env.AIWORKER_HOME = '/tmp/aiworker-home'
+
+    expect(resolveWorkerOverlaysRoot('demo-worker')).toBe('/tmp/aiworker-home/workers/demo-worker/overlays')
+  })
+
+  it('resolves overlay files under the kind directory and rejects unsafe paths', () => {
+    const overlaysRoot = '/tmp/aiworker-home/workers/demo-worker/overlays'
+
+    expect(resolveWorkerOverlayFile(overlaysRoot, 'skills', 'freeform-session/SKILL.md'))
+      .toBe('/tmp/aiworker-home/workers/demo-worker/overlays/skills/freeform-session/SKILL.md')
+    expect(resolveWorkerOverlayFile(overlaysRoot, 'entry-files', 'NOTES.md'))
+      .toBe('/tmp/aiworker-home/workers/demo-worker/overlays/entry-files/NOTES.md')
+    expect(resolveWorkerOverlayFile(overlaysRoot, 'mcp', 'codex/config.toml'))
+      .toBe('/tmp/aiworker-home/workers/demo-worker/overlays/mcp/codex/config.toml')
+
+    expect(() => resolveWorkerOverlayFile(overlaysRoot, 'plugins', 'x.md')).toThrow()
+    expect(() => resolveWorkerOverlayFile(overlaysRoot, 'skills', '../../etc/passwd')).toThrow()
+    expect(() => resolveWorkerOverlayFile(overlaysRoot, 'skills', '/abs/path')).toThrow()
+    expect(() => resolveWorkerOverlayFile(overlaysRoot, 'skills', '')).toThrow()
   })
 
   it('rejects worker ids that escape the home root', () => {

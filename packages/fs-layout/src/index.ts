@@ -108,6 +108,49 @@ export function resolveWorkspacesRoot(workerId: string): string {
 }
 
 /**
+ * Worker-owned overlay content store, sibling of `workspaces/`:
+ * `<worker-home>/overlays`. Holds editable skill / mcp / entry-file content
+ * referenced by `worker-overlay://<kind>/<path>` sourceRefs in the worker config
+ * envelope (the envelope itself stays content-free).
+ */
+export function resolveWorkerOverlaysRoot(workerId: string): string {
+  return path.join(resolveWorkerHome(workerId), 'overlays')
+}
+
+export type WorkerOverlayKind = 'skills' | 'mcp' | 'entry-files'
+
+const WORKER_OVERLAY_KINDS = new Set<WorkerOverlayKind>(['skills', 'mcp', 'entry-files'])
+
+function assertSafeOverlayKind(kind: string): WorkerOverlayKind {
+  if (!WORKER_OVERLAY_KINDS.has(kind as WorkerOverlayKind))
+    throw new Error(`Invalid worker overlay kind: ${JSON.stringify(kind)}`)
+  return kind as WorkerOverlayKind
+}
+
+function safeOverlaySegments(relativePath: string): string[] {
+  const segments = relativePath.split(/[\\/]/).filter(Boolean)
+  if (
+    segments.length === 0
+    || path.isAbsolute(relativePath)
+    || segments.some(segment => segment === '.' || segment === '..' || segment.includes('\0'))
+  ) {
+    throw new Error(`Invalid worker overlay path: ${JSON.stringify(relativePath)}`)
+  }
+  return segments
+}
+
+/**
+ * Resolve an absolute file path inside the worker overlay store from a
+ * `kind ∈ skills|mcp|entry-files` and a relative content path. Rejects path
+ * traversal, absolute paths, and unknown kinds so a `worker-overlay://` sourceRef
+ * can never escape `<overlaysRoot>/<kind>/`.
+ */
+export function resolveWorkerOverlayFile(overlaysRoot: string, kind: string, relativePath: string): string {
+  const safeKind = assertSafeOverlayKind(kind)
+  return path.join(path.resolve(overlaysRoot), safeKind, ...safeOverlaySegments(relativePath))
+}
+
+/**
  * Worker identity, Soul binding, and engine defaults live
  * in `aiworker.db`. Worker init creates only the filesystem root an external
  * engine can actually use: workspaces.

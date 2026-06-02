@@ -22,6 +22,7 @@ import {
   projectEngineAssetsToWorkspace,
   resolveSoulAppEngineTarget,
 } from '@zonease/aiworker-engine-projection'
+import { resolveWorkerOverlayFile } from '@zonease/aiworker-fs-layout'
 import { AppError, soulAppProjectionReceiptSchema } from '@zonease/aiworker-soul-descriptor'
 import {
   appendSessionEvent,
@@ -80,6 +81,12 @@ export interface LocalWorkerRuntimeOptions {
     metadata?: Record<string, unknown>
   }
   workspacesRoot: string
+  /**
+   * Worker-owned overlay content store (`<worker-home>/overlays`, sibling of
+   * `workspaces/`). Resolves `worker-overlay://<kind>/<path>` overlay sourceRefs.
+   * Defaults to the `overlays` sibling of `workspacesRoot` when omitted.
+   */
+  overlaysRoot?: string
   executor?: LocalExecutor
   engineBridge?: LocalEngineBridgeOptions | null
   engineAssetSource?: EngineAssetSource | null
@@ -171,6 +178,7 @@ export interface WorkspaceProjectionCleanupResult extends WorkspaceProjectionRec
 export class LocalWorkerRuntime {
   readonly #workerInput: LocalWorkerRuntimeOptions['worker']
   readonly #workspacesRoot: string
+  readonly #overlaysRoot: string
   readonly #executor: LocalExecutor
   readonly #engineAssetSource: EngineAssetSource | null
   readonly #engineBridgeOptions: LocalEngineBridgeOptions | null
@@ -180,6 +188,7 @@ export class LocalWorkerRuntime {
   constructor(options: LocalWorkerRuntimeOptions) {
     this.#workerInput = options.worker
     this.#workspacesRoot = path.resolve(options.workspacesRoot)
+    this.#overlaysRoot = path.resolve(options.overlaysRoot ?? path.join(path.dirname(this.#workspacesRoot), 'overlays'))
     this.#executor = options.executor ?? createExternalEngineExecutor()
     this.#engineAssetSource = options.engineAssetSource ?? null
     this.#engineBridgeOptions = options.engineBridge ?? null
@@ -1074,14 +1083,20 @@ export class LocalWorkerRuntime {
       if (ref.startsWith(prefix))
         return ref.slice(prefix.length)
     }
+    const overlayPrefix = 'worker-overlay://entry-files/'
+    if (ref.startsWith(overlayPrefix))
+      return ref.slice(overlayPrefix.length)
     return null
   }
 
   private skillOverlayIdFromRef(ref: string | null): string | null {
     const prefix = 'descriptor://engine/skills/'
-    if (!ref?.startsWith(prefix))
-      return null
-    return ref.slice(prefix.length).replace(/\/SKILL\.md$/, '')
+    if (ref?.startsWith(prefix))
+      return ref.slice(prefix.length).replace(/\/SKILL\.md$/, '')
+    const overlayPrefix = 'worker-overlay://skills/'
+    if (ref?.startsWith(overlayPrefix))
+      return ref.slice(overlayPrefix.length).replace(/\/SKILL\.md$/, '')
+    return null
   }
 
   private workerConfigOptions(value: unknown): Record<string, unknown> {
@@ -1095,7 +1110,20 @@ export class LocalWorkerRuntime {
   }
 
   private resolveWorkerOverlaySourcePath(sourceRoot: string, kind: WorkerOverlayProjectionAsset['kind'], sourceRef: string, target: string): string {
+    const ref = sourceRef.trim()
+    if (ref.startsWith('worker-overlay://'))
+      return this.resolveWorkerOverlayStorePath(ref)
     return path.join(path.resolve(sourceRoot), ...this.workerOverlaySourceSegments(kind, sourceRef, target))
+  }
+
+  private resolveWorkerOverlayStorePath(sourceRef: string): string {
+    const rest = sourceRef.slice('worker-overlay://'.length)
+    const slash = rest.indexOf('/')
+    const storeKind = slash === -1 ? '' : rest.slice(0, slash)
+    const relativePath = slash === -1 ? '' : rest.slice(slash + 1)
+    if (!relativePath.trim())
+      throw new Error(`Invalid worker overlay sourceRef: ${sourceRef}`)
+    return resolveWorkerOverlayFile(this.#overlaysRoot, storeKind, relativePath)
   }
 
   private workerOverlaySourceSegments(kind: WorkerOverlayProjectionAsset['kind'], sourceRef: string, target: string): string[] {
