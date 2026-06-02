@@ -246,8 +246,16 @@ backend behavior, expect a Soul-provided mounted workbench, or encode
 ## Pending Implementation (Phase-B Teardown)
 
 Phase A flipped the canonical docs and doc gates to the worker-owns-workbench,
-Soul-as-template, standalone-only v1 model. The implementation still carries the
-old model and is torn down in Phase B. `test.todo` guards point here. Tracked debt:
+Soul-as-template, standalone-only v1 model.
+
+Phase-B teardown is COMPLETE (commits `110a9a8e`..`5589af96`): every teardown bullet
+below is landed and its guard re-armed. The worker-owns-workbench and two-plane
+zero-intrusion guards are satisfied by the per-slice guards (worker-studio
+direct-chat render + no-micro-app, `check-soul-app-boundaries`, inversion C1–C6).
+The only REMAINING follow-ups are: worker-config overlay content editing (a feature
+whose design must respect the config-envelope no-full-content boundary), the i18n
+locale "Soul Apps" wording cleanup, and running the rewritten Freeform browser proof
+on a browser box. Landed teardown:
 
 - remove the capability layer: descriptor `capabilities`, session `capabilityId`,
   `/api/capabilities`, CLI `--capability` / `capability list`, SDK `capability()`,
