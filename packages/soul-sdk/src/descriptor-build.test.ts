@@ -122,7 +122,7 @@ describe('SDK descriptor build conventions', () => {
 
     expect(validation.discovery.generatedSections).not.toContain('api')
     expect(result.discovery.generatedSections).not.toContain('api')
-    expect(result.descriptor).toMatchObject({ api: null })
+    expect(result.descriptor).not.toHaveProperty('api')
     expect(JSON.stringify(result.descriptor)).not.toContain('api/src/index.ts')
     expect(existsSync(join(rootDir, 'dist/api'))).toBe(false)
   })

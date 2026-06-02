@@ -85,7 +85,6 @@ async function writeFixtureDist(root: string): Promise<void> {
 
 function fixtureDescriptorText(): string {
   return `${JSON.stringify({
-    api: null,
     compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
     configuration: {},
     engine: {

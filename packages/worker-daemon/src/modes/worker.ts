@@ -1,23 +1,16 @@
 import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppEngineTarget } from '@zonease/aiworker-soul-descriptor'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
-import type { LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerApiAuthProvider, WorkerApiIdentity, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
+import type { LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerApiAuthProvider, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 
 import type { Context } from 'hono'
-import type { ChildProcessByStdio } from 'node:child_process'
-import type { Readable } from 'node:stream'
-import { Buffer } from 'node:buffer'
-import { spawn } from 'node:child_process'
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import process from 'node:process'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
 import { listBaselineAssets } from '@zonease/aiworker-engine-projection'
 import {
   AppError,
-  isLoopbackMountedServiceUrl,
 } from '@zonease/aiworker-soul-descriptor'
 import {
   closeWorkerDb,
@@ -54,7 +47,6 @@ import {
   createWorkerOrchestrator,
   LocalEngineResolutionError,
   resolveLocalCliEngine,
-  soulAppServiceEnv,
   workerEnv,
 } from '@zonease/aiworker-worker-runtime'
 import { streamSSE } from 'hono/streaming'
@@ -82,7 +74,6 @@ import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings,
 import { serveWorkerWeb, serveWorkerWebAsset } from './worker/web-static'
 
 const DEFAULT_RUNTIME_VERSION = 'dev'
-const REQUEST_IDENTITIES = new WeakMap<Context, WorkerApiIdentity>()
 
 export interface BootstrapWorkerAppOptions {
   dbPath?: string
@@ -100,18 +91,10 @@ export interface BootstrapWorkerAppOptions {
 export interface LocalDaemonState {
   authProvider: WorkerApiAuthProvider
   host: WorkerOrchestrator
-  mountingAppServices: Map<string, Promise<MountedSoulAppService | null>>
-  mountedAppServices: Map<string, MountedSoulAppService>
   startedAt: string
   runtimeVersion: string
   runtimes: Map<string, LocalWorkerRuntime>
   now?: () => string
-}
-
-interface MountedSoulAppService {
-  baseUrl: string
-  mountToken: string
-  process?: ChildProcessByStdio<null, Readable, Readable>
 }
 
 interface MountedSurfaceContribution {
@@ -127,27 +110,6 @@ interface MountedSurfaceContribution {
   }
   target?: string
 }
-
-const MOUNTED_PROXY_TIMEOUT_MS = 10_000
-const MOUNTED_PROXY_STRIPPED_HEADERS = new Set([
-  'authorization',
-  'connection',
-  'content-length',
-  'cookie',
-  'host',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
-  'x-real-ip',
-])
-const MOUNTED_PROXY_STRIPPED_RESPONSE_HEADERS = new Set([
-  'set-cookie',
-  'set-cookie2',
-])
 
 export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}): Promise<{
   app: OpenAPIHono
@@ -181,8 +143,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const state: LocalDaemonState = {
     authProvider: createLocalBearerAuthProvider({ token: options.token ?? workerEnv.AIWORKER_LOCAL_TOKEN }),
     host,
-    mountingAppServices: new Map(),
-    mountedAppServices: new Map(),
     runtimes,
     startedAt: new Date().toISOString(),
     runtimeVersion,
@@ -210,13 +170,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.use(requestLogger)
   app.onError(errorHandler)
   app.use('/api/*', async (c, next) => {
-    if (authenticateMountedBrokerRequest(c, state))
-      return next()
     const result = state.authProvider.authenticate({ authorization: c.req.header('authorization') })
     if (result.status === 'denied')
       return c.json({ error: { code: 'UNAUTHORIZED', message: result.reason } }, 401)
-    if (result.status === 'authenticated')
-      REQUEST_IDENTITIES.set(c, result.identity)
     return next()
   })
 
@@ -305,13 +261,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.post('/api/app-installation/apps/:appId/archive', (c) => {
     const appId = c.req.param('appId')
     const app = state.host.archiveApp(appId)
-    stopMountedSoulAppService(state, appId)
     return c.json({ app, catalog: state.host.listCatalog() })
   })
   app.delete('/api/app-installation/apps/:appId', (c) => {
     const appId = c.req.param('appId')
     const app = state.host.deleteApp(appId)
-    stopMountedSoulAppService(state, appId)
     return c.json({ app, catalog: state.host.listCatalog(), deleted: true })
   })
 
@@ -721,9 +675,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const contribution = descriptorWorkbenchContribution(app)
     if (!contribution)
       return c.json({ error: { code: 'WORKBENCH_ENTRY_NOT_FOUND', message: `Soul App does not declare a mounted workbench entry: ${app.appId}` } }, 404)
-    const service = await resolveMountedSoulAppServiceOrResponse(c, state, app)
-    if (service instanceof Response)
-      return service
     const sourceUrl = new URL(c.req.url)
     const entry = `${appOwnedApiRoutePrefix(app)}${contribution.surface.entry}`
     return c.json({
@@ -733,7 +684,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
         workspaceId: workspace?.id ?? null,
       },
       microApp: {
-        data: mountedMicroAppData(c, state, app, service, contribution),
+        data: mountedMicroAppData(c, state, app, contribution),
         name: `${app.appId}--${contribution.id}`,
         url: `${entry}${sourceUrl.search}`,
       },
@@ -767,14 +718,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ settings })
   })
 
-  app.all('/api/apps/:appId', (c) => {
-    return proxyMountedSoulAppApiRoute(c, state)
-  })
-  app.all('/api/apps/:appId/', (c) => {
-    return proxyMountedSoulAppApiRoute(c, state)
-  })
-  app.all('/api/apps/:appId/:path{.+}', (c) => {
-    return proxyMountedSoulAppApiRoute(c, state)
+  // A Soul has no app-owned API: this route is GET-only and serves the mounted
+  // workbench micro-app bundle (entry HTML + sibling assets) under the descriptor
+  // workbench directory. It is not a proxy to any Soul-owned local service.
+  app.get('/api/apps/:appId/:path{.+}', (c) => {
+    return serveMountedWorkbenchAsset(c, state)
   })
 
   registerLocalOpenApiPaths(app)
@@ -783,7 +731,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     info: {
       title: 'AIWorker Local Daemon API',
       version: runtimeVersion,
-      description: 'Local Shell and Engine Bridge API for Soul Apps, Soul workers, workspaces, sessions, artifacts, files, mounted app APIs, native engine invocations, and settings.',
+      description: 'Local Shell and Engine Bridge API for Soul Apps, Soul workers, workspaces, sessions, artifacts, files, the mounted workbench, native engine invocations, and settings.',
     },
   })
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
@@ -825,35 +773,6 @@ export function localApiExposureWarning(host: string, token: string | null | und
   if (isLoopbackHost(host))
     return `[aiworker-daemon] 未配置 AIWORKER_LOCAL_TOKEN:/api/* 以本机匿名身份开放,请确保仅绑定 loopback。`
   return `[aiworker-daemon] AIWORKER_LOCAL_TOKEN 未配置且绑定到非 loopback 地址 ${host}:/api/* 将以匿名身份暴露,请配置 token 或改绑 127.0.0.1。`
-}
-
-function authenticateMountedBrokerRequest(c: Context, state: LocalDaemonState): boolean {
-  const appId = brokerAppIdFromPath(new URL(c.req.url).pathname)
-  if (!appId)
-    return false
-  const token = c.req.header('x-aiworker-mount-token')
-  if (!token)
-    return false
-  const mounted = state.mountedAppServices.get(appId)
-  return mounted ? secureStringEqual(token, mounted.mountToken) : false
-}
-
-function brokerAppIdFromPath(pathname: string): string | null {
-  const match = /^\/api\/apps\/([^/]+)\/broker(?:\/|$)/.exec(pathname)
-  if (!match?.[1])
-    return null
-  try {
-    return decodeURIComponent(match[1])
-  }
-  catch {
-    return null
-  }
-}
-
-function secureStringEqual(actual: string, expected: string): boolean {
-  const actualBytes = Buffer.from(actual)
-  const expectedBytes = Buffer.from(expected)
-  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes)
 }
 
 async function workerOverlayResponse(state: LocalDaemonState, workerId: string) {
@@ -1248,7 +1167,7 @@ function unavailableSoulAppResponse(c: Context, state: LocalDaemonState, workerI
   }
 }
 
-function proxyMountedSoulAppApiRoute(c: Context, state: LocalDaemonState): Promise<Response> | Response {
+function serveMountedWorkbenchAsset(c: Context, state: LocalDaemonState): Promise<Response> | Response {
   const appId = c.req.param('appId')
   if (!appId)
     return notFound(c, 'Soul App')
@@ -1257,214 +1176,20 @@ function proxyMountedSoulAppApiRoute(c: Context, state: LocalDaemonState): Promi
     return notFound(c, 'Soul App')
   if (app.status !== 'enabled')
     return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-  return proxyMountedSoulAppApi(c, state, app)
+  return serveMountedWorkbenchAssetForApp(c, app)
 }
 
-async function proxyMountedSoulAppApi(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<Response> {
+async function serveMountedWorkbenchAssetForApp(c: Context, app: HostedSoulApp): Promise<Response> {
+  // A Soul is a descriptor-only template with no app-owned API: the only thing
+  // served under /api/apps/:appId is the mounted workbench micro-app bundle.
   const staticResponse = await descriptorMountedAssetResponse(c, app)
   if (staticResponse)
     return staticResponse
-
-  const locatorError = mountedProxyLocatorContextError(c, app)
-  if (locatorError)
-    return locatorError
-
-  const service = await mountedSoulAppServiceOrResponse(c, state, app)
-  if (service instanceof Response)
-    return service
-
-  const sourceUrl = new URL(c.req.url)
-  const targetPath = c.req.param('path') ?? ''
-  const targetUrl = new URL(`/${targetPath}`, service.baseUrl)
-  targetUrl.search = sourceUrl.search
-  const headers = mountedProxyHeaders(c.req.raw.headers)
-  applyMountedProxyContextHeaders(headers, c, state, app, service)
-
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), MOUNTED_PROXY_TIMEOUT_MS)
-  try {
-    const res = await fetch(targetUrl, {
-      body: c.req.method === 'GET' || c.req.method === 'HEAD' ? undefined : c.req.raw.body,
-      headers,
-      method: c.req.method,
-      redirect: 'manual',
-      signal: controller.signal,
-    })
-    const responseHeaders = new Headers(res.headers)
-    stripMountedProxyResponseHeaders(responseHeaders)
-    return new Response(res.body, {
-      headers: responseHeaders,
-      status: res.status,
-      statusText: res.statusText,
-    })
-  }
-  catch (error) {
-    const aborted = controller.signal.aborted
-    return mountedServiceError(
-      c,
-      app,
-      aborted ? 'SOUL_APP_SERVICE_TIMEOUT' : 'SOUL_APP_SERVICE_UNREACHABLE',
-      aborted
-        ? `Mounted Soul App service timed out after ${MOUNTED_PROXY_TIMEOUT_MS}ms.`
-        : error instanceof Error ? error.message : String(error),
-      aborted ? 504 : 502,
-    )
-  }
-  finally {
-    clearTimeout(timeout)
-  }
-}
-
-function mountedProxyHeaders(source: Headers): Headers {
-  const headers = new Headers()
-  for (const [key, value] of source) {
-    const lower = key.toLowerCase()
-    if (MOUNTED_PROXY_STRIPPED_HEADERS.has(lower) || lower.startsWith('x-forwarded-'))
-      continue
-    headers.set(key, value)
-  }
-  return headers
-}
-
-function stripMountedProxyResponseHeaders(headers: Headers): void {
-  for (const key of [...headers.keys()]) {
-    const lower = key.toLowerCase()
-    if (MOUNTED_PROXY_STRIPPED_RESPONSE_HEADERS.has(lower) || lower.startsWith('x-aiworker-mount-'))
-      headers.delete(key)
-  }
-  headers.delete('content-encoding')
-  headers.delete('transfer-encoding')
-}
-
-function mountedProxyLocatorContextError(c: Context, app: HostedSoulApp): Response | null {
-  const workerId = c.req.query('workerId')
-  const workspaceId = c.req.query('workspaceId')
-  const sessionId = c.req.query('sessionId')
-  const worker = workerId ? getWorker(workerId) : null
-  const workspace = workspaceId ? getWorkspace(workspaceId) : null
-  const session = sessionId ? getSession(sessionId) : null
-
-  if (workerId && !worker)
-    return mountContextInvalid(c, `Worker not found: ${workerId}`)
-  if (workspaceId && !workspace)
-    return mountContextInvalid(c, `Workspace not found: ${workspaceId}`)
-  if (sessionId && !session)
-    return mountContextInvalid(c, `Session not found: ${sessionId}`)
-  if (worker?.status === 'archived')
-    return mountContextInvalid(c, `Worker ${worker.id} is archived and cannot proxy app-owned API requests.`)
-  if (workspace?.status === 'archived')
-    return mountContextInvalid(c, `Workspace ${workspace.id} is archived and cannot proxy app-owned API requests.`)
-  if (session?.status === 'archived')
-    return mountContextInvalid(c, `Session ${session.id} is archived and cannot proxy app-owned API requests.`)
-  if (worker && worker.appId !== app.appId)
-    return mountContextInvalid(c, `Worker ${worker.id} does not belong to Soul App ${app.appId}`)
-  if (workspace && workspace.workerId) {
-    if (worker && workspace.workerId !== worker.id)
-      return mountContextInvalid(c, `Workspace ${workspace.id} does not belong to worker ${worker.id}`)
-    if (!worker && workspace.workerId) {
-      const workspaceWorker = getWorker(workspace.workerId)
-      if (!workspaceWorker || workspaceWorker.appId !== app.appId)
-        return mountContextInvalid(c, `Workspace ${workspace.id} does not belong to Soul App ${app.appId}`)
-    }
-  }
-  if (session) {
-    if (worker && session.workerId !== worker.id)
-      return mountContextInvalid(c, `Session ${session.id} does not belong to worker ${worker.id}`)
-    if (workspace && session.workspaceId !== workspace.id)
-      return mountContextInvalid(c, `Session ${session.id} does not belong to workspace ${workspace.id}`)
-    if (!worker) {
-      const sessionWorker = getWorker(session.workerId)
-      if (!sessionWorker || sessionWorker.appId !== app.appId)
-        return mountContextInvalid(c, `Session ${session.id} does not belong to Soul App ${app.appId}`)
-    }
-  }
-  return null
-}
-
-function mountContextInvalid(c: Context, message: string): Response {
-  return c.json({ error: { code: 'MOUNT_CONTEXT_INVALID', message } }, 400)
+  return notFound(c, 'mounted workbench asset')
 }
 
 function appOwnedApiRoutePrefix(app: HostedSoulApp): string {
   return app.api.routePrefix ?? `/api/apps/${app.appId}`
-}
-
-async function mountedSoulAppServiceOrResponse(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | Response> {
-  const service = await resolveMountedSoulAppServiceOrResponse(c, state, app)
-  if (service instanceof Response)
-    return service
-  if (service)
-    return service
-  return mountedServiceError(c, app, 'SOUL_APP_SERVICE_NOT_CONFIGURED', `Soul App does not declare a mounted local service: ${app.appId}`, 424)
-}
-
-async function resolveMountedSoulAppServiceOrResponse(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | Response | null> {
-  try {
-    const service = await resolveMountedSoulAppService(state, app)
-    if (service)
-      return service
-    return null
-  }
-  catch (error) {
-    return mountedServiceError(c, app, 'SOUL_APP_SERVICE_UNREACHABLE', error instanceof Error ? error.message : String(error), 502)
-  }
-}
-
-function mountedServiceError(c: Context, app: HostedSoulApp, code: string, message: string, status: number): Response {
-  const responseStatus = status === 424 ? 424 : status === 504 ? 504 : 502
-  return c.json(redactBrokerOutput({
-    error: { code, message },
-    routePrefix: appOwnedApiRoutePrefix(app),
-  }), responseStatus)
-}
-
-function applyMountedProxyContextHeaders(
-  headers: Headers,
-  c: Context,
-  state: LocalDaemonState,
-  app: HostedSoulApp,
-  service: MountedSoulAppService,
-  contribution?: MountedSurfaceContribution,
-): void {
-  const sourceUrl = new URL(c.req.url)
-  const origin = `${sourceUrl.protocol}//${sourceUrl.host}`
-  const identity = requestIdentity(c)
-  const operatorId = identity?.operatorId ?? 'operator-local'
-  const payload = Buffer.from(JSON.stringify({
-    appId: app.appId,
-    artifactId: c.req.query('artifactId') ?? null,
-    expiresAt: mountContextExpiry(state),
-    identity: identity ? publicHostIdentity(identity) : null,
-    operatorId,
-    permissions: app.permissions,
-    routePrefix: appOwnedApiRoutePrefix(app),
-    sessionId: c.req.query('sessionId') ?? null,
-    surface: contribution ? publicMountedSurfaceContribution(contribution) : null,
-    workerId: c.req.query('workerId') ?? null,
-    workspaceId: c.req.query('workspaceId') ?? null,
-  })).toString('base64url')
-  const signature = createHmac('sha256', service.mountToken).update(payload).digest('hex')
-
-  headers.set('x-aiworker-app-id', app.appId)
-  headers.set('x-aiworker-host-url', origin)
-  headers.set('x-aiworker-mount-context', payload)
-  headers.set('x-aiworker-mount-signature', signature)
-  headers.set('x-aiworker-mount-token', service.mountToken)
-  headers.set('x-aiworker-route-prefix', appOwnedApiRoutePrefix(app))
-}
-
-function requestIdentity(c: Context): WorkerApiIdentity | null {
-  return REQUEST_IDENTITIES.get(c) ?? null
-}
-
-function publicHostIdentity(identity: WorkerApiIdentity): WorkerApiIdentity {
-  return {
-    authMethod: identity.authMethod,
-    grants: identity.grants,
-    operatorId: identity.operatorId,
-    providerId: identity.providerId,
-    subject: identity.subject,
-  }
 }
 
 function mountContextExpiry(state: LocalDaemonState): string {
@@ -1489,14 +1214,13 @@ function mountedMicroAppData(
   c: Context,
   state: LocalDaemonState,
   app: HostedSoulApp,
-  service: MountedSoulAppService | null,
   contribution: MountedSurfaceContribution,
 ): MountedMicroAppHostData {
   return {
     appId: app.appId,
     artifactId: c.req.query('artifactId') ?? null,
     expiresAt: mountContextExpiry(state),
-    mountTokenPresent: Boolean(service?.mountToken),
+    mountTokenPresent: false,
     routePrefix: appOwnedApiRoutePrefix(app),
     sessionId: c.req.query('sessionId') ?? null,
     surfaceId: contribution.id,
@@ -1600,128 +1324,6 @@ function descriptorWorkbenchContribution(app: HostedSoulApp): MountedSurfaceCont
       scope: app.mountedWorkbench.scope,
     },
   }
-}
-
-async function resolveMountedSoulAppService(state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | null> {
-  const existing = state.mountedAppServices.get(app.appId)
-  if (existing)
-    return existing
-  const pending = state.mountingAppServices.get(app.appId)
-  if (pending)
-    return pending
-
-  const started = startMountedSoulAppService(state, app)
-  state.mountingAppServices.set(app.appId, started)
-  try {
-    return await started
-  }
-  finally {
-    state.mountingAppServices.delete(app.appId)
-  }
-}
-
-export function mountedServiceSpawnEnv(mountToken: string): NodeJS.ProcessEnv {
-  return { ...soulAppServiceEnv(), AIWORKER_MOUNT_TOKEN: mountToken, PORT: '0' }
-}
-
-async function startMountedSoulAppService(state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | null> {
-  const service = app.api.localService
-  if (!service)
-    return null
-  if (!service.command?.length)
-    return null
-
-  const cwd = mountedSoulAppCwd(app)
-  const mountToken = randomUUID()
-  const child = spawn(service.command[0]!, service.command.slice(1), {
-    cwd,
-    env: mountedServiceSpawnEnv(mountToken),
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  const baseUrl = await waitForMountedSoulAppUrl(child, service.healthPath)
-  const mounted = { baseUrl, mountToken, process: child }
-  state.mountedAppServices.set(app.appId, mounted)
-  return mounted
-}
-
-function stopMountedSoulAppService(state: LocalDaemonState, appId: string): void {
-  const mounted = state.mountedAppServices.get(appId)
-  if (!mounted)
-    return
-  state.mountedAppServices.delete(appId)
-  if (mounted.process && !mounted.process.killed)
-    mounted.process.kill('SIGTERM')
-}
-
-function mountedSoulAppCwd(app: HostedSoulApp): string {
-  if (app.sourceKind === 'descriptor-path')
-    return path.dirname(app.sourceRef)
-  return process.cwd()
-}
-
-async function healthcheckMountedSoulAppUrl(baseUrl: string, healthPath: string): Promise<void> {
-  const healthUrl = new URL(healthPath, baseUrl)
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), MOUNTED_PROXY_TIMEOUT_MS)
-  try {
-    const health = await fetch(healthUrl, { signal: controller.signal })
-    if (!health.ok)
-      throw new Error(`Mounted Soul App healthcheck failed ${health.status}: ${healthUrl}`)
-  }
-  finally {
-    clearTimeout(timeout)
-  }
-}
-
-async function waitForMountedSoulAppUrl(child: ChildProcessByStdio<null, Readable, Readable>, healthPath: string): Promise<string> {
-  const url = await new Promise<string>((resolve, reject) => {
-    let output = ''
-    const timer = setTimeout(() => {
-      child.kill()
-      reject(new Error('Timed out waiting for mounted Soul App service URL.'))
-    }, 5000)
-    child.once('error', (error) => {
-      clearTimeout(timer)
-      reject(error)
-    })
-    child.stdout.on('data', (chunk: Buffer) => {
-      output += chunk.toString('utf8')
-      const line = output.split(/\r?\n/).find(item => item.trim().startsWith('{'))
-      if (!line)
-        return
-      try {
-        const parsed = JSON.parse(line) as { url?: unknown }
-        if (typeof parsed.url === 'string' && parsed.url.length > 0) {
-          if (!isLoopbackMountedServiceUrl(parsed.url)) {
-            child.kill()
-            clearTimeout(timer)
-            reject(new Error(`Mounted Soul App service URL must be loopback HTTP: ${parsed.url}`))
-            return
-          }
-          clearTimeout(timer)
-          resolve(parsed.url)
-        }
-      }
-      catch {
-        // Keep waiting for a JSON status line.
-      }
-    })
-    child.stderr.on('data', (chunk: Buffer) => {
-      output += chunk.toString('utf8')
-    })
-    child.once('exit', (code) => {
-      clearTimeout(timer)
-      reject(new Error(`Mounted Soul App service exited before readiness: ${code ?? 'signal'}. ${output.trim()}`))
-    })
-  })
-  try {
-    await healthcheckMountedSoulAppUrl(url, healthPath)
-  }
-  catch (error) {
-    child.kill()
-    throw error
-  }
-  return url
 }
 
 function resolvedExecutionMetadata(settings: LocalSettingsConfig, engineIdOverride?: string | null): Record<string, unknown> {

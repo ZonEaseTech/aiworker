@@ -141,5 +141,4 @@ describe('local shell copy', () => {
     expect(Object.keys(messagesFor('en').workspace)).not.toContain('turnCount')
     expect(Object.keys(messagesFor('en').workspace)).not.toContain('turnHistory')
   })
-
 })

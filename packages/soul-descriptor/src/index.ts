@@ -111,21 +111,12 @@ function isSafeBuiltDistPath(
   })
 }
 
-function isSafeAppOwnedApiMount(value: string): boolean {
-  return /^\/api\/apps\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)
-}
-
 const hostInterpretedObjectSchema = jsonObjectSchema.superRefine(rejectForbiddenHostInterpretedFields)
 const externalObjectSchema = jsonObjectSchema.superRefine(rejectForbiddenDescriptorSecrets)
 
 const builtHtmlEntrySchema = z.string().refine(
   value => isSafeBuiltDistPath(value, { extension: '.html', prefix: 'dist/' }),
   'mounted workbench entry must point to a built HTML file under dist/',
-)
-
-const builtServiceEntrySchema = z.string().refine(
-  value => isSafeBuiltDistPath(value, { extension: '.js', prefix: 'dist/' }),
-  'app-owned API entry must point to a built JavaScript file under dist/',
 )
 
 const engineAssetDirectorySchema = z.string().refine(
@@ -140,11 +131,6 @@ const engineMcpFileSchema = z.string().refine(
   'native MCP descriptor file must point to a built .toml or .json file under dist/engine-assets/mcp/',
 )
 
-const appOwnedApiMountSchema = z.string().refine(
-  isSafeAppOwnedApiMount,
-  'app-owned API mount must use /api/apps/:appId',
-)
-
 const workbenchRouterSchema = z
   .object({
     mode: z.literal('search').default('search'),
@@ -157,14 +143,6 @@ const workbenchSchema = z
     mode: z.enum(['sdk-common', 'custom']).default('sdk-common'),
     router: workbenchRouterSchema.default({ mode: 'search' }),
     type: z.literal('micro-app'),
-  })
-  .strict()
-
-const appOwnedApiSchema = z
-  .object({
-    entry: builtServiceEntrySchema,
-    mount: appOwnedApiMountSchema,
-    type: z.literal('local-service'),
   })
   .strict()
 
@@ -202,7 +180,6 @@ export const soulDescriptorV1Schema = z
     compatibility: hostInterpretedObjectSchema,
     configuration: hostInterpretedObjectSchema,
     workbench: workbenchSchema,
-    api: appOwnedApiSchema.nullable(),
     engine: engineSchema,
     health: hostInterpretedObjectSchema,
     extensions: hostInterpretedObjectSchema,
@@ -225,7 +202,6 @@ export const soulProtocolPackage = {
     'compatibility',
     'configuration',
     'workbench',
-    'api',
     'engine',
     'health',
     'extensions',

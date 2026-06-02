@@ -12,7 +12,6 @@ export type SoulValidationStatus = 'invalid' | 'valid'
 
 export interface SoulConfig {
   appId?: string
-  api?: SoulDescriptorV1['api']
   compatibility?: Partial<SoulDescriptorV1['compatibility']>
   configuration?: Partial<SoulDescriptorV1['configuration']>
   description?: string
@@ -319,7 +318,6 @@ function redactDiagnosticMessage(message: string): string {
 
 function createDescriptor(config: SoulConfig, discovery: SoulDiscovery): SoulDescriptorV1 {
   return parseSoulDescriptorV1({
-    api: config.api ?? null,
     compatibility: {
       engines: ['codex', 'claude-code'],
       host: '>=1.0.0',
@@ -440,7 +438,6 @@ function fallbackConfig(): SoulConfig {
 
 function fallbackDescriptor(): SoulDescriptorV1 {
   return parseSoulDescriptorV1({
-    api: null,
     compatibility: {},
     configuration: {},
     engine: {},

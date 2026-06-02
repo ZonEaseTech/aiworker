@@ -90,7 +90,6 @@ describe('release bundle packager', () => {
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
-
   it('rejects standalone bundles before staging when the packaged Freeform descriptor drops the Claude Code MCP target', async () => {
     await writeFixtureDist(root, { descriptorText: fixtureDescriptorText({ mcpTargets: ['codex'] }) })
     await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
@@ -205,7 +204,6 @@ function fixtureDescriptorText(options: {
       },
       type: 'micro-app',
     },
-    api: null,
     engine: {
       mcp: {
         targets: Object.fromEntries(mcpTargets.map(target => [

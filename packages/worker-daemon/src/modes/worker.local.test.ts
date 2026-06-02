@@ -25,12 +25,11 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { bootstrapWorkerApp, localApiExposureWarning, mountedServiceSpawnEnv } from './worker'
+import { bootstrapWorkerApp, localApiExposureWarning } from './worker'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
 
 const freeformDescriptor = parseSoulDescriptorV1({
-  api: null,
   compatibility: { host: '>=1.0.0' },
   configuration: {},
   engine: {
@@ -2726,259 +2725,22 @@ describe('local daemon API', () => {
       .toContain('Broker Config Overlay Session')
   })
 
-  it('proxies descriptor-declared app-owned API with sanitized locator context and no Host action routes', async () => {
-    const target = await app()
-    const appRoot = join(dir, 'api-soul')
-    writeApiSoul(appRoot)
-
-    const installRes = await target.request('/api/app-installation/install', {
-      body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(installRes.status).toBe(201)
-    expect((await target.request('/api/local/apps/install', { method: 'POST' })).status).toBe(404)
-    expect((await target.request('/api/app-installation/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
-    expect((await target.request('/api/local/apps/demo-api/enable', { method: 'POST' })).status).toBe(404)
-
-    const workerRes = await target.request('/api/workers', {
-      body: JSON.stringify({ id: 'demo-api-worker', name: 'Demo API Worker', appId: 'demo-api' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workerRes.status).toBe(201)
-    const workspace = await createWorkspaceLocator(target, 'demo-api-worker')
-    const siblingWorkspace = await createWorkspaceLocator(target, 'demo-api-worker')
-    const sessionRes = await target.request('/api/sessions', {
-      body: JSON.stringify({
-        title: 'Demo API session',
-        workerId: 'demo-api-worker',
-        workspaceId: workspace.id,
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(sessionRes.status).toBe(201)
-    const session = (await sessionRes.json() as { session: { id: string } }).session
-
-    const mismatchedContext = await target.request(`/api/apps/demo-api/echo?workerId=demo-api-worker&workspaceId=${siblingWorkspace.id}&sessionId=${session.id}`)
-    expect(mismatchedContext.status).toBe(400)
-    expect(await mismatchedContext.json()).toMatchObject({
-      error: { code: 'MOUNT_CONTEXT_INVALID' },
-    })
-
-    const proxied = await target.request(`/api/apps/demo-api/echo?workerId=demo-api-worker&workspaceId=${workspace.id}&sessionId=${session.id}`, {
-      headers: {
-        'authorization': 'Bearer client-forwarded-credential',
-        'cookie': 'sid=client-cookie',
-        'x-forwarded-for': '203.0.113.10',
-        'x-aiworker-mount-context': 'client-spoofed-context',
-        'x-aiworker-mount-signature': 'client-spoofed-signature',
-        'x-aiworker-mount-token': 'client-spoofed-token',
-      },
-    })
-    expect(proxied.status).toBe(200)
-    expect(proxied.headers.get('set-cookie')).toBeNull()
-    expect(proxied.headers.get('x-aiworker-mount-context')).toBeNull()
-    expect(proxied.headers.get('x-aiworker-mount-signature')).toBeNull()
-    expect(proxied.headers.get('x-aiworker-mount-token')).toBeNull()
-    const proxiedBody = await proxied.json()
-    expect(proxiedBody).toMatchObject({
-      appId: 'demo-api',
-      hasAuthorization: false,
-      hasCookie: false,
-      hasForwardedFor: false,
-      hasMountToken: true,
-      isMountSignatureValid: true,
-      mountTokenHeader: expect.not.stringContaining('client-spoofed-token'),
-      mountContext: {
-        appId: 'demo-api',
-        routePrefix: '/api/apps/demo-api',
-        sessionId: session.id,
-        workerId: 'demo-api-worker',
-        workspaceId: workspace.id,
-      },
-      path: '/echo',
-    })
-    expect(proxiedBody.mountContextHeader).not.toBe('client-spoofed-context')
-    expect(proxiedBody.mountSignatureHeader).not.toBe('client-spoofed-signature')
-    expect((await target.request('/api/local/apps/demo-api/echo')).status).toBe(404)
-
-    const proxiedRoot = await target.request('/api/apps/demo-api?workerId=demo-api-worker')
-    const proxiedRootText = await proxiedRoot.text()
-    expect(proxiedRoot.status, proxiedRootText).toBe(200)
-    expect(JSON.parse(proxiedRootText)).toMatchObject({
-      appId: 'demo-api',
-      hasMountToken: true,
-      path: '/',
-    })
-    expect((await target.request('/api/apps/demo-api/?workerId=demo-api-worker')).status).toBe(200)
-    const preflightRoot = await target.request('/api/apps/demo-api?workerId=demo-api-worker', { method: 'OPTIONS' })
-    expect(preflightRoot.status).toBe(200)
-    expect(await preflightRoot.json()).toMatchObject({
-      appId: 'demo-api',
-      hasMountToken: true,
-      path: '/',
-    })
-    const mountRes = await target.request('/api/mount/workbench?workerId=demo-api-worker')
-    expect(mountRes.status).toBe(200)
-    const mountBody = await mountRes.json() as { microApp: { data: Record<string, unknown> } }
-    expect(mountBody.microApp.data.mountTokenPresent).toBe(true)
-    expect(mountBody.microApp.data).not.toHaveProperty('mountToken')
-
-    const hostAction = await target.request('/api/local/apps/demo-api/actions/create-profile', { method: 'POST' })
-    expect(hostAction.status).toBe(404)
-
-    const domainRoute = await target.request(`/api/apps/demo-api/candidates/123/reports?workerId=demo-api-worker&workspaceId=${workspace.id}`, {
-      body: JSON.stringify({ reportDraft: 'app-owned-only' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(domainRoute.status).toBe(200)
-    expect(await domainRoute.json()).toMatchObject({
-      body: { reportDraft: 'app-owned-only' },
-      method: 'POST',
-      mountContext: {
-        appId: 'demo-api',
-        routePrefix: '/api/apps/demo-api',
-        workerId: 'demo-api-worker',
-        workspaceId: workspace.id,
-      },
-      path: '/candidates/123/reports',
-    })
-
-    await target.request('/api/app-installation/apps/demo-api/archive', { method: 'POST' })
-  })
-
-  it('rejects archived locator context before proxying app-owned API requests', async () => {
-    const target = await app()
-    const appRoot = join(dir, 'api-archive-soul')
-    writeApiSoul(appRoot)
-
-    const installRes = await target.request('/api/app-installation/install', {
-      body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(installRes.status).toBe(201)
-    expect((await target.request('/api/app-installation/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
-
-    const workerRes = await target.request('/api/workers', {
-      body: JSON.stringify({ id: 'demo-api-archive-worker', name: 'Demo API Archive Worker', appId: 'demo-api' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workerRes.status).toBe(201)
-    const workspace = await createWorkspaceLocator(target, 'demo-api-archive-worker')
-    const sessionRes = await target.request('/api/sessions', {
-      body: JSON.stringify({
-        title: 'Demo API archive session',
-        workerId: 'demo-api-archive-worker',
-        workspaceId: workspace.id,
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(sessionRes.status).toBe(201)
-    const session = (await sessionRes.json() as { session: { id: string } }).session
-
-    await target.request(`/api/sessions/${session.id}/archive`, { method: 'POST' })
-    const archivedSession = await target.request(`/api/apps/demo-api/echo?workerId=demo-api-archive-worker&workspaceId=${workspace.id}&sessionId=${session.id}`)
-    expect(archivedSession.status).toBe(400)
-    expect(await archivedSession.json()).toMatchObject({
-      error: { code: 'MOUNT_CONTEXT_INVALID', message: `Session ${session.id} is archived and cannot proxy app-owned API requests.` },
-    })
-
-    const replacementSessionRes = await target.request('/api/sessions', {
-      body: JSON.stringify({
-        title: 'Demo API replacement session',
-        workerId: 'demo-api-archive-worker',
-        workspaceId: workspace.id,
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(replacementSessionRes.status).toBe(201)
-    const replacementSession = (await replacementSessionRes.json() as { session: { id: string } }).session
-
-    await target.request(`/api/workspace-locators/${workspace.id}/archive`, { method: 'POST' })
-    const archivedWorkspace = await target.request(`/api/apps/demo-api/echo?workerId=demo-api-archive-worker&workspaceId=${workspace.id}&sessionId=${replacementSession.id}`)
-    expect(archivedWorkspace.status).toBe(400)
-    expect(await archivedWorkspace.json()).toMatchObject({
-      error: { code: 'MOUNT_CONTEXT_INVALID', message: `Workspace ${workspace.id} is archived and cannot proxy app-owned API requests.` },
-    })
-
-    const activeWorkspace = await createWorkspaceLocator(target, 'demo-api-archive-worker')
-    const activeSessionRes = await target.request('/api/sessions', {
-      body: JSON.stringify({
-        title: 'Demo API active workspace session',
-        workerId: 'demo-api-archive-worker',
-        workspaceId: activeWorkspace.id,
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(activeSessionRes.status).toBe(201)
-    const activeSession = (await activeSessionRes.json() as { session: { id: string } }).session
-
-    await target.request('/api/workers/demo-api-archive-worker/archive', { method: 'POST' })
-    const archivedWorker = await target.request(`/api/apps/demo-api/echo?workerId=demo-api-archive-worker&workspaceId=${activeWorkspace.id}&sessionId=${activeSession.id}`)
-    expect(archivedWorker.status).toBe(400)
-    expect(await archivedWorker.json()).toMatchObject({
-      error: { code: 'MOUNT_CONTEXT_INVALID', message: 'Worker demo-api-archive-worker is archived and cannot proxy app-owned API requests.' },
-    })
-  })
-
-  it('redacts mounted app-owned API startup diagnostics before returning broker errors', async () => {
-    const target = await app()
-    const appRoot = join(dir, 'failing-api-soul')
-    writeFailingApiSoul(appRoot)
-
-    const installRes = await target.request('/api/app-installation/install', {
-      body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(installRes.status).toBe(201)
-    expect((await target.request('/api/app-installation/apps/demo-failing-api/enable', { method: 'POST' })).status).toBe(200)
-
-    const response = await target.request('/api/apps/demo-failing-api/echo')
-    expect(response.status).toBe(502)
-    const body = await response.json()
-    expect(body).toMatchObject({
-      error: { code: 'SOUL_APP_SERVICE_UNREACHABLE' },
-      routePrefix: '/api/apps/demo-failing-api',
-    })
-    const serialized = JSON.stringify(body)
-    expect(serialized).not.toContain('sk-mounted-service-secret')
-    expect(serialized).not.toContain('literal-secret-value')
-    expect(serialized).toContain('[REDACTED]')
-  })
-
   it('hard-deletes installed Soul App metadata without leaving a disabled app shell', async () => {
     const target = await app()
-    const appRoot = join(dir, 'delete-api-soul')
-    writeApiSoul(appRoot)
+    const worker = await createFreeformWorker(target)
 
-    const installRes = await target.request('/api/app-installation/install', {
-      body: JSON.stringify({ descriptorPath: join(appRoot, 'dist', 'soul.descriptor.json') }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(installRes.status).toBe(201)
-    expect((await target.request('/api/app-installation/apps/demo-api/enable', { method: 'POST' })).status).toBe(200)
-    expect((await target.request('/api/apps/demo-api/echo')).status).toBe(200)
+    expect((await target.request(`/api/app-installation/apps/${FREEFORM_APP_ID}`)).status).toBe(200)
 
-    const deleteRes = await target.request('/api/app-installation/apps/demo-api', { method: 'DELETE' })
+    const deleteRes = await target.request(`/api/app-installation/apps/${FREEFORM_APP_ID}`, { method: 'DELETE' })
 
     expect(deleteRes.status).toBe(200)
     expect(await deleteRes.json()).toMatchObject({
-      app: { appId: 'demo-api' },
+      app: { appId: FREEFORM_APP_ID },
       deleted: true,
     })
-    expect((await target.request('/api/app-installation/apps/demo-api')).status).toBe(404)
-    expect((await target.request('/api/local/apps/demo-api')).status).toBe(404)
-    expect((await target.request('/api/apps/demo-api/echo')).status).toBe(404)
+    expect((await target.request(`/api/app-installation/apps/${FREEFORM_APP_ID}`)).status).toBe(404)
+    expect((await target.request(`/api/local/apps/${FREEFORM_APP_ID}`)).status).toBe(404)
+    void worker
   })
 
   it('requires bearer auth only when a workspace token is configured', async () => {
@@ -3212,18 +2974,6 @@ describe('local daemon API', () => {
       ['get', '/api/settings'],
       ['patch', '/api/settings'],
       ['get', '/api/mount/workbench'],
-      ['get', '/api/apps/{appId}'],
-      ['options', '/api/apps/{appId}'],
-      ['post', '/api/apps/{appId}'],
-      ['put', '/api/apps/{appId}'],
-      ['patch', '/api/apps/{appId}'],
-      ['delete', '/api/apps/{appId}'],
-      ['get', '/api/apps/{appId}/{path}'],
-      ['options', '/api/apps/{appId}/{path}'],
-      ['post', '/api/apps/{appId}/{path}'],
-      ['put', '/api/apps/{appId}/{path}'],
-      ['patch', '/api/apps/{appId}/{path}'],
-      ['delete', '/api/apps/{appId}/{path}'],
     ]
     const missingBrokerRoutes = expectedBrokerRoutes.flatMap(([method, path]) =>
       (openapi.paths[path] as Record<string, unknown> | undefined)?.[method]
@@ -3235,8 +2985,9 @@ describe('local daemon API', () => {
     const localWorkerEngineInvocationPath = ['/api/local/workers', '{workerId}', 'engine/invocations'].join('/')
     expect(Object.keys(openapi.paths)).toContain('/api/sessions/{sessionId}/invocations')
     expect(Object.keys(openapi.paths)).toContain('/api/engine/invocations')
-    expect(Object.keys(openapi.paths)).toContain('/api/apps/{appId}')
-    expect(Object.keys(openapi.paths)).toContain('/api/apps/{appId}/{path}')
+    // A Soul has no app-owned API: the broker exposes no /api/apps proxy paths.
+    expect(Object.keys(openapi.paths)).not.toContain('/api/apps/{appId}')
+    expect(Object.keys(openapi.paths)).not.toContain('/api/apps/{appId}/{path}')
     expect(Object.keys(openapi.paths)).not.toContain(localWorkerEngineInvocationPath)
     expect(Object.keys(openapi.paths)).not.toContain('/api/local/info')
     expect(Object.keys(openapi.paths)).not.toContain('/api/local/settings')
@@ -3291,129 +3042,4 @@ describe('local daemon API', () => {
     expect(localApiExposureWarning('0.0.0.0', null)).toContain('非 loopback')
     expect(localApiExposureWarning('0.0.0.0', 'token')).toBeNull()
   })
-
-  it('mounted service env drops LLM/cloud credentials and injects mount token', () => {
-    const env = mountedServiceSpawnEnv('mount-token')
-    expect(env.AIWORKER_MOUNT_TOKEN).toBe('mount-token')
-    expect(env.OPENAI_API_KEY).toBeUndefined()
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
-  })
-
-  function writeApiSoul(root: string): void {
-    const descriptor = parseSoulDescriptorV1({
-      ...freeformDescriptor,
-      api: {
-        entry: 'dist/api/server.js',
-        mount: '/api/apps/demo-api',
-        type: 'local-service',
-      },
-      identity: {
-        appId: 'demo-api',
-        description: 'Descriptor-only API Soul.',
-        name: 'Demo API Soul',
-        soulId: 'demo-api',
-        version: '0.1.0',
-      },
-    })
-    const distRoot = join(root, 'dist')
-    mkdirSync(join(distRoot, 'api'), { recursive: true })
-    mkdirSync(join(distRoot, 'engine-assets', 'workspace'), { recursive: true })
-    mkdirSync(join(distRoot, 'engine-assets', 'skills'), { recursive: true })
-    mkdirSync(join(distRoot, 'engine-assets', 'mcp', 'codex'), { recursive: true })
-    writeFileSync(join(distRoot, 'soul.descriptor.json'), `${JSON.stringify(descriptor, null, 2)}\n`)
-    writeFileSync(join(distRoot, 'engine-assets', 'workspace', 'AGENTS.md'), '# Demo API Workspace\n')
-    writeFileSync(join(distRoot, 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex mcp\n')
-    writeFileSync(join(distRoot, 'api', 'server.js'), `
-const { createHmac } = require('node:crypto')
-function isValidMountSignature(request) {
-  const context = request.headers.get('x-aiworker-mount-context')
-  const signature = request.headers.get('x-aiworker-mount-signature')
-  const token = request.headers.get('x-aiworker-mount-token')
-  if (!context || !signature || !token)
-    return false
-  return createHmac('sha256', token).update(context).digest('hex') === signature
-}
-const server = Bun.serve({
-  async fetch(request) {
-    const url = new URL(request.url)
-    if (url.pathname === '/health')
-      return Response.json({ status: 'ok' })
-    if (url.pathname === '/' || url.pathname === '/echo') {
-      const mountContextHeader = request.headers.get('x-aiworker-mount-context')
-      const mountContext = mountContextHeader
-        ? JSON.parse(Buffer.from(mountContextHeader, 'base64url').toString('utf8'))
-        : null
-      return Response.json({
-        appId: 'demo-api',
-        hasAuthorization: Boolean(request.headers.get('authorization')),
-        hasCookie: Boolean(request.headers.get('cookie')),
-        hasForwardedFor: Boolean(request.headers.get('x-forwarded-for')),
-        hasMountToken: Boolean(request.headers.get('x-aiworker-mount-token')),
-        isMountSignatureValid: isValidMountSignature(request),
-        mountContextHeader: request.headers.get('x-aiworker-mount-context'),
-        mountContext,
-        mountSignatureHeader: request.headers.get('x-aiworker-mount-signature'),
-        mountTokenHeader: request.headers.get('x-aiworker-mount-token'),
-        path: url.pathname,
-      }, {
-        headers: {
-          'content-type': 'application/json',
-          'set-cookie': 'demo_api_session=should-not-reach-host',
-          'x-aiworker-mount-context': request.headers.get('x-aiworker-mount-context') ?? '',
-          'x-aiworker-mount-signature': request.headers.get('x-aiworker-mount-signature') ?? '',
-          'x-aiworker-mount-token': request.headers.get('x-aiworker-mount-token') ?? '',
-        },
-      })
-    }
-    if (url.pathname === '/candidates/123/reports') {
-      const mountContextHeader = request.headers.get('x-aiworker-mount-context')
-      const mountContext = mountContextHeader
-        ? JSON.parse(Buffer.from(mountContextHeader, 'base64url').toString('utf8'))
-        : null
-      return Response.json({
-        body: await request.json(),
-        method: request.method,
-        mountContext,
-        path: url.pathname,
-      })
-    }
-    return Response.json({ path: url.pathname }, { status: 404 })
-  },
-  hostname: '127.0.0.1',
-  port: Number(Bun.env.PORT ?? 0),
-})
-process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${server.port}\` }) + '\\n')
-`)
-  }
-
-  function writeFailingApiSoul(root: string): void {
-    const descriptor = parseSoulDescriptorV1({
-      ...freeformDescriptor,
-      api: {
-        entry: 'dist/api/server.js',
-        mount: '/api/apps/demo-failing-api',
-        type: 'local-service',
-      },
-      identity: {
-        appId: 'demo-failing-api',
-        description: 'Descriptor-only API Soul with failing local service.',
-        name: 'Failing API Soul',
-        soulId: 'demo-failing-api',
-        version: '0.1.0',
-      },
-    })
-    const distRoot = join(root, 'dist')
-    mkdirSync(join(distRoot, 'api'), { recursive: true })
-    mkdirSync(join(distRoot, 'engine-assets', 'workspace'), { recursive: true })
-    mkdirSync(join(distRoot, 'engine-assets', 'skills'), { recursive: true })
-    mkdirSync(join(distRoot, 'engine-assets', 'mcp', 'codex'), { recursive: true })
-    writeFileSync(join(distRoot, 'soul.descriptor.json'), `${JSON.stringify(descriptor, null, 2)}\n`)
-    writeFileSync(join(distRoot, 'engine-assets', 'workspace', 'AGENTS.md'), '# Failing API Workspace\n')
-    writeFileSync(join(distRoot, 'engine-assets', 'mcp', 'codex', 'config.toml'), '# codex mcp\n')
-    writeFileSync(join(distRoot, 'api', 'server.js'), `
-process.stderr.write('startup token=sk-mounted-service-secret\\n')
-process.stderr.write('authorization = "literal-secret-value"\\n')
-setTimeout(() => process.exit(7), 10)
-`)
-  }
 })

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import type { SoulDiscovery, SoulValidationIssue } from '@zonease/aiworker-soul-sdk'
 import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
+import type { SoulDiscovery, SoulValidationIssue } from '@zonease/aiworker-soul-sdk'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 import type { UpdateCliOptions, UpdateCommandName } from './updater'

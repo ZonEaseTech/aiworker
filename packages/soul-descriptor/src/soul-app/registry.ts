@@ -163,40 +163,24 @@ function descriptorIdentity(descriptor: SoulDescriptorV1): {
   }
 }
 
-function apiForDescriptor(descriptor: SoulDescriptorV1): HostedSoulAppApi {
-  const identity = descriptorIdentity(descriptor)
-  if (!descriptor.api) {
-    return {
-      localService: null,
-      routePrefix: null,
-    }
-  }
+function apiForDescriptor(_descriptor: SoulDescriptorV1): HostedSoulAppApi {
+  // A Soul is a descriptor-only template of engine assets: it has no app-owned API
+  // and no local service. The mounted workbench resolves its URL prefix from the
+  // `appOwnedApiRoutePrefix` fallback (`/api/apps/:appId`), so leave both null.
   return {
-    localService: {
-      command: ['bun', descriptor.api.entry.replace(/^dist\//, '')],
-      healthPath: '/health',
-    },
-    routePrefix: descriptor.api.mount ?? `/api/apps/${identity.appId}`,
+    localService: null,
+    routePrefix: null,
   }
 }
 
 function permissionsForDescriptor(descriptor: SoulDescriptorV1): SoulAppPermission[] {
   const identity = descriptorIdentity(descriptor)
-  const permissions: SoulAppPermission[] = [{
+  return [{
     action: 'mount',
     kind: 'ui',
     reason: 'Mount the descriptor-declared Soul workbench.',
     target: `${identity.appId}-workbench`,
   }]
-  if (descriptor.api) {
-    permissions.push({
-      action: 'serve',
-      kind: 'api',
-      reason: 'Serve the descriptor-declared app-owned API.',
-      target: descriptor.api.mount ?? `/api/apps/${identity.appId}`,
-    })
-  }
-  return permissions
 }
 
 function engineAssetsForDescriptor(descriptor: SoulDescriptorV1): SoulAppEngineAssets {

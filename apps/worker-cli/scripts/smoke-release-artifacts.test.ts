@@ -197,7 +197,6 @@ function fixtureDescriptorText(options: {
 } = {}): string {
   const mcpTargets = options.mcpTargets ?? ['claude-code', 'codex']
   return `${JSON.stringify({
-    api: null,
     compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
     configuration: {},
     engine: options.engine ?? {

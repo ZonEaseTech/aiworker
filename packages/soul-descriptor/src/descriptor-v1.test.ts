@@ -24,7 +24,6 @@ const baseDescriptor = {
     type: 'micro-app',
     entry: 'dist/web/workbench/index.html',
   },
-  api: null,
   engine: {},
   health: {
     type: 'static',
@@ -48,7 +47,6 @@ describe('descriptor v1 schema', () => {
     const descriptor = parseSoulDescriptorV1(baseDescriptor)
 
     expect(Object.keys(descriptor).sort()).toEqual([
-      'api',
       'compatibility',
       'configuration',
       'engine',
@@ -96,34 +94,26 @@ describe('descriptor v1 schema', () => {
         }),
       ).toThrow()
     }
-
-    for (const apiEntry of ['./host-adapter/api.ts', 'dist/../host-adapter/api.js']) {
-      expect(() =>
-        parseSoulDescriptorV1({
-          ...baseDescriptor,
-          api: {
-            type: 'local-service',
-            entry: apiEntry,
-            mount: '/api/apps/aiworker-freeform',
-          },
-        }),
-      ).toThrow()
-    }
   })
 
-  test('rejects unsafe app-owned API mounts', () => {
-    for (const mount of ['/api/apps/freeform/../x', '/api/apps/freeform/internal']) {
-      expect(() =>
-        parseSoulDescriptorV1({
-          ...baseDescriptor,
-          api: {
-            type: 'local-service',
-            entry: 'dist/api/index.js',
-            mount,
-          },
-        }),
-      ).toThrow()
-    }
+  test('rejects an app-owned API section: a Soul is a descriptor-only template', () => {
+    expect(() =>
+      parseSoulDescriptorV1({
+        ...baseDescriptor,
+        api: {
+          type: 'local-service',
+          entry: 'dist/api/index.js',
+          mount: '/api/apps/aiworker-freeform',
+        },
+      }),
+    ).toThrow()
+
+    expect(() =>
+      parseSoulDescriptorV1({
+        ...baseDescriptor,
+        api: null,
+      }),
+    ).toThrow()
   })
 
   test('rejects old governance concepts in host-interpreted sections', () => {
@@ -239,22 +229,11 @@ describe('descriptor v1 schema', () => {
     ).toThrow()
   })
 
-  test('accepts built mounted workbench and app-owned API entries', () => {
-    const descriptor = parseSoulDescriptorV1({
-      ...baseDescriptor,
-      api: {
-        type: 'local-service',
-        entry: 'dist/api/index.js',
-        mount: '/api/apps/aiworker-freeform',
-      },
-    })
+  test('accepts the built mounted workbench entry', () => {
+    const descriptor = parseSoulDescriptorV1(baseDescriptor)
 
     expect(descriptor.workbench.entry).toBe('dist/web/workbench/index.html')
-    expect(descriptor.api).toEqual({
-      type: 'local-service',
-      entry: 'dist/api/index.js',
-      mount: '/api/apps/aiworker-freeform',
-    })
+    expect(descriptor).not.toHaveProperty('api')
   })
 
   test('accepts built engine projection references', () => {

@@ -76,7 +76,6 @@ function fixtureDescriptorText(options: {
       },
       type: 'micro-app',
     },
-    api: null,
     engine: options.engine ?? {
       mcp: {
         targets: {

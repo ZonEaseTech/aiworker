@@ -281,7 +281,6 @@ async function writeDemoEngineAssets(distRoot: string): Promise<void> {
 
 function demoDescriptor(): SoulDescriptorV1 {
   return {
-    api: null,
     compatibility: {
       engines: ['codex', 'claude-code'],
       host: '>=1.0.0',

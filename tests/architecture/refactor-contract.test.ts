@@ -147,7 +147,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(docCheck).toContain('SDK API convention discovery must stay explicit')
     expect(sdkDescriptorBuildTest).toContain('api/src/index.ts')
     expect(sdkDescriptorBuildTest).toContain('not.toContain(\'api\')')
-    expect(sdkDescriptorBuildTest).toContain('api: null')
+    expect(sdkDescriptorBuildTest).toContain('not.toHaveProperty(\'api\')')
 
     for (const phrase of [
       'Canonical Coverage Ledger',
@@ -407,22 +407,11 @@ describe('destructive refactor contract bootstrap', () => {
     expect(docCheck).toContain('worker config broker routes must stay complete')
   })
 
-  test.todo('protocol doc promotes the capability route and app-owned API proxy routes', () => {
-    // Phase-B teardown: docs/testing.md Pending Implementation
-    // New model: descriptor v1 has no capabilities and Souls have no app-owned API, so
-    // the broker exposes neither GET /api/capabilities nor the /api/apps proxy. Restore
-    // these route/credential-stripping assertions only if those layers are reinstated.
-    const protocol = readRepoFile('docs/protocol.md')
-    for (const route of [
-      'GET    /api/capabilities',
-      'ANY    /api/apps/:appId',
-      'ANY    /api/apps/:appId/*',
-    ]) {
-      expect(protocol).toContain(route)
-    }
-    expect(protocol).toContain('strips client credentials before proxying')
-    expect(protocol).toContain('strips app-owned cookies plus Host mount credentials before returning')
-  })
+  // Removed: the inverse is enforced by scripts/check-doc-contract.ts
+  // forbidIncludes('docs/protocol.md', ['/api/capabilities', '/api/apps/:appId']).
+  // The new protocol.md forbids the capability route and the app-owned API proxy
+  // routes outright, so a todo asserting those routes exist would assert a
+  // forbidden state.
 
   test('soul protocol does not expose legacy worker overlay write contracts', () => {
     const protocolIndex = readRepoFile('packages/soul-descriptor/src/index.ts')
@@ -575,28 +564,36 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('app.post(\'/api/local/apps/:appId/healthcheck\'')
   })
 
-  test.todo('daemon app-owned API proxy does not preserve local catch-all alias', () => {
-    // Phase-B teardown: docs/testing.md Pending Implementation
-    // New model: Souls have no app-owned API, so the daemon exposes no /api/apps proxy.
+  test('daemon exposes no app-owned API proxy: only a GET mounted-workbench asset route under /api/apps', () => {
+    // New model: a Soul is a descriptor-only template with no app-owned API. The
+    // daemon serves the mounted workbench micro-app bundle (GET-only) under
+    // /api/apps/:appId, but there is no proxy to any Soul-owned local service and
+    // no credential-stripping / mount-signature machinery.
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
-    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
-    const protocol = readRepoFile('docs/protocol.md')
 
-    expect(protocol).toContain('ANY    /api/apps/:appId')
-    expect(protocol).toContain('ANY    /api/apps/:appId/*')
-    expect(protocol).toContain('strips client credentials before proxying')
-    expect(protocol).toContain('strips app-owned cookies plus Host mount credentials before returning')
-    expect(daemon).toContain('app.all(\'/api/apps/:appId/:path{.+}\'')
+    // The mounted-workbench asset route survives but is GET-only and is not a proxy.
+    expect(daemon).toContain('app.get(\'/api/apps/:appId/:path{.+}\'')
+    expect(daemon).not.toContain('app.all(\'/api/apps')
     expect(daemon).not.toContain('app.all(\'/api/local/apps/:appId/:path{.+}\'')
-    expect(daemon).not.toContain('(?:local/)?apps')
-    expect(daemon).not.toContain('isReservedLocalAppLifecyclePath')
-    expect(daemonTest).toContain('client-spoofed-token')
-    expect(daemonTest).toContain('/api/apps/demo-api/candidates/123/reports')
-    expect(daemonTest).toContain('x-aiworker-mount-context')
-    expect(daemonTest).toContain('x-aiworker-mount-signature')
-    expect(daemonTest).toContain('set-cookie')
-    expect(docCheck).toContain('app-owned API proxy must strip credentials')
+
+    // No app-owned API proxy / mounted local-service machinery remains.
+    for (const forbidden of [
+      'proxyMountedSoulAppApi',
+      'startMountedSoulAppService',
+      'mountedServiceSpawnEnv',
+      'applyMountedProxyContextHeaders',
+      'x-aiworker-mount-signature',
+      'authenticateMountedBrokerRequest',
+      'SOUL_APP_SERVICE_UNREACHABLE',
+    ]) {
+      expect(daemon, `daemon must not retain app-owned API proxy machinery: ${forbidden}`).not.toContain(forbidden)
+    }
+
+    // The app-owned-API proxy tests are gone with the proxy they exercised.
+    expect(daemonTest).not.toContain('client-spoofed-token')
+    expect(daemonTest).not.toContain('/api/apps/demo-api/candidates/123/reports')
+    expect(daemonTest).not.toContain('x-aiworker-mount-signature')
   })
 
   test('daemon worker collection surface does not preserve local broker aliases', () => {
@@ -1809,16 +1806,9 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemonTest).toContain('not.toContain(\'sk-\')')
   })
 
-  test.todo('canonical testing ledger tracks app-owned API proxy coverage', () => {
-    // Phase-B teardown: docs/testing.md Pending Implementation
-    // New model: Souls have no app-owned API, so the coverage ledger no longer carries
-    // an app-owned API proxy row. Restore when that proxy layer is reinstated.
-    const testing = readRepoFile('docs/testing.md')
-    const docCheck = readRepoFile('scripts/check-doc-contract.ts')
-    expect(testing).toContain('App-owned API proxy')
-    expect(testing).toContain('app-owned API proxy test')
-    expect(docCheck).toContain('Testing ledger must track app-owned API proxy coverage')
-  })
+  // Removed: the app-owned-API-proxy coverage ledger row was intentionally dropped
+  // in Phase-A. A Soul has no app-owned API, so docs/testing.md no longer tracks an
+  // app-owned API proxy test row.
 
   test('canonical testing docs track worker config envelope security guardrails', () => {
     const testing = readRepoFile('docs/testing.md')

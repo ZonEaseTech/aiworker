@@ -22,7 +22,6 @@ import {
 const FREEFORM_APP_ID = 'aiworker-freeform'
 
 const freeformDescriptor = parseSoulDescriptorV1({
-  api: null,
   compatibility: { host: '>=1.0.0' },
   configuration: {},
   engine: {

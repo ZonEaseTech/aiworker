@@ -397,7 +397,7 @@ forbidIncludes('docs/soul-authoring.md', [
 requireIncludes('packages/soul-sdk/src/descriptor-build.test.ts', [
   'api/src/index.ts',
   'not.toContain(\'api\')',
-  'api: null',
+  'not.toHaveProperty(\'api\')',
 ])
 if (!read('packages/soul-sdk/src/descriptor-build.test.ts').includes('keeps app-owned API source out of convention discovery and build output')) {
   issues.push({

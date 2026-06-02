@@ -414,4 +414,3 @@ async function proxyJsonRequestWithBody(
     method: request.method,
   }).then(r => new Response(r.body, { status: r.status, headers: r.headers }))
 }
-

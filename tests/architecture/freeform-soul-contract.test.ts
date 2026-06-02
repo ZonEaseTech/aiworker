@@ -94,7 +94,6 @@ describe('Freeform Soul descriptor contract', () => {
     const descriptor = parseSoulDescriptorV1(readJson<unknown>(freeformDescriptorPath))
 
     expect(descriptor).toMatchObject({
-      api: null,
       identity: {
         appId: 'aiworker-freeform',
         name: 'AIWorker Freeform',
@@ -110,6 +109,8 @@ describe('Freeform Soul descriptor contract', () => {
         type: 'micro-app',
       },
     })
+    // A Soul is a descriptor-only template of engine assets: no app-owned API.
+    expect(descriptor).not.toHaveProperty('api')
     expect(descriptor).not.toHaveProperty('capabilities')
     expect(descriptor.engine).toMatchObject({
       mcp: {

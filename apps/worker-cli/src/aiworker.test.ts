@@ -1878,11 +1878,6 @@ describe('aiworker local CLI', () => {
   it('fails descriptor validation on source hook paths', async () => {
     const descriptorPath = path.join(root, 'bad-soul.descriptor.json')
     await writeFile(descriptorPath, JSON.stringify({
-      api: {
-        entry: 'dist/../host-adapter/api.js',
-        mount: '/api/apps/bad-soul',
-        type: 'local-service',
-      },
       compatibility: {},
       configuration: {},
       engine: {},
@@ -1915,10 +1910,6 @@ describe('aiworker local CLI', () => {
       expect.objectContaining({
         code: 'invalid_descriptor',
         path: 'workbench.entry',
-      }),
-      expect.objectContaining({
-        code: 'invalid_descriptor',
-        path: 'api.entry',
       }),
     ]))
   })

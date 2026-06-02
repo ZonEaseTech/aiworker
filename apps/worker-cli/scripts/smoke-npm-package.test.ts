@@ -37,7 +37,6 @@ describe('npm package smoke script contract', () => {
         router: { mode: 'search' },
         type: 'micro-app',
       },
-      api: null,
       engine: {
         workspaceAssets: { source: 'dist/engine-assets/workspace' },
         skills: { source: 'dist/engine-assets/skills' },

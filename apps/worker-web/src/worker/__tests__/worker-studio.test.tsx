@@ -152,7 +152,6 @@ function hostedApp({
     appId,
     description: `${appName} descriptor`,
     descriptor: {
-      api: null,
       compatibility: { host: '>=1.0.0' },
       configuration: {},
       engine: {},
