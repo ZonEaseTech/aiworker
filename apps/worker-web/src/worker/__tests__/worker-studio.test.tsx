@@ -113,10 +113,8 @@ function hostedApp({
     descriptor: {
       engine: {},
       identity: {
-        appId,
+        id: appId,
         name: appName,
-        soulId: appId.replace(/^aiworker-/, ''),
-        version: '0.1.0',
       },
       protocol: 'soul/v1',
     },
@@ -141,12 +139,10 @@ function hostedApp({
       name: appName,
       status: status === 'enabled' ? 'available' : 'coming_soon',
     },
-    soulId: appId.replace(/^aiworker-/, ''),
     sourceKind: 'descriptor-path',
     sourceRef: `/tmp/${appId}/dist/soul.descriptor.json`,
     status,
     validationIssues: [],
-    version: '0.1.0',
   }
 }
 

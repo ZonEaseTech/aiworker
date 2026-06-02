@@ -64,7 +64,7 @@ describe('worker-daemon control contract endpoints', () => {
     const body = await res.json()
     // 必须满足 worker-control-protocol 的 describe 形状（含 configMicroAppEntry）
     const describe = parseWorkerDescribe(body)
-    expect(describe.templateId).toBe(FREEFORM_APP_ID)
+    expect(describe.id).toBe(FREEFORM_APP_ID)
     // Phase-2 Host control plane mounts the Worker's own Workbench web (daemon root),
     // not a Soul-provided micro-app. v1 has no /api/mount/workbench.
     expect(describe.configMicroAppEntry).toBe('/')
@@ -120,7 +120,7 @@ describe('worker-daemon control contract endpoints', () => {
     const res = await target.request('/api/control/assignment', {
       body: JSON.stringify({
         version: 1,
-        templateId: 'freeform',
+        id: FREEFORM_APP_ID,
         connectors: [],
         permissions: ['read'],
         gatewayProfileRef: 'env:OPENAI_API_KEY',
@@ -129,7 +129,7 @@ describe('worker-daemon control contract endpoints', () => {
       method: 'PUT',
     })
     expect(res.status).toBe(200)
-    expect(await res.json()).toMatchObject({ assignment: { templateId: 'freeform' } })
+    expect(await res.json()).toMatchObject({ assignment: { id: FREEFORM_APP_ID } })
   })
 
   it('PUT /api/control/assignment rejects an envelope carrying non-contract data', async () => {
@@ -138,7 +138,7 @@ describe('worker-daemon control contract endpoints', () => {
     const res = await target.request('/api/control/assignment', {
       body: JSON.stringify({
         version: 1,
-        templateId: 'freeform',
+        id: FREEFORM_APP_ID,
         connectors: [],
         permissions: [],
         gatewayProfileRef: 'env:X',

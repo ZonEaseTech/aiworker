@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 
 export const OFFICIAL_FREEFORM_APP_ID = 'aiworker-freeform'
-const OFFICIAL_FREEFORM_SOUL_ID = 'freeform'
 const OFFICIAL_FREEFORM_NAME = 'AIWorker Freeform'
 const OFFICIAL_FREEFORM_MCP_REFS = {
   'claude-code': 'dist/engine-assets/mcp/claude-code/.mcp.json',
@@ -12,9 +11,9 @@ const OFFICIAL_FREEFORM_MCP_REFS = {
 
 export function parseOfficialFreeformDescriptorJson(text: string): ReturnType<typeof parseSoulDescriptorV1> {
   const descriptor = parseSoulDescriptorV1(JSON.parse(text))
-  if (descriptor.identity.appId !== OFFICIAL_FREEFORM_APP_ID)
+  if (descriptor.identity.id !== OFFICIAL_FREEFORM_APP_ID)
     throw new Error(`expected ${OFFICIAL_FREEFORM_APP_ID}`)
-  if (descriptor.identity.soulId !== OFFICIAL_FREEFORM_SOUL_ID || descriptor.identity.name !== OFFICIAL_FREEFORM_NAME)
+  if (descriptor.identity.name !== OFFICIAL_FREEFORM_NAME)
     throw new Error('expected official Freeform identity')
   if (!hasOfficialFreeformMcpTargets(descriptor.engine.mcp?.targets))
     throw new Error('expected official Freeform native MCP targets')

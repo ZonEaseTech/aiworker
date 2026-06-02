@@ -3,11 +3,10 @@ import { describe, expect, test } from 'bun:test'
 import { parseOfficialFreeformDescriptorJson } from './official-freeform-descriptor'
 
 describe('official Freeform descriptor parser', () => {
-  test('rejects descriptor v1 packages that keep the Freeform app id but drift from the canonical Freeform identity', () => {
+  test('rejects descriptor v1 packages that keep the Freeform id but drift from the canonical Freeform identity', () => {
     expect(() =>
       parseOfficialFreeformDescriptorJson(fixtureDescriptorText({
         name: 'Not AIWorker Freeform',
-        soulId: 'not-freeform',
       })),
     ).toThrow('expected official Freeform identity')
   })
@@ -38,15 +37,12 @@ describe('official Freeform descriptor parser', () => {
 function fixtureDescriptorText(options: {
   engine?: unknown
   name?: string
-  soulId?: string
 } = {}): string {
   return `${JSON.stringify({
     protocol: 'soul/v1',
     identity: {
-      appId: 'aiworker-freeform',
+      id: 'aiworker-freeform',
       name: options.name ?? 'AIWorker Freeform',
-      soulId: options.soulId ?? 'freeform',
-      version: '0.1.0',
     },
     engine: options.engine ?? {
       mcp: {

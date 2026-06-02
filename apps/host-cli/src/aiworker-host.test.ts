@@ -24,7 +24,7 @@ describe('aiworker-host control CLI', () => {
 
   it('lists workers from the injected host-control registry', async () => {
     const registry = createWorkerRegistry()
-    registry.register({ workerId: 'w1', templateId: 'aiworker-freeform', endpoint: 'http://127.0.0.1:9217', health: { ready: true } })
+    registry.register({ workerId: 'w1', id: 'aiworker-freeform', endpoint: 'http://127.0.0.1:9217', health: { ready: true } })
     const code = await runHostCli(['worker', 'list'], { registry })
     expect(code).toBe(0)
     const parsed = JSON.parse(output) as { workers: { workerId: string }[] }

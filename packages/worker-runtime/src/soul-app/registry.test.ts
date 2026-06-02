@@ -27,11 +27,9 @@ const freeformDescriptor = parseSoulDescriptorV1({
     workspaceAssets: { source: 'dist/engine-assets/workspace' },
   },
   identity: {
-    appId: FREEFORM_APP_ID,
     description: 'Open-ended Soul for freeform local work.',
+    id: FREEFORM_APP_ID,
     name: 'AIWorker Freeform',
-    soulId: 'freeform',
-    version: '0.1.0',
   },
   protocol: 'soul/v1',
 })
@@ -82,9 +80,9 @@ describe('Host Soul descriptor registry', () => {
         scope: 'app',
       },
       name: 'AIWorker Freeform',
-      soulId: 'freeform',
-      version: '0.1.0',
     })
+    expect(installed).not.toHaveProperty('soulId')
+    expect(installed).not.toHaveProperty('version')
     expect(listHostedSoulApps()).toHaveLength(1)
     expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
 

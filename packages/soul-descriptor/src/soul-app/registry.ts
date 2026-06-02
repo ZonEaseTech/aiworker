@@ -89,12 +89,10 @@ export const hostedSoulAppSchema = zod.object({
   name: zod.string().min(1),
   permissions: zod.array(soulAppPermissionSchema).readonly(),
   projectedSoul: verticalSoulSchema,
-  soulId: zod.string().min(1),
   sourceKind: soulAppInstallSourceKindSchema,
   sourceRef: zod.string().min(1),
   status: soulAppRegistryStatusSchema,
   validationIssues: zod.array(soulDescriptorValidationIssueSchema).readonly(),
-  version: zod.string().min(1),
 })
 export type HostedSoulApp = z.infer<typeof hostedSoulAppSchema>
 
@@ -102,7 +100,7 @@ export function projectSoulAppSoul(descriptor: SoulDescriptorV1, status: Vertica
   const identity = descriptorIdentity(descriptor)
   return {
     description: identity.description,
-    id: identity.appId,
+    id: identity.id,
     name: identity.name,
     status,
   }
@@ -121,7 +119,7 @@ export function buildHostedSoulApp(input: {
   const identity = descriptorIdentity(input.descriptor)
   return hostedSoulAppSchema.parse({
     api: apiForDescriptor(input.descriptor),
-    appId: identity.appId,
+    appId: identity.id,
     description: identity.description,
     descriptor: input.descriptor,
     descriptorDigest: input.descriptorDigest,
@@ -138,28 +136,22 @@ export function buildHostedSoulApp(input: {
     name: identity.name,
     permissions: permissionsForDescriptor(input.descriptor),
     projectedSoul: projectSoulAppSoul(input.descriptor, input.status === 'enabled' ? 'available' : 'coming_soon'),
-    soulId: identity.soulId,
     sourceKind: input.sourceKind,
     sourceRef: input.sourceRef,
     status: input.status,
     validationIssues: input.validationIssues ?? [],
-    version: identity.version,
   })
 }
 
 function descriptorIdentity(descriptor: SoulDescriptorV1): {
-  appId: string
   description: string
+  id: string
   name: string
-  soulId: string
-  version: string
 } {
   return {
-    appId: String(descriptor.identity.appId),
     description: String(descriptor.identity.description ?? descriptor.identity.name),
+    id: String(descriptor.identity.id),
     name: String(descriptor.identity.name),
-    soulId: String(descriptor.identity.soulId),
-    version: String(descriptor.identity.version),
   }
 }
 
@@ -179,7 +171,7 @@ function permissionsForDescriptor(descriptor: SoulDescriptorV1): SoulAppPermissi
     action: 'mount',
     kind: 'ui',
     reason: 'Mount the descriptor-declared Soul workbench.',
-    target: `${identity.appId}-workbench`,
+    target: `${identity.id}-workbench`,
   }]
 }
 

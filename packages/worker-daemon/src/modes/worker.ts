@@ -187,7 +187,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const worker = resolution.worker
     return c.json({
       workerId: worker.id,
-      templateId: worker.appId,
+      id: worker.appId,
       version: state.runtimeVersion,
       health: { ready: true },
       // Phase-2 Host control plane mounts the Worker's own Workbench web (served at

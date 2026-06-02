@@ -90,7 +90,7 @@ function fixtureDescriptorText(): string {
       skills: { source: 'dist/engine-assets/skills' },
       workspaceAssets: { source: 'dist/engine-assets/workspace' },
     },
-    identity: { appId: 'aiworker-freeform', name: 'AIWorker Freeform', soulId: 'freeform', version: '0.1.0' },
+    identity: { id: 'aiworker-freeform', name: 'AIWorker Freeform' },
     protocol: 'soul/v1',
   })}\n`
 }

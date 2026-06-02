@@ -11,12 +11,9 @@ export type SoulBuildStatus = 'built' | 'failed'
 export type SoulValidationStatus = 'invalid' | 'valid'
 
 export interface SoulConfig {
-  appId?: string
   description?: string
   id: string
   name: string
-  soulId?: string
-  version: string
 }
 
 export interface SoulArtifactConfig {
@@ -70,11 +67,7 @@ interface ResolvedSoul {
 }
 
 export function defineSoul(input: SoulConfig): SoulConfig {
-  return {
-    ...input,
-    appId: input.appId ?? input.id,
-    soulId: input.soulId ?? input.id,
-  }
+  return { ...input }
 }
 
 export function artifact(input: SoulArtifactConfig): SoulArtifactConfig {
@@ -173,8 +166,8 @@ async function loadSoulConfig(rootDir: string, issues: SoulValidationIssue[]): P
     const config = module.default as SoulConfig | undefined
     if (!config || typeof config !== 'object')
       throw new Error('default export must be a Soul config object')
-    if (!config.id || !config.name || !config.version)
-      throw new Error('id, name, and version are required')
+    if (!config.id || !config.name)
+      throw new Error('id and name are required')
     return defineSoul(config)
   }
   catch (error) {
@@ -285,11 +278,9 @@ function createDescriptor(config: SoulConfig, discovery: SoulDiscovery): SoulDes
         : {}),
     },
     identity: {
-      appId: config.appId ?? config.id,
       description: config.description,
+      id: config.id,
       name: config.name,
-      soulId: config.soulId ?? config.id,
-      version: config.version,
     },
     protocol: 'soul/v1',
   })
@@ -316,7 +307,6 @@ function fallbackConfig(): SoulConfig {
   return {
     id: 'invalid',
     name: 'Invalid Soul',
-    version: '0.0.0',
   }
 }
 

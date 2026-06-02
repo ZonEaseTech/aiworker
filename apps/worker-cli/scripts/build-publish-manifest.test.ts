@@ -52,10 +52,8 @@ describe('CLI publish manifest builder', () => {
         workspaceAssets: { source: 'dist/engine-assets/workspace' },
       },
       identity: {
-        appId: 'aiworker-demo',
+        id: 'aiworker-demo',
         name: 'Demo',
-        soulId: 'demo',
-        version: '0.1.0',
       },
       protocol: 'soul/v1',
     }))

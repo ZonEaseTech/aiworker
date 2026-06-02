@@ -55,10 +55,8 @@ const freeformDescriptor = parseSoulDescriptorV1({
     workspaceAssets: { source: 'dist/engine-assets/workspace' },
   },
   identity: {
-    appId: 'aiworker-freeform',
+    id: 'aiworker-freeform',
     name: 'AIWorker Freeform',
-    soulId: 'freeform',
-    version: '0.1.0',
   },
   protocol: 'soul/v1',
 })
@@ -147,11 +145,9 @@ describe('greenfield local worker session schema', () => {
 
   it('persists Host Soul App registry lifecycle state', () => {
     const installed = upsertSoulApp({
-      id: freeformDescriptor.identity.appId as string,
+      id: freeformDescriptor.identity.id as string,
       name: freeformDescriptor.identity.name as string,
-      version: freeformDescriptor.identity.version as string,
       protocol: freeformDescriptor.protocol,
-      soulId: freeformDescriptor.identity.soulId as string,
       sourceKind: 'inline',
       sourceRef: 'test:inline',
       descriptorDigest: 'digest-1',
@@ -161,7 +157,7 @@ describe('greenfield local worker session schema', () => {
 
     expect(installed.status).toBe('installed')
     expect(installed.healthStatus).toBe('unknown')
-    expect(getSoulApp('aiworker-freeform')?.descriptorJson.identity.appId).toBe('aiworker-freeform')
+    expect(getSoulApp('aiworker-freeform')?.descriptorJson.identity.id).toBe('aiworker-freeform')
     expect(getSoulApp('aiworker-freeform')?.descriptorDigest).toBe('digest-1')
     expect(listSoulApps()).toHaveLength(1)
 
@@ -193,11 +189,9 @@ describe('greenfield local worker session schema', () => {
   it('rejects literal secrets inside opaque descriptor extensions and external payloads', () => {
     expect(() =>
       upsertSoulApp({
-        id: freeformDescriptor.identity.appId as string,
+        id: freeformDescriptor.identity.id as string,
         name: freeformDescriptor.identity.name as string,
-        version: freeformDescriptor.identity.version as string,
         protocol: freeformDescriptor.protocol,
-        soulId: freeformDescriptor.identity.soulId as string,
         sourceKind: 'inline',
         sourceRef: 'test:inline',
         descriptorDigest: 'digest-secret-external',
@@ -215,11 +209,9 @@ describe('greenfield local worker session schema', () => {
 
     expect(() =>
       upsertSoulApp({
-        id: freeformDescriptor.identity.appId as string,
+        id: freeformDescriptor.identity.id as string,
         name: freeformDescriptor.identity.name as string,
-        version: freeformDescriptor.identity.version as string,
         protocol: freeformDescriptor.protocol,
-        soulId: freeformDescriptor.identity.soulId as string,
         sourceKind: 'inline',
         sourceRef: 'test:inline',
         descriptorDigest: 'digest-secret-extension',

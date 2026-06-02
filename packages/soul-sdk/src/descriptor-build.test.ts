@@ -39,11 +39,12 @@ describe('SDK descriptor build conventions', () => {
     const result = await buildSoul(rootDir)
 
     expect(result.descriptor.identity).toMatchObject({
-      appId: 'aiworker-freeform',
+      id: 'aiworker-freeform',
       name: 'AIWorker Freeform',
-      soulId: 'freeform',
-      version: '0.1.0',
     })
+    expect(result.descriptor.identity).not.toHaveProperty('appId')
+    expect(result.descriptor.identity).not.toHaveProperty('soulId')
+    expect(result.descriptor.identity).not.toHaveProperty('version')
     expect(result.descriptor).not.toHaveProperty('capabilities')
     expect(result.descriptor).not.toHaveProperty('workbench')
     expect(result.descriptor.engine).toEqual({
@@ -172,11 +173,8 @@ async function createFreeformSoulFixture(options: { codexMcp?: string } = {}): P
   writeFileSync(join(rootDir, 'soul.config.ts'), `import { defineSoul } from '@zonease/aiworker-soul-sdk'
 
 export default defineSoul({
-  appId: 'aiworker-freeform',
   id: 'aiworker-freeform',
   name: 'AIWorker Freeform',
-  soulId: 'freeform',
-  version: '0.1.0',
 })
 `)
   writeFileSync(join(rootDir, 'engine/workspace/AGENTS.md'), '# AIWorker Freeform Workspace\n')

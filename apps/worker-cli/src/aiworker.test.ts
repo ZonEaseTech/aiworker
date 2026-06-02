@@ -1550,8 +1550,8 @@ describe('aiworker local CLI', () => {
     const installParent = path.join(root, 'install')
     const currentBundleDir = path.join(installParent, 'aiworker-darwin-arm64')
     const releaseBundleDir = path.join(root, 'release', 'aiworker-darwin-arm64')
-    const descriptor = JSON.parse(await readFile(freeformDescriptorPath(), 'utf8')) as { identity: { appId: string } }
-    descriptor.identity.appId = 'wrong-freeform'
+    const descriptor = JSON.parse(await readFile(freeformDescriptorPath(), 'utf8')) as { identity: { id: string } }
+    descriptor.identity.id = 'wrong-freeform'
     await writeFakeBundle(currentBundleDir, 'old')
     await writeFakeBundle(releaseBundleDir, 'new', { descriptorText: `${JSON.stringify(descriptor)}\n` })
     const archiveBytes = await createTarGz(releaseBundleDir)
@@ -1676,8 +1676,8 @@ describe('aiworker local CLI', () => {
 
   it('reports packaged official apps unready when Freeform descriptor has the wrong app id', async () => {
     const moduleDir = path.join(root, 'dist')
-    const descriptor = JSON.parse(await readFile(freeformDescriptorPath(), 'utf8')) as { identity: { appId: string } }
-    descriptor.identity.appId = 'wrong-freeform'
+    const descriptor = JSON.parse(await readFile(freeformDescriptorPath(), 'utf8')) as { identity: { id: string } }
+    descriptor.identity.id = 'wrong-freeform'
     await writeFakeBundle(moduleDir, 'wrong-official-app', { descriptorText: `${JSON.stringify(descriptor)}\n` })
 
     const resources = inspectCliOfficialAppsResource(moduleDir)
@@ -1830,7 +1830,7 @@ describe('aiworker local CLI', () => {
         skills?: { source: string }
         workspaceAssets?: { source: string }
       }
-      identity: { appId: string, name: string, soulId: string, version: string }
+      identity: { id: string, name: string, description?: string }
       protocol: string
     }
     expect(scaffoldPackageJson.dependencies['@zonease/aiworker-soul-sdk']).toBe('workspace:*')
@@ -1843,13 +1843,14 @@ describe('aiworker local CLI', () => {
     expect(descriptor).not.toHaveProperty('capabilities')
     expect(descriptor).toMatchObject({
       identity: {
-        appId: 'demo-soul-app',
+        id: 'demo-soul-app',
         name: 'Demo Soul App',
-        soulId: 'demo-soul-app',
-        version: '0.1.0',
       },
       protocol: 'soul/v1',
     })
+    expect(descriptor.identity).not.toHaveProperty('appId')
+    expect(descriptor.identity).not.toHaveProperty('soulId')
+    expect(descriptor.identity).not.toHaveProperty('version')
     expect(descriptor).not.toHaveProperty('workbench')
     expect(descriptor.engine).toMatchObject({
       mcp: {
@@ -1954,10 +1955,8 @@ describe('aiworker local CLI', () => {
         },
       },
       identity: {
-        appId: 'bad-soul',
+        id: 'bad-soul',
         name: 'Bad Soul',
-        soulId: 'bad-soul',
-        version: '0.1.0',
       },
       protocol: 'soul/v1',
     }))

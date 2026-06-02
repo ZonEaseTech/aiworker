@@ -48,12 +48,9 @@ export function scaffoldSoulConfigTs(appId: string): string {
   return `import { defineSoul } from '@zonease/aiworker-soul-sdk'
 
 export default defineSoul({
-  appId: '${appId}',
   description: 'Descriptor-only starter Soul for ${name}.',
   id: '${appId}',
   name: '${name}',
-  soulId: '${appId}',
-  version: '0.1.0',
 })
 `
 }

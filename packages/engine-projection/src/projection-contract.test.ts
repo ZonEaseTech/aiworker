@@ -472,7 +472,10 @@ function descriptorFor() {
         workspaceAssets: { source: 'dist/engine-assets/workspace' },
       },
     },
-    id: 'aiworker-freeform',
+    // Descriptor v1 identity collapsed to a single `id` under `identity`. The owned
+    // skill-target prefix (aiworker-freeform-...) is derived from `identity.id`, so the
+    // fixture carries the real descriptor identity shape rather than a top-level id.
+    identity: { id: 'aiworker-freeform', name: 'AIWorker Freeform' },
   }
 }
 

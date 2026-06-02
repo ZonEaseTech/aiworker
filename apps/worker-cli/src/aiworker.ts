@@ -1564,7 +1564,7 @@ async function buildSoulCommand(dir?: string): Promise<void> {
   const descriptorFile = portableRelativePath(rootDir, build.outputPath)
 
   printJson({
-    appId: descriptorIdentityString(build.descriptor, 'appId'),
+    appId: descriptorIdentityString(build.descriptor, 'id'),
     descriptorPath: build.outputPath,
     files: [descriptorFile],
     generatedSections: build.discovery.generatedSections,
@@ -1626,7 +1626,6 @@ interface AppValidationResult {
   sdkStatus: 'invalid' | 'valid' | null
   source: 'descriptor' | 'directory' | 'missing'
   status: 'fail' | 'pass'
-  version: string | null
 }
 
 async function validateAppAtPath(inputPath: string): Promise<AppValidationResult> {
@@ -1646,7 +1645,6 @@ async function validateAppAtPath(inputPath: string): Promise<AppValidationResult
       sdkStatus: null,
       source: 'missing',
       status: 'fail',
-      version: null,
     }
   }
 
@@ -1661,7 +1659,7 @@ async function validateAppAtPath(inputPath: string): Promise<AppValidationResult
   const status = sdkIssues.length === 0 && descriptorIssues.length === 0 ? 'pass' : 'fail'
 
   return {
-    appId: descriptorIdentityString(descriptorResult.descriptor, 'appId'),
+    appId: descriptorIdentityString(descriptorResult.descriptor, 'id'),
     descriptor: descriptorResult.descriptor,
     descriptorIssues,
     descriptorPath: resolved.descriptorPath,
@@ -1671,7 +1669,6 @@ async function validateAppAtPath(inputPath: string): Promise<AppValidationResult
     sdkStatus: sdkValidation?.status ?? null,
     source: resolved.source,
     status,
-    version: descriptorIdentityString(descriptorResult.descriptor, 'version'),
   }
 }
 
@@ -1686,7 +1683,6 @@ function validationReport(result: AppValidationResult) {
     sdkStatus: result.sdkStatus,
     source: result.source,
     status: result.status,
-    version: result.version,
   }
 }
 

@@ -9,8 +9,9 @@ export const workerHealthSchema = z.object({
 
 export const workerDescribeSchema = z.object({
   workerId: z.string().min(1),
-  // templateId 承载 descriptor appId，与 assignment.templateId 同指；Host 侧统一用 Template 术语。
-  templateId: z.string().min(1),
+  // id 是 worker 所运行 Soul 的单一 id（descriptor identity 已收口为 id + name）；与
+  // assignment.id 同指，区别于上面 worker 自身的 workerId。
+  id: z.string().min(1),
   version: z.string().min(1),
   health: workerHealthSchema,
   // 配置 micro-app entry：host-web 据此 mount（载体 = micro-app）。契约不绑定 transport
@@ -34,7 +35,7 @@ function isReferenceShapedGatewayProfileRef(value: string): boolean {
 
 export const workerAssignmentEnvelopeSchema = z.object({
   version: z.literal(WORKER_CONTROL_PROTOCOL_VERSION),
-  templateId: z.string().min(1),
+  id: z.string().min(1),
   connectors: z.array(z.object({ id: z.string().min(1), authorized: z.boolean() }).strict()),
   permissions: z.array(z.string()),
   gatewayProfileRef: z.string().min(1).refine(isReferenceShapedGatewayProfileRef, {

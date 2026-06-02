@@ -169,10 +169,8 @@ function fixtureDescriptorText(options: {
   return `${JSON.stringify({
     protocol: 'soul/v1',
     identity: {
-      appId: options.appId ?? 'aiworker-freeform',
+      id: options.appId ?? 'aiworker-freeform',
       name: 'AIWorker Freeform',
-      soulId: 'freeform',
-      version: '0.1.0',
     },
     engine: {
       mcp: {

@@ -93,15 +93,18 @@ describe('Freeform Soul descriptor contract', () => {
 
     const descriptor = parseSoulDescriptorV1(readJson<unknown>(freeformDescriptorPath))
 
+    // Descriptor v1 identity collapsed to a single Soul `id` + display `name` (D6).
+    // The old appId/soulId duality and `version` are gone; re-armed to the single-id model.
     expect(descriptor).toMatchObject({
       identity: {
-        appId: 'aiworker-freeform',
+        id: 'aiworker-freeform',
         name: 'AIWorker Freeform',
-        soulId: 'freeform',
-        version: '0.1.0',
       },
       protocol: 'soul/v1',
     })
+    expect(descriptor.identity).not.toHaveProperty('appId')
+    expect(descriptor.identity).not.toHaveProperty('soulId')
+    expect(descriptor.identity).not.toHaveProperty('version')
     // A Soul is a descriptor-only template of engine assets: no app-owned API and
     // no mounted workbench (the Worker owns and directly renders its Workbench).
     expect(descriptor).not.toHaveProperty('api')

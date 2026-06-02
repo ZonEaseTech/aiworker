@@ -106,7 +106,7 @@ test('G6: docs forbid engine-secret persistence on both planes', () => {
   //     纯源码字符串断言抓不到「保留标识符名但改实现」的 vacuity，这条能抓。
   const baseEnvelope = {
     version: WORKER_CONTROL_PROTOCOL_VERSION,
-    templateId: 'tpl-g6',
+    id: 'aiworker-freeform',
     connectors: [] as { id: string, authorized: boolean }[],
     permissions: [] as string[],
     gatewayProfileRef: 'env:GATEWAY_PROFILE',

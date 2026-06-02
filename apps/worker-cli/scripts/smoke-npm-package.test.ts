@@ -8,11 +8,9 @@ describe('npm package smoke script contract', () => {
     const descriptor = parseOfficialFreeformDescriptorJson(JSON.stringify({
       protocol: 'soul/v1',
       identity: {
-        appId: 'aiworker-freeform',
+        id: 'aiworker-freeform',
         description: 'Open-ended Soul for freeform local work.',
         name: 'AIWorker Freeform',
-        soulId: 'freeform',
-        version: '0.1.0',
       },
       engine: {
         workspaceAssets: { source: 'dist/engine-assets/workspace' },

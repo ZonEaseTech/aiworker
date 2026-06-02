@@ -9,10 +9,9 @@ import {
 const baseDescriptor = {
   protocol: 'soul/v1',
   identity: {
-    appId: 'aiworker-freeform',
-    soulId: 'freeform',
+    id: 'aiworker-freeform',
     name: 'AIWorker Freeform',
-    version: '0.1.0',
+    description: 'Open-ended Soul for freeform local work.',
   },
   engine: {},
 } as const

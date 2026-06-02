@@ -17,6 +17,11 @@ import * as schema from './schema'
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 
+// Descriptor v1 identity collapsed to a single `id`; `version`/`soulId` are no longer
+// descriptor concepts. The historical `soul_apps.version` column survives only behind
+// the storage boundary and is fed this fixed placeholder.
+const SOUL_APP_LEGACY_VERSION = '0.0.0'
+
 function resolveMigrationsFolder(rel: string): string {
   const dev = path.resolve(moduleDir, '../../drizzle', rel)
   if (existsSync(dev))
@@ -462,9 +467,7 @@ export interface UpsertFileInput {
 export interface UpsertSoulAppInput {
   id: string
   name: string
-  version: string
   protocol: string
-  soulId: string
   status?: SoulAppRow['status']
   sourceKind: SoulAppRow['sourceKind']
   sourceRef: string
@@ -1098,9 +1101,11 @@ export function upsertSoulApp(input: UpsertSoulAppInput): SoulAppRow {
     getWorkerDb().insert(schema.soulApps).values({
       id: input.id,
       name: input.name,
-      version: input.version,
+      // Historical columns retained only behind the storage boundary. Descriptor v1
+      // identity collapsed to a single `id`; these are no longer descriptor concepts.
+      version: SOUL_APP_LEGACY_VERSION,
       protocol: input.protocol,
-      soulId: input.soulId,
+      soulId: input.id,
       status,
       sourceKind: input.sourceKind,
       sourceRef: input.sourceRef,
@@ -1120,9 +1125,9 @@ export function upsertSoulApp(input: UpsertSoulAppInput): SoulAppRow {
   else {
     getWorkerDb().update(schema.soulApps).set({
       name: input.name,
-      version: input.version,
+      version: SOUL_APP_LEGACY_VERSION,
       protocol: input.protocol,
-      soulId: input.soulId,
+      soulId: input.id,
       status,
       sourceKind: input.sourceKind,
       sourceRef: input.sourceRef,

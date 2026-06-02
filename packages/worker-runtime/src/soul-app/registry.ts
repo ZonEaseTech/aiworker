@@ -64,11 +64,9 @@ export function installSoulDescriptor(input: SoulDescriptorInstallInput, context
   const descriptor = parseSoulDescriptorV1(input.descriptor)
   const result = validateDescriptor(descriptor, context)
   const row = upsertSoulApp({
-    id: descriptor.identity.appId as string,
+    id: descriptor.identity.id as string,
     name: descriptor.identity.name as string,
-    version: descriptor.identity.version as string,
     protocol: descriptor.protocol,
-    soulId: descriptor.identity.soulId as string,
     status: result.status === 'valid' ? 'installed' : 'error',
     sourceKind: input.sourceKind,
     sourceRef: input.sourceRef,

@@ -416,8 +416,10 @@ function nativeMcpSourceFile(descriptorRoot: string, sourceRef: string, target: 
 }
 
 function descriptorAppId(descriptor: Record<string, unknown>): string {
+  // Descriptor v1 identity collapsed to a single `id`. Read `identity.id`; the
+  // projection still prefixes owned skill targets with this Soul id.
   const identity = readObject(descriptor.identity)
-  const appId = identity?.appId ?? descriptor.id
+  const appId = identity?.id ?? descriptor.id
   return typeof appId === 'string' && appId.length > 0 ? appId : 'soul'
 }
 

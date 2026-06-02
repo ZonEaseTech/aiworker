@@ -1,11 +1,9 @@
 {
   "protocol": "soul/v1",
   "identity": {
-    "appId": "aiworker-freeform",
     "description": "Open-ended Soul for freeform local work.",
-    "name": "AIWorker Freeform",
-    "soulId": "freeform",
-    "version": "0.1.0"
+    "id": "aiworker-freeform",
+    "name": "AIWorker Freeform"
   },
   "engine": {
     "workspaceAssets": {

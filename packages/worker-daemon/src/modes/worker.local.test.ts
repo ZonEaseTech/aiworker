@@ -40,11 +40,9 @@ const freeformDescriptor = parseSoulDescriptorV1({
     workspaceAssets: { source: 'dist/engine-assets/workspace' },
   },
   identity: {
-    appId: FREEFORM_APP_ID,
     description: 'Open-ended Soul for freeform local work.',
+    id: FREEFORM_APP_ID,
     name: 'AIWorker Freeform',
-    soulId: 'freeform',
-    version: '0.1.0',
   },
   protocol: 'soul/v1',
 })

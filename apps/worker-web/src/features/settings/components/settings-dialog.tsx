@@ -553,7 +553,7 @@ function SoulAppsSettings({
               const permissionCount = app.permissions.length
               const workbenchCount = app.mountedWorkbench ? 1 : 0
               const apiRoutePrefix = app.api.routePrefix
-              const soulId = app.soulId || app.projectedSoul?.id || app.appId
+              const soulId = app.projectedSoul?.id || app.appId
               const permissionLabels = app.permissions.map(permissionLabel).filter(isString)
               const busy = busyAppId === app.appId
               const actionLabel = app.status === 'enabled' ? soulAppsCopy.archiveApp(app.name) : soulAppsCopy.enableApp(app.name)
@@ -562,7 +562,7 @@ function SoulAppsSettings({
                   <CardHeader>
                     <ItemContent className="min-w-0">
                       <CardTitle>{app.name}</CardTitle>
-                      <CardDescription>{`${formatStatus(app.status, locale)} · ${app.version}`}</CardDescription>
+                      <CardDescription>{formatStatus(app.status, locale)}</CardDescription>
                     </ItemContent>
                     <CardAction>
                       <Button
