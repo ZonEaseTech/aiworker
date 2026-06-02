@@ -79,8 +79,10 @@ export const createWorkspaceBodySchema = z.object({
   type: z.string().optional(),
 })
 
+// No client-chosen `rootPath`: workspace roots are derived under the Worker home
+// (`<worker-home>/workspaces/<workspaceId>`). The create body is just
+// `{ workerId, name }` (plus optional type/metadata/sourcePointers).
 export const createWorkspaceLocatorBodySchema = createWorkspaceBodySchema.extend({
-  rootPath: z.string().trim().min(1).optional(),
   workerId: z.string().trim().min(1),
 })
 

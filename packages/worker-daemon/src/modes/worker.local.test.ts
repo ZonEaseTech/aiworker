@@ -144,12 +144,11 @@ describe('local daemon API', () => {
   async function createWorkspaceLocator(
     target: Awaited<ReturnType<typeof app>>,
     workerId: string,
-    input: { name?: string, rootPath?: string, type?: string } = {},
+    input: { name?: string, type?: string } = {},
   ) {
     const workspaceRes = await target.request('/api/workspace-locators', {
       body: JSON.stringify({
         name: input.name ?? 'Open Workspace',
-        rootPath: input.rootPath,
         type: input.type ?? 'workspace',
         workerId,
       }),
@@ -161,8 +160,7 @@ describe('local daemon API', () => {
   }
 
   async function createWorkspaceAndSession(target: Awaited<ReturnType<typeof app>>, workerId: string) {
-    const rootPath = mkdtempSync(join(dir, `${workerId}-workspace-`))
-    const workspace = await createWorkspaceLocator(target, workerId, { rootPath })
+    const workspace = await createWorkspaceLocator(target, workerId)
 
     const sessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
@@ -872,14 +870,18 @@ describe('local daemon API', () => {
     expect(res.status).toBeLessThan(500)
   })
 
-  it('honors workspace locator rootPath for app-owned workspace projection', async () => {
+  it('derives workspace root under the Worker home and ignores any client-supplied rootPath', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'requested-root-worker')
     // daemon-per-worker:一 daemon 至多一 active worker(C2)。sibling 作 archived 元数据
     // 直插存在(绕过 C2 路由守卫),仅用于证明 scoped 列举按 workerId 隔离——其 workspace
     // 不出现在 active worker 的 scoped 列表。
     upsertWorker({ id: 'sibling-root-worker', appId: FREEFORM_APP_ID, name: 'Sibling', status: 'archived' })
+    // workspace 根派生在 Worker home 下(<worker-home>/workspaces/<workspaceId>),
+    // 非客户端选择。即使 body 带 rootPath(Zod 非 strict 会剥离未知字段),
+    // 持久化的根必须是派生根,而不是这个请求的路径。
     const requestedRootPath = join(dir, 'requested-workspace-root')
+    const workspacesRoot = join(dir, 'workers', worker.id, 'workspaces')
 
     const createRes = await target.request('/api/workspace-locators', {
       body: JSON.stringify({
@@ -894,12 +896,14 @@ describe('local daemon API', () => {
 
     expect(createRes.status).toBe(201)
     const body = await createRes.json() as { workspace: { id: string, rootPath: string } }
-    expect(body.workspace.rootPath).toBe(requestedRootPath)
+    const derivedRootPath = join(workspacesRoot, body.workspace.id)
+    expect(body.workspace.rootPath).toBe(derivedRootPath)
+    expect(body.workspace.rootPath).not.toBe(requestedRootPath)
 
     const getRes = await target.request(`/api/workspace-locators/${body.workspace.id}`)
     expect(getRes.status).toBe(200)
     const fetched = await getRes.json() as { workspace: { rootPath: string } }
-    expect(fetched.workspace.rootPath).toBe(requestedRootPath)
+    expect(fetched.workspace.rootPath).toBe(derivedRootPath)
     expect((await target.request('/api/local/workspaces')).status).toBe(404)
     expect((await target.request(`/api/local/workers/${worker.id}/workspaces`)).status).toBe(404)
     expect((await target.request(`/api/local/workers/${worker.id}/workspaces`, {
@@ -947,7 +951,7 @@ describe('local daemon API', () => {
     expect(scopedListRes.status).toBe(200)
     const scopedList = await scopedListRes.json() as { workspaces: Array<{ id: string, workerId: string }> }
     expect(scopedList.workspaces.map(workspace => workspace.workerId)).toEqual([worker.id, worker.id])
-    await expect(readFile(join(requestedRootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Freeform')
+    await expect(readFile(join(derivedRootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Freeform')
   })
 
   it('archives workspace locator metadata and blocks new workspace work', async () => {

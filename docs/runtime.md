@@ -42,8 +42,10 @@ before `aiworker start` reuses it.
 The Workbench web is the single active Worker's surface: it shows the bound Soul,
 has no create-Worker or Soul-catalog UI, and its empty states are the first-run
 experience — an empty Workbench prompts the employee to create the first workspace
-and choose its `rootPath`; a workspace with no session prompts to start the first
-session. Auto-bootstrap stops at the Worker; the first workspace is the employee's
+by name; its root is derived under the Worker home
+(`<worker-home>/workspaces/<workspaceId>`), not client-chosen. A workspace with no
+session prompts to start the first session.
+Auto-bootstrap stops at the Worker; the first workspace is the employee's
 first action in the Workbench.
 
 ## Session And Invocation State

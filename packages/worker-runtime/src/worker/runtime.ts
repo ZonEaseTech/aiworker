@@ -88,7 +88,6 @@ export interface LocalWorkerRuntimeOptions {
 
 export interface CreateLocalWorkspaceInput {
   name: string
-  rootPath?: string
   type?: string
   sourcePointers?: Record<string, unknown>[]
   metadata?: Record<string, unknown>
@@ -212,7 +211,10 @@ export class LocalWorkerRuntime {
   async createWorkspace(input: CreateLocalWorkspaceInput): Promise<WorkspaceRow> {
     this.requireActiveWorker()
     const id = randomUUID()
-    const rootPath = input.rootPath ? path.resolve(input.rootPath) : path.join(this.#workspacesRoot, id)
+    // Workspace roots are derived under the Worker home (<worker-home>/workspaces/<id>);
+    // they are not client-chosen. AIWorker is not a developer tool pointed at
+    // arbitrary repositories, so there is no `rootPath` create input.
+    const rootPath = path.join(this.#workspacesRoot, id)
     const layout = await this.prepareWorkspaceLayout({
       name: input.name,
       projectEngineAssets: true,

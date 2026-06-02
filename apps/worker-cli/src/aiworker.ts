@@ -57,7 +57,7 @@ import cac from 'cac'
 
 import consola from 'consola'
 import packageJson from '../package.json' with { type: 'json' }
-import { isOfficialFreeformDescriptorFile, parseOfficialFreeformDescriptorJson } from './official-freeform-descriptor'
+import { isOfficialFreeformDescriptorFile, OFFICIAL_FREEFORM_APP_ID, parseOfficialFreeformDescriptorJson } from './official-freeform-descriptor'
 import {
   createScaffoldPackageJson,
   createScaffoldTsconfig,
@@ -845,6 +845,94 @@ async function startDaemonProcess(opts: { host?: string, port?: number } = {}, p
 
 async function startDaemon(opts: { host?: string, port?: number } = {}): Promise<void> {
   printJson(await startDaemonProcess(opts))
+}
+
+interface StartCommandOptions {
+  host?: string
+  open?: boolean
+  port?: number
+}
+
+interface EnsuredStartWorker {
+  appId: string
+  created: boolean
+  id: string
+}
+
+// Idempotent CLI bootstrap: ensure exactly one active Worker bound to the bundled
+// official Freeform Soul exists. Install + enable the bundled descriptor, then
+// reuse the single active Worker if present, or create one when none exists. This
+// convenience lives in the CLI; the daemon stays passive and never auto-creates a
+// Worker. To run a different Soul, install it and create the Worker explicitly
+// before `aiworker start` reuses it.
+async function ensureStandaloneStartWorker(paths: LocalPaths): Promise<EnsuredStartWorker> {
+  const host = createHost(paths)
+  const bootstrap = await host.bootstrapOfficialSoulApps()
+  if (bootstrap.status === 'fail')
+    throw new Error('failed to install the bundled official Freeform Soul App')
+
+  const resolution = resolveSingleActiveWorker()
+  if (resolution.kind === 'single') {
+    const worker = resolution.worker
+    return { appId: worker.appId, created: false, id: worker.id }
+  }
+  if (resolution.kind === 'multiple') {
+    throw new Error(
+      `cannot start: the DB holds more than one active worker (${resolution.workers.map(worker => worker.id).join(', ')}); a daemon hosts at most one active worker.`,
+    )
+  }
+
+  const created = await host.createSoulWorker({
+    appId: OFFICIAL_FREEFORM_APP_ID,
+    name: 'AIWorker Freeform',
+  })
+  return { appId: created.worker.appId, created: true, id: created.worker.id }
+}
+
+function shouldOpenBrowser(opts: StartCommandOptions): boolean {
+  if (opts.open === false)
+    return false
+  if (process.env.CI)
+    return false
+  return process.stdout.isTTY === true
+}
+
+// Best-effort, cross-platform, never throws: a missing opener must never fail or
+// block `aiworker start` (or its tests).
+function openBrowser(url: string): boolean {
+  const command = process.platform === 'darwin'
+    ? ['open', url]
+    : process.platform === 'win32'
+      ? ['cmd', '/c', 'start', '', url]
+      : ['xdg-open', url]
+  try {
+    const child = Bun.spawn(command, { stderr: 'ignore', stdout: 'ignore' })
+    child.unref()
+    return true
+  }
+  catch {
+    return false
+  }
+}
+
+async function runStart(opts: StartCommandOptions = {}): Promise<void> {
+  const paths = await ensureDb()
+  const worker = await ensureStandaloneStartWorker(paths)
+
+  const status = daemonStatus()
+  // Idempotent daemon start: reuse an already-running daemon instead of throwing.
+  const daemon = status.running && status.pid
+    ? { logFile: paths.logFile, pid: status.pid, started: false as const, url: `http://127.0.0.1:${opts.port ?? getWorkerEnv().PORT}` }
+    : await startDaemonProcess({ host: opts.host, port: opts.port }, paths)
+
+  const opened = shouldOpenBrowser(opts) ? openBrowser(daemon.url) : false
+
+  printJson({
+    daemon,
+    opened,
+    url: daemon.url,
+    worker,
+  })
 }
 
 async function stopDaemonProcess(paths = localPaths(), status = daemonStatus()): Promise<DaemonStopResult> {
@@ -1751,6 +1839,11 @@ function registerCommands(): void {
     .option('--pre', 'use preview release channel')
     .action((opts: UpdateCliOptions) => runUpdateCommand('upgrade', opts))
 
+  cli.command('start', 'ensure the bundled Freeform Worker, start the daemon, and open the Workbench')
+    .option('--host <host>', 'bind host')
+    .option('--port <n>', 'port', { type: [Number] })
+    .option('--no-open', 'do not open the Workbench URL in a browser')
+    .action((opts: { host?: string, open?: boolean, port?: number[] }) => runStart({ host: opts.host, open: opts.open, port: optionalNumber(opts.port) }))
   cli.command('daemon start', 'start local daemon in background').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon foreground', 'run local daemon in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon status', 'show local daemon status').action(() => printJson(daemonStatus()))
@@ -1854,6 +1947,7 @@ function registerCommands(): void {
 
 const OPERATOR_COMMAND_INDEX = [
   'aiworker operator commands',
+  'start',
   'daemon start|stop|restart|status|logs',
   'open',
   'doctor',
@@ -1868,6 +1962,7 @@ const OPERATOR_COMMAND_INDEX = [
 
 const FULL_COMMAND_INDEX = [
   'aiworker command index',
+  'start',
   'init',
   'update|upgrade',
   'daemon start|foreground|status|stop|restart|logs|check',
@@ -1948,7 +2043,7 @@ export async function runCli(argv: string[] = process.argv): Promise<number> {
       return 0
     }
     cli.unsetMatchedCommand()
-    const parsed = cli.parse(preprocessArgv(argv), { run: false })
+    const parsed = cli.parse(preprocessArgv(defaultToStartCommand(argv)), { run: false })
     if (cli.options.help === true || cli.options.version === true)
       return 0
     if (!cli.matchedCommand && parsed.args[0])
@@ -1971,6 +2066,22 @@ export async function runCli(argv: string[] = process.argv): Promise<number> {
 function isTopLevelHelpRequest(argv: string[]): boolean {
   const args = argv.slice(2)
   return args.some(arg => arg === '--help' || arg === '-h') && args.every(arg => arg.startsWith('-'))
+}
+
+// `aiworker` with no subcommand is the zero-config entry: it runs `start`. Help
+// and version short-circuit before this; only a bare invocation (no command
+// token, no help/version flag) is rewritten so flags like `--no-open`/`--port`
+// still flow to `start`.
+export function defaultToStartCommand(argv: string[]): string[] {
+  const args = argv.slice(2)
+  const hasCommandToken = args.some(arg => !arg.startsWith('-'))
+  if (hasCommandToken)
+    return argv
+  if (args.some(arg => arg === '--help' || arg === '-h' || arg === '--version' || arg === '-v'))
+    return argv
+  const next = argv.slice()
+  next.splice(2, 0, 'start')
+  return next
 }
 
 if (import.meta.main)

@@ -390,7 +390,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     try {
       workspace = await runtime.createWorkspace({
         name: result.data.name,
-        rootPath: result.data.rootPath,
         type: result.data.type ?? 'workspace',
         sourcePointers: result.data.sourcePointers ?? [],
         metadata: result.data.metadata ?? {},

@@ -17,6 +17,7 @@ import {
   getWorkerDb,
   initWorkerDb,
   listSessionEvents,
+  listWorkers,
   runWorkerMigrations,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
@@ -478,6 +479,79 @@ describe('aiworker local CLI', () => {
 
     expect(await runCli(argv('workspace', 'create', '--name', 'Scratch', '--type', 'freeform'))).toBe(1)
     expect(errorOutput).toContain('more than one active worker')
+  })
+
+  it('aiworker start idempotently ensures a single Freeform worker, reuses a running daemon, and stays headless-safe', async () => {
+    // Pre-seed a "running" daemon by pointing the pid file at this test process so
+    // `start` takes the reuse branch and never spawns a real detached daemon.
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+
+    // First start: installs the bundled Freeform Soul, creates the single worker,
+    // reuses the running daemon, and skips the browser open under --no-open.
+    expect(await runCli(argv('start', '--no-open'))).toBe(0)
+    const first = JSON.parse(output) as {
+      daemon: { started: boolean }
+      opened: boolean
+      url: string
+      worker: { appId: string, created: boolean, id: string }
+    }
+    expect(first.worker).toMatchObject({ appId: FREEFORM_APP_ID, created: true })
+    expect(first.daemon.started).toBe(false)
+    expect(first.opened).toBe(false)
+    expect(first.url).toContain('http://127.0.0.1:')
+    output = ''
+
+    // Second start: idempotent — reuses the existing worker (created=false) and
+    // does not throw WORKER_ALREADY_ACTIVE or "daemon already running".
+    expect(await runCli(argv('start', '--no-open'))).toBe(0)
+    const second = JSON.parse(output) as { worker: { created: boolean, id: string } }
+    expect(second.worker.created).toBe(false)
+    expect(second.worker.id).toBe(first.worker.id)
+
+    // Exactly one active worker persists across idempotent starts.
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    expect(listWorkers().filter(worker => worker.status === 'active').map(worker => worker.id)).toEqual([first.worker.id])
+    closeWorkerDb()
+  })
+
+  it('bare aiworker (no subcommand) runs the zero-config start entry', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+
+    // No command token at all: this must be rewritten to `start` (not an unknown
+    // command error and not top-level help). `--no-open` still flows through.
+    expect(await runCli(argv('--no-open'))).toBe(0)
+    const result = JSON.parse(output) as { opened: boolean, worker: { appId: string, created: boolean } }
+    expect(result.worker).toMatchObject({ appId: FREEFORM_APP_ID, created: true })
+    expect(result.opened).toBe(false)
+  })
+
+  it('aiworker start --no-open suppresses the browser open even when stdout is a TTY', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+
+    // Force the interactive branch so the only thing keeping the browser closed is
+    // the explicit `--no-open` flag (not the non-TTY/CI headless guard).
+    const originalIsTty = process.stdout.isTTY
+    process.stdout.isTTY = true
+    const originalCi = process.env.CI
+    delete process.env.CI
+    try {
+      expect(await runCli(argv('start', '--no-open'))).toBe(0)
+      const result = JSON.parse(output) as { opened: boolean }
+      expect(result.opened).toBe(false)
+    }
+    finally {
+      process.stdout.isTTY = originalIsTty
+      if (originalCi === undefined)
+        delete process.env.CI
+      else
+        process.env.CI = originalCi
+    }
   })
 
   it('streams session events for an active running engine invocation through CLI with after/limit paging', async () => {
