@@ -277,10 +277,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     workers: listWorkers(),
   }))
 
-  app.get('/api/capabilities', (c) => {
-    const workerId = c.req.query('workerId')
-    return c.json({ capabilities: workerId ? state.host.listCapabilitiesForWorker(workerId) : state.host.listCapabilities() })
-  })
   app.get('/api/app-installation/apps', c => c.json({ apps: state.host.listApps() }))
   app.post('/api/app-installation/install', async (c) => {
     const result = await parseJsonBody(c, installAppBodySchema, 'INSTALL_APP_INVALID')
@@ -1236,10 +1232,6 @@ function requireWorkerSession(workerId: string, sessionId: string): SessionRow {
   return session
 }
 
-function requireCapabilityForWorker(state: LocalDaemonState, workerId: string, capabilityId: unknown) {
-  return state.host.requireCapabilityForWorker(workerId, capabilityId)
-}
-
 function unavailableSoulAppResponse(c: Context, state: LocalDaemonState, workerId: string): Response | null {
   try {
     state.host.requireEnabledAppForWorker(workerId)
@@ -1254,10 +1246,6 @@ function unavailableSoulAppResponse(c: Context, state: LocalDaemonState, workerI
     }
     throw error
   }
-}
-
-function enrichCapabilityMetadata(_state: LocalDaemonState, _workerId: string, _capabilityId: string, metadata: Record<string, unknown>): Record<string, unknown> {
-  return metadata
 }
 
 function proxyMountedSoulAppApiRoute(c: Context, state: LocalDaemonState): Promise<Response> | Response {
@@ -1804,7 +1792,6 @@ async function createWorkspaceSessionFromBody(
   state: LocalDaemonState,
   workspace: WorkspaceRow,
   body: {
-    capabilityId: string
     engineId?: null | string
     input?: string
     metadata?: Record<string, unknown>
@@ -1815,18 +1802,16 @@ async function createWorkspaceSessionFromBody(
   if (unavailableApp)
     return unavailableApp
   const runtime = requireRuntime(state, workspace.workerId)
-  const capability = requireCapabilityForWorker(state, workspace.workerId, body.capabilityId)
   const settings = loadLocalSettings()
   const execution = resolvedExecutionMetadata(settings, body.engineId)
-  const metadata = enrichCapabilityMetadata(state, workspace.workerId, capability.id, {
+  const metadata = {
     ...(body.metadata ?? {}),
     ...execution,
-  })
+  }
   let session
   try {
     session = await runtime.createSession({
       workspaceId: workspace.id,
-      capabilityId: capability.id,
       title: body.title,
       metadata,
     })
@@ -1919,7 +1904,7 @@ async function createSessionInvocationFromBody(
     engineId: String(execution.engineId),
     input: body.input,
     metadata: {
-      ...enrichCapabilityMetadata(state, currentSession.workerId, currentSession.capabilityId, currentSession.metadataJson ?? {}),
+      ...(currentSession.metadataJson ?? {}),
       ...(body.metadata ?? {}),
       ...execution,
     },

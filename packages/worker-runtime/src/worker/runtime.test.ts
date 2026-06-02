@@ -187,7 +187,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Existing Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Existing session',
       metadata: { outputKind: 'freeform' },
     })
@@ -205,7 +204,6 @@ describe('LocalWorkerRuntime', () => {
       .toThrow('Worker worker-demo is archived and cannot start new work.')
     await expect(workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Blocked session',
     }))
       .rejects
@@ -233,7 +231,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Archived Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Existing workspace session',
       metadata: { outputKind: 'freeform' },
     })
@@ -242,7 +239,6 @@ describe('LocalWorkerRuntime', () => {
 
     await expect(workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Blocked workspace session',
     }))
       .rejects
@@ -270,7 +266,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Archived Session Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Archived session',
       metadata: { outputKind: 'freeform' },
     })
@@ -299,11 +294,9 @@ describe('LocalWorkerRuntime', () => {
     })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform-summary',
       title: 'Summarize freeform session',
       metadata: {
         outputKind: 'freeform-summary',
-        capabilityName: 'Freeform Summary',
       },
     })
 
@@ -314,7 +307,6 @@ describe('LocalWorkerRuntime', () => {
       engineCommand: 'codex',
       metadata: {
         outputKind: 'freeform-summary',
-        capabilityName: 'Freeform Summary',
       },
     })
 
@@ -329,7 +321,6 @@ describe('LocalWorkerRuntime', () => {
     const snapshot = workerRuntime.snapshot()
     expect(snapshot.worker.appId).toBe('demo-soul')
     expect(snapshot.workspaces).toHaveLength(1)
-    expect(snapshot.sessions[0]?.capabilityId).toBe('freeform-summary')
     expect(snapshot.sessions[0]?.status).toBe('active')
     expect(snapshot.sessions[0]?.endedAt).toBeNull()
     expect(snapshot).not.toHaveProperty('turns')
@@ -397,7 +388,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Bridge Invocation Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Bridge invocation session',
     })
 
@@ -438,7 +428,6 @@ describe('LocalWorkerRuntime', () => {
     })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Session-level invocation',
       metadata: {
         outputKind: 'freeform',
@@ -489,7 +478,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Default Bridge Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Default bridge session',
     })
 
@@ -532,7 +520,6 @@ describe('LocalWorkerRuntime', () => {
     await rm(join(workspace.rootPath, '.aiworker', 'projections.json'), { force: true })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Missing receipt session',
     })
 
@@ -570,7 +557,6 @@ describe('LocalWorkerRuntime', () => {
     await writeFile(join(workspace.rootPath, '.aiworker', 'projections.json'), '{"secret":"sk-bad-receipt-secret",')
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Malformed receipt session',
     })
 
@@ -613,7 +599,6 @@ describe('LocalWorkerRuntime', () => {
     await writeFile(receiptPath, `${JSON.stringify({ ...legacyReceipt, secret: 'sk-invalid-receipt-secret' }, null, 2)}\n`)
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Invalid receipt schema session',
     })
 
@@ -655,7 +640,6 @@ describe('LocalWorkerRuntime', () => {
     await writeFile(receiptPath, `${JSON.stringify({ ...receipt, receiptId: 'stale-receipt' }, null, 2)}\n`)
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Stale receipt session',
     })
 
@@ -694,7 +678,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Config Stale Receipt Workspace' })
     const staleSession = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Stale config receipt session',
     })
     upsertWorkerConfigValue({
@@ -730,7 +713,6 @@ describe('LocalWorkerRuntime', () => {
     await workerRuntime.reprojectWorkspaceAssets(workspace.id, { engineTarget: 'codex' })
     const freshSession = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Fresh config receipt session',
     })
     const freshResult = await workerRuntime.startInvocation({
@@ -762,7 +744,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Reserved Overlay Workspace' })
     const staleSession = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Stale reserved overlay session',
     })
     upsertWorkerConfigValue({
@@ -804,7 +785,6 @@ describe('LocalWorkerRuntime', () => {
 
     const freshSession = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Fresh reserved overlay session',
     })
     const freshResult = await workerRuntime.startInvocation({
@@ -836,7 +816,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Descriptor Stale Receipt Workspace' })
     const staleSession = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Stale descriptor receipt session',
     })
     await writeFile(join(appRoot, 'engine-assets', 'skills', 'freeform-context', 'SKILL.md'), '# Changed Descriptor Skill\n')
@@ -858,7 +837,6 @@ describe('LocalWorkerRuntime', () => {
     await workerRuntime.reprojectWorkspaceAssets(workspace.id, { engineTarget: 'codex' })
     const freshSession = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Fresh descriptor receipt session',
     })
     const freshResult = await workerRuntime.startInvocation({
@@ -939,7 +917,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Bridge Start Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Bridge start session',
     })
 
@@ -1020,7 +997,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Bridge Follow-up Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Bridge follow-up session',
     })
     createEngineInvocation({
@@ -1108,7 +1084,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Missing Native Ref Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Missing native ref session',
     })
     createEngineInvocation({
@@ -1154,7 +1129,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform-summary',
       title: 'Summarize freeform session',
       metadata: {
         engineCommand: 'codex',
@@ -1210,7 +1184,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Legacy BYOK Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform-summary',
       title: 'Legacy BYOK session',
     })
     updateSession({
@@ -1254,7 +1227,7 @@ describe('LocalWorkerRuntime', () => {
     })
   })
 
-  it('carries session capability metadata into continuation invocation prompts and artifacts', async () => {
+  it('carries session metadata into continuation invocation prompts and artifacts', async () => {
     const prompts: string[] = []
     const workerRuntime = runtime({
       async invoke(input) {
@@ -1276,11 +1249,9 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform-summary',
       title: 'Summarize freeform session',
       metadata: {
         outputKind: 'freeform-summary',
-        capabilityName: 'Freeform Summary',
       },
     })
 
@@ -1291,10 +1262,9 @@ describe('LocalWorkerRuntime', () => {
       metadata: { executionMode: 'local-cli' },
     })
 
-    expect(prompts[0]).toContain('Capability: freeform-summary')
-    expect(prompts[0]).not.toContain('Capability template:')
+    expect(prompts[0]).not.toContain('Capability:')
     expect(prompts[0]).toContain('Output kind: freeform-summary')
-    expect(result.invocation.metadataJson).toMatchObject({ capabilityName: 'Freeform Summary', executionMode: 'local-cli', outputKind: 'freeform-summary' })
+    expect(result.invocation.metadataJson).toMatchObject({ executionMode: 'local-cli', outputKind: 'freeform-summary' })
   })
 
   it('records explicit skill mention metadata while preserving natural language input', async () => {
@@ -1312,7 +1282,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Freeform workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform-context',
       title: 'Freeform workspace',
       metadata: {
         mentions: [{ id: 'freeform-brief', kind: 'skill', label: 'Freeform brief' }],
@@ -1350,7 +1319,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Generic workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform-session',
       title: 'Generic session',
       metadata: {},
     })
@@ -1376,7 +1344,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform-summary',
       title: 'Summarize freeform session',
     })
 
@@ -1422,7 +1389,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Failure Lifecycle Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Failure lifecycle session',
     })
 
@@ -1494,7 +1460,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Redaction Failure Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Redaction failure session',
     })
 
@@ -1534,7 +1499,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Redacted Success Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Redacted success session',
     })
 
@@ -1572,7 +1536,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Redacted Failure Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Redacted failure session',
     })
 
@@ -1605,7 +1568,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Cancel Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Cancel session',
     })
     const invocation = createEngineInvocation({
@@ -1695,7 +1657,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Bridge Cancel Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Bridge cancel session',
     })
     const invocation = createEngineInvocation({
@@ -1793,7 +1754,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Claude Cancel Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Claude cancel session',
     })
     const invocation = createEngineInvocation({
@@ -1860,7 +1820,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Cancel Failure Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Cancel failure session',
     })
     const invocation = createEngineInvocation({
@@ -1948,7 +1907,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Incomplete Handle Cancel Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Incomplete handle cancel session',
     })
     const invocation = createEngineInvocation({
@@ -1985,7 +1943,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Reattach Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Reattach session',
     })
     const invocation = createEngineInvocation({
@@ -2054,7 +2011,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Reconcile Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'freeform',
       title: 'Reconcile session',
     })
     const invocation = createEngineInvocation({
@@ -2102,7 +2058,6 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Demo Workspace' })
     const session = await workerRuntime.createSession({
       workspaceId: workspace.id,
-      capabilityId: 'demo-soul-app.freeform-brief',
       title: 'Freeform brief',
       metadata: {
         outputKind: 'freeform-brief',

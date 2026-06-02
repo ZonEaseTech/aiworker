@@ -5,14 +5,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-descriptor'
 import { closeWorkerDb, initWorkerDb, listEngineInvocations, listSessionEvents } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { runCli } from './aiworker'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
-const FREEFORM_CAPABILITY_ID = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'default')
 
 describe('Freeform CLI golden path', () => {
   const originalEnv = { ...process.env }
@@ -150,8 +148,6 @@ describe('Freeform CLI golden path', () => {
       'freeform-golden-worker',
       '--workspace',
       workspace.workspace.id,
-      '--capability',
-      FREEFORM_CAPABILITY_ID,
       '--title',
       'Freeform golden session',
       '--input',

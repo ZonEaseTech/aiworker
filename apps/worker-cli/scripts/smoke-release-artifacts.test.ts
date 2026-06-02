@@ -51,16 +51,6 @@ describe('release artifact smoke', () => {
     ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz is missing aiworker-darwin-arm64/drizzle/worker/0000_fixture.sql')
   })
 
-  it('rejects attach artifacts when the packaged Freeform descriptor drops the default capability', async () => {
-    await writeFixtureReleaseArtifact(root, 'darwin-arm64', {
-      descriptorText: fixtureDescriptorText({ capabilities: [] }),
-    })
-
-    await expect(
-      verifyReleaseArtifacts({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('release artifact aiworker-darwin-arm64.tar.gz must include the official Freeform descriptor')
-  })
-
   it('rejects attach artifacts when the packaged Freeform descriptor drops the Claude Code MCP target', async () => {
     await writeFixtureReleaseArtifact(root, 'darwin-arm64', {
       descriptorText: fixtureDescriptorText({ mcpTargets: ['codex'] }),
@@ -202,23 +192,12 @@ async function writeFixtureReleaseArtifact(
 }
 
 function fixtureDescriptorText(options: {
-  capabilities?: unknown[]
   engine?: Record<string, unknown>
   mcpTargets?: Array<'claude-code' | 'codex'>
 } = {}): string {
   const mcpTargets = options.mcpTargets ?? ['claude-code', 'codex']
   return `${JSON.stringify({
     api: null,
-    capabilities: options.capabilities ?? [
-      {
-        id: 'default',
-        name: 'Freeform Session',
-        prompt: {
-          ref: 'dist/product/capabilities/default/prompt.md',
-          type: 'packaged-file',
-        },
-      },
-    ],
     compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
     configuration: {},
     engine: options.engine ?? {

@@ -110,7 +110,6 @@ describe('soul-descriptor package boundary', () => {
 
   test('keeps local session protocol lifecycle-only without Host-owned context', () => {
     const parsed = localSessionSchema.parse({
-      capabilityId: 'default',
       createdAt: '2026-05-27T00:00:00.000Z',
       endedAt: null,
       id: 'session-1',
@@ -124,5 +123,6 @@ describe('soul-descriptor package boundary', () => {
     })
 
     expect(parsed).not.toHaveProperty('context')
+    expect(parsed).not.toHaveProperty('capabilityId')
   })
 })

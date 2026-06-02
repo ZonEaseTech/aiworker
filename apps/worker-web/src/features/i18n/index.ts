@@ -1,11 +1,11 @@
-import type { VerticalSoul, WorkspaceCapability } from '../local-workspace/model-types'
-import type { BuiltinCapabilityCopy, BuiltinSoulCopy, StaticMessages, StatusKey, SupportedLocale } from './types'
+import type { VerticalSoul } from '../local-workspace/model-types'
+import type { BuiltinSoulCopy, StaticMessages, StatusKey, SupportedLocale } from './types'
 
 import { de, en, ja, zhCN } from './locales'
 import { supportedLocales } from './types'
 
 export { supportedLocales } from './types'
-export type { BuiltinCapabilityCopy, BuiltinSoulCopy, StaticMessages, SupportedLocale } from './types'
+export type { BuiltinSoulCopy, StaticMessages, SupportedLocale } from './types'
 
 const messagesByLocale: Record<SupportedLocale, StaticMessages> = {
   de,
@@ -28,15 +28,6 @@ export function languageLabel(locale: SupportedLocale, activeLocale: SupportedLo
 
 export function displaySoul(soul: VerticalSoul, _locale: SupportedLocale): BuiltinSoulCopy {
   return { description: soul.description, name: soul.name }
-}
-
-export function displayCapability(capability: WorkspaceCapability, _locale: SupportedLocale): BuiltinCapabilityCopy {
-  return {
-    description: capability.description,
-    inputHints: capability.inputHints,
-    name: capability.name,
-    outputKind: capability.outputKind,
-  }
 }
 
 export function formatStatus(status: string, locale: SupportedLocale): string {

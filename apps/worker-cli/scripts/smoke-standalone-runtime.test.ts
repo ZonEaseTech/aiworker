@@ -23,17 +23,6 @@ describe('standalone runtime smoke script contract', () => {
         host: '>=1.0.0',
         sdk: '>=1.0.0',
       },
-      capabilities: [
-        {
-          id: 'default',
-          name: 'Freeform Session',
-          prompt: {
-            ref: 'dist/product/capabilities/default/prompt.md',
-            type: 'packaged-file',
-          },
-          purpose: 'Start an open-ended engine-backed AIWorker session inside a workspace locator.',
-        },
-      ],
       configuration: {
         defaults: { engine: 'codex' },
         features: {

@@ -23,18 +23,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 
 // -- inlined from deleted shared types --
-interface SoulCapability {
-  appId: string
-  description: string
-  id: string
-  inputHints: readonly string[]
-  name: string
-  outputKind: string
-  promptRef: string
-}
-
 interface VerticalSoul {
-  defaultCapabilities: readonly string[]
   description: string
   id: string
   name: string
@@ -58,7 +47,6 @@ export interface SoulDescriptorInstallInput {
 
 export interface SoulCatalog {
   apps: HostedSoulApp[]
-  capabilities: SoulCapability[]
   souls: VerticalSoul[]
 }
 
@@ -184,26 +172,14 @@ export function getHostedSoulApp(appId: string): HostedSoulApp | null {
 export function listSoulCatalog(): SoulCatalog {
   const apps = listHostedSoulApps()
   const appSouls = apps.map(app => app.projectedSoul)
-  const appCapabilities = apps
-    .filter(app => app.status === 'enabled')
-    .flatMap(app => app.projectedCapabilities)
   return {
     apps,
-    capabilities: appCapabilities,
     souls: appSouls,
   }
 }
 
 export function findCatalogSoul(id: string): VerticalSoul | undefined {
   return listSoulCatalog().souls.find(soul => soul.id === id)
-}
-
-export function findCapability(id: string): SoulCapability | undefined {
-  return listSoulCatalog().capabilities.find(capability => capability.id === id)
-}
-
-export function listCapabilitiesForSoul(appId: string): SoulCapability[] {
-  return listSoulCatalog().capabilities.filter(capability => capability.appId === appId)
 }
 
 export function hostedSoulAppFromRow(row: SoulAppRow): HostedSoulApp {

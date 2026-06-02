@@ -6,7 +6,6 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-descriptor'
 import { afterEach, describe, expect, it } from 'bun:test'
 
 import { createMountedSoulAppTestRuntime, createStandaloneSoulAppRuntime, mountSessionApiProxy, renderUniversalWorkbenchHtml } from './index'
@@ -46,17 +45,14 @@ describe('descriptor Soul runtime harness', () => {
       workerName: 'Demo Worker',
     })
 
-    const capabilityId = namespaceSoulAppCapabilityId('demo-soul-app', 'default')
     expect(standalone.descriptor.identity.appId).toBe('demo-soul-app')
     expect(standalone.catalog.apps.map(item => item.appId)).toEqual(['demo-soul-app'])
-    expect(standalone.catalog.capabilities.map(item => item.id)).toEqual([capabilityId])
     expect(standalone.catalog.souls.map(item => item.id)).toEqual(['demo-soul-app'])
     expect(standalone.worker).toEqual({
       appId: 'demo-soul-app',
       defaultEngineId: 'codex',
       id: 'demo-worker',
       metadata: expect.objectContaining({
-        defaultCapabilities: [capabilityId],
         domainSoulId: 'demo',
         soulAppId: 'demo-soul-app',
       }),
@@ -69,26 +65,18 @@ describe('descriptor Soul runtime harness', () => {
     await expect(readFile(path.join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain('workspace-file')
 
     const session = await standalone.runtime.createSession({
-      capabilityId,
-      metadata: standalone.sessionMetadata(capabilityId),
       title: 'Standalone session',
       workspaceId: workspace.id,
     })
     const result = await standalone.runtime.startInvocation({
       engineId: 'test',
       input: 'Create standalone artifact.',
-      metadata: standalone.sessionMetadata(capabilityId),
       sessionId: session.id,
     })
 
     expect('turn' in result).toBe(false)
     expect(result.invocation).toBeDefined()
     expect(result.session.status).toBe('active')
-    expect(standalone.sessionMetadata(capabilityId)).toMatchObject({
-      capabilityName: 'Default',
-      capabilityId,
-    })
-    expect(standalone.sessionMetadata(capabilityId)).not.toHaveProperty('skillName')
   })
 
   it('creates a mounted descriptor test runtime', async () => {
@@ -161,32 +149,6 @@ describe('descriptor Soul runtime harness', () => {
     }
   })
 
-  it('maps mounted capability listing without the retired template route alias', async () => {
-    const calls: Array<{ method: string, url: string }> = []
-    const originalFetch = globalThis.fetch
-    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      calls.push({ method: init?.method ?? 'GET', url: String(url) })
-      return Response.json({ capabilities: [] })
-    }) as typeof fetch
-    try {
-      const response = await mountSessionApiProxy(new Request('http://soul.test/api/capabilities'), {
-        hostApiBaseUrl: 'http://host.test',
-        workerId: 'worker-1',
-      })
-
-      expect(response).not.toBeNull()
-      expect(await response!.json()).toEqual({ capabilities: [] })
-      expect(calls).toEqual([{ method: 'GET', url: 'http://host.test/api/capabilities?workerId=worker-1' }])
-      expect(mountSessionApiProxy(new Request('http://soul.test/api/templates'), {
-        hostApiBaseUrl: 'http://host.test',
-        workerId: 'worker-1',
-      })).toBeNull()
-    }
-    finally {
-      globalThis.fetch = originalFetch
-    }
-  })
-
   it('maps mounted workspace collection calls to canonical workspace locator APIs', async () => {
     const calls: Array<{ body: unknown, method: string, url: string }> = []
     const originalFetch = globalThis.fetch
@@ -240,7 +202,7 @@ describe('descriptor Soul runtime harness', () => {
         workspaceId: 'workspace-1',
       })
       const createResponse = await mountSessionApiProxy(new Request('http://soul.test/api/sessions', {
-        body: JSON.stringify({ capabilityId: 'capability-1', title: 'Mounted Session', workerId: 'client-worker' }),
+        body: JSON.stringify({ title: 'Mounted Session', workerId: 'client-worker' }),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       }), {
@@ -255,7 +217,6 @@ describe('descriptor Soul runtime harness', () => {
         { body: null, method: 'GET', url: 'http://host.test/api/sessions?workerId=worker-1&workspaceId=workspace-1' },
         {
           body: {
-            capabilityId: 'capability-1',
             title: 'Mounted Session',
             workerId: 'worker-1',
             workspaceId: 'workspace-1',
@@ -321,15 +282,6 @@ async function writeDemoEngineAssets(distRoot: string): Promise<void> {
 function demoDescriptor(): SoulDescriptorV1 {
   return {
     api: null,
-    capabilities: [{
-      id: 'default',
-      name: 'Default',
-      prompt: {
-        ref: 'dist/product/capabilities/default/prompt.md',
-        type: 'packaged-file',
-      },
-      purpose: 'Create a default descriptor-backed session.',
-    }],
     compatibility: {
       engines: ['codex', 'claude-code'],
       host: '>=1.0.0',

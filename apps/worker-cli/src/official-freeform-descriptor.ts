@@ -5,8 +5,6 @@ import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 export const OFFICIAL_FREEFORM_APP_ID = 'aiworker-freeform'
 const OFFICIAL_FREEFORM_SOUL_ID = 'freeform'
 const OFFICIAL_FREEFORM_NAME = 'AIWorker Freeform'
-const OFFICIAL_FREEFORM_CAPABILITY_ID = 'default'
-const OFFICIAL_FREEFORM_CAPABILITY_NAME = 'Freeform Session'
 const OFFICIAL_FREEFORM_WORKBENCH_ENTRY = 'dist/web/workbench/index.html'
 const OFFICIAL_FREEFORM_MCP_REFS = {
   'claude-code': 'dist/engine-assets/mcp/claude-code/.mcp.json',
@@ -19,9 +17,6 @@ export function parseOfficialFreeformDescriptorJson(text: string): ReturnType<ty
     throw new Error(`expected ${OFFICIAL_FREEFORM_APP_ID}`)
   if (descriptor.identity.soulId !== OFFICIAL_FREEFORM_SOUL_ID || descriptor.identity.name !== OFFICIAL_FREEFORM_NAME)
     throw new Error('expected official Freeform identity')
-  const defaultCapability = descriptor.capabilities.find(isOfficialFreeformDefaultCapability)
-  if (defaultCapability?.name !== OFFICIAL_FREEFORM_CAPABILITY_NAME)
-    throw new Error('expected official Freeform default capability')
   if (
     descriptor.workbench.entry !== OFFICIAL_FREEFORM_WORKBENCH_ENTRY
     || descriptor.workbench.mode !== 'sdk-common'
@@ -33,15 +28,6 @@ export function parseOfficialFreeformDescriptorJson(text: string): ReturnType<ty
   if (!hasOfficialFreeformMcpTargets(descriptor.engine.mcp?.targets))
     throw new Error('expected official Freeform native MCP targets')
   return descriptor
-}
-
-function isOfficialFreeformDefaultCapability(capability: unknown): capability is { id: string, name: string } {
-  return typeof capability === 'object'
-    && capability !== null
-    && 'id' in capability
-    && 'name' in capability
-    && capability.id === OFFICIAL_FREEFORM_CAPABILITY_ID
-    && typeof capability.name === 'string'
 }
 
 function hasOfficialFreeformMcpTargets(targets: unknown): boolean {

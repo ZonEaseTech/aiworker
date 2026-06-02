@@ -86,16 +86,6 @@ async function writeFixtureDist(root: string): Promise<void> {
 function fixtureDescriptorText(): string {
   return `${JSON.stringify({
     api: null,
-    capabilities: [
-      {
-        id: 'default',
-        name: 'Freeform Session',
-        prompt: {
-          ref: 'dist/product/capabilities/default/prompt.md',
-          type: 'packaged-file',
-        },
-      },
-    ],
     compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
     configuration: {},
     engine: {

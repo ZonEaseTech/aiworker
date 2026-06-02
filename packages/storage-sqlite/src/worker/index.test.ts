@@ -52,11 +52,6 @@ import {
 
 const freeformDescriptor = parseSoulDescriptorV1({
   api: null,
-  capabilities: [{
-    id: 'default',
-    name: 'Freeform Session',
-    prompt: { ref: 'dist/product/capabilities/default/prompt.md', type: 'packaged-file' },
-  }],
   compatibility: { host: '>=1.0.0' },
   configuration: {},
   engine: {
@@ -155,7 +150,7 @@ describe('greenfield local worker session schema', () => {
     const sessionColumns = getWorkerDb()
       .all<{ name: string }>(sql.raw('PRAGMA table_info("sessions")'))
       .map(row => row.name)
-    expect(sessionColumns).toContain('capability_id')
+    expect(sessionColumns).not.toContain('capability_id')
     expect(sessionColumns).not.toContain('capability_template_id')
     expect(sessionColumns).not.toContain('context')
   })
@@ -540,7 +535,6 @@ describe('greenfield local worker session schema', () => {
       id: 'session-1',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityId: 'candidate-screen',
       title: 'Screen candidate',
       at: '2026-05-09T01:02:00.000Z',
     })
@@ -604,7 +598,6 @@ describe('greenfield local worker session schema', () => {
       id: 'session-invocation-only',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityId: 'default',
       title: 'Invocation-only session',
       at: '2026-05-27T01:02:00.000Z',
     })
@@ -659,7 +652,6 @@ describe('greenfield local worker session schema', () => {
       id: 'session-normalized-bridge-events',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityId: 'default',
       title: 'Normalized bridge events session',
       at: '2026-05-27T01:12:00.000Z',
     })
@@ -727,7 +719,6 @@ describe('greenfield local worker session schema', () => {
       id: 'session-engine-diagnostics-secret',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityId: 'default',
       title: 'Diagnostics session',
       at: '2026-05-27T02:02:00.000Z',
     })
@@ -776,7 +767,6 @@ describe('greenfield local worker session schema', () => {
         id: 'session-domain-metadata',
         workerId: worker.id,
         workspaceId: workspace.id,
-        capabilityId: 'default',
         title: 'Domain metadata session',
         metadataJson: { promptText: 'Summarize the business artifact.' },
       }),
@@ -911,7 +901,6 @@ describe('greenfield local worker session schema', () => {
       id: 'session-events',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityId: 'candidate-screen',
       title: 'Events session',
       at: '2026-05-23T00:00:02.000Z',
     })
@@ -981,10 +970,8 @@ describe('greenfield local worker session schema', () => {
       id: 'legacy-hr-session',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityId: 'candidate-screen',
       title: 'Legacy candidate screen',
       metadataJson: {
-        capabilityId: 'candidate-screen',
         keep: 'value',
         soulName: 'HR',
       },
@@ -994,9 +981,8 @@ describe('greenfield local worker session schema', () => {
       id: 'legacy-hr-custom-session',
       workerId: worker.id,
       workspaceId: workspace.id,
-      capabilityId: 'custom-legacy-capability',
-      title: 'Custom legacy capability',
-      metadataJson: { capabilityId: 'custom-legacy-capability' },
+      title: 'Custom legacy session',
+      metadataJson: { legacyTag: 'custom-legacy' },
       at: '2026-05-13T13:04:03.000Z',
     })
 
@@ -1084,7 +1070,6 @@ describe('greenfield local worker session schema', () => {
     expect(explain(`SELECT * FROM workers WHERE status = 'active' ORDER BY updated_at DESC LIMIT 20`)).toContain('workers_status_updated_at_idx')
     expect(explain(`SELECT * FROM workspaces WHERE worker_id = 'worker-demo' ORDER BY updated_at DESC LIMIT 20`)).toContain('workspaces_worker_updated_at_idx')
     expect(explain(`SELECT * FROM sessions WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('sessions_workspace_updated_at_idx')
-    expect(explain(`SELECT * FROM sessions WHERE capability_id = 'default' ORDER BY updated_at DESC LIMIT 20`)).toContain('sessions_capability_updated_at_idx')
     expect(explain(`SELECT * FROM engine_invocations WHERE invocation_status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('engine_invocations_status_updated_at_idx')
     expect(explain(`SELECT * FROM bridge_events WHERE invocation_id = 'inv-1' ORDER BY created_at ASC LIMIT 200`)).toContain('bridge_events_invocation_created_at_idx')
     expect(explain(`SELECT * FROM files WHERE workspace_id = 'workspace-1' ORDER BY updated_at DESC LIMIT 50`)).toContain('files_workspace_updated_at_idx')

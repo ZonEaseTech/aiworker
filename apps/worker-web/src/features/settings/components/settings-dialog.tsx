@@ -1,7 +1,6 @@
 import type { IconSvgElement } from '@hugeicons/react'
 import type { HostedSoulApp, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-soul-descriptor'
 import type { CSSProperties, ReactNode } from 'react'
-import type { WorkspaceCapability } from '../../local-workspace/model-types'
 
 import {
   Cancel01Icon,
@@ -78,7 +77,6 @@ const settingsSections: Array<{
 
 export function SettingsDialog({
   apps,
-  capabilities,
   initial,
   initialSection,
   onAppsChanged,
@@ -87,7 +85,6 @@ export function SettingsDialog({
   runtimeVersion,
 }: {
   apps: HostedSoulApp[]
-  capabilities: WorkspaceCapability[]
   initial: LocalSettingsConfig
   initialSection: SettingsSection
   onAppsChanged?: () => Promise<void> | void
@@ -165,7 +162,7 @@ export function SettingsDialog({
             />
           )
         : null}
-      {section === 'soul-packs' ? <SoulAppsSettings apps={apps} capabilities={capabilities} copy={copy} locale={activeLocale} onAppsChanged={onAppsChanged} /> : null}
+      {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} onAppsChanged={onAppsChanged} /> : null}
       {section === 'connectors' ? <ConnectorsSettings copy={copy} settings={settings} update={persist} /> : null}
       {section === 'mcp' ? <LocalMcpSettings copy={copy} /> : null}
       {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} /> : null}
@@ -513,13 +510,11 @@ function EngineCardIcon({ engineId, iconSrc, installed }: { engineId: string, ic
 
 function SoulAppsSettings({
   apps,
-  capabilities,
   copy,
   locale,
   onAppsChanged,
 }: {
   apps: HostedSoulApp[]
-  capabilities: WorkspaceCapability[]
   copy: ReturnType<typeof messagesFor>
   locale: ReturnType<typeof normalizeLocale>
   onAppsChanged?: () => Promise<void> | void
@@ -557,7 +552,6 @@ function SoulAppsSettings({
           ? apps.map((app) => {
               const permissionCount = app.permissions.length
               const workbenchCount = app.mountedWorkbench ? 1 : 0
-              const capabilityCount = capabilities.filter(capability => capability.appId === app.appId || capability.appId === app.projectedSoul?.id).length
               const apiRoutePrefix = app.api.routePrefix
               const soulId = app.soulId || app.projectedSoul?.id || app.appId
               const permissionLabels = app.permissions.map(permissionLabel).filter(isString)
@@ -585,7 +579,6 @@ function SoulAppsSettings({
                     <CardDescription>{soulId}</CardDescription>
                     <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
                       <Badge variant="outline">{soulAppsCopy.permissionCount(permissionCount)}</Badge>
-                      <Badge variant="outline">{soulAppsCopy.capabilityCount(capabilityCount)}</Badge>
                       <Badge variant="outline">{soulAppsCopy.mountedWorkbenchCount(workbenchCount)}</Badge>
                     </ItemActions>
                     <ItemGroup className="gap-2" aria-label={`${app.name} app access`}>
@@ -595,16 +588,6 @@ function SoulAppsSettings({
                               <Kbd className="h-auto w-fit uppercase">{soulAppsCopy.permissionsTitle}</Kbd>
                               <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
                                 {permissionLabels.slice(0, 4).map(label => <Badge key={label} variant="outline">{label}</Badge>)}
-                              </ItemActions>
-                            </ItemContent>
-                          )
-                        : null}
-                      {app.projectedCapabilities.length > 0
-                        ? (
-                            <ItemContent className="gap-1.5">
-                              <Kbd className="h-auto w-fit uppercase">{soulAppsCopy.capabilitiesTitle}</Kbd>
-                              <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
-                                {app.projectedCapabilities.slice(0, 4).map(capability => <Badge key={capability.id} variant="outline">{capability.name}</Badge>)}
                               </ItemActions>
                             </ItemContent>
                           )

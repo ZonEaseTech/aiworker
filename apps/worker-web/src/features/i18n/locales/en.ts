@@ -40,13 +40,11 @@ export const en = {
   common: {
     available: 'available',
     comingSoon: 'coming soon',
-    capabilities: 'capabilities',
     interface: 'Interface',
     notInstalled: 'not installed',
     workspace: 'Workspace',
   },
   create: {
-    capability: 'Capability',
     sessionContext: 'Session context',
     creatingSession: 'Creating session...',
     footer: 'Sessions stay in this Soul workspace by default.',
@@ -66,7 +64,6 @@ export const en = {
   },
   navigation: {
     createTabs: {
-      capability: 'Capability',
       project: 'Project',
     },
     projectTabs: {
@@ -79,7 +76,6 @@ export const en = {
       domainSystems: 'Domain systems',
       examples: 'Examples',
       projects: 'Projects',
-      capabilities: 'Capabilities',
     },
   },
   projects: {
@@ -96,7 +92,6 @@ export const en = {
     configure: 'Configure',
     continueSession: 'Continue session',
     createSession: 'Create session',
-    createSessionHint: capabilityName => `Start a ${capabilityName} session in this workspace.`,
     createSessionPlaceholder: 'Describe the goal, context, source material, or expected app-owned output...',
     createSessionPrompt: workspaceName => `What do you want to build in ${workspaceName}?`,
     addSourceMaterials: 'Add source material',
@@ -149,7 +144,6 @@ export const en = {
     noWorker: 'No worker',
     noWorkspaceSessions: 'No sessions in this workspace yet.',
     otherWorkspaces: 'Other workspaces',
-    selectedCapability: 'Selected capability',
     selectedWorkspace: 'Selected workspace',
     sessionDetail: 'Session',
     latest: 'Latest',
@@ -265,7 +259,6 @@ export const en = {
     },
     soulPacks: {
       apiRoute: routePrefix => `API ${routePrefix}`,
-      capabilitiesTitle: 'Capabilities',
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
       archiveApp: name => `Archive ${name}`,
@@ -277,7 +270,6 @@ export const en = {
       mountedWorkbenchCount: count => `${count} mounted ${count === 1 ? 'workbench' : 'workbenches'}`,
       permissionsTitle: 'App access',
       permissionCount: count => `${count} access ${count === 1 ? 'entry' : 'entries'}`,
-      capabilityCount: count => `${count} ${count === 1 ? 'capability' : 'capabilities'}`,
       title: 'Soul Apps',
       unavailableConnector: 'unavailable',
       updating: 'Updating',

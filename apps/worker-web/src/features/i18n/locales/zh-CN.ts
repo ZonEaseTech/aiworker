@@ -42,13 +42,11 @@ export const zhCN = {
   common: {
     available: '可用',
     comingSoon: '即将推出',
-    capabilities: '个能力',
     interface: '界面',
     notInstalled: '未安装',
     workspace: '工作区',
   },
   create: {
-    capability: '能力',
     sessionContext: '会话上下文',
     creatingSession: '正在创建会话...',
     footer: '会话默认保留在当前 Soul 工作区内。',
@@ -63,7 +61,6 @@ export const zhCN = {
   languageOptions: en.languageOptions,
   navigation: {
     createTabs: {
-      capability: '能力',
       project: '项目',
     },
     projectTabs: {
@@ -76,7 +73,6 @@ export const zhCN = {
       domainSystems: '领域系统',
       examples: '示例',
       projects: '项目',
-      capabilities: '能力',
     },
   },
   projects: {
@@ -93,7 +89,6 @@ export const zhCN = {
     configure: '配置',
     continueSession: '继续会话',
     createSession: '创建会话',
-    createSessionHint: capabilityName => `在此工作区中启动一个 ${capabilityName} 会话。`,
     createSessionPlaceholder: '描述目标、上下文、输入材料或期望的应用自有输出...',
     createSessionPrompt: workspaceName => `要在 ${workspaceName} 中构建什么？`,
     addSourceMaterials: '添加输入材料',
@@ -146,7 +141,6 @@ export const zhCN = {
     noWorker: '暂无 worker',
     noWorkspaceSessions: '此工作区还没有会话。',
     otherWorkspaces: '其他工作区',
-    selectedCapability: '已选能力',
     selectedWorkspace: '已选工作区',
     sessionDetail: '会话',
     latest: '最新',
@@ -262,7 +256,6 @@ export const zhCN = {
     },
     soulPacks: {
       apiRoute: routePrefix => `API ${routePrefix}`,
-      capabilitiesTitle: '能力',
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
       archiveApp: name => `归档 ${name}`,
@@ -274,7 +267,6 @@ export const zhCN = {
       mountedWorkbenchCount: count => `${count} 个挂载工作台`,
       permissionsTitle: 'App 访问',
       permissionCount: count => `${count} 个访问项`,
-      capabilityCount: count => `${count} 个能力`,
       title: 'Soul Apps',
       unavailableConnector: '不可用',
       updating: '更新中',

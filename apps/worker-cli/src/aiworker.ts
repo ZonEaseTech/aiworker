@@ -64,7 +64,6 @@ import {
   scaffoldBuildScriptTs,
   scaffoldClaudeCodeMcpConfig,
   scaffoldCodexMcpConfig,
-  scaffoldPrompt,
   scaffoldReadme,
   scaffoldSkill,
   scaffoldSoulConfigTs,
@@ -1157,17 +1156,15 @@ function projectionReceiptStaleCliError(workspaceId: string): Error {
   return new Error(`PROJECTION_RECEIPT_STALE: Projection receipt is invalid for workspace ${workspaceId}.`)
 }
 
-async function startSessionCommand(opts: { capability?: string, engine?: string, input?: string, model?: string, reasoning?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
+async function startSessionCommand(opts: { engine?: string, input?: string, model?: string, reasoning?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
   const paths = await ensureDb()
   const runtime = await ensureRuntime({ worker: opts.worker })
   const workspaceId = requireText(opts.workspace, 'workspace')
   const workspace = getWorkspace(workspaceId)
   if (!workspace || workspace.workerId !== runtime.workerId)
     throw new Error(`workspace not found for ${runtime.workerId}: ${workspaceId}`)
-  const capabilityId = requireText(opts.capability, 'capability')
   const host = createHost(paths)
   host.requireEnabledAppForWorker(runtime.workerId)
-  const capability = host.requireCapabilityForWorker(runtime.workerId, capabilityId)
   const selectedEngineId = opts.engine?.trim() || selectedCliEngineId()
   const engineMetadata = {
     ...resolveCliEngineMetadata(selectedEngineId),
@@ -1175,7 +1172,6 @@ async function startSessionCommand(opts: { capability?: string, engine?: string,
   }
   const session = await runtime.createSession({
     workspaceId,
-    capabilityId: capability.id,
     title: requireText(opts.title, 'title'),
     metadata: engineMetadata,
   })
@@ -1431,7 +1427,6 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
     'soul.config.ts',
     'scripts/build.ts',
     'scripts/validate.ts',
-    'product/capabilities/default/prompt.md',
     'engine/workspace/AGENTS.md',
     'engine/workspace/CLAUDE.md',
     'engine/workspace/README.md',
@@ -1446,7 +1441,6 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
   writeScaffoldFile(path.join(targetDir, 'soul.config.ts'), scaffoldSoulConfigTs(appId))
   writeScaffoldFile(path.join(targetDir, 'scripts/build.ts'), scaffoldBuildScriptTs())
   writeScaffoldFile(path.join(targetDir, 'scripts/validate.ts'), scaffoldValidateScriptTs())
-  writeScaffoldFile(path.join(targetDir, 'product/capabilities/default/prompt.md'), scaffoldPrompt(appId))
   writeScaffoldFile(path.join(targetDir, 'engine/workspace/AGENTS.md'), scaffoldWorkspaceAgents(appId))
   writeScaffoldFile(path.join(targetDir, 'engine/workspace/CLAUDE.md'), '@AGENTS.md\n')
   writeScaffoldFile(path.join(targetDir, 'engine/workspace/README.md'), scaffoldWorkspaceReadme(appId))
@@ -1808,11 +1802,6 @@ function registerCommands(): void {
   cli.command('worker config archive <workerId> <configKey>', 'archive a worker-scoped Host config envelope').action(archiveWorkerConfigCommand)
   cli.command('worker archive <id>', 'archive a local Soul worker').action(archiveWorkerCommand)
   cli.command('worker delete <id>', 'hard-delete local Soul worker metadata').action(deleteWorkerCommand)
-  cli.command('capability list', 'list app-declared capabilities').option('--app <appId>', 'Soul App id (appId, e.g. aiworker-freeform)').action(async (opts: { app?: string }) => {
-    const paths = await ensureDb()
-    const capabilities = createHost(paths).listCapabilities(opts.app)
-    printJson({ capabilities })
-  })
 
   cli.command('workspace create', 'create a worker workspace').option('--name <text>', 'workspace name').option('--type <id>', 'workspace type').option('--worker <id>', 'worker id').action(createWorkspaceCommand)
   cli.command('workspace list', 'list worker workspaces').option('--worker <id>', 'worker id').action(listWorkspaceCommand)
@@ -1826,7 +1815,6 @@ function registerCommands(): void {
 
   cli.command('session start', 'create a workspace session and first invocation')
     .option('--workspace <id>', 'workspace id')
-    .option('--capability <id>', 'capability id')
     .option('--title <text>', 'session title')
     .option('--input <text>', 'initial invocation input')
     .option('--engine <id>', 'engine id for this new session')
@@ -1890,7 +1878,6 @@ const FULL_COMMAND_INDEX = [
   'worker create|list|show|select|config list|config set|config archive|archive|delete',
   'workspace create|list|show|projection refresh|archive|delete',
   'session start|invoke|events|reconcile|cancel|list|show|archive|delete',
-  'capability list',
   'files list|show',
   'settings list',
   'engine select',

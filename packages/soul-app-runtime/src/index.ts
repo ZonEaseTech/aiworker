@@ -13,7 +13,6 @@ import type {
 
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
-import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-descriptor'
 import {
   closeWorkerDb,
   initWorkerDb,
@@ -28,16 +27,6 @@ import {
 } from '@zonease/aiworker-worker-runtime'
 
 export { renderUniversalWorkbenchHtml } from './universal-workbench-html'
-
-interface RuntimeCapability {
-  appId: string
-  description: string
-  id: string
-  inputHints: readonly string[]
-  name: string
-  outputKind: string
-  promptRef: string
-}
 
 export interface StandaloneSoulAppRuntimeOptions {
   appDistRoot?: string
@@ -68,7 +57,6 @@ export interface SoulAppRuntimeHarness {
   dispose: () => void
   hostedApp: HostedSoulApp
   runtime: LocalWorkerRuntime
-  sessionMetadata: (capabilityId: string) => Record<string, unknown>
   snapshot: LocalWorkerRuntime['snapshot']
   worker: SoulAppRuntimeWorkerSnapshot
 }
@@ -181,14 +169,12 @@ async function createRuntimeForDescriptor(input: {
 }): Promise<{ runtime: LocalWorkerRuntime, worker: SoulAppRuntimeWorkerSnapshot }> {
   const descriptor = input.descriptor
   const identity = descriptorIdentity(descriptor)
-  const capabilities = descriptorCapabilities(descriptor)
   const worker = upsertWorker({
     id: input.workerId,
     appId: identity.appId,
     name: input.workerName,
     defaultEngineId: descriptorDefaultEngine(descriptor),
     metadataJson: {
-      defaultCapabilities: capabilities.map(capability => namespaceSoulAppCapabilityId(identity.appId, capability.id)),
       description: identity.description,
       domainSoulId: identity.soulId,
       soulAppId: identity.appId,
@@ -269,15 +255,6 @@ function descriptorDefaultEngine(descriptor: SoulDescriptorV1): string {
   return typeof configuration.defaults?.engine === 'string' ? configuration.defaults.engine : 'codex'
 }
 
-function descriptorCapabilities(descriptor: SoulDescriptorV1): Array<{ id: string }> {
-  return descriptor.capabilities.map((capability, index) => {
-    if (!capability || typeof capability !== 'object')
-      throw new Error(`descriptor capability must be an object: capabilities.${index}`)
-    const id = (capability as { id?: unknown }).id
-    return { id: requireDescriptorString(id, `capabilities.${index}.id`) }
-  })
-}
-
 function requireDescriptorString(value: unknown, pathLabel: string): string {
   if (typeof value !== 'string' || value.length === 0)
     throw new Error(`descriptor ${pathLabel} must be a non-empty string`)
@@ -298,7 +275,6 @@ function harness(input: {
   return {
     ...input,
     dispose: closeWorkerDb,
-    sessionMetadata: capabilityId => sessionMetadata(input.descriptor, input.catalog.capabilities, capabilityId),
     snapshot: () => input.runtime.snapshot(),
   }
 }
@@ -316,7 +292,6 @@ function publicWorkerSnapshot(worker: WorkerRow): SoulAppRuntimeWorkerSnapshot {
 function scopedCatalog(app: HostedSoulApp): SoulCatalog {
   return {
     apps: [app],
-    capabilities: [...app.projectedCapabilities],
     souls: [app.projectedSoul],
   }
 }
@@ -337,9 +312,6 @@ export function mountSessionApiProxy(request: Request, options: {
   const hostApi = options.hostApiBaseUrl.replace(/\/$/, '')
   const workerId = url.searchParams.get('workerId') ?? options.workerId
   const workspaceId = url.searchParams.get('workspaceId') ?? options.workspaceId ?? null
-
-  if (url.pathname === '/api/capabilities' && request.method === 'GET')
-    return proxyJsonRequest(request, `${hostApi}/api/capabilities?workerId=${encodeURIComponent(workerId)}`)
 
   if (url.pathname === '/api/workspaces' && request.method === 'GET')
     return proxyJsonRequest(request, `${hostApi}/api/workspace-locators?workerId=${encodeURIComponent(workerId)}`)
@@ -443,19 +415,3 @@ async function proxyJsonRequestWithBody(
   }).then(r => new Response(r.body, { status: r.status, headers: r.headers }))
 }
 
-function sessionMetadata(
-  descriptor: SoulDescriptorV1,
-  capabilities: readonly RuntimeCapability[],
-  capabilityId: string,
-): Record<string, unknown> {
-  const capability = capabilities.find(item => item.id === capabilityId)
-  const identity = descriptorIdentity(descriptor)
-  return {
-    capabilityName: capability?.name ?? capabilityId,
-    capabilityId,
-    inputHints: capability?.inputHints ?? [],
-    outputKind: capability?.outputKind ?? 'session',
-    soulAppId: identity.appId,
-    soulName: identity.name,
-  }
-}

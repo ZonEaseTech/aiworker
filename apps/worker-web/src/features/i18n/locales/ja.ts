@@ -42,13 +42,11 @@ export const ja = {
   common: {
     available: '利用可能',
     comingSoon: '近日対応',
-    capabilities: '能力',
     interface: 'インターフェース',
     notInstalled: '未インストール',
     workspace: 'ワークスペース',
   },
   create: {
-    capability: '能力',
     sessionContext: 'セッションコンテキスト',
     creatingSession: 'セッションを作成中...',
     footer: 'セッションは既定でこの Soul ワークスペース内に保持されます。',
@@ -63,7 +61,6 @@ export const ja = {
   languageOptions: en.languageOptions,
   navigation: {
     createTabs: {
-      capability: '能力',
       project: 'プロジェクト',
     },
     projectTabs: {
@@ -76,7 +73,6 @@ export const ja = {
       domainSystems: 'ドメインシステム',
       examples: '例',
       projects: 'プロジェクト',
-      capabilities: '能力',
     },
   },
   projects: {
@@ -93,7 +89,6 @@ export const ja = {
     configure: '設定',
     continueSession: 'セッションを続ける',
     createSession: 'セッションを作成',
-    createSessionHint: capabilityName => `このワークスペースで ${capabilityName} セッションを開始します。`,
     createSessionPlaceholder: '目的、コンテキスト、入力資料、期待する App 所有の出力を記述します...',
     createSessionPrompt: workspaceName => `${workspaceName} で何を構築しますか？`,
     addSourceMaterials: '入力資料を追加',
@@ -146,7 +141,6 @@ export const ja = {
     noWorker: 'worker なし',
     noWorkspaceSessions: 'このワークスペースにはまだセッションがありません。',
     otherWorkspaces: '他のワークスペース',
-    selectedCapability: '選択中の能力',
     selectedWorkspace: '選択中のワークスペース',
     sessionDetail: 'セッション',
     latest: '最新',
@@ -262,7 +256,6 @@ export const ja = {
     },
     soulPacks: {
       apiRoute: routePrefix => `API ${routePrefix}`,
-      capabilitiesTitle: 'Capabilities',
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
       archiveApp: name => `${name} をアーカイブ`,
@@ -274,7 +267,6 @@ export const ja = {
       mountedWorkbenchCount: count => `マウント済み Workbench ${count} 件`,
       permissionsTitle: 'App アクセス',
       permissionCount: count => `アクセス項目 ${count} 件`,
-      capabilityCount: count => `能力 ${count} 件`,
       title: 'Soul Apps',
       unavailableConnector: '利用不可',
       updating: '更新中',

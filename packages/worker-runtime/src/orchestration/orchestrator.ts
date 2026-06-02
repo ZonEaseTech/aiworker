@@ -24,12 +24,10 @@ import {
   archiveSoulApp,
   deleteSoulApp,
   enableSoulApp,
-  findCapability,
   findCatalogSoul,
   getHostedSoulApp,
   installSoulAppFromPath,
   installSoulDescriptor,
-  listCapabilitiesForSoul,
   listHostedSoulApps,
   listSoulCatalog,
   runSoulAppHealthcheck,
@@ -38,18 +36,7 @@ import { createLocalWorkerRuntime } from '../worker/runtime'
 import { AsyncLock } from './async-lock'
 
 // -- inlined from deleted shared types --
-interface SoulCapability {
-  appId: string
-  description: string
-  id: string
-  inputHints: readonly string[]
-  name: string
-  outputKind: string
-  promptRef: string
-}
-
 interface VerticalSoul {
-  defaultCapabilities: readonly string[]
   description: string
   id: string
   name: string
@@ -163,24 +150,6 @@ export class WorkerOrchestrator {
     return soul
   }
 
-  listCapabilities(appId?: string): SoulCapability[] {
-    return appId ? listCapabilitiesForSoul(appId) : this.listCatalog().capabilities
-  }
-
-  listCapabilitiesForWorker(workerId: string): SoulCapability[] {
-    const worker = this.requireWorker(workerId)
-    return listCapabilitiesForSoul(worker.appId)
-  }
-
-  requireCapabilityForWorker(workerId: string, capabilityId: unknown): SoulCapability {
-    const worker = this.requireWorker(workerId)
-    const id = requireText(capabilityId, 'capabilityId')
-    const capability = findCapability(id)
-    if (!capability || capability.appId !== worker.appId)
-      throw AppError.badRequest(`Capability ${id} does not belong to worker ${workerId}.`, 'CAPABILITY_NOT_AVAILABLE')
-    return capability
-  }
-
   requireEnabledAppForWorker(workerId: string): HostedSoulApp {
     const worker = getWorker(workerId)
     if (!worker)
@@ -212,7 +181,6 @@ export class WorkerOrchestrator {
         name,
         defaultEngineId: input.defaultEngineId ?? 'codex',
         metadataJson: {
-          defaultCapabilities: [...soul.defaultCapabilities],
           description: soul.description,
           soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
           ...(input.metadata ?? {}),

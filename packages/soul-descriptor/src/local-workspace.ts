@@ -143,7 +143,6 @@ export const localSessionSchema = z.object({
   id: idSchema,
   workerId: idSchema,
   workspaceId: idSchema,
-  capabilityId: idSchema,
   title: z.string().min(1),
   status: localSessionStatusSchema,
   metadataJson: localJsonObjectSchema,

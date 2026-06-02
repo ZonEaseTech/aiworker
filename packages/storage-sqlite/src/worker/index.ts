@@ -373,7 +373,6 @@ export interface CreateSessionInput {
   id: string
   workerId: string
   workspaceId: string
-  capabilityId: string
   title: string
   status?: SessionRow['status']
   metadataJson?: Record<string, unknown>
@@ -715,7 +714,6 @@ export function createSession(input: CreateSessionInput): SessionRow {
     id: input.id,
     workerId: input.workerId,
     workspaceId: input.workspaceId,
-    capabilityId: input.capabilityId,
     title: input.title,
     status: input.status ?? 'active',
     metadataJson: input.metadataJson ?? {},

@@ -47,16 +47,6 @@ const now = '2026-05-10T00:00:00.000Z'
 const PRIMARY_SOUL_ID = 'aiworker-demo-primary'
 const SECONDARY_SOUL_ID = 'aiworker-demo-secondary'
 const CUSTOM_SOUL_ID = 'aiworker-custom'
-const CUSTOM_CAPABILITY_ID = `${CUSTOM_SOUL_ID}.explore`
-const PRIMARY_CONTEXT_CAPTURE = `${PRIMARY_SOUL_ID}.context-capture`
-const PRIMARY_NEXT_STEP = `${PRIMARY_SOUL_ID}.lifecycle-next-step`
-const PRIMARY_SUMMARY = `${PRIMARY_SOUL_ID}.request-screen`
-const PRIMARY_BRIEF = `${PRIMARY_SOUL_ID}.briefing-brief`
-const PRIMARY_PLAN = `${PRIMARY_SOUL_ID}.action-plan`
-const PRIMARY_HANDOFF_SUMMARY = `${PRIMARY_SOUL_ID}.handoff-summary`
-const PRIMARY_EVIDENCE_MATRIX = `${PRIMARY_SOUL_ID}.evidence-matrix`
-const PRIMARY_QUALITY_CHECK = `${PRIMARY_SOUL_ID}.quality-check`
-const PRIMARY_CONTEXT_DRAFT = `${PRIMARY_SOUL_ID}.context-update-draft`
 
 function openHostSettings() {
   fireEvent.click(screen.getByRole('button', { name: /^Platform settings(?:\s|$)/ }))
@@ -85,119 +75,8 @@ const workers = [
 ]
 
 const souls = [
-  { defaultCapabilities: [PRIMARY_CONTEXT_CAPTURE, PRIMARY_CONTEXT_DRAFT, PRIMARY_NEXT_STEP, PRIMARY_SUMMARY, PRIMARY_BRIEF, PRIMARY_PLAN, PRIMARY_HANDOFF_SUMMARY, PRIMARY_EVIDENCE_MATRIX, PRIMARY_QUALITY_CHECK], description: 'Primary operations workspace', id: PRIMARY_SOUL_ID, name: 'Demo Primary', status: 'available' },
-  { defaultCapabilities: ['aiworker-demo-secondary.secondary-check'], description: 'Secondary workspace', id: SECONDARY_SOUL_ID, name: 'Demo Secondary', status: 'available' },
-]
-
-const capabilities = [
-  {
-    description: 'Capture source context for a workspace item.',
-    id: PRIMARY_CONTEXT_CAPTURE,
-    inputHints: ['Source context', 'Workspace goal'],
-    name: 'Context Capture',
-    outputKind: 'context-capture',
-    promptRef: './product/capabilities/context-capture/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Draft an inspectable request context update.',
-    id: PRIMARY_CONTEXT_DRAFT,
-    inputHints: ['Request materials', 'Accepted README baseline'],
-    name: 'Context Update Draft',
-    outputKind: 'context-update-draft',
-    promptRef: './product/workflows/context-update-draft/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Prepare the next Primary touchpoint.',
-    id: PRIMARY_NEXT_STEP,
-    inputHints: ['Session context', 'Open questions'],
-    name: 'Lifecycle Next Step',
-    outputKind: 'lifecycle-next-step',
-    promptRef: './product/workflows/lifecycle-next-step/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Prepare a role rubric.',
-    id: `${PRIMARY_SOUL_ID}.evaluation-guide`,
-    inputHints: ['Goal', 'Signals'],
-    name: 'Evaluation Guide',
-    outputKind: 'evaluation-guide',
-    promptRef: './product/workflows/evaluation-guide/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Screen a request against a role.',
-    id: PRIMARY_SUMMARY,
-    inputHints: ['Role', 'Request packet'],
-    name: 'Request Screen',
-    outputKind: 'request-screen',
-    promptRef: './product/workflows/request-screen/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Draft an briefing brief.',
-    id: PRIMARY_BRIEF,
-    inputHints: ['Request packet', 'Rubric'],
-    name: 'Briefing Brief',
-    outputKind: 'briefing-brief',
-    promptRef: './product/workflows/briefing-brief/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Draft an action plan.',
-    id: PRIMARY_PLAN,
-    inputHints: ['Session context', 'Goal expectations'],
-    name: 'Action Plan',
-    outputKind: 'action-plan',
-    promptRef: './product/workflows/action-plan/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Prepare a handoff summary.',
-    id: PRIMARY_HANDOFF_SUMMARY,
-    inputHints: ['Session context', 'Handoff notes'],
-    name: 'Handoff Summary',
-    outputKind: 'handoff-summary',
-    promptRef: './product/workflows/handoff-summary/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Compare requests against the role rubric.',
-    id: PRIMARY_EVIDENCE_MATRIX,
-    inputHints: ['Evaluation guide', 'Request packets'],
-    name: 'Evidence Matrix',
-    outputKind: 'evidence-matrix',
-    promptRef: './product/workflows/evidence-matrix/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Prepare a roundup packet.',
-    id: `${PRIMARY_SOUL_ID}.roundup-packet`,
-    inputHints: ['Evidence matrix', 'Briefing notes'],
-    name: 'Roundup Packet',
-    outputKind: 'roundup-packet',
-    promptRef: './product/workflows/roundup-packet/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Check operational quality.',
-    id: PRIMARY_QUALITY_CHECK,
-    inputHints: ['Artifact', 'Policy'],
-    name: 'Quality Check',
-    outputKind: 'quality-check',
-    promptRef: './product/workflows/quality-check/prompt.md',
-    appId: PRIMARY_SOUL_ID,
-  },
-  {
-    description: 'Summarize secondary readiness.',
-    id: 'aiworker-demo-secondary.secondary-check',
-    inputHints: ['Test evidence', 'Known defects'],
-    name: 'Secondary Check',
-    outputKind: 'secondary-check',
-    promptRef: './product/workflows/secondary-check/prompt.md',
-    appId: SECONDARY_SOUL_ID,
-  },
+  { description: 'Primary operations workspace', id: PRIMARY_SOUL_ID, name: 'Demo Primary', status: 'available' },
+  { description: 'Secondary workspace', id: SECONDARY_SOUL_ID, name: 'Demo Secondary', status: 'available' },
 ]
 
 const themeMediaQuery = '(prefers-color-scheme: dark)'
@@ -219,7 +98,6 @@ const baseSettings: LocalSettingsConfig = {
 }
 
 const sessionRecord = {
-  capabilityId: PRIMARY_SUMMARY,
   createdAt: now,
   endedAt: null,
   id: 'session-1',
@@ -246,7 +124,6 @@ let currentEvents: LocalSessionEvent[]
 let currentSettings: typeof baseSettings
 let currentSessions: typeof sessionRecord[]
 let currentSouls: typeof souls
-let currentCapabilities: typeof capabilities
 let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
 let workspaceDataResponses: Array<Promise<typeof workspace[]> | typeof workspace[]>
@@ -276,11 +153,6 @@ function hostedApp({
     description: `${appName} descriptor`,
     descriptor: {
       api: null,
-      capabilities: [{
-        id: 'default',
-        name: `${appName} Default`,
-        prompt: { ref: 'dist/product/capabilities/default/prompt.md', type: 'packaged-file' },
-      }],
       compatibility: { host: '>=1.0.0' },
       configuration: {},
       engine: {},
@@ -316,17 +188,7 @@ function hostedApp({
     },
     name: appName,
     permissions,
-    projectedCapabilities: [{
-      description: `${appName} default capability`,
-      id: `${appId}.default`,
-      inputHints: [],
-      name: `${appName} Default`,
-      outputKind: 'session',
-      promptRef: 'dist/product/capabilities/default/prompt.md',
-      appId,
-    }],
     projectedSoul: {
-      defaultCapabilities: [`${appId}.default`],
       description: `${appName} descriptor`,
       id: appId,
       name: appName,
@@ -343,7 +205,6 @@ function hostedApp({
 
 function catalogOnlyAppForSoul(
   soul: typeof souls[number],
-  projectedCapabilities: typeof capabilities,
 ): HostedSoulApp {
   const app = hostedApp({ appId: soul.id, appName: soul.name })
   return {
@@ -353,12 +214,8 @@ function catalogOnlyAppForSoul(
       ...app.descriptor,
       workbench: null,
     } as unknown as HostedSoulApp['descriptor'],
-    projectedCapabilities: projectedCapabilities
-      .filter(capability => capability.appId === soul.id)
-      .map(capability => ({ ...capability, inputHints: [...capability.inputHints] })),
     projectedSoul: {
       ...soul,
-      defaultCapabilities: [...(soul.defaultCapabilities ?? [])],
       status: soul.status === 'available' ? 'available' : 'coming_soon',
     },
   }
@@ -395,11 +252,7 @@ function resetSettings() {
   currentWorkspaces = [{ ...workspace }]
   workspaceDataResponses = []
   currentSessions = [{ ...sessionRecord }]
-  currentSouls = souls.map(soul => ({ ...soul, defaultCapabilities: [...soul.defaultCapabilities] }))
-  currentCapabilities = capabilities.map(capability => ({
-    ...capability,
-    inputHints: [...capability.inputHints],
-  }))
+  currentSouls = souls.map(soul => ({ ...soul }))
   currentEvents = [{ ...eventRecord }]
   currentWorkers = workers.map(worker => ({ ...worker }))
   currentWorkerOverlayAssets = [{
@@ -417,7 +270,7 @@ function resetSettings() {
   lastMessageRequestBody = null
   lastSessionRequestBody = null
   writtenFiles = []
-  currentApps = currentSouls.map(soul => catalogOnlyAppForSoul(soul, currentCapabilities))
+  currentApps = currentSouls.map(soul => catalogOnlyAppForSoul(soul))
 }
 
 function workerOverlayConfigKeyForTest(asset: LocalWorkerOverlayAsset): string {
@@ -575,7 +428,7 @@ beforeEach(() => {
       currentApps = currentApps.map(app => app.appId === 'aiworker-demo-secondary' ? { ...app, status: 'enabled' } : app)
       return json({
         app: enabled ? { ...enabled, status: 'enabled' } : null,
-        catalog: { apps: currentApps, capabilities: currentCapabilities, souls: currentSouls },
+        catalog: { apps: currentApps, souls: currentSouls },
       })
     }
     if (url.endsWith('/api/app-installation/apps/aiworker-demo-secondary/archive') && method === 'POST') {
@@ -583,7 +436,7 @@ beforeEach(() => {
       currentApps = currentApps.map(app => app.appId === 'aiworker-demo-secondary' ? { ...app, status: 'disabled' } : app)
       return json({
         app: disabled ? { ...disabled, status: 'disabled' } : null,
-        catalog: { apps: currentApps, capabilities: currentCapabilities, souls: currentSouls },
+        catalog: { apps: currentApps, souls: currentSouls },
       })
     }
     const requestUrl = new URL(url, 'http://local.test')
@@ -739,8 +592,6 @@ beforeEach(() => {
         target: projectionRefreshMatch[1],
       })
     }
-    if (url.endsWith('/api/capabilities'))
-      return json({ capabilities: currentCapabilities })
     if (url.endsWith('/api/workspace-locators') && method === 'POST') {
       const body = init?.body ? JSON.parse(String(init.body)) as { name: string } : { name: 'New request workspace' }
       const created = { ...workspace, id: 'workspace-created', name: body.name }
@@ -1170,23 +1021,10 @@ describe('worker studio', () => {
     currentSouls = [
       ...currentSouls,
       {
-        defaultCapabilities: [CUSTOM_CAPABILITY_ID],
         description: 'Custom workspace',
         id: CUSTOM_SOUL_ID,
         name: 'AIWorker Custom',
         status: 'available',
-      },
-    ]
-    currentCapabilities = [
-      ...currentCapabilities,
-      {
-        description: 'Explore a custom workspace.',
-        id: CUSTOM_CAPABILITY_ID,
-        inputHints: ['Workspace context'],
-        name: 'Explore',
-        outputKind: 'custom-exploration',
-        promptRef: './product/workflows/explore/prompt.md',
-        appId: CUSTOM_SOUL_ID,
       },
     ]
     currentWorkers = [
@@ -1645,7 +1483,7 @@ describe('worker studio', () => {
     expect(microApp.getAttribute('url')).toBe('/api/apps/aiworker-demo-primary/micro-app/workbench?workerId=e2e-people-codex-20260525&theme=light')
   })
 
-  it('routes directly to a worker and updates capabilities with worker identity', async () => {
+  it('routes directly to a worker and shows worker identity', async () => {
     window.history.replaceState(null, '', '/workers/secondary-worker')
     render(<WorkerStudio />)
 
@@ -1653,14 +1491,8 @@ describe('worker studio', () => {
 
     await waitFor(() => {
       expect(screen.getByText('secondary-worker')).toBeTruthy()
-      expect(screen.getAllByText('Secondary Check').length).toBeGreaterThan(0)
-      expect(screen.queryByText('request-screen')).toBeNull()
     })
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
-    const capabilityHeading = screen.getByText('Capability (1)')
-    expect(capabilityHeading).toBeTruthy()
-    expect(capabilityHeading.closest('[data-slot="item-group"]')).toBeTruthy()
-    expect(capabilityHeading.closest('[data-slot="card"]')).toBeNull()
     expect(screen.getByTestId('worker-identity-card').getAttribute('data-slot')).toBe('card')
     expect(document.querySelector('.worker-overview-panel')).toBeNull()
     const workspaceAvatarButton = screen.getByRole('button', { name: 'Workspace' })

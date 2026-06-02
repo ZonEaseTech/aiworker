@@ -108,7 +108,7 @@ export function resolveWorkspacesRoot(workerId: string): string {
 }
 
 /**
- * Worker identity, Soul binding, enabled capabilities, and engine defaults live
+ * Worker identity, Soul binding, and engine defaults live
  * in `aiworker.db`. Worker init creates only the filesystem root an external
  * engine can actually use: workspaces.
  */

@@ -4,7 +4,6 @@ import type {
 
 export interface SoulAppScopedContext {
   appId: string
-  capabilityId?: string
   operatorId?: string
   permissions: readonly SoulAppPermission[]
   sessionId?: string

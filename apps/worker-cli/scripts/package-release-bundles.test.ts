@@ -90,16 +90,6 @@ describe('release bundle packager', () => {
     await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
   })
 
-  it('rejects standalone bundles before staging when the packaged Freeform descriptor drops the default capability', async () => {
-    await writeFixtureDist(root, { descriptorText: fixtureDescriptorText({ capabilities: [] }) })
-    await writeFile(path.join(root, 'aiworker-darwin-arm64'), '#!/bin/sh\necho aiworker\n')
-    await chmod(path.join(root, 'aiworker-darwin-arm64'), 0o755)
-
-    await expect(
-      packageReleaseBundles({ rootDir: root, targets: ['darwin-arm64'] }),
-    ).rejects.toThrow('invalid release resource: apps/worker-cli/dist/official-apps/aiworker-freeform/dist/soul.descriptor.json is not the official Freeform descriptor')
-    await expect(stat(path.join(root, 'release', 'aiworker-darwin-arm64'))).rejects.toThrow()
-  })
 
   it('rejects standalone bundles before staging when the packaged Freeform descriptor drops the Claude Code MCP target', async () => {
     await writeFixtureDist(root, { descriptorText: fixtureDescriptorText({ mcpTargets: ['codex'] }) })
@@ -190,7 +180,6 @@ async function writeFixtureDist(
 
 function fixtureDescriptorText(options: {
   appId?: string
-  capabilities?: unknown[]
   mcpTargets?: Array<'claude-code' | 'codex'>
 } = {}): string {
   const mcpTargets = options.mcpTargets ?? ['claude-code', 'codex']
@@ -207,16 +196,6 @@ function fixtureDescriptorText(options: {
       host: '>=1.0.0',
       sdk: '>=1.0.0',
     },
-    capabilities: options.capabilities ?? [
-      {
-        id: 'default',
-        name: 'Freeform Session',
-        prompt: {
-          ref: 'dist/product/capabilities/default/prompt.md',
-          type: 'packaged-file',
-        },
-      },
-    ],
     configuration: {},
     workbench: {
       entry: 'dist/web/workbench/index.html',

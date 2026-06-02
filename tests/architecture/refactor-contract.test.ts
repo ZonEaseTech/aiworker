@@ -441,49 +441,6 @@ describe('destructive refactor contract bootstrap', () => {
     expect(localWorkspaceProtocol).toContain('localWorkerConfigValueInputSchema')
   })
 
-  test('capability template projections stay generic and do not expose review rubric fields', () => {
-    const activeSources = [
-      'packages/soul-descriptor/src/soul-app/registry.ts',
-      'packages/worker-runtime/src/soul-app/registry.ts',
-      'packages/worker-runtime/src/orchestration/orchestrator.ts',
-      'packages/soul-app-runtime/src/index.ts',
-      'apps/worker-web/src/features/local-workspace/model-types.ts',
-    ]
-
-    const findings = activeSources
-      .filter(path => readRepoFile(path).includes('reviewRubricRef'))
-      .map(path => `${path}: reviewRubricRef`)
-
-    expect(findings, 'Host-visible capability templates must not carry app-owned review rubric fields').toEqual([])
-  })
-
-  test('CLI exposes capability listing without the retired template list command', () => {
-    const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
-    const cliTest = readRepoFile('apps/worker-cli/src/aiworker.test.ts')
-    const cliSmoke = readRepoFile('apps/worker-cli/scripts/smoke-dist-release.ts')
-    const sourceForbidden = [
-      'cli.command(\'template list\'',
-      'compatibility inspection: template list',
-      'list app-declared session templates',
-      'compatibility inspection:',
-    ]
-
-    for (const snippet of sourceForbidden)
-      expect(cliSource).not.toContain(snippet)
-    for (const snippet of sourceForbidden.slice(1))
-      expect(cliTest).not.toContain(snippet)
-    expect(cliSmoke).not.toContain('const templates')
-    expect(cliSmoke).not.toContain('templates.stdout')
-
-    expect(cliSource).toContain('cli.command(\'capability list\'')
-    expect(cliSource).toContain('list app-declared capabilities')
-    expect(cliSource).toContain('printJson({ capabilities })')
-    expect(cliSmoke).toContain('[\'capability\', \'list\'')
-    expect(cliTest).toContain('argv(\'capability\', \'list\'')
-    expect(cliTest).toContain('argv(\'template\', \'list\'')
-    expect(cliTest).toContain(').toBe(1)')
-  })
-
   test('CLI does not preserve the source-checkout dev compatibility alias', () => {
     const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
     const cliTest = readRepoFile('apps/worker-cli/src/aiworker.test.ts')
@@ -671,17 +628,6 @@ describe('destructive refactor contract bootstrap', () => {
     expect(webOverlayApi).not.toContain('/api/local/workers/')
   })
 
-  test('daemon capability surface does not preserve worker-local broker aliases', () => {
-    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
-    const soulAppRuntime = readRepoFile('packages/soul-app-runtime/src/index.ts')
-
-    expect(daemon).toContain('app.get(\'/api/capabilities\'')
-    expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/capabilities\'')
-    expect(daemon).not.toContain('app.get(\'/api/local/workers/:workerId/capabilities/:capabilityId\'')
-    expect(soulAppRuntime).toContain('/api/capabilities?workerId=')
-    expect(soulAppRuntime).not.toContain(['/api/local/workers/', '{workerId}/capabilities'].join('$'))
-  })
-
   test('daemon workspace locator collection surface does not preserve local broker alias', () => {
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
     const daemonSchemas = readRepoFile('packages/worker-daemon/src/modes/worker/schemas.ts')
@@ -847,33 +793,6 @@ describe('destructive refactor contract bootstrap', () => {
     expect(identityProviderTest).not.toContain('target: \'api/local\'')
   })
 
-  test('CLI session start selects a capability without the retired skill option', () => {
-    const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
-    const cliTests = [
-      'apps/worker-cli/src/aiworker.test.ts',
-      'apps/worker-cli/src/freeform-golden-path.test.ts',
-      'tests/browser/freeform-cli-golden-path.spec.ts',
-    ].map(path => [path, readRepoFile(path)] as const)
-
-    const sourceForbidden = [
-      '.option(\'--skill <id>\'',
-      'skill?: string',
-      'opts.skill',
-      'skillId',
-      'capability template id',
-    ]
-    const findings = [
-      ...sourceForbidden
-        .filter(snippet => cliSource.includes(snippet))
-        .map(snippet => `apps/worker-cli/src/aiworker.ts: ${snippet}`),
-      ...cliTests.flatMap(([path, source]) => source.includes('\'--skill\'') ? [`${path}: '--skill'`] : []),
-    ]
-
-    expect(findings, 'CLI session start should use --capability and capability language only').toEqual([])
-    expect(cliSource).toContain('.option(\'--capability <id>\'')
-    expect(cliSource).toContain('opts.capability')
-  })
-
   test('session creation surfaces do not accept Host-owned context text', () => {
     const sources = [
       'apps/worker-cli/src/aiworker.ts',
@@ -904,76 +823,6 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'Host session creation should carry locator metadata and invocation input, not free-form context content').toEqual([])
   })
 
-  test('engine invocation prompts use capability language without retired template copy', () => {
-    const sources = [
-      'packages/worker-runtime/src/worker/runtime.ts',
-    ].map(path => [path, readRepoFile(path)] as const)
-    const forbidden = [
-      'Capability template:',
-      'session template metadata',
-    ]
-    const findings = sources.flatMap(([path, source]) =>
-      forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`),
-    )
-
-    expect(findings, 'native engine prompt copy should not reintroduce retired template language').toEqual([])
-  })
-
-  test('engine bridge contract tests use generic capability descriptor refs', () => {
-    const source = readRepoFile('packages/engine-bridge/src/bridge-contract.test.ts')
-    const forbidden = [
-      'capability/hr-review',
-    ]
-
-    const findings = forbidden
-      .filter(snippet => source.includes(snippet))
-      .map(snippet => `packages/engine-bridge/src/bridge-contract.test.ts: ${snippet}`)
-
-    expect(findings, 'engine bridge tests should keep capability refs opaque and non-domain-specific').toEqual([])
-  })
-
-  test('local broker capability routes do not preserve retired template route aliases', () => {
-    const activeSources = [
-      'packages/worker-daemon/src/modes/worker.ts',
-      'packages/soul-app-runtime/src/index.ts',
-      'apps/worker-cli/scripts/smoke-dist-release.ts',
-      'apps/worker-web/src/features/local-workspace/api/workspace-data.ts',
-      'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
-    ]
-    const forbidden = [
-      'app.get(\'/api/local/capabilities\'',
-      'url.endsWith(\'/api/local/capabilities\')',
-      '/api/local/templates',
-      '/api/local/workers/:workerId/templates',
-      ['/api/local/workers/', '{workerId}/templates'].join('$'),
-      '/api/templates',
-      'templates/:templateId',
-      '[\'template\', \'list\'',
-    ]
-    const findings = activeSources.flatMap((path) => {
-      const source = readRepoFile(path)
-      return forbidden
-        .filter(snippet => source.includes(snippet))
-        .map(snippet => `${path}: ${snippet}`)
-    })
-
-    expect(findings, 'local broker routes should expose capability endpoints, not retired template aliases').toEqual([])
-  })
-
-  test('host daemon capability route tests name the Freeform capability fixture as a capability', () => {
-    const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
-    const helperStart = daemonTest.indexOf('async function createFreeformWorker')
-    const helperEnd = daemonTest.indexOf('async function createWorkspaceAndSession')
-    const createFreeformWorkerHelper = helperStart >= 0 && helperEnd > helperStart
-      ? daemonTest.slice(helperStart, helperEnd)
-      : daemonTest
-
-    expect(daemonTest).not.toContain('FREEFORM_TEMPLATE')
-    expect(daemonTest).toContain('FREEFORM_CAPABILITY')
-    expect(createFreeformWorkerHelper).toContain('/api/workers')
-    expect(createFreeformWorkerHelper).not.toContain('/api/local/workers')
-  })
-
   test('host daemon workspace session fixture uses canonical broker routes', () => {
     const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
     const helperStart = daemonTest.indexOf('async function createWorkspaceLocator')
@@ -986,100 +835,6 @@ describe('destructive refactor contract bootstrap', () => {
     expect(createWorkspaceAndSessionHelper).toContain('/api/sessions')
     expect(createWorkspaceAndSessionHelper).not.toContain(['/api/local/workers/', '{workerId}/workspaces'].join('$'))
     expect(createWorkspaceAndSessionHelper).not.toContain(['/workspaces/', '{workspace.id}/sessions'].join('$'))
-  })
-
-  test('host daemon capability helpers do not preserve retired template helper names', () => {
-    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
-    const forbidden = [
-      'requireTemplateForWorker',
-      'enrichTemplateMetadata',
-    ]
-    const findings = forbidden
-      .filter(snippet => daemon.includes(snippet))
-      .map(snippet => `packages/worker-daemon/src/modes/worker.ts: ${snippet}`)
-
-    expect(findings, 'daemon internals should use capability language for current broker helpers').toEqual([])
-    expect(daemon).toContain('requireCapabilityForWorker')
-    expect(daemon).toContain('enrichCapabilityMetadata')
-  })
-
-  test('Host-visible Soul defaults use capability language instead of template defaults', () => {
-    const activeSources = [
-      'packages/soul-descriptor/src/soul-app/registry.ts',
-      'packages/soul-descriptor/src/soul-app/index.ts',
-      'packages/worker-runtime/src/soul-app/registry.ts',
-      'packages/worker-runtime/src/orchestration/orchestrator.ts',
-      'packages/soul-app-runtime/src/index.ts',
-      'apps/worker-web/src/features/local-workspace/model-types.ts',
-      'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
-    ]
-    const findings = activeSources.flatMap((path) => {
-      const source = readRepoFile(path)
-      return source.includes('defaultTemplates') ? [`${path}: defaultTemplates`] : []
-    })
-
-    expect(findings, 'Soul catalog defaults should expose defaultCapabilities, not defaultTemplates').toEqual([])
-  })
-
-  test('Host Soul catalog exposes capabilities instead of a template collection', () => {
-    const activeSources = [
-      'packages/worker-runtime/src/soul-app/registry.ts',
-      'packages/worker-runtime/src/orchestration/orchestrator.ts',
-      'packages/soul-app-runtime/src/index.ts',
-      'packages/soul-app-runtime/src/index.test.ts',
-      'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
-    ]
-    const forbidden = [
-      'templates: CapabilityTemplate[]',
-      'templates: appTemplates',
-      'listSoulCatalog().templates',
-      'this.listCatalog().templates',
-      'catalog.templates',
-      'input.catalog.templates',
-      'templates: [...app.projectedCapabilities]',
-      'catalog: { apps: currentApps, souls: currentSouls, templates: currentTemplates }',
-    ]
-    const findings = activeSources.flatMap((path) => {
-      const source = readRepoFile(path)
-      return forbidden
-        .filter(snippet => source.includes(snippet))
-        .map(snippet => `${path}: ${snippet}`)
-    })
-
-    expect(findings, 'Host catalog should return a capabilities collection, not templates').toEqual([])
-  })
-
-  test('Web local workspace model exposes capabilities instead of templates', () => {
-    const activeSources = [
-      'apps/worker-web/src/features/local-workspace/model-types.ts',
-      'apps/worker-web/src/features/local-workspace/api/types.ts',
-      'apps/worker-web/src/features/local-workspace/api/workspace-data.ts',
-      'apps/worker-web/src/features/local-workspace/components/workspace-card.tsx',
-      'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
-      'apps/worker-web/src/features/i18n/display.test.ts',
-      'apps/worker-web/src/features/i18n/index.ts',
-      'apps/worker-web/src/worker/worker-studio.tsx',
-      'apps/worker-web/src/worker/studio/locator.ts',
-      'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
-    ]
-    const forbidden = [
-      'templates: CapabilityTemplate[]',
-      'templates: WorkspaceTemplate[]',
-      'LocalWorkspaceData[\'templates\']',
-      'WorkspaceCardProps[\'template\']',
-      'data.templates',
-      'templates={data.templates}',
-      'templates={templates}',
-      'template={data.',
-      'const templatedSoulIds',
-      'CapabilityTemplate',
-    ]
-    const findings = activeSources.flatMap((path) => {
-      const source = readRepoFile(path)
-      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
-    })
-
-    expect(findings, 'Web should keep the Host-visible startable unit collection named capabilities').toEqual([])
   })
 
   test('Web local workspace model tests use generic soul ids instead of retired HR and QA identities', () => {
@@ -1113,24 +868,6 @@ describe('destructive refactor contract bootstrap', () => {
       .map(snippet => `apps/worker-web/src/features/local-workspace/components/creation-dialogs.test.tsx: ${snippet}`)
 
     expect(findings, 'local workspace dialog tests should not use old app-local product identities as generic descriptor fixtures').toEqual([])
-  })
-
-  test('WorkerStudio capability fixtures use capability collection names', () => {
-    const source = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
-    const forbidden = [
-      'const templates =',
-      'currentTemplates',
-      'templates.map',
-      'capability templates',
-      'capabilityTemplateHeading',
-    ]
-    const findings = forbidden
-      .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
-
-    expect(findings, 'WorkerStudio fixtures should name Host-visible startable units as capabilities').toEqual([])
-    expect(source).toContain('const capabilities =')
-    expect(source).toContain('currentCapabilities')
   })
 
   test('WorkerStudio primary capability fixture uses generic descriptor wording instead of person-profile residue', () => {
@@ -1198,34 +935,6 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'WorkerStudio tests should prove Host-generic mounted behavior without old HR/QA domain fixtures').toEqual([])
   })
 
-  test('Web i18n helpers expose capability names instead of template helpers', () => {
-    const activeSources = [
-      'apps/worker-web/src/features/i18n/index.ts',
-      'apps/worker-web/src/features/i18n/types.ts',
-      'apps/worker-web/src/features/i18n/display.test.ts',
-      'apps/worker-web/src/features/i18n/locales/en.ts',
-      'apps/worker-web/src/features/i18n/locales/zh-CN.ts',
-      'apps/worker-web/src/features/i18n/locales/ja.ts',
-      'apps/worker-web/src/features/i18n/locales/de.ts',
-      'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
-      'apps/worker-web/src/features/local-workspace/components/workspace-card.tsx',
-      'apps/worker-web/src/worker/studio/locator.ts',
-      'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
-    ]
-    const forbidden = [
-      'displayTemplate',
-      'BuiltinTemplateCopy',
-      'templateCount',
-      'Manifest Template',
-    ]
-    const findings = activeSources.flatMap((path) => {
-      const source = readRepoFile(path)
-      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
-    })
-
-    expect(findings, 'Web i18n helpers should describe capabilities instead of retired template helpers').toEqual([])
-  })
-
   test('Web i18n display tests use generic descriptor fixtures instead of retired HR identity', () => {
     const source = readRepoFile('apps/worker-web/src/features/i18n/display.test.ts')
     const retiredFixtureSnippets = [
@@ -1239,53 +948,6 @@ describe('destructive refactor contract bootstrap', () => {
       .map(snippet => `apps/worker-web/src/features/i18n/display.test.ts: ${snippet}`)
 
     expect(findings, 'Web i18n display tests should prove generic descriptor projection without old HR/person fixtures').toEqual([])
-  })
-
-  test('Web shell copy schema uses capability keys for startable units', () => {
-    const activeSources = [
-      'apps/worker-web/src/features/i18n/types.ts',
-      'apps/worker-web/src/features/i18n/locales/en.ts',
-      'apps/worker-web/src/features/i18n/locales/zh-CN.ts',
-      'apps/worker-web/src/features/i18n/locales/ja.ts',
-      'apps/worker-web/src/features/i18n/locales/de.ts',
-      'apps/worker-web/src/features/i18n/locales/local-shell-copy.test.ts',
-      'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
-    ]
-    const forbidden = [
-      'capabilityTemplate:',
-      'common.templates',
-      'createTabs.template',
-      'topTabs.templates',
-      'copy.create.capabilityTemplate',
-      'templateName',
-    ]
-    const findings = activeSources.flatMap((path) => {
-      const source = readRepoFile(path)
-      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
-    })
-
-    expect(findings, 'visible shell copy keys should use capability terminology').toEqual([])
-  })
-
-  test('runtime session metadata names capability display without skillName compatibility', () => {
-    const activeSources = [
-      'packages/soul-app-runtime/src/index.ts',
-      'packages/worker-runtime/src/worker/runtime.test.ts',
-      'packages/worker-runtime/src/worker/executor.test.ts',
-    ]
-    const findings = activeSources.flatMap((path) => {
-      const source = readRepoFile(path)
-      return [
-        ...source.includes('skillName') ? [`${path}: skillName`] : [],
-        ...source.includes('CapabilityTemplate') ? [`${path}: CapabilityTemplate`] : [],
-        ...source.includes('sessionMetadata: (capabilityTemplateId: string)') ? [`${path}: sessionMetadata capabilityTemplateId parameter`] : [],
-        ...source.includes('sessionMetadata: capabilityTemplateId =>') ? [`${path}: sessionMetadata capabilityTemplateId lambda`] : [],
-        ...source.includes('capabilities.find(item => item.id === capabilityTemplateId)') ? [`${path}: capabilityTemplateId lookup local`] : [],
-        ...source.includes('capabilityName: capability?.name ?? capabilityTemplateId') ? [`${path}: capabilityTemplateId fallback local`] : [],
-      ]
-    })
-
-    expect(findings, 'capability-derived session metadata should not be named as native engine skills').toEqual([])
   })
 
   test('Host runtime session fixtures stay generic instead of preserving retired domain workflow terms', () => {
@@ -1313,80 +975,70 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'Host runtime tests should use Freeform/protocol-generic fixtures, not retired HR workflow language').toEqual([])
   })
 
-  test.todo('session capability selection uses capabilityId outside historical migrations', () => {
-    // Phase-B teardown: docs/testing.md Pending Implementation
-    // New model: a session carries no capability; the capability layer (capabilityId)
-    // is removed from docs and broker contracts. Restore when the layer is torn down.
-    const protocol = readRepoFile('docs/protocol.md')
-    const runtimeDoc = readRepoFile('docs/runtime.md')
-    const activeSources = [
+  test('session capability selection is removed from contract surfaces outside historical migrations', () => {
+    // New model: a Soul is a descriptor-only template of engine assets and carries no
+    // capability concept; a session is a chat over one workspace and records no
+    // capabilityId. The capability layer is removed from every broker/API/CLI/web/SDK/
+    // descriptor contract surface. Historical SQLite migrations (drizzle/) may still
+    // name `capability_id` only as migration input behind the storage boundary.
+    const contractSurfaces = [
+      'packages/soul-descriptor/src/index.ts',
       'packages/soul-descriptor/src/local-workspace.ts',
+      'packages/soul-descriptor/src/soul-app/index.ts',
+      'packages/soul-descriptor/src/soul-app/registry.ts',
+      'packages/soul-descriptor/src/soul-app/protocol.ts',
+      'packages/soul-sdk/src/index.ts',
       'packages/storage-sqlite/src/worker/schema.ts',
       'packages/storage-sqlite/src/worker/index.ts',
-      'packages/storage-sqlite/src/worker/index.test.ts',
+      'packages/worker-runtime/src/index.ts',
       'packages/worker-runtime/src/worker/runtime.ts',
-      'packages/worker-runtime/src/worker/runtime.test.ts',
-      'packages/worker-runtime/src/orchestration/orchestrator.test.ts',
+      'packages/worker-runtime/src/orchestration/orchestrator.ts',
+      'packages/worker-runtime/src/soul-app/registry.ts',
       'packages/worker-daemon/src/modes/worker.ts',
       'packages/worker-daemon/src/modes/worker/schemas.ts',
-      'packages/worker-daemon/src/modes/worker.local.test.ts',
+      'packages/worker-daemon/src/modes/worker/openapi.ts',
       'packages/soul-app-runtime/src/index.ts',
-      'packages/soul-app-runtime/src/index.test.ts',
       'apps/worker-cli/src/aiworker.ts',
-      'apps/worker-cli/src/aiworker.test.ts',
+      'apps/worker-cli/src/scaffold.ts',
+      'apps/worker-cli/src/official-freeform-descriptor.ts',
+      'apps/worker-web/src/features/local-workspace/api/types.ts',
+      'apps/worker-web/src/features/local-workspace/api/workspace-data.ts',
+      'apps/worker-web/src/features/local-workspace/model-types.ts',
       'apps/worker-web/src/worker/studio/locator.ts',
-      'apps/worker-web/src/worker/studio/locator.test.ts',
       'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
-      'apps/worker-web/src/worker/__tests__/worker-studio.test.tsx',
+      'apps/worker-web/src/worker/worker-studio.tsx',
       'apps/worker-web/src/features/local-workspace/components/workspace-card.tsx',
+      'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
     ]
-    const findings = activeSources.flatMap((path) => {
+    const findings = contractSurfaces.flatMap((path) => {
       const source = readRepoFile(path)
-        .split('\n')
-        .filter(line => !(path === 'packages/worker-daemon/src/modes/worker.local.test.ts'
-          && (line.includes('rejects legacy session create bodies that still send capabilityTemplateId')
-            || line.includes('capabilityTemplateId: FREEFORM_CAPABILITY'))))
-        .filter(line => !(path === 'packages/storage-sqlite/src/worker/index.test.ts'
-          && line.includes('capability_template_id')))
-        .join('\n')
-      return [
-        ...source.includes('capabilityTemplateId') ? [`${path}: capabilityTemplateId`] : [],
-        ...source.includes('capability_template_id') ? [`${path}: capability_template_id`] : [],
-      ]
+      return /capabilit/i.test(source) ? [path] : []
     })
 
-    expect(protocol).toContain('`capabilityId`')
-    expect(runtimeDoc).toContain('`capabilityId`')
-    expect(findings, 'current Host-facing session contracts and current SQLite schema should use capabilityId; historical migrations may contain the old column only as migration input').toEqual([])
-  })
+    expect(findings, 'capability is removed from broker/API/CLI/web/SDK/descriptor contract surfaces').toEqual([])
 
-  test('Host runtime capability lookup APIs do not expose retired template helper names', () => {
-    const activeSources = [
-      'packages/worker-runtime/src/index.ts',
-      'packages/worker-runtime/src/orchestration/orchestrator.ts',
-      'packages/worker-runtime/src/orchestration/orchestrator.test.ts',
-      'packages/worker-runtime/src/soul-app/registry.ts',
-      'packages/worker-runtime/src/soul-app/registry.test.ts',
-      'packages/worker-daemon/src/modes/worker.ts',
-      'apps/worker-cli/src/aiworker.ts',
-    ]
-    const forbidden = [
-      'findHostCapabilityTemplate',
-      'listHostCapabilityTemplatesForSoul',
-      'listCapabilityTemplates',
-      'listCapabilityTemplatesForWorker',
-      'requireCapabilityTemplateForWorker',
-      ['Template ', '{id} does not belong'].join('$'),
-      'TEMPLATE_NOT_AVAILABLE',
-      'validates worker template ownership',
-      'CapabilityTemplate',
-    ]
-    const findings = activeSources.flatMap((path) => {
-      const source = readRepoFile(path)
-      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
-    })
+    const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
+    expect(cliSource).not.toContain('--capability')
+    expect(cliSource).not.toContain('capability list')
 
-    expect(findings, 'Host runtime should expose capability lookup helpers, not template helper aliases').toEqual([])
+    const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
+    expect(daemon).not.toContain('/api/capabilities')
+    expect(readRepoFile('packages/worker-daemon/src/modes/worker/openapi.ts')).not.toContain('/api/capabilities')
+
+    const sessionBodySchema = readRepoFile('packages/worker-daemon/src/modes/worker/schemas.ts')
+    expect(sessionBodySchema).not.toContain('capabilityId')
+
+    const sessionContract = readRepoFile('packages/soul-descriptor/src/local-workspace.ts')
+    expect(sessionContract).not.toContain('capabilityId')
+
+    // descriptor v1 no longer declares a capabilities section
+    expect(readRepoFile('packages/soul-descriptor/src/index.ts')).not.toContain('capabilities')
+    // SDK no longer exposes the capability() authoring helper
+    expect(readRepoFile('packages/soul-sdk/src/index.ts')).not.toContain('capability')
+
+    // historical migrations are allowed to retain the legacy column name
+    const migrationSurface = readRepoFile('packages/storage-sqlite/drizzle/worker/0016_steady_silvermane.sql')
+    expect(migrationSurface).toContain('capability_id')
   })
 
   test('Host runtime tests use generic worker fixtures instead of retired HR worker ids', () => {
@@ -1406,25 +1058,6 @@ describe('destructive refactor contract bootstrap', () => {
       .map(snippet => `packages/worker-runtime/src/worker/runtime.test.ts: ${snippet}`)
 
     expect(findings, 'Host runtime tests should keep worker fixtures generic').toEqual([])
-  })
-
-  test('Soul protocol capability projection helpers do not expose retired template names', () => {
-    const activeSources = [
-      'packages/soul-descriptor/src/soul-app/index.ts',
-      'packages/soul-descriptor/src/soul-app/registry.ts',
-    ]
-    const forbidden = [
-      'CapabilityTemplate',
-      'capabilityTemplateSchema',
-      'projectSoulAppCapabilityTemplate',
-      'projectSoulAppCapabilityTemplates',
-    ]
-    const findings = activeSources.flatMap((path) => {
-      const source = readRepoFile(path)
-      return forbidden.filter(snippet => source.includes(snippet)).map(snippet => `${path}: ${snippet}`)
-    })
-
-    expect(findings, 'Soul protocol projection helpers should expose capabilities, not capability templates').toEqual([])
   })
 
   test('Soul protocol id utility tests use neutral slug examples', () => {
@@ -1750,19 +1383,6 @@ describe('destructive refactor contract bootstrap', () => {
 
     expect(findings, 'Web overlay config writes must use canonical worker_config keys only').toEqual([])
     expect(workerStudioTest).toContain('/api/workers/primary-worker/config/skill-overlay%3Abriefing-brief')
-  })
-
-  test('storage legacy discard fixtures use capability wording for custom capability ids', () => {
-    const storageTest = readRepoFile('packages/storage-sqlite/src/worker/index.test.ts')
-    const forbidden = [
-      'custom-legacy-template',
-      'Custom legacy template',
-    ]
-    const findings = forbidden
-      .filter(snippet => storageTest.includes(snippet))
-      .map(snippet => `packages/storage-sqlite/src/worker/index.test.ts: ${snippet}`)
-
-    expect(findings, 'storage fixtures should not name custom capabilities as templates').toEqual([])
   })
 
   test('retired built-in Soul cleanup does not expose legacy-named current APIs', () => {

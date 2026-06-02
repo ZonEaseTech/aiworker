@@ -49,7 +49,6 @@ type WorkerStudioResolvedLocatorState = Omit<WorkerStudioLocatorState, 'soulSess
 
 const emptyWorkerStudioLocatorState: WorkerStudioResolvedLocatorState = {
   allSessions: [],
-  capabilities: [],
   filteredWorkspaces: [],
   isWorkspaceContextRoute: false,
   selectableWorkers: [],
@@ -156,7 +155,6 @@ export function WorkerStudio() {
     selectedSoulApp,
     selectedWorker,
     selectedWorkspace,
-    capabilities,
   } = locatorState ?? emptyWorkerStudioLocatorState
   const workerConfigurationWorker = workerConfigurationWorkerId
     ? selectableWorkers.find(worker => worker.id === workerConfigurationWorkerId) ?? selectedWorker
@@ -484,7 +482,6 @@ export function WorkerStudio() {
                     initialSection={settingsInitialSection}
                     apps={data.apps}
                     runtimeVersion={data.info.runtimeVersion}
-                    capabilities={data.capabilities}
                     onClose={() => setSettingsOpen(false)}
                     onSaved={(settings) => {
                       setState(current => current.data
@@ -565,7 +562,6 @@ export function WorkerStudio() {
                   <WorkerHomeFallback
                     allSessions={allSessions}
                     copy={copy}
-                    data={data}
                     filteredWorkspaces={filteredProjects}
                     locale={activeLocale}
                     query={query}
@@ -573,7 +569,6 @@ export function WorkerStudio() {
                     selectedSoulCopy={selectedSoulCopy}
                     selectedWorker={selectedWorker}
                     selectedWorkspace={selectedWorkspace}
-                    capabilities={capabilities}
                     onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
                     onOpenSettings={() => openSettings()}
                     onRefresh={() => void refresh()}

@@ -1,7 +1,6 @@
 import type { WorkerRoute } from '../../app/router/worker-route'
 import type { LocalWorkspaceData } from '../../features/local-workspace/api/types'
 
-import { displayCapability, normalizeLocale } from '../../features/i18n'
 import { latest, sessionForWorkspace } from '../../features/local-workspace/model'
 
 export interface WorkerStudioLocatorInput {
@@ -25,7 +24,6 @@ export interface WorkerStudioLocatorState {
   selectedWorkspace: LocalWorkspaceData['workspaces'][number] | null
   soulSessions: LocalWorkspaceData['sessions']
   soulWorkspaces: LocalWorkspaceData['workspaces']
-  capabilities: LocalWorkspaceData['capabilities']
 }
 
 export function deriveWorkerStudioLocatorState({
@@ -37,7 +35,6 @@ export function deriveWorkerStudioLocatorState({
   selectedWorkspaceId = null,
 }: WorkerStudioLocatorInput): WorkerStudioLocatorState {
   const allSessions = data?.sessions ?? []
-  const activeLocale = normalizeLocale(data?.settings.language ?? 'en')
   const routedWorkspace = route.kind === 'workspace' || route.kind === 'session'
     ? data?.workspaces.find(workspace => workspace.id === route.workspaceId) ?? null
     : null
@@ -60,13 +57,9 @@ export function deriveWorkerStudioLocatorState({
   const selectedSoulApp = selectedWorker && data
     ? data.apps.find(app => app.appId === selectedWorker.appId || app.projectedSoul?.id === selectedWorker.appId) ?? null
     : null
-  const capabilities = data?.capabilities.filter(capability => capability.appId === selectedWorker?.appId) ?? []
   const soulWorkspaces = data?.workspaces.filter(item => item.workerId === selectedWorker?.id) ?? []
   const soulSessions = deriveSoulSessions(allSessions, soulWorkspaces)
   const filteredWorkspaces = deriveFilteredWorkspaces({
-    allSessions,
-    data,
-    locale: activeLocale,
     query,
     soulWorkspaces,
   })
@@ -96,14 +89,12 @@ export function deriveWorkerStudioLocatorState({
     selectedWorkspace,
     soulSessions,
     soulWorkspaces,
-    capabilities,
   }
 }
 
 function deriveSelectableWorkers(data: LocalWorkspaceData): LocalWorkspaceData['workers'] {
   const availableSoulIds = new Set(data.souls.filter(soul => soul.status === 'available').map(soul => soul.id))
-  const capabilityAppIds = new Set(data.capabilities.map(capability => capability.appId))
-  return data.workers.filter(worker => availableSoulIds.has(worker.appId) && capabilityAppIds.has(worker.appId))
+  return data.workers.filter(worker => availableSoulIds.has(worker.appId))
 }
 
 function deriveSoulSessions(
@@ -115,26 +106,12 @@ function deriveSoulSessions(
 }
 
 function deriveFilteredWorkspaces({
-  allSessions,
-  data,
-  locale,
   query,
   soulWorkspaces,
 }: {
-  allSessions: LocalWorkspaceData['sessions']
-  data: LocalWorkspaceData | null
-  locale: Parameters<typeof displayCapability>[1]
   query: string | null
   soulWorkspaces: LocalWorkspaceData['workspaces']
 }): LocalWorkspaceData['workspaces'] {
   const needle = (query ?? '').trim().toLowerCase()
-  return soulWorkspaces.filter((item) => {
-    const latestSession = sessionForWorkspace(item, allSessions)
-    const capability = data?.capabilities.find(candidate => candidate.id === latestSession?.capabilityId)
-    const capabilityCopy = capability ? displayCapability(capability, locale) : null
-    return !needle
-      || item.name.toLowerCase().includes(needle)
-      || capability?.name.toLowerCase().includes(needle)
-      || capabilityCopy?.name.toLowerCase().includes(needle)
-  })
+  return soulWorkspaces.filter(item => !needle || item.name.toLowerCase().includes(needle))
 }

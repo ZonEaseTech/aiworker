@@ -31,7 +31,6 @@ function defaultShellCopy(copy: ShellCopy): string[] {
     copy.settings.dialog.subtitle,
     copy.settings.dialog.title,
     copy.settings.externalMcp.pending,
-    copy.settings.soulPacks.capabilitiesTitle,
     copy.settings.soulPacks.permissionsTitle,
     copy.settings.soulPacks.permissionCount(2),
   ]
@@ -143,32 +142,4 @@ describe('local shell copy', () => {
     expect(Object.keys(messagesFor('en').workspace)).not.toContain('turnHistory')
   })
 
-  it('uses capability language instead of template copy for startable units', () => {
-    const forbidden = [
-      /templates?/i,
-      /模板/,
-      /テンプレート/,
-    ]
-
-    for (const locale of supportedLocales) {
-      const copy = messagesFor(locale)
-      const texts = [
-        copy.common.capabilities,
-        copy.create.capability,
-        copy.navigation.createTabs.capability,
-        copy.navigation.topTabs.capabilities,
-        copy.settings.soulPacks.capabilityCount(2),
-      ]
-
-      for (const text of texts) {
-        for (const pattern of forbidden)
-          expect(text, `${locale}: ${text}`).not.toMatch(pattern)
-      }
-    }
-
-    expect(messagesFor('en').create.capability).toBe('Capability')
-    expect(messagesFor('en').navigation.topTabs.capabilities).toBe('Capabilities')
-    expect(messagesFor('zh-CN').create.capability).toBe('能力')
-    expect(messagesFor('zh-CN').navigation.topTabs.capabilities).toBe('能力')
-  })
 })

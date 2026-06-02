@@ -116,9 +116,6 @@ function isSafeAppOwnedApiMount(value: string): boolean {
 }
 
 const hostInterpretedObjectSchema = jsonObjectSchema.superRefine(rejectForbiddenHostInterpretedFields)
-const hostInterpretedArraySchema = z
-  .array(z.unknown())
-  .superRefine(rejectForbiddenHostInterpretedFields)
 const externalObjectSchema = jsonObjectSchema.superRefine(rejectForbiddenDescriptorSecrets)
 
 const builtHtmlEntrySchema = z.string().refine(
@@ -203,7 +200,6 @@ export const soulDescriptorV1Schema = z
     protocol: z.literal(SOUL_DESCRIPTOR_V1_PROTOCOL),
     identity: hostInterpretedObjectSchema,
     compatibility: hostInterpretedObjectSchema,
-    capabilities: hostInterpretedArraySchema,
     configuration: hostInterpretedObjectSchema,
     workbench: workbenchSchema,
     api: appOwnedApiSchema.nullable(),
@@ -227,7 +223,6 @@ export const soulProtocolPackage = {
     'protocol',
     'identity',
     'compatibility',
-    'capabilities',
     'configuration',
     'workbench',
     'api',

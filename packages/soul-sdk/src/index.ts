@@ -13,7 +13,6 @@ export type SoulValidationStatus = 'invalid' | 'valid'
 export interface SoulConfig {
   appId?: string
   api?: SoulDescriptorV1['api']
-  capabilities?: SoulCapabilityConfig[]
   compatibility?: Partial<SoulDescriptorV1['compatibility']>
   configuration?: Partial<SoulDescriptorV1['configuration']>
   description?: string
@@ -25,12 +24,6 @@ export interface SoulConfig {
   soulId?: string
   version: string
   workbench?: SoulWorkbenchConfig
-}
-
-export interface SoulCapabilityConfig {
-  id: string
-  name?: string
-  purpose?: string
 }
 
 export interface SoulWorkbenchConfig {
@@ -59,7 +52,6 @@ export interface SoulNativeMcpConfig {
 }
 
 export interface SoulDiscovery {
-  capabilities: Array<{ id: string, promptPath: string }>
   generatedSections: string[]
   mcpTargets: Array<{ file: string, target: string }>
   workbench: { mode: 'custom' | 'sdk-common', source: string }
@@ -96,10 +88,6 @@ export function defineSoul(input: SoulConfig): SoulConfig {
     appId: input.appId ?? input.id,
     soulId: input.soulId ?? input.id,
   }
-}
-
-export function capability(input: SoulCapabilityConfig): SoulCapabilityConfig {
-  return input
 }
 
 export function commonWorkbench(options: SoulWorkbenchConfig = {}): SoulWorkbenchConfig {
@@ -153,7 +141,6 @@ export async function buildSoul(rootDir: string): Promise<SoulBuildResult> {
   rmSync(outputRoot, { force: true, recursive: true })
   mkdirSync(outputRoot, { recursive: true })
 
-  copyCapabilities(rootDir, resolved.discovery.capabilities)
   writeWorkbench(rootDir, resolved.discovery.workbench)
   copyEngineAssets(rootDir, resolved.discovery)
 
@@ -172,14 +159,6 @@ async function resolveSoul(rootDir: string): Promise<ResolvedSoul & { issues: So
   const issues: SoulValidationIssue[] = []
   const config = await loadSoulConfig(rootDir, issues)
   const discovery = discoverSoul(rootDir)
-
-  if (discovery.capabilities.length === 0) {
-    issues.push({
-      code: 'missing_capability',
-      message: 'Soul must define at least one product/capabilities/*/prompt.md file.',
-      path: 'product/capabilities',
-    })
-  }
 
   for (const target of discovery.mcpTargets) {
     validateNativeMcp(rootDir, target, issues)
@@ -239,10 +218,9 @@ async function loadSoulConfig(rootDir: string, issues: SoulValidationIssue[]): P
 }
 
 function discoverSoul(rootDir: string): SoulDiscovery {
-  const capabilities = discoverCapabilities(rootDir)
   const workbench = discoverWorkbench(rootDir)
   const mcpTargets = discoverMcpTargets(rootDir)
-  const generatedSections = ['capabilities', 'workbench']
+  const generatedSections = ['workbench']
 
   if (existsSync(join(rootDir, 'engine/workspace')))
     generatedSections.push('engine.workspaceAssets')
@@ -252,26 +230,10 @@ function discoverSoul(rootDir: string): SoulDiscovery {
     generatedSections.push('engine.mcp')
 
   return {
-    capabilities,
     generatedSections,
     mcpTargets,
     workbench,
   }
-}
-
-function discoverCapabilities(rootDir: string): Array<{ id: string, promptPath: string }> {
-  const capabilitiesDir = join(rootDir, 'product/capabilities')
-  if (!existsSync(capabilitiesDir))
-    return []
-
-  return readdirSync(capabilitiesDir, { withFileTypes: true })
-    .filter(entry => entry.isDirectory())
-    .map(entry => ({
-      id: entry.name,
-      promptPath: toPortablePath(relative(rootDir, join(capabilitiesDir, entry.name, 'prompt.md'))),
-    }))
-    .filter(item => existsSync(join(rootDir, item.promptPath)))
-    .sort((left, right) => left.id.localeCompare(right.id))
 }
 
 function discoverWorkbench(rootDir: string): SoulDiscovery['workbench'] {
@@ -356,23 +318,8 @@ function redactDiagnosticMessage(message: string): string {
 }
 
 function createDescriptor(config: SoulConfig, discovery: SoulDiscovery): SoulDescriptorV1 {
-  const capabilityConfigs = new Map((config.capabilities ?? []).map(item => [item.id, item]))
-  const capabilities = discovery.capabilities.map((item) => {
-    const configured = capabilityConfigs.get(item.id)
-    return {
-      id: item.id,
-      name: configured?.name ?? titleize(item.id),
-      prompt: {
-        ref: `dist/${item.promptPath}`,
-        type: 'packaged-file',
-      },
-      ...(configured?.purpose ? { purpose: configured.purpose } : {}),
-    }
-  })
-
   return parseSoulDescriptorV1({
     api: config.api ?? null,
-    capabilities,
     compatibility: {
       engines: ['codex', 'claude-code'],
       host: '>=1.0.0',
@@ -437,15 +384,6 @@ function createDescriptor(config: SoulConfig, discovery: SoulDiscovery): SoulDes
   })
 }
 
-function copyCapabilities(rootDir: string, capabilities: SoulDiscovery['capabilities']): void {
-  for (const item of capabilities) {
-    copyDirectory(
-      join(rootDir, 'product/capabilities', item.id),
-      join(rootDir, 'dist/product/capabilities', item.id),
-    )
-  }
-}
-
 function commonWorkbenchDistDir(): string {
   // soul-workbench is a sibling workspace package; resolve its built micro-app
   // bundle by filesystem layout (robust across runtimes / node_modules linking).
@@ -503,7 +441,6 @@ function fallbackConfig(): SoulConfig {
 function fallbackDescriptor(): SoulDescriptorV1 {
   return parseSoulDescriptorV1({
     api: null,
-    capabilities: [],
     compatibility: {},
     configuration: {},
     engine: {},
@@ -517,14 +454,6 @@ function fallbackDescriptor(): SoulDescriptorV1 {
       type: 'micro-app',
     },
   })
-}
-
-function titleize(value: string): string {
-  return value
-    .split('-')
-    .filter(Boolean)
-    .map(part => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-    .join(' ')
 }
 
 function toPortablePath(path: string): string {

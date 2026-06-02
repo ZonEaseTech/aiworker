@@ -12,19 +12,7 @@ import { z as zod } from 'zod'
 const verticalSoulStatusSchema = zod.enum(['available', 'coming_soon'])
 type VerticalSoulStatus = zod.infer<typeof verticalSoulStatusSchema>
 
-const projectedCapabilitySchema = zod.object({
-  description: zod.string().min(1),
-  id: zod.string().min(1),
-  inputHints: zod.array(zod.string().min(1)).readonly(),
-  name: zod.string().min(1),
-  outputKind: zod.string().min(1),
-  promptRef: zod.string().min(1),
-  appId: zod.string().min(1),
-})
-type ProjectedCapability = zod.infer<typeof projectedCapabilitySchema>
-
 const verticalSoulSchema = zod.object({
-  defaultCapabilities: zod.array(zod.string().min(1)).readonly(),
   description: zod.string().min(1),
   id: zod.string().min(1),
   name: zod.string().min(1),
@@ -100,7 +88,6 @@ export const hostedSoulAppSchema = zod.object({
   mountedWorkbench: mountedWorkbenchSchema,
   name: zod.string().min(1),
   permissions: zod.array(soulAppPermissionSchema).readonly(),
-  projectedCapabilities: zod.array(projectedCapabilitySchema).readonly(),
   projectedSoul: verticalSoulSchema,
   soulId: zod.string().min(1),
   sourceKind: soulAppInstallSourceKindSchema,
@@ -111,51 +98,14 @@ export const hostedSoulAppSchema = zod.object({
 })
 export type HostedSoulApp = z.infer<typeof hostedSoulAppSchema>
 
-export function namespaceSoulAppCapabilityId(appId: string, capabilityId: string): string {
-  return `${appId}.${capabilityId}`
-}
-
-export function parseNamespacedSoulAppCapabilityId(id: string): { appId: string, capabilityId: string } | null {
-  const index = id.indexOf('.')
-  if (index <= 0 || index >= id.length - 1)
-    return null
-  return { appId: id.slice(0, index), capabilityId: id.slice(index + 1) }
-}
-
 export function projectSoulAppSoul(descriptor: SoulDescriptorV1, status: VerticalSoulStatus = 'available'): VerticalSoul {
   const identity = descriptorIdentity(descriptor)
   return {
-    defaultCapabilities: projectSoulAppDefaultCapabilities(descriptor),
     description: identity.description,
     id: identity.appId,
     name: identity.name,
     status,
   }
-}
-
-export function projectSoulAppDefaultCapabilities(descriptor: SoulDescriptorV1): string[] {
-  const identity = descriptorIdentity(descriptor)
-  return descriptor.capabilities
-    .map(capability => capabilityRecord(capability))
-    .map(capability => namespaceSoulAppCapabilityId(identity.appId, capability.id))
-}
-
-export function projectSoulAppCapability(descriptor: SoulDescriptorV1, capability: unknown): ProjectedCapability {
-  const identity = descriptorIdentity(descriptor)
-  const record = capabilityRecord(capability)
-  return {
-    description: record.description,
-    id: namespaceSoulAppCapabilityId(identity.appId, record.id),
-    inputHints: ['Workspace locator is owned by the Soul App.'],
-    name: record.name,
-    outputKind: 'session',
-    promptRef: record.promptRef,
-    appId: identity.appId,
-  }
-}
-
-export function projectSoulAppCapabilities(descriptor: SoulDescriptorV1): ProjectedCapability[] {
-  return descriptor.capabilities.map(capability => projectSoulAppCapability(descriptor, capability))
 }
 
 export function buildHostedSoulApp(input: {
@@ -187,7 +137,6 @@ export function buildHostedSoulApp(input: {
     },
     name: identity.name,
     permissions: permissionsForDescriptor(input.descriptor),
-    projectedCapabilities: projectSoulAppCapabilities(input.descriptor),
     projectedSoul: projectSoulAppSoul(input.descriptor, input.status === 'enabled' ? 'available' : 'coming_soon'),
     soulId: identity.soulId,
     sourceKind: input.sourceKind,
@@ -211,24 +160,6 @@ function descriptorIdentity(descriptor: SoulDescriptorV1): {
     name: String(descriptor.identity.name),
     soulId: String(descriptor.identity.soulId),
     version: String(descriptor.identity.version),
-  }
-}
-
-function capabilityRecord(capability: unknown): {
-  description: string
-  id: string
-  name: string
-  promptRef: string
-} {
-  const record = capability && typeof capability === 'object' ? capability as Record<string, unknown> : {}
-  const id = typeof record.id === 'string' && record.id.trim().length > 0 ? record.id : 'default'
-  const name = typeof record.name === 'string' && record.name.trim().length > 0 ? record.name : id
-  const prompt = record.prompt && typeof record.prompt === 'object' ? record.prompt as Record<string, unknown> : {}
-  return {
-    description: typeof record.purpose === 'string' && record.purpose.trim().length > 0 ? record.purpose : name,
-    id,
-    name,
-    promptRef: typeof prompt.ref === 'string' && prompt.ref.trim().length > 0 ? prompt.ref : `dist/product/capabilities/${id}/prompt.md`,
   }
 }
 

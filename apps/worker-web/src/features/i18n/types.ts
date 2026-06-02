@@ -45,13 +45,11 @@ export interface StaticMessages {
   common: {
     available: string
     comingSoon: string
-    capabilities: string
     interface: string
     notInstalled: string
     workspace: string
   }
   create: {
-    capability: string
     sessionContext: string
     creatingSession: string
     footer: string
@@ -64,7 +62,6 @@ export interface StaticMessages {
   languageOptions: Record<SupportedLocale, string>
   navigation: {
     createTabs: {
-      capability: string
       project: string
     }
     projectTabs: {
@@ -77,7 +74,6 @@ export interface StaticMessages {
       domainSystems: string
       examples: string
       projects: string
-      capabilities: string
     }
   }
   projects: {
@@ -94,7 +90,6 @@ export interface StaticMessages {
     configure: string
     continueSession: string
     createSession: string
-    createSessionHint: (capabilityName: string) => string
     createSessionPlaceholder: string
     createSessionPrompt: (workspaceName: string) => string
     addSourceMaterials: string
@@ -147,7 +142,6 @@ export interface StaticMessages {
     noWorker: string
     noWorkspaceSessions: string
     otherWorkspaces: string
-    selectedCapability: string
     selectedWorkspace: string
     sessionDetail: string
     latest: string
@@ -263,7 +257,6 @@ export interface StaticMessages {
     }
     soulPacks: {
       apiRoute: (routePrefix: string) => string
-      capabilitiesTitle: string
       connectorStatus: (connectorId: string, status: string) => string
       connectorsTitle: string
       archiveApp: (name: string) => string
@@ -275,7 +268,6 @@ export interface StaticMessages {
       mountedWorkbenchCount: (count: number) => string
       permissionsTitle: string
       permissionCount: (count: number) => string
-      capabilityCount: (count: number) => string
       title: string
       unavailableConnector: string
       updating: string
@@ -287,11 +279,4 @@ export interface StaticMessages {
 export interface BuiltinSoulCopy {
   description: string
   name: string
-}
-
-export interface BuiltinCapabilityCopy {
-  description: string
-  inputHints: readonly string[]
-  name: string
-  outputKind: string
 }

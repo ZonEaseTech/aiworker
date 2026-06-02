@@ -4,7 +4,7 @@ import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { namespaceSoulAppCapabilityId, parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
+import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import {
   appendSessionEvent,
   bridgeEvents,
@@ -28,16 +28,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { bootstrapWorkerApp, localApiExposureWarning, mountedServiceSpawnEnv } from './worker'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
-const FREEFORM_CAPABILITY = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'default')
 
 const freeformDescriptor = parseSoulDescriptorV1({
   api: null,
-  capabilities: [{
-    id: 'default',
-    name: 'Freeform Session',
-    prompt: { ref: 'dist/product/capabilities/default/prompt.md', type: 'packaged-file' },
-    purpose: 'Start an open-ended engine-backed AIWorker session inside a workspace locator.',
-  }],
   compatibility: { host: '>=1.0.0' },
   configuration: {},
   engine: {
@@ -178,7 +171,6 @@ describe('local daemon API', () => {
 
     const sessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         title: 'Freeform session',
         workerId,
         workspaceId: workspace.id,
@@ -254,9 +246,8 @@ describe('local daemon API', () => {
     })
     createSession({
       at: seedNow,
-      capabilityId: 'candidate-screen',
       id: 'legacy-hr-session',
-      metadataJson: { capabilityId: 'candidate-screen', soulName: 'HR' },
+      metadataJson: { soulName: 'HR' },
       title: 'Legacy candidate screen',
       workerId: 'legacy-hr-worker',
       workspaceId: 'legacy-hr-workspace',
@@ -321,28 +312,14 @@ describe('local daemon API', () => {
     expect(legacyMemberWriteRes.status).toBe(404)
   })
 
-  it('lists capabilities without retired template route aliases', async () => {
+  it('does not expose a capability listing route', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'capability-route-worker')
 
-    const capabilitiesRes = await target.request('/api/capabilities')
-    expect(capabilitiesRes.status).toBe(200)
-    const capabilitiesBody = await capabilitiesRes.json() as { capabilities: Array<{ id: string }> }
-    expect(capabilitiesBody.capabilities.map(capability => capability.id)).toContain(FREEFORM_CAPABILITY)
-
+    expect((await target.request('/api/capabilities')).status).toBe(404)
+    expect((await target.request(`/api/capabilities?workerId=${worker.id}`)).status).toBe(404)
     expect((await target.request('/api/local/capabilities')).status).toBe(404)
-
-    const workerCapabilitiesRes = await target.request(`/api/capabilities?workerId=${worker.id}`)
-    expect(workerCapabilitiesRes.status).toBe(200)
-    const workerCapabilitiesBody = await workerCapabilitiesRes.json() as { capabilities: Array<{ id: string }> }
-    expect(workerCapabilitiesBody.capabilities.map(capability => capability.id)).toEqual([FREEFORM_CAPABILITY])
-
     expect((await target.request(`/api/local/workers/${worker.id}/capabilities`)).status).toBe(404)
-    expect((await target.request(`/api/local/workers/${worker.id}/capabilities/${FREEFORM_CAPABILITY}`)).status).toBe(404)
-
-    expect((await target.request('/api/local/templates')).status).toBe(404)
-    expect((await target.request(`/api/local/workers/${worker.id}/templates`)).status).toBe(404)
-    expect((await target.request(`/api/local/workers/${worker.id}/templates/${FREEFORM_CAPABILITY}`)).status).toBe(404)
   })
 
   it('bootstraps official descriptors from an explicit packaged app root', async () => {
@@ -775,7 +752,6 @@ describe('local daemon API', () => {
 
     const sessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         input: 'Start through the daemon session create route.',
         title: 'First invocation session',
         workerId: worker.id,
@@ -802,7 +778,6 @@ describe('local daemon API', () => {
     expect((await target.request(`/api/local/workspaces/${workspace.id}/sessions`)).status).toBe(404)
     expect((await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions`, {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         title: 'Legacy nested session create',
       }),
       headers: { 'content-type': 'application/json' },
@@ -810,7 +785,6 @@ describe('local daemon API', () => {
     })).status).toBe(404)
     expect((await target.request(`/api/local/workspaces/${workspace.id}/sessions`, {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         title: 'Legacy workspace session create',
       }),
       headers: { 'content-type': 'application/json' },
@@ -828,7 +802,6 @@ describe('local daemon API', () => {
     const siblingWorkspace = await createWorkspaceLocator(target, worker.id, { name: 'Sibling Session Workspace' })
     const siblingSessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         title: 'Sibling session',
         workerId: worker.id,
         workspaceId: siblingWorkspace.id,
@@ -845,26 +818,6 @@ describe('local daemon API', () => {
     expect(scopedSessions.sessions.map(session => session.workspaceId)).toEqual([workspace.id])
   })
 
-  it('rejects legacy session create bodies that still send capabilityTemplateId', async () => {
-    const target = await app()
-    const worker = await createFreeformWorker(target, 'legacy-capability-field-worker')
-    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Legacy Capability Field Workspace' })
-
-    const legacyRes = await target.request('/api/sessions', {
-      body: JSON.stringify({
-        capabilityTemplateId: FREEFORM_CAPABILITY,
-        title: 'Legacy capability field',
-        workerId: worker.id,
-        workspaceId: workspace.id,
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-
-    expect(legacyRes.status).toBe(400)
-    expect(await legacyRes.json()).toMatchObject({ error: { code: 'CREATE_SESSION_INVALID' } })
-  })
-
   it('rejects Host-owned free-form session notes in write bodies', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target, 'freeform-context-reject-worker')
@@ -872,7 +825,6 @@ describe('local daemon API', () => {
 
     const rejectedCreateRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         context: 'Host must not store this free-form session note.',
         title: 'Rejected context session',
         workerId: worker.id,
@@ -954,18 +906,6 @@ describe('local daemon API', () => {
     // 锁定的不变量是"非-active present workerId 必被拒",不锁具体码。
     expect(res.status).toBeGreaterThanOrEqual(400)
     expect(res.status).toBeLessThan(500)
-  })
-
-  it('GET /api/capabilities omits workerId → unscoped list (single-active daemon ⇒ that Worker scope)', async () => {
-    const target = await app()
-    const worker = await createFreeformWorker(target, 'cap-worker')
-    // absent → unscoped 全局列举(existence-filter 语义,见 protocol.md);standalone client
-    // 省略 workerId 必须拿到非空能力,这是 standalone 读路径不依赖 Host 的保证。
-    const all = await (await target.request('/api/capabilities')).json() as { capabilities: unknown[] }
-    expect(all.capabilities.length).toBeGreaterThan(0)
-    // 单 active worker 下,unscoped 与 present(self)scoped 结果一致(coincidence = standalone 保证)。
-    const scoped = await (await target.request(`/api/capabilities?workerId=${worker.id}`)).json() as { capabilities: unknown[] }
-    expect(all.capabilities).toEqual(scoped.capabilities)
   })
 
   it('honors workspace locator rootPath for app-owned workspace projection', async () => {
@@ -1060,7 +1000,6 @@ describe('local daemon API', () => {
 
     const blockedSessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         input: 'Start after workspace archive.',
         title: 'Blocked archived workspace session',
         workerId: worker.id,
@@ -1187,7 +1126,6 @@ describe('local daemon API', () => {
 
     const blockedSessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         input: 'Start session after worker archive.',
         title: 'Blocked archived worker session',
         workerId: worker.id,
@@ -1382,7 +1320,6 @@ describe('local daemon API', () => {
 
     const workerStreamRes = await target.request(`/api/local/workers/${worker.id}/workspaces/${workspace.id}/sessions/stream`, {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         input: 'Start through legacy worker workspace stream alias.',
         title: 'Legacy stream session',
       }),
@@ -1393,7 +1330,6 @@ describe('local daemon API', () => {
 
     const workspaceStreamRes = await target.request(`/api/local/workspaces/${workspace.id}/sessions/stream`, {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         input: 'Start through legacy workspace stream alias.',
         title: 'Legacy stream session',
       }),
@@ -1992,7 +1928,6 @@ describe('local daemon API', () => {
 
     const sessionCreateRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: FREEFORM_CAPABILITY,
         title: 'Blocked after Soul App archive',
         workerId: worker.id,
         workspaceId: workspace.id,
@@ -2816,7 +2751,6 @@ describe('local daemon API', () => {
     const siblingWorkspace = await createWorkspaceLocator(target, 'demo-api-worker')
     const sessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: namespaceSoulAppCapabilityId('demo-api', 'default'),
         title: 'Demo API session',
         workerId: 'demo-api-worker',
         workspaceId: workspace.id,
@@ -2938,7 +2872,6 @@ describe('local daemon API', () => {
     const workspace = await createWorkspaceLocator(target, 'demo-api-archive-worker')
     const sessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: namespaceSoulAppCapabilityId('demo-api', 'default'),
         title: 'Demo API archive session',
         workerId: 'demo-api-archive-worker',
         workspaceId: workspace.id,
@@ -2958,7 +2891,6 @@ describe('local daemon API', () => {
 
     const replacementSessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: namespaceSoulAppCapabilityId('demo-api', 'default'),
         title: 'Demo API replacement session',
         workerId: 'demo-api-archive-worker',
         workspaceId: workspace.id,
@@ -2979,7 +2911,6 @@ describe('local daemon API', () => {
     const activeWorkspace = await createWorkspaceLocator(target, 'demo-api-archive-worker')
     const activeSessionRes = await target.request('/api/sessions', {
       body: JSON.stringify({
-        capabilityId: namespaceSoulAppCapabilityId('demo-api', 'default'),
         title: 'Demo API active workspace session',
         workerId: 'demo-api-archive-worker',
         workspaceId: activeWorkspace.id,
@@ -3242,7 +3173,6 @@ describe('local daemon API', () => {
       ['post', '/api/app-installation/apps/{appId}/enable'],
       ['post', '/api/app-installation/apps/{appId}/archive'],
       ['delete', '/api/app-installation/apps/{appId}'],
-      ['get', '/api/capabilities'],
       ['post', '/api/workers'],
       ['get', '/api/workers'],
       ['get', '/api/workers/{workerId}'],

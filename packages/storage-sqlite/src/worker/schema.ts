@@ -49,7 +49,6 @@ export const sessions = sqliteTable(
     id: text('id').primaryKey(),
     workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
     workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-    capabilityId: text('capability_id').notNull(),
     title: text('title').notNull(),
     // 'deleted' は reserved 終態。v1 にソフト削除プロデューサーなし — コードパス上 status を 'deleted' にセットする処理は存在しない。
     // 'archived' が唯一のソフト ライフサイクル遷移。セッション DELETE (DELETE /api/sessions/:id) はハードデリート(物理行削除)であり、
@@ -62,7 +61,6 @@ export const sessions = sqliteTable(
     updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    capabilityUpdatedAtIdx: index('sessions_capability_updated_at_idx').on(table.capabilityId, table.updatedAt),
     statusUpdatedAtIdx: index('sessions_status_updated_at_idx').on(table.status, table.updatedAt),
     workerUpdatedAtIdx: index('sessions_worker_updated_at_idx').on(table.workerId, table.updatedAt),
     workspaceUpdatedAtIdx: index('sessions_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),

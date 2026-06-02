@@ -19,7 +19,6 @@ const baseDescriptor = {
     host: '>=1.0.0',
     engines: ['codex'],
   },
-  capabilities: [],
   configuration: {},
   workbench: {
     type: 'micro-app',
@@ -50,7 +49,6 @@ describe('descriptor v1 schema', () => {
 
     expect(Object.keys(descriptor).sort()).toEqual([
       'api',
-      'capabilities',
       'compatibility',
       'configuration',
       'engine',

@@ -11,7 +11,7 @@ import type {
   LocalWorkspace,
   SoulAppProjectionReceipt,
 } from '@zonease/aiworker-soul-descriptor'
-import type { VerticalSoul, WorkspaceCapability } from '../model-types'
+import type { VerticalSoul } from '../model-types'
 
 export interface LocalSoulAppLifecycleResponse {
   app: LocalHostedSoulApp
@@ -29,7 +29,6 @@ export interface LocalInfoResponse {
 export interface LocalWorkspaceData {
   info: LocalInfoResponse
   apps: LocalHostedSoulApp[]
-  capabilities: WorkspaceCapability[]
   workers: LocalWorker[]
   souls: VerticalSoul[]
   workspaces: LocalWorkspace[]

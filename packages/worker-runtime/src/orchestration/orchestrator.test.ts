@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { namespaceSoulAppCapabilityId, parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
+import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import {
   closeWorkerDb,
   createSession,
@@ -19,14 +19,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { createWorkerOrchestrator } from './orchestrator'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
-const FREEFORM_DEFAULT = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'default')
 const freeformDescriptor = parseSoulDescriptorV1({
   api: null,
-  capabilities: [{
-    id: 'default',
-    name: 'Freeform Session',
-    prompt: { ref: 'dist/product/capabilities/default/prompt.md', type: 'packaged-file' },
-  }],
   compatibility: { host: '>=1.0.0' },
   configuration: {},
   engine: {
@@ -101,7 +95,6 @@ describe('Worker orchestrator boundary', () => {
       id: 'legacy-hr-session',
       workerId: 'legacy-hr-worker',
       workspaceId: 'legacy-hr-workspace',
-      capabilityId: 'candidate-screen',
       title: 'Legacy candidate screen',
       at,
     })
@@ -140,7 +133,6 @@ describe('Worker orchestrator boundary', () => {
       appId: FREEFORM_APP_ID,
     })
     expect(created.worker.metadataJson).toMatchObject({
-      defaultCapabilities: expect.any(Array),
       owner: 'operator',
       soulAppId: FREEFORM_APP_ID,
     })
@@ -180,25 +172,6 @@ describe('Worker orchestrator boundary', () => {
 
     await expect(readFile(path.join(workspace.rootPath, '.codex', 'config.toml'), 'utf8')).resolves.toContain('mcp_servers.ats')
     await expect(readFile(path.join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain('"kind": "mcp-client"')
-  })
-
-  it('validates worker capability ownership', async () => {
-    const runtime = orchestrator()
-    await runtime.bootstrapOfficialSoulApps()
-    const created = await runtime.createSoulWorker({
-      id: 'freeform-worker',
-      name: 'Freeform',
-      appId: FREEFORM_APP_ID,
-    })
-
-    const capability = runtime.requireCapabilityForWorker(created.worker.id, FREEFORM_DEFAULT)
-    expect(capability).toMatchObject({
-      id: FREEFORM_DEFAULT,
-      appId: FREEFORM_APP_ID,
-    })
-
-    expect(() => runtime.requireCapabilityForWorker(created.worker.id, 'other-soul.release-gate'))
-      .toThrow('does not belong to worker')
   })
 
   it('validates that a worker Soul App is enabled before new work', async () => {

@@ -79,7 +79,6 @@ describe('Freeform Soul descriptor contract', () => {
     for (const path of [
       `${freeformPath}/package.json`,
       `${freeformPath}/soul.config.ts`,
-      `${freeformPath}/product/capabilities/default/prompt.md`,
       `${freeformPath}/engine/workspace/AGENTS.md`,
       `${freeformPath}/engine/skills/freeform-session/SKILL.md`,
       `${freeformPath}/engine/mcp/codex/config.toml`,
@@ -111,12 +110,7 @@ describe('Freeform Soul descriptor contract', () => {
         type: 'micro-app',
       },
     })
-    expect(descriptor.capabilities).toEqual([
-      expect.objectContaining({
-        id: 'default',
-        name: 'Freeform Session',
-      }),
-    ])
+    expect(descriptor).not.toHaveProperty('capabilities')
     expect(descriptor.engine).toMatchObject({
       mcp: {
         targets: {
@@ -162,7 +156,6 @@ describe('Freeform Soul descriptor contract', () => {
     for (const exportName of [
       'artifact',
       'buildSoul',
-      'capability',
       'commonWorkbench',
       'defineSoul',
       'extendWorkbench',

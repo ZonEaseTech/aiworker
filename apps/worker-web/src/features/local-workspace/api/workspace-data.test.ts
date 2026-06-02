@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { archiveSoulApp, enableSoulApp, loadLocalWorkspaceData } from './workspace-data'
 
 const projectedSoul = {
-  defaultCapabilities: ['aiworker-freeform.default'],
   description: 'Open-ended Soul for freeform local work.',
   id: 'aiworker-freeform',
   name: 'AIWorker Freeform',
@@ -22,17 +21,6 @@ const responses: Record<string, unknown> = {
   '/api/info': { runtimeVersion: 'test', startedAt: '2026-05-09T00:00:00.000Z', workers: [] },
   '/api/sessions': { sessions: [] },
   '/api/settings': { settings: { language: 'en' } },
-  '/api/capabilities': {
-    capabilities: [{
-      description: 'Freeform session work',
-      id: 'aiworker-freeform.default',
-      inputHints: [],
-      name: 'Freeform',
-      outputKind: 'session',
-      promptRef: 'dist/product/capabilities/default/prompt.md',
-      appId: 'aiworker-freeform',
-    }],
-  },
   '/api/workers': { workers: [] },
   '/api/workspace-locators': { workspaces: [] },
 }
@@ -68,8 +56,8 @@ describe('loadLocalWorkspaceData', () => {
     expect(paths).not.toContain('/api/local/sessions')
     expect(paths).not.toContain('/api/local/capabilities')
     expect(paths).not.toContain(retiredLocalSoulsPath)
+    expect(paths).not.toContain('/api/capabilities')
     expect(paths).toContain('/api/app-installation/apps')
-    expect(paths).toContain('/api/capabilities')
     expect(paths).toContain('/api/info')
     expect(paths).toContain('/api/settings')
     expect(paths).toContain('/api/workers')
@@ -77,8 +65,8 @@ describe('loadLocalWorkspaceData', () => {
     expect(paths).toContain('/api/sessions')
     expect(data).not.toHaveProperty('turns')
     expect(data).not.toHaveProperty('templates')
+    expect(data).not.toHaveProperty('capabilities')
     expect(data.souls).toEqual([projectedSoul])
-    expect(data.capabilities.map(capability => capability.id)).toEqual(['aiworker-freeform.default'])
   })
 
   it('archives Soul Apps through the app-installation broker route', async () => {

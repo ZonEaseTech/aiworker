@@ -59,7 +59,6 @@ export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/info', summary: 'Show local broker info', tags: ['broker'] },
     { method: 'get', path: '/api/settings', summary: 'Show local broker settings', tags: ['settings'] },
     { method: 'patch', path: '/api/settings', summary: 'Update local broker settings', tags: ['settings'] },
-    { method: 'get', path: '/api/capabilities', summary: 'List Host capabilities', tags: ['capabilities'] },
     { method: 'post', path: '/api/workers', summary: 'Create Soul worker', tags: ['workers'], created: true },
     { method: 'get', path: '/api/workers', summary: 'List Soul workers', tags: ['workers'] },
     { method: 'get', path: '/api/workers/{workerId}', summary: 'Show Soul worker', tags: ['workers'] },

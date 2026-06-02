@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-descriptor'
 import {
   appendSessionEvent,
   closeWorkerDb,
@@ -82,7 +81,6 @@ describe('aiworker local CLI', () => {
   }
 
   const FREEFORM_APP_ID = 'aiworker-freeform'
-  const FREEFORM_CAPABILITY_ID = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'default')
 
   function freeformDescriptorPath(): string {
     return path.resolve(import.meta.dir, '..', '..', '..', 'souls', FREEFORM_APP_ID, 'dist', 'soul.descriptor.json')
@@ -111,9 +109,8 @@ describe('aiworker local CLI', () => {
       id: 'legacy-hr-session',
       workerId: 'legacy-hr-worker',
       workspaceId: 'legacy-hr-workspace',
-      capabilityId: 'candidate-screen',
       title: 'Legacy candidate screen',
-      metadataJson: { capabilityId: 'candidate-screen', soulName: 'HR' },
+      metadataJson: { soulName: 'HR' },
       at: '2026-05-13T13:04:02.000Z',
     })
     closeWorkerDb()
@@ -229,7 +226,6 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('app list|show|install|enable|archive|delete|doctor|permissions|bootstrap|create|validate|smoke')
     expect(output).toContain('soul list|create|build')
     expect(output).toContain('worker create|list|show|select|config list|config set|config archive|archive|delete')
-    expect(output).toContain('capability list')
     expect(output).toContain('files list|show')
     expect(output).not.toContain('compatibility inspection')
     expect(output).not.toContain('artifacts list|show|open')
@@ -250,7 +246,6 @@ describe('aiworker local CLI', () => {
 
     expect(output).toContain('Commands:')
     expect(output).toContain('app create <id>')
-    expect(output).toContain('list app-declared capabilities')
     expect(output).toContain('list workspace files')
     expect(output).toContain('print workspace file')
     expect(output).not.toContain('compatibility inspection')
@@ -501,7 +496,6 @@ describe('aiworker local CLI', () => {
     closeWorkerDb()
     initWorkerDb(process.env.WORKER_DB_PATH!)
     const session = createSession({
-      capabilityId: FREEFORM_CAPABILITY_ID,
       id: 'events-session-1',
       metadataJson: {},
       title: 'Stream events while running',
@@ -578,7 +572,6 @@ describe('aiworker local CLI', () => {
     closeWorkerDb()
     initWorkerDb(process.env.WORKER_DB_PATH!)
     const session = createSession({
-      capabilityId: FREEFORM_CAPABILITY_ID,
       id: 'reconcile-session-1',
       metadataJson: {},
       title: 'Reconcile running invocation',
@@ -647,7 +640,6 @@ describe('aiworker local CLI', () => {
     closeWorkerDb()
     initWorkerDb(process.env.WORKER_DB_PATH!)
     const session = createSession({
-      capabilityId: FREEFORM_CAPABILITY_ID,
       id: 'cancel-session-1',
       metadataJson: {},
       title: 'Cancel running invocation',
@@ -786,8 +778,6 @@ describe('aiworker local CLI', () => {
       'lifecycle-worker',
       '--workspace',
       workspace.id,
-      '--capability',
-      FREEFORM_CAPABILITY_ID,
       '--title',
       'Lifecycle Session',
       '--input',
@@ -944,8 +934,6 @@ describe('aiworker local CLI', () => {
       'archive-app-cli-worker',
       '--workspace',
       workspace.id,
-      '--capability',
-      FREEFORM_CAPABILITY_ID,
       '--title',
       'Archive app session',
       '--input',
@@ -969,8 +957,6 @@ describe('aiworker local CLI', () => {
       'archive-app-cli-worker',
       '--workspace',
       workspace.id,
-      '--capability',
-      FREEFORM_CAPABILITY_ID,
       '--title',
       'Blocked by app archive',
       '--input',
@@ -983,7 +969,7 @@ describe('aiworker local CLI', () => {
     expect(errorOutput).toContain(`Soul App is not enabled: ${FREEFORM_APP_ID}`)
   })
 
-  it('materializes app-authored capability assets for the first session invocation', async () => {
+  it('materializes app-authored engine assets for the first session invocation', async () => {
     await writeFakeCodexCommand()
 
     expect(await runCli(argv('app', 'install', freeformDescriptorPath()))).toBe(0)
@@ -1003,8 +989,6 @@ describe('aiworker local CLI', () => {
       'demo-worker',
       '--workspace',
       workspace.id,
-      '--capability',
-      FREEFORM_CAPABILITY_ID,
       '--title',
       'Evidence Matrix',
       '--input',
@@ -1077,7 +1061,6 @@ describe('aiworker local CLI', () => {
       id: 'session-inspect-session',
       workerId: 'session-inspect-worker',
       workspaceId: 'session-inspect-workspace',
-      capabilityId: FREEFORM_CAPABILITY_ID,
       title: 'Session Inspect',
       at: '2026-05-27T08:10:02.000Z',
     })
@@ -1127,8 +1110,6 @@ describe('aiworker local CLI', () => {
       'demo-worker',
       '--workspace',
       workspace.id,
-      '--capability',
-      FREEFORM_CAPABILITY_ID,
       '--title',
       'Evidence Matrix',
       '--input',
@@ -1179,8 +1160,6 @@ describe('aiworker local CLI', () => {
       'demo-worker',
       '--workspace',
       workspace.id,
-      '--capability',
-      FREEFORM_CAPABILITY_ID,
       '--title',
       'Explicit Engine Matrix',
       '--input',
@@ -1224,8 +1203,6 @@ describe('aiworker local CLI', () => {
       'claude-worker',
       '--workspace',
       workspace.id,
-      '--capability',
-      FREEFORM_CAPABILITY_ID,
       '--title',
       'Claude profile',
       '--input',
@@ -1264,8 +1241,6 @@ describe('aiworker local CLI', () => {
       'frozen-worker',
       '--workspace',
       workspace.id,
-      '--capability',
-      FREEFORM_CAPABILITY_ID,
       '--title',
       'Frozen engine',
       '--input',
@@ -1327,7 +1302,6 @@ describe('aiworker local CLI', () => {
       id: 'legacy-engine-session',
       workerId: 'legacy-engine-worker',
       workspaceId: workspace.id,
-      capabilityId: FREEFORM_CAPABILITY_ID,
       title: 'Legacy engine session',
       metadataJson: {
         engineId: 'claude-code',
@@ -1712,21 +1686,12 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { souls: Array<{ id: string, status: string }> }).souls).toEqual(expect.arrayContaining([expect.objectContaining({ id: FREEFORM_APP_ID, status: 'available' })]))
     output = ''
 
-    expect(await runCli(argv('capability', 'list', '--app', FREEFORM_APP_ID))).toBe(0)
-    const capabilityId = FREEFORM_CAPABILITY_ID
-    expect((JSON.parse(output) as { capabilities: Array<{ id: string }> }).capabilities.map(capability => capability.id)).toContain(capabilityId)
-    output = ''
-
     expect(await runCli(argv('worker', 'create', '--id', 'mounted-hr', '--name', 'Mounted HR', '--app', FREEFORM_APP_ID))).toBe(0)
     expect((JSON.parse(output) as { worker: { metadata: Record<string, unknown>, appId: string } }).worker.appId).toBe(FREEFORM_APP_ID)
     output = ''
 
     expect(await runCli(argv('app', 'archive', FREEFORM_APP_ID))).toBe(0)
     expect((JSON.parse(output) as { app: { status: string } }).app.status).toBe('disabled')
-    output = ''
-
-    expect(await runCli(argv('capability', 'list', '--app', FREEFORM_APP_ID))).toBe(0)
-    expect((JSON.parse(output) as { capabilities: unknown[] }).capabilities).toEqual([])
     output = ''
 
     expect(await runCli(argv('template', 'list', '--app', FREEFORM_APP_ID))).toBe(1)
@@ -1747,7 +1712,8 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('soul', 'build', appDir))).toBe(0)
     const built = JSON.parse(output) as { appId: string, descriptorPath: string, generatedSections: string[], status: string }
     expect(built).toMatchObject({ appId: 'authoring-soul', descriptorPath, status: 'built' })
-    expect(built.generatedSections).toEqual(expect.arrayContaining(['capabilities', 'workbench']))
+    expect(built.generatedSections).toEqual(expect.arrayContaining(['workbench']))
+    expect(built.generatedSections).not.toContain('capabilities')
     await expect(stat(descriptorPath)).resolves.toBeTruthy()
   })
 
@@ -1759,7 +1725,7 @@ describe('aiworker local CLI', () => {
     const descriptorPath = path.join(appDir, 'dist', 'soul.descriptor.json')
     expect(scaffold).toMatchObject({ appId: 'demo-soul-app', descriptorPath, path: appDir })
     expect(scaffold.files).toContain('soul.config.ts')
-    expect(scaffold.files).toContain('product/capabilities/default/prompt.md')
+    expect(scaffold.files).not.toContain('product/capabilities/default/prompt.md')
     expect(scaffold.files).toContain('engine/workspace/AGENTS.md')
     expect(scaffold.files).toContain('engine/skills/default/SKILL.md')
     expect(scaffold.files).toContain('engine/mcp/codex/config.toml')
@@ -1782,10 +1748,8 @@ describe('aiworker local CLI', () => {
     }
     const scaffoldReadme = await readFile(path.join(appDir, 'README.md'), 'utf8')
     const scaffoldSoulConfig = await readFile(path.join(appDir, 'soul.config.ts'), 'utf8')
-    const scaffoldPrompt = await readFile(path.join(appDir, 'product', 'capabilities', 'default', 'prompt.md'), 'utf8')
     const scaffoldWorkspaceGitignore = await readFile(path.join(appDir, 'engine', 'workspace', '.gitignore'), 'utf8')
     const descriptor = JSON.parse(await readFile(descriptorPath, 'utf8')) as {
-      capabilities: Array<{ id: string, prompt: { ref: string, type: string } }>
       engine: {
         mcp?: { targets?: Record<string, { file: string }> }
         skills?: { source: string }
@@ -1802,14 +1766,8 @@ describe('aiworker local CLI', () => {
     expect(scaffoldSoulConfig).toContain('defineSoul')
     expect(scaffoldSoulConfig).toContain('id: \'demo-soul-app\'')
     expect(scaffoldSoulConfig).not.toContain('host-adapter')
+    expect(descriptor).not.toHaveProperty('capabilities')
     expect(descriptor).toMatchObject({
-      capabilities: [{
-        id: 'default',
-        prompt: {
-          ref: 'dist/product/capabilities/default/prompt.md',
-          type: 'packaged-file',
-        },
-      }],
       identity: {
         appId: 'demo-soul-app',
         name: 'Demo Soul App',
@@ -1841,7 +1799,6 @@ describe('aiworker local CLI', () => {
     expect(scaffoldReadme).toContain('dist/soul.descriptor.json')
     expect(scaffoldReadme).not.toContain('soul-app.manifest.json')
     expect(scaffoldReadme).not.toContain('host-adapter')
-    expect(scaffoldPrompt).not.toContain('broker')
     expect(scaffoldWorkspaceGitignore).toContain('.aiworker/sessions/')
     expect(scaffoldWorkspaceGitignore).toContain('.aiworker/projections.json')
     expect(scaffoldWorkspaceGitignore).toContain('evidence/raw/')
@@ -1926,7 +1883,6 @@ describe('aiworker local CLI', () => {
         mount: '/api/apps/bad-soul',
         type: 'local-service',
       },
-      capabilities: [],
       compatibility: {},
       configuration: {},
       engine: {},
@@ -1981,7 +1937,6 @@ describe('aiworker local CLI', () => {
     expect(validation.validation.status).toBe('fail')
     expect(validation.validation.sdkIssues.map(issue => [issue.code, issue.path])).toEqual(expect.arrayContaining([
       ['missing_config', 'soul.config.ts'],
-      ['missing_capability', 'product/capabilities'],
     ]))
   })
 

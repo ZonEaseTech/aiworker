@@ -164,11 +164,11 @@ describe('Worker DB forbidden domain schema contract', () => {
     expect(findings, 'latest worker snapshot should describe bridge metadata only').toEqual([])
   })
 
-  test('latest session snapshot uses capability_id instead of legacy capability_template_id', () => {
+  test('latest session snapshot drops the retired capability columns', () => {
     const snapshot = latestWorkerSnapshot()
     const sessionColumns = columnsFor(snapshot, 'sessions')
 
-    expect(sessionColumns).toContain('capability_id')
+    expect(sessionColumns).not.toContain('capability_id')
     expect(sessionColumns).not.toContain('capability_template_id')
   })
 

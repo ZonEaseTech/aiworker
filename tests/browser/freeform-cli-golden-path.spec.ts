@@ -6,14 +6,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { chromium } from 'playwright'
-import { namespaceSoulAppCapabilityId } from '../../packages/soul-descriptor/src/index'
 import { closeWorkerDb, createEngineInvocation, initWorkerDb, upsertFile, upsertWorkerConfigValue } from '../../packages/storage-sqlite/src/worker/index'
 import { MOUNT_TIMEOUT_MS } from './mount-wait'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const appId = 'aiworker-freeform'
 const workerId = 'freeform-cli-golden-worker'
-const capabilityId = namespaceSoulAppCapabilityId(appId, 'default')
 const cancelInvocationId = 'freeform-browser-cancel-invocation'
 const reconcileInvocationId = 'freeform-browser-reconcile-invocation'
 const descriptorPath = join(repoRoot, 'souls/aiworker-freeform/dist/soul.descriptor.json')
@@ -68,8 +66,6 @@ try {
     workerId,
     '--workspace',
     workspaceResult.workspace.id,
-    '--capability',
-    capabilityId,
     '--title',
     'Freeform CLI browser golden path',
     '--input',

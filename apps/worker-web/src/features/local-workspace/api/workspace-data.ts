@@ -4,17 +4,16 @@ import type {
   LocalWorker,
   LocalWorkspace,
 } from '@zonease/aiworker-soul-descriptor'
-import type { VerticalSoul, WorkspaceCapability } from '../model-types'
+import type { VerticalSoul } from '../model-types'
 import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppLifecycleResponse, LocalWorkspaceData } from './types'
 
 import { localJson } from '../../../shared/api/local-client'
 
 export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
-  const [info, apps, workers, capabilities, workspaces, sessions, settings] = await Promise.all([
+  const [info, apps, workers, workspaces, sessions, settings] = await Promise.all([
     localJson<LocalInfoResponse>('/api/info'),
     localJson<{ apps: LocalHostedSoulApp[] }>('/api/app-installation/apps'),
     localJson<{ workers: LocalWorker[] }>('/api/workers'),
-    localJson<{ capabilities: WorkspaceCapability[] }>('/api/capabilities'),
     localJson<{ workspaces: LocalWorkspace[] }>('/api/workspace-locators'),
     localJson<{ sessions: LocalSession[] }>('/api/sessions'),
     localJson<{ settings: LocalSettingsConfig }>('/api/settings'),
@@ -22,7 +21,6 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
   return {
     info,
     apps: apps.apps,
-    capabilities: capabilities.capabilities,
     workers: workers.workers,
     souls: deriveSoulsFromApps(apps.apps),
     workspaces: workspaces.workspaces,
@@ -32,10 +30,7 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
 }
 
 function deriveSoulsFromApps(apps: readonly LocalHostedSoulApp[]): VerticalSoul[] {
-  return apps.map(app => ({
-    ...app.projectedSoul,
-    defaultCapabilities: [...app.projectedSoul.defaultCapabilities],
-  }))
+  return apps.map(app => ({ ...app.projectedSoul }))
 }
 
 export interface ResolveMountedWorkbenchOptions {

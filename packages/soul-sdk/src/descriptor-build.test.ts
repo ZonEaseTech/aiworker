@@ -63,17 +63,7 @@ describe('SDK descriptor build conventions', () => {
       soulId: 'freeform',
       version: '0.1.0',
     })
-    expect(result.descriptor.capabilities).toEqual([
-      {
-        id: 'default',
-        name: 'Freeform Session',
-        prompt: {
-          ref: 'dist/product/capabilities/default/prompt.md',
-          type: 'packaged-file',
-        },
-        purpose: 'Start an open-ended engine-backed AIWorker session inside a workspace locator.',
-      },
-    ])
+    expect(result.descriptor).not.toHaveProperty('capabilities')
     expect(result.descriptor.workbench).toEqual({
       entry: 'dist/web/workbench/index.html',
       mode: 'sdk-common',
@@ -91,7 +81,6 @@ describe('SDK descriptor build conventions', () => {
       workspaceAssets: { source: 'dist/engine-assets/workspace' },
     })
     expect(result.discovery.generatedSections).toEqual([
-      'capabilities',
       'workbench',
       'engine.workspaceAssets',
       'engine.skills',
@@ -190,7 +179,7 @@ describe('SDK descriptor build conventions', () => {
     const validation = await validateSoul(rootDir)
 
     expect(validation.status).toBe('valid')
-    expect(validation.discovery.capabilities).toEqual([{ id: 'default', promptPath: 'product/capabilities/default/prompt.md' }])
+    expect(validation.discovery).not.toHaveProperty('capabilities')
     expect(validation.discovery.workbench).toEqual({ mode: 'sdk-common', source: 'sdk-common' })
     expect(validation.discovery.mcpTargets).toEqual([
       { file: 'engine/mcp/claude-code/.mcp.json', target: 'claude-code' },
@@ -205,7 +194,6 @@ async function createFreeformSoulFixture(options: { codexMcp?: string } = {}): P
   const rootDir = mkdtempSync(join(fixtureParent, 'aiworker-freeform-sdk-'))
   tempRoots.push(rootDir)
 
-  await mkdir(join(rootDir, 'product/capabilities/default'), { recursive: true })
   await mkdir(join(rootDir, 'engine/workspace'), { recursive: true })
   await mkdir(join(rootDir, 'engine/skills/freeform-session'), { recursive: true })
   await mkdir(join(rootDir, 'engine/mcp/codex'), { recursive: true })
@@ -214,31 +202,16 @@ async function createFreeformSoulFixture(options: { codexMcp?: string } = {}): P
 
   symlinkSync(join(import.meta.dir, '..'), join(rootDir, 'node_modules/@zonease/aiworker-soul-sdk'), 'dir')
 
-  writeFileSync(join(rootDir, 'soul.config.ts'), `import { capability, defineSoul } from '@zonease/aiworker-soul-sdk'
+  writeFileSync(join(rootDir, 'soul.config.ts'), `import { defineSoul } from '@zonease/aiworker-soul-sdk'
 
 export default defineSoul({
   appId: 'aiworker-freeform',
-  capabilities: [
-    capability({
-      id: 'default',
-      name: 'Freeform Session',
-      purpose: 'Start an open-ended engine-backed AIWorker session inside a workspace locator.',
-    }),
-  ],
   id: 'aiworker-freeform',
   name: 'AIWorker Freeform',
   soulId: 'freeform',
   version: '0.1.0',
 })
 `)
-  writeFileSync(join(rootDir, 'product/capabilities/default/prompt.md'), [
-    'Operate inside the provided workspace root.',
-    'Use projected skills and native MCP config when available.',
-    'Report progress through the native engine.',
-    'Avoid assuming a domain-specific workflow.',
-    'Leave domain interpretation to the user or a future Soul App.',
-    '',
-  ].join('\n'))
   writeFileSync(join(rootDir, 'engine/workspace/AGENTS.md'), '# AIWorker Freeform Workspace\n')
   writeFileSync(join(rootDir, 'engine/skills/freeform-session/SKILL.md'), '# Freeform Session\n')
   writeFileSync(join(rootDir, 'engine/mcp/codex/config.toml'), options.codexMcp ?? '# Freeform Codex MCP placeholder\n')

@@ -96,7 +96,6 @@ export interface CreateLocalWorkspaceInput {
 
 export interface CreateLocalSessionInput {
   workspaceId: string
-  capabilityId: string
   title: string
   metadata?: Record<string, unknown>
 }
@@ -323,7 +322,6 @@ export class LocalWorkerRuntime {
       id: randomUUID(),
       workerId: this.workerId,
       workspaceId: workspace.id,
-      capabilityId: input.capabilityId,
       title: input.title,
       status: 'active',
       metadataJson: sessionMetadata,
@@ -354,7 +352,6 @@ export class LocalWorkerRuntime {
       engineCommand: sessionEngine.engineCommand,
       engineId: sessionEngine.engineId,
       executionMode: sessionEngine.executionMode,
-      capabilityId: session.capabilityId,
       sessionId: session.id,
       workerId: this.workerId,
       workspaceId: workspace.id,
@@ -647,7 +644,6 @@ export class LocalWorkerRuntime {
       resolveLatestExternalSessionRef: async () => latestExternalSessionRef(previousInvocation),
     })
     const request = {
-      capabilityDescriptorRef: input.session.capabilityId,
       cwd: input.workspace.rootPath,
       engineCommand: input.sessionEngine.engineCommand,
       engineTarget: input.sessionEngine.engineId,
@@ -779,7 +775,6 @@ export class LocalWorkerRuntime {
       `Soul worker: ${this.#workerInput.name}`,
       `App id: ${this.#workerInput.appId}`,
       `Workspace session: ${session.title}`,
-      `Capability: ${session.capabilityId}`,
       `Output kind: ${readString(metadata.outputKind, 'session')}`,
       '',
       ...mentions,

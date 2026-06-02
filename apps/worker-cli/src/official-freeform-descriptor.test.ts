@@ -12,14 +12,6 @@ describe('official Freeform descriptor parser', () => {
     ).toThrow('expected official Freeform identity')
   })
 
-  test('rejects descriptor v1 packages that keep the Freeform app id but drop the default Freeform capability', () => {
-    expect(() =>
-      parseOfficialFreeformDescriptorJson(fixtureDescriptorText({
-        capabilities: [],
-      })),
-    ).toThrow('expected official Freeform default capability')
-  })
-
   test('rejects descriptor v1 packages that drift from the canonical Freeform workbench', () => {
     expect(() =>
       parseOfficialFreeformDescriptorJson(fixtureDescriptorText({
@@ -57,7 +49,6 @@ describe('official Freeform descriptor parser', () => {
 })
 
 function fixtureDescriptorText(options: {
-  capabilities?: unknown[]
   engine?: unknown
   name?: string
   soulId?: string
@@ -76,16 +67,6 @@ function fixtureDescriptorText(options: {
       host: '>=1.0.0',
       sdk: '>=1.0.0',
     },
-    capabilities: options.capabilities ?? [
-      {
-        id: 'default',
-        name: 'Freeform Session',
-        prompt: {
-          ref: 'dist/product/capabilities/default/prompt.md',
-          type: 'packaged-file',
-        },
-      },
-    ],
     configuration: {},
     workbench: options.workbench ?? {
       entry: 'dist/web/workbench/index.html',

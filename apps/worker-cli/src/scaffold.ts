@@ -45,17 +45,10 @@ export function createScaffoldTsconfig() {
 
 export function scaffoldSoulConfigTs(appId: string): string {
   const name = titleCase(appId)
-  return `import { capability, defineSoul } from '@zonease/aiworker-soul-sdk'
+  return `import { defineSoul } from '@zonease/aiworker-soul-sdk'
 
 export default defineSoul({
   appId: '${appId}',
-  capabilities: [
-    capability({
-      id: 'default',
-      name: '${name} Session',
-      purpose: 'Start a descriptor-only Soul session inside a workspace locator.',
-    }),
-  ],
   description: 'Descriptor-only starter Soul for ${name}.',
   id: '${appId}',
   name: '${name}',
@@ -111,7 +104,7 @@ export function scaffoldReadme(appId: string): string {
     'aiworker app smoke .',
     '```',
     '',
-    'Keep app-owned engine files under `engine/` and public product prompts under `product/capabilities/`.',
+    'Keep app-owned engine files under `engine/`.',
     'Native MCP files may hold local author secrets, but descriptor output must not copy those values.',
     '',
   ].join('\n')
@@ -166,18 +159,6 @@ export function scaffoldCodexMcpConfig(): string {
 
 export function scaffoldClaudeCodeMcpConfig(): string {
   return '{ "mcpServers": {} }\n'
-}
-
-export function scaffoldPrompt(appId: string): string {
-  return [
-    `# ${titleCase(appId)} Default Prompt`,
-    '',
-    'Operate inside the provided workspace root.',
-    'Use projected skills and native MCP config when available.',
-    'Report progress through the native engine.',
-    'Avoid assuming a domain-specific workflow until the user provides one.',
-    '',
-  ].join('\n')
 }
 
 export function writeScaffoldFile(filePath: string, content: string): void {

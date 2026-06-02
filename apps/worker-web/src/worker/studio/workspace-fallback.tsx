@@ -12,7 +12,6 @@ import { Button } from '@zonease/aiworker-ui/components/button'
 import { CardContent } from '@zonease/aiworker-ui/components/card'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@zonease/aiworker-ui/components/input-group'
 import { Item, ItemActions, ItemContent, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
-import { displayCapability } from '../../features/i18n'
 import { WorkerIdentityBlock, WorkspaceCard } from '../../features/local-workspace/components'
 import { sessionForWorkspace } from '../../features/local-workspace/model'
 import { StudioChromeHeader, StudioEmptyState, StudioTitleBlock } from '../components/studio-shell'
@@ -20,11 +19,6 @@ import { StudioChromeHeader, StudioEmptyState, StudioTitleBlock } from '../compo
 type WorkerIdentityBlockProps = Parameters<typeof WorkerIdentityBlock>[0]
 type WorkspaceCardProps = Parameters<typeof WorkspaceCard>[0]
 type LocalWorkspace = WorkspaceCardProps['item']
-type WorkspaceCapability = NonNullable<WorkspaceCardProps['capability']>
-
-interface WorkspaceFallbackData {
-  capabilities: WorkspaceCapability[]
-}
 
 export function WorkspaceContextNoMountedSurface({
   copy,
@@ -70,7 +64,6 @@ export function WorkspaceContextNoMountedSurface({
 export function WorkerHomeFallback({
   allSessions,
   copy,
-  data,
   filteredWorkspaces,
   locale,
   onCreateWorkspace,
@@ -83,11 +76,9 @@ export function WorkerHomeFallback({
   selectedSoulCopy,
   selectedWorker,
   selectedWorkspace,
-  capabilities,
 }: {
   allSessions: Parameters<typeof sessionForWorkspace>[1]
   copy: WorkerIdentityBlockProps['copy']
-  data: WorkspaceFallbackData
   filteredWorkspaces: LocalWorkspace[]
   locale: WorkspaceCardProps['locale']
   onCreateWorkspace: () => void
@@ -100,7 +91,6 @@ export function WorkerHomeFallback({
   selectedSoulCopy: WorkerIdentityBlockProps['soulCopy']
   selectedWorker: NonNullable<WorkerIdentityBlockProps['worker']>
   selectedWorkspace: LocalWorkspace | null
-  capabilities: WorkspaceCapability[]
 }) {
   return (
     <>
@@ -125,7 +115,7 @@ export function WorkerHomeFallback({
       </StudioChromeHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-7 py-6 max-md:px-4">
-        <ItemGroup className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2">
+        <ItemGroup className="grid grid-cols-1 items-stretch gap-3">
           <WorkerIdentityBlock
             compact
             copy={copy}
@@ -134,18 +124,6 @@ export function WorkerHomeFallback({
             soulCopy={selectedSoulCopy}
             worker={selectedWorker}
           />
-          <Item variant="muted" size="sm" className="min-w-0 items-start">
-            <ItemContent className="min-w-0 gap-3">
-              <ItemTitle>{`${copy.create.capability} (${capabilities.length})`}</ItemTitle>
-              <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
-                {capabilities.map(capability => (
-                  <Badge key={capability.id} variant="outline" className="max-w-full truncate">
-                    {displayCapability(capability, locale).name}
-                  </Badge>
-                ))}
-              </ItemActions>
-            </ItemContent>
-          </Item>
         </ItemGroup>
 
         <ItemGroup className="min-h-0 gap-3">
@@ -185,7 +163,6 @@ export function WorkerHomeFallback({
                       item={item}
                       locale={locale}
                       session={session}
-                      capability={data.capabilities.find(capability => capability.id === session?.capabilityId)}
                       onSelect={() => onSelectWorkspace(item)}
                     />
                   )

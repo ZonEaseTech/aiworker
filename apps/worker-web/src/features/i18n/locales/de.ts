@@ -42,13 +42,11 @@ export const de = {
   common: {
     available: 'verfügbar',
     comingSoon: 'bald verfügbar',
-    capabilities: 'Fähigkeiten',
     interface: 'Oberfläche',
     notInstalled: 'nicht installiert',
     workspace: 'Workspace',
   },
   create: {
-    capability: 'Fähigkeit',
     sessionContext: 'Session-Kontext',
     creatingSession: 'Session wird erstellt...',
     footer: 'Sessions bleiben standardmäßig in diesem Soul-Workspace.',
@@ -63,7 +61,6 @@ export const de = {
   languageOptions: en.languageOptions,
   navigation: {
     createTabs: {
-      capability: 'Fähigkeit',
       project: 'Projekt',
     },
     projectTabs: {
@@ -76,7 +73,6 @@ export const de = {
       domainSystems: 'Domänensysteme',
       examples: 'Beispiele',
       projects: 'Projekte',
-      capabilities: 'Fähigkeiten',
     },
   },
   projects: {
@@ -93,7 +89,6 @@ export const de = {
     configure: 'Konfigurieren',
     continueSession: 'Session fortsetzen',
     createSession: 'Session erstellen',
-    createSessionHint: capabilityName => `Startet eine ${capabilityName}-Session in diesem Workspace.`,
     createSessionPlaceholder: 'Beschreibe Ziel, Kontext, Quellmaterial oder erwartete app-eigene Ausgabe...',
     createSessionPrompt: workspaceName => `Was soll in ${workspaceName} erstellt werden?`,
     addSourceMaterials: 'Quellmaterial hinzufügen',
@@ -146,7 +141,6 @@ export const de = {
     noWorker: 'Kein Worker',
     noWorkspaceSessions: 'In diesem Workspace gibt es noch keine Sessions.',
     otherWorkspaces: 'Andere Workspaces',
-    selectedCapability: 'Ausgewählte Capability',
     selectedWorkspace: 'Ausgewählter Workspace',
     sessionDetail: 'Session',
     latest: 'Neueste',
@@ -262,7 +256,6 @@ export const de = {
     },
     soulPacks: {
       apiRoute: routePrefix => `API ${routePrefix}`,
-      capabilitiesTitle: 'Capabilities',
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
       archiveApp: name => `${name} archivieren`,
@@ -274,7 +267,6 @@ export const de = {
       mountedWorkbenchCount: count => `${count} gemountete ${count === 1 ? 'Workbench' : 'Workbenches'}`,
       permissionsTitle: 'App-Zugriff',
       permissionCount: count => `${count} ${count === 1 ? 'Zugriffseintrag' : 'Zugriffseinträge'}`,
-      capabilityCount: count => `${count} ${count === 1 ? 'Fähigkeit' : 'Fähigkeiten'}`,
       title: 'Soul Apps',
       unavailableConnector: 'nicht verfügbar',
       updating: 'Aktualisiert',

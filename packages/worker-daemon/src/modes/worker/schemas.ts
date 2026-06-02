@@ -112,7 +112,6 @@ export const patchSettingsBodySchema = localSettingsConfigSchema.partial()
 // ---------------------------------------------------------------------------
 
 export const createSessionBodySchema = z.object({
-  capabilityId: z.string().trim().min(1),
   context: z.never().optional(),
   engineId: z.string().nullable().optional(),
   input: z.string().optional(),

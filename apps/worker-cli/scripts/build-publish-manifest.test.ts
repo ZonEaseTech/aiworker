@@ -48,7 +48,6 @@ describe('CLI publish manifest builder', () => {
     mkdirSync(path.join(appRoot, 'dist', 'engine-assets', 'workspace'), { recursive: true })
     mkdirSync(path.join(appRoot, 'dist', 'host-adapter'), { recursive: true })
     await writeFile(path.join(appRoot, 'dist', 'soul.descriptor.json'), JSON.stringify({
-      capabilities: [],
       compatibility: {},
       configuration: {},
       engine: {

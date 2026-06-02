@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { namespaceSoulAppCapabilityId, parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
+import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import { closeWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
@@ -11,27 +11,18 @@ import { bootstrapOfficialSoulApps } from './official'
 import {
   archiveSoulApp,
   enableSoulApp,
-  findCapability,
   findCatalogSoul,
   installSoulAppFromPath,
   installSoulDescriptor,
-  listCapabilitiesForSoul,
   listHostedSoulApps,
   listSoulCatalog,
   runSoulAppHealthcheck,
 } from './registry'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
-const FREEFORM_DEFAULT = namespaceSoulAppCapabilityId(FREEFORM_APP_ID, 'default')
 
 const freeformDescriptor = parseSoulDescriptorV1({
   api: null,
-  capabilities: [{
-    id: 'default',
-    name: 'Freeform Session',
-    prompt: { ref: 'dist/product/capabilities/default/prompt.md', type: 'packaged-file' },
-    purpose: 'Start an open-ended engine-backed AIWorker session.',
-  }],
   compatibility: { host: '>=1.0.0' },
   configuration: {},
   engine: {
@@ -72,11 +63,9 @@ describe('Host Soul descriptor registry', () => {
 
   it('starts with an app-only empty Host catalog', () => {
     expect(listHostedSoulApps()).toHaveLength(0)
-    expect(listSoulCatalog().capabilities).toEqual([])
+    expect(listSoulCatalog()).not.toHaveProperty('capabilities')
     expect(listSoulCatalog().souls).toEqual([])
     expect(findCatalogSoul('hr')).toBeUndefined()
-    expect(findCapability('candidate-screen')).toBeUndefined()
-    expect(listCapabilitiesForSoul('hr')).toEqual([])
   })
 
   it('installs, enables, projects, healthchecks, and archives a descriptor', async () => {
@@ -117,8 +106,6 @@ describe('Host Soul descriptor registry', () => {
     expect(enabled.healthStatus).toBe('pass')
 
     expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('available')
-    expect(findCapability(FREEFORM_DEFAULT)?.appId).toBe(FREEFORM_APP_ID)
-    expect(listCapabilitiesForSoul(FREEFORM_APP_ID).map(capability => capability.id)).toEqual([FREEFORM_DEFAULT])
     expect(listSoulCatalog().souls.some(soul => soul.id === 'hr')).toBe(false)
 
     const checked = runSoulAppHealthcheck(FREEFORM_APP_ID, { hostVersion: '0.19.3' })
@@ -126,7 +113,6 @@ describe('Host Soul descriptor registry', () => {
 
     const disabled = archiveSoulApp(FREEFORM_APP_ID, { now: () => '2026-05-12T22:24:00.000Z' })
     expect(disabled.status).toBe('disabled')
-    expect(findCapability(FREEFORM_DEFAULT)).toBeUndefined()
     expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
 
     const reinstalled = await installSoulAppFromPath(descriptorPath, {
@@ -174,10 +160,8 @@ describe('Host Soul descriptor registry', () => {
     expect(enabled.descriptor.external).toEqual(descriptor.external)
 
     const projected = JSON.stringify({
-      capabilities: catalog.capabilities,
       mountedWorkbench: enabled.mountedWorkbench,
       permissions: enabled.permissions,
-      projectedCapabilities: enabled.projectedCapabilities,
       projectedSoul: enabled.projectedSoul,
       souls: catalog.souls,
     })
@@ -215,7 +199,6 @@ describe('Host Soul descriptor registry', () => {
       [FREEFORM_APP_ID, 'preserved_disabled'],
     ])
     expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
-    expect(listCapabilitiesForSoul(FREEFORM_APP_ID)).toEqual([])
   })
 
   it('bootstraps official descriptors from an explicit packaged app root', async () => {
