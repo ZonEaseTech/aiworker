@@ -1948,16 +1948,11 @@ describe('aiworker local CLI', () => {
   it('fails descriptor validation on source hook paths', async () => {
     const descriptorPath = path.join(root, 'bad-soul.descriptor.json')
     await writeFile(descriptorPath, JSON.stringify({
-      compatibility: {},
-      configuration: {},
       engine: {
         workspaceAssets: {
           source: 'dist/engine-assets/../host-adapter',
         },
       },
-      extensions: {},
-      external: {},
-      health: {},
       identity: {
         appId: 'bad-soul',
         name: 'Bad Soul',

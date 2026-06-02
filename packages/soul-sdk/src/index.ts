@@ -12,22 +12,11 @@ export type SoulValidationStatus = 'invalid' | 'valid'
 
 export interface SoulConfig {
   appId?: string
-  compatibility?: Partial<SoulDescriptorV1['compatibility']>
-  configuration?: Partial<SoulDescriptorV1['configuration']>
   description?: string
-  external?: Record<string, unknown>
-  extensions?: Record<string, unknown>
-  health?: Record<string, unknown>
   id: string
   name: string
   soulId?: string
   version: string
-  workbench?: SoulWorkbenchConfig
-}
-
-export interface SoulWorkbenchConfig {
-  mode?: 'custom' | 'sdk-common'
-  source?: string
 }
 
 export interface SoulArtifactConfig {
@@ -53,7 +42,6 @@ export interface SoulNativeMcpConfig {
 export interface SoulDiscovery {
   generatedSections: string[]
   mcpTargets: Array<{ file: string, target: string }>
-  workbench: { mode: 'custom' | 'sdk-common', source: string }
 }
 
 export interface SoulValidationIssue {
@@ -86,22 +74,6 @@ export function defineSoul(input: SoulConfig): SoulConfig {
     ...input,
     appId: input.appId ?? input.id,
     soulId: input.soulId ?? input.id,
-  }
-}
-
-export function commonWorkbench(options: SoulWorkbenchConfig = {}): SoulWorkbenchConfig {
-  return {
-    mode: 'sdk-common',
-    source: 'sdk-common',
-    ...options,
-  }
-}
-
-export function extendWorkbench(base: SoulWorkbenchConfig, extension: SoulWorkbenchConfig): SoulWorkbenchConfig {
-  return {
-    ...base,
-    ...extension,
-    mode: extension.mode ?? 'custom',
   }
 }
 
@@ -216,7 +188,6 @@ async function loadSoulConfig(rootDir: string, issues: SoulValidationIssue[]): P
 }
 
 function discoverSoul(rootDir: string): SoulDiscovery {
-  const workbench = discoverWorkbench(rootDir)
   const mcpTargets = discoverMcpTargets(rootDir)
   const generatedSections: string[] = []
 
@@ -230,28 +201,6 @@ function discoverSoul(rootDir: string): SoulDiscovery {
   return {
     generatedSections,
     mcpTargets,
-    workbench,
-  }
-}
-
-function discoverWorkbench(rootDir: string): SoulDiscovery['workbench'] {
-  if (existsSync(join(rootDir, 'web/mounted/index.html'))) {
-    return {
-      mode: 'custom',
-      source: 'web/mounted/index.html',
-    }
-  }
-
-  if (existsSync(join(rootDir, 'product/workbench/index.tsx'))) {
-    return {
-      mode: 'custom',
-      source: 'product/workbench/index.tsx',
-    }
-  }
-
-  return {
-    mode: 'sdk-common',
-    source: 'sdk-common',
   }
 }
 
@@ -317,27 +266,6 @@ function redactDiagnosticMessage(message: string): string {
 
 function createDescriptor(config: SoulConfig, discovery: SoulDiscovery): SoulDescriptorV1 {
   return parseSoulDescriptorV1({
-    compatibility: {
-      engines: ['codex', 'claude-code'],
-      host: '>=1.0.0',
-      sdk: '>=1.0.0',
-      ...config.compatibility,
-    },
-    configuration: {
-      defaults: {
-        engine: 'codex',
-      },
-      features: {
-        engine: true,
-        mcp: true,
-        skills: true,
-        workbench: true,
-        workspaceAssets: true,
-      },
-      scope: 'worker',
-      version: '1',
-      ...config.configuration,
-    },
     engine: {
       ...(discovery.generatedSections.includes('engine.workspaceAssets')
         ? { workspaceAssets: { source: 'dist/engine-assets/workspace' } }
@@ -355,12 +283,6 @@ function createDescriptor(config: SoulConfig, discovery: SoulDiscovery): SoulDes
             },
           }
         : {}),
-    },
-    extensions: config.extensions ?? {},
-    external: config.external ?? {},
-    health: config.health ?? {
-      ready: true,
-      type: 'static',
     },
     identity: {
       appId: config.appId ?? config.id,
@@ -400,12 +322,7 @@ function fallbackConfig(): SoulConfig {
 
 function fallbackDescriptor(): SoulDescriptorV1 {
   return parseSoulDescriptorV1({
-    compatibility: {},
-    configuration: {},
     engine: {},
-    extensions: {},
-    external: {},
-    health: {},
     identity: {},
     protocol: 'soul/v1',
   })

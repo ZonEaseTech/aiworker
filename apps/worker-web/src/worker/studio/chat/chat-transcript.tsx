@@ -14,9 +14,8 @@ export interface ChatTranscriptProps {
  * maps engine-bridge events into packages/ui transcript turns, and `ChatThread`
  * renders them. With no invocation selected it renders an empty, labelled log.
  *
- * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
- * (session → mounted soul workbench, not worker-web); home is the soul-sdk
- * sdk-common workbench. See memory worker-standalone-release-map-2026-06-01.
+ * The Worker renders the session chat directly: this transcript is mounted by
+ * worker-studio on the session route. The Soul provides no UI.
  */
 export function ChatTranscript({ ariaLabel, intervalMs, invocationId }: ChatTranscriptProps) {
   const { turns } = useInvocationEvents(invocationId, intervalMs === undefined ? {} : { intervalMs })

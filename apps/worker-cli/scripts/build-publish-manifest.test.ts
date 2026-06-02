@@ -48,14 +48,9 @@ describe('CLI publish manifest builder', () => {
     mkdirSync(path.join(appRoot, 'dist', 'engine-assets', 'workspace'), { recursive: true })
     mkdirSync(path.join(appRoot, 'dist', 'host-adapter'), { recursive: true })
     await writeFile(path.join(appRoot, 'dist', 'soul.descriptor.json'), JSON.stringify({
-      compatibility: {},
-      configuration: {},
       engine: {
         workspaceAssets: { source: 'dist/engine-assets/workspace' },
       },
-      extensions: {},
-      external: {},
-      health: {},
       identity: {
         appId: 'aiworker-demo',
         name: 'Demo',

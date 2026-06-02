@@ -14,19 +14,7 @@ const baseDescriptor = {
     name: 'AIWorker Freeform',
     version: '0.1.0',
   },
-  compatibility: {
-    sdk: '>=1.0.0',
-    host: '>=1.0.0',
-    engines: ['codex'],
-  },
-  configuration: {},
   engine: {},
-  health: {
-    type: 'static',
-    ready: true,
-  },
-  extensions: {},
-  external: {},
 } as const
 
 describe('descriptor v1 schema', () => {
@@ -43,15 +31,27 @@ describe('descriptor v1 schema', () => {
     const descriptor = parseSoulDescriptorV1(baseDescriptor)
 
     expect(Object.keys(descriptor).sort()).toEqual([
-      'compatibility',
-      'configuration',
       'engine',
-      'extensions',
-      'external',
-      'health',
       'identity',
       'protocol',
     ])
+  })
+
+  test('rejects the retired compatibility/configuration/health/extensions/external sections', () => {
+    for (const field of [
+      'compatibility',
+      'configuration',
+      'health',
+      'extensions',
+      'external',
+    ]) {
+      expect(() =>
+        parseSoulDescriptorV1({
+          ...baseDescriptor,
+          [field]: {},
+        }),
+      ).toThrow()
+    }
   })
 
   test('rejects a workbench section: descriptor v1 has no mounted workbench', () => {
@@ -127,7 +127,8 @@ describe('descriptor v1 schema', () => {
     expect(() =>
       parseSoulDescriptorV1({
         ...baseDescriptor,
-        configuration: {
+        identity: {
+          ...baseDescriptor.identity,
           governance: {},
         },
       }),
@@ -143,51 +144,32 @@ describe('descriptor v1 schema', () => {
     ).toThrow()
   })
 
-  test('keeps extensions and external as opaque descriptor payloads without secrets', () => {
-    const descriptor = parseSoulDescriptorV1({
-      ...baseDescriptor,
-      extensions: {
-        'demo.example/review': {
-          rubricRef: 'opaque-ref',
-        },
-      },
-      external: {
-        businessWorkflow: {
-          candidateId: 'candidate-123',
-        },
-      },
-    })
-
-    expect(descriptor.extensions).toEqual({
-      'demo.example/review': {
-        rubricRef: 'opaque-ref',
-      },
-    })
-    expect(descriptor.external).toEqual({
-      businessWorkflow: {
-        candidateId: 'candidate-123',
-      },
-    })
-
-    expect(() =>
-      parseSoulDescriptorV1({
-        ...baseDescriptor,
-        external: {
-          token: 'literal-secret',
-        },
-      }),
-    ).toThrow()
-
+  test('rejects extensions and external sections: descriptor v1 carries no opaque payloads', () => {
     expect(() =>
       parseSoulDescriptorV1({
         ...baseDescriptor,
         extensions: {
           'demo.example/review': {
-            memory: {},
+            rubricRef: 'opaque-ref',
           },
         },
       }),
     ).toThrow()
+
+    expect(() =>
+      parseSoulDescriptorV1({
+        ...baseDescriptor,
+        external: {
+          businessWorkflow: {
+            candidateId: 'candidate-123',
+          },
+        },
+      }),
+    ).toThrow()
+
+    const descriptor = parseSoulDescriptorV1(baseDescriptor)
+    expect(descriptor).not.toHaveProperty('extensions')
+    expect(descriptor).not.toHaveProperty('external')
   })
 
   test('rejects unsafe engine projection references and inline native MCP content', () => {

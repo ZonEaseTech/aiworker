@@ -18,12 +18,8 @@ function readString(value: unknown): string {
  * turns. Pure and transport-independent — the same mapping serves a poll or an
  * SSE source.
  *
- * STATUS: unwired reusable foundation. The canonical architecture is
- * mounted-owns-chat — the session experience renders in the mounted soul
- * workbench, NOT worker-web (guards worker-studio.test.tsx:1786/1807 + the
- * Freeform browser proof). Chat's proper home is the soul-sdk sdk-common
- * workbench; this pure mapper is the most directly portable piece. See memory
- * worker-standalone-release-map-2026-06-01.
+ * The Worker renders the session chat directly: worker-studio mounts the chat
+ * surface on the session route and this pure mapper feeds its transcript view.
  *
  * v1 semantics (one turn per invocation):
  * - `assistant_delta` (`payloadJson.data.text`) accumulates into one

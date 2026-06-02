@@ -51,14 +51,9 @@ import {
 } from './index'
 
 const freeformDescriptor = parseSoulDescriptorV1({
-  compatibility: { host: '>=1.0.0' },
-  configuration: {},
   engine: {
     workspaceAssets: { source: 'dist/engine-assets/workspace' },
   },
-  extensions: {},
-  external: {},
-  health: { ready: true },
   identity: {
     appId: 'aiworker-freeform',
     name: 'AIWorker Freeform',
@@ -213,7 +208,7 @@ describe('greenfield local worker session schema', () => {
               apiKey: 'literal-secret',
             },
           },
-        },
+        } as typeof freeformDescriptor,
         at: '2026-05-12T22:22:00.000Z',
       }),
     ).toThrow('Literal secrets are not allowed in Worker metadata: soul_apps.descriptorJson.external.businessWorkflow.apiKey')
@@ -235,7 +230,7 @@ describe('greenfield local worker session schema', () => {
               token: 'literal-secret',
             },
           },
-        },
+        } as typeof freeformDescriptor,
         at: '2026-05-12T22:22:00.000Z',
       }),
     ).toThrow('Literal secrets are not allowed in Worker metadata: soul_apps.descriptorJson.extensions.demo.example/review.token')

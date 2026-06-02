@@ -5,8 +5,6 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import {
   artifact,
   buildSoul,
-  commonWorkbench,
-  extendWorkbench,
   nativeMcp,
   skill,
   validateSoul,
@@ -32,10 +30,6 @@ describe('SDK descriptor build conventions', () => {
     expect(nativeMcp({ file: 'engine/mcp/codex/config.toml', target: 'codex' })).toEqual({
       file: 'engine/mcp/codex/config.toml',
       target: 'codex',
-    })
-    expect(extendWorkbench(commonWorkbench(), { source: 'web/mounted/index.html' })).toEqual({
-      mode: 'custom',
-      source: 'web/mounted/index.html',
     })
   })
 
@@ -153,7 +147,7 @@ describe('SDK descriptor build conventions', () => {
 
     expect(validation.status).toBe('valid')
     expect(validation.discovery).not.toHaveProperty('capabilities')
-    expect(validation.discovery.workbench).toEqual({ mode: 'sdk-common', source: 'sdk-common' })
+    expect(validation.discovery).not.toHaveProperty('workbench')
     expect(validation.discovery.mcpTargets).toEqual([
       { file: 'engine/mcp/claude-code/.mcp.json', target: 'claude-code' },
       { file: 'engine/mcp/codex/config.toml', target: 'codex' },

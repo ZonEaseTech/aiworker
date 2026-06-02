@@ -19,10 +19,9 @@ export interface ChatSurfaceProps {
  * (`<ChatSurface key={sessionId} ... />`) so a session change remounts with a
  * fresh follow state and no stale transcript leaks across sessions.
  *
- * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
- * (session → mounted soul workbench, not worker-web; guards 1786/1807 + browser
- * proof); home is the soul-sdk sdk-common workbench. NOT wired into
- * worker-studio. See memory worker-standalone-release-map-2026-06-01.
+ * The Worker owns and renders the session chat directly: worker-studio mounts
+ * this surface on the session route (the Soul provides no UI; there is no
+ * mounted workbench). This is the live employee chat, not a reusable stub.
  */
 export function ChatSurface({ composerLabels, sessionId, transcriptAriaLabel }: ChatSurfaceProps) {
   const [activeInvocationId, setActiveInvocationId] = useState<string | null>(null)

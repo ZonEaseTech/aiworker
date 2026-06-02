@@ -29,12 +29,9 @@ export interface InvocationEventsResponse {
  * `POST /api/sessions/:id/invocations` (docs/runtime.md); this hits the local
  * broker with no Host on the path.
  *
- * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
- * (the session experience renders in the mounted soul workbench, not worker-web;
- * guards worker-studio.test.tsx:1786/1807 + Freeform browser proof). Chat's home
- * is the soul-sdk sdk-common workbench. This client is at a non-retired path
- * and does not resurrect the retired Host-era session module. See memory
- * worker-standalone-release-map-2026-06-01.
+ * The Worker renders the session chat directly: this client backs the chat
+ * composer that worker-studio mounts on the session route. It is at a
+ * non-retired path and does not resurrect the retired Host-era session module.
  */
 export function submitSessionInvocation(
   sessionId: string,

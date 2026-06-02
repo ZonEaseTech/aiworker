@@ -80,8 +80,6 @@ async function writeFixtureDist(root: string): Promise<void> {
 
 function fixtureDescriptorText(): string {
   return `${JSON.stringify({
-    compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
-    configuration: {},
     engine: {
       mcp: {
         targets: {
@@ -92,9 +90,6 @@ function fixtureDescriptorText(): string {
       skills: { source: 'dist/engine-assets/skills' },
       workspaceAssets: { source: 'dist/engine-assets/workspace' },
     },
-    extensions: {},
-    external: {},
-    health: { ready: true, type: 'static' },
     identity: { appId: 'aiworker-freeform', name: 'AIWorker Freeform', soulId: 'freeform', version: '0.1.0' },
     protocol: 'soul/v1',
   })}\n`

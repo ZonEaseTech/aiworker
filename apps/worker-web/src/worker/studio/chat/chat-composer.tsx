@@ -23,9 +23,8 @@ export interface ChatComposerProps {
  * surface can point its transcript at it. Labels are injected by the caller,
  * keeping this component free of any locale dependency and trivially testable.
  *
- * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
- * (session → mounted soul workbench, not worker-web); home is the soul-sdk
- * sdk-common workbench. See memory worker-standalone-release-map-2026-06-01.
+ * The Worker renders the session chat directly: this composer is mounted by
+ * worker-studio on the session route. The Soul provides no UI.
  */
 export function ChatComposer({ labels, onSubmitted, sessionId }: ChatComposerProps) {
   return (

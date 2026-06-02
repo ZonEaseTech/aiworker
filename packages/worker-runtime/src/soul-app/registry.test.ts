@@ -22,15 +22,10 @@ import {
 const FREEFORM_APP_ID = 'aiworker-freeform'
 
 const freeformDescriptor = parseSoulDescriptorV1({
-  compatibility: { host: '>=1.0.0' },
-  configuration: {},
   engine: {
     skills: { source: 'dist/engine-assets/skills' },
     workspaceAssets: { source: 'dist/engine-assets/workspace' },
   },
-  extensions: {},
-  external: {},
-  health: { ready: true },
   identity: {
     appId: FREEFORM_APP_ID,
     description: 'Open-ended Soul for freeform local work.',
@@ -118,27 +113,11 @@ describe('Host Soul descriptor registry', () => {
     expect(reinstalled.descriptorDigest).toBe(installed.descriptorDigest)
   })
 
-  it('keeps descriptor extensions and external payload opaque to Host projections', () => {
-    const descriptor = parseSoulDescriptorV1({
-      ...freeformDescriptor,
-      extensions: {
-        'demo.example/review': {
-          memoryPolicy: 'domain-owned',
-          reviewRubric: 'candidate-scorecard',
-        },
-      },
-      external: {
-        businessWorkflow: {
-          candidateId: 'candidate-123',
-          reviewRubric: 'approve-or-reject',
-        },
-      },
-    })
-
+  it('carries no descriptor extensions or external payload: descriptor v1 is identity/engine only', () => {
     const installed = installSoulDescriptor({
-      descriptor,
+      descriptor: freeformDescriptor,
       sourceKind: 'inline',
-      sourceRef: 'inline://opaque-descriptor',
+      sourceRef: 'inline://descriptor-only',
     }, {
       hostVersion: '0.19.3',
       now: () => '2026-05-12T22:22:00.000Z',
@@ -149,10 +128,10 @@ describe('Host Soul descriptor registry', () => {
     })
     const catalog = listSoulCatalog()
 
-    expect(installed.descriptor.extensions).toEqual(descriptor.extensions)
-    expect(installed.descriptor.external).toEqual(descriptor.external)
-    expect(enabled.descriptor.extensions).toEqual(descriptor.extensions)
-    expect(enabled.descriptor.external).toEqual(descriptor.external)
+    expect(installed.descriptor).not.toHaveProperty('extensions')
+    expect(installed.descriptor).not.toHaveProperty('external')
+    expect(enabled.descriptor).not.toHaveProperty('extensions')
+    expect(enabled.descriptor).not.toHaveProperty('external')
 
     const projected = JSON.stringify({
       mountedWorkbench: enabled.mountedWorkbench,
@@ -160,10 +139,9 @@ describe('Host Soul descriptor registry', () => {
       projectedSoul: enabled.projectedSoul,
       souls: catalog.souls,
     })
-    expect(projected).not.toContain('candidate-123')
-    expect(projected).not.toContain('reviewRubric')
-    expect(projected).not.toContain('memoryPolicy')
+    // Host projections expose only descriptor identity, never opaque domain payloads.
     expect(projected).not.toContain('businessWorkflow')
+    expect(projected).not.toContain('candidateId')
   })
 
   it('bootstraps official Freeform without re-enabling disabled apps', async () => {

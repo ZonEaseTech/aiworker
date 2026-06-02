@@ -111,12 +111,7 @@ function hostedApp({
     appId,
     description: `${appName} descriptor`,
     descriptor: {
-      compatibility: { host: '>=1.0.0' },
-      configuration: {},
       engine: {},
-      extensions: {},
-      external: {},
-      health: { ready: true },
       identity: {
         appId,
         name: appName,

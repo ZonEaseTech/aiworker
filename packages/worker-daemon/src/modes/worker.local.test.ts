@@ -30,8 +30,6 @@ import { bootstrapWorkerApp, localApiExposureWarning } from './worker'
 const FREEFORM_APP_ID = 'aiworker-freeform'
 
 const freeformDescriptor = parseSoulDescriptorV1({
-  compatibility: { host: '>=1.0.0' },
-  configuration: {},
   engine: {
     mcp: {
       targets: {
@@ -41,9 +39,6 @@ const freeformDescriptor = parseSoulDescriptorV1({
     skills: { source: 'dist/engine-assets/skills' },
     workspaceAssets: { source: 'dist/engine-assets/workspace' },
   },
-  extensions: {},
-  external: {},
-  health: { ready: true, type: 'static' },
   identity: {
     appId: FREEFORM_APP_ID,
     description: 'Open-ended Soul for freeform local work.',

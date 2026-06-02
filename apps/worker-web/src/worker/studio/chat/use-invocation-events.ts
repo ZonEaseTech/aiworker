@@ -31,9 +31,8 @@ const EMPTY_STATE: InvocationEventsState = { events: [], forInvocationId: null, 
  * invocation reaches a terminal status. The transport is deliberately behind this
  * hook: a future SSE endpoint can replace the poll loop without changing callers.
  *
- * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
- * (session → mounted soul workbench, not worker-web); home is the soul-sdk
- * sdk-common workbench. See memory worker-standalone-release-map-2026-06-01.
+ * The Worker renders the session chat directly: this hook backs the chat
+ * transcript that worker-studio mounts on the session route. The Soul has no UI.
  *
  * State carries the invocation id it belongs to; switching invocations (or
  * clearing it) derives empty until the new id's first poll lands, so no stale

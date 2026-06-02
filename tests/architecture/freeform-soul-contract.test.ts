@@ -152,9 +152,7 @@ describe('Freeform Soul descriptor contract', () => {
     for (const exportName of [
       'artifact',
       'buildSoul',
-      'commonWorkbench',
       'defineSoul',
-      'extendWorkbench',
       'nativeMcp',
       'skill',
       'validateSoul',
@@ -167,5 +165,8 @@ describe('Freeform Soul descriptor contract', () => {
     expect(sdk).not.toHaveProperty('defineSoulApp')
     expect(sdk).not.toHaveProperty(['createSoulApp', 'Manifest'].join(''))
     expect(sdk).not.toHaveProperty('defineSoulAppEngineAssets')
+    // The SDK no longer authors a workbench: the Worker owns and renders it.
+    expect(sdk).not.toHaveProperty('commonWorkbench')
+    expect(sdk).not.toHaveProperty('extendWorkbench')
   })
 })

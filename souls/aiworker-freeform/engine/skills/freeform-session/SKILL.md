@@ -7,4 +7,4 @@ description: Use for open-ended AIWorker sessions where the user has not selecte
 
 Stay inside the provided workspace root, use projected files and native MCP
 configuration when present, and report progress through the native engine.
-Leave domain interpretation to the user or a future Soul App.
+Leave domain interpretation to the user or a future Soul.

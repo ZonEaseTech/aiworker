@@ -14,23 +14,6 @@ describe('npm package smoke script contract', () => {
         soulId: 'freeform',
         version: '0.1.0',
       },
-      compatibility: {
-        engines: ['codex', 'claude-code'],
-        host: '>=1.0.0',
-        sdk: '>=1.0.0',
-      },
-      configuration: {
-        defaults: { engine: 'codex' },
-        features: {
-          engine: true,
-          mcp: true,
-          skills: true,
-          workbench: true,
-          workspaceAssets: true,
-        },
-        scope: 'worker',
-        version: '1',
-      },
       engine: {
         workspaceAssets: { source: 'dist/engine-assets/workspace' },
         skills: { source: 'dist/engine-assets/skills' },
@@ -41,12 +24,6 @@ describe('npm package smoke script contract', () => {
           },
         },
       },
-      health: {
-        ready: true,
-        type: 'static',
-      },
-      extensions: {},
-      external: {},
     }))
     const files = [
       'package/official-apps/aiworker-freeform/dist/engine-assets/workspace/README.md',

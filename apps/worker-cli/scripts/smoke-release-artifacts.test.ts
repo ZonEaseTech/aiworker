@@ -195,8 +195,6 @@ function fixtureDescriptorText(options: {
 } = {}): string {
   const mcpTargets = options.mcpTargets ?? ['claude-code', 'codex']
   return `${JSON.stringify({
-    compatibility: { engines: ['codex'], host: '>=1.0.0', sdk: '>=1.0.0' },
-    configuration: {},
     engine: options.engine ?? {
       mcp: {
         targets: Object.fromEntries(mcpTargets.map(target => [
@@ -211,9 +209,6 @@ function fixtureDescriptorText(options: {
       skills: { source: 'dist/engine-assets/skills' },
       workspaceAssets: { source: 'dist/engine-assets/workspace' },
     },
-    extensions: {},
-    external: {},
-    health: { ready: true, type: 'static' },
     identity: { appId: 'aiworker-freeform', name: 'AIWorker Freeform', soulId: 'freeform', version: '0.1.0' },
     protocol: 'soul/v1',
   })}\n`

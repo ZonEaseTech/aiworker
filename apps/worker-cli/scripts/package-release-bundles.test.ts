@@ -174,12 +174,6 @@ function fixtureDescriptorText(options: {
       soulId: 'freeform',
       version: '0.1.0',
     },
-    compatibility: {
-      engines: ['codex'],
-      host: '>=1.0.0',
-      sdk: '>=1.0.0',
-    },
-    configuration: {},
     engine: {
       mcp: {
         targets: Object.fromEntries(mcpTargets.map(target => [
@@ -198,11 +192,5 @@ function fixtureDescriptorText(options: {
         source: 'dist/engine-assets/workspace',
       },
     },
-    health: {
-      ready: true,
-      type: 'static',
-    },
-    extensions: {},
-    external: {},
   })}\n`
 }

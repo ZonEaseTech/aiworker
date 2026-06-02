@@ -112,7 +112,6 @@ function isSafeBuiltDistPath(
 }
 
 const hostInterpretedObjectSchema = jsonObjectSchema.superRefine(rejectForbiddenHostInterpretedFields)
-const externalObjectSchema = jsonObjectSchema.superRefine(rejectForbiddenDescriptorSecrets)
 
 const engineAssetDirectorySchema = z.string().refine(
   value => isSafeBuiltDistPath(value, { prefix: 'dist/engine-assets/' }),
@@ -157,12 +156,7 @@ export const soulDescriptorV1Schema = z
   .object({
     protocol: z.literal(SOUL_DESCRIPTOR_V1_PROTOCOL),
     identity: hostInterpretedObjectSchema,
-    compatibility: hostInterpretedObjectSchema,
-    configuration: hostInterpretedObjectSchema,
     engine: engineSchema,
-    health: hostInterpretedObjectSchema,
-    extensions: hostInterpretedObjectSchema,
-    external: externalObjectSchema,
   })
   .strict()
 
@@ -178,12 +172,7 @@ export const soulProtocolPackage = {
   sections: [
     'protocol',
     'identity',
-    'compatibility',
-    'configuration',
     'engine',
-    'health',
-    'extensions',
-    'external',
   ],
 } as const
 

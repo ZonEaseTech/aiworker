@@ -1,14 +1,14 @@
-# AIWorker Soul App SDK
+# AIWorker Soul SDK
 
-`@zonease/aiworker-soul-app-sdk` is the descriptor authoring and build surface
-for Soul Apps under `souls/*`.
+`@zonease/aiworker-soul-sdk` is the descriptor authoring and build surface for
+Souls under `souls/*`. A Soul is a descriptor-only template of engine assets;
+the SDK no longer authors a workbench.
 
 The default authoring shape is:
 
 ```text
 souls/my-soul/
   soul.config.ts
-  product/capabilities/default/prompt.md
   engine/workspace/
   engine/skills/
   engine/mcp/codex/config.toml
@@ -16,5 +16,5 @@ souls/my-soul/
 ```
 
 `buildSoul(rootDir)` generates `dist/soul.descriptor.json` and packaged assets.
-Host runtime consumes the built descriptor and refs only; it does not import
-Soul source.
+The descriptor carries only `protocol`, `identity`, and `engine`. Worker runtime
+consumes the built descriptor and refs only; it does not import Soul source.

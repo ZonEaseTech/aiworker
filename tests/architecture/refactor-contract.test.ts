@@ -352,15 +352,19 @@ describe('destructive refactor contract bootstrap', () => {
     expect(soulAppEngineAssets).not.toContain('mcpServers:')
     expect(registry).not.toContain('descriptor.extensions')
     expect(registry).not.toContain('descriptor.external')
-    expect(hostRuntimeRegistryTest).toContain('keeps descriptor extensions and external payload opaque to Host projections')
-    expect(hostRuntimeRegistryTest).toContain('reviewRubric')
-    expect(hostRuntimeRegistryTest).toContain('memoryPolicy')
+    // Descriptor v1 carries no extensions/external sections at all; the Host
+    // registry test guards that the descriptor stays identity/engine only and
+    // that Host projections never expose domain payloads.
+    expect(hostRuntimeRegistryTest).toContain('carries no descriptor extensions or external payload')
+    expect(hostRuntimeRegistryTest).toContain('not.toHaveProperty(\'extensions\')')
+    expect(hostRuntimeRegistryTest).toContain('not.toHaveProperty(\'external\')')
   })
 
   test('protocol descriptor has no mounted workbench or router-mode surface', () => {
-    // Phase-B P3c: descriptor v1 carries no `workbench` section and no mounted
-    // router-mode — the Worker owns and directly renders its Workbench. (The
-    // extensions/external opaque-section assertions remain P5 and stay deferred.)
+    // Phase-B P3c+P5: descriptor v1 carries no `workbench` section and no mounted
+    // router-mode — the Worker owns and directly renders its Workbench. P5
+    // minimizes the descriptor to protocol/identity/engine only: the
+    // compatibility/configuration/health/extensions/external sections are gone.
     const protocol = readRepoFile('docs/protocol.md')
     const descriptorSource = readRepoFile('packages/soul-descriptor/src/index.ts')
 
@@ -370,8 +374,18 @@ describe('destructive refactor contract bootstrap', () => {
     expect(descriptorSource).not.toContain('workbenchSchema')
     expect(descriptorSource).not.toContain('workbenchRouterSchema')
     expect(descriptorSource).not.toContain('workbench: workbenchSchema')
-    // The descriptor sections list (soulProtocolPackage.sections) must not name workbench.
-    expect(descriptorSource).not.toContain('\'workbench\',')
+    // The descriptor sections list (soulProtocolPackage.sections) must not name
+    // workbench or any of the P5-removed sections.
+    for (const removedSection of [
+      'workbench',
+      'compatibility',
+      'configuration',
+      'health',
+      'extensions',
+      'external',
+    ]) {
+      expect(descriptorSource).not.toContain(`'${removedSection}',`)
+    }
   })
 
   test('protocol doc promotes broker methods and worker config envelope details', () => {

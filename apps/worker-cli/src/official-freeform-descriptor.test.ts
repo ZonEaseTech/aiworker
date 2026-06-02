@@ -48,12 +48,6 @@ function fixtureDescriptorText(options: {
       soulId: options.soulId ?? 'freeform',
       version: '0.1.0',
     },
-    compatibility: {
-      engines: ['codex'],
-      host: '>=1.0.0',
-      sdk: '>=1.0.0',
-    },
-    configuration: {},
     engine: options.engine ?? {
       mcp: {
         targets: {
@@ -72,11 +66,5 @@ function fixtureDescriptorText(options: {
         source: 'dist/engine-assets/workspace',
       },
     },
-    health: {
-      ready: true,
-      type: 'static',
-    },
-    extensions: {},
-    external: {},
   })}\n`
 }
