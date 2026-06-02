@@ -139,11 +139,12 @@ broker deterministic. They do not turn the daemon into a product backend.
   list, which on a single-active daemon is that active Worker's. The standalone
   CLI or Workbench web therefore never depends on Host or fleet context.
 - `GET /api/workspace-locators` may receive `workerId` to filter locators.
-- `POST /api/workspace-locators` receives `workerId`, may receive `rootPath`,
-  and creates Worker workspace locator metadata plus projection-owned bootstrap
-  files. `rootPath` is deliberately unconstrained — it is not restricted to the
-  Worker home directory; this open semantic is intentional for the
-  single-operator local model and must not be silently tightened.
+- `POST /api/workspace-locators` receives `workerId` and a workspace name, and
+  creates Worker workspace locator metadata plus projection-owned bootstrap
+  files. Workspace roots are derived under the Worker home directory
+  (`<worker-home>/workspaces/<workspaceId>`), not client-chosen: AIWorker is not
+  a developer tool pointed at arbitrary repositories, so there is no custom
+  `rootPath`.
 - `GET /api/sessions` may receive `workerId` and `workspaceId` to filter session
   lists.
 - `POST /api/sessions` receives `workerId` and `workspaceId` as locator context.

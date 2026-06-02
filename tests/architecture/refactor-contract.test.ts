@@ -401,7 +401,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(protocol).not.toContain('/api/local/info')
     expect(protocol).not.toContain('/api/local/settings')
     expect(protocol).toContain('GET /api/workspace-locators` may receive `workerId`')
-    expect(protocol).toContain('POST /api/workspace-locators` receives `workerId`, may receive `rootPath`')
+    expect(protocol).toContain('POST /api/workspace-locators` receives `workerId` and a workspace name')
     expect(protocol).toContain('GET /api/sessions` may receive `workerId` and `workspaceId`')
     expect(protocol).toContain('POST /api/sessions` receives `workerId` and `workspaceId`')
     expect(docCheck).toContain('worker config broker routes must stay complete')

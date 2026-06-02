@@ -27,6 +27,25 @@ demand. A standalone CLI or Workbench client may omit `workerId` on list routes;
 the unscoped result on a single-active daemon is that active Worker's, so the
 standalone path never depends on Host or fleet context.
 
+## Standalone Entry
+
+The standalone entry is one zero-config command. `aiworker start` (the default
+command) is idempotent: it ensures a single active Worker bound to the bundled
+official Freeform Soul exists — installing the bundled descriptor and creating the
+Worker when none is present, reusing the existing Worker otherwise — then starts
+the daemon, serves the Workbench web, and opens the local Workbench URL. The
+bootstrap convenience lives in the CLI; the daemon stays passive and never
+auto-creates a Worker. To run a different Soul, install it and create the Worker
+explicitly (`aiworker app install` then `aiworker worker create --soul <id>`)
+before `aiworker start` reuses it.
+
+The Workbench web is the single active Worker's surface: it shows the bound Soul,
+has no create-Worker or Soul-catalog UI, and its empty states are the first-run
+experience — an empty Workbench prompts the employee to create the first workspace
+and choose its `rootPath`; a workspace with no session prompts to start the first
+session. Auto-bootstrap stops at the Worker; the first workspace is the employee's
+first action in the Workbench.
+
 ## Session And Invocation State
 
 session lifecycle: active | archived | deleted
@@ -37,8 +56,12 @@ Session lifecycle describes whether the locator remains available in AIWorker.
 It does not describe engine execution.
 
 A session is a chat over one workspace: a composer and a transcript. It records no
-capability. The engine target defaults to the Worker's detected default engine and
-may be overridden per session. Historical SQLite column names may remain only
+capability. A session is created under a workspace with no capability or other
+input; it is auto-named and renamable, opens an empty chat, and its first composer
+message becomes the session's first invocation. The engine target defaults to the
+Worker's detected default engine and may be overridden per session.
+
+Historical SQLite column names may remain only
 behind the storage boundary while migrations are collapsed.
 
 execution/process state belongs to engine_invocations

@@ -263,6 +263,13 @@ old model and is torn down in Phase B. `test.todo` guards point here. Tracked de
 - strip the Host chrome from `apps/worker-web` (New Soul worker, Soul Apps, worker
   list); render the workspace tree with nested sessions and the session chat
   directly in the worker Workbench;
+- implement the `aiworker start` zero-config entry (ensure a single active
+  Freeform-bound Worker, start the daemon, open the local Workbench URL) and make
+  the Workbench empty states the first-run experience (create-first-workspace,
+  start-first-session); remove `apps/worker-web/src/worker/studio/first-run-soul-app-home.tsx`;
+- derive workspace roots under the Worker home (`<worker-home>/workspaces/<id>`);
+  remove the client-chosen `rootPath` parameter and the open-rootPath impl from
+  workspace creation (AIWorker is not a developer tool pointed at arbitrary repos);
 - collapse descriptor identity `appId`/`soulId` to a single Soul `id`, and prune
   the retired descriptor sections from the parser;
 - remove SDK helpers `capability()` and `commonWorkbench()` (keep `defineSoul()`,

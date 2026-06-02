@@ -236,8 +236,8 @@ requireIncludes('docs/protocol.md', [
   'The\ncontrol contract must not carry session, invocation, projection, engine, or\ndomain data.',
   // 钉死倒置后归属:workspace locator metadata 归 Worker（a6c75512,验收 #3 补 pin 防静默 revert）。
   'creates Worker workspace locator metadata plus projection-owned bootstrap\n  files.',
-  // #4 rootPath 开放语义: 刻意不约束(单 operator 本机模型)
-  'rootPath` is deliberately unconstrained — it is not restricted to the',
+  // workspaces are created under the Worker home dir; no client-chosen rootPath (AIWorker is not a dev tool)
+  'Workspace roots are derived under the Worker home directory',
 ])
 forbidIncludes('docs/protocol.md', [
   'host-adapter',
@@ -333,6 +333,11 @@ requireIncludes('docs/runtime.md', [
   'Physical workspace root deletion is a separate dangerous\naction and is not the default lifecycle behavior.',
   // 钉死 BYOK 密钥脱敏边界用泛化 DB（非 Host DB）（a6c75512,验收 #3 补 pin 防静默 revert）。
   'resolved key is read from the environment at call time and is never persisted to\nDB, projection receipts, logs, diagnostics, OpenAPI examples, or UI.',
+  // NEW MODEL: standalone zero-config entry (aiworker start); worker-web pure workbench, empty-state = first-run
+  '## Standalone Entry',
+  'The standalone entry is one zero-config command.',
+  'the daemon stays passive and never\nauto-creates a Worker.',
+  'Auto-bootstrap stops at the Worker; the first workspace is the employee\'s\nfirst action in the Workbench.',
 ])
 
 requireIncludes('docs/soul-authoring.md', [
