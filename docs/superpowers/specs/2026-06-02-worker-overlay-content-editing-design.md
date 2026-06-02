@@ -79,3 +79,20 @@ currently pins those strings. Mechanical; folded into this feature's implementat
 new package tests for the projection scheme resolution, the content GET/PUT routes
 (incl. MCP-view-only + redaction + literal-secret rejection), and the worker-web
 editor; standalone smokes green.
+
+## Status / follow-up
+
+IMPLEMENTED + architect-APPROVED (commits d38851e5 F1, 03c80632 F2, 05f8ffbe F3,
+a1f4b6cd F4). Secret boundary verified end-to-end (content only in files, never the
+envelope; MCP view-only GET-redacted + PUT-rejected; literal secrets rejected;
+traversal rejected; descriptor:// baseline byte-identical).
+
+Tracked follow-up (architect nit, non-blocking): `packages/engine-projection/src/index.ts`
+exports a second, UNWIRED scheme-aware projection (`projectEngineAssets` +
+`resolveOverlaySourceFile`) with no runtime caller — the LIVE path is
+`projectEngineAssetsToWorkspace` in `workspace-projection.ts`. Consolidate or delete
+the dead duplicate (and re-home its traversal test onto the live resolver) to remove
+the divergence risk. Pre-existing (out of this feature's scope): the MCP literal-secret
+guard asymmetry in `workspace-projection.ts` (overlay branch asserts, baseline-copy
+branch does not) — the new `/content` PUT path rejects MCP entirely, so this feature
+neither introduces nor widens it.
