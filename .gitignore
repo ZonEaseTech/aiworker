@@ -17,3 +17,5 @@ coverage/
 .playwright-mcp/
 .worktrees/
 .superpowers/
+
+.omc
