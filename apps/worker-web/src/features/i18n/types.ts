@@ -111,10 +111,6 @@ export interface StaticMessages {
     engineStarting: string
     eventCount: (count: number) => string
     eventStream: string
-    firstRunDetail: string
-    firstRunRailHint: string
-    firstRunRailTitle: string
-    firstRunTitle: string
     followUpInput: string
     followUpPlaceholder: string
     hideDeveloperDetails: string
@@ -123,15 +119,10 @@ export interface StaticMessages {
     noOtherWorkspaces: string
     noSelectionDetail: string
     noSelectionTitle: string
-    noMountedSurface: string
-    noMountedSurfaceDetail: (soulName: string) => string
-    noSoulApps: string
-    noSoulAppsDetail: string
     noInvocations: string
     operatorRole: string
     sendInvocation: string
     sendingInvocation: string
-    backToSoulHome: string
     backToWorker: string
     backToWorkspace: string
     currentSession: string
@@ -149,8 +140,6 @@ export interface StaticMessages {
     soulCatalog: string
     previewSourceMaterial: (name: string) => string
     removeSourceMaterial: (name: string) => string
-    soulApps: (count: number) => string
-    startSoulApp: (appName: string) => string
     invocationCount: (count: number) => string
     invocationHistory: string
     updated: (when: string) => string

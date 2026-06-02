@@ -23,7 +23,6 @@ function defaultShellCopy(copy: ShellCopy): string[] {
     copy.projects.searchPlaceholder,
     copy.workspace.artifactCount(2),
     copy.workspace.createSessionPlaceholder,
-    copy.workspace.firstRunDetail,
     copy.workspace.followUpPlaceholder,
     copy.workspace.noSelectionDetail,
     copy.settings.connectors.hint,
@@ -85,15 +84,44 @@ describe('local shell copy', () => {
     }
   })
 
-  it('describes the default path as Soul App workspace sessions', () => {
-    expect(messagesFor('en').app.subtitle).toBe('Soul Apps, workspaces, sessions')
-    expect(messagesFor('zh-CN').app.subtitle).toBe('Soul App、工作区、会话')
-    expect(messagesFor('en').workspace.firstRunDetail).toContain('app-owned work')
-    expect(messagesFor('zh-CN').workspace.firstRunDetail).toContain('应用自有工作')
+  it('describes the default path as Soul workspace sessions', () => {
+    expect(messagesFor('en').app.subtitle).toBe('Souls, workspaces, sessions')
+    expect(messagesFor('zh-CN').app.subtitle).toBe('Soul、工作区、会话')
     expect(messagesFor('en').projects.empty.title).toBe('No workspaces yet')
     expect(messagesFor('zh-CN').projects.empty.title).toBe('还没有工作区')
     expect(messagesFor('en').projects.searchPlaceholder).toBe('Search workspaces...')
     expect(messagesFor('zh-CN').projects.searchPlaceholder).toBe('搜索工作区...')
+  })
+
+  it('drops retired Soul App / app-owned vocabulary from worker shell copy', () => {
+    const forbidden = [/Soul[- ]Apps?\b/i, /app-owned/i, /应用自有/, /App 所有/, /app-eigene/i]
+    for (const locale of supportedLocales) {
+      const copy = messagesFor(locale)
+      const texts = [
+        copy.app.subtitle,
+        copy.artifact.defaultHint,
+        copy.projects.empty.detail('HR'),
+        copy.workspace.createSessionPlaceholder,
+        copy.workspace.followUpPlaceholder,
+        copy.workspace.noSelectionDetail,
+        copy.settings.connectors.hint,
+        copy.settings.dialog.subtitle,
+        copy.settings.externalMcp.pending,
+        copy.settings.nav.soulPacks,
+        copy.settings.soulPacks.empty,
+        copy.settings.soulPacks.hint,
+        copy.settings.soulPacks.title,
+      ]
+      for (const text of texts) {
+        for (const pattern of forbidden)
+          expect(text, `${locale}: ${text}`).not.toMatch(pattern)
+      }
+    }
+
+    expect(Object.keys(messagesFor('en').workspace)).not.toContain('firstRunTitle')
+    expect(Object.keys(messagesFor('en').workspace)).not.toContain('firstRunDetail')
+    expect(Object.keys(messagesFor('en').workspace)).not.toContain('noSoulApps')
+    expect(Object.keys(messagesFor('en').workspace)).not.toContain('soulApps')
   })
 
   it('uses session context and invocation language for Host shell copy', () => {
