@@ -21,7 +21,7 @@ export interface ChatSurfaceProps {
  *
  * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
  * (session → mounted soul workbench, not worker-web; guards 1786/1807 + browser
- * proof); home is the soul-app-sdk sdk-common workbench. NOT wired into
+ * proof); home is the soul-sdk sdk-common workbench. NOT wired into
  * worker-studio. See memory worker-standalone-release-map-2026-06-01.
  */
 export function ChatSurface({ composerLabels, sessionId, transcriptAriaLabel }: ChatSurfaceProps) {

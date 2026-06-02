@@ -1,4 +1,4 @@
-import type { LocalExecutionMode } from '@zonease/aiworker-soul-protocol'
+import type { LocalExecutionMode } from '@zonease/aiworker-soul-descriptor'
 
 export interface FrozenSessionEngine {
   engineCommand: string | null

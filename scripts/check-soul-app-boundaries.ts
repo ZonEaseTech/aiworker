@@ -23,7 +23,7 @@ const hostPrivatePackages = [
   '@zonease/aiworker-worker-runtime',
   '@zonease/aiworker-fs-layout',
   '@zonease/aiworker-worker-daemon',
-  '@zonease/aiworker-soul-protocol',
+  '@zonease/aiworker-soul-descriptor',
   '@zonease/aiworker-storage-sqlite',
   '@zonease/aiworker-worker-web',
 ]
@@ -39,7 +39,7 @@ const hostPrivateRoots = [
   'packages/fs-layout',
   'packages/worker-daemon',
   'packages/worker-runtime',
-  'packages/soul-protocol',
+  'packages/soul-descriptor',
   'packages/storage-sqlite',
 ]
 const forbiddenLegacyRoots = [

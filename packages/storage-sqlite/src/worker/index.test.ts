@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
+import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { sql } from 'drizzle-orm'
 

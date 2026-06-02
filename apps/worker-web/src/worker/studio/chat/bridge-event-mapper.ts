@@ -1,4 +1,4 @@
-import type { LocalSessionEvent } from '@zonease/aiworker-soul-protocol'
+import type { LocalSessionEvent } from '@zonease/aiworker-soul-descriptor'
 import type {
   TranscriptActivityModel,
   TranscriptItemModel,
@@ -21,7 +21,7 @@ function readString(value: unknown): string {
  * STATUS: unwired reusable foundation. The canonical architecture is
  * mounted-owns-chat — the session experience renders in the mounted soul
  * workbench, NOT worker-web (guards worker-studio.test.tsx:1786/1807 + the
- * Freeform browser proof). Chat's proper home is the soul-app-sdk sdk-common
+ * Freeform browser proof). Chat's proper home is the soul-sdk sdk-common
  * workbench; this pure mapper is the most directly portable piece. See memory
  * worker-standalone-release-map-2026-06-01.
  *

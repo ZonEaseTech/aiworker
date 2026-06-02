@@ -1,4 +1,4 @@
-import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
+import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import type { LocalExecutor } from './index'
 
 import { mkdtempSync } from 'node:fs'
@@ -6,7 +6,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
+import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-descriptor'
 import { afterEach, describe, expect, it } from 'bun:test'
 
 import { createMountedSoulAppTestRuntime, createStandaloneSoulAppRuntime, mountSessionApiProxy, renderUniversalWorkbenchHtml } from './index'

@@ -1,4 +1,4 @@
-import type { LocalWorkerConfigKind, LocalWorkerConfigTarget, LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-protocol'
+import type { LocalWorkerConfigKind, LocalWorkerConfigTarget, LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-descriptor'
 import type { WorkerConfigSaveBody } from './types'
 
 import { archiveWorkerConfigValue, saveWorkerConfigValue } from './worker-config'

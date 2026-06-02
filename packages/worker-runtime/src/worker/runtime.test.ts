@@ -1,5 +1,5 @@
 import type { EngineEventSink } from '@zonease/aiworker-engine-bridge'
-import type { SoulAppEngineAssets } from '@zonease/aiworker-soul-protocol'
+import type { SoulAppEngineAssets } from '@zonease/aiworker-soul-descriptor'
 
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'

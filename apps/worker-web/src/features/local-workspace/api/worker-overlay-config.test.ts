@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-protocol'
+import type { LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-descriptor'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 

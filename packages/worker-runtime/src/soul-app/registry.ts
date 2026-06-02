@@ -4,7 +4,7 @@ import type {
   SoulAppInstallSourceKind,
   SoulDescriptorV1,
   SoulDescriptorValidationIssue,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import type { SoulAppRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { createHash } from 'node:crypto'
@@ -13,7 +13,7 @@ import path from 'node:path'
 import {
   buildHostedSoulApp,
   parseSoulDescriptorV1,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import {
   deleteSoulApp as deleteSoulAppRow,
   getSoulApp,

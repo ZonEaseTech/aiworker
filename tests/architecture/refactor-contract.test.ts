@@ -124,7 +124,7 @@ describe('destructive refactor contract bootstrap', () => {
     const authoring = readRepoFile('docs/soul-authoring.md')
     const testing = readRepoFile('docs/testing.md')
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')
-    const sdkDescriptorBuildTest = readRepoFile('packages/soul-app-sdk/src/descriptor-build.test.ts')
+    const sdkDescriptorBuildTest = readRepoFile('packages/soul-sdk/src/descriptor-build.test.ts')
 
     for (const phrase of [
       'Convention discovery',
@@ -258,7 +258,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('worker lifecycle uses archive status without disabled or paused worker states', () => {
-    const protocol = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
+    const protocol = readRepoFile('packages/soul-descriptor/src/local-workspace.ts')
     const storageSchema = readRepoFile('packages/storage-sqlite/src/worker/schema.ts')
     const daemonSchemas = readRepoFile('packages/worker-daemon/src/modes/worker/schemas.ts')
     const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
@@ -335,8 +335,8 @@ describe('destructive refactor contract bootstrap', () => {
   test('protocol and authoring contracts stay descriptor-only and native-MCP based', () => {
     const protocol = readRepoFile('docs/protocol.md')
     const authoring = readRepoFile('docs/soul-authoring.md')
-    const soulAppEngineAssets = readRepoFile('packages/soul-protocol/src/soul-app/manifest.ts')
-    const registry = readRepoFile('packages/soul-protocol/src/soul-app/registry.ts')
+    const soulAppEngineAssets = readRepoFile('packages/soul-descriptor/src/soul-app/manifest.ts')
+    const registry = readRepoFile('packages/soul-descriptor/src/soul-app/registry.ts')
     const hostRuntimeRegistryTest = readRepoFile('packages/worker-runtime/src/soul-app/registry.test.ts')
 
     expect(protocol).toContain('dist/soul.descriptor.json')
@@ -425,15 +425,15 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('soul protocol does not expose legacy worker overlay write contracts', () => {
-    const protocolIndex = readRepoFile('packages/soul-protocol/src/index.ts')
-    const localWorkspaceProtocol = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
+    const protocolIndex = readRepoFile('packages/soul-descriptor/src/index.ts')
+    const localWorkspaceProtocol = readRepoFile('packages/soul-descriptor/src/local-workspace.ts')
     const forbidden = [
       'localWorkerOverlaySaveSchema',
       'LocalWorkerOverlaySaveInput',
     ]
     const findings = forbidden.flatMap(snippet => [
-      protocolIndex.includes(snippet) ? `packages/soul-protocol/src/index.ts: ${snippet}` : null,
-      localWorkspaceProtocol.includes(snippet) ? `packages/soul-protocol/src/local-workspace.ts: ${snippet}` : null,
+      protocolIndex.includes(snippet) ? `packages/soul-descriptor/src/index.ts: ${snippet}` : null,
+      localWorkspaceProtocol.includes(snippet) ? `packages/soul-descriptor/src/local-workspace.ts: ${snippet}` : null,
     ].filter((item): item is string => Boolean(item)))
 
     expect(findings, 'worker overlay writes must use worker config envelope contracts').toEqual([])
@@ -443,7 +443,7 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('capability template projections stay generic and do not expose review rubric fields', () => {
     const activeSources = [
-      'packages/soul-protocol/src/soul-app/registry.ts',
+      'packages/soul-descriptor/src/soul-app/registry.ts',
       'packages/worker-runtime/src/soul-app/registry.ts',
       'packages/worker-runtime/src/orchestration/orchestrator.ts',
       'packages/soul-app-runtime/src/index.ts',
@@ -819,7 +819,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/worker-runtime/src/index.ts',
       'packages/worker-runtime/src/soul-app/official.ts',
       'packages/worker-runtime/src/soul-app/registry.ts',
-      'packages/soul-protocol/src/soul-app/protocol.ts',
+      'packages/soul-descriptor/src/soul-app/protocol.ts',
     ].map(path => [path, readRepoFile(path)] as const)
     const forbidden = [
       'disableApp(',
@@ -880,7 +880,7 @@ describe('destructive refactor contract bootstrap', () => {
       'packages/worker-daemon/src/modes/worker/schemas.ts',
       'packages/worker-daemon/src/modes/worker.ts',
       'packages/worker-runtime/src/worker/runtime.ts',
-      'packages/soul-protocol/src/local-workspace.ts',
+      'packages/soul-descriptor/src/local-workspace.ts',
       'packages/storage-sqlite/src/worker/index.ts',
     ].map(path => [path, readRepoFile(path)] as const)
     const forbidden = [
@@ -1005,8 +1005,8 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('Host-visible Soul defaults use capability language instead of template defaults', () => {
     const activeSources = [
-      'packages/soul-protocol/src/soul-app/registry.ts',
-      'packages/soul-protocol/src/soul-app/index.ts',
+      'packages/soul-descriptor/src/soul-app/registry.ts',
+      'packages/soul-descriptor/src/soul-app/index.ts',
       'packages/worker-runtime/src/soul-app/registry.ts',
       'packages/worker-runtime/src/orchestration/orchestrator.ts',
       'packages/soul-app-runtime/src/index.ts',
@@ -1320,7 +1320,7 @@ describe('destructive refactor contract bootstrap', () => {
     const protocol = readRepoFile('docs/protocol.md')
     const runtimeDoc = readRepoFile('docs/runtime.md')
     const activeSources = [
-      'packages/soul-protocol/src/local-workspace.ts',
+      'packages/soul-descriptor/src/local-workspace.ts',
       'packages/storage-sqlite/src/worker/schema.ts',
       'packages/storage-sqlite/src/worker/index.ts',
       'packages/storage-sqlite/src/worker/index.test.ts',
@@ -1410,8 +1410,8 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('Soul protocol capability projection helpers do not expose retired template names', () => {
     const activeSources = [
-      'packages/soul-protocol/src/soul-app/index.ts',
-      'packages/soul-protocol/src/soul-app/registry.ts',
+      'packages/soul-descriptor/src/soul-app/index.ts',
+      'packages/soul-descriptor/src/soul-app/registry.ts',
     ]
     const forbidden = [
       'CapabilityTemplate',
@@ -1428,7 +1428,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('Soul protocol id utility tests use neutral slug examples', () => {
-    const source = readRepoFile('packages/soul-protocol/src/lib/ids.test.ts')
+    const source = readRepoFile('packages/soul-descriptor/src/lib/ids.test.ts')
     const retiredSlugSnippets = [
       'HR People Profile',
       'QA___Release',
@@ -1438,14 +1438,14 @@ describe('destructive refactor contract bootstrap', () => {
 
     const findings = retiredSlugSnippets
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `packages/soul-protocol/src/lib/ids.test.ts: ${snippet}`)
+      .map(snippet => `packages/soul-descriptor/src/lib/ids.test.ts: ${snippet}`)
 
     expect(findings, 'slug helper tests should not encode retired HR/QA fixture names').toEqual([])
   })
 
   test('Host-visible Soul catalog does not expose domain as a platform field', () => {
     const activeSources = [
-      'packages/soul-protocol/src/soul-app/registry.ts',
+      'packages/soul-descriptor/src/soul-app/registry.ts',
       'packages/worker-runtime/src/soul-app/registry.ts',
       'packages/worker-runtime/src/orchestration/orchestrator.ts',
       'apps/worker-web/src/features/local-workspace/model-types.ts',
@@ -1539,14 +1539,14 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('public package entrypoints no longer export legacy turn runtime surfaces', () => {
     const hostRuntimeEntrypoint = readRepoFile('packages/worker-runtime/src/index.ts')
-    const soulProtocolEntrypoint = readRepoFile('packages/soul-protocol/src/index.ts')
+    const soulProtocolEntrypoint = readRepoFile('packages/soul-descriptor/src/index.ts')
     const forbiddenExports = [
       ['packages/worker-runtime/src/index.ts', 'StartLocalTurnInput', hostRuntimeEntrypoint],
       ['packages/worker-runtime/src/index.ts', 'LocalTurnStartResult', hostRuntimeEntrypoint],
-      ['packages/soul-protocol/src/index.ts', 'LocalTurn', soulProtocolEntrypoint],
-      ['packages/soul-protocol/src/index.ts', 'LocalTurnStatus', soulProtocolEntrypoint],
-      ['packages/soul-protocol/src/index.ts', 'localTurnSchema', soulProtocolEntrypoint],
-      ['packages/soul-protocol/src/index.ts', 'localTurnStatusSchema', soulProtocolEntrypoint],
+      ['packages/soul-descriptor/src/index.ts', 'LocalTurn', soulProtocolEntrypoint],
+      ['packages/soul-descriptor/src/index.ts', 'LocalTurnStatus', soulProtocolEntrypoint],
+      ['packages/soul-descriptor/src/index.ts', 'localTurnSchema', soulProtocolEntrypoint],
+      ['packages/soul-descriptor/src/index.ts', 'localTurnStatusSchema', soulProtocolEntrypoint],
     ]
 
     const findings = forbiddenExports
@@ -1557,7 +1557,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('local workspace protocol defines sessions and invocations without LocalTurn schemas', () => {
-    const source = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
+    const source = readRepoFile('packages/soul-descriptor/src/local-workspace.ts')
     const forbidden = [
       'localTurnStatusSchema',
       'LocalTurnStatus',
@@ -1566,7 +1566,7 @@ describe('destructive refactor contract bootstrap', () => {
     ]
     const findings = forbidden
       .filter(snippet => source.includes(snippet))
-      .map(snippet => `packages/soul-protocol/src/local-workspace.ts: ${snippet}`)
+      .map(snippet => `packages/soul-descriptor/src/local-workspace.ts: ${snippet}`)
 
     expect(findings, 'local workspace protocol should not preserve turn records as a current contract').toEqual([])
     expect(source).toContain('localEngineInvocationSchema')
@@ -1574,7 +1574,7 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('Soul App event protocol uses invocation events instead of turn callbacks', () => {
-    const source = readRepoFile('packages/soul-protocol/src/soul-app/protocol.ts')
+    const source = readRepoFile('packages/soul-descriptor/src/soul-app/protocol.ts')
 
     expect(source).not.toContain('onTurnCompleted')
     expect(source).not.toContain('turnId: string')
@@ -1583,8 +1583,8 @@ describe('destructive refactor contract bootstrap', () => {
   })
 
   test('soul protocol public surface does not expose generic agent runtime providers', () => {
-    const protocolEntrypoint = readRepoFile('packages/soul-protocol/src/index.ts')
-    const providerFiles = listSourceFiles('packages/soul-protocol/src/providers')
+    const protocolEntrypoint = readRepoFile('packages/soul-descriptor/src/index.ts')
+    const providerFiles = listSourceFiles('packages/soul-descriptor/src/providers')
     const forbiddenPublicExports = [
       'agentEventSchema',
       'AgentEvent',
@@ -1603,15 +1603,15 @@ describe('destructive refactor contract bootstrap', () => {
     ]
     const exportFindings = forbiddenPublicExports
       .filter(snippet => protocolEntrypoint.includes(snippet))
-      .map(snippet => `packages/soul-protocol/src/index.ts: ${snippet}`)
+      .map(snippet => `packages/soul-descriptor/src/index.ts: ${snippet}`)
 
-    expect([...providerFiles, ...exportFindings], 'soul-protocol should not own generic agent runtime provider primitives').toEqual([])
+    expect([...providerFiles, ...exportFindings], 'soul-descriptor should not own generic agent runtime provider primitives').toEqual([])
   })
 
   test('soul protocol provider surface does not expose memory or governance providers', () => {
-    const providerSources = listSourceFiles('packages/soul-protocol/src/providers')
+    const providerSources = listSourceFiles('packages/soul-descriptor/src/providers')
       .map(path => [path, readRepoFile(path)] as const)
-    const protocolSources = listSourceFiles('packages/soul-protocol/src')
+    const protocolSources = listSourceFiles('packages/soul-descriptor/src')
       .map(path => [path, readRepoFile(path)] as const)
     const forbidden = [
       'BrainMemory',
@@ -1636,7 +1636,7 @@ describe('destructive refactor contract bootstrap', () => {
       source.includes('governance') ? [`${path}: governance`] : [],
     )
 
-    expect([...findings, ...governanceFindings], 'soul-protocol should not expose memory/governance provider primitives').toEqual([])
+    expect([...findings, ...governanceFindings], 'soul-descriptor should not expose memory/governance provider primitives').toEqual([])
   })
 
   test('host runtime creates session invocations without legacy startTurn compatibility', () => {
@@ -1905,13 +1905,13 @@ describe('destructive refactor contract bootstrap', () => {
 
   test('session event contracts are invocation-native without turnId compatibility', () => {
     const storage = readRepoFile('packages/storage-sqlite/src/worker/index.ts')
-    const protocol = readRepoFile('packages/soul-protocol/src/local-workspace.ts')
+    const protocol = readRepoFile('packages/soul-descriptor/src/local-workspace.ts')
     const runtime = readRepoFile('packages/worker-runtime/src/worker/runtime.ts')
     const forbidden = [
       ['packages/storage-sqlite/src/worker/index.ts', 'turnId:', storage],
       ['packages/storage-sqlite/src/worker/index.ts', 'turnId?', storage],
       ['packages/storage-sqlite/src/worker/index.ts', 'eventJson.turnId', storage],
-      ['packages/soul-protocol/src/local-workspace.ts', 'turnId:', protocol],
+      ['packages/soul-descriptor/src/local-workspace.ts', 'turnId:', protocol],
       ['packages/worker-runtime/src/worker/runtime.ts', 'turnId: null', runtime],
       ['packages/worker-runtime/src/worker/runtime.ts', 'turnId: string | null', runtime],
       ['packages/worker-runtime/src/worker/runtime.ts', 'input.turnId', runtime],

@@ -24,7 +24,7 @@ const CANONICAL_WORKER_CONFIG_UPDATED_BY = [
   'app-owned-api',
 ] as const
 
-describe('soul-protocol package boundary', () => {
+describe('soul-descriptor package boundary', () => {
   test('declares descriptor-only v1 sections', () => {
     expect(soulProtocolPackage.descriptor).toBe('dist/soul.descriptor.json')
     expect(soulProtocolPackage.sections).toContain('workbench')

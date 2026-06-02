@@ -1,4 +1,4 @@
-import type { LocalSession, LocalWorkspace } from '@zonease/aiworker-soul-protocol'
+import type { LocalSession, LocalWorkspace } from '@zonease/aiworker-soul-descriptor'
 import type { normalizeLocale } from '../../i18n'
 import type { WorkspaceCapability } from '../model-types'
 

@@ -120,4 +120,4 @@ export {
   slugify,
   WORKER_ID_ALPHABET,
   WORKER_ID_PATTERN,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'

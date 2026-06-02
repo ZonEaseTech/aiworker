@@ -139,8 +139,7 @@ template packages. Package and app names are plane-prefixed: `worker-*` owns the
 autonomous runtime; `host-*` owns the Phase 2 control plane; shared capability
 packages keep their names and are consumed by Workers. The descriptor-protocol
 package is `soul-descriptor` and the authoring SDK is `soul-sdk`; both drop the
-retired `soul-protocol` / `soul-app-sdk` "soul-as-app" names (the physical rename
-is tracked Phase-B work). `worker-*` packages must not
+retired `soul-protocol` / `soul-app-sdk` "soul-as-app" names. `worker-*` packages must not
 import `host-*` packages. For v1 strong acceptance, Freeform is the only shipped
 Soul; retired HR/QA app-local source trees stay deleted until they are re-authored
 as descriptor-producing `souls/*` packages.

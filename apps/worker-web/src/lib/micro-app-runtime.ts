@@ -1,4 +1,4 @@
-import type { MountedMicroAppChildEvent, MountedMicroAppHostData } from '@zonease/aiworker-soul-protocol'
+import type { MountedMicroAppChildEvent, MountedMicroAppHostData } from '@zonease/aiworker-soul-descriptor'
 
 export interface MountedMicroAppRouteInfo {
   fullPath?: string

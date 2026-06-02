@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
-import { parseSoulDescriptorV1 } from '../../packages/soul-protocol/src/index'
+import { parseSoulDescriptorV1 } from '../../packages/soul-descriptor/src/index'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const freeformPath = 'souls/aiworker-freeform'
@@ -157,7 +157,7 @@ describe('Freeform Soul descriptor contract', () => {
   })
 
   test('SDK public surface exposes descriptor authoring builders and validators, not old source entrypoints', async () => {
-    const sdk = await import('../../packages/soul-app-sdk/src/index')
+    const sdk = await import('../../packages/soul-sdk/src/index')
 
     for (const exportName of [
       'artifact',
@@ -171,7 +171,7 @@ describe('Freeform Soul descriptor contract', () => {
       'validateSoul',
       'workspaceAsset',
     ]) {
-      expect(sdk, `@zonease/aiworker-soul-app-sdk should export ${exportName}`).toHaveProperty(exportName)
+      expect(sdk, `@zonease/aiworker-soul-sdk should export ${exportName}`).toHaveProperty(exportName)
       expect(typeof sdk[exportName as keyof typeof sdk]).toBe('function')
     }
 

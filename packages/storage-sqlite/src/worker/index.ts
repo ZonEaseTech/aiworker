@@ -1,4 +1,4 @@
-import type { LocalWorkerConfigUpdatedBy } from '@zonease/aiworker-soul-protocol'
+import type { LocalWorkerConfigUpdatedBy } from '@zonease/aiworker-soul-descriptor'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 
@@ -7,7 +7,7 @@ import {
 
   localWorkerConfigValueInputSchema,
   localWorkerConfigValueSchema,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import { Database } from 'bun:sqlite'
 import { and, desc, eq, gt, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'

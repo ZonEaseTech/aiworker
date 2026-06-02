@@ -78,7 +78,7 @@ dist/
 
 ## SDK Responsibilities
 
-`packages/soul-app-sdk` owns:
+`packages/soul-sdk` owns:
 
 - author-facing declarations;
 - convention discovery;

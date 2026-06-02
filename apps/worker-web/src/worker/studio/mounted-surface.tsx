@@ -1,7 +1,7 @@
 import type {
   MountedMicroAppChildEvent,
   MountedMicroAppHostData,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import type { MutableRefObject } from 'react'
 import type { ResolvedTheme } from '../../features/theme/system-theme'
 

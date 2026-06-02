@@ -1,4 +1,4 @@
-import type { LocalWorker } from '@zonease/aiworker-soul-protocol'
+import type { LocalWorker } from '@zonease/aiworker-soul-descriptor'
 
 export function shortWorkerId(workerId: string): string {
   if (workerId.length <= 14)

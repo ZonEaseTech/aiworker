@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 
-import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
+import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 
 export const OFFICIAL_FREEFORM_APP_ID = 'aiworker-freeform'
 const OFFICIAL_FREEFORM_SOUL_ID = 'freeform'

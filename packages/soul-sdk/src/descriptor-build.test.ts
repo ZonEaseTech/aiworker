@@ -212,9 +212,9 @@ async function createFreeformSoulFixture(options: { codexMcp?: string } = {}): P
   await mkdir(join(rootDir, 'engine/mcp/claude-code'), { recursive: true })
   await mkdir(join(rootDir, 'node_modules/@zonease'), { recursive: true })
 
-  symlinkSync(join(import.meta.dir, '..'), join(rootDir, 'node_modules/@zonease/aiworker-soul-app-sdk'), 'dir')
+  symlinkSync(join(import.meta.dir, '..'), join(rootDir, 'node_modules/@zonease/aiworker-soul-sdk'), 'dir')
 
-  writeFileSync(join(rootDir, 'soul.config.ts'), `import { capability, defineSoul } from '@zonease/aiworker-soul-app-sdk'
+  writeFileSync(join(rootDir, 'soul.config.ts'), `import { capability, defineSoul } from '@zonease/aiworker-soul-sdk'
 
 export default defineSoul({
   appId: 'aiworker-freeform',

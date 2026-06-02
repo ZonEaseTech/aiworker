@@ -1,7 +1,7 @@
 import type {
   LocalEngineInvocation,
   LocalSessionEvent,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import type { TranscriptTurnModel } from '@zonease/aiworker-ui/components/transcript-types'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -32,7 +32,7 @@ const EMPTY_STATE: InvocationEventsState = { events: [], forInvocationId: null, 
  * hook: a future SSE endpoint can replace the poll loop without changing callers.
  *
  * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
- * (session → mounted soul workbench, not worker-web); home is the soul-app-sdk
+ * (session → mounted soul workbench, not worker-web); home is the soul-sdk
  * sdk-common workbench. See memory worker-standalone-release-map-2026-06-01.
  *
  * State carries the invocation id it belongs to; switching invocations (or

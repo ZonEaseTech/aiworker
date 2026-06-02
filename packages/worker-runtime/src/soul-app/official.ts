@@ -1,4 +1,4 @@
-import type { HostedSoulApp } from '@zonease/aiworker-soul-protocol'
+import type { HostedSoulApp } from '@zonease/aiworker-soul-descriptor'
 import type { SoulAppRegistryContext } from './registry'
 
 import path from 'node:path'

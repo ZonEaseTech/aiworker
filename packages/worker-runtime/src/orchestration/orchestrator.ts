@@ -1,4 +1,4 @@
-import type { HostedSoulApp } from '@zonease/aiworker-soul-protocol'
+import type { HostedSoulApp } from '@zonease/aiworker-soul-descriptor'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { OfficialRetiredMetadataDiscardResult, OfficialSoulAppBootstrapResult } from '../soul-app/official'
 import type { SoulAppRegistryContext, SoulCatalog, SoulDescriptorInstallInput } from '../soul-app/registry'
@@ -9,7 +9,7 @@ import path from 'node:path'
 import {
   AppError,
   mintWorkerId,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import {
   getWorker,
   listWorkers,

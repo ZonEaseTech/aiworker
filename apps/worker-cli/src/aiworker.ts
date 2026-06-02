@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import type { SoulDiscovery, SoulValidationIssue } from '@zonease/aiworker-soul-app-sdk'
-import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
+import type { SoulDiscovery, SoulValidationIssue } from '@zonease/aiworker-soul-sdk'
+import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 import type { UpdateCliOptions, UpdateCommandName } from './updater'
@@ -18,7 +18,7 @@ import {
   parseSoulDescriptorV1,
   SOUL_DESCRIPTOR_OUTPUT_PATH,
   soulAppIdSchema,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import {
   closeWorkerDb,
   deleteSession,
@@ -92,10 +92,10 @@ export interface LocalPaths {
   logFile: string
 }
 
-type SoulAppSdkModule = typeof import('../../../packages/soul-app-sdk/src/index')
+type SoulAppSdkModule = typeof import('../../../packages/soul-sdk/src/index')
 
-const SOUL_APP_SDK_PACKAGE = '@zonease/aiworker-soul-app-sdk'
-const SOURCE_SOUL_APP_SDK_ROOT = path.resolve(import.meta.dir, '../../../packages/soul-app-sdk')
+const SOUL_APP_SDK_PACKAGE = '@zonease/aiworker-soul-sdk'
+const SOURCE_SOUL_APP_SDK_ROOT = path.resolve(import.meta.dir, '../../../packages/soul-sdk')
 
 let soulAppSdk: Promise<SoulAppSdkModule> | null = null
 
@@ -1727,14 +1727,14 @@ function portableRelativePath(from: string, to: string): string {
 
 async function loadSoulAppSdk(): Promise<SoulAppSdkModule> {
   soulAppSdk ??= import(SOUL_APP_SDK_PACKAGE)
-    .catch(async () => import('../../../packages/soul-app-sdk/src/index')) as Promise<SoulAppSdkModule>
+    .catch(async () => import('../../../packages/soul-sdk/src/index')) as Promise<SoulAppSdkModule>
   return soulAppSdk
 }
 
 function ensureScaffoldSdkLink(targetDir: string): void {
   if (!existsSync(SOURCE_SOUL_APP_SDK_ROOT))
     return
-  const linkPath = path.join(targetDir, 'node_modules/@zonease/aiworker-soul-app-sdk')
+  const linkPath = path.join(targetDir, 'node_modules/@zonease/aiworker-soul-sdk')
   if (existsSync(linkPath))
     return
   mkdirSync(path.dirname(linkPath), { recursive: true })

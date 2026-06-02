@@ -63,8 +63,8 @@
         "@types/bun": "^1.2.13",
         "@zonease/aiworker-engine-bridge": "workspace:*",
         "@zonease/aiworker-fs-layout": "workspace:*",
-        "@zonease/aiworker-soul-app-sdk": "workspace:*",
-        "@zonease/aiworker-soul-protocol": "workspace:*",
+        "@zonease/aiworker-soul-descriptor": "workspace:*",
+        "@zonease/aiworker-soul-sdk": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
         "@zonease/aiworker-worker-daemon": "workspace:*",
         "@zonease/aiworker-worker-runtime": "workspace:*",
@@ -81,7 +81,7 @@
         "@hugeicons/react": "^1.1.6",
         "@micro-zoe/micro-app": "^1.0.0-rc.30",
         "@tailwindcss/vite": "^4.2.2",
-        "@zonease/aiworker-soul-protocol": "workspace:*",
+        "@zonease/aiworker-soul-descriptor": "workspace:*",
         "@zonease/aiworker-ui": "workspace:*",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
@@ -112,7 +112,7 @@
     "packages/engine-projection": {
       "name": "@zonease/aiworker-engine-projection",
       "dependencies": {
-        "@zonease/aiworker-soul-protocol": "workspace:*",
+        "@zonease/aiworker-soul-descriptor": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
@@ -139,7 +139,7 @@
     "packages/soul-app-runtime": {
       "name": "@zonease/aiworker-soul-app-runtime",
       "dependencies": {
-        "@zonease/aiworker-soul-protocol": "workspace:*",
+        "@zonease/aiworker-soul-descriptor": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
         "@zonease/aiworker-worker-runtime": "workspace:*",
       },
@@ -148,21 +148,21 @@
         "typescript": "^5.8.3",
       },
     },
-    "packages/soul-app-sdk": {
-      "name": "@zonease/aiworker-soul-app-sdk",
+    "packages/soul-descriptor": {
+      "name": "@zonease/aiworker-soul-descriptor",
       "dependencies": {
-        "@zonease/aiworker-soul-protocol": "workspace:*",
-        "@zonease/aiworker-soul-workbench": "workspace:*",
+        "zod": "^3.24.4",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
         "typescript": "^5.8.3",
       },
     },
-    "packages/soul-protocol": {
-      "name": "@zonease/aiworker-soul-protocol",
+    "packages/soul-sdk": {
+      "name": "@zonease/aiworker-soul-sdk",
       "dependencies": {
-        "zod": "^3.24.4",
+        "@zonease/aiworker-soul-descriptor": "workspace:*",
+        "@zonease/aiworker-soul-workbench": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
@@ -191,7 +191,7 @@
     "packages/storage-sqlite": {
       "name": "@zonease/aiworker-storage-sqlite",
       "dependencies": {
-        "@zonease/aiworker-soul-protocol": "workspace:*",
+        "@zonease/aiworker-soul-descriptor": "workspace:*",
         "drizzle-orm": "^0.44.1",
       },
       "devDependencies": {
@@ -254,7 +254,7 @@
         "@scalar/hono-api-reference": "^0.5.180",
         "@zonease/aiworker-engine-bridge": "workspace:*",
         "@zonease/aiworker-engine-projection": "workspace:*",
-        "@zonease/aiworker-soul-protocol": "workspace:*",
+        "@zonease/aiworker-soul-descriptor": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
         "@zonease/aiworker-worker-control-protocol": "workspace:*",
         "@zonease/aiworker-worker-runtime": "workspace:*",
@@ -274,7 +274,7 @@
         "@zonease/aiworker-engine-bridge": "workspace:*",
         "@zonease/aiworker-engine-projection": "workspace:*",
         "@zonease/aiworker-fs-layout": "workspace:*",
-        "@zonease/aiworker-soul-protocol": "workspace:*",
+        "@zonease/aiworker-soul-descriptor": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
         "zod": "^3.24.4",
       },
@@ -286,7 +286,7 @@
     "souls/aiworker-freeform": {
       "name": "@zonease/aiworker-freeform",
       "dependencies": {
-        "@zonease/aiworker-soul-app-sdk": "workspace:*",
+        "@zonease/aiworker-soul-sdk": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
@@ -899,9 +899,9 @@
 
     "@zonease/aiworker-soul-app-runtime": ["@zonease/aiworker-soul-app-runtime@workspace:packages/soul-app-runtime"],
 
-    "@zonease/aiworker-soul-app-sdk": ["@zonease/aiworker-soul-app-sdk@workspace:packages/soul-app-sdk"],
+    "@zonease/aiworker-soul-descriptor": ["@zonease/aiworker-soul-descriptor@workspace:packages/soul-descriptor"],
 
-    "@zonease/aiworker-soul-protocol": ["@zonease/aiworker-soul-protocol@workspace:packages/soul-protocol"],
+    "@zonease/aiworker-soul-sdk": ["@zonease/aiworker-soul-sdk@workspace:packages/soul-sdk"],
 
     "@zonease/aiworker-soul-workbench": ["@zonease/aiworker-soul-workbench@workspace:packages/soul-workbench"],
 

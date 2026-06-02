@@ -1,5 +1,5 @@
 import type { Context } from 'hono'
-import { AppError } from '@zonease/aiworker-soul-protocol'
+import { AppError } from '@zonease/aiworker-soul-descriptor'
 import consola from 'consola'
 
 const SECRET_ASSIGNMENT_RE = /(["']?[\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*["']?\s*[:=]\s*["']?)([^"'\s]+)/gi

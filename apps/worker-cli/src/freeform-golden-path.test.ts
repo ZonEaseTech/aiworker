@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
+import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-descriptor'
 import { closeWorkerDb, initWorkerDb, listEngineInvocations, listSessionEvents } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 

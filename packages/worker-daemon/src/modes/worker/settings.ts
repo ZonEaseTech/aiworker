@@ -1,5 +1,5 @@
-import type { LocalEngineReadinessSettings, LocalSettingsConfig } from '@zonease/aiworker-soul-protocol'
-import { AppError, localSettingsConfigSchema } from '@zonease/aiworker-soul-protocol'
+import type { LocalEngineReadinessSettings, LocalSettingsConfig } from '@zonease/aiworker-soul-descriptor'
+import { AppError, localSettingsConfigSchema } from '@zonease/aiworker-soul-descriptor'
 import { getSetting, listSettings, setSetting } from '@zonease/aiworker-storage-sqlite/worker'
 import { scanLocalEngines } from '@zonease/aiworker-worker-runtime'
 

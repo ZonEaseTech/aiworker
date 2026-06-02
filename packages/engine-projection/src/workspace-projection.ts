@@ -4,7 +4,7 @@ import type {
   SoulAppEngineTarget,
   SoulAppProjectionReceipt,
   SoulAppProjectionReceiptEntry,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'

@@ -1,4 +1,4 @@
-import type { LocalEngineInvocationStatus, LocalSessionStatus } from '@zonease/aiworker-soul-protocol'
+import type { LocalEngineInvocationStatus, LocalSessionStatus } from '@zonease/aiworker-soul-descriptor'
 
 export const supportedLocales = ['en', 'zh-CN', 'ja', 'de'] as const
 export type SupportedLocale = typeof supportedLocales[number]

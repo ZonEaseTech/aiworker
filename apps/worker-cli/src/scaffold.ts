@@ -19,7 +19,7 @@ export function createScaffoldPackageJson(appId: string) {
     type: 'module',
     version: '0.1.0',
     dependencies: {
-      '@zonease/aiworker-soul-app-sdk': 'workspace:*',
+      '@zonease/aiworker-soul-sdk': 'workspace:*',
     },
     devDependencies: {
       '@types/bun': '^1.2.13',
@@ -45,7 +45,7 @@ export function createScaffoldTsconfig() {
 
 export function scaffoldSoulConfigTs(appId: string): string {
   const name = titleCase(appId)
-  return `import { capability, defineSoul } from '@zonease/aiworker-soul-app-sdk'
+  return `import { capability, defineSoul } from '@zonease/aiworker-soul-sdk'
 
 export default defineSoul({
   appId: '${appId}',
@@ -67,7 +67,7 @@ export default defineSoul({
 
 export function scaffoldBuildScriptTs(): string {
   return `import process from 'node:process'
-import { buildSoul } from '@zonease/aiworker-soul-app-sdk'
+import { buildSoul } from '@zonease/aiworker-soul-sdk'
 
 const result = await buildSoul(process.cwd())
 process.stdout.write(\`\${JSON.stringify({
@@ -80,7 +80,7 @@ process.stdout.write(\`\${JSON.stringify({
 
 export function scaffoldValidateScriptTs(): string {
   return `import process from 'node:process'
-import { validateSoul } from '@zonease/aiworker-soul-app-sdk'
+import { validateSoul } from '@zonease/aiworker-soul-sdk'
 
 const result = await validateSoul(process.cwd())
 process.stdout.write(\`\${JSON.stringify({

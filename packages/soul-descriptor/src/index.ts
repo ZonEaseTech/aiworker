@@ -221,7 +221,7 @@ export function parseSoulDescriptorV1(descriptor: unknown): SoulDescriptorV1 {
 }
 
 export const soulProtocolPackage = {
-  name: '@zonease/aiworker-soul-protocol',
+  name: '@zonease/aiworker-soul-descriptor',
   descriptor: SOUL_DESCRIPTOR_OUTPUT_PATH,
   sections: [
     'protocol',

@@ -26,7 +26,7 @@ tests/architecture/
 Protocol tests:
 
 ```text
-packages/soul-protocol/src/
+packages/soul-descriptor/src/
   descriptor-v1.test.ts
   index.test.ts
   lib/ids.test.ts
@@ -35,7 +35,7 @@ packages/soul-protocol/src/
 SDK tests:
 
 ```text
-packages/soul-app-sdk/src/
+packages/soul-sdk/src/
   descriptor-build.test.ts
 ```
 
@@ -156,7 +156,7 @@ Coverage status values:
 | Decision area | Canonical home | Guardrail | Status |
 | --- | --- | --- | --- |
 | Worker autonomy / Host control plane | `docs/architecture.md`, `AGENTS.md` | `bun run docs:check`, `bun run test:contracts` | docs+tests |
-| Descriptor-only Host/Soul boundary | `docs/protocol.md`, `docs/soul-authoring.md` | `packages/soul-protocol` tests, architecture tests | docs+tests |
+| Descriptor-only Host/Soul boundary | `docs/protocol.md`, `docs/soul-authoring.md` | `packages/soul-descriptor` tests, architecture tests | docs+tests |
 | Worker-owned workbench | `docs/architecture.md`, `docs/runtime.md` | browser Freeform proof, refactor-contract tests | docs+tests |
 | Session lifecycle and invocation state split | `docs/runtime.md` | architecture tests and engine bridge tests | docs+tests |
 | Protocol implementation contract | `docs/protocol.md` | docs check and architecture tests | docs+tests |
@@ -265,11 +265,6 @@ old model and is torn down in Phase B. `test.todo` guards point here. Tracked de
   directly in the worker Workbench;
 - collapse descriptor identity `appId`/`soulId` to a single Soul `id`, and prune
   the retired descriptor sections from the parser;
-- rename packages to drop the "soul-as-app" naming: `soul-protocol` →
-  `soul-descriptor` and `soul-app-sdk` → `soul-sdk` (directories, `package.json`
-  names, `@zonease/aiworker-*` ids, all imports, tsconfig paths, the
-  `docs/architecture.md` monorepo shape, the `docs/testing.md` test paths, and gate
-  references such as `test:protocol` and `check-doc-contract.ts`);
 - remove SDK helpers `capability()` and `commonWorkbench()` (keep `defineSoul()`,
   `skill()`, `nativeMcp()`, `workspaceAsset()`); replace residual "Soul App"
   wording with "Soul" across source and output;

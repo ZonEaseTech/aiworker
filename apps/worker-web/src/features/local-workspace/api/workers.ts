@@ -1,4 +1,4 @@
-import type { LocalWorker } from '@zonease/aiworker-soul-protocol'
+import type { LocalWorker } from '@zonease/aiworker-soul-descriptor'
 
 import { localJson } from '../../../shared/api/local-client'
 

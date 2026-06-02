@@ -20,7 +20,7 @@
     "test": "bun test --timeout=30000"
   },
   "dependencies": {
-    "@zonease/aiworker-soul-protocol": "workspace:*",
+    "@zonease/aiworker-soul-descriptor": "workspace:*",
     "@zonease/aiworker-storage-sqlite": "workspace:*",
     "@zonease/aiworker-worker-runtime": "workspace:*"
   },

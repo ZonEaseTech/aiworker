@@ -1,4 +1,4 @@
-import { capability, defineSoul } from '@zonease/aiworker-soul-app-sdk'
+import { capability, defineSoul } from '@zonease/aiworker-soul-sdk'
 
 export default defineSoul({
   appId: 'aiworker-freeform',

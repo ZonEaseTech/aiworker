@@ -1,8 +1,8 @@
-import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
+import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-protocol'
+import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 
 const SECRET_ASSIGNMENT_RE = /(["']?[\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*["']?\s*[:=]\s*["']?)([^"'\s]+)/gi
 const SECRET_VALUE_RE = /-----BEGIN[A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----)?|\beyJ[\w-]+\.[\w-]+\.[\w-]+|\b(?:Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,})\b/gi
@@ -449,7 +449,7 @@ function copyCapabilities(rootDir: string, capabilities: SoulDiscovery['capabili
 function commonWorkbenchDistDir(): string {
   // soul-workbench is a sibling workspace package; resolve its built micro-app
   // bundle by filesystem layout (robust across runtimes / node_modules linking).
-  const here = dirname(fileURLToPath(import.meta.url)) // packages/soul-app-sdk/src
+  const here = dirname(fileURLToPath(import.meta.url)) // packages/soul-sdk/src
   return join(here, '..', '..', 'soul-workbench', 'dist', 'web', 'workbench')
 }
 

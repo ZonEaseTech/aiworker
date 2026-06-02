@@ -32,7 +32,7 @@ const targetPackages = [
   ['packages/worker-daemon', '@zonease/aiworker-worker-daemon'],
   ['packages/worker-control-protocol', '@zonease/aiworker-worker-control-protocol'],
   ['packages/host-control', '@zonease/aiworker-host-control'],
-  ['packages/soul-protocol', '@zonease/aiworker-soul-protocol'],
+  ['packages/soul-descriptor', '@zonease/aiworker-soul-descriptor'],
   ['packages/engine-bridge', '@zonease/aiworker-engine-bridge'],
   ['packages/engine-projection', '@zonease/aiworker-engine-projection'],
   ['packages/soul-workbench', '@zonease/aiworker-soul-workbench'],
@@ -58,11 +58,11 @@ describe('target package ownership', () => {
       ]),
     )
 
-    expect(packages['packages/soul-protocol']?.dependencies ?? {}).not.toHaveProperty('react')
-    expect(packages['packages/soul-protocol']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-worker-runtime')
+    expect(packages['packages/soul-descriptor']?.dependencies ?? {}).not.toHaveProperty('react')
+    expect(packages['packages/soul-descriptor']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-worker-runtime')
     expect(packages['packages/worker-runtime']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-soul-workbench')
-    expect(packages['packages/worker-runtime']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-soul-app-sdk')
-    expect(packages['packages/soul-app-sdk']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-worker-runtime')
+    expect(packages['packages/worker-runtime']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-soul-sdk')
+    expect(packages['packages/soul-sdk']?.dependencies ?? {}).not.toHaveProperty('@zonease/aiworker-worker-runtime')
 
     // 控制契约方向：host-control 经 worker-control-protocol 单向消费契约，
     // 不得依赖任何 worker-* 运行时包；契约包本身保持纯净（不回指 host-*）。
@@ -134,10 +134,10 @@ describe('target package ownership', () => {
     expect(hostRuntimeEntrypoint).not.toContain('NativeEngineBridge')
   })
 
-  test('worker-cli declares soul-app-sdk and uses no deep sibling-source imports', () => {
+  test('worker-cli declares soul-sdk and uses no deep sibling-source imports', () => {
     const cliPkg = JSON.parse(readFileSync(join(repoRoot, 'apps/worker-cli/package.json'), 'utf8')) as PackageJson
     const allDeps = { ...(cliPkg.dependencies ?? {}), ...(cliPkg.devDependencies ?? {}) }
-    expect(allDeps, 'worker-cli must declare its soul-app-sdk usage').toHaveProperty('@zonease/aiworker-soul-app-sdk')
+    expect(allDeps, 'worker-cli must declare its soul-sdk usage').toHaveProperty('@zonease/aiworker-soul-sdk')
 
     const deepImports: string[] = []
     for (const root of ['apps/worker-cli/src', 'apps/worker-web/src', 'packages']) {
@@ -172,8 +172,8 @@ describe('target package ownership', () => {
     expect(src.includes('HOST_PRIVATE'), 'post-inversion these are WORKER_PRIVATE packages').toBe(false)
   })
 
-  test('soul-protocol/soul-app modules have no VALUE import of the package root barrel (runtime acyclic)', () => {
-    const dir = join(repoRoot, 'packages/soul-protocol/src/soul-app')
+  test('soul-descriptor/soul-app modules have no VALUE import of the package root barrel (runtime acyclic)', () => {
+    const dir = join(repoRoot, 'packages/soul-descriptor/src/soul-app')
     const offenders: string[] = []
     for (const file of readdirSync(dir)) {
       if (!file.endsWith('.ts') || file.endsWith('.test.ts'))
@@ -181,7 +181,7 @@ describe('target package ownership', () => {
       const src = readFileSync(join(dir, file), 'utf8')
       // 匹配 value import（排除 `import type ...`）from '..' / '../index'
       if (/^\s*import\s+(?!type[\s{])\S[^\n;]*from\s+['"]\.\.(?:\/index)?['"]/m.test(src))
-        offenders.push(`packages/soul-protocol/src/soul-app/${file}`)
+        offenders.push(`packages/soul-descriptor/src/soul-app/${file}`)
     }
     expect(offenders, 'soul-app modules must not VALUE-import the root barrel (would create a runtime cycle)').toEqual([])
   })

@@ -18,7 +18,7 @@ export const WORKER_PRIVATE_IMPORT_PREFIXES = [
   '@zonease/aiworker-worker-runtime',
   '@zonease/aiworker-fs-layout',
   '@zonease/aiworker-worker-daemon',
-  '@zonease/aiworker-soul-protocol',
+  '@zonease/aiworker-soul-descriptor',
   '@zonease/aiworker-storage-sqlite',
   '@zonease/aiworker-worker-web',
 ]
@@ -31,7 +31,7 @@ const FORBIDDEN_LEGACY_IMPORT_PREFIXES = [
 ]
 
 const ALLOWED_SHARED_PACKAGES = new Set([
-  '@zonease/aiworker-soul-app-sdk',
+  '@zonease/aiworker-soul-sdk',
   '@zonease/aiworker-soul-app-runtime',
   '@zonease/aiworker-soul-workbench',
   '@zonease/aiworker-ui',
@@ -43,7 +43,7 @@ const CURRENT_WORKER_PRIVATE_ROOTS = [
   'packages/fs-layout',
   'packages/worker-daemon',
   'packages/worker-runtime',
-  'packages/soul-protocol',
+  'packages/soul-descriptor',
   'packages/storage-sqlite',
 ]
 
@@ -70,7 +70,7 @@ export function scanPrivateImports(rootDir: string): PrivateImportIssue[] {
         issues.push({
           file: path.relative(rootDir, file),
           importPath,
-          message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
+          message: 'Soul Apps must use @zonease/aiworker-soul-sdk instead of Host private packages or sibling Soul Apps.',
         })
       }
     }

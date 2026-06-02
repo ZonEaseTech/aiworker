@@ -1,4 +1,4 @@
-import type { LocalEngineStatus } from '@zonease/aiworker-soul-protocol'
+import type { LocalEngineStatus } from '@zonease/aiworker-soul-descriptor'
 import { spawnSync } from 'node:child_process'
 
 import { sanitizeEngineEnv } from './engine-env'

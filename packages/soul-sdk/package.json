@@ -1,5 +1,5 @@
 {
-  "name": "@zonease/aiworker-soul-protocol",
+  "name": "@zonease/aiworker-soul-sdk",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -13,10 +13,11 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test --timeout=15000"
+    "test": "bun test --timeout=30000"
   },
   "dependencies": {
-    "zod": "^3.24.4"
+    "@zonease/aiworker-soul-descriptor": "workspace:*",
+    "@zonease/aiworker-soul-workbench": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",

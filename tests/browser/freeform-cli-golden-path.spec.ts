@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { chromium } from 'playwright'
-import { namespaceSoulAppCapabilityId } from '../../packages/soul-protocol/src/index'
+import { namespaceSoulAppCapabilityId } from '../../packages/soul-descriptor/src/index'
 import { closeWorkerDb, createEngineInvocation, initWorkerDb, upsertFile, upsertWorkerConfigValue } from '../../packages/storage-sqlite/src/worker/index'
 import { MOUNT_TIMEOUT_MS } from './mount-wait'
 

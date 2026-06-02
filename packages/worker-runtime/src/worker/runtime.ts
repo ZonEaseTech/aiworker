@@ -1,6 +1,6 @@
 import type { EngineAdapter, EngineBridgeFailureCode, EngineBridgeOptions, EngineEventSink } from '@zonease/aiworker-engine-bridge'
 import type { EngineAssetSource, ReservedOverlayProjectionConfig, WorkerOverlayProjectionAsset } from '@zonease/aiworker-engine-projection'
-import type { LocalExecutionMode, SoulAppEngineTarget, SoulAppProjectionReceipt } from '@zonease/aiworker-soul-protocol'
+import type { LocalExecutionMode, SoulAppEngineTarget, SoulAppProjectionReceipt } from '@zonease/aiworker-soul-descriptor'
 import type {
   EngineInvocationRow,
   FileRow,
@@ -22,7 +22,7 @@ import {
   projectEngineAssetsToWorkspace,
   resolveSoulAppEngineTarget,
 } from '@zonease/aiworker-engine-projection'
-import { AppError, soulAppProjectionReceiptSchema } from '@zonease/aiworker-soul-protocol'
+import { AppError, soulAppProjectionReceiptSchema } from '@zonease/aiworker-soul-descriptor'
 import {
   appendSessionEvent,
   createEngineInvocation,

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
+import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-descriptor'
 import {
   appendSessionEvent,
   closeWorkerDb,
@@ -1795,7 +1795,7 @@ describe('aiworker local CLI', () => {
       protocol: string
       workbench: { entry: string, router: { mode: string }, type: string }
     }
-    expect(scaffoldPackageJson.dependencies['@zonease/aiworker-soul-app-sdk']).toBe('workspace:*')
+    expect(scaffoldPackageJson.dependencies['@zonease/aiworker-soul-sdk']).toBe('workspace:*')
     expect(scaffoldPackageJson.scripts.build).toBe('bun scripts/build.ts')
     expect(scaffoldPackageJson.scripts.validate).toBe('bun scripts/validate.ts')
     expect(scaffoldTsconfig.include).toEqual(['soul.config.ts', 'scripts/**/*.ts'])

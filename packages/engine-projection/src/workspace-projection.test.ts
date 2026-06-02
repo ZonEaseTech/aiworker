@@ -1,4 +1,4 @@
-import type { SoulAppEngineAssets } from '@zonease/aiworker-soul-protocol'
+import type { SoulAppEngineAssets } from '@zonease/aiworker-soul-descriptor'
 
 import { mkdtempSync } from 'node:fs'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'

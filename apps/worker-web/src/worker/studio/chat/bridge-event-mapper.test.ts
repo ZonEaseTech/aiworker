@@ -1,4 +1,4 @@
-import type { LocalSessionEvent } from '@zonease/aiworker-soul-protocol'
+import type { LocalSessionEvent } from '@zonease/aiworker-soul-descriptor'
 
 import { describe, expect, it } from 'vitest'
 

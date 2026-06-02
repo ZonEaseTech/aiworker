@@ -3,7 +3,7 @@ import type {
   LocalFile,
   LocalSession,
   LocalSessionEvent,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 
 import { localJson } from '../../../shared/api/local-client'
 
@@ -32,7 +32,7 @@ export interface InvocationEventsResponse {
  * STATUS: unwired reusable foundation — canonical architecture is mounted-owns-chat
  * (the session experience renders in the mounted soul workbench, not worker-web;
  * guards worker-studio.test.tsx:1786/1807 + Freeform browser proof). Chat's home
- * is the soul-app-sdk sdk-common workbench. This client is at a non-retired path
+ * is the soul-sdk sdk-common workbench. This client is at a non-retired path
  * and does not resurrect the retired Host-era session module. See memory
  * worker-standalone-release-map-2026-06-01.
  */

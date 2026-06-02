@@ -69,7 +69,7 @@ const WORKER_PRIVATE_HOST_PACKAGES = [
   '@zonease/aiworker-worker-runtime',
   '@zonease/aiworker-fs-layout',
   '@zonease/aiworker-worker-daemon',
-  '@zonease/aiworker-soul-protocol',
+  '@zonease/aiworker-soul-descriptor',
   '@zonease/aiworker-storage-sqlite',
   '@zonease/aiworker-worker-web',
 ]
@@ -82,7 +82,7 @@ const FORBIDDEN_LEGACY_PACKAGES = [
 ]
 
 const ALLOWED_SHARED_PACKAGES = [
-  '@zonease/aiworker-soul-app-sdk',
+  '@zonease/aiworker-soul-sdk',
   '@zonease/aiworker-soul-app-runtime',
   '@zonease/aiworker-soul-workbench',
   '@zonease/aiworker-ui',

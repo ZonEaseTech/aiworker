@@ -2,14 +2,14 @@ import antfu from '@antfu/eslint-config'
 
 const soulAppHostPrivateImportPatterns = [
   { group: ['@zonease/aiworker-cli', '@zonease/aiworker-cli/**'], message: 'Soul App code must not import Host CLI internals; use app scripts and the SDK boundary.' },
-  { group: ['@zonease/aiworker-worker-runtime', '@zonease/aiworker-worker-runtime/**'], message: 'Soul App code must not import Host runtime internals; use @zonease/aiworker-soul-app-sdk.' },
+  { group: ['@zonease/aiworker-worker-runtime', '@zonease/aiworker-worker-runtime/**'], message: 'Soul App code must not import Host runtime internals; use @zonease/aiworker-soul-sdk.' },
   { group: ['@zonease/aiworker-worker-daemon', '@zonease/aiworker-worker-daemon/**'], message: 'Soul App code must not import Host daemon internals; use SDK descriptors or mounted broker routes.' },
-  { group: ['@zonease/aiworker-soul-protocol', '@zonease/aiworker-soul-protocol/**'], message: 'Soul App code must not import Host/Soul protocol internals directly; use @zonease/aiworker-soul-app-sdk exports.' },
+  { group: ['@zonease/aiworker-soul-descriptor', '@zonease/aiworker-soul-descriptor/**'], message: 'Soul App code must not import Host/Soul protocol internals directly; use @zonease/aiworker-soul-sdk exports.' },
   { group: ['@zonease/aiworker-storage-sqlite', '@zonease/aiworker-storage-sqlite/**'], message: 'Soul App code must not access Host storage directly; use local runtime or brokered routes.' },
   { group: ['@zonease/aiworker-worker-web', '@zonease/aiworker-worker-web/**'], message: 'Soul App code must not import Host Web internals; declare UI through the descriptor.' },
   { group: ['@zonease/aiworker-api', '@zonease/aiworker-api/**'], message: 'Soul App code must not import the retired apps/api package; use the Soul App SDK or mounted broker routes.' },
-  { group: ['@zonease/aiworker-core', '@zonease/aiworker-core/**'], message: 'Soul App code must not import retired Host core internals; use @zonease/aiworker-soul-app-sdk.' },
-  { group: ['@zonease/aiworker-shared', '@zonease/aiworker-shared/**'], message: 'Soul App code must not import retired shared Host contracts; use @zonease/aiworker-soul-app-sdk exports.' },
+  { group: ['@zonease/aiworker-core', '@zonease/aiworker-core/**'], message: 'Soul App code must not import retired Host core internals; use @zonease/aiworker-soul-sdk.' },
+  { group: ['@zonease/aiworker-shared', '@zonease/aiworker-shared/**'], message: 'Soul App code must not import retired shared Host contracts; use @zonease/aiworker-soul-sdk exports.' },
   { group: ['@zonease/aiworker-soul-app-workbench', '@zonease/aiworker-soul-app-workbench/**'], message: 'Soul App code must not import the retired Soul App workbench package; use descriptor-owned workbench assets.' },
   { group: ['apps/api/**', 'apps/worker-cli/**', 'apps/worker-web/**', 'packages/core/**', 'packages/shared/**', 'packages/soul-app-workbench/**', 'packages/storage-sqlite/**'], message: 'Soul App code must stay inside the public SDK boundary; listed legacy paths are forbidden only as retired imports.' },
 ]

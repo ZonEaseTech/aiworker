@@ -1,11 +1,11 @@
 import type { OpenAPIHono } from '@hono/zod-openapi'
 import { z } from '@hono/zod-openapi'
-import { localWorkerConfigValueInputSchema } from '@zonease/aiworker-soul-protocol'
+import { localWorkerConfigValueInputSchema } from '@zonease/aiworker-soul-descriptor'
 
 export function registerLocalOpenApiPaths(app: OpenAPIHono): void {
   const responseSchema = z.object({}).passthrough().openapi('LocalResponse')
   // envelope shape (kind/target/updatedBy enums, options, checksum, sourceRef) 由
-  // packages/soul-protocol 单一来源定义；这里只挂 OpenAPI 元数据，避免与 protocol drift。
+  // packages/soul-descriptor 单一来源定义；这里只挂 OpenAPI 元数据，避免与 protocol drift。
   const workerConfigValueInputSchema = localWorkerConfigValueInputSchema.openapi('WorkerConfigValueInput', {
     description: 'SDK-standard configValueJson envelope. Values must use refs and non-secret operational options; do not send literal secrets, full native MCP files, Soul domain records, business state, or artifact content.',
     example: {

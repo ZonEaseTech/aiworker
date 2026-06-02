@@ -1,5 +1,5 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import type { HostedSoulApp, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-soul-protocol'
+import type { HostedSoulApp, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-soul-descriptor'
 import type { CSSProperties, ReactNode } from 'react'
 import type { WorkspaceCapability } from '../../local-workspace/model-types'
 

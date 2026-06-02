@@ -1,4 +1,4 @@
-import type { HostedSoulApp } from '@zonease/aiworker-soul-protocol'
+import type { HostedSoulApp } from '@zonease/aiworker-soul-descriptor'
 import type { messagesFor, normalizeLocale } from '../../features/i18n'
 import type { LocalWorkspaceData } from '../../features/local-workspace/api/types'
 

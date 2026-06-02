@@ -44,7 +44,7 @@ describe('scanPrivateImports', () => {
   it('does not flag allowed shared packages (sdk/runtime/ui/current workbench)', () => {
     const root = makeApp({
       'soul.config.ts': 'export default {}\n',
-      'src/x.ts': `import { defineSoul } from '@zonease/aiworker-soul-app-sdk'\nimport { Foo } from '@zonease/aiworker-ui'\nimport { Workbench } from '@zonease/aiworker-soul-workbench'\n`,
+      'src/x.ts': `import { defineSoul } from '@zonease/aiworker-soul-sdk'\nimport { Foo } from '@zonease/aiworker-ui'\nimport { Workbench } from '@zonease/aiworker-soul-workbench'\n`,
     })
     expect(scanPrivateImports(root)).toEqual([])
   })

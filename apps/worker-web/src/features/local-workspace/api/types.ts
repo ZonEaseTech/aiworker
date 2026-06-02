@@ -10,7 +10,7 @@ import type {
   LocalWorkerOverlay,
   LocalWorkspace,
   SoulAppProjectionReceipt,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import type { VerticalSoul, WorkspaceCapability } from '../model-types'
 
 export interface LocalSoulAppLifecycleResponse {

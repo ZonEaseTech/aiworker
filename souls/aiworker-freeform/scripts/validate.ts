@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { validateSoul } from '@zonease/aiworker-soul-app-sdk'
+import { validateSoul } from '@zonease/aiworker-soul-sdk'
 
 const result = await validateSoul(process.cwd())
 process.stdout.write(`${JSON.stringify({

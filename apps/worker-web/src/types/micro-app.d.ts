@@ -1,4 +1,4 @@
-import type { MountedMicroAppHostData } from '@zonease/aiworker-soul-protocol'
+import type { MountedMicroAppHostData } from '@zonease/aiworker-soul-descriptor'
 import type { DetailedHTMLProps, HTMLAttributes } from 'react'
 
 declare module 'react' {

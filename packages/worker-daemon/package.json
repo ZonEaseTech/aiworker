@@ -26,7 +26,7 @@
     "@scalar/hono-api-reference": "^0.5.180",
     "@zonease/aiworker-engine-bridge": "workspace:*",
     "@zonease/aiworker-engine-projection": "workspace:*",
-    "@zonease/aiworker-soul-protocol": "workspace:*",
+    "@zonease/aiworker-soul-descriptor": "workspace:*",
     "@zonease/aiworker-storage-sqlite": "workspace:*",
     "@zonease/aiworker-worker-control-protocol": "workspace:*",
     "@zonease/aiworker-worker-runtime": "workspace:*",

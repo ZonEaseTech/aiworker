@@ -3,7 +3,7 @@ import type {
   LocalSettingsConfig,
   LocalWorker,
   LocalWorkspace,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import type { VerticalSoul, WorkspaceCapability } from '../model-types'
 import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppLifecycleResponse, LocalWorkspaceData } from './types'
 

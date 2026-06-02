@@ -1,4 +1,4 @@
-import type { LocalSettingsConfig } from '@zonease/aiworker-soul-protocol'
+import type { LocalSettingsConfig } from '@zonease/aiworker-soul-descriptor'
 import type { messagesFor } from '../i18n'
 
 type WorkerMessages = ReturnType<typeof messagesFor>

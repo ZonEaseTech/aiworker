@@ -1,4 +1,4 @@
-import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppEngineTarget } from '@zonease/aiworker-soul-protocol'
+import type { HostedSoulApp, LocalSettingsConfig, LocalWorkerOverlayAsset, MountedMicroAppHostData, SoulAppEngineTarget } from '@zonease/aiworker-soul-descriptor'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerApiAuthProvider, WorkerApiIdentity, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 
@@ -18,7 +18,7 @@ import { listBaselineAssets } from '@zonease/aiworker-engine-projection'
 import {
   AppError,
   isLoopbackMountedServiceUrl,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import {
   closeWorkerDb,
   deleteSession,

@@ -2,7 +2,7 @@ import type {
   LocalSession,
   LocalSessionEvent,
   LocalWorkspace,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import type { messagesFor } from '../i18n'
 
 type WorkerMessages = ReturnType<typeof messagesFor>

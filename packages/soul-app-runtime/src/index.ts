@@ -3,7 +3,7 @@ import type {
   SoulAppEngineAssets,
   SoulAppEngineTarget,
   SoulDescriptorV1,
-} from '@zonease/aiworker-soul-protocol'
+} from '@zonease/aiworker-soul-descriptor'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type {
   LocalExecutor,
@@ -13,7 +13,7 @@ import type {
 
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
-import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-protocol'
+import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-descriptor'
 import {
   closeWorkerDb,
   initWorkerDb,

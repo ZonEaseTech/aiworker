@@ -5,12 +5,12 @@
  * - 不使用 .strict()：多余字段静默 strip，匹配原 `as T` 的忽略多余键行为。
  * - 必填字段 = 原 requireString() 强制校验的字段，使用 z.string().trim().min(1)。
  * - 其余字段一律 .optional()，当前类型允许 null 的用 .nullable().optional()。
- * - 枚举字段使用从 @zonease/aiworker-soul-protocol 或 storage-sqlite schema 查到的确切枚举值。
+ * - 枚举字段使用从 @zonease/aiworker-soul-descriptor 或 storage-sqlite schema 查到的确切枚举值。
  */
 
 import type { Context } from 'hono'
 
-import { localSettingsConfigSchema, localWorkerConfigValueInputSchema, localWorkerStatusSchema, localWorkspaceStatusSchema } from '@zonease/aiworker-soul-protocol'
+import { localSettingsConfigSchema, localWorkerConfigValueInputSchema, localWorkerStatusSchema, localWorkspaceStatusSchema } from '@zonease/aiworker-soul-descriptor'
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ export const patchWorkerBodySchema = z.object({
   defaultEngineId: z.string().nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   name: z.string().trim().min(1).optional(),
-  // status 枚举值来自 @zonease/aiworker-soul-protocol localWorkerStatusSchema：['active','archived']
+  // status 枚举值来自 @zonease/aiworker-soul-descriptor localWorkerStatusSchema：['active','archived']
   status: localWorkerStatusSchema.optional(),
 })
 
@@ -87,7 +87,7 @@ export const createWorkspaceLocatorBodySchema = createWorkspaceBodySchema.extend
 // ---------------------------------------------------------------------------
 // PATCH /api/workspace-locators/:workspaceId
 // 白名单字段（对应 Pick<WorkspaceRow, 'metadataJson' | 'name' | 'sourcePointersJson' | 'status'>）
-// status 枚举值来自 @zonease/aiworker-soul-protocol localWorkspaceStatusSchema：['active','archived']
+// status 枚举值来自 @zonease/aiworker-soul-descriptor localWorkspaceStatusSchema：['active','archived']
 // ---------------------------------------------------------------------------
 
 export const patchWorkspaceBodySchema = z.object({

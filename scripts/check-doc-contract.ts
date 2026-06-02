@@ -349,7 +349,7 @@ requireIncludes('docs/soul-authoring.md', [
   'The SDK uses directory conventions for the common path and a small\n`soul.config.ts` for identity and explicit overrides.',
   'souls/*',
   'soul.config.ts',
-  '`packages/soul-app-sdk` owns:',
+  '`packages/soul-sdk` owns:',
   '- author-facing declarations;\n- convention discovery;\n- descriptor generation;\n- descriptor validation;\n- engine asset discovery;\n- SDK-standard worker configuration model;\n- build output under `dist/`.',
   // Soul = template of engine assets only, no UI / no app-owned API; Worker owns + renders the Workbench
   'A Soul is a template of engine assets only. It has no capabilities, no workbench\nsource, and no `web/` or `api/` surfaces: the Worker owns and renders the\nWorkbench, and the Soul provides no UI and no app-owned API.',
@@ -389,14 +389,14 @@ forbidIncludes('docs/soul-authoring.md', [
   'dist/api/',
   '  web/\n  api/\n  engine-assets/',
 ])
-requireIncludes('packages/soul-app-sdk/src/descriptor-build.test.ts', [
+requireIncludes('packages/soul-sdk/src/descriptor-build.test.ts', [
   'api/src/index.ts',
   'not.toContain(\'api\')',
   'api: null',
 ])
-if (!read('packages/soul-app-sdk/src/descriptor-build.test.ts').includes('keeps app-owned API source out of convention discovery and build output')) {
+if (!read('packages/soul-sdk/src/descriptor-build.test.ts').includes('keeps app-owned API source out of convention discovery and build output')) {
   issues.push({
-    file: 'packages/soul-app-sdk/src/descriptor-build.test.ts',
+    file: 'packages/soul-sdk/src/descriptor-build.test.ts',
     message: 'SDK API convention discovery must stay explicit',
   })
 }
@@ -427,9 +427,9 @@ requireIncludes('docs/testing.md', [
   'Architecture tests:',
   'tests/architecture/\n  forbidden-host-domain-schema.test.ts\n  freeform-soul-contract.test.ts\n  inversion-guards.test.ts\n  package-ownership.test.ts\n  refactor-contract.test.ts',
   'Protocol tests:',
-  'packages/soul-protocol/src/\n  descriptor-v1.test.ts\n  index.test.ts\n  lib/ids.test.ts',
+  'packages/soul-descriptor/src/\n  descriptor-v1.test.ts\n  index.test.ts\n  lib/ids.test.ts',
   'SDK tests:',
-  'packages/soul-app-sdk/src/\n  descriptor-build.test.ts',
+  'packages/soul-sdk/src/\n  descriptor-build.test.ts',
   'Worker runtime tests:',
   'packages/worker-runtime/src/\n  config/worker.test.ts\n  index.test.ts\n  orchestration/identity-provider.test.ts\n  orchestration/orchestrator.test.ts\n  soul-app/registry.test.ts\n  worker/engine-env.test.ts\n  worker/executor.test.ts\n  worker/local-engine-resolver.test.ts\n  worker/runtime.test.ts',
   'Engine projection tests:',
@@ -784,8 +784,8 @@ if (!testContractsScript.includes('bun test tests/architecture'))
   issues.push({ file: 'package.json', message: 'test:contracts must run the refactor contract test' })
 if (!testContractsScript.includes('scripts/check-soul-app-boundaries.test.ts'))
   issues.push({ file: 'package.json', message: 'test:contracts must run the Host/Soul import boundary test' })
-if (packageJson.scripts?.['test:protocol'] !== 'bun run --filter \'@zonease/aiworker-soul-protocol\' test')
-  issues.push({ file: 'package.json', message: 'test:protocol must run the soul-protocol package test' })
+if (packageJson.scripts?.['test:protocol'] !== 'bun run --filter \'@zonease/aiworker-soul-descriptor\' test')
+  issues.push({ file: 'package.json', message: 'test:protocol must run the soul-descriptor package test' })
 const testCliScript = packageJson.scripts?.['test:cli'] ?? ''
 const testBrowserFreeformScript = packageJson.scripts?.['test:browser:freeform'] ?? ''
 const hostDaemonOpenApi = read('packages/worker-daemon/src/modes/worker/openapi.ts')
@@ -991,7 +991,7 @@ function documentedTestingCoverageFindings(testPath: string, rootPackageJson: { 
       findings.push(`listed CLI proof is not covered by test:cli: ${testPath}`)
   }
 
-  if (testPath.startsWith('packages/soul-protocol/') && !scripts['test:protocol']?.includes('@zonease/aiworker-soul-protocol'))
+  if (testPath.startsWith('packages/soul-descriptor/') && !scripts['test:protocol']?.includes('@zonease/aiworker-soul-descriptor'))
     findings.push(`listed protocol test is not covered by test:protocol: ${testPath}`)
 
   const workspaceRoot = testPath.match(/^(?:apps|packages|souls)\/[^/]+/)?.[0]

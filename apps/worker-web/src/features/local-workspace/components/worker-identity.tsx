@@ -1,4 +1,4 @@
-import type { LocalWorker } from '@zonease/aiworker-soul-protocol'
+import type { LocalWorker } from '@zonease/aiworker-soul-descriptor'
 import type { displaySoul, messagesFor, normalizeLocale } from '../../i18n'
 import type { VerticalSoul } from '../model-types'
 
