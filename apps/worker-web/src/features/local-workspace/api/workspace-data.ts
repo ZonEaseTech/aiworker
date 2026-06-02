@@ -33,27 +33,6 @@ function deriveSoulsFromApps(apps: readonly LocalHostedSoulApp[]): VerticalSoul[
   return apps.map(app => ({ ...app.projectedSoul }))
 }
 
-export interface ResolveMountedWorkbenchOptions {
-  sessionId?: string | null
-  theme?: string
-  workerId?: string | null
-  workspaceId?: string | null
-}
-
-export async function resolveMountedWorkbench<T>(options: ResolveMountedWorkbenchOptions = {}): Promise<T> {
-  const params = new URLSearchParams()
-  if (options.workerId)
-    params.set('workerId', options.workerId)
-  if (options.workspaceId)
-    params.set('workspaceId', options.workspaceId)
-  if (options.sessionId)
-    params.set('sessionId', options.sessionId)
-  if (options.theme)
-    params.set('theme', options.theme)
-  const query = params.toString()
-  return localJson<T>(`/api/mount/workbench${query ? `?${query}` : ''}`)
-}
-
 export async function enableSoulApp(appId: string): Promise<LocalSoulAppLifecycleResponse> {
   return localJson<LocalSoulAppLifecycleResponse>(`/api/app-installation/apps/${appId}/enable`, {
     method: 'POST',

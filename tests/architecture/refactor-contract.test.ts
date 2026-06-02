@@ -1002,7 +1002,6 @@ describe('destructive refactor contract bootstrap', () => {
       'apps/worker-web/src/features/local-workspace/api/workspace-data.ts',
       'apps/worker-web/src/features/local-workspace/model-types.ts',
       'apps/worker-web/src/worker/studio/locator.ts',
-      'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
       'apps/worker-web/src/worker/worker-studio.tsx',
       'apps/worker-web/src/features/local-workspace/components/workspace-card.tsx',
       'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
@@ -1083,7 +1082,6 @@ describe('destructive refactor contract bootstrap', () => {
       'apps/worker-web/src/features/i18n/types.ts',
       'apps/worker-web/src/features/local-workspace/components/creation-dialogs.tsx',
       'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
-      'apps/worker-web/src/worker/studio/first-run-soul-app-home.tsx',
     ]
     const forbidden = [
       'domain: zod.string',
@@ -1972,78 +1970,24 @@ describe('destructive refactor contract bootstrap', () => {
     expect(docCheck).toContain('custom descriptor workbench must bypass SDK common fallback')
   })
 
-  test('WorkerStudio derives production workbench routes from descriptor v1 only', () => {
+  test('WorkerStudio renders the session chat directly without mounted micro-app machinery', () => {
+    // Phase-B P3w: the Worker owns and directly renders its Workbench in
+    // apps/worker-web. The session experience is the worker-web chat surface
+    // (composer + transcript), not a mounted Soul-provided micro-app. The mounted
+    // route adapter and micro-app runtime are removed from worker-web.
     const source = readRepoFile('apps/worker-web/src/worker/worker-studio.tsx')
-    const match = source.match(/function descriptorWorkbenchRoutes[\s\S]*?\n\}\n/)
-    expect(match, 'descriptorWorkbenchRoutes should stay a small explicit descriptor adapter').not.toBeNull()
 
-    const routeAdapter = match![0]
-    const forbiddenSnippets = [
-      'mountedContribution',
-      'microAppSurfaceIds',
-      'routePaths',
-    ]
+    expect(source).toContain('ChatSurface')
+    expect(source).not.toContain('descriptorWorkbenchRoutes')
+    expect(source).not.toContain('MountedSoulAppRouteSurface')
+    expect(source).not.toContain('resolveMountedWorkbench')
+    expect(source).not.toContain('@micro-zoe/micro-app')
+    expect(source).not.toContain('/api/mount/workbench')
 
-    const findings = forbiddenSnippets
-      .filter(snippet => routeAdapter.includes(snippet))
-      .map(snippet => `descriptorWorkbenchRoutes: ${snippet}`)
-
-    expect(findings, 'descriptor workbench routes must not be derived from legacy manifest.ui projection').toEqual([])
-  })
-
-  test('mounted child route tests use generic workbench paths instead of retired HR routes', () => {
-    const source = readRepoFile('apps/worker-web/src/worker/mounted-child-route.test.ts')
-    const retiredRouteSnippets = [
-      'aiworker-hr',
-      'hr-home',
-      '\'/hr',
-      '/outside/release',
-      'item-ben',
-      'item-stella',
-      'item-ada',
-      'tab=review',
-    ]
-
-    const findings = retiredRouteSnippets
-      .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/worker-web/src/worker/mounted-child-route.test.ts: ${snippet}`)
-
-    expect(findings, 'mounted child route tests should prove generic mounted routing without HR route fixtures').toEqual([])
-  })
-
-  test('micro-app runtime tests use generic workbench routes instead of retired HR routes', () => {
-    const source = readRepoFile('apps/worker-web/src/lib/micro-app-runtime.test.ts')
-    const retiredRouteSnippets = [
-      'aiworker-hr',
-      'hr-home',
-      '\'/hr',
-      'aiworker-demo-people',
-      'aiworker-demo-release',
-      'item-ben',
-      'item-stella',
-      'item-ada',
-      'tab=review',
-    ]
-
-    const findings = retiredRouteSnippets
-      .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/worker-web/src/lib/micro-app-runtime.test.ts: ${snippet}`)
-
-    expect(findings, 'micro-app runtime tests should prove generic route plumbing without HR route fixtures').toEqual([])
-  })
-
-  test('mounted route preference tests use generic worker and route ids instead of retired HR routes', () => {
-    const source = readRepoFile('apps/worker-web/src/worker/studio/mounted-route-preferences.test.ts')
-    const retiredRouteSnippets = [
-      'worker-hr',
-      'hr-profile',
-    ]
-
-    const findings = retiredRouteSnippets
-      .filter(snippet => source.includes(snippet))
-      .map(snippet => `apps/worker-web/src/worker/studio/mounted-route-preferences.test.ts: ${snippet}`)
-
-    expect(findings, 'mounted route preference tests should use neutral worker ids and route ids').toEqual([])
+    expect(existsSync(join(repoRoot, 'apps/worker-web/src/worker/studio/mounted-surface.tsx'))).toBe(false)
+    expect(existsSync(join(repoRoot, 'apps/worker-web/src/lib/micro-app-runtime.ts'))).toBe(false)
+    expect(existsSync(join(repoRoot, 'apps/worker-web/src/worker/mounted-child-route.ts'))).toBe(false)
+    expect(existsSync(join(repoRoot, 'apps/worker-web/src/worker/studio/mounted-route-preferences.ts'))).toBe(false)
   })
 
   test('Web worker tests use generic descriptor fixtures instead of retired HR and QA app ids', () => {

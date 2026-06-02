@@ -1,43 +1,38 @@
-import type {
-  HostedSoulApp,
-  LocalWorkerOverlayAsset,
-} from '@zonease/aiworker-soul-descriptor'
+import type { LocalSession, LocalWorkerOverlayAsset, LocalWorkspace } from '@zonease/aiworker-soul-descriptor'
 import type { FormEvent } from 'react'
 import type { LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
-import type { WorkerStudioLayoutVariant } from './components/studio-shell'
+import type { ChatComposerLabels } from './studio/chat/chat-composer'
 import type { WorkerStudioLocatorState } from './studio/locator'
-import type { MountedWorkbenchRoute } from './studio/mounted-surface'
 
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
-import { Item, ItemContent, ItemDescription, ItemTitle } from '@zonease/aiworker-ui/components/item'
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { Button } from '@zonease/aiworker-ui/components/button'
+import { CardContent } from '@zonease/aiworker-ui/components/card'
+import { ItemTitle } from '@zonease/aiworker-ui/components/item'
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { navigateWorkerRoute, useWorkerRoute } from '../app/router/worker-route'
 import {
   displaySoul,
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
-import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, projectWorkerWorkspaceOverlay, saveWorkerOverlayConfigValues } from '../features/local-workspace/api'
-import { CreateWorkerDialog, CreateWorkspaceDialog } from '../features/local-workspace/components'
+import {
+  createSession,
+  createWorkspace,
+  loadLocalWorkspaceData,
+  loadWorkerOverlay,
+  saveWorkerOverlayConfigValues,
+} from '../features/local-workspace/api'
+import { CreateWorkspaceDialog } from '../features/local-workspace/components'
 import { projectNamePlaceholder } from '../features/local-workspace/model'
 import { SettingsDialog } from '../features/settings'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
-import { StudioMainFrame, WorkerStudioLayout } from './components/studio-shell'
-import { mountedChildDefaultPath } from './mounted-child-route'
-import { FirstRunSoulAppHome } from './studio/first-run-soul-app-home'
-import { HostSidebarActions, HostSidebarFooter, HostTopBar } from './studio/host-chrome'
+import { StudioChromeHeader, StudioEmptyState, StudioMainFrame, StudioTitleBlock, WorkerStudioLayout } from './components/studio-shell'
+import { ChatSurface } from './studio/chat/chat-surface'
+import { WorkerStudioTopBar } from './studio/host-chrome'
 import { deriveWorkerStudioLocatorState } from './studio/locator'
-import {
-  persistActiveMountedRoutePreferences,
-  readActiveMountedRoutePreferences,
-  resolveActiveMountedRoute,
-  updateWorkerMountedRoutePreference,
-} from './studio/mounted-route-preferences'
-import { MountedSoulAppRouteSurface } from './studio/mounted-surface'
-import { WorkerHomeFallback, WorkspaceContextNoMountedSurface } from './studio/workspace-fallback'
+import { WorkspaceTree } from './studio/workspace-tree'
 import { WorkerConfigurationDialog } from './worker-configuration-dialog'
-import { WorkerSwitcher } from './worker-workbench-tree'
 
 interface StudioState {
   data: LocalWorkspaceData | null
@@ -66,55 +61,26 @@ function workerOverlayAssetsReducer(
   return assets
 }
 
-function descriptorWorkbenchRoutes(app: HostedSoulApp | null): MountedWorkbenchRoute[] {
-  if (!app?.descriptor?.workbench || app.descriptor.workbench.type !== 'micro-app')
-    return []
-  return [{
-    id: app.mountedWorkbench.id,
-    label: `${app.name} Workbench`,
-    path: app.mountedWorkbench.path,
-    surface: {
-      renderer: app.mountedWorkbench.renderer,
-      scope: app.mountedWorkbench.scope,
-    },
-  }]
-}
-
 export function WorkerStudio() {
   const route = useWorkerRoute()
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
-  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null)
-  const [newWorkerName, setNewWorkerName] = useState('')
-  const [selectedNewWorkerSoulId, setSelectedNewWorkerSoulId] = useState<string | null>(null)
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceTitle, setWorkspaceTitle] = useState('')
-  const [query, setQuery] = useState('')
-  const [createWorkerOpen, setCreateWorkerOpen] = useState(false)
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>('execution')
   const [workerConfigurationOpen, setWorkerConfigurationOpen] = useState(false)
-  const [workerConfigurationWorkerId, setWorkerConfigurationWorkerId] = useState<string | null>(null)
   const [workerOverlayAssets, dispatchWorkerOverlayAssets] = useReducer(workerOverlayAssetsReducer, [])
   const [submitting, setSubmitting] = useState(false)
-  const mountedChildRouteMemoryRef = useRef(new Map<string, string>())
-  const refreshRequestSeqRef = useRef(0)
 
   const refresh = useCallback(async (): Promise<LocalWorkspaceData | null> => {
-    const requestSeq = refreshRequestSeqRef.current + 1
-    refreshRequestSeqRef.current = requestSeq
     setState(current => ({ ...current, loading: true, error: null }))
     try {
       const data = await loadLocalWorkspaceData()
-      if (refreshRequestSeqRef.current !== requestSeq)
-        return null
       setState({ data, error: null, loading: false })
       return data
     }
     catch (error) {
-      if (refreshRequestSeqRef.current !== requestSeq)
-        return null
       setState({ data: null, error: error instanceof Error ? error.message : String(error), loading: false })
       return null
     }
@@ -125,129 +91,38 @@ export function WorkerStudio() {
   }, [refresh])
 
   const data = state.data
-  const defaultNewWorkerSoulId = useMemo(
-    () => data?.souls.find(soul => soul.status === 'available')?.id ?? null,
-    [data?.souls],
-  )
-  const newWorkerSoulId = selectedNewWorkerSoulId ?? defaultNewWorkerSoulId
   const activeLocale = normalizeLocale(data?.settings.language)
   const copy = messagesFor(activeLocale)
   const locatorState = useMemo(
     () => data
-      ? deriveWorkerStudioLocatorState({
-          data,
-          newWorkerSoulId,
-          query,
-          route,
-          selectedWorkerId,
-          selectedWorkspaceId,
-        })
+      ? deriveWorkerStudioLocatorState({ data, route })
       : null,
-    [data, query, route, selectedWorkerId, selectedWorkspaceId, newWorkerSoulId],
+    [data, route],
   )
   const {
     allSessions,
-    filteredWorkspaces: filteredProjects,
     isWorkspaceContextRoute,
-    selectableWorkers,
     selectedSession,
     selectedSoul,
-    selectedSoulApp,
     selectedWorker,
     selectedWorkspace,
   } = locatorState ?? emptyWorkerStudioLocatorState
-  const workerConfigurationWorker = workerConfigurationWorkerId
-    ? selectableWorkers.find(worker => worker.id === workerConfigurationWorkerId) ?? selectedWorker
-    : selectedWorker
-  const workerOverlayTarget = workerConfigurationOpen ? workerConfigurationWorker : selectedWorker
-  const selectedWorkerOverlayId = workerOverlayTarget?.id ?? null
-  const selectWorkspaceLocator = useCallback(async (workerId: string, workspaceId: string): Promise<void> => {
-    const nextData = await refresh()
-    const selectedWorkspace = nextData?.workspaces.find(workspace => workspace.id === workspaceId && workspace.workerId === workerId)
-    if (!selectedWorkspace)
-      return
-    setSelectedWorkerId(workerId)
-    setSelectedWorkspaceId(selectedWorkspace.id)
-    navigateWorkerRoute({ kind: 'workspace', workerId, workspaceId: selectedWorkspace.id })
-  }, [refresh])
-  const refreshSelectedWorkspaceProjection = useCallback(async (): Promise<void> => {
-    if (!selectedWorker || !selectedWorkspace) {
-      await refresh()
-      return
-    }
-    try {
-      await projectWorkerWorkspaceOverlay(selectedWorker.id, selectedWorkspace.id)
-      await refresh()
-    }
-    catch (error) {
-      setState(current => ({
-        ...current,
-        error: error instanceof Error ? error.message : String(error),
-        loading: false,
-      }))
-    }
-  }, [refresh, selectedWorker, selectedWorkspace])
-  const soulAppForWorker = useCallback((worker: typeof selectedWorker) => {
-    if (!worker)
-      return null
-    return data?.apps.find(app => app.appId === worker.appId || app.projectedSoul?.id === worker.appId) ?? null
-  }, [data?.apps])
-  const workerConfigurationSoulApp = useMemo(
-    () => soulAppForWorker(workerConfigurationWorker),
-    [soulAppForWorker, workerConfigurationWorker],
+  const workspaces = useMemo(
+    () => data && selectedWorker
+      ? data.workspaces.filter(workspace => workspace.workerId === selectedWorker.id)
+      : [],
+    [data, selectedWorker],
   )
-  const selectedMountedRoutes = useMemo(
-    () => descriptorWorkbenchRoutes(selectedSoulApp),
-    [selectedSoulApp],
+  const selectedWorkerOverlayId = selectedWorker?.id ?? null
+  const sessionsForWorkspace = useCallback(
+    (workspace: LocalWorkspace) => allSessions
+      .filter(session => session.workspaceId === workspace.id)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [allSessions],
   )
-  const workerConfigurationMountedRoutes = useMemo(
-    () => descriptorWorkbenchRoutes(workerConfigurationSoulApp),
-    [workerConfigurationSoulApp],
-  )
-  const selectedMountedWorkbenchRoute = selectedMountedRoutes[0] ?? null
-  const showMountedWorkbenchRoute = Boolean(selectedSoulApp && selectedMountedWorkbenchRoute)
-  const workbenchTabs = useMemo(() => {
-    if (workerConfigurationMountedRoutes.length <= 1)
-      return []
-    return workerConfigurationMountedRoutes
-      .map(r => ({ id: r.id, label: r.label, path: mountedChildDefaultPath(r.path) }))
-  }, [workerConfigurationMountedRoutes])
-  const [activeMountedTabMap, setActiveMountedTabMap] = useState<Record<string, string>>(() => readActiveMountedRoutePreferences())
-  const updateActiveMountedTabMap = useCallback((updater: (current: Record<string, string>) => Record<string, string>) => {
-    setActiveMountedTabMap((current) => {
-      const next = updater(current)
-      persistActiveMountedRoutePreferences(next)
-      return next
-    })
-  }, [])
-  const activeMountedRoute = useMemo(
-    () => resolveActiveMountedRoute({
-      preferences: activeMountedTabMap,
-      routes: selectedMountedRoutes,
-      workerId: selectedWorker?.id ?? null,
-    }),
-    [activeMountedTabMap, selectedMountedRoutes, selectedWorker?.id],
-  )
-  const mountedWorkspaceId = activeMountedRoute?.surface?.scope === 'app' && !isWorkspaceContextRoute
-    ? null
-    : selectedWorkspace?.id ?? null
-  const workerConfigurationActiveRouteId = useMemo(() => {
-    if (!workerConfigurationWorker)
-      return null
-    const candidate = activeMountedTabMap[workerConfigurationWorker.id]
-    if (candidate && workerConfigurationMountedRoutes.some(route => route.id === candidate))
-      return candidate
-    return workerConfigurationMountedRoutes[0]?.id ?? null
-  }, [activeMountedTabMap, workerConfigurationMountedRoutes, workerConfigurationWorker])
 
-  const enabledSoulApps = useMemo(
-    () => data?.apps.filter(app => app.status === 'enabled') ?? [],
-    [data?.apps],
-  )
   const selectedSoulCopy = selectedSoul ? displaySoul(selectedSoul, activeLocale) : null
-  const hostLocatorSegments = selectedWorker && selectedSoulCopy
-    ? [selectedSoulCopy.name, selectedWorker.name]
-    : [copy.app.brand]
+  const topBarTitle = selectedSoulCopy?.name ?? copy.app.brand
   const systemTheme = useSystemTheme()
   const appearance = data?.settings.appearance ?? 'system'
   const resolvedTheme = resolveTheme(appearance, systemTheme)
@@ -287,57 +162,35 @@ export function WorkerStudio() {
   }
 
   async function saveWorkerOverlayAssets(assets: LocalWorkerOverlayAsset[]) {
-    if (!workerOverlayTarget)
+    if (!selectedWorker)
       return
     const previousOverlayAssets = workerOverlayAssets.filter(asset => asset.source !== 'baseline')
     dispatchWorkerOverlayAssets(assets)
     const overlayOnly = assets.filter(asset => asset.source !== 'baseline')
-    await saveWorkerOverlayConfigValues(workerOverlayTarget.id, previousOverlayAssets, overlayOnly)
-    const result = await loadWorkerOverlay(workerOverlayTarget.id)
+    await saveWorkerOverlayConfigValues(selectedWorker.id, previousOverlayAssets, overlayOnly)
+    const result = await loadWorkerOverlay(selectedWorker.id)
     dispatchWorkerOverlayAssets(result.overlay.assets)
   }
 
-  function startSoulApp(app: HostedSoulApp) {
-    if (!data)
-      return
-    const soulId = data.souls.some(soul => soul.id === app.appId)
-      ? app.appId
-      : app.projectedSoul?.id ?? app.appId
-    const soul = data.souls.find(item => item.id === soulId)
-    const soulCopy = soul ? displaySoul(soul, activeLocale) : null
-    setSelectedNewWorkerSoulId(soulId)
-    setNewWorkerName(soulCopy?.name ?? app.name)
-    setCreateWorkerOpen(true)
-  }
-
-  async function submitWorker(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!newWorkerName.trim() || !newWorkerSoulId)
-      return
-    const result = await createWorker({
-      name: newWorkerName.trim(),
-      appId: newWorkerSoulId,
+  const selectSession = useCallback((workspace: LocalWorkspace, session: LocalSession) => {
+    navigateWorkerRoute({
+      kind: 'session',
+      sessionId: session.id,
+      workerId: workspace.workerId,
+      workspaceId: workspace.id,
     })
-    setSelectedWorkerId(result.worker.id)
-    setNewWorkerName('')
-    setCreateWorkerOpen(false)
-    await refresh()
-    navigateWorkerRoute({ kind: 'worker', workerId: result.worker.id })
-  }
+  }, [])
 
-  async function submitProject(event: FormEvent<HTMLFormElement>) {
+  async function submitWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!data || !selectedSoul || !selectedWorker || !workspaceTitle.trim())
       return
     setSubmitting(true)
     try {
       const workspaceResult = await createWorkspace(selectedWorker.id, {
-        metadata: {
-          soulId: selectedSoul.id,
-        },
+        metadata: { soulId: selectedSoul.id },
         name: workspaceTitle.trim(),
       })
-      setSelectedWorkspaceId(workspaceResult.workspace.id)
       setWorkspaceTitle('')
       setCreateWorkspaceOpen(false)
       await refresh()
@@ -347,6 +200,38 @@ export function WorkerStudio() {
       setSubmitting(false)
     }
   }
+
+  const startSession = useCallback(async (workspace: LocalWorkspace) => {
+    if (!selectedWorker)
+      return
+    const nextIndex = allSessions.filter(session => session.workspaceId === workspace.id).length + 1
+    const result = await createSession({
+      title: `${copy.workspace.newSession} ${nextIndex}`,
+      workerId: workspace.workerId,
+      workspaceId: workspace.id,
+    })
+    await refresh()
+    navigateWorkerRoute({
+      kind: 'session',
+      sessionId: result.session.id,
+      workerId: workspace.workerId,
+      workspaceId: workspace.id,
+    })
+  }, [allSessions, copy.workspace.newSession, refresh, selectedWorker])
+
+  const composerLabels: ChatComposerLabels = useMemo(() => ({
+    ariaLabel: copy.workspace.createSessionPlaceholder,
+    attachment: {
+      add: copy.workspace.addSourceMaterials,
+      attached: copy.workspace.attachedSourceMaterials,
+      closePreview: () => copy.workspace.closeSourceMaterialPreview,
+      materialReadError: copy.workspace.materialReadError,
+      preview: copy.workspace.previewSourceMaterial,
+      remove: copy.workspace.removeSourceMaterial,
+    },
+    placeholder: copy.workspace.createSessionPlaceholder,
+    submitAriaLabel: copy.workspace.sendInvocation,
+  }), [copy])
 
   if (state.loading && !data) {
     return (
@@ -369,111 +254,40 @@ export function WorkerStudio() {
   if (!data)
     return null
 
-  if (!selectedWorker) {
-    const availableSouls = data.souls.filter(soul => soul.status === 'available')
-    return (
-      <WorkerStudioLayout
-        appearance={appearance}
-        header={(
-          <HostTopBar
-            sidebarCollapsed={sidebarCollapsed}
-            locatorSegments={hostLocatorSegments}
-            onToggleSidebar={() => setSidebarCollapsed(current => !current)}
-          />
-        )}
-        mainLabel={copy.accessibility.soulProjectsAndArtifacts}
-        resolvedTheme={resolvedTheme}
-        sidebarCollapsed={sidebarCollapsed}
-        sidebarLabel={copy.workspace.currentWorker}
-        variant="home"
-        sidebar={(
-          <>
-            <HostSidebarActions
-              onCreateWorker={() => setCreateWorkerOpen(true)}
-              onOpenSoulApps={() => openSettings('soul-packs')}
-            />
-            <Item variant="muted" size="sm" role="region">
-              <ItemContent>
-                <ItemTitle>{copy.workspace.firstRunRailTitle}</ItemTitle>
-                <ItemDescription>{copy.workspace.firstRunRailHint}</ItemDescription>
-              </ItemContent>
-            </Item>
-            <HostSidebarFooter runtimeVersion={data.info.runtimeVersion} onOpenSettings={() => openSettings('execution')} />
-          </>
-        )}
-        main={(
-          <StudioMainFrame kicker={copy.app.workspacePill} title={copy.workspace.firstRunTitle}>
-            <FirstRunSoulAppHome
-              apps={enabledSoulApps}
-              copy={copy}
-              locale={activeLocale}
-              souls={availableSouls}
-              onCreateWorker={() => setCreateWorkerOpen(true)}
-              onStartApp={startSoulApp}
-            />
-          </StudioMainFrame>
-        )}
-        dialogs={(
-          <CreateWorkerDialog
-            availableSouls={availableSouls}
-            copy={copy}
-            locale={activeLocale}
-            open={createWorkerOpen}
-            selectedSoulId={newWorkerSoulId ?? ''}
-            workerName={newWorkerName}
-            onClose={() => setCreateWorkerOpen(false)}
-            onNameChange={setNewWorkerName}
-            onSoulChange={setSelectedNewWorkerSoulId}
-            onSubmit={submitWorker}
-          />
-        )}
-      />
-    )
-  }
-
-  if (!selectedSoul || !selectedSoulCopy)
-    return null
-
-  const showWorkspaceContextSurface = isWorkspaceContextRoute && Boolean(selectedWorkspace)
-  const layoutVariant: WorkerStudioLayoutVariant = showWorkspaceContextSurface ? 'workspace' : 'home'
+  const layoutVariant = route.kind === 'session' && selectedSession ? 'session' : 'workspace'
 
   return (
     <>
       <WorkerStudioLayout
         appearance={appearance}
         header={(
-          <HostTopBar
+          <WorkerStudioTopBar
+            configureLabel={copy.workspace.configure}
+            settingsLabel={copy.accessibility.openSettings}
             sidebarCollapsed={sidebarCollapsed}
-            locatorSegments={hostLocatorSegments}
+            title={topBarTitle}
+            onConfigureWorker={selectedWorker ? () => setWorkerConfigurationOpen(true) : undefined}
+            onOpenSettings={() => openSettings('execution')}
             onToggleSidebar={() => setSidebarCollapsed(current => !current)}
           />
         )}
         dialogs={(
           <>
-            <CreateWorkerDialog
-              availableSouls={data.souls.filter(soul => soul.status === 'available')}
-              copy={copy}
-              locale={activeLocale}
-              open={createWorkerOpen}
-              selectedSoulId={newWorkerSoulId ?? ''}
-              workerName={newWorkerName}
-              onClose={() => setCreateWorkerOpen(false)}
-              onNameChange={setNewWorkerName}
-              onSoulChange={setSelectedNewWorkerSoulId}
-              onSubmit={submitWorker}
-            />
-
-            <CreateWorkspaceDialog
-              copy={copy}
-              open={createWorkspaceOpen}
-              placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
-              workerLabel={`${selectedWorker.name} / ${selectedSoulCopy.name}`}
-              submitting={submitting}
-              workspaceTitle={workspaceTitle}
-              onClose={() => setCreateWorkspaceOpen(false)}
-              onSubmit={submitProject}
-              onTitleChange={setWorkspaceTitle}
-            />
+            {selectedSoul
+              ? (
+                  <CreateWorkspaceDialog
+                    copy={copy}
+                    open={createWorkspaceOpen}
+                    placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
+                    workerLabel={selectedWorker ? `${selectedWorker.name} / ${selectedSoulCopy?.name ?? selectedSoul.id}` : ''}
+                    submitting={submitting}
+                    workspaceTitle={workspaceTitle}
+                    onClose={() => setCreateWorkspaceOpen(false)}
+                    onSubmit={submitWorkspace}
+                    onTitleChange={setWorkspaceTitle}
+                  />
+                )
+              : null}
 
             {settingsOpen
               ? (
@@ -497,111 +311,120 @@ export function WorkerStudio() {
         mainLabel={copy.accessibility.soulProjectsAndArtifacts}
         resolvedTheme={resolvedTheme}
         sidebarCollapsed={sidebarCollapsed}
-        sidebarLabel={copy.workspace.currentWorker}
+        sidebarLabel={copy.workspace.workspaceList}
         variant={layoutVariant}
         sidebar={(
-          <>
-            <HostSidebarActions
-              onCreateWorker={() => setCreateWorkerOpen(true)}
-              onOpenSoulApps={() => openSettings('soul-packs')}
-            />
-
-            <WorkerSwitcher
-              selectedWorkerId={selectedWorker?.id ?? null}
-              workers={selectableWorkers}
-              soulNameForWorker={(worker) => {
-                const soul = data.souls.find(item => item.id === worker.appId)
-                return soul ? displaySoul(soul, activeLocale).name : worker.appId
-              }}
-              onConfigureWorker={(worker) => {
-                setWorkerConfigurationWorkerId(worker.id)
-                setWorkerConfigurationOpen(true)
-              }}
-              onSelectWorker={(worker) => {
-                setSelectedWorkerId(worker.id)
-                setSelectedWorkspaceId(null)
-                navigateWorkerRoute({ kind: 'worker', workerId: worker.id })
-              }}
-            />
-
-            <HostSidebarFooter runtimeVersion={data.info.runtimeVersion} onOpenSettings={() => openSettings('execution')} />
-          </>
+          <WorkspaceTree
+            emptyWorkspacesLabel={copy.projects.empty.title}
+            newSessionLabel={copy.workspace.newSession}
+            newWorkspaceLabel={copy.workspace.newWorkspace}
+            noSessionsLabel={copy.workspace.noWorkspaceSessions}
+            selectedSessionId={selectedSession?.id ?? null}
+            selectedWorkspaceId={selectedWorkspace?.id ?? null}
+            sessionsForWorkspace={sessionsForWorkspace}
+            title={copy.workspace.workspaceList}
+            workspaces={workspaces}
+            onCreateSession={workspace => void startSession(workspace)}
+            onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+            onSelectSession={selectSession}
+          />
         )}
         main={(
-          <>
-            {showMountedWorkbenchRoute && selectedSoulApp && activeMountedRoute
-              ? (
-                  <MountedSoulAppRouteSurface
-                    key={`${selectedWorker.id}:${activeMountedRoute.id}`}
-                    appId={selectedSoulApp.appId}
-                    resolvedTheme={resolvedTheme}
-                    route={activeMountedRoute}
-                    routeMemoryRef={mountedChildRouteMemoryRef}
-                    sessionId={route.kind === 'session' ? selectedSession?.id ?? null : null}
-                    workerId={selectedWorker.id}
-                    workspaceId={mountedWorkspaceId}
-                    onSelectWorkspace={workspaceId => selectWorkspaceLocator(selectedWorker.id, workspaceId)}
-                  />
-                )
-              : null}
-
-            {!showMountedWorkbenchRoute && isWorkspaceContextRoute && selectedWorkspace
-              ? (
-                  <WorkspaceContextNoMountedSurface
-                    copy={copy}
-                    selectedSoulCopy={selectedSoulCopy}
-                    selectedWorkspace={selectedWorkspace}
-                    onOpenSettings={() => openSettings()}
-                    onRefresh={() => void refreshSelectedWorkspaceProjection()}
-                  />
-                )
-              : null}
-
-            {!showMountedWorkbenchRoute && !(isWorkspaceContextRoute && selectedWorkspace)
-              ? (
-                  <WorkerHomeFallback
-                    allSessions={allSessions}
-                    copy={copy}
-                    filteredWorkspaces={filteredProjects}
-                    locale={activeLocale}
-                    query={query}
-                    selectedSoul={selectedSoul}
-                    selectedSoulCopy={selectedSoulCopy}
-                    selectedWorker={selectedWorker}
-                    selectedWorkspace={selectedWorkspace}
-                    onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
-                    onOpenSettings={() => openSettings()}
-                    onRefresh={() => void refresh()}
-                    onSearch={setQuery}
-                    onSelectWorkspace={workspace => selectWorkspaceLocator(workspace.workerId, workspace.id)}
-                  />
-                )
-              : null}
-          </>
+          <WorkbenchMain
+            copy={copy}
+            composerLabels={composerLabels}
+            hasWorkspaces={workspaces.length > 0}
+            isWorkspaceContextRoute={isWorkspaceContextRoute}
+            selectedSession={selectedSession ?? (selectedWorkspace ? sessionsForWorkspace(selectedWorkspace)[0] ?? null : null)}
+            selectedWorkspace={selectedWorkspace}
+            onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+            onStartSession={() => {
+              if (selectedWorkspace)
+                void startSession(selectedWorkspace)
+            }}
+          />
         )}
       />
       <WorkerConfigurationDialog
-        activeWorkbenchTabId={workerConfigurationActiveRouteId}
+        activeWorkbenchTabId={null}
         assets={workerOverlayAssets}
         open={workerConfigurationOpen}
-        worker={workerConfigurationWorker}
-        workbenchTabs={workbenchTabs}
-        onOpenChange={(open) => {
-          setWorkerConfigurationOpen(open)
-          if (!open)
-            setWorkerConfigurationWorkerId(null)
-        }}
+        worker={selectedWorker}
+        workbenchTabs={[]}
+        onOpenChange={setWorkerConfigurationOpen}
         onSaveAssets={saveWorkerOverlayAssets}
-        onSelectWorkbenchTab={(tab) => {
-          if (workerConfigurationWorker) {
-            updateActiveMountedTabMap(prev => updateWorkerMountedRoutePreference({
-              current: prev,
-              routeId: tab.id,
-              workerId: workerConfigurationWorker.id,
-            }))
-          }
-        }}
+        onSelectWorkbenchTab={() => {}}
       />
     </>
+  )
+}
+
+function WorkbenchMain({
+  composerLabels,
+  copy,
+  hasWorkspaces,
+  isWorkspaceContextRoute,
+  onCreateWorkspace,
+  onStartSession,
+  selectedSession,
+  selectedWorkspace,
+}: {
+  composerLabels: ChatComposerLabels
+  copy: ReturnType<typeof messagesFor>
+  hasWorkspaces: boolean
+  isWorkspaceContextRoute: boolean
+  onCreateWorkspace: () => void
+  onStartSession: () => void
+  selectedSession: LocalSession | null
+  selectedWorkspace: LocalWorkspace | null
+}) {
+  if (isWorkspaceContextRoute && selectedSession) {
+    return (
+      <>
+        <StudioChromeHeader>
+          <StudioTitleBlock kicker={copy.workspace.currentSession} title={selectedSession.title} />
+        </StudioChromeHeader>
+        <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-7 py-4 max-md:px-4">
+          <ChatSurface
+            key={selectedSession.id}
+            composerLabels={composerLabels}
+            sessionId={selectedSession.id}
+            transcriptAriaLabel={copy.workspace.eventStream}
+          />
+        </CardContent>
+      </>
+    )
+  }
+
+  if (isWorkspaceContextRoute && selectedWorkspace) {
+    return (
+      <StudioMainFrame kicker={copy.workspace.currentWorkspace} title={selectedWorkspace.name}>
+        <StudioEmptyState
+          title={copy.workspace.noWorkspaceSessions}
+          detail={copy.workspace.createSessionPrompt(selectedWorkspace.name)}
+          action={(
+            <Button type="button" variant="ghost" size="lg" onClick={onStartSession}>
+              {copy.workspace.newSession}
+            </Button>
+          )}
+        />
+      </StudioMainFrame>
+    )
+  }
+
+  return (
+    <StudioMainFrame kicker={copy.app.workspacePill} title={copy.workspace.workspaceList}>
+      <StudioEmptyState
+        title={hasWorkspaces ? copy.workspace.noSelectionTitle : copy.projects.empty.title}
+        detail={copy.workspace.noSelectionDetail}
+        action={hasWorkspaces
+          ? null
+          : (
+              <Button type="button" variant="ghost" size="lg" onClick={onCreateWorkspace}>
+                {copy.workspace.newWorkspace}
+              </Button>
+            )}
+      />
+    </StudioMainFrame>
   )
 }

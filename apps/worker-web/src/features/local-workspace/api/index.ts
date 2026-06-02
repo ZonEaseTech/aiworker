@@ -39,8 +39,8 @@ export {
   archiveSoulApp,
   enableSoulApp,
   loadLocalWorkspaceData,
-  resolveMountedWorkbench,
 } from './workspace-data'
 export {
+  createSession,
   createWorkspace,
 } from './workspaces'
