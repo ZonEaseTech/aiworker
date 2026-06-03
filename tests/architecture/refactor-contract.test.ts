@@ -263,6 +263,7 @@ describe('destructive refactor contract bootstrap', () => {
     const daemonSchemas = readRepoFile('packages/worker-daemon/src/modes/worker/schemas.ts')
     const cliSource = readRepoFile('apps/worker-cli/src/aiworker.ts')
     const daemonSource = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
+    const daemonOpenApi = readRepoFile('packages/worker-daemon/src/modes/worker/openapi.ts')
     const cliArchiveWorker = cliSource.slice(
       cliSource.indexOf('async function archiveWorkerCommand'),
       cliSource.indexOf('async function deleteWorkerCommand'),
@@ -280,6 +281,9 @@ describe('destructive refactor contract bootstrap', () => {
     ].filter(Boolean)
 
     expect(protocol).toContain('localWorkerStatusSchema = z.enum([\'active\', \'archived\'])')
+    expect(cliSource).toContain('cli.command(\'worker archive <id>\'')
+    expect(daemonSource).toContain('app.post(\'/api/workers/:workerId/archive\'')
+    expect(daemonOpenApi).toContain('path: \'/api/workers/{workerId}/archive\'')
     expect(cliArchiveWorker).toContain('status: \'archived\'')
     expect(daemonArchiveWorker).toContain('status: \'archived\'')
     expect(findings, 'Local Worker lifecycle should archive/delete Worker metadata; Soul App disabled remains a separate app registry state').toEqual([])

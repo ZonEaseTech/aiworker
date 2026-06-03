@@ -1262,6 +1262,16 @@ describe('local daemon API', () => {
     expect(await getRes.json()).toMatchObject({
       worker: { id: worker.id, status: 'archived' },
     })
+    const listRes = await target.request('/api/workers')
+    expect(listRes.status).toBe(200)
+    expect((await listRes.json() as { workers: Array<{ id: string, status: string }> }).workers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: worker.id,
+          status: 'archived',
+        }),
+      ]),
+    )
 
     const blockedWorkspaceRes = await target.request('/api/workspace-locators', {
       body: JSON.stringify({ name: 'Blocked Archived Worker Workspace', type: 'workspace', workerId: worker.id }),
