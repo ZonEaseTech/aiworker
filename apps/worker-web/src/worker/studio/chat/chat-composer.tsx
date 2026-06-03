@@ -13,7 +13,7 @@ export interface ChatComposerLabels {
 
 export interface ChatComposerProps {
   labels: ChatComposerLabels
-  onSubmitted?: (invocationId: string) => void
+  onSubmitted?: (submission: { invocationId: string, text: string }) => void
   sessionId: string
 }
 
@@ -38,7 +38,7 @@ export function ChatComposer({ labels, onSubmitted, sessionId }: ChatComposerPro
         if (trimmed.length === 0)
           return
         const result = await submitSessionInvocation(sessionId, { input: trimmed })
-        onSubmitted?.(result.invocation.id)
+        onSubmitted?.({ invocationId: result.invocation.id, text: trimmed })
       }}
     />
   )

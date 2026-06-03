@@ -63,4 +63,32 @@ describe('chat surface', () => {
       expect(screen.getByText(/engine reply here/)).toBeTruthy()
     })
   })
+
+  it('echoes the submitted message as a user-message turn in the transcript', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/invocations') && init?.method === 'POST') {
+        return new Response(JSON.stringify({
+          events: [],
+          files: [],
+          invocation: { id: 'inv-echo', status: 'queued' },
+          session: { id: 'session-1', status: 'active' },
+        }), { status: 201 })
+      }
+      return new Response(JSON.stringify({
+        events: [],
+        invocation: { id: 'inv-echo', status: 'succeeded' },
+      }))
+    }))
+
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'echo this back please' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+
+    await waitFor(() => {
+      const userMessage = document.querySelector('[data-transcript-slot="user-message"]')
+      expect(userMessage?.textContent).toContain('echo this back please')
+    })
+  })
 })

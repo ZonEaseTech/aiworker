@@ -252,10 +252,16 @@ Phase-B teardown is COMPLETE (commits `110a9a8e`..`5589af96`): every teardown bu
 below is landed and its guard re-armed. The worker-owns-workbench and two-plane
 zero-intrusion guards are satisfied by the per-slice guards (worker-studio
 direct-chat render + no-micro-app, `check-soul-app-boundaries`, inversion C1–C6).
-The only REMAINING follow-ups are: worker-config overlay content editing (a feature
-whose design must respect the config-envelope no-full-content boundary), the i18n
-locale "Soul Apps" wording cleanup, and running the rewritten Freeform browser proof
-on a browser box. Landed teardown:
+The follow-ups worker-config overlay content editing and the i18n locale "Soul Apps"
+wording cleanup are now also LANDED (overlay F1–F4 `d38851e5`/`03c80632`/`05f8ffbe`/
+`a1f4b6cd`, consolidated to a single `worker-overlay://` impl in `19d0351b`; i18n
+wording in `a1f4b6cd`). The rewritten Freeform browser proof has now been run on a
+browser box (green inside a full `release:check` exit 0). That first real run exposed
+a missing piece of the worker-owned chat — the composer submission was never echoed as
+a `user-message` turn (the engine bridge stream carries no user turn) — now fixed in
+`ChatSurface`/`ChatTranscript`, which prepend the submitted text as a leading
+`user-message` turn ahead of the engine-derived turns. No Phase-B follow-ups remain.
+Landed teardown:
 
 - remove the capability layer: descriptor `capabilities`, session `capabilityId`,
   `/api/capabilities`, CLI `--capability` / `capability list`, SDK `capability()`,
