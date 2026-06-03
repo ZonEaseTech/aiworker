@@ -187,6 +187,37 @@ describe('worker configuration overlay content editor', () => {
     expect(onReload).toHaveBeenCalled()
   })
 
+  it('adds a new entry file overlay through content PUT instead of a descriptor envelope', async () => {
+    routes['PUT /api/workers/primary-worker/config/entry-file-overlay%3AREADME.md/content'] = init => ({
+      body: { checksum: 'sha256:z', content: JSON.parse(String(init?.body)).content, editable: true, source: 'overlay', sourceRef: 'worker-overlay://entry-files/README.md' },
+    })
+    const onReload = vi.fn()
+    renderDialog([skillBaseline], onReload)
+
+    fireEvent.click(screen.getByRole('button', { name: `+ ${copy.workerConfig.addEntryFile}` }))
+    fireEvent.change(await screen.findByLabelText(copy.workerConfig.addNamePlaceholder), { target: { value: 'README.md' } })
+    fireEvent.change(screen.getByLabelText(copy.workerConfig.addContentPlaceholder), { target: { value: '# Project notes' } })
+    fireEvent.click(screen.getByRole('button', { name: copy.workerConfig.add }))
+
+    await waitFor(() => {
+      const put = calls.find(call => call.method === 'PUT' && call.url.includes('entry-file-overlay%3AREADME.md/content'))
+      expect(put?.body).toMatchObject({ content: '# Project notes' })
+    })
+    expect(calls.some(call => call.url.includes('entry-file-overlay%3AREADME.md') && !call.url.endsWith('/content'))).toBe(false)
+    expect(onReload).toHaveBeenCalled()
+  })
+
+  it('does not expose the low-level descriptor source reference asset form', () => {
+    renderDialog([skillBaseline, mcpAsset])
+
+    expect(screen.queryByRole('button', { name: 'New entry file' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New skill' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New mcp client' })).toBeNull()
+    expect(screen.queryByLabelText('Overlay asset source reference')).toBeNull()
+    expect(screen.queryByText(skillBaseline.sourceRef)).toBeNull()
+    expect(screen.queryByText(mcpAsset.sourceRef)).toBeNull()
+  })
+
   it('shows an mcp row as a read-only redacted view with no Save or Reset', async () => {
     routes['GET /api/workers/primary-worker/config/mcp-overlay%3Acodex/content'] = () => ({
       body: { checksum: 'sha256:x', content: 'token = [redacted]', editable: false, source: 'baseline', sourceRef: mcpAsset.sourceRef },

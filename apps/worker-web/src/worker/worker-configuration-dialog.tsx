@@ -28,13 +28,6 @@ const categories: { label: string, value: OverlayCategory }[] = [
   { label: 'Entry files', value: 'entry-file' },
 ]
 
-interface NewAssetDraft {
-  id: string
-  kind: OverlayCategory
-  sourceRef: string
-  target: string
-}
-
 export function WorkerConfigurationDialog({
   activeWorkbenchTabId,
   assets,
@@ -62,10 +55,6 @@ export function WorkerConfigurationDialog({
   const [contentTarget, setContentTarget] = useState<LocalWorkerOverlayAsset | null>(null)
   const [addCategory, setAddCategory] = useState<'entry-file' | 'skill' | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
-  const [activeCategory, setActiveCategory] = useState<OverlayCategory | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
-  const [createValidation, setCreateValidation] = useState<string | null>(null)
-  const [newAsset, setNewAsset] = useState<NewAssetDraft | null>(null)
   const [autosave, setAutosave] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const [autosaveErrorMessage, setAutosaveErrorMessage] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -105,8 +94,6 @@ export function WorkerConfigurationDialog({
   const canShowWorkbenchPanel = Boolean(workbenchTabs && workbenchTabs.length > 1)
   const effectiveSelectedPanel = selectedPanel === 'workbench' && canShowWorkbenchPanel ? selectedPanel : null
   const selectedAsset = effectiveSelectedPanel === 'workbench' ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
-  const defaultNewAsset = useMemo(() => activeCategory ? createDefaultAssetDraft(activeCategory, assets) : null, [activeCategory, assets])
-  const effectiveNewAsset = newAsset?.kind === activeCategory ? newAsset : defaultNewAsset
 
   function targetsFor(nextAsset: LocalWorkerOverlayAsset): string[] {
     if (nextAsset.kind !== 'skill')
@@ -196,45 +183,6 @@ export function WorkerConfigurationDialog({
     await onSaveAssets(nextAssets)
   }
 
-  function createTargets(kind: OverlayCategory, target: string): string[] {
-    if (kind !== 'skill')
-      return [target.trim()]
-    return ['codex', 'claude-code']
-  }
-
-  async function createAsset() {
-    if (!activeCategory || !effectiveNewAsset)
-      return
-    const targets = createTargets(activeCategory, effectiveNewAsset.target)
-    const now = new Date().toISOString()
-    const nextAssets: LocalWorkerOverlayAsset[] = targets.map(target => ({
-      checksum: null,
-      enabled: true,
-      id: effectiveNewAsset.id.trim(),
-      kind: activeCategory,
-      metadataJson: {},
-      optionsJson: {},
-      source: 'overlay' as const,
-      sourceRef: effectiveNewAsset.sourceRef.trim(),
-      target,
-      updatedAt: now,
-    }))
-    const errors = nextAssets.flatMap(asset => validateAsset(asset, assets))
-    setCreateValidation(formatValidation(errors))
-    if (errors.length > 0)
-      return
-    setSaving(true)
-    try {
-      await saveAssets([...assets, ...nextAssets])
-      setSelectedAssetId(nextAssets[0]!.id)
-      setNewAsset(null)
-      setCreateOpen(false)
-    }
-    finally {
-      setSaving(false)
-    }
-  }
-
   async function deleteAsset(asset: LocalWorkerOverlayAsset) {
     setSaving(true)
     try {
@@ -271,16 +219,6 @@ export function WorkerConfigurationDialog({
   function selectAsset(id: string) {
     setSelectedPanel(null)
     setSelectedAssetId(id)
-  }
-
-  function updateNewAsset(patch: Partial<NewAssetDraft>) {
-    if (!defaultNewAsset)
-      return
-    setNewAsset(current => ({
-      ...(current?.kind === activeCategory ? current : defaultNewAsset),
-      ...patch,
-    }))
-    setCreateValidation(null)
   }
 
   useEffect(() => {
@@ -399,21 +337,6 @@ export function WorkerConfigurationDialog({
                               assets.
                             </p>
                           )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start"
-                        onClick={() => {
-                          setActiveCategory(cat.value)
-                          setCreateOpen(true)
-                          setCreateValidation(null)
-                        }}
-                      >
-                        New
-                        {' '}
-                        {cat.label.slice(0, -1).toLowerCase()}
-                      </Button>
                     </CollapsibleGroup>
                   )
                 })}
@@ -448,147 +371,107 @@ export function WorkerConfigurationDialog({
           <div data-testid="worker-overlay-editor-panel" className="flex min-w-0 flex-1 flex-col max-md:w-full max-md:flex-none max-md:min-w-0">
             <ScrollArea className="h-full">
               <div className="p-6">
-                {createOpen
+                {effectiveSelectedPanel === 'workbench'
                   ? (
                       <ItemGroup className="gap-3">
                         <Item variant="muted">
-                          <ItemContent className="grid min-w-0 gap-2">
-                            <ItemTitle>
-                              Create
-                              {' '}
-                              {activeCategory ? categories.find(c => c.value === activeCategory)?.label.slice(0, -1) : 'asset'}
-                            </ItemTitle>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                              <Input aria-label="Overlay asset id" value={effectiveNewAsset?.id ?? ''} onChange={event => updateNewAsset({ id: event.currentTarget.value })} />
-                              <Input aria-label="Overlay asset target" value={effectiveNewAsset?.target ?? ''} onChange={event => updateNewAsset({ target: event.currentTarget.value })} />
-                            </div>
-                            <Input aria-label="Overlay asset source reference" value={effectiveNewAsset?.sourceRef ?? ''} onChange={event => updateNewAsset({ sourceRef: event.currentTarget.value })} />
+                          <ItemContent className="grid min-w-0 gap-3">
+                            <ItemTitle>Workbench</ItemTitle>
+                            <ItemDescription>
+                              Choose the declared mounted route used by this Soul worker.
+                            </ItemDescription>
                           </ItemContent>
-                          <ItemActions>
-                            <Button type="button" variant="secondary" disabled={saving} onClick={() => void createAsset()}>
-                              Create asset
-                            </Button>
-                          </ItemActions>
                         </Item>
-                        {createValidation
+                        {workbenchTabs && workbenchTabs.length > 1
                           ? (
                               <Item variant="default">
-                                <ItemContent>
-                                  <ItemTitle>Validation</ItemTitle>
-                                  <ItemDescription className="line-clamp-none whitespace-pre-wrap">{createValidation}</ItemDescription>
+                                <ItemContent className="grid min-w-0 gap-2">
+                                  <ItemTitle>Workbench route</ItemTitle>
+                                  <ItemDescription>This preference is stored for this worker only.</ItemDescription>
+                                  <ItemActions className="gap-0.5" role="tablist" aria-label="Workbench routes">
+                                    {workbenchTabs.map(tab => (
+                                      <button
+                                        key={tab.id}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={tab.id === activeWorkbenchTabId}
+                                        className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                                          tab.id === activeWorkbenchTabId
+                                            ? 'bg-background text-foreground shadow-sm'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                        }`}
+                                        onClick={() => onSelectWorkbenchTab?.(tab)}
+                                      >
+                                        {tab.label}
+                                      </button>
+                                    ))}
+                                  </ItemActions>
                                 </ItemContent>
                               </Item>
                             )
                           : null}
                       </ItemGroup>
                     )
-                  : effectiveSelectedPanel === 'workbench'
+                  : selectedAsset
                     ? (
                         <ItemGroup className="gap-3">
-                          <Item variant="muted">
-                            <ItemContent className="grid min-w-0 gap-3">
-                              <ItemTitle>Workbench</ItemTitle>
+                          <div className="flex items-center justify-between">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <ItemTitle>{selectedAsset.id}</ItemTitle>
+                                {selectedAsset.source === 'baseline'
+                                  ? <Badge variant="secondary" className="text-xs">baseline</Badge>
+                                  : null}
+                              </div>
                               <ItemDescription>
-                                Choose the declared mounted route used by this Soul worker.
+                                {selectedAsset.source}
+                                {' '}
+                                ·
+                                {' '}
+                                {selectedAsset.target}
                               </ItemDescription>
-                            </ItemContent>
-                          </Item>
-                          {workbenchTabs && workbenchTabs.length > 1
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setContentTarget(selectedAsset)}
+                              >
+                                {selectedAsset.kind === 'mcp-client' ? labels.view : labels.viewEdit}
+                              </Button>
+                              <Switch
+                                checked={selectedAsset.enabled}
+                                disabled={saving}
+                                aria-label={`Enable ${selectedAsset.id}`}
+                                onCheckedChange={checked => void saveAsset({ ...selectedAsset, enabled: checked })}
+                              />
+                            </div>
+                          </div>
+                          {selectedAsset.checksum
                             ? (
                                 <Item variant="default">
-                                  <ItemContent className="grid min-w-0 gap-2">
-                                    <ItemTitle>Workbench route</ItemTitle>
-                                    <ItemDescription>This preference is stored for this worker only.</ItemDescription>
-                                    <ItemActions className="gap-0.5" role="tablist" aria-label="Workbench routes">
-                                      {workbenchTabs.map(tab => (
-                                        <button
-                                          key={tab.id}
-                                          type="button"
-                                          role="tab"
-                                          aria-selected={tab.id === activeWorkbenchTabId}
-                                          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                                            tab.id === activeWorkbenchTabId
-                                              ? 'bg-background text-foreground shadow-sm'
-                                              : 'text-muted-foreground hover:text-foreground'
-                                          }`}
-                                          onClick={() => onSelectWorkbenchTab?.(tab)}
-                                        >
-                                          {tab.label}
-                                        </button>
-                                      ))}
-                                    </ItemActions>
+                                  <ItemContent className="grid min-w-0 gap-1">
+                                    <ItemTitle>Checksum</ItemTitle>
+                                    <ItemDescription className="line-clamp-none break-all">{selectedAsset.checksum}</ItemDescription>
                                   </ItemContent>
                                 </Item>
                               )
                             : null}
+                          {autosave === 'failed' && autosaveErrorMessage
+                            ? (
+                                <Alert variant="destructive">
+                                  <AlertDescription>{autosaveErrorMessage}</AlertDescription>
+                                </Alert>
+                              )
+                            : null}
                         </ItemGroup>
                       )
-                    : selectedAsset
-                      ? (
-                          <ItemGroup className="gap-3">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <ItemTitle>{selectedAsset.id}</ItemTitle>
-                                  {selectedAsset.source === 'baseline'
-                                    ? <Badge variant="secondary" className="text-xs">baseline</Badge>
-                                    : null}
-                                </div>
-                                <ItemDescription>
-                                  {selectedAsset.source}
-                                  {' '}
-                                  ·
-                                  {' '}
-                                  {selectedAsset.target}
-                                </ItemDescription>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-2">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setContentTarget(selectedAsset)}
-                                >
-                                  {selectedAsset.kind === 'mcp-client' ? labels.view : labels.viewEdit}
-                                </Button>
-                                <Switch
-                                  checked={selectedAsset.enabled}
-                                  disabled={saving}
-                                  aria-label={`Enable ${selectedAsset.id}`}
-                                  onCheckedChange={checked => void saveAsset({ ...selectedAsset, enabled: checked })}
-                                />
-                              </div>
-                            </div>
-                            <Item variant="muted">
-                              <ItemContent className="grid min-w-0 gap-1">
-                                <ItemTitle>Source reference</ItemTitle>
-                                <ItemDescription className="line-clamp-none break-all">{selectedAsset.sourceRef}</ItemDescription>
-                              </ItemContent>
-                            </Item>
-                            {selectedAsset.checksum
-                              ? (
-                                  <Item variant="default">
-                                    <ItemContent className="grid min-w-0 gap-1">
-                                      <ItemTitle>Checksum</ItemTitle>
-                                      <ItemDescription className="line-clamp-none break-all">{selectedAsset.checksum}</ItemDescription>
-                                    </ItemContent>
-                                  </Item>
-                                )
-                              : null}
-                            {autosave === 'failed' && autosaveErrorMessage
-                              ? (
-                                  <Alert variant="destructive">
-                                    <AlertDescription>{autosaveErrorMessage}</AlertDescription>
-                                  </Alert>
-                                )
-                              : null}
-                          </ItemGroup>
-                        )
-                      : (
-                          <ItemDescription className="pt-8 text-center">
-                            Select an asset from the list or create a new one.
-                          </ItemDescription>
-                        )}
+                    : (
+                        <ItemDescription className="pt-8 text-center">
+                          Select an asset from the list.
+                        </ItemDescription>
+                      )}
               </div>
             </ScrollArea>
           </div>
@@ -840,24 +723,6 @@ function OverlayContentAddDialog({
       </DialogContent>
     </Dialog>
   )
-}
-
-function createDefaultAssetDraft(kind: OverlayCategory, assets: LocalWorkerOverlayAsset[] = []): NewAssetDraft {
-  const base = kind === 'entry-file' ? 'AGENTS.md' : kind === 'mcp-client' ? 'team-context' : 'custom-skill'
-  return {
-    id: nextCopyId(base, assets),
-    kind,
-    sourceRef: defaultSourceRef(kind, base),
-    target: kind === 'entry-file' ? 'workspace' : 'codex',
-  }
-}
-
-function defaultSourceRef(kind: OverlayCategory, id: string): string {
-  if (kind === 'entry-file')
-    return `descriptor://engine/workspace/${id}`
-  if (kind === 'mcp-client')
-    return `descriptor://engine/mcp/${id}`
-  return `descriptor://engine/skills/${id}`
 }
 
 function formatValidation(errors: string[]): string | null {
