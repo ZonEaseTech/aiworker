@@ -994,9 +994,23 @@ function readRecord(value: unknown): Record<string, unknown> {
 }
 
 function assertNoUnexpectedBrowserEvents(events: string[]): void {
+  // The chat transport is EventSource SSE (commit fd969a6b). Switching the active
+  // invocation (e.g. on composer submit) closes the prior SSE via React effect
+  // cleanup, and the browser reports that intentional client-side close as
+  // ERR_ABORTED. Tolerate ONLY that exact shape: the app's bare `?after=N` events
+  // stream aborted by the client. The trailing `\d+:` cannot match the test's own
+  // `?after=0&limit=20` fetches (the `&` breaks it), and the `$` anchor keeps every
+  // other errorText (ERR_CONNECTION_RESET, server stream failure, ...) on /events
+  // fatal — so this adapts the proof to the SSE transport without weakening it.
+  // Declared inside the function: it is referenced by the hoisted call site at the
+  // top of the spec, so a module-scope `const` would be in its TDZ when first used.
+  const intentionalSseTeardown
+    = /\/api\/engine\/invocations\/[^/]+\/events\?after=\d+:net::ERR_ABORTED$/
   const failures = events.filter(event =>
     event.startsWith('pageerror:')
-    || (event.startsWith('requestfailed:') && event.includes('127.0.0.1')),
+    || (event.startsWith('requestfailed:')
+      && event.includes('127.0.0.1')
+      && !intentionalSseTeardown.test(event)),
   )
   if (failures.length > 0)
     throw new Error(`Unexpected browser errors during Freeform golden path: ${failures.join('\n')}`)
