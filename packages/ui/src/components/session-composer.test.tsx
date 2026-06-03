@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import type { FormEvent } from 'react'
+
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -100,6 +102,73 @@ describe('sessionComposer', () => {
     expect(fireEvent.keyDown(textarea, { key: 'Enter' })).toBe(false)
     expect(onMentionSelect).toHaveBeenCalledWith({ id: 'candidate-profile', label: 'Candidate profile' })
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('submits the form from the textarea with Cmd+Enter or Ctrl+Enter only', () => {
+    const onSubmit = vi.fn((event: FormEvent<HTMLFormElement>) => event.preventDefault())
+
+    render(
+      <SessionComposer
+        ariaLabel="Session input"
+        onSubmit={onSubmit}
+        onValueChange={vi.fn()}
+        submitAriaLabel="Start"
+        value="Start the focused session"
+        variant="large"
+      />,
+    )
+
+    const textarea = screen.getByRole('textbox', { name: 'Session input' })
+
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    expect(fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })).toBe(false)
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+
+    expect(fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })).toBe(false)
+    expect(onSubmit).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps modifier-enter behind the same submit eligibility guard as the send button', () => {
+    const onSubmit = vi.fn((event: FormEvent<HTMLFormElement>) => event.preventDefault())
+    const props = {
+      ariaLabel: 'Session input',
+      onSubmit,
+      onValueChange: vi.fn(),
+      submitAriaLabel: 'Start',
+      variant: 'large' as const,
+    }
+
+    const { rerender } = render(<SessionComposer {...props} value="" />)
+    const textarea = screen.getByRole('textbox', { name: 'Session input' })
+
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    rerender(<SessionComposer {...props} value="Ready" submitDisabled />)
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Session input' }), { key: 'Enter', metaKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    rerender(<SessionComposer {...props} value="Ready" submitting />)
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Session input' }), { key: 'Enter', ctrlKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    rerender(
+      <SessionComposer
+        {...props}
+        attachments={[{
+          id: 'notes',
+          kind: 'TXT',
+          name: 'notes.txt',
+          removeLabel: 'Remove notes.txt',
+        }]}
+        value=""
+      />,
+    )
+    expect(fireEvent.keyDown(screen.getByRole('textbox', { name: 'Session input' }), { key: 'Enter', ctrlKey: true })).toBe(false)
+    expect(onSubmit).toHaveBeenCalledTimes(1)
   })
 
   it('dismisses the active mention typeahead from the textarea', () => {

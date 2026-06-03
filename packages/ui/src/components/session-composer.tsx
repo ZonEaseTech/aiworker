@@ -258,14 +258,18 @@ export function SessionComposer({
           placeholder={placeholder}
           value={value}
           onChange={event => onValueChange(event.target.value)}
-          onKeyDown={event => handleMentionTypeaheadKeyDown(event, {
-            activeIndex: activeMentionOptionIndex,
-            enabledOptions: enabledMentionOptions,
-            isOpen: mentionTypeaheadOpen,
-            onDismiss: onMentionDismiss,
-            onSelect: onMentionSelect,
-            setActiveIndex: index => setActiveMentionOptionState({ index, optionKey: enabledMentionOptionKey }),
-          })}
+          onKeyDown={(event) => {
+            if (handleSessionComposerSubmitKeyDown(event, { canSubmit }))
+              return
+            handleMentionTypeaheadKeyDown(event, {
+              activeIndex: activeMentionOptionIndex,
+              enabledOptions: enabledMentionOptions,
+              isOpen: mentionTypeaheadOpen,
+              onDismiss: onMentionDismiss,
+              onSelect: onMentionSelect,
+              setActiveIndex: index => setActiveMentionOptionState({ index, optionKey: enabledMentionOptionKey }),
+            })
+          }}
           onPaste={event => handleAttachmentPaste(event, onAddAttachmentFiles)}
         />
         {error || disabledReason
@@ -379,6 +383,31 @@ function filterSessionComposerMentionOptions(
 
 function getMentionOptionDomId(listboxId: string, option: SessionComposerMentionOption) {
   return `${listboxId}-option-${option.id.replace(/[^\w-]/g, '-')}`
+}
+
+function handleSessionComposerSubmitKeyDown(
+  event: KeyboardEvent<HTMLTextAreaElement>,
+  { canSubmit }: { canSubmit: boolean },
+): boolean {
+  if (event.key !== 'Enter' || event.shiftKey || (!event.metaKey && !event.ctrlKey))
+    return false
+
+  event.preventDefault()
+
+  if (!canSubmit)
+    return true
+
+  const form = event.currentTarget.form
+  if (!form)
+    return true
+
+  if (typeof form.requestSubmit === 'function') {
+    form.requestSubmit()
+    return true
+  }
+
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  return true
 }
 
 function handleMentionTypeaheadKeyDown(
