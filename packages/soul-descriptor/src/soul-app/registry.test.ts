@@ -13,15 +13,19 @@ const descriptor = parseSoulDescriptorV1({
   engine: {},
 })
 
+function buildApp() {
+  return buildHostedSoulApp({
+    descriptor,
+    descriptorDigest: 'digest',
+    sourceKind: 'descriptor-path',
+    sourceRef: '/tmp/aiworker-freeform/dist/soul.descriptor.json',
+    status: 'enabled',
+  })
+}
+
 describe('buildHostedSoulApp', () => {
   test('projects descriptor identity into a hosted soul app', () => {
-    const app = buildHostedSoulApp({
-      descriptor,
-      descriptorDigest: 'digest',
-      sourceKind: 'descriptor-path',
-      sourceRef: '/tmp/aiworker-freeform/dist/soul.descriptor.json',
-      status: 'enabled',
-    })
+    const app = buildApp()
 
     expect(app.appId).toBe('aiworker-freeform')
     expect(app.name).toBe('AIWorker Freeform')
@@ -29,13 +33,7 @@ describe('buildHostedSoulApp', () => {
   })
 
   test('does not project the retired v1-empty api/permissions fields', () => {
-    const app = buildHostedSoulApp({
-      descriptor,
-      descriptorDigest: 'digest',
-      sourceKind: 'descriptor-path',
-      sourceRef: '/tmp/aiworker-freeform/dist/soul.descriptor.json',
-      status: 'enabled',
-    })
+    const app = buildApp()
 
     expect(app).not.toHaveProperty('api')
     expect(app).not.toHaveProperty('permissions')
