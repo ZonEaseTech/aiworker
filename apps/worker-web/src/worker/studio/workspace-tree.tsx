@@ -9,7 +9,6 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@zonease/aiworker-ui/components/sidebar'
@@ -129,14 +128,6 @@ export function WorkspaceTree({
                             </SidebarMenuItem>
                           )}
                     </SidebarMenu>
-                    <SidebarMenuAction
-                      type="button"
-                      aria-label={`${newSessionLabel} for ${workspace.name}`}
-                      title={newSessionLabel}
-                      onClick={() => onCreateSession(workspace)}
-                    >
-                      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
-                    </SidebarMenuAction>
                   </CollapsibleGroup>
                 )
               })

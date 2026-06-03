@@ -45,10 +45,10 @@ export function deriveWorkerStudioLocatorState({
   const routedSelectableWorker = routedWorker && selectableWorkers.some(worker => worker.id === routedWorker.id)
     ? routedWorker
     : null
+  const routeHasWorkerContext = route.kind !== 'home'
   const selectedWorker = routedSelectableWorker
     ?? (selectedWorkerId ? selectableWorkers.find(worker => worker.id === selectedWorkerId) ?? null : null)
-    ?? selectableWorkers[0]
-    ?? null
+    ?? (routeHasWorkerContext ? null : selectableWorkers[0] ?? null)
   const selectedSoul = selectedWorker
     ? data?.souls.find(soul => soul.id === selectedWorker.appId) ?? null
     : data?.souls.find(soul => soul.id === newWorkerSoulId && soul.status === 'available')
@@ -93,8 +93,7 @@ export function deriveWorkerStudioLocatorState({
 }
 
 function deriveSelectableWorkers(data: LocalWorkspaceData): LocalWorkspaceData['workers'] {
-  const availableSoulIds = new Set(data.souls.filter(soul => soul.status === 'available').map(soul => soul.id))
-  return data.workers.filter(worker => availableSoulIds.has(worker.appId))
+  return data.workers.filter(worker => worker.status === 'active')
 }
 
 function deriveSoulSessions(

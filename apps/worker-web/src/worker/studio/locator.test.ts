@@ -7,22 +7,24 @@ import { deriveWorkerStudioLocatorState } from './locator'
 const now = '2026-05-23T00:00:00.000Z'
 
 describe('deriveWorkerStudioLocatorState', () => {
-  it('selectable workers only include available Souls', () => {
+  it('keeps active workers selectable even when their Soul catalog entry is unavailable', () => {
     const data = createData({
       souls: [
-        soul({ id: 'aiworker-demo-primary', status: 'available' }),
-        soul({ id: 'aiworker-demo-secondary', status: 'coming_soon' }),
+        soul({ id: 'aiworker-demo-primary', status: 'coming_soon' }),
+        soul({ id: 'aiworker-demo-secondary', status: 'available' }),
       ],
       workers: [
         worker({ id: 'primary-worker', appId: 'aiworker-demo-primary' }),
         worker({ id: 'secondary-worker', appId: 'aiworker-demo-secondary' }),
+        worker({ id: 'archived-worker', appId: 'aiworker-demo-secondary', status: 'archived' }),
       ],
     })
 
     const state = deriveWorkerStudioLocatorState({ data, route: { kind: 'home' } })
 
-    expect(state.selectableWorkers.map(item => item.id)).toEqual(['primary-worker'])
+    expect(state.selectableWorkers.map(item => item.id)).toEqual(['primary-worker', 'secondary-worker'])
     expect(state.selectedWorker?.id).toBe('primary-worker')
+    expect(state.selectedSoul?.id).toBe('aiworker-demo-primary')
   })
 
   it('defaults the new-worker Soul selection to the first available Soul when no preference is supplied', () => {
@@ -88,6 +90,21 @@ describe('deriveWorkerStudioLocatorState', () => {
     expect(sessionState.selectedWorker?.id).toBe('secondary-worker')
     expect(sessionState.selectedWorkspace?.id).toBe('secondary-workspace')
     expect(sessionState.selectedSession?.id).toBe('secondary-session')
+  })
+
+  it('does not silently select another worker when a routed worker is missing', () => {
+    const data = createData({
+      souls: [soul({ id: 'aiworker-demo-primary', status: 'available' })],
+      workers: [worker({ id: 'primary-worker', appId: 'aiworker-demo-primary' })],
+    })
+
+    const state = deriveWorkerStudioLocatorState({
+      data,
+      route: { kind: 'worker', workerId: 'missing-worker' },
+    })
+
+    expect(state.selectedWorker).toBeNull()
+    expect(state.selectedSoul?.id).toBe('aiworker-demo-primary')
   })
 
   it('filters workspaces by workspace name without reading app-owned session content', () => {

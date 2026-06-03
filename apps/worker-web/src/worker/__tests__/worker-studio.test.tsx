@@ -87,8 +87,10 @@ let currentSouls: typeof souls
 let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
 let currentWorkerOverlayAssets: LocalWorkerOverlayAsset[]
+let hideCreatedWorkerFromWorkerList: boolean
 let lastMessageRequestBody: Record<string, unknown> | null
 let lastSessionRequestBody: Record<string, unknown> | null
+let lastWorkerRequestBody: Record<string, unknown> | null
 let lastWorkspaceRequestBody: Record<string, unknown> | null
 let currentApps: HostedSoulApp[]
 
@@ -198,8 +200,10 @@ function resetSettings() {
     target: 'codex',
     updatedAt: now,
   }]
+  hideCreatedWorkerFromWorkerList = false
   lastMessageRequestBody = null
   lastSessionRequestBody = null
+  lastWorkerRequestBody = null
   lastWorkspaceRequestBody = null
   currentApps = currentSouls.map(soul => catalogOnlyAppForSoul(soul))
 }
@@ -279,6 +283,18 @@ beforeEach(() => {
     }
     if (requestUrl.pathname === '/api/workers' && method === 'GET')
       return json({ workers: currentWorkers })
+    if (requestUrl.pathname === '/api/workers' && method === 'POST') {
+      lastWorkerRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
+      const created = {
+        ...workers[0]!,
+        id: 'worker-created',
+        name: String(lastWorkerRequestBody.name ?? 'Created worker'),
+        appId: String(lastWorkerRequestBody.appId ?? PRIMARY_SOUL_ID),
+      }
+      if (!hideCreatedWorkerFromWorkerList)
+        currentWorkers = [created, ...currentWorkers]
+      return json({ worker: created }, 201)
+    }
     const workerConfigReadMatch = requestUrl.pathname.match(/^\/api\/workers\/([^/]+)\/config$/)
     if (workerConfigReadMatch && method === 'GET') {
       const workerId = decodeURIComponent(workerConfigReadMatch[1]!)
@@ -441,6 +457,90 @@ describe('worker studio', () => {
       expect(window.location.pathname).toBe('/workers/primary-worker/workspaces/workspace-created')
     })
     expect(lastWorkspaceRequestBody).toMatchObject({ name: 'Release workspace', workerId: 'primary-worker' })
+  })
+
+  it('creates a worker first when the live workspace page has no active worker', async () => {
+    currentWorkers = []
+    currentWorkspaces = []
+    currentSessions = []
+    window.history.replaceState(null, '', '/')
+    render(<WorkerStudio />)
+
+    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    fireEvent.click(within(main).getByRole('button', { name: 'Create worker' }))
+
+    const workerDialog = await screen.findByRole('dialog', { name: 'Create worker' })
+    fireEvent.change(within(workerDialog).getByLabelText('Worker name'), { target: { value: 'Primary live worker' } })
+    fireEvent.click(within(workerDialog).getByRole('button', { name: 'Create worker' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/workers', expect.objectContaining({ method: 'POST' }))
+    })
+    expect(lastWorkerRequestBody).toMatchObject({ appId: PRIMARY_SOUL_ID, name: 'Primary live worker' })
+
+    const workspaceDialog = await screen.findByRole('dialog', { name: 'Create workspace' })
+    expect((within(workspaceDialog).getByLabelText('Current worker') as HTMLInputElement).value).toBe('Primary live worker / Demo Primary')
+    fireEvent.change(within(workspaceDialog).getByLabelText('Workspace name'), { target: { value: 'Live browser workspace' } })
+    fireEvent.click(within(workspaceDialog).getByTestId('create-project'))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/workspace-locators', expect.objectContaining({ method: 'POST' }))
+      expect(window.location.pathname).toBe('/workers/worker-created/workspaces/workspace-created')
+    })
+    expect(lastWorkspaceRequestBody).toMatchObject({ name: 'Live browser workspace', workerId: 'worker-created' })
+  })
+
+  it('uses the created worker for workspace creation even before the worker list refresh sees it', async () => {
+    currentWorkers = []
+    currentWorkspaces = []
+    currentSessions = []
+    hideCreatedWorkerFromWorkerList = true
+    window.history.replaceState(null, '', '/')
+    render(<WorkerStudio />)
+
+    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    fireEvent.click(within(main).getByRole('button', { name: 'Create worker' }))
+
+    const workerDialog = await screen.findByRole('dialog', { name: 'Create worker' })
+    fireEvent.change(within(workerDialog).getByLabelText('Worker name'), { target: { value: 'Delayed worker' } })
+    fireEvent.click(within(workerDialog).getByRole('button', { name: 'Create worker' }))
+
+    const workspaceDialog = await screen.findByRole('dialog', { name: 'Create workspace' })
+    expect((within(workspaceDialog).getByLabelText('Current worker') as HTMLInputElement).value).toBe('Delayed worker / Demo Primary')
+    fireEvent.change(within(workspaceDialog).getByLabelText('Workspace name'), { target: { value: 'Delayed refresh workspace' } })
+    fireEvent.click(within(workspaceDialog).getByTestId('create-project'))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/workspace-locators', expect.objectContaining({ method: 'POST' }))
+      expect(window.location.pathname).toBe('/workers/worker-created/workspaces/workspace-created')
+    })
+    expect(lastWorkspaceRequestBody).toMatchObject({ name: 'Delayed refresh workspace', workerId: 'worker-created' })
+  })
+
+  it('creates a workspace for the active worker even when its Soul app is not currently available', async () => {
+    currentSouls = [
+      { ...souls[0]!, status: 'coming_soon' },
+      { description: 'Secondary workspace', id: 'aiworker-demo-secondary', name: 'Demo Secondary', status: 'available' },
+    ]
+    currentApps = currentSouls.map(soul => catalogOnlyAppForSoul(soul))
+    currentWorkspaces = []
+    currentSessions = []
+    window.history.replaceState(null, '', '/')
+    render(<WorkerStudio />)
+
+    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    fireEvent.click(within(main).getByRole('button', { name: 'Create workspace' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect((within(dialog).getByLabelText('Current worker') as HTMLInputElement).value).toBe('Primary / Demo Primary')
+    fireEvent.change(within(dialog).getByLabelText('Workspace name'), { target: { value: 'Checkout deploy checklist' } })
+    fireEvent.click(within(dialog).getByTestId('create-project'))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/workspace-locators', expect.objectContaining({ method: 'POST' }))
+      expect(window.location.pathname).toBe('/workers/primary-worker/workspaces/workspace-created')
+    })
+    expect(lastWorkspaceRequestBody).toMatchObject({ name: 'Checkout deploy checklist', workerId: 'primary-worker' })
   })
 
   it('starts a new session from the workspace tree and routes to the session chat', async () => {

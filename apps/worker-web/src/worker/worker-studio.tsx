@@ -20,12 +20,13 @@ import {
 } from '../features/i18n'
 import {
   createSession,
+  createWorker,
   createWorkspace,
   loadLocalWorkspaceData,
   loadWorkerOverlay,
   saveWorkerOverlayConfigValues,
 } from '../features/local-workspace/api'
-import { CreateWorkspaceDialog } from '../features/local-workspace/components'
+import { CreateWorkerDialog, CreateWorkspaceDialog } from '../features/local-workspace/components'
 import { projectNamePlaceholder } from '../features/local-workspace/model'
 import { SettingsDialog } from '../features/settings'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
@@ -66,6 +67,10 @@ function workerOverlayAssetsReducer(
 export function WorkerStudio() {
   const route = useWorkerRoute()
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
+  const [workerName, setWorkerName] = useState('')
+  const [newWorkerSoulId, setNewWorkerSoulId] = useState('')
+  const [createWorkerOpen, setCreateWorkerOpen] = useState(false)
+  const [workspaceWorker, setWorkspaceWorker] = useState<LocalWorkspaceData['workers'][number] | null>(null)
   const [workspaceTitle, setWorkspaceTitle] = useState('')
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -123,7 +128,17 @@ export function WorkerStudio() {
     [allSessions],
   )
 
+  const availableSouls = useMemo(
+    () => data?.souls.filter(soul => soul.status === 'available') ?? [],
+    [data],
+  )
+  const selectedNewWorkerSoulId = newWorkerSoulId || selectedSoul?.id || availableSouls[0]?.id || ''
+  const workspaceTargetWorker = selectedWorker ?? workspaceWorker
+  const workspaceTargetSoul = workspaceTargetWorker
+    ? data?.souls.find(soul => soul.id === workspaceTargetWorker.appId) ?? selectedSoul
+    : selectedSoul
   const selectedSoulCopy = selectedSoul ? displaySoul(selectedSoul, activeLocale) : null
+  const workspaceTargetSoulCopy = workspaceTargetSoul ? displaySoul(workspaceTargetSoul, activeLocale) : null
   const topBarTitle = selectedSoulCopy?.name ?? copy.app.brand
   const systemTheme = useSystemTheme()
   const appearance = data?.settings.appearance ?? 'system'
@@ -163,6 +178,13 @@ export function WorkerStudio() {
     setSettingsOpen(true)
   }
 
+  function openWorkspaceCreation() {
+    if (workspaceTargetWorker)
+      setCreateWorkspaceOpen(true)
+    else
+      setCreateWorkerOpen(true)
+  }
+
   async function saveWorkerOverlayAssets(assets: LocalWorkerOverlayAsset[]) {
     if (!selectedWorker)
       return
@@ -190,20 +212,46 @@ export function WorkerStudio() {
     })
   }, [])
 
-  async function submitWorkspace(event: FormEvent<HTMLFormElement>) {
+  async function submitWorker(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!data || !selectedSoul || !selectedWorker || !workspaceTitle.trim())
+    const appId = selectedNewWorkerSoulId
+    if (!data || !appId || !workerName.trim())
       return
     setSubmitting(true)
     try {
-      const workspaceResult = await createWorkspace(selectedWorker.id, {
-        metadata: { soulId: selectedSoul.id },
+      const result = await createWorker({
+        appId,
+        name: workerName.trim(),
+      })
+      setWorkerName('')
+      setWorkspaceWorker(result.worker)
+      setCreateWorkerOpen(false)
+      await refresh()
+      navigateWorkerRoute({ kind: 'worker', workerId: result.worker.id })
+      setCreateWorkspaceOpen(true)
+    }
+    finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function submitWorkspace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const worker = workspaceTargetWorker
+    const soul = workspaceTargetSoul
+    if (!data || !soul || !worker || !workspaceTitle.trim())
+      return
+    setSubmitting(true)
+    try {
+      const workspaceResult = await createWorkspace(worker.id, {
+        metadata: { soulId: soul.id },
         name: workspaceTitle.trim(),
       })
       setWorkspaceTitle('')
+      setWorkspaceWorker(null)
       setCreateWorkspaceOpen(false)
       await refresh()
-      navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorker.id, workspaceId: workspaceResult.workspace.id })
+      navigateWorkerRoute({ kind: 'workspace', workerId: worker.id, workspaceId: workspaceResult.workspace.id })
     }
     finally {
       setSubmitting(false)
@@ -282,21 +330,37 @@ export function WorkerStudio() {
         )}
         dialogs={(
           <>
-            {selectedSoul
+            {workspaceTargetSoul
               ? (
                   <CreateWorkspaceDialog
                     copy={copy}
                     open={createWorkspaceOpen}
-                    placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
-                    workerLabel={selectedWorker ? `${selectedWorker.name} / ${selectedSoulCopy?.name ?? selectedSoul.id}` : ''}
+                    placeholder={projectNamePlaceholder(workspaceTargetSoul.id, copy)}
+                    workerLabel={workspaceTargetWorker ? `${workspaceTargetWorker.name} / ${workspaceTargetSoulCopy?.name ?? workspaceTargetSoul.id}` : ''}
                     submitting={submitting}
                     workspaceTitle={workspaceTitle}
-                    onClose={() => setCreateWorkspaceOpen(false)}
+                    onClose={() => {
+                      setWorkspaceWorker(null)
+                      setCreateWorkspaceOpen(false)
+                    }}
                     onSubmit={submitWorkspace}
                     onTitleChange={setWorkspaceTitle}
                   />
                 )
               : null}
+
+            <CreateWorkerDialog
+              availableSouls={availableSouls}
+              copy={copy}
+              locale={activeLocale}
+              open={createWorkerOpen}
+              selectedSoulId={selectedNewWorkerSoulId}
+              workerName={workerName}
+              onClose={() => setCreateWorkerOpen(false)}
+              onNameChange={setWorkerName}
+              onSoulChange={setNewWorkerSoulId}
+              onSubmit={submitWorker}
+            />
 
             {settingsOpen
               ? (
@@ -326,7 +390,7 @@ export function WorkerStudio() {
           <WorkspaceTree
             emptyWorkspacesLabel={copy.projects.empty.title}
             newSessionLabel={copy.workspace.newSession}
-            newWorkspaceLabel={copy.workspace.newWorkspace}
+            newWorkspaceLabel={selectedWorker ? copy.workspace.newWorkspace : copy.workspace.createWorker}
             noSessionsLabel={copy.workspace.noWorkspaceSessions}
             selectedSessionId={selectedSession?.id ?? null}
             selectedWorkspaceId={selectedWorkspace?.id ?? null}
@@ -334,7 +398,7 @@ export function WorkerStudio() {
             title={copy.workspace.workspaceList}
             workspaces={workspaces}
             onCreateSession={workspace => void startSession(workspace)}
-            onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+            onCreateWorkspace={openWorkspaceCreation}
             onSelectSession={selectSession}
           />
         )}
@@ -342,12 +406,13 @@ export function WorkerStudio() {
           <WorkbenchMain
             copy={copy}
             composerLabels={composerLabels}
+            hasWorker={Boolean(selectedWorker)}
             hasWorkspaces={workspaces.length > 0}
             isWorkspaceContextRoute={isWorkspaceContextRoute}
             selectedSession={selectedSession ?? (selectedWorkspace ? sessionsForWorkspace(selectedWorkspace)[0] ?? null : null)}
             selectedSoulName={selectedSoulCopy?.name ?? selectedSoul?.id ?? copy.app.brand}
             selectedWorkspace={selectedWorkspace}
-            onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+            onCreateWorkspace={openWorkspaceCreation}
             onStartSession={() => {
               if (selectedWorkspace)
                 void startSession(selectedWorkspace)
@@ -374,6 +439,7 @@ export function WorkerStudio() {
 function WorkbenchMain({
   composerLabels,
   copy,
+  hasWorker,
   hasWorkspaces,
   isWorkspaceContextRoute,
   onCreateWorkspace,
@@ -384,6 +450,7 @@ function WorkbenchMain({
 }: {
   composerLabels: ChatComposerLabels
   copy: ReturnType<typeof messagesFor>
+  hasWorker: boolean
   hasWorkspaces: boolean
   isWorkspaceContextRoute: boolean
   onCreateWorkspace: () => void
@@ -414,10 +481,12 @@ function WorkbenchMain({
     return (
       <StudioMainFrame kicker={copy.workspace.currentWorkspace} title={selectedWorkspace.name}>
         <StudioEmptyState
+          icon={<HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />}
           title={copy.workspace.noWorkspaceSessions}
           detail={copy.workspace.createSessionPrompt(selectedWorkspace.name)}
           action={(
-            <Button type="button" variant="ghost" size="lg" onClick={onStartSession}>
+            <Button type="button" size="lg" onClick={onStartSession}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
               {copy.workspace.newSession}
             </Button>
           )}
@@ -430,15 +499,22 @@ function WorkbenchMain({
     <StudioMainFrame kicker={copy.app.workspacePill} title={copy.workspace.workspaceList}>
       <StudioEmptyState
         className={hasWorkspaces ? undefined : 'mx-auto min-h-[min(28rem,60vh)] w-full max-w-xl items-center text-center'}
-        icon={hasWorkspaces ? undefined : <HugeiconsIcon icon={FolderLibraryIcon} strokeWidth={2} aria-hidden="true" />}
+        icon={<HugeiconsIcon icon={FolderLibraryIcon} strokeWidth={2} aria-hidden="true" />}
         title={hasWorkspaces ? copy.workspace.noSelectionTitle : copy.projects.empty.title}
-        detail={hasWorkspaces ? copy.workspace.noSelectionDetail : copy.projects.empty.detail(selectedSoulName)}
+        detail={hasWorkspaces
+          ? copy.workspace.noSelectionDetail
+          : hasWorker ? copy.projects.empty.detail(selectedSoulName) : copy.workspace.createWorkerHint}
         action={hasWorkspaces
-          ? null
+          ? (
+              <Button type="button" size="lg" onClick={onCreateWorkspace}>
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
+                {copy.workspace.newWorkspace}
+              </Button>
+            )
           : (
               <Button type="button" size="lg" onClick={onCreateWorkspace}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
-                {copy.workspace.createWorkspace}
+                {hasWorker ? copy.workspace.createWorkspace : copy.workspace.createWorker}
               </Button>
             )}
       />
