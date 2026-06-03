@@ -30,7 +30,6 @@ import {
 } from '../features/i18n'
 import {
   archiveSession,
-  archiveWorker,
   archiveWorkspace,
   createSession,
   createWorker,
@@ -67,7 +66,6 @@ interface InitialChatSubmission {
 type PendingArchiveAction
   = | { kind: 'session', label: string, sessionId: string, workerId: string, workspaceId: string }
     | { kind: 'workspace', label: string, workerId: string, workspaceId: string }
-    | { kind: 'worker', label: string, workerId: string }
 
 type WorkerStudioResolvedLocatorState = Omit<WorkerStudioLocatorState, 'soulSessions' | 'soulWorkspaces'>
 
@@ -93,9 +91,7 @@ function workerOverlayAssetsReducer(
 function archiveActionLabel(copy: ReturnType<typeof messagesFor>, kind: PendingArchiveAction['kind']): string {
   if (kind === 'session')
     return copy.workspace.archiveSession
-  if (kind === 'workspace')
-    return copy.workspace.archiveWorkspace
-  return copy.workspace.archiveWorker
+  return copy.workspace.archiveWorkspace
 }
 
 function archiveConfirmationTitle(copy: ReturnType<typeof messagesFor>, kind: PendingArchiveAction['kind']): string {
@@ -360,12 +356,6 @@ export function WorkerStudio() {
     [route.kind, selectedSession, selectedWorkspace, sessionsForWorkspace],
   )
 
-  const requestArchiveSelectedWorker = useCallback(() => {
-    if (!selectedWorker)
-      return
-    setPendingArchive({ kind: 'worker', label: selectedWorker.name, workerId: selectedWorker.id })
-  }, [selectedWorker])
-
   const requestArchiveSelectedWorkspace = useCallback(() => {
     if (!selectedWorkspace || !selectedWorker)
       return
@@ -394,12 +384,6 @@ export function WorkerStudio() {
     if (!action)
       return
     setPendingArchive(null)
-    if (action.kind === 'worker') {
-      await archiveWorker(action.workerId)
-      navigateWorkerRoute({ kind: 'home' })
-      await refresh()
-      return
-    }
     if (action.kind === 'workspace') {
       await archiveWorkspace(action.workspaceId)
       navigateWorkerRoute({ kind: 'worker', workerId: action.workerId })
@@ -458,12 +442,10 @@ export function WorkerStudio() {
         appearance={appearance}
         header={(
           <WorkerStudioTopBar
-            archiveWorkerLabel={copy.workspace.archiveWorker}
             configureLabel={copy.workspace.configure}
             settingsLabel={copy.accessibility.openSettings}
             sidebarCollapsed={sidebarCollapsed}
             title={topBarTitle}
-            onArchiveWorker={selectedWorker ? requestArchiveSelectedWorker : undefined}
             onConfigureWorker={selectedWorker ? () => setWorkerConfigurationOpen(true) : undefined}
             onOpenSettings={() => openSettings('execution')}
             onToggleSidebar={() => setSidebarCollapsed(current => !current)}
@@ -554,6 +536,7 @@ export function WorkerStudio() {
         variant={layoutVariant}
         sidebar={(
           <WorkspaceTree
+            archiveWorkspaceLabel={copy.workspace.archiveWorkspace}
             emptyWorkspacesLabel={copy.projects.empty.title}
             newSessionLabel={copy.workspace.newSession}
             newWorkspaceLabel={selectedWorker ? copy.workspace.newWorkspace : copy.workspace.createWorker}
@@ -563,6 +546,14 @@ export function WorkerStudio() {
             sessionsForWorkspace={sessionsForWorkspace}
             title={copy.workspace.workspaceList}
             workspaces={workspaces}
+            onArchiveWorkspace={(workspace) => {
+              setPendingArchive({
+                kind: 'workspace',
+                label: workspace.name,
+                workerId: workspace.workerId,
+                workspaceId: workspace.id,
+              })
+            }}
             onCreateSession={workspace => void startSession(workspace)}
             onCreateWorkspace={openWorkspaceCreation}
             onSelectSession={selectSession}
@@ -640,16 +631,28 @@ function WorkbenchMain({
       <>
         <StudioChromeHeader
           actions={(
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              aria-label={copy.workspace.archiveSession}
-              title={copy.workspace.archiveSession}
-              onClick={onArchiveSession}
-            >
-              <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                aria-label={copy.workspace.archiveWorkspace}
+                title={copy.workspace.archiveWorkspace}
+                onClick={onArchiveWorkspace}
+              >
+                <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                aria-label={copy.workspace.archiveSession}
+                title={copy.workspace.archiveSession}
+                onClick={onArchiveSession}
+              >
+                <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
+              </Button>
+            </>
           )}
         >
           <StudioTitleBlock kicker={copy.workspace.currentSession} title={selectedSession.title} />

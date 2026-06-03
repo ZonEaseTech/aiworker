@@ -415,6 +415,7 @@ describe('worker studio', () => {
     expect(screen.queryByRole('button', { name: 'Soul Apps' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Switch to Primary' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Create worker' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Archive worker' })).toBeNull()
     expect(screen.queryByText('Loading Soul workspace...')).toBeNull()
   })
 
@@ -425,6 +426,7 @@ describe('worker studio', () => {
     const tree = await screen.findByTestId('workspace-tree')
     expect(within(tree).getByText('Demo Workspace')).toBeTruthy()
     expect(within(tree).getByRole('button', { name: 'Open session Screen request' })).toBeTruthy()
+    expect(within(tree).getByRole('button', { name: 'Archive workspace Demo Workspace' })).toBeTruthy()
     expect(within(tree).getByRole('button', { name: 'New workspace' })).toBeTruthy()
     expect(within(tree).getAllByRole('button', { name: /New session/ }).length).toBeGreaterThan(0)
   })
@@ -595,6 +597,7 @@ describe('worker studio', () => {
     expect(empty?.className).toContain('text-center')
     expect(empty?.className).not.toContain('items-start')
     expect(within(main).getByRole('button', { name: 'New workspace' })).toBeTruthy()
+    expect(within(screen.getByTestId('workspace-tree')).getByRole('button', { name: 'Archive workspace Demo Workspace' })).toBeTruthy()
   })
 
   it('shows a create-first-workspace empty state when the worker has no workspaces', async () => {
@@ -691,25 +694,55 @@ describe('worker studio', () => {
     expect(within(screen.getByTestId('workspace-tree')).queryByText('Demo Workspace')).toBeNull()
   })
 
-  it('archives the selected worker from the browser and returns to first-run worker creation', async () => {
+  it('archives a workspace from the no-selection sidebar and returns to the worker', async () => {
+    window.history.replaceState(null, '', '/workers/primary-worker')
+    render(<WorkerStudio />)
+
+    const tree = await screen.findByTestId('workspace-tree')
+    fireEvent.click(within(tree).getByRole('button', { name: 'Archive workspace Demo Workspace' }))
+    expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
+
+    const dialog = await screen.findByRole('dialog', { name: 'Archive workspace?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive workspace' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/workspace-locators/workspace-1/archive', expect.objectContaining({ method: 'POST' }))
+      expect(window.location.pathname).toBe('/workers/primary-worker')
+    })
+    expect(currentWorkspaces.find(item => item.id === 'workspace-1')?.status).toBe('archived')
+    expect(screen.getByTestId('workspace-tree').textContent).not.toContain('Demo Workspace')
+  })
+
+  it('archives the selected workspace from a session context without changing session archive behavior', async () => {
+    window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1/sessions/session-1')
+    render(<WorkerStudio />)
+
+    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    expect(within(main).getByRole('button', { name: 'Archive session' })).toBeTruthy()
+    fireEvent.click(within(main).getByRole('button', { name: 'Archive workspace' }))
+    expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
+    expectNoArchiveRequest('/api/sessions/session-1/archive')
+
+    const dialog = await screen.findByRole('dialog', { name: 'Archive workspace?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive workspace' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/workspace-locators/workspace-1/archive', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).not.toHaveBeenCalledWith('/api/sessions/session-1/archive', expect.objectContaining({ method: 'POST' }))
+      expect(window.location.pathname).toBe('/workers/primary-worker')
+    })
+    expect(currentWorkspaces.find(item => item.id === 'workspace-1')?.status).toBe('archived')
+  })
+
+  it('does not expose or call Worker archive from the Workbench UI', async () => {
     window.history.replaceState(null, '', '/workers/primary-worker')
     render(<WorkerStudio />)
 
     await screen.findByLabelText('Worker Workbench')
-    fireEvent.click(screen.getByRole('button', { name: 'Archive worker' }))
+
+    expect(screen.queryByRole('button', { name: 'Archive worker' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Archive worker?' })).toBeNull()
     expectNoArchiveRequest('/api/workers/primary-worker/archive')
-
-    const dialog = await screen.findByRole('dialog', { name: 'Archive worker?' })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive worker' }))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/workers/primary-worker/archive', expect.objectContaining({ method: 'POST' }))
-      expect(window.location.pathname).toBe('/')
-    })
-    expect(currentWorkers.find(worker => worker.id === 'primary-worker')?.status).toBe('archived')
-    const main = screen.getByLabelText('Soul workspaces and sessions')
-    expect(within(main).getByRole('button', { name: 'Create worker' })).toBeTruthy()
-    expect(screen.getByTestId('workspace-tree').textContent).not.toContain('Demo Workspace')
   })
 
   it('renders the latest session chat for a workspace route that already has sessions', async () => {

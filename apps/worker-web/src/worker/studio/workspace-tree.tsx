@@ -1,6 +1,6 @@
 import type { LocalSession, LocalWorkspace } from '@zonease/aiworker-soul-descriptor'
 
-import { Add01Icon, File02Icon, FolderLibraryIcon } from '@hugeicons/core-free-icons'
+import { Add01Icon, Archive01Icon, File02Icon, FolderLibraryIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { CollapsibleGroup } from '@zonease/aiworker-ui/components/collapsible-group'
 import {
@@ -21,12 +21,14 @@ import { useMemo, useState } from 'react'
  * main area to render the session chat directly.
  */
 export function WorkspaceTree({
+  archiveWorkspaceLabel,
   emptyWorkspacesLabel,
   newSessionLabel,
   newWorkspaceLabel,
   noSessionsLabel,
   onCreateSession,
   onCreateWorkspace,
+  onArchiveWorkspace,
   onSelectSession,
   selectedSessionId,
   selectedWorkspaceId,
@@ -34,10 +36,12 @@ export function WorkspaceTree({
   title,
   workspaces,
 }: {
+  archiveWorkspaceLabel: string
   emptyWorkspacesLabel: string
   newSessionLabel: string
   newWorkspaceLabel: string
   noSessionsLabel: string
+  onArchiveWorkspace: (workspace: LocalWorkspace) => void
   onCreateSession: (workspace: LocalWorkspace) => void
   onCreateWorkspace: () => void
   onSelectSession: (workspace: LocalWorkspace, session: LocalSession) => void
@@ -103,6 +107,19 @@ export function WorkspaceTree({
                         >
                           <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
                           <span className="truncate">{newSessionLabel}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          type="button"
+                          size="sm"
+                          aria-label={`${archiveWorkspaceLabel} ${workspace.name}`}
+                          title={archiveWorkspaceLabel}
+                          className="text-sidebar-foreground/70"
+                          onClick={() => onArchiveWorkspace(workspace)}
+                        >
+                          <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
+                          <span className="truncate">{archiveWorkspaceLabel}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                       {sessions.length > 0
