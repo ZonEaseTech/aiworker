@@ -438,7 +438,7 @@ requireIncludes('docs/testing.md', [
   'Worker runtime tests:',
   'packages/worker-runtime/src/\n  config/worker.test.ts\n  index.test.ts\n  orchestration/identity-provider.test.ts\n  orchestration/orchestrator.test.ts\n  soul-app/registry.test.ts\n  worker/engine-env.test.ts\n  worker/executor.test.ts\n  worker/local-engine-resolver.test.ts\n  worker/runtime.test.ts',
   'Engine projection tests:',
-  'packages/engine-projection/src/\n  index.test.ts\n  projection-contract.test.ts\n  workspace-projection.test.ts',
+  'packages/engine-projection/src/\n  index.test.ts\n  workspace-projection.test.ts',
   'Engine bridge tests:',
   'packages/engine-bridge/src/\n  bridge-contract.test.ts\n  index.test.ts',
   'Worker daemon tests:',

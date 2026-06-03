@@ -59,7 +59,6 @@ Engine projection tests:
 ```text
 packages/engine-projection/src/
   index.test.ts
-  projection-contract.test.ts
   workspace-projection.test.ts
 ```
 
@@ -302,7 +301,8 @@ Phase-B teardown is complete and the v1 release gates are green (a fresh
 `release:check` exits 0). The items below were surfaced by the 2026-06-03 stage-1
 alignment audit and are distinct from teardown. Deferral is a scheduling decision
 and does not by itself make an item aligned; the alignment verdict for each is
-stated. Item 1 was fixed during the audit; items 2 and 3 remain tracked.
+stated. All three were initially deferred, then resolved in the follow-up round
+(2026-06-03); they are kept here as a record of what was found and fixed.
 
 1. **MCP redaction-coverage asymmetry — RESOLVED (commit `2ffa70aa`).** The
    display-side redaction regex (`SECRET_VALUE_RE` in
@@ -326,33 +326,35 @@ stated. Item 1 was fixed during the audit; items 2 and 3 remain tracked.
    detectors stay separate by design (G6 pins them as defense-in-depth); what is
    unified is *coverage*, enforced by the new tests, not a single physical regex.
 
-2. **Dual projection engines (test-fidelity debt).** The live runtime path is
+2. **Dual projection engines — RESOLVED.** The live runtime path is
    `projectEngineAssetsToWorkspace` in
-   `packages/engine-projection/src/workspace-projection.ts` (covered by
-   `workspace-projection.test.ts` and the runtime). The contract test
-   `projection-contract.test.ts` instead exercises `projectEngineAssets` in
-   `packages/engine-projection/src/index.ts`, which no runtime path calls. The
-   duplicated `worker-overlay://` resolution was already removed in `19d0351b`
-   (see `docs/superpowers/specs/2026-06-02-worker-overlay-content-editing-design.md`),
-   leaving a single live overlay implementation. Verdict: functionally aligned —
-   the live path works and is tested — but the contract test validates a
-   runtime-dead function, giving partial false confidence. Recommendation: unify so
-   the contract test exercises the live path, or delete the dead function.
+   `packages/engine-projection/src/workspace-projection.ts`. The retired contract
+   test `projection-contract.test.ts` exercised a second, runtime-dead
+   `projectEngineAssets` implementation in `packages/engine-projection/src/index.ts`
+   that no runtime path called — giving partial false confidence. A coverage diff
+   showed `workspace-projection.test.ts` already subsumed the contract test's
+   scenarios (overlay disable/replace, entry-file overlay, reserved
+   projection-overlay, receipt cleanup and cleanup-escape, MCP-secret
+   metadata-only), so the dead `projectEngineAssets`/`cleanupReceipt`/
+   `computeProjectionFreshnessMarker` surface and `projection-contract.test.ts`
+   were deleted; `index.ts` now only re-exports the live `workspace-projection`
+   API plus `engineProjectionPackage`. The one assertion not already covered —
+   freshness-marker determinism for identical inputs — was ported to
+   `workspace-projection.test.ts`. There is now a single projection engine, tested
+   on the live path.
 
-3. **Always-empty `HostedSoulApp.api` / `permissions` projection fields (shape
-   debt).** The descriptor→`HostedSoulApp` projection in
-   `packages/soul-descriptor/src/soul-app/registry.ts` emits
+3. **Always-empty `HostedSoulApp.api` / `permissions` projection fields — RESOLVED.**
+   The descriptor→`HostedSoulApp` projection in
+   `packages/soul-descriptor/src/soul-app/registry.ts` used to emit
    `api: { localService: null, routePrefix: null }` and `permissions: []`
-   unconditionally, because v1 descriptors carry no app-owned API and no mounted
-   workbench. Verdict: aligned with the descriptor-only contract (descriptor v1 is
-   `protocol`/`identity`/`engine` only; the Soul provides no API or UI) — these are
-   structurally dead Phase-2-shaped fields, not a contract violation. The
-   worker-web settings dialog still renders them (`app.api.routePrefix`,
-   `app.permissions`), so this is also dead UI. Recommendation (focused cleanup
-   pass): remove the always-empty `api`/`permissions` projection fields and the
-   settings-dialog block that renders them, keeping the Phase-2 `SoulAppPermission`
-   type and the `SoulAppScopedContext` control-protocol interfaces (still used by
-   the dormant Host plane) untouched.
+   unconditionally (v1 descriptors carry no app-owned API and no mounted
+   workbench), and the worker-web settings dialog rendered them — dead, always-empty
+   UI. The `api`/`permissions` projection fields, the `hostedSoulAppApiSchema`/
+   `HostedSoulAppApi` type, the `apiForDescriptor`/`permissionsForDescriptor`
+   helpers, and the settings-dialog block that rendered them (plus the now-orphaned
+   `soulPacks` i18n copy) were removed. The Phase-2 `SoulAppPermission` type and the
+   `SoulAppScopedContext` control-protocol interfaces (consumed by the dormant Host
+   plane) are intentionally retained.
 
 The 2026-06-03 audit also fixed a cosmetic nit outside these three: the CLI
 release smoke PASS messages used retired wording ("Soul Apps", "Host Web/API");
