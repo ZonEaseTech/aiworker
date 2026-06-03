@@ -223,9 +223,9 @@ try {
   const sessionArchiveProof = await readSessionArchiveProofFromBrowser(page, sessionResult.session.id)
   assertSessionArchiveProof(sessionArchiveProof, sessionResult.session.id)
 
-  // Archive workspace and worker lifecycle, blocking new work on the archived worker.
-  const hostLifecycleArchiveProof = await readHostLifecycleArchiveProofFromBrowser(page, workerId, workspaceResult.workspace.id)
-  assertHostLifecycleArchiveProof(hostLifecycleArchiveProof, workerId, workspaceResult.workspace.id)
+  // Archive workspace from browser context without driving Worker archive from the Workbench.
+  const workspaceLifecycleProof = await readWorkspaceLifecycleProofFromBrowser(page, workerId, workspaceResult.workspace.id)
+  assertWorkspaceLifecycleProof(workspaceLifecycleProof, workerId, workspaceResult.workspace.id)
 
   await page.screenshot({ fullPage: true, path: join(evidenceRoot, 'freeform-cli-golden-path.png') })
   await writeEvidence('golden-path.json', {
@@ -242,7 +242,7 @@ try {
     invocationExternalSessionRefProof,
     invocationReconcileProof,
     projectionRefreshProof,
-    hostLifecycleArchiveProof,
+    workspaceLifecycleProof,
     sessionArchiveProof,
     routeUrl,
   })
@@ -900,34 +900,28 @@ function assertSessionArchiveProof(proof: Record<string, unknown>, sessionId: st
     throw new Error(`Archive proof exposed retired turn semantics: ${serialized}`)
 }
 
-async function readHostLifecycleArchiveProofFromBrowser(page: Page, workerId: string, workspaceId: string): Promise<Record<string, unknown>> {
+async function readWorkspaceLifecycleProofFromBrowser(page: Page, workerId: string, workspaceId: string): Promise<Record<string, unknown>> {
   return await page.evaluate(async ({ workerId, workspaceId }) => {
     const workspaceArchiveResponse = await fetch(`/api/workspace-locators/${workspaceId}/archive`, { method: 'POST' })
     const workspaceArchiveBody = await workspaceArchiveResponse.text()
     const workspaceReadResponse = await fetch(`/api/workspace-locators/${workspaceId}`)
     const workspaceReadBody = await workspaceReadResponse.text()
-    const workerArchiveResponse = await fetch(`/api/workers/${workerId}/archive`, { method: 'POST' })
-    const workerArchiveBody = await workerArchiveResponse.text()
     const workerReadResponse = await fetch(`/api/workers/${workerId}`)
     const workerReadBody = await workerReadResponse.text()
-    const blockedWorkspaceResponse = await fetch('/api/workspace-locators', {
+    const replacementWorkspaceResponse = await fetch('/api/workspace-locators', {
       body: JSON.stringify({
-        name: 'Blocked workspace after worker archive',
+        name: 'Replacement workspace after workspace archive',
         type: 'freeform',
         workerId,
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     })
-    const blockedWorkspaceBody = await blockedWorkspaceResponse.text()
+    const replacementWorkspaceBody = await replacementWorkspaceResponse.text()
     return {
-      blockedWorkspace: {
-        body: JSON.parse(blockedWorkspaceBody) as Record<string, unknown>,
-        status: blockedWorkspaceResponse.status,
-      },
-      workerArchive: {
-        body: JSON.parse(workerArchiveBody) as Record<string, unknown>,
-        status: workerArchiveResponse.status,
+      replacementWorkspace: {
+        body: JSON.parse(replacementWorkspaceBody) as Record<string, unknown>,
+        status: replacementWorkspaceResponse.status,
       },
       workerRead: {
         body: JSON.parse(workerReadBody) as Record<string, unknown>,
@@ -945,18 +939,17 @@ async function readHostLifecycleArchiveProofFromBrowser(page: Page, workerId: st
   }, { workerId, workspaceId })
 }
 
-function assertHostLifecycleArchiveProof(proof: Record<string, unknown>, workerId: string, workspaceId: string): void {
+function assertWorkspaceLifecycleProof(proof: Record<string, unknown>, workerId: string, workspaceId: string): void {
   const workspaceArchive = readRecord(proof.workspaceArchive)
   const workspaceRead = readRecord(proof.workspaceRead)
-  const workerArchive = readRecord(proof.workerArchive)
   const workerRead = readRecord(proof.workerRead)
-  const blockedWorkspace = readRecord(proof.blockedWorkspace)
+  const replacementWorkspace = readRecord(proof.replacementWorkspace)
   if (workspaceArchive.status !== 200 || workspaceRead.status !== 200)
     throw new Error(`Workspace lifecycle archive proof failed: ${JSON.stringify(proof)}`)
-  if (workerArchive.status !== 200 || workerRead.status !== 200)
-    throw new Error(`Worker lifecycle archive proof failed: ${JSON.stringify(proof)}`)
-  if (typeof blockedWorkspace.status !== 'number' || blockedWorkspace.status < 400)
-    throw new Error(`Archived worker accepted new workspace work: ${JSON.stringify(proof)}`)
+  if (workerRead.status !== 200)
+    throw new Error(`Worker lifecycle read failed after workspace archive: ${JSON.stringify(proof)}`)
+  if (typeof replacementWorkspace.status !== 'number' || replacementWorkspace.status >= 400)
+    throw new Error(`Active Worker rejected a replacement workspace after workspace archive: ${JSON.stringify(proof)}`)
 
   for (const candidate of [
     readRecord(readRecord(workspaceArchive.body).workspace),
@@ -966,20 +959,18 @@ function assertHostLifecycleArchiveProof(proof: Record<string, unknown>, workerI
       throw new Error(`Workspace lifecycle archive proof missed archived state: ${JSON.stringify(proof)}`)
   }
 
-  for (const candidate of [
-    readRecord(readRecord(workerArchive.body).worker),
-    readRecord(readRecord(workerRead.body).worker),
-  ]) {
-    if (candidate.id !== workerId || candidate.status !== 'archived')
-      throw new Error(`Worker lifecycle archive proof missed archived state: ${JSON.stringify(proof)}`)
-  }
+  const worker = readRecord(readRecord(workerRead.body).worker)
+  if (worker.id !== workerId || worker.status !== 'active')
+    throw new Error(`Workspace lifecycle proof changed Worker lifecycle from browser context: ${JSON.stringify(proof)}`)
+
+  const replacement = readRecord(readRecord(replacementWorkspace.body).workspace)
+  if (replacement.workerId !== workerId || replacement.status !== 'active')
+    throw new Error(`Replacement workspace proof missed active Worker continuity: ${JSON.stringify(proof)}`)
 
   const serialized = JSON.stringify(proof)
-  if (!serialized.includes('WORKER_ARCHIVED'))
-    throw new Error(`Host lifecycle archive proof missed blocked work diagnostic: ${serialized}`)
   for (const forbidden of ['/turns/', '"turn"', 'candidateId', 'reviewRecord', 'artifactContent', 'literal-secret-value']) {
     if (serialized.includes(forbidden))
-      throw new Error(`Host lifecycle archive proof exposed forbidden content ${forbidden}: ${serialized}`)
+      throw new Error(`Workspace lifecycle proof exposed forbidden content ${forbidden}: ${serialized}`)
   }
 }
 

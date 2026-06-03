@@ -454,7 +454,7 @@ requireIncludes('docs/testing.md', [
   'OpenAPI and redaction contract tests:',
   'packages/worker-daemon/src/modes/worker.local.test.ts\npackages/storage-sqlite/src/worker/index.test.ts\npackages/engine-bridge/src/bridge-contract.test.ts\npackages/engine-projection/src/workspace-projection.test.ts',
   'The v1 browser proof is Freeform-only and standalone:',
-  'Worker Workbench opens standalone with Host absent on worker/workspace/session locator\n-> renders the session chat directly in the worker Workbench without any micro-app\n-> verifies the first invocation and starts a session-level follow-up from browser context\n-> shows bridge event refs in the session chat\n-> cancels a queued invocation without changing session lifecycle\n-> reattaches and reconciles engine bridge events\n-> refreshes projection receipts from the Workbench\n-> applies worker config overlay and observes worker-overlay projection receipts\n-> archives the session and rejects follow-up\n-> archives workspace and worker lifecycle, blocking new work on archived worker',
+  'Worker Workbench opens standalone with Host absent on worker/workspace/session locator\n-> renders the session chat directly in the worker Workbench without any micro-app\n-> verifies the first invocation and starts a session-level follow-up from browser context\n-> shows bridge event refs in the session chat\n-> cancels a queued invocation without changing session lifecycle\n-> reattaches and reconciles engine bridge events\n-> refreshes projection receipts from the Workbench\n-> applies worker config overlay and observes worker-overlay projection receipts\n-> archives the session and rejects follow-up\n-> archives workspace without exposing Worker archive from browser context',
   'Do not modify the new architecture to satisfy old E2E assumptions. Delete or\nrewrite tests that require Host to import Soul source, expect old daemon product\nbackend behavior, expect a Soul-provided mounted workbench, or encode\n`router-mode="pure"` as production behavior.',
   'tests/browser/freeform-cli-golden-path.spec.ts',
   // Phase-B teardown debt tracked in testing.md
@@ -587,7 +587,7 @@ for (const requiredBrowserProofScopeText of [
   '-> refreshes projection receipts from the Workbench',
   '-> applies worker config overlay and observes worker-overlay projection receipts',
   '-> archives the session and rejects follow-up',
-  '-> archives workspace and worker lifecycle, blocking new work on archived worker',
+  '-> archives workspace without exposing Worker archive from browser context',
 ]) {
   if (!testingDoc.includes(requiredBrowserProofScopeText)) {
     issues.push({
@@ -857,10 +857,21 @@ requireFreeformBrowserProofIncludes([
   ['/api/sessions/', '{id}/archive'].join('$'),
   'assertSessionArchiveProof',
   ['/api/workspace-locators/', '{workspaceId}/archive'].join('$'),
+  'assertWorkspaceLifecycleProof',
+  'replacementWorkspace',
+])
+for (const forbiddenBrowserWorkerArchiveProof of [
   ['/api/workers/', '{workerId}/archive'].join('$'),
   'assertHostLifecycleArchiveProof',
   'WORKER_ARCHIVED',
-])
+]) {
+  if (freeformCliBrowserProof.includes(forbiddenBrowserWorkerArchiveProof)) {
+    issues.push({
+      file: 'tests/browser/freeform-cli-golden-path.spec.ts',
+      message: 'browser proof must not drive Worker archive from Workbench context',
+    })
+  }
+}
 if (packageJson.scripts?.['docs:check'] !== 'bun scripts/check-doc-contract.ts')
   issues.push({ file: 'package.json', message: 'docs:check must run scripts/check-doc-contract.ts' })
 if (packageJson.scripts?.['ui:check'] !== 'bun scripts/check-web-ui-components.ts')
