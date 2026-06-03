@@ -374,6 +374,29 @@ describe('workspace engine asset projection', () => {
     expect(receiptJson).not.toContain('secretref:codex/default-profile')
   })
 
+  it('produces a stable freshness marker for identical projection inputs', async () => {
+    // Determinism coverage ported from the retired projection-contract.test.ts,
+    // which exercised the dead index.ts `projectEngineAssets` path. The live path
+    // must yield the same marker for identical inputs (sensitivity to changed
+    // inputs is covered by the preceding test).
+    const sourceRoot = tempRoot('freshness-determinism-source')
+    await writeEngineAssetSource(sourceRoot, 'command = "baseline-mcp"\n')
+    const project = (workspaceRoot: string) => projectEngineAssetsToWorkspace({
+      appId: 'demo-soul-app',
+      engineAssets: mcpEngineAssets(['codex']),
+      engineTarget: 'codex',
+      now: '2026-05-16T00:00:00.000Z',
+      sourceRoot,
+      variables: { workspaceName: 'Stable workspace' },
+      workspaceRoot,
+    })
+    const first = await project(tempRoot('freshness-determinism-a'))
+    const second = await project(tempRoot('freshness-determinism-b'))
+
+    expect(first.freshnessMarker).toMatch(/^sha256:[a-f0-9]{64}$/)
+    expect(second.freshnessMarker).toBe(first.freshnessMarker)
+  })
+
   it('lets a reserved projection-overlay config participate in the freshness marker but project no file', async () => {
     const sourceRoot = tempRoot('reserved-overlay-source')
     const baselineWorkspaceRoot = tempRoot('reserved-overlay-baseline')
