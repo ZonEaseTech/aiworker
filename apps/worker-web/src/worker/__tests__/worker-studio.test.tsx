@@ -557,6 +557,19 @@ describe('worker studio', () => {
     expect(lastSessionRequestBody).toMatchObject({ workerId: 'primary-worker', workspaceId: 'workspace-1' })
   })
 
+  it('centers the no-workspace-selected empty state in the main workbench', async () => {
+    window.history.replaceState(null, '', '/workers/primary-worker')
+    render(<WorkerStudio />)
+
+    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const title = within(main).getByText('No workspace selected')
+    const empty = title.closest('[data-slot="empty"]')
+    expect(empty?.className).toContain('items-center')
+    expect(empty?.className).toContain('text-center')
+    expect(empty?.className).not.toContain('items-start')
+    expect(within(main).getByRole('button', { name: 'New workspace' })).toBeTruthy()
+  })
+
   it('shows a create-first-workspace empty state when the worker has no workspaces', async () => {
     currentWorkspaces = []
     currentSessions = []
@@ -580,7 +593,11 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     const main = await screen.findByLabelText('Soul workspaces and sessions')
-    expect(within(main).getByText('No sessions in this workspace yet.')).toBeTruthy()
+    const title = within(main).getByText('No sessions in this workspace yet.')
+    const empty = title.closest('[data-slot="empty"]')
+    expect(empty?.className).toContain('items-center')
+    expect(empty?.className).toContain('text-center')
+    expect(empty?.className).not.toContain('items-start')
     expect(within(main).getByRole('button', { name: 'New session' })).toBeTruthy()
   })
 

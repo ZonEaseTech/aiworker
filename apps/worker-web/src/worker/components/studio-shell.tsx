@@ -211,7 +211,7 @@ export function StudioEmptyState({
   ...props
 }: StudioEmptyStateProps) {
   return (
-    <Empty {...props} className={cn('min-h-42 items-start justify-center p-4', className)}>
+    <Empty {...props} className={cn('min-h-42 justify-center p-4', className)}>
       <EmptyHeader>
         {icon ? <EmptyMedia variant="icon">{icon}</EmptyMedia> : null}
         <EmptyTitle>{title}</EmptyTitle>
