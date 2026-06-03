@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import { cp, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { isWorkerOverlaySourceRef, parseWorkerOverlaySourceRef } from '@zonease/aiworker-soul-descriptor'
 
 export {
   cleanupWorkspaceProjectionReceipt,
@@ -44,36 +43,9 @@ export interface ProjectionReceipt {
 export interface ProjectEngineAssetsInput {
   descriptor: Record<string, unknown>
   descriptorRoot: string
-  /**
-   * Worker-owned overlay content store root (`<worker-home>/overlays`). Required
-   * to resolve `worker-overlay://<kind>/<path>` overlay sourceRefs; unused for
-   * `descriptor://…` baseline/overlay refs.
-   */
-  overlayRoot?: string
   target: EngineProjectionTarget
   workerConfig: unknown
   workspaceRoot: string
-}
-
-/**
- * Scheme-aware overlay file resolution. `descriptor://…` refs resolve from the
- * descriptor source root (byte-identical to the baseline behavior, via the
- * provided `descriptorResolver`); `worker-overlay://<kind>/<path>` refs resolve
- * from `<overlayRoot>/<kind>/<path>`. The `worker-overlay://` shape (kind + safe
- * relative path) is parsed by the single shared `parseWorkerOverlaySourceRef`
- * from soul-descriptor — no inline scheme parser here.
- */
-function resolveOverlaySourceFile(input: {
-  descriptorResolver: (sourceRef: string) => string
-  overlayRoot?: string
-  sourceRef: string
-}): string {
-  if (!isWorkerOverlaySourceRef(input.sourceRef))
-    return input.descriptorResolver(input.sourceRef)
-  if (!input.overlayRoot)
-    throw new Error(`Worker overlay root is required to resolve sourceRef: ${input.sourceRef}`)
-  const parsed = parseWorkerOverlaySourceRef(input.sourceRef)!
-  return path.join(path.resolve(input.overlayRoot), parsed.kind, ...safeRelativeSegments(parsed.path))
 }
 
 export interface CleanupReceiptInput {
@@ -108,12 +80,9 @@ export async function projectEngineAssets(input: ProjectEngineAssetsInput): Prom
   const workerConfig = workerConfigOverlays(input.workerConfig)
   const projectedFiles: ProjectionReceiptFile[] = []
 
-  const overlayRoot = input.overlayRoot ? path.resolve(input.overlayRoot) : undefined
-
   if (assets.workspaceAssets?.source) {
     projectedFiles.push(...await projectWorkspaceAssets({
       descriptorRoot,
-      overlayRoot,
       source: assets.workspaceAssets.source,
       target: input.target,
       workerConfig,
@@ -125,7 +94,6 @@ export async function projectEngineAssets(input: ProjectEngineAssetsInput): Prom
     projectedFiles.push(...await projectSkills({
       appId: descriptorAppId(input.descriptor),
       descriptorRoot,
-      overlayRoot,
       workerConfig,
       source: assets.skills.source,
       target: input.target,
@@ -138,7 +106,6 @@ export async function projectEngineAssets(input: ProjectEngineAssetsInput): Prom
     const projected = await projectNativeMcpFile({
       descriptorRoot,
       file: nativeMcpFile,
-      overlayRoot,
       target: input.target,
       workerConfig,
       workspaceRoot,
@@ -180,7 +147,6 @@ export function computeProjectionFreshnessMarker(input: {
 
 async function projectWorkspaceAssets(input: {
   descriptorRoot: string
-  overlayRoot?: string
   source: string
   target: EngineProjectionTarget
   workerConfig: WorkerConfigOverlay[]
@@ -202,13 +168,7 @@ async function projectWorkspaceAssets(input: {
     if (overlay?.enabled === false)
       continue
     const projectedSourceRef = overlay?.enabled && overlay.sourceRef !== sourceRef ? overlay.sourceRef : sourceRef
-    const sourceFile = projectedSourceRef === sourceRef
-      ? file
-      : resolveOverlaySourceFile({
-          descriptorResolver: ref => workspaceAssetSourceFile(sourceRoot, ref),
-          overlayRoot: input.overlayRoot,
-          sourceRef: projectedSourceRef,
-        })
+    const sourceFile = projectedSourceRef === sourceRef ? file : workspaceAssetSourceFile(sourceRoot, projectedSourceRef)
 
     await copyProjectedFile(sourceFile, input.workspaceRoot, targetPath)
     projected.push(await receiptFile({
@@ -226,11 +186,7 @@ async function projectWorkspaceAssets(input: {
     const targetPath = entryFileOverlayTargetPath(overlay)
     if (!targetPath)
       continue
-    const sourceFile = resolveOverlaySourceFile({
-      descriptorResolver: ref => workspaceAssetSourceFile(sourceRoot, ref),
-      overlayRoot: input.overlayRoot,
-      sourceRef: overlay.sourceRef,
-    })
+    const sourceFile = workspaceAssetSourceFile(sourceRoot, overlay.sourceRef)
     await copyProjectedFile(sourceFile, input.workspaceRoot, targetPath)
     projected.push(await receiptFile({
       kind: 'workspace-asset',
@@ -247,7 +203,6 @@ async function projectWorkspaceAssets(input: {
 async function projectSkills(input: {
   appId: string
   descriptorRoot: string
-  overlayRoot?: string
   source: string
   target: EngineProjectionTarget
   workerConfig: WorkerConfigOverlay[]
@@ -275,13 +230,7 @@ async function projectSkills(input: {
     if (overlay?.enabled === false)
       continue
     const projectedSourceRef = overlay?.enabled && overlay.sourceRef !== sourceRef ? overlay.sourceRef : sourceRef
-    const projectedSourceFile = projectedSourceRef === sourceRef
-      ? sourceFile
-      : resolveOverlaySourceFile({
-          descriptorResolver: ref => skillSourceFile(skillsRoot, ref),
-          overlayRoot: input.overlayRoot,
-          sourceRef: projectedSourceRef,
-        })
+    const projectedSourceFile = projectedSourceRef === sourceRef ? sourceFile : skillSourceFile(skillsRoot, projectedSourceRef)
 
     const targetPath = skillTargetPath(input.appId, skillId, input.target)
     await copyProjectedFile(projectedSourceFile, input.workspaceRoot, targetPath)
@@ -300,7 +249,6 @@ async function projectSkills(input: {
 async function projectNativeMcpFile(input: {
   descriptorRoot: string
   file: string
-  overlayRoot?: string
   target: EngineProjectionTarget
   workerConfig: WorkerConfigOverlay[]
   workspaceRoot: string
@@ -312,13 +260,7 @@ async function projectNativeMcpFile(input: {
   if (overlay?.enabled === false)
     return null
   const projectedSourceRef = overlay?.enabled && overlay.sourceRef !== sourceRef ? overlay.sourceRef : sourceRef
-  const projectedSourceFile = projectedSourceRef === sourceRef
-    ? sourceFile
-    : resolveOverlaySourceFile({
-        descriptorResolver: ref => nativeMcpSourceFile(input.descriptorRoot, ref, input.target),
-        overlayRoot: input.overlayRoot,
-        sourceRef: projectedSourceRef,
-      })
+  const projectedSourceFile = projectedSourceRef === sourceRef ? sourceFile : nativeMcpSourceFile(input.descriptorRoot, projectedSourceRef, input.target)
 
   await copyProjectedFile(projectedSourceFile, input.workspaceRoot, targetPath)
 
