@@ -348,7 +348,6 @@ async function assertWorkerArchiveAbsentFromUi(page: Page): Promise<void> {
     throw new Error('Worker archive is exposed from the Workbench UI.')
 }
 
-
 function runCliJson<T = unknown>(...args: string[]): T {
   const result = Bun.spawnSync({
     cmd: [process.execPath, 'apps/worker-cli/src/aiworker.ts', ...args],
