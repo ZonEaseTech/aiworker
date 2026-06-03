@@ -45,7 +45,7 @@ function isTextLikeFile(file: Pick<File, 'name' | 'type'>): boolean {
     return true
   if (/(?:json|javascript|typescript|xml|csv|yaml|yml|markdown|x-www-form-urlencoded)$/i.test(file.type))
     return true
-  return /\.(?:cjs|css|csv|html|js|json|jsx|log|md|mdx|mjs|sql|svg|toml|ts|tsx|txt|xml|yaml|yml)$/i.test(file.name)
+  return /\.(?:cjs|css|csv|html|js|json|jsx|log|md|mdx|mjs|sql|svg|toml|ts|tsx|tsv|txt|xml|yaml|yml)$/i.test(file.name)
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {

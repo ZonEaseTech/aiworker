@@ -320,6 +320,41 @@ describe('sessionComposer', () => {
     expect(draft.files[0]).toBe(file)
   })
 
+  it('reads TSV attachments without a MIME type as utf8 source material', async () => {
+    const onSubmitDraft = vi.fn()
+    const file = new File(['col_a\tcol_b\n1\t2\n'], 'burn-20260528021436.tsv')
+
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        defaultValue="Read this"
+        onSubmitDraft={onSubmitDraft}
+        submitAriaLabel="Start"
+      />,
+    )
+
+    fireEvent.change(screen.getByTestId('managed-session-file-input'), {
+      target: { files: [file] },
+    })
+    fireEvent.submit(screen.getByRole('form', { name: 'Session input' }))
+
+    await waitFor(() => expect(onSubmitDraft).toHaveBeenCalledTimes(1))
+    expect(onSubmitDraft.mock.calls[0]?.[0].materials[0]).toMatchObject({
+      content: 'col_a\tcol_b\n1\t2\n',
+      encoding: 'utf8',
+      mimeType: 'application/octet-stream',
+      name: 'burn-20260528021436.tsv',
+    })
+  })
+
   it('shows the controlled selected mode label and submits its id', async () => {
     const onSubmitDraft = vi.fn()
 
