@@ -1,3 +1,4 @@
+import type { LocalEngineStatus } from '@zonease/aiworker-soul-descriptor'
 import type { LocalExecutor, LocalWorkerRuntimeOptions } from '@zonease/aiworker-worker-runtime'
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
@@ -26,8 +27,22 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { bootstrapWorkerApp, localApiExposureWarning } from './worker'
+import { setEngineScanner } from './worker/settings'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
+
+// 确定性的 fake 引擎扫描结果:codex 已安装(满足 rescan/test 断言),其余未安装。
+// 注入到每个 daemon boot,使 settings 加载 / rescan 路由绝不 shell 出真实引擎 CLI。
+function fakeEngineRows(): LocalEngineStatus[] {
+  return [
+    { command: 'codex', id: 'codex', installed: true, name: 'Codex CLI', path: '/fake/bin/codex', version: 'codex test 1.0' },
+    { command: 'claude', id: 'claude-code', installed: false, name: 'Claude Code', path: null, version: null },
+    { command: 'cursor-agent', id: 'cursor', installed: false, name: 'Cursor Agent', path: null, version: null },
+    { command: 'gemini', id: 'gemini', installed: false, name: 'Gemini CLI', path: null, version: null },
+    { command: 'opencode', id: 'opencode', installed: false, name: 'OpenCode', path: null, version: null },
+    { command: 'qwen', id: 'qwen', installed: false, name: 'Qwen Code', path: null, version: null },
+  ]
+}
 
 const freeformDescriptor = parseSoulDescriptorV1({
   engine: {
@@ -94,6 +109,9 @@ describe('local daemon API', () => {
     // 之后被触发,撞上 "Worker database not initialized"。
     for (const daemon of bootedDaemons)
       daemon.shutdown()
+    // 无条件复位引擎扫描器到真实实现:即使某测试只 boot 了一个会 reject 的 daemon
+    // (未进 bootedDaemons),也不让其注入的 fake 泄漏到下一个测试。
+    setEngineScanner(null)
     closeWorkerDb()
     if (originalPath == null)
       delete process.env.PATH
@@ -111,6 +129,7 @@ describe('local daemon API', () => {
     const boot = await bootstrapWorkerApp({
       dbPath: join(dir, 'worker.db'),
       engineBridge,
+      engineScanner: () => fakeEngineRows(),
       executor: {
         async invoke(input) {
           input.onEvent?.({ kind: 'status', label: 'test-started', detail: input.engineId })
@@ -833,6 +852,7 @@ describe('local daemon API', () => {
     }
     const bootOptions = {
       dbPath: join(dir, 'worker.db'),
+      engineScanner: () => fakeEngineRows(),
       executor: noopExecutor,
       runtimeVersion: 'test',
       workersRoot: join(dir, 'workers'),
@@ -1606,6 +1626,7 @@ describe('local daemon API', () => {
   it('drains live SSE bus subscriptions on shutdown so no DB read fires after closeWorkerDb', async () => {
     const boot = await bootstrapWorkerApp({
       dbPath: join(dir, 'worker.db'),
+      engineScanner: () => fakeEngineRows(),
       executor: {
         async invoke(input) {
           input.onEvent?.({ kind: 'text', text: 'done' })
@@ -2768,6 +2789,57 @@ describe('local daemon API', () => {
     })).status).toBe(404)
     expect((await target.request('/api/local/settings')).status).toBe(404)
     expect(listSettings().some(setting => setting.key === 'local-settings')).toBe(true)
+  })
+
+  // 证明引擎扫描走的是注入的 fake 而不是真实 scanLocalEngines(后者会 shell 出
+  // codex/claude/cursor-agent --version,在并发 release:check 下产生孤儿进程)。
+  // sentinel 扫描器返回一个唯一可辨识的行并记录调用次数:断言 settings 加载与
+  // rescan 路由都调用了它,且返回的 engines 来自 sentinel(真实扫描器未被使用)。
+  it('routes engine scanning through the injected scanner, never the real CLIs', async () => {
+    let scanCalls = 0
+    const sentinelRows: LocalEngineStatus[] = [
+      { command: 'sentinel-engine', id: 'sentinel-engine', installed: false, name: 'Sentinel Engine', path: null, version: null },
+    ]
+    const boot = await bootstrapWorkerApp({
+      dbPath: join(dir, 'worker.db'),
+      engineScanner: () => {
+        scanCalls += 1
+        return sentinelRows.map(row => ({ ...row }))
+      },
+      executor: {
+        async invoke(input) {
+          input.onEvent?.({ kind: 'text', text: 'done' })
+          return { artifacts: [], summary: 'done' }
+        },
+      },
+      runtimeVersion: 'test',
+      workersRoot: join(dir, 'workers'),
+    })
+    bootedDaemons.push(boot.state)
+    const target = boot.app
+
+    // boot 自身不加载 settings(走 readLocalConnectorSettings 的非扫描 fallback)。
+    expect(scanCalls).toBe(0)
+
+    // 首次 GET /api/settings → 空 DB → defaultLocalSettings → 注入的扫描器被调用一次,
+    // 然后落库;返回的 engines 必须正是 sentinel 行(真实扫描器未被使用)。
+    const first = await target.request('/api/settings')
+    expect(first.status).toBe(200)
+    const firstBody = await first.json() as { settings: { engines: LocalEngineStatus[] } }
+    expect(scanCalls).toBe(1)
+    expect(firstBody.settings.engines).toEqual(sentinelRows)
+    expect(firstBody.settings.engines.some(engine => engine.id === 'codex')).toBe(false)
+
+    // settings 已落库,二次加载不再扫描。
+    expect((await target.request('/api/settings')).status).toBe(200)
+    expect(scanCalls).toBe(1)
+
+    // POST /api/engine/targets/rescan 必须也走注入的扫描器。
+    const rescan = await target.request('/api/engine/targets/rescan', { method: 'POST' })
+    expect(rescan.status).toBe(200)
+    const rescanBody = await rescan.json() as { engines: LocalEngineStatus[] }
+    expect(scanCalls).toBe(2)
+    expect(rescanBody.engines).toEqual(sentinelRows)
   })
 
   it('rejects literal BYOK API keys in local settings', async () => {

@@ -9,6 +9,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { bootstrapWorkerApp } from '../worker'
+import { setEngineScanner } from './settings'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
 
@@ -28,6 +29,8 @@ describe('worker-daemon control contract endpoints', () => {
   afterEach(async () => {
     for (const daemon of bootedDaemons)
       daemon.shutdown()
+    // 无条件复位引擎扫描器到真实实现,防止注入的 fake 跨测试泄漏。
+    setEngineScanner(null)
     closeWorkerDb()
     await rm(dir, { recursive: true, force: true })
   })
@@ -35,6 +38,10 @@ describe('worker-daemon control contract endpoints', () => {
   async function app() {
     const boot = await bootstrapWorkerApp({
       dbPath: join(dir, 'worker.db'),
+      // 注入确定性 fake 引擎扫描器,使 settings 加载绝不 shell 出真实引擎 CLI。
+      engineScanner: () => [
+        { command: 'codex', id: 'codex', installed: true, name: 'Codex CLI', path: '/fake/bin/codex', version: 'codex test 1.0' },
+      ],
       executor: {
         async invoke(input) {
           input.onEvent?.({ kind: 'text', text: 'done' })

@@ -1,5 +1,5 @@
 import type { BaselineAssetStoreKind } from '@zonease/aiworker-engine-projection'
-import type { LocalSettingsConfig, LocalWorkerOverlayAsset, SoulAppEngineTarget } from '@zonease/aiworker-soul-descriptor'
+import type { LocalEngineStatus, LocalSettingsConfig, LocalWorkerOverlayAsset, SoulAppEngineTarget } from '@zonease/aiworker-soul-descriptor'
 import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import type { LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerApiAuthProvider, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
@@ -75,7 +75,7 @@ import {
   workerConfigContentBodySchema,
   workerConfigValueBodySchema,
 } from './worker/schemas'
-import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings, saveLocalSettings, scanLocalEngines } from './worker/settings'
+import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings, saveLocalSettings, scanEnginesForDaemon, setEngineScanner } from './worker/settings'
 import { serveWorkerWeb, serveWorkerWebAsset } from './worker/web-static'
 
 const DEFAULT_RUNTIME_VERSION = 'dev'
@@ -90,6 +90,9 @@ export interface BootstrapWorkerAppOptions {
   token?: string
   runtimeVersion?: string
   executor?: LocalExecutor
+  // 引擎扫描缝(镜像 executor 注入):不传则用真实 scanLocalEngines;测试注入 fake,
+  // 使 settings 加载 / rescan 路由不 shell 出真实引擎 CLI。
+  engineScanner?: () => LocalEngineStatus[]
   now?: () => string
 }
 
@@ -124,6 +127,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const runtimeVersion = options.runtimeVersion ?? DEFAULT_RUNTIME_VERSION
   const workersRoot = options.workersRoot ?? path.join(path.dirname(dbPath), 'workers')
   const runtimes = new Map<string, LocalWorkerRuntime>()
+  // 安装引擎扫描器(默认 = 真实 scanLocalEngines),必须早于任何 settings 加载
+  // (bootstrapOfficialSoulApps / runtime.init / 后续请求路径)。
+  setEngineScanner(options.engineScanner ?? null)
   const host = createWorkerOrchestrator({
     engineBridge: options.engineBridge,
     executor: options.executor,
@@ -151,6 +157,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       for (const runtime of runtimes.values())
         runtime.dispose()
       runtimes.clear()
+      // 重置回真实扫描器,防止本测试注入的 fake 泄漏到下一个测试。
+      setEngineScanner(null)
     },
   }
   await state.host.bootstrapOfficialSoulApps()
@@ -604,7 +612,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const current = loadLocalSettings()
     const settings = saveLocalSettings({
       ...current,
-      engines: scanLocalEngines(),
+      engines: scanEnginesForDaemon(),
       updatedAt: new Date().toISOString(),
     })
     return c.json({ engines: settings.engines, settings })

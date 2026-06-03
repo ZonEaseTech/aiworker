@@ -1,10 +1,25 @@
-import type { LocalEngineReadinessSettings, LocalSettingsConfig } from '@zonease/aiworker-soul-descriptor'
+import type { LocalEngineReadinessSettings, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-soul-descriptor'
 import { AppError, localSettingsConfigSchema } from '@zonease/aiworker-soul-descriptor'
 import { getSetting, listSettings, setSetting } from '@zonease/aiworker-storage-sqlite/worker'
 import { scanLocalEngines } from '@zonease/aiworker-worker-runtime'
 
 export const LOCAL_SETTINGS_KEY = 'local-settings'
-export { scanLocalEngines }
+
+// 引擎扫描的依赖注入缝:默认始终是真实的 scanLocalEngines(生产路径字节不变),
+// 测试通过 setEngineScanner 注入 fake,避免在 defaultLocalSettings / rescan 路由里
+// shell 出真实的引擎 CLI(codex/claude/cursor-agent --version)。模块级单例,与
+// 既有的全局 DB 单例同模式;daemon shutdown 时重置回真实扫描器以隔离测试。
+type EngineScanner = () => LocalEngineStatus[]
+let activeEngineScanner: EngineScanner = scanLocalEngines
+
+export function setEngineScanner(scanner: EngineScanner | null): void {
+  activeEngineScanner = scanner ?? scanLocalEngines
+}
+
+// daemon 路由与 defaultLocalSettings 共用的扫描入口,始终走当前激活的扫描器。
+export function scanEnginesForDaemon(): LocalEngineStatus[] {
+  return activeEngineScanner()
+}
 
 const DEFAULT_CONNECTORS: LocalSettingsConfig['connectors'] = [
   { enabled: false, id: 'ats', name: 'ATS / HRIS', status: 'not_configured' },
@@ -142,7 +157,7 @@ function normalizePendingMcpSettings(settings: LocalSettingsConfig): LocalSettin
 }
 
 function defaultLocalSettings(): LocalSettingsConfig {
-  const engines = scanLocalEngines()
+  const engines = activeEngineScanner()
   const firstInstalled = engines.find(engine => engine.installed)
   return {
     appearance: 'system',
