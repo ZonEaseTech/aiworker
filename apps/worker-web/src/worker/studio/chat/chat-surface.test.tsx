@@ -17,16 +17,71 @@ const composerLabels = {
   submitAriaLabel: 'Send message',
 }
 
+function sessionDetail(events: unknown[] = [], invocations: unknown[] = []) {
+  return {
+    events,
+    invocations,
+    session: { id: 'session-1', status: 'active' },
+  }
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
 describe('chat surface', () => {
   it('renders an empty transcript and a composer for the selected session', () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}')))
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(sessionDetail()))))
     render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
     expect(screen.getByRole('log', { name: 'Session transcript' })).toBeTruthy()
     expect(screen.getByRole('textbox')).toBeTruthy()
+  })
+
+  it('stretches to the main workbench so the composer stays pinned to the bottom', () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(sessionDetail()))))
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    const surface = document.querySelector('[data-chat-surface="true"]')
+    expect(surface?.className).toContain('flex-1')
+    expect(surface?.className).toContain('overflow-hidden')
+  })
+
+  it('replays persisted session events after a browser refresh with no in-memory active invocation', async () => {
+    const persistedEvent = {
+      createdAt: '2026-06-01T00:00:00.000Z',
+      id: 3,
+      invocationId: 'inv-restored',
+      payloadJson: { data: { text: 'persisted reply after refresh' } },
+      seq: 1,
+      sessionId: 'session-1',
+      type: 'assistant_delta',
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/sessions/session-1') {
+        return new Response(JSON.stringify(sessionDetail(
+          [persistedEvent],
+          [{
+            id: 'inv-restored',
+            metadataJson: { uiUserDisplayText: 'persisted user prompt after refresh' },
+            seq: 1,
+            sessionId: 'session-1',
+            status: 'succeeded',
+          }],
+        )))
+      }
+      return new Response(JSON.stringify({
+        events: [persistedEvent],
+        invocation: { id: 'inv-restored', status: 'succeeded' },
+      }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    expect(await screen.findByText(/persisted reply after refresh/)).toBeTruthy()
+    expect(screen.getByText(/persisted user prompt after refresh/)).toBeTruthy()
+    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/session-1', expect.any(Object))
   })
 
   it('submits a message and streams the resulting invocation into the transcript', async () => {
@@ -40,6 +95,8 @@ describe('chat surface', () => {
           session: { id: 'session-1', status: 'active' },
         }), { status: 201 })
       }
+      if (url === '/api/sessions/session-1')
+        return new Response(JSON.stringify(sessionDetail()))
       return new Response(JSON.stringify({
         events: [{
           createdAt: '2026-06-01T00:00:00.000Z',
@@ -75,6 +132,8 @@ describe('chat surface', () => {
           session: { id: 'session-1', status: 'active' },
         }), { status: 201 })
       }
+      if (url === '/api/sessions/session-1')
+        return new Response(JSON.stringify(sessionDetail()))
       return new Response(JSON.stringify({
         events: [],
         invocation: { id: 'inv-echo', status: 'succeeded' },

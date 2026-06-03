@@ -10,6 +10,7 @@ import { localJson } from '../../../shared/api/local-client'
 export interface SubmitSessionInvocationBody {
   input: string
   metadata?: Record<string, unknown>
+  waitForCompletion?: boolean
 }
 
 export interface SessionInvocationResponse {
@@ -22,6 +23,12 @@ export interface SessionInvocationResponse {
 export interface InvocationEventsResponse {
   events: LocalSessionEvent[]
   invocation: LocalEngineInvocation
+}
+
+export interface SessionDetailResponse {
+  events: LocalSessionEvent[]
+  invocations: LocalEngineInvocation[]
+  session: LocalSession
 }
 
 /**
@@ -44,11 +51,21 @@ export function submitSessionInvocation(
 }
 
 /**
+ * Read a persisted session snapshot for browser reload recovery. The daemon
+ * returns session lifecycle data plus session-level invocations and redacted
+ * bridge events, so the Workbench can replay the transcript before following
+ * the latest invocation's live stream.
+ */
+export function fetchSessionDetail(sessionId: string): Promise<SessionDetailResponse> {
+  return localJson<SessionDetailResponse>(`/api/sessions/${encodeURIComponent(sessionId)}`)
+}
+
+/**
  * Read an engine invocation's events for the chat view, with optional
  * `after`/`limit` paging. Canonical route is `GET /api/engine/invocations/:id/events`
  * (docs/protocol.md), which returns the redacted event window plus the current
- * invocation snapshot. This backs the worker-web chat-view event source (poll
- * now; an SSE transport can reuse the same `after`/Last-Event-ID cursor later).
+ * invocation snapshot. This backs the worker-web chat-view poll fallback; the
+ * browser's primary live path uses the same route as an SSE stream.
  */
 export function fetchInvocationEvents(
   invocationId: string,

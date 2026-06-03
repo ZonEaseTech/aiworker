@@ -23,7 +23,7 @@ afterEach(() => {
 
 describe('chat composer', () => {
   it('submits the composed message as a session-level invocation and reports the new invocation id', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       events: [],
       files: [],
       invocation: { id: 'inv-9', status: 'queued' },
@@ -39,12 +39,37 @@ describe('chat composer', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith('/api/sessions/session-1/invocations', expect.objectContaining({
-        body: JSON.stringify({ input: 'do the thing' }),
+        body: JSON.stringify({ input: 'do the thing', waitForCompletion: false }),
         method: 'POST',
       }))
     })
     await waitFor(() => {
       expect(onSubmitted).toHaveBeenCalledWith({ invocationId: 'inv-9', text: 'do the thing' })
     })
+  })
+
+  it('includes attached source materials in the session invocation input', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      events: [],
+      files: [],
+      invocation: { id: 'inv-10', status: 'queued' },
+      session: { id: 'session-1', status: 'active' },
+    }), { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<ChatComposer labels={labels} sessionId="session-1" />)
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '查看这两个文件' } })
+    fireEvent.change(screen.getByTestId('managed-session-file-input'), {
+      target: { files: [new File(['col_a\tcol_b\n1\t2\n'], 'burn-20260528021436.tsv', { type: 'text/tab-separated-values' })] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { input: string, waitForCompletion: boolean }
+    expect(body.input).toContain('查看这两个文件')
+    expect(body.input).toContain('burn-20260528021436.tsv')
+    expect(body.input).toContain('col_a\tcol_b\n1\t2')
+    expect(body.waitForCompletion).toBe(false)
   })
 })

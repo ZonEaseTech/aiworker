@@ -391,19 +391,193 @@ describe('local daemon API', () => {
       status: 'succeeded',
     })
 
+    const materialOnlyInput = [
+      '<attached_source_materials>',
+      '<source_material name="secret &amp; guide.md">',
+      'visible-secret-should-not-reach-session-detail',
+      '</source_material>',
+      '</attached_source_materials>',
+    ].join('\n')
+    const materialOnlyRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: materialOnlyInput }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(materialOnlyRes.status).toBe(201)
+    const materialOnlyBody = await materialOnlyRes.json() as { invocation: { sessionId: string, status: string } }
+    expect(materialOnlyBody.invocation).toMatchObject({
+      sessionId: session.id,
+      status: 'succeeded',
+    })
+
     const sessionRes = await target.request(`/api/sessions/${session.id}`)
     expect(sessionRes.status).toBe(200)
     const sessionBody = await sessionRes.json() as {
-      invocations: Array<{ sessionId: string, status: string }>
+      invocations: Array<{ metadataJson: Record<string, unknown>, sessionId: string, status: string }>
       session: { id: string, status: string }
     }
     expect(sessionBody.session).toMatchObject({ id: session.id, status: 'active' })
-    expect(sessionBody.invocations.map(invocation => invocation.sessionId)).toEqual([session.id, session.id])
-    expect(sessionBody.invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded'])
+    expect(sessionBody.invocations.map(invocation => invocation.sessionId)).toEqual([session.id, session.id, session.id])
+    expect(sessionBody.invocations.map(invocation => invocation.status)).toEqual(['succeeded', 'succeeded', 'succeeded'])
+    expect(sessionBody.invocations.map(invocation => invocation.metadataJson.uiUserDisplayText)).toEqual([
+      'Continue the Freeform session.',
+      'Continue through the broker.',
+      'Attached source materials: secret & guide.md',
+    ])
+    expect(JSON.stringify(sessionBody.invocations)).not.toContain('visible-secret-should-not-reach-session-detail')
 
     expect((await target.request(`/api/local/sessions/${session.id}`)).status).toBe(404)
     expect((await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}`)).status).toBe(404)
     expect('turns' in sessionBody).toBe(false)
+  })
+
+  it('can return a running session invocation without waiting for engine completion', async () => {
+    let releaseAdapter!: () => void
+    let adapterStarted!: () => void
+    const started = new Promise<void>((resolve) => {
+      adapterStarted = resolve
+    })
+    const release = new Promise<void>((resolve) => {
+      releaseAdapter = resolve
+    })
+    const target = await app(undefined, undefined, undefined, {
+      adapters: [{
+        target: 'codex',
+        async cancel() {
+          return {}
+        },
+        async discover() {
+          return { callable: true, installed: true, supportsNativeResume: false, target: 'codex' }
+        },
+        async followUp() {
+          throw new Error('detached invocation test should start the first native session')
+        },
+        normalize() {
+          return []
+        },
+        async start() {
+          adapterStarted()
+          await release
+          return {
+            metadata: { executionSource: 'engine-bridge' },
+            summary: 'detached invocation completed',
+          }
+        },
+      }],
+      projectionReceipts: {
+        async assertUsable() {},
+      },
+    })
+    const worker = await createFreeformWorker(target, 'detached-session-invocation-worker')
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    const requestPromise = Promise.resolve(target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Start and stream without blocking the Workbench.', waitForCompletion: false }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }))
+    await started
+    const early = await Promise.race([
+      requestPromise.then(response => ({ response, type: 'response' as const })),
+      new Promise<{ type: 'timeout' }>(resolve => setTimeout(() => resolve({ type: 'timeout' }), 50)),
+    ])
+    if (early.type === 'timeout') {
+      releaseAdapter()
+      await requestPromise.catch(() => undefined)
+      throw new Error('session invocation response waited for engine completion')
+    }
+
+    expect(early.response.status).toBe(201)
+    const body = await early.response.json() as {
+      events: Array<{ invocationId: string, payloadJson: Record<string, unknown>, type: string }>
+      invocation: { id: string, processState: string, sessionId: string, status: string }
+      session: { id: string, status: string }
+    }
+    expect(body.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(body.invocation).toMatchObject({
+      processState: 'spawned',
+      sessionId: session.id,
+      status: 'running',
+    })
+    expect(body.events.at(-1)).toMatchObject({
+      invocationId: body.invocation.id,
+      payloadJson: { invocationId: body.invocation.id, status: 'running' },
+      type: 'status',
+    })
+
+    releaseAdapter()
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const invocationRes = await target.request(`/api/engine/invocations/${body.invocation.id}`)
+      const invocationBody = await invocationRes.json() as { invocation: { status: string, summary: string | null } }
+      if (invocationBody.invocation.status === 'succeeded') {
+        expect(invocationBody.invocation.summary).toBe('detached invocation completed')
+        return
+      }
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    throw new Error('detached invocation did not finish after adapter release')
+  })
+
+  it('records detached session invocation failures after the non-blocking response', async () => {
+    const target = await app(undefined, undefined, undefined, {
+      adapters: [{
+        target: 'codex',
+        async cancel() {
+          return {}
+        },
+        async discover() {
+          return { callable: true, installed: true, supportsNativeResume: false, target: 'codex' }
+        },
+        async followUp() {
+          throw new Error('detached failure test should start the first native session')
+        },
+        normalize() {
+          return []
+        },
+        async start() {
+          throw new Error('detached invocation failed after response')
+        },
+      }],
+      projectionReceipts: {
+        async assertUsable() {},
+      },
+    })
+    const worker = await createFreeformWorker(target, 'detached-session-failure-worker')
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    const response = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Start detached work that will fail after response.', waitForCompletion: false }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(response.status).toBe(201)
+    const body = await response.json() as {
+      invocation: { id: string, sessionId: string, status: string }
+    }
+    expect(body.invocation).toMatchObject({
+      sessionId: session.id,
+      status: 'running',
+    })
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const sessionRes = await target.request(`/api/sessions/${session.id}`)
+      const sessionBody = await sessionRes.json() as {
+        events: Array<{ invocationId: string, payloadJson: Record<string, unknown>, type: string }>
+        invocations: Array<{ error: string | null, id: string, status: string }>
+      }
+      const invocation = sessionBody.invocations.find(item => item.id === body.invocation.id)
+      if (invocation?.status === 'failed') {
+        expect(invocation.error).toContain('detached invocation failed after response')
+        expect(sessionBody.events.some(event =>
+          event.invocationId === body.invocation.id
+          && event.type === 'error'
+          && String(event.payloadJson.message).includes('detached invocation failed after response'),
+        )).toBe(true)
+        return
+      }
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    throw new Error('detached invocation failure was not recorded')
   })
 
   it('surfaces missing projection receipt failures through the session invocation API', async () => {

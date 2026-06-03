@@ -121,6 +121,17 @@ export interface LocalInvocationStartResult {
   files: FileRow[]
 }
 
+interface LocalInvocationStartContext {
+  currentSession: SessionRow
+  input: StartLocalInvocationInput
+  invocation: EngineInvocationRow
+  metadata: Record<string, unknown>
+  prompt: string
+  session: SessionRow
+  sessionEngine: FrozenSessionEngine
+  workspace: WorkspaceRow
+}
+
 export interface LocalInvocationCancelResult {
   session: SessionRow
   invocation: EngineInvocationRow
@@ -345,6 +356,23 @@ export class LocalWorkerRuntime {
   }
 
   async startInvocation(input: StartLocalInvocationInput): Promise<LocalInvocationStartResult> {
+    return this.runInvocationToCompletion(this.createInvocationStart(input))
+  }
+
+  async startInvocationDetached(input: StartLocalInvocationInput): Promise<LocalInvocationStartResult> {
+    const context = this.createInvocationStart(input)
+    void this.runInvocationToCompletion(context).catch((error) => {
+      this.recordInvocationFailure(context, error)
+    })
+    return {
+      session: context.currentSession,
+      invocation: context.invocation,
+      events: listSessionEvents(context.session.id).filter(event => event.invocationId === context.invocation.id),
+      files: [],
+    }
+  }
+
+  private createInvocationStart(input: StartLocalInvocationInput): LocalInvocationStartContext {
     this.requireActiveWorker()
     const session = this.requireActiveSession(input.sessionId)
     const workspace = this.requireActiveWorkspace(session.workspaceId)
@@ -385,8 +413,33 @@ export class LocalWorkerRuntime {
     this.appendEvent(session.id, 'status', { invocationId: invocation.id, status: 'running' }, invocation.id)
     this.bus.emit({ kind: 'event', workspaceId: workspace.id, sessionId: session.id, invocationId: invocation.id, payload: { invocation, status: 'running' }, at: this.#now() })
 
+    return {
+      currentSession,
+      input,
+      invocation,
+      metadata,
+      prompt,
+      session,
+      sessionEngine,
+      workspace,
+    }
+  }
+
+  private async runInvocationToCompletion(context: LocalInvocationStartContext): Promise<LocalInvocationStartResult> {
+    const {
+      currentSession,
+      input,
+      invocation,
+      metadata,
+      prompt,
+      session,
+      sessionEngine,
+      workspace,
+    } = context
+
     try {
       const invocationRoot = await this.ensureInvocationRoot(workspace, session, invocation)
+      await this.materializeInvocationInputPreview(invocationRoot, input.input)
       const result = await this.invokeEngine({
         invocation,
         invocationRoot,
@@ -419,30 +472,41 @@ export class LocalWorkerRuntime {
       }
     }
     catch (error) {
-      const message = redactEngineString(error instanceof Error ? error.message : String(error))
-      const recoveredMetadata = isLocalExecutorFailureLike(error) ? redactEngineRecord(error.partialResult?.metadata ?? {}) : {}
-      const failureCode = engineFailureCode(error)
-      const processState = engineFailureProcessState(error)
-      const failedInvocation = updateEngineInvocation({
-        id: invocation.id,
-        status: 'failed',
-        processState,
-        failureCode,
-        eventLogRef: `aiworker://sessions/${session.id}/invocations/${invocation.id}/events`,
-        error: message,
-        metadataJson: { ...metadata, ...recoveredMetadata },
-        summary: isLocalExecutorFailureLike(error) ? redactEngineNullableString(error.partialResult?.summary ?? null) : null,
-        finishedAt: this.#now(),
-        at: this.#now(),
-      })
-      this.appendEvent(session.id, 'error', { failureCode, invocationId: invocation.id, message }, invocation.id)
-      this.bus.emit({ kind: 'event', workspaceId: workspace.id, sessionId: session.id, invocationId: invocation.id, payload: { invocation: failedInvocation, status: 'failed' }, at: this.#now() })
-      return {
-        session: currentSession,
-        invocation: failedInvocation,
-        events: listSessionEvents(session.id).filter(event => event.invocationId === invocation.id),
-        files: [],
-      }
+      return this.recordInvocationFailure(context, error)
+    }
+  }
+
+  private recordInvocationFailure(context: LocalInvocationStartContext, error: unknown): LocalInvocationStartResult {
+    const {
+      currentSession,
+      invocation,
+      metadata,
+      session,
+      workspace,
+    } = context
+    const message = redactEngineString(error instanceof Error ? error.message : String(error))
+    const recoveredMetadata = isLocalExecutorFailureLike(error) ? redactEngineRecord(error.partialResult?.metadata ?? {}) : {}
+    const failureCode = engineFailureCode(error)
+    const processState = engineFailureProcessState(error)
+    const failedInvocation = updateEngineInvocation({
+      id: invocation.id,
+      status: 'failed',
+      processState,
+      failureCode,
+      eventLogRef: `aiworker://sessions/${session.id}/invocations/${invocation.id}/events`,
+      error: message,
+      metadataJson: { ...metadata, ...recoveredMetadata },
+      summary: isLocalExecutorFailureLike(error) ? redactEngineNullableString(error.partialResult?.summary ?? null) : null,
+      finishedAt: this.#now(),
+      at: this.#now(),
+    })
+    this.appendEvent(session.id, 'error', { failureCode, invocationId: invocation.id, message }, invocation.id)
+    this.bus.emit({ kind: 'event', workspaceId: workspace.id, sessionId: session.id, invocationId: invocation.id, payload: { invocation: failedInvocation, status: 'failed' }, at: this.#now() })
+    return {
+      session: currentSession,
+      invocation: failedInvocation,
+      events: listSessionEvents(session.id).filter(event => event.invocationId === invocation.id),
+      files: [],
     }
   }
 
@@ -826,6 +890,13 @@ export class LocalWorkerRuntime {
     return invocationRoot
   }
 
+  private async materializeInvocationInputPreview(invocationRoot: string, request: string): Promise<void> {
+    const preview = invocationInputPreviewFromRequest(request)
+    if (!preview)
+      return
+    await writeFile(path.join(invocationRoot, 'input-preview.md'), `${preview}\n`, 'utf8')
+  }
+
   private requireWorker(): WorkerRow {
     const worker = getWorker(this.workerId)
     if (!worker)
@@ -1200,6 +1271,39 @@ function redactEngineString(value: string): string {
 
 function redactEngineNullableString(value: string | null): string | null {
   return value == null ? null : redactEngineString(value)
+}
+
+function invocationInputPreviewFromRequest(request: string): string | null {
+  const materialsIndex = attachedSourceMaterialsIndex(request)
+  const requestText = (materialsIndex >= 0 ? request.slice(0, materialsIndex) : request).trim()
+  const preview = requestText || attachedSourceMaterialsPreview(request)
+  if (!preview)
+    return null
+  const redacted = redactEngineString(preview).trim()
+  return redacted.length > 0 ? redacted : null
+}
+
+function attachedSourceMaterialsIndex(value: string): number {
+  const markerIndex = value.indexOf('<attached_source_materials>')
+  if (markerIndex < 0)
+    return -1
+  return markerIndex === 0 || value.charAt(markerIndex - 1) === '\n' ? markerIndex : -1
+}
+
+function attachedSourceMaterialsPreview(request: string): string | null {
+  if (!request.includes('<attached_source_materials>'))
+    return null
+  const names = Array.from(request.matchAll(/<source_material name="([^"]+)"/g), match => unescapeSourceMaterialName(match[1] ?? ''))
+    .filter(name => name.length > 0)
+  return names.length > 0 ? `Attached source materials: ${names.join(', ')}` : 'Attached source materials'
+}
+
+function unescapeSourceMaterialName(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&')
 }
 
 function readRecords(value: unknown): Array<Record<string, unknown>> {

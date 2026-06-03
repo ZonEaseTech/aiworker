@@ -508,11 +508,15 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const workspace = requireWorkerWorkspace(result.data.workerId, result.data.workspaceId)
     return createWorkspaceSessionFromBody(c, state, workspace, result.data)
   })
-  app.get('/api/sessions/:sessionId', (c) => {
+  app.get('/api/sessions/:sessionId', async (c) => {
     const session = getSession(c.req.param('sessionId'))
     if (!session)
       return notFound(c, 'session')
-    return c.json(redactBrokerOutput({ session, invocations: sessionInvocations(session.id), events: listSessionEvents(session.id) }))
+    return c.json(redactBrokerOutput({
+      session,
+      invocations: await sessionInvocationsWithInputPreview(session),
+      events: listSessionEvents(session.id),
+    }))
   })
   app.patch('/api/sessions/:sessionId', async (c) => {
     const session = requireSession(c.req.param('sessionId'))
@@ -1055,6 +1059,92 @@ function sessionInvocations(sessionId: string) {
   return listEngineInvocations(sessionId).sort((left, right) => left.seq - right.seq)
 }
 
+async function sessionInvocationsWithInputPreview(session: SessionRow) {
+  const workspace = getWorkspace(session.workspaceId)
+  const invocations = sessionInvocations(session.id)
+  if (!workspace)
+    return invocations
+  return Promise.all(invocations.map(async (invocation) => {
+    const uiUserDisplayText = await readInvocationInputPreview(workspace, session, invocation.seq)
+    if (!uiUserDisplayText)
+      return invocation
+    return {
+      ...invocation,
+      metadataJson: {
+        ...(invocation.metadataJson ?? {}),
+        uiUserDisplayText,
+      },
+    }
+  }))
+}
+
+async function readInvocationInputPreview(workspace: WorkspaceRow, session: SessionRow, seq: number): Promise<string | null> {
+  const padded = String(seq).padStart(4, '0')
+  const invocationRoot = path.join(workspace.rootPath, '.aiworker', 'sessions', session.id, 'invocations', padded)
+  const preview = await readRedactedInputPreview(path.join(invocationRoot, 'input-preview.md'))
+  if (preview)
+    return preview
+  const promptPath = path.join(invocationRoot, 'prompt.md')
+  try {
+    const prompt = await readFile(promptPath, 'utf8')
+    return invocationInputPreviewFromPrompt(prompt)
+  }
+  catch {
+    return null
+  }
+}
+
+async function readRedactedInputPreview(previewPath: string): Promise<string | null> {
+  try {
+    const preview = (await readFile(previewPath, 'utf8')).trim()
+    if (preview.length === 0)
+      return null
+    const redacted = redactEngineBridgeValue(preview)
+    return typeof redacted === 'string' && redacted.trim().length > 0 ? redacted : null
+  }
+  catch {
+    return null
+  }
+}
+
+function invocationInputPreviewFromPrompt(prompt: string): string | null {
+  const marker = '\nInvocation request:\n'
+  const markerIndex = prompt.lastIndexOf(marker)
+  if (markerIndex < 0)
+    return null
+  const rawRequest = prompt.slice(markerIndex + marker.length)
+  const materialsIndex = attachedSourceMaterialsIndex(rawRequest)
+  const requestText = (materialsIndex >= 0 ? rawRequest.slice(0, materialsIndex) : rawRequest).trim()
+  const preview = requestText || attachedSourceMaterialsPreview(rawRequest)
+  if (!preview)
+    return null
+  const redacted = redactEngineBridgeValue(preview)
+  return typeof redacted === 'string' && redacted.trim().length > 0 ? redacted : null
+}
+
+function attachedSourceMaterialsIndex(value: string): number {
+  const markerIndex = value.indexOf('<attached_source_materials>')
+  if (markerIndex < 0)
+    return -1
+  return markerIndex === 0 || value.charAt(markerIndex - 1) === '\n' ? markerIndex : -1
+}
+
+function attachedSourceMaterialsPreview(request: string): string | null {
+  if (!request.includes('<attached_source_materials>'))
+    return null
+  const names = Array.from(request.matchAll(/<source_material name="([^"]+)"/g), match => unescapeSourceMaterialName(match[1] ?? ''))
+    .filter(name => name.length > 0)
+  return names.length > 0 ? `Attached source materials: ${names.join(', ')}` : 'Attached source materials'
+}
+
+function unescapeSourceMaterialName(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&')
+}
+
 const ENGINE_TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'lost'])
 
 // Stream an invocation's bridge events as text/event-stream frames. Replays
@@ -1464,6 +1554,7 @@ async function createSessionInvocationFromBody(
     engineId?: null | string
     input: string
     metadata?: Record<string, unknown>
+    waitForCompletion?: boolean
   },
   invalidCode: string,
 ): Promise<Response> {
@@ -1518,7 +1609,9 @@ async function createSessionInvocationFromBody(
   }
   let invocationResult
   try {
-    invocationResult = await runtime.startInvocation({ ...invocationInput, sessionId: currentSession.id })
+    invocationResult = body.waitForCompletion === false
+      ? await runtime.startInvocationDetached({ ...invocationInput, sessionId: currentSession.id })
+      : await runtime.startInvocation({ ...invocationInput, sessionId: currentSession.id })
   }
   catch (error) {
     const response = hostMetadataValidationResponse(c, invalidCode, error)

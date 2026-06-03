@@ -3,6 +3,7 @@ import type { ManagedSessionComposerAttachmentLabels } from '@zonease/aiworker-u
 import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/managed-session-composer'
 
 import { submitSessionInvocation } from '../../../features/local-workspace/api/session-invocations'
+import { sessionDraftToDisplayText, sessionDraftToInvocationInput } from './session-draft-input'
 
 export interface ChatComposerLabels {
   ariaLabel: string
@@ -34,11 +35,11 @@ export function ChatComposer({ labels, onSubmitted, sessionId }: ChatComposerPro
       placeholder={labels.placeholder}
       submitAriaLabel={labels.submitAriaLabel}
       onSubmitDraft={async (draft) => {
-        const trimmed = draft.text.trim()
-        if (trimmed.length === 0)
+        const input = sessionDraftToInvocationInput(draft)
+        if (input.length === 0)
           return
-        const result = await submitSessionInvocation(sessionId, { input: trimmed })
-        onSubmitted?.({ invocationId: result.invocation.id, text: trimmed })
+        const result = await submitSessionInvocation(sessionId, { input, waitForCompletion: false })
+        onSubmitted?.({ invocationId: result.invocation.id, text: sessionDraftToDisplayText(draft) })
       }}
     />
   )

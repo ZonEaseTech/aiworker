@@ -136,6 +136,7 @@ export const createBrokerSessionBodySchema = createSessionBodySchema.extend({
 export const createSessionInvocationBodySchema = z.object({
   input: z.string().trim().min(1),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  waitForCompletion: z.boolean().optional(),
 })
 
 export const createBrokerEngineInvocationBodySchema = createSessionInvocationBodySchema.extend({
