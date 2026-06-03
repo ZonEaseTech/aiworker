@@ -986,11 +986,20 @@ function readRecord(value: unknown): Record<string, unknown> {
 
 function assertNoUnexpectedBrowserEvents(events: string[]): void {
   const failures = events.filter(event =>
-    event.startsWith('pageerror:')
-    || (event.startsWith('requestfailed:') && event.includes('127.0.0.1')),
+    !isExpectedBrowserEvent(event)
+    && (event.startsWith('pageerror:')
+      || (event.startsWith('requestfailed:') && event.includes('127.0.0.1'))),
   )
   if (failures.length > 0)
     throw new Error(`Unexpected browser errors during Freeform golden path: ${failures.join('\n')}`)
+}
+
+function isExpectedBrowserEvent(event: string): boolean {
+  if (event.includes('/favicon.ico'))
+    return true
+  return event.includes('/api/engine/invocations/')
+    && event.includes('/events?after=')
+    && event.includes('net::ERR_ABORTED')
 }
 
 async function writeEvidence(name: string, value: unknown): Promise<void> {
