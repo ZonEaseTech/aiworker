@@ -265,7 +265,6 @@ export const en = {
       soulPacksDetail: 'Install, enable, diagnose',
     },
     soulPacks: {
-      apiRoute: routePrefix => `API ${routePrefix}`,
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
       archiveApp: name => `Archive ${name}`,
@@ -274,8 +273,6 @@ export const en = {
       enableApp: name => `Enable ${name}`,
       enabledConnector: 'enabled',
       hint: 'Installed Souls define which vertical products can create workers and workspaces. Diagnostics stay here instead of the worker rail.',
-      permissionsTitle: 'App access',
-      permissionCount: count => `${count} access ${count === 1 ? 'entry' : 'entries'}`,
       title: 'Souls',
       unavailableConnector: 'unavailable',
       updating: 'Updating',

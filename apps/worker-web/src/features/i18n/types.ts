@@ -263,7 +263,6 @@ export interface StaticMessages {
       soulPacksDetail: string
     }
     soulPacks: {
-      apiRoute: (routePrefix: string) => string
       connectorStatus: (connectorId: string, status: string) => string
       connectorsTitle: string
       archiveApp: (name: string) => string
@@ -272,8 +271,6 @@ export interface StaticMessages {
       enableApp: (name: string) => string
       enabledConnector: string
       hint: string
-      permissionsTitle: string
-      permissionCount: (count: number) => string
       title: string
       unavailableConnector: string
       updating: string

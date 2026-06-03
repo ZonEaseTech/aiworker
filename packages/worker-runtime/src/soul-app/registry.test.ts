@@ -126,15 +126,12 @@ describe('Host Soul descriptor registry', () => {
     expect(enabled.descriptor).not.toHaveProperty('external')
 
     const projected = JSON.stringify({
-      permissions: enabled.permissions,
       projectedSoul: enabled.projectedSoul,
       souls: catalog.souls,
     })
     // Host projections expose only descriptor identity, never opaque domain payloads.
     expect(projected).not.toContain('businessWorkflow')
     expect(projected).not.toContain('candidateId')
-    // v1 = worker-owns-workbench：Soul 投影无 mount 权限，permissions 恒为空。
-    expect(enabled.permissions).toEqual([])
   })
 
   it('bootstraps official Freeform without re-enabling disabled apps', async () => {

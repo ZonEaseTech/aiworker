@@ -47,7 +47,6 @@ import {
 } from '@zonease/aiworker-ui/components/field'
 import { Input } from '@zonease/aiworker-ui/components/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@zonease/aiworker-ui/components/item'
-import { Kbd } from '@zonease/aiworker-ui/components/kbd'
 import { ScrollArea } from '@zonease/aiworker-ui/components/scroll-area'
 import { Switch } from '@zonease/aiworker-ui/components/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@zonease/aiworker-ui/components/tabs'
@@ -550,10 +549,7 @@ function SoulAppsSettings({
       <ItemGroup className="gap-2">
         {apps.length > 0
           ? apps.map((app) => {
-              const permissionCount = app.permissions.length
-              const apiRoutePrefix = app.api.routePrefix
               const soulId = app.projectedSoul?.id || app.appId
-              const permissionLabels = app.permissions.map(permissionLabel).filter(isString)
               const busy = busyAppId === app.appId
               const actionLabel = app.status === 'enabled' ? soulAppsCopy.archiveApp(app.name) : soulAppsCopy.enableApp(app.name)
               return (
@@ -576,22 +572,6 @@ function SoulAppsSettings({
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
                     <CardDescription>{soulId}</CardDescription>
-                    <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
-                      <Badge variant="outline">{soulAppsCopy.permissionCount(permissionCount)}</Badge>
-                    </ItemActions>
-                    <ItemGroup className="gap-2" aria-label={`${app.name} app access`}>
-                      {permissionLabels.length > 0
-                        ? (
-                            <ItemContent className="gap-1.5">
-                              <Kbd className="h-auto w-fit uppercase">{soulAppsCopy.permissionsTitle}</Kbd>
-                              <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
-                                {permissionLabels.slice(0, 4).map(label => <Badge key={label} variant="outline">{label}</Badge>)}
-                              </ItemActions>
-                            </ItemContent>
-                          )
-                        : null}
-                    </ItemGroup>
-                    {apiRoutePrefix ? <CardDescription>{soulAppsCopy.apiRoute(apiRoutePrefix)}</CardDescription> : null}
                   </CardContent>
                 </Card>
               )
@@ -613,16 +593,6 @@ function SoulAppsSettings({
         : null}
     </ItemGroup>
   )
-}
-
-function permissionLabel(permission: HostedSoulApp['permissions'][number]): string | null {
-  if (!permission.kind || !permission.action || !permission.target)
-    return null
-  return `${permission.kind}:${permission.action}:${permission.target}`
-}
-
-function isString(value: string | null): value is string {
-  return typeof value === 'string'
 }
 
 function ConnectorsSettings({ copy, settings, update }: { copy: ReturnType<typeof messagesFor>, settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {

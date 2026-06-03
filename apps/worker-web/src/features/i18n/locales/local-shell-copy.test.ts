@@ -30,8 +30,6 @@ function defaultShellCopy(copy: ShellCopy): string[] {
     copy.settings.dialog.subtitle,
     copy.settings.dialog.title,
     copy.settings.externalMcp.pending,
-    copy.settings.soulPacks.permissionsTitle,
-    copy.settings.soulPacks.permissionCount(2),
   ]
 }
 

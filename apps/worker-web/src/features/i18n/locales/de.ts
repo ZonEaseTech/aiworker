@@ -262,7 +262,6 @@ export const de = {
       soulPacksDetail: 'Installieren, aktivieren, diagnostizieren',
     },
     soulPacks: {
-      apiRoute: routePrefix => `API ${routePrefix}`,
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
       archiveApp: name => `${name} archivieren`,
@@ -271,8 +270,6 @@ export const de = {
       enableApp: name => `${name} aktivieren`,
       enabledConnector: 'aktiviert',
       hint: 'Installierte Souls bestimmen, welche vertikalen Produkte Worker und Workspaces erstellen können. Diagnosen bleiben hier statt in der Worker-Leiste.',
-      permissionsTitle: 'App-Zugriff',
-      permissionCount: count => `${count} ${count === 1 ? 'Zugriffseintrag' : 'Zugriffseinträge'}`,
       title: 'Souls',
       unavailableConnector: 'nicht verfügbar',
       updating: 'Aktualisiert',

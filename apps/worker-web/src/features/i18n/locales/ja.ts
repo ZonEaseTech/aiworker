@@ -262,7 +262,6 @@ export const ja = {
       soulPacksDetail: 'インストール / 有効化 / 診断',
     },
     soulPacks: {
-      apiRoute: routePrefix => `API ${routePrefix}`,
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
       archiveApp: name => `${name} をアーカイブ`,
@@ -271,8 +270,6 @@ export const ja = {
       enableApp: name => `${name} を有効化`,
       enabledConnector: '有効',
       hint: 'インストール済み Souls は、作成できる worker と workspace の種類を定義します。診断情報は worker レールではなくここに集約します。',
-      permissionsTitle: 'App アクセス',
-      permissionCount: count => `アクセス項目 ${count} 件`,
       title: 'Souls',
       unavailableConnector: '利用不可',
       updating: '更新中',

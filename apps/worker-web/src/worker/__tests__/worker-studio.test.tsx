@@ -101,19 +101,13 @@ let currentApps: HostedSoulApp[]
 function hostedApp({
   appId,
   appName,
-  permissions = [],
   status = 'enabled',
 }: {
   appId: string
   appName: string
-  permissions?: HostedSoulApp['permissions']
   status?: HostedSoulApp['status']
 }): HostedSoulApp {
   return {
-    api: {
-      localService: null,
-      routePrefix: `/api/apps/${appId}`,
-    },
     appId,
     description: `${appName} descriptor`,
     descriptor: {
@@ -131,7 +125,6 @@ function hostedApp({
     healthMessage: null,
     healthStatus: 'unknown',
     name: appName,
-    permissions,
     projectedSoul: {
       description: `${appName} descriptor`,
       id: appId,

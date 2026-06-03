@@ -3,7 +3,6 @@ import type { SoulDescriptorV1 } from '..'
 import type {
   SoulAppEngineAssets,
   SoulAppEngineTarget,
-  SoulAppPermission,
 } from './manifest'
 
 import path from 'node:path'
@@ -51,24 +50,7 @@ export const soulDescriptorValidationIssueSchema = zod.object({
 })
 export type SoulDescriptorValidationIssue = z.infer<typeof soulDescriptorValidationIssueSchema>
 
-const soulAppPermissionSchema = zod.object({
-  action: zod.enum(['read', 'write', 'create', 'propose', 'mount', 'serve']),
-  kind: zod.enum(['storage', 'connector', 'ui', 'api', 'search']),
-  reason: zod.string().min(1),
-  target: zod.string().min(1),
-})
-
-const hostedSoulAppApiSchema = zod.object({
-  localService: zod.object({
-    command: zod.array(zod.string().min(1)).min(1).readonly(),
-    healthPath: zod.string().min(1),
-  }).nullable(),
-  routePrefix: zod.string().min(1).nullable(),
-})
-export type HostedSoulAppApi = z.infer<typeof hostedSoulAppApiSchema>
-
 export const hostedSoulAppSchema = zod.object({
-  api: hostedSoulAppApiSchema,
   appId: zod.string().min(1),
   description: zod.string().min(1),
   descriptor: zod.custom<SoulDescriptorV1>(),
@@ -77,7 +59,6 @@ export const hostedSoulAppSchema = zod.object({
   healthMessage: zod.string().nullable(),
   healthStatus: soulAppHealthStatusSchema,
   name: zod.string().min(1),
-  permissions: zod.array(soulAppPermissionSchema).readonly(),
   projectedSoul: verticalSoulSchema,
   sourceKind: soulAppInstallSourceKindSchema,
   sourceRef: zod.string().min(1),
@@ -108,7 +89,6 @@ export function buildHostedSoulApp(input: {
 }): HostedSoulApp {
   const identity = descriptorIdentity(input.descriptor)
   return hostedSoulAppSchema.parse({
-    api: apiForDescriptor(input.descriptor),
     appId: identity.id,
     description: identity.description,
     descriptor: input.descriptor,
@@ -117,7 +97,6 @@ export function buildHostedSoulApp(input: {
     healthMessage: input.healthMessage ?? null,
     healthStatus: input.healthStatus ?? 'unknown',
     name: identity.name,
-    permissions: permissionsForDescriptor(input.descriptor),
     projectedSoul: projectSoulAppSoul(input.descriptor, input.status === 'enabled' ? 'available' : 'coming_soon'),
     sourceKind: input.sourceKind,
     sourceRef: input.sourceRef,
@@ -136,21 +115,6 @@ function descriptorIdentity(descriptor: SoulDescriptorV1): {
     id: String(descriptor.identity.id),
     name: String(descriptor.identity.name),
   }
-}
-
-function apiForDescriptor(_descriptor: SoulDescriptorV1): HostedSoulAppApi {
-  // Soul 是 descriptor-only 的 engine-asset 模板：没有 app-owned API，也没有 local
-  // service，因此 localService 与 routePrefix 都为 null。
-  return {
-    localService: null,
-    routePrefix: null,
-  }
-}
-
-function permissionsForDescriptor(_descriptor: SoulDescriptorV1): SoulAppPermission[] {
-  // v1 = worker-owns-workbench：Soul 是 descriptor-only 模板，没有 mounted workbench，
-  // 因此不投影任何 mount 权限，permissions 恒为空。
-  return []
 }
 
 function engineAssetsForDescriptor(descriptor: SoulDescriptorV1): SoulAppEngineAssets {

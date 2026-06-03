@@ -262,7 +262,6 @@ export const zhCN = {
       soulPacksDetail: '安装、启用、诊断',
     },
     soulPacks: {
-      apiRoute: routePrefix => `API ${routePrefix}`,
       connectorStatus: (connectorId, status) => `${connectorId} · ${status}`,
       connectorsTitle: 'Connectors',
       archiveApp: name => `归档 ${name}`,
@@ -271,8 +270,6 @@ export const zhCN = {
       enableApp: name => `启用 ${name}`,
       enabledConnector: '已启用',
       hint: '已安装的 Souls 决定哪些垂直产品可以创建 worker 和 workspace。诊断信息放在这里，不进入 worker 左栏。',
-      permissionsTitle: 'App 访问',
-      permissionCount: count => `${count} 个访问项`,
       title: 'Souls',
       unavailableConnector: '不可用',
       updating: '更新中',

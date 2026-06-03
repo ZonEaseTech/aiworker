@@ -34,7 +34,6 @@ export {
 } from './registry'
 export type {
   HostedSoulApp,
-  HostedSoulAppApi,
   SoulAppHealthStatus,
   SoulAppInstallSourceKind,
   SoulAppRegistryStatus,
