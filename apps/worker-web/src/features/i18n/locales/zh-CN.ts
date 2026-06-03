@@ -86,6 +86,24 @@ export const zhCN = {
     artifactCount: count => `${count} 个输出`,
     byokNeedsKey: 'BYOK 需要提供方、模型和 API key 引用后才能运行会话调用。',
     byokReady: (provider, model) => `${provider} ${model} 已可用于会话调用。`,
+    archiveSession: '归档会话',
+    archiveWorker: '归档 worker',
+    archiveWorkspace: '归档工作区',
+    archiveConfirmation: {
+      cancel: '取消',
+      session: {
+        detail: sessionTitle => `“${sessionTitle}” 将离开活跃会话列表。`,
+        title: '确认归档会话？',
+      },
+      worker: {
+        detail: workerName => `“${workerName}” 及其活跃工作区将离开 Workbench。`,
+        title: '确认归档 worker？',
+      },
+      workspace: {
+        detail: workspaceName => `“${workspaceName}” 及其活跃会话将离开当前 worker。`,
+        title: '确认归档工作区？',
+      },
+    },
     configure: '配置',
     continueSession: '继续会话',
     createSession: '创建会话',

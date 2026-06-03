@@ -36,7 +36,7 @@ export function deriveWorkerStudioLocatorState({
 }: WorkerStudioLocatorInput): WorkerStudioLocatorState {
   const allSessions = data?.sessions ?? []
   const routedWorkspace = route.kind === 'workspace' || route.kind === 'session'
-    ? data?.workspaces.find(workspace => workspace.id === route.workspaceId) ?? null
+    ? data?.workspaces.find(workspace => workspace.id === route.workspaceId && workspace.status === 'active') ?? null
     : null
   const routedWorker = route.kind === 'worker'
     ? data?.workers.find(worker => worker.id === route.workerId) ?? null
@@ -57,7 +57,7 @@ export function deriveWorkerStudioLocatorState({
   const selectedSoulApp = selectedWorker && data
     ? data.apps.find(app => app.appId === selectedWorker.appId || app.projectedSoul?.id === selectedWorker.appId) ?? null
     : null
-  const soulWorkspaces = data?.workspaces.filter(item => item.workerId === selectedWorker?.id) ?? []
+  const soulWorkspaces = data?.workspaces.filter(item => item.workerId === selectedWorker?.id && item.status === 'active') ?? []
   const soulSessions = deriveSoulSessions(allSessions, soulWorkspaces)
   const filteredWorkspaces = deriveFilteredWorkspaces({
     query,
@@ -70,11 +70,12 @@ export function deriveWorkerStudioLocatorState({
     : null
   const explicitSelectedWorkspace = routeWorkspace ?? manuallySelectedWorkspace
   const selectedWorkspace = explicitSelectedWorkspace ?? latest(soulWorkspaces)
-  const routeSession = route.kind === 'session'
-    ? allSessions.find(session => session.id === route.sessionId && session.workspaceId === route.workspaceId) ?? null
+  const routeSession = route.kind === 'session' && routeWorkspace
+    ? allSessions.find(session => session.id === route.sessionId && session.workspaceId === route.workspaceId && session.status === 'active') ?? null
     : null
-  const selectedSession = routeSession
-    ?? (route.kind === 'workspace' ? null : selectedWorkspace ? sessionForWorkspace(selectedWorkspace, allSessions) : latest(soulSessions))
+  const selectedSession = route.kind === 'session'
+    ? routeSession
+    : route.kind === 'workspace' ? null : selectedWorkspace ? sessionForWorkspace(selectedWorkspace, allSessions) : latest(soulSessions)
   const isWorkspaceContextRoute = (route.kind === 'workspace' || route.kind === 'session') && Boolean(selectedWorkspace)
 
   return {
@@ -101,7 +102,7 @@ function deriveSoulSessions(
   soulWorkspaces: LocalWorkspaceData['workspaces'],
 ): LocalWorkspaceData['sessions'] {
   const workspaceIds = new Set(soulWorkspaces.map(item => item.id))
-  return allSessions.filter(session => workspaceIds.has(session.workspaceId))
+  return allSessions.filter(session => workspaceIds.has(session.workspaceId) && session.status === 'active')
 }
 
 function deriveFilteredWorkspaces({

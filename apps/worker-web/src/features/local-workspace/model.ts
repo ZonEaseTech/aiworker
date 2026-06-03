@@ -20,7 +20,9 @@ export function eventsForSession(session: LocalSession, events: LocalSessionEven
 export function sessionForWorkspace(item: LocalWorkspace | null, sessions: LocalSession[]): LocalSession | null {
   if (!item)
     return null
-  return sessions.filter(session => session.workspaceId === item.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
+  return sessions
+    .filter(session => session.workspaceId === item.id && session.status === 'active')
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
 }
 
 export function latest<T extends { updatedAt: string }>(items: T[]): T | null {

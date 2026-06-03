@@ -1,4 +1,5 @@
 import {
+  Archive01Icon,
   PanelLeftIcon,
   Settings02Icon,
   Wrench01Icon,
@@ -14,7 +15,9 @@ import { SidebarMenuButton } from '@zonease/aiworker-ui/components/sidebar'
  * configuration and local settings entry points.
  */
 export function WorkerStudioTopBar({
+  archiveWorkerLabel,
   configureLabel,
+  onArchiveWorker,
   onConfigureWorker,
   onOpenSettings,
   onToggleSidebar,
@@ -22,7 +25,9 @@ export function WorkerStudioTopBar({
   sidebarCollapsed,
   title,
 }: {
+  archiveWorkerLabel: string
   configureLabel: string
+  onArchiveWorker?: () => void
   onConfigureWorker?: () => void
   onOpenSettings: () => void
   onToggleSidebar: () => void
@@ -62,6 +67,20 @@ export function WorkerStudioTopBar({
                   onClick={onConfigureWorker}
                 >
                   <HugeiconsIcon icon={Wrench01Icon} strokeWidth={2} aria-hidden="true" />
+                </SidebarMenuButton>
+              )
+            : null}
+          {onArchiveWorker
+            ? (
+                <SidebarMenuButton
+                  aria-label={archiveWorkerLabel}
+                  className="size-7 w-7 justify-center p-0"
+                  size="sm"
+                  title={archiveWorkerLabel}
+                  type="button"
+                  onClick={onArchiveWorker}
+                >
+                  <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
                 </SidebarMenuButton>
               )
             : null}

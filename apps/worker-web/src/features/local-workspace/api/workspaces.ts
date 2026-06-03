@@ -11,6 +11,10 @@ export function createWorkspace(workerId: string, input: {
   return localJson('/api/workspace-locators', { method: 'POST', body: JSON.stringify({ workerId, ...input }) })
 }
 
+export function archiveWorkspace(workspaceId: string): Promise<{ workspace: LocalWorkspace }> {
+  return localJson(`/api/workspace-locators/${encodeURIComponent(workspaceId)}/archive`, { method: 'POST' })
+}
+
 /**
  * Create a session inside a workspace. Canonical route is `POST /api/sessions`
  * (docs/runtime.md); the body carries locator metadata (worker + workspace) plus
@@ -25,4 +29,8 @@ export function createSession(input: {
   workspaceId: string
 }): Promise<{ session: LocalSession }> {
   return localJson('/api/sessions', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function archiveSession(sessionId: string): Promise<{ session: LocalSession }> {
+  return localJson(`/api/sessions/${encodeURIComponent(sessionId)}/archive`, { method: 'POST' })
 }

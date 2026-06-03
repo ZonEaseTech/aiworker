@@ -5,12 +5,22 @@ import type { SettingsSection } from '../features/settings'
 import type { ChatComposerLabels } from './studio/chat/chat-composer'
 import type { WorkerStudioLocatorState } from './studio/locator'
 
-import { Add01Icon, FolderLibraryIcon } from '@hugeicons/core-free-icons'
+import { Add01Icon, Archive01Icon, FolderLibraryIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { CardContent } from '@zonease/aiworker-ui/components/card'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@zonease/aiworker-ui/components/dialog'
 import { ItemTitle } from '@zonease/aiworker-ui/components/item'
+import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/managed-session-composer'
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { navigateWorkerRoute, useWorkerRoute } from '../app/router/worker-route'
 import {
@@ -19,12 +29,16 @@ import {
   normalizeLocale,
 } from '../features/i18n'
 import {
+  archiveSession,
+  archiveWorker,
+  archiveWorkspace,
   createSession,
   createWorker,
   createWorkspace,
   loadLocalWorkspaceData,
   loadWorkerOverlay,
   saveWorkerOverlayConfigValues,
+  submitSessionInvocation,
 } from '../features/local-workspace/api'
 import { CreateWorkerDialog, CreateWorkspaceDialog } from '../features/local-workspace/components'
 import { projectNamePlaceholder } from '../features/local-workspace/model'
@@ -32,6 +46,7 @@ import { SettingsDialog } from '../features/settings'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
 import { StudioChromeHeader, StudioEmptyState, StudioMainFrame, StudioTitleBlock, WorkerStudioLayout } from './components/studio-shell'
 import { ChatSurface } from './studio/chat/chat-surface'
+import { sessionDraftToInvocationInput } from './studio/chat/session-draft-input'
 import { WorkerStudioTopBar } from './studio/host-chrome'
 import { deriveWorkerStudioLocatorState } from './studio/locator'
 import { WorkspaceTree } from './studio/workspace-tree'
@@ -42,6 +57,17 @@ interface StudioState {
   error: string | null
   loading: boolean
 }
+
+interface InitialChatSubmission {
+  invocationId: string
+  sessionId: string
+  text: string
+}
+
+type PendingArchiveAction
+  = | { kind: 'session', label: string, sessionId: string, workerId: string, workspaceId: string }
+    | { kind: 'workspace', label: string, workerId: string, workspaceId: string }
+    | { kind: 'worker', label: string, workerId: string }
 
 type WorkerStudioResolvedLocatorState = Omit<WorkerStudioLocatorState, 'soulSessions' | 'soulWorkspaces'>
 
@@ -64,6 +90,18 @@ function workerOverlayAssetsReducer(
   return assets
 }
 
+function archiveActionLabel(copy: ReturnType<typeof messagesFor>, kind: PendingArchiveAction['kind']): string {
+  if (kind === 'session')
+    return copy.workspace.archiveSession
+  if (kind === 'workspace')
+    return copy.workspace.archiveWorkspace
+  return copy.workspace.archiveWorker
+}
+
+function archiveConfirmationTitle(copy: ReturnType<typeof messagesFor>, kind: PendingArchiveAction['kind']): string {
+  return copy.workspace.archiveConfirmation[kind].title
+}
+
 export function WorkerStudio() {
   const route = useWorkerRoute()
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
@@ -79,6 +117,8 @@ export function WorkerStudio() {
   const [workerConfigurationOpen, setWorkerConfigurationOpen] = useState(false)
   const [workerOverlayAssets, dispatchWorkerOverlayAssets] = useReducer(workerOverlayAssetsReducer, [])
   const [submitting, setSubmitting] = useState(false)
+  const [initialSessionSubmission, setInitialSessionSubmission] = useState<InitialChatSubmission | null>(null)
+  const [pendingArchive, setPendingArchive] = useState<PendingArchiveAction | null>(null)
 
   const refresh = useCallback(async (): Promise<LocalWorkspaceData | null> => {
     setState(current => ({ ...current, loading: true, error: null }))
@@ -116,17 +156,27 @@ export function WorkerStudio() {
   } = locatorState ?? emptyWorkerStudioLocatorState
   const workspaces = useMemo(
     () => data && selectedWorker
-      ? data.workspaces.filter(workspace => workspace.workerId === selectedWorker.id)
+      ? data.workspaces.filter(workspace => workspace.workerId === selectedWorker.id && workspace.status === 'active')
       : [],
     [data, selectedWorker],
   )
   const selectedWorkerOverlayId = selectedWorker?.id ?? null
   const sessionsForWorkspace = useCallback(
     (workspace: LocalWorkspace) => allSessions
-      .filter(session => session.workspaceId === workspace.id)
+      .filter(session => session.workspaceId === workspace.id && session.status === 'active')
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [allSessions],
   )
+
+  useEffect(() => {
+    if (route.kind !== 'session' || !selectedWorkspace || selectedSession)
+      return
+    navigateWorkerRoute({
+      kind: 'workspace',
+      workerId: selectedWorkspace.workerId,
+      workspaceId: selectedWorkspace.id,
+    }, { replace: true })
+  }, [route.kind, selectedSession, selectedWorkspace])
 
   const availableSouls = useMemo(
     () => data?.souls.filter(soul => soul.status === 'available') ?? [],
@@ -261,7 +311,7 @@ export function WorkerStudio() {
   const startSession = useCallback(async (workspace: LocalWorkspace) => {
     if (!selectedWorker)
       return
-    const nextIndex = allSessions.filter(session => session.workspaceId === workspace.id).length + 1
+    const nextIndex = sessionsForWorkspace(workspace).length + 1
     const result = await createSession({
       title: `${copy.workspace.newSession} ${nextIndex}`,
       workerId: workspace.workerId,
@@ -274,7 +324,96 @@ export function WorkerStudio() {
       workerId: workspace.workerId,
       workspaceId: workspace.id,
     })
-  }, [allSessions, copy.workspace.newSession, refresh, selectedWorker])
+  }, [copy.workspace.newSession, refresh, selectedWorker, sessionsForWorkspace])
+
+  const startSessionWithInput = useCallback(async (workspace: LocalWorkspace, input: string) => {
+    if (!selectedWorker)
+      return
+    const trimmed = input.trim()
+    if (trimmed.length === 0)
+      return
+    const nextIndex = sessionsForWorkspace(workspace).length + 1
+    const sessionResult = await createSession({
+      title: `${copy.workspace.newSession} ${nextIndex}`,
+      workerId: workspace.workerId,
+      workspaceId: workspace.id,
+    })
+    const invocationResult = await submitSessionInvocation(sessionResult.session.id, { input: trimmed, waitForCompletion: false })
+    setInitialSessionSubmission({
+      invocationId: invocationResult.invocation.id,
+      sessionId: sessionResult.session.id,
+      text: trimmed,
+    })
+    await refresh()
+    navigateWorkerRoute({
+      kind: 'session',
+      sessionId: sessionResult.session.id,
+      workerId: workspace.workerId,
+      workspaceId: workspace.id,
+    })
+  }, [copy.workspace.newSession, refresh, selectedWorker, sessionsForWorkspace])
+
+  const displayedSession = useMemo(
+    () => route.kind === 'session'
+      ? selectedSession
+      : selectedSession ?? (selectedWorkspace ? sessionsForWorkspace(selectedWorkspace)[0] ?? null : null),
+    [route.kind, selectedSession, selectedWorkspace, sessionsForWorkspace],
+  )
+
+  const requestArchiveSelectedWorker = useCallback(() => {
+    if (!selectedWorker)
+      return
+    setPendingArchive({ kind: 'worker', label: selectedWorker.name, workerId: selectedWorker.id })
+  }, [selectedWorker])
+
+  const requestArchiveSelectedWorkspace = useCallback(() => {
+    if (!selectedWorkspace || !selectedWorker)
+      return
+    setPendingArchive({
+      kind: 'workspace',
+      label: selectedWorkspace.name,
+      workerId: selectedWorker.id,
+      workspaceId: selectedWorkspace.id,
+    })
+  }, [selectedWorker, selectedWorkspace])
+
+  const requestArchiveSelectedSession = useCallback(() => {
+    if (!displayedSession || !selectedWorkspace)
+      return
+    setPendingArchive({
+      kind: 'session',
+      label: displayedSession.title,
+      sessionId: displayedSession.id,
+      workerId: selectedWorkspace.workerId,
+      workspaceId: selectedWorkspace.id,
+    })
+  }, [displayedSession, selectedWorkspace])
+
+  const confirmPendingArchive = useCallback(async () => {
+    const action = pendingArchive
+    if (!action)
+      return
+    setPendingArchive(null)
+    if (action.kind === 'worker') {
+      await archiveWorker(action.workerId)
+      navigateWorkerRoute({ kind: 'home' })
+      await refresh()
+      return
+    }
+    if (action.kind === 'workspace') {
+      await archiveWorkspace(action.workspaceId)
+      navigateWorkerRoute({ kind: 'worker', workerId: action.workerId })
+      await refresh()
+      return
+    }
+    await archiveSession(action.sessionId)
+    navigateWorkerRoute({
+      kind: 'workspace',
+      workerId: action.workerId,
+      workspaceId: action.workspaceId,
+    })
+    await refresh()
+  }, [pendingArchive, refresh])
 
   const composerLabels: ChatComposerLabels = useMemo(() => ({
     ariaLabel: copy.workspace.createSessionPlaceholder,
@@ -319,10 +458,12 @@ export function WorkerStudio() {
         appearance={appearance}
         header={(
           <WorkerStudioTopBar
+            archiveWorkerLabel={copy.workspace.archiveWorker}
             configureLabel={copy.workspace.configure}
             settingsLabel={copy.accessibility.openSettings}
             sidebarCollapsed={sidebarCollapsed}
             title={topBarTitle}
+            onArchiveWorker={selectedWorker ? requestArchiveSelectedWorker : undefined}
             onConfigureWorker={selectedWorker ? () => setWorkerConfigurationOpen(true) : undefined}
             onOpenSettings={() => openSettings('execution')}
             onToggleSidebar={() => setSidebarCollapsed(current => !current)}
@@ -379,6 +520,31 @@ export function WorkerStudio() {
                   />
                 )
               : null}
+
+            <Dialog open={pendingArchive !== null} onOpenChange={open => !open && setPendingArchive(null)}>
+              {pendingArchive
+                ? (
+                    <DialogContent closeButtonLabel={copy.accessibility.closeDialog}>
+                      <DialogHeader>
+                        <DialogTitle>{archiveConfirmationTitle(copy, pendingArchive.kind)}</DialogTitle>
+                        <DialogDescription>
+                          {copy.workspace.archiveConfirmation[pendingArchive.kind].detail(pendingArchive.label)}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <DialogClose asChild>
+                          <Button type="button" variant="outline">
+                            {copy.workspace.archiveConfirmation.cancel}
+                          </Button>
+                        </DialogClose>
+                        <Button type="button" variant="destructive" onClick={() => void confirmPendingArchive()}>
+                          {archiveActionLabel(copy, pendingArchive.kind)}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  )
+                : null}
+            </Dialog>
           </>
         )}
         mainLabel={copy.accessibility.soulProjectsAndArtifacts}
@@ -409,13 +575,17 @@ export function WorkerStudio() {
             hasWorker={Boolean(selectedWorker)}
             hasWorkspaces={workspaces.length > 0}
             isWorkspaceContextRoute={isWorkspaceContextRoute}
-            selectedSession={selectedSession ?? (selectedWorkspace ? sessionsForWorkspace(selectedWorkspace)[0] ?? null : null)}
+            initialSessionSubmission={initialSessionSubmission}
+            onArchiveSession={requestArchiveSelectedSession}
+            onArchiveWorkspace={requestArchiveSelectedWorkspace}
+            selectedSession={displayedSession}
             selectedSoulName={selectedSoulCopy?.name ?? selectedSoul?.id ?? copy.app.brand}
             selectedWorkspace={selectedWorkspace}
             onCreateWorkspace={openWorkspaceCreation}
-            onStartSession={() => {
-              if (selectedWorkspace)
-                void startSession(selectedWorkspace)
+            onStartSessionWithInput={(input) => {
+              if (!selectedWorkspace)
+                return undefined
+              return startSessionWithInput(selectedWorkspace, input)
             }}
           />
         )}
@@ -441,9 +611,12 @@ function WorkbenchMain({
   copy,
   hasWorker,
   hasWorkspaces,
+  initialSessionSubmission,
   isWorkspaceContextRoute,
+  onArchiveSession,
+  onArchiveWorkspace,
   onCreateWorkspace,
-  onStartSession,
+  onStartSessionWithInput,
   selectedSession,
   selectedSoulName,
   selectedWorkspace,
@@ -452,9 +625,12 @@ function WorkbenchMain({
   copy: ReturnType<typeof messagesFor>
   hasWorker: boolean
   hasWorkspaces: boolean
+  initialSessionSubmission: InitialChatSubmission | null
   isWorkspaceContextRoute: boolean
+  onArchiveSession: () => void
+  onArchiveWorkspace: () => void
   onCreateWorkspace: () => void
-  onStartSession: () => void
+  onStartSessionWithInput: (input: string) => Promise<void> | void
   selectedSession: LocalSession | null
   selectedSoulName: string
   selectedWorkspace: LocalWorkspace | null
@@ -462,13 +638,27 @@ function WorkbenchMain({
   if (isWorkspaceContextRoute && selectedSession) {
     return (
       <>
-        <StudioChromeHeader>
+        <StudioChromeHeader
+          actions={(
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label={copy.workspace.archiveSession}
+              title={copy.workspace.archiveSession}
+              onClick={onArchiveSession}
+            >
+              <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
+            </Button>
+          )}
+        >
           <StudioTitleBlock kicker={copy.workspace.currentSession} title={selectedSession.title} />
         </StudioChromeHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-7 py-4 max-md:px-4">
           <ChatSurface
             key={selectedSession.id}
             composerLabels={composerLabels}
+            initialActive={initialSessionSubmission?.sessionId === selectedSession.id ? initialSessionSubmission : null}
             sessionId={selectedSession.id}
             transcriptAriaLabel={copy.workspace.eventStream}
           />
@@ -479,19 +669,35 @@ function WorkbenchMain({
 
   if (isWorkspaceContextRoute && selectedWorkspace) {
     return (
-      <StudioMainFrame kicker={copy.workspace.currentWorkspace} title={selectedWorkspace.name}>
-        <StudioEmptyState
-          icon={<HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />}
-          title={copy.workspace.noWorkspaceSessions}
-          detail={copy.workspace.createSessionPrompt(selectedWorkspace.name)}
-          action={(
-            <Button type="button" size="lg" onClick={onStartSession}>
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
-              {copy.workspace.newSession}
+      <>
+        <StudioChromeHeader
+          actions={(
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label={copy.workspace.archiveWorkspace}
+              title={copy.workspace.archiveWorkspace}
+              onClick={onArchiveWorkspace}
+            >
+              <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
             </Button>
           )}
-        />
-      </StudioMainFrame>
+        >
+          <StudioTitleBlock kicker={copy.workspace.currentWorkspace} title={selectedWorkspace.name} />
+        </StudioChromeHeader>
+        <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-7 py-4 max-md:px-4">
+          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-y-auto">
+            <StudioEmptyState
+              className="mx-auto max-w-xl items-center text-center"
+              icon={<HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />}
+              title={copy.workspace.noWorkspaceSessions}
+              detail={copy.workspace.createSessionPrompt(selectedWorkspace.name)}
+            />
+          </div>
+          <InitialWorkspaceComposer labels={composerLabels} onSubmit={onStartSessionWithInput} />
+        </CardContent>
+      </>
     )
   }
 
@@ -519,5 +725,28 @@ function WorkbenchMain({
             )}
       />
     </StudioMainFrame>
+  )
+}
+
+function InitialWorkspaceComposer({
+  labels,
+  onSubmit,
+}: {
+  labels: ChatComposerLabels
+  onSubmit: (input: string) => Promise<void> | void
+}) {
+  return (
+    <ManagedSessionComposer
+      ariaLabel={labels.ariaLabel}
+      attachmentLabels={labels.attachment}
+      placeholder={labels.placeholder}
+      submitAriaLabel={labels.submitAriaLabel}
+      onSubmitDraft={async (draft) => {
+        const input = sessionDraftToInvocationInput(draft)
+        if (input.length === 0)
+          return
+        await onSubmit(input)
+      }}
+    />
   )
 }

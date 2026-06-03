@@ -86,6 +86,24 @@ export const de = {
     artifactCount: count => `${count} Ausgaben`,
     byokNeedsKey: 'BYOK benötigt Provider, Modell und API-Key-Referenz, bevor Session-Aufrufe laufen können.',
     byokReady: (provider, model) => `${provider} ${model} ist für Session-Aufrufe konfiguriert.`,
+    archiveSession: 'Session archivieren',
+    archiveWorker: 'Worker archivieren',
+    archiveWorkspace: 'Workspace archivieren',
+    archiveConfirmation: {
+      cancel: 'Abbrechen',
+      session: {
+        detail: sessionTitle => `"${sessionTitle}" wird aus der aktiven Session-Liste entfernt.`,
+        title: 'Session archivieren?',
+      },
+      worker: {
+        detail: workerName => `"${workerName}" und seine aktiven Workspaces verlassen die Workbench.`,
+        title: 'Worker archivieren?',
+      },
+      workspace: {
+        detail: workspaceName => `"${workspaceName}" und seine aktiven Sessions verlassen diesen Worker.`,
+        title: 'Workspace archivieren?',
+      },
+    },
     configure: 'Konfigurieren',
     continueSession: 'Session fortsetzen',
     createSession: 'Session erstellen',

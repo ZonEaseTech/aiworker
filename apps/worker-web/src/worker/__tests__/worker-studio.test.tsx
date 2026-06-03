@@ -1,4 +1,4 @@
-import type { HostedSoulApp, LocalSessionEvent, LocalSettingsConfig, LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-descriptor'
+import type { HostedSoulApp, LocalSession, LocalSessionEvent, LocalSettingsConfig, LocalWorker, LocalWorkerOverlayAsset, LocalWorkspace } from '@zonease/aiworker-soul-descriptor'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -18,6 +18,10 @@ function selectSettingsTab(tab: HTMLElement) {
   fireEvent.mouseDown(tab, { button: 0, ctrlKey: false })
 }
 
+function expectNoArchiveRequest(pathname: string) {
+  expect(fetch).not.toHaveBeenCalledWith(pathname, expect.objectContaining({ method: 'POST' }))
+}
+
 const workspace = {
   createdAt: now,
   id: 'workspace-1',
@@ -29,11 +33,11 @@ const workspace = {
   sourcePointersJson: [],
   metadataJson: {},
   updatedAt: now,
-}
+} satisfies LocalWorkspace
 
 const workers = [
   { createdAt: now, defaultEngineId: 'codex', id: 'primary-worker', metadataJson: {}, name: 'Primary', appId: PRIMARY_SOUL_ID, status: 'active', updatedAt: now },
-]
+] satisfies LocalWorker[]
 
 const souls = [
   { description: 'Primary operations workspace', id: PRIMARY_SOUL_ID, name: 'Demo Primary', status: 'available' },
@@ -68,7 +72,7 @@ const sessionRecord = {
   updatedAt: now,
   workerId: 'primary-worker',
   workspaceId: 'workspace-1',
-}
+} satisfies LocalSession
 
 const eventRecord = {
   createdAt: now,
@@ -82,10 +86,10 @@ const eventRecord = {
 
 let currentEvents: LocalSessionEvent[]
 let currentSettings: typeof baseSettings
-let currentSessions: typeof sessionRecord[]
+let currentSessions: LocalSession[]
 let currentSouls: typeof souls
-let currentWorkers: typeof workers
-let currentWorkspaces: typeof workspace[]
+let currentWorkers: LocalWorker[]
+let currentWorkspaces: LocalWorkspace[]
 let currentWorkerOverlayAssets: LocalWorkerOverlayAsset[]
 let hideCreatedWorkerFromWorkerList: boolean
 let lastMessageRequestBody: Record<string, unknown> | null
@@ -295,6 +299,13 @@ beforeEach(() => {
         currentWorkers = [created, ...currentWorkers]
       return json({ worker: created }, 201)
     }
+    const workerArchiveMatch = requestUrl.pathname.match(/^\/api\/workers\/([^/]+)\/archive$/)
+    if (workerArchiveMatch && method === 'POST') {
+      const workerId = decodeURIComponent(workerArchiveMatch[1]!)
+      const archived = currentWorkers.find(worker => worker.id === workerId)
+      currentWorkers = currentWorkers.map(worker => worker.id === workerId ? { ...worker, status: 'archived' } : worker)
+      return json({ worker: archived ? { ...archived, status: 'archived' } : null })
+    }
     const workerConfigReadMatch = requestUrl.pathname.match(/^\/api\/workers\/([^/]+)\/config$/)
     if (workerConfigReadMatch && method === 'GET') {
       const workerId = decodeURIComponent(workerConfigReadMatch[1]!)
@@ -323,6 +334,13 @@ beforeEach(() => {
       currentWorkspaces = [created, ...currentWorkspaces]
       return json({ workspace: created }, 201)
     }
+    const workspaceArchiveMatch = requestUrl.pathname.match(/^\/api\/workspace-locators\/([^/]+)\/archive$/)
+    if (workspaceArchiveMatch && method === 'POST') {
+      const workspaceId = decodeURIComponent(workspaceArchiveMatch[1]!)
+      const archived = currentWorkspaces.find(item => item.id === workspaceId)
+      currentWorkspaces = currentWorkspaces.map(item => item.id === workspaceId ? { ...item, status: 'archived' } : item)
+      return json({ workspace: archived ? { ...archived, status: 'archived' } : null })
+    }
     if (requestUrl.pathname === '/api/workspace-locators')
       return json({ workspaces: currentWorkspaces })
     if (requestUrl.pathname === '/api/sessions' && method === 'POST') {
@@ -336,9 +354,25 @@ beforeEach(() => {
       currentSessions = [created, ...currentSessions]
       return json({ session: created }, 201)
     }
-    if (requestUrl.pathname === '/api/sessions/session-1/invocations' && method === 'POST') {
+    const sessionInvocationMatch = requestUrl.pathname.match(/^\/api\/sessions\/([^/]+)\/invocations$/)
+    if (sessionInvocationMatch && method === 'POST') {
+      const sessionId = decodeURIComponent(sessionInvocationMatch[1]!)
       lastMessageRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
-      return json({ artifacts: [], events: [], files: [], invocation: { id: 'invocation-1', status: 'queued' }, session: sessionRecord }, 201)
+      const session = currentSessions.find(item => item.id === sessionId) ?? { ...sessionRecord, id: sessionId }
+      return json({
+        artifacts: [],
+        events: [],
+        files: [],
+        invocation: { id: `invocation-${sessionId}`, status: 'queued' },
+        session,
+      }, 201)
+    }
+    const sessionArchiveMatch = requestUrl.pathname.match(/^\/api\/sessions\/([^/]+)\/archive$/)
+    if (sessionArchiveMatch && method === 'POST') {
+      const sessionId = decodeURIComponent(sessionArchiveMatch[1]!)
+      const archived = currentSessions.find(session => session.id === sessionId)
+      currentSessions = currentSessions.map(session => session.id === sessionId ? { ...session, status: 'archived' } : session)
+      return json({ session: archived ? { ...archived, status: 'archived' } : null })
     }
     const invocationEventsMatch = requestUrl.pathname.match(/^\/api\/engine\/invocations\/([^/]+)\/events$/)
     if (invocationEventsMatch && method === 'GET') {
@@ -587,7 +621,7 @@ describe('worker studio', () => {
     expect(await screen.findByRole('dialog', { name: 'Create workspace' })).toBeTruthy()
   })
 
-  it('shows a start-first-session empty state for a workspace with no sessions', async () => {
+  it('starts the first session from an in-page workspace composer', async () => {
     currentSessions = []
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
@@ -598,7 +632,91 @@ describe('worker studio', () => {
     expect(empty?.className).toContain('items-center')
     expect(empty?.className).toContain('text-center')
     expect(empty?.className).not.toContain('items-start')
-    expect(within(main).getByRole('button', { name: 'New session' })).toBeTruthy()
+
+    fireEvent.change(within(main).getByRole('textbox'), { target: { value: 'Start from the empty workspace composer.' } })
+    fireEvent.click(within(main).getByRole('button', { name: 'Send invocation' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/sessions', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).toHaveBeenCalledWith('/api/sessions/session-created/invocations', expect.objectContaining({ method: 'POST' }))
+      expect(window.location.pathname).toBe('/workers/primary-worker/workspaces/workspace-1/sessions/session-created')
+    })
+    expect(lastSessionRequestBody).toMatchObject({ workerId: 'primary-worker', workspaceId: 'workspace-1' })
+    expect(lastMessageRequestBody).toMatchObject({ input: 'Start from the empty workspace composer.' })
+    await waitFor(() => {
+      expect(within(main).getByText('Start from the empty workspace composer.')).toBeTruthy()
+    })
+  })
+
+  it('archives the selected session from the browser and returns to the workspace', async () => {
+    window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1/sessions/session-1')
+    render(<WorkerStudio />)
+
+    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    fireEvent.click(within(main).getByRole('button', { name: 'Archive session' }))
+    expectNoArchiveRequest('/api/sessions/session-1/archive')
+
+    const firstDialog = await screen.findByRole('dialog', { name: 'Archive session?' })
+    fireEvent.click(within(firstDialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Archive session?' })).toBeNull()
+    })
+    expectNoArchiveRequest('/api/sessions/session-1/archive')
+
+    fireEvent.click(within(main).getByRole('button', { name: 'Archive session' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Archive session?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive session' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/sessions/session-1/archive', expect.objectContaining({ method: 'POST' }))
+      expect(window.location.pathname).toBe('/workers/primary-worker/workspaces/workspace-1')
+    })
+    expect(currentSessions.find(session => session.id === 'session-1')?.status).toBe('archived')
+    expect(within(main).getByText('No sessions in this workspace yet.')).toBeTruthy()
+    expect(within(main).queryByRole('log', { name: 'Session events' })).toBeNull()
+    expect(within(screen.getByTestId('workspace-tree')).queryByRole('button', { name: 'Open session Screen request' })).toBeNull()
+  })
+
+  it('archives the selected workspace from the browser and returns to the worker', async () => {
+    currentSessions = []
+    window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    fireEvent.click(within(main).getByRole('button', { name: 'Archive workspace' }))
+    expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
+
+    const dialog = await screen.findByRole('dialog', { name: 'Archive workspace?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive workspace' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/workspace-locators/workspace-1/archive', expect.objectContaining({ method: 'POST' }))
+      expect(window.location.pathname).toBe('/workers/primary-worker')
+    })
+    expect(currentWorkspaces.find(item => item.id === 'workspace-1')?.status).toBe('archived')
+    expect(within(main).getByText('No workspaces yet')).toBeTruthy()
+    expect(within(screen.getByTestId('workspace-tree')).queryByText('Demo Workspace')).toBeNull()
+  })
+
+  it('archives the selected worker from the browser and returns to first-run worker creation', async () => {
+    window.history.replaceState(null, '', '/workers/primary-worker')
+    render(<WorkerStudio />)
+
+    await screen.findByLabelText('Worker Workbench')
+    fireEvent.click(screen.getByRole('button', { name: 'Archive worker' }))
+    expectNoArchiveRequest('/api/workers/primary-worker/archive')
+
+    const dialog = await screen.findByRole('dialog', { name: 'Archive worker?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive worker' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/workers/primary-worker/archive', expect.objectContaining({ method: 'POST' }))
+      expect(window.location.pathname).toBe('/')
+    })
+    expect(currentWorkers.find(worker => worker.id === 'primary-worker')?.status).toBe('archived')
+    const main = screen.getByLabelText('Soul workspaces and sessions')
+    expect(within(main).getByRole('button', { name: 'Create worker' })).toBeTruthy()
+    expect(screen.getByTestId('workspace-tree').textContent).not.toContain('Demo Workspace')
   })
 
   it('renders the latest session chat for a workspace route that already has sessions', async () => {

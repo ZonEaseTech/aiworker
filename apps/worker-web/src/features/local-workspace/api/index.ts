@@ -43,6 +43,7 @@ export {
   projectWorkerWorkspaceOverlay,
 } from './worker-overlays'
 export {
+  archiveWorker,
   createWorker,
 } from './workers'
 export {
@@ -51,6 +52,8 @@ export {
   loadLocalWorkspaceData,
 } from './workspace-data'
 export {
+  archiveSession,
+  archiveWorkspace,
   createSession,
   createWorkspace,
 } from './workspaces'

@@ -186,21 +186,21 @@ try {
     const streamedSlots = ['transcript-turn', 'status-message']
     const deadline = Date.now() + 8000
     let userText: null | string = null
+    let userTexts: string[] = []
     let slots: string[] = []
     while (Date.now() < deadline) {
       const query = (selector: string) => document.querySelector(selector)
-      const userMessage = query('[data-transcript-slot="user-message"]')
-      if (userMessage)
-        userText = (userMessage.textContent ?? '').trim()
+      userTexts = Array.from(document.querySelectorAll('[data-transcript-slot="user-message"]')).map(node => (node.textContent ?? '').trim())
+      userText = userTexts.find(text => text.includes(needle)) ?? null
       slots = streamedSlots.filter(slot => query(`[data-transcript-slot="${slot}"]`))
       if (userText?.includes(needle) && slots.length > 0)
-        return { slots, userText }
+        return { slots, userText, userTexts }
       await new Promise(resolve => setTimeout(resolve, 100))
     }
-    return { slots, userText }
+    return { slots, userText, userTexts }
   }, composerMessage)
   if (transcript.userText === null || !transcript.userText.includes(composerMessage))
-    throw new Error(`Worker Workbench chat did not render the composer's user message. got=${JSON.stringify(transcript.userText)}`)
+    throw new Error(`Worker Workbench chat did not render the composer's user message. got=${JSON.stringify(transcript.userTexts)}`)
   if (transcript.slots.length === 0)
     throw new Error(`Worker Workbench chat rendered no engine transcript turn (transcript-turn/status-message) from the invocation, only the echoed user message.`)
 

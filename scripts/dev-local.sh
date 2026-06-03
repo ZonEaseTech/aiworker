@@ -68,6 +68,53 @@ wait_for_health() {
   return 1
 }
 
+read_daemon_pid() {
+  local pid_file="${AIWORKER_HOME}/aiworker-daemon.pid"
+  local pid
+
+  for _ in $(seq 1 20); do
+    if [[ -s "$pid_file" ]]; then
+      pid="$(tr -d '[:space:]' < "$pid_file")"
+      if [[ "$pid" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "$pid"
+        return 0
+      fi
+    fi
+    sleep 0.1
+  done
+
+  echo "[dev] daemon pid file was not created or was invalid: $pid_file" >&2
+  return 1
+}
+
+stop_daemon_after_start_failure() {
+  local listener
+  local pid
+
+  listener="$(listener_for_port "$PORT")"
+  pid="$(printf '%s\n' "$listener" | awk 'NR > 1 { print $2; exit }')"
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    echo "[dev] cleaning up daemon listener pid=$pid after startup failure" >&2
+    kill -TERM "$pid" 2>/dev/null || true
+  fi
+}
+
+start_daemon_with_worker() {
+  echo "[dev] ensuring default Worker and starting daemon via aiworker start"
+  (
+    cd "$ROOT_DIR"
+    AIWORKER_HOME="$AIWORKER_HOME" \
+      AIWORKER_WORKER_HOST="$AIWORKER_WORKER_HOST" \
+      PORT="$PORT" \
+      bun apps/worker-cli/src/aiworker.ts start --no-open --host "$AIWORKER_HOST" --port "$PORT" >/dev/null
+  )
+  if ! DAEMON_PID="$(read_daemon_pid)"; then
+    stop_daemon_after_start_failure
+    return 1
+  fi
+  echo "[dev] daemon pid=$DAEMON_PID"
+}
+
 ensure_port_free "$PORT"
 ensure_port_free "$AIWORKER_WEB_PORT"
 mkdir -p "$AIWORKER_HOME"
@@ -76,14 +123,7 @@ trap cleanup EXIT INT TERM
 
 echo "[dev] AIWORKER_HOME=$AIWORKER_HOME"
 echo "[dev] starting daemon on http://${AIWORKER_HOST}:${PORT}"
-(
-  cd "$ROOT_DIR"
-  AIWORKER_HOME="$AIWORKER_HOME" \
-    AIWORKER_WORKER_HOST="$AIWORKER_WORKER_HOST" \
-    PORT="$PORT" \
-    bun apps/worker-cli/src/aiworker.ts daemon foreground --host "$AIWORKER_HOST" --port "$PORT"
-) &
-DAEMON_PID=$!
+start_daemon_with_worker
 
 wait_for_health
 
@@ -108,7 +148,8 @@ done
 
 status=0
 if ! kill -0 "$DAEMON_PID" 2>/dev/null; then
-  wait "$DAEMON_PID" || status=$?
+  wait "$DAEMON_PID" 2>/dev/null || true
+  status=1
 elif ! kill -0 "$WEB_PID" 2>/dev/null; then
   wait "$WEB_PID" || status=$?
 fi

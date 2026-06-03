@@ -89,6 +89,24 @@ export const en = {
     artifactCount: count => `${count} outputs`,
     byokNeedsKey: 'BYOK needs a provider, model, and API key reference before session invocations can run.',
     byokReady: (provider, model) => `${provider} ${model} is configured for session invocations.`,
+    archiveSession: 'Archive session',
+    archiveWorker: 'Archive worker',
+    archiveWorkspace: 'Archive workspace',
+    archiveConfirmation: {
+      cancel: 'Cancel',
+      session: {
+        detail: sessionTitle => `"${sessionTitle}" will leave the active session list.`,
+        title: 'Archive session?',
+      },
+      worker: {
+        detail: workerName => `"${workerName}" and its active workspaces will leave the Workbench.`,
+        title: 'Archive worker?',
+      },
+      workspace: {
+        detail: workspaceName => `"${workspaceName}" and its active sessions will leave this worker.`,
+        title: 'Archive workspace?',
+      },
+    },
     configure: 'Configure',
     continueSession: 'Continue session',
     createSession: 'Create session',

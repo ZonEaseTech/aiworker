@@ -107,6 +107,45 @@ describe('deriveWorkerStudioLocatorState', () => {
     expect(state.selectedSoul?.id).toBe('aiworker-demo-primary')
   })
 
+  it('does not select or list archived workspaces and sessions', () => {
+    const data = createData({
+      souls: [soul({ id: 'aiworker-demo-primary', status: 'available' })],
+      workers: [worker({ id: 'primary-worker', appId: 'aiworker-demo-primary' })],
+      workspaces: [
+        workspace({ id: 'active-workspace', name: 'Active Workspace', workerId: 'primary-worker' }),
+        workspace({ id: 'archived-workspace', name: 'Archived Workspace', status: 'archived', workerId: 'primary-worker' }),
+      ],
+      sessions: [
+        session({ id: 'active-session', workspaceId: 'active-workspace', workerId: 'primary-worker' }),
+        session({ id: 'archived-session', status: 'archived', workspaceId: 'active-workspace', workerId: 'primary-worker' }),
+        session({ id: 'orphaned-session', workspaceId: 'archived-workspace', workerId: 'primary-worker' }),
+      ],
+    })
+
+    const workerState = deriveWorkerStudioLocatorState({
+      data,
+      route: { kind: 'worker', workerId: 'primary-worker' },
+    })
+    expect(workerState.soulWorkspaces.map(item => item.id)).toEqual(['active-workspace'])
+    expect(workerState.soulSessions.map(item => item.id)).toEqual(['active-session'])
+
+    const archivedRouteState = deriveWorkerStudioLocatorState({
+      data,
+      route: { kind: 'session', workerId: 'primary-worker', workspaceId: 'archived-workspace', sessionId: 'orphaned-session' },
+    })
+    expect(archivedRouteState.isWorkspaceContextRoute).toBe(false)
+    expect(archivedRouteState.selectedWorkspace).toBeNull()
+    expect(archivedRouteState.selectedSession).toBeNull()
+
+    const archivedSessionRouteState = deriveWorkerStudioLocatorState({
+      data,
+      route: { kind: 'session', workerId: 'primary-worker', workspaceId: 'active-workspace', sessionId: 'archived-session' },
+    })
+    expect(archivedSessionRouteState.isWorkspaceContextRoute).toBe(true)
+    expect(archivedSessionRouteState.selectedWorkspace?.id).toBe('active-workspace')
+    expect(archivedSessionRouteState.selectedSession).toBeNull()
+  })
+
   it('filters workspaces by workspace name without reading app-owned session content', () => {
     const data = createData({
       settings: { language: 'en' } as LocalWorkspaceData['settings'],
