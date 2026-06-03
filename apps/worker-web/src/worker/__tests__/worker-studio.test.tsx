@@ -641,6 +641,28 @@ describe('worker studio', () => {
     })
   })
 
+  it('centers the empty workspace composer in a bounded focus column', async () => {
+    currentSessions = []
+    window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const entry = main.querySelector('[data-workspace-empty-chat-entry="true"]')
+    expect(entry).toBeTruthy()
+    const entryElement = entry as HTMLElement
+    expect(entryElement.className).toContain('flex-1')
+    expect(entryElement.className).toContain('items-center')
+    expect(entryElement.className).toContain('justify-center')
+
+    const column = entryElement.querySelector('[data-workspace-empty-chat-column="true"]')
+    expect(column).toBeTruthy()
+    const columnElement = column as HTMLElement
+    expect(columnElement.className).toContain('mx-auto')
+    expect(columnElement.className).toContain('max-w-')
+    expect(within(columnElement).getByText('No sessions in this workspace yet.')).toBeTruthy()
+    expect(within(columnElement).getByRole('textbox')).toBeTruthy()
+  })
+
   it('archives the selected session from the browser and returns to the workspace', async () => {
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1/sessions/session-1')
     render(<WorkerStudio />)

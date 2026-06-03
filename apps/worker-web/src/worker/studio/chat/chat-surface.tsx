@@ -77,27 +77,47 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
   )
   const activeInvocationId = active?.invocationId ?? latestInvocation?.id ?? null
   const activeInitialInvocation = latestInvocation?.id === activeInvocationId ? latestInvocation : null
+  const hasConversation = activeInvocationId !== null || snapshot.events.length > 0 || snapshot.invocations.length > 0
+  const transcript = (
+    <ChatTranscript
+      ariaLabel={transcriptAriaLabel}
+      emptyState={snapshot.status === 'error' ? <TranscriptRestoreErrorState /> : undefined}
+      initialInvocation={activeInitialInvocation}
+      invocationId={activeInvocationId}
+      loading={snapshot.status === 'loading'}
+      sessionEvents={snapshot.events}
+      sessionInvocations={snapshot.invocations}
+      sessionId={sessionId}
+      userMessage={active}
+    />
+  )
+  const composer = (
+    <ChatComposer
+      labels={composerLabels}
+      onSubmitted={setActive}
+      sessionId={sessionId}
+    />
+  )
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden" data-chat-surface="true">
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <ChatTranscript
-          ariaLabel={transcriptAriaLabel}
-          emptyState={snapshot.status === 'error' ? <TranscriptRestoreErrorState /> : undefined}
-          initialInvocation={activeInitialInvocation}
-          invocationId={activeInvocationId}
-          loading={snapshot.status === 'loading'}
-          sessionEvents={snapshot.events}
-          sessionInvocations={snapshot.invocations}
-          sessionId={sessionId}
-          userMessage={active}
-        />
-      </div>
-      <ChatComposer
-        labels={composerLabels}
-        onSubmitted={setActive}
-        sessionId={sessionId}
-      />
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-chat-surface="true">
+      {hasConversation
+        ? (
+            <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 overflow-hidden" data-chat-column="true">
+              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+                {transcript}
+              </div>
+              {composer}
+            </div>
+          )
+        : (
+            <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-y-auto" data-chat-empty-entry="true">
+              <div className="mx-auto flex w-full max-w-3xl flex-col gap-3" data-chat-column="true">
+                {transcript}
+                {composer}
+              </div>
+            </div>
+          )}
     </div>
   )
 }

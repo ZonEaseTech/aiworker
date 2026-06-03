@@ -54,6 +54,30 @@ describe('chat surface', () => {
     expect(screen.getByRole('textbox')).toBeTruthy()
   })
 
+  it('centers an empty session route composer in a bounded focus column', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(sessionDetail()))))
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('status', { name: 'Loading transcript' })).toBeNull()
+    })
+
+    const emptyEntry = document.querySelector('[data-chat-empty-entry="true"]')
+    expect(emptyEntry).toBeTruthy()
+    const emptyEntryElement = emptyEntry as HTMLElement
+    expect(emptyEntryElement.className).toContain('flex-1')
+    expect(emptyEntryElement.className).toContain('items-center')
+    expect(emptyEntryElement.className).toContain('justify-center')
+
+    const emptyColumn = emptyEntryElement.querySelector('[data-chat-column="true"]')
+    expect(emptyColumn).toBeTruthy()
+    const emptyColumnElement = emptyColumn as HTMLElement
+    expect(emptyColumnElement.className).toContain('mx-auto')
+    expect(emptyColumnElement.className).toContain('max-w-')
+    expect(emptyColumnElement.contains(screen.getByRole('log', { name: 'Session transcript' }))).toBe(true)
+    expect(emptyColumnElement.contains(screen.getByRole('textbox'))).toBe(true)
+  })
+
   it('stretches to the main workbench so the composer stays pinned to the bottom', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(sessionDetail()))))
     render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
@@ -82,6 +106,48 @@ describe('chat surface', () => {
     await waitFor(() => {
       expect(screen.queryByRole('status', { name: 'Loading transcript' })).toBeNull()
     })
+  })
+
+  it('aligns existing conversation transcript and composer in one centered chat column', async () => {
+    const persistedEvent = {
+      createdAt: '2026-06-01T00:00:00.000Z',
+      id: 1,
+      invocationId: 'inv-existing',
+      payloadJson: { data: { text: 'existing assistant reply' } },
+      seq: 1,
+      sessionId: 'session-1',
+      type: 'assistant_delta',
+    }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/sessions/session-1') {
+        return new Response(JSON.stringify(sessionDetail(
+          [persistedEvent],
+          [{
+            id: 'inv-existing',
+            metadataJson: { uiUserDisplayText: 'existing user prompt' },
+            seq: 1,
+            sessionId: 'session-1',
+            status: 'succeeded',
+          }],
+        )))
+      }
+      return new Response(JSON.stringify({
+        events: [persistedEvent],
+        invocation: { id: 'inv-existing', status: 'succeeded' },
+      }))
+    }))
+
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    expect(await screen.findByText(/existing assistant reply/)).toBeTruthy()
+    const chatColumn = document.querySelector('[data-chat-column="true"]')
+    expect(chatColumn).toBeTruthy()
+    const chatColumnElement = chatColumn as HTMLElement
+    expect(chatColumnElement.className).toContain('mx-auto')
+    expect(chatColumnElement.className).toContain('max-w-')
+    expect(chatColumnElement.contains(screen.getByRole('log', { name: 'Session transcript' }))).toBe(true)
+    expect(chatColumnElement.contains(screen.getByRole('textbox'))).toBe(true)
   })
 
   it('renders a transcript restore error instead of the default empty state when session detail fails', async () => {

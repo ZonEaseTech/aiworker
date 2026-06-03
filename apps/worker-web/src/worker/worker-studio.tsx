@@ -686,16 +686,24 @@ function WorkbenchMain({
         >
           <StudioTitleBlock kicker={copy.workspace.currentWorkspace} title={selectedWorkspace.name} />
         </StudioChromeHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-7 py-4 max-md:px-4">
-          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-y-auto">
-            <StudioEmptyState
-              className="mx-auto max-w-xl items-center text-center"
-              icon={<HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />}
-              title={copy.workspace.noWorkspaceSessions}
-              detail={copy.workspace.createSessionPrompt(selectedWorkspace.name)}
-            />
+        <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden px-7 py-4 max-md:px-4">
+          <div
+            className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-y-auto"
+            data-workspace-empty-chat-entry="true"
+          >
+            <div
+              className="mx-auto flex w-full max-w-3xl flex-col gap-4"
+              data-workspace-empty-chat-column="true"
+            >
+              <StudioEmptyState
+                className="mx-auto max-w-xl items-center text-center"
+                icon={<HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />}
+                title={copy.workspace.noWorkspaceSessions}
+                detail={copy.workspace.createSessionPrompt(selectedWorkspace.name)}
+              />
+              <InitialWorkspaceComposer labels={composerLabels} onSubmit={onStartSessionWithInput} />
+            </div>
           </div>
-          <InitialWorkspaceComposer labels={composerLabels} onSubmit={onStartSessionWithInput} />
         </CardContent>
       </>
     )
