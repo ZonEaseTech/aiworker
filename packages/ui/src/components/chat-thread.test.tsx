@@ -7,6 +7,94 @@ import { ChatThread } from './chat-thread'
 afterEach(() => cleanup())
 
 describe('chat thread', () => {
+  it('constrains transcript rhythm to a shared centered conversation column', () => {
+    render(
+      <ChatThread
+        ariaLabel="Conversation"
+        turns={[
+          {
+            id: 'assistant-turn',
+            items: [{ id: 'answer', kind: 'assistant-markdown', markdown: 'A calmer response.' }],
+          },
+          {
+            id: 'user-turn',
+            items: [{ body: 'Please review this.', id: 'user', kind: 'user-message' }],
+          },
+        ]}
+      />,
+    )
+
+    const thread = document.querySelector('[data-transcript-slot="chat-thread"]')
+    const log = document.querySelector('[data-transcript-slot="chat-thread-log"]')
+    const userTurnShell = document
+      .querySelector('[data-transcript-turn-kind="user"] [data-transcript-slot="transcript-turn-shell"]')
+    const assistantTurnShell = document
+      .querySelector('[data-transcript-turn-kind="assistant"] [data-transcript-slot="transcript-turn-shell"]')
+
+    expect(thread?.className).toContain('mx-auto')
+    expect(thread?.className).toContain('w-full')
+    expect(thread?.className).toContain('max-w-3xl')
+    expect(log?.className).toContain('w-full')
+    expect(userTurnShell?.className).toContain('ml-auto')
+    expect(assistantTurnShell?.className).toContain('w-full')
+  })
+
+  it('renders an empty transcript companion outside the labelled log', () => {
+    render(<ChatThread ariaLabel="Conversation" turns={[]} />)
+
+    const log = screen.getByRole('log', { name: 'Conversation' })
+    const empty = document.querySelector('[data-transcript-slot="chat-thread-empty"]')
+    expect(log).toBeTruthy()
+    expect(empty).toBeTruthy()
+    expect(empty?.className).toContain('w-full')
+    expect(empty?.closest('[role="log"]')).toBeNull()
+    expect(document.querySelector('[data-transcript-slot="transcript-turn"]')).toBeNull()
+    expect(screen.getByText('Ready when you are')).toBeTruthy()
+  })
+
+  it('renders transcript loading skeleton in the transcript region before turns load', () => {
+    render(<ChatThread ariaLabel="Conversation" loading turns={[]} />)
+
+    expect(screen.getByRole('log', { name: 'Conversation' }).getAttribute('aria-busy')).toBe('true')
+    expect(screen.getByRole('status', { name: 'Loading transcript' })).toBeTruthy()
+    expect(document.querySelector('[data-transcript-slot="chat-thread-loading"]')?.className).toContain('w-full')
+  })
+
+  it('renders assistant turns without default card chrome or generic headers', () => {
+    render(
+      <ChatThread
+        ariaLabel="Conversation"
+        turns={[{
+          id: 'assistant-turn',
+          items: [{ id: 'answer', kind: 'assistant-markdown', markdown: 'A calmer response.' }],
+        }]}
+      />,
+    )
+
+    const turn = document.querySelector('[data-transcript-slot="transcript-turn"]')
+    expect(turn?.getAttribute('data-transcript-turn-kind')).toBe('assistant')
+    expect(turn?.className).not.toContain('border')
+    expect(turn?.className).not.toContain('bg-background')
+    expect(screen.queryByText('Turn')).toBeNull()
+  })
+
+  it('aligns user turns as compact transcript bubbles', () => {
+    render(
+      <ChatThread
+        ariaLabel="Conversation"
+        turns={[{
+          id: 'user-turn',
+          items: [{ body: 'Please review this.', id: 'user', kind: 'user-message' }],
+        }]}
+      />,
+    )
+
+    const turn = document.querySelector('[data-transcript-slot="transcript-turn"]')
+    expect(turn?.getAttribute('data-transcript-turn-kind')).toBe('user')
+    expect(turn?.className).toContain('justify-end')
+    expect(screen.getByText('Please review this.')).toBeTruthy()
+  })
+
   it('renders generic turn items without owning product semantics', () => {
     render(
       <ChatThread

@@ -18,10 +18,12 @@ export function StreamingPlaceholder({ ariaLabel, className, label }: StreamingP
       role="status"
       aria-label={statusLabel}
       aria-live="polite"
-      className={cn('min-h-20 rounded-md border border-dashed border-border bg-muted/20 p-3', className)}
+      className={cn('grid min-h-20 max-w-3xl min-w-0 gap-3 rounded-lg bg-muted/20 px-3 py-3', className)}
     >
-      <Skeleton className="mb-3 h-3 w-2/5" />
-      <Skeleton className="mb-3 h-3 w-3/5" />
+      <div className="grid min-w-0 gap-2">
+        <Skeleton className="h-3 w-28" />
+        <Skeleton className="h-3 w-3/5" />
+      </div>
       <p className="text-xs/relaxed text-muted-foreground">{label}</p>
     </div>
   )

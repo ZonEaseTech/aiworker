@@ -1,5 +1,6 @@
 import type { LocalEngineInvocation, LocalSessionEvent } from '@zonease/aiworker-soul-descriptor'
 import type { TranscriptTurnModel } from '@zonease/aiworker-ui/components/transcript-types'
+import type { ReactNode } from 'react'
 
 import { ChatThread } from '@zonease/aiworker-ui/components/chat-thread'
 import { useMemo } from 'react'
@@ -15,9 +16,11 @@ type TranscriptInvocation = Pick<LocalEngineInvocation, 'id' | 'metadataJson' | 
 
 export interface ChatTranscriptProps {
   ariaLabel: string
+  emptyState?: ReactNode
   initialInvocation?: (Pick<LocalEngineInvocation, 'id' | 'status'> & Partial<LocalEngineInvocation>) | null
   invocationId: string | null
   intervalMs?: number
+  loading?: boolean
   sessionEvents?: LocalSessionEvent[]
   sessionInvocations?: TranscriptInvocation[]
   sessionId: string
@@ -40,9 +43,11 @@ export interface ChatTranscriptProps {
  */
 export function ChatTranscript({
   ariaLabel,
+  emptyState,
   initialInvocation = null,
   intervalMs,
   invocationId,
+  loading = false,
   sessionEvents = EMPTY_SESSION_EVENTS,
   sessionInvocations = EMPTY_SESSION_INVOCATIONS,
   sessionId,
@@ -73,7 +78,7 @@ export function ChatTranscript({
     () => insertUserMessageTurns(engineTurns, sessionInvocations, userMessage),
     [engineTurns, sessionInvocations, userMessage],
   )
-  return <ChatThread ariaLabel={ariaLabel} turns={turns} />
+  return <ChatThread ariaLabel={ariaLabel} emptyState={emptyState} loading={loading && turns.length === 0} turns={turns} />
 }
 
 function mergeSessionEvents(events: LocalSessionEvent[]): LocalSessionEvent[] {

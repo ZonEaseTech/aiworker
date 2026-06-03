@@ -1,6 +1,7 @@
 import type { LocalEngineInvocation, LocalSessionEvent } from '@zonease/aiworker-soul-descriptor'
 import type { ChatComposerLabels } from './chat-composer'
 
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
 import { useEffect, useMemo, useReducer, useState } from 'react'
 import { fetchSessionDetail } from '../../../features/local-workspace/api/session-invocations'
 import { ChatComposer } from './chat-composer'
@@ -16,9 +17,11 @@ export interface ChatSurfaceProps {
 interface SessionTranscriptSnapshot {
   events: LocalSessionEvent[]
   invocations: LocalEngineInvocation[]
+  status: 'error' | 'loaded' | 'loading'
 }
 
-const EMPTY_TRANSCRIPT_SNAPSHOT: SessionTranscriptSnapshot = { events: [], invocations: [] }
+const ERROR_TRANSCRIPT_SNAPSHOT: SessionTranscriptSnapshot = { events: [], invocations: [], status: 'error' }
+const LOADING_TRANSCRIPT_SNAPSHOT: SessionTranscriptSnapshot = { events: [], invocations: [], status: 'loading' }
 
 type SessionTranscriptSnapshotAction
   = | { type: 'reset' }
@@ -41,7 +44,7 @@ type SessionTranscriptSnapshotAction
  */
 export function ChatSurface({ composerLabels, initialActive = null, sessionId, transcriptAriaLabel }: ChatSurfaceProps) {
   const [active, setActive] = useState<{ invocationId: string, text: string } | null>(initialActive)
-  const [snapshot, dispatchSnapshot] = useReducer(sessionTranscriptSnapshotReducer, EMPTY_TRANSCRIPT_SNAPSHOT)
+  const [snapshot, dispatchSnapshot] = useReducer(sessionTranscriptSnapshotReducer, LOADING_TRANSCRIPT_SNAPSHOT)
 
   useEffect(() => {
     let cancelled = false
@@ -54,13 +57,14 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
           snapshot: {
             events: Array.isArray(detail.events) ? detail.events : [],
             invocations: Array.isArray(detail.invocations) ? detail.invocations : [],
+            status: 'loaded',
           },
           type: 'loaded',
         })
       })
       .catch(() => {
         if (!cancelled)
-          dispatchSnapshot({ type: 'reset' })
+          dispatchSnapshot({ snapshot: ERROR_TRANSCRIPT_SNAPSHOT, type: 'loaded' })
       })
     return () => {
       cancelled = true
@@ -79,8 +83,10 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <ChatTranscript
           ariaLabel={transcriptAriaLabel}
+          emptyState={snapshot.status === 'error' ? <TranscriptRestoreErrorState /> : undefined}
           initialInvocation={activeInitialInvocation}
           invocationId={activeInvocationId}
+          loading={snapshot.status === 'loading'}
           sessionEvents={snapshot.events}
           sessionInvocations={snapshot.invocations}
           sessionId={sessionId}
@@ -106,5 +112,21 @@ function sessionTranscriptSnapshotReducer(
 ): SessionTranscriptSnapshot {
   if (action.type === 'loaded')
     return action.snapshot
-  return EMPTY_TRANSCRIPT_SNAPSHOT
+  return LOADING_TRANSCRIPT_SNAPSHOT
+}
+
+function TranscriptRestoreErrorState() {
+  return (
+    <Empty
+      aria-label="Transcript history unavailable"
+      className="min-h-48 border-0 bg-transparent"
+      data-transcript-slot="chat-thread-error"
+      role="status"
+    >
+      <EmptyHeader>
+        <EmptyTitle>Transcript history unavailable</EmptyTitle>
+        <EmptyDescription>Local history could not be restored.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  )
 }
