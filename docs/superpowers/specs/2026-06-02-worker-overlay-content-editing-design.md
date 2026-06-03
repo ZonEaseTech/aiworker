@@ -87,12 +87,19 @@ a1f4b6cd F4). Secret boundary verified end-to-end (content only in files, never 
 envelope; MCP view-only GET-redacted + PUT-rejected; literal secrets rejected;
 traversal rejected; descriptor:// baseline byte-identical).
 
-Tracked follow-up (architect nit, non-blocking): `packages/engine-projection/src/index.ts`
-exports a second, UNWIRED scheme-aware projection (`projectEngineAssets` +
-`resolveOverlaySourceFile`) with no runtime caller — the LIVE path is
-`projectEngineAssetsToWorkspace` in `workspace-projection.ts`. Consolidate or delete
-the dead duplicate (and re-home its traversal test onto the live resolver) to remove
-the divergence risk. Pre-existing (out of this feature's scope): the MCP literal-secret
+Follow-up (architect nit) — RESOLVED (commit 19d0351b): F1 had added the
+`worker-overlay://` scheme resolution to `projectEngineAssets` in
+`packages/engine-projection/src/index.ts` — but that function is the
+projection-CONTRACT-tested one and is NOT the live runtime path (the runtime uses
+`projectEngineAssetsToWorkspace` in `workspace-projection.ts`, which has its own
+content-driven worker-overlay handling). So the F1 addition was a runtime-dead
+duplicate. It was removed (`index.ts` is now byte-identical to its pre-F1 baseline
+plus F2's re-exports) and its `worker-overlay-projection.test.ts` deleted. There is
+now ONE `worker-overlay://` implementation (the live `workspace-projection.ts` path);
+the shared `parseWorkerOverlaySourceRef` parser and fs-layout resolver are untouched.
+(A deeper PRE-EXISTING smell remains, out of scope: the projection contract tests
+exercise `projectEngineAssets` while the runtime uses `projectEngineAssetsToWorkspace`
+— the two projection engines should be unified in a dedicated future effort.) Pre-existing (out of this feature's scope): the MCP literal-secret
 guard asymmetry in `workspace-projection.ts` (overlay branch asserts, baseline-copy
 branch does not) — the new `/content` PUT path rejects MCP entirely, so this feature
 neither introduces nor widens it.
