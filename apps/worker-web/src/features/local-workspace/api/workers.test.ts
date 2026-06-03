@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { archiveWorker, createWorker } from './workers'
+import { createWorker } from './workers'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -30,24 +30,4 @@ describe('worker API', () => {
     }))
   })
 
-  it('archives workers through the canonical broker route', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
-      worker: {
-        createdAt: '2026-05-27T00:00:00.000Z',
-        defaultEngineId: 'codex',
-        id: 'worker-created',
-        metadataJson: {},
-        name: 'Created worker',
-        appId: 'demo-soul-app',
-        status: 'archived',
-        updatedAt: '2026-05-27T00:00:00.000Z',
-      },
-    }))))
-
-    await archiveWorker('worker-created')
-
-    expect(fetch).toHaveBeenCalledWith('/api/workers/worker-created/archive', expect.objectContaining({
-      method: 'POST',
-    }))
-  })
 })

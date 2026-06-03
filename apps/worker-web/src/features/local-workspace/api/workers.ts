@@ -10,7 +10,3 @@ export function createWorker(input: {
 }): Promise<{ worker: LocalWorker }> {
   return localJson('/api/workers', { method: 'POST', body: JSON.stringify(input) })
 }
-
-export function archiveWorker(workerId: string): Promise<{ worker: LocalWorker }> {
-  return localJson(`/api/workers/${encodeURIComponent(workerId)}/archive`, { method: 'POST' })
-}

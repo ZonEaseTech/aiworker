@@ -87,17 +87,12 @@ export const ja = {
     byokNeedsKey: 'BYOK にはプロバイダー、モデル、API キー参照が必要です。',
     byokReady: (provider, model) => `${provider} ${model} はセッション呼び出しで利用できます。`,
     archiveSession: 'セッションをアーカイブ',
-    archiveWorker: 'worker をアーカイブ',
     archiveWorkspace: 'ワークスペースをアーカイブ',
     archiveConfirmation: {
       cancel: 'キャンセル',
       session: {
         detail: sessionTitle => `「${sessionTitle}」はアクティブなセッション一覧から外れます。`,
         title: 'セッションをアーカイブしますか？',
-      },
-      worker: {
-        detail: workerName => `「${workerName}」とそのアクティブなワークスペースは Workbench から外れます。`,
-        title: 'worker をアーカイブしますか？',
       },
       workspace: {
         detail: workspaceName => `「${workspaceName}」とそのアクティブなセッションはこの worker から外れます。`,
