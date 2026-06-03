@@ -29,5 +29,4 @@ describe('worker API', () => {
       method: 'POST',
     }))
   })
-
 })
