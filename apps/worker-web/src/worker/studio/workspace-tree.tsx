@@ -143,9 +143,20 @@ export function WorkspaceTree({
             : (
                 <SidebarMenu aria-label="Workspaces">
                   <SidebarMenuItem>
-                    <SidebarMenuButton type="button" disabled>
+                    <span data-slot="item-description" className="block px-2 py-1 text-xs text-sidebar-foreground/60">
+                      {emptyWorkspacesLabel}
+                    </span>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      type="button"
+                      aria-label={`${newWorkspaceLabel} (${emptyWorkspacesLabel})`}
+                      title={newWorkspaceLabel}
+                      className="text-sidebar-foreground/80"
+                      onClick={onCreateWorkspace}
+                    >
                       <HugeiconsIcon icon={FolderLibraryIcon} strokeWidth={2} aria-hidden="true" />
-                      <span>{emptyWorkspacesLabel}</span>
+                      <span className="truncate">{newWorkspaceLabel}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 </SidebarMenu>

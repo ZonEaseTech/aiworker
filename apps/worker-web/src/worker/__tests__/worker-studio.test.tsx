@@ -465,7 +465,13 @@ describe('worker studio', () => {
 
     const main = await screen.findByLabelText('Soul workspaces and sessions')
     expect(within(main).getByText('No workspaces yet')).toBeTruthy()
-    expect(within(main).getByRole('button', { name: 'New workspace' })).toBeTruthy()
+    expect(within(main).getByText('Create a Demo Primary workspace to start work.')).toBeTruthy()
+    expect(within(main).getByRole('button', { name: 'Create workspace' })).toBeTruthy()
+
+    const tree = screen.getByTestId('workspace-tree')
+    expect(within(tree).getByText('No workspaces yet')).toBeTruthy()
+    fireEvent.click(within(tree).getByRole('button', { name: 'New workspace (No workspaces yet)' }))
+    expect(await screen.findByRole('dialog', { name: 'Create workspace' })).toBeTruthy()
   })
 
   it('shows a start-first-session empty state for a workspace with no sessions', async () => {

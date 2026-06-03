@@ -5,6 +5,8 @@ import type { SettingsSection } from '../features/settings'
 import type { ChatComposerLabels } from './studio/chat/chat-composer'
 import type { WorkerStudioLocatorState } from './studio/locator'
 
+import { Add01Icon, FolderLibraryIcon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { CardContent } from '@zonease/aiworker-ui/components/card'
@@ -343,6 +345,7 @@ export function WorkerStudio() {
             hasWorkspaces={workspaces.length > 0}
             isWorkspaceContextRoute={isWorkspaceContextRoute}
             selectedSession={selectedSession ?? (selectedWorkspace ? sessionsForWorkspace(selectedWorkspace)[0] ?? null : null)}
+            selectedSoulName={selectedSoulCopy?.name ?? selectedSoul?.id ?? copy.app.brand}
             selectedWorkspace={selectedWorkspace}
             onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
             onStartSession={() => {
@@ -376,6 +379,7 @@ function WorkbenchMain({
   onCreateWorkspace,
   onStartSession,
   selectedSession,
+  selectedSoulName,
   selectedWorkspace,
 }: {
   composerLabels: ChatComposerLabels
@@ -385,6 +389,7 @@ function WorkbenchMain({
   onCreateWorkspace: () => void
   onStartSession: () => void
   selectedSession: LocalSession | null
+  selectedSoulName: string
   selectedWorkspace: LocalWorkspace | null
 }) {
   if (isWorkspaceContextRoute && selectedSession) {
@@ -424,13 +429,16 @@ function WorkbenchMain({
   return (
     <StudioMainFrame kicker={copy.app.workspacePill} title={copy.workspace.workspaceList}>
       <StudioEmptyState
+        className={hasWorkspaces ? undefined : 'mx-auto min-h-[min(28rem,60vh)] w-full max-w-xl items-center text-center'}
+        icon={hasWorkspaces ? undefined : <HugeiconsIcon icon={FolderLibraryIcon} strokeWidth={2} aria-hidden="true" />}
         title={hasWorkspaces ? copy.workspace.noSelectionTitle : copy.projects.empty.title}
-        detail={copy.workspace.noSelectionDetail}
+        detail={hasWorkspaces ? copy.workspace.noSelectionDetail : copy.projects.empty.detail(selectedSoulName)}
         action={hasWorkspaces
           ? null
           : (
-              <Button type="button" variant="ghost" size="lg" onClick={onCreateWorkspace}>
-                {copy.workspace.newWorkspace}
+              <Button type="button" size="lg" onClick={onCreateWorkspace}>
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
+                {copy.workspace.createWorkspace}
               </Button>
             )}
       />
