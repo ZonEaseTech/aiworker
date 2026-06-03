@@ -2609,11 +2609,14 @@ describe('local daemon API', () => {
   it('reads, edits, and redacts worker overlay asset content through the config content routes', async () => {
     const officialAppsRoot = join(dir, 'official-content-apps')
     writePackagedFreeform(officialAppsRoot)
-    // Author-owned native MCP file carries a literal secret: GET must redact it
-    // and the route must never let it be edited (Option A view-only).
+    // Author-owned native MCP file carries literal secrets: GET must redact them
+    // and the route must never let them be edited (Option A view-only). Covers
+    // both a secret-key assignment (sk-) and value-format credentials under a
+    // non-secret key / inside an args array (AKIA, ghp_) — the common MCP-server
+    // shape that display redaction must catch by format, not only by key name.
     writeFileSync(
       join(officialAppsRoot, FREEFORM_APP_ID, 'dist', 'engine-assets', 'mcp', 'codex', 'config.toml'),
-      'command = "freeform-mcp"\napi_key = "sk-baselineliteralsecret999"\n',
+      'command = "freeform-mcp"\napi_key = "sk-baselineliteralsecret999"\nargs = ["-e", "AKIAIOSFODNN7EXAMPLE"]\nrepo = "ghp_baseline0000000000000000000000"\n',
     )
     const target = await app(undefined, undefined, officialAppsRoot)
     const worker = await createFreeformWorker(target, 'content-overlay-worker')
@@ -2675,6 +2678,9 @@ describe('local daemon API', () => {
     expect(mcp.editable).toBe(false)
     expect(mcp.content).toContain('[REDACTED]')
     expect(mcp.content).not.toContain('sk-baselineliteralsecret999')
+    // Value-format credentials (non-secret key / args array) must also be redacted.
+    expect(mcp.content).not.toContain('AKIAIOSFODNN7EXAMPLE')
+    expect(mcp.content).not.toContain('ghp_baseline')
 
     const mcpPutRes = await target.request(`/api/workers/${worker.id}/config/mcp-overlay%3Acodex/content`, {
       body: JSON.stringify({ content: 'command = "edited"\n' }),

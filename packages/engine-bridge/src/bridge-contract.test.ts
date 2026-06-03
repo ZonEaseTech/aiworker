@@ -265,6 +265,42 @@ describe('engine-bridge B+ adapter contract exports', () => {
     expect(JSON.stringify(redacted)).toContain('[REDACTED]')
   })
 
+  test('redacts value-format credentials (ghp_/gho_/github_pat_/AKIA/AIza/JWT/PEM) by format, not only prefix/secret-key forms', () => {
+    // Author-owned native MCP files may carry literal secrets and are shown
+    // view-only through this redactor. Value-format credentials commonly appear
+    // under a non-secret key name or as a bare args-array element (e.g. an MCP
+    // server config), so display redaction must match credential VALUE formats —
+    // the same coverage the storage write-reject regex already enforces — not
+    // only Bearer/sk-/token=/secret-key assignments.
+    const redactEngineBridgeValue = expectExportedFunction('redactEngineBridgeValue')
+
+    // Neutral key names (no api_key/secret/token/password/authorization substring)
+    // so this isolates VALUE-format redaction, not key-name-based redaction.
+    const corpus = {
+      awsLine: 'id = "AKIAIOSFODNN7EXAMPLE"',
+      repoLine: 'repo = "ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"',
+      ghoBare: 'gho_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      githubPatBare: 'github_pat_cccccccccccccccccccccccccccc',
+      googleLine: 'gkey = "AIzaSyA00000000000000000000000000000000"',
+      jwtBare: 'eyJhbGciOiJIUzI1Ni1.eyJzdWIiOiIxMjM0NTY.SflKxwRJSMeKKF2QT4',
+      argsArray: ['run', '-e', 'AKIAIOSFODNN7EXAMPLE', 'image'],
+      pemBlock: '-----BEGIN PRIVATE KEY-----\nMIIBVAIBADANBgkqhkiG9w0BAQEFAASCAm2X\n-----END PRIVATE KEY-----',
+    }
+
+    const out = JSON.stringify(redactEngineBridgeValue(corpus))
+    for (const leak of [
+      'AKIAIOSFODNN7EXAMPLE',
+      'ghp_aaaaaaaaaaaaaaaaaaaa',
+      'gho_bbbbbbbbbbbbbbbbbbbb',
+      'github_pat_cccccccccccc',
+      'AIzaSyA000000000000',
+      'eyJhbGciOiJIUzI1Ni1',
+      'MIIBVAIBADANBgkqhkiG9w0B',
+    ])
+      expect(out, `display redaction must cover ${leak}`).not.toContain(leak)
+    expect(out).toContain('[REDACTED]')
+  })
+
   test('redacts adapter discover failures and classifies them as callable failures', async () => {
     const { engineBridge } = createContractHarness({ discoverFails: true })
 

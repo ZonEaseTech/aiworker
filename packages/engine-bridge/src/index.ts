@@ -46,7 +46,13 @@ const FORBIDDEN_DOMAIN_EVENT_TYPES = new Set([
 ])
 
 const ALLOWED_EVENT_TYPE_SET = new Set<string>(ALLOWED_BRIDGE_EVENT_TYPES)
-const SECRET_VALUE_RE = /(Bearer\s+)[\w.~+/-]{12,}|(sk-)[\w-]{8,}|(token=)[^\s"']+|(["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["'])[^"'\n]+(["'])/gi
+// Canonical value-format credential alternation. Exported so the engine-bridge
+// display redactor and the worker-daemon diagnostic redactor share one coverage
+// source and cannot drift apart. It mirrors the storage write-reject formats, so
+// any credential rejected on write is also redacted on display. These branches
+// carry no capture groups: a format match redacts the whole token to [REDACTED].
+export const SECRET_FORMAT_ALTERNATION: string = String.raw`-----BEGIN[A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----)?|\beyJ[\w-]+\.[\w-]+\.[\w-]+|\b(?:ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,})\b`
+const SECRET_VALUE_RE = new RegExp(`(Bearer\\s+)[\\w.~+/-]{12,}|(sk-)[\\w-]{8,}|(token=)[^\\s"']+|(["']?(?:api[_-]?key|authorization|password|secret|token)["']?\\s*[:=]\\s*["'])[^"'\\n]+(["'])|${SECRET_FORMAT_ALTERNATION}`, 'gi')
 
 export type EngineBridgeFailureCode = typeof ENGINE_BRIDGE_FAILURE_CODES[number]
 export type EngineInvocationStatus = typeof ENGINE_INVOCATION_STATUSES[number]
