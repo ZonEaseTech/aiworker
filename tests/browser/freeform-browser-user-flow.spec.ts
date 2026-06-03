@@ -305,7 +305,7 @@ async function archiveWorkspaceLifecycleFromUi(
     method: 'POST',
   })
 
-  await page.getByRole('button', { name: 'Archive workspace' }).click()
+  await page.getByRole('button', { exact: true, name: 'Archive workspace' }).click()
   await confirmArchiveDialog(page, 'Archive workspace?', 'Archive workspace')
   await page.waitForURL(new RegExp(`/workers/${escapeRegExp(routeIds.workerId)}$`), { timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   await main.getByText('No workspaces yet').waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
