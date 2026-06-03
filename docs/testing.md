@@ -295,3 +295,65 @@ Landed teardown:
 - reshape the `descriptor-v1` parser tests and the `apps/worker-web` mounted-render
   guards to the worker-owned model;
 - add worker-owns-workbench and two-plane zero-intrusion architecture guards.
+
+## Deferred Post-v1 Items (tracked, not Phase-B teardown)
+
+Phase-B teardown is complete and the v1 release gates are green (a fresh
+`release:check` exits 0). The items below were surfaced by the 2026-06-03 stage-1
+alignment audit and are distinct from teardown. Deferral is a scheduling decision
+and does not by itself make an item aligned; the alignment verdict for each is
+stated. Item 1 was fixed during the audit; items 2 and 3 remain tracked.
+
+1. **MCP redaction-coverage asymmetry — RESOLVED (commit `2ffa70aa`).** The
+   display-side redaction regex (`SECRET_VALUE_RE` in
+   `packages/engine-bridge/src/index.ts`) recognized fewer secret shapes than the
+   write-reject regex (`LITERAL_SECRET_RE` in
+   `packages/storage-sqlite/src/worker/index.ts`): it keyed on prefixes (`Bearer`,
+   `sk-`, `token=`) and secret-like key names, while write-reject also matches
+   credential value formats (`ghp_`, `gho_`, `github_pat_`, `AKIA`, `AIza`, JWT,
+   PEM). Author-owned native MCP files may carry literal secrets and are shown
+   view-only through `GET /api/workers/:workerId/config/:configKey/content`, so a
+   value-format credential under a non-secret key name or inside an `args` array
+   (a common MCP server config shape) was displayed unredacted — a reachable
+   "secret into UI" deviation from the runtime.md redaction contract and the
+   protocol.md "mcp-overlay content is redacted on display" rule. It was masked by
+   a G6 check that only asserts the regex is *present* (not its coverage) and a
+   worker-daemon test that only exercised `sk-`. Fixed by extracting a shared
+   `SECRET_FORMAT_ALTERNATION` constant in engine-bridge (reused by the
+   worker-daemon diagnostic redactor) and broadening display redaction to match
+   write-reject coverage; engine-bridge and worker-daemon MCP content-route tests
+   now assert `ghp_`/`AKIA`/`AIza`/JWT/PEM redaction. Per-plane write-reject
+   detectors stay separate by design (G6 pins them as defense-in-depth); what is
+   unified is *coverage*, enforced by the new tests, not a single physical regex.
+
+2. **Dual projection engines (test-fidelity debt).** The live runtime path is
+   `projectEngineAssetsToWorkspace` in
+   `packages/engine-projection/src/workspace-projection.ts` (covered by
+   `workspace-projection.test.ts` and the runtime). The contract test
+   `projection-contract.test.ts` instead exercises `projectEngineAssets` in
+   `packages/engine-projection/src/index.ts`, which no runtime path calls. The
+   duplicated `worker-overlay://` resolution was already removed in `19d0351b`
+   (see `docs/superpowers/specs/2026-06-02-worker-overlay-content-editing-design.md`),
+   leaving a single live overlay implementation. Verdict: functionally aligned —
+   the live path works and is tested — but the contract test validates a
+   runtime-dead function, giving partial false confidence. Recommendation: unify so
+   the contract test exercises the live path, or delete the dead function.
+
+3. **Always-empty `HostedSoulApp.api` / `permissions` projection fields (shape
+   debt).** The descriptor→`HostedSoulApp` projection in
+   `packages/soul-descriptor/src/soul-app/registry.ts` emits
+   `api: { localService: null, routePrefix: null }` and `permissions: []`
+   unconditionally, because v1 descriptors carry no app-owned API and no mounted
+   workbench. Verdict: aligned with the descriptor-only contract (descriptor v1 is
+   `protocol`/`identity`/`engine` only; the Soul provides no API or UI) — these are
+   structurally dead Phase-2-shaped fields, not a contract violation. The
+   worker-web settings dialog still renders them (`app.api.routePrefix`,
+   `app.permissions`), so this is also dead UI. Recommendation (focused cleanup
+   pass): remove the always-empty `api`/`permissions` projection fields and the
+   settings-dialog block that renders them, keeping the Phase-2 `SoulAppPermission`
+   type and the `SoulAppScopedContext` control-protocol interfaces (still used by
+   the dormant Host plane) untouched.
+
+The 2026-06-03 audit also fixed a cosmetic nit outside these three: the CLI
+release smoke PASS messages used retired wording ("Soul Apps", "Host Web/API");
+they now read "the official Soul" and "the Workbench web and broker API".
