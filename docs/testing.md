@@ -234,7 +234,7 @@ Worker Workbench opens standalone with Host absent on worker/workspace/session l
 -> refreshes projection receipts from the Workbench
 -> applies worker config overlay and observes worker-overlay projection receipts
 -> archives the session and rejects follow-up
--> archives workspace and worker lifecycle, blocking new work on archived worker
+-> archives workspace without exposing Worker archive from browser context
 ```
 
 Do not modify the new architecture to satisfy old E2E assumptions. Delete or

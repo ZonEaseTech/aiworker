@@ -1675,9 +1675,10 @@ describe('destructive refactor contract bootstrap', () => {
     expect(freeformCliBrowserProof).toContain('assertProjectionRefreshProof')
     expect(freeformCliBrowserProof).toContain('worker-overlay')
     expect(freeformCliBrowserProof).toContain(`/api/workspace-locators/\${workspaceId}/archive`)
-    expect(freeformCliBrowserProof).toContain(`/api/workers/\${workerId}/archive`)
-    expect(freeformCliBrowserProof).toContain('assertHostLifecycleArchiveProof')
-    expect(freeformCliBrowserProof).toContain('WORKER_ARCHIVED')
+    expect(freeformCliBrowserProof).not.toContain(`/api/workers/\${workerId}/archive`)
+    expect(freeformCliBrowserProof).toContain('assertWorkspaceLifecycleProof')
+    expect(freeformCliBrowserProof).toContain('replacementWorkspace')
+    expect(freeformCliBrowserProof).not.toContain('WORKER_ARCHIVED')
     const hostDaemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')
     expect(hostDaemonTest).toContain('Start session after worker archive.')
     expect(hostDaemonTest).toContain('Continue after worker archive.')
@@ -1856,18 +1857,19 @@ describe('destructive refactor contract bootstrap', () => {
     expect(testing).toContain('-> refreshes projection receipts from the Workbench')
     expect(testing).toContain('-> applies worker config overlay and observes worker-overlay projection receipts')
     expect(testing).toContain('-> archives the session and rejects follow-up')
-    expect(testing).toContain('-> archives workspace and worker lifecycle, blocking new work on archived worker')
+    expect(testing).toContain('-> archives workspace without exposing Worker archive from browser context')
 
     expect(docCheck).toContain('browser proof must cover Freeform v1 scope')
     expect(docCheck).toContain('assertInvocationExternalSessionRefProof')
     expect(docCheck).toContain('externalSessionRef')
 
     // The new proof renders chat directly: it asserts no micro-app and drives the
-    // worker-web chat surface; it keeps the reusable broker-fetch lifecycle proofs.
+    // worker-web chat surface; Worker archive stays outside browser-driven proofs.
     expect(browserProof).toContain('data-chat-surface="true"')
     expect(browserProof).toContain('readSessionFollowUpProofFromBrowser')
     expect(browserProof).toContain('assertSessionArchiveProof')
-    expect(browserProof).toContain('assertHostLifecycleArchiveProof')
+    expect(browserProof).toContain('assertWorkspaceLifecycleProof')
+    expect(browserProof).not.toContain('WORKER_ARCHIVED')
 
     // The retired mounted-surface / archived-mount-rejection helpers are gone (the
     // proof asserts the absence of a micro-app rather than resolving a mount). The
