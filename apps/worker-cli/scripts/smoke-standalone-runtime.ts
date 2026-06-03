@@ -70,7 +70,7 @@ async function main(): Promise<number> {
     await assertPackagedFreeform(list.stdout, officialAppsRoot)
     await assertStandaloneOfficialFreeformDescriptor(officialAppsRoot)
 
-    consola.success('[smoke-standalone-runtime] PASS: unpacked standalone binary boots with packaged migrations and official Soul Apps descriptor refs')
+    consola.success('[smoke-standalone-runtime] PASS: unpacked standalone binary boots with packaged migrations and the official Soul descriptor refs')
     return 0
   }
   finally {

@@ -89,7 +89,7 @@ async function main(): Promise<number> {
     assertJsonIncludes(list.stdout, 'aiworker-freeform')
     assertJsonIncludes(souls.stdout, 'aiworker-freeform')
 
-    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API, reports packaged resources, and bootstraps official Soul Apps with descriptor refs')
+    consola.success('[smoke-dist-release] PASS: dist CLI starts the Workbench web and broker API, reports packaged resources, and bootstraps the official Soul with descriptor refs')
     return 0
   }
   finally {

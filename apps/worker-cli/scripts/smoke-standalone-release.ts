@@ -53,7 +53,7 @@ export async function runStandaloneReleaseSmoke(options: RunStandaloneReleaseSmo
 
 async function main(): Promise<number> {
   await runStandaloneReleaseSmoke()
-  consola.success('[smoke-standalone-release] PASS: standalone bundles include packaged Host assets and official Soul Apps descriptor refs')
+  consola.success('[smoke-standalone-release] PASS: standalone bundles include packaged Workbench assets and the official Soul descriptor refs')
   return 0
 }
 

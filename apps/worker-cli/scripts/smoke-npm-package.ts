@@ -57,7 +57,7 @@ async function main(): Promise<number> {
     }
     await assertTarballOfficialFreeformDescriptor(archivePath, officialFreeformDescriptorPath, files)
     await assertInstalledPackageRuntime(tempDir, archivePath)
-    consola.success('[smoke-npm-package] PASS: npm package installs, runs doctor, and bootstraps packaged official Soul Apps with descriptor refs')
+    consola.success('[smoke-npm-package] PASS: npm package installs, runs doctor, and bootstraps the packaged official Soul with descriptor refs')
     return 0
   }
   finally {
