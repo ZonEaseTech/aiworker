@@ -625,7 +625,10 @@ export class LocalWorkerRuntime {
   }
 
   dispose(): void {
-    return undefined
+    // 排空事件总线:断开所有还活着的订阅者(如 SSE live-tail),使 dispose 之后任何
+    // emit 都不会再把 DB 读排进微任务队列。运行体必须在 closeWorkerDb 之前 dispose,
+    // 否则关库后触发的订阅回调会撞上 "Worker database not initialized"。
+    this.bus.clear()
   }
 
   private async invokeEngine(input: {

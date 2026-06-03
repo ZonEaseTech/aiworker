@@ -14,13 +14,20 @@ const FREEFORM_APP_ID = 'aiworker-freeform'
 
 describe('worker-daemon control contract endpoints', () => {
   let dir = ''
+  // 与 worker.local.test 一致:收集 boot 出来的 daemon,afterEach 关库前 dispose,
+  // 排空各运行体事件总线,防止还活着的订阅在 closeWorkerDb 后触发 DB 读(防御性,
+  // 本文件当前不开 SSE / 不建 running invocation,故今天为惰性,但守住同一不变量)。
+  let bootedDaemons: Array<{ shutdown: () => void }> = []
 
   beforeEach(() => {
     closeWorkerDb()
     dir = mkdtempSync(join(tmpdir(), 'aiworker-control-'))
+    bootedDaemons = []
   })
 
   afterEach(async () => {
+    for (const daemon of bootedDaemons)
+      daemon.shutdown()
     closeWorkerDb()
     await rm(dir, { recursive: true, force: true })
   })
@@ -37,6 +44,7 @@ describe('worker-daemon control contract endpoints', () => {
       runtimeVersion: 'test',
       workersRoot: join(dir, 'workers'),
     })
+    bootedDaemons.push(boot.state)
     return boot.app
   }
 

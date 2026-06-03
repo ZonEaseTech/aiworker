@@ -23,4 +23,10 @@ export class LocalWorkerEventBus {
     for (const handler of [...this.#handlers])
       handler(event)
   }
+
+  // 清空所有订阅:运行体 dispose 时调用,确保关库后再无订阅者把 DB 读排进微任务队列
+  // (例如还活着的 SSE live-tail 订阅在 closeWorkerDb 之后被 emit 触发)。
+  clear(): void {
+    this.#handlers.clear()
+  }
 }

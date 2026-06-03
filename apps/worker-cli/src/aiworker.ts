@@ -1008,7 +1008,7 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
     consola.info(`[aiworker-daemon] update available: ${updateNotice.currentVersion} -> ${updateNotice.targetVersion}; run ${updateNotice.command}`)
   }
   const { bootstrapWorkerApp, localApiExposureWarning } = await import('@zonease/aiworker-worker-daemon/bootstrap')
-  const { app, port } = await bootstrapWorkerApp({
+  const { app, port, state } = await bootstrapWorkerApp({
     officialAppsRoot: resolveCliOfficialAppsRoot(),
     runtimeVersion: packageJson.version,
     webStaticDir: resolveCliWorkerWebStaticDir(),
@@ -1028,6 +1028,9 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
     const keepAlive = setInterval(() => undefined, 60_000)
     const shutdown = () => {
       clearInterval(keepAlive)
+      // 先 dispose 运行体(排空事件总线,断开还活着的 SSE live-tail 订阅),再停 server,
+      // 最后 runCli 的 finally 关库——确保关库前已无订阅者可触发 DB 读。
+      state.shutdown()
       server.stop()
       resolve()
     }

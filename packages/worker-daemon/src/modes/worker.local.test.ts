@@ -78,14 +78,22 @@ function parseSseFrames(body: string): Array<{ data: string, event?: string, id?
 describe('local daemon API', () => {
   let dir: string
   let originalPath: string | undefined
+  // 收集本测试 boot 出来的 daemon,afterEach 在关库前 dispose,排空各运行体事件总线,
+  // 断开还活着的 SSE live-tail 订阅,避免关库后被触发的订阅回调泄漏到下一个测试。
+  let bootedDaemons: Array<{ shutdown: () => void }>
 
   beforeEach(() => {
     closeWorkerDb()
     originalPath = process.env.PATH
     dir = mkdtempSync(join(tmpdir(), 'aiworker-workspace-api-'))
+    bootedDaemons = []
   })
 
   afterEach(async () => {
+    // 关库前先 dispose 所有运行体(排空事件总线),否则还活着的订阅会在 closeWorkerDb
+    // 之后被触发,撞上 "Worker database not initialized"。
+    for (const daemon of bootedDaemons)
+      daemon.shutdown()
     closeWorkerDb()
     if (originalPath == null)
       delete process.env.PATH
@@ -121,6 +129,7 @@ describe('local daemon API', () => {
       webStaticDir,
       workersRoot: join(dir, 'workers'),
     })
+    bootedDaemons.push(boot.state)
     return boot.app
   }
 
@@ -828,7 +837,8 @@ describe('local daemon API', () => {
       runtimeVersion: 'test',
       workersRoot: join(dir, 'workers'),
     }
-    await bootstrapWorkerApp(bootOptions)
+    const firstBoot = await bootstrapWorkerApp(bootOptions)
+    bootedDaemons.push(firstBoot.state)
     upsertWorker({ id: 'dirty-a', appId: FREEFORM_APP_ID, name: 'A', status: 'active' })
     upsertWorker({ id: 'dirty-b', appId: FREEFORM_APP_ID, name: 'B', status: 'active' })
     closeWorkerDb()
@@ -1584,6 +1594,86 @@ describe('local daemon API', () => {
       headers: { 'accept': 'text/event-stream', 'last-event-id': String(lastEvent.id) },
     })
     expect(res.status).toBe(204)
+  })
+
+  // 测试隔离回归守卫:一个还在跑(running)的 invocation 的 SSE live-tail 会订阅
+  // runtime.bus 并 park。若 daemon 关停时不 dispose 运行体(排空总线),关库后任何
+  // bus.emit 都会触发这个还活着的订阅回调 → readSnapshot → getWorkerDb() →
+  // "Worker database not initialized"。在并发负载下,这个泄漏的 DB 读会以
+  // "Unhandled error between tests" / 撞进后一个测试 handler 的形式让无关测试 500。
+  // 本测试在单跑、无负载下确定性复现这个排序:dispose 必须在 closeWorkerDb 之前
+  // 把总线订阅断干净。
+  it('drains live SSE bus subscriptions on shutdown so no DB read fires after closeWorkerDb', async () => {
+    const boot = await bootstrapWorkerApp({
+      dbPath: join(dir, 'worker.db'),
+      executor: {
+        async invoke(input) {
+          input.onEvent?.({ kind: 'text', text: 'done' })
+          return { artifacts: [], summary: 'done' }
+        },
+      },
+      runtimeVersion: 'test',
+      workersRoot: join(dir, 'workers'),
+    })
+    bootedDaemons.push(boot.state)
+    const target = boot.app
+    const worker = await createFreeformWorker(target, 'sse-shutdown-drain-worker')
+    const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
+
+    // running(非 terminal)→ /events 进入 live-tail 分支,订阅 bus 并 park。
+    createEngineInvocation({
+      id: 'daemon-sse-shutdown-invocation',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/daemon-sse-shutdown-invocation/input`,
+      processState: 'spawned',
+      status: 'running',
+    })
+
+    // 打开 SSE 流但不读 body(running 永不收尾),让 streamSSE 回调跑到订阅 bus。
+    const sseRes = await target.request('/api/engine/invocations/daemon-sse-shutdown-invocation/events', {
+      headers: { accept: 'text/event-stream' },
+    })
+    expect(sseRes.status).toBe(200)
+    await new Promise(resolve => setTimeout(resolve, 50))
+
+    const runtime = boot.state.runtimes.get(worker.id)
+    expect(runtime).toBeDefined()
+
+    // 捕获泄漏的 DB 读以未处理 rejection 形式冒出来(微任务里抛,非同步抛)。
+    const leaked: unknown[] = []
+    const onUnhandled = (reason: unknown) => {
+      leaked.push(reason)
+    }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      // 关停顺序:先 dispose(排空总线),再关库。修复前 dispose 是 no-op,订阅仍活。
+      boot.state.shutdown()
+      closeWorkerDb()
+
+      // 关库后触发一次 bus.emit。修复前:还活着的 live-tail 订阅回调被触发 → DB 读
+      // → "Worker database not initialized"。修复后:总线已排空,无回调,无 DB 读。
+      runtime!.bus.emit({
+        kind: 'event',
+        workspaceId: workspace.id,
+        sessionId: session.id,
+        invocationId: 'daemon-sse-shutdown-invocation',
+        payload: { status: 'running' },
+        at: new Date().toISOString(),
+      })
+      // 排空微任务,让任何被排进队列的 readSnapshot → getWorkerDb() 跑完并 settle。
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+
+    const leakedDbErrors = leaked.filter(reason =>
+      reason instanceof Error && reason.message.includes('Worker database not initialized'),
+    )
+    expect(leakedDbErrors).toEqual([])
   })
 
   it('lists workspace files for the mounted artifacts surface', async () => {

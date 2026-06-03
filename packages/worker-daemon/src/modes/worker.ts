@@ -104,6 +104,10 @@ export interface LocalDaemonState {
   // orchestrator hands each runtime. Must NOT diverge from the runtime's view.
   workersRoot: string
   now?: () => string
+  // 关停 daemon:dispose 所有运行体(排空各自事件总线,断开还活着的 SSE live-tail
+  // 订阅),必须在 closeWorkerDb 之前调用,否则关库后被触发的订阅回调会撞上
+  // "Worker database not initialized"。幂等。
+  shutdown: () => void
 }
 
 export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}): Promise<{
@@ -143,6 +147,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     runtimeVersion,
     workersRoot,
     now: options.now,
+    shutdown: () => {
+      for (const runtime of runtimes.values())
+        runtime.dispose()
+      runtimes.clear()
+    },
   }
   await state.host.bootstrapOfficialSoulApps()
   // C4:daemon 至多重建一个 active worker。>1 active 仅来自旧多路复用脏 DB →
