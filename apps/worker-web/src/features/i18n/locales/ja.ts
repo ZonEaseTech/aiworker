@@ -253,7 +253,6 @@ export const ja = {
       enableApp: name => `${name} を有効化`,
       enabledConnector: '有効',
       hint: 'インストール済み Souls は、作成できる worker と workspace の種類を定義します。診断情報は worker レールではなくここに集約します。',
-      mountedWorkbenchCount: count => `マウント済み Workbench ${count} 件`,
       permissionsTitle: 'App アクセス',
       permissionCount: count => `アクセス項目 ${count} 件`,
       title: 'Souls',

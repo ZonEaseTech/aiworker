@@ -253,7 +253,6 @@ export const de = {
       enableApp: name => `${name} aktivieren`,
       enabledConnector: 'aktiviert',
       hint: 'Installierte Souls bestimmen, welche vertikalen Produkte Worker und Workspaces erstellen können. Diagnosen bleiben hier statt in der Worker-Leiste.',
-      mountedWorkbenchCount: count => `${count} gemountete ${count === 1 ? 'Workbench' : 'Workbenches'}`,
       permissionsTitle: 'App-Zugriff',
       permissionCount: count => `${count} ${count === 1 ? 'Zugriffseintrag' : 'Zugriffseinträge'}`,
       title: 'Souls',

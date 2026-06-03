@@ -551,7 +551,6 @@ function SoulAppsSettings({
         {apps.length > 0
           ? apps.map((app) => {
               const permissionCount = app.permissions.length
-              const workbenchCount = app.mountedWorkbench ? 1 : 0
               const apiRoutePrefix = app.api.routePrefix
               const soulId = app.projectedSoul?.id || app.appId
               const permissionLabels = app.permissions.map(permissionLabel).filter(isString)
@@ -579,7 +578,6 @@ function SoulAppsSettings({
                     <CardDescription>{soulId}</CardDescription>
                     <ItemActions className="min-w-0 flex-wrap justify-start gap-1.5">
                       <Badge variant="outline">{soulAppsCopy.permissionCount(permissionCount)}</Badge>
-                      <Badge variant="outline">{soulAppsCopy.mountedWorkbenchCount(workbenchCount)}</Badge>
                     </ItemActions>
                     <ItemGroup className="gap-2" aria-label={`${app.name} app access`}>
                       {permissionLabels.length > 0

@@ -256,7 +256,6 @@ export const en = {
       enableApp: name => `Enable ${name}`,
       enabledConnector: 'enabled',
       hint: 'Installed Souls define which vertical products can create workers and workspaces. Diagnostics stay here instead of the worker rail.',
-      mountedWorkbenchCount: count => `${count} mounted ${count === 1 ? 'workbench' : 'workbenches'}`,
       permissionsTitle: 'App access',
       permissionCount: count => `${count} access ${count === 1 ? 'entry' : 'entries'}`,
       title: 'Souls',

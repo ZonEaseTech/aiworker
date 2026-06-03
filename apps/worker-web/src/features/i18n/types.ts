@@ -254,7 +254,6 @@ export interface StaticMessages {
       enableApp: (name: string) => string
       enabledConnector: string
       hint: string
-      mountedWorkbenchCount: (count: number) => string
       permissionsTitle: string
       permissionCount: (count: number) => string
       title: string

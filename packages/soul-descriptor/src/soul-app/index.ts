@@ -26,7 +26,6 @@ export type {
 export {
   buildHostedSoulApp,
   hostedSoulAppSchema,
-  mountedWorkbenchSchema,
   projectSoulAppSoul,
   soulAppHealthStatusSchema,
   soulAppInstallSourceKindSchema,
@@ -36,7 +35,6 @@ export {
 export type {
   HostedSoulApp,
   HostedSoulAppApi,
-  MountedWorkbench,
   SoulAppHealthStatus,
   SoulAppInstallSourceKind,
   SoulAppRegistryStatus,

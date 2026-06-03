@@ -124,13 +124,6 @@ function hostedApp({
     },
     healthMessage: null,
     healthStatus: 'unknown',
-    mountedWorkbench: {
-      entry: '/micro-app/workbench',
-      id: 'workbench',
-      path: '/workbench',
-      renderer: 'micro-app',
-      scope: 'app',
-    },
     name: appName,
     permissions,
     projectedSoul: {

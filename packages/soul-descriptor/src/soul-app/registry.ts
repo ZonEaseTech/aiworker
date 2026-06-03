@@ -67,15 +67,6 @@ const hostedSoulAppApiSchema = zod.object({
 })
 export type HostedSoulAppApi = z.infer<typeof hostedSoulAppApiSchema>
 
-export const mountedWorkbenchSchema = zod.object({
-  entry: zod.literal('/micro-app/workbench'),
-  id: zod.literal('workbench'),
-  path: zod.literal('/workbench'),
-  renderer: zod.literal('micro-app'),
-  scope: zod.literal('app'),
-})
-export type MountedWorkbench = z.infer<typeof mountedWorkbenchSchema>
-
 export const hostedSoulAppSchema = zod.object({
   api: hostedSoulAppApiSchema,
   appId: zod.string().min(1),
@@ -85,7 +76,6 @@ export const hostedSoulAppSchema = zod.object({
   engineAssets: zod.custom<SoulAppEngineAssets>(),
   healthMessage: zod.string().nullable(),
   healthStatus: soulAppHealthStatusSchema,
-  mountedWorkbench: mountedWorkbenchSchema,
   name: zod.string().min(1),
   permissions: zod.array(soulAppPermissionSchema).readonly(),
   projectedSoul: verticalSoulSchema,
@@ -126,13 +116,6 @@ export function buildHostedSoulApp(input: {
     engineAssets: engineAssetsForDescriptor(input.descriptor),
     healthMessage: input.healthMessage ?? null,
     healthStatus: input.healthStatus ?? 'unknown',
-    mountedWorkbench: {
-      entry: '/micro-app/workbench',
-      id: 'workbench',
-      path: '/workbench',
-      renderer: 'micro-app',
-      scope: 'app',
-    },
     name: identity.name,
     permissions: permissionsForDescriptor(input.descriptor),
     projectedSoul: projectSoulAppSoul(input.descriptor, input.status === 'enabled' ? 'available' : 'coming_soon'),
@@ -156,23 +139,18 @@ function descriptorIdentity(descriptor: SoulDescriptorV1): {
 }
 
 function apiForDescriptor(_descriptor: SoulDescriptorV1): HostedSoulAppApi {
-  // A Soul is a descriptor-only template of engine assets: it has no app-owned API
-  // and no local service. The mounted workbench resolves its URL prefix from the
-  // `appOwnedApiRoutePrefix` fallback (`/api/apps/:appId`), so leave both null.
+  // Soul 是 descriptor-only 的 engine-asset 模板：没有 app-owned API，也没有 local
+  // service，因此 localService 与 routePrefix 都为 null。
   return {
     localService: null,
     routePrefix: null,
   }
 }
 
-function permissionsForDescriptor(descriptor: SoulDescriptorV1): SoulAppPermission[] {
-  const identity = descriptorIdentity(descriptor)
-  return [{
-    action: 'mount',
-    kind: 'ui',
-    reason: 'Mount the descriptor-declared Soul workbench.',
-    target: `${identity.id}-workbench`,
-  }]
+function permissionsForDescriptor(_descriptor: SoulDescriptorV1): SoulAppPermission[] {
+  // v1 = worker-owns-workbench：Soul 是 descriptor-only 模板，没有 mounted workbench，
+  // 因此不投影任何 mount 权限，permissions 恒为空。
+  return []
 }
 
 function engineAssetsForDescriptor(descriptor: SoulDescriptorV1): SoulAppEngineAssets {
