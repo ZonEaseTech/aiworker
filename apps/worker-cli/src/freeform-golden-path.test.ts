@@ -284,6 +284,9 @@ describe('Freeform CLI golden path', () => {
       await assertRedactedEngineLogProof(invocation.metadataJson)
 
     await expect(readFile(path.join(workspace.workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('AIWorker Freeform Workspace')
+    // CLAUDE.md is the Claude Code entry file: it imports AGENTS.md via `@AGENTS.md`
+    // so both engines read the same workspace guidance. It must project alongside AGENTS.md.
+    await expect(readFile(path.join(workspace.workspace.rootPath, 'CLAUDE.md'), 'utf8')).resolves.toContain('@AGENTS.md')
     await expect(stat(path.join(workspace.workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'))).resolves.toBeTruthy()
 
     const archived = await runCliJson<{ session: { id: string, status: string } }>('session', 'archive', started.session.id)
