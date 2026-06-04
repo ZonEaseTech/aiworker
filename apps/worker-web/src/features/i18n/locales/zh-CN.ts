@@ -86,6 +86,7 @@ export const zhCN = {
     artifactCount: count => `${count} 个输出`,
     byokNeedsKey: 'BYOK 需要提供方、模型和 API key 引用后才能运行会话调用。',
     byokReady: (provider, model) => `${provider} ${model} 已可用于会话调用。`,
+    archive: '归档',
     archiveSession: '归档会话',
     archiveWorkspace: '归档工作区',
     archiveConfirmation: {

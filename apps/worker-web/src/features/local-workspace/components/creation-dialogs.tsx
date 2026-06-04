@@ -101,6 +101,9 @@ export function CreateWorkerDialog({
   selectedSoulId: string
   workerName: string
 }) {
+  const selectedSoul = availableSouls.find(soul => soul.id === selectedSoulId)
+  const selectedSoulCopy = selectedSoul ? displaySoul(selectedSoul, locale) : null
+
   return (
     <CreateDialogShell
       description={copy.workspace.createWorkerHint}
@@ -121,9 +124,11 @@ export function CreateWorkerDialog({
               <SelectTrigger
                 id="create-worker-soul"
                 aria-label={copy.create.soul}
-                className="w-full"
+                className="w-full overflow-hidden"
               >
-                <SelectValue placeholder={copy.create.soul} />
+                <SelectValue placeholder={copy.create.soul}>
+                  {selectedSoulCopy?.name}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent
                 align="start"

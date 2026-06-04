@@ -89,6 +89,7 @@ export const en = {
     artifactCount: count => `${count} outputs`,
     byokNeedsKey: 'BYOK needs a provider, model, and API key reference before session invocations can run.',
     byokReady: (provider, model) => `${provider} ${model} is configured for session invocations.`,
+    archive: 'Archive',
     archiveSession: 'Archive session',
     archiveWorkspace: 'Archive workspace',
     archiveConfirmation: {

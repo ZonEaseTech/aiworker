@@ -5,7 +5,7 @@ import type { SettingsSection } from '../features/settings'
 import type { ChatComposerLabels } from './studio/chat/chat-composer'
 import type { WorkerStudioLocatorState } from './studio/locator'
 
-import { Add01Icon, Archive01Icon, FolderLibraryIcon } from '@hugeicons/core-free-icons'
+import { Add01Icon, Archive01Icon, FolderLibraryIcon, MoreHorizontalCircle01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Button } from '@zonease/aiworker-ui/components/button'
@@ -19,6 +19,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@zonease/aiworker-ui/components/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@zonease/aiworker-ui/components/dropdown-menu'
 import { ItemTitle } from '@zonease/aiworker-ui/components/item'
 import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/managed-session-composer'
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
@@ -32,14 +38,13 @@ import {
   archiveSession,
   archiveWorkspace,
   createSession,
-  createWorker,
   createWorkspace,
   loadLocalWorkspaceData,
   loadWorkerOverlay,
   saveWorkerOverlayConfigValues,
   submitSessionInvocation,
 } from '../features/local-workspace/api'
-import { CreateWorkerDialog, CreateWorkspaceDialog } from '../features/local-workspace/components'
+import { CreateWorkspaceDialog } from '../features/local-workspace/components'
 import { projectNamePlaceholder } from '../features/local-workspace/model'
 import { SettingsDialog } from '../features/settings'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
@@ -98,13 +103,41 @@ function archiveConfirmationTitle(copy: ReturnType<typeof messagesFor>, kind: Pe
   return copy.workspace.archiveConfirmation[kind].title
 }
 
+function HeaderMoreActionsMenu({
+  actions,
+  label,
+}: {
+  actions: { label: string, onSelect: () => void }[]
+  label: string
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          aria-label={label}
+          title={label}
+        >
+          <HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {actions.map(action => (
+          <DropdownMenuItem key={action.label} onSelect={action.onSelect}>
+            <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
+            {action.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 export function WorkerStudio() {
   const route = useWorkerRoute()
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
-  const [workerName, setWorkerName] = useState('')
-  const [newWorkerSoulId, setNewWorkerSoulId] = useState('')
-  const [createWorkerOpen, setCreateWorkerOpen] = useState(false)
-  const [workspaceWorker, setWorkspaceWorker] = useState<LocalWorkspaceData['workers'][number] | null>(null)
   const [workspaceTitle, setWorkspaceTitle] = useState('')
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -174,12 +207,7 @@ export function WorkerStudio() {
     }, { replace: true })
   }, [route.kind, selectedSession, selectedWorkspace])
 
-  const availableSouls = useMemo(
-    () => data?.souls.filter(soul => soul.status === 'available') ?? [],
-    [data],
-  )
-  const selectedNewWorkerSoulId = newWorkerSoulId || selectedSoul?.id || availableSouls[0]?.id || ''
-  const workspaceTargetWorker = selectedWorker ?? workspaceWorker
+  const workspaceTargetWorker = selectedWorker
   const workspaceTargetSoul = workspaceTargetWorker
     ? data?.souls.find(soul => soul.id === workspaceTargetWorker.appId) ?? selectedSoul
     : selectedSoul
@@ -227,8 +255,6 @@ export function WorkerStudio() {
   function openWorkspaceCreation() {
     if (workspaceTargetWorker)
       setCreateWorkspaceOpen(true)
-    else
-      setCreateWorkerOpen(true)
   }
 
   async function saveWorkerOverlayAssets(assets: LocalWorkerOverlayAsset[]) {
@@ -258,29 +284,6 @@ export function WorkerStudio() {
     })
   }, [])
 
-  async function submitWorker(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const appId = selectedNewWorkerSoulId
-    if (!data || !appId || !workerName.trim())
-      return
-    setSubmitting(true)
-    try {
-      const result = await createWorker({
-        appId,
-        name: workerName.trim(),
-      })
-      setWorkerName('')
-      setWorkspaceWorker(result.worker)
-      setCreateWorkerOpen(false)
-      await refresh()
-      navigateWorkerRoute({ kind: 'worker', workerId: result.worker.id })
-      setCreateWorkspaceOpen(true)
-    }
-    finally {
-      setSubmitting(false)
-    }
-  }
-
   async function submitWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const worker = workspaceTargetWorker
@@ -294,7 +297,6 @@ export function WorkerStudio() {
         name: workspaceTitle.trim(),
       })
       setWorkspaceTitle('')
-      setWorkspaceWorker(null)
       setCreateWorkspaceOpen(false)
       await refresh()
       navigateWorkerRoute({ kind: 'workspace', workerId: worker.id, workspaceId: workspaceResult.workspace.id })
@@ -463,7 +465,6 @@ export function WorkerStudio() {
                     submitting={submitting}
                     workspaceTitle={workspaceTitle}
                     onClose={() => {
-                      setWorkspaceWorker(null)
                       setCreateWorkspaceOpen(false)
                     }}
                     onSubmit={submitWorkspace}
@@ -471,19 +472,6 @@ export function WorkerStudio() {
                   />
                 )
               : null}
-
-            <CreateWorkerDialog
-              availableSouls={availableSouls}
-              copy={copy}
-              locale={activeLocale}
-              open={createWorkerOpen}
-              selectedSoulId={selectedNewWorkerSoulId}
-              workerName={workerName}
-              onClose={() => setCreateWorkerOpen(false)}
-              onNameChange={setWorkerName}
-              onSoulChange={setNewWorkerSoulId}
-              onSubmit={submitWorker}
-            />
 
             {settingsOpen
               ? (
@@ -536,10 +524,10 @@ export function WorkerStudio() {
         variant={layoutVariant}
         sidebar={(
           <WorkspaceTree
-            archiveWorkspaceLabel={copy.workspace.archiveWorkspace}
+            archiveLabel={copy.workspace.archive}
             emptyWorkspacesLabel={copy.projects.empty.title}
             newSessionLabel={copy.workspace.newSession}
-            newWorkspaceLabel={selectedWorker ? copy.workspace.newWorkspace : copy.workspace.createWorker}
+            newWorkspaceLabel={copy.workspace.newWorkspace}
             noSessionsLabel={copy.workspace.noWorkspaceSessions}
             selectedSessionId={selectedSession?.id ?? null}
             selectedWorkspaceId={selectedWorkspace?.id ?? null}
@@ -550,6 +538,15 @@ export function WorkerStudio() {
               setPendingArchive({
                 kind: 'workspace',
                 label: workspace.name,
+                workerId: workspace.workerId,
+                workspaceId: workspace.id,
+              })
+            }}
+            onArchiveSession={(workspace, session) => {
+              setPendingArchive({
+                kind: 'session',
+                label: session.title,
+                sessionId: session.id,
                 workerId: workspace.workerId,
                 workspaceId: workspace.id,
               })
@@ -631,28 +628,12 @@ function WorkbenchMain({
       <>
         <StudioChromeHeader
           actions={(
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label={copy.workspace.archiveWorkspace}
-                title={copy.workspace.archiveWorkspace}
-                onClick={onArchiveWorkspace}
-              >
-                <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label={copy.workspace.archiveSession}
-                title={copy.workspace.archiveSession}
-                onClick={onArchiveSession}
-              >
-                <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
-              </Button>
-            </>
+            <HeaderMoreActionsMenu
+              label="More actions for current session"
+              actions={[
+                { label: copy.workspace.archive, onSelect: onArchiveSession },
+              ]}
+            />
           )}
         >
           <StudioTitleBlock kicker={copy.workspace.currentSession} title={selectedSession.title} />
@@ -675,16 +656,12 @@ function WorkbenchMain({
       <>
         <StudioChromeHeader
           actions={(
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              aria-label={copy.workspace.archiveWorkspace}
-              title={copy.workspace.archiveWorkspace}
-              onClick={onArchiveWorkspace}
-            >
-              <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
-            </Button>
+            <HeaderMoreActionsMenu
+              label="More actions for current workspace"
+              actions={[
+                { label: copy.workspace.archive, onSelect: onArchiveWorkspace },
+              ]}
+            />
           )}
         >
           <StudioTitleBlock kicker={copy.workspace.currentWorkspace} title={selectedWorkspace.name} />
@@ -720,20 +697,15 @@ function WorkbenchMain({
         title={hasWorkspaces ? copy.workspace.noSelectionTitle : copy.projects.empty.title}
         detail={hasWorkspaces
           ? copy.workspace.noSelectionDetail
-          : hasWorker ? copy.projects.empty.detail(selectedSoulName) : copy.workspace.createWorkerHint}
-        action={hasWorkspaces
+          : hasWorker ? copy.projects.empty.detail(selectedSoulName) : copy.workspace.noWorker}
+        action={hasWorker
           ? (
               <Button type="button" size="lg" onClick={onCreateWorkspace}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
-                {copy.workspace.newWorkspace}
+                {hasWorkspaces ? copy.workspace.newWorkspace : copy.workspace.createWorkspace}
               </Button>
             )
-          : (
-              <Button type="button" size="lg" onClick={onCreateWorkspace}>
-                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
-                {hasWorker ? copy.workspace.createWorkspace : copy.workspace.createWorker}
-              </Button>
-            )}
+          : null}
       />
     </StudioMainFrame>
   )

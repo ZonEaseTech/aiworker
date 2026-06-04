@@ -18,8 +18,17 @@ function selectSettingsTab(tab: HTMLElement) {
   fireEvent.mouseDown(tab, { button: 0, ctrlKey: false })
 }
 
+function openMenu(trigger: HTMLElement) {
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' })
+}
+
 function expectNoArchiveRequest(pathname: string) {
   expect(fetch).not.toHaveBeenCalledWith(pathname, expect.objectContaining({ method: 'POST' }))
+}
+
+function expectNeutralArchiveMenuItem(item: HTMLElement) {
+  expect(item.getAttribute('data-slot')).toBe('dropdown-menu-item')
+  expect(item.getAttribute('data-variant')).toBe('default')
 }
 
 const workspace = {
@@ -426,9 +435,16 @@ describe('worker studio', () => {
     const tree = await screen.findByTestId('workspace-tree')
     expect(within(tree).getByText('Demo Workspace')).toBeTruthy()
     expect(within(tree).getByRole('button', { name: 'Open session Screen request' })).toBeTruthy()
-    expect(within(tree).getByRole('button', { name: 'Archive workspace Demo Workspace' })).toBeTruthy()
+    expect(within(tree).queryByRole('button', { name: 'Archive workspace Demo Workspace' })).toBeNull()
+    const workspaceMoreAction = within(tree).getByRole('button', { name: 'More actions for workspace Demo Workspace' })
+    const sessionMoreAction = within(tree).getByRole('button', { name: 'More actions for session Screen request' })
+    expect(workspaceMoreAction).toBeTruthy()
+    expect(sessionMoreAction).toBeTruthy()
     expect(within(tree).getByRole('button', { name: 'New workspace' })).toBeTruthy()
     expect(within(tree).getAllByRole('button', { name: /New session/ }).length).toBeGreaterThan(0)
+
+    openMenu(sessionMoreAction)
+    expectNeutralArchiveMenuItem(await screen.findByRole('menuitem', { name: 'Archive' }))
   })
 
   it('renders the selected session chat directly in the main area without a mounted micro-app', async () => {
@@ -488,7 +504,7 @@ describe('worker studio', () => {
     expect(lastWorkspaceRequestBody).toMatchObject({ name: 'Release workspace', workerId: 'primary-worker' })
   })
 
-  it('creates a worker first when the live workspace page has no active worker', async () => {
+  it('does not expose create-worker fallback when the Workbench has no active worker', async () => {
     currentWorkers = []
     currentWorkspaces = []
     currentSessions = []
@@ -496,54 +512,10 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     const main = await screen.findByLabelText('Soul workspaces and sessions')
-    fireEvent.click(within(main).getByRole('button', { name: 'Create worker' }))
-
-    const workerDialog = await screen.findByRole('dialog', { name: 'Create worker' })
-    fireEvent.change(within(workerDialog).getByLabelText('Worker name'), { target: { value: 'Primary live worker' } })
-    fireEvent.click(within(workerDialog).getByRole('button', { name: 'Create worker' }))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/workers', expect.objectContaining({ method: 'POST' }))
-    })
-    expect(lastWorkerRequestBody).toMatchObject({ appId: PRIMARY_SOUL_ID, name: 'Primary live worker' })
-
-    const workspaceDialog = await screen.findByRole('dialog', { name: 'Create workspace' })
-    expect((within(workspaceDialog).getByLabelText('Current worker') as HTMLInputElement).value).toBe('Primary live worker / Demo Primary')
-    fireEvent.change(within(workspaceDialog).getByLabelText('Workspace name'), { target: { value: 'Live browser workspace' } })
-    fireEvent.click(within(workspaceDialog).getByTestId('create-project'))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/workspace-locators', expect.objectContaining({ method: 'POST' }))
-      expect(window.location.pathname).toBe('/workers/worker-created/workspaces/workspace-created')
-    })
-    expect(lastWorkspaceRequestBody).toMatchObject({ name: 'Live browser workspace', workerId: 'worker-created' })
-  })
-
-  it('uses the created worker for workspace creation even before the worker list refresh sees it', async () => {
-    currentWorkers = []
-    currentWorkspaces = []
-    currentSessions = []
-    hideCreatedWorkerFromWorkerList = true
-    window.history.replaceState(null, '', '/')
-    render(<WorkerStudio />)
-
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
-    fireEvent.click(within(main).getByRole('button', { name: 'Create worker' }))
-
-    const workerDialog = await screen.findByRole('dialog', { name: 'Create worker' })
-    fireEvent.change(within(workerDialog).getByLabelText('Worker name'), { target: { value: 'Delayed worker' } })
-    fireEvent.click(within(workerDialog).getByRole('button', { name: 'Create worker' }))
-
-    const workspaceDialog = await screen.findByRole('dialog', { name: 'Create workspace' })
-    expect((within(workspaceDialog).getByLabelText('Current worker') as HTMLInputElement).value).toBe('Delayed worker / Demo Primary')
-    fireEvent.change(within(workspaceDialog).getByLabelText('Workspace name'), { target: { value: 'Delayed refresh workspace' } })
-    fireEvent.click(within(workspaceDialog).getByTestId('create-project'))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/workspace-locators', expect.objectContaining({ method: 'POST' }))
-      expect(window.location.pathname).toBe('/workers/worker-created/workspaces/workspace-created')
-    })
-    expect(lastWorkspaceRequestBody).toMatchObject({ name: 'Delayed refresh workspace', workerId: 'worker-created' })
+    expect(within(main).queryByRole('button', { name: 'Create worker' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Create worker' })).toBeNull()
+    expect(fetch).not.toHaveBeenCalledWith('/api/workers', expect.objectContaining({ method: 'POST' }))
+    expect(lastWorkerRequestBody).toBeNull()
   })
 
   it('creates a workspace for the active worker even when its Soul app is not currently available', async () => {
@@ -597,7 +569,7 @@ describe('worker studio', () => {
     expect(empty?.className).toContain('text-center')
     expect(empty?.className).not.toContain('items-start')
     expect(within(main).getByRole('button', { name: 'New workspace' })).toBeTruthy()
-    expect(within(screen.getByTestId('workspace-tree')).getByRole('button', { name: 'Archive workspace Demo Workspace' })).toBeTruthy()
+    expect(within(screen.getByTestId('workspace-tree')).getByRole('button', { name: 'More actions for workspace Demo Workspace' })).toBeTruthy()
   })
 
   it('shows a create-first-workspace empty state when the worker has no workspaces', async () => {
@@ -671,7 +643,14 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     const main = await screen.findByLabelText('Soul workspaces and sessions')
-    fireEvent.click(within(main).getByRole('button', { name: 'Archive session' }))
+    expect(within(main).queryByRole('button', { name: 'Archive session' })).toBeNull()
+    openMenu(within(main).getByRole('button', { name: 'More actions for current session' }))
+    const archiveSessionMenuItem = await screen.findByRole('menuitem', { name: 'Archive' })
+    expectNeutralArchiveMenuItem(archiveSessionMenuItem)
+    expect(screen.queryByRole('menuitem', { name: 'Archive session' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Archive workspace' })).toBeNull()
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1)
+    fireEvent.click(archiveSessionMenuItem)
     expectNoArchiveRequest('/api/sessions/session-1/archive')
 
     const firstDialog = await screen.findByRole('dialog', { name: 'Archive session?' })
@@ -681,7 +660,8 @@ describe('worker studio', () => {
     })
     expectNoArchiveRequest('/api/sessions/session-1/archive')
 
-    fireEvent.click(within(main).getByRole('button', { name: 'Archive session' }))
+    openMenu(within(main).getByRole('button', { name: 'More actions for current session' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive' }))
     const dialog = await screen.findByRole('dialog', { name: 'Archive session?' })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Archive session' }))
 
@@ -701,7 +681,12 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     const main = await screen.findByLabelText('Soul workspaces and sessions')
-    fireEvent.click(within(main).getByRole('button', { name: 'Archive workspace' }))
+    expect(within(main).queryByRole('button', { name: 'Archive workspace' })).toBeNull()
+    openMenu(within(main).getByRole('button', { name: 'More actions for current workspace' }))
+    const archiveWorkspaceMenuItem = await screen.findByRole('menuitem', { name: 'Archive' })
+    expectNeutralArchiveMenuItem(archiveWorkspaceMenuItem)
+    expect(screen.queryByRole('menuitem', { name: 'Archive workspace' })).toBeNull()
+    fireEvent.click(archiveWorkspaceMenuItem)
     expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
 
     const dialog = await screen.findByRole('dialog', { name: 'Archive workspace?' })
@@ -721,7 +706,11 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     const tree = await screen.findByTestId('workspace-tree')
-    fireEvent.click(within(tree).getByRole('button', { name: 'Archive workspace Demo Workspace' }))
+    openMenu(within(tree).getByRole('button', { name: 'More actions for workspace Demo Workspace' }))
+    const archiveWorkspaceMenuItem = await screen.findByRole('menuitem', { name: 'Archive' })
+    expectNeutralArchiveMenuItem(archiveWorkspaceMenuItem)
+    expect(screen.queryByRole('menuitem', { name: 'Archive workspace' })).toBeNull()
+    fireEvent.click(archiveWorkspaceMenuItem)
     expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
 
     const dialog = await screen.findByRole('dialog', { name: 'Archive workspace?' })
@@ -735,25 +724,25 @@ describe('worker studio', () => {
     expect(screen.getByTestId('workspace-tree').textContent).not.toContain('Demo Workspace')
   })
 
-  it('archives the selected workspace from a session context without changing session archive behavior', async () => {
+  it('does not offer workspace archive from a selected session header menu', async () => {
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1/sessions/session-1')
     render(<WorkerStudio />)
 
     const main = await screen.findByLabelText('Soul workspaces and sessions')
-    expect(within(main).getByRole('button', { name: 'Archive session' })).toBeTruthy()
-    fireEvent.click(within(main).getByRole('button', { name: 'Archive workspace' }))
+    expect(within(main).queryByRole('button', { name: 'Archive session' })).toBeNull()
+    openMenu(within(main).getByRole('button', { name: 'More actions for current session' }))
+    const archiveMenuItem = await screen.findByRole('menuitem', { name: 'Archive' })
+    expect(screen.queryByRole('menuitem', { name: 'Archive workspace' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Archive session' })).toBeNull()
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1)
+    fireEvent.click(archiveMenuItem)
     expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
     expectNoArchiveRequest('/api/sessions/session-1/archive')
 
-    const dialog = await screen.findByRole('dialog', { name: 'Archive workspace?' })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive workspace' }))
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/workspace-locators/workspace-1/archive', expect.objectContaining({ method: 'POST' }))
-      expect(fetch).not.toHaveBeenCalledWith('/api/sessions/session-1/archive', expect.objectContaining({ method: 'POST' }))
-      expect(window.location.pathname).toBe('/workers/primary-worker')
-    })
-    expect(currentWorkspaces.find(item => item.id === 'workspace-1')?.status).toBe('archived')
+    const dialog = await screen.findByRole('dialog', { name: 'Archive session?' })
+    expect(screen.queryByRole('dialog', { name: 'Archive workspace?' })).toBeNull()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
   })
 
   it('does not expose or call Worker archive from the Workbench UI', async () => {
@@ -857,6 +846,20 @@ describe('worker studio', () => {
     fireEvent.click(sidebarToggle)
     expect(screen.getByRole('button', { name: 'Show sidebar' }).getAttribute('aria-pressed')).toBe('false')
     expect(document.querySelector('[class*="lucide-"]')).toBeNull()
+  })
+
+  it('aligns the workspace list title and create action in a compact sidebar row', async () => {
+    render(<WorkerStudio />)
+
+    const header = await screen.findByTestId('workspace-tree-header')
+    expect(header.className).toContain('items-center')
+    expect(header.className).toContain('justify-between')
+    expect(within(header).getByText('Workspaces').getAttribute('data-slot')).toBe('sidebar-group-label')
+
+    const action = within(header).getByRole('button', { name: 'New workspace' })
+    expect(action.getAttribute('data-slot')).toBe('sidebar-menu-button')
+    expect(action.getAttribute('data-size')).toBe('sm')
+    expect(action.className).toContain('size-7')
   })
 
   it('opens settings, rescans/tests engines, and autosaves settings changes', async () => {

@@ -86,6 +86,7 @@ export const ja = {
     artifactCount: count => `出力 ${count} 件`,
     byokNeedsKey: 'BYOK にはプロバイダー、モデル、API キー参照が必要です。',
     byokReady: (provider, model) => `${provider} ${model} はセッション呼び出しで利用できます。`,
+    archive: 'アーカイブ',
     archiveSession: 'セッションをアーカイブ',
     archiveWorkspace: 'ワークスペースをアーカイブ',
     archiveConfirmation: {

@@ -86,6 +86,7 @@ export const de = {
     artifactCount: count => `${count} Ausgaben`,
     byokNeedsKey: 'BYOK benötigt Provider, Modell und API-Key-Referenz, bevor Session-Aufrufe laufen können.',
     byokReady: (provider, model) => `${provider} ${model} ist für Session-Aufrufe konfiguriert.`,
+    archive: 'Archivieren',
     archiveSession: 'Session archivieren',
     archiveWorkspace: 'Workspace archivieren',
     archiveConfirmation: {

@@ -87,6 +87,7 @@ export interface StaticMessages {
     artifactCount: (count: number) => string
     byokNeedsKey: string
     byokReady: (provider: string, model: string) => string
+    archive: string
     archiveSession: string
     archiveWorkspace: string
     archiveConfirmation: {

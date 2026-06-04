@@ -8,7 +8,7 @@ import { CreateWorkerDialog, CreateWorkspaceDialog } from './creation-dialogs'
 const copy = messagesFor('en')
 const soul = {
   defaultCapabilities: [],
-  description: 'People operations workspace',
+  description: 'People operations workspace with enough detail to wrap into a second line when rendered inside the select trigger',
   id: 'aiworker-demo-people',
   name: 'Demo People',
   status: 'available',
@@ -38,6 +38,9 @@ describe('creation dialogs', () => {
 
     const soulTrigger = within(dialog).getByRole('combobox', { name: copy.create.soul })
     expect(soulTrigger.getAttribute('data-slot')).toBe('select-trigger')
+    expect(soulTrigger.className).toContain('overflow-hidden')
+    expect(soulTrigger.textContent).toContain(soul.name)
+    expect(soulTrigger.textContent).not.toContain(soul.description)
     expect(dialog.querySelector('[data-slot="field-group"] [data-slot="field-group"]')).toBeNull()
 
     const workerInput = within(dialog).getByLabelText(copy.workspace.workerName)
