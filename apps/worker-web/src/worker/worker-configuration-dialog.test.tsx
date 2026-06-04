@@ -1,6 +1,6 @@
 import type { LocalWorker, LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-descriptor'
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { messagesFor } from '../features/i18n'
@@ -38,6 +38,19 @@ const skillOverlay: LocalWorkerOverlayAsset = {
   id: 'custom-skill',
   source: 'overlay',
   sourceRef: 'worker-overlay://skills/custom-skill/SKILL.md',
+}
+
+const entryFileOverlay: LocalWorkerOverlayAsset = {
+  checksum: null,
+  enabled: true,
+  id: 'README.md',
+  kind: 'entry-file',
+  metadataJson: {},
+  optionsJson: {},
+  source: 'overlay',
+  sourceRef: 'worker-overlay://entry-files/README.md',
+  target: 'codex',
+  updatedAt: now,
 }
 
 const mcpAsset: LocalWorkerOverlayAsset = {
@@ -96,6 +109,15 @@ function renderDialog(assets: LocalWorkerOverlayAsset[], onReload = vi.fn()) {
   )
 }
 
+function editorPanel() {
+  return within(screen.getByTestId('worker-overlay-editor-panel'))
+}
+
+function expectNoDetachedAddButtons() {
+  expect(screen.queryByRole('button', { name: `+ ${copy.workerConfig.addSkill}` })).toBeNull()
+  expect(screen.queryByRole('button', { name: `+ ${copy.workerConfig.addEntryFile}` })).toBeNull()
+}
+
 function selectAssetRow(assetId: string) {
   const row = screen.getAllByRole('button').find(button =>
     button.getAttribute('data-slot') === 'sidebar-menu-button' && button.textContent?.includes(assetId),
@@ -105,27 +127,73 @@ function selectAssetRow(assetId: string) {
   fireEvent.click(row)
 }
 
-async function openEditor(assetId: string, actionLabel: string) {
-  selectAssetRow(assetId)
-  fireEvent.click(await screen.findByRole('button', { name: actionLabel }))
-}
-
 describe('worker configuration overlay content editor', () => {
+  it('loads selected skill content inline without opening a nested editor dialog', async () => {
+    routes['GET /api/workers/primary-worker/config/skill-overlay%3Abriefing-brief/content?target=codex'] = () => ({
+      body: { checksum: 'sha256:x', content: '# baseline body', editable: true, source: 'baseline', sourceRef: skillBaseline.sourceRef },
+    })
+    renderDialog([skillBaseline])
+
+    selectAssetRow('briefing-brief')
+
+    const panel = screen.getByTestId('worker-overlay-editor-panel')
+    const textarea = await within(panel).findByLabelText(copy.workerConfig.contentLabel)
+    await waitFor(() => expect((textarea as HTMLTextAreaElement).value).toBe('# baseline body'))
+    expect(screen.queryByRole('button', { name: copy.workerConfig.viewEdit })).toBeNull()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  })
+
+  it('opens add skill as an inline draft in the editor panel', async () => {
+    routes['PUT /api/workers/primary-worker/config/skill-overlay%3Anew-skill/content'] = init => ({
+      body: { checksum: 'sha256:z', content: JSON.parse(String(init?.body)).content, editable: true, source: 'overlay', sourceRef: 'worker-overlay://skills/new-skill/SKILL.md' },
+    })
+    renderDialog([skillBaseline])
+
+    fireEvent.click(screen.getByRole('button', { name: copy.workerConfig.addSkill }))
+
+    const panel = screen.getByTestId('worker-overlay-editor-panel')
+    fireEvent.change(await within(panel).findByLabelText(copy.workerConfig.addNamePlaceholder), { target: { value: 'new-skill' } })
+    fireEvent.change(within(panel).getByLabelText(copy.workerConfig.addContentPlaceholder), { target: { value: '# fresh skill' } })
+    fireEvent.click(within(panel).getByRole('button', { name: copy.workerConfig.add }))
+
+    await waitFor(() => {
+      const put = calls.find(call => call.method === 'PUT' && call.url.includes('skill-overlay%3Anew-skill/content'))
+      expect(put?.body).toMatchObject({ content: '# fresh skill' })
+    })
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  })
+
   it('opens the editor and shows the baseline content with a source indicator', async () => {
     routes['GET /api/workers/primary-worker/config/skill-overlay%3Abriefing-brief/content?target=codex'] = () => ({
       body: { checksum: 'sha256:x', content: '# baseline body', editable: true, source: 'baseline', sourceRef: skillBaseline.sourceRef },
     })
     renderDialog([skillBaseline])
 
-    await openEditor('briefing-brief', copy.workerConfig.viewEdit)
+    selectAssetRow('briefing-brief')
 
-    const textarea = await screen.findByLabelText(copy.workerConfig.contentLabel)
+    expect(editorPanel().queryByRole('button', { name: copy.workerConfig.viewEdit })).toBeNull()
+    const textarea = await editorPanel().findByLabelText(copy.workerConfig.contentLabel)
     await waitFor(() => expect((textarea as HTMLTextAreaElement).value).toBe('# baseline body'))
-    expect(screen.getByTestId('overlay-content-source').textContent).toBe(copy.workerConfig.sourceBaseline)
-    expect(screen.queryByRole('button', { name: copy.workerConfig.resetToBaseline })).toBeNull()
+    expect(editorPanel().getByTestId('overlay-content-source').textContent).toBe(copy.workerConfig.sourceBaseline)
+    expect(editorPanel().queryByRole('button', { name: copy.workerConfig.resetToBaseline })).toBeNull()
   })
 
-  it('edits then saves through PUT content and reloads the config list', async () => {
+  it('selects an entry-file row and loads editable content inline without a View/Edit action', async () => {
+    routes['GET /api/workers/primary-worker/config/entry-file-overlay%3AREADME.md/content'] = () => ({
+      body: { checksum: 'sha256:e', content: '# project notes', editable: true, source: 'overlay', sourceRef: entryFileOverlay.sourceRef },
+    })
+    renderDialog([skillBaseline, entryFileOverlay])
+
+    selectAssetRow('README.md')
+
+    expect(editorPanel().queryByRole('button', { name: copy.workerConfig.viewEdit })).toBeNull()
+    const textarea = await editorPanel().findByLabelText(copy.workerConfig.contentLabel)
+    await waitFor(() => expect((textarea as HTMLTextAreaElement).value).toBe('# project notes'))
+    expect(editorPanel().getByTestId('overlay-content-source').textContent).toBe(copy.workerConfig.sourceOverlay)
+    expect(editorPanel().getByRole('button', { name: copy.workerConfig.resetToBaseline })).toBeTruthy()
+  })
+
+  it('edits selected skill content inline and saves through PUT only after explicit Save', async () => {
     routes['GET /api/workers/primary-worker/config/skill-overlay%3Acustom-skill/content?target=codex'] = () => ({
       body: { checksum: 'sha256:x', content: 'old body', editable: true, source: 'overlay', sourceRef: skillOverlay.sourceRef },
     })
@@ -135,20 +203,55 @@ describe('worker configuration overlay content editor', () => {
     const onReload = vi.fn()
     renderDialog([skillOverlay], onReload)
 
-    await openEditor('custom-skill', copy.workerConfig.viewEdit)
-    const textarea = await screen.findByLabelText(copy.workerConfig.contentLabel)
+    selectAssetRow('custom-skill')
+    const textarea = await editorPanel().findByLabelText(copy.workerConfig.contentLabel)
     await waitFor(() => expect((textarea as HTMLTextAreaElement).value).toBe('old body'))
+    const saveButton = editorPanel().getByRole('button', { name: copy.workerConfig.save })
+    expect(saveButton.hasAttribute('disabled')).toBe(true)
     fireEvent.change(textarea, { target: { value: 'new body' } })
-    fireEvent.click(screen.getByRole('button', { name: copy.workerConfig.save }))
+    expect(saveButton.hasAttribute('disabled')).toBe(false)
+
+    expect(calls.some(call => call.method === 'PUT')).toBe(false)
+    fireEvent.click(saveButton)
 
     await waitFor(() => {
       const put = calls.find(call => call.method === 'PUT' && call.url.includes('skill-overlay%3Acustom-skill/content'))
       expect(put?.body).toMatchObject({ content: 'new body', target: 'codex' })
     })
+    await waitFor(() => expect(saveButton.hasAttribute('disabled')).toBe(true))
     expect(onReload).toHaveBeenCalled()
   })
 
-  it('resets an overlay to baseline by archiving the overlay config', async () => {
+  it('asks before discarding dirty inline content when selecting another asset', async () => {
+    routes['GET /api/workers/primary-worker/config/skill-overlay%3Acustom-skill/content?target=codex'] = () => ({
+      body: { checksum: 'sha256:x', content: 'old body', editable: true, source: 'overlay', sourceRef: skillOverlay.sourceRef },
+    })
+    routes['GET /api/workers/primary-worker/config/entry-file-overlay%3AREADME.md/content'] = () => ({
+      body: { checksum: 'sha256:e', content: '# project notes', editable: true, source: 'overlay', sourceRef: entryFileOverlay.sourceRef },
+    })
+    renderDialog([skillOverlay, entryFileOverlay])
+
+    selectAssetRow('custom-skill')
+    const textarea = await editorPanel().findByLabelText(copy.workerConfig.contentLabel)
+    await waitFor(() => expect((textarea as HTMLTextAreaElement).value).toBe('old body'))
+    fireEvent.change(textarea, { target: { value: 'unsaved body' } })
+
+    selectAssetRow('README.md')
+
+    expect(await screen.findByText(copy.workerConfig.unsavedChangesTitle)).toBeTruthy()
+    expect((textarea as HTMLTextAreaElement).value).toBe('unsaved body')
+    fireEvent.click(screen.getByRole('button', { name: copy.workerConfig.cancel }))
+    expect(screen.queryByText(copy.workerConfig.unsavedChangesTitle)).toBeNull()
+    expect((textarea as HTMLTextAreaElement).value).toBe('unsaved body')
+
+    selectAssetRow('README.md')
+    fireEvent.click(await screen.findByRole('button', { name: copy.workerConfig.discardChanges }))
+
+    const nextTextarea = await editorPanel().findByLabelText(copy.workerConfig.contentLabel)
+    await waitFor(() => expect((nextTextarea as HTMLTextAreaElement).value).toBe('# project notes'))
+  })
+
+  it('resets selected overlay content to baseline from the inline editor', async () => {
     routes['GET /api/workers/primary-worker/config/skill-overlay%3Acustom-skill/content?target=codex'] = () => ({
       body: { checksum: 'sha256:x', content: 'overlay body', editable: true, source: 'overlay', sourceRef: skillOverlay.sourceRef },
     })
@@ -158,9 +261,9 @@ describe('worker configuration overlay content editor', () => {
     const onReload = vi.fn()
     renderDialog([skillOverlay], onReload)
 
-    await openEditor('custom-skill', copy.workerConfig.viewEdit)
-    await screen.findByLabelText(copy.workerConfig.contentLabel)
-    fireEvent.click(await screen.findByRole('button', { name: copy.workerConfig.resetToBaseline }))
+    selectAssetRow('custom-skill')
+    await editorPanel().findByLabelText(copy.workerConfig.contentLabel)
+    fireEvent.click(editorPanel().getByRole('button', { name: copy.workerConfig.resetToBaseline }))
 
     await waitFor(() => {
       expect(calls.some(call => call.method === 'POST' && call.url.includes('skill-overlay%3Acustom-skill/archive'))).toBe(true)
@@ -168,17 +271,18 @@ describe('worker configuration overlay content editor', () => {
     expect(onReload).toHaveBeenCalled()
   })
 
-  it('adds a new skill overlay by PUTting a new configKey', async () => {
+  it('creates a skill draft from the Skills category plus and saves it from the right panel', async () => {
     routes['PUT /api/workers/primary-worker/config/skill-overlay%3Anew-skill/content'] = init => ({
       body: { checksum: 'sha256:z', content: JSON.parse(String(init?.body)).content, editable: true, source: 'overlay', sourceRef: 'worker-overlay://skills/new-skill/SKILL.md' },
     })
     const onReload = vi.fn()
     renderDialog([skillBaseline], onReload)
 
-    fireEvent.click(screen.getByRole('button', { name: `+ ${copy.workerConfig.addSkill}` }))
-    fireEvent.change(await screen.findByLabelText(copy.workerConfig.addNamePlaceholder), { target: { value: 'new-skill' } })
-    fireEvent.change(screen.getByLabelText(copy.workerConfig.addContentPlaceholder), { target: { value: '# fresh skill' } })
-    fireEvent.click(screen.getByRole('button', { name: copy.workerConfig.add }))
+    expectNoDetachedAddButtons()
+    fireEvent.click(screen.getByRole('button', { name: copy.workerConfig.addSkill }))
+    fireEvent.change(editorPanel().getByLabelText(copy.workerConfig.addNamePlaceholder), { target: { value: 'new-skill' } })
+    fireEvent.change(editorPanel().getByLabelText(copy.workerConfig.addContentPlaceholder), { target: { value: '# fresh skill' } })
+    fireEvent.click(editorPanel().getByRole('button', { name: copy.workerConfig.add }))
 
     await waitFor(() => {
       const put = calls.find(call => call.method === 'PUT' && call.url.includes('skill-overlay%3Anew-skill/content'))
@@ -187,17 +291,18 @@ describe('worker configuration overlay content editor', () => {
     expect(onReload).toHaveBeenCalled()
   })
 
-  it('adds a new entry file overlay through content PUT instead of a descriptor envelope', async () => {
+  it('creates an entry-file draft from the Entry files category plus and saves through content PUT', async () => {
     routes['PUT /api/workers/primary-worker/config/entry-file-overlay%3AREADME.md/content'] = init => ({
       body: { checksum: 'sha256:z', content: JSON.parse(String(init?.body)).content, editable: true, source: 'overlay', sourceRef: 'worker-overlay://entry-files/README.md' },
     })
     const onReload = vi.fn()
     renderDialog([skillBaseline], onReload)
 
-    fireEvent.click(screen.getByRole('button', { name: `+ ${copy.workerConfig.addEntryFile}` }))
-    fireEvent.change(await screen.findByLabelText(copy.workerConfig.addNamePlaceholder), { target: { value: 'README.md' } })
-    fireEvent.change(screen.getByLabelText(copy.workerConfig.addContentPlaceholder), { target: { value: '# Project notes' } })
-    fireEvent.click(screen.getByRole('button', { name: copy.workerConfig.add }))
+    expectNoDetachedAddButtons()
+    fireEvent.click(screen.getByRole('button', { name: copy.workerConfig.addEntryFile }))
+    fireEvent.change(editorPanel().getByLabelText(copy.workerConfig.addNamePlaceholder), { target: { value: 'README.md' } })
+    fireEvent.change(editorPanel().getByLabelText(copy.workerConfig.addContentPlaceholder), { target: { value: '# Project notes' } })
+    fireEvent.click(editorPanel().getByRole('button', { name: copy.workerConfig.add }))
 
     await waitFor(() => {
       const put = calls.find(call => call.method === 'PUT' && call.url.includes('entry-file-overlay%3AREADME.md/content'))
@@ -218,7 +323,7 @@ describe('worker configuration overlay content editor', () => {
     expect(screen.queryByText(mcpAsset.sourceRef)).toBeNull()
   })
 
-  it('shows an mcp row as a read-only redacted view with no Save or Reset', async () => {
+  it('selects an mcp row and auto-previews redacted content inline as read-only with no Save or Reset', async () => {
     routes['GET /api/workers/primary-worker/config/mcp-overlay%3Acodex/content'] = () => ({
       body: { checksum: 'sha256:x', content: 'token = [redacted]', editable: false, source: 'baseline', sourceRef: mcpAsset.sourceRef },
     })
@@ -226,17 +331,19 @@ describe('worker configuration overlay content editor', () => {
 
     selectAssetRow('team-context')
     expect(screen.queryByRole('button', { name: copy.workerConfig.viewEdit })).toBeNull()
-    fireEvent.click(await screen.findByRole('button', { name: copy.workerConfig.view }))
+    expect(screen.queryByRole('button', { name: copy.workerConfig.view })).toBeNull()
 
-    const textarea = await screen.findByLabelText(copy.workerConfig.contentLabel)
+    expect(editorPanel().queryByRole('button', { name: copy.workerConfig.view })).toBeNull()
+    expect(editorPanel().queryByRole('button', { name: copy.workerConfig.viewEdit })).toBeNull()
+    const textarea = await editorPanel().findByLabelText(copy.workerConfig.contentLabel)
     await waitFor(() => expect((textarea as HTMLTextAreaElement).value).toBe('token = [redacted]'))
     expect((textarea as HTMLTextAreaElement).readOnly).toBe(true)
     expect(screen.queryByRole('button', { name: copy.workerConfig.save })).toBeNull()
     expect(screen.queryByRole('button', { name: copy.workerConfig.resetToBaseline })).toBeNull()
-    expect(screen.getByText(copy.workerConfig.readonlyHint)).toBeTruthy()
+    expect(screen.getAllByText(copy.workerConfig.readonlyHint).length).toBeGreaterThan(0)
   })
 
-  it('surfaces the daemon literal-secret rejection (422) as an inline error', async () => {
+  it('surfaces the daemon literal-secret rejection (422) as an inline editor error', async () => {
     routes['GET /api/workers/primary-worker/config/skill-overlay%3Acustom-skill/content?target=codex'] = () => ({
       body: { checksum: 'sha256:x', content: 'body', editable: true, source: 'overlay', sourceRef: skillOverlay.sourceRef },
     })
@@ -246,11 +353,12 @@ describe('worker configuration overlay content editor', () => {
     })
     renderDialog([skillOverlay])
 
-    await openEditor('custom-skill', copy.workerConfig.viewEdit)
-    await screen.findByLabelText(copy.workerConfig.contentLabel)
-    fireEvent.click(screen.getByRole('button', { name: copy.workerConfig.save }))
+    selectAssetRow('custom-skill')
+    const textarea = await editorPanel().findByLabelText(copy.workerConfig.contentLabel)
+    fireEvent.change(textarea, { target: { value: 'literal secret candidate' } })
+    fireEvent.click(editorPanel().getByRole('button', { name: copy.workerConfig.save }))
 
-    const error = await screen.findByTestId('overlay-content-error')
+    const error = await editorPanel().findByTestId('overlay-content-error')
     expect(error.textContent).toBe('literal secrets are not allowed in worker overlay content')
   })
 })

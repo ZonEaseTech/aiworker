@@ -287,6 +287,9 @@ export interface StaticMessages {
     saving: string
     resetToBaseline: string
     cancel: string
+    discardChanges: string
+    unsavedChangesTitle: string
+    unsavedChangesDescription: string
     addNamePlaceholder: string
     addContentPlaceholder: string
     add: string

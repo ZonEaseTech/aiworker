@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { CollapsibleGroup } from '@zonease/aiworker-ui/components/collapsible-group'
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@zonease/aiworker-ui/components/dropdown-menu'
 import { Input } from '@zonease/aiworker-ui/components/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
@@ -52,11 +52,12 @@ export function WorkerConfigurationDialog({
   workbenchTabs?: { id: string, label: string, path: string }[]
 }) {
   const labels = copy.workerConfig
-  const [contentTarget, setContentTarget] = useState<LocalWorkerOverlayAsset | null>(null)
-  const [addCategory, setAddCategory] = useState<'entry-file' | 'skill' | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const [draftCategory, setDraftCategory] = useState<'entry-file' | 'skill' | null>(null)
   const [autosave, setAutosave] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const [autosaveErrorMessage, setAutosaveErrorMessage] = useState<string | null>(null)
+  const [contentDirty, setContentDirty] = useState(false)
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
   const [saving, setSaving] = useState(false)
   const [selectedPanel, setSelectedPanel] = useState<null | 'workbench'>(null)
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
@@ -93,7 +94,7 @@ export function WorkerConfigurationDialog({
   }, [assets])
   const canShowWorkbenchPanel = Boolean(workbenchTabs && workbenchTabs.length > 1)
   const effectiveSelectedPanel = selectedPanel === 'workbench' && canShowWorkbenchPanel ? selectedPanel : null
-  const selectedAsset = effectiveSelectedPanel === 'workbench' ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
+  const selectedAsset = effectiveSelectedPanel === 'workbench' || draftCategory ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
 
   function targetsFor(nextAsset: LocalWorkerOverlayAsset): string[] {
     if (nextAsset.kind !== 'skill')
@@ -216,9 +217,64 @@ export function WorkerConfigurationDialog({
     }
   }
 
+  function runOrConfirmDiscard(action: () => void) {
+    if (!contentDirty) {
+      action()
+      return
+    }
+    setPendingNavigation(() => action)
+  }
+
+  function clearDirtyAndRun(action: () => void) {
+    setContentDirty(false)
+    setPendingNavigation(null)
+    action()
+  }
+
   function selectAsset(id: string) {
-    setSelectedPanel(null)
-    setSelectedAssetId(id)
+    runOrConfirmDiscard(() => {
+      setDraftCategory(null)
+      setSelectedPanel(null)
+      setSelectedAssetId(id)
+    })
+  }
+
+  function selectWorkbenchPanel() {
+    runOrConfirmDiscard(() => {
+      setDraftCategory(null)
+      setSelectedPanel('workbench')
+      setSelectedAssetId(null)
+    })
+  }
+
+  function startDraft(kind: 'entry-file' | 'skill') {
+    runOrConfirmDiscard(() => {
+      setSelectedPanel(null)
+      setSelectedAssetId(null)
+      setDraftCategory(kind)
+    })
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) {
+      onOpenChange(true)
+      return
+    }
+    runOrConfirmDiscard(() => onOpenChange(false))
+  }
+
+  function discardPendingChanges() {
+    const action = pendingNavigation
+    clearDirtyAndRun(() => action?.())
+  }
+
+  function cancelPendingDiscard() {
+    setPendingNavigation(null)
+  }
+
+  function completeDraft() {
+    setContentDirty(false)
+    setDraftCategory(null)
   }
 
   useEffect(() => {
@@ -231,7 +287,7 @@ export function WorkerConfigurationDialog({
   }, [autosave])
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="flex h-dvh flex-col gap-0 overflow-hidden p-0 sm:h-5/6 sm:max-w-5xl" showCloseButton={false}>
         <ItemActions data-settings-slot="settings-dialog-actions" className="absolute top-4 right-4" aria-hidden={false}>
           {autosave !== 'idle'
@@ -257,15 +313,20 @@ export function WorkerConfigurationDialog({
           <Badge variant="secondary" className="w-fit">WORKER OVERLAY</Badge>
           <DialogTitle>Worker configuration</DialogTitle>
           <DialogDescription>{worker ? `${worker.name} worker overlay` : 'Worker overlay'}</DialogDescription>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Button type="button" variant="outline" size="sm" onClick={() => setAddCategory('skill')}>
-              {`+ ${labels.addSkill}`}
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setAddCategory('entry-file')}>
-              {`+ ${labels.addEntryFile}`}
-            </Button>
-          </div>
         </DialogHeader>
+        {pendingNavigation
+          ? (
+              <Alert className="mx-6 mb-3">
+                <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                  <span>{labels.unsavedChangesTitle}</span>
+                  <ItemActions className="gap-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={cancelPendingDiscard}>{labels.cancel}</Button>
+                    <Button type="button" variant="destructive" size="sm" onClick={discardPendingChanges}>{labels.discardChanges}</Button>
+                  </ItemActions>
+                </AlertDescription>
+              </Alert>
+            )
+          : null}
         <div data-testid="worker-configuration-body" className="flex flex-1 min-h-0 max-md:flex-col">
           <div data-testid="worker-overlay-sidebar" className="flex w-80 shrink-0 flex-col min-h-0 bg-sidebar text-sidebar-foreground max-md:max-h-64 max-md:w-full max-md:flex-none">
             <div className="shrink-0 px-3 pt-4 pb-2">
@@ -285,6 +346,19 @@ export function WorkerConfigurationDialog({
                       title={cat.label}
                       toggleAriaLabel={`Toggle ${cat.label}`}
                       meta={catAssets.length > 0 ? <Badge variant="outline">{catAssets.length}</Badge> : null}
+                      action={cat.value === 'skill' || cat.value === 'entry-file'
+                        ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={cat.value === 'skill' ? labels.addSkill : labels.addEntryFile}
+                              onClick={() => startDraft(cat.value === 'skill' ? 'skill' : 'entry-file')}
+                            >
+                              +
+                            </Button>
+                          )
+                        : null}
                       drawerProps={{ className: 'gap-1' }}
                     >
                       {catAssets.length > 0
@@ -348,10 +422,7 @@ export function WorkerConfigurationDialog({
                             isActive={effectiveSelectedPanel === 'workbench'}
                             size="lg"
                             className="h-11 items-start py-1.5"
-                            onClick={() => {
-                              setSelectedPanel('workbench')
-                              setSelectedAssetId(null)
-                            }}
+                            onClick={selectWorkbenchPanel}
                           >
                             <span className="flex min-w-0 flex-col gap-0.5">
                               <span className="truncate">Workbench</span>
@@ -371,141 +442,130 @@ export function WorkerConfigurationDialog({
           <div data-testid="worker-overlay-editor-panel" className="flex min-w-0 flex-1 flex-col max-md:w-full max-md:flex-none max-md:min-w-0">
             <ScrollArea className="h-full">
               <div className="p-6">
-                {effectiveSelectedPanel === 'workbench'
+                {draftCategory && worker
                   ? (
-                      <ItemGroup className="gap-3">
-                        <Item variant="muted">
-                          <ItemContent className="grid min-w-0 gap-3">
-                            <ItemTitle>Workbench</ItemTitle>
-                            <ItemDescription>
-                              Choose the declared mounted route used by this Soul worker.
-                            </ItemDescription>
-                          </ItemContent>
-                        </Item>
-                        {workbenchTabs && workbenchTabs.length > 1
-                          ? (
-                              <Item variant="default">
-                                <ItemContent className="grid min-w-0 gap-2">
-                                  <ItemTitle>Workbench route</ItemTitle>
-                                  <ItemDescription>This preference is stored for this worker only.</ItemDescription>
-                                  <ItemActions className="gap-0.5" role="tablist" aria-label="Workbench routes">
-                                    {workbenchTabs.map(tab => (
-                                      <button
-                                        key={tab.id}
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={tab.id === activeWorkbenchTabId}
-                                        className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                                          tab.id === activeWorkbenchTabId
-                                            ? 'bg-background text-foreground shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                        }`}
-                                        onClick={() => onSelectWorkbenchTab?.(tab)}
-                                      >
-                                        {tab.label}
-                                      </button>
-                                    ))}
-                                  </ItemActions>
-                                </ItemContent>
-                              </Item>
-                            )
-                          : null}
-                      </ItemGroup>
+                      <OverlayContentAddPanel
+                        key={draftCategory}
+                        kind={draftCategory}
+                        labels={labels}
+                        workerId={worker.id}
+                        onAdded={() => {
+                          completeDraft()
+                          void onReload?.()
+                        }}
+                        onCancel={() => runOrConfirmDiscard(() => completeDraft())}
+                        onDirtyChange={setContentDirty}
+                      />
                     )
-                  : selectedAsset
+                  : effectiveSelectedPanel === 'workbench'
                     ? (
                         <ItemGroup className="gap-3">
-                          <div className="flex items-center justify-between">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <ItemTitle>{selectedAsset.id}</ItemTitle>
-                                {selectedAsset.source === 'baseline'
-                                  ? <Badge variant="secondary" className="text-xs">baseline</Badge>
-                                  : null}
-                              </div>
+                          <Item variant="muted">
+                            <ItemContent className="grid min-w-0 gap-3">
+                              <ItemTitle>Workbench</ItemTitle>
                               <ItemDescription>
-                                {selectedAsset.source}
-                                {' '}
-                                ·
-                                {' '}
-                                {selectedAsset.target}
+                                Choose the declared mounted route used by this Soul worker.
                               </ItemDescription>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setContentTarget(selectedAsset)}
-                              >
-                                {selectedAsset.kind === 'mcp-client' ? labels.view : labels.viewEdit}
-                              </Button>
-                              <Switch
-                                checked={selectedAsset.enabled}
-                                disabled={saving}
-                                aria-label={`Enable ${selectedAsset.id}`}
-                                onCheckedChange={checked => void saveAsset({ ...selectedAsset, enabled: checked })}
-                              />
-                            </div>
-                          </div>
-                          {selectedAsset.checksum
+                            </ItemContent>
+                          </Item>
+                          {workbenchTabs && workbenchTabs.length > 1
                             ? (
                                 <Item variant="default">
-                                  <ItemContent className="grid min-w-0 gap-1">
-                                    <ItemTitle>Checksum</ItemTitle>
-                                    <ItemDescription className="line-clamp-none break-all">{selectedAsset.checksum}</ItemDescription>
+                                  <ItemContent className="grid min-w-0 gap-2">
+                                    <ItemTitle>Workbench route</ItemTitle>
+                                    <ItemDescription>This preference is stored for this worker only.</ItemDescription>
+                                    <ItemActions className="gap-0.5" role="tablist" aria-label="Workbench routes">
+                                      {workbenchTabs.map(tab => (
+                                        <button
+                                          key={tab.id}
+                                          type="button"
+                                          role="tab"
+                                          aria-selected={tab.id === activeWorkbenchTabId}
+                                          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                                            tab.id === activeWorkbenchTabId
+                                              ? 'bg-background text-foreground shadow-sm'
+                                              : 'text-muted-foreground hover:text-foreground'
+                                          }`}
+                                          onClick={() => onSelectWorkbenchTab?.(tab)}
+                                        >
+                                          {tab.label}
+                                        </button>
+                                      ))}
+                                    </ItemActions>
                                   </ItemContent>
                                 </Item>
                               )
                             : null}
-                          {autosave === 'failed' && autosaveErrorMessage
-                            ? (
-                                <Alert variant="destructive">
-                                  <AlertDescription>{autosaveErrorMessage}</AlertDescription>
-                                </Alert>
-                              )
-                            : null}
                         </ItemGroup>
                       )
-                    : (
-                        <ItemDescription className="pt-8 text-center">
-                          Select an asset from the list.
-                        </ItemDescription>
-                      )}
+                    : selectedAsset
+                      ? (
+                          <ItemGroup className="gap-3">
+                            <div className="flex items-center justify-between">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <ItemTitle>{selectedAsset.id}</ItemTitle>
+                                  {selectedAsset.source === 'baseline'
+                                    ? <Badge variant="secondary" className="text-xs">baseline</Badge>
+                                    : null}
+                                </div>
+                                <ItemDescription>
+                                  {selectedAsset.source}
+                                  {' '}
+                                  ·
+                                  {' '}
+                                  {selectedAsset.target}
+                                </ItemDescription>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <Switch
+                                  checked={selectedAsset.enabled}
+                                  disabled={saving}
+                                  aria-label={`Enable ${selectedAsset.id}`}
+                                  onCheckedChange={checked => void saveAsset({ ...selectedAsset, enabled: checked })}
+                                />
+                              </div>
+                            </div>
+                            {selectedAsset.checksum
+                              ? (
+                                  <Item variant="default">
+                                    <ItemContent className="grid min-w-0 gap-1">
+                                      <ItemTitle>Checksum</ItemTitle>
+                                      <ItemDescription className="line-clamp-none break-all">{selectedAsset.checksum}</ItemDescription>
+                                    </ItemContent>
+                                  </Item>
+                                )
+                              : null}
+                            {autosave === 'failed' && autosaveErrorMessage
+                              ? (
+                                  <Alert variant="destructive">
+                                    <AlertDescription>{autosaveErrorMessage}</AlertDescription>
+                                  </Alert>
+                                )
+                              : null}
+                            {worker
+                              ? (
+                                  <OverlayContentEditorPanel
+                                    key={`${selectedAsset.kind}:${selectedAsset.id}:${selectedAsset.target}`}
+                                    asset={selectedAsset}
+                                    labels={labels}
+                                    workerId={worker.id}
+                                    onDirtyChange={setContentDirty}
+                                    onSaved={() => void onReload?.()}
+                                  />
+                                )
+                              : null}
+                          </ItemGroup>
+                        )
+                      : (
+                          <ItemDescription className="pt-8 text-center">
+                            Select an asset from the list.
+                          </ItemDescription>
+                        )}
               </div>
             </ScrollArea>
           </div>
         </div>
-        {contentTarget && worker
-          ? (
-              <OverlayContentEditorDialog
-                key={`${contentTarget.kind}:${contentTarget.id}:${contentTarget.target}`}
-                asset={contentTarget}
-                labels={labels}
-                workerId={worker.id}
-                onClose={() => setContentTarget(null)}
-                onSaved={() => {
-                  setContentTarget(null)
-                  void onReload?.()
-                }}
-              />
-            )
-          : null}
-        {addCategory && worker
-          ? (
-              <OverlayContentAddDialog
-                key={addCategory}
-                kind={addCategory}
-                labels={labels}
-                workerId={worker.id}
-                onClose={() => setAddCategory(null)}
-                onAdded={() => {
-                  setAddCategory(null)
-                  void onReload?.()
-                }}
-              />
-            )
-          : null}
       </DialogContent>
     </Dialog>
   )
@@ -521,27 +581,29 @@ function contentConfigKey(asset: LocalWorkerOverlayAsset): string {
   return `skill-overlay:${asset.id}`
 }
 
-function OverlayContentEditorDialog({
+function OverlayContentEditorPanel({
   asset,
   labels,
-  onClose,
+  onDirtyChange,
   onSaved,
   workerId,
 }: {
   asset: LocalWorkerOverlayAsset
   labels: StaticMessages['workerConfig']
-  onClose: () => void
+  onDirtyChange: (dirty: boolean) => void
   onSaved: () => void
   workerId: string
 }) {
   const configKey = contentConfigKey(asset)
   const target = asset.kind === 'skill' ? asset.target : undefined
   const [content, setContent] = useState('')
+  const [savedContent, setSavedContent] = useState('')
   const [editable, setEditable] = useState(false)
   const [source, setSource] = useState<'baseline' | 'overlay'>('baseline')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const dirty = editable && content !== savedContent
 
   useEffect(() => {
     let cancelled = false
@@ -550,6 +612,7 @@ function OverlayContentEditorDialog({
         if (cancelled)
           return
         setContent(result.content)
+        setSavedContent(result.content)
         setEditable(result.editable)
         setSource(result.source)
       })
@@ -566,11 +629,22 @@ function OverlayContentEditorDialog({
     }
   }, [configKey, labels.loadFailed, target, workerId])
 
+  useEffect(() => {
+    onDirtyChange(dirty)
+    return () => onDirtyChange(false)
+  }, [dirty, onDirtyChange])
+
   async function save() {
+    if (!dirty)
+      return
     setBusy(true)
     setError(null)
     try {
-      await putOverlayContent(workerId, configKey, { content, target })
+      const result = await putOverlayContent(workerId, configKey, { content, target })
+      setContent(result.content)
+      setSavedContent(result.content)
+      setEditable(result.editable)
+      setSource(result.source)
       onSaved()
     }
     catch (caught) {
@@ -597,16 +671,17 @@ function OverlayContentEditorDialog({
   }
 
   return (
-    <Dialog open onOpenChange={openNext => openNext ? undefined : onClose()}>
-      <DialogContent className="flex max-h-[85dvh] flex-col gap-3 sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{labels.editorTitle(asset.id)}</DialogTitle>
-          <DialogDescription>
-            <Badge variant="outline" data-testid="overlay-content-source">
-              {source === 'overlay' ? labels.sourceOverlay : labels.sourceBaseline}
-            </Badge>
-          </DialogDescription>
-        </DialogHeader>
+    <Item variant="default">
+      <ItemContent className="grid min-w-0 gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="grid min-w-0 gap-1">
+            <ItemTitle>{labels.editorTitle(asset.id)}</ItemTitle>
+            <ItemDescription>{asset.kind === 'mcp-client' ? labels.readonlyHint : labels.contentLabel}</ItemDescription>
+          </div>
+          <Badge variant="outline" data-testid="overlay-content-source">
+            {source === 'overlay' ? labels.sourceOverlay : labels.sourceBaseline}
+          </Badge>
+        </div>
         <div className="grid gap-2">
           <Label htmlFor="overlay-content-textarea">{labels.contentLabel}</Label>
           <Textarea
@@ -629,8 +704,7 @@ function OverlayContentEditorDialog({
               </Alert>
             )
           : null}
-        <DialogFooter>
-          <Button type="button" variant="ghost" onClick={onClose}>{labels.cancel}</Button>
+        <ItemActions className="justify-end gap-2">
           {editable && source === 'overlay'
             ? (
                 <Button type="button" variant="outline" disabled={busy} onClick={() => void reset()}>
@@ -640,34 +714,42 @@ function OverlayContentEditorDialog({
             : null}
           {editable
             ? (
-                <Button type="button" disabled={busy || loading} onClick={() => void save()}>
+                <Button type="button" disabled={busy || loading || !dirty} onClick={() => void save()}>
                   {busy ? labels.saving : labels.save}
                 </Button>
               )
             : null}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ItemActions>
+      </ItemContent>
+    </Item>
   )
 }
 
-function OverlayContentAddDialog({
+function OverlayContentAddPanel({
   kind,
   labels,
   onAdded,
-  onClose,
+  onCancel,
+  onDirtyChange,
   workerId,
 }: {
   kind: 'entry-file' | 'skill'
   labels: StaticMessages['workerConfig']
   onAdded: () => void
-  onClose: () => void
+  onCancel: () => void
+  onDirtyChange: (dirty: boolean) => void
   workerId: string
 }) {
   const [name, setName] = useState('')
   const [content, setContent] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const dirty = name.trim().length > 0 || content.length > 0
+
+  useEffect(() => {
+    onDirtyChange(dirty)
+    return () => onDirtyChange(false)
+  }, [dirty, onDirtyChange])
 
   async function add() {
     if (!name.trim())
@@ -687,41 +769,46 @@ function OverlayContentAddDialog({
   }
 
   return (
-    <Dialog open onOpenChange={openNext => openNext ? undefined : onClose()}>
-      <DialogContent className="flex max-h-[85dvh] flex-col gap-3 sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{kind === 'skill' ? labels.addSkill : labels.addEntryFile}</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-2">
-          <Input
-            aria-label={labels.addNamePlaceholder}
-            placeholder={labels.addNamePlaceholder}
-            value={name}
-            onChange={event => setName(event.currentTarget.value)}
-          />
-          <Textarea
-            aria-label={labels.addContentPlaceholder}
-            placeholder={labels.addContentPlaceholder}
-            className="min-h-48 font-mono text-xs"
-            value={content}
-            onChange={event => setContent(event.currentTarget.value)}
-          />
-        </div>
-        {error
-          ? (
-              <Alert variant="destructive">
-                <AlertDescription data-testid="overlay-add-error">{error}</AlertDescription>
-              </Alert>
-            )
-          : null}
-        <DialogFooter>
-          <Button type="button" variant="ghost" onClick={onClose}>{labels.cancel}</Button>
-          <Button type="button" disabled={busy || !name.trim()} onClick={() => void add()}>
-            {busy ? labels.saving : labels.add}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ItemGroup className="gap-3">
+      <Item variant="muted">
+        <ItemContent className="grid min-w-0 gap-1">
+          <ItemTitle>{kind === 'skill' ? labels.addSkill : labels.addEntryFile}</ItemTitle>
+          <ItemDescription>{labels.contentLabel}</ItemDescription>
+        </ItemContent>
+      </Item>
+      <Item variant="default">
+        <ItemContent className="grid min-w-0 gap-3">
+          <div className="grid gap-2">
+            <Input
+              aria-label={labels.addNamePlaceholder}
+              placeholder={labels.addNamePlaceholder}
+              value={name}
+              onChange={event => setName(event.currentTarget.value)}
+            />
+            <Textarea
+              aria-label={labels.addContentPlaceholder}
+              placeholder={labels.addContentPlaceholder}
+              className="min-h-48 font-mono text-xs"
+              value={content}
+              onChange={event => setContent(event.currentTarget.value)}
+            />
+          </div>
+          {error
+            ? (
+                <Alert variant="destructive">
+                  <AlertDescription data-testid="overlay-add-error">{error}</AlertDescription>
+                </Alert>
+              )
+            : null}
+          <ItemActions className="justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={onCancel}>{labels.cancel}</Button>
+            <Button type="button" disabled={busy || !name.trim()} onClick={() => void add()}>
+              {busy ? labels.saving : labels.add}
+            </Button>
+          </ItemActions>
+        </ItemContent>
+      </Item>
+    </ItemGroup>
   )
 }
 
