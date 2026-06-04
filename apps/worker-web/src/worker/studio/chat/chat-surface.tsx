@@ -2,7 +2,7 @@ import type { LocalEngineInvocation, LocalSessionEvent } from '@zonease/aiworker
 import type { ChatComposerLabels } from './chat-composer'
 
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
-import { useEffect, useMemo, useReducer, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { fetchSessionDetail } from '../../../features/local-workspace/api/session-invocations'
 import { ChatComposer } from './chat-composer'
 import { ChatTranscript } from './chat-transcript'
@@ -44,7 +44,10 @@ type SessionTranscriptSnapshotAction
  */
 export function ChatSurface({ composerLabels, initialActive = null, sessionId, transcriptAriaLabel }: ChatSurfaceProps) {
   const [active, setActive] = useState<{ invocationId: string, text: string } | null>(initialActive)
+  const [composerFocusRequestToken, setComposerFocusRequestToken] = useState<number | undefined>(undefined)
   const [snapshot, dispatchSnapshot] = useReducer(sessionTranscriptSnapshotReducer, LOADING_TRANSCRIPT_SNAPSHOT)
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null)
+  const transcriptShouldStickToLatestRef = useRef(true)
 
   useEffect(() => {
     let cancelled = false
@@ -78,6 +81,40 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
   const activeInvocationId = active?.invocationId ?? latestInvocation?.id ?? null
   const activeInitialInvocation = latestInvocation?.id === activeInvocationId ? latestInvocation : null
   const hasConversation = activeInvocationId !== null || snapshot.events.length > 0 || snapshot.invocations.length > 0
+
+  useLayoutEffect(() => {
+    if (!hasConversation || snapshot.status === 'loading')
+      return
+    scrollTranscriptToLatest(transcriptScrollRef.current)
+    transcriptShouldStickToLatestRef.current = true
+  }, [active?.invocationId, active?.text, hasConversation, snapshot.events.length, snapshot.invocations.length, snapshot.status])
+
+  useEffect(() => {
+    const scrollContainer = transcriptScrollRef.current
+    if (!hasConversation || !scrollContainer)
+      return undefined
+
+    const handleScroll = () => {
+      transcriptShouldStickToLatestRef.current = isTranscriptNearLatest(scrollContainer)
+    }
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
+    handleScroll()
+    return () => scrollContainer.removeEventListener('scroll', handleScroll)
+  }, [hasConversation])
+
+  useEffect(() => {
+    const scrollContainer = transcriptScrollRef.current
+    if (!hasConversation || !scrollContainer || typeof MutationObserver === 'undefined')
+      return undefined
+
+    const observer = new MutationObserver(() => {
+      if (transcriptShouldStickToLatestRef.current)
+        scrollTranscriptToLatest(scrollContainer)
+    })
+    observer.observe(scrollContainer, { childList: true, characterData: true, subtree: true })
+    return () => observer.disconnect()
+  }, [hasConversation])
+
   const transcript = (
     <ChatTranscript
       ariaLabel={transcriptAriaLabel}
@@ -93,8 +130,12 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
   )
   const composer = (
     <ChatComposer
+      focusRequestToken={composerFocusRequestToken}
       labels={composerLabels}
-      onSubmitted={setActive}
+      onSubmitted={(submission) => {
+        setActive(submission)
+        setComposerFocusRequestToken(token => (token ?? 0) + 1)
+      }}
       sessionId={sessionId}
     />
   )
@@ -104,7 +145,7 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
       {hasConversation
         ? (
             <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 overflow-hidden" data-chat-column="true">
-              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+              <div ref={transcriptScrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto" data-chat-transcript-scroll="true">
                 {transcript}
               </div>
               {composer}
@@ -124,6 +165,23 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
 
 function latestInvocationForSession(invocations: LocalEngineInvocation[]): LocalEngineInvocation | null {
   return invocations.slice().sort((left, right) => left.seq - right.seq).at(-1) ?? null
+}
+
+function scrollTranscriptToLatest(scrollContainer: HTMLElement | null) {
+  if (!scrollContainer)
+    return
+
+  const top = scrollContainer.scrollHeight
+  if (typeof scrollContainer.scrollTo === 'function') {
+    scrollContainer.scrollTo({ behavior: 'auto', top })
+    return
+  }
+
+  scrollContainer.scrollTop = top
+}
+
+function isTranscriptNearLatest(scrollContainer: HTMLElement) {
+  return scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight <= 48
 }
 
 function sessionTranscriptSnapshotReducer(

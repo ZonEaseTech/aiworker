@@ -30,6 +30,7 @@
     "test:contracts": "bun test tests/architecture scripts/check-soul-app-boundaries.test.ts",
     "test:protocol": "bun run --filter '@zonease/aiworker-soul-descriptor' test",
     "test:cli": "bun run --filter '@zonease/aiworker-freeform' build && bun test apps/worker-cli/src/aiworker.test.ts apps/worker-cli/src/freeform-golden-path.test.ts --timeout=30000",
+    "test:browser:chat-experience": "bun run --filter '@zonease/aiworker-freeform' build && bun run --filter '@zonease/aiworker-worker-web' build && bun tests/browser/freeform-chat-experience.spec.ts",
     "test:browser:freeform": "bun run --filter '@zonease/aiworker-freeform' build && bun run --filter '@zonease/aiworker-worker-web' build && bun tests/browser/freeform-cli-golden-path.spec.ts && bun tests/browser/freeform-browser-user-flow.spec.ts",
     "ui:check": "bun scripts/check-web-ui-components.ts",
     "docs:check": "bun scripts/check-doc-contract.ts",

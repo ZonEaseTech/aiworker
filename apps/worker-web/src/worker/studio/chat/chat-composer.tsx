@@ -13,6 +13,7 @@ export interface ChatComposerLabels {
 }
 
 export interface ChatComposerProps {
+  focusRequestToken?: number
   labels: ChatComposerLabels
   onSubmitted?: (submission: { invocationId: string, text: string }) => void
   sessionId: string
@@ -27,11 +28,12 @@ export interface ChatComposerProps {
  * The Worker renders the session chat directly: this composer is mounted by
  * worker-studio on the session route. The Soul provides no UI.
  */
-export function ChatComposer({ labels, onSubmitted, sessionId }: ChatComposerProps) {
+export function ChatComposer({ focusRequestToken, labels, onSubmitted, sessionId }: ChatComposerProps) {
   return (
     <ManagedSessionComposer
       ariaLabel={labels.ariaLabel}
       attachmentLabels={labels.attachment}
+      focusRequestToken={focusRequestToken}
       placeholder={labels.placeholder}
       submitAriaLabel={labels.submitAriaLabel}
       onSubmitDraft={async (draft) => {

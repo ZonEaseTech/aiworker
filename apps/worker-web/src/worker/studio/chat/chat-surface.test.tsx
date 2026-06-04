@@ -40,6 +40,7 @@ function deferredResponse<T>(value: T) {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -204,6 +205,130 @@ describe('chat surface', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/sessions/session-1', expect.any(Object))
   })
 
+  it('scrolls the restored transcript container to the latest message after refresh', async () => {
+    const scrollTo = vi.fn()
+    const scrollToDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo')
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    })
+
+    try {
+      const persistedEvent = {
+        createdAt: '2026-06-01T00:00:00.000Z',
+        id: 4,
+        invocationId: 'inv-scroll-restored',
+        payloadJson: { data: { text: 'last restored reply stays visible' } },
+        seq: 1,
+        sessionId: 'session-1',
+        type: 'assistant_delta',
+      }
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === '/api/sessions/session-1') {
+          return new Response(JSON.stringify(sessionDetail(
+            [persistedEvent],
+            [{
+              id: 'inv-scroll-restored',
+              metadataJson: { uiUserDisplayText: 'restored prompt that should stay visible' },
+              seq: 1,
+              sessionId: 'session-1',
+              status: 'succeeded',
+            }],
+          )))
+        }
+        return new Response(JSON.stringify({
+          events: [persistedEvent],
+          invocation: { id: 'inv-scroll-restored', status: 'succeeded' },
+        }))
+      }))
+
+      render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+      expect(await screen.findByText(/last restored reply stays visible/)).toBeTruthy()
+      expect(document.querySelector('[data-chat-transcript-scroll="true"]')).toBeTruthy()
+      await waitFor(() => {
+        expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: expect.any(Number) }))
+      })
+    }
+    finally {
+      if (scrollToDescriptor)
+        Object.defineProperty(HTMLElement.prototype, 'scrollTo', scrollToDescriptor)
+      else
+        delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo
+    }
+  })
+
+  it('does not force a manually scrolled transcript back to the bottom during streaming mutations', async () => {
+    expect(typeof MutationObserver).toBe('function')
+    const scrollTo = vi.fn()
+    const scrollToDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo')
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    })
+
+    try {
+      const persistedEvent = {
+        createdAt: '2026-06-01T00:00:00.000Z',
+        id: 5,
+        invocationId: 'inv-manual-scroll',
+        payloadJson: { data: { text: 'streaming reply before manual scroll' } },
+        seq: 1,
+        sessionId: 'session-1',
+        type: 'assistant_delta',
+      }
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === '/api/sessions/session-1') {
+          return new Response(JSON.stringify(sessionDetail(
+            [persistedEvent],
+            [{
+              id: 'inv-manual-scroll',
+              metadataJson: { uiUserDisplayText: 'long prompt before manual scroll' },
+              seq: 1,
+              sessionId: 'session-1',
+              status: 'running',
+            }],
+          )))
+        }
+        return new Response(JSON.stringify({
+          events: [persistedEvent],
+          invocation: { id: 'inv-manual-scroll', status: 'running' },
+        }))
+      }))
+
+      render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+      expect(await screen.findByText(/streaming reply before manual scroll/)).toBeTruthy()
+      await waitFor(() => {
+        expect(scrollTo).toHaveBeenCalled()
+      })
+      scrollTo.mockClear()
+
+      const scroller = document.querySelector('[data-chat-transcript-scroll="true"]') as HTMLElement | null
+      expect(scroller).toBeTruthy()
+      Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 300 })
+      Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1200 })
+      scroller!.scrollTop = 0
+      fireEvent.scroll(scroller!)
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      const streamedToken = document.createElement('div')
+      streamedToken.textContent = 'new token while the reader is up-thread'
+      scroller!.append(streamedToken)
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(scrollTo).not.toHaveBeenCalled()
+    }
+    finally {
+      if (scrollToDescriptor)
+        Object.defineProperty(HTMLElement.prototype, 'scrollTo', scrollToDescriptor)
+      else
+        delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo
+    }
+  })
+
   it('submits a message and streams the resulting invocation into the transcript', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
@@ -268,6 +393,41 @@ describe('chat surface', () => {
     await waitFor(() => {
       const userMessage = document.querySelector('[data-transcript-slot="user-message"]')
       expect(userMessage?.textContent).toContain('echo this back please')
+    })
+  })
+
+  it('restores keyboard focus to the composer after submitting with the send button', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/invocations') && init?.method === 'POST') {
+        return new Response(JSON.stringify({
+          events: [],
+          files: [],
+          invocation: { id: 'inv-focus', status: 'queued' },
+          session: { id: 'session-1', status: 'active' },
+        }), { status: 201 })
+      }
+      if (url === '/api/sessions/session-1')
+        return new Response(JSON.stringify(sessionDetail()))
+      return new Response(JSON.stringify({
+        events: [],
+        invocation: { id: 'inv-focus', status: 'succeeded' },
+      }))
+    }))
+
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'keep keyboard rhythm' } })
+    const sendButton = screen.getByRole('button', { name: 'Send message' }) as HTMLButtonElement
+    sendButton.focus()
+    expect(document.activeElement).toBe(sendButton)
+
+    fireEvent.click(sendButton)
+
+    await waitFor(() => {
+      const textbox = screen.getByRole('textbox') as HTMLTextAreaElement
+      expect(textbox.value).toBe('')
+      expect(document.activeElement).toBe(textbox)
     })
   })
 })

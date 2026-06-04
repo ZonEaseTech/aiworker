@@ -1,4 +1,4 @@
-import type { ClipboardEvent, FormEvent, KeyboardEvent, ReactNode } from 'react'
+import type { ClipboardEvent, FormEvent, KeyboardEvent, ReactNode, RefObject } from 'react'
 
 import { Alert, AlertDescription } from '#components/alert'
 import { Badge, BadgeLabel } from '#components/badge'
@@ -20,7 +20,7 @@ import {
   MailSend02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 export interface SessionComposerAttachmentItem {
   id: string
@@ -84,6 +84,11 @@ export interface SessionComposerProps {
   disabled?: boolean
   disabledReason?: ReactNode
   error?: ReactNode
+  /**
+   * Parent-owned request nonce for returning keyboard focus to the textarea
+   * after a workflow such as submit, remount, or route restore.
+   */
+  focusRequestToken?: number | string
   mentionOptions?: SessionComposerMentionOption[]
   mentionQuery?: SessionComposerMentionQuery
   onAddAttachmentFiles?: (files: File[]) => void
@@ -151,6 +156,7 @@ export function SessionComposer({
   disabled = false,
   disabledReason,
   error,
+  focusRequestToken,
   mentionOptions = EMPTY_MENTION_OPTIONS,
   mentionQuery,
   onAddAttachmentFiles,
@@ -179,6 +185,7 @@ export function SessionComposer({
   value,
   variant = 'large',
 }: SessionComposerProps) {
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null)
   const canSubmit = !disabled && !submitDisabled && !submitting && (allowSubmitWithoutText || value.trim().length > 0 || attachments.length > 0)
   const mentionListboxId = useId()
   const mentionTypeaheadOpen = mentionQuery?.active === true && mentionQuery.trigger === '$'
@@ -201,6 +208,12 @@ export function SessionComposer({
   const activeMentionOptionDomId = activeMentionOption
     ? getMentionOptionDomId(mentionListboxId, activeMentionOption)
     : undefined
+
+  useEffect(() => {
+    if (focusRequestToken === undefined || disabled || submitting)
+      return undefined
+    return scheduleSessionComposerInputFocus(composerInputRef)
+  }, [disabled, focusRequestToken, submitting])
 
   return (
     <form
@@ -242,6 +255,7 @@ export function SessionComposer({
         />
         <SessionAttachmentList attachments={attachments} onRemoveAttachment={onRemoveAttachment} removeDisabled={disabled || submitting} />
         <InputGroupTextarea
+          ref={composerInputRef}
           data-session-slot="composer-input"
           aria-label={ariaLabel}
           className={cn(
@@ -304,6 +318,32 @@ export function SessionComposer({
       </InputGroup>
     </form>
   )
+}
+
+function scheduleSessionComposerInputFocus(inputRef: RefObject<HTMLTextAreaElement | null>) {
+  let cancelled = false
+  const focusInput = () => {
+    if (cancelled)
+      return
+    const input = inputRef.current
+    if (!input || input.disabled)
+      return
+    input.focus({ preventScroll: true })
+  }
+
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    const frame = window.requestAnimationFrame(focusInput)
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(frame)
+    }
+  }
+
+  const timeout = setTimeout(focusInput, 0)
+  return () => {
+    cancelled = true
+    clearTimeout(timeout)
+  }
 }
 
 function SessionComposerTypeahead({

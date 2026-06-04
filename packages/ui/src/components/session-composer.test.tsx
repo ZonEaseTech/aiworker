@@ -131,6 +131,29 @@ describe('sessionComposer', () => {
     expect(onSubmit).toHaveBeenCalledTimes(2)
   })
 
+  it('restores keyboard focus to the textarea when the focus request token changes', async () => {
+    const props = {
+      ariaLabel: 'Session input',
+      onSubmit: vi.fn((event: FormEvent<HTMLFormElement>) => event.preventDefault()),
+      onValueChange: vi.fn(),
+      submitAriaLabel: 'Start',
+      value: 'Ready to send',
+      variant: 'large' as const,
+    }
+
+    const { rerender } = render(<SessionComposer {...props} />)
+
+    const submitButton = screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement
+    submitButton.focus()
+    expect(document.activeElement).toBe(submitButton)
+
+    rerender(<SessionComposer {...props} focusRequestToken={1} />)
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Session input' }))
+    })
+  })
+
   it('keeps modifier-enter behind the same submit eligibility guard as the send button', () => {
     const onSubmit = vi.fn((event: FormEvent<HTMLFormElement>) => event.preventDefault())
     const props = {
