@@ -26,7 +26,7 @@ const baseEnv = {
 }
 const browserEvents: string[] = []
 const cliOutputs: Record<string, unknown> = {}
-const chatEvidence: Record<string, ChatRhythmMetrics | ComposerLayoutMetrics | Record<string, unknown> | string> = {}
+const chatEvidence: Record<string, ChatRhythmMetrics | ComposerLayoutMetrics | KeyboardRoutingMetrics | Record<string, unknown> | string> = {}
 
 let daemon: ReturnType<typeof Bun.spawn> | null = null
 let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null
@@ -80,6 +80,7 @@ try {
   chatEvidence.sessionComposerMobile = await assertComposerPinnedToMainBottom(page, 'session composer mobile')
   await page.screenshot({ fullPage: true, path: join(evidenceRoot, 'freeform-chat-experience-mobile.png') })
   await page.setViewportSize(desktopViewport)
+  chatEvidence.keyboardRouting = await assertPlainKeyRoutesToComposer(page)
   if (await page.locator('micro-app').count() !== 0)
     throw new Error('Worker Workbench rendered a micro-app during the session chat experience proof.')
 
@@ -133,6 +134,8 @@ finally {
 
 interface ComposerLayoutMetrics {
   bottomGap: number
+  composerGradientPresent: boolean
+  composerInsideScroller: boolean
   fieldBottom: number
   fieldHeight: number
   fieldTop: number
@@ -143,6 +146,10 @@ interface ComposerLayoutMetrics {
   surfaceBottom: number | null
   surfaceHeight: number | null
   surfaceTop: number | null
+  stickyFooterBottom: number | null
+  stickyFooterPosition: string | null
+  threadOverflowAnchor: string | null
+  threadScrollPaddingBottom: string | null
 }
 
 interface ChatRhythmMetrics {
@@ -158,6 +165,12 @@ interface ChatRhythmMetrics {
   scrollTop: number | null
   submittedUserVisible: boolean
   turnCount: number
+}
+
+interface KeyboardRoutingMetrics {
+  activeElementSlot: string | null
+  composerFocused: boolean
+  routedValue: string
 }
 
 async function createWorkspaceAndInitialSessionFromUi(page: Page): Promise<void> {
@@ -189,14 +202,22 @@ async function assertComposerPinnedToMainBottom(page: Page, label: string): Prom
     const main = document.querySelector('[data-chat-surface="true"]')?.closest('[role="region"][aria-label="Soul workspaces and sessions"]')
     const field = document.querySelector('[data-chat-surface="true"] [data-session-slot="composer-field"]')
     const surface = document.querySelector('[data-chat-surface="true"]')
+    const scroller = document.querySelector<HTMLElement>('[data-chat-transcript-scroll="true"]')
+    const stickyFooter = document.querySelector<HTMLElement>('[data-chat-composer-footer="true"]')
+    const gradient = document.querySelector('[data-chat-composer-gradient="true"]')
     if (!main || !field)
       throw new Error(`Missing layout target for ${metricLabel}`)
 
     const mainRect = main.getBoundingClientRect()
     const fieldRect = field.getBoundingClientRect()
     const surfaceRect = surface?.getBoundingClientRect()
+    const stickyFooterRect = stickyFooter?.getBoundingClientRect()
+    const scrollerStyle = scroller ? getComputedStyle(scroller) : null
+    const stickyFooterStyle = stickyFooter ? getComputedStyle(stickyFooter) : null
     return {
       bottomGap: Math.round(mainRect.bottom - fieldRect.bottom),
+      composerGradientPresent: gradient !== null,
+      composerInsideScroller: scroller?.contains(field) ?? false,
       fieldBottom: Math.round(fieldRect.bottom),
       fieldHeight: Math.round(fieldRect.height),
       fieldTop: Math.round(fieldRect.top),
@@ -207,15 +228,59 @@ async function assertComposerPinnedToMainBottom(page: Page, label: string): Prom
       surfaceBottom: surfaceRect ? Math.round(surfaceRect.bottom) : null,
       surfaceHeight: surfaceRect ? Math.round(surfaceRect.height) : null,
       surfaceTop: surfaceRect ? Math.round(surfaceRect.top) : null,
+      stickyFooterBottom: stickyFooterRect ? Math.round(stickyFooterRect.bottom) : null,
+      stickyFooterPosition: stickyFooterStyle?.position ?? null,
+      threadOverflowAnchor: scrollerStyle?.overflowAnchor ?? null,
+      threadScrollPaddingBottom: scrollerStyle?.scrollPaddingBottom ?? null,
     }
   }, label)
 
+  if (!metrics.composerInsideScroller)
+    throw new Error(`${label} composer is not inside the Codex-style thread scroll viewport: ${JSON.stringify(metrics)}`)
+  if (metrics.stickyFooterPosition !== 'sticky')
+    throw new Error(`${label} composer footer is not a sticky bottom footer: ${JSON.stringify(metrics)}`)
+  if (!metrics.composerGradientPresent)
+    throw new Error(`${label} is missing the sticky composer gradient layer: ${JSON.stringify(metrics)}`)
+  if (metrics.threadOverflowAnchor !== 'none')
+    throw new Error(`${label} thread scroll viewport does not disable overflow anchoring: ${JSON.stringify(metrics)}`)
   if (metrics.bottomGap < 8 || metrics.bottomGap > 56)
     throw new Error(`${label} is not pinned near the main workbench bottom: ${JSON.stringify(metrics)}`)
   if (metrics.fieldTop < metrics.mainBottom - 280)
     throw new Error(`${label} is too high in the main workbench: ${JSON.stringify(metrics)}`)
   if (metrics.surfaceBottom !== null && Math.abs(metrics.mainBottom - metrics.surfaceBottom) > 24)
     throw new Error(`${label} chat surface does not fill the main workbench: ${JSON.stringify(metrics)}`)
+  return metrics
+}
+
+async function assertPlainKeyRoutesToComposer(page: Page): Promise<KeyboardRoutingMetrics> {
+  const composer = page.locator('[data-chat-surface="true"] [data-codex-composer="true"]').first()
+  await composer.waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+  await composer.fill('')
+  await page.evaluate(() => {
+    const activeElement = document.activeElement as HTMLElement | null
+    activeElement?.blur()
+  })
+
+  await page.keyboard.press('z')
+  await page.waitForFunction(() => {
+    const composer = document.querySelector<HTMLTextAreaElement>('[data-chat-surface="true"] [data-codex-composer="true"]')
+    return composer?.value === 'z' && document.activeElement === composer
+  }, undefined, { timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+
+  const metrics = await page.evaluate((): KeyboardRoutingMetrics => {
+    const activeElement = document.activeElement as HTMLElement | null
+    const composer = document.querySelector<HTMLTextAreaElement>('[data-chat-surface="true"] [data-codex-composer="true"]')
+    return {
+      activeElementSlot: activeElement?.getAttribute('data-session-slot') ?? activeElement?.getAttribute('data-slot') ?? null,
+      composerFocused: document.activeElement === composer,
+      routedValue: composer?.value ?? '',
+    }
+  })
+
+  if (!metrics.composerFocused || metrics.routedValue !== 'z')
+    throw new Error(`Plain key did not route into the session composer: ${JSON.stringify(metrics)}`)
+
+  await composer.fill('')
   return metrics
 }
 

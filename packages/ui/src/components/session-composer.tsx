@@ -256,6 +256,7 @@ export function SessionComposer({
         <SessionAttachmentList attachments={attachments} onRemoveAttachment={onRemoveAttachment} removeDisabled={disabled || submitting} />
         <InputGroupTextarea
           ref={composerInputRef}
+          data-codex-composer="true"
           data-session-slot="composer-input"
           aria-label={ariaLabel}
           className={cn(

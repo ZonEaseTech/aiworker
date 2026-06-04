@@ -46,6 +46,8 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
   const [active, setActive] = useState<{ invocationId: string, text: string } | null>(initialActive)
   const [composerFocusRequestToken, setComposerFocusRequestToken] = useState<number | undefined>(undefined)
   const [snapshot, dispatchSnapshot] = useReducer(sessionTranscriptSnapshotReducer, LOADING_TRANSCRIPT_SNAPSHOT)
+  const composerFooterRef = useRef<HTMLDivElement | null>(null)
+  const surfaceRef = useRef<HTMLDivElement | null>(null)
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null)
   const transcriptShouldStickToLatestRef = useRef(true)
 
@@ -103,6 +105,15 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
   }, [hasConversation])
 
   useEffect(() => {
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      routePlainKeyToComposer(event, surfaceRef.current)
+    }
+
+    document.addEventListener('keydown', handleDocumentKeyDown, { capture: true })
+    return () => document.removeEventListener('keydown', handleDocumentKeyDown, { capture: true })
+  }, [])
+
+  useEffect(() => {
     const scrollContainer = transcriptScrollRef.current
     if (!hasConversation || !scrollContainer || typeof MutationObserver === 'undefined')
       return undefined
@@ -113,6 +124,32 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
     })
     observer.observe(scrollContainer, { childList: true, characterData: true, subtree: true })
     return () => observer.disconnect()
+  }, [hasConversation])
+
+  useLayoutEffect(() => {
+    const scrollContainer = transcriptScrollRef.current
+    const composerFooter = composerFooterRef.current
+    if (!hasConversation || !scrollContainer || !composerFooter)
+      return undefined
+
+    const updateComposerReserve = () => {
+      const height = Math.ceil(composerFooter.getBoundingClientRect().height)
+      scrollContainer.style.setProperty('--chat-scroll-padding-bottom', `${height + 16}px`)
+    }
+
+    updateComposerReserve()
+    if (typeof ResizeObserver === 'undefined') {
+      return () => {
+        scrollContainer.style.removeProperty('--chat-scroll-padding-bottom')
+      }
+    }
+
+    const observer = new ResizeObserver(updateComposerReserve)
+    observer.observe(composerFooter)
+    return () => {
+      observer.disconnect()
+      scrollContainer.style.removeProperty('--chat-scroll-padding-bottom')
+    }
   }, [hasConversation])
 
   const transcript = (
@@ -141,14 +178,33 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
   )
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-chat-surface="true">
+    <div ref={surfaceRef} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-chat-surface="true">
       {hasConversation
         ? (
             <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 overflow-hidden" data-chat-column="true">
-              <div ref={transcriptScrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto" data-chat-transcript-scroll="true">
-                {transcript}
+              <div
+                ref={transcriptScrollRef}
+                className="relative flex min-h-0 min-w-0 flex-1 flex-col-reverse overflow-y-auto [overflow-anchor:none] [scroll-padding-bottom:var(--chat-scroll-padding-bottom,0px)]"
+                data-chat-transcript-scroll="true"
+              >
+                <div className="flex min-h-full shrink-0 flex-col justify-start" data-chat-scroll-content="true">
+                  <div className="relative flex shrink-0 flex-col pb-8" data-chat-transcript-content="true">
+                    {transcript}
+                  </div>
+                  <div
+                    ref={composerFooterRef}
+                    className="sticky bottom-0 z-10 mt-auto w-full pb-2 pt-4"
+                    data-chat-composer-footer="true"
+                  >
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 flex h-full w-full justify-center pt-4" data-chat-composer-gradient="true">
+                      <div className="z-0 h-full w-full bg-gradient-to-t from-background via-background to-background/0" />
+                    </div>
+                    <div className="relative z-10 flex flex-col">
+                      {composer}
+                    </div>
+                  </div>
+                </div>
               </div>
-              {composer}
             </div>
           )
         : (
@@ -171,7 +227,7 @@ function scrollTranscriptToLatest(scrollContainer: HTMLElement | null) {
   if (!scrollContainer)
     return
 
-  const top = scrollContainer.scrollHeight
+  const top = 0
   if (typeof scrollContainer.scrollTo === 'function') {
     scrollContainer.scrollTo({ behavior: 'auto', top })
     return
@@ -181,7 +237,68 @@ function scrollTranscriptToLatest(scrollContainer: HTMLElement | null) {
 }
 
 function isTranscriptNearLatest(scrollContainer: HTMLElement) {
-  return scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight <= 48
+  return Math.abs(scrollContainer.scrollTop) <= 48
+}
+
+function routePlainKeyToComposer(event: KeyboardEvent, surface: HTMLElement | null) {
+  if (!shouldRoutePlainKeyToComposer(event))
+    return
+
+  const composer = surface?.querySelector<HTMLTextAreaElement>('[data-codex-composer="true"]')
+  if (!composer || composer.disabled)
+    return
+
+  event.preventDefault()
+  composer.focus()
+  insertPlainTextAtComposerSelection(composer, event.key)
+}
+
+function shouldRoutePlainKeyToComposer(event: KeyboardEvent) {
+  if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey)
+    return false
+  if (event.key.length !== 1 || event.key === ' ' || event.key === '\u00A0')
+    return false
+  if (isElementInOpenInteractiveOverlay())
+    return false
+
+  const path = typeof event.composedPath === 'function' ? event.composedPath() : []
+  return !path.some((target) => {
+    if (!(target instanceof HTMLElement))
+      return false
+    return isEditableTarget(target) || target.closest('[data-codex-terminal], dil-renderer') !== null
+  })
+}
+
+function isElementInOpenInteractiveOverlay() {
+  return document.querySelector([
+    '[role="dialog"][data-state="open"]',
+    '[role="menu"][data-state="open"]',
+    '[role="listbox"][data-state="open"]',
+  ].join(', ')) !== null
+}
+
+function isEditableTarget(target: HTMLElement) {
+  return target.closest('input, textarea, select, [contenteditable="true"]') !== null || target.isContentEditable
+}
+
+function insertPlainTextAtComposerSelection(composer: HTMLTextAreaElement, text: string) {
+  const value = composer.value
+  const start = composer.selectionStart ?? value.length
+  const end = composer.selectionEnd ?? start
+  const nextValue = `${value.slice(0, start)}${text}${value.slice(end)}`
+  const cursor = start + text.length
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+
+  if (valueSetter)
+    valueSetter.call(composer, nextValue)
+  else
+    composer.value = nextValue
+
+  composer.setSelectionRange(cursor, cursor)
+  const inputEvent = typeof InputEvent === 'function'
+    ? new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' })
+    : new Event('input', { bubbles: true })
+  composer.dispatchEvent(inputEvent)
 }
 
 function sessionTranscriptSnapshotReducer(

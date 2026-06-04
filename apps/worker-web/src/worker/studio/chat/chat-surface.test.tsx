@@ -151,6 +151,52 @@ describe('chat surface', () => {
     expect(chatColumnElement.contains(screen.getByRole('textbox'))).toBe(true)
   })
 
+  it('renders an existing conversation composer as a sticky footer inside the thread scroll viewport', async () => {
+    const persistedEvent = {
+      createdAt: '2026-06-01T00:00:00.000Z',
+      id: 2,
+      invocationId: 'inv-sticky-footer',
+      payloadJson: { data: { text: 'sticky footer assistant reply' } },
+      seq: 1,
+      sessionId: 'session-1',
+      type: 'assistant_delta',
+    }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/sessions/session-1') {
+        return new Response(JSON.stringify(sessionDetail(
+          [persistedEvent],
+          [{
+            id: 'inv-sticky-footer',
+            metadataJson: { uiUserDisplayText: 'sticky footer user prompt' },
+            seq: 1,
+            sessionId: 'session-1',
+            status: 'succeeded',
+          }],
+        )))
+      }
+      return new Response(JSON.stringify({
+        events: [persistedEvent],
+        invocation: { id: 'inv-sticky-footer', status: 'succeeded' },
+      }))
+    }))
+
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    expect(await screen.findByText(/sticky footer assistant reply/)).toBeTruthy()
+    const scroller = document.querySelector('[data-chat-transcript-scroll="true"]') as HTMLElement | null
+    expect(scroller).toBeTruthy()
+    expect(scroller?.className).toContain('[overflow-anchor:none]')
+    expect(scroller?.contains(screen.getByRole('log', { name: 'Session transcript' }))).toBe(true)
+    expect(scroller?.contains(screen.getByRole('textbox'))).toBe(true)
+
+    const footer = scroller?.querySelector('[data-chat-composer-footer="true"]') as HTMLElement | null
+    expect(footer).toBeTruthy()
+    expect(footer?.className).toContain('sticky')
+    expect(footer?.className).toContain('bottom-0')
+    expect(footer?.querySelector('[data-chat-composer-gradient="true"]')).toBeTruthy()
+  })
+
   it('renders a transcript restore error instead of the default empty state when session detail fails', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => {
       throw new Error('session detail unavailable')
@@ -248,7 +294,7 @@ describe('chat surface', () => {
       expect(await screen.findByText(/last restored reply stays visible/)).toBeTruthy()
       expect(document.querySelector('[data-chat-transcript-scroll="true"]')).toBeTruthy()
       await waitFor(() => {
-        expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: expect.any(Number) }))
+        expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }))
       })
     }
     finally {
@@ -310,7 +356,7 @@ describe('chat surface', () => {
       expect(scroller).toBeTruthy()
       Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 300 })
       Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1200 })
-      scroller!.scrollTop = 0
+      Object.defineProperty(scroller, 'scrollTop', { configurable: true, value: -900, writable: true })
       fireEvent.scroll(scroller!)
       await new Promise(resolve => setTimeout(resolve, 0))
 
@@ -429,5 +475,30 @@ describe('chat surface', () => {
       expect(textbox.value).toBe('')
       expect(document.activeElement).toBe(textbox)
     })
+  })
+
+  it('routes plain document typing into the composer while preserving non-text keys', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(sessionDetail()))))
+
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('status', { name: 'Loading transcript' })).toBeNull()
+    })
+
+    const textbox = screen.getByRole('textbox') as HTMLTextAreaElement
+    textbox.blur()
+    expect(document.activeElement).not.toBe(textbox)
+
+    fireEvent.keyDown(document, { key: 'z' })
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(textbox)
+      expect(textbox.value).toBe('z')
+    })
+
+    textbox.blur()
+    fireEvent.keyDown(document, { key: ' ' })
+    expect(textbox.value).toBe('z')
   })
 })
