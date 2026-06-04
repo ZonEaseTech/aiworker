@@ -154,6 +154,9 @@ function TranscriptItem({ item }: { item: TranscriptItemModel }) {
       : <AssistantMarkdown markdown={item.markdown} streaming={item.streaming} />
   }
 
+  if (item.kind === 'timeline-step')
+    return <TimelineStepItem item={item} />
+
   if (item.kind === 'activity-group') {
     return (
       <TranscriptActivityGroup
@@ -205,6 +208,52 @@ function TranscriptItem({ item }: { item: TranscriptItemModel }) {
   )
 }
 
+function TimelineStepItem({ item }: { item: Extract<TranscriptItemModel, { kind: 'timeline-step' }> }) {
+  const optimistic = item.provenance === 'optimistic'
+  const statusLabel = timelineStepStatusLabel(item.status)
+
+  return (
+    <Item
+      data-transcript-slot="timeline-step"
+      data-timeline-step-provenance={item.provenance}
+      data-timeline-step-status={item.status}
+      variant="muted"
+      className={cn(
+        'min-w-0 rounded-lg border border-transparent bg-muted/35 shadow-none',
+        optimistic && 'border-dashed border-muted-foreground/30 bg-muted/20',
+      )}
+    >
+      <ItemContent>
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <ItemDescription className="max-w-full line-clamp-none text-foreground">
+              {item.title}
+            </ItemDescription>
+            {item.body
+              ? (
+                  <ItemDescription className="mt-1 max-w-full line-clamp-none text-muted-foreground">
+                    {item.body}
+                  </ItemDescription>
+                )
+              : null}
+            {optimistic
+              ? (
+                  <div className="mt-2 grid min-w-0 gap-2" aria-hidden="true">
+                    <Skeleton className="h-2 w-32" />
+                    <Skeleton className="h-2 w-2/5" />
+                  </div>
+                )
+              : null}
+          </div>
+          <span className="shrink-0 rounded-full bg-background/70 px-2 py-0.5 text-[0.625rem]/relaxed uppercase tracking-wide text-muted-foreground">
+            {optimistic ? 'Optimistic' : statusLabel}
+          </span>
+        </div>
+      </ItemContent>
+    </Item>
+  )
+}
+
 function createDefaultTurnSummary(turn: TranscriptTurnModel): ReactNode {
   const summary = summarizeTranscriptTurn(turn)
 
@@ -248,6 +297,18 @@ function resolveTranscriptTurnKind(turn: TranscriptTurnModel): 'assistant' | 'mi
   if (turn.items.some(item => item.kind === 'assistant-markdown'))
     return 'assistant'
   return 'mixed'
+}
+
+function timelineStepStatusLabel(status: Extract<TranscriptItemModel, { kind: 'timeline-step' }>['status']): string {
+  if (status === 'succeeded')
+    return 'Done'
+  if (status === 'failed')
+    return 'Failed'
+  if (status === 'waiting')
+    return 'Waiting'
+  if (status === 'idle')
+    return 'Idle'
+  return 'Running'
 }
 
 function stringifyNode(node: ReactNode): string {

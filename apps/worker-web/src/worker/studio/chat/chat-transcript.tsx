@@ -164,7 +164,7 @@ function applyActiveStreamingState(
 function streamingAssistantTurn(invocationId: string): TranscriptTurnModel {
   return {
     id: invocationId,
-    items: [streamingAssistantItem(invocationId)],
+    items: [optimisticTimelineStepItem(invocationId), streamingAssistantItem(invocationId)],
   }
 }
 
@@ -175,6 +175,17 @@ function markTurnAssistantStreaming(turn: TranscriptTurnModel): TranscriptTurnMo
   return {
     ...turn,
     items: turn.items.map(item => item.kind === 'assistant-markdown' ? { ...item, streaming: true } : item),
+  }
+}
+
+function optimisticTimelineStepItem(invocationId: string): TranscriptTurnModel['items'][number] {
+  return {
+    body: 'Waiting for the native engine to emit its first event.',
+    id: `${invocationId}:timeline:optimistic-start`,
+    kind: 'timeline-step',
+    provenance: 'optimistic',
+    status: 'waiting',
+    title: 'Starting invocation',
   }
 }
 

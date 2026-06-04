@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 export type TranscriptTone = 'danger' | 'info' | 'muted' | 'warning'
 export type TranscriptActivityStatus = 'failed' | 'idle' | 'running' | 'succeeded' | 'waiting'
+export type TranscriptStepProvenance = 'engine' | 'optimistic'
 
 export interface TranscriptArtifactModel {
   action?: ReactNode
@@ -31,9 +32,19 @@ export interface TranscriptActivityModel {
   title: ReactNode
 }
 
+export interface TranscriptTimelineStepModel {
+  body?: ReactNode
+  category?: string
+  id: string
+  provenance: TranscriptStepProvenance
+  status?: TranscriptActivityStatus
+  title: ReactNode
+}
+
 export type TranscriptItemModel
   = | { body: ReactNode, id: string, kind: 'user-message' }
     | { id: string, kind: 'assistant-markdown', markdown: string, streaming?: boolean }
+    | ({ kind: 'timeline-step' } & TranscriptTimelineStepModel)
     | { activities: TranscriptActivityModel[], defaultCollapsed?: boolean, id: string, kind: 'activity-group', summary: ReactNode }
     | ({ id: string, kind: 'command' } & TranscriptCommandModel)
     | { artifacts: TranscriptArtifactModel[], id: string, kind: 'artifact-strip' }

@@ -89,4 +89,27 @@ describe('chat transcript view', () => {
     expect(screen.getByText(/draft a concise update/)).toBeTruthy()
     expect(await screen.findByRole('status', { name: 'Preparing response' })).toBeTruthy()
   })
+
+  it('marks the pre-event active invocation skeleton as optimistic instead of real engine progress', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      events: [],
+      invocation: { id: 'inv-optimistic', status: 'running' },
+    }))))
+
+    render(
+      <ChatTranscript
+        ariaLabel="Session transcript"
+        initialInvocation={{ id: 'inv-optimistic', status: 'running' }}
+        intervalMs={1000}
+        invocationId="inv-optimistic"
+        sessionId="s1"
+        userMessage={{ invocationId: 'inv-optimistic', text: 'show a timeline' }}
+      />,
+    )
+
+    expect(screen.getByText(/show a timeline/)).toBeTruthy()
+    expect(await screen.findByText('Starting invocation')).toBeTruthy()
+    expect(document.querySelector('[data-transcript-slot="timeline-step"][data-timeline-step-provenance="optimistic"]')).toBeTruthy()
+    expect(document.querySelector('[data-transcript-slot="timeline-step"][data-timeline-step-provenance="engine"]')).toBeNull()
+  })
 })

@@ -72,6 +72,14 @@ input; it is auto-named and renamable, opens an empty chat, and its first compos
 message becomes the session's first invocation. The engine target defaults to the
 Worker's detected default engine and may be overridden per session.
 
+The Workbench transcript may render generic bridge observations as visible
+timeline steps so the employee sees a coherent invocation flow rather than a
+single disconnected loading placeholder. Optimistic startup skeletons are allowed
+before the first real bridge event, but they must be visually or semantically
+distinguishable from engine-derived steps and must not claim that tool/progress
+work happened before a real event exists. Transcript timeline rendering must not
+expose chain-of-thought, raw tool payloads, unredacted chunks, or secrets.
+
 Historical SQLite column names may remain only
 behind the storage boundary while migrations are collapsed.
 

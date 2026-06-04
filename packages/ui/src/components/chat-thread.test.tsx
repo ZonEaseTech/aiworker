@@ -174,4 +174,40 @@ describe('chat thread', () => {
 
     expect(screen.getByRole('status', { name: 'Preparing response' })).toBeTruthy()
   })
+
+  it('renders generic timeline steps with distinct optimistic and engine provenance', () => {
+    render(
+      <ChatThread
+        ariaLabel="Conversation"
+        turns={[{
+          id: 'invocation-1',
+          items: [
+            {
+              body: 'Waiting for the native engine to emit its first event.',
+              id: 'optimistic-start',
+              kind: 'timeline-step',
+              provenance: 'optimistic',
+              status: 'waiting',
+              title: 'Starting invocation',
+            },
+            {
+              body: 'Read workspace files',
+              id: 'engine-progress',
+              kind: 'timeline-step',
+              provenance: 'engine',
+              status: 'running',
+              title: 'Inspecting workspace',
+            },
+          ],
+        }]}
+      />,
+    )
+
+    expect(screen.getByText('Starting invocation')).toBeTruthy()
+    expect(screen.getByText('Waiting for the native engine to emit its first event.')).toBeTruthy()
+    expect(screen.getByText('Inspecting workspace')).toBeTruthy()
+    expect(screen.getByText('Read workspace files')).toBeTruthy()
+    expect(document.querySelector('[data-transcript-slot="timeline-step"][data-timeline-step-provenance="optimistic"]')).toBeTruthy()
+    expect(document.querySelector('[data-transcript-slot="timeline-step"][data-timeline-step-provenance="engine"]')).toBeTruthy()
+  })
 })
