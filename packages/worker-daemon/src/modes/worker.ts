@@ -93,6 +93,9 @@ export interface BootstrapWorkerAppOptions {
   // 引擎扫描缝(镜像 executor 注入):不传则用真实 scanLocalEngines;测试注入 fake,
   // 使 settings 加载 / rescan 路由不 shell 出真实引擎 CLI。
   engineScanner?: () => LocalEngineStatus[]
+  // 会话自动命名缝:不传则关闭(单元/集成测试不会自动 spawn 取名引擎);
+  // 真实 CLI 入口 (aiworker start/daemon) 传 true 开启。见 docs/runtime.md。
+  sessionAutoName?: boolean
   now?: () => string
 }
 
@@ -133,6 +136,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const host = createWorkerOrchestrator({
     engineBridge: options.engineBridge,
     executor: options.executor,
+    sessionAutoName: options.sessionAutoName ?? false,
     now: options.now,
     officialAppsRoot: options.officialAppsRoot,
     registryContext: () => {
@@ -524,9 +528,15 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     if (!result.ok)
       return result.response
     try {
+      // 员工显式改名(标题确有变化)→ 标记 titleSource='user',使会话自动命名
+      // 永不覆盖。占位标题原样回填不算改名,避免过早锁死自动命名。
+      const renaming = typeof result.data.title === 'string' && result.data.title.length > 0 && result.data.title !== session.title
+      const metadataJson = result.data.metadata || renaming
+        ? { ...(session.metadataJson ?? {}), ...(result.data.metadata ?? {}), ...(renaming ? { titleSource: 'user' } : {}) }
+        : undefined
       return c.json({ session: updateSession({
         id: session.id,
-        metadataJson: result.data.metadata ? { ...(session.metadataJson ?? {}), ...result.data.metadata } : undefined,
+        metadataJson,
         status: result.data.status,
         title: result.data.title,
       }) })

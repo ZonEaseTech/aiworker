@@ -72,6 +72,27 @@ input; it is auto-named and renamable, opens an empty chat, and its first compos
 message becomes the session's first invocation. The engine target defaults to the
 Worker's detected default engine and may be overridden per session.
 
+### Session Auto-Naming
+
+A session is auto-named on its first invocation, and only while its title is still
+auto-assigned — never after the employee renames it. The Worker upgrades the title
+in two steps: first an immediate placeholder derived from a truncated form of the
+first prompt, then an engine-refined short title.
+
+The engine refinement runs as an internal one-shot engine call. That call is a
+fresh native session that is discarded: it is never resumed, its external session
+ref is never written back into the session's resume chain, and its observations
+never appear in the session transcript. It is recorded as an engine invocation
+marked internal, so engine process state still lives in `engine_invocations`
+(reconciler, cancel, lost still apply), but resume resolution and transcript
+projection exclude internal invocations. A later real follow-up therefore always
+resumes from the latest real invocation, never from the auto-naming call.
+
+Engine refinement is best-effort: when the engine is unavailable, or the call
+fails or times out, the placeholder title remains and no error surfaces to the
+session. The generated title is redacted like any other persisted, displayed
+value and must carry no secrets.
+
 The Workbench transcript may render generic bridge observations as visible
 timeline steps so the employee sees a coherent invocation flow rather than a
 single disconnected loading placeholder. Optimistic startup skeletons are allowed

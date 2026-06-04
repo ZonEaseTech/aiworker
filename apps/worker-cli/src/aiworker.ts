@@ -1144,6 +1144,7 @@ async function runDaemonForegroundServer(prepared: DaemonForegroundPreparation):
   const { app, port, state } = await bootstrapWorkerApp({
     officialAppsRoot: resolveCliOfficialAppsRoot(),
     runtimeVersion: packageJson.version,
+    sessionAutoName: true,
     webStaticDir: resolveCliWorkerWebStaticDir(),
   })
   const env = getWorkerEnv()

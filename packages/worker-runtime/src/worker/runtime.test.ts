@@ -7,7 +7,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getEngineInvocation, getWorkerConfigValue, initWorkerDb, listSessionEvents, runWorkerMigrations, updateSession, updateWorkspace, upsertWorker, upsertWorkerConfigValue } from '@zonease/aiworker-storage-sqlite/worker'
+import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getEngineInvocation, getSession, getWorkerConfigValue, initWorkerDb, listEngineInvocations, listSessionEvents, runWorkerMigrations, updateSession, updateWorkspace, upsertWorker, upsertWorkerConfigValue } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { LocalExecutorFailure } from './executor'
@@ -2640,6 +2640,225 @@ describe('LocalWorkerRuntime', () => {
     expect(readme).toContain('No accepted profile update yet.')
     await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Available native skills may be empty')
     await expect(readFile(join(workspace.rootPath, 'CLAUDE.md'), 'utf8')).resolves.toBe('@AGENTS.md\n')
+  })
+
+  describe('session auto-naming', () => {
+    function autoNameRuntime(executor: ConstructorParameters<typeof LocalWorkerRuntime>[0]['executor']) {
+      return new LocalWorkerRuntime({
+        worker: { id: 'worker-demo', appId: 'demo-soul', name: 'Demo', defaultEngineId: 'codex' },
+        workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
+        now,
+        executor,
+        sessionAutoName: true,
+      })
+    }
+
+    async function freshSession(workerRuntime: LocalWorkerRuntime) {
+      await workerRuntime.init()
+      const workspace = await workerRuntime.createWorkspace({ name: 'Auto Name Workspace' })
+      const session = await workerRuntime.createSession({ workspaceId: workspace.id, title: 'Untitled session' })
+      return { session, workspace }
+    }
+
+    it('refines the title with an engine-generated name on the first invocation', async () => {
+      const workerRuntime = autoNameRuntime({
+        async invoke(input) {
+          if (input.metadata?.purpose === 'session-autoname')
+            return { summary: '引擎标题XYZ' }
+          return { summary: `Finished ${input.sessionId}` }
+        },
+      })
+      const { session } = await freshSession(workerRuntime)
+      expect(getSession(session.id)?.metadataJson.titleSource).toBe('auto-default')
+
+      await workerRuntime.startInvocation({
+        sessionId: session.id,
+        input: 'Please refactor the authentication module thoroughly',
+        engineId: 'codex',
+        engineCommand: 'codex',
+      })
+      await workerRuntime.drainBackgroundWork()
+
+      const refined = getSession(session.id)!
+      expect(refined.title).toBe('引擎标题XYZ')
+      expect(refined.metadataJson.titleSource).toBe('auto-engine')
+    })
+
+    it('applies the truncated placeholder immediately, before the engine title resolves', async () => {
+      let releaseTitle: () => void = () => {}
+      const gate = new Promise<void>((resolve) => {
+        releaseTitle = resolve
+      })
+      const workerRuntime = autoNameRuntime({
+        async invoke(input) {
+          if (input.metadata?.purpose === 'session-autoname') {
+            await gate
+            return { summary: '机器名' }
+          }
+          return { summary: 'main answer' }
+        },
+      })
+      const { session } = await freshSession(workerRuntime)
+
+      await workerRuntime.startInvocation({
+        sessionId: session.id,
+        input: 'Please refactor the authentication module thoroughly',
+        engineId: 'codex',
+        engineCommand: 'codex',
+      })
+
+      const placeholderState = getSession(session.id)!
+      expect(placeholderState.title).toBe('Please r')
+      expect(placeholderState.metadataJson.titleSource).toBe('auto-truncated')
+
+      releaseTitle()
+      await workerRuntime.drainBackgroundWork()
+      expect(getSession(session.id)!.title).toBe('机器名')
+    })
+
+    it('keeps the internal auto-naming invocation out of the session transcript', async () => {
+      const workerRuntime = autoNameRuntime({
+        async invoke(input) {
+          const text = input.metadata?.purpose === 'session-autoname' ? '内部标题' : 'main answer'
+          input.onEvent?.({ kind: 'text', text })
+          return { summary: text }
+        },
+      })
+      const { session } = await freshSession(workerRuntime)
+
+      const result = await workerRuntime.startInvocation({
+        sessionId: session.id,
+        input: 'Summarize the quarterly report',
+        engineId: 'codex',
+        engineCommand: 'codex',
+      })
+      await workerRuntime.drainBackgroundWork()
+
+      const invocations = listEngineInvocations(session.id)
+      const internal = invocations.filter(invocation => invocation.metadataJson.kind === 'internal')
+      const real = invocations.filter(invocation => invocation.metadataJson.kind !== 'internal')
+      expect(internal).toHaveLength(1)
+      expect(real).toHaveLength(1)
+      expect(real[0]!.id).toBe(result.invocation.id)
+
+      const events = listSessionEvents(session.id)
+      expect(events.length).toBeGreaterThan(0)
+      expect(events.every(event => event.invocationId === result.invocation.id)).toBe(true)
+      expect(events.some(event => event.invocationId === internal[0]!.id)).toBe(false)
+    })
+
+    it('excludes the internal auto-naming invocation from the native resume chain', async () => {
+      const followUpRefs: unknown[] = []
+      const workerRuntime = new LocalWorkerRuntime({
+        worker: { id: 'worker-demo', appId: 'demo-soul', name: 'Demo', defaultEngineId: 'codex' },
+        workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
+        now,
+        executor: {
+          async invoke() {
+            throw new Error('engine bridge adapter should be used')
+          },
+        },
+        sessionAutoName: true,
+        engineBridge: {
+          adapters: [{
+            target: 'codex',
+            async cancel() {
+              return {}
+            },
+            async discover() {
+              return { callable: true, installed: true, supportsNativeResume: true, target: 'codex' }
+            },
+            async followUp(request: Record<string, unknown>) {
+              followUpRefs.push(request.externalSessionRef)
+              return { externalSessionRef: { id: 'followup-native' }, summary: 'follow up done' }
+            },
+            normalize() {
+              return []
+            },
+            async start(request: Record<string, unknown>) {
+              const isTitle = (request.metadata as { purpose?: string } | undefined)?.purpose === 'session-autoname'
+              return {
+                externalSessionRef: { id: isTitle ? 'internal-native' : 'real-native' },
+                summary: isTitle ? '机器标题' : 'first answer',
+              }
+            },
+          }],
+          projectionReceipts: {
+            async assertUsable() {},
+          },
+        },
+      })
+      await workerRuntime.init()
+      const workspace = await workerRuntime.createWorkspace({ name: 'Resume Workspace' })
+      const session = await workerRuntime.createSession({ workspaceId: workspace.id, title: 'Untitled session' })
+
+      await workerRuntime.startInvocation({ sessionId: session.id, input: 'Kick off the first task', engineId: 'codex', engineCommand: 'codex' })
+      await workerRuntime.drainBackgroundWork()
+
+      await workerRuntime.startInvocation({ sessionId: session.id, input: 'Continue the work', engineId: 'codex', engineCommand: 'codex' })
+
+      expect(followUpRefs).toEqual([{ id: 'real-native' }])
+    })
+
+    it('redacts secrets from the engine-generated title', async () => {
+      const workerRuntime = autoNameRuntime({
+        async invoke(input) {
+          if (input.metadata?.purpose === 'session-autoname')
+            return { summary: 'ghp_abcdefghijklmnopqrstuvwxyz0123456789' }
+          return { summary: 'main answer' }
+        },
+      })
+      const { session } = await freshSession(workerRuntime)
+
+      await workerRuntime.startInvocation({ sessionId: session.id, input: 'Refresh the credentials', engineId: 'codex', engineCommand: 'codex' })
+      await workerRuntime.drainBackgroundWork()
+
+      expect(getSession(session.id)!.title).not.toContain('ghp_')
+    })
+
+    it('never overrides a title the employee has already set', async () => {
+      const titleCalls: string[] = []
+      const workerRuntime = autoNameRuntime({
+        async invoke(input) {
+          if (input.metadata?.purpose === 'session-autoname') {
+            titleCalls.push(input.prompt)
+            return { summary: 'ROBOT' }
+          }
+          return { summary: 'main answer' }
+        },
+      })
+      const { session } = await freshSession(workerRuntime)
+      updateSession({ id: session.id, title: 'My Name', metadataJson: { ...session.metadataJson, titleSource: 'user' } })
+
+      await workerRuntime.startInvocation({ sessionId: session.id, input: 'Do the work now', engineId: 'codex', engineCommand: 'codex' })
+      await workerRuntime.drainBackgroundWork()
+
+      expect(getSession(session.id)!.title).toBe('My Name')
+      expect(titleCalls).toHaveLength(0)
+      expect(listEngineInvocations(session.id).every(invocation => invocation.metadataJson.kind !== 'internal')).toBe(true)
+    })
+
+    it('keeps the truncated placeholder when engine refinement fails', async () => {
+      const workerRuntime = autoNameRuntime({
+        async invoke(input) {
+          if (input.metadata?.purpose === 'session-autoname')
+            throw new Error('no engine available')
+          return { summary: 'main answer' }
+        },
+      })
+      const { session } = await freshSession(workerRuntime)
+
+      const result = await workerRuntime.startInvocation({ sessionId: session.id, input: 'Generate the weekly summary', engineId: 'codex', engineCommand: 'codex' })
+      await workerRuntime.drainBackgroundWork()
+
+      const named = getSession(session.id)!
+      expect(named.title).toBe('Generate')
+      expect(named.metadataJson.titleSource).toBe('auto-truncated')
+      expect(result.invocation.status).toBe('succeeded')
+      const internal = listEngineInvocations(session.id).filter(invocation => invocation.metadataJson.kind === 'internal')
+      expect(internal).toHaveLength(1)
+      expect(internal[0]!.status).toBe('failed')
+    })
   })
 })
 

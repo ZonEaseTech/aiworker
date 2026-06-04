@@ -90,6 +90,13 @@ export interface LocalWorkerRuntimeOptions {
   executor?: LocalExecutor
   engineBridge?: LocalEngineBridgeOptions | null
   engineAssetSource?: EngineAssetSource | null
+  /**
+   * When true, the worker auto-names a session on its first invocation: an
+   * immediate truncated placeholder, then a best-effort engine-refined title via
+   * an internal one-shot engine call. Off by default; the production daemon turns
+   * it on. See docs/runtime.md "Session Auto-Naming".
+   */
+  sessionAutoName?: boolean
   now?: () => string
 }
 
@@ -193,6 +200,8 @@ export class LocalWorkerRuntime {
   readonly #executor: LocalExecutor
   readonly #engineAssetSource: EngineAssetSource | null
   readonly #engineBridgeOptions: LocalEngineBridgeOptions | null
+  readonly #sessionAutoName: boolean
+  readonly #backgroundTasks = new Set<Promise<unknown>>()
   readonly #now: () => string
   readonly bus = new LocalWorkerEventBus()
 
@@ -203,6 +212,7 @@ export class LocalWorkerRuntime {
     this.#executor = options.executor ?? createExternalEngineExecutor()
     this.#engineAssetSource = options.engineAssetSource ?? null
     this.#engineBridgeOptions = options.engineBridge ?? null
+    this.#sessionAutoName = options.sessionAutoName ?? false
     this.#now = options.now ?? (() => new Date().toISOString())
   }
 
@@ -339,7 +349,8 @@ export class LocalWorkerRuntime {
   async createSession(input: CreateLocalSessionInput): Promise<SessionRow> {
     this.requireActiveWorker()
     const workspace = this.requireActiveWorkspace(input.workspaceId)
-    const sessionMetadata = freezeSessionEngineMetadata(input.metadata ?? {}, this.requestedSessionEngine(input.metadata ?? {}))
+    const baseSessionMetadata = freezeSessionEngineMetadata(input.metadata ?? {}, this.requestedSessionEngine(input.metadata ?? {}))
+    const sessionMetadata = { ...baseSessionMetadata, titleSource: readString(baseSessionMetadata.titleSource, 'auto-default') }
     const session = createSession({
       id: randomUUID(),
       workerId: this.workerId,
@@ -356,11 +367,14 @@ export class LocalWorkerRuntime {
   }
 
   async startInvocation(input: StartLocalInvocationInput): Promise<LocalInvocationStartResult> {
-    return this.runInvocationToCompletion(this.createInvocationStart(input))
+    const context = this.createInvocationStart(input)
+    this.maybeKickSessionAutoName(context)
+    return this.runInvocationToCompletion(context)
   }
 
   async startInvocationDetached(input: StartLocalInvocationInput): Promise<LocalInvocationStartResult> {
     const context = this.createInvocationStart(input)
+    this.maybeKickSessionAutoName(context)
     void this.runInvocationToCompletion(context).catch((error) => {
       this.recordInvocationFailure(context, error)
     })
@@ -370,6 +384,131 @@ export class LocalWorkerRuntime {
       events: listSessionEvents(context.session.id).filter(event => event.invocationId === context.invocation.id),
       files: [],
     }
+  }
+
+  /**
+   * Await background work (session auto-naming one-shots) the runtime kicked off
+   * detached. Tests await this before asserting the engine-refined title. The
+   * daemon does not currently drain on shutdown: an in-flight one-shot is
+   * abandoned best-effort — its late DB writes throw against a closed DB and are
+   * swallowed — consistent with auto-naming being best-effort. Graceful
+   * drain-on-shutdown is a future improvement.
+   */
+  async drainBackgroundWork(): Promise<void> {
+    while (this.#backgroundTasks.size > 0) {
+      const pending = [...this.#backgroundTasks]
+      await Promise.allSettled(pending)
+      for (const task of pending)
+        this.#backgroundTasks.delete(task)
+    }
+  }
+
+  /**
+   * On a session's first invocation, and only while its title is still
+   * auto-assigned, upgrade the title: an immediate truncated placeholder, then a
+   * detached engine-refined title. No-op unless auto-naming is enabled.
+   */
+  private maybeKickSessionAutoName(context: LocalInvocationStartContext): void {
+    if (!this.#sessionAutoName)
+      return
+    const titleSource = readString(readRecord(context.session.metadataJson).titleSource, 'auto-default')
+    if (titleSource !== 'auto-default')
+      return
+    const placeholder = truncateAutoNameTitle(context.input.input)
+    if (!placeholder)
+      return
+    this.applyAutoNameTitle(context.session.id, placeholder, 'auto-truncated')
+    const task = this.runSessionAutoNameOneShot(context).catch(() => {})
+    this.#backgroundTasks.add(task)
+    void task.finally(() => {
+      this.#backgroundTasks.delete(task)
+    })
+  }
+
+  /**
+   * Rename a session via an internal one-shot engine call. The native session is
+   * fresh and discarded (never resumed), and its observations never reach the
+   * transcript. The internal invocation row is marked internal so process state
+   * stays in engine_invocations while resume/transcript exclude it. Best-effort:
+   * any failure leaves the truncated placeholder in place.
+   */
+  private async runSessionAutoNameOneShot(context: LocalInvocationStartContext): Promise<void> {
+    const session = getSession(context.session.id)
+    if (!session)
+      return
+    const metadata = { ...context.metadata, kind: 'internal', purpose: 'session-autoname' }
+    const invocationId = randomUUID()
+    const invocation = createEngineInvocation({
+      id: invocationId,
+      sessionId: session.id,
+      seq: nextEngineInvocationSeq(session.id),
+      engineId: context.sessionEngine.engineId,
+      engineCommand: context.sessionEngine.engineCommand,
+      inputRef: `aiworker://sessions/${session.id}/invocations/${invocationId}/input`,
+      processState: 'spawned',
+      status: 'running',
+      metadataJson: metadata,
+      startedAt: this.#now(),
+      at: this.#now(),
+    })
+    try {
+      const invocationRoot = await this.ensureInvocationRoot(context.workspace, session, invocation)
+      // The title instructions are the only channel for the one-shot; feed them
+      // to both prompt and request body so no adapter can read the raw prompt.
+      const titlePrompt = buildAutoNameTitlePrompt(context.input.input)
+      const result = await this.invokeEngine({
+        allowResume: false,
+        invocation,
+        invocationRoot,
+        metadata,
+        prompt: titlePrompt,
+        recordTranscript: false,
+        requestInput: titlePrompt,
+        session: context.currentSession,
+        sessionEngine: context.sessionEngine,
+        workspace: context.workspace,
+      })
+      updateEngineInvocation({
+        id: invocation.id,
+        ...engineInvocationReferenceFields(result),
+        status: 'succeeded',
+        processState: 'exited',
+        summary: redactEngineString(result.summary),
+        metadataJson: { ...metadata, ...redactEngineRecord(result.metadata ?? {}) },
+        finishedAt: this.#now(),
+        at: this.#now(),
+      })
+      const title = cleanAutoNameTitle(result.summary)
+      if (title)
+        this.applyAutoNameTitle(session.id, title, 'auto-engine')
+    }
+    catch (error) {
+      updateEngineInvocation({
+        id: invocation.id,
+        status: 'failed',
+        processState: engineFailureProcessState(error),
+        failureCode: engineFailureCode(error),
+        error: redactEngineString(error instanceof Error ? error.message : String(error)),
+        finishedAt: this.#now(),
+        at: this.#now(),
+      })
+    }
+  }
+
+  private applyAutoNameTitle(sessionId: string, title: string, source: 'auto-engine' | 'auto-truncated'): void {
+    const session = getSession(sessionId)
+    if (!session)
+      return
+    const currentSource = readString(readRecord(session.metadataJson).titleSource, 'auto-default')
+    if (currentSource === 'user')
+      return
+    const updated = updateSession({
+      id: sessionId,
+      title,
+      metadataJson: { ...readRecord(session.metadataJson), titleSource: source },
+      at: this.#now(),
+    })
+    this.bus.emit({ kind: 'session', workspaceId: updated.workspaceId, sessionId, payload: { status: updated.status }, at: this.#now() })
   }
 
   private createInvocationStart(input: StartLocalInvocationInput): LocalInvocationStartContext {
@@ -704,22 +843,33 @@ export class LocalWorkerRuntime {
     session: SessionRow
     sessionEngine: FrozenSessionEngine
     workspace: WorkspaceRow
+    /** When false, never resume a prior native session (fresh one-shot). Default true. */
+    allowResume?: boolean
+    /** When false, bridge observations are not written to the session transcript. Default true. */
+    recordTranscript?: boolean
   }): Promise<LocalExecutorResult> {
+    const allowResume = input.allowResume ?? true
+    const recordTranscript = input.recordTranscript ?? true
     const bridgeOptions = this.#engineBridgeOptions && this.#engineBridgeOptions.adapters.length > 0
       ? this.#engineBridgeOptions
       : createLocalExecutorBridgeOptions(this.#executor, input.sessionEngine.engineId, {
           assertUsable: request => this.assertWorkspaceProjectionReceipt(input.workspace, request),
         })
 
-    const previousInvocation = latestPriorEngineInvocation(input.session.id, input.invocation.seq, input.sessionEngine.engineId)
+    const previousInvocation = allowResume
+      ? latestPriorEngineInvocation(input.session.id, input.invocation.seq, input.sessionEngine.engineId)
+      : null
     const bridge = createEngineBridge({
       adapters: bridgeOptions.adapters,
       bridgeEventStore: {
-        append: async event => this.appendBridgeEvent(input.session.id, readRecord(event), input.invocation.id, 'running'),
+        append: async (event) => {
+          if (recordTranscript)
+            this.appendBridgeEvent(input.session.id, readRecord(event), input.invocation.id, 'running')
+        },
       },
       projectionReceipts: bridgeOptions.projectionReceipts,
       rawChunkStore: bridgeOptions.rawChunkStore,
-      resolveLatestExternalSessionRef: async () => latestExternalSessionRef(previousInvocation),
+      resolveLatestExternalSessionRef: async () => (allowResume ? latestExternalSessionRef(previousInvocation) : null),
     })
     const request = {
       cwd: input.workspace.rootPath,
@@ -1273,6 +1423,45 @@ function redactEngineNullableString(value: string | null): string | null {
   return value == null ? null : redactEngineString(value)
 }
 
+const AUTO_NAME_TITLE_MAX = 8
+
+/** First non-empty line of the user prompt, redacted and clamped to the title length. */
+function truncateAutoNameTitle(input: string): string {
+  const firstLine = firstNonEmptyLine(redactEngineString(input))
+  const collapsed = firstLine.replace(/\s+/g, ' ').trim()
+  return clampTitleLength(collapsed)
+}
+
+/** Engine summary cleaned into a bare title: redacted, unquoted, no trailing punctuation, clamped. */
+function cleanAutoNameTitle(summary: string): string {
+  const firstLine = firstNonEmptyLine(redactEngineString(summary))
+  const stripped = firstLine
+    .replace(/^["'`「『《【([]+/u, '')
+    .replace(/["'`」』》】)\]]+$/u, '')
+    .replace(/[。.!?！？,，、;；:：]+$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return clampTitleLength(stripped)
+}
+
+function buildAutoNameTitlePrompt(input: string): string {
+  return [
+    'Generate a concise session title for the request below.',
+    `Rules: output only the title, on a single line, at most ${AUTO_NAME_TITLE_MAX} characters, no surrounding quotes, no trailing punctuation, no explanation.`,
+    '',
+    'Request:',
+    redactEngineString(input).trim(),
+  ].join('\n')
+}
+
+function firstNonEmptyLine(value: string): string {
+  return value.split('\n').map(line => line.trim()).find(line => line.length > 0) ?? ''
+}
+
+function clampTitleLength(value: string): string {
+  return Array.from(value).slice(0, AUTO_NAME_TITLE_MAX).join('').trim()
+}
+
 function invocationInputPreviewFromRequest(request: string): string | null {
   const materialsIndex = attachedSourceMaterialsIndex(request)
   const requestText = (materialsIndex >= 0 ? request.slice(0, materialsIndex) : request).trim()
@@ -1375,8 +1564,12 @@ function sessionEventTypeFromBridgeEvent(type: string): SessionEventRow['type'] 
 
 function latestPriorEngineInvocation(sessionId: string, beforeSeq: number, engineId: string): EngineInvocationRow | null {
   return listEngineInvocations(sessionId)
-    .filter(invocation => invocation.seq < beforeSeq && invocation.engineId === engineId)
+    .filter(invocation => invocation.seq < beforeSeq && invocation.engineId === engineId && !isInternalEngineInvocation(invocation))
     .sort((left, right) => right.seq - left.seq)[0] ?? null
+}
+
+function isInternalEngineInvocation(invocation: EngineInvocationRow): boolean {
+  return readString(readRecord(invocation.metadataJson).kind, '') === 'internal'
 }
 
 function latestExternalSessionRef(invocation: EngineInvocationRow | null): unknown {

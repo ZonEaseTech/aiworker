@@ -125,11 +125,13 @@ describe('local daemon API', () => {
     webStaticDir?: string,
     officialAppsRoot?: string,
     engineBridge?: LocalWorkerRuntimeOptions['engineBridge'],
+    sessionAutoName = false,
   ) {
     const boot = await bootstrapWorkerApp({
       dbPath: join(dir, 'worker.db'),
       engineBridge,
       engineScanner: () => fakeEngineRows(),
+      sessionAutoName,
       executor: {
         async invoke(input) {
           input.onEvent?.({ kind: 'status', label: 'test-started', detail: input.engineId })
@@ -429,6 +431,36 @@ describe('local daemon API', () => {
     expect((await target.request(`/api/local/sessions/${session.id}`)).status).toBe(404)
     expect((await target.request(`/api/local/workers/${worker.id}/sessions/${session.id}`)).status).toBe(404)
     expect('turns' in sessionBody).toBe(false)
+  })
+
+  it('auto-names a session end-to-end when the daemon enables session auto-naming', async () => {
+    const target = await app(undefined, undefined, undefined, undefined, true)
+    const worker = await createFreeformWorker(target, 'autoname-worker')
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    const invocationRes = await target.request(`/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Investigate the failing build pipeline' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(invocationRes.status).toBe(201)
+
+    // The engine-refined title (②) runs detached; poll the session until it lands.
+    let named: { title: string, metadataJson: Record<string, unknown> } | undefined
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const body = await (await target.request(`/api/sessions/${session.id}`)).json() as {
+        session: { title: string, metadataJson: Record<string, unknown> }
+      }
+      if (body.session.metadataJson.titleSource === 'auto-engine') {
+        named = body.session
+        break
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10)
+      })
+    }
+    expect(named?.metadataJson.titleSource).toBe('auto-engine')
+    expect(named?.title).toBe('done')
   })
 
   it('can return a running session invocation without waiting for engine completion', async () => {

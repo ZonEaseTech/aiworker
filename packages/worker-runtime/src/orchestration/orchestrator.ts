@@ -49,6 +49,8 @@ export interface WorkerOrchestratorOptions {
   now?: () => string
   officialAppsRoot?: string
   registryContext?: () => SoulAppRegistryContext
+  /** Enable per-worker session auto-naming. Off by default; the daemon turns it on. */
+  sessionAutoName?: boolean
   workersRoot: string
 }
 
@@ -208,6 +210,7 @@ export class WorkerOrchestrator {
       executor: this.options.executor,
       engineBridge: this.options.engineBridge,
       engineAssetSource: this.engineAssetSourceForWorker(worker),
+      sessionAutoName: this.options.sessionAutoName ?? false,
       now: this.options.now,
       workspacesRoot: path.join(this.options.workersRoot, worker.id, 'workspaces'),
       overlaysRoot: path.join(this.options.workersRoot, worker.id, 'overlays'),
