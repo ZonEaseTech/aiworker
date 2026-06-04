@@ -149,10 +149,17 @@ bun run dev
 目标 packaged/npm preview 入口：
 
 ```bash
-bunx @zonease/aiworker-cli daemon start --port 9217
+bunx @zonease/aiworker-cli start --port 9217
 # or, if Bun is already available for the shim:
-npx @zonease/aiworker-cli daemon start --port 9217
+npx @zonease/aiworker-cli start --port 9217
 ```
+
+`aiworker start` 是默认 operator 入口：它完成 DB / bundled Freeform Soul /
+single active Worker bootstrap，后台启动本地 service，并默认打开 Workbench。
+`aiworker daemon start --port 9217` 走同一套 bootstrap 和后台 service 启动逻辑，
+但不打开浏览器；`aiworker daemon foreground --port 9217` 走同一套 bootstrap，
+并把 service 留在前台进程。发布/packaged 路径只有这个 service port；`5173`
+只属于 source-checkout Vite dev server。
 
 这是 `0.x preview`：Host Web/API 启动、worker DB migrations，以及官方 Freeform Soul
 bootstrap 需要能从 npm package 直接工作。领域业务 workflow、第三方 Soul App authoring、
@@ -168,11 +175,12 @@ bun apps/worker-cli/src/aiworker.ts daemon foreground --port 9217
 源码态默认使用 `~/.aiworker-dev` 作为开发 profile；发布包和 npm preview
 默认仍使用 `~/.aiworker`。两种入口都可以通过 `AIWORKER_HOME=<path>` 显式覆盖。
 `aiworker dev` 仅保留为 source-checkout compatibility alias；日常 operator
-lifecycle 使用 `daemon start|stop|restart|status|logs`。
+lifecycle 使用 `start` 或 `daemon start|foreground|stop|restart|status|logs`。
 
-打开 Web 后，首屏应帮助用户 install/enable 官方或第三方 Soul App，再创建 Soul worker 与
-workspace/session。Settings 由明确 settings button 打开，支持 Local CLI / BYOK、engine
-scan/test、connectors、MCP、language、appearance、autosave 和 Soul App 管理。
+打开 Web 后，standalone v1 已有一个 Freeform-bound active Worker；Workbench 首屏应帮助
+用户创建第一个 workspace，再进入 workspace 内创建 session。Settings 由明确 settings
+button 打开，支持 Local CLI / BYOK、engine scan/test、connectors、MCP、language、
+appearance、autosave 和 Soul App 管理。
 
 ## 仓库结构
 

@@ -88,6 +88,7 @@ export interface LocalPaths {
   dbPath: string
   workersRoot: string
   pidFile: string
+  daemonMetaFile: string
   logFile: string
 }
 
@@ -99,6 +100,7 @@ const SOURCE_SOUL_APP_SDK_ROOT = path.resolve(import.meta.dir, '../../../package
 let soulAppSdk: Promise<SoulAppSdkModule> | null = null
 
 interface RuntimeOptions {
+  requireEnabledApp?: boolean
   worker?: string
 }
 
@@ -134,12 +136,34 @@ interface SessionContinuationContext {
 
 type CliProjectionEngineTarget = 'claude-code' | 'codex'
 
-interface DaemonStartResult {
+export interface DaemonStartedResult {
+  host: string
   logFile: string
   pid: number
+  port: number
   started: true
   url: string
 }
+
+interface DaemonReuseResult {
+  actual: {
+    host?: string
+    port?: number
+    url: null | string
+  }
+  logFile: string
+  message: string
+  pid: number
+  requested: {
+    host?: string
+    port?: number
+  }
+  started: false
+  url: null | string
+}
+
+type DaemonStartResult = DaemonStartedResult | DaemonReuseResult
+export type DaemonStarter = (opts: { host?: string, port?: number }, paths: LocalPaths) => Promise<DaemonStartedResult>
 
 interface DaemonStopResult {
   pid?: number
@@ -157,6 +181,12 @@ interface DaemonRestartResult {
 const cli = cac('aiworker')
 const CLI_MODULE_DIR = path.dirname(fileURLToPath(import.meta.url))
 const OFFICIAL_APP_DESCRIPTOR_FILENAME = 'dist/soul.descriptor.json'
+
+let daemonStarterForTest: DaemonStarter | null = null
+
+export function __setDaemonStarterForTest(starter: DaemonStarter | null): void {
+  daemonStarterForTest = starter
+}
 
 interface CliResourceResolutionOptions {
   executableDir?: string
@@ -254,6 +284,7 @@ export function resolveCliLocalPaths(moduleDir = CLI_MODULE_DIR): LocalPaths {
     dbPath: process.env.WORKER_DB_PATH ?? path.join(home, 'aiworker.db'),
     workersRoot: path.join(home, 'workers'),
     pidFile: path.join(home, 'aiworker-daemon.pid'),
+    daemonMetaFile: path.join(home, 'aiworker-daemon.json'),
     logFile: path.join(home, 'aiworker-daemon.log'),
   }
 }
@@ -406,7 +437,10 @@ async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerR
   const worker = getWorker(workerId)
   if (!worker)
     throw new Error(`worker not found: ${workerId}`)
-  const runtime = createHost(paths).createRuntimeForWorker(worker)
+  const host = createHost(paths)
+  if (options.requireEnabledApp)
+    host.requireEnabledAppForWorker(worker.id)
+  const runtime = host.createRuntimeForWorker(worker)
   await runtime.init()
   return runtime
 }
@@ -804,17 +838,62 @@ function compareVersionStrings(left: string, right: string): number {
   return 0
 }
 
-function daemonStatus(): { logFile: string, pid: number | null, running: boolean } {
-  const paths = localPaths()
+function daemonStatus(paths = localPaths()): { logFile: string, pid: number | null, running: boolean } {
   if (!existsSync(paths.pidFile))
     return { pid: null, running: false, logFile: paths.logFile }
   const pid = Number.parseInt(readFileSync(paths.pidFile, 'utf8'), 10)
   return { pid: Number.isFinite(pid) ? pid : null, running: Number.isFinite(pid) && isProcessAlive(pid), logFile: paths.logFile }
 }
 
-async function startDaemonProcess(opts: { host?: string, port?: number } = {}, paths = localPaths()): Promise<DaemonStartResult> {
+interface DaemonMetadata {
+  host: string
+  pid: number
+  port: number
+  startedAt: string
+  url: string
+}
+
+function daemonUrl(host: string, port: number): string {
+  return `http://${host}:${port}`
+}
+
+function readDaemonMetadata(paths: LocalPaths): DaemonMetadata | null {
+  try {
+    const parsed = JSON.parse(readFileSync(paths.daemonMetaFile, 'utf8')) as Partial<DaemonMetadata>
+    if (
+      typeof parsed.host === 'string'
+      && typeof parsed.pid === 'number'
+      && typeof parsed.port === 'number'
+      && typeof parsed.startedAt === 'string'
+      && typeof parsed.url === 'string'
+    ) {
+      return {
+        host: parsed.host,
+        pid: parsed.pid,
+        port: parsed.port,
+        startedAt: parsed.startedAt,
+        url: parsed.url,
+      }
+    }
+  }
+  catch {
+    return null
+  }
+  return null
+}
+
+function writeDaemonMetadata(paths: LocalPaths, metadata: DaemonMetadata): void {
   mkdirSync(paths.home, { recursive: true })
-  const current = daemonStatus()
+  writeFileSync(paths.daemonMetaFile, `${JSON.stringify(metadata, null, 2)}\n`)
+}
+
+function removeDaemonMetadata(paths: LocalPaths): void {
+  rmSync(paths.daemonMetaFile, { force: true })
+}
+
+async function startDaemonProcess(opts: { host?: string, port?: number } = {}, paths = localPaths()): Promise<DaemonStartedResult> {
+  mkdirSync(paths.home, { recursive: true })
+  const current = daemonStatus(paths)
   if (current.running)
     throw new Error(`daemon already running: pid=${current.pid}`)
   writeFileSync(paths.logFile, '')
@@ -840,11 +919,51 @@ async function startDaemonProcess(opts: { host?: string, port?: number } = {}, p
   if (!child.pid)
     throw new Error('daemon did not return a pid')
   writeFileSync(paths.pidFile, String(child.pid))
-  return { started: true, pid: child.pid, logFile: paths.logFile, url: `http://127.0.0.1:${opts.port ?? getWorkerEnv().PORT}` }
+  const env = getWorkerEnv()
+  const host = opts.host ?? env.AIWORKER_WORKER_HOST
+  const port = opts.port ?? env.PORT
+  return { started: true, pid: child.pid, logFile: paths.logFile, host, port, url: daemonUrl(host, port) }
+}
+
+async function startOrReuseDaemon(
+  opts: { host?: string, port?: number } = {},
+  paths = localPaths(),
+  starter: DaemonStarter = daemonStarterForTest ?? startDaemonProcess,
+): Promise<DaemonStartResult> {
+  const status = daemonStatus(paths)
+  if (status.running && status.pid) {
+    const metadata = readDaemonMetadata(paths)
+    const actual = metadata?.pid === status.pid ? metadata : null
+    return {
+      actual: {
+        host: actual?.host,
+        port: actual?.port,
+        url: actual?.url ?? null,
+      },
+      logFile: paths.logFile,
+      message: actual
+        ? 'daemon already running; reused existing process'
+        : metadata
+          ? 'daemon already running; reused existing process, daemon metadata pid mismatch, actual URL unknown'
+          : 'daemon already running; reused existing process, actual URL unknown',
+      pid: status.pid,
+      requested: {
+        host: opts.host,
+        port: opts.port,
+      },
+      started: false,
+      url: actual?.url ?? null,
+    }
+  }
+
+  return starter(opts, paths)
 }
 
 async function startDaemon(opts: { host?: string, port?: number } = {}): Promise<void> {
-  printJson(await startDaemonProcess(opts))
+  const paths = await ensureDb()
+  const worker = await ensureStandaloneServiceReady(paths)
+  const daemon = await startOrReuseDaemon(opts, paths)
+  printJson({ daemon, worker })
 }
 
 interface StartCommandOptions {
@@ -853,19 +972,18 @@ interface StartCommandOptions {
   port?: number
 }
 
-interface EnsuredStartWorker {
+export interface EnsuredStartWorker {
   appId: string
   created: boolean
   id: string
 }
 
-// Idempotent CLI bootstrap: ensure exactly one active Worker bound to the bundled
-// official Freeform Soul exists. Install + enable the bundled descriptor, then
-// reuse the single active Worker if present, or create one when none exists. This
-// convenience lives in the CLI; the daemon stays passive and never auto-creates a
-// Worker. To run a different Soul, install it and create the Worker explicitly
-// before `aiworker start` reuses it.
-async function ensureStandaloneStartWorker(paths: LocalPaths): Promise<EnsuredStartWorker> {
+// Idempotent CLI service bootstrap: ensure exactly one active Worker bound to
+// the bundled official Freeform Soul exists. Install + enable the bundled
+// descriptor, then reuse the single active Worker if present, or create one when
+// none exists. This convenience lives in the public CLI service-start commands;
+// the daemon package stays passive and never auto-creates a Worker.
+async function ensureStandaloneServiceReady(paths: LocalPaths): Promise<EnsuredStartWorker> {
   const host = createHost(paths)
   const bootstrap = await host.bootstrapOfficialSoulApps()
   if (bootstrap.status === 'fail')
@@ -917,15 +1035,10 @@ function openBrowser(url: string): boolean {
 
 async function runStart(opts: StartCommandOptions = {}): Promise<void> {
   const paths = await ensureDb()
-  const worker = await ensureStandaloneStartWorker(paths)
+  const worker = await ensureStandaloneServiceReady(paths)
+  const daemon = await startOrReuseDaemon({ host: opts.host, port: opts.port }, paths)
 
-  const status = daemonStatus()
-  // Idempotent daemon start: reuse an already-running daemon instead of throwing.
-  const daemon = status.running && status.pid
-    ? { logFile: paths.logFile, pid: status.pid, started: false as const, url: `http://127.0.0.1:${opts.port ?? getWorkerEnv().PORT}` }
-    : await startDaemonProcess({ host: opts.host, port: opts.port }, paths)
-
-  const opened = shouldOpenBrowser(opts) ? openBrowser(daemon.url) : false
+  const opened = daemon.url && shouldOpenBrowser(opts) ? openBrowser(daemon.url) : false
 
   printJson({
     daemon,
@@ -935,9 +1048,10 @@ async function runStart(opts: StartCommandOptions = {}): Promise<void> {
   })
 }
 
-async function stopDaemonProcess(paths = localPaths(), status = daemonStatus()): Promise<DaemonStopResult> {
+async function stopDaemonProcess(paths = localPaths(), status = daemonStatus(paths)): Promise<DaemonStopResult> {
   if (!status.pid || !status.running) {
     rmSync(paths.pidFile, { force: true })
+    removeDaemonMetadata(paths)
     return { stopped: false, running: false }
   }
   try {
@@ -949,6 +1063,7 @@ async function stopDaemonProcess(paths = localPaths(), status = daemonStatus()):
   }
   await waitForProcessExit(status.pid)
   rmSync(paths.pidFile, { force: true })
+  removeDaemonMetadata(paths)
   return { stopped: true, pid: status.pid, running: false }
 }
 
@@ -957,11 +1072,13 @@ async function stopDaemon(): Promise<void> {
 }
 
 async function restartDaemon(opts: { host?: string, port?: number } = {}): Promise<void> {
-  const paths = localPaths()
-  const status = daemonStatus()
+  const paths = await ensureDb()
+  const worker = await ensureStandaloneServiceReady(paths)
+  const status = daemonStatus(paths)
   const stopped = await stopDaemonProcess(paths, status)
-  const started = await startDaemonProcess(opts, paths)
-  printJson({ restarted: stopped.stopped, stopped, started })
+  const starter = daemonStarterForTest ?? startDaemonProcess
+  const started = await starter(opts, paths)
+  printJson({ restarted: stopped.stopped, stopped, started, worker })
 }
 
 async function restartManagedDaemonAfterCliUpgrade(): Promise<DaemonRestartResult> {
@@ -1001,9 +1118,25 @@ function readProcessCommand(pid: number): string | null {
   return output.length > 0 ? output : null
 }
 
-async function daemonForeground(opts: { host?: string, port?: number } = {}): Promise<void> {
-  localPaths()
+export interface DaemonForegroundPreparation {
+  opts: {
+    host?: string
+    port?: number
+  }
+  paths: LocalPaths
+  updateNotice: Awaited<ReturnType<typeof maybeResolveDailyUpdateNotice>>
+  worker: EnsuredStartWorker
+}
+
+export async function prepareDaemonForeground(opts: { host?: string, port?: number } = {}): Promise<DaemonForegroundPreparation> {
+  const paths = await ensureDb()
+  const worker = await ensureStandaloneServiceReady(paths)
   const updateNotice = await maybeResolveDailyUpdateNotice()
+  return { opts, paths, updateNotice, worker }
+}
+
+async function runDaemonForegroundServer(prepared: DaemonForegroundPreparation): Promise<void> {
+  const { opts, paths, updateNotice } = prepared
   if (updateNotice) {
     consola.info(`[aiworker-daemon] update available: ${updateNotice.currentVersion} -> ${updateNotice.targetVersion}; run ${updateNotice.command}`)
   }
@@ -1023,6 +1156,17 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
   const exposureWarning = localApiExposureWarning(server.hostname ?? '127.0.0.1', env.AIWORKER_LOCAL_TOKEN)
   if (exposureWarning)
     console.warn(exposureWarning)
+  const actualHost = server.hostname ?? opts.host ?? env.AIWORKER_WORKER_HOST
+  const actualPort = server.port
+  if (typeof actualPort !== 'number')
+    throw new Error('daemon server did not expose a bound port')
+  writeDaemonMetadata(paths, {
+    host: actualHost,
+    pid: process.pid,
+    port: actualPort,
+    startedAt: state.startedAt,
+    url: daemonUrl(actualHost, actualPort),
+  })
   consola.success(`[aiworker-daemon] listening on http://${server.hostname}:${server.port}`)
   await new Promise<void>((resolve) => {
     const keepAlive = setInterval(() => undefined, 60_000)
@@ -1032,11 +1176,16 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
       // 最后 runCli 的 finally 关库——确保关库前已无订阅者可触发 DB 读。
       state.shutdown()
       server.stop()
+      removeDaemonMetadata(paths)
       resolve()
     }
     process.once('SIGINT', shutdown)
     process.once('SIGTERM', shutdown)
   })
+}
+
+async function daemonForeground(opts: { host?: string, port?: number } = {}): Promise<void> {
+  await runDaemonForegroundServer(await prepareDaemonForeground(opts))
 }
 
 async function daemonCheck(opts: { host?: string, port?: number } = {}): Promise<void> {
@@ -1174,9 +1323,7 @@ function workerConfigValueResponse(
 }
 
 async function createWorkspaceCommand(opts: { name?: string, type?: string, worker?: string }): Promise<void> {
-  const paths = await ensureDb()
-  const runtime = await ensureRuntime({ worker: opts.worker })
-  createHost(paths).requireEnabledAppForWorker(runtime.workerId)
+  const runtime = await ensureRuntime({ requireEnabledApp: true, worker: opts.worker })
   printJson({ workspace: await runtime.createWorkspace({ name: requireText(opts.name, 'name'), type: opts.type }) })
 }
 
@@ -1248,14 +1395,12 @@ function projectionReceiptStaleCliError(workspaceId: string): Error {
 }
 
 async function startSessionCommand(opts: { engine?: string, input?: string, model?: string, reasoning?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
-  const paths = await ensureDb()
-  const runtime = await ensureRuntime({ worker: opts.worker })
+  await ensureDb()
+  const runtime = await ensureRuntime({ requireEnabledApp: true, worker: opts.worker })
   const workspaceId = requireText(opts.workspace, 'workspace')
   const workspace = getWorkspace(workspaceId)
   if (!workspace || workspace.workerId !== runtime.workerId)
     throw new Error(`workspace not found for ${runtime.workerId}: ${workspaceId}`)
-  const host = createHost(paths)
-  host.requireEnabledAppForWorker(runtime.workerId)
   const selectedEngineId = opts.engine?.trim() || selectedCliEngineId()
   const engineMetadata = {
     ...resolveCliEngineMetadata(selectedEngineId),
@@ -1280,13 +1425,12 @@ async function startSessionCommand(opts: { engine?: string, input?: string, mode
 }
 
 async function resolveSessionContinuationContext(opts: SessionContinuationCommandOptions): Promise<SessionContinuationContext> {
-  const paths = await ensureDb()
+  await ensureDb()
   const sessionId = requireText(opts.session, 'session')
   const session = getSession(sessionId)
   if (!session)
     throw new Error(`session not found: ${sessionId}`)
-  const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
-  createHost(paths).requireEnabledAppForWorker(runtime.workerId)
+  const runtime = await ensureRuntime({ requireEnabledApp: true, worker: opts.worker ?? session.workerId })
   const engineMetadata = resolveInvocationEngineMetadata(session.metadataJson)
   const frozen = readFrozenSessionEngine(session.metadataJson)
   const needsLegacyEngineRepair = frozen?.executionMode === 'local-cli' && frozen.engineCommand !== engineMetadata.engineCommand
@@ -1843,11 +1987,11 @@ function registerCommands(): void {
     .option('--port <n>', 'port', { type: [Number] })
     .option('--no-open', 'do not open the Workbench URL in a browser')
     .action((opts: { host?: string, open?: boolean, port?: number[] }) => runStart({ host: opts.host, open: opts.open, port: optionalNumber(opts.port) }))
-  cli.command('daemon start', 'start local daemon in background').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
-  cli.command('daemon foreground', 'run local daemon in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
+  cli.command('daemon start', 'ensure the bundled Freeform Worker and start the service in background without opening Workbench').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
+  cli.command('daemon foreground', 'ensure the bundled Freeform Worker and run the service in foreground without opening Workbench').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon status', 'show local daemon status').action(() => printJson(daemonStatus()))
   cli.command('daemon stop', 'stop local daemon').action(stopDaemon)
-  cli.command('daemon restart', 'restart local daemon').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => restartDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
+  cli.command('daemon restart', 'ensure the bundled Freeform Worker and restart the local service').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => restartDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon logs', 'show local daemon logs').option('--tail <n>', 'line count', { type: [Number] }).action((opts: { tail?: number[] }) => showLogs({ tail: optionalNumber(opts.tail) }))
   cli.command('daemon check', 'check local daemon health').option('--host <host>', 'host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonCheck({ host: opts.host, port: optionalNumber(opts.port) }))
 
@@ -2053,7 +2197,7 @@ export async function runCli(argv: string[] = process.argv): Promise<number> {
     return code
   }
   catch (error) {
-    consola.error(redactCliInspectOutput(error instanceof Error ? error.message : String(error)))
+    process.stderr.write(`${redactCliInspectOutput(error instanceof Error ? error.message : String(error))}\n`)
     process.exitCode = 0
     return 1
   }

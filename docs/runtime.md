@@ -29,15 +29,24 @@ standalone path never depends on Host or fleet context.
 
 ## Standalone Entry
 
-The standalone entry is one zero-config command. `aiworker start` (the default
-command) is idempotent: it ensures a single active Worker bound to the bundled
-official Freeform Soul exists — installing the bundled descriptor and creating the
-Worker when none is present, reusing the existing Worker otherwise — then starts
-the daemon, serves the Workbench web, and opens the local Workbench URL. The
-bootstrap convenience lives in the CLI; the daemon stays passive and never
-auto-creates a Worker. To run a different Soul, install it and create the Worker
-explicitly (`aiworker app install` then `aiworker worker create --soul <id>`)
-before `aiworker start` reuses it.
+The standalone entry is one zero-config command. That command now sits inside a
+shared zero-config service startup contract for the public CLI commands that
+start the service. `aiworker start` (the default command),
+`aiworker daemon start`, `aiworker daemon restart`, and
+`aiworker daemon foreground` are idempotent at the Worker readiness layer: each
+ensures a single active Worker bound to the bundled official Freeform Soul exists
+— installing the bundled descriptor and creating the Worker when none is present,
+reusing the existing Worker otherwise — before starting or restarting the service.
+The command differences are process shape and browser convenience only:
+`aiworker start` runs the daemon in background and may open the local Workbench
+URL by default, `aiworker daemon start` runs the same service in background
+without opening the browser, and `aiworker daemon foreground` runs it in the
+current process without opening the browser. The bootstrap convenience lives in
+the CLI service-start commands. At the package layer, the daemon stays passive and never
+auto-creates a Worker. `packages/worker-daemon` does not create Workers for
+programmatic daemon bootstrap. To run a different Soul, install it and create the
+Worker explicitly (`aiworker app install` then `aiworker worker create --app
+<appId>`) before the service-start command reuses it.
 
 The Workbench web is the single active Worker's surface: it shows the bound Soul,
 has no create-Worker or Soul-catalog UI, and its empty states are the first-run

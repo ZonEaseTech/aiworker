@@ -17,7 +17,7 @@ const soulAppHostPrivateImportPatterns = [
 export default antfu({
   typescript: true,
   react: true,
-  ignores: ['dist', 'node_modules', '.agents', '.serena', 'docs', '**/routeTree.gen.ts', '**/drizzle/**'],
+  ignores: ['dist', 'node_modules', '.agents', '.omx', '.serena', 'docs', '**/routeTree.gen.ts', '**/drizzle/**'],
 }, {
   // FEAT-066: Soul Apps are runnable app workspaces. They may depend on the
   // public SDK, but not on Host internals or sibling app internals.

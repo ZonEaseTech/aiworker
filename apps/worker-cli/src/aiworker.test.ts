@@ -1,3 +1,5 @@
+import type { DaemonStartedResult, LocalPaths } from './aiworker'
+
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { mkdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
@@ -25,8 +27,10 @@ import { soulAppServiceEnv } from '@zonease/aiworker-worker-runtime'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
+  __setDaemonStarterForTest,
   downloadAndReplaceGitHubBundle,
   inspectCliOfficialAppsResource,
+  prepareDaemonForeground,
   preprocessArgv,
   resolveCliDefaultHomeDir,
   resolveCliLocalPaths,
@@ -65,6 +69,7 @@ describe('aiworker local CLI', () => {
   })
 
   afterEach(async () => {
+    __setDaemonStarterForTest(null)
     closeWorkerDb()
     process.exitCode = 0
     for (const key of Object.keys(process.env))
@@ -82,6 +87,28 @@ describe('aiworker local CLI', () => {
   }
 
   const FREEFORM_APP_ID = 'aiworker-freeform'
+
+  function daemonStartedFixture(opts: { host?: string, port?: number }, paths: LocalPaths, pid: number): DaemonStartedResult {
+    const host = opts.host ?? '127.0.0.1'
+    const port = opts.port ?? 9217
+    return {
+      host,
+      logFile: paths.logFile,
+      pid,
+      port,
+      started: true,
+      url: `http://${host}:${port}`,
+    }
+  }
+
+  function installFakeDaemonStarter(pid: number): Array<{ host?: string, port?: number }> {
+    const started: Array<{ host?: string, port?: number }> = []
+    __setDaemonStarterForTest(async (opts, paths) => {
+      started.push(opts)
+      return daemonStartedFixture(opts, paths, pid)
+    })
+    return started
+  }
 
   function freeformDescriptorPath(): string {
     return path.resolve(import.meta.dir, '..', '..', '..', 'souls', FREEFORM_APP_ID, 'dist', 'soul.descriptor.json')
@@ -494,13 +521,13 @@ describe('aiworker local CLI', () => {
     const first = JSON.parse(output) as {
       daemon: { started: boolean }
       opened: boolean
-      url: string
+      url: null | string
       worker: { appId: string, created: boolean, id: string }
     }
     expect(first.worker).toMatchObject({ appId: FREEFORM_APP_ID, created: true })
     expect(first.daemon.started).toBe(false)
     expect(first.opened).toBe(false)
-    expect(first.url).toContain('http://127.0.0.1:')
+    expect(first.url).toBeNull()
     output = ''
 
     // Second start: idempotent — reuses the existing worker (created=false) and
@@ -552,6 +579,181 @@ describe('aiworker local CLI', () => {
       else
         process.env.CI = originalCi
     }
+  })
+
+  it('aiworker daemon start runs unified bootstrap and fake-starts a non-running daemon without opening Workbench', async () => {
+    const started = installFakeDaemonStarter(4242)
+
+    expect(await runCli(argv('daemon', 'start', '--host', '127.0.0.1', '--port', '43123'))).toBe(0)
+
+    const result = JSON.parse(output) as {
+      daemon: { host: string, pid: number, port: number, started: boolean, url: string }
+      opened?: boolean
+      worker: { appId: string, created: boolean, id: string }
+    }
+    expect(started).toEqual([{ host: '127.0.0.1', port: 43123 }])
+    expect(result.daemon).toMatchObject({
+      host: '127.0.0.1',
+      pid: 4242,
+      port: 43123,
+      started: true,
+      url: 'http://127.0.0.1:43123',
+    })
+    expect(result.opened).toBeUndefined()
+    expect(result.worker).toMatchObject({ appId: FREEFORM_APP_ID, created: true })
+
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    expect(listWorkers().filter(worker => worker.status === 'active').map(worker => worker.appId)).toEqual([FREEFORM_APP_ID])
+    closeWorkerDb()
+  })
+
+  it('aiworker daemon restart runs unified bootstrap before fake-starting the service', async () => {
+    const started = installFakeDaemonStarter(4343)
+
+    expect(await runCli(argv('daemon', 'restart', '--host', '127.0.0.1', '--port', '43125'))).toBe(0)
+
+    const result = JSON.parse(output) as {
+      opened?: boolean
+      restarted: boolean
+      started: { host: string, pid: number, port: number, started: boolean, url: string }
+      stopped: { running: boolean, stopped: boolean }
+      worker: { appId: string, created: boolean }
+    }
+    expect(started).toEqual([{ host: '127.0.0.1', port: 43125 }])
+    expect(result.restarted).toBe(false)
+    expect(result.stopped).toMatchObject({ running: false, stopped: false })
+    expect(result.started).toMatchObject({
+      host: '127.0.0.1',
+      pid: 4343,
+      port: 43125,
+      started: true,
+      url: 'http://127.0.0.1:43125',
+    })
+    expect(result.opened).toBeUndefined()
+    expect(result.worker).toMatchObject({ appId: FREEFORM_APP_ID, created: true })
+  })
+
+  it('aiworker daemon start reuses an already-running daemon and worker without spawning', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    const started = installFakeDaemonStarter(1)
+
+    expect(await runCli(argv('daemon', 'start'))).toBe(0)
+
+    const result = JSON.parse(output) as {
+      daemon: { pid: number, started: boolean, url: null | string }
+      worker: { appId: string, created: boolean, id: string }
+    }
+    expect(started).toEqual([])
+    expect(result.daemon).toMatchObject({ pid: process.pid, started: false, url: null })
+    expect(result.worker).toMatchObject({ appId: FREEFORM_APP_ID, created: true })
+
+    output = ''
+    expect(await runCli(argv('daemon', 'start'))).toBe(0)
+    const second = JSON.parse(output) as { daemon: { started: boolean }, worker: { created: boolean, id: string } }
+    expect(second.daemon.started).toBe(false)
+    expect(second.worker.created).toBe(false)
+    expect(second.worker.id).toBe(result.worker.id)
+  })
+
+  it('aiworker daemon start reuse does not pretend requested host and port were applied', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    await writeFile(path.join(home, 'aiworker-daemon.json'), `${JSON.stringify({
+      host: '127.0.0.1',
+      pid: process.pid,
+      port: 41234,
+      startedAt: '2026-06-03T00:00:00.000Z',
+      url: 'http://127.0.0.1:41234',
+    })}\n`)
+
+    expect(await runCli(argv('daemon', 'start', '--host', '127.0.0.2', '--port', '49999'))).toBe(0)
+
+    const result = JSON.parse(output) as {
+      daemon: {
+        actual: { host: string, port: number, url: string }
+        requested: { host: string, port: number }
+        started: boolean
+        url: string
+      }
+      worker: { appId: string }
+    }
+    expect(result.daemon.started).toBe(false)
+    expect(result.daemon.url).toBe('http://127.0.0.1:41234')
+    expect(result.daemon.actual).toEqual({ host: '127.0.0.1', port: 41234, url: 'http://127.0.0.1:41234' })
+    expect(result.daemon.requested).toEqual({ host: '127.0.0.2', port: 49999 })
+    expect(result.daemon.url).not.toBe('http://127.0.0.2:49999')
+    expect(result.worker.appId).toBe(FREEFORM_APP_ID)
+  })
+
+  it('aiworker daemon start ignores stale daemon metadata from a different pid', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    await writeFile(path.join(home, 'aiworker-daemon.json'), `${JSON.stringify({
+      host: '127.0.0.1',
+      pid: process.pid + 1,
+      port: 41234,
+      startedAt: '2026-06-03T00:00:00.000Z',
+      url: 'http://127.0.0.1:41234',
+    })}\n`)
+
+    expect(await runCli(argv('daemon', 'start', '--host', '127.0.0.2', '--port', '49999'))).toBe(0)
+
+    const result = JSON.parse(output) as {
+      daemon: {
+        actual: { host?: string, port?: number, url: null | string }
+        message: string
+        requested: { host: string, port: number }
+        started: boolean
+        url: null | string
+      }
+    }
+    expect(result.daemon.started).toBe(false)
+    expect(result.daemon.url).toBeNull()
+    expect(result.daemon.actual).toEqual({ url: null })
+    expect(result.daemon.requested).toEqual({ host: '127.0.0.2', port: 49999 })
+    expect(result.daemon.message).toContain('metadata pid mismatch')
+    expect(result.daemon.message).toContain('actual URL unknown')
+  })
+
+  it('daemon foreground prepare seam runs unified bootstrap without opening a browser or serving forever', async () => {
+    const prepared = await prepareDaemonForeground({ host: '127.0.0.1', port: 43124 })
+
+    expect(prepared.opts).toEqual({ host: '127.0.0.1', port: 43124 })
+    expect(prepared.worker).toMatchObject({ appId: FREEFORM_APP_ID, created: true })
+
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    expect(listWorkers().filter(worker => worker.status === 'active').map(worker => worker.appId)).toEqual([FREEFORM_APP_ID])
+    closeWorkerDb()
+  })
+
+  it('service-start commands fail fast instead of guessing when multiple active workers exist', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'active-a', '--name', 'A', '--app', FREEFORM_APP_ID))).toBe(0)
+    closeWorkerDb()
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    upsertWorker({ id: 'active-b', appId: FREEFORM_APP_ID, name: 'B', status: 'active' })
+    closeWorkerDb()
+
+    const started = installFakeDaemonStarter(1)
+
+    for (const args of [
+      ['start', '--no-open'],
+      ['daemon', 'start'],
+      ['daemon', 'restart'],
+    ]) {
+      errorOutput = ''
+      output = ''
+      expect(await runCli(argv(...args))).toBe(1)
+      expect(errorOutput).toContain('more than one active worker')
+    }
+
+    expect(started).toEqual([])
+    await expect(prepareDaemonForeground()).rejects.toThrow('more than one active worker')
   })
 
   it('streams session events for an active running engine invocation through CLI with after/limit paging', async () => {
@@ -1055,7 +1257,8 @@ describe('aiworker local CLI', () => {
     expect(errorOutput).toContain(`Soul App is not enabled: ${FREEFORM_APP_ID}`)
     errorOutput = ''
 
-    expect(await runCli(argv('session', 'invoke', '--session', session.id, '--input', 'Should not follow up.'))).toBe(1)
+    const invokeExitCode = await runCli(argv('session', 'invoke', '--session', session.id, '--input', 'Should not follow up.'))
+    expect(invokeExitCode).toBe(1)
     expect(errorOutput).toContain(`Soul App is not enabled: ${FREEFORM_APP_ID}`)
   })
 
