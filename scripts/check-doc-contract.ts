@@ -164,7 +164,7 @@ forbidIncludes('AGENTS.md', [
   'PMA requirement',
 ])
 
-for (const file of ['README.md', 'README.zh-CN.md']) {
+for (const file of ['README.md', 'README.zh-CN.md', 'README.ja.md']) {
   requireIncludes(file, canonicalDocs)
   forbidIncludes(file, [
     'docs/plan',
