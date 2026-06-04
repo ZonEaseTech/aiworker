@@ -104,7 +104,7 @@ try {
     throw new Error(`Reload changed the worker/workspace/session route: ${page.url()}`)
 
   await page.screenshot({ fullPage: true, path: join(evidenceRoot, 'freeform-browser-user-flow-before-archive.png') })
-  const lifecycleProof = await archiveLifecycleFromUi(page, routeIds)
+  const lifecycleProof = await archiveWorkspaceLifecycleFromUi(page, routeIds)
   assertLifecycleArchiveProof(lifecycleProof, routeIds)
 
   assertNoUnexpectedBrowserEvents(browserEvents)
@@ -281,12 +281,14 @@ async function assertSettingsUserFlow(page: Page): Promise<void> {
   await settingsDialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 }
 
-async function archiveLifecycleFromUi(
+async function archiveWorkspaceLifecycleFromUi(
   page: Page,
   routeIds: { sessionId: string, workerId: string, workspaceId: string },
 ): Promise<Record<string, unknown>> {
   const eventStart = browserEvents.length
   const main = page.getByRole('region', { name: 'Soul workspaces and sessions' })
+  await assertWorkerArchiveAbsentFromUi(page)
+
   await page.getByRole('button', { name: 'Archive session' }).click()
   await confirmArchiveDialog(page, 'Archive session?', 'Archive session')
   await page.waitForURL(new RegExp(`/workers/${escapeRegExp(routeIds.workerId)}/workspaces/${escapeRegExp(routeIds.workspaceId)}$`), {
@@ -295,6 +297,7 @@ async function archiveLifecycleFromUi(
   await main.getByText('No sessions in this workspace yet.').waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   if (await page.getByRole('button', { name: 'Open session New session 1' }).count() !== 0)
     throw new Error('Archived session remained selectable in the workspace tree.')
+  await assertWorkerArchiveAbsentFromUi(page)
 
   const sessionRead = await readLocalApi(page, `/api/sessions/${routeIds.sessionId}`)
   const blockedFollowUp = await callLocalApi(page, `/api/sessions/${routeIds.sessionId}/invocations`, {
@@ -302,24 +305,19 @@ async function archiveLifecycleFromUi(
     method: 'POST',
   })
 
-  await page.getByRole('button', { name: 'Archive workspace' }).click()
+  await page.getByRole('button', { exact: true, name: 'Archive workspace' }).click()
   await confirmArchiveDialog(page, 'Archive workspace?', 'Archive workspace')
   await page.waitForURL(new RegExp(`/workers/${escapeRegExp(routeIds.workerId)}$`), { timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   await main.getByText('No workspaces yet').waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   if (await page.getByText('Browser user workspace').count() !== 0)
     throw new Error('Archived workspace remained visible in the workspace tree.')
+  await assertWorkerArchiveAbsentFromUi(page)
 
   const workspaceRead = await readLocalApi(page, `/api/workspace-locators/${routeIds.workspaceId}`)
-
-  await page.getByRole('button', { name: 'Archive worker' }).click()
-  await confirmArchiveDialog(page, 'Archive worker?', 'Archive worker')
-  await page.waitForURL(/\/$/, { timeout: WORKBENCH_RENDER_TIMEOUT_MS })
-  await main.getByRole('button', { name: 'Create worker' }).waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
-
   const workerRead = await readLocalApi(page, `/api/workers/${routeIds.workerId}`)
-  const blockedWorkspace = await callLocalApi(page, '/api/workspace-locators', {
+  const replacementWorkspace = await callLocalApi(page, '/api/workspace-locators', {
     body: {
-      name: 'Blocked browser workspace after worker archive',
+      name: 'Replacement browser workspace after workspace archive',
       type: 'freeform',
       workerId: routeIds.workerId,
     },
@@ -331,7 +329,7 @@ async function archiveLifecycleFromUi(
 
   return {
     blockedFollowUp,
-    blockedWorkspace,
+    replacementWorkspace,
     sessionRead,
     workerRead,
     workspaceRead,
@@ -342,6 +340,12 @@ async function confirmArchiveDialog(page: Page, title: string, action: string): 
   const dialog = page.getByRole('dialog', { name: title })
   await dialog.getByRole('button', { name: action }).click()
   await dialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+}
+
+async function assertWorkerArchiveAbsentFromUi(page: Page): Promise<void> {
+  const archiveWorkerButtons = await page.getByRole('button', { name: 'Archive worker' }).count()
+  if (archiveWorkerButtons !== 0)
+    throw new Error('Worker archive is exposed from the Workbench UI.')
 }
 
 function runCliJson<T = unknown>(...args: string[]): T {
@@ -530,7 +534,7 @@ function assertLifecycleArchiveProof(
   const workspaceRead = readRecord(proof.workspaceRead)
   const workerRead = readRecord(proof.workerRead)
   const blockedFollowUp = readRecord(proof.blockedFollowUp)
-  const blockedWorkspace = readRecord(proof.blockedWorkspace)
+  const replacementWorkspace = readRecord(proof.replacementWorkspace)
 
   const session = readRecord(readRecord(sessionRead.body).session)
   if (sessionRead.status !== 200 || session.id !== routeIds.sessionId || session.status !== 'archived')
@@ -544,15 +548,14 @@ function assertLifecycleArchiveProof(
     throw new Error(`Workspace UI archive proof failed: ${JSON.stringify(proof)}`)
 
   const worker = readRecord(readRecord(workerRead.body).worker)
-  if (workerRead.status !== 200 || worker.id !== routeIds.workerId || worker.status !== 'archived')
-    throw new Error(`Worker UI archive proof failed: ${JSON.stringify(proof)}`)
-  const blockedWorkspaceError = readRecord(readRecord(blockedWorkspace.body).error)
-  if (blockedWorkspace.status !== 400 || blockedWorkspaceError.code !== 'WORKER_ARCHIVED')
-    throw new Error(`Archived worker accepted new workspace work: ${JSON.stringify(proof)}`)
+  if (workerRead.status !== 200 || worker.id !== routeIds.workerId || worker.status !== 'active')
+    throw new Error(`Workbench archived the Worker or returned the wrong Worker lifecycle: ${JSON.stringify(proof)}`)
+  if (typeof replacementWorkspace.status !== 'number' || replacementWorkspace.status >= 400)
+    throw new Error(`Active Worker rejected a replacement workspace after workspace archive: ${JSON.stringify(proof)}`)
 
   const serialized = JSON.stringify(proof)
-  if (!serialized.includes('SESSION_ARCHIVED') || !serialized.includes('WORKER_ARCHIVED'))
-    throw new Error(`Lifecycle archive proof missed blocked worker diagnostic: ${serialized}`)
+  if (!serialized.includes('SESSION_ARCHIVED'))
+    throw new Error(`Lifecycle archive proof missed archived-session diagnostic: ${serialized}`)
   for (const forbidden of ['/turns/', '"turn"', 'sk-browser-user-flow-secret']) {
     if (serialized.includes(forbidden))
       throw new Error(`Lifecycle archive proof exposed forbidden content ${forbidden}: ${serialized}`)

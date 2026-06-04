@@ -88,16 +88,11 @@ export interface StaticMessages {
     byokNeedsKey: string
     byokReady: (provider: string, model: string) => string
     archiveSession: string
-    archiveWorker: string
     archiveWorkspace: string
     archiveConfirmation: {
       cancel: string
       session: {
         detail: (sessionTitle: string) => string
-        title: string
-      }
-      worker: {
-        detail: (workerName: string) => string
         title: string
       }
       workspace: {

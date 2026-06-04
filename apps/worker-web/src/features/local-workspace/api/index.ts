@@ -43,7 +43,6 @@ export {
   projectWorkerWorkspaceOverlay,
 } from './worker-overlays'
 export {
-  archiveWorker,
   createWorker,
 } from './workers'
 export {

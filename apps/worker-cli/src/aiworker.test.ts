@@ -878,6 +878,22 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('worker', 'archive', 'lifecycle-worker'))).toBe(0)
     expect((JSON.parse(output) as { worker: { status: string } }).worker.status).toBe('archived')
     output = ''
+    expect(await runCli(argv('worker', 'show', 'lifecycle-worker'))).toBe(0)
+    expect((JSON.parse(output) as { worker: { id: string, status: string } }).worker).toMatchObject({
+      id: 'lifecycle-worker',
+      status: 'archived',
+    })
+    output = ''
+    expect(await runCli(argv('worker', 'list'))).toBe(0)
+    expect((JSON.parse(output) as { workers: Array<{ id: string, status: string }> }).workers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'lifecycle-worker',
+          status: 'archived',
+        }),
+      ]),
+    )
+    output = ''
     errorOutput = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Blocked Workspace', '--type', 'freeform', '--worker', 'lifecycle-worker'))).toBe(1)
     expect(errorOutput).toContain('Worker lifecycle-worker is archived and cannot start new work.')
