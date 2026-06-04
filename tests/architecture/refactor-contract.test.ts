@@ -239,7 +239,7 @@ describe('destructive refactor contract bootstrap', () => {
       'aiworker-soul-app-dev',
     ]
 
-    for (const file of ['README.md', 'README.zh-CN.md']) {
+    for (const file of ['README.md', 'README.zh-CN.md', 'README.ja.md']) {
       const readme = readRepoFile(file)
 
       for (const doc of requiredDocs)
