@@ -434,6 +434,9 @@ describe('worker studio', () => {
 
     const tree = await screen.findByTestId('workspace-tree')
     expect(within(tree).getByText('Demo Workspace')).toBeTruthy()
+    const workspaceToggle = within(tree).getByRole('button', { name: 'Collapse Demo Workspace' })
+    expect(within(workspaceToggle).getByText('Demo Workspace').getAttribute('data-slot')).toBe('item-title')
+    expect(workspaceToggle.querySelector('[data-slot="badge"]')).toBeNull()
     expect(within(tree).getByRole('button', { name: 'Open session Screen request' })).toBeTruthy()
     expect(within(tree).queryByRole('button', { name: 'Archive workspace Demo Workspace' })).toBeNull()
     const workspaceMoreAction = within(tree).getByRole('button', { name: 'More actions for workspace Demo Workspace' })

@@ -56,13 +56,13 @@ export function CollapsibleGroup({
             type="button"
             variant="ghost"
             size="lg"
-            className="h-7 min-h-7 min-w-0 flex-1 justify-between gap-1.5 overflow-hidden px-2 py-0 text-muted-foreground whitespace-nowrap hover:bg-muted/50 hover:text-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground dark:hover:bg-muted/30"
+            className="h-7 min-h-7 min-w-0 flex-1 justify-start gap-1.5 overflow-hidden px-2 py-0 text-muted-foreground whitespace-nowrap hover:bg-muted/50 hover:text-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground dark:hover:bg-muted/30"
             aria-label={toggleAriaLabel}
             aria-controls={controlsId}
           >
+            <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-start" className={cn('text-muted-foreground transition-transform', open && 'rotate-180')} aria-hidden="true" />
             <ItemTitle className="min-w-0 flex-1 truncate text-left text-muted-foreground">{title}</ItemTitle>
             {meta !== null && meta !== undefined ? <Badge variant="ghost" className="text-muted-foreground">{meta}</Badge> : null}
-            <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" className={cn('text-muted-foreground transition-transform', open && 'rotate-180')} aria-hidden="true" />
           </Button>
         </CollapsibleTrigger>
         {action

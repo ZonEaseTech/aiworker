@@ -37,6 +37,29 @@ describe('studio collapsible group', () => {
     expect(within(drawer).getByRole('button', { name: 'Open item' })).toBeTruthy()
   })
 
+  it('can omit meta while rendering the collapse icon before the title', () => {
+    render(
+      <CollapsibleGroup
+        collapsed={false}
+        controlsId="item-section-secondary"
+        title="Hidden Count Items"
+        toggleAriaLabel="Hidden Count Items"
+        onToggle={() => {}}
+      >
+        <button type="button">Open hidden count item</button>
+      </CollapsibleGroup>,
+    )
+
+    const toggle = screen.getByRole('button', { name: 'Hidden Count Items' })
+    const icon = toggle.querySelector('[data-icon="inline-start"]')
+    const title = within(toggle).getByText('Hidden Count Items')
+    if (!icon)
+      throw new Error('Expected the collapse icon to render at the inline start of the trigger.')
+    expect(title.getAttribute('data-slot')).toBe('item-title')
+    expect(toggle.querySelector('[data-slot="badge"]')).toBeNull()
+    expect(Boolean(icon.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true)
+  })
+
   it('keeps the drawer hidden when collapsed', () => {
     render(
       <CollapsibleGroup

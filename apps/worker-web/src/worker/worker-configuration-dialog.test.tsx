@@ -128,6 +128,15 @@ function selectAssetRow(assetId: string) {
 }
 
 describe('worker configuration overlay content editor', () => {
+  it('keeps overlay category count meta visible by default', () => {
+    renderDialog([skillBaseline, skillOverlay, entryFileOverlay])
+
+    const skillsToggle = screen.getByRole('button', { name: 'Toggle Skills' })
+    expect(within(skillsToggle).getByText('Skills').getAttribute('data-slot')).toBe('item-title')
+    expect(within(skillsToggle).getByText('2').closest('[data-slot="badge"]')).toBeTruthy()
+    expect(skillsToggle.querySelector('[data-icon="inline-start"]')).toBeTruthy()
+  })
+
   it('loads selected skill content inline without opening a nested editor dialog', async () => {
     routes['GET /api/workers/primary-worker/config/skill-overlay%3Abriefing-brief/content?target=codex'] = () => ({
       body: { checksum: 'sha256:x', content: '# baseline body', editable: true, source: 'baseline', sourceRef: skillBaseline.sourceRef },

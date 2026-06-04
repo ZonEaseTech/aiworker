@@ -104,7 +104,6 @@ export function WorkspaceTree({
                     controlsId={`workspace-tree-group-${workspace.id}`}
                     data-active={workspace.id === selectedWorkspaceId ? 'true' : undefined}
                     drawerProps={{ 'aria-label': `${workspace.name} sessions`, 'role': 'group' }}
-                    meta={sessions.length}
                     title={workspace.name}
                     toggleAriaLabel={`${collapsed ? 'Expand' : 'Collapse'} ${workspace.name}`}
                     action={(
