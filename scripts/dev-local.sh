@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 AIWORKER_HOME="${AIWORKER_HOME:-$HOME/.aiworker-dev}"
 AIWORKER_HOST="${AIWORKER_HOST:-127.0.0.1}"
@@ -17,6 +17,101 @@ listener_for_port() {
   lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null || true
 }
 
+process_cwd() {
+  lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1 || true
+}
+
+is_path_inside_root() {
+  local candidate="$1"
+
+  [[ "$candidate" == "$ROOT_DIR" || "$candidate" == "$ROOT_DIR/"* ]]
+}
+
+is_aiworker_dev_daemon_process() {
+  local command="$1"
+  local cwd="$2"
+
+  if [[ "$command" == *"apps/worker-cli/src/aiworker.ts daemon foreground"* ]] && is_path_inside_root "$cwd"; then
+    return 0
+  fi
+
+  return 1
+}
+
+remove_daemon_metadata_files() {
+  rm -f "${AIWORKER_HOME}/aiworker-daemon.pid" "${AIWORKER_HOME}/aiworker-daemon.json"
+}
+
+read_existing_daemon_pid() {
+  local pid_file="${AIWORKER_HOME}/aiworker-daemon.pid"
+  local pid
+
+  if [[ ! -s "$pid_file" ]]; then
+    return 1
+  fi
+
+  pid="$(tr -d '[:space:]' < "$pid_file")"
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$pid"
+    return 0
+  fi
+
+  return 1
+}
+
+stop_verified_dev_daemon() {
+  local pid
+  local command
+  local cwd
+
+  if ! pid="$(read_existing_daemon_pid)"; then
+    remove_daemon_metadata_files
+    return 0
+  fi
+
+  if ! kill -0 "$pid" 2>/dev/null; then
+    remove_daemon_metadata_files
+    return 0
+  fi
+
+  command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  cwd="$(process_cwd "$pid")"
+  if is_aiworker_dev_daemon_process "$command" "$cwd"; then
+    (
+      cd "$ROOT_DIR"
+      AIWORKER_HOME="$AIWORKER_HOME" \
+        bun apps/worker-cli/src/aiworker.ts daemon stop >/dev/null 2>&1 || true
+    )
+  else
+    echo "[dev] ignoring non-AIWorker daemon pid file pid=$pid command=$command"
+    remove_daemon_metadata_files
+  fi
+}
+
+kill_matching_aiworker_listener() {
+  local port="$1"
+  local pids
+  pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+
+  if [[ -z "$pids" ]]; then
+    return 0
+  fi
+
+  for pid in $pids; do
+    local command
+    local cwd
+    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    cwd="$(process_cwd "$pid")"
+
+    if is_aiworker_dev_daemon_process "$command" "$cwd"; then
+      echo "[dev] stopping stale AIWorker daemon pid=$pid port=$port"
+      kill -TERM "$pid" 2>/dev/null || true
+    else
+      echo "[dev] skip pid=$pid port=$port command=$command"
+    fi
+  done
+}
+
 ensure_port_free() {
   local port="$1"
   local listener
@@ -27,6 +122,13 @@ ensure_port_free() {
     echo "[dev] run: bun run dev:clean"
     exit 1
   fi
+}
+
+restart_existing_dev_daemon() {
+  echo "[dev] restarting existing daemon for AIWORKER_HOME=$AIWORKER_HOME"
+  stop_verified_dev_daemon
+  kill_matching_aiworker_listener "$PORT"
+  sleep 1
 }
 
 cleanup() {
@@ -115,9 +217,10 @@ start_daemon_with_worker() {
   echo "[dev] daemon pid=$DAEMON_PID"
 }
 
+mkdir -p "$AIWORKER_HOME"
+restart_existing_dev_daemon
 ensure_port_free "$PORT"
 ensure_port_free "$AIWORKER_WEB_PORT"
-mkdir -p "$AIWORKER_HOME"
 
 trap cleanup EXIT INT TERM
 

@@ -9,6 +9,14 @@ function readRepoFile(relativePath: string): string {
   return readFileSync(resolve(repoRoot, relativePath), 'utf8')
 }
 
+function lineIndexMatching(content: string, pattern: RegExp): number {
+  return content.split(/\r?\n/).findIndex(line => pattern.test(line))
+}
+
+function lineIndexContaining(content: string, text: string): number {
+  return content.split(/\r?\n/).findIndex(line => line.includes(text))
+}
+
 describe('Worker startup contract', () => {
   it('keeps dev-local Web startup behind the CLI start worker bootstrap', () => {
     const script = readRepoFile('scripts/dev-local.sh')
@@ -25,5 +33,58 @@ describe('Worker startup contract', () => {
     expect(pidReadIndex, 'dev-local must know the daemon pid before Worker Web starts').toBeLessThan(webIndex)
     expect(cleanupIndex, 'startup-failure cleanup must be defined before Worker Web starts').toBeLessThan(webIndex)
     expect(script, 'dev-local must not depend on parsing aiworker start stdout JSON').not.toContain('JSON.parse(input)')
+  })
+
+  it('restarts an existing dev daemon before checking the daemon port', () => {
+    const script = readRepoFile('scripts/dev-local.sh')
+    const restartCallLine = lineIndexMatching(script, /^restart_existing_dev_daemon$/)
+    const verifiedStopCallLine = lineIndexMatching(script, /^\s*stop_verified_dev_daemon$/)
+    const aiworkerListenerCleanupLine = lineIndexMatching(script, /^\s*kill_matching_aiworker_listener "\$PORT"$/)
+    const daemonPortCheckLine = lineIndexMatching(script, /^ensure_port_free "\$PORT"$/)
+    const startLine = lineIndexMatching(script, /^start_daemon_with_worker$/)
+
+    expect(restartCallLine, 'dev-local must have an explicit restart gate call for stale dev daemons').toBeGreaterThanOrEqual(0)
+    expect(verifiedStopCallLine, 'dev-local restart gate must verify and stop the current AIWORKER_HOME daemon').toBeGreaterThanOrEqual(0)
+    expect(aiworkerListenerCleanupLine, 'dev-local restart gate must clear AIWorker-owned listeners on the target daemon port').toBeGreaterThan(verifiedStopCallLine)
+    expect(restartCallLine, 'dev-local must restart/cleanup before treating the daemon port as unavailable').toBeLessThan(daemonPortCheckLine)
+    expect(daemonPortCheckLine, 'dev-local must still fail fast after cleanup if a non-AIWorker process owns the daemon port').toBeLessThan(startLine)
+  })
+
+  it('verifies daemon pid-file ownership before invoking daemon stop', () => {
+    const script = readRepoFile('scripts/dev-local.sh')
+    const ownershipCheckLine = lineIndexContaining(script, 'if is_aiworker_dev_daemon_process "$command" "$cwd"; then')
+    const daemonStopLine = lineIndexContaining(script, 'apps/worker-cli/src/aiworker.ts daemon stop')
+
+    expect(script, 'dev-local must read the daemon pid file itself before deciding whether to stop it').toContain('read_existing_daemon_pid')
+    expect(script, 'dev-local must remove polluted daemon metadata instead of letting aiworker start reuse it').toContain('remove_daemon_metadata_files')
+    expect(ownershipCheckLine, 'dev-local must verify the pid-file process identity before daemon stop').toBeGreaterThanOrEqual(0)
+    expect(daemonStopLine, 'dev-local must only invoke daemon stop after the pid-file process is classified as AIWorker-owned').toBeGreaterThan(ownershipCheckLine)
+  })
+
+  it('uses a path-boundary-safe cwd check for AIWorker daemon ownership', () => {
+    const script = readRepoFile('scripts/dev-local.sh')
+
+    expect(script, 'dev-local must canonicalize the repo root before comparing process cwd').toContain('pwd -P')
+    expect(script, 'dev-local must centralize cwd ownership classification behind a path-boundary helper').toContain('is_path_inside_root')
+    expect(script, 'dev-local must accept the repo root itself as owned').toContain('"$candidate" == "$ROOT_DIR"')
+    expect(script, 'dev-local must accept only descendants under ROOT_DIR/ as owned').toContain('"$candidate" == "$ROOT_DIR/"*')
+    expect(script, 'dev-local must not use prefix-only cwd matching that treats aiworker-old as aiworker-owned').not.toContain('"$cwd" == "$ROOT_DIR"*')
+  })
+
+  it('treats process cwd lookup failures as non-owned instead of failing dev startup', () => {
+    const script = readRepoFile('scripts/dev-local.sh')
+
+    expect(script, 'dev-local must look up process cwd through a helper').toContain('process_cwd()')
+    expect(script, 'process_cwd must tolerate lsof or pipeline failure under pipefail').toContain('| head -n 1 || true')
+    expect(script, 'ownership checks must still reject empty cwd through the path-boundary helper').toContain('is_path_inside_root "$cwd"')
+  })
+
+  it('limits automatic daemon-port cleanup to AIWorker dev processes', () => {
+    const script = readRepoFile('scripts/dev-local.sh')
+
+    expect(script, 'dev-local must classify AIWorker daemon listeners before killing them').toContain('is_aiworker_dev_daemon_process')
+    expect(script, 'dev-local may only auto-kill the source-checkout daemon foreground command').toContain('apps/worker-cli/src/aiworker.ts daemon foreground')
+    expect(script, 'dev-local must report skipped non-AIWorker listeners instead of killing them').toContain('skip pid=$pid port=$port')
+    expect(script, 'dev-local must keep the generic port-free gate for non-AIWorker conflicts').toContain('ensure_port_free "$PORT"')
   })
 })
