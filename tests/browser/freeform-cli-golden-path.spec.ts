@@ -985,6 +985,15 @@ function readRecord(value: unknown): Record<string, unknown> {
 }
 
 function assertNoUnexpectedBrowserEvents(events: string[]): void {
+  // The chat transport is EventSource SSE (commit fd969a6b). Switching the active
+  // invocation (e.g. on composer submit) closes the prior SSE via React effect
+  // cleanup, and the browser reports that intentional client-side close as
+  // ERR_ABORTED. Tolerate ONLY that exact shape: the app's bare `?after=N` events
+  // stream aborted by the client. The trailing `\d+:` cannot match the test's own
+  // `?after=0&limit=20` fetches (the `&` breaks it), and the `$` anchor keeps every
+  // other errorText (ERR_CONNECTION_RESET, server stream failure, ...) on /events
+  // fatal — so the expected-event helper adapts the proof to the SSE transport
+  // without weakening it.
   const failures = events.filter(event =>
     !isExpectedBrowserEvent(event)
     && (event.startsWith('pageerror:')
@@ -997,9 +1006,10 @@ function assertNoUnexpectedBrowserEvents(events: string[]): void {
 function isExpectedBrowserEvent(event: string): boolean {
   if (event.includes('/favicon.ico'))
     return true
-  return event.includes('/api/engine/invocations/')
-    && event.includes('/events?after=')
-    && event.includes('net::ERR_ABORTED')
+  // Keep this as a function declaration (not a module-scope const) because the
+  // assertion is reached by a hoisted call site before module-scope const
+  // initializers would run.
+  return /\/api\/engine\/invocations\/[^/]+\/events\?after=\d+:net::ERR_ABORTED$/.test(event)
 }
 
 async function writeEvidence(name: string, value: unknown): Promise<void> {
