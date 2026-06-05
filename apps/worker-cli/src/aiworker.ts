@@ -1461,10 +1461,13 @@ function ensureFleetSeeded(root: string): FleetIndex {
 }
 
 async function createWorkerCommand(opts: { id?: string, name?: string, app?: string, port?: number }): Promise<void> {
-  const id = requireText(opts.id, 'id')
   const app = requireText(opts.app, 'app')
   const root = fleetRootDir()
   const index = readFleet(root)
+  let id = opts.id?.trim() || mintWorkerId()
+  while (!opts.id && (index.workers.some(worker => worker.id === id) || existsSync(workerHomeDir(root, id)))) {
+    id = mintWorkerId()
+  }
   if (index.workers.some(worker => worker.id === id))
     throw new Error(`fleet worker already exists: ${id}`)
   const homeDir = workerHomeDir(root, id)
@@ -2309,11 +2312,11 @@ function registerCommands(): void {
     const paths = await ensureDefaultDb()
     printJson({ souls: createHost(paths).listSouls() })
   })
-  cli.command('worker create <id>', 'create a standalone fleet worker in its own home')
+  cli.command('worker create [id]', 'create a standalone fleet worker in its own home')
     .option('--app <appId>', 'Soul App id (appId, e.g. aiworker-freeform)')
     .option('--name <text>', 'worker name (defaults to <id>)')
     .option('--port <n>', 'daemon port (auto-allocated when omitted)', { type: [Number] })
-    .action((id: string, opts: { app?: string, name?: string, port?: number[] }) =>
+    .action((id: string | undefined, opts: { app?: string, name?: string, port?: number[] }) =>
       createWorkerCommand({ app: opts.app, id, name: opts.name, port: optionalNumber(opts.port) }))
   cli.command('worker list', 'list local Soul workers').action(async () => {
     printJson({ workers: await ensureAllWorkers() })

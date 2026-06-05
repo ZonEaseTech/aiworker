@@ -532,6 +532,15 @@ describe('aiworker local CLI', () => {
       .toMatchObject({ type: 'freeform', workerId: 'fleet-fallback-worker' })
   })
 
+  it('generates a worker id when creating a fleet worker from a Soul app', async () => {
+    expect(await runCli(argv('worker', 'create', '--name', 'Generated Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    const created = JSON.parse(output) as { worker: { home: string, id: string, workerId: string } }
+
+    expect(created.worker.id).toMatch(/^w_[0-9a-hjkmnp-tv-z]{12}$/)
+    expect(created.worker.workerId).toBe(created.worker.id)
+    expect(created.worker.home).toBe(path.join(root, 'home', 'workers', created.worker.id))
+  })
+
   it('prefers a current-home worker over the fleet index so non-fleet/adopted homes are unaffected', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
@@ -580,8 +589,11 @@ describe('aiworker local CLI', () => {
       fleet: { default: string | null, root: string }
       started: Array<{ daemon: { started: boolean }, id: string, port: number, url: string }>
     }
-    const workerId = first.started[0]?.id
-    const port = first.started[0]?.port
+    const firstStarted = first.started[0]
+    if (!firstStarted)
+      throw new Error('aiworker start did not report a started worker')
+    const workerId = firstStarted.id
+    const port = firstStarted.port
     expect(workerId).toMatch(/^w_/)
     expect(typeof port).toBe('number')
     expect(first.started).toEqual([
