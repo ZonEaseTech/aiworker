@@ -189,7 +189,7 @@ describe('e2e soul sampling static contracts', () => {
       if (args[0] === 'workspace' && args[1] === 'create')
         return 'creating workspace\n{"workspace":{"id":"workspace-1"}}\ncreated'
       if (args[0] === 'session' && args[1] === 'start')
-        return 'starting session\n{"invocation":{"id":"invocation-1"},"session":{"id":"session-1"}}\nstarted'
+        return 'starting session\n{"invocation":{"id":"invocation-1","status":"succeeded"},"session":{"id":"session-1"}}\nstarted'
       if (args[0] === 'session' && args[1] === 'events')
         return 'events\n{"events":[{"type":"invocation.completed"}]}\ndone'
       return '{"ok":true}'
@@ -216,7 +216,7 @@ describe('e2e soul sampling static contracts', () => {
       if (args[0] === 'workspace' && args[1] === 'create')
         return '{"workspace":{"id":"workspace-1"}}'
       if (args[0] === 'session' && args[1] === 'start')
-        return '{"invocation":{"id":"invocation-1"},"session":{"id":"session-1"}}'
+        return '{"invocation":{"id":"invocation-1","status":"succeeded"},"session":{"id":"session-1"}}'
       if (args[0] === 'session' && args[1] === 'events')
         return '{"events":[{"type":"invocation.completed"}]}'
       return '{"ok":true}'
@@ -243,6 +243,29 @@ describe('e2e soul sampling static contracts', () => {
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
     })
+  })
+
+  it('rejects failed invocations after fetching events for evidence', async () => {
+    const calls: string[][] = []
+    const runCli = async (args: string[]): Promise<string> => {
+      calls.push(args)
+      if (args[0] === 'workspace' && args[1] === 'create')
+        return '{"workspace":{"id":"workspace-1"}}'
+      if (args[0] === 'session' && args[1] === 'start')
+        return '{"invocation":{"id":"invocation-1","status":"failed","error":"codex exited"},"session":{"id":"session-1"}}'
+      if (args[0] === 'session' && args[1] === 'events')
+        return '{"events":[{"type":"invocation.error"}]}'
+      return '{"ok":true}'
+    }
+
+    await expect(runSamplingCaseWithCli({
+      caseId: 'case-1',
+      prompt: '请自然处理这个请求。',
+      runCli,
+      scope: { appId: 'software-support', workerId: 'e2e-software-support' },
+    })).rejects.toThrow('invocation invocation-1 failed')
+
+    expect(calls).toContainEqual(['session', 'events', 'invocation-1'])
   })
 
   it('writes scorecards with redacted prompt and output snippets', () => {

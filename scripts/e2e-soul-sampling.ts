@@ -424,6 +424,20 @@ export function readNestedId(value: unknown, key: string): string {
   return id
 }
 
+export function readNestedString(value: unknown, key: string, field: string): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return undefined
+
+  const nested = (value as Record<string, unknown>)[key]
+  if (!nested || typeof nested !== 'object' || Array.isArray(nested))
+    return undefined
+
+  const fieldValue = (nested as Record<string, unknown>)[field]
+  return typeof fieldValue === 'string' && fieldValue.trim().length > 0
+    ? fieldValue.trim()
+    : undefined
+}
+
 export async function runSamplingCaseWithCli(input: RunSamplingCaseWithCliInput): Promise<SamplingCliResult> {
   const reasoning = input.reasoning
     ?? input.env?.AIWORKER_E2E_REASONING
@@ -462,8 +476,18 @@ export async function runSamplingCaseWithCli(input: RunSamplingCaseWithCliInput)
   const sessionOutput = parseJsonObject(await input.runCli(plan[2]!, input.env))
   const sessionId = readNestedId(sessionOutput, 'session')
   const invocationId = readNestedId(sessionOutput, 'invocation')
+  const invocationStatus = readNestedString(sessionOutput, 'invocation', 'status')
+  const invocationError = readNestedString(sessionOutput, 'invocation', 'error')
 
   parseJsonObject(await input.runCli(['session', 'events', invocationId], input.env))
+
+  if (invocationStatus !== 'succeeded') {
+    throw new Error([
+      `invocation ${invocationId} failed`,
+      `status=${invocationStatus ?? 'missing'}`,
+      ...(invocationError ? [`error=${invocationError}`] : []),
+    ].join(' '))
+  }
 
   return { invocationId, sessionId, workspaceId }
 }
