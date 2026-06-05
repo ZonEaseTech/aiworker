@@ -6,6 +6,7 @@ export interface AssignmentView {
   serverRef: string
   soulReleaseRef: string
   status: AssignmentStatus
+  revokedAt?: string | null
   workerId?: string | null
   workbenchUrl?: string | null
 }
@@ -38,6 +39,8 @@ export function canAdvanceAssignment(from: AssignmentStatus, to: AssignmentStatu
 }
 
 export function userCanOpenWorker(user: AuthenticatedUser, assignment: AssignmentView): boolean {
+  if (assignment.revokedAt)
+    return false
   if (assignment.status !== 'ready')
     return false
   return normalizeAssignedEmail(user.email) === assignment.assignedEmail

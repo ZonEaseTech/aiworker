@@ -48,14 +48,27 @@ describe('host-control assignment boundary', () => {
     expect(userCanOpenWorker({ email: 'worker@example.com' }, assignment)).toBe(false)
   })
 
+  test('does not allow a ready assignment to be opened when revokedAt is present', () => {
+    const assignment = createAssignmentView({
+      assignedEmail: 'worker@example.com',
+      assignmentId: 'assign-1',
+      revokedAt: '2026-06-06T10:00:00.000Z',
+      serverRef: 'srv-1',
+      soulReleaseRef: 'soul-release-1',
+      status: 'ready',
+    })
+
+    expect(userCanOpenWorker({ email: 'worker@example.com' }, assignment)).toBe(false)
+  })
+
   test('checks assignment status transitions', () => {
     expect(canAdvanceAssignment('draft', 'provisioning')).toBe(true)
     expect(canAdvanceAssignment('provisioning', 'checked_in')).toBe(true)
     expect(canAdvanceAssignment('checked_in', 'access_ready')).toBe(true)
     expect(canAdvanceAssignment('access_ready', 'ready')).toBe(true)
     expect(canAdvanceAssignment('ready', 'revoked')).toBe(true)
-    expect(canAdvanceAssignment('archived', 'ready')).toBe(false)
-    expect(canAdvanceAssignment('ready', 'checked_in')).toBe(false)
+    expect(canAdvanceAssignment('ready', 'provisioning')).toBe(false)
+    expect(canAdvanceAssignment('revoked', 'ready')).toBe(false)
   })
 
   test('redacts provision-token-shaped values only', () => {
