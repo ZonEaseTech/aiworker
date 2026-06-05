@@ -202,10 +202,10 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     checkedAt: new Date().toISOString(),
   }))
 
-  // Host↔Worker 控制契约面（被动 server；Host 是 client）。Phase-2 Host 控制面把
-  // Worker 自有的 Workbench web 当作 sandboxed micro-app 来 mount；契约 transport-
-  // agnostic（worker-control-protocol）。这些端点只读/接收控制信封，不得触碰
-  // session/invocation/projection/engine 逻辑（C5）。
+  // Host↔Worker 控制契约面（被动 server；Host 是 client）。Phase-2 Host 只消费
+  // Worker 自描述、健康、assignment、lifecycle；可把员工导向 Worker 自有
+  // Workbench URL，但不得 mount/frame/render Workbench。这些端点只读/接收控制
+  // 信封，不得触碰 session/invocation/projection/engine 逻辑（C5）。
   app.get('/api/control/health', c => c.json({ ready: true }))
 
   app.get('/api/control/worker', (c) => {
@@ -221,9 +221,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       id: worker.appId,
       version: state.runtimeVersion,
       health: { ready: true },
-      // Phase-2 Host control plane mounts the Worker's own Workbench web (served at
-      // the daemon root), not a Soul-provided micro-app. v1 has no mounted workbench.
-      configMicroAppEntry: '/',
+      workbenchUrl: '/',
     })
   })
 

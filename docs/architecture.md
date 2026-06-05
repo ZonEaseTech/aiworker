@@ -6,8 +6,18 @@ skills, and temporary drafts are evidence only. They do not override this file.
 
 ## Position
 
-AIWorker is a worker-centric product. A Worker is an autonomous, CLI-first
-runtime that runs one Soul through a native engine and owns engine launch.
+AIWorker turns one expert's professional capability into many employees'
+production capacity. A knowledgeable author packages that capability as a Soul,
+iterates it quickly, and an organization uses Host to copy it at low cost to
+employees who do not need to understand the technical system. Each employee gets
+an out-of-the-box, dedicated AI Worker.
+
+Soul is the capability carrier. Host is the iteration and replication lever.
+Worker is the employee-side ready-to-use terminal.
+
+AIWorker is therefore a worker-centric product. A Worker is an autonomous,
+CLI-first runtime that runs one Soul through a native engine and owns engine
+launch.
 
 A Worker runs fully standalone. v1 ships the standalone Worker only; the Host
 control plane is Phase 2 and is never on the runtime hot path.
@@ -32,11 +42,48 @@ A Worker starts its own local infrastructure, locates workspace/session context,
 serves its own Workbench web, owns projection and the engine bridge, launches and
 observes the native engine, and exposes a local broker API.
 
-Host is an optional control plane: distributor, manager, permission allocator,
-and connector authorizer. Host is Phase 2 and is never on the runtime hot path.
-Host does not spawn, observe, or hold engine processes. Host is not a domain
-workflow layer, a product backend, an agent runtime, a repository dashboard, or a
-Soul configuration center.
+Host is an optional control plane for Soul release, distribution, permission
+allocation, connector authorization, and Worker provisioning records. Host is
+Phase 2 and is never on the runtime hot path. Host does not spawn, observe, or
+hold engine processes. Host is not a domain workflow layer, a product backend, an
+agent runtime, a repository dashboard, a Soul configuration center, or a UI shell
+around a Worker.
+
+## Phase 2 Product MVP
+
+The Phase 2 MVP is Soul distribution and employee Worker authorization:
+
+```text
+expert author -> published Soul version -> Host assignment -> employee Worker
+```
+
+The minimum useful loop is:
+
+1. A capability author builds and publishes a Soul version.
+2. An administrator assigns that Soul version to an employee or employee group.
+3. Host records only distribution, authorization, connector, gateway/profile, and
+   provisioning metadata.
+4. Each employee receives or starts a dedicated Worker bound to the assigned Soul.
+5. The employee opens the Worker's own Workbench and can start work without
+   learning Souls, descriptors, MCP, engine targets, or Host.
+6. The author can publish an updated Soul version, and the administrator can
+   roll it out or roll it back across assigned employees.
+
+The MVP user experience must prove three things:
+
+- author experience: a professional capability can be packaged, published, and
+  iterated without turning the Soul into an app or backend;
+- administrator experience: one published capability can be copied to many
+  employees with visible assignment, connector authorization, gateway/profile
+  reference, Worker readiness, and rollout status;
+- employee experience: the result feels like "my AI worker is ready", not like a
+  technical deployment, Host dashboard, embedded page, or configuration chore.
+
+Phase 2 must not use mount, mounted workbench, micro-app, iframe, or Host-rendered
+Worker UI as product value. Host may help an employee reach the Worker's own URL,
+but it must not wrap, embed, render, or reinterpret the Workbench. The product
+value is capability replication, version rollout, permission governance, and
+low-friction employee onboarding.
 
 ## Decision Coverage Index
 
@@ -44,16 +91,17 @@ tmp/refactor decisions are evidence until promoted. Accepted refactor decisions
 become active authority only when they are represented in the canonical docs,
 guarded by tests, or both.
 
-- docs/architecture.md owns worker autonomy, worker-owns-workbench, Soul-as-template,
-  Host control-plane ownership, monorepo boundaries, data ownership, Freeform v1
-  scope, and destructive migration constraints.
+- docs/architecture.md owns the AIWorker product core, Phase 2 distribution MVP,
+  worker autonomy, worker-owns-workbench, Soul-as-template, Host control-plane
+  ownership, monorepo boundaries, data ownership, Freeform v1 scope, and
+  destructive migration constraints.
 - docs/protocol.md owns descriptor, broker route, configuration envelope, and the
   Phase 2 Host↔Worker control contract.
 - docs/runtime.md owns projection, runtime assets CRUD, engine bridge, lifecycle, cleanup, and redaction contracts.
 - docs/soul-authoring.md owns SDK authoring, convention discovery, build output,
   native MCP source layout, and Freeform source contract.
-- docs/testing.md owns the coverage ledger, guardrail mapping, and the Phase 2
-  implementation-teardown debt.
+- docs/testing.md owns the coverage ledger, guardrail mapping, Phase 2 MVP
+  experience acceptance, and historical implementation-teardown record.
 
 ## Ownership
 
@@ -81,8 +129,10 @@ A Worker is a running instance bound to one Soul. A Worker owns its runtime stat
 
 Host (Phase 2) owns only control-plane metadata:
 
-- the worker registry: which workers exist, identity, endpoint, health;
-- assignment metadata: assigned Soul, connectors, engine/gateway profile, permissions;
+- Soul release metadata: published versions, rollout state, and rollback records;
+- distribution metadata: which employees or groups receive which Soul version;
+- the worker registry: which employee Workers exist, identity, endpoint, health;
+- assignment metadata: assigned Soul version, connectors, engine/gateway profile, permissions;
 - permission allocation and connector authorization;
 - worker distribution and provisioning records.
 
@@ -99,12 +149,11 @@ Workbench web, and configuration. The Worker never registers with or pushes to
 Host.
 
 v1 scope: the standalone single-daemon path is the whole product — one daemon is
-one Worker with its own CLI, Workbench web, and configuration. The fleet — an
-optional Host control plane that discovers and brokers across worker endpoints —
-is Phase 2. In Phase 2 the fleet is a plug-in shell layered from outside; the
-Worker stays pure, its binary and behavior do not change whether a fleet is
-present or absent, and the `workerId` is the Worker's own minted identity, not a
-fleet-imposed handle.
+one Worker with its own CLI, Workbench web, and configuration. Phase 2 adds Host
+as the organization-side distribution and governance plane. The Worker stays
+pure: its binary and behavior do not change whether Host is present or absent,
+and the `workerId` is the Worker's own minted identity, not a fleet-imposed
+handle.
 
 ## Monorepo Boundary
 
@@ -171,18 +220,18 @@ rendered by `apps/worker-web` from `packages/ui` primitives, driven by the local
 broker API and the engine bridge event stream.
 
 Host↔Worker integration is Phase 2 and is over-the-wire only, with zero code
-intrusion in either direction:
-
-- a sandboxed micro-app loaded over HTTP, where Host frames the Worker's own
-  Workbench web — the Worker is unaware it is framed and keeps running standalone
-  if Host is absent;
-- the transport-agnostic control contract owned by
-  `packages/worker-control-protocol`, where a Worker is the passive control
-  server, Host is the client, and a Worker never initiates a connection to Host.
+intrusion in either direction. Host does not mount, frame, or render the
+Workbench. The only Host-to-Worker product contract is the transport-agnostic
+control contract owned by `packages/worker-control-protocol`, where a Worker is
+the passive control server, Host is the client, and a Worker never initiates a
+connection to Host.
 
 The control contract covers worker describe, health, instance lifecycle, and an
 assignment envelope. It must not carry session, invocation, projection, engine,
-or domain data. Neither integration channel is on the v1 runtime path.
+or domain data. The assignment envelope is the distribution record that lets Host
+copy a published Soul version plus authorized connectors, permissions, and
+gateway/profile refs to employee Workers. No Host control surface is on the v1
+runtime path.
 
 ## Runtime Boundary
 

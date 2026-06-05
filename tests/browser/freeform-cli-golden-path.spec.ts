@@ -7,7 +7,7 @@ import { join } from 'node:path'
 
 import { chromium } from 'playwright'
 import { closeWorkerDb, createEngineInvocation, initWorkerDb, upsertFile, upsertWorkerConfigValue } from '../../packages/storage-sqlite/src/worker/index'
-import { MOUNT_TIMEOUT_MS as WORKBENCH_RENDER_TIMEOUT_MS } from './mount-wait'
+import { WORKBENCH_RENDER_TIMEOUT_MS } from './workbench-render-wait'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const appId = 'aiworker-freeform'
@@ -134,7 +134,7 @@ try {
 
   // Standalone worker-owned flow: the Worker Workbench opens with Host absent on a
   // worker/workspace/session locator and renders the session chat DIRECTLY in
-  // worker-web. There is no mounted micro-app and no /api/mount/workbench.
+  // worker-web. There is no micro-app and no /api/mount/workbench.
   const routeUrl = `${baseUrl}/workers/${workerId}/workspaces/${workspaceResult.workspace.id}/sessions/${sessionResult.session.id}`
   await page.goto(routeUrl, { waitUntil: 'domcontentloaded' })
 
@@ -146,7 +146,7 @@ try {
 
   const microAppCount = await page.locator('micro-app').count()
   if (microAppCount !== 0)
-    throw new Error(`Worker Workbench rendered a mounted micro-app (${microAppCount}); v1 has no micro-app, the Worker renders chat directly.`)
+    throw new Error(`Worker Workbench rendered an unexpected micro-app (${microAppCount}); v1 has no micro-app, the Worker renders chat directly.`)
 
   // The ChatTranscript (ChatThread) renders directly in the page light DOM — the
   // transcript log slot must be present without any micro-app shadow root.
@@ -321,9 +321,9 @@ function seedWorkbenchFixtures(workspaceId: string): void {
   initWorkerDb(dbPath)
   try {
     // Session artifacts are a workspace dimension (the invocation result never
-    // carries files), so seed a workspace file the mounted ArtifactStrip renders.
+    // carries files), so seed a workspace file the Workbench artifact strip renders.
     upsertFile({ id: 'workbench-artifact-report', kind: 'generated', path: 'output/report.md', size: 128, source: 'session', workspaceId })
-    // A worker config value the mounted configuration summary module renders.
+    // A worker config value the Workbench configuration summary module renders.
     upsertWorkerConfigValue({
       configKey: 'engine-selection',
       configValueJson: {

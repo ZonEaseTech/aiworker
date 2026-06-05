@@ -1,32 +1,33 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { HostControlPlane, MountWorkerConfig } from './app'
+import { HostControlPlane, WorkerDistributionSummary } from './app'
 
-describe('host-web management mount', () => {
-  it('mounts the worker configuration micro-app via router-mode="search"', () => {
+describe('host-web distribution control plane', () => {
+  it('summarizes assignment and readiness without rendering a micro-app', () => {
     const { container } = render(
-      <MountWorkerConfig entry="/api/mount/workbench" name="worker-config" />,
+      <WorkerDistributionSummary
+        assignment={{ soulVersion: 'freeform@1.0.0', connectors: 2, permissions: 3 }}
+        worker={{ id: 'worker-1', ready: true, workbenchUrl: '/' }}
+      />,
     )
-    const microApp = container.querySelector('micro-app')
-    expect(microApp).not.toBeNull()
-    expect(microApp?.getAttribute('router-mode')).toBe('search')
-    expect(microApp?.getAttribute('url')).toBe('/api/mount/workbench')
-    expect(microApp?.getAttribute('name')).toBe('worker-config')
+    expect(container.querySelector('micro-app')).toBeNull()
+    expect(container.querySelector('[data-slot="host-worker-distribution"]')).not.toBeNull()
+    expect(container.textContent).toContain('freeform@1.0.0')
+    expect(container.textContent).toContain('Ready')
   })
 
-  it('frames the worker configuration micro-app in the control-plane shell at the canonical entry', () => {
+  it('shows a Worker-owned Workbench destination instead of an embedded surface', () => {
     const { container } = render(<HostControlPlane />)
-    const mount = container.querySelector('[data-slot="host-management-mount"]')
-    expect(mount).not.toBeNull()
-    const microApp = container.querySelector('[data-slot="worker-config-micro-app"]')
-    expect(microApp?.getAttribute('router-mode')).toBe('search')
-    expect(microApp?.getAttribute('url')).toBe('/api/mount/workbench')
+    expect(container.querySelector('micro-app')).toBeNull()
+    const destination = container.querySelector('[data-slot="employee-workbench-link"]')
+    expect(destination?.getAttribute('href')).toBe('/')
+    expect(container.textContent).toContain('Open Worker')
   })
 
-  it('frames a host-daemon-resolved per-worker config entry when supplied', () => {
-    const { container } = render(<HostControlPlane configMicroAppEntry="https://worker.local/api/mount/workbench" />)
-    const microApp = container.querySelector('[data-slot="worker-config-micro-app"]')
-    expect(microApp?.getAttribute('url')).toBe('https://worker.local/api/mount/workbench')
+  it('uses a host-resolved Worker-owned Workbench URL when supplied', () => {
+    const { container } = render(<HostControlPlane workbenchUrl="https://worker.local/" />)
+    const destination = container.querySelector('[data-slot="employee-workbench-link"]')
+    expect(destination?.getAttribute('href')).toBe('https://worker.local/')
   })
 })

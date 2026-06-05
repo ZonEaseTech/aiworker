@@ -14,9 +14,8 @@ export const workerDescribeSchema = z.object({
   id: z.string().min(1),
   version: z.string().min(1),
   health: workerHealthSchema,
-  // 配置 micro-app entry：host-web 据此 mount（载体 = micro-app）。契约不绑定 transport
-  // 细节，仅给出 entry 引用，未来非 web transport 可复用同一契约。
-  configMicroAppEntry: z.string().min(1),
+  // Worker 自有 Workbench 的入口。Host 可把员工导向这里,但不得 mount/frame/render。
+  workbenchUrl: z.string().min(1),
 }).strict()
 
 export const workerLifecycleSchema = z.object({

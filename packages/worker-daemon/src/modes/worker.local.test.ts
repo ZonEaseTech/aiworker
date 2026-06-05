@@ -1913,7 +1913,7 @@ describe('local daemon API', () => {
     expect(leakedDbErrors).toEqual([])
   })
 
-  it('lists workspace files for the mounted artifacts surface', async () => {
+  it('lists workspace files for the Workbench artifacts surface', async () => {
     const target = await app()
     const worker = await createFreeformWorker(target)
     const { workspace } = await createWorkspaceAndSession(target, worker.id)
@@ -2550,7 +2550,7 @@ describe('local daemon API', () => {
         enabled: true,
         kind: 'workbench-preference',
         options: {
-          preferredEntry: 'mounted',
+          preferredEntry: 'workbench',
         },
         sourceRef: 'descriptor://workbench/entry',
         target: 'all',
@@ -2567,7 +2567,7 @@ describe('local daemon API', () => {
           enabled: true,
           kind: 'workbench-preference',
           options: {
-            preferredEntry: 'mounted',
+            preferredEntry: 'workbench',
           },
           target: 'all',
           updatedBy: 'web',

@@ -44,8 +44,7 @@ if (apps.length === 0) {
   process.exit(0)
 }
 for (const app of apps) {
-  const prefix = app.mountedContribution?.apiRoutePrefix ?? "no mounted api"
-  console.log(`  ${app.appId}: ${app.status}, health=${app.healthStatus}, api=${prefix}`)
+  console.log(`  ${app.appId}: ${app.status}, health=${app.healthStatus}, api=no app api`)
 }
 '
 }

@@ -16,9 +16,13 @@ Temporary drafts live in `tmp/`。旧 changelog、历史 E2E、旧 project-local
 
 ## Product Boundary
 
-Worker 是自治 CLI-first 运行体，拥有 engine 启动权；Host 是可选控制面：分发 / 管理 / 权限分配 / connector 授权（Phase 2）。
+AIWorker 的核心 = 让一个懂行的人，把一套专业能力做成 Soul、快速迭代，再低成本复制给一群不懂技术的员工；每个员工因此拥有一个开箱即用的专属 AI 工作者。
 
-v1 只发 standalone Worker：Host、micro-app、control-protocol 全是 Phase 2，永不在运行热路径上。Worker 创建时绑定一个 Soul（终生不变），拥有并直接渲染自己的 Workbench。默认路径：
+Soul = 能力载体；Host = 迭代 + 复制的杠杆；Worker = 员工侧开箱即用的终端。一个人的能力 → 全员的产能。
+
+Worker 是自治 CLI-first 运行体，拥有 engine 启动权；Host 是可选控制面：Soul 发布 / 分发 / 管理 / 权限分配 / connector 授权 / Worker provisioning（Phase 2）。
+
+v1 只发 standalone Worker：Host 与 control-protocol 全是 Phase 2，永不在运行热路径上。Worker 创建时绑定一个 Soul（终生不变），拥有并直接渲染自己的 Workbench。默认路径：
 
 ```text
 Worker -> Workbench -> workspace -> session (chat) -> native engine
@@ -40,7 +44,7 @@ Workbench 管 workspace、workspace 下的 session（= chat composer + view）�
 
 Host/Soul 是 descriptor-only：Host 与 Workbench 只消费 `dist/soul.descriptor.json`，不读 Soul source、不 import Soul 私有模块、不解释领域字段。
 
-Worker 拥有并直接渲染 Workbench；v1 没有 micro-app、没有 mounted-workbench、没有 Soul 提供的 UI。Phase 2 Host 才用 micro-app over HTTP 框住 Worker web，零代码侵入。Descriptor v1 极简：`protocol / identity / engine` 资产束，无 workbench / api / capability。
+Worker 拥有并直接渲染 Workbench；v1 没有 micro-app、没有 mounted-workbench、没有 Soul 提供的 UI。Phase 2 Host 不 mount / frame / render Worker Workbench，只通过控制契约做分发、授权、provisioning、readiness/lifecycle 状态。Descriptor v1 极简：`protocol / identity / engine` 资产束，无 workbench / api / capability。
 
 ## Runtime Boundary
 

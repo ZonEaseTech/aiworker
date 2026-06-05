@@ -155,6 +155,7 @@ Coverage status values:
 | Decision area | Canonical home | Guardrail | Status |
 | --- | --- | --- | --- |
 | Worker autonomy / Host control plane | `docs/architecture.md`, `AGENTS.md` | `bun run docs:check`, `bun run test:contracts` | docs+tests |
+| Phase 2 Soul distribution MVP | `docs/architecture.md`, `docs/protocol.md`, `docs/runtime.md` | docs check, host-control assignment tests, future Phase 2 journey proof | docs+tests |
 | Descriptor-only Host/Soul boundary | `docs/protocol.md`, `docs/soul-authoring.md` | `packages/soul-descriptor` tests, architecture tests | docs+tests |
 | Worker-owned workbench | `docs/architecture.md`, `docs/runtime.md` | browser Freeform proof, refactor-contract tests | docs+tests |
 | Session lifecycle and invocation state split | `docs/runtime.md` | architecture tests and engine bridge tests | docs+tests |
@@ -241,6 +242,36 @@ Do not modify the new architecture to satisfy old E2E assumptions. Delete or
 rewrite tests that require Host to import Soul source, expect old daemon product
 backend behavior, expect a Soul-provided mounted workbench, or encode
 `router-mode="pure"` as production behavior.
+
+## Phase 2 MVP Experience Proof Scope
+
+The Phase 2 product proof is not a Host-embedded Workbench proof. It is a Soul
+distribution and employee readiness proof:
+
+```text
+author publishes a Soul version
+-> administrator assigns that Soul version to an employee or group
+-> Host records connector authorization, permission set, and gateway/profile ref
+-> employee Worker is provisioned or located with that assignment
+-> employee opens the Worker-owned Workbench as a ready-to-use AI worker
+-> Host can show assignment, rollout, readiness, and lifecycle status
+-> Host cannot read or render session chat, invocation events, projection output,
+   engine process state, workspace domain files, or literal secrets
+```
+
+The product acceptance criteria are:
+
+- author: can iterate a Soul version without adding UI, app-owned API, or Host
+  integration files to the Soul;
+- administrator: can copy one published capability to many employees and see
+  rollout/readiness state without touching employee runtime data;
+- employee: sees a ready Worker and can start a workspace/session without Host,
+  Soul descriptor, MCP, engine-target, or deployment jargon;
+- governance: assignment records carry only Soul version identity, connector
+  authorization, permissions, gateway/profile refs, and lifecycle/provisioning
+  metadata;
+- anti-mount: no Phase 2 acceptance test may treat micro-app, mounted workbench,
+  iframe, or Host-rendered Worker UI as product value.
 
 ## Pending Implementation (Phase-B Teardown)
 

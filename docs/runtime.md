@@ -13,6 +13,12 @@ The runtime is six chains:
 5. Worker-owned Workbench: workspace and session chat.
 6. Archive and delete.
 
+Phase 2 adds organization-side Soul distribution, but it does not add a Host
+runtime chain. Host can publish and assign a Soul version, authorize connector
+and gateway/profile refs, and track employee Worker readiness. The employee
+still experiences a ready-to-use Worker with its own Workbench, workspace,
+session chat, projection, engine bridge, lifecycle, and redaction.
+
 ## Local Daemon
 
 `packages/worker-daemon` owns the local broker API used by the Worker CLI and the
@@ -56,6 +62,13 @@ by name; its root is derived under the Worker home
 session prompts to start the first session.
 Auto-bootstrap stops at the Worker; the first workspace is the employee's
 first action in the Workbench.
+
+In Phase 2, a Host-provisioned employee Worker keeps the same Workbench
+experience. The first screen must read as "my AI worker is ready", not "Host
+mounted a remote surface". Host assignment may preselect the bound Soul version,
+authorized connector refs, permissions, and gateway/profile ref, but it must not
+inject Host navigation, Host state, or Host workflow into the Worker's chat
+surface.
 
 ## Session And Invocation State
 
@@ -278,7 +291,11 @@ sessions. Hard delete is explicit and removes Worker metadata plus receipt-owned
 projection files only. Physical workspace root deletion is a separate dangerous
 action and is not the default lifecycle behavior.
 
-Host→Worker assignment and lifecycle signals are Phase 2. In v1 the Worker runs
-standalone and no Host signal affects its runtime execution.
+Host→Worker assignment and lifecycle signals are Phase 2 distribution inputs. In
+v1 the Worker runs standalone and no Host signal affects its runtime execution.
+In Phase 2, assignment changes may update Worker-scoped authorization and
+selection metadata at explicit sync points, but they must not expose session
+content to Host, interrupt native engine execution, replace projection ownership,
+or make the Worker depend on Host for normal work.
 
 Session and invocation context files under `.aiworker/sessions/*` are cleaned only when the physical workspace root is deleted; session lifecycle delete intentionally preserves them.

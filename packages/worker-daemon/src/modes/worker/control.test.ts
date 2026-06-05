@@ -77,12 +77,11 @@ describe('worker-daemon control contract endpoints', () => {
     const res = await target.request('/api/control/worker')
     expect(res.status).toBe(200)
     const body = await res.json()
-    // 必须满足 worker-control-protocol 的 describe 形状（含 configMicroAppEntry）
+    // 必须满足 worker-control-protocol 的 describe 形状（含 Worker-owned Workbench URL）
     const describe = parseWorkerDescribe(body)
     expect(describe.id).toBe(FREEFORM_APP_ID)
-    // Phase-2 Host control plane mounts the Worker's own Workbench web (daemon root),
-    // not a Soul-provided micro-app. v1 has no /api/mount/workbench.
-    expect(describe.configMicroAppEntry).toBe('/')
+    expect(describe.workbenchUrl).toBe('/')
+    expect(body).not.toHaveProperty('configMicroAppEntry')
   })
 
   it('GET /api/control/worker returns the single active worker, not listWorkers()[0]', async () => {
@@ -119,14 +118,13 @@ describe('worker-daemon control contract endpoints', () => {
     const target = await app()
     await createFreeformWorker(target, 'standalone-worker')
     // 控制契约自描述:standalone client 无先验地发现 workerId + Worker 自有 Workbench 入口。
-    // v1 无 mounted micro-app:Phase-2 Host 控制面把 Worker 自有的 Workbench web(daemon
-    // 根)当作 sandboxed micro-app mount,Worker 直接渲染自己的 Workbench,不再有
-    // /api/mount/workbench 来 resolve Soul-provided micro-app。
     const describeRes = await target.request('/api/control/worker')
     expect(describeRes.status).toBe(200)
-    const describe = parseWorkerDescribe(await describeRes.json())
+    const body = await describeRes.json()
+    const describe = parseWorkerDescribe(body)
     expect(describe.workerId).toBe('standalone-worker')
-    expect(describe.configMicroAppEntry).toBe('/')
+    expect(describe.workbenchUrl).toBe('/')
+    expect(body).not.toHaveProperty('configMicroAppEntry')
   })
 
   it('PUT /api/control/assignment accepts a valid envelope', async () => {

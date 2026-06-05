@@ -20,7 +20,7 @@ describe('check-soul-app-boundaries', () => {
     expect(result.stderr).not.toContain('apps/worker-web/src/worker/souls')
   })
 
-  test('blocks Host Web imports of the retired shared workbench package', () => {
+  test('blocks Worker Web imports of the retired shared workbench package', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
     try {
       const sourceDir = join(tempRoot, 'apps/worker-web/src/worker')

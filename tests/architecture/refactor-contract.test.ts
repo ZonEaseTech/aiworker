@@ -102,7 +102,8 @@ describe('destructive refactor contract bootstrap', () => {
     }
 
     const architecture = readRepoFile('docs/architecture.md')
-    expect(architecture).toContain('Host is an optional control plane: distributor, manager, permission allocator,\nand connector authorizer.')
+    expect(architecture).toContain('Host is an optional control plane for Soul release, distribution, permission\nallocation, connector authorization, and Worker provisioning records.')
+    expect(architecture).toContain('Soul is the capability carrier. Host is the iteration and replication lever.\nWorker is the employee-side ready-to-use terminal.')
     expect(architecture).toContain('CLI-first')
     expect(architecture).toContain('descriptor-only')
     expect(architecture).toContain('packages/core and packages/shared disappear')
@@ -116,7 +117,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(architecture).toContain('tmp/refactor decisions are evidence until promoted')
     expect(architecture).toContain('docs/protocol.md owns descriptor, broker route, configuration envelope, and the')
     expect(architecture).toContain('docs/runtime.md owns projection, runtime assets CRUD, engine bridge, lifecycle, cleanup, and redaction contracts')
-    expect(architecture).toContain('docs/testing.md owns the coverage ledger, guardrail mapping, and the Phase 2')
+    expect(architecture).toContain('docs/testing.md owns the coverage ledger, guardrail mapping, Phase 2 MVP\n  experience acceptance, and historical implementation-teardown record.')
     expect(agents).toContain('tmp/refactor accepted decisions must be promoted to canonical docs or tests before implementation')
   })
 
@@ -899,7 +900,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'WorkerStudio positive descriptor fixture should not keep the retired HR person-profile capability').toEqual([])
   })
 
-  test('WorkerStudio tests use generic mounted Soul fixtures instead of retired HR QA workflow language', () => {
+  test('WorkerStudio tests use generic descriptor fixtures instead of retired HR QA workflow language', () => {
     const source = readRepoFile('apps/worker-web/src/worker/__tests__/worker-studio.test.tsx')
     const retiredFixtureSnippets = [
       'HR_SOUL_ID',
@@ -938,7 +939,7 @@ describe('destructive refactor contract bootstrap', () => {
       .filter(snippet => source.includes(snippet))
       .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
 
-    expect(findings, 'WorkerStudio tests should prove Host-generic mounted behavior without old HR/QA domain fixtures').toEqual([])
+    expect(findings, 'WorkerStudio tests should prove generic Worker Workbench behavior without old HR/QA domain fixtures').toEqual([])
   })
 
   test('Web i18n display tests use generic descriptor fixtures instead of retired HR identity', () => {
@@ -968,9 +969,7 @@ describe('destructive refactor contract bootstrap', () => {
       'Candidate pool',
       'interview-brief',
       'Interview brief',
-      'resume',
       'candidate',
-      'employee',
       'alumni',
     ]
     const findings = activeSources.flatMap((path) => {
@@ -1569,7 +1568,7 @@ describe('destructive refactor contract bootstrap', () => {
       .filter(snippet => workerStudioTest.includes(snippet))
       .map(snippet => `apps/worker-web/src/worker/__tests__/worker-studio.test.tsx: ${snippet}`)
 
-    expect(findings, 'Web tests should model app-owned mounted sessions through sessions/events only').toEqual([])
+    expect(findings, 'Web tests should model Worker-owned sessions through sessions/events only').toEqual([])
     expect(workerStudioTest).toContain('/api/sessions')
     expect(workerStudioTest).toContain('/api/sessions/session-1/invocations')
   })
@@ -1881,7 +1880,7 @@ describe('destructive refactor contract bootstrap', () => {
     expect(browserProof).not.toContain('readArchivedMountRejectionProofFromBrowser')
     expect(browserProof).not.toContain('assertArchivedMountRejectionProof')
     expect(browserProof).not.toContain('assertMountedMicroAppHostData')
-    expect(browserProof).toContain('rendered a mounted micro-app')
+    expect(browserProof).toContain('rendered an unexpected micro-app')
   })
 
   test('tag release workflow runs the canonical release gate before publishing', () => {
@@ -1953,20 +1952,24 @@ describe('destructive refactor contract bootstrap', () => {
     expect(existsSync(join(repoRoot, 'packages/shared-v2'))).toBe(false)
   })
 
-  test('there is no mounted workbench chain: no /api/mount/workbench, no soul-workbench package, no descriptor workbench', () => {
+  test('there is no mounted workbench chain or Host micro-app control remnant', () => {
     // Phase-B P3c: the Worker owns and directly renders its Workbench. The mounted
     // micro-app chain is removed entirely — no mount route, no resolution, no
-    // custom-vs-SDK-common fallback, no Soul-provided workbench package.
-    // Scope: worker-plane sources only. The Phase-2 Host control plane
-    // (host-web, worker-control-protocol configMicroAppEntry) is intentionally
-    // out of scope and keeps its dormant default.
-    const workerPlaneSources = [
+    // custom-vs-SDK-common fallback, no Soul-provided workbench package, and no
+    // Phase 2 Host/control-protocol micro-app entry remnant.
+    const activeSources = [
       'packages/worker-daemon/src/modes/worker.ts',
       'packages/worker-daemon/src/modes/worker/openapi.ts',
+      'packages/worker-control-protocol/src/index.ts',
+      'apps/host-web/src/app.tsx',
+      'apps/host-web/src/main.tsx',
       'apps/worker-web/src/worker/worker-studio.tsx',
     ]
     const forbiddenSnippets = [
       '/api/mount/workbench',
+      '@micro-zoe/micro-app',
+      '<micro-app',
+      'configMicroAppEntry',
       'mountedSurfaceResponse',
       'findMountedSurfaceContribution',
       'findWorkbenchMountContributions',
@@ -1975,14 +1978,14 @@ describe('destructive refactor contract bootstrap', () => {
       'descriptorWorkbenchContribution',
     ]
 
-    const findings = workerPlaneSources.flatMap((path) => {
+    const findings = activeSources.flatMap((path) => {
       const source = readRepoFile(path)
       return forbiddenSnippets
         .filter(snippet => source.includes(snippet))
         .map(snippet => `${path}: ${snippet}`)
     })
 
-    expect(findings, 'worker plane must have no mounted workbench chain').toEqual([])
+    expect(findings, 'active Worker/Host control surfaces must have no mounted workbench or micro-app remnants').toEqual([])
 
     // The deleted Soul-provided workbench packages must be gone.
     expect(existsSync(join(repoRoot, 'packages/soul-workbench'))).toBe(false)

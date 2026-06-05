@@ -52,19 +52,19 @@ const rawWebStorageMessage = 'Soul Apps must use createSoulAppWebStorage(...) in
 const forbiddenLegacyHostWebImports = ['@zonease/aiworker-soul-app-workbench']
 const retiredHostWebSurfacePatterns: Array<{ message: string, pattern: RegExp }> = [
   {
-    message: 'Host Web must not keep WorkspaceSessionComposer; session product UI belongs in Soul-owned mounted surfaces.',
+    message: 'Worker Web must not keep retired WorkspaceSessionComposer; session product UI belongs in the Worker-owned Workbench chat surface.',
     pattern: /\bWorkspaceSessionComposer\b/,
   },
   {
-    message: 'Host Web must not keep Host-owned session turn clients; turns are started by the engine bridge or Soul-owned mounted UI.',
+    message: 'Worker Web must not keep retired session turn clients; session invocations are started by the Worker engine bridge and Workbench chat surface.',
     pattern: /\b(?:createSessionTurn|continueSessionTurn)(?:Stream)?\b/,
   },
   {
-    message: 'Host Web must not keep Host-owned MarkdownPreview session surfaces.',
+    message: 'Worker Web must not keep retired MarkdownPreview session surfaces.',
     pattern: /\bMarkdownPreview\b/,
   },
   {
-    message: 'Host Web must not keep Host-owned session progress surfaces.',
+    message: 'Worker Web must not keep retired session progress surfaces.',
     pattern: /\bbuildSessionProgress\b/,
   },
 ]
@@ -214,7 +214,7 @@ function scanHostEmbeddedSoulRenderers(): BoundaryIssue[] {
     .map(rendererPath => ({
       file: rendererPath,
       importPath: 'host-renderer',
-      message: 'Host Web must not add Soul-specific renderer directories; move domain UI into the owning Soul App product web or mounted surface boundary.',
+      message: 'Worker Web must not add Soul-specific renderer directories; Soul provides descriptors and assets, not Workbench UI.',
     }))
 }
 
@@ -229,7 +229,7 @@ function scanHostWebPackageImports(): BoundaryIssue[] {
         issues.push(issue(
           file,
           importPath,
-          'Host Web must mount Soul workbench routes through descriptor-declared micro-app surfaces instead of importing the retired Soul App workbench package.',
+          'Worker Web must not import the retired Soul App workbench package; the Worker owns and directly renders the Workbench from descriptor data.',
         ))
       }
     }
@@ -249,11 +249,11 @@ function scanHostWebRetiredProductSurfaces(): BoundaryIssue[] {
     if (isTestSourceFile(file))
       continue
     if (relative.includes('/features/session/')) {
-      issues.push(issue(file, 'features/session', 'Host Web must not keep retired Host-owned session product feature files.'))
+      issues.push(issue(file, 'features/session', 'Worker Web must not keep retired session product feature files outside the Worker-owned Workbench chat surface.'))
       continue
     }
     if (relative.endsWith('/worker/session-progress.ts')) {
-      issues.push(issue(file, 'session-progress', 'Host Web must not keep retired Host-owned session progress files.'))
+      issues.push(issue(file, 'session-progress', 'Worker Web must not keep retired session progress files.'))
       continue
     }
     const content = readFileSync(file, 'utf8')
@@ -273,7 +273,7 @@ function reportHostEmbeddedSoulRendererDebt(): void {
   if (completionAudit) {
     console.error('Soul App boundary completion audit blocked by Host-embedded Soul renderer paths:')
     for (const rendererPath of rendererPaths)
-      console.error(`- ${rendererPath}: move domain UI into the owning Soul App product web or mounted surface boundary.`)
+      console.error(`- ${rendererPath}: remove Soul-specific renderer directories; Soul provides descriptors and assets, not Workbench UI.`)
     process.exit(1)
   }
 }

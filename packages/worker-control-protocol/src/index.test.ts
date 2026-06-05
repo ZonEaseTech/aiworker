@@ -13,9 +13,20 @@ describe('worker-control-protocol contract', () => {
       id: 'aiworker-freeform',
       version: '0.1.0',
       health: { ready: true },
-      configMicroAppEntry: '/api/mount/workbench',
+      workbenchUrl: '/',
     })
     expect(ok.id).toBe('aiworker-freeform')
+    expect(ok.workbenchUrl).toBe('/')
+  })
+
+  test('describe rejects micro-app entry remnants', () => {
+    expect(() => parseWorkerDescribe({
+      workerId: 'w1',
+      id: 'aiworker-freeform',
+      version: '0.1.0',
+      health: { ready: true },
+      configMicroAppEntry: '/api/mount/workbench',
+    } as never)).toThrow()
   })
 
   test('assignment envelope is shape+version only, no connector behavior', () => {

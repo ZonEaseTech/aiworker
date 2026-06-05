@@ -1,7 +1,7 @@
 # AIWorker Protocol
 
 This document defines the canonical Soul descriptor contract, the local broker
-routes, and the Phase 2 Host-to-Worker control contract.
+routes, and the Phase 2 Host-to-Worker distribution control contract.
 
 ## Descriptor-Only Install And Runtime
 
@@ -186,9 +186,28 @@ envelope. The Worker is the passive control server; Host is the client. A Worker
 never initiates a connection to Host.
 
 Phase 2 Host-to-Worker integration is over-the-wire only, with zero code
-intrusion in either direction: Host frames the Worker's own Workbench web as a
-sandboxed micro-app loaded over HTTP, and drives the control contract. The
-control contract must not carry session, invocation, projection, engine, or
-domain data. The assignment envelope carries authorized connectors, permissions,
-and an engine/gateway profile ref by shape and version only; connector behavior
-is out of contract scope.
+intrusion in either direction. Host does not mount, frame, embed, render, or proxy
+the Worker's Workbench. Host may direct an employee to a Worker-owned Workbench
+URL, but that URL is an employee destination, not a Host-rendered surface.
+
+The control contract must not carry session, invocation, projection, engine, or
+domain data. The assignment envelope is a distribution record: it carries the
+assigned Soul identity/version, authorized connectors, permissions, and an
+engine/gateway profile ref by shape and version only. Connector behavior,
+employee work, domain state, and native engine execution are out of contract
+scope.
+
+`worker.describe` may include the Worker-owned `workbenchUrl` so Host can direct
+an employee to their Worker. It must not expose a mount entry, micro-app entry,
+router mode, app-owned route, or Host-rendered surface.
+
+The Phase 2 MVP contract is therefore:
+
+```text
+publish Soul version -> assign to employee/group -> provision employee Worker -> employee opens Worker Workbench
+```
+
+Host owns the publish/assign/provision governance path. Worker owns the
+Workbench, workspace, session, invocation, projection, engine bridge, runtime
+configuration overlays, and redaction. This split is what makes Soul replication
+cheap without turning Host into a runtime backend or UI container.

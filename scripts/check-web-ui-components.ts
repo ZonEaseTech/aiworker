@@ -140,37 +140,72 @@ const acceptedResidualVisualUtilities: AcceptedResidualVisualUtility[] = [
   {
     file: 'apps/worker-web/src/worker/components/studio-shell.tsx',
     token: 'bg-background',
-    reason: 'Host shell canvas must bind to the shadcn background surface token',
+    reason: 'Workbench canvas must bind to the shadcn background surface token',
   },
   {
     file: 'apps/worker-web/src/worker/components/studio-shell.tsx',
     token: 'bg-sidebar',
-    reason: 'Host left rail must bind to the shadcn sidebar surface token',
+    reason: 'Workbench left rail must bind to the shadcn sidebar surface token',
   },
   {
     file: 'apps/worker-web/src/worker/components/studio-shell.tsx',
     token: 'text-foreground',
-    reason: 'Host shell canvas must use the shadcn foreground pair for bg-background',
+    reason: 'Workbench canvas must use the shadcn foreground pair for bg-background',
   },
   {
     file: 'apps/worker-web/src/worker/components/studio-shell.tsx',
     token: 'text-sidebar-foreground',
-    reason: 'Host left rail must use the shadcn foreground pair for bg-sidebar',
+    reason: 'Workbench left rail must use the shadcn foreground pair for bg-sidebar',
   },
   {
     file: 'apps/worker-web/src/worker/studio/host-chrome.tsx',
     token: 'bg-sidebar',
-    reason: 'HostTopBar is Host chrome and must visually align with the shadcn sidebar surface token',
+    reason: 'Workbench top bar must visually align with the shadcn sidebar surface token',
   },
   {
     file: 'apps/worker-web/src/worker/studio/host-chrome.tsx',
     token: 'text-sidebar-foreground',
-    reason: 'HostTopBar must use the shadcn foreground pair for bg-sidebar',
+    reason: 'Workbench top bar must use the shadcn foreground pair for bg-sidebar',
+  },
+  {
+    file: 'apps/worker-web/src/worker/studio/chat/chat-surface.tsx',
+    token: 'bg-background',
+    reason: 'Workbench chat surface uses the shadcn background token for the transcript/composer canvas',
+  },
+  {
+    file: 'apps/worker-web/src/worker/studio/chat/chat-surface.tsx',
+    token: 'bg-transparent',
+    reason: 'Workbench chat composer keeps textarea chrome transparent so the shadcn field shell owns the frame',
+  },
+  {
+    file: 'apps/worker-web/src/worker/studio/chat/chat-surface.tsx',
+    token: 'border-0',
+    reason: 'Workbench chat composer removes native textarea borders because the shadcn field shell owns the border',
+  },
+  {
+    file: 'apps/worker-web/src/worker/studio/workspace-tree.tsx',
+    token: 'text-sidebar-foreground/70',
+    reason: 'Worker Workbench tree tertiary text uses muted sidebar foreground contrast',
+  },
+  {
+    file: 'apps/worker-web/src/worker/studio/workspace-tree.tsx',
+    token: 'text-sidebar-foreground/80',
+    reason: 'Worker Workbench tree active metadata keeps slightly stronger sidebar contrast',
+  },
+  {
+    file: 'apps/worker-web/src/worker/studio/workspace-tree.tsx',
+    token: 'text-xs',
+    reason: 'Worker Workbench tree metadata uses compact text to keep workspace/session hierarchy scannable',
   },
   {
     file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'bg-sidebar',
-    reason: 'Worker Configuration segmented controls bind to the shadcn sidebar token used by Host chrome',
+    reason: 'Worker Configuration segmented controls bind to the shadcn sidebar token used by Workbench chrome',
+  },
+  {
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
+    token: 'font-mono',
+    reason: 'Worker Configuration technical refs use monospace only for compact identifiers',
   },
   {
     file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
@@ -209,13 +244,18 @@ const acceptedResidualVisualUtilities: AcceptedResidualVisualUtility[] = [
   },
   {
     file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
+    token: 'text-muted-foreground',
+    reason: 'Worker Configuration helper text uses the shadcn muted foreground token',
+  },
+  {
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'text-sidebar-foreground',
-    reason: 'Worker Configuration active segment text matches Host sidebar foreground tokens',
+    reason: 'Worker Configuration active segment text matches Workbench sidebar foreground tokens',
   },
   {
     file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     token: 'text-sidebar-foreground/60',
-    reason: 'Worker Configuration inactive segment text uses muted Host sidebar foreground contrast',
+    reason: 'Worker Configuration inactive segment text uses muted Workbench sidebar foreground contrast',
   },
   {
     file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
@@ -223,14 +263,14 @@ const acceptedResidualVisualUtilities: AcceptedResidualVisualUtility[] = [
     reason: 'Worker Configuration compact metadata labels use the small shadcn text scale',
   },
   {
-    file: 'apps/worker-web/src/worker/worker-workbench-tree.tsx',
-    token: 'font-normal',
-    reason: 'Host workbench tree secondary rows keep normal weight for locator hierarchy',
+    file: 'apps/worker-web/src/worker/worker-studio.tsx',
+    token: 'text-center',
+    reason: 'WorkerStudio centers empty-state copy inside the Workbench main area',
   },
   {
-    file: 'apps/worker-web/src/worker/worker-workbench-tree.tsx',
+    file: 'apps/worker-web/src/worker/studio/workspace-tree.tsx',
     token: 'text-sidebar-foreground/60',
-    reason: 'Host workbench tree metadata uses muted sidebar foreground contrast',
+    reason: 'Worker Workbench tree metadata uses muted sidebar foreground contrast',
   },
 ]
 const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
@@ -242,17 +282,17 @@ const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
   {
     file: 'apps/worker-web/src/features/local-workspace/components/worker-identity.tsx',
     category: 'card',
-    reason: 'worker identity is a compact Host object summary surface and is intentionally a shadcn Card',
+    reason: 'worker identity is a compact Worker object summary surface and is intentionally a shadcn Card',
   },
   {
     file: 'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
     category: 'alert',
-    reason: 'Settings engine test and Soul App security-block feedback are status callouts and should render through shadcn Alert',
+    reason: 'Settings engine test and Soul security-block feedback are status callouts and should render through shadcn Alert',
   },
   {
     file: 'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
     category: 'card',
-    reason: 'installed Soul App rows are app object cards inside Settings and use generated shadcn Card composition',
+    reason: 'installed Soul rows are capability object cards inside Settings and use generated shadcn Card composition',
   },
   {
     file: 'apps/worker-web/src/features/settings/components/settings-dialog.tsx',
@@ -262,12 +302,27 @@ const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
   {
     file: 'apps/worker-web/src/worker/components/studio-shell.tsx',
     category: 'scoped-native-layout',
-    reason: 'Host shell viewport uses semantic native layout with data-host-slot markers; shadcn primitives own inner chrome',
+    reason: 'Worker Workbench viewport uses semantic native layout with data-host-slot markers; shadcn primitives own inner chrome',
+  },
+  {
+    file: 'apps/worker-web/src/worker/studio/chat/chat-surface.tsx',
+    category: 'slotless-native-class',
+    reason: 'Workbench chat surface uses native layout wrappers around composer and transcript; shadcn primitives own controls inside',
+  },
+  {
+    file: 'apps/worker-web/src/worker/studio/chat/session-timeline.tsx',
+    category: 'slotless-native-class',
+    reason: 'Session timeline uses a single native wrapper for stream layout inside the Worker-owned chat transcript',
   },
   {
     file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     category: 'alert',
-    reason: 'Worker Configuration status and validation feedback are Host shell callouts rendered through shadcn Alert',
+    reason: 'Worker Configuration status and validation feedback are Workbench callouts rendered through shadcn Alert',
+  },
+  {
+    file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
+    category: 'outline-button',
+    reason: 'Worker Configuration uses a shadcn outline button for compact dialog actions',
   },
   {
     file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
@@ -280,41 +335,41 @@ const acceptedSurfaceClassifications: AcceptedSurfaceClassification[] = [
     reason: 'Worker Configuration uses native wrappers only for dialog layout around shadcn primitives',
   },
   {
-    file: 'apps/worker-web/src/worker/studio/first-run-soul-app-home.tsx',
-    category: 'card',
-    reason: 'first-run Soul App rows are app object cards inside the Host start-worker surface',
-  },
-  {
-    file: 'apps/worker-web/src/worker/studio/mounted-surface.tsx',
-    category: 'alert',
-    reason: 'generic mounted surface errors are Host bridge status callouts rendered through shadcn Alert',
-  },
-  {
-    file: 'apps/worker-web/src/worker/studio/workspace-fallback.tsx',
-    category: 'input-frame',
-    reason: 'Host workspace fallback search uses generated shadcn InputGroup frames',
-  },
-  {
-    file: 'apps/worker-web/src/worker/worker-workbench-tree.tsx',
+    file: 'apps/worker-web/src/worker/studio/workspace-tree.tsx',
     category: 'scoped-native-layout',
-    reason: 'Host workbench tree uses semantic layout markers for locator structure around shadcn rows',
+    reason: 'Worker Workbench tree uses semantic layout markers for locator structure around shadcn rows',
   },
   {
-    file: 'apps/worker-web/src/worker/worker-workbench-tree.tsx',
+    file: 'apps/worker-web/src/worker/studio/workspace-tree.tsx',
     category: 'slotless-native-class',
-    reason: 'Host workbench tree native wrappers provide non-visual hierarchy layout around shadcn controls',
+    reason: 'Worker Workbench tree native wrappers provide non-visual hierarchy layout around shadcn controls',
   },
   {
     file: 'apps/worker-web/src/worker/worker-studio.tsx',
     category: 'alert',
-    reason: 'Host-displayed Soul App action results are protocol status callouts and should use shadcn Alert instead of raw text wrappers',
+    reason: 'Workbench-displayed Soul action results are protocol status callouts and should use shadcn Alert instead of raw text wrappers',
+  },
+  {
+    file: 'apps/worker-web/src/worker/worker-studio.tsx',
+    category: 'outline-button',
+    reason: 'WorkerStudio uses a shadcn outline button for Workbench-level actions',
+  },
+  {
+    file: 'apps/worker-web/src/worker/worker-studio.tsx',
+    category: 'slotless-native-class',
+    reason: 'WorkerStudio keeps native wrappers only for top-level Workbench layout around shadcn primitives',
   },
 ]
 const acceptedRawNativeControlClassifications: AcceptedRawNativeControlClassification[] = [
   {
+    file: 'apps/worker-web/src/worker/studio/workspace-tree.tsx',
+    category: 'raw-button',
+    reason: 'WorkspaceTree uses one native button only for compact tree affordances where sidebar primitives own visual styling',
+  },
+  {
     file: 'apps/worker-web/src/worker/worker-configuration-dialog.tsx',
     category: 'raw-button',
-    reason: 'Worker Configuration uses native buttons only for compact Host shell segmented controls with shadcn-compatible state styling',
+    reason: 'Worker Configuration uses native buttons only for compact Workbench segmented controls with shadcn-compatible state styling',
   },
 ]
 const classDensityEntries: ClassDensityEntry[] = []
@@ -951,13 +1006,13 @@ function shadcnThemeAuditLine(): string {
   if (!dark) {
     issues.push({
       file: cssPath,
-      message: 'dark theme variables must live under :root.dark so later mounted micro-app :root styles cannot override Host dark tokens',
+      message: 'dark theme variables must live under :root.dark so theme overrides stay scoped and predictable',
     })
   }
   if (/\n\.dark\s*\{/.test(css)) {
     issues.push({
       file: cssPath,
-      message: 'do not define dark theme variables with bare .dark; use :root.dark for mounted micro-app CSS isolation',
+      message: 'do not define dark theme variables with bare .dark; use :root.dark for Workbench theme isolation',
     })
   }
   return [

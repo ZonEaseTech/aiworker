@@ -1,58 +1,74 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@zonease/aiworker-ui/components/card'
 
-export interface MountWorkerConfigProps {
-  // configMicroAppEntry as reported by the worker control-protocol `worker.describe` verb.
-  entry: string
-  label?: string
-  name?: string
+export interface WorkerDistributionSummaryProps {
+  assignment: {
+    soulVersion: string
+    connectors: number
+    permissions: number
+  }
+  worker: {
+    id: string
+    ready: boolean
+    workbenchUrl: string
+  }
 }
 
-// Management mount: the Host control plane mounts a worker's configuration
-// micro-app via `router-mode="search"` — the only production mounted-workbench
-// transport (AGENTS.md Protocol Boundary). Host resolves one entry and passes
-// locator context; the Soul owns its internal routes, domain UI and API.
-export function MountWorkerConfig({ entry, label = 'Worker configuration', name = 'worker-config' }: MountWorkerConfigProps) {
+export function WorkerDistributionSummary({ assignment, worker }: WorkerDistributionSummaryProps) {
   return (
-    <Card data-slot="host-management-mount" className="flex min-h-0 flex-1 flex-col">
+    <Card data-slot="host-worker-distribution" className="flex min-h-0 flex-1 flex-col">
       <CardHeader>
-        <CardTitle>{label}</CardTitle>
+        <CardTitle>Soul distribution</CardTitle>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col">
-        <micro-app
-          data-slot="worker-config-micro-app"
-          destroy
-          name={name}
-          router-mode="search"
-          url={entry}
-          className="min-h-0 w-full flex-1"
-        />
+      <CardContent className="grid gap-4 text-sm sm:grid-cols-2">
+        <div>
+          <p className="text-muted-foreground">Soul version</p>
+          <p className="font-medium">{assignment.soulVersion}</p>
+        </div>
+        <div>
+          <p className="text-muted-foreground">Worker</p>
+          <p className="font-medium">{worker.id}</p>
+        </div>
+        <div>
+          <p className="text-muted-foreground">Authorization</p>
+          <p className="font-medium">
+            {assignment.connectors} connectors, {assignment.permissions} permissions
+          </p>
+        </div>
+        <div>
+          <p className="text-muted-foreground">Readiness</p>
+          <p className="font-medium">{worker.ready ? 'Ready' : 'Not ready'}</p>
+        </div>
+        <div className="sm:col-span-2">
+          <a
+            data-slot="employee-workbench-link"
+            className="text-primary font-medium underline-offset-4 hover:underline"
+            href={worker.workbenchUrl}
+          >
+            Open Worker
+          </a>
+        </div>
       </CardContent>
     </Card>
   )
 }
 
 export interface HostControlPlaneProps {
-  // The Worker's config micro-app entry as reported by the control-protocol
-  // `worker.describe` verb (configMicroAppEntry). Defaults to the canonical v1
-  // broker endpoint `/api/mount/workbench` (architecture.md: management and
-  // employee mounts share the single endpoint; the distinction is topological).
-  // The host daemon supplies the resolved per-worker entry in later plans.
-  configMicroAppEntry?: string
+  workbenchUrl?: string
 }
 
-// Control-plane web shell: frames the Worker configuration micro-app in the Host's
-// managed context (architecture.md Management mount). Worker registry/assignment
-// surfaces are wired in later plans.
-export function HostControlPlane({ configMicroAppEntry = '/api/mount/workbench' }: HostControlPlaneProps = {}) {
+export function HostControlPlane({ workbenchUrl = '/' }: HostControlPlaneProps = {}) {
   return (
     <main className="mx-auto flex min-h-svh max-w-3xl flex-col gap-4 p-6">
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold">AIWorker Host</h1>
         <p className="text-muted-foreground text-sm">
-          Distribute, manage, authorize connectors, and mount worker configuration micro-apps.
+          Publish a Soul, assign it to employees, and track ready Worker terminals.
         </p>
       </header>
-      <MountWorkerConfig entry={configMicroAppEntry} />
+      <WorkerDistributionSummary
+        assignment={{ soulVersion: 'aiworker-freeform@local', connectors: 0, permissions: 0 }}
+        worker={{ id: 'employee-worker', ready: true, workbenchUrl }}
+      />
     </main>
   )
 }

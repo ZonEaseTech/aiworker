@@ -12,7 +12,6 @@
     "test": "vitest run --testTimeout=15000"
   },
   "dependencies": {
-    "@micro-zoe/micro-app": "^1.0.0-rc.30",
     "@tailwindcss/vite": "^4.2.2",
     "@zonease/aiworker-ui": "workspace:*",
     "react": "^19.1.0",

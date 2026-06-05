@@ -743,7 +743,7 @@ async function restSmoke(
     checks.push({
       detail: `/admin/ status=${admin.status}`,
       evidence: path.join(debugRoot, 'logs', `${pairId}-rest-smoke.json`),
-      name: `${pairId} Worker Admin mount`,
+      name: `${pairId} Worker Admin surface`,
       status: admin.status === 200 ? 'pass' : 'fail',
     })
 

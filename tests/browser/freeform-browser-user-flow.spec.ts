@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { chromium } from 'playwright'
-import { MOUNT_TIMEOUT_MS as WORKBENCH_RENDER_TIMEOUT_MS } from './mount-wait'
+import { WORKBENCH_RENDER_TIMEOUT_MS } from './workbench-render-wait'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const appId = 'aiworker-freeform'
