@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 
-import { buildCheckInBody, checkInToHost, maybeProvisionCheckIn } from './provision-client'
+import { buildAccessHello, buildCheckInBody, checkInToHost, maybeProvisionCheckIn } from './provision-client'
 
 describe('worker provision check-in client', () => {
   const originalHost = process.env.AIWORKER_HOST_URL
@@ -40,6 +40,21 @@ describe('worker provision check-in client', () => {
     expect(Object.keys(body.worker).sort()).toEqual(['health', 'id', 'version', 'workbenchUrl', 'workerId'])
     expect('sessionId' in body).toBe(false)
     expect('sessionId' in body.worker).toBe(false)
+  })
+
+  it('builds the exact worker access hello body', () => {
+    const hello = buildAccessHello({
+      assignmentId: 'assignment-1',
+      token: 'awt_secret',
+      workerId: 'worker-1',
+    })
+
+    expect(hello).toEqual({
+      assignmentId: 'assignment-1',
+      token: 'awt_secret',
+      workerId: 'worker-1',
+    })
+    expect(Object.keys(hello).sort()).toEqual(['assignmentId', 'token', 'workerId'])
   })
 
   it('posts check-in JSON to the host and parses the worker access response', async () => {

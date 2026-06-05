@@ -1,5 +1,6 @@
 import {
   parseWorkerCheckInResponse,
+  type WorkerAccessHello,
   type WorkerCheckInRequest,
   type WorkerCheckInResponse,
 } from '@zonease/aiworker-worker-control-protocol'
@@ -45,6 +46,14 @@ export function buildCheckInBody(input: BuildCheckInInput): WorkerCheckInRequest
       workerId: input.workerId,
       workbenchUrl: input.workbenchUrl,
     },
+  }
+}
+
+export function buildAccessHello(input: WorkerAccessHello): WorkerAccessHello {
+  return {
+    assignmentId: input.assignmentId,
+    token: input.token,
+    workerId: input.workerId,
   }
 }
 
