@@ -3,8 +3,10 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { eq } from 'drizzle-orm'
 
 import {
+  __setHostAssignmentStorageTestHooks,
   closeHostDb,
   createAssignment,
   getAssignmentByWorkerId,
@@ -16,6 +18,7 @@ import {
   revokeAssignment,
   runHostMigrations,
   verifyAndConsumeProvisionToken,
+  hostAssignments,
 } from './index'
 
 describe('host sqlite assignment storage', () => {
@@ -28,6 +31,7 @@ describe('host sqlite assignment storage', () => {
   })
 
   afterEach(async () => {
+    __setHostAssignmentStorageTestHooks(null)
     closeHostDb()
     await rm(dir, { recursive: true, force: true })
   })
@@ -56,6 +60,28 @@ describe('host sqlite assignment storage', () => {
     const first = verifyAndConsumeProvisionToken(created.provisionToken)
     expect(first?.assignmentId).toBe(created.assignment.assignmentId)
     expect(verifyAndConsumeProvisionToken(created.provisionToken)).toBeNull()
+  })
+
+  it('returns null when the conditional consume update changes no rows', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+    const racedAt = '2026-06-06T00:03:00.000Z'
+
+    __setHostAssignmentStorageTestHooks({
+      beforeConsumeUpdate: assignment => {
+        getHostDb().update(hostAssignments).set({
+          provisionTokenConsumedAt: racedAt,
+          updatedAt: racedAt,
+        }).where(eq(hostAssignments.assignmentId, assignment.assignmentId)).run()
+      },
+    })
+
+    expect(verifyAndConsumeProvisionToken(created.provisionToken, {
+      now: () => racedAt,
+    })).toBeNull()
   })
 
   it('rejects expired provision tokens', () => {
@@ -103,6 +129,41 @@ describe('host sqlite assignment storage', () => {
       serverRef: 'aissh:server-a',
       soulReleaseRef: 'ops-copilot@v1',
     })).toThrow(/Literal secrets are not allowed/)
+  })
+
+  it('throws when checked-in fields contain literal secrets', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    expect(() => markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: 'Bearer abcdefghijklmnop',
+    })).toThrow(/Literal secrets are not allowed/)
+  })
+
+  it('throws when ready fields contain literal secrets', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    expect(() => markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82?token=literal-secret',
+    })).toThrow(/Literal secrets are not allowed/)
+  })
+
+  it('throws when revoked fields contain literal secrets', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    expect(() => revokeAssignment(created.assignment.assignmentId, 'admin@zonease.org password="literal-secret"')).toThrow(/Literal secrets are not allowed/)
   })
 
   it('requires initialization before use', () => {

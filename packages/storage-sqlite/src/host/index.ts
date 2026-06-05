@@ -17,6 +17,11 @@ const SECRET_REFERENCE_PREFIXES = ['$', 'env:', 'secretref:'] as const
 
 let db: ReturnType<typeof createDb> | null = null
 let sqliteHandle: Database | null = null
+let testHooks: HostAssignmentStorageTestHooks | null = null
+
+interface HostAssignmentStorageTestHooks {
+  beforeConsumeUpdate?: (assignment: HostAssignmentRow, at: string) => void
+}
 
 function createDb(dbPath: string) {
   const sqlite = new Database(dbPath, { create: true })
@@ -78,6 +83,10 @@ export function runHostMigrations() {
 export type HostAssignmentStatus = typeof schema.hostAssignments.$inferSelect['status']
 export type HostAssignmentRow = typeof schema.hostAssignments.$inferSelect
 
+export function __setHostAssignmentStorageTestHooks(hooks: HostAssignmentStorageTestHooks | null): void {
+  testHooks = hooks
+}
+
 export interface CreateAssignmentInput {
   assignedEmail: string
   serverRef: string
@@ -105,6 +114,9 @@ interface MarkAssignmentReadyInput {
 export function createAssignment(input: CreateAssignmentInput): { assignment: HostAssignmentRow, provisionToken: string } {
   const at = readNow(input.now)
   const metadataJson = input.metadataJson ?? {}
+  assertNoLiteralSecrets(input.assignedEmail, 'host_assignments.assignedEmail')
+  assertNoLiteralSecrets(input.serverRef, 'host_assignments.serverRef')
+  assertNoLiteralSecrets(input.soulReleaseRef, 'host_assignments.soulReleaseRef')
   assertNoLiteralSecrets(metadataJson, 'host_assignments.metadataJson')
 
   const provisionToken = createProvisionToken()
@@ -151,7 +163,9 @@ export function verifyAndConsumeProvisionToken(token: string, options: VerifyPro
   if (!assignment)
     return null
 
-  getHostDb()
+  testHooks?.beforeConsumeUpdate?.(assignment, at)
+
+  const consumeResult = getHostDb()
     .update(schema.hostAssignments)
     .set({ provisionTokenConsumedAt: at, updatedAt: at })
     .where(and(
@@ -160,12 +174,15 @@ export function verifyAndConsumeProvisionToken(token: string, options: VerifyPro
     ))
     .run()
 
-  const consumed = getAssignment(assignment.assignmentId)
-  return consumed?.provisionTokenConsumedAt === at ? consumed : null
+  if (runChanges(consumeResult) !== 1)
+    return null
+  return getAssignment(assignment.assignmentId)
 }
 
 export function markAssignmentCheckedIn(assignmentId: string, input: MarkAssignmentCheckedInInput): HostAssignmentRow | null {
   const at = input.checkInAt ?? new Date().toISOString()
+  assertNoLiteralSecrets(input.workerId, 'host_assignments.workerId')
+  assertNoLiteralSecrets(input.workerVersion, 'host_assignments.workerVersion')
   getHostDb()
     .update(schema.hostAssignments)
     .set({
@@ -182,6 +199,7 @@ export function markAssignmentCheckedIn(assignmentId: string, input: MarkAssignm
 
 export function markAssignmentReady(assignmentId: string, input: MarkAssignmentReadyInput): HostAssignmentRow | null {
   const at = input.accessReadyAt ?? new Date().toISOString()
+  assertNoLiteralSecrets(input.workbenchUrl, 'host_assignments.workbenchUrl')
   getHostDb()
     .update(schema.hostAssignments)
     .set({
@@ -197,6 +215,7 @@ export function markAssignmentReady(assignmentId: string, input: MarkAssignmentR
 
 export function revokeAssignment(assignmentId: string, revokedBy: string): HostAssignmentRow | null {
   const at = new Date().toISOString()
+  assertNoLiteralSecrets(revokedBy, 'host_assignments.revokedBy')
   getHostDb()
     .update(schema.hostAssignments)
     .set({
@@ -239,6 +258,14 @@ function normalizeEmail(email: string): string {
 
 function readNow(now: (() => string) | undefined): string {
   return now?.() ?? new Date().toISOString()
+}
+
+function runChanges(result: unknown): number {
+  if (result && typeof result === 'object' && 'changes' in result) {
+    const changes = (result as { changes: unknown }).changes
+    return typeof changes === 'number' ? changes : 0
+  }
+  return 0
 }
 
 function assertNoLiteralSecrets(value: unknown, context: string): void {
