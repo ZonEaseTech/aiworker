@@ -224,6 +224,7 @@
         "@scalar/hono-api-reference": "^0.5.180",
         "@zonease/aiworker-engine-bridge": "workspace:*",
         "@zonease/aiworker-engine-projection": "workspace:*",
+        "@zonease/aiworker-fs-layout": "workspace:*",
         "@zonease/aiworker-soul-descriptor": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
         "@zonease/aiworker-worker-control-protocol": "workspace:*",
@@ -255,6 +256,46 @@
     },
     "souls/aiworker-freeform": {
       "name": "@zonease/aiworker-freeform",
+      "dependencies": {
+        "@zonease/aiworker-soul-sdk": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "souls/google-ads": {
+      "name": "@zonease/aiworker-google-ads",
+      "dependencies": {
+        "@zonease/aiworker-soul-sdk": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "souls/hr-manager": {
+      "name": "@zonease/aiworker-hr-manager",
+      "dependencies": {
+        "@zonease/aiworker-soul-sdk": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "souls/product-manager": {
+      "name": "@zonease/aiworker-product-manager",
+      "dependencies": {
+        "@zonease/aiworker-soul-sdk": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "souls/software-support": {
+      "name": "@zonease/aiworker-software-support",
       "dependencies": {
         "@zonease/aiworker-soul-sdk": "workspace:*",
       },
@@ -901,11 +942,19 @@
 
     "@zonease/aiworker-fs-layout": ["@zonease/aiworker-fs-layout@workspace:packages/fs-layout"],
 
+    "@zonease/aiworker-google-ads": ["@zonease/aiworker-google-ads@workspace:souls/google-ads"],
+
     "@zonease/aiworker-host-cli": ["@zonease/aiworker-host-cli@workspace:apps/host-cli"],
 
     "@zonease/aiworker-host-control": ["@zonease/aiworker-host-control@workspace:packages/host-control"],
 
     "@zonease/aiworker-host-web": ["@zonease/aiworker-host-web@workspace:apps/host-web"],
+
+    "@zonease/aiworker-hr-manager": ["@zonease/aiworker-hr-manager@workspace:souls/hr-manager"],
+
+    "@zonease/aiworker-product-manager": ["@zonease/aiworker-product-manager@workspace:souls/product-manager"],
+
+    "@zonease/aiworker-software-support": ["@zonease/aiworker-software-support@workspace:souls/software-support"],
 
     "@zonease/aiworker-soul-descriptor": ["@zonease/aiworker-soul-descriptor@workspace:packages/soul-descriptor"],
 

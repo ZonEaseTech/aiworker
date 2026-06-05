@@ -1,0 +1,18 @@
+{
+  "name": "@zonease/aiworker-software-support",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "typecheck": "tsc --noEmit",
+    "validate": "bun scripts/validate.ts"
+  },
+  "dependencies": {
+    "@zonease/aiworker-soul-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.13",
+    "typescript": "^5.8.3"
+  }
+}
