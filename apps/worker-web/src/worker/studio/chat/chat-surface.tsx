@@ -2,8 +2,8 @@ import type { LocalEngineInvocation, LocalSessionEvent } from '@zonease/aiworker
 import type { ChatComposerLabels } from './chat-composer'
 
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { fetchSessionDetail } from '../../../features/local-workspace/api/session-invocations'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { cancelEngineInvocation, fetchSessionDetail } from '../../../features/local-workspace/api/session-invocations'
 import { ChatComposer } from './chat-composer'
 import { ChatTranscript } from './chat-transcript'
 
@@ -20,8 +20,24 @@ interface SessionTranscriptSnapshot {
   status: 'error' | 'loaded' | 'loading'
 }
 
+interface ActiveInvocationFollow {
+  invocationId: string
+  status: LocalEngineInvocation['status']
+  text: string
+}
+
+interface ObservedInvocationStatus {
+  id: string
+  status: LocalEngineInvocation['status']
+}
+
+type ObservedInvocationStatusAction
+  = | { type: 'reset' }
+    | { invocation: ObservedInvocationStatus, type: 'set' }
+
 const ERROR_TRANSCRIPT_SNAPSHOT: SessionTranscriptSnapshot = { events: [], invocations: [], status: 'error' }
 const LOADING_TRANSCRIPT_SNAPSHOT: SessionTranscriptSnapshot = { events: [], invocations: [], status: 'loading' }
+const TERMINAL_INVOCATION_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'lost'])
 
 type SessionTranscriptSnapshotAction
   = | { type: 'reset' }
@@ -43,17 +59,23 @@ type SessionTranscriptSnapshotAction
  * mounted workbench). This is the live employee chat, not a reusable stub.
  */
 export function ChatSurface({ composerLabels, initialActive = null, sessionId, transcriptAriaLabel }: ChatSurfaceProps) {
-  const [active, setActive] = useState<{ invocationId: string, text: string } | null>(initialActive)
+  const [active, setActive] = useState<ActiveInvocationFollow | null>(
+    initialActive ? { ...initialActive, status: 'running' } : null,
+  )
+  const [observedInvocation, dispatchObservedInvocation] = useReducer(observedInvocationStatusReducer, null)
   const [composerFocusRequestToken, setComposerFocusRequestToken] = useState<number | undefined>(undefined)
   const [snapshot, dispatchSnapshot] = useReducer(sessionTranscriptSnapshotReducer, LOADING_TRANSCRIPT_SNAPSHOT)
   const composerFooterRef = useRef<HTMLDivElement | null>(null)
+  const refreshedTerminalInvocationsRef = useRef<Set<string>>(new Set())
   const surfaceRef = useRef<HTMLDivElement | null>(null)
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null)
   const transcriptShouldStickToLatestRef = useRef(true)
 
   useEffect(() => {
     let cancelled = false
+    refreshedTerminalInvocationsRef.current = new Set()
     dispatchSnapshot({ type: 'reset' })
+    dispatchObservedInvocation({ type: 'reset' })
     fetchSessionDetail(sessionId)
       .then((detail) => {
         if (cancelled)
@@ -81,8 +103,42 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
     [snapshot.invocations],
   )
   const activeInvocationId = active?.invocationId ?? latestInvocation?.id ?? null
-  const activeInitialInvocation = latestInvocation?.id === activeInvocationId ? latestInvocation : null
+  const activeInitialInvocation = active?.invocationId === activeInvocationId
+    ? { id: active.invocationId, status: active.status }
+    : latestInvocation?.id === activeInvocationId
+      ? latestInvocation
+      : null
+  const activeInvocationStatus = observedInvocation?.id === activeInvocationId
+    ? observedInvocation.status
+    : active?.status ?? latestInvocation?.status
+  const composerStatus = composerStatusForInvocation(activeInvocationStatus)
   const hasConversation = activeInvocationId !== null || snapshot.events.length > 0 || snapshot.invocations.length > 0
+  const handleInvocationStatusChange = useCallback((invocation: Pick<LocalEngineInvocation, 'id' | 'status'>) => {
+    dispatchObservedInvocation({ invocation: { id: invocation.id, status: invocation.status }, type: 'set' })
+    setActive(current => current?.invocationId === invocation.id
+      ? activeInvocationWithStatus(current, invocation.status)
+      : current)
+    if (
+      active?.invocationId !== invocation.id
+      || !TERMINAL_INVOCATION_STATUSES.has(invocation.status)
+      || refreshedTerminalInvocationsRef.current.has(invocation.id)
+    )
+      return
+
+    refreshedTerminalInvocationsRef.current.add(invocation.id)
+    void fetchSessionDetail(sessionId)
+      .then((detail) => {
+        dispatchSnapshot({
+          snapshot: {
+            events: Array.isArray(detail.events) ? detail.events : [],
+            invocations: Array.isArray(detail.invocations) ? detail.invocations : [],
+            status: 'loaded',
+          },
+          type: 'loaded',
+        })
+      })
+      .catch(() => undefined)
+  }, [active?.invocationId, sessionId])
 
   useLayoutEffect(() => {
     if (!hasConversation || snapshot.status === 'loading')
@@ -159,6 +215,7 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
       initialInvocation={activeInitialInvocation}
       invocationId={activeInvocationId}
       loading={snapshot.status === 'loading'}
+      onInvocationStatusChange={handleInvocationStatusChange}
       sessionEvents={snapshot.events}
       sessionInvocations={snapshot.invocations}
       sessionId={sessionId}
@@ -169,11 +226,23 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
     <ChatComposer
       focusRequestToken={composerFocusRequestToken}
       labels={composerLabels}
+      onCancel={async () => {
+        if (!activeInvocationId)
+          return
+        const result = await cancelEngineInvocation(activeInvocationId)
+        dispatchObservedInvocation({ invocation: { id: result.invocation.id, status: result.invocation.status }, type: 'set' })
+        setActive(current => current?.invocationId === result.invocation.id
+          ? activeInvocationWithStatus(current, result.invocation.status)
+          : current)
+        setComposerFocusRequestToken(token => (token ?? 0) + 1)
+      }}
       onSubmitted={(submission) => {
         setActive(submission)
+        dispatchObservedInvocation({ invocation: { id: submission.invocationId, status: submission.status }, type: 'set' })
         setComposerFocusRequestToken(token => (token ?? 0) + 1)
       }}
       sessionId={sessionId}
+      status={composerStatus}
     />
   )
 
@@ -181,10 +250,10 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
     <div ref={surfaceRef} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-chat-surface="true">
       {hasConversation
         ? (
-            <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 overflow-hidden" data-chat-column="true">
+            <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-2 overflow-hidden px-4 sm:px-0" data-chat-column="true">
               <div
                 ref={transcriptScrollRef}
-                className="relative flex min-h-0 min-w-0 flex-1 flex-col-reverse overflow-y-auto [overflow-anchor:none] [scroll-padding-bottom:var(--chat-scroll-padding-bottom,0px)]"
+                className="no-scrollbar relative flex min-h-0 min-w-0 flex-1 flex-col-reverse overflow-y-auto [overflow-anchor:none] [scroll-padding-bottom:var(--chat-scroll-padding-bottom,0px)]"
                 data-chat-transcript-scroll="true"
               >
                 <div className="flex min-h-full shrink-0 flex-col justify-start" data-chat-scroll-content="true">
@@ -193,13 +262,10 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
                   </div>
                   <div
                     ref={composerFooterRef}
-                    className="sticky bottom-0 z-10 mt-auto w-full pb-2 pt-4"
+                    className="sticky bottom-0 z-10 mt-auto w-full bg-background pb-3 pt-3"
                     data-chat-composer-footer="true"
                   >
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 flex h-full w-full justify-center pt-4" data-chat-composer-gradient="true">
-                      <div className="z-0 h-full w-full bg-gradient-to-t from-background via-background to-background/0" />
-                    </div>
-                    <div className="relative z-10 flex flex-col">
+                    <div className="flex flex-col">
                       {composer}
                     </div>
                   </div>
@@ -208,8 +274,8 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
             </div>
           )
         : (
-            <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-y-auto" data-chat-empty-entry="true">
-              <div className="mx-auto flex w-full max-w-3xl flex-col gap-3" data-chat-column="true">
+            <div className="no-scrollbar flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-y-auto" data-chat-empty-entry="true">
+              <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-4 sm:px-0" data-chat-column="true">
                 {transcript}
                 {composer}
               </div>
@@ -220,7 +286,27 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
 }
 
 function latestInvocationForSession(invocations: LocalEngineInvocation[]): LocalEngineInvocation | null {
-  return invocations.slice().sort((left, right) => left.seq - right.seq).at(-1) ?? null
+  return invocations
+    .filter(invocation => !isInternalInvocation(invocation))
+    .sort((left, right) => left.seq - right.seq)
+    .at(-1) ?? null
+}
+
+function isInternalInvocation(invocation: LocalEngineInvocation): boolean {
+  const metadata = invocation.metadataJson
+  return Boolean(metadata && typeof metadata === 'object' && !Array.isArray(metadata) && metadata.kind === 'internal')
+}
+
+function composerStatusForInvocation(status: LocalEngineInvocation['status'] | undefined) {
+  if (status === 'queued' || status === 'starting' || status === 'running')
+    return 'running'
+  if (status === 'succeeded')
+    return 'completed'
+  if (status === 'failed' || status === 'lost')
+    return 'failed'
+  if (status === 'cancelled')
+    return 'cancelled'
+  return 'idle'
 }
 
 function scrollTranscriptToLatest(scrollContainer: HTMLElement | null) {
@@ -308,6 +394,25 @@ function sessionTranscriptSnapshotReducer(
   if (action.type === 'loaded')
     return action.snapshot
   return LOADING_TRANSCRIPT_SNAPSHOT
+}
+
+function observedInvocationStatusReducer(
+  state: ObservedInvocationStatus | null,
+  action: ObservedInvocationStatusAction,
+): ObservedInvocationStatus | null {
+  if (action.type === 'set') {
+    if (state?.id === action.invocation.id && state.status === action.invocation.status)
+      return state
+    return action.invocation
+  }
+  return null
+}
+
+function activeInvocationWithStatus(
+  current: ActiveInvocationFollow,
+  status: LocalEngineInvocation['status'],
+): ActiveInvocationFollow {
+  return current.status === status ? current : { ...current, status }
 }
 
 function TranscriptRestoreErrorState() {

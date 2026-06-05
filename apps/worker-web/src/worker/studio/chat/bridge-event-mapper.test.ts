@@ -39,17 +39,86 @@ describe('buildInvocationTurns', () => {
     expect(assistant).toMatchObject({ kind: 'assistant-markdown', markdown: 'Hello, world.' })
   })
 
-  it('maps tool events into one replacing activity-group row per tool call', () => {
+  it('splits assistant text around tool activity to preserve native event order', () => {
     const turns = buildInvocationTurns([
-      event({ invocationId: 'inv-1', seq: 1, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { id: 't1', name: 'bash', phase: 'use' } } }),
-      event({ invocationId: 'inv-1', seq: 2, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { id: 't1', name: 'bash', phase: 'result', isError: false } } }),
+      event({ invocationId: 'inv-1', seq: 1, type: 'assistant_delta', payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: '先说明。' } } }),
+      event({ invocationId: 'inv-1', seq: 2, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { id: 'tool-1', input: { command: 'sed missing-skill' }, name: 'Bash', phase: 'use' } } }),
+      event({ invocationId: 'inv-1', seq: 3, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { content: 'No such file', id: 'tool-1', isError: true, name: null, phase: 'result' } } }),
+      event({ invocationId: 'inv-1', seq: 4, type: 'assistant_delta', payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: '文件路径没有读到。' } } }),
+    ])
+
+    expect(turns[0]!.items.map(item => item.kind)).toEqual([
+      'assistant-markdown',
+      'activity-group',
+      'assistant-markdown',
+    ])
+    expect(turns[0]!.items[0]).toMatchObject({ kind: 'assistant-markdown', markdown: '先说明。' })
+    expect(turns[0]!.items[1]).toMatchObject({ kind: 'activity-group', summary: 'Failed Bash: sed missing-skill' })
+    expect(turns[0]!.items[2]).toMatchObject({ kind: 'assistant-markdown', markdown: '文件路径没有读到。' })
+  })
+
+  it('creates a new tool group when another tool call happens after assistant continuation', () => {
+    const turns = buildInvocationTurns([
+      event({ invocationId: 'inv-1', seq: 1, type: 'assistant_delta', payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: '第一段。' } } }),
+      event({ invocationId: 'inv-1', seq: 2, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { id: 'tool-1', input: { command: 'sed missing-skill' }, name: 'Bash', phase: 'use' } } }),
+      event({ invocationId: 'inv-1', seq: 3, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { content: 'No such file', id: 'tool-1', isError: true, name: null, phase: 'result' } } }),
+      event({ invocationId: 'inv-1', seq: 4, type: 'assistant_delta', payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: '第二段。' } } }),
+      event({ invocationId: 'inv-1', seq: 5, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { id: 'tool-2', input: { command: 'sed superpowers' }, name: 'Bash', phase: 'use' } } }),
+      event({ invocationId: 'inv-1', seq: 6, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { content: '---\\nname: using-superpowers', id: 'tool-2', isError: false, name: null, phase: 'result' } } }),
+      event({ invocationId: 'inv-1', seq: 7, type: 'assistant_delta', payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: '第三段。' } } }),
+    ])
+
+    expect(turns[0]!.items.map(item => item.kind)).toEqual([
+      'assistant-markdown',
+      'activity-group',
+      'assistant-markdown',
+      'activity-group',
+      'assistant-markdown',
+    ])
+    expect(turns[0]!.items[0]).toMatchObject({ kind: 'assistant-markdown', markdown: '第一段。' })
+    expect(turns[0]!.items[1]).toMatchObject({ kind: 'activity-group', summary: 'Failed Bash: sed missing-skill' })
+    expect(turns[0]!.items[2]).toMatchObject({ kind: 'assistant-markdown', markdown: '第二段。' })
+    expect(turns[0]!.items[3]).toMatchObject({ kind: 'activity-group', summary: 'Ran Bash: sed superpowers' })
+    expect(turns[0]!.items[4]).toMatchObject({ kind: 'assistant-markdown', markdown: '第三段。' })
+  })
+
+  it('maps tool use/result into one readable activity row without losing the command context', () => {
+    const turns = buildInvocationTurns([
+      event({
+        invocationId: 'inv-1',
+        seq: 1,
+        type: 'tool',
+        payloadJson: {
+          bridgeEvent: 'invocation.tool.observed',
+          tool: { id: 't1', input: { command: 'printf bridge' }, name: 'Bash', phase: 'use' },
+        },
+      }),
+      event({
+        invocationId: 'inv-1',
+        seq: 2,
+        type: 'tool',
+        payloadJson: {
+          bridgeEvent: 'invocation.tool.observed',
+          tool: { content: 'bridge', id: 't1', isError: false, name: null, phase: 'result' },
+        },
+      }),
     ])
     const group = turns[0]!.items.find(item => item.kind === 'activity-group')
     expect(group).toBeTruthy()
     expect(group).toMatchObject({ kind: 'activity-group' })
     if (group?.kind === 'activity-group') {
+      expect(group.summary).toBe('Ran Bash: printf bridge')
       expect(group.activities).toHaveLength(1)
-      expect(group.activities[0]).toMatchObject({ title: 'bash', status: 'succeeded' })
+      expect(group.activities[0]).toMatchObject({
+        command: {
+          command: 'printf bridge',
+          output: 'bridge',
+          status: 'succeeded',
+          title: 'Bash',
+        },
+        status: 'succeeded',
+        title: 'Bash',
+      })
     }
   })
 
@@ -67,23 +136,35 @@ describe('buildInvocationTurns', () => {
     expect(timeline).toHaveLength(2)
     expect(timeline).toMatchObject([
       { body: 'Process exited', category: 'lifecycle', provenance: 'engine', status: 'succeeded', title: 'Invocation completed' },
-      { body: 'Reading files', category: 'progress', provenance: 'engine', status: 'running', title: 'Progress update' },
+      { category: 'progress', provenance: 'engine', status: 'running', title: 'Reading files' },
     ])
+    expect(timeline[1]?.body).toBeUndefined()
   })
 
-  it('keeps assistant output after the lifecycle state slot instead of bracketing it with lifecycle checklist items', () => {
+  it('maps daemon status-only lifecycle events into the replacing lifecycle slot', () => {
     const turns = buildInvocationTurns([
-      event({ invocationId: 'inv-1', seq: 1, type: 'status', payloadJson: { bridgeEvent: 'invocation.started' } }),
-      event({ invocationId: 'inv-1', seq: 2, type: 'assistant_delta', payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: 'streamed answer' } } }),
-      event({ invocationId: 'inv-1', seq: 3, type: 'status', payloadJson: { bridgeEvent: 'invocation.completed' } }),
+      event({ invocationId: 'inv-1', seq: 1, type: 'status', payloadJson: { invocationId: 'inv-1', status: 'running' } }),
+      event({ invocationId: 'inv-1', seq: 2, type: 'status', payloadJson: { invocationId: 'inv-1', status: 'succeeded' } }),
     ])
 
-    expect(turns[0]!.items.map(item => item.kind)).toEqual([
-      'timeline-step',
-      'assistant-markdown',
+    const timeline = turns[0]!.items.filter((item): item is TimelineStepItem => item.kind === 'timeline-step')
+    expect(timeline).toHaveLength(1)
+    expect(timeline[0]).toMatchObject({ category: 'lifecycle', provenance: 'engine', status: 'succeeded', title: 'Invocation completed' })
+  })
+
+  it('removes successful lifecycle chrome once assistant output exists', () => {
+    const turns = buildInvocationTurns([
+      event({ invocationId: 'inv-1', seq: 1, type: 'status', payloadJson: { bridgeEvent: 'invocation.started' } }),
+      event({ invocationId: 'inv-1', seq: 2, type: 'status', payloadJson: { bridgeEvent: 'invocation.progress', data: { message: 'Reading files' } } }),
+      event({ invocationId: 'inv-1', seq: 3, type: 'assistant_delta', payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: 'streamed answer' } } }),
+      event({ invocationId: 'inv-1', seq: 4, type: 'status', payloadJson: { bridgeEvent: 'invocation.completed' } }),
     ])
-    expect(turns[0]!.items[0]).toMatchObject({ category: 'lifecycle', kind: 'timeline-step', status: 'succeeded', title: 'Invocation completed' })
-    expect(turns[0]!.items[1]).toMatchObject({ kind: 'assistant-markdown', markdown: 'streamed answer' })
+
+    expect(turns[0]!.items.map(item => item.kind)).toEqual(['assistant-markdown'])
+    expect(turns[0]!.items[0]).toMatchObject({ kind: 'assistant-markdown', markdown: 'streamed answer' })
+    expect(JSON.stringify(turns)).not.toContain('Invocation completed')
+    expect(JSON.stringify(turns)).not.toContain('Progress update')
+    expect(JSON.stringify(turns)).not.toContain('Reading files')
   })
 
   it('does not surface progress data.text because it may contain native thinking content', () => {
@@ -101,8 +182,19 @@ describe('buildInvocationTurns', () => {
 
     expect(JSON.stringify(turns)).not.toContain('private reasoning trace')
     const timeline = turns[0]!.items.filter((item): item is TimelineStepItem => item.kind === 'timeline-step')
-    expect(timeline[0]).toMatchObject({ category: 'progress', provenance: 'engine', status: 'running', title: 'Progress update' })
+    expect(timeline[0]).toMatchObject({ category: 'progress', provenance: 'engine', status: 'running', title: 'Working' })
     expect(timeline[0]?.body).toBeUndefined()
+  })
+
+  it('drops duplicate running lifecycle chrome once a clearer progress or tool row exists', () => {
+    const turns = buildInvocationTurns([
+      event({ invocationId: 'inv-1', seq: 1, type: 'status', payloadJson: { bridgeEvent: 'invocation.started' } }),
+      event({ invocationId: 'inv-1', seq: 2, type: 'status', payloadJson: { bridgeEvent: 'invocation.progress', data: { message: 'Reading files' } } }),
+      event({ invocationId: 'inv-1', seq: 3, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { id: 't1', input: { command: 'printf bridge' }, name: 'Bash', phase: 'use' } } }),
+    ])
+
+    expect(JSON.stringify(turns)).not.toContain('Invocation started')
+    expect(turns[0]!.items.map(item => item.kind)).toEqual(['timeline-step', 'activity-group'])
   })
 
   it('collapses process bridge observations into the latest lifecycle state', () => {
@@ -144,11 +236,41 @@ describe('buildInvocationTurns', () => {
     const group = turns[0]!.items.find(item => item.kind === 'activity-group')
     expect(group).toBeTruthy()
     if (group?.kind === 'activity-group') {
-      expect(group.summary).toBe('2 tool activities')
+      expect(group.summary).toBe('Ran bash + 1 more')
       expect(group.activities).toHaveLength(2)
       expect(group.activities[0]).toMatchObject({ status: 'succeeded', title: 'bash' })
       expect(group.activities[1]).toMatchObject({ status: 'running', title: 'read' })
     }
+  })
+
+  it('keeps readable tool activity while removing generic completed progress chrome', () => {
+    const turns = buildInvocationTurns([
+      event({ invocationId: 'inv-1', seq: 1, type: 'status', payloadJson: { bridgeEvent: 'invocation.started' } }),
+      event({ invocationId: 'inv-1', seq: 2, type: 'status', payloadJson: { bridgeEvent: 'invocation.progress', data: { message: 'initializing' } } }),
+      event({ invocationId: 'inv-1', seq: 3, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { id: 'tool-1', input: { command: 'printf bridge' }, name: 'Bash', phase: 'use' } } }),
+      event({ invocationId: 'inv-1', seq: 4, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { content: 'bridge', id: 'tool-1', isError: false, name: null, phase: 'result' } } }),
+      event({ invocationId: 'inv-1', seq: 5, type: 'assistant_delta', payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: 'Done.' } } }),
+      event({ invocationId: 'inv-1', seq: 6, type: 'status', payloadJson: { bridgeEvent: 'invocation.completed', detail: 'text response' } }),
+    ])
+
+    expect(turns[0]!.items.map(item => item.kind)).toEqual(['activity-group', 'assistant-markdown'])
+    expect(JSON.stringify(turns)).toContain('Ran Bash: printf bridge')
+    expect(JSON.stringify(turns)).not.toContain('Progress update')
+    expect(JSON.stringify(turns)).not.toContain('Invocation completed')
+    expect(JSON.stringify(turns)).not.toContain('1 tool activity')
+  })
+
+  it('removes running progress once assistant text is visible even before the terminal tail arrives', () => {
+    const turns = buildInvocationTurns([
+      event({ invocationId: 'inv-1', seq: 1, type: 'status', payloadJson: { bridgeEvent: 'invocation.progress', status: 'running' } }),
+      event({ invocationId: 'inv-1', seq: 2, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { id: 'tool-1', input: { command: 'printf bridge' }, name: 'Bash', phase: 'use' } } }),
+      event({ invocationId: 'inv-1', seq: 3, type: 'tool', payloadJson: { bridgeEvent: 'invocation.tool.observed', tool: { content: 'bridge', id: 'tool-1', isError: false, name: null, phase: 'result' } } }),
+      event({ invocationId: 'inv-1', seq: 4, type: 'assistant_delta', payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: 'Done.' } } }),
+    ])
+
+    expect(turns[0]!.items.map(item => item.kind)).toEqual(['activity-group', 'assistant-markdown'])
+    expect(JSON.stringify(turns)).toContain('Ran Bash: printf bridge')
+    expect(JSON.stringify(turns)).not.toContain('Working')
   })
 
   it('keeps raw tool payloads and secret-like values out of visible tool timeline data', () => {
@@ -171,6 +293,115 @@ describe('buildInvocationTurns', () => {
 
     expect(JSON.stringify(turns)).not.toContain('sk-test-raw-secret')
     expect(JSON.stringify(turns)).not.toContain('/tmp/private')
+  })
+
+  it('maps redacted resource observations into first-class resource-card items', () => {
+    const turns = buildInvocationTurns([
+      event({
+        invocationId: 'inv-1',
+        seq: 1,
+        type: 'artifact',
+        payloadJson: {
+          bridgeEvent: 'resource.observed',
+          resource: {
+            href: 'http://localhost:54393/report',
+            kind: 'web',
+            location: 'localhost:54393',
+            status: 'available',
+            title: 'Superpowers Brainstorm',
+          },
+        },
+      }),
+      event({
+        invocationId: 'inv-1',
+        seq: 2,
+        type: 'file_change',
+        payloadJson: {
+          bridgeEvent: 'file.changed',
+          file: {
+            kind: 'document',
+            path: 'docs/runtime.md',
+            status: 'modified',
+            title: 'runtime.md',
+          },
+        },
+      }),
+    ])
+
+    expect(turns[0]!.items).toMatchObject([
+      {
+        id: 'inv-1:resource:1',
+        kind: 'resource-card',
+        resource: {
+          href: 'http://localhost:54393/report',
+          kind: 'web',
+          location: 'localhost:54393',
+          status: 'available',
+          title: 'Superpowers Brainstorm',
+        },
+      },
+      {
+        id: 'inv-1:resource:2',
+        kind: 'resource-card',
+        resource: {
+          kind: 'document',
+          location: 'docs/runtime.md',
+          status: 'modified',
+          title: 'runtime.md',
+        },
+      },
+    ])
+  })
+
+  it('maps redacted command observations into activity commands without leaking tool args', () => {
+    const turns = buildInvocationTurns([
+      event({
+        invocationId: 'inv-1',
+        seq: 1,
+        type: 'tool',
+        payloadJson: {
+          bridgeEvent: 'invocation.tool.observed',
+          tool: {
+            args: { token: 'sk-test-raw-secret' },
+            command: 'bun run --filter @zonease/aiworker-ui test',
+            id: 'tool-1',
+            name: 'exec_command',
+            output: '1 failed',
+            phase: 'result',
+            status: 'failed',
+          },
+        },
+      }),
+    ])
+
+    const group = turns[0]!.items.find(item => item.kind === 'activity-group')
+    expect(group).toMatchObject({
+      activities: [
+        {
+          command: {
+            command: 'bun run --filter @zonease/aiworker-ui test',
+            output: '1 failed',
+            status: 'failed',
+            title: 'exec_command',
+          },
+          status: 'failed',
+          title: 'exec_command',
+        },
+      ],
+      kind: 'activity-group',
+    })
+    expect(JSON.stringify(turns)).not.toContain('sk-test-raw-secret')
+  })
+
+  it('does not append generic action buttons after completed assistant output', () => {
+    const turns = buildInvocationTurns([
+      event({ invocationId: 'inv-1', seq: 1, type: 'assistant_delta', payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: 'Done.' } } }),
+      event({ invocationId: 'inv-1', seq: 2, type: 'status', payloadJson: { bridgeEvent: 'invocation.completed' } }),
+    ])
+
+    expect(turns[0]!.items.map(item => item.kind)).toEqual(['assistant-markdown'])
+    expect(JSON.stringify(turns)).not.toContain('Feedback')
+    expect(JSON.stringify(turns)).not.toContain('Source')
   })
 
   it('maps an error event into a danger status item', () => {

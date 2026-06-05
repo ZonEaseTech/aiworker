@@ -22,6 +22,27 @@ export interface TranscriptCommandModel {
   title?: ReactNode
 }
 
+export type TranscriptResourceKind = 'browser' | 'directory' | 'document' | 'file' | 'image' | 'unknown' | 'web'
+
+export interface TranscriptResourceModel {
+  actionLabel?: ReactNode
+  description?: ReactNode
+  href?: string
+  id: string
+  kind: TranscriptResourceKind
+  location?: ReactNode
+  status?: ReactNode
+  title: ReactNode
+}
+
+export interface TranscriptTurnActionModel {
+  disabled?: boolean
+  href?: string
+  id: string
+  label: ReactNode
+  onClick?: () => void
+}
+
 export interface TranscriptActivityModel {
   command?: TranscriptCommandModel
   description?: ReactNode
@@ -48,6 +69,8 @@ export type TranscriptItemModel
     | { activities: TranscriptActivityModel[], defaultCollapsed?: boolean, id: string, kind: 'activity-group', summary: ReactNode }
     | ({ id: string, kind: 'command' } & TranscriptCommandModel)
     | { artifacts: TranscriptArtifactModel[], id: string, kind: 'artifact-strip' }
+    | { id: string, kind: 'resource-card', resource: TranscriptResourceModel }
+    | { actions: TranscriptTurnActionModel[], id: string, kind: 'turn-action-rail' }
     | { body: ReactNode, id: string, kind: 'status', tone?: TranscriptTone }
     | { id: string, kind: 'custom', node: ReactNode }
 
@@ -66,6 +89,7 @@ export interface TranscriptTurnSummary {
   assistantCount: number
   commandCount: number
   itemCount: number
+  resourceCount: number
 }
 
 export function summarizeTranscriptTurn(turn: TranscriptTurnModel): TranscriptTurnSummary {
@@ -86,6 +110,9 @@ export function summarizeTranscriptTurn(turn: TranscriptTurnModel): TranscriptTu
     if (item.kind === 'artifact-strip')
       summary.artifactCount += item.artifacts.length
 
+    if (item.kind === 'resource-card')
+      summary.resourceCount += 1
+
     return summary
   }, {
     activityCount: 0,
@@ -93,5 +120,6 @@ export function summarizeTranscriptTurn(turn: TranscriptTurnModel): TranscriptTu
     assistantCount: 0,
     commandCount: 0,
     itemCount: 0,
+    resourceCount: 0,
   })
 }

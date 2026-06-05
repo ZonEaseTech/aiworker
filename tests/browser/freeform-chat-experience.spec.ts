@@ -134,6 +134,8 @@ finally {
 
 interface ComposerLayoutMetrics {
   bottomGap: number
+  composerFieldBackground: string
+  composerFieldSolidSurface: boolean
   composerGradientPresent: boolean
   composerInsideScroller: boolean
   fieldBottom: number
@@ -153,7 +155,14 @@ interface ComposerLayoutMetrics {
 }
 
 interface ChatRhythmMetrics {
+  actionRailCount: number
   activeElementSlot: string | null
+  completedChromeVisible: boolean
+  feedbackVisible: boolean
+  genericProgressVisible: boolean
+  genericToolSummaryVisible: boolean
+  startedChromeVisible: boolean
+  quoteVisible: boolean
   composerFocused: boolean
   latestBottom: number | null
   latestText: string | null
@@ -163,8 +172,12 @@ interface ChatRhythmMetrics {
   scrollClientHeight: number | null
   scrollHeight: number | null
   scrollTop: number | null
+  sourceVisible: boolean
   submittedUserVisible: boolean
+  readableToolSummaryVisible: boolean
+  turnTexts: string[]
   turnCount: number
+  workingChromeVisible: boolean
 }
 
 interface KeyboardRoutingMetrics {
@@ -199,6 +212,17 @@ async function assertComposerPinnedToMainBottom(page: Page, label: string): Prom
   await page.locator('[data-chat-surface="true"] [data-session-slot="composer-field"]').waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 
   const metrics = await page.evaluate((metricLabel): ComposerLayoutMetrics => {
+    const readCssColorAlpha = (value: string): number | null => {
+      const rgba = value.match(/^rgba?\((.+)\)$/)
+      if (!rgba)
+        return null
+      const parts = rgba[1]!.split(',').map(part => part.trim())
+      if (parts.length < 4)
+        return 1
+      const alpha = Number(parts[3])
+      return Number.isFinite(alpha) ? alpha : null
+    }
+
     const main = document.querySelector('[data-chat-surface="true"]')?.closest('[role="region"][aria-label="Soul workspaces and sessions"]')
     const field = document.querySelector('[data-chat-surface="true"] [data-session-slot="composer-field"]')
     const surface = document.querySelector('[data-chat-surface="true"]')
@@ -212,10 +236,14 @@ async function assertComposerPinnedToMainBottom(page: Page, label: string): Prom
     const fieldRect = field.getBoundingClientRect()
     const surfaceRect = surface?.getBoundingClientRect()
     const stickyFooterRect = stickyFooter?.getBoundingClientRect()
+    const fieldStyle = getComputedStyle(field)
     const scrollerStyle = scroller ? getComputedStyle(scroller) : null
     const stickyFooterStyle = stickyFooter ? getComputedStyle(stickyFooter) : null
+    const fieldBackgroundAlpha = readCssColorAlpha(fieldStyle.backgroundColor)
     return {
       bottomGap: Math.round(mainRect.bottom - fieldRect.bottom),
+      composerFieldBackground: fieldStyle.backgroundColor,
+      composerFieldSolidSurface: fieldBackgroundAlpha === null ? true : fieldBackgroundAlpha >= 0.99,
       composerGradientPresent: gradient !== null,
       composerInsideScroller: scroller?.contains(field) ?? false,
       fieldBottom: Math.round(fieldRect.bottom),
@@ -239,12 +267,16 @@ async function assertComposerPinnedToMainBottom(page: Page, label: string): Prom
     throw new Error(`${label} composer is not inside the Codex-style thread scroll viewport: ${JSON.stringify(metrics)}`)
   if (metrics.stickyFooterPosition !== 'sticky')
     throw new Error(`${label} composer footer is not a sticky bottom footer: ${JSON.stringify(metrics)}`)
-  if (!metrics.composerGradientPresent)
-    throw new Error(`${label} is missing the sticky composer gradient layer: ${JSON.stringify(metrics)}`)
+  if (metrics.composerGradientPresent)
+    throw new Error(`${label} still has a decorative composer gradient layer: ${JSON.stringify(metrics)}`)
+  if (!metrics.composerFieldSolidSurface)
+    throw new Error(`${label} composer field is not a solid surface: ${JSON.stringify(metrics)}`)
   if (metrics.threadOverflowAnchor !== 'none')
     throw new Error(`${label} thread scroll viewport does not disable overflow anchoring: ${JSON.stringify(metrics)}`)
   if (metrics.bottomGap < 8 || metrics.bottomGap > 56)
     throw new Error(`${label} is not pinned near the main workbench bottom: ${JSON.stringify(metrics)}`)
+  if (metrics.fieldHeight > 172)
+    throw new Error(`${label} composer field is too tall for a Codex-like chat dock: ${JSON.stringify(metrics)}`)
   if (metrics.fieldTop < metrics.mainBottom - 280)
     throw new Error(`${label} is too high in the main workbench: ${JSON.stringify(metrics)}`)
   if (metrics.surfaceBottom !== null && Math.abs(metrics.mainBottom - metrics.surfaceBottom) > 24)
@@ -295,7 +327,13 @@ async function assertSessionChatRhythm(
       return false
     const turns = scroller.querySelectorAll('[data-transcript-slot="transcript-turn"]')
     const userMessages = Array.from(scroller.querySelectorAll('[data-transcript-slot="user-message"]'))
-    return turns.length >= 4 && userMessages.some(messageNode => messageNode.textContent?.includes(message))
+    const latestText = turns.item(turns.length - 1)?.textContent ?? ''
+    return turns.length >= 4
+      && userMessages.some(messageNode => messageNode.textContent?.includes(message))
+      && latestText.includes('Done.')
+      && latestText.includes('Ran Bash: printf bridge')
+      && !latestText.includes('Invocation started')
+      && !latestText.includes('Working')
   }, expectedUserText, { timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 
   if (options.requireComposerFocus) {
@@ -310,8 +348,15 @@ async function assertSessionChatRhythm(
     const activeElementSlot = activeElement?.getAttribute('data-session-slot') ?? activeElement?.getAttribute('data-slot') ?? null
     if (!scroller) {
       return {
+        actionRailCount: 0,
         activeElementSlot,
+        completedChromeVisible: false,
         composerFocused: false,
+        feedbackVisible: false,
+        genericProgressVisible: false,
+        genericToolSummaryVisible: false,
+        startedChromeVisible: false,
+        quoteVisible: false,
         latestBottom: null,
         latestText: null,
         latestTop: null,
@@ -320,8 +365,12 @@ async function assertSessionChatRhythm(
         scrollClientHeight: null,
         scrollHeight: null,
         scrollTop: null,
+        sourceVisible: false,
         submittedUserVisible: false,
+        readableToolSummaryVisible: false,
+        turnTexts: [],
         turnCount: 0,
+        workingChromeVisible: false,
       }
     }
 
@@ -337,8 +386,18 @@ async function assertSessionChatRhythm(
         return rect.bottom <= scrollerRect.bottom + 2 && rect.top >= scrollerRect.top - 2
       })
 
+    const bodyText = document.body.textContent ?? ''
+    const scrollerText = scroller.textContent ?? ''
+
     return {
+      actionRailCount: document.querySelectorAll('[data-transcript-slot="turn-action-rail"]').length,
       activeElementSlot,
+      completedChromeVisible: bodyText.includes('Invocation completed'),
+      feedbackVisible: bodyText.includes('Feedback'),
+      genericProgressVisible: scrollerText.includes('Progress update'),
+      genericToolSummaryVisible: /\b\d+ tool activit(?:y|ies)\b/.test(scrollerText),
+      startedChromeVisible: scrollerText.includes('Invocation started'),
+      quoteVisible: bodyText.includes('Quote'),
       composerFocused: activeElement?.matches('[data-chat-surface="true"] [data-session-slot="composer-input"]') ?? false,
       latestBottom: latestRect ? Math.round(latestRect.bottom) : null,
       latestText: latestTurn?.textContent?.trim() ?? null,
@@ -348,8 +407,12 @@ async function assertSessionChatRhythm(
       scrollClientHeight: scroller.clientHeight,
       scrollHeight: scroller.scrollHeight,
       scrollTop: scroller.scrollTop,
+      sourceVisible: bodyText.includes('Source'),
       submittedUserVisible,
+      readableToolSummaryVisible: scrollerText.includes('Ran Bash: printf bridge'),
+      turnTexts: turns.map(turn => turn.textContent?.trim() ?? ''),
       turnCount: turns.length,
+      workingChromeVisible: scrollerText.includes('Working'),
     }
   }, expectedUserText)
 
@@ -359,6 +422,10 @@ async function assertSessionChatRhythm(
     throw new Error(`Submitted user message is not visible in the transcript viewport: ${JSON.stringify(metrics)}`)
   if (!metrics.latestVisible)
     throw new Error(`Latest transcript turn is not visible after submit/refresh: ${JSON.stringify(metrics)}`)
+  if (metrics.actionRailCount !== 0 || metrics.feedbackVisible || metrics.quoteVisible || metrics.sourceVisible || metrics.completedChromeVisible || metrics.startedChromeVisible)
+    throw new Error(`Session transcript exposed non-Codex-like generic chrome: ${JSON.stringify(metrics)}`)
+  if (metrics.genericProgressVisible || metrics.genericToolSummaryVisible || metrics.workingChromeVisible || !metrics.readableToolSummaryVisible)
+    throw new Error(`Session transcript did not expose readable tool activity: ${JSON.stringify(metrics)}`)
   return metrics
 }
 

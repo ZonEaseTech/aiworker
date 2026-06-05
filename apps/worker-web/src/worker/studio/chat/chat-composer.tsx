@@ -1,8 +1,9 @@
+import type { LocalEngineInvocation } from '@zonease/aiworker-soul-descriptor'
 import type { ManagedSessionComposerAttachmentLabels } from '@zonease/aiworker-ui/components/managed-session-composer'
-
-import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/managed-session-composer'
+import type { SessionComposerDockStatus } from './session-composer-dock'
 
 import { submitSessionInvocation } from '../../../features/local-workspace/api/session-invocations'
+import { SessionComposerDock } from './session-composer-dock'
 import { sessionDraftToDisplayText, sessionDraftToInvocationInput } from './session-draft-input'
 
 export interface ChatComposerLabels {
@@ -15,8 +16,10 @@ export interface ChatComposerLabels {
 export interface ChatComposerProps {
   focusRequestToken?: number
   labels: ChatComposerLabels
-  onSubmitted?: (submission: { invocationId: string, text: string }) => void
+  onCancel?: () => Promise<void> | void
+  onSubmitted?: (submission: { invocationId: string, status: LocalEngineInvocation['status'], text: string }) => void
   sessionId: string
+  status?: SessionComposerDockStatus
 }
 
 /**
@@ -28,21 +31,31 @@ export interface ChatComposerProps {
  * The Worker renders the session chat directly: this composer is mounted by
  * worker-studio on the session route. The Soul provides no UI.
  */
-export function ChatComposer({ focusRequestToken, labels, onSubmitted, sessionId }: ChatComposerProps) {
+export function ChatComposer({
+  focusRequestToken,
+  labels,
+  onCancel,
+  onSubmitted,
+  sessionId,
+  status = 'idle',
+}: ChatComposerProps) {
   return (
-    <ManagedSessionComposer
-      ariaLabel={labels.ariaLabel}
-      attachmentLabels={labels.attachment}
+    <SessionComposerDock
       focusRequestToken={focusRequestToken}
-      placeholder={labels.placeholder}
-      submitAriaLabel={labels.submitAriaLabel}
+      labels={labels}
+      onCancel={onCancel}
       onSubmitDraft={async (draft) => {
         const input = sessionDraftToInvocationInput(draft)
         if (input.length === 0)
           return
         const result = await submitSessionInvocation(sessionId, { input, waitForCompletion: false })
-        onSubmitted?.({ invocationId: result.invocation.id, text: sessionDraftToDisplayText(draft) })
+        onSubmitted?.({
+          invocationId: result.invocation.id,
+          status: result.invocation.status,
+          text: sessionDraftToDisplayText(draft),
+        })
       }}
+      status={status}
     />
   )
 }

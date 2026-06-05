@@ -81,3 +81,16 @@ export function fetchInvocationEvents(
     `/api/engine/invocations/${encodeURIComponent(invocationId)}/events${query ? `?${query}` : ''}`,
   )
 }
+
+/**
+ * Cancel a running engine invocation through the Worker-owned engine route.
+ * This keeps session lifecycle and follow-up semantics untouched: cancelling
+ * belongs to `engine_invocations`, while new input still uses
+ * `POST /api/sessions/:sessionId/invocations`.
+ */
+export function cancelEngineInvocation(invocationId: string): Promise<SessionInvocationResponse> {
+  return localJson<SessionInvocationResponse>(
+    `/api/engine/invocations/${encodeURIComponent(invocationId)}/cancel`,
+    { method: 'POST' },
+  )
+}

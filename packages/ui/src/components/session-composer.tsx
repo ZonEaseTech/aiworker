@@ -240,8 +240,8 @@ export function SessionComposer({
       <InputGroup
         data-session-slot="composer-field"
         className={cn(
-          'h-auto min-h-0 flex-col items-stretch overflow-hidden',
-          variant === 'large' && 'min-h-44',
+          'h-auto min-h-0 flex-col items-stretch overflow-hidden border-border bg-background shadow-none has-[[data-slot=input-group-control]:focus-visible]:!border-border has-[[data-slot=input-group-control]:focus-visible]:!ring-0 dark:bg-background',
+          variant === 'large' && 'min-h-24',
           variant === 'panel' && 'min-h-0 flex-1',
         )}
         data-disabled={disabled || submitting ? true : undefined}
@@ -261,7 +261,7 @@ export function SessionComposer({
           aria-label={ariaLabel}
           className={cn(
             'min-h-16 max-h-40 w-full',
-            variant === 'large' && 'min-h-32',
+            variant === 'large' && 'min-h-16',
             variant === 'compact' && 'min-h-12',
             variant === 'panel' && 'min-h-0 max-h-none flex-1 field-sizing-fixed',
           )}

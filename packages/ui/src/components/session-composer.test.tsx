@@ -55,6 +55,33 @@ describe('sessionComposer', () => {
     expect(screen.queryByRole('combobox')).toBeNull()
   })
 
+  it('renders the large chat composer as a solid, lower-height input instead of a translucent panel', () => {
+    const { container } = render(
+      <SessionComposer
+        ariaLabel="Session input"
+        onSubmit={vi.fn()}
+        onValueChange={vi.fn()}
+        submitAriaLabel="Start"
+        value=""
+        variant="large"
+      />,
+    )
+
+    const field = container.querySelector('[data-session-slot="composer-field"]')
+    const textarea = container.querySelector('[data-session-slot="composer-input"]')
+    expect(field?.className).toContain('bg-background')
+    expect(field?.className).toContain('border-border')
+    expect(field?.className).toContain('shadow-none')
+    expect(field?.className).toContain('has-[[data-slot=input-group-control]:focus-visible]:!border-border')
+    expect(field?.className).toContain('has-[[data-slot=input-group-control]:focus-visible]:!ring-0')
+    expect(field?.className).toContain('min-h-24')
+    expect(field?.className).not.toContain('bg-input/')
+    expect(field?.className).not.toContain('shadow-sm')
+    expect(field?.className).not.toContain('min-h-44')
+    expect(textarea?.className).toContain('min-h-16')
+    expect(textarea?.className).not.toContain('min-h-32')
+  })
+
   it('navigates active mention options from the textarea and skips disabled options', () => {
     const onMentionSelect = vi.fn()
     const onSubmit = vi.fn()

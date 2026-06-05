@@ -10,6 +10,7 @@ import { fetchInvocationEvents } from '../../../features/local-workspace/api/ses
 import { buildInvocationTurns } from './bridge-event-mapper'
 
 const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'lost'])
+const INVOCATION_STATUSES = new Set(['queued', 'starting', 'running', 'succeeded', 'failed', 'cancelled', 'lost'])
 const DEFAULT_POLL_INTERVAL_MS = 1000
 const EMPTY_INITIAL_EVENTS: LocalSessionEvent[] = []
 
@@ -82,11 +83,7 @@ export function useInvocationEvents(
   const initialEventsRef = useRef<InitialEventsRef>({ events: [], key: '' })
   if (initialEventsRef.current.key !== initialEventsKey)
     initialEventsRef.current = { events: initialEvents, key: initialEventsKey }
-  const initialInvocationKey = [
-    initialInvocation?.id ?? '',
-    initialInvocation?.status ?? '',
-    initialInvocation?.updatedAt ?? '',
-  ].join(':')
+  const initialInvocationKey = initialInvocation?.id ?? ''
   const initialInvocationRef = useRef<InitialInvocationRef>({
     invocation: null,
     key: '',
@@ -109,8 +106,10 @@ export function useInvocationEvents(
       : null
     let cursor = maxEventId(seededEvents)
     let collected: LocalSessionEvent[] = [...seededEvents]
+    let publishedInvocation: InvocationEventInvocation | null = null
     const publish = (invocation: InvocationEventInvocation | null) => {
-      dispatchState({ state: { events: [...collected], forInvocationId: invocationId, invocation }, type: 'replace' })
+      publishedInvocation = nonRegressingInvocation(publishedInvocation, invocation)
+      dispatchState({ state: { events: [...collected], forInvocationId: invocationId, invocation: publishedInvocation }, type: 'replace' })
     }
 
     publish(seededInvocation)
@@ -119,8 +118,49 @@ export function useInvocationEvents(
 
     if (eventSourceEnabled && sessionId && typeof EventSource !== 'undefined') {
       source = new EventSource(invocationEventsPath(invocationId, cursor))
-      const handleDone = () => {
+      const stopSourceAndPolling = () => {
+        if (timer) {
+          clearTimeout(timer)
+          timer = undefined
+        }
         source?.close()
+      }
+      const reattachTail = async (): Promise<boolean> => {
+        try {
+          const result = await fetchInvocationEvents(invocationId, { after: cursor })
+          if (cancelled)
+            return false
+          collected = upsertEvents(collected, result.events)
+          cursor = maxEventId(collected)
+          publish(result.invocation)
+          return TERMINAL_STATUSES.has(result.invocation.status)
+        }
+        catch {
+          // The SSE stream already delivered what it could. A final JSON
+          // reattach is best-effort so a transient tail read must not erase the
+          // partial transcript.
+          return false
+        }
+      }
+      const scheduleTailPoll = () => {
+        if (cancelled)
+          return
+        timer = setTimeout(() => {
+          void reattachTail().then((terminal) => {
+            if (cancelled)
+              return
+            if (terminal) {
+              stopSourceAndPolling()
+              return
+            }
+            scheduleTailPoll()
+          })
+        }, intervalMs)
+      }
+      const handleDone = () => {
+        void reattachTail().finally(() => {
+          stopSourceAndPolling()
+        })
       }
       source.onmessage = (message) => {
         if (cancelled)
@@ -131,13 +171,14 @@ export function useInvocationEvents(
         collected = upsertEvents(collected, [event])
         if (event.id > cursor)
           cursor = event.id
-        publish(seededInvocation)
+        publish(invocationFromSessionEvent(event, publishedInvocation ?? seededInvocation))
       }
       source.addEventListener('done', handleDone)
+      scheduleTailPoll()
       return () => {
         cancelled = true
         source?.removeEventListener?.('done', handleDone)
-        source?.close()
+        stopSourceAndPolling()
       }
     }
 
@@ -188,6 +229,47 @@ function upsertEvents(current: LocalSessionEvent[], next: LocalSessionEvent[]): 
   for (const event of next)
     byId.set(event.id, event)
   return [...byId.values()].sort((left, right) => left.id - right.id)
+}
+
+function nonRegressingInvocation(
+  current: InvocationEventInvocation | null,
+  next: InvocationEventInvocation | null,
+): InvocationEventInvocation | null {
+  if (!next)
+    return current
+  if (current && TERMINAL_STATUSES.has(current.status) && !TERMINAL_STATUSES.has(next.status))
+    return current
+  return next
+}
+
+function invocationFromSessionEvent(
+  event: LocalSessionEvent,
+  current: InvocationEventInvocation | null,
+): InvocationEventInvocation | null {
+  const status = invocationStatusFromSessionEvent(event)
+  if (!status)
+    return current
+  return {
+    ...current,
+    id: event.invocationId,
+    status,
+  }
+}
+
+function invocationStatusFromSessionEvent(event: LocalSessionEvent): LocalEngineInvocation['status'] | null {
+  const payload = readRecord(event.payloadJson)
+  const bridgeEvent = readString(payload.bridgeEvent)
+  if (bridgeEvent === 'invocation.completed' || bridgeEvent === 'process.exited')
+    return 'succeeded'
+  if (bridgeEvent === 'invocation.cancelled')
+    return 'cancelled'
+  if (bridgeEvent === 'invocation.error' || bridgeEvent === 'process.lost')
+    return 'failed'
+
+  const status = readString(payload.status)
+  return INVOCATION_STATUSES.has(status)
+    ? status as LocalEngineInvocation['status']
+    : null
 }
 
 function readRecord(value: unknown): Record<string, unknown> {

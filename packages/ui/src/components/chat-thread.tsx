@@ -10,9 +10,11 @@ import { cn } from '#lib/utils'
 import { ArtifactStrip } from './artifact-strip'
 import { AssistantMarkdown } from './assistant-markdown'
 import { CommandBlock } from './command-block'
+import { ResourceCard } from './resource-card'
 import { StreamingPlaceholder } from './streaming-placeholder'
 import { TranscriptActivityGroup } from './transcript-activity-group'
 import { summarizeTranscriptTurn } from './transcript-types'
+import { TurnActionRail } from './turn-action-rail'
 
 export interface ChatThreadProps {
   ariaLabel: string
@@ -38,7 +40,7 @@ export function ChatThread({
   return (
     <div
       data-transcript-slot="chat-thread"
-      className={cn('mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-4', className)}
+      className={cn('mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-4', className)}
     >
       <ItemGroup
         data-transcript-slot="chat-thread-log"
@@ -140,7 +142,7 @@ export function TranscriptTurn({ onCollapsedChange, turn }: TranscriptTurnProps)
 function TranscriptItem({ item }: { item: TranscriptItemModel }) {
   if (item.kind === 'user-message') {
     return (
-      <Item data-transcript-slot="user-message" variant="muted" className="min-w-0 rounded-lg bg-muted/70 shadow-sm">
+      <Item data-transcript-slot="user-message" variant="muted" className="min-w-0 rounded-lg bg-muted/70">
         <ItemContent>
           <ItemDescription className="max-w-full line-clamp-none text-foreground">{item.body}</ItemDescription>
         </ItemContent>
@@ -182,6 +184,12 @@ function TranscriptItem({ item }: { item: TranscriptItemModel }) {
   if (item.kind === 'artifact-strip')
     return <ArtifactStrip artifacts={item.artifacts} />
 
+  if (item.kind === 'resource-card')
+    return <ResourceCard resource={item.resource} />
+
+  if (item.kind === 'turn-action-rail')
+    return <TurnActionRail actions={item.actions} />
+
   if (item.kind === 'status') {
     return (
       <Item
@@ -210,54 +218,54 @@ function TranscriptItem({ item }: { item: TranscriptItemModel }) {
 
 function TimelineStepItem({ item }: { item: Extract<TranscriptItemModel, { kind: 'timeline-step' }> }) {
   const optimistic = item.provenance === 'optimistic'
-  const statusLabel = timelineStepStatusLabel(item.status)
 
   return (
-    <Item
+    <div
       data-transcript-slot="timeline-step"
       data-timeline-step-provenance={item.provenance}
       data-timeline-step-status={item.status}
-      variant="muted"
       className={cn(
-        'min-w-0 rounded-lg border border-transparent bg-muted/35 shadow-none',
-        optimistic && 'border-dashed border-muted-foreground/30 bg-muted/20',
+        'flex min-w-0 items-start gap-2 py-1 text-xs/relaxed text-muted-foreground',
+        item.status === 'failed' && 'text-destructive',
       )}
     >
-      <ItemContent>
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <ItemDescription className="max-w-full line-clamp-none text-foreground">
-              {item.title}
-            </ItemDescription>
-            {item.body
-              ? (
-                  <ItemDescription className="mt-1 max-w-full line-clamp-none text-muted-foreground">
-                    {item.body}
-                  </ItemDescription>
-                )
-              : null}
-            {optimistic
-              ? (
-                  <div className="mt-2 grid min-w-0 gap-2" aria-hidden="true">
-                    <Skeleton className="h-2 w-32" />
-                    <Skeleton className="h-2 w-2/5" />
-                  </div>
-                )
-              : null}
-          </div>
-          <span className="shrink-0 rounded-full bg-background/70 px-2 py-0.5 text-[0.625rem]/relaxed uppercase tracking-wide text-muted-foreground">
-            {optimistic ? 'Optimistic' : statusLabel}
-          </span>
-        </div>
-      </ItemContent>
-    </Item>
+      <span
+        aria-hidden="true"
+        className={cn(
+          'mt-2 size-1.5 shrink-0 rounded-full bg-muted-foreground/45',
+          item.status === 'running' && 'animate-pulse bg-foreground/55',
+          item.status === 'failed' && 'bg-destructive',
+        )}
+      />
+      <div className="min-w-0">
+        <p className="max-w-full text-xs/relaxed text-current">
+          <span>{item.title}</span>
+          {item.body
+            ? (
+                <span className="text-muted-foreground">
+                  {' · '}
+                  {item.body}
+                </span>
+              )
+            : null}
+        </p>
+        {optimistic
+          ? (
+              <div className="mt-2 grid min-w-0 gap-1.5" aria-hidden="true">
+                <Skeleton className="h-1.5 w-28" />
+                <Skeleton className="h-1.5 w-36" />
+              </div>
+            )
+          : null}
+      </div>
+    </div>
   )
 }
 
 function createDefaultTurnSummary(turn: TranscriptTurnModel): ReactNode {
   const summary = summarizeTranscriptTurn(turn)
 
-  return `${summary.itemCount} items, ${summary.activityCount} activities, ${summary.artifactCount} artifacts`
+  return `${summary.itemCount} items, ${summary.activityCount} activities, ${summary.artifactCount} artifacts, ${summary.resourceCount} resources`
 }
 
 function DefaultChatThreadEmptyState() {
@@ -297,18 +305,6 @@ function resolveTranscriptTurnKind(turn: TranscriptTurnModel): 'assistant' | 'mi
   if (turn.items.some(item => item.kind === 'assistant-markdown'))
     return 'assistant'
   return 'mixed'
-}
-
-function timelineStepStatusLabel(status: Extract<TranscriptItemModel, { kind: 'timeline-step' }>['status']): string {
-  if (status === 'succeeded')
-    return 'Done'
-  if (status === 'failed')
-    return 'Failed'
-  if (status === 'waiting')
-    return 'Waiting'
-  if (status === 'idle')
-    return 'Idle'
-  return 'Running'
 }
 
 function stringifyNode(node: ReactNode): string {

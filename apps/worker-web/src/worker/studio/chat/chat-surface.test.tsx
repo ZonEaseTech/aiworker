@@ -74,7 +74,8 @@ describe('chat surface', () => {
     expect(emptyColumn).toBeTruthy()
     const emptyColumnElement = emptyColumn as HTMLElement
     expect(emptyColumnElement.className).toContain('mx-auto')
-    expect(emptyColumnElement.className).toContain('max-w-')
+    expect(emptyColumnElement.className).toContain('max-w-2xl')
+    expect(emptyColumnElement.className).toContain('px-4')
     expect(emptyColumnElement.contains(screen.getByRole('log', { name: 'Session transcript' }))).toBe(true)
     expect(emptyColumnElement.contains(screen.getByRole('textbox'))).toBe(true)
   })
@@ -146,9 +147,46 @@ describe('chat surface', () => {
     expect(chatColumn).toBeTruthy()
     const chatColumnElement = chatColumn as HTMLElement
     expect(chatColumnElement.className).toContain('mx-auto')
-    expect(chatColumnElement.className).toContain('max-w-')
+    expect(chatColumnElement.className).toContain('max-w-2xl')
+    expect(chatColumnElement.className).toContain('px-4')
     expect(chatColumnElement.contains(screen.getByRole('log', { name: 'Session transcript' }))).toBe(true)
     expect(chatColumnElement.contains(screen.getByRole('textbox'))).toBe(true)
+  })
+
+  it('keeps following the latest user invocation when an internal autoname invocation has the latest sequence', async () => {
+    const userReplyEvent = {
+      createdAt: '2026-06-01T00:00:00.000Z',
+      id: 20,
+      invocationId: 'inv-user',
+      payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: 'visible user answer' } },
+      seq: 1,
+      sessionId: 'session-1',
+      type: 'assistant_delta',
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(sessionDetail(
+      [userReplyEvent],
+      [
+        {
+          id: 'inv-user',
+          metadataJson: { uiUserDisplayText: 'visible user prompt' },
+          seq: 1,
+          sessionId: 'session-1',
+          status: 'succeeded',
+        },
+        {
+          id: 'inv-internal-title',
+          metadataJson: { kind: 'internal', purpose: 'session-autoname' },
+          seq: 2,
+          sessionId: 'session-1',
+          status: 'succeeded',
+        },
+      ],
+    )))))
+
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    expect(await screen.findByText('visible user answer')).toBeTruthy()
+    expect(screen.getByText('visible user prompt')).toBeTruthy()
   })
 
   it('renders an existing conversation composer as a sticky footer inside the thread scroll viewport', async () => {
@@ -186,6 +224,7 @@ describe('chat surface', () => {
     expect(await screen.findByText(/sticky footer assistant reply/)).toBeTruthy()
     const scroller = document.querySelector('[data-chat-transcript-scroll="true"]') as HTMLElement | null
     expect(scroller).toBeTruthy()
+    expect(scroller?.className).toContain('no-scrollbar')
     expect(scroller?.className).toContain('[overflow-anchor:none]')
     expect(scroller?.contains(screen.getByRole('log', { name: 'Session transcript' }))).toBe(true)
     expect(scroller?.contains(screen.getByRole('textbox'))).toBe(true)
@@ -194,7 +233,8 @@ describe('chat surface', () => {
     expect(footer).toBeTruthy()
     expect(footer?.className).toContain('sticky')
     expect(footer?.className).toContain('bottom-0')
-    expect(footer?.querySelector('[data-chat-composer-gradient="true"]')).toBeTruthy()
+    expect(footer?.className).toContain('bg-background')
+    expect(footer?.querySelector('[data-chat-composer-gradient="true"]')).toBeNull()
   })
 
   it('renders a transcript restore error instead of the default empty state when session detail fails', async () => {
@@ -409,6 +449,105 @@ describe('chat surface', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/engine reply here/)).toBeTruthy()
+    })
+  })
+
+  it('shows starting feedback immediately after submit before the first engine event', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/invocations') && init?.method === 'POST') {
+        return new Response(JSON.stringify({
+          events: [],
+          files: [],
+          invocation: { id: 'inv-starting', status: 'running' },
+          session: { id: 'session-1', status: 'active' },
+        }), { status: 201 })
+      }
+      if (url === '/api/sessions/session-1')
+        return new Response(JSON.stringify(sessionDetail()))
+      return new Promise<Response>(() => {})
+    }))
+
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'go' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Starting invocation')).toBeTruthy()
+      expect(document.querySelector('[data-timeline-step-provenance="optimistic"]')).toBeTruthy()
+    })
+  })
+
+  it('cancels a running invocation from the composer dock stop control', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/api/sessions/session-1') {
+        return new Response(JSON.stringify(sessionDetail([], [{
+          id: 'inv-running',
+          metadataJson: { uiUserDisplayText: 'keep working' },
+          seq: 1,
+          sessionId: 'session-1',
+          status: 'running',
+        }])))
+      }
+      if (url === '/api/engine/invocations/inv-running/cancel' && init?.method === 'POST') {
+        return new Response(JSON.stringify({
+          events: [],
+          files: [],
+          invocation: { id: 'inv-running', status: 'cancelled' },
+          session: { id: 'session-1', status: 'active' },
+        }), { status: 201 })
+      }
+      return new Response(JSON.stringify({ events: [], invocation: { id: 'inv-running', status: 'running' } }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Stop invocation' })).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Stop invocation' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/engine/invocations/inv-running/cancel', expect.objectContaining({ method: 'POST' }))
+    })
+  })
+
+  it('unlocks the composer when snapshot events show a terminal invocation despite a stale running invocation row', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/sessions/session-1') {
+        return new Response(JSON.stringify(sessionDetail([
+          {
+            createdAt: '2026-06-01T00:00:00.000Z',
+            id: 1,
+            invocationId: 'inv-stale-running',
+            payloadJson: { invocationId: 'inv-stale-running', status: 'succeeded' },
+            seq: 1,
+            sessionId: 'session-1',
+            type: 'status',
+          },
+        ], [{
+          id: 'inv-stale-running',
+          metadataJson: { uiUserDisplayText: 'stale running prompt' },
+          seq: 1,
+          sessionId: 'session-1',
+          status: 'running',
+        }])))
+      }
+      return new Promise<Response>(() => {})
+    }))
+
+    render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Invocation completed')).toBeTruthy()
+    })
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'next follow-up' } })
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: 'Send message' }) as HTMLButtonElement).disabled).toBe(false)
     })
   })
 

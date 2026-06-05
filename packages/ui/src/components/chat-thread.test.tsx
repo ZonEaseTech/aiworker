@@ -33,7 +33,7 @@ describe('chat thread', () => {
 
     expect(thread?.className).toContain('mx-auto')
     expect(thread?.className).toContain('w-full')
-    expect(thread?.className).toContain('max-w-3xl')
+    expect(thread?.className).toContain('max-w-2xl')
     expect(log?.className).toContain('w-full')
     expect(userTurnShell?.className).toContain('ml-auto')
     expect(assistantTurnShell?.className).toContain('w-full')
@@ -90,8 +90,10 @@ describe('chat thread', () => {
     )
 
     const turn = document.querySelector('[data-transcript-slot="transcript-turn"]')
+    const bubble = document.querySelector('[data-transcript-slot="user-message"]')
     expect(turn?.getAttribute('data-transcript-turn-kind')).toBe('user')
     expect(turn?.className).toContain('justify-end')
+    expect(bubble?.className).not.toContain('shadow')
     expect(screen.getByText('Please review this.')).toBeTruthy()
   })
 
@@ -175,7 +177,7 @@ describe('chat thread', () => {
     expect(screen.getByRole('status', { name: 'Preparing response' })).toBeTruthy()
   })
 
-  it('renders generic timeline steps with distinct optimistic and engine provenance', () => {
+  it('renders timeline steps as quiet inline continuity, not card badges', () => {
     render(
       <ChatThread
         ariaLabel="Conversation"
@@ -204,10 +206,51 @@ describe('chat thread', () => {
     )
 
     expect(screen.getByText('Starting invocation')).toBeTruthy()
-    expect(screen.getByText('Waiting for the native engine to emit its first event.')).toBeTruthy()
+    expect(document.body.textContent).toContain('Waiting for the native engine to emit its first event.')
     expect(screen.getByText('Inspecting workspace')).toBeTruthy()
-    expect(screen.getByText('Read workspace files')).toBeTruthy()
-    expect(document.querySelector('[data-transcript-slot="timeline-step"][data-timeline-step-provenance="optimistic"]')).toBeTruthy()
-    expect(document.querySelector('[data-transcript-slot="timeline-step"][data-timeline-step-provenance="engine"]')).toBeTruthy()
+    expect(document.body.textContent).toContain('Read workspace files')
+    const optimisticStep = document.querySelector('[data-transcript-slot="timeline-step"][data-timeline-step-provenance="optimistic"]')
+    const engineStep = document.querySelector('[data-transcript-slot="timeline-step"][data-timeline-step-provenance="engine"]')
+    expect(optimisticStep).toBeTruthy()
+    expect(engineStep).toBeTruthy()
+    expect(optimisticStep?.className).not.toContain('rounded-lg')
+    expect(optimisticStep?.className).not.toContain('shadow')
+    expect(engineStep?.className).not.toContain('rounded-lg')
+    expect(document.body.textContent).not.toContain('Optimistic')
+    expect(document.body.textContent).not.toContain('Done')
+  })
+
+  it('renders resource cards and turn actions as first-class transcript items', () => {
+    render(
+      <ChatThread
+        ariaLabel="Conversation"
+        turns={[{
+          id: 'inv-1',
+          items: [
+            {
+              id: 'resource-item',
+              kind: 'resource-card',
+              resource: {
+                href: 'http://localhost:54393',
+                id: 'resource-1',
+                kind: 'web',
+                location: 'localhost:54393',
+                title: '网页预览',
+              },
+            },
+            {
+              actions: [{ id: 'copy', label: 'Copy' }],
+              id: 'actions',
+              kind: 'turn-action-rail',
+            },
+          ],
+        }]}
+      />,
+    )
+
+    expect(screen.getByText('网页预览')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy()
+    expect(document.querySelector('[data-transcript-slot="resource-card"]')).toBeTruthy()
+    expect(document.querySelector('[data-transcript-slot="turn-action-rail"]')).toBeTruthy()
   })
 })

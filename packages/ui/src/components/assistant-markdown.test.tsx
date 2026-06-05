@@ -46,6 +46,40 @@ describe('assistant markdown', () => {
     expect(repairStreamingMarkdown('`inline', true)).toBe('`inline`')
   })
 
+  it('marks streaming markdown with a subtle breathing tail instead of a caret cursor', () => {
+    const { container } = render(<AssistantMarkdown markdown="Streaming answer" streaming />)
+
+    const markdown = container.querySelector('[data-transcript-slot="assistant-markdown"]')
+    expect(markdown?.getAttribute('data-streaming')).toBe('true')
+    expect(markdown?.className).toContain('after:animate-pulse')
+    expect(markdown?.className).toContain('after:rounded-full')
+    expect(markdown?.className).not.toContain('after:animate-caret-blink')
+    expect(markdown?.className).not.toContain('after:w-px')
+    expect(markdown?.className).toContain('motion-safe:animate-in')
+    expect(screen.getByText('Streaming answer')).toBeTruthy()
+  })
+
+  it('keeps wide code and table overflow scrollable without visible scrollbar chrome', () => {
+    const { container } = render(
+      <AssistantMarkdown
+        markdown={[
+          '```ts',
+          'const value = "a very long code line that can overflow horizontally when needed"',
+          '```',
+          '',
+          '| Wide | Value |',
+          '|---|---|',
+          '| command | bun run --filter @zonease/aiworker-worker-web test |',
+        ].join('\n')}
+      />,
+    )
+
+    const codeScroller = container.querySelector('[data-testid="assistant-code-block"] pre')
+    const tableScroller = screen.getByRole('table').parentElement
+    expect(codeScroller?.className).toContain('no-scrollbar')
+    expect(tableScroller?.className).toContain('no-scrollbar')
+  })
+
   it('does not treat whitespace-delimited asterisks as italic markdown', () => {
     const { container } = render(<AssistantMarkdown markdown="2 * 3 = 6 * 1" />)
 
@@ -82,5 +116,44 @@ describe('assistant markdown', () => {
 
     expect(screen.getByText('glob **/*.ts and **/node_modules/** and **/dist/**')).toBeTruthy()
     expect(container.querySelector('strong')).toBeNull()
+  })
+
+  it('renders P0 rich transcript blocks without breaking nested or task lists', () => {
+    const { container } = render(
+      <AssistantMarkdown
+        markdown={[
+          '## Plan',
+          '',
+          '- parent',
+          '  - child',
+          '- [x] verified',
+          '- [ ] pending',
+          '',
+          '| File | Status |',
+          '|---|---|',
+          '| docs/runtime.md | ok |',
+        ].join('\n')}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Plan' })).toBeTruthy()
+    expect(screen.getByText('child').closest('li')?.getAttribute('data-list-depth')).toBe('1')
+    expect((screen.getByRole('checkbox', { name: 'verified' }) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByRole('checkbox', { name: 'pending' }) as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByRole('table')).toBeTruthy()
+    expect(container.textContent).toContain('docs/runtime.md')
+  })
+
+  it('renders safe typed links and inline semantic tokens for paths and commands', () => {
+    render(
+      <AssistantMarkdown markdown="Open http://localhost:5173 and see `bun test`, docs/runtime.md, branch codex/refactor." />,
+    )
+
+    const link = screen.getByRole('link', { name: 'http://localhost:5173' })
+    expect(link.getAttribute('href')).toBe('http://localhost:5173')
+    expect(link.getAttribute('data-link-kind')).toBe('localhost')
+    expect(screen.getByText('bun test').tagName).toBe('CODE')
+    expect(screen.getByText('docs/runtime.md').getAttribute('data-inline-kind')).toBe('path')
+    expect(screen.getByText('codex/refactor').getAttribute('data-inline-kind')).toBe('branch')
   })
 })

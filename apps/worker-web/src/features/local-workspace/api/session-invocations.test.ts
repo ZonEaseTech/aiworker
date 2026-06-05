@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchInvocationEvents, fetchSessionDetail, submitSessionInvocation } from './session-invocations'
+import { cancelEngineInvocation, fetchInvocationEvents, fetchSessionDetail, submitSessionInvocation } from './session-invocations'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -105,5 +105,20 @@ describe('session invocations API', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/sessions/session%201', expect.any(Object))
     expect(result.invocations).toHaveLength(1)
     expect(result.events[0]).toMatchObject({ invocationId: 'inv-1', type: 'assistant_delta' })
+  })
+
+  it('cancels an engine invocation through the canonical engine cancel route', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      events: [],
+      files: [],
+      invocation: { id: 'inv 1', status: 'cancelled' },
+      session: { id: 'session-1', status: 'active' },
+    }), { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await cancelEngineInvocation('inv 1')
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/engine/invocations/inv%201/cancel', expect.objectContaining({ method: 'POST' }))
+    expect(result.invocation).toMatchObject({ id: 'inv 1', status: 'cancelled' })
   })
 })

@@ -44,8 +44,27 @@ describe('chat composer', () => {
       }))
     })
     await waitFor(() => {
-      expect(onSubmitted).toHaveBeenCalledWith({ invocationId: 'inv-9', text: 'do the thing' })
+      expect(onSubmitted).toHaveBeenCalledWith({ invocationId: 'inv-9', status: 'queued', text: 'do the thing' })
     })
+  })
+
+  it('renders the running composer dock stop control without changing the follow-up route', async () => {
+    const onCancel = vi.fn()
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      events: [],
+      files: [],
+      invocation: { id: 'inv-9', status: 'queued' },
+      session: { id: 'session-1', status: 'active' },
+    }), { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<ChatComposer labels={labels} onCancel={onCancel} sessionId="session-1" status="running" />)
+
+    expect(screen.getByRole('button', { name: 'Stop invocation' })).toBeTruthy()
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'queued follow-up' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Stop invocation' }))
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('includes attached source materials in the session invocation input', async () => {
