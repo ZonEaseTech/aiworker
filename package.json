@@ -31,6 +31,8 @@
     "smoke:standalone-runtime": "bun apps/worker-cli/scripts/smoke-standalone-runtime.ts",
     "smoke:npm-package": "bun apps/worker-cli/scripts/smoke-npm-package.ts",
     "smoke:fleet": "bun apps/worker-cli/scripts/smoke-fleet.ts",
+    "e2e:soul-sampling": "bun scripts/e2e-soul-sampling.ts run",
+    "e2e:soul-sampling:dry-run": "bun scripts/e2e-soul-sampling.ts dry-run",
     "test:contracts": "bun test tests/architecture scripts/check-soul-app-boundaries.test.ts",
     "test:protocol": "bun run --filter '@zonease/aiworker-soul-descriptor' test",
     "test:cli": "bun run --filter '@zonease/aiworker-freeform' build && bun test apps/worker-cli/src/aiworker.test.ts apps/worker-cli/src/freeform-golden-path.test.ts --timeout=30000",
