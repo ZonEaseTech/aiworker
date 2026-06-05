@@ -30,6 +30,15 @@ interface CommandResult {
   status: number
 }
 
+interface CleanDependencies {
+  env?: { AIWORKER_DEV_FLEET_PURGE?: string }
+  home?: string
+  log?: (message: string) => void
+  removePath?: (path: string, options: { force?: boolean, recursive?: boolean }) => void
+  runCli?: (args: string[], options?: { allowFailure?: boolean }) => CommandResult
+  runCommand?: (command: string, args: string[], options?: { allowFailure?: boolean }) => CommandResult
+}
+
 interface PortStatus {
   listening: boolean
   port: number
@@ -506,21 +515,35 @@ async function status(): Promise<void> {
   }
 }
 
-function clean(): void {
-  const home = aiworkerHome()
+export function clean(deps: CleanDependencies = {}): void {
+  const home = deps.home ?? aiworkerHome()
+  const env = deps.env ?? process.env
+  const log = deps.log ?? console.log
+  const removePath = deps.removePath ?? rmSync
+  const runCommand = deps.runCommand ?? run
+  const runCli = deps.runCli ?? cli
+
   for (const entry of DEV_FLEET_TOPOLOGY)
-    run('tmux', ['kill-session', '-t', entry.tmuxSession], { allowFailure: true })
+    runCommand('tmux', ['kill-session', '-t', entry.tmuxSession], { allowFailure: true })
 
-  cli(['stop', '--all'], { allowFailure: true })
-  rmSync(manifestPath(home), { force: true })
+  const stopResult = runCli(['stop', '--all'], { allowFailure: true })
+  if (stopResult.status !== 0) {
+    log(`[dev:fleet-web:clean] aiworker stop --all exited with status ${stopResult.status}`)
+    if (stopResult.stdout.trim())
+      log(`[dev:fleet-web:clean] aiworker stop --all stdout:\n${stopResult.stdout.trim()}`)
+    if (stopResult.stderr.trim())
+      log(`[dev:fleet-web:clean] aiworker stop --all stderr:\n${stopResult.stderr.trim()}`)
+  }
 
-  if (shouldPurgeHome(process.env)) {
-    rmSync(home, { force: true, recursive: true })
-    console.log(`[dev:fleet-web:clean] purged AIWORKER_HOME=${home}`)
+  removePath(manifestPath(home), { force: true })
+
+  if (shouldPurgeHome(env)) {
+    removePath(home, { force: true, recursive: true })
+    log(`[dev:fleet-web:clean] purged AIWORKER_HOME=${home}`)
     return
   }
 
-  console.log(`[dev:fleet-web:clean] kept AIWORKER_HOME=${home}`)
+  log(`[dev:fleet-web:clean] kept AIWORKER_HOME=${home}`)
 }
 
 async function main(): Promise<void> {

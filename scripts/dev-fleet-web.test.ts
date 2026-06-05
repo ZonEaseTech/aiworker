@@ -5,6 +5,7 @@ import { describe, expect, it } from 'bun:test'
 import {
   assertExpectedHealth,
   buildManifest,
+  clean,
   DEV_FLEET_TOPOLOGY,
   formatPortStatus,
   parseFleetStatus,
@@ -242,5 +243,62 @@ describe('dev fleet web clean safety', () => {
     expect(shouldPurgeHome({ AIWORKER_DEV_FLEET_PURGE: undefined })).toBe(false)
     expect(shouldPurgeHome({ AIWORKER_DEV_FLEET_PURGE: '0' })).toBe(false)
     expect(shouldPurgeHome({ AIWORKER_DEV_FLEET_PURGE: '1' })).toBe(true)
+  })
+
+  it('kills only the fixed harness tmux sessions', () => {
+    const commands: Array<{ args: string[], command: string }> = []
+
+    clean({
+      home: '/tmp/aiworker-dev',
+      log: () => {},
+      removePath: () => {},
+      runCli: () => ({ stderr: '', stdout: '', status: 0 }),
+      runCommand: (command, args) => {
+        commands.push({ args, command })
+        return { stderr: '', stdout: '', status: 0 }
+      },
+    })
+
+    expect(commands).toEqual(DEV_FLEET_TOPOLOGY.map(entry => ({
+      args: ['kill-session', '-t', entry.tmuxSession],
+      command: 'tmux',
+    })))
+  })
+
+  it('prints stop failure details before continuing idempotent cleanup', () => {
+    const logs: string[] = []
+
+    clean({
+      home: '/tmp/aiworker-dev',
+      log: message => logs.push(message),
+      removePath: () => {},
+      runCli: () => ({ stderr: 'db locked', stdout: 'partial stop', status: 42 }),
+      runCommand: () => ({ stderr: '', stdout: '', status: 0 }),
+    })
+
+    expect(logs).toContain('[dev:fleet-web:clean] aiworker stop --all exited with status 42')
+    expect(logs).toContain('[dev:fleet-web:clean] aiworker stop --all stdout:\npartial stop')
+    expect(logs).toContain('[dev:fleet-web:clean] aiworker stop --all stderr:\ndb locked')
+    expect(logs).toContain('[dev:fleet-web:clean] kept AIWORKER_HOME=/tmp/aiworker-dev')
+  })
+
+  it('removes only the manifest and keeps home by default', () => {
+    const removed: Array<{ options: { force?: boolean, recursive?: boolean }, path: string }> = []
+
+    clean({
+      env: { AIWORKER_DEV_FLEET_PURGE: undefined },
+      home: '/tmp/aiworker-dev',
+      log: () => {},
+      removePath: (path, options) => removed.push({ options, path }),
+      runCli: () => ({ stderr: '', stdout: '', status: 0 }),
+      runCommand: () => ({ stderr: '', stdout: '', status: 0 }),
+    })
+
+    expect(removed).toEqual([
+      {
+        options: { force: true },
+        path: '/tmp/aiworker-dev/dev-fleet-web.json',
+      },
+    ])
   })
 })
