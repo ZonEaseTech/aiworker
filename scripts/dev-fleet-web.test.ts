@@ -3,10 +3,12 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'bun:test'
 
 import {
+  assertExpectedHealth,
   buildManifest,
   DEV_FLEET_TOPOLOGY,
   formatPortStatus,
   parseFleetStatus,
+  shouldRejectStartupPort,
   summarizeDaemonHealth,
   validateWorkerApp,
 } from './dev-fleet-web'
@@ -200,5 +202,26 @@ describe('dev fleet web status helpers', () => {
       running: true,
       url: 'http://127.0.0.1:9218',
     })
+  })
+})
+
+describe('dev fleet web health validation', () => {
+  it('rejects daemon health for the wrong active app', () => {
+    expect(() =>
+      assertExpectedHealth({
+        expectedAppId: 'google-ads',
+        expectedWorkerId: 'dev-google-ads',
+        health: {
+          workers: [{ appId: 'hr-manager', id: 'dev-google-ads', status: 'active' }],
+        },
+        url: 'http://127.0.0.1:9218/health',
+      }),
+    ).toThrow('http://127.0.0.1:9218/health returned worker dev-google-ads/hr-manager, expected dev-google-ads/google-ads')
+  })
+
+  it('allows daemon port reuse but rejects occupied Vite ports before start', () => {
+    expect(shouldRejectStartupPort({ kind: 'daemon', listening: true })).toBe(false)
+    expect(shouldRejectStartupPort({ kind: 'vite', listening: true })).toBe(true)
+    expect(shouldRejectStartupPort({ kind: 'vite', listening: false })).toBe(false)
   })
 })

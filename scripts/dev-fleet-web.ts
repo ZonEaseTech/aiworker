@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 
@@ -41,6 +41,14 @@ interface DaemonHealthProbe {
   ok: boolean
   status: null | number
   workerId: null | string
+}
+
+interface DaemonHealthBody {
+  workers?: Array<{
+    appId?: unknown
+    id?: unknown
+    status?: unknown
+  }>
 }
 
 interface FleetWorkerStatus {
@@ -157,6 +165,17 @@ function run(
   return { stderr, stdout, status }
 }
 
+function cli(args: string[], options: { allowFailure?: boolean } = {}): CommandResult {
+  return run('bun', ['apps/worker-cli/src/aiworker.ts', ...args], {
+    allowFailure: options.allowFailure,
+    cwd: repoRoot(),
+    env: {
+      AIWORKER_HOME: aiworkerHome(),
+      WORKER_DB_PATH: undefined,
+    },
+  })
+}
+
 function hasTmuxSession(session: string): boolean {
   return run('tmux', ['has-session', '-t', session], { allowFailure: true }).status === 0
 }
@@ -175,6 +194,10 @@ export function formatPortStatus(statuses: PortStatus[]): string {
   return statuses
     .map(status => `${status.port}: ${status.listening ? `listening ${status.process ?? ''}`.trim() : 'none'}`)
     .join('\n')
+}
+
+export function shouldRejectStartupPort(input: { kind: 'daemon' | 'vite', listening: boolean }): boolean {
+  return input.kind === 'vite' && input.listening
 }
 
 export function parseFleetStatus(text: string): FleetWorkerStatus[] {
@@ -227,13 +250,7 @@ async function fetchDaemonHealth(url: string): Promise<DaemonHealthProbe> {
     const response = await fetch(`${url}/health`, {
       signal: AbortSignal.timeout(1000),
     })
-    const body = await response.json().catch(() => null) as null | {
-      workers?: Array<{
-        appId?: unknown
-        id?: unknown
-        status?: unknown
-      }>
-    }
+    const body = await response.json().catch(() => null) as DaemonHealthBody | null
     const activeWorker = body?.workers?.find(worker => worker.status === 'active') ?? body?.workers?.[0]
     return {
       appId: typeof activeWorker?.appId === 'string' ? activeWorker.appId : null,
@@ -250,6 +267,155 @@ async function fetchDaemonHealth(url: string): Promise<DaemonHealthProbe> {
       workerId: null,
     }
   }
+}
+
+export function assertExpectedHealth(input: {
+  expectedAppId: string
+  expectedWorkerId: string
+  health: DaemonHealthBody
+  url: string
+}): void {
+  const active = input.health.workers?.find(worker => worker.status === 'active') ?? input.health.workers?.[0]
+  const id = typeof active?.id === 'string' ? active.id : '<missing>'
+  const appId = typeof active?.appId === 'string' ? active.appId : '<missing>'
+  if (id !== input.expectedWorkerId || appId !== input.expectedAppId) {
+    throw new Error(
+      `${input.url} returned worker ${id}/${appId}, expected ${input.expectedWorkerId}/${input.expectedAppId}`,
+    )
+  }
+}
+
+function requireTmux(): void {
+  run('tmux', ['-V'])
+}
+
+function assertVitePortAvailable(port: number): void {
+  const status = listenerForPort(port)
+  if (!shouldRejectStartupPort({ kind: 'vite', listening: status.listening }))
+    return
+
+  throw new Error(`Vite port ${port} is already in use:\n${status.process ?? formatPortStatus([status])}`)
+}
+
+function readWorkerRow(workerId: string): null | { appId?: unknown, id?: unknown } {
+  const result = cli(['worker', 'show', workerId])
+  const parsed = JSON.parse(result.stdout) as { worker?: null | { appId?: unknown, id?: unknown } }
+  return parsed.worker ?? null
+}
+
+function ensureWorker(entry: DevFleetEntry): void {
+  const existing = readWorkerRow(entry.workerId)
+  if (existing) {
+    validateWorkerApp({ expectedAppId: entry.appId, row: existing })
+    console.log(`[dev:fleet-web] reuse worker ${entry.workerId} (${entry.appId})`)
+    return
+  }
+
+  console.log(`[dev:fleet-web] create worker ${entry.workerId} (${entry.appId})`)
+  cli([
+    'worker',
+    'create',
+    entry.workerId,
+    '--app',
+    entry.appId,
+    '--name',
+    entry.soulName,
+    '--port',
+    String(entry.apiPort),
+  ])
+}
+
+function killHarnessTmuxSessions(): void {
+  for (const entry of DEV_FLEET_TOPOLOGY)
+    run('tmux', ['kill-session', '-t', entry.tmuxSession], { allowFailure: true })
+}
+
+function assertVitePortsAvailable(): void {
+  for (const entry of DEV_FLEET_TOPOLOGY)
+    assertVitePortAvailable(entry.vitePort)
+}
+
+function restartTmuxVite(entry: DevFleetEntry, host: string): void {
+  run('tmux', ['kill-session', '-t', entry.tmuxSession], { allowFailure: true })
+  run('tmux', [
+    'new-session',
+    '-d',
+    '-s',
+    entry.tmuxSession,
+    '-c',
+    join(repoRoot(), 'apps/worker-web'),
+    `AIWORKER_API_URL=http://${host}:${entry.apiPort} bun run dev --host ${host} --port ${entry.vitePort} --strictPort`,
+  ])
+}
+
+async function waitForHttpOk(url: string, attempts = 60): Promise<Response> {
+  let lastError: unknown = null
+  for (let index = 0; index < attempts; index += 1) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(1000) })
+      if (response.ok)
+        return response
+      lastError = `${response.status} ${response.statusText}`
+    }
+    catch (error) {
+      lastError = error
+    }
+    await Bun.sleep(500)
+  }
+  throw new Error(`timed out waiting for ${url}: ${lastError instanceof Error ? lastError.message : String(lastError)}`)
+}
+
+async function verifyDaemon(entry: DevFleetEntry, host: string): Promise<void> {
+  const url = `http://${host}:${entry.apiPort}/health`
+  const response = await waitForHttpOk(url)
+  const health = await response.json() as DaemonHealthBody
+  assertExpectedHealth({
+    expectedAppId: entry.appId,
+    expectedWorkerId: entry.workerId,
+    health,
+    url,
+  })
+}
+
+async function verifyVite(entry: DevFleetEntry, host: string): Promise<void> {
+  await waitForHttpOk(`http://${host}:${entry.vitePort}/`)
+}
+
+async function start(): Promise<void> {
+  const host = process.env.AIWORKER_HOST || '127.0.0.1'
+  const home = aiworkerHome()
+  mkdirSync(home, { recursive: true })
+  requireTmux()
+  killHarnessTmuxSessions()
+  assertVitePortsAvailable()
+
+  console.log(`[dev:fleet-web] AIWORKER_HOME=${home}`)
+  cli(['app', 'bootstrap', 'official'])
+  for (const entry of DEV_FLEET_TOPOLOGY)
+    ensureWorker(entry)
+
+  cli(['start', '--all'])
+
+  for (const entry of DEV_FLEET_TOPOLOGY)
+    restartTmuxVite(entry, host)
+
+  for (const entry of DEV_FLEET_TOPOLOGY) {
+    await verifyDaemon(entry, host)
+    await verifyVite(entry, host)
+  }
+
+  const manifest = buildManifest({
+    generatedAt: new Date().toISOString(),
+    home,
+    host,
+  })
+  writeFileSync(manifestPath(home), `${JSON.stringify(manifest, null, 2)}\n`)
+
+  console.log('\nSoul                 Worker                    API                       Web')
+  for (const worker of manifest.workers) {
+    console.log(`${worker.soul.padEnd(20)} ${worker.workerId.padEnd(25)} ${worker.apiUrl.padEnd(25)} ${worker.webUrl}`)
+  }
+  console.log('\n[dev:fleet-web] tmux attach example: tmux attach -t aiworker-vite-freeform')
 }
 
 function formatDaemonStatus(worker: FleetWorkerStatus): string {
@@ -292,15 +458,19 @@ async function status(): Promise<void> {
 
 async function main(): Promise<void> {
   const mode = process.argv[2] || 'start'
+  if (mode === 'start') {
+    await start()
+    return
+  }
   if (mode === 'status') {
     await status()
     return
   }
-  if (mode !== 'start' && mode !== 'clean') {
+  if (mode !== 'clean') {
     throw new Error(`unsupported dev fleet web command: ${mode}`)
   }
 
-  throw new Error(`dev fleet web ${mode} command is unavailable in this incremental skeleton`)
+  throw new Error('dev fleet web clean command is unavailable in this incremental skeleton')
 }
 
 if (import.meta.main) {
