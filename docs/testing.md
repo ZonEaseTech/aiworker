@@ -113,12 +113,20 @@ commands. It must not replace either engine with fake behavior. It validates
 the Worker runtime's process-management contract against both real CLIs:
 preflight/version, structured output parsing, Stop/cancel interrupt, hard
 timeout escalation, runtime dispose cleanup, and restart reconciliation to
-`lost`. It is not part of the default `bun run test` or CI release gates because
-it depends on local engine authentication and may spend real model quota. Run it
-explicitly with:
+`lost`. The evidence JSON records the git head/dirty state, timeout settings,
+sample count, per-case process handles, process-group cleanup checks, and
+per-engine pass-rate summary. It is not part of the default `bun run test` or CI
+release gates because it depends on local engine authentication and may spend
+real model quota. Run the single-sample smoke explicitly with:
 
 ```text
 bun run test:engine-real
+```
+
+For release-style local evidence, run repeated real samples:
+
+```text
+AIWORKER_ENGINE_REAL_SAMPLES=5 bun run test:engine-real
 ```
 
 CLI release smoke contract tests:

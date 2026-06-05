@@ -28,14 +28,48 @@ interface EvidenceCase {
   engineId: string
   name: string
   ok: boolean
+  sample: number
 }
 
 interface Evidence {
   cases: EvidenceCase[]
   completedAt?: string
+  environment: {
+    cwd: string
+    gitDirty: boolean | null
+    gitHead: string | null
+    pid: number
+    platform: NodeJS.Platform
+  }
   evidencePath?: string
   root: string
+  sampleCount: number
+  settings: {
+    drainMs: number
+    shortTimeoutMs: number
+    timeoutMs: number
+    waitTimeoutMs: number
+  }
   startedAt: string
+  summary?: EvidenceSummary
+}
+
+interface EvidenceSummary {
+  byEngineCase: Array<{
+    averageDurationMs: number | null
+    engineId: string
+    failed: number
+    maxDurationMs: number | null
+    minDurationMs: number | null
+    name: string
+    passRate: number
+    passed: number
+    samples: number
+  }>
+  failedCases: number
+  passedCases: number
+  sampleCount: number
+  totalCases: number
 }
 
 const ENGINES: EngineSpec[] = [
@@ -46,6 +80,8 @@ const ENGINES: EngineSpec[] = [
 const REAL_ENGINE_TIMEOUT_MS = readPositiveInteger(process.env.AIWORKER_ENGINE_REAL_TIMEOUT_MS, 120_000)
 const REAL_ENGINE_SHORT_TIMEOUT_MS = readPositiveInteger(process.env.AIWORKER_ENGINE_REAL_SHORT_TIMEOUT_MS, 1)
 const WAIT_TIMEOUT_MS = readPositiveInteger(process.env.AIWORKER_ENGINE_REAL_WAIT_TIMEOUT_MS, 60_000)
+const DRAIN_MS = readPositiveInteger(process.env.AIWORKER_ENGINE_REAL_DRAIN_MS, 1_500)
+const SAMPLE_COUNT = readPositiveInteger(process.env.AIWORKER_ENGINE_REAL_SAMPLES, 1)
 
 if (process.argv.includes('--crash-child')) {
   await runCrashChild()
@@ -58,19 +94,35 @@ async function runAcceptance(): Promise<void> {
   const root = mkdtempSync(path.join(tmpdir(), 'aiworker-engine-real-'))
   const evidence: Evidence = {
     cases: [],
+    environment: {
+      cwd: process.cwd(),
+      gitDirty: readGitDirty(),
+      gitHead: readGitHead(),
+      pid: process.pid,
+      platform: process.platform,
+    },
     root,
+    sampleCount: SAMPLE_COUNT,
+    settings: {
+      drainMs: DRAIN_MS,
+      shortTimeoutMs: REAL_ENGINE_SHORT_TIMEOUT_MS,
+      timeoutMs: REAL_ENGINE_TIMEOUT_MS,
+      waitTimeoutMs: WAIT_TIMEOUT_MS,
+    },
     startedAt: new Date().toISOString(),
   }
   let failed = false
 
   try {
-    for (const engine of ENGINES) {
-      await recordCase(evidence, engine, 'preflight', () => preflight(engine))
-      await recordCase(evidence, engine, 'start-and-parse', () => startAndParse(root, engine))
-      await recordCase(evidence, engine, 'runtime-cancel', () => runtimeCancel(root, engine))
-      await recordCase(evidence, engine, 'executor-timeout', () => executorTimeout(root, engine))
-      await recordCase(evidence, engine, 'runtime-dispose', () => runtimeDispose(root, engine))
-      await recordCase(evidence, engine, 'restart-reconcile', () => restartReconcile(root, engine))
+    for (let sample = 1; sample <= SAMPLE_COUNT; sample++) {
+      for (const engine of ENGINES) {
+        await recordCase(evidence, sample, engine, 'preflight', () => preflight(engine))
+        await recordCase(evidence, sample, engine, 'start-and-parse', () => startAndParse(root, sample, engine))
+        await recordCase(evidence, sample, engine, 'runtime-cancel', () => runtimeCancel(root, sample, engine))
+        await recordCase(evidence, sample, engine, 'executor-timeout', () => executorTimeout(root, sample, engine))
+        await recordCase(evidence, sample, engine, 'runtime-dispose', () => runtimeDispose(root, sample, engine))
+        await recordCase(evidence, sample, engine, 'restart-reconcile', () => restartReconcile(root, sample, engine))
+      }
     }
   }
   catch (error) {
@@ -79,6 +131,7 @@ async function runAcceptance(): Promise<void> {
   }
   finally {
     evidence.completedAt = new Date().toISOString()
+    evidence.summary = summarizeEvidence(evidence.cases)
     const evidencePath = path.join(root, 'engine-management-evidence.json')
     evidence.evidencePath = evidencePath
     writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8')
@@ -88,13 +141,14 @@ async function runAcceptance(): Promise<void> {
       process.exitCode = 1
     }
     else {
-      console.log(`[engine-real] ${evidence.cases.length} real engine checks passed.`)
+      console.log(`[engine-real] ${evidence.cases.length} real engine checks passed across ${SAMPLE_COUNT} sample(s).`)
     }
   }
 }
 
 async function recordCase(
   evidence: Evidence,
+  sample: number,
   engine: EngineSpec,
   name: string,
   fn: () => Promise<Record<string, unknown>>,
@@ -110,8 +164,9 @@ async function recordCase(
       engineId: engine.id,
       name,
       ok: true,
+      sample,
     })
-    console.log(`[engine-real] PASS ${engine.id} ${name}`)
+    console.log(`[engine-real] PASS sample ${sample}/${SAMPLE_COUNT} ${engine.id} ${name}`)
   }
   catch (error) {
     evidence.cases.push({
@@ -122,8 +177,9 @@ async function recordCase(
       engineId: engine.id,
       name,
       ok: false,
+      sample,
     })
-    console.error(`[engine-real] FAIL ${engine.id} ${name}`)
+    console.error(`[engine-real] FAIL sample ${sample}/${SAMPLE_COUNT} ${engine.id} ${name}`)
     throw error
   }
 }
@@ -142,8 +198,8 @@ async function preflight(engine: EngineSpec): Promise<Record<string, unknown>> {
   }
 }
 
-async function startAndParse(root: string, engine: EngineSpec): Promise<Record<string, unknown>> {
-  const workspaceRoot = path.join(root, `${engine.id}-start-workspace`)
+async function startAndParse(root: string, sample: number, engine: EngineSpec): Promise<Record<string, unknown>> {
+  const workspaceRoot = path.join(root, `sample-${sample}`, `${engine.id}-start-workspace`)
   const invocationRoot = path.join(workspaceRoot, '.aiworker', 'sessions', 'session-1', 'invocations', '0001')
   await mkdir(workspaceRoot, { recursive: true })
   const expected = `AIWORKER_REAL_ENGINE_OK_${engine.id.replace(/\W+/g, '_')}`
@@ -178,8 +234,8 @@ async function startAndParse(root: string, engine: EngineSpec): Promise<Record<s
   }
 }
 
-async function runtimeCancel(root: string, engine: EngineSpec): Promise<Record<string, unknown>> {
-  const fixture = await createRuntimeFixture(root, engine, 'cancel')
+async function runtimeCancel(root: string, sample: number, engine: EngineSpec): Promise<Record<string, unknown>> {
+  const fixture = await createRuntimeFixture(root, sample, engine, 'cancel')
   let handle: ProcessHandle | null = null
   try {
     const started = await fixture.runtime.startInvocationDetached({
@@ -194,6 +250,7 @@ async function runtimeCancel(root: string, engine: EngineSpec): Promise<Record<s
     if (handle.pgid)
       await waitForProcessGroupGone(handle.pgid, WAIT_TIMEOUT_MS)
     await drainRuntimeBackground()
+    const processGone = handle.pgid ? !isProcessGroupAlive(handle.pgid) : null
     const events = listSessionEvents(fixture.sessionId).filter(event => event.invocationId === started.invocation.id)
     return {
       eventTypes: events.map(event => event.type),
@@ -203,6 +260,7 @@ async function runtimeCancel(root: string, engine: EngineSpec): Promise<Record<s
         status: cancelled.invocation.status,
         summary: cancelled.invocation.summary,
       },
+      processGone,
     }
   }
   finally {
@@ -213,8 +271,8 @@ async function runtimeCancel(root: string, engine: EngineSpec): Promise<Record<s
   }
 }
 
-async function executorTimeout(root: string, engine: EngineSpec): Promise<Record<string, unknown>> {
-  const workspaceRoot = path.join(root, `${engine.id}-timeout-workspace`)
+async function executorTimeout(root: string, sample: number, engine: EngineSpec): Promise<Record<string, unknown>> {
+  const workspaceRoot = path.join(root, `sample-${sample}`, `${engine.id}-timeout-workspace`)
   const invocationRoot = path.join(workspaceRoot, '.aiworker', 'sessions', 'session-1', 'invocations', '0001')
   await mkdir(workspaceRoot, { recursive: true })
   const handles: ProcessHandle[] = []
@@ -246,6 +304,7 @@ async function executorTimeout(root: string, engine: EngineSpec): Promise<Record
       durationMs: Date.now() - startedAt,
       error: message.slice(0, 300),
       handle: handle ? redactHandle(handle) : null,
+      processGone: handle?.pgid ? !isProcessGroupAlive(handle.pgid) : null,
     }
   }
   finally {
@@ -255,8 +314,8 @@ async function executorTimeout(root: string, engine: EngineSpec): Promise<Record
   }
 }
 
-async function runtimeDispose(root: string, engine: EngineSpec): Promise<Record<string, unknown>> {
-  const fixture = await createRuntimeFixture(root, engine, 'dispose')
+async function runtimeDispose(root: string, sample: number, engine: EngineSpec): Promise<Record<string, unknown>> {
+  const fixture = await createRuntimeFixture(root, sample, engine, 'dispose')
   let handle: ProcessHandle | null = null
   try {
     const started = await fixture.runtime.startInvocationDetached({
@@ -282,10 +341,11 @@ async function runtimeDispose(root: string, engine: EngineSpec): Promise<Record<
   }
 }
 
-async function restartReconcile(root: string, engine: EngineSpec): Promise<Record<string, unknown>> {
-  const dbPath = path.join(root, `${engine.id}-restart-worker.db`)
-  const outputPath = path.join(root, `${engine.id}-restart-child.json`)
-  const workspaceRoot = path.join(root, `${engine.id}-restart-workspaces`)
+async function restartReconcile(root: string, sample: number, engine: EngineSpec): Promise<Record<string, unknown>> {
+  const dbPath = path.join(root, `sample-${sample}`, `${engine.id}-restart-worker.db`)
+  const outputPath = path.join(root, `sample-${sample}`, `${engine.id}-restart-child.json`)
+  const workspaceRoot = path.join(root, `sample-${sample}`, `${engine.id}-restart-workspaces`)
+  await mkdir(path.dirname(outputPath), { recursive: true })
   const child = spawn(process.execPath, [process.argv[1]!, '--crash-child', engine.id, engine.command, dbPath, workspaceRoot, outputPath], {
     cwd: process.cwd(),
     env: process.env,
@@ -299,6 +359,8 @@ async function restartReconcile(root: string, engine: EngineSpec): Promise<Recor
     invocationId: string
     workerId: string
   }
+  const orphanProcessAliveBeforeReconcile = childState.handle.pgid ? isProcessGroupAlive(childState.handle.pgid) : null
+  assert(orphanProcessAliveBeforeReconcile === true, `${engine.id} restart child did not leave an observable orphan process group`)
 
   closeWorkerDb()
   initWorkerDb(dbPath)
@@ -325,6 +387,7 @@ async function restartReconcile(root: string, engine: EngineSpec): Promise<Recor
         status: invocation.status,
         summary: invocation.summary,
       },
+      orphanProcessAliveBeforeReconcile,
     }
   }
   finally {
@@ -380,12 +443,12 @@ async function runCrashChild(): Promise<void> {
   process.exit(0)
 }
 
-async function createRuntimeFixture(root: string, engine: EngineSpec, label: string): Promise<{
+async function createRuntimeFixture(root: string, sample: number, engine: EngineSpec, label: string): Promise<{
   cleanup: () => Promise<void>
   runtime: LocalWorkerRuntime
   sessionId: string
 }> {
-  const fixtureRoot = path.join(root, `${engine.id}-${label}`)
+  const fixtureRoot = path.join(root, `sample-${sample}`, `${engine.id}-${label}`)
   const dbPath = path.join(fixtureRoot, 'worker.db')
   const workspacesRoot = path.join(fixtureRoot, 'workspaces')
   await mkdir(workspacesRoot, { recursive: true })
@@ -518,6 +581,80 @@ function waitForChild(child: ReturnType<typeof spawn>): Promise<number | null> {
   })
 }
 
+function summarizeEvidence(cases: EvidenceCase[]): EvidenceSummary {
+  const byEngineCase = new Map<string, {
+    durations: number[]
+    engineId: string
+    failed: number
+    name: string
+    passed: number
+    samples: Set<number>
+  }>()
+
+  for (const item of cases) {
+    const key = `${item.engineId}\0${item.name}`
+    const existing = byEngineCase.get(key) ?? {
+      durations: [],
+      engineId: item.engineId,
+      failed: 0,
+      name: item.name,
+      passed: 0,
+      samples: new Set<number>(),
+    }
+    existing.samples.add(item.sample)
+    if (item.ok)
+      existing.passed += 1
+    else
+      existing.failed += 1
+    const durationMs = item.details.durationMs
+    if (typeof durationMs === 'number' && Number.isFinite(durationMs))
+      existing.durations.push(durationMs)
+    byEngineCase.set(key, existing)
+  }
+
+  const passedCases = cases.filter(item => item.ok).length
+  return {
+    byEngineCase: [...byEngineCase.values()].map(item => {
+      const total = item.passed + item.failed
+      return {
+        averageDurationMs: average(item.durations),
+        engineId: item.engineId,
+        failed: item.failed,
+        maxDurationMs: item.durations.length > 0 ? Math.max(...item.durations) : null,
+        minDurationMs: item.durations.length > 0 ? Math.min(...item.durations) : null,
+        name: item.name,
+        passRate: total > 0 ? item.passed / total : 0,
+        passed: item.passed,
+        samples: item.samples.size,
+      }
+    }),
+    failedCases: cases.length - passedCases,
+    passedCases,
+    sampleCount: SAMPLE_COUNT,
+    totalCases: cases.length,
+  }
+}
+
+function average(values: number[]): number | null {
+  if (values.length === 0)
+    return null
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function readGitHead(): string | null {
+  const result = spawnSync('git', ['rev-parse', '--short', 'HEAD'], {
+    encoding: 'utf8',
+  })
+  return result.status === 0 ? result.stdout.trim() : null
+}
+
+function readGitDirty(): boolean | null {
+  const result = spawnSync('git', ['status', '--short'], {
+    encoding: 'utf8',
+  })
+  return result.status === 0 ? result.stdout.trim().length > 0 : null
+}
+
 function readPositiveInteger(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? '', 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
@@ -533,5 +670,5 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function drainRuntimeBackground(): Promise<void> {
-  await sleep(readPositiveInteger(process.env.AIWORKER_ENGINE_REAL_DRAIN_MS, 1_500))
+  await sleep(DRAIN_MS)
 }
