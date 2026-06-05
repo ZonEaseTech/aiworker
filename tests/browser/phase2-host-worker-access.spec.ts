@@ -30,14 +30,22 @@ try {
       browserEvents.push(`console:${message.type()}:${message.text()}`)
   })
   page.on('pageerror', error => browserEvents.push(`pageerror:${error.message}`))
+  page.on('requestfailed', request => browserEvents.push(`requestfailed:${request.url()}:${request.failure()?.errorText ?? 'unknown'}`))
 
-  await page.goto(hostUrl, { waitUntil: 'domcontentloaded' })
+  const hostStatus = await gotoDocument(page, hostUrl, '/host')
   await page.getByRole('heading', { name: 'AI Workers' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('button', { name: '开通 AI Worker' }).waitFor({ state: 'visible', timeout: 10000 })
-  evidence.host = await assertNoMountContainers(page, '/host')
+  evidence.host = {
+    ...await assertNoMountContainers(page, '/host'),
+    status: hostStatus,
+  }
 
-  await page.goto(workerUrl, { waitUntil: 'domcontentloaded' })
-  evidence.worker = await assertNoMountContainers(page, new URL(workerUrl).pathname)
+  const workerPathname = new URL(workerUrl).pathname
+  const workerStatus = await gotoDocument(page, workerUrl, workerPathname)
+  evidence.worker = {
+    ...await assertNoMountContainers(page, workerPathname),
+    status: workerStatus,
+  }
 
   if (browserEvents.length > 0)
     throw new Error(`Unexpected browser errors during Phase 2 host/worker access proof: ${browserEvents.join('\n')}`)
@@ -84,6 +92,13 @@ async function assertNoMountContainers(page: Page, pathname: string): Promise<Mo
     )
   }
   return { iframeCount, microAppCount, pathname }
+}
+
+async function gotoDocument(page: Page, url: string, label: string): Promise<number> {
+  const response = await page.goto(url, { waitUntil: 'domcontentloaded' })
+  if (!response?.ok())
+    throw new Error(`${label} returned HTTP ${response?.status() ?? 'unknown'}`)
+  return response.status()
 }
 
 async function startHostPreview(): Promise<string> {

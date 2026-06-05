@@ -286,8 +286,7 @@ bun run test:browser:phase2
 It verifies that `/host` is the administrator control plane with `AI Workers`
 and `开通 AI Worker`, and that `/workers/:workerId` is not accepted as a
 Host-mounted Worker UI. The proof must not find `micro-app` or `iframe` on
-either `/host` or the Worker access path. Static preview/history fallback is not
-an end-to-end Worker Access Adapter proof.
+either `/host` or the Worker access path. Static preview/history fallback is not an end-to-end Worker Access Adapter proof.
 
 ## Pending Implementation (Phase-B Teardown)
 
