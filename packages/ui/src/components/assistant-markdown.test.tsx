@@ -39,6 +39,14 @@ describe('assistant markdown', () => {
     expect(within(screen.getByTestId('assistant-code-block')).getByText('const value = 1')).toBeTruthy()
   })
 
+  it('renders strong emphasis after CJK punctuation without requiring a space', () => {
+    const { container } = render(<AssistantMarkdown markdown="按这个 session 的约束：**我的主战场就是当前 `cwd` 这个 workspace root**。" />)
+
+    const strong = container.querySelector('strong')
+    expect(strong?.textContent).toBe('我的主战场就是当前 cwd 这个 workspace root')
+    expect(screen.getByText('cwd').tagName).toBe('CODE')
+  })
+
   it('repairs incomplete streaming fences before rendering', () => {
     expect(repairStreamingMarkdown('```ts\nconst value = 1', true)).toBe('```ts\nconst value = 1\n```')
     expect(repairStreamingMarkdown('**bold', true)).toBe('**bold**')

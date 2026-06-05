@@ -519,7 +519,11 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
       const closeIndex = findStrongCloser(text, index + 2)
       if (closeIndex !== -1) {
         flushText()
-        nodes.push(<strong key={`${keyPrefix}-strong-${index}`} className="font-semibold">{text.slice(index + 2, closeIndex)}</strong>)
+        nodes.push(
+          <strong key={`${keyPrefix}-strong-${index}`} className="font-semibold">
+            {renderInlineMarkdown(text.slice(index + 2, closeIndex), `${keyPrefix}-strong-${index}`)}
+          </strong>,
+        )
         index = closeIndex + 2
         continue
       }
@@ -529,7 +533,11 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
       const closeIndex = findItalicCloser(text, index + 1)
       if (closeIndex !== -1) {
         flushText()
-        nodes.push(<em key={`${keyPrefix}-em-${index}`}>{text.slice(index + 1, closeIndex)}</em>)
+        nodes.push(
+          <em key={`${keyPrefix}-em-${index}`}>
+            {renderInlineMarkdown(text.slice(index + 1, closeIndex), `${keyPrefix}-em-${index}`)}
+          </em>,
+        )
         index = closeIndex + 1
         continue
       }
@@ -792,7 +800,7 @@ function isStrongOpener(text: string, index: number): boolean {
   if (!isEmphasisContentStart(next))
     return false
 
-  return !previous || /[\s([{"']/.test(previous)
+  return isEmphasisOpeningBoundary(previous)
 }
 
 function isItalicOpener(text: string, index: number): boolean {
@@ -810,9 +818,20 @@ function isItalicOpener(text: string, index: number): boolean {
   if (!isEmphasisContentStart(next))
     return false
 
-  return !previous || /[\s([{"']/.test(previous)
+  return isEmphasisOpeningBoundary(previous)
 }
 
 function isEmphasisContentStart(value: string): boolean {
   return !/[\s!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~-]/.test(value)
+}
+
+function isEmphasisOpeningBoundary(value: string | undefined): boolean {
+  if (!value)
+    return true
+
+  return /\s/.test(value) || /[([{"']/.test(value) || isUnicodePunctuation(value)
+}
+
+function isUnicodePunctuation(value: string): boolean {
+  return /\p{P}/u.test(value)
 }
