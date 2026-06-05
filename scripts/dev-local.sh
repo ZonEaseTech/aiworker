@@ -170,11 +170,30 @@ wait_for_health() {
   return 1
 }
 
+default_worker_pid_file() {
+  AIWORKER_HOME="$AIWORKER_HOME" bun -e '
+import { join, resolve } from "node:path"
+
+const home = process.env.AIWORKER_HOME
+if (!home)
+  process.exit(1)
+
+const index = await Bun.file(join(home, "fleet.json")).json()
+const defaultWorker = index.workers?.find((worker) => worker.id === index.default) ?? index.workers?.[0]
+if (!defaultWorker?.home)
+  process.exit(1)
+
+const workerHome = defaultWorker.home === "." ? home : resolve(home, defaultWorker.home)
+console.log(join(workerHome, "aiworker-daemon.pid"))
+'
+}
+
 read_daemon_pid() {
-  local pid_file="${AIWORKER_HOME}/aiworker-daemon.pid"
+  local pid_file
   local pid
 
   for _ in $(seq 1 20); do
+    pid_file="$(default_worker_pid_file)"
     if [[ -s "$pid_file" ]]; then
       pid="$(tr -d '[:space:]' < "$pid_file")"
       if [[ "$pid" =~ ^[0-9]+$ ]]; then
@@ -185,7 +204,7 @@ read_daemon_pid() {
     sleep 0.1
   done
 
-  echo "[dev] daemon pid file was not created or was invalid: $pid_file" >&2
+  echo "[dev] daemon pid file was not created or was invalid: ${pid_file:-<unknown>}" >&2
   return 1
 }
 
@@ -208,7 +227,7 @@ start_daemon_with_worker() {
     AIWORKER_HOME="$AIWORKER_HOME" \
       AIWORKER_WORKER_HOST="$AIWORKER_WORKER_HOST" \
       PORT="$PORT" \
-      bun apps/worker-cli/src/aiworker.ts start --no-open --host "$AIWORKER_HOST" --port "$PORT" >/dev/null
+      bun apps/worker-cli/src/aiworker.ts start --host "$AIWORKER_HOST" --port "$PORT" >/dev/null
   )
   if ! DAEMON_PID="$(read_daemon_pid)"; then
     stop_daemon_after_start_failure

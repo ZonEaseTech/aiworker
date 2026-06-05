@@ -20,19 +20,29 @@ function lineIndexContaining(content: string, text: string): number {
 describe('Worker startup contract', () => {
   it('keeps dev-local Web startup behind the CLI start worker bootstrap', () => {
     const script = readRepoFile('scripts/dev-local.sh')
-    const ensureIndex = script.indexOf('apps/worker-cli/src/aiworker.ts start --no-open')
+    const ensureIndex = script.indexOf('apps/worker-cli/src/aiworker.ts start --host "$AIWORKER_HOST" --port "$PORT"')
     const pidReadIndex = script.indexOf('DAEMON_PID="$(read_daemon_pid)"')
     const cleanupIndex = script.indexOf('stop_daemon_after_start_failure')
     const webIndex = script.indexOf('starting Worker Web')
 
-    expect(ensureIndex, 'dev-local must invoke aiworker start --no-open before launching Worker Web').toBeGreaterThanOrEqual(0)
+    expect(ensureIndex, 'dev-local must invoke aiworker start before launching Worker Web').toBeGreaterThanOrEqual(0)
     expect(pidReadIndex, 'dev-local must read the daemon pid file after aiworker start succeeds').toBeGreaterThan(ensureIndex)
     expect(cleanupIndex, 'dev-local must clean up a started daemon if pid capture fails').toBeGreaterThanOrEqual(0)
     expect(webIndex, 'dev-local should still launch Worker Web after the startup gate').toBeGreaterThanOrEqual(0)
     expect(ensureIndex, 'Worker bootstrap must run before Worker Web starts').toBeLessThan(webIndex)
     expect(pidReadIndex, 'dev-local must know the daemon pid before Worker Web starts').toBeLessThan(webIndex)
     expect(cleanupIndex, 'startup-failure cleanup must be defined before Worker Web starts').toBeLessThan(webIndex)
+    expect(script, 'dev-local must not pass unsupported open flags to aiworker start').not.toMatch(/\s--(?:no-)?open(?:\s|$)/)
     expect(script, 'dev-local must not depend on parsing aiworker start stdout JSON').not.toContain('JSON.parse(input)')
+  })
+
+  it('reads the daemon pid from the fleet default worker home after aiworker start', () => {
+    const script = readRepoFile('scripts/dev-local.sh')
+
+    expect(script, 'dev-local must derive the pid file from fleet metadata after fleet start').toContain('default_worker_pid_file()')
+    expect(script, 'dev-local must inspect fleet.json instead of assuming the root home pid file').toContain('fleet.json')
+    expect(script, 'dev-local must resolve per-worker homes under AIWORKER_HOME/workers').toContain('workers')
+    expect(script, 'dev-local must read the fleet worker pid file after aiworker start').toContain('pid_file="$(default_worker_pid_file)"')
   })
 
   it('restarts an existing dev daemon before checking the daemon port', () => {
