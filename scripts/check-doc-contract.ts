@@ -452,7 +452,7 @@ requireIncludes('docs/testing.md', [
   '## Browser Proof Scope',
   'bun run test:contracts',
   'Current release confidence is built from these gates:',
-  'bun run docs:check\nbun run test:contracts\nbun run test:protocol\nbun run test:cli\nbun run test:browser:freeform\nbun run typecheck\nbun run lint\nbun run build\nbun run smoke:dist-release\nbun run smoke:standalone-release\nbun run smoke:standalone-runtime\nbun run smoke:npm-package\nbun run test\nbun run check',
+  'bun run docs:check\nbun run test:contracts\nbun run test:protocol\nbun run test:cli\nbun run test:browser:freeform\nbun run test:browser:phase2\nbun run typecheck\nbun run lint\nbun run build\nbun run smoke:dist-release\nbun run smoke:standalone-release\nbun run smoke:standalone-runtime\nbun run smoke:npm-package\nbun run test\nbun run check',
   '`bun run release:check` is the aggregator for this current release gate list.',
   '`bun run release:check` must exactly aggregate the Current Release Gates.',
   'Tag release handoff must run post-compile artifact proof after `release:check`\nand before npm publish or GitHub release attachment.',
@@ -534,6 +534,9 @@ requireIncludes('docs/testing.md', [
   'Worker access: `/workers/:workerId` is employee navigation through Worker Access Adapter, not Host-rendered UI.',
   'Auth: Logto proves identity; AIWorker assignment decides exact Worker access.',
   'anti-mount: no Phase 2 acceptance test may treat micro-app, mounted workbench,\n  iframe, or Host-rendered Worker UI as product value.',
+  'bun run test:browser:phase2',
+  'It verifies that `/host` is the administrator control plane with `AI Workers`\nand `开通 AI Worker`, and that `/workers/:workerId` is not accepted as a\nHost-mounted Worker UI.',
+  'The proof must not find `micro-app` or `iframe` on\neither `/host` or the Worker access path.',
 ])
 for (const testPath of documentedTestingPaths()) {
   if (!existsSync(abs(testPath))) {
@@ -566,6 +569,7 @@ const expectedReleaseGateCommands = [
   'bun run test:protocol',
   'bun run test:cli',
   'bun run test:browser:freeform',
+  'bun run test:browser:phase2',
   'bun run typecheck',
   'bun run lint',
   'bun run build',
@@ -838,6 +842,7 @@ if (packageJson.scripts?.['test:protocol'] !== 'bun run --filter \'@zonease/aiwo
   issues.push({ file: 'package.json', message: 'test:protocol must run the soul-descriptor package test' })
 const testCliScript = packageJson.scripts?.['test:cli'] ?? ''
 const testBrowserFreeformScript = packageJson.scripts?.['test:browser:freeform'] ?? ''
+const testBrowserPhase2Script = packageJson.scripts?.['test:browser:phase2'] ?? ''
 const hostDaemonOpenApi = read('packages/worker-daemon/src/modes/worker/openapi.ts')
 const hostDaemonWorkerLocalTest = read('packages/worker-daemon/src/modes/worker.local.test.ts')
 const freeformCliBrowserProof = read('tests/browser/freeform-cli-golden-path.spec.ts')
@@ -860,6 +865,10 @@ for (const proof of browserFreeformProofs) {
 }
 if (!testBrowserFreeformScript.includes('tests/browser/freeform-cli-golden-path.spec.ts'))
   issues.push({ file: 'package.json', message: 'test:browser:freeform must include the Freeform CLI browser golden path proof' })
+if (!testBrowserPhase2Script.includes('bun run --filter \'@zonease/aiworker-host-web\' build'))
+  issues.push({ file: 'package.json', message: 'test:browser:phase2 must rebuild Host Web before the Phase 2 browser proof' })
+if (!testBrowserPhase2Script.includes('tests/browser/phase2-host-worker-access.spec.ts'))
+  issues.push({ file: 'package.json', message: 'test:browser:phase2 must include the Phase 2 host/worker access browser proof' })
 requireWorkerConfigBrokerRoutesComplete([
   ['docs/protocol.md', read('docs/protocol.md'), [
     'GET    /api/workers/:workerId/config',
