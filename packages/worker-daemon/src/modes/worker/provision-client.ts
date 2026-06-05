@@ -1,11 +1,14 @@
 import {
   parseWorkerCheckInResponse,
   type WorkerAccessHello,
+  type WorkerAccessRequestEnvelope,
+  type WorkerAccessResponseEnvelope,
   type WorkerCheckInRequest,
   type WorkerCheckInResponse,
 } from '@zonease/aiworker-worker-control-protocol'
 
 export type CheckInFetch = (url: URL, init: RequestInit) => Promise<Response>
+export type AccessForwardFetch = (url: URL, init: RequestInit) => Promise<Response>
 
 export interface BuildCheckInInput {
   id: string
@@ -34,6 +37,12 @@ export interface MaybeProvisionCheckInInput {
   checkIn?: (input: CheckInInput) => Promise<WorkerCheckInResponse>
   env: Record<string, string | undefined>
   runtimeVersion: string
+}
+
+export interface HandleAccessRequestEnvelopeInput {
+  envelope: WorkerAccessRequestEnvelope
+  fetch?: AccessForwardFetch
+  localBaseUrl: string
 }
 
 export function buildCheckInBody(input: BuildCheckInInput): WorkerCheckInRequest {
@@ -84,4 +93,26 @@ export async function maybeProvisionCheckIn(input: MaybeProvisionCheckInInput): 
     workerId: input.activeResolution.worker.id,
     workbenchUrl: '/',
   })
+}
+
+export async function handleAccessRequestEnvelope(
+  input: HandleAccessRequestEnvelopeInput,
+): Promise<WorkerAccessResponseEnvelope> {
+  const doFetch = input.fetch ?? fetch
+  const url = new URL(input.envelope.path, input.localBaseUrl)
+  const init: RequestInit = {
+    headers: input.envelope.headers,
+    method: input.envelope.method,
+  }
+  if (input.envelope.method !== 'GET' && input.envelope.method !== 'HEAD')
+    init.body = input.envelope.bodyText
+
+  const response = await doFetch(url, init)
+  return {
+    type: 'response',
+    id: input.envelope.id,
+    status: response.status,
+    headers: Object.fromEntries(response.headers.entries()),
+    bodyText: await response.text(),
+  }
 }

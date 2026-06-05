@@ -173,6 +173,7 @@ async function handleWorkerRoute(
   if (!userCanOpenWorker(user, readyAuthView))
     return json({ error: { code: 'FORBIDDEN' } }, { status: 403 })
 
+  // Until a Worker access connection is registered, the employee URL is not ready and Host must not pretend it is. aissh success and check-in are not enough.
   if (assignment.status !== 'ready' || !accessRegistry.has(workerId))
     return json({ error: { code: 'WORKER_ACCESS_NOT_READY' } }, { status: 503 })
 

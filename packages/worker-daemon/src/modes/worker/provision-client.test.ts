@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 
-import { buildAccessHello, buildCheckInBody, checkInToHost, maybeProvisionCheckIn } from './provision-client'
+import {
+  buildAccessHello,
+  buildCheckInBody,
+  checkInToHost,
+  handleAccessRequestEnvelope,
+  maybeProvisionCheckIn,
+} from './provision-client'
 
 describe('worker provision check-in client', () => {
   const originalHost = process.env.AIWORKER_HOST_URL
@@ -205,5 +211,79 @@ describe('worker provision check-in client', () => {
     })
 
     expect(calls).toEqual([])
+  })
+
+  it('forwards a worker access GET envelope to the local workbench and returns a response envelope', async () => {
+    const calls: Array<{ body: unknown, headers: unknown, method: string, url: string }> = []
+
+    const response = await handleAccessRequestEnvelope({
+      envelope: {
+        type: 'request',
+        id: 'req_1',
+        method: 'GET',
+        path: '/workers/wkr_82',
+        headers: { accept: 'text/html' },
+        bodyText: 'must-not-forward',
+      },
+      fetch: async (url, init) => {
+        calls.push({
+          body: init?.body,
+          headers: init?.headers,
+          method: init?.method ?? 'GET',
+          url: String(url),
+        })
+        return new Response('<main>worker</main>', {
+          headers: { 'content-type': 'text/html' },
+          status: 202,
+        })
+      },
+      localBaseUrl: 'http://127.0.0.1:9217',
+    })
+
+    expect(calls).toEqual([{
+      body: undefined,
+      headers: { accept: 'text/html' },
+      method: 'GET',
+      url: 'http://127.0.0.1:9217/workers/wkr_82',
+    }])
+    expect(response).toEqual({
+      type: 'response',
+      id: 'req_1',
+      status: 202,
+      headers: { 'content-type': 'text/html' },
+      bodyText: '<main>worker</main>',
+    })
+  })
+
+  it('forwards worker access POST body and headers to the local workbench', async () => {
+    const calls: Array<{ body: unknown, headers: unknown, method: string, url: string }> = []
+
+    await handleAccessRequestEnvelope({
+      envelope: {
+        type: 'request',
+        id: 'req_2',
+        method: 'POST',
+        path: '/workers/wkr_82/api/messages',
+        headers: { 'content-type': 'application/json' },
+        bodyText: '{"text":"hello"}',
+      },
+      fetch: async (url, init) => {
+        calls.push({
+          body: init?.body,
+          headers: init?.headers,
+          method: init?.method ?? 'GET',
+          url: String(url),
+        })
+        return Response.json({ ok: true })
+      },
+      localBaseUrl: 'http://127.0.0.1:9217',
+    })
+
+    expect(calls).toEqual([{
+      body: '{"text":"hello"}',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+      url: 'http://127.0.0.1:9217/workers/wkr_82/api/messages',
+    }])
   })
 })

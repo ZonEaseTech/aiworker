@@ -1,3 +1,9 @@
+import {
+  parseWorkerAccessResponseEnvelope,
+  type WorkerAccessRequestEnvelope,
+  type WorkerAccessResponseEnvelope,
+} from '@zonease/aiworker-worker-control-protocol'
+
 export interface WorkerAccessConnection {
   close: () => void
   workerId: string
@@ -38,4 +44,25 @@ export function sanitizeForwardHeaders(source: Headers): Headers {
   next.delete('set-cookie')
   next.delete('x-aiworker-user-email')
   return next
+}
+
+export async function createAccessRequestEnvelope(request: Request): Promise<WorkerAccessRequestEnvelope> {
+  const url = new URL(request.url)
+  const headers = Object.fromEntries(sanitizeForwardHeaders(request.headers).entries())
+  const bodyText = request.method === 'GET' || request.method === 'HEAD'
+    ? ''
+    : await request.text()
+
+  return {
+    type: 'request',
+    id: 'req_1',
+    method: request.method,
+    path: `${url.pathname}${url.search}`,
+    headers,
+    bodyText,
+  }
+}
+
+export function parseAccessResponseEnvelope(input: unknown): WorkerAccessResponseEnvelope {
+  return parseWorkerAccessResponseEnvelope(input)
 }

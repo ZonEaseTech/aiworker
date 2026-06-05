@@ -239,6 +239,32 @@ describe('host server', () => {
     expect(response.status).toBe(403)
   })
 
+  it('returns not-ready for an assigned ready worker without a registered access connection', async () => {
+    const server = await createHostServer({
+      authUser: bobUser,
+      dbPath: dbPath(),
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: '1.0.0',
+    })
+    markAssignmentAccessReady(created.assignment.assignmentId)
+    markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })
+
+    const response = await server.fetch(new Request('http://host/workers/wkr_82'))
+
+    expect(response.status).toBe(503)
+    expect(await json(response)).toEqual({ error: { code: 'WORKER_ACCESS_NOT_READY' } })
+  })
+
   it('routes an assigned ready worker when access registry has the connection', async () => {
     const accessRegistry = createWorkerAccessRegistry()
     const server = await createHostServer({
