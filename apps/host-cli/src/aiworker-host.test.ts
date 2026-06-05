@@ -43,7 +43,7 @@ describe('aiworker-host control CLI', () => {
     expect(code).toBe(1)
   })
 
-  it('serves with injected server factory and bun serve implementation', async () => {
+  it('serves with no admin user by default', async () => {
     const calls: any[] = []
     const code = await runHostCli([
       'serve',
@@ -72,11 +72,7 @@ describe('aiworker-host control CLI', () => {
     expect(calls[0]).toEqual({
       type: 'factory',
       options: {
-        authUser: {
-          email: 'admin@example.com',
-          roles: ['host:admin'],
-          subject: 'dev-host-admin',
-        },
+        authUser: null,
         dbPath: '/tmp/aiworker-host.db',
         publicBaseUrl: 'https://aiworker.zonease.org',
       },
@@ -87,6 +83,37 @@ describe('aiworker-host control CLI', () => {
       listening: true,
       port: 4321,
       publicBaseUrl: 'https://aiworker.zonease.org',
+    })
+  })
+
+  it('serves with an explicit dev admin user when requested', async () => {
+    const calls: any[] = []
+    const code = await runHostCli([
+      'serve',
+      '--db',
+      '/tmp/aiworker-host.db',
+      '--dev-admin-email',
+      'admin@example.com',
+    ], {
+      async serverFactory(options) {
+        calls.push({ type: 'factory', options })
+        return {
+          async fetch() {
+            return new Response('ok')
+          },
+        }
+      },
+      bunServe(options) {
+        calls.push({ type: 'serve', options })
+        return {} as ReturnType<typeof Bun.serve>
+      },
+    })
+
+    expect(code).toBe(0)
+    expect(calls[0].options.authUser).toEqual({
+      email: 'admin@example.com',
+      roles: ['host:admin'],
+      subject: 'dev-admin',
     })
   })
 })

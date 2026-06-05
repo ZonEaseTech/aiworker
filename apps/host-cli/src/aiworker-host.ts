@@ -45,20 +45,23 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
   cli
     .command('serve', 'serve the Host provisioning/control API')
     .option('--db <path>', 'Host sqlite database path', { default: 'host.db' })
+    .option('--dev-admin-email <email>', 'development-only static host admin email')
     .option('--public-base-url <url>', 'public Host base URL', { default: 'http://127.0.0.1:9310' })
     .option('--port <port>', 'listen port', { default: '9310' })
-    .action(async (options: { db: string, port: string | number, publicBaseUrl: string }) => {
+    .action(async (options: { db: string, devAdminEmail?: string, port: string | number, publicBaseUrl: string }) => {
       const port = Number(options.port)
       if (!Number.isInteger(port) || port <= 0)
         throw new Error(`Invalid port: ${options.port}`)
 
       const publicBaseUrl = options.publicBaseUrl
       const server = await (deps.serverFactory ?? createHostServer)({
-        authUser: {
-          email: 'admin@example.com',
-          roles: ['host:admin'],
-          subject: 'dev-host-admin',
-        },
+        authUser: options.devAdminEmail
+          ? {
+              email: options.devAdminEmail,
+              roles: ['host:admin'],
+              subject: 'dev-admin',
+            }
+          : null,
         dbPath: options.db,
         publicBaseUrl,
       })

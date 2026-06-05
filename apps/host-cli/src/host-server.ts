@@ -1,7 +1,9 @@
 import type { AuthenticatedHostUser, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
 
+import { existsSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
+import { resolve } from 'node:path'
 
 import {
   createAssignmentView,
@@ -41,8 +43,16 @@ interface CreateAssignmentRequest {
   soulReleaseRef?: unknown
 }
 
+let activeHostDbPath: string | null = null
+
 export async function createHostServer(options: HostServerOptions): Promise<HostServer> {
-  initHostDb(options.dbPath)
+  const dbPath = normalizeDbPath(options.dbPath)
+  if (activeHostDbPath && activeHostDbPath !== dbPath && existsSync(activeHostDbPath)) {
+    throw new Error(`Cannot create Host server with different Host dbPath in one process: active=${activeHostDbPath} requested=${dbPath}`)
+  }
+
+  activeHostDbPath = dbPath
+  initHostDb(dbPath)
   runHostMigrations()
 
   const authProvider = createStaticAuthProvider(options.authUser ?? null)
@@ -192,6 +202,10 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+}
+
+function normalizeDbPath(dbPath: string): string {
+  return dbPath === ':memory:' ? dbPath : resolve(dbPath)
 }
 
 function json(value: unknown, init: ResponseInit = {}): Response {

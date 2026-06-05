@@ -49,6 +49,36 @@ describe('host server', () => {
     }
   }
 
+  it('allows repeated server creation for the same dbPath', async () => {
+    const path = dbPath()
+
+    await createHostServer({
+      authUser: adminUser,
+      dbPath: path,
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })
+
+    await expect(createHostServer({
+      authUser: bobUser,
+      dbPath: path,
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })).resolves.toBeDefined()
+  })
+
+  it('throws when creating servers for different active dbPaths in one process', async () => {
+    await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })
+
+    await expect(createHostServer({
+      authUser: bobUser,
+      dbPath: join(dir, 'other-host.db'),
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })).rejects.toThrow('different Host dbPath')
+  })
+
   it('allows an admin to create and list assignments without leaking stored token fields', async () => {
     const server = await createHostServer({
       authUser: adminUser,
