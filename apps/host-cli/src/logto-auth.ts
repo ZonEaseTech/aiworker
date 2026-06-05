@@ -20,7 +20,7 @@ export function extractBearerToken(headers: Headers): string | null {
   if (!authorization)
     return null
 
-  const match = /^Bearer\s+(\S+)$/i.exec(authorization.trim())
+  const match = /^Bearer +(\S+)$/i.exec(authorization.trim())
   return match?.[1] ?? null
 }
 
@@ -36,8 +36,13 @@ export function mapLogtoClaimsToUser(claims: LogtoClaims): AuthenticatedHostUser
 
   return {
     email: claims.email.trim().toLowerCase(),
-    roles: Array.isArray(claims.roles) ? claims.roles.filter((role): role is string => typeof role === 'string') : [],
-    subject: claims.sub,
+    roles: Array.isArray(claims.roles)
+      ? claims.roles
+          .filter((role): role is string => typeof role === 'string')
+          .map(role => role.trim())
+          .filter(Boolean)
+      : [],
+    subject: claims.sub.trim(),
   }
 }
 
@@ -50,11 +55,16 @@ export function createLogtoAuthProvider(options: LogtoAuthOptions): AuthProvider
       if (!token)
         return null
 
-      const { payload } = await jwtVerify(token, jwks, {
-        audience: options.audience,
-        issuer: options.issuer,
-      })
-      return mapLogtoClaimsToUser(payload as LogtoClaims)
+      try {
+        const { payload } = await jwtVerify(token, jwks, {
+          audience: options.audience,
+          issuer: options.issuer,
+        })
+        return mapLogtoClaimsToUser(payload as LogtoClaims)
+      }
+      catch {
+        return null
+      }
     },
   }
 }
