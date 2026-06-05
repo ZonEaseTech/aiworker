@@ -36,6 +36,13 @@ interface PortStatus {
   process: null | string
 }
 
+interface DaemonHealthProbe {
+  appId: null | string
+  ok: boolean
+  status: null | number
+  workerId: null | string
+}
+
 interface FleetWorkerStatus {
   app: string
   healthOk: boolean
@@ -150,14 +157,6 @@ function run(
   return { stderr, stdout, status }
 }
 
-function cli(args: string[], options: { allowFailure?: boolean } = {}): CommandResult {
-  return run('bun', ['apps/worker-cli/src/aiworker.ts', ...args], {
-    allowFailure: options.allowFailure,
-    cwd: repoRoot(),
-    env: { AIWORKER_HOME: aiworkerHome() },
-  })
-}
-
 function hasTmuxSession(session: string): boolean {
   return run('tmux', ['has-session', '-t', session], { allowFailure: true }).status === 0
 }
@@ -201,21 +200,73 @@ export function parseFleetStatus(text: string): FleetWorkerStatus[] {
   }))
 }
 
-async function status(): Promise<void> {
-  const home = aiworkerHome()
-  console.log(`[dev:fleet-web:status] AIWORKER_HOME=${home}`)
+export function summarizeDaemonHealth(input: {
+  entry: DevFleetEntry
+  health: DaemonHealthProbe | null
+  port: PortStatus
+  url: string
+}): FleetWorkerStatus {
+  const activeWorkerId = input.health?.workerId ?? input.entry.workerId
+  const activeAppId = input.health?.appId ?? input.entry.appId
+  return {
+    app: activeAppId,
+    healthOk: input.port.listening
+      && input.health?.ok === true
+      && activeWorkerId === input.entry.workerId
+      && activeAppId === input.entry.appId,
+    healthStatus: input.health?.status ?? null,
+    id: activeWorkerId,
+    port: input.entry.apiPort,
+    running: input.port.listening,
+    url: input.url,
+  }
+}
 
-  const fleet = cli(['fleet', 'status'], { allowFailure: true })
-  console.log('\n[daemon]')
-  if (fleet.status === 0) {
-    for (const worker of parseFleetStatus(fleet.stdout)) {
-      console.log(
-        `${worker.id}: app=${worker.app} running=${worker.running} health=${worker.healthOk ? 'ok' : 'not-ok'} status=${worker.healthStatus ?? 'n/a'} url=${worker.url}`,
-      )
+async function fetchDaemonHealth(url: string): Promise<DaemonHealthProbe> {
+  try {
+    const response = await fetch(`${url}/health`, {
+      signal: AbortSignal.timeout(1000),
+    })
+    const body = await response.json().catch(() => null) as null | {
+      workers?: Array<{
+        appId?: unknown
+        id?: unknown
+        status?: unknown
+      }>
+    }
+    const activeWorker = body?.workers?.find(worker => worker.status === 'active') ?? body?.workers?.[0]
+    return {
+      appId: typeof activeWorker?.appId === 'string' ? activeWorker.appId : null,
+      ok: response.ok,
+      status: response.status,
+      workerId: typeof activeWorker?.id === 'string' ? activeWorker.id : null,
     }
   }
-  else {
-    console.log('fleet status unavailable')
+  catch {
+    return {
+      appId: null,
+      ok: false,
+      status: null,
+      workerId: null,
+    }
+  }
+}
+
+function formatDaemonStatus(worker: FleetWorkerStatus): string {
+  return `${worker.id}: app=${worker.app} running=${worker.running} health=${worker.healthOk ? 'ok' : 'not-ok'} status=${worker.healthStatus ?? 'n/a'} url=${worker.url}`
+}
+
+async function status(): Promise<void> {
+  const home = aiworkerHome()
+  const host = '127.0.0.1'
+  console.log(`[dev:fleet-web:status] AIWORKER_HOME=${home}`)
+
+  console.log('\n[daemon]')
+  for (const entry of DEV_FLEET_TOPOLOGY) {
+    const url = `http://${host}:${entry.apiPort}`
+    const port = listenerForPort(entry.apiPort)
+    const health = port.listening ? await fetchDaemonHealth(url) : null
+    console.log(formatDaemonStatus(summarizeDaemonHealth({ entry, health, port, url })))
   }
 
   console.log('\n[tmux]')

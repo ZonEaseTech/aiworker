@@ -7,6 +7,7 @@ import {
   DEV_FLEET_TOPOLOGY,
   formatPortStatus,
   parseFleetStatus,
+  summarizeDaemonHealth,
   validateWorkerApp,
 } from './dev-fleet-web'
 
@@ -170,5 +171,34 @@ describe('dev fleet web status helpers', () => {
         url: 'http://127.0.0.1:9218',
       },
     ])
+  })
+
+  it('summarizes daemon health from topology and probes without fleet JSON', () => {
+    expect(summarizeDaemonHealth({
+      entry: {
+        apiPort: 9218,
+        appId: 'google-ads',
+        soulName: '谷歌推广',
+        tmuxSession: 'aiworker-vite-google-ads',
+        vitePort: 5174,
+        workerId: 'dev-google-ads',
+      },
+      health: {
+        appId: 'google-ads',
+        ok: true,
+        status: 200,
+        workerId: 'dev-google-ads',
+      },
+      port: { listening: true, port: 9218, process: 'bun 123 aiworker' },
+      url: 'http://127.0.0.1:9218',
+    })).toEqual({
+      app: 'google-ads',
+      healthOk: true,
+      healthStatus: 200,
+      id: 'dev-google-ads',
+      port: 9218,
+      running: true,
+      url: 'http://127.0.0.1:9218',
+    })
   })
 })
