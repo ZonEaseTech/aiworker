@@ -44,7 +44,7 @@ Workbench 管 workspace、workspace 下的 session（= chat composer + view）�
 
 Host/Soul 是 descriptor-only：Host 与 Workbench 只消费 `dist/soul.descriptor.json`，不读 Soul source、不 import Soul 私有模块、不解释领域字段。
 
-Worker 拥有并直接渲染 Workbench；v1 没有 micro-app、没有 mounted-workbench、没有 Soul 提供的 UI。Phase 2 Host 不 mount / frame / render Worker Workbench，只通过控制契约做分发、授权、provisioning、readiness/lifecycle 状态。Descriptor v1 极简：`protocol / identity / engine` 资产束，无 workbench / api / capability。
+Worker 拥有并直接渲染 Workbench；v1 没有 micro-app、没有 mounted-workbench、没有 Soul 提供的 UI。Phase 2 Host 不 mount / frame / render Worker Workbench。Phase 2 允许 Worker 主动 check-in Host 并建立 Worker Access reverse tunnel；这些只属于分发/访问闭环，不让 Host 进入 Worker runtime 热路径。Descriptor v1 极简：`protocol / identity / engine` 资产束，无 workbench / api / capability。
 
 ## Runtime Boundary
 

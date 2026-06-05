@@ -111,8 +111,10 @@ requireIncludes('docs/architecture.md', [
   // descriptor minimal
   'Descriptor v1 is intentionally minimal: `protocol`, `identity`, `engine` asset\nrefs and engine targets. It carries no workbench, no app-owned API, no\ncapabilities, and no domain business concepts.',
   'The Worker owns and renders its Workbench directly. v1 has no micro-app, no\nmounted-workbench resolution, and no Soul-provided UI.',
-  // Phase 2 control plane, passive worker
-  'Host does not mount, frame, or render the\nWorkbench. The only Host-to-Worker product contract is the transport-agnostic\ncontrol contract owned by `packages/worker-control-protocol`, where a Worker is\nthe passive control server, Host is the client, and a Worker never initiates a\nconnection to Host.',
+  // Phase 2 control plane
+  'Phase 2 Host integration has two\ndistribution-plane directions:',
+  'Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host',
+  'Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.',
   'The control contract covers worker describe, health, instance lifecycle, and an\nassignment envelope. It must not carry session, invocation, projection, engine,\nor domain data. The assignment envelope is the distribution record that lets Host\ncopy a published Soul version plus authorized connectors, permissions, and\ngateway/profile refs to employee Workers.',
   // session = chat, no capability
   'A session is a Worker\nlocator for a workspace and its invocation references; it carries no capability.\nA session is, to the employee, a chat: a composer and a transcript over one\nworkspace.',
@@ -151,7 +153,7 @@ requireIncludes('AGENTS.md', [
   '禁止创建 `core-v2` / `shared-v2`。`packages/core` 与 `packages/shared` 最终消失。`apps/api` 迁移为 `packages/worker-daemon`。',
   'Host/Soul 是 descriptor-only：Host 与 Workbench 只消费 `dist/soul.descriptor.json`，不读 Soul source、不 import Soul 私有模块、不解释领域字段。',
   'Worker 拥有并直接渲染 Workbench；v1 没有 micro-app、没有 mounted-workbench、没有 Soul 提供的 UI。',
-  'Phase 2 Host 不 mount / frame / render Worker Workbench，只通过控制契约做分发、授权、provisioning、readiness/lifecycle 状态。',
+  'Phase 2 Host 不 mount / frame / render Worker Workbench。Phase 2 允许 Worker 主动 check-in Host 并建立 Worker Access reverse tunnel；这些只属于分发/访问闭环，不让 Host 进入 Worker runtime 热路径。',
   'Descriptor v1 极简：`protocol / identity / engine` 资产束，无 workbench / api / capability。',
   'Session 只保留 lifecycle：`active | archived | deleted`。Execution/process 状态属于 `engine_invocations`。',
   'Native engine 采用 B+ structured bridge。Worker 管 projection、process observation、redacted raw chunks、normalized bridge events、opaque external refs、cancel、reattach、reconciler、engine 启动；native engine 自己管理模型、tool loop、approval、sandbox、auth/profile 和 native session。',
@@ -244,12 +246,17 @@ requireIncludes('docs/protocol.md', [
   '## Host-to-Worker Control Contract',
   '`packages/worker-control-protocol` defines a transport-agnostic control contract.',
   'It covers worker.describe, worker.health, worker.lifecycle, and a worker.assignment\nenvelope.',
-  'The Worker is the passive control server; Host is the client. A Worker\nnever initiates a connection to Host.',
+  'Phase 2 Host integration has two distribution-plane directions:',
+  'Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host',
+  'Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.',
   'The Host control plane is Phase 2 and is not on the v1 runtime path.',
   'Host does not mount, frame, embed, render, or proxy\nthe Worker\'s Workbench.',
   'The control contract must not carry session, invocation, projection, engine, or\ndomain data. The assignment envelope is a distribution record',
   '`worker.describe` may include the Worker-owned `workbenchUrl` so Host can direct\nan employee to their Worker. It must not expose a mount entry, micro-app entry,\nrouter mode, app-owned route, or Host-rendered surface.',
   'publish Soul version -> assign to employee/group -> provision employee Worker -> employee opens Worker Workbench',
+  'POST   /api/provision/check-in',
+  'GET    /api/provision/access',
+  'GET    /workers/:workerId',
   'Host owns the publish/assign/provision governance path. Worker owns the\nWorkbench, workspace, session, invocation, projection, engine bridge, runtime\nconfiguration overlays, and redaction.',
   // 钉死倒置后归属:workspace locator metadata 归 Worker（a6c75512,验收 #3 补 pin 防静默 revert）。
   'creates Worker workspace locator metadata plus projection-owned bootstrap\n  files.',
@@ -359,6 +366,9 @@ requireIncludes('docs/runtime.md', [
   'Auto-bootstrap stops at the Worker; the first workspace is the employee\'s\nfirst action in the Workbench.',
   'In Phase 2, a Host-provisioned employee Worker keeps the same Workbench\nexperience. The first screen must read as "my AI worker is ready", not "Host\nmounted a remote surface".',
   'Host→Worker assignment and lifecycle signals are Phase 2 distribution inputs.',
+  'Phase 2 provisioning check-in and Worker Access tunnel signals are distribution-plane signals.',
+  'Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host',
+  'Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.',
   'assignment changes may update Worker-scoped authorization and\nselection metadata at explicit sync points, but they must not expose session\ncontent to Host, interrupt native engine execution, replace projection ownership,\nor make the Worker depend on Host for normal work.',
 ])
 
@@ -518,6 +528,9 @@ requireIncludes('docs/testing.md', [
   'author: can iterate a Soul version without adding UI, app-owned API, or Host\n  integration files to the Soul',
   'administrator: can copy one published capability to many employees and see\n  rollout/readiness state without touching employee runtime data',
   'employee: sees a ready Worker and can start a workspace/session without Host,\n  Soul descriptor, MCP, engine-target, or deployment jargon',
+  'Phase 2 provisioning: aissh success is not ready until Worker check-in and access ready.',
+  'Worker access: `/workers/:workerId` is employee navigation through Worker Access Adapter, not Host-rendered UI.',
+  'Auth: Logto proves identity; AIWorker assignment decides exact Worker access.',
   'anti-mount: no Phase 2 acceptance test may treat micro-app, mounted workbench,\n  iframe, or Host-rendered Worker UI as product value.',
 ])
 for (const testPath of documentedTestingPaths()) {

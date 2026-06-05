@@ -213,6 +213,22 @@ test('G5: the only Host->Worker contract is worker-control-protocol', () => {
   }
 })
 
+test('G5 phase-2 access: Worker may initiate only provisioning check-in and access tunnel signals', () => {
+  const architecture = read('docs/architecture.md')
+  const protocol = read('docs/protocol.md')
+  const runtime = read('docs/runtime.md')
+
+  expect(architecture).toContain('Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host')
+  expect(protocol).toContain('POST   /api/provision/check-in')
+  expect(protocol).toContain('GET    /api/provision/access')
+  expect(runtime).toContain('Phase 2 provisioning check-in and Worker Access tunnel signals are distribution-plane signals')
+
+  for (const doc of [architecture, protocol, runtime]) {
+    expect(doc).toContain('Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data')
+    expect(doc).toContain('Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench')
+  }
+})
+
 // G5 clause-2 ↔ C5：唯一 Host→Worker 契约 worker-control-protocol 必须 transport-agnostic——
 // 契约源不得 hardcode transport（往 schema 加 httpUrl/wsEndpoint 等不该被任何测试漏过）。
 // 剥注释后断言不出现 transport token（注释合法地提到 "transport"，故须剥注释，与 G4 同法）。

@@ -270,6 +270,9 @@ The product acceptance criteria are:
 - governance: assignment records carry only Soul version identity, connector
   authorization, permissions, gateway/profile refs, and lifecycle/provisioning
   metadata;
+- Phase 2 provisioning: aissh success is not ready until Worker check-in and access ready.
+- Worker access: `/workers/:workerId` is employee navigation through Worker Access Adapter, not Host-rendered UI.
+- Auth: Logto proves identity; AIWorker assignment decides exact Worker access.
 - anti-mount: no Phase 2 acceptance test may treat micro-app, mounted workbench,
   iframe, or Host-rendered Worker UI as product value.
 
