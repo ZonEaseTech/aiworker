@@ -99,7 +99,7 @@ export async function handleAccessRequestEnvelope(
   input: HandleAccessRequestEnvelopeInput,
 ): Promise<WorkerAccessResponseEnvelope> {
   const doFetch = input.fetch ?? fetch
-  const url = new URL(input.envelope.path, input.localBaseUrl)
+  const url = resolveLocalAccessPath(input.localBaseUrl, input.envelope.path)
   const init: RequestInit = {
     headers: input.envelope.headers,
     method: input.envelope.method,
@@ -115,4 +115,16 @@ export async function handleAccessRequestEnvelope(
     headers: Object.fromEntries(response.headers.entries()),
     bodyText: await response.text(),
   }
+}
+
+function resolveLocalAccessPath(localBaseUrl: string, path: string): URL {
+  if (!path.startsWith('/') || path.startsWith('//') || /^[a-z][a-z\d+.-]*:/i.test(path))
+    throw new Error('invalid worker access path')
+
+  const localBase = new URL(localBaseUrl)
+  const url = new URL(path, localBase)
+  if (url.origin !== localBase.origin)
+    throw new Error('invalid worker access path')
+
+  return url
 }

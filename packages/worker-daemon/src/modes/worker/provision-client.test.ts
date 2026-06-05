@@ -286,4 +286,28 @@ describe('worker provision check-in client', () => {
       url: 'http://127.0.0.1:9217/workers/wkr_82/api/messages',
     }])
   })
+
+  it('rejects absolute worker access paths without calling fetch', async () => {
+    let calls = 0
+
+    for (const path of ['https://evil.example/pwn', '//evil.example/pwn']) {
+      await expect(handleAccessRequestEnvelope({
+        envelope: {
+          type: 'request',
+          id: 'req_3',
+          method: 'GET',
+          path,
+          headers: {},
+          bodyText: '',
+        },
+        fetch: async () => {
+          calls += 1
+          return Response.json({ ok: true })
+        },
+        localBaseUrl: 'http://127.0.0.1:9217',
+      })).rejects.toThrow('invalid worker access path')
+    }
+
+    expect(calls).toBe(0)
+  })
 })
