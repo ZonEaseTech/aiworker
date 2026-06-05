@@ -143,10 +143,12 @@ plane is dormant in v1.
 
 ## Daemon Topology (daemon-per-worker)
 
-A Worker daemon hosts at most one active Worker. A Worker daemon carries zero
-fleet/Host awareness: it is a passive local server that serves its own CLI,
-Workbench web, and configuration. The Worker never registers with or pushes to
-Host.
+A Worker daemon hosts at most one active Worker. In v1, the daemon remains
+standalone and carries no fleet/Host runtime dependency: it serves its own CLI,
+Workbench web, and configuration without needing Host. In Phase 2, Worker may
+initiate provisioning check-in and Worker Access reverse tunnel connections to
+Host as distribution-plane signals only. These Worker-initiated signals are not
+runtime hot-path ownership.
 
 v1 scope: the standalone single-daemon path is the whole product — one daemon is
 one Worker with its own CLI, Workbench web, and configuration. Phase 2 adds Host
