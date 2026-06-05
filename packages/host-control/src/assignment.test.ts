@@ -36,6 +36,18 @@ describe('host-control assignment boundary', () => {
     expect(userCanOpenWorker({ email: 'other@example.com' }, assignment)).toBe(false)
   })
 
+  test('normalizes assignment email when checking whether a user can open it', () => {
+    const assignment = {
+      assignedEmail: '  WORKER@example.COM ',
+      assignmentId: 'assign-1',
+      serverRef: 'srv-1',
+      soulReleaseRef: 'soul-release-1',
+      status: 'ready' as const,
+    }
+
+    expect(userCanOpenWorker({ email: 'worker@example.com' }, assignment)).toBe(true)
+  })
+
   test('does not allow revoked assignments to be opened', () => {
     const assignment = createAssignmentView({
       assignedEmail: 'worker@example.com',

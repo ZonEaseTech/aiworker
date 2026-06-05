@@ -43,5 +43,5 @@ export function userCanOpenWorker(user: AuthenticatedUser, assignment: Assignmen
     return false
   if (assignment.status !== 'ready')
     return false
-  return normalizeAssignedEmail(user.email) === assignment.assignedEmail
+  return normalizeAssignedEmail(user.email) === normalizeAssignedEmail(assignment.assignedEmail)
 }

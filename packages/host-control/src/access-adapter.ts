@@ -24,6 +24,7 @@ export function createWorkerAccessRegistry(): WorkerAccessRegistry {
       connections.set(connection.workerId, connection)
     },
     remove(workerId) {
+      connections.get(workerId)?.close()
       connections.delete(workerId)
     },
   }
@@ -33,6 +34,8 @@ export function sanitizeForwardHeaders(source: Headers): Headers {
   const next = new Headers(source)
   next.delete('authorization')
   next.delete('cookie')
+  next.delete('proxy-authorization')
   next.delete('set-cookie')
+  next.delete('x-aiworker-user-email')
   return next
 }
