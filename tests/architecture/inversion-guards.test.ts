@@ -217,15 +217,25 @@ test('G5 phase-2 access: Worker may initiate only provisioning check-in and acce
   const architecture = read('docs/architecture.md')
   const protocol = read('docs/protocol.md')
   const runtime = read('docs/runtime.md')
+  const docs = [
+    ['docs/architecture.md', architecture],
+    ['docs/protocol.md', protocol],
+    ['docs/runtime.md', runtime],
+  ] as const
 
   expect(architecture).toContain('Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host')
   expect(protocol).toContain('POST   /api/provision/check-in')
   expect(protocol).toContain('GET    /api/provision/access')
   expect(runtime).toContain('Phase 2 provisioning check-in and Worker Access tunnel signals are distribution-plane signals')
 
-  for (const doc of [architecture, protocol, runtime]) {
+  for (const [, doc] of docs) {
     expect(doc).toContain('Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data')
     expect(doc).toContain('Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench')
+  }
+
+  const forbiddenWorkerToHostSync = /\bWorker\s+(?:may|can|must|should)\s+(?:initiate|push|sync|send|upload|stream|replicate)[^\n.]*(?:telemetry|session|invocation|projection|engine|chat|secret)[^\n.]*(?:to|with)\s+Host\b/i
+  for (const [path, doc] of docs) {
+    expect(forbiddenWorkerToHostSync.test(doc), `${path} must not broaden Worker->Host signals into telemetry/session/projection/engine/chat/secret sync`).toBe(false)
   }
 })
 
