@@ -1,4 +1,4 @@
-import type { AuthenticatedHostUser, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
+import type { AuthenticatedHostUser, AuthProvider, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
 
 import { existsSync } from 'node:fs'
@@ -28,6 +28,7 @@ import {
 
 export interface HostServerOptions {
   accessRegistry?: WorkerAccessRegistry
+  authProvider?: AuthProvider
   authUser?: AuthenticatedHostUser | null
   dbPath: string
   publicBaseUrl: string
@@ -55,7 +56,7 @@ export async function createHostServer(options: HostServerOptions): Promise<Host
   initHostDb(dbPath)
   runHostMigrations()
 
-  const authProvider = createStaticAuthProvider(options.authUser ?? null)
+  const authProvider = options.authProvider ?? createStaticAuthProvider(options.authUser ?? null)
   const accessRegistry = options.accessRegistry ?? createWorkerAccessRegistry()
 
   return {
@@ -85,7 +86,7 @@ export async function createHostServer(options: HostServerOptions): Promise<Host
 
 async function handleAssignments(
   request: Request,
-  authProvider: ReturnType<typeof createStaticAuthProvider>,
+  authProvider: AuthProvider,
 ): Promise<Response> {
   const user = await authProvider.authenticateRequest({ headers: request.headers })
   if (!user || !userIsHostAdmin(user))
@@ -156,7 +157,7 @@ async function handleCheckIn(request: Request): Promise<Response> {
 
 async function handleWorkerRoute(
   request: Request,
-  authProvider: ReturnType<typeof createStaticAuthProvider>,
+  authProvider: AuthProvider,
   accessRegistry: WorkerAccessRegistry,
   workerId: string,
 ): Promise<Response> {

@@ -126,6 +126,27 @@ describe('host server', () => {
     expect(createResponse.status).toBe(403)
   })
 
+  it('uses an injected auth provider for admin assignment access', async () => {
+    const server = await createHostServer({
+      authProvider: {
+        async authenticateRequest({ headers }) {
+          return headers.get('x-auth-test-user') === 'admin' ? adminUser : null
+        },
+      },
+      authUser: null,
+      dbPath: dbPath(),
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })
+
+    const forbidden = await server.fetch(new Request('http://host/api/host/assignments'))
+    const allowed = await server.fetch(new Request('http://host/api/host/assignments', {
+      headers: { 'x-auth-test-user': 'admin' },
+    }))
+
+    expect(forbidden.status).toBe(403)
+    expect(allowed.status).toBe(200)
+  })
+
   it('rejects assignment creation before storage when assignedEmail is not an email', async () => {
     const server = await createHostServer({
       authUser: adminUser,
