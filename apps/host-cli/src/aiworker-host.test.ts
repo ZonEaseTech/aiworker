@@ -42,4 +42,51 @@ describe('aiworker-host control CLI', () => {
     const code = await runHostCli(['nope'])
     expect(code).toBe(1)
   })
+
+  it('serves with injected server factory and bun serve implementation', async () => {
+    const calls: any[] = []
+    const code = await runHostCli([
+      'serve',
+      '--db',
+      '/tmp/aiworker-host.db',
+      '--public-base-url',
+      'https://aiworker.zonease.org',
+      '--port',
+      '4321',
+    ], {
+      async serverFactory(options) {
+        calls.push({ type: 'factory', options })
+        return {
+          async fetch() {
+            return new Response('ok')
+          },
+        }
+      },
+      bunServe(options) {
+        calls.push({ type: 'serve', options })
+        return {} as ReturnType<typeof Bun.serve>
+      },
+    })
+
+    expect(code).toBe(0)
+    expect(calls[0]).toEqual({
+      type: 'factory',
+      options: {
+        authUser: {
+          email: 'admin@example.com',
+          roles: ['host:admin'],
+          subject: 'dev-host-admin',
+        },
+        dbPath: '/tmp/aiworker-host.db',
+        publicBaseUrl: 'https://aiworker.zonease.org',
+      },
+    })
+    expect(calls[1].type).toBe('serve')
+    expect(calls[1].options.port).toBe(4321)
+    expect(JSON.parse(output)).toEqual({
+      listening: true,
+      port: 4321,
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })
+  })
 })
