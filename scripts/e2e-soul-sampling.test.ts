@@ -9,6 +9,7 @@ import {
   classifyFinding,
   OFFICIAL_SAMPLING_SOULS,
   redactSamplingText,
+  runSamplingCaseWithCli,
   SCORE_DIMENSIONS,
   writeScorecard,
 } from './e2e-soul-sampling'
@@ -143,6 +144,105 @@ describe('e2e soul sampling static contracts', () => {
         'high',
       ],
     ])
+  })
+
+  it('runs one sampling case through the AIWorker CLI adapter', async () => {
+    const calls: string[][] = []
+    const runCli = async (args: string[]): Promise<string> => {
+      calls.push(args)
+      if (args[0] === 'workspace' && args[1] === 'create')
+        return '{"workspace":{"id":"workspace-1"}}'
+      if (args[0] === 'session' && args[1] === 'start')
+        return '{"invocation":{"id":"invocation-1","status":"succeeded"},"session":{"id":"session-1"}}'
+      if (args[0] === 'session' && args[1] === 'events')
+        return '{"events":[{"type":"invocation.completed"}]}'
+      return '{"ok":true}'
+    }
+
+    const result = await runSamplingCaseWithCli({
+      caseId: 'case-1',
+      prompt: '请自然处理这个请求。',
+      runCli,
+      scope: { appId: 'software-support', workerId: 'e2e-software-support' },
+    })
+
+    expect(calls).toContainEqual(['worker', 'create', 'e2e-software-support', '--app', 'software-support'])
+
+    const sessionStart = calls.find(args => args[0] === 'session' && args[1] === 'start')
+    expect(sessionStart).toEqual(expect.arrayContaining([
+      '--engine',
+      'codex',
+      '--reasoning',
+      'high',
+      '--input',
+      '请自然处理这个请求。',
+    ]))
+    expect(result).toEqual({
+      invocationId: 'invocation-1',
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+    })
+  })
+
+  it('extracts CLI JSON objects from stdout with surrounding logs', async () => {
+    const runCli = async (args: string[]): Promise<string> => {
+      if (args[0] === 'workspace' && args[1] === 'create')
+        return 'creating workspace\n{"workspace":{"id":"workspace-1"}}\ncreated'
+      if (args[0] === 'session' && args[1] === 'start')
+        return 'starting session\n{"invocation":{"id":"invocation-1"},"session":{"id":"session-1"}}\nstarted'
+      if (args[0] === 'session' && args[1] === 'events')
+        return 'events\n{"events":[{"type":"invocation.completed"}]}\ndone'
+      return '{"ok":true}'
+    }
+
+    await expect(runSamplingCaseWithCli({
+      caseId: 'case-1',
+      prompt: '请自然处理这个请求。',
+      runCli,
+      scope: { appId: 'software-support', workerId: 'e2e-software-support' },
+    })).resolves.toEqual({
+      invocationId: 'invocation-1',
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+    })
+  })
+
+  it('continues when the CLI worker already exists in this sampling run', async () => {
+    const calls: string[][] = []
+    const runCli = async (args: string[]): Promise<string> => {
+      calls.push(args)
+      if (args[0] === 'worker' && args[1] === 'create')
+        throw new Error('fleet worker already exists: e2e-software-support')
+      if (args[0] === 'workspace' && args[1] === 'create')
+        return '{"workspace":{"id":"workspace-1"}}'
+      if (args[0] === 'session' && args[1] === 'start')
+        return '{"invocation":{"id":"invocation-1"},"session":{"id":"session-1"}}'
+      if (args[0] === 'session' && args[1] === 'events')
+        return '{"events":[{"type":"invocation.completed"}]}'
+      return '{"ok":true}'
+    }
+
+    const result = await runSamplingCaseWithCli({
+      caseId: 'case-1',
+      prompt: '请自然处理这个请求。',
+      runCli,
+      scope: { appId: 'software-support', workerId: 'e2e-software-support' },
+    })
+
+    expect(calls).toContainEqual(['worker', 'create', 'e2e-software-support', '--app', 'software-support'])
+    expect(calls).toContainEqual([
+      'workspace',
+      'create',
+      '--worker',
+      'e2e-software-support',
+      '--name',
+      'software-support-case-1',
+    ])
+    expect(result).toEqual({
+      invocationId: 'invocation-1',
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+    })
   })
 
   it('writes scorecards with redacted prompt and output snippets', () => {

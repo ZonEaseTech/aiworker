@@ -50,15 +50,34 @@ export interface BuildSamplingManifestInput {
   runId: string
 }
 
+export interface SamplingCliScope {
+  appId: string
+  workerId: string
+}
+
+export interface SamplingCliResult {
+  invocationId: string
+  sessionId: string
+  workspaceId: string
+}
+
+export type RunCli = (args: string[], env?: Record<string, string | undefined>) => Promise<string>
+
+interface RunSamplingCaseWithCliInput {
+  caseId: string
+  env?: Record<string, string | undefined>
+  prompt: string
+  reasoning?: string
+  runCli: RunCli
+  scope: SamplingCliScope
+}
+
 interface CliPlanInput {
   caseId: string
   engine: 'codex'
   prompt: string
   reasoning: string
-  scope: {
-    appId: string
-    workerId: string
-  }
+  scope: SamplingCliScope
   workspaceId: string
   workspaceName: string
 }
@@ -74,6 +93,16 @@ export interface ScorecardInput {
   prompt: string
   root: string
   status: 'fail' | 'pass'
+}
+
+interface SamplingRunCase {
+  case: SamplingCase
+  scope: SamplingCliScope
+}
+
+interface SamplingRunSelection {
+  scope?: 'pilot' | 'pilot-retest'
+  soul?: string
 }
 
 function makeCase(id: string, prompt: string, expectedEvidence: string): SamplingCase {
@@ -318,6 +347,172 @@ export function buildCliPlan(input: CliPlanInput): string[][] {
   ]
 }
 
+export function parseJsonObject(stdout: string): Record<string, unknown> {
+  for (let index = 0; index < stdout.length; index++) {
+    if (stdout[index] !== '{')
+      continue
+
+    const end = findJsonObjectEnd(stdout, index)
+    if (end === -1)
+      continue
+
+    try {
+      const parsed: unknown = JSON.parse(stdout.slice(index, end))
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+        return parsed as Record<string, unknown>
+    }
+    catch {
+      // Keep scanning: CLI stdout can contain non-JSON logs before the payload.
+    }
+  }
+
+  throw new Error('CLI stdout did not contain a JSON object')
+}
+
+function findJsonObjectEnd(text: string, start: number): number {
+  let depth = 0
+  let escaped = false
+  let inString = false
+
+  for (let index = start; index < text.length; index++) {
+    const char = text[index]
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+      if (char === '"')
+        inString = false
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === '{') {
+      depth++
+      continue
+    }
+    if (char === '}') {
+      depth--
+      if (depth === 0)
+        return index + 1
+    }
+  }
+
+  return -1
+}
+
+export function readNestedId(value: unknown, key: string): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error(`Missing ${key}.id in CLI output`)
+
+  const nested = (value as Record<string, unknown>)[key]
+  if (!nested || typeof nested !== 'object' || Array.isArray(nested))
+    throw new Error(`Missing ${key}.id in CLI output`)
+
+  const id = (nested as Record<string, unknown>).id
+  if (typeof id !== 'string' || id.trim().length === 0)
+    throw new Error(`Missing ${key}.id in CLI output`)
+
+  return id
+}
+
+export async function runSamplingCaseWithCli(input: RunSamplingCaseWithCliInput): Promise<SamplingCliResult> {
+  const reasoning = input.reasoning
+    ?? input.env?.AIWORKER_E2E_REASONING
+    ?? process.env.AIWORKER_E2E_REASONING
+    ?? 'high'
+  const workspaceName = slugSamplingName(`${input.scope.appId}-${input.caseId}`)
+  const workerCreateArgs = ['worker', 'create', input.scope.workerId, '--app', input.scope.appId]
+
+  try {
+    await input.runCli(workerCreateArgs, input.env)
+  }
+  catch (error) {
+    if (!isWorkerAlreadyExistsError(error))
+      throw error
+  }
+
+  const workspaceOutput = parseJsonObject(await input.runCli([
+    'workspace',
+    'create',
+    '--worker',
+    input.scope.workerId,
+    '--name',
+    workspaceName,
+  ], input.env))
+  const workspaceId = readNestedId(workspaceOutput, 'workspace')
+
+  const plan = buildCliPlan({
+    caseId: input.caseId,
+    engine: 'codex',
+    prompt: input.prompt,
+    reasoning,
+    scope: input.scope,
+    workspaceId,
+    workspaceName,
+  })
+  const sessionOutput = parseJsonObject(await input.runCli(plan[2]!, input.env))
+  const sessionId = readNestedId(sessionOutput, 'session')
+  const invocationId = readNestedId(sessionOutput, 'invocation')
+
+  parseJsonObject(await input.runCli(['session', 'events', invocationId], input.env))
+
+  return { invocationId, sessionId, workspaceId }
+}
+
+function isWorkerAlreadyExistsError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('fleet worker already exists:') || message.includes('worker already exists')
+}
+
+function slugSamplingName(value: string): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')
+
+  return slug || 'sampling-case'
+}
+
+export async function runAiworkerCli(
+  args: string[],
+  env: Record<string, string | undefined> = process.env,
+): Promise<string> {
+  const child = Bun.spawn(['bun', 'apps/worker-cli/src/aiworker.ts', ...args], {
+    cwd: process.cwd(),
+    env,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  const [stdout, stderr, exitCode] = await Promise.all([
+    child.stdout ? new Response(child.stdout).text() : '',
+    child.stderr ? new Response(child.stderr).text() : '',
+    child.exited,
+  ])
+
+  if (exitCode !== 0) {
+    throw new Error([
+      `AIWorker CLI failed (${args.join(' ')}) with exit code ${exitCode}`,
+      'stdout:',
+      stdout.trim(),
+      'stderr:',
+      stderr.trim(),
+    ].join('\n'))
+  }
+
+  return stdout
+}
+
 export function writeScorecard(input: ScorecardInput): void {
   assertSafeCaseId(input.caseId)
 
@@ -360,11 +555,117 @@ function currentCommit(): string {
   return result.stdout.toString().trim() || 'unknown'
 }
 
+function parseRunSelection(args: string[]): SamplingRunSelection {
+  let scope: SamplingRunSelection['scope']
+  let soul: string | undefined
+
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--scope') {
+      const value = args[++index]
+      if (value !== 'pilot' && value !== 'pilot-retest')
+        throw new Error('Expected --scope pilot or --scope pilot-retest')
+      scope = value
+      continue
+    }
+    if (arg === '--soul') {
+      const value = args[++index]
+      if (!value || value.startsWith('--'))
+        throw new Error('Expected --soul <appId>')
+      soul = value
+      continue
+    }
+    throw new Error(`Unknown sampling option: ${arg}`)
+  }
+
+  if (scope && soul)
+    throw new Error('Use either --scope or --soul, not both')
+  if (!scope && !soul)
+    throw new Error('Run requires --scope pilot|pilot-retest or --soul <appId>; dry-run writes only the manifest')
+
+  return { scope, soul }
+}
+
+function selectSamplingRunCases(selection: SamplingRunSelection): SamplingRunCase[] {
+  if (selection.soul) {
+    const soul = requireSamplingSoul(selection.soul)
+    return [
+      ...soul.agentsCases,
+      ...soul.skills.flatMap(skill => skill.cases),
+    ].map(item => ({
+      case: item,
+      scope: samplingCliScope(soul.appId),
+    }))
+  }
+
+  const freeform = requireSamplingSoul('aiworker-freeform')
+  const softwareSupport = requireSamplingSoul('software-support')
+  const softwareAgentsCase = requireSamplingCase(
+    softwareSupport.agentsCases,
+    'software-support-agents-routing',
+  )
+  const ticketTriage = softwareSupport.skills.find(skill => skill.id === 'ticket-triage')
+  if (!ticketTriage)
+    throw new Error('Sampling pilot case not found: ticket-triage')
+  const ticketTriageCase = requireSamplingCase(ticketTriage.cases, 'ticket-triage-happy-path')
+
+  return [
+    ...freeform.agentsCases.map(item => ({
+      case: item,
+      scope: samplingCliScope(freeform.appId),
+    })),
+    {
+      case: softwareAgentsCase,
+      scope: samplingCliScope(softwareSupport.appId),
+    },
+    {
+      case: ticketTriageCase,
+      scope: samplingCliScope(softwareSupport.appId),
+    },
+  ]
+}
+
+function requireSamplingSoul(appId: string): SamplingSoul {
+  const soul = OFFICIAL_SAMPLING_SOULS.find(item => item.appId === appId)
+  if (!soul)
+    throw new Error(`Unknown sampling Soul: ${appId}`)
+  return soul
+}
+
+function requireSamplingCase(cases: SamplingCase[], caseId: string): SamplingCase {
+  const item = cases.find(candidate => candidate.id === caseId)
+  if (!item)
+    throw new Error(`Sampling case not found: ${caseId}`)
+  return item
+}
+
+function samplingCliScope(appId: string): SamplingCliScope {
+  return {
+    appId,
+    workerId: `e2e-${appId}`,
+  }
+}
+
+function buildCliEnv(manifest: SamplingManifest): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = { ...process.env, AIWORKER_HOME: manifest.home }
+  delete env.WORKER_DB_PATH
+  return env
+}
+
+function samplingOutputSnippet(result: SamplingCliResult): string {
+  return [
+    `workspaceId=${result.workspaceId}`,
+    `sessionId=${result.sessionId}`,
+    `invocationId=${result.invocationId}`,
+    'events=fetched',
+  ].join(' ')
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2]
 
   if (command !== 'dry-run' && command !== 'run') {
-    console.error('Usage: bun scripts/e2e-soul-sampling.ts <dry-run|run>')
+    console.error('Usage: bun scripts/e2e-soul-sampling.ts <dry-run|run> [--scope pilot|pilot-retest | --soul <appId>]')
     process.exitCode = 1
     return
   }
@@ -377,12 +678,71 @@ async function main(): Promise<void> {
   })
   const evidence = await writeDryRunEvidence(manifest)
 
+  if (command === 'dry-run') {
+    console.log(JSON.stringify({
+      command,
+      dryRun: true,
+      evidenceRoot: manifest.evidenceRoot,
+      manifestPath: evidence.manifestPath,
+      manifest,
+    }, null, 2))
+    return
+  }
+
+  let selection: SamplingRunSelection
+  try {
+    selection = parseRunSelection(process.argv.slice(3))
+  }
+  catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+    return
+  }
+  const cases = selectSamplingRunCases(selection)
+  const cliEnv = buildCliEnv(manifest)
+  const results = []
+
+  for (const item of cases) {
+    try {
+      const result = await runSamplingCaseWithCli({
+        caseId: item.case.id,
+        env: cliEnv,
+        prompt: item.case.prompt,
+        runCli: runAiworkerCli,
+        scope: item.scope,
+      })
+      writeScorecard({
+        caseId: item.case.id,
+        dimensions: [],
+        findingKinds: [],
+        outputSnippet: samplingOutputSnippet(result),
+        prompt: item.case.prompt,
+        root: manifest.evidenceRoot,
+        status: 'pass',
+      })
+      results.push({ caseId: item.case.id, ...result, status: 'pass' })
+    }
+    catch (error) {
+      writeScorecard({
+        caseId: item.case.id,
+        dimensions: [],
+        findingKinds: ['platform'],
+        outputSnippet: error instanceof Error ? error.message : String(error),
+        prompt: item.case.prompt,
+        root: manifest.evidenceRoot,
+        status: 'fail',
+      })
+      throw error
+    }
+  }
+
   console.log(JSON.stringify({
     command,
-    dryRun: true,
+    dryRun: false,
     evidenceRoot: manifest.evidenceRoot,
     manifestPath: evidence.manifestPath,
-    manifest,
+    results,
+    selection,
   }, null, 2))
 }
 
