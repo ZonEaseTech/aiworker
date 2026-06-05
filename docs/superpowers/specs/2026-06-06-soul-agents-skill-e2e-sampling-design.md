@@ -1,7 +1,7 @@
-# Soul Skill 真实 E2E 采样调优设计
+# Soul AGENTS 与 Skill 真实 E2E 采样调优设计
 
 - 状态: 用户已批准设计方向, 待用户 review 书面 spec 后进入 implementation plan
-- 范围: 5 个官方 Soul 的 skill 真实 Codex engine 多轮采样, 输出质量评估, skill/资产调优, 复测闭环
+- 范围: 5 个官方 Soul 的 workspace `AGENTS.md` 与 skill 真实 Codex engine 多轮采样, 输出质量评估, AGENTS/skill/资产调优, 复测闭环
 - 主轴: 仿人类使用的质量闭环, 不是固定轮数 smoke
 
 ## 背景
@@ -26,14 +26,14 @@ Worker 独立 home/DB/端口链路可用。Codex CLI 已安装, 可通过 worker
 `node_modules` 空壳。该漂移必须在进入长期采样前最小清理, 让 contract gate
 重新可信。
 
-用户目标不是审计这些 skill, 而是把它们调教到真实可用水准。任何 LLM engine
+用户目标不是审计这些 Soul 资产, 而是把 `AGENTS.md` 指挥中枢和 skill 调教到真实可用水准。任何 LLM engine
 流程都必须真实调用, 不 fake、不用模拟 engine 代替质量判断。
 
 ## 目标
 
 1. 为 5 个官方 Soul 建立真实 worker 采样环境, 每个 Soul 独立 Worker home。
-2. 对每个 skill 做多轮、仿人类的真实 Codex 调用。
-3. 用统一 rubric 采集输出质量问题, 区分 skill 文案问题、workspace 指挥问题、
+2. 对每个 Soul 的 workspace `AGENTS.md` 做指挥中枢测试, 对每个 skill 做多轮、仿人类的真实 Codex 调用。
+3. 用统一 rubric 采集输出质量问题, 区分 AGENTS 指挥问题、skill 文案问题、
    knowledge/template 缺口和平台运行问题。
 4. 对前三类 Soul 资产问题做内循环修复, 并用新的 prompt 复测。
 5. 形成可追踪的采样证据、评分、修复决策和复测结果。
@@ -53,7 +53,12 @@ Worker 独立 home/DB/端口链路可用。Codex CLI 已安装, 可通过 worker
 
 ## 采样原则
 
-采样按「真实员工会怎么用」设计, 每个 skill 至少覆盖三类任务:
+采样按「真实员工会怎么用」设计, 分两层覆盖:
+
+1. **AGENTS.md 指挥中枢测试**: 用户不点名 skill, 只给自然业务请求, 期望 Soul 能选对 workflow、引用正确资产、拒绝领域外或高风险请求。
+2. **skill 深测**: 用户点名或明显触发某个 workflow, 期望对应 skill 产出具名成品并通过自检。
+
+每个 skill 至少覆盖三类任务:
 
 1. **信息充足任务**: 用户给出足够上下文, 期望 skill 直接产出具名成品。
 2. **信息缺失或混乱任务**: 用户给的输入不完整、口径混杂或包含不可靠假设,
@@ -61,7 +66,8 @@ Worker 独立 home/DB/端口链路可用。Codex CLI 已安装, 可通过 worker
 3. **边界或高压任务**: 涉及合规、资金、PII、冲突利益、承诺风险、质量门或紧急场景,
    期望 skill 明确边界并给可执行下一步。
 
-轮数不预设上限。每个 skill 初始至少跑 2 轮; 任一核心质量项未达标时, 进入修复和追加复测。
+轮数不预设上限。每个 Soul 的 `AGENTS.md` 初始至少跑 2 轮自然请求; 每个 skill 初始至少跑 2 轮。
+任一核心质量项未达标时, 进入修复和追加复测。
 复测必须使用新的 prompt 或改写后的场景, 防止 skill 只适配单个测试题。
 
 ## 执行拓扑
@@ -103,20 +109,21 @@ tmp/e2e-soul-sampling/<timestamp>/
 `manifest.json` 记录本轮 worker、workspace、session、invocation、engine metadata、
 开始/结束时间、命令版本和 Git commit。`prompts/` 保存脱敏后的输入场景。
 `runs/` 保存运行摘要、CLI JSON、session events 和最终输出摘要。`scorecards/`
-保存逐 skill rubric。`findings.md` 汇总问题队列。`fix-log.md` 记录每次资产修改和复测结果。
+保存逐 AGENTS/skill rubric。`findings.md` 汇总问题队列。`fix-log.md` 记录每次资产修改和复测结果。
 
 采样记录可以保留 output 摘要和必要片段, 但必须避免写入密钥、PII 和未经脱敏的商户或候选人数据。
 
 ## 质量 Rubric
 
-每个 skill 的输出按 0 到 2 分评分:
+每个 AGENTS/skill 采样输出按 0 到 2 分评分:
 
 | 维度 | 0 | 1 | 2 |
 | --- | --- | --- | --- |
+| AGENTS 指挥 | 忽略 Soul 边界或资产索引 | 能保持领域但选路不稳 | 能按自然请求选对 workflow、资产和边界 |
 | 触发与选路 | 未使用对应 skill 或跑偏 | 部分选对, 但混用/弱引用 | 准确进入对应 workflow |
 | 澄清与假设 | 缺输入仍编造 | 有提问但不完整 | 必要时先问, 或显式标假设/待验证 |
 | 资产引用 | 不读或乱引 knowledge/template | 引用泛化 | 正确使用对应 knowledge 和 template |
-| 成品完整度 | 只有建议, 无具名交付物 | 有结构但缺关键项 | 符合 skill 产出物和模板 |
+| 成品完整度 | 只有建议, 无具名交付物 | 有结构但缺关键项 | 符合对应产出物和模板 |
 | 领域深度 | 泛泛而谈 | 有部分领域锚点 | 命中 TTPOS/餐饮/Google Ads 等领域硬约束 |
 | 可执行性 | 难落地 | 有步骤但缺判据 | 有编号步骤、判据、下一步和责任边界 |
 | 边界与合规 | 过度承诺或泄漏风险 | 有提醒但不稳定 | 明确边界、脱敏、合规、人审/法务/研发确认 |
@@ -138,8 +145,8 @@ tmp/e2e-soul-sampling/<timestamp>/
 
 采样失败归为四类:
 
-1. **skill 文案问题**: SKILL.md 缺步骤、缺约束、触发描述不清、自检不足。
-2. **workspace 指挥问题**: AGENTS.md 选路、领域边界、资产索引或默认路径不清。
+1. **AGENTS 指挥问题**: AGENTS.md 选路、领域边界、资产索引、默认路径或安全红线不清。
+2. **skill 文案问题**: SKILL.md 缺步骤、缺约束、触发描述不清、自检不足。
 3. **knowledge/template 缺口**: playbook、benchmarks、integrations 或 templates 缺必要口径。
 4. **平台运行问题**: descriptor、projection、CLI、session、engine bridge、event 采集或 worker 隔离问题。
 
@@ -151,14 +158,14 @@ tmp/e2e-soul-sampling/<timestamp>/
 
 1. 构建并验证 Soul。
 2. 创建或复用独立 Worker。
-3. 为一个 skill 跑初始采样任务。
+3. 先跑 `AGENTS.md` 自然请求采样, 再为一个 skill 跑初始采样任务。
 4. 评分并记录失败原因。
 5. 如果失败属于 Soul assets, 修改最小相关文件。
 6. 重新 build / validate。
 7. 用新 prompt 复测失败维度。
 8. 达标后进入下一个 skill。
 
-当多个 skill 暴露同一类问题时, 优先改共享 AGENTS、knowledge 或 template, 再复测受影响 skill。
+当多个自然请求或多个 skill 暴露同一类问题时, 优先改共享 AGENTS、knowledge 或 template, 再复测受影响 AGENTS/skill 场景。
 当单个 skill 的 workflow 特别关键, 可以先深调到标杆水准, 再把模式迁移到同 Soul 的其他 skill。
 
 ## Soul 覆盖
@@ -167,6 +174,7 @@ tmp/e2e-soul-sampling/<timestamp>/
 
 重点验证本地餐饮代运营闭环:
 
+- AGENTS 是否能把自然请求路由到 onboarding、GBP、campaign、copy、tracking 或 review, 并拒绝「推广 TTPOS 产品本身」等领域外请求。
 - onboarding 是否能先锁定餐厅画像、AOV/毛利、GBP 状态和预算。
 - GBP、campaign、copy、tracking、review 是否能引用本地动作、归因缺口、PDPA 和多客户冲突。
 - 泰语/中文字符计数、Google Ads policy 和本地化文案是否稳健。
@@ -175,6 +183,7 @@ tmp/e2e-soul-sampling/<timestamp>/
 
 重点验证 TTPOS 中国团队 HR 工作:
 
+- AGENTS 是否能把自然招聘/组织请求路由到 JD、面试、offer、onboarding 或 OKR, 并坚持中国团队、岗位族、职级和脱敏边界。
 - JD、面试、offer、onboarding、OKR 是否围绕同一岗位族/职级对齐。
 - 技术岗是否命中 Go/Flutter/Melos/GORM/多终端等真实能力维度。
 - 薪酬和劳动合规是否使用占位、脱敏、法务/公司实际调研边界。
@@ -183,6 +192,7 @@ tmp/e2e-soul-sampling/<timestamp>/
 
 重点验证 TTPOS 产品 PM 工作:
 
+- AGENTS 是否能把自然产品请求路由到机会评估、PRD、排期、实验或指标体系, 并坚持 TTPOS 质量门与 sprint 评分。
 - PRD/机会评估是否回溯 Job、门店经营指标、多租户、多终端和泰国市场。
 - backlog 是否使用 ttpos-bot sprint 评分和超期阈值, 不退回泛 RICE。
 - experiment/metrics 是否写清指标口径、MDE、数据源、时区和判定规则。
@@ -191,6 +201,7 @@ tmp/e2e-soul-sampling/<timestamp>/
 
 重点验证商家支持和升级质量:
 
+- AGENTS 是否能把自然商家问题路由到分诊、runbook、事故沟通或 KB, 并先共情、再采集、再升级。
 - ticket triage 是否先共情再采集复现五要素, 输出能过质量门的 issue。
 - incident comms 是否谨慎处理资金、ETA、人审和时间线。
 - runbook/KB 是否区分商家语言与工程语言, 有明确升级出口和维护标记。
@@ -199,7 +210,7 @@ tmp/e2e-soul-sampling/<timestamp>/
 
 Freeform 作为平台链路 sanity:
 
-- 验证 open-ended session 能遵守 workspace root、使用 projected files、不乱套 domain workflow。
+- 验证 AGENTS 能保持 open-ended 边界: 遵守 workspace root、使用 projected files、不乱套 domain workflow。
 - 用它区分平台运行问题和 domain skill 质量问题。
 
 ## 安全与红线
@@ -244,16 +255,17 @@ bun run crg:review
 
 1. `docs:check` 和 `test:contracts` 通过。
 2. 5 个官方 Soul 均完成真实 worker + Codex engine 采样。
-3. 21 个 skill 均至少有达标复测记录; 未达标项必须有明确剩余问题和下一步。
-4. 每个 domain Soul 至少有 1 个代表性 skill 被深调为标杆, 且同 Soul 其他 skill 没有明显结构性短板。
-5. 采样目录包含 manifest、prompt、scorecard、findings 和 fix-log。
-6. 所有修改后的 Soul assets 均 build/validate 通过。
-7. 未引入 Host runtime、Soul UI、fake engine 或密钥/PII 泄漏。
+3. 5 个 `AGENTS.md` 均至少有自然请求达标复测记录; 未达标项必须有明确剩余问题和下一步。
+4. 21 个 skill 均至少有达标复测记录; 未达标项必须有明确剩余问题和下一步。
+5. 每个 domain Soul 至少有 1 个代表性 skill 被深调为标杆, 且同 Soul 的 AGENTS 与其他 skill 没有明显结构性短板。
+6. 采样目录包含 manifest、prompt、scorecard、findings 和 fix-log。
+7. 所有修改后的 Soul assets 均 build/validate 通过。
+8. 未引入 Host runtime、Soul UI、fake engine 或密钥/PII 泄漏。
 
 ## 实施顺序建议
 
 1. 最小清理 contract gate 漂移, 删除退休空目录, 证明 `test:contracts` 通过。
-2. 写采样 runner 或脚本化命令序列, 先覆盖 Freeform + 1 个 domain skill。
+2. 写采样 runner 或脚本化命令序列, 先覆盖 Freeform AGENTS + 1 个 domain AGENTS + 1 个 domain skill。
 3. 建立 rubric 和采样证据格式。
 4. 逐 Soul 运行真实采样, 从失败最集中的 domain 开始修。
 5. 每次修复后做 focused build/validate + 新 prompt 复测。
@@ -262,7 +274,7 @@ bun run crg:review
 ## 设计自检
 
 - 无占位词。
-- 范围聚焦在 skill 真实 e2e 采样与调优, 未扩展到 Host/发布产品面。
+- 范围聚焦在 AGENTS/skill 真实 e2e 采样与调优, 未扩展到 Host/发布产品面。
 - 运行链路明确使用 worker CLI + real Codex engine。
 - 成功标准以质量达标和复测为准, 不以固定轮数为准。
 - 安全边界覆盖密钥、PII、资金、法律、对外发布和 canonical architecture。
