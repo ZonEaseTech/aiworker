@@ -45,7 +45,7 @@ import {
   submitSessionInvocation,
 } from '../features/local-workspace/api'
 import { CreateWorkspaceDialog } from '../features/local-workspace/components'
-import { projectNamePlaceholder } from '../features/local-workspace/model'
+import { projectNamePlaceholder, upsertSession } from '../features/local-workspace/model'
 import { SettingsDialog } from '../features/settings'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
 import { StudioChromeHeader, StudioEmptyState, StudioMainFrame, StudioTitleBlock, WorkerStudioLayout } from './components/studio-shell'
@@ -282,6 +282,12 @@ export function WorkerStudio() {
       workerId: workspace.workerId,
       workspaceId: workspace.id,
     })
+  }, [])
+
+  const syncSessionDetail = useCallback((session: LocalSession) => {
+    setState(current => current.data
+      ? { ...current, data: { ...current.data, sessions: upsertSession(current.data.sessions, session) } }
+      : current)
   }, [])
 
   async function submitWorkspace(event: FormEvent<HTMLFormElement>) {
@@ -570,6 +576,7 @@ export function WorkerStudio() {
             selectedSoulName={selectedSoulCopy?.name ?? selectedSoul?.id ?? copy.app.brand}
             selectedWorkspace={selectedWorkspace}
             onCreateWorkspace={openWorkspaceCreation}
+            onSessionUpdated={syncSessionDetail}
             onStartSessionWithInput={(input) => {
               if (!selectedWorkspace)
                 return undefined
@@ -604,6 +611,7 @@ function WorkbenchMain({
   onArchiveSession,
   onArchiveWorkspace,
   onCreateWorkspace,
+  onSessionUpdated,
   onStartSessionWithInput,
   selectedSession,
   selectedSoulName,
@@ -618,6 +626,7 @@ function WorkbenchMain({
   onArchiveSession: () => void
   onArchiveWorkspace: () => void
   onCreateWorkspace: () => void
+  onSessionUpdated: (session: LocalSession) => void
   onStartSessionWithInput: (input: string) => Promise<void> | void
   selectedSession: LocalSession | null
   selectedSoulName: string
@@ -643,6 +652,7 @@ function WorkbenchMain({
             key={selectedSession.id}
             composerLabels={composerLabels}
             initialActive={initialSessionSubmission?.sessionId === selectedSession.id ? initialSessionSubmission : null}
+            onSessionUpdated={onSessionUpdated}
             sessionId={selectedSession.id}
             transcriptAriaLabel={copy.workspace.eventStream}
           />

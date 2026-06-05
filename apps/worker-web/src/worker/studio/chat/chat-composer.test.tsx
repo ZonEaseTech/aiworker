@@ -44,7 +44,12 @@ describe('chat composer', () => {
       }))
     })
     await waitFor(() => {
-      expect(onSubmitted).toHaveBeenCalledWith({ invocationId: 'inv-9', status: 'queued', text: 'do the thing' })
+      expect(onSubmitted).toHaveBeenCalledWith({
+        invocationId: 'inv-9',
+        session: { id: 'session-1', status: 'active' },
+        status: 'queued',
+        text: 'do the thing',
+      })
     })
   })
 

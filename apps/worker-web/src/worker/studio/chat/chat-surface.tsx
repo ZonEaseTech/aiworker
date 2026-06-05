@@ -1,4 +1,4 @@
-import type { LocalEngineInvocation, LocalSessionEvent } from '@zonease/aiworker-soul-descriptor'
+import type { LocalEngineInvocation, LocalSession, LocalSessionEvent } from '@zonease/aiworker-soul-descriptor'
 import type { ChatComposerLabels } from './chat-composer'
 
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
@@ -10,6 +10,7 @@ import { ChatTranscript } from './chat-transcript'
 export interface ChatSurfaceProps {
   composerLabels: ChatComposerLabels
   initialActive?: { invocationId: string, text: string } | null
+  onSessionUpdated?: (session: LocalSession) => void
   sessionId: string
   transcriptAriaLabel: string
 }
@@ -58,7 +59,7 @@ type SessionTranscriptSnapshotAction
  * this surface on the session route (the Soul provides no UI; there is no
  * mounted workbench). This is the live employee chat, not a reusable stub.
  */
-export function ChatSurface({ composerLabels, initialActive = null, sessionId, transcriptAriaLabel }: ChatSurfaceProps) {
+export function ChatSurface({ composerLabels, initialActive = null, onSessionUpdated, sessionId, transcriptAriaLabel }: ChatSurfaceProps) {
   const [active, setActive] = useState<ActiveInvocationFollow | null>(
     initialActive ? { ...initialActive, status: 'running' } : null,
   )
@@ -80,14 +81,8 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
       .then((detail) => {
         if (cancelled)
           return
-        dispatchSnapshot({
-          snapshot: {
-            events: Array.isArray(detail.events) ? detail.events : [],
-            invocations: Array.isArray(detail.invocations) ? detail.invocations : [],
-            status: 'loaded',
-          },
-          type: 'loaded',
-        })
+        onSessionUpdated?.(detail.session)
+        dispatchSnapshot({ snapshot: sessionTranscriptSnapshotFromDetail(detail), type: 'loaded' })
       })
       .catch(() => {
         if (!cancelled)
@@ -96,7 +91,7 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
     return () => {
       cancelled = true
     }
-  }, [sessionId])
+  }, [onSessionUpdated, sessionId])
 
   const latestInvocation = useMemo(
     () => latestInvocationForSession(snapshot.invocations),
@@ -122,23 +117,18 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
       active?.invocationId !== invocation.id
       || !TERMINAL_INVOCATION_STATUSES.has(invocation.status)
       || refreshedTerminalInvocationsRef.current.has(invocation.id)
-    )
+    ) {
       return
+    }
 
     refreshedTerminalInvocationsRef.current.add(invocation.id)
     void fetchSessionDetail(sessionId)
       .then((detail) => {
-        dispatchSnapshot({
-          snapshot: {
-            events: Array.isArray(detail.events) ? detail.events : [],
-            invocations: Array.isArray(detail.invocations) ? detail.invocations : [],
-            status: 'loaded',
-          },
-          type: 'loaded',
-        })
+        onSessionUpdated?.(detail.session)
+        dispatchSnapshot({ snapshot: sessionTranscriptSnapshotFromDetail(detail), type: 'loaded' })
       })
       .catch(() => undefined)
-  }, [active?.invocationId, sessionId])
+  }, [active?.invocationId, onSessionUpdated, sessionId])
 
   useLayoutEffect(() => {
     if (!hasConversation || snapshot.status === 'loading')
@@ -236,9 +226,10 @@ export function ChatSurface({ composerLabels, initialActive = null, sessionId, t
           : current)
         setComposerFocusRequestToken(token => (token ?? 0) + 1)
       }}
-      onSubmitted={(submission) => {
-        setActive(submission)
-        dispatchObservedInvocation({ invocation: { id: submission.invocationId, status: submission.status }, type: 'set' })
+      onSubmitted={({ invocationId, session, status, text }) => {
+        onSessionUpdated?.(session)
+        setActive({ invocationId, status, text })
+        dispatchObservedInvocation({ invocation: { id: invocationId, status }, type: 'set' })
         setComposerFocusRequestToken(token => (token ?? 0) + 1)
       }}
       sessionId={sessionId}
@@ -394,6 +385,14 @@ function sessionTranscriptSnapshotReducer(
   if (action.type === 'loaded')
     return action.snapshot
   return LOADING_TRANSCRIPT_SNAPSHOT
+}
+
+function sessionTranscriptSnapshotFromDetail(detail: Awaited<ReturnType<typeof fetchSessionDetail>>): SessionTranscriptSnapshot {
+  return {
+    events: Array.isArray(detail.events) ? detail.events : [],
+    invocations: Array.isArray(detail.invocations) ? detail.invocations : [],
+    status: 'loaded',
+  }
 }
 
 function observedInvocationStatusReducer(

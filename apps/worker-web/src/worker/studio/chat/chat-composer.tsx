@@ -1,4 +1,4 @@
-import type { LocalEngineInvocation } from '@zonease/aiworker-soul-descriptor'
+import type { LocalEngineInvocation, LocalSession } from '@zonease/aiworker-soul-descriptor'
 import type { ManagedSessionComposerAttachmentLabels } from '@zonease/aiworker-ui/components/managed-session-composer'
 import type { SessionComposerDockStatus } from './session-composer-dock'
 
@@ -17,7 +17,7 @@ export interface ChatComposerProps {
   focusRequestToken?: number
   labels: ChatComposerLabels
   onCancel?: () => Promise<void> | void
-  onSubmitted?: (submission: { invocationId: string, status: LocalEngineInvocation['status'], text: string }) => void
+  onSubmitted?: (submission: { invocationId: string, session: LocalSession, status: LocalEngineInvocation['status'], text: string }) => void
   sessionId: string
   status?: SessionComposerDockStatus
 }
@@ -51,6 +51,7 @@ export function ChatComposer({
         const result = await submitSessionInvocation(sessionId, { input, waitForCompletion: false })
         onSubmitted?.({
           invocationId: result.invocation.id,
+          session: result.session,
           status: result.invocation.status,
           text: sessionDraftToDisplayText(draft),
         })

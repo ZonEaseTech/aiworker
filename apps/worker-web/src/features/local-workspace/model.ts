@@ -9,7 +9,9 @@ type WorkerMessages = ReturnType<typeof messagesFor>
 
 export function upsertSession(sessions: LocalSession[], nextSession: LocalSession): LocalSession[] {
   const byId = new Map(sessions.map(session => [session.id, session]))
-  byId.set(nextSession.id, nextSession)
+  const existing = byId.get(nextSession.id)
+  if (!existing || existing.updatedAt.localeCompare(nextSession.updatedAt) <= 0)
+    byId.set(nextSession.id, nextSession)
   return [...byId.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 

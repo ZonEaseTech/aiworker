@@ -417,7 +417,9 @@ export class LocalWorkerRuntime {
     const placeholder = truncateAutoNameTitle(context.input.input)
     if (!placeholder)
       return
-    this.applyAutoNameTitle(context.session.id, placeholder, 'auto-truncated')
+    const placeholderSession = this.applyAutoNameTitle(context.session.id, placeholder, 'auto-truncated')
+    if (placeholderSession)
+      context.currentSession = placeholderSession
     const task = this.runSessionAutoNameOneShot(context).catch(() => {})
     this.#backgroundTasks.add(task)
     void task.finally(() => {
@@ -495,13 +497,13 @@ export class LocalWorkerRuntime {
     }
   }
 
-  private applyAutoNameTitle(sessionId: string, title: string, source: 'auto-engine' | 'auto-truncated'): void {
+  private applyAutoNameTitle(sessionId: string, title: string, source: 'auto-engine' | 'auto-truncated'): SessionRow | null {
     const session = getSession(sessionId)
     if (!session)
-      return
+      return null
     const currentSource = readString(readRecord(session.metadataJson).titleSource, 'auto-default')
     if (currentSource === 'user')
-      return
+      return null
     const updated = updateSession({
       id: sessionId,
       title,
@@ -509,6 +511,7 @@ export class LocalWorkerRuntime {
       at: this.#now(),
     })
     this.bus.emit({ kind: 'session', workspaceId: updated.workspaceId, sessionId, payload: { status: updated.status }, at: this.#now() })
+    return updated
   }
 
   private createInvocationStart(input: StartLocalInvocationInput): LocalInvocationStartContext {

@@ -258,6 +258,20 @@ function installMatchMedia(initialMatches: boolean) {
   return controller
 }
 
+function deferredJsonResponse(body: unknown) {
+  let resolve!: () => void
+  const gate = new Promise<void>((resolveGate) => {
+    resolve = resolveGate
+  })
+  return {
+    resolve,
+    response: async () => {
+      await gate
+      return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
+    },
+  }
+}
+
 beforeEach(() => {
   resetSettings()
   window.history.replaceState(null, '', '/')
@@ -486,6 +500,111 @@ describe('worker studio', () => {
     expect(lastMessageRequestBody).toMatchObject({ input: 'continue please' })
     await waitFor(() => {
       expect(screen.getByText(/engine reply here/)).toBeTruthy()
+    })
+  })
+
+  it('uses the first invocation truncated title without letting stale detail flash the old session name back', async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    const oldSessionDetail = deferredJsonResponse({
+      events: [],
+      invocations: [],
+      session: {
+        ...sessionRecord,
+        title: 'New session 3',
+        updatedAt: '2026-05-10T00:00:01.000Z',
+      },
+    })
+    const truncatedSession = {
+      ...sessionRecord,
+      metadataJson: { titleSource: 'auto-truncated' },
+      title: 'Check MC',
+      updatedAt: '2026-05-10T00:00:02.000Z',
+    } satisfies LocalSession
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requestUrl = new URL(String(input), 'http://local.test')
+      const method = init?.method ?? 'GET'
+      if (requestUrl.pathname === '/api/sessions/session-1' && method === 'GET')
+        return oldSessionDetail.response()
+      if (requestUrl.pathname === '/api/sessions/session-1/invocations' && method === 'POST') {
+        lastMessageRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
+        return new Response(JSON.stringify({
+          artifacts: [],
+          events: [],
+          files: [],
+          invocation: { id: 'invocation-truncated', status: 'queued' },
+          session: truncatedSession,
+        }), {
+          headers: { 'content-type': 'application/json' },
+          status: 201,
+        })
+      }
+      if (!defaultFetch)
+        throw new Error(`Unexpected request: ${String(input)}`)
+      return defaultFetch(input, init)
+    })
+    window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1/sessions/session-1')
+
+    render(<WorkerStudio />)
+
+    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    fireEvent.change(await within(main).findByRole('textbox'), { target: { value: 'Check MCP tools now' } })
+    fireEvent.click(within(main).getByRole('button', { name: 'Send invocation' }))
+
+    await waitFor(() => {
+      expect(within(main).getByText('Check MC')).toBeTruthy()
+      expect(within(screen.getByTestId('workspace-tree')).getByRole('button', { name: 'Open session Check MC' })).toBeTruthy()
+    })
+
+    oldSessionDetail.resolve()
+
+    await waitFor(() => {
+      expect(within(main).getByText('Check MC')).toBeTruthy()
+      expect(within(main).queryByText('New session 3')).toBeNull()
+    })
+  })
+
+  it('updates the session header and tree when session detail carries an auto-generated title', async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    const renamedSession = {
+      ...sessionRecord,
+      metadataJson: { titleSource: 'auto-engine' },
+      title: 'Investigate build pipeline',
+      updatedAt: '2026-05-10T00:00:01.000Z',
+    } satisfies LocalSession
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requestUrl = new URL(String(input), 'http://local.test')
+      if (requestUrl.pathname === '/api/sessions/session-1' && (init?.method ?? 'GET') === 'GET') {
+        return new Response(JSON.stringify({
+          events: [{
+            ...eventRecord,
+            payloadJson: { bridgeEvent: 'invocation.completed' },
+            type: 'status',
+          }],
+          invocations: [{
+            id: 'invocation-1',
+            metadataJson: { uiUserDisplayText: 'Investigate the failing build pipeline' },
+            seq: 1,
+            sessionId: 'session-1',
+            status: 'succeeded',
+          }],
+          session: renamedSession,
+        }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (!defaultFetch)
+        throw new Error(`Unexpected request: ${String(input)}`)
+      return defaultFetch(input, init)
+    })
+    window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1/sessions/session-1')
+
+    render(<WorkerStudio />)
+
+    const main = await screen.findByLabelText('Soul workspaces and sessions')
+
+    await waitFor(() => {
+      expect(within(main).getByText('Investigate build pipeline')).toBeTruthy()
+      expect(within(screen.getByTestId('workspace-tree')).getByRole('button', { name: 'Open session Investigate build pipeline' })).toBeTruthy()
     })
   })
 
