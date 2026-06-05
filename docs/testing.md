@@ -102,6 +102,25 @@ apps/worker-cli/src/aiworker.test.ts
 tests/browser/freeform-cli-golden-path.spec.ts
 ```
 
+Real local engine CLI acceptance:
+
+```text
+tests/engine-real/engine-management.acceptance.ts
+```
+
+This gate intentionally uses the authenticated local `codex` and `claude`
+commands. It must not replace either engine with fake behavior. It validates
+the Worker runtime's process-management contract against both real CLIs:
+preflight/version, structured output parsing, Stop/cancel interrupt, hard
+timeout escalation, runtime dispose cleanup, and restart reconciliation to
+`lost`. It is not part of the default `bun run test` or CI release gates because
+it depends on local engine authentication and may spend real model quota. Run it
+explicitly with:
+
+```text
+bun run test:engine-real
+```
+
 CLI release smoke contract tests:
 
 ```text
