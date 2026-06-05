@@ -5,6 +5,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 
 import * as schema from './schema'
+import { hostAssignmentStorageTestHooks } from './test-hooks'
 
 const TOKEN_PREFIX = 'awp_'
 const TOKEN_BYTES = 32
@@ -17,11 +18,6 @@ const SECRET_REFERENCE_PREFIXES = ['$', 'env:', 'secretref:'] as const
 
 let db: ReturnType<typeof createDb> | null = null
 let sqliteHandle: Database | null = null
-let testHooks: HostAssignmentStorageTestHooks | null = null
-
-interface HostAssignmentStorageTestHooks {
-  beforeConsumeUpdate?: (assignment: HostAssignmentRow, at: string) => void
-}
 
 function createDb(dbPath: string) {
   const sqlite = new Database(dbPath, { create: true })
@@ -83,10 +79,6 @@ export function runHostMigrations() {
 export type HostAssignmentStatus = typeof schema.hostAssignments.$inferSelect['status']
 export type HostAssignmentRow = typeof schema.hostAssignments.$inferSelect
 
-export function __setHostAssignmentStorageTestHooks(hooks: HostAssignmentStorageTestHooks | null): void {
-  testHooks = hooks
-}
-
 export interface CreateAssignmentInput {
   assignedEmail: string
   serverRef: string
@@ -106,9 +98,12 @@ interface MarkAssignmentCheckedInInput {
   checkInAt?: string
 }
 
+interface MarkAssignmentAccessReadyInput {
+  accessReadyAt?: string
+}
+
 interface MarkAssignmentReadyInput {
   workbenchUrl: string
-  accessReadyAt?: string
 }
 
 export function createAssignment(input: CreateAssignmentInput): { assignment: HostAssignmentRow, provisionToken: string } {
@@ -163,7 +158,7 @@ export function verifyAndConsumeProvisionToken(token: string, options: VerifyPro
   if (!assignment)
     return null
 
-  testHooks?.beforeConsumeUpdate?.(assignment, at)
+  hostAssignmentStorageTestHooks.current?.beforeConsumeUpdate?.(assignment, at)
 
   const consumeResult = getHostDb()
     .update(schema.hostAssignments)
@@ -183,6 +178,8 @@ export function markAssignmentCheckedIn(assignmentId: string, input: MarkAssignm
   const at = input.checkInAt ?? new Date().toISOString()
   assertNoLiteralSecrets(input.workerId, 'host_assignments.workerId')
   assertNoLiteralSecrets(input.workerVersion, 'host_assignments.workerVersion')
+  if (input.checkInAt)
+    assertNoLiteralSecrets(input.checkInAt, 'host_assignments.checkedInAt')
   getHostDb()
     .update(schema.hostAssignments)
     .set({
@@ -197,15 +194,30 @@ export function markAssignmentCheckedIn(assignmentId: string, input: MarkAssignm
   return getAssignment(assignmentId)
 }
 
-export function markAssignmentReady(assignmentId: string, input: MarkAssignmentReadyInput): HostAssignmentRow | null {
+export function markAssignmentAccessReady(assignmentId: string, input: MarkAssignmentAccessReadyInput = {}): HostAssignmentRow | null {
   const at = input.accessReadyAt ?? new Date().toISOString()
+  if (input.accessReadyAt)
+    assertNoLiteralSecrets(input.accessReadyAt, 'host_assignments.accessReadyAt')
+  getHostDb()
+    .update(schema.hostAssignments)
+    .set({
+      status: 'access_ready',
+      accessReadyAt: at,
+      updatedAt: at,
+    })
+    .where(eq(schema.hostAssignments.assignmentId, assignmentId))
+    .run()
+  return getAssignment(assignmentId)
+}
+
+export function markAssignmentReady(assignmentId: string, input: MarkAssignmentReadyInput): HostAssignmentRow | null {
+  const at = new Date().toISOString()
   assertNoLiteralSecrets(input.workbenchUrl, 'host_assignments.workbenchUrl')
   getHostDb()
     .update(schema.hostAssignments)
     .set({
       status: 'ready',
       workbenchUrl: input.workbenchUrl,
-      accessReadyAt: at,
       updatedAt: at,
     })
     .where(eq(schema.hostAssignments.assignmentId, assignmentId))

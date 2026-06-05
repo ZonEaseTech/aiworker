@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import {
-  __setHostAssignmentStorageTestHooks,
   closeHostDb,
   createAssignment,
   getAssignmentByWorkerId,
   getHostDb,
   initHostDb,
   listAssignments,
+  markAssignmentAccessReady,
   markAssignmentCheckedIn,
   markAssignmentReady,
   revokeAssignment,
@@ -20,6 +20,7 @@ import {
   verifyAndConsumeProvisionToken,
   hostAssignments,
 } from './index'
+import { setHostAssignmentStorageTestHooks } from './test-hooks'
 
 describe('host sqlite assignment storage', () => {
   let dir = ''
@@ -31,7 +32,7 @@ describe('host sqlite assignment storage', () => {
   })
 
   afterEach(async () => {
-    __setHostAssignmentStorageTestHooks(null)
+    setHostAssignmentStorageTestHooks(null)
     closeHostDb()
     await rm(dir, { recursive: true, force: true })
   })
@@ -70,7 +71,7 @@ describe('host sqlite assignment storage', () => {
     })
     const racedAt = '2026-06-06T00:03:00.000Z'
 
-    __setHostAssignmentStorageTestHooks({
+    setHostAssignmentStorageTestHooks({
       beforeConsumeUpdate: assignment => {
         getHostDb().update(hostAssignments).set({
           provisionTokenConsumedAt: racedAt,
@@ -110,9 +111,11 @@ describe('host sqlite assignment storage', () => {
       workerVersion: 'test',
       checkInAt: '2026-06-06T00:01:00.000Z',
     })
+    markAssignmentAccessReady(created.assignment.assignmentId, {
+      accessReadyAt: '2026-06-06T00:02:00.000Z',
+    })
     markAssignmentReady(created.assignment.assignmentId, {
       workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
-      accessReadyAt: '2026-06-06T00:02:00.000Z',
     })
     revokeAssignment(created.assignment.assignmentId, 'admin@zonease.org')
 
@@ -120,6 +123,36 @@ describe('host sqlite assignment storage', () => {
     expect(row?.status).toBe('revoked')
     expect(row?.workbenchUrl).toBe('https://aiworker.zonease.org/workers/wkr_82')
     expect(JSON.stringify(row)).not.toMatch(/sk-|Bearer |Logto|password|secret/i)
+  })
+
+  it('keeps checked-in assignments out of ready until access and URL readiness complete', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    const checkedIn = markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: 'test',
+      checkInAt: '2026-06-06T00:01:00.000Z',
+    })
+    expect(checkedIn?.status).toBe('checked_in')
+    expect(checkedIn?.workbenchUrl).toBeNull()
+
+    const accessReady = markAssignmentAccessReady(created.assignment.assignmentId, {
+      accessReadyAt: '2026-06-06T00:02:00.000Z',
+    })
+    expect(accessReady?.status).toBe('access_ready')
+    expect(accessReady?.accessReadyAt).toBe('2026-06-06T00:02:00.000Z')
+    expect(accessReady?.workbenchUrl).toBeNull()
+
+    const ready = markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })
+    expect(ready?.status).toBe('ready')
+    expect(ready?.accessReadyAt).toBe('2026-06-06T00:02:00.000Z')
+    expect(ready?.workbenchUrl).toBe('https://aiworker.zonease.org/workers/wkr_82')
   })
 
   it('throws when assignment metadata contains literal secrets', () => {
