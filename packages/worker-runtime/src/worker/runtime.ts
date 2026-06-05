@@ -10,6 +10,7 @@ import type {
   WorkspaceRow,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import type { LocalExecutor, LocalExecutorEvent, LocalExecutorResult } from './executor'
+import type { LocalEngineInvocationRun } from './process-manager'
 import type { FrozenSessionEngine } from './session-engine'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -51,6 +52,7 @@ import {
 import { LocalWorkerEventBus } from './events'
 import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
 import { LocalWorkspaceFiles } from './files'
+import { LocalEngineProcessManager } from './process-manager'
 import {
   freezeSessionEngineMetadata,
 
@@ -200,6 +202,7 @@ export class LocalWorkerRuntime {
   readonly #executor: LocalExecutor
   readonly #engineAssetSource: EngineAssetSource | null
   readonly #engineBridgeOptions: LocalEngineBridgeOptions | null
+  readonly #engineProcessManager: LocalEngineProcessManager
   readonly #sessionAutoName: boolean
   readonly #backgroundTasks = new Set<Promise<unknown>>()
   readonly #now: () => string
@@ -209,11 +212,12 @@ export class LocalWorkerRuntime {
     this.#workerInput = options.worker
     this.#workspacesRoot = path.resolve(options.workspacesRoot)
     this.#overlaysRoot = path.resolve(options.overlaysRoot ?? path.join(path.dirname(this.#workspacesRoot), 'overlays'))
-    this.#executor = options.executor ?? createExternalEngineExecutor()
     this.#engineAssetSource = options.engineAssetSource ?? null
     this.#engineBridgeOptions = options.engineBridge ?? null
     this.#sessionAutoName = options.sessionAutoName ?? false
     this.#now = options.now ?? (() => new Date().toISOString())
+    this.#engineProcessManager = new LocalEngineProcessManager({ now: this.#now })
+    this.#executor = options.executor ?? createExternalEngineExecutor({ processManager: this.#engineProcessManager })
   }
 
   get workerId(): string {
@@ -235,7 +239,72 @@ export class LocalWorkerRuntime {
       at: this.#now(),
     })
     await this.repairWorkspaceLayouts()
+    await this.reconcileEngineInvocationsOnStartup()
     return worker
+  }
+
+  private async reconcileEngineInvocationsOnStartup(): Promise<void> {
+    const workspaceIds = new Set(listWorkspaces(this.workerId, 10_000).map(workspace => workspace.id))
+    if (workspaceIds.size === 0)
+      return
+
+    const sessions = listSessions(undefined, 10_000).filter(session => workspaceIds.has(session.workspaceId))
+    const sessionsById = new Map(sessions.map(session => [session.id, session]))
+    if (sessionsById.size === 0)
+      return
+
+    const invocations = listEngineInvocations(undefined, 10_000)
+    for (const invocation of invocations) {
+      const session = sessionsById.get(invocation.sessionId)
+      if (!session)
+        continue
+      if (invocation.status !== 'starting' && invocation.status !== 'running')
+        continue
+      if (invocation.processState === 'exited' || invocation.processState === 'killed' || invocation.processState === 'lost')
+        continue
+
+      const bridgeEvents: Array<Record<string, unknown>> = []
+      const bridge = createEngineBridge({
+        adapters: [],
+        bridgeEventStore: {
+          append: async (event) => {
+            bridgeEvents.push(readRecord(event))
+          },
+        },
+        processManager: this.#engineProcessManager,
+      })
+      const processHandle = readRecord(readRecord(invocation.metadataJson).processHandle)
+      const handle = Object.keys(processHandle).length > 0 ? processHandle : { invocationId: invocation.id }
+      const result = readRecord(await bridge.reconcileInvocation({
+        handle,
+        invocationId: invocation.id,
+      }))
+      const status = readEngineInvocationStatus(result.status, invocation.status)
+      if (status !== 'lost')
+        continue
+
+      const processState = readEngineProcessState(result.processState, 'lost')
+      const failureCode = readNullableString(result.failureCode) ?? 'ENGINE_PROCESS_LOST'
+      const updated = updateEngineInvocation({
+        id: invocation.id,
+        failureCode,
+        finishedAt: this.#now(),
+        processState,
+        status,
+        summary: 'Native engine process was lost.',
+        at: this.#now(),
+      })
+      for (const bridgeEvent of bridgeEvents)
+        this.appendEvent(session.id, 'status', sessionPayloadFromBridgeEvent(bridgeEvent, status), invocation.id)
+      this.bus.emit({
+        kind: 'event',
+        workspaceId: session.workspaceId,
+        sessionId: session.id,
+        invocationId: invocation.id,
+        payload: { invocation: updated, status },
+        at: this.#now(),
+      })
+    }
   }
 
   async createWorkspace(input: CreateLocalWorkspaceInput): Promise<WorkspaceRow> {
@@ -453,6 +522,7 @@ export class LocalWorkerRuntime {
       startedAt: this.#now(),
       at: this.#now(),
     })
+    const run = this.#engineProcessManager.startInvocation(invocation.id)
     try {
       const invocationRoot = await this.ensureInvocationRoot(context.workspace, session, invocation)
       // The title instructions are the only channel for the one-shot; feed them
@@ -466,10 +536,14 @@ export class LocalWorkerRuntime {
         prompt: titlePrompt,
         recordTranscript: false,
         requestInput: titlePrompt,
+        run,
         session: context.currentSession,
         sessionEngine: context.sessionEngine,
         workspace: context.workspace,
       })
+      const terminal = this.cancelledInvocationResult(context.currentSession, session, invocation)
+      if (terminal)
+        return
       updateEngineInvocation({
         id: invocation.id,
         ...engineInvocationReferenceFields(result),
@@ -485,6 +559,9 @@ export class LocalWorkerRuntime {
         this.applyAutoNameTitle(session.id, title, 'auto-engine')
     }
     catch (error) {
+      const terminal = this.cancelledInvocationResult(context.currentSession, session, invocation)
+      if (terminal)
+        return
       updateEngineInvocation({
         id: invocation.id,
         status: 'failed',
@@ -494,6 +571,9 @@ export class LocalWorkerRuntime {
         finishedAt: this.#now(),
         at: this.#now(),
       })
+    }
+    finally {
+      run.finish()
     }
   }
 
@@ -579,6 +659,7 @@ export class LocalWorkerRuntime {
       workspace,
     } = context
 
+    const run = this.#engineProcessManager.startInvocation(invocation.id)
     try {
       const invocationRoot = await this.ensureInvocationRoot(workspace, session, invocation)
       await this.materializeInvocationInputPreview(invocationRoot, input.input)
@@ -588,10 +669,14 @@ export class LocalWorkerRuntime {
         metadata,
         prompt,
         requestInput: input.input,
+        run,
         session: currentSession,
         sessionEngine,
         workspace,
       })
+      const terminal = this.cancelledInvocationResult(currentSession, session, invocation)
+      if (terminal)
+        return terminal
       const resultMetadata = redactEngineRecord(result.metadata ?? {})
       const summary = redactEngineString(result.summary)
       const finishedInvocation = updateEngineInvocation({
@@ -614,7 +699,25 @@ export class LocalWorkerRuntime {
       }
     }
     catch (error) {
+      const terminal = this.cancelledInvocationResult(currentSession, session, invocation)
+      if (terminal)
+        return terminal
       return this.recordInvocationFailure(context, error)
+    }
+    finally {
+      run.finish()
+    }
+  }
+
+  private cancelledInvocationResult(currentSession: SessionRow, session: SessionRow, invocation: EngineInvocationRow): LocalInvocationStartResult | null {
+    const latest = getEngineInvocation(invocation.id)
+    if (latest?.status !== 'cancelled')
+      return null
+    return {
+      session: currentSession,
+      invocation: latest,
+      events: listSessionEvents(session.id).filter(event => event.invocationId === invocation.id),
+      files: [],
     }
   }
 
@@ -694,6 +797,7 @@ export class LocalWorkerRuntime {
       }
     }
 
+    this.#engineProcessManager.cancelInvocation(invocation.id, input.reason)
     const processState = invocation.status === 'queued' ? 'not_spawned' : 'killed'
     const cancelledInvocation = updateEngineInvocation({
       id: invocation.id,
@@ -831,6 +935,7 @@ export class LocalWorkerRuntime {
   }
 
   dispose(): void {
+    this.#engineProcessManager.dispose()
     // 排空事件总线:断开所有还活着的订阅者(如 SSE live-tail),使 dispose 之后任何
     // emit 都不会再把 DB 读排进微任务队列。运行体必须在 closeWorkerDb 之前 dispose,
     // 否则关库后触发的订阅回调会撞上 "Worker database not initialized"。
@@ -850,6 +955,7 @@ export class LocalWorkerRuntime {
     allowResume?: boolean
     /** When false, bridge observations are not written to the session transcript. Default true. */
     recordTranscript?: boolean
+    run?: LocalEngineInvocationRun
   }): Promise<LocalExecutorResult> {
     const allowResume = input.allowResume ?? true
     const recordTranscript = input.recordTranscript ?? true
@@ -857,7 +963,7 @@ export class LocalWorkerRuntime {
       ? this.#engineBridgeOptions
       : createLocalExecutorBridgeOptions(this.#executor, input.sessionEngine.engineId, {
           assertUsable: request => this.assertWorkspaceProjectionReceipt(input.workspace, request),
-        })
+        }, this.#engineProcessManager)
 
     const previousInvocation = allowResume
       ? latestPriorEngineInvocation(input.session.id, input.invocation.seq, input.sessionEngine.engineId)
@@ -882,9 +988,28 @@ export class LocalWorkerRuntime {
       invocationId: input.invocation.id,
       invocationRoot: input.invocationRoot,
       metadata: input.metadata,
+      onProcessHandle: (handle: unknown) => {
+        const processHandle = readRecord(handle)
+        const invocationId = readString(processHandle.invocationId, '')
+        if (invocationId !== input.invocation.id)
+          return
+        input.run?.registerProcessHandle(processHandle)
+        const latest = getEngineInvocation(input.invocation.id)
+        if (!latest || latest.status === 'cancelled')
+          return
+        updateEngineInvocation({
+          id: input.invocation.id,
+          metadataJson: {
+            ...(latest.metadataJson ?? {}),
+            processHandle,
+          },
+          at: this.#now(),
+        })
+      },
       projectionManifestPath: readString(readRecord(input.workspace.metadataJson.engineAssetProjection).projectionManifestPath, engineAssetProjectionReceiptPath()),
       projectionReceiptId: input.workspace.id,
       prompt: input.prompt,
+      signal: input.run?.signal,
       sessionId: input.session.id,
       workerId: this.workerId,
       workspaceId: input.workspace.id,
@@ -1600,9 +1725,11 @@ function createLocalExecutorBridgeOptions(
   executor: LocalExecutor,
   target: string,
   projectionReceipts?: LocalEngineBridgeOptions['projectionReceipts'],
+  processManager?: LocalEngineBridgeOptions['processManager'],
 ): LocalEngineBridgeOptions {
   return {
     adapters: [createLocalExecutorBridgeAdapter(executor, target)],
+    processManager,
     projectionReceipts,
   }
 }
@@ -1641,13 +1768,18 @@ async function invokeLocalExecutorThroughBridge(
   fallbackTarget: string,
 ): Promise<Record<string, unknown>> {
   const invocationId = readString(request.invocationId, '')
+  const onProcessHandle = typeof request.onProcessHandle === 'function'
+    ? request.onProcessHandle as (handle: unknown) => void
+    : undefined
   const result = await executor.invoke({
     engineCommand: readNullableString(request.engineCommand),
     engineId: readString(request.engineTarget, fallbackTarget),
     invocationId,
     invocationRoot: readString(request.invocationRoot, ''),
+    onProcessHandle: onProcessHandle ? handle => onProcessHandle(handle) : undefined,
     onEvent: event => sink.event(bridgeEventFromLocalExecutorEvent(event, invocationId)),
     prompt: readString(request.prompt, ''),
+    signal: request.signal instanceof AbortSignal ? request.signal : undefined,
     sessionId: readString(request.sessionId, ''),
     workspaceId: readString(request.workspaceId, ''),
     workspaceRoot: readString(request.cwd, ''),

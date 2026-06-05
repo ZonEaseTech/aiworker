@@ -161,6 +161,38 @@ printf 'authorization = "literal-secret-value"\\n' >&2
     expect(`${stdout}\n${stderr}`).toContain('[REDACTED]')
   })
 
+  it('caps local CLI stdout, stderr, and summary buffers', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+printf 'prefix-'
+printf 'A%.0s' {1..160}
+printf 'error-' >&2
+printf 'B%.0s' {1..160} >&2
+`)
+    const input = {
+      ...baseInput(command, workspaceRoot),
+      engineId: 'qwen',
+    }
+
+    const result = await createExternalEngineExecutor({
+      maxBufferedLogChars: 64,
+      maxSummaryChars: 40,
+    }).invoke(input)
+
+    const stdout = await readFile(path.join(input.invocationRoot, 'stdout.log'), 'utf8')
+    const stderr = await readFile(path.join(input.invocationRoot, 'stderr.log'), 'utf8')
+    expect(result.summary).toContain('earlier characters from engine response')
+    expect(result.summary.length).toBeLessThan(140)
+    expect(stdout).toContain('earlier characters from stdout')
+    expect(stdout).toContain('AAAAAAAAAA')
+    expect(stdout.length).toBeLessThan(140)
+    expect(stderr).toContain('earlier characters from stderr')
+    expect(stderr).toContain('BBBBBBBBBB')
+    expect(stderr.length).toBeLessThan(140)
+  })
+
   it('terminates local CLI engines after the configured hard timeout', async () => {
     const workspaceRoot = path.join(makeRoot(), 'workspace')
     await mkdir(workspaceRoot, { recursive: true })
@@ -177,5 +209,37 @@ exec perl -e '$SIG{TERM}=sub{}; select undef,undef,undef,0.01 while 1'
       readFile(path.join(workspaceRoot, '.aiworker', 'sessions', 'session-1', 'invocations', '0001', 'stderr.log'), 'utf8'),
     ).resolves.toContain('Process exceeded 250ms and was terminated.')
     expect(DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS).toBe(300_000)
+  })
+
+  it('interrupts local CLI engines when the invocation is aborted', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+printf 'started\\n' > started.txt
+trap 'printf "engine interrupted\\n" >&2; exit 130' INT TERM
+while true; do sleep 1; done
+`)
+    const controller = new AbortController()
+    const input = {
+      ...baseInput(command, workspaceRoot),
+      signal: controller.signal,
+    }
+    const invocation = createExternalEngineExecutor({ timeoutMs: 1_000 }).invoke(input)
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      try {
+        if ((await readFile(path.join(workspaceRoot, 'started.txt'), 'utf8')).includes('started'))
+          break
+      }
+      catch {}
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    controller.abort('user-stop')
+
+    await expect(invocation).rejects.toThrow('Process interrupted by AIWorker Stop.')
+    await expect(
+      readFile(path.join(workspaceRoot, '.aiworker', 'sessions', 'session-1', 'invocations', '0001', 'stderr.log'), 'utf8'),
+    ).resolves.toContain('Process interrupted by AIWorker Stop.')
   })
 })

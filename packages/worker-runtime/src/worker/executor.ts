@@ -1,21 +1,24 @@
 import type { EngineEventParserKind, ParsedEngineEvent } from './engine-stream'
+import type { LocalEngineProcessHandle } from './process-manager'
 
-import { spawn, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import process from 'node:process'
 import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
 import { sanitizeEngineEnv } from './engine-env'
 import { createEngineStreamHandler } from './engine-stream'
+import { LocalEngineProcessManager } from './process-manager'
 
 export interface LocalExecutorInput {
   engineCommand?: string | null
   engineId: string
   invocationId: string
   invocationRoot: string
+  onProcessHandle?: (handle: LocalExecutorProcessHandle) => void
   onEvent?: (event: LocalExecutorEvent) => void
   prompt: string
+  signal?: AbortSignal
   sessionId: string
   workspaceId: string
   workspaceRoot: string
@@ -38,6 +41,8 @@ export class LocalExecutorFailure extends Error {
   }
 }
 
+export type LocalExecutorProcessHandle = LocalEngineProcessHandle
+
 export type LocalExecutorEvent
   = | { kind: 'status', label: string, detail?: string }
     | { kind: 'text', text: string }
@@ -54,10 +59,19 @@ export interface LocalExecutor {
 
 export const DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS = 300_000
 
-const LOCAL_CLI_ENGINE_KILL_GRACE_MS = 150
+const DEFAULT_LOCAL_CLI_ENGINE_LOG_BUFFER_LIMIT_CHARS = 1_000_000
+const DEFAULT_LOCAL_CLI_ENGINE_SUMMARY_LIMIT_CHARS = 64_000
 
 export interface ExternalEngineExecutorOptions {
+  maxBufferedLogChars?: number
+  maxSummaryChars?: number
+  processManager?: LocalEngineProcessManager
   timeoutMs?: number
+}
+
+interface BoundedTextBuffer {
+  text: string
+  truncatedChars: number
 }
 
 interface LocalEngineBuildArgsInput {
@@ -168,17 +182,18 @@ const localEngineDefinitions: Record<string, LocalEngineDefinition> = {
 }
 
 export function createExternalEngineExecutor(options: ExternalEngineExecutorOptions = {}): LocalExecutor {
+  const processManager = options.processManager ?? new LocalEngineProcessManager()
   return {
     async invoke(input) {
       const executionMode = readString(input.metadata?.executionMode, 'local-cli')
       if (executionMode === 'byok')
         return runByokExecutor(input)
-      return runLocalCliExecutor(input, options)
+      return runLocalCliExecutor(input, { ...options, processManager })
     },
   }
 }
 
-async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalEngineExecutorOptions): Promise<LocalExecutorResult> {
+async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalEngineExecutorOptions & { processManager: LocalEngineProcessManager }): Promise<LocalExecutorResult> {
   const command = input.engineCommand || input.engineId
   if (!command || command === 'internal')
     throw new Error('Local CLI execution requires an external engine command.')
@@ -206,7 +221,8 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
     reasoning: readString(input.metadata?.reasoning, ''),
   })
   const timeoutMs = options.timeoutMs ?? DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS
-  let finalMessage = ''
+  const maxSummaryChars = options.maxSummaryChars ?? DEFAULT_LOCAL_CLI_ENGINE_SUMMARY_LIMIT_CHARS
+  const finalMessage = createBoundedTextBuffer()
   let externalSessionRef: Record<string, unknown> | null = null
   const parser = engine.parser
     ? createEngineStreamHandler(engine.parser, (event) => {
@@ -216,28 +232,33 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
         }
         const localEvent = toLocalExecutorEvent(event)
         if (localEvent.kind === 'text')
-          finalMessage += localEvent.text
+          appendBoundedText(finalMessage, localEvent.text, maxSummaryChars)
         emit(input, localEvent)
       })
     : null
 
-  const execution = await execCommand(command, args, enginePrompt, timeoutMs, {
+  const execution = await options.processManager.runProcess(command, args, enginePrompt, timeoutMs, {
     cwd: input.workspaceRoot,
     env: {
       ...sanitizeEngineEnv(),
       ...(engine.env ?? {}),
     },
+    invocationId: input.invocationId,
+    maxBufferedLogChars: options.maxBufferedLogChars ?? DEFAULT_LOCAL_CLI_ENGINE_LOG_BUFFER_LIMIT_CHARS,
+    onProcessHandle: input.onProcessHandle,
     onStderr: undefined,
     onStdout: (chunk) => {
       if (parser) {
         parser.feed(chunk)
         return
       }
-      finalMessage += chunk
+      appendBoundedText(finalMessage, chunk, maxSummaryChars)
       emit(input, { kind: 'text', text: chunk })
     },
+    signal: input.signal,
   })
   parser?.flush()
+  const summary = boundedTextValue(finalMessage, 'engine response').trim()
 
   await writeFile(path.join(input.invocationRoot, 'stdout.log'), redactEngineLog(execution.stdout), 'utf8')
   await writeFile(path.join(input.invocationRoot, 'stderr.log'), redactEngineLog(execution.stderr), 'utf8')
@@ -250,17 +271,16 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
         engineExitCode: execution.code,
         executionSource: 'local-cli',
         ...(externalSessionRef ? { externalSessionRef } : {}),
-        finalMessage: finalMessage.trim(),
+        finalMessage: summary,
         processId: randomUUID(),
         stderrLog: path.join(input.invocationRoot, 'stderr.log'),
         stdoutLog: path.join(input.invocationRoot, 'stdout.log'),
       },
       externalSessionRef: encodeLocalExternalSessionRef(externalSessionRef),
-      summary: finalMessage.trim() || `${engine.name} exited with code ${execution.code}.`,
+      summary: summary || `${engine.name} exited with code ${execution.code}.`,
     })
   }
 
-  finalMessage = finalMessage.trim()
   emit(input, {
     kind: 'status',
     label: 'completed',
@@ -271,13 +291,13 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
     metadata: {
       executionSource: 'local-cli',
       ...(externalSessionRef ? { externalSessionRef } : {}),
-      finalMessage,
+      finalMessage: summary,
       processId: randomUUID(),
       stderrLog: path.join(input.invocationRoot, 'stderr.log'),
       stdoutLog: path.join(input.invocationRoot, 'stdout.log'),
     },
     externalSessionRef: encodeLocalExternalSessionRef(externalSessionRef),
-    summary: finalMessage || `${engine.name} completed.`,
+    summary: summary || `${engine.name} completed.`,
   }
 }
 
@@ -340,81 +360,32 @@ async function requestOpenAICompatibleContent({
   return content
 }
 
-function execCommand(
-  command: string,
-  args: string[],
-  stdin: string,
-  timeoutMs: number,
-  options: {
-    cwd?: string
-    env?: NodeJS.ProcessEnv
-    onStderr?: (chunk: string) => void
-    onStdout?: (chunk: string) => void
-  } = {},
-): Promise<{ code: number | null, stderr: string, stdout: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd ?? process.cwd(),
-      detached: true,
-      env: options.env ?? sanitizeEngineEnv(),
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    let stdout = ''
-    let stderr = ''
-    let killed = false
-    let killTimer: ReturnType<typeof setTimeout> | undefined
-    const signalChildGroup = (signal: NodeJS.Signals) => {
-      if (child.pid) {
-        try {
-          process.kill(-child.pid, signal)
-          return
-        }
-        catch {
-          // Fall back to signaling the child directly when process groups are unavailable.
-        }
-      }
-      child.kill(signal)
-    }
-    const timer = setTimeout(() => {
-      killed = true
-      signalChildGroup('SIGTERM')
-      killTimer = setTimeout(() => {
-        signalChildGroup('SIGKILL')
-      }, LOCAL_CLI_ENGINE_KILL_GRACE_MS)
-    }, timeoutMs)
-    const clearTimers = () => {
-      clearTimeout(timer)
-      if (killTimer)
-        clearTimeout(killTimer)
-    }
-    child.stdout.setEncoding('utf8')
-    child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk
-      options.onStdout?.(chunk)
-    })
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk
-      options.onStderr?.(chunk)
-    })
-    child.stdin.on('error', (error: NodeJS.ErrnoException) => {
-      if (error.code !== 'EPIPE') {
-        clearTimers()
-        reject(error)
-      }
-    })
-    child.on('error', (error) => {
-      clearTimers()
-      reject(error)
-    })
-    child.on('close', (code) => {
-      clearTimers()
-      if (killed)
-        stderr += `\nProcess exceeded ${timeoutMs}ms and was terminated.`
-      resolve({ code, stdout, stderr })
-    })
-    child.stdin.end(stdin)
-  })
+function createBoundedTextBuffer(): BoundedTextBuffer {
+  return { text: '', truncatedChars: 0 }
+}
+
+function appendBoundedText(buffer: BoundedTextBuffer, chunk: string, maxChars: number): void {
+  if (!chunk)
+    return
+  if (maxChars <= 0) {
+    buffer.truncatedChars += buffer.text.length + chunk.length
+    buffer.text = ''
+    return
+  }
+  const next = buffer.text + chunk
+  if (next.length <= maxChars) {
+    buffer.text = next
+    return
+  }
+  const overflow = next.length - maxChars
+  buffer.truncatedChars += overflow
+  buffer.text = next.slice(overflow)
+}
+
+function boundedTextValue(buffer: BoundedTextBuffer, label: string): string {
+  if (buffer.truncatedChars <= 0)
+    return buffer.text
+  return `[AIWorker truncated ${buffer.truncatedChars} earlier characters from ${label}.]\n${buffer.text}`
 }
 
 function toLocalExecutorEvent(event: ParsedEngineEvent): LocalExecutorEvent {
