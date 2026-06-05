@@ -1,4 +1,5 @@
 import { join, resolve } from 'node:path'
+import process from 'node:process'
 
 export interface DevFleetEntry {
   apiPort: number
@@ -116,7 +117,7 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  main().catch(error => {
+  main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error))
     process.exit(1)
   })

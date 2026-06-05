@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { describe, expect, it } from 'bun:test'
 
 import {
-  DEV_FLEET_TOPOLOGY,
   buildManifest,
+  DEV_FLEET_TOPOLOGY,
   validateWorkerApp,
 } from './dev-fleet-web'
 
