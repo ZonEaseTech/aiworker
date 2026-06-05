@@ -135,7 +135,11 @@ describe('Host Soul descriptor registry', () => {
   })
 
   it('bootstraps official Freeform without re-enabling disabled apps', async () => {
+    // Scope to Freeform: this test exercises the disabled-app preservation
+    // mechanism, not the full official catalog (covered in orchestrator.test.ts).
+    const definitions = [{ descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json', id: FREEFORM_APP_ID }]
     const first = await bootstrapOfficialSoulApps({
+      definitions,
       hostVersion: '0.19.3',
       now: () => '2026-05-13T12:25:00.000Z',
     })
@@ -146,6 +150,7 @@ describe('Host Soul descriptor registry', () => {
     expect(findCatalogSoul('hr')).toBeUndefined()
 
     const second = await bootstrapOfficialSoulApps({
+      definitions,
       hostVersion: '0.19.3',
       now: () => '2026-05-13T12:26:00.000Z',
     })
@@ -155,6 +160,7 @@ describe('Host Soul descriptor registry', () => {
 
     archiveSoulApp(FREEFORM_APP_ID, { now: () => '2026-05-13T12:27:00.000Z' })
     const third = await bootstrapOfficialSoulApps({
+      definitions,
       hostVersion: '0.19.3',
       now: () => '2026-05-13T12:28:00.000Z',
     })
@@ -171,6 +177,7 @@ describe('Host Soul descriptor registry', () => {
     writeFileSync(path.join(freeformRoot, 'soul.descriptor.json'), JSON.stringify(freeformDescriptor))
 
     const results = await bootstrapOfficialSoulApps({
+      definitions: [{ descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json', id: FREEFORM_APP_ID }],
       hostVersion: '0.19.3',
       now: () => '2026-05-14T14:12:00.000Z',
       officialAppsRoot: packagedRoot,

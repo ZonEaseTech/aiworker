@@ -3,6 +3,7 @@ import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import type { SoulDiscovery, SoulValidationIssue } from '@zonease/aiworker-soul-sdk'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
+import type { FleetIndex, FleetWorker } from './fleet'
 import type { UpdateCliOptions, UpdateCommandName } from './updater'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
@@ -53,10 +54,24 @@ import {
   resolveLocalCliEngine,
   scanLocalEngines,
 } from '@zonease/aiworker-worker-runtime'
-import cac from 'cac'
 
+import cac from 'cac'
 import consola from 'consola'
 import packageJson from '../package.json' with { type: 'json' }
+import {
+  adoptLegacyHome,
+  allocatePort,
+  buildLocalPaths,
+  FLEET_ADOPTED_HOME,
+  FLEET_DEFAULT_BASE_PORT,
+  fleetWorkerPaths,
+  readFleet,
+  resolveTargets,
+  setDefault,
+  upsertFleetWorker,
+  workerHomeDir,
+  writeFleet,
+} from './fleet'
 import { isOfficialFreeformDescriptorFile, OFFICIAL_FREEFORM_APP_ID, parseOfficialFreeformDescriptorJson } from './official-freeform-descriptor'
 import {
   createScaffoldPackageJson,
@@ -188,6 +203,21 @@ export function __setDaemonStarterForTest(starter: DaemonStarter | null): void {
   daemonStarterForTest = starter
 }
 
+// Test-only: seed an active worker row (with full orchestrator-populated
+// engine/metadata) into the current home DB, the way the old option-based
+// `worker create` did. The public `worker create` is now fleet-aware (it builds a
+// separate per-worker home), so fixtures that need a worker in the *test* home
+// use this seam instead. Mirrors the `__setDaemonStarterForTest` precedent.
+export async function __seedWorkerForTest(input: { app: string, id?: string, name?: string }): Promise<{ appId: string, id: string }> {
+  const paths = await ensureDb()
+  const created = await createHost(paths).createSoulWorker({
+    appId: input.app,
+    id: input.id,
+    name: input.name ?? input.id ?? input.app,
+  })
+  return { appId: created.worker.appId, id: created.worker.id }
+}
+
 interface CliResourceResolutionOptions {
   executableDir?: string
 }
@@ -279,13 +309,13 @@ export function resolveCliLocalPaths(moduleDir = CLI_MODULE_DIR): LocalPaths {
   const home = resolveAiworkerScope({
     defaultHomeDir: resolveCliDefaultHomeDir(moduleDir),
   }).home
+  const base = buildLocalPaths(home)
+  // Single-home CLI honors WORKER_DB_PATH (tests + power users pin the DB).
+  // Per-worker fleet paths derive dbPath purely from home (see buildLocalPaths),
+  // so this override stays scoped to the resolved default home only.
   return {
-    home,
-    dbPath: process.env.WORKER_DB_PATH ?? path.join(home, 'aiworker.db'),
-    workersRoot: path.join(home, 'workers'),
-    pidFile: path.join(home, 'aiworker-daemon.pid'),
-    daemonMetaFile: path.join(home, 'aiworker-daemon.json'),
-    logFile: path.join(home, 'aiworker-daemon.log'),
+    ...base,
+    dbPath: process.env.WORKER_DB_PATH ?? base.dbPath,
   }
 }
 
@@ -303,10 +333,18 @@ function localPaths(): LocalPaths {
 
 async function ensureDb(): Promise<LocalPaths> {
   const paths = localPaths()
+  return ensureDbAt(paths)
+}
+
+// Open + migrate the SQLite DB for an explicit set of paths. The DB handle is a
+// process-global singleton, so callers must not interleave two homes in one
+// process; fleet commands that touch a specific worker's DB (`worker create`,
+// adopt) close the handle before targeting another home.
+async function ensureDbAt(paths: LocalPaths): Promise<LocalPaths> {
   await mkdir(paths.home, { recursive: true })
   await mkdir(path.dirname(paths.dbPath), { recursive: true })
   initWorkerDb(paths.dbPath)
-  runWorkerMigrations(getWorkerEnv().WORKER_MIGRATIONS_FOLDER)
+  runWorkerMigrations(resolveCliMigrationsFolder() ?? getWorkerEnv().WORKER_MIGRATIONS_FOLDER)
   return paths
 }
 
@@ -415,28 +453,58 @@ function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, offi
   })
 }
 
-function resolveStandaloneWorkerId(): string {
-  // Standalone single-daemon path: a daemon hosts at most one active Worker, so
-  // omitting --worker and `selected-worker` resolves to that lone active Worker
-  // without depending on Host or fleet context. Mirrors the daemon's
-  // `/api/control/worker` resolver so CLI and daemon agree on "active".
-  const resolution = resolveSingleActiveWorker()
-  if (resolution.kind === 'single')
-    return resolution.worker.id
-  if (resolution.kind === 'multiple') {
+// Resolve the home + worker row that a runtime command targets. Current home wins:
+// when an explicit `--worker`, the per-home `selected-worker`, or the lone active
+// worker of the current home resolves a row, we serve it from the current home
+// exactly as before. Only when the current home cannot resolve the worker do we
+// fall back to the fleet index and reopen the targeted worker's own home/DB — this
+// unlocks `workspace create --worker X` (and the rest of the runtime surface) for a
+// worker that `worker create` built in its own per-worker fleet home.
+//
+// `ensureDbAt` reopens the global SQLite singleton (initWorkerDb force-closes the
+// prior handle), so the fleet branch reopens the target home before `getWorker`
+// and the caller builds `createHost` from the returned (target-home) paths — the
+// current and fleet DBs never interleave.
+async function resolveWorkerTarget(workerOpt?: string): Promise<{ paths: LocalPaths, worker: WorkerRow }> {
+  const currentPaths = await ensureDb()
+  // Probe the lone active worker of the current home without throwing on the
+  // multiple-active dirty-home case, so an unresolved current home can fall back to
+  // the fleet index. The multiple-active error is preserved below.
+  const currentResolution = resolveSingleActiveWorker()
+  if (currentResolution.kind === 'multiple' && !workerOpt && !selectedWorkerId()) {
     throw new Error(
-      `cannot resolve a standalone worker: the DB holds more than one active worker (${resolution.workers.map(worker => worker.id).join(', ')}); a daemon hosts at most one active worker. Pass --worker to disambiguate.`,
+      `cannot resolve a standalone worker: the DB holds more than one active worker (${currentResolution.workers.map(worker => worker.id).join(', ')}); a daemon hosts at most one active worker. Pass --worker to disambiguate.`,
     )
   }
+  const currentWorkerId = workerOpt
+    ?? selectedWorkerId()
+    ?? (currentResolution.kind === 'single' ? currentResolution.worker.id : undefined)
+  if (currentWorkerId) {
+    const currentWorker = getWorker(currentWorkerId)
+    if (currentWorker)
+      return { paths: currentPaths, worker: currentWorker }
+  }
+
+  // Fleet fallback (by id): reopen the targeted worker's own home/DB.
+  const root = fleetRootDir()
+  const index = readFleet(root)
+  const targetId = workerOpt ?? index.default ?? index.workers[0]?.id
+  const entry = targetId ? index.workers.find(worker => worker.id === targetId) : undefined
+  if (entry) {
+    const fleetPaths = fleetWorkerPaths(root, entry)
+    await ensureDbAt(fleetPaths)
+    const fleetWorker = getWorker(entry.id)
+    if (fleetWorker)
+      return { paths: fleetPaths, worker: fleetWorker }
+  }
+
+  if (currentWorkerId || targetId)
+    throw new Error(`worker not found: ${currentWorkerId ?? targetId}`)
   throw new Error('no active worker; run `aiworker worker create` or pass --worker')
 }
 
 async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerRuntime> {
-  const paths = await ensureDb()
-  const workerId = options.worker ?? selectedWorkerId() ?? resolveStandaloneWorkerId()
-  const worker = getWorker(workerId)
-  if (!worker)
-    throw new Error(`worker not found: ${workerId}`)
+  const { paths, worker } = await resolveWorkerTarget(options.worker)
   const host = createHost(paths)
   if (options.requireEnabledApp)
     host.requireEnabledAppForWorker(worker.id)
@@ -967,8 +1035,9 @@ async function startDaemon(opts: { host?: string, port?: number } = {}): Promise
 }
 
 interface StartCommandOptions {
+  all?: boolean
   host?: string
-  open?: boolean
+  id?: string
   port?: number
 }
 
@@ -1007,45 +1076,115 @@ async function ensureStandaloneServiceReady(paths: LocalPaths): Promise<EnsuredS
   return { appId: created.worker.appId, created: true, id: created.worker.id }
 }
 
-function shouldOpenBrowser(opts: StartCommandOptions): boolean {
-  if (opts.open === false)
-    return false
-  if (process.env.CI)
-    return false
-  return process.stdout.isTTY === true
-}
-
-// Best-effort, cross-platform, never throws: a missing opener must never fail or
-// block `aiworker start` (or its tests).
-function openBrowser(url: string): boolean {
-  const command = process.platform === 'darwin'
-    ? ['open', url]
-    : process.platform === 'win32'
-      ? ['cmd', '/c', 'start', '', url]
-      : ['xdg-open', url]
+// Probe whether a TCP port is already bound on the loopback host. Best-effort and
+// synchronous-ish: any failure to bind means "in use", which is the conservative
+// answer for port allocation. Never throws.
+async function isPortInUse(host: string, port: number): Promise<boolean> {
   try {
-    const child = Bun.spawn(command, { stderr: 'ignore', stdout: 'ignore' })
-    child.unref()
-    return true
+    const server = Bun.listen({
+      hostname: host,
+      port,
+      socket: { data() {} },
+    })
+    server.stop(true)
+    return false
   }
   catch {
-    return false
+    return true
   }
 }
 
-async function runStart(opts: StartCommandOptions = {}): Promise<void> {
-  const paths = await ensureDb()
-  const worker = await ensureStandaloneServiceReady(paths)
-  const daemon = await startOrReuseDaemon({ host: opts.host, port: opts.port }, paths)
+// Fleet-level `start [id] [--all]`: every target runs fully in the background and
+// the command prints each daemon URL. There is no browser open and no foreground
+// mode here (the dedicated `open` command and `daemon foreground` cover those).
+// Each target's daemon is spawned with its own per-worker home (AIWORKER_HOME +
+// WORKER_DB_PATH derived from fleetWorkerPaths) so daemons never share a DB.
+async function runFleetStart(opts: StartCommandOptions = {}): Promise<void> {
+  const root = fleetRootDir()
+  let index = ensureFleetSeeded(root)
+  const targets = resolveTargets(index, { all: opts.all, id: opts.id })
+  if (targets.length === 0)
+    throw new Error('no fleet worker to start')
 
-  const opened = daemon.url && shouldOpenBrowser(opts) ? openBrowser(daemon.url) : false
+  const singleTarget = targets.length === 1 ? targets[0] : null
+  const host = opts.host ?? '127.0.0.1'
+  const results: Array<{ daemon: DaemonStartResult, id: string, port: number, url: string }> = []
+
+  for (const target of targets) {
+    const paths = fleetWorkerPaths(root, target)
+    const alreadyRunning = daemonStatus(paths).running
+    let port = singleTarget && typeof opts.port === 'number' ? opts.port : target.port
+    // Live bind-probe: when this worker's daemon is not already running, bump past
+    // a port that is busy on the system (or registered to another fleet worker)
+    // and persist the choice so the fleet index always reflects the port the
+    // daemon will actually try to bind. An already-running daemon is reused as-is.
+    if (!alreadyRunning) {
+      while (await isPortInUse(host, port)) {
+        const used = new Set(index.workers.filter(worker => worker.id !== target.id).map(worker => worker.port))
+        do {
+          port += 1
+        } while (used.has(port))
+      }
+      if (port !== target.port) {
+        index = upsertFleetWorker(index, { ...target, port })
+        writeFleet(root, index)
+      }
+    }
+    // Single-source the resolved host: the same `host` drives the live bind-probe
+    // above, the daemon spawn/bind here, and the printed URL below — instead of
+    // relying on `AIWORKER_WORKER_HOST` defaulting to 127.0.0.1 to coincide.
+    const daemon = await startOrReuseDaemon({ host, port }, paths)
+    results.push({ daemon, id: target.id, port, url: daemonUrl(host, port) })
+  }
 
   printJson({
-    daemon,
-    opened,
-    url: daemon.url,
-    worker,
+    fleet: { default: index.default, root },
+    started: results,
   })
+}
+
+// Fleet-level `stop [id] [--all]`: resolve targets and stop each per-worker home
+// daemon by its pid (reuses the single-home stop logic against per-worker paths).
+async function runFleetStop(opts: { all?: boolean, id?: string } = {}): Promise<void> {
+  const root = fleetRootDir()
+  const index = ensureFleetSeeded(root)
+  const targets = resolveTargets(index, { all: opts.all, id: opts.id })
+  const stopped: Array<{ id: string } & DaemonStopResult> = []
+  for (const target of targets) {
+    const paths = fleetWorkerPaths(root, target)
+    stopped.push({ id: target.id, ...await stopDaemonProcess(paths) })
+  }
+  printJson({ fleet: { default: index.default, root }, stopped })
+}
+
+async function runFleetList(): Promise<void> {
+  const root = fleetRootDir()
+  const index = ensureFleetSeeded(root)
+  printJson({
+    fleet: { default: index.default, root },
+    workers: index.workers.map(worker => fleetWorkerSummary(root, worker)),
+  })
+}
+
+async function runFleetStatus(): Promise<void> {
+  const root = fleetRootDir()
+  const index = ensureFleetSeeded(root)
+  const workers = []
+  for (const worker of index.workers) {
+    const summary = fleetWorkerSummary(root, worker)
+    let health: { ok: boolean, status: number | null } = { ok: false, status: null }
+    if (summary.running) {
+      try {
+        const res = await fetch(`${summary.url}/health`)
+        health = { ok: res.ok, status: res.status }
+      }
+      catch {
+        health = { ok: false, status: null }
+      }
+    }
+    workers.push({ ...summary, health })
+  }
+  printJson({ fleet: { default: index.default, root }, workers })
 }
 
 async function stopDaemonProcess(paths = localPaths(), status = daemonStatus(paths)): Promise<DaemonStopResult> {
@@ -1205,22 +1344,143 @@ async function showLogs(opts: { tail?: number } = {}): Promise<void> {
   process.stdout.write(`${redactCliInspectOutput(lines.slice(-(opts.tail ?? 80)).join('\n'))}\n`)
 }
 
-async function createWorkerCommand(opts: { id?: string, name?: string, app?: string }): Promise<void> {
-  const paths = await ensureDb()
-  const created = await createHost(paths).createSoulWorker({
-    id: opts.id,
-    name: requireText(opts.name, 'name'),
-    appId: requireText(opts.app, 'app'),
-  })
-  printJson({ worker: created.snapshot.worker })
+// The fleet root = the resolved default home. Every fleet worker lives in its
+// own standalone home under `<root>/workers/<id>/`; the adopted legacy default
+// home maps to the root itself. This resolves independently of WORKER_DB_PATH so
+// the fleet index never collapses onto a single pinned DB.
+function fleetRootDir(): string {
+  return resolveAiworkerScope({ defaultHomeDir: resolveCliDefaultHomeDir() }).home
 }
 
+function fleetWorkerSummary(root: string, worker: FleetWorker): {
+  app: string
+  createdAt: string
+  home: string
+  id: string
+  pid: number | null
+  port: number
+  running: boolean
+  url: string
+} {
+  const paths = fleetWorkerPaths(root, worker)
+  const status = daemonStatus(paths)
+  const metadata = readDaemonMetadata(paths)
+  const host = metadata?.host ?? '127.0.0.1'
+  return {
+    app: worker.app,
+    createdAt: worker.createdAt,
+    home: worker.home,
+    id: worker.id,
+    pid: status.pid,
+    port: worker.port,
+    running: status.running,
+    url: daemonUrl(host, worker.port),
+  }
+}
+
+function legacyWorkerFromDb(paths: LocalPaths): { app: string, id: string } | null {
+  closeWorkerDb()
+  if (!existsSync(paths.dbPath))
+    return null
+  initWorkerDb(paths.dbPath)
+  try {
+    const resolution = resolveSingleActiveWorker()
+    const worker = resolution.kind === 'single'
+      ? resolution.worker
+      : listWorkers().find(row => row.status === 'active') ?? listWorkers()[0]
+    return worker ? { app: worker.appId, id: worker.id } : null
+  }
+  finally {
+    closeWorkerDb()
+  }
+}
+
+function legacyPortFromDaemonMeta(paths: LocalPaths): number | null {
+  return readDaemonMetadata(paths)?.port ?? null
+}
+
+// Adopt an existing single-home default into the fleet index in place (home '.'),
+// then seed a freeform fleet entry when the index is still empty so a bare
+// `aiworker start` matches today's zero-config behavior. The freeform worker row
+// itself is created by the daemon child in its own home (ensureStandaloneServiceReady).
+function ensureFleetSeeded(root: string): FleetIndex {
+  adoptLegacyHome(root, {
+    readLegacyPort: legacyPortFromDaemonMeta,
+    readLegacyWorker: legacyWorkerFromDb,
+  })
+  const index = readFleet(root)
+  if (index.workers.length > 0)
+    return index
+  const seeded = upsertFleetWorker(index, {
+    app: OFFICIAL_FREEFORM_APP_ID,
+    createdAt: new Date().toISOString(),
+    home: path.relative(root, workerHomeDir(root, 'freeform')) || FLEET_ADOPTED_HOME,
+    id: 'freeform',
+    port: allocatePort(index, FLEET_DEFAULT_BASE_PORT),
+  })
+  writeFleet(root, seeded)
+  return seeded
+}
+
+async function createWorkerCommand(opts: { id?: string, name?: string, app?: string, port?: number }): Promise<void> {
+  const id = requireText(opts.id, 'id')
+  const app = requireText(opts.app, 'app')
+  const root = fleetRootDir()
+  const index = readFleet(root)
+  if (index.workers.some(worker => worker.id === id))
+    throw new Error(`fleet worker already exists: ${id}`)
+  const homeDir = workerHomeDir(root, id)
+  if (existsSync(homeDir))
+    throw new Error(`worker home already exists: ${homeDir}`)
+
+  const paths = buildLocalPaths(homeDir)
+  closeWorkerDb()
+  await ensureDbAt(paths)
+  try {
+    const host = createHost(paths)
+    const bootstrap = await host.bootstrapOfficialSoulApps()
+    if (bootstrap.status === 'fail')
+      throw new Error('failed to install the bundled official Soul Apps for the new worker home')
+    const created = await host.createSoulWorker({
+      appId: app,
+      id,
+      name: opts.name?.trim() || id,
+    })
+    const port = opts.port ?? allocatePort(index, FLEET_DEFAULT_BASE_PORT)
+    const next = upsertFleetWorker(index, {
+      app,
+      createdAt: new Date().toISOString(),
+      home: path.relative(root, homeDir) || FLEET_ADOPTED_HOME,
+      id,
+      port,
+    })
+    writeFleet(root, next)
+    printJson({
+      fleet: { default: next.default, root },
+      worker: {
+        app,
+        home: homeDir,
+        id,
+        port,
+        workerId: created.snapshot.worker.id,
+      },
+    })
+  }
+  finally {
+    closeWorkerDb()
+  }
+}
+
+// `worker select` writes `fleet.default` (the fleet-level default target for a
+// bare `start`/`stop`). This is decoupled from the per-home `selected-worker`
+// setting (still read by `selectedWorkerId()` for backward compatibility); do
+// not assume this command sets a per-home worker selection.
 async function selectWorkerCommand(id: string): Promise<void> {
-  await ensureDb()
-  const worker = getWorker(id)
-  if (!worker)
-    throw new Error(`worker not found: ${id}`)
-  printJson({ setting: setSetting('selected-worker', { workerId: worker.id }) })
+  const root = fleetRootDir()
+  const index = ensureFleetSeeded(root)
+  const next = setDefault(index, requireText(id, 'id'))
+  writeFleet(root, next)
+  printJson({ fleet: { default: next.default, root } })
 }
 
 async function archiveWorkerCommand(id: string): Promise<void> {
@@ -1983,11 +2243,17 @@ function registerCommands(): void {
     .option('--pre', 'use preview release channel')
     .action((opts: UpdateCliOptions) => runUpdateCommand('upgrade', opts))
 
-  cli.command('start', 'ensure the bundled Freeform Worker, start the daemon, and open the Workbench')
+  cli.command('start [id]', 'start one fleet worker (default/<id>) or all (--all) in the background and print URLs')
+    .option('--all', 'start every fleet worker')
     .option('--host <host>', 'bind host')
-    .option('--port <n>', 'port', { type: [Number] })
-    .option('--no-open', 'do not open the Workbench URL in a browser')
-    .action((opts: { host?: string, open?: boolean, port?: number[] }) => runStart({ host: opts.host, open: opts.open, port: optionalNumber(opts.port) }))
+    .option('--port <n>', 'port (single target only)', { type: [Number] })
+    .action((id: string | undefined, opts: { all?: boolean, host?: string, port?: number[] }) =>
+      runFleetStart({ all: opts.all, host: opts.host, id, port: optionalNumber(opts.port) }))
+  cli.command('stop [id]', 'stop one fleet worker (default/<id>) or all (--all)')
+    .option('--all', 'stop every fleet worker')
+    .action((id: string | undefined, opts: { all?: boolean }) => runFleetStop({ all: opts.all, id }))
+  cli.command('fleet list', 'list fleet workers (id/app/home/port/running)').action(runFleetList)
+  cli.command('fleet status', 'list fleet workers and probe each /health').action(runFleetStatus)
   cli.command('daemon start', 'ensure the bundled Freeform Worker and start the service in background without opening Workbench').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon foreground', 'ensure the bundled Freeform Worker and run the service in foreground without opening Workbench').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon status', 'show local daemon status').action(() => printJson(daemonStatus()))
@@ -2015,7 +2281,12 @@ function registerCommands(): void {
     const paths = await ensureDb()
     printJson({ souls: createHost(paths).listSouls() })
   })
-  cli.command('worker create', 'create a local Soul worker').option('--id <id>', 'worker id').option('--name <text>', 'worker name').option('--app <appId>', 'Soul App id (appId, e.g. aiworker-freeform)').action(createWorkerCommand)
+  cli.command('worker create <id>', 'create a standalone fleet worker in its own home')
+    .option('--app <appId>', 'Soul App id (appId, e.g. aiworker-freeform)')
+    .option('--name <text>', 'worker name (defaults to <id>)')
+    .option('--port <n>', 'daemon port (auto-allocated when omitted)', { type: [Number] })
+    .action((id: string, opts: { app?: string, name?: string, port?: number[] }) =>
+      createWorkerCommand({ app: opts.app, id, name: opts.name, port: optionalNumber(opts.port) }))
   cli.command('worker list', 'list local Soul workers').action(async () => {
     await ensureAllWorkers()
     printJson({ workers: listWorkers() })
@@ -2091,7 +2362,9 @@ function registerCommands(): void {
 
 const OPERATOR_COMMAND_INDEX = [
   'aiworker operator commands',
-  'start',
+  'start [id]|--all',
+  'stop [id]|--all',
+  'fleet list|status',
   'daemon start|stop|restart|status|logs',
   'open',
   'doctor',
@@ -2106,7 +2379,9 @@ const OPERATOR_COMMAND_INDEX = [
 
 const FULL_COMMAND_INDEX = [
   'aiworker command index',
-  'start',
+  'start [id]|--all',
+  'stop [id]|--all',
+  'fleet list|status',
   'init',
   'update|upgrade',
   'daemon start|foreground|status|stop|restart|logs|check',

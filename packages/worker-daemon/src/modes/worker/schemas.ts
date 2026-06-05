@@ -45,18 +45,6 @@ export const installAppBodySchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
-// POST /api/workers
-// ---------------------------------------------------------------------------
-
-export const createWorkerBodySchema = z.object({
-  defaultEngineId: z.string().nullable().optional(),
-  id: z.string().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  name: z.string().trim().min(1),
-  appId: z.string().trim().min(1),
-})
-
-// ---------------------------------------------------------------------------
 // PATCH /api/workers/:workerId
 // ---------------------------------------------------------------------------
 

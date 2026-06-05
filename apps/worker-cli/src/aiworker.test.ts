@@ -20,6 +20,7 @@ import {
   initWorkerDb,
   listSessionEvents,
   listWorkers,
+  listWorkspaces,
   runWorkerMigrations,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
@@ -27,6 +28,7 @@ import { soulAppServiceEnv } from '@zonease/aiworker-worker-runtime'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
+  __seedWorkerForTest,
   __setDaemonStarterForTest,
   downloadAndReplaceGitHubBundle,
   inspectCliOfficialAppsResource,
@@ -445,12 +447,14 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'freeform-worker', '--name', 'Freeform Worker', '--app', FREEFORM_APP_ID))).toBe(0)
-    expect((JSON.parse(output) as { worker: { id: string, appId: string } }).worker).toMatchObject({ id: 'freeform-worker', appId: FREEFORM_APP_ID })
+    expect(await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'freeform-worker', name: 'Freeform Worker' }))
+      .toMatchObject({ appId: FREEFORM_APP_ID, id: 'freeform-worker' })
     output = ''
 
+    // `worker select` is now fleet-level: it adopts the lone root-home worker into
+    // the fleet index and sets it as the fleet default.
     expect(await runCli(argv('worker', 'select', 'freeform-worker'))).toBe(0)
-    expect(output).toContain('selected-worker')
+    expect((JSON.parse(output) as { fleet: { default: string } }).fleet.default).toBe('freeform-worker')
     output = ''
 
     expect(await runCli(argv('workspace', 'create', '--name', 'Scratch', '--type', 'freeform', '--worker', 'freeform-worker'))).toBe(0)
@@ -469,7 +473,7 @@ describe('aiworker local CLI', () => {
   it('resolves the single active worker for standalone commands when --worker and selected-worker are absent', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'solo-worker', '--name', 'Solo Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'solo-worker', name: 'Solo Worker' })
     output = ''
 
     // Standalone single-daemon path: no `worker select`, no `--worker` flag.
@@ -492,7 +496,7 @@ describe('aiworker local CLI', () => {
   it('refuses to guess a worker when the DB holds more than one active worker', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'active-a', '--name', 'A', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'active-a', name: 'A' })
     output = ''
 
     // Inject a second active worker directly to simulate a dirty multi-active DB
@@ -508,77 +512,112 @@ describe('aiworker local CLI', () => {
     expect(errorOutput).toContain('more than one active worker')
   })
 
-  it('aiworker start idempotently ensures a single Freeform worker, reuses a running daemon, and stays headless-safe', async () => {
-    // Pre-seed a "running" daemon by pointing the pid file at this test process so
-    // `start` takes the reuse branch and never spawns a real detached daemon.
-    const home = path.join(root, 'home')
-    mkdirSync(home, { recursive: true })
-    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+  it('falls back to the fleet home when --worker resolves a worker that `worker create` built in its own per-worker home', async () => {
+    // `worker create` is fleet-aware: it builds a separate per-worker home under
+    // `<root>/home/workers/<id>` and registers it in fleet.json. The current
+    // (root) home has no such worker row, so a runtime command must fall back to
+    // the fleet index by id and reopen that worker's own home/DB. This is the
+    // cross-fleet golden flow: worker create → workspace create --worker X.
+    expect(await runCli(argv('worker', 'create', 'fleet-fallback-worker', '--name', 'Fleet Fallback Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    const created = JSON.parse(output) as { worker: { home: string, id: string } }
+    expect(created.worker.id).toBe('fleet-fallback-worker')
+    expect(created.worker.home).toBe(path.join(root, 'home', 'workers', 'fleet-fallback-worker'))
+    output = ''
+    closeWorkerDb()
 
-    // First start: installs the bundled Freeform Soul, creates the single worker,
-    // reuses the running daemon, and skips the browser open under --no-open.
-    expect(await runCli(argv('start', '--no-open'))).toBe(0)
-    const first = JSON.parse(output) as {
-      daemon: { started: boolean }
-      opened: boolean
-      url: null | string
-      worker: { appId: string, created: boolean, id: string }
-    }
-    expect(first.worker).toMatchObject({ appId: FREEFORM_APP_ID, created: true })
-    expect(first.daemon.started).toBe(false)
-    expect(first.opened).toBe(false)
-    expect(first.url).toBeNull()
+    // The current (root) home holds no worker row, so this resolves only via the
+    // fleet fallback into the per-worker home — proving cross-fleet runtime access.
+    expect(await runCli(argv('workspace', 'create', '--name', 'Scratch', '--type', 'freeform', '--worker', 'fleet-fallback-worker'))).toBe(0)
+    expect((JSON.parse(output) as { workspace: { type: string, workerId: string } }).workspace)
+      .toMatchObject({ type: 'freeform', workerId: 'fleet-fallback-worker' })
+  })
+
+  it('prefers a current-home worker over the fleet index so non-fleet/adopted homes are unaffected', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    // Second start: idempotent — reuses the existing worker (created=false) and
-    // does not throw WORKER_ALREADY_ACTIVE or "daemon already running".
-    expect(await runCli(argv('start', '--no-open'))).toBe(0)
-    const second = JSON.parse(output) as { worker: { created: boolean, id: string } }
-    expect(second.worker.created).toBe(false)
-    expect(second.worker.id).toBe(first.worker.id)
-
-    // Exactly one active worker persists across idempotent starts.
-    initWorkerDb(process.env.WORKER_DB_PATH!)
-    expect(listWorkers().filter(worker => worker.status === 'active').map(worker => worker.id)).toEqual([first.worker.id])
+    // Seed the lone active worker directly in the current (root) home.
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'current-home-worker', name: 'Current Home Worker' })
+    output = ''
     closeWorkerDb()
+
+    // Plant a fleet.json whose default points at a worker that exists in NEITHER
+    // the current home nor any fleet home. If the resolver consulted the fleet
+    // before the current home, it would resolve `phantom-fleet-worker` and fail;
+    // current-home precedence must ignore the fleet entirely.
+    writeFileSync(path.join(process.env.AIWORKER_HOME!, 'fleet.json'), `${JSON.stringify({
+      default: 'phantom-fleet-worker',
+      version: 1,
+      workers: [{
+        app: FREEFORM_APP_ID,
+        createdAt: '2026-06-01T00:00:00.000Z',
+        home: 'workers/phantom-fleet-worker',
+        id: 'phantom-fleet-worker',
+        port: 9217,
+      }],
+    }, null, 2)}\n`)
+
+    // No --worker, no selected-worker: the single active current-home worker must
+    // resolve directly from the current home, never falling back to the fleet.
+    expect(await runCli(argv('workspace', 'create', '--name', 'Scratch', '--type', 'freeform'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string, type: string, workerId: string } }).workspace
+    expect(workspace).toMatchObject({ type: 'freeform', workerId: 'current-home-worker' })
+    output = ''
+
+    // The workspace landed in the current (root) home DB, not any fleet sub-home.
+    closeWorkerDb()
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    const currentHomeWorkspaces = listWorkspaces('current-home-worker')
+    closeWorkerDb()
+    expect(currentHomeWorkspaces.map(entry => entry.id)).toContain(workspace.id)
   })
 
-  it('bare aiworker (no subcommand) runs the zero-config start entry', async () => {
-    const home = path.join(root, 'home')
-    mkdirSync(home, { recursive: true })
-    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+  it('aiworker start seeds a freeform fleet worker, reuses a running daemon in its home, and stays background-only', async () => {
+    // Empty fleet → `start` seeds the freeform worker under workers/freeform and
+    // targets that home. Pre-seed a "running" daemon by pointing the freeform
+    // home's pid file at this test process so `start` takes the reuse branch and
+    // never spawns a real detached daemon.
+    const freeformHome = path.join(root, 'home', 'workers', 'freeform')
+    mkdirSync(freeformHome, { recursive: true })
+    await writeFile(path.join(freeformHome, 'aiworker-daemon.pid'), String(process.pid))
+
+    expect(await runCli(argv('start'))).toBe(0)
+    const first = JSON.parse(output) as {
+      fleet: { default: string | null, root: string }
+      started: Array<{ daemon: { started: boolean }, id: string, port: number, url: string }>
+    }
+    expect(first.started).toEqual([
+      expect.objectContaining({
+        daemon: expect.objectContaining({ started: false }),
+        id: 'freeform',
+        port: 9217,
+        url: 'http://127.0.0.1:9217',
+      }),
+    ])
+    expect(first.fleet.default).toBe('freeform')
+    output = ''
+
+    // Second start: idempotent — reuses the running daemon and keeps the same
+    // single fleet entry (no duplicate seed, no "daemon already running" throw).
+    expect(await runCli(argv('start'))).toBe(0)
+    const second = JSON.parse(output) as { started: Array<{ daemon: { started: boolean }, id: string }> }
+    expect(second.started).toEqual([
+      expect.objectContaining({ daemon: expect.objectContaining({ started: false }), id: 'freeform' }),
+    ])
+  })
+
+  it('bare aiworker (no subcommand) runs the zero-config fleet start entry', async () => {
+    const freeformHome = path.join(root, 'home', 'workers', 'freeform')
+    mkdirSync(freeformHome, { recursive: true })
+    await writeFile(path.join(freeformHome, 'aiworker-daemon.pid'), String(process.pid))
 
     // No command token at all: this must be rewritten to `start` (not an unknown
-    // command error and not top-level help). `--no-open` still flows through.
-    expect(await runCli(argv('--no-open'))).toBe(0)
-    const result = JSON.parse(output) as { opened: boolean, worker: { appId: string, created: boolean } }
-    expect(result.worker).toMatchObject({ appId: FREEFORM_APP_ID, created: true })
-    expect(result.opened).toBe(false)
-  })
-
-  it('aiworker start --no-open suppresses the browser open even when stdout is a TTY', async () => {
-    const home = path.join(root, 'home')
-    mkdirSync(home, { recursive: true })
-    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
-
-    // Force the interactive branch so the only thing keeping the browser closed is
-    // the explicit `--no-open` flag (not the non-TTY/CI headless guard).
-    const originalIsTty = process.stdout.isTTY
-    process.stdout.isTTY = true
-    const originalCi = process.env.CI
-    delete process.env.CI
-    try {
-      expect(await runCli(argv('start', '--no-open'))).toBe(0)
-      const result = JSON.parse(output) as { opened: boolean }
-      expect(result.opened).toBe(false)
-    }
-    finally {
-      process.stdout.isTTY = originalIsTty
-      if (originalCi === undefined)
-        delete process.env.CI
-      else
-        process.env.CI = originalCi
-    }
+    // command error and not top-level help).
+    expect(await runCli(argv())).toBe(0)
+    const result = JSON.parse(output) as { started: Array<{ daemon: { started: boolean }, id: string, url: string }> }
+    expect(result.started).toEqual([
+      expect.objectContaining({ id: 'freeform', url: 'http://127.0.0.1:9217' }),
+    ])
   })
 
   it('aiworker daemon start runs unified bootstrap and fake-starts a non-running daemon without opening Workbench', async () => {
@@ -733,7 +772,7 @@ describe('aiworker local CLI', () => {
   it('service-start commands fail fast instead of guessing when multiple active workers exist', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'active-a', '--name', 'A', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'active-a', name: 'A' })
     closeWorkerDb()
     initWorkerDb(process.env.WORKER_DB_PATH!)
     upsertWorker({ id: 'active-b', appId: FREEFORM_APP_ID, name: 'B', status: 'active' })
@@ -741,8 +780,11 @@ describe('aiworker local CLI', () => {
 
     const started = installFakeDaemonStarter(1)
 
+    // The single-home daemon entry points still fail fast on a dirty multi-active
+    // DB. Fleet `start` is intentionally DB-free in the parent (it delegates the
+    // single-active check to each spawned daemon child), so it is not listed here;
+    // the invariant is enforced by the daemon bootstrap and orchestrator layers.
     for (const args of [
-      ['start', '--no-open'],
       ['daemon', 'start'],
       ['daemon', 'restart'],
     ]) {
@@ -760,7 +802,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'events-worker', '--name', 'Events Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'events-worker', name: 'Events Worker' })
     output = ''
     expect(await runCli(argv('worker', 'select', 'events-worker'))).toBe(0)
     output = ''
@@ -836,7 +878,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'reconcile-worker', '--name', 'Reconcile Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'reconcile-worker', name: 'Reconcile Worker' })
     output = ''
     expect(await runCli(argv('worker', 'select', 'reconcile-worker'))).toBe(0)
     output = ''
@@ -904,7 +946,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'cancel-worker', '--name', 'Cancel Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'cancel-worker', name: 'Cancel Worker' })
     output = ''
     expect(await runCli(argv('worker', 'select', 'cancel-worker'))).toBe(0)
     output = ''
@@ -968,7 +1010,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'config-worker', '--name', 'Config Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'config-worker', name: 'Config Worker' })
     output = ''
 
     expect(await runCli(argv(
@@ -1008,7 +1050,7 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'secret-config-worker', '--name', 'Secret Config Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'secret-config-worker', name: 'Secret Config Worker' })
     output = ''
     errorOutput = ''
 
@@ -1040,7 +1082,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'lifecycle-worker', '--name', 'Lifecycle Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'lifecycle-worker', name: 'Lifecycle Worker' })
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Lifecycle Workspace', '--type', 'freeform', '--worker', 'lifecycle-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -1116,7 +1158,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'cli-delete-workspace-worker', '--name', 'CLI Delete Workspace Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'cli-delete-workspace-worker', name: 'CLI Delete Workspace Worker' })
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'CLI Delete Workspace', '--type', 'freeform', '--worker', 'cli-delete-workspace-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -1142,7 +1184,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'cli-delete-worker-invalid-receipt', '--name', 'CLI Delete Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'cli-delete-worker-invalid-receipt', name: 'CLI Delete Worker' })
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'CLI Delete Worker Workspace', '--type', 'freeform', '--worker', 'cli-delete-worker-invalid-receipt'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -1171,7 +1213,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'cli-refresh-worker', '--name', 'CLI Refresh Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'cli-refresh-worker', name: 'CLI Refresh Worker' })
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'CLI Refresh Workspace', '--type', 'freeform', '--worker', 'cli-refresh-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -1213,7 +1255,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'archive-app-cli-worker', '--name', 'Archive App CLI Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'archive-app-cli-worker', name: 'Archive App CLI Worker' })
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Archive App CLI Workspace', '--type', 'freeform', '--worker', 'archive-app-cli-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -1269,7 +1311,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'demo-worker', '--name', 'Demo Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'demo-worker', name: 'Demo Worker' })
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'demo-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
@@ -1388,7 +1430,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'demo-worker', '--name', 'Demo Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'demo-worker', name: 'Demo Worker' })
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'demo-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -1481,7 +1523,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'claude-worker', '--name', 'Claude Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'claude-worker', name: 'Claude Worker' })
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'claude-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -1519,7 +1561,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'frozen-worker', '--name', 'Frozen Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'frozen-worker', name: 'Frozen Worker' })
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'frozen-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -1581,7 +1623,7 @@ describe('aiworker local CLI', () => {
     output = ''
     expect(await runCli(argv('app', 'enable', FREEFORM_APP_ID))).toBe(0)
     output = ''
-    expect(await runCli(argv('worker', 'create', '--id', 'legacy-engine-worker', '--name', 'Legacy Engine Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'legacy-engine-worker', name: 'Legacy Engine Worker' })
     output = ''
     expect(await runCli(argv('workspace', 'create', '--name', 'Analysis Workspace', '--type', 'general-analysis', '--worker', 'legacy-engine-worker'))).toBe(0)
     const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
@@ -1928,6 +1970,10 @@ describe('aiworker local CLI', () => {
     expect(body.bootstrap.status).toBe('pass')
     expect(body.bootstrap.results.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'installed_enabled'],
+      ['google-ads', 'installed_enabled'],
+      ['hr-manager', 'installed_enabled'],
+      ['product-manager', 'installed_enabled'],
+      ['software-support', 'installed_enabled'],
     ])
     expect(body.catalog.souls).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: FREEFORM_APP_ID, status: 'available' }),
@@ -1936,14 +1982,14 @@ describe('aiworker local CLI', () => {
     output = ''
 
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
-    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed'])
+    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed', 'refreshed', 'refreshed', 'refreshed', 'refreshed'])
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'legacy-hr', '--name', 'Legacy HR', '--app', 'hr'))).toBe(1)
+    await expect(__seedWorkerForTest({ app: 'hr', id: 'legacy-hr', name: 'Legacy HR' })).rejects.toThrow()
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'official-freeform', '--name', 'Official Freeform', '--app', FREEFORM_APP_ID))).toBe(0)
-    expect((JSON.parse(output) as { worker: { appId: string } }).worker.appId).toBe(FREEFORM_APP_ID)
+    expect(await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'official-freeform', name: 'Official Freeform' }))
+      .toMatchObject({ appId: FREEFORM_APP_ID })
   })
 
   it('discards legacy HR metadata during official app bootstrap', async () => {
@@ -1979,8 +2025,8 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { souls: Array<{ id: string, status: string }> }).souls).toEqual(expect.arrayContaining([expect.objectContaining({ id: FREEFORM_APP_ID, status: 'available' })]))
     output = ''
 
-    expect(await runCli(argv('worker', 'create', '--id', 'mounted-hr', '--name', 'Mounted HR', '--app', FREEFORM_APP_ID))).toBe(0)
-    expect((JSON.parse(output) as { worker: { metadata: Record<string, unknown>, appId: string } }).worker.appId).toBe(FREEFORM_APP_ID)
+    expect(await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'mounted-hr', name: 'Mounted HR' }))
+      .toMatchObject({ appId: FREEFORM_APP_ID })
     output = ''
 
     expect(await runCli(argv('app', 'archive', FREEFORM_APP_ID))).toBe(0)

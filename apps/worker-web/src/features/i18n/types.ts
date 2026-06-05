@@ -56,7 +56,6 @@ export interface StaticMessages {
     newProject: string
     projectName: string
     projectPlaceholders: { default: string }
-    soul: string
     submit: string
   }
   languageOptions: Record<SupportedLocale, string>
@@ -109,8 +108,6 @@ export interface StaticMessages {
     addSourceMaterials: string
     attachedSourceMaterials: string
     closeSourceMaterialPreview: string
-    createWorker: string
-    createWorkerHint: string
     createWorkspace: string
     createWorkspaceHint: string
     appApiRoute: (routePrefix: string) => string
@@ -166,7 +163,6 @@ export interface StaticMessages {
     workerId: string
     workerList: string
     workerListHint: string
-    workerName: string
     workerSoul: string
     workerStatus: string
   }

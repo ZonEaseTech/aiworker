@@ -10,6 +10,7 @@ import { WORKBENCH_RENDER_TIMEOUT_MS } from './workbench-render-wait'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const appId = 'aiworker-freeform'
+const workerId = 'freeform-browser-user-worker'
 const descriptorPath = join(repoRoot, 'souls/aiworker-freeform/dist/soul.descriptor.json')
 const evidenceRoot = join(repoRoot, 'tmp', `freeform-browser-user-flow-${new Date().toISOString().replace(/[:.]/g, '-')}`)
 const desktopViewport = { height: 920, width: 1440 }
@@ -37,6 +38,10 @@ await writeFakeCodexCommand()
 try {
   cliOutputs.install = runCliJson('app', 'install', descriptorPath)
   cliOutputs.enable = runCliJson('app', 'enable', appId)
+  // A Worker is a standalone instance ensured at the CLI/daemon layer (as
+  // `aiworker start` does); it is never created from the Workbench web. Pre-create
+  // it here so the browser opens an already-running Worker's own Workbench.
+  cliOutputs.worker = runCliJson('worker', 'create', workerId, '--name', 'Browser User Worker', '--app', appId)
 
   const port = reservePort()
   daemon = Bun.spawn({
@@ -68,10 +73,13 @@ try {
   page.on('pageerror', error => browserEvents.push(`pageerror:${error.message}`))
   page.on('requestfailed', request => browserEvents.push(`requestfailed:${request.url()}:${request.failure()?.errorText ?? 'unknown'}`))
 
+  // `aiworker start` opens the Worker's own Workbench at its root; the Workbench
+  // auto-selects the single active standalone Worker. The browser never creates a
+  // Worker — it only creates workspaces and sessions for the already-running one.
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
   await page.getByTestId('worker-studio-shell').waitFor({ state: 'attached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 
-  await createWorkerWorkspaceAndSessionFromUi(page)
+  await createWorkspaceAndSessionFromUi(page)
   const routeIds = readRouteIds(new URL(page.url()).pathname)
 
   const chatSurface = page.locator('[data-chat-surface="true"]')
@@ -143,13 +151,12 @@ finally {
   await rm(workRoot, { force: true, recursive: true })
 }
 
-async function createWorkerWorkspaceAndSessionFromUi(page: Page): Promise<void> {
+async function createWorkspaceAndSessionFromUi(page: Page): Promise<void> {
   const main = page.getByRole('region', { name: 'Soul workspaces and sessions' })
-  await main.getByRole('button', { name: 'Create worker' }).click()
-
-  const workerDialog = page.getByRole('dialog', { name: 'Create worker' })
-  await workerDialog.getByLabel('Worker name').fill('Browser User Worker')
-  await workerDialog.getByRole('button', { name: 'Create worker' }).click()
+  // The Worker already exists (ensured via CLI). The Workbench creates workspaces
+  // and sessions — never workers — so the flow opens the create-workspace dialog
+  // directly from the worker's empty-state.
+  await main.getByRole('button', { name: 'Create workspace' }).click()
 
   const workspaceDialog = page.getByRole('dialog', { name: 'Create workspace' })
   await workspaceDialog.getByLabel('Workspace name').fill('Browser user workspace')
@@ -230,13 +237,14 @@ async function assertComposerPinnedToMainBottom(page: Page, label: string): Prom
 async function addEntryFileOverlayFromUi(page: Page, workerId: string): Promise<void> {
   await page.getByRole('button', { name: 'Configure' }).click()
   const configDialog = page.getByRole('dialog', { name: 'Worker configuration' })
-  await configDialog.getByRole('button', { name: '+ Add entry file' }).click()
+  await configDialog.getByRole('button', { name: 'Add entry file' }).click()
 
-  const addDialog = page.getByRole('dialog', { name: 'Add entry file' })
-  await addDialog.getByLabel('Name').fill('USER_FLOW.md')
-  await addDialog.getByLabel('Content').fill('# Browser user flow\n\nCreated from the Workbench configuration dialog.')
-  await addDialog.getByRole('button', { name: 'Add' }).click()
-  await addDialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+  // The add panel renders inline inside the config dialog (not a nested dialog).
+  const addPanel = configDialog.getByTestId('worker-overlay-editor-panel')
+  await addPanel.getByLabel('Name').fill('USER_FLOW.md')
+  await addPanel.getByLabel('Content').fill('# Browser user flow\n\nCreated from the Workbench configuration dialog.')
+  await addPanel.getByRole('button', { name: 'Add' }).click()
+  await addPanel.getByLabel('Name').waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 
   const saved = await readLocalApi(page, `/api/workers/${workerId}/config/entry-file-overlay%3AUSER_FLOW.md/content`)
   assertEntryFileProof(saved)
@@ -245,22 +253,26 @@ async function addEntryFileOverlayFromUi(page: Page, workerId: string): Promise<
 async function assertSecretOverlayRejectionFromUi(page: Page): Promise<void> {
   const eventStart = browserEvents.length
   const configDialog = page.getByRole('dialog', { name: 'Worker configuration' })
-  await configDialog.getByRole('button', { name: '+ Add skill' }).click()
+  await configDialog.getByRole('button', { name: 'Add skill' }).click()
 
-  const addDialog = page.getByRole('dialog', { name: 'Add skill' })
-  await addDialog.getByLabel('Name').fill('secret-skill')
-  await addDialog.getByLabel('Content').fill('api_key = "sk-browser-user-flow-secret"')
-  await addDialog.getByRole('button', { name: 'Add' }).click()
+  // The add panel renders inline inside the config dialog (not a nested dialog).
+  const addPanel = configDialog.getByTestId('worker-overlay-editor-panel')
+  await addPanel.getByLabel('Name').fill('secret-skill')
+  await addPanel.getByLabel('Content').fill('api_key = "sk-browser-user-flow-secret"')
+  await addPanel.getByRole('button', { name: 'Add' }).click()
 
-  const error = await addDialog.getByTestId('overlay-add-error').textContent({ timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+  const error = await addPanel.getByTestId('overlay-add-error').textContent({ timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   if (!error || !/secret/i.test(error))
     throw new Error(`Secret overlay rejection did not surface inline: ${error ?? '<empty>'}`)
 
   const rejectionEvents = browserEvents.splice(eventStart)
   browserEvents.push(...rejectionEvents.filter(event => !event.includes('status of 422')))
 
-  await addDialog.getByRole('button', { name: 'Cancel' }).click()
-  await addDialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+  // The panel is dirty (Name was filled), so Cancel shows a discard-confirmation
+  // banner inside the dialog — click "Discard changes" to actually dismiss the panel.
+  await addPanel.getByRole('button', { name: 'Cancel' }).click()
+  await configDialog.getByRole('button', { name: 'Discard changes' }).click()
+  await addPanel.getByLabel('Name').waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   await configDialog.getByRole('button', { name: 'Close' }).click()
   await configDialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 }

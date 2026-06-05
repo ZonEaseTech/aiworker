@@ -8,7 +8,7 @@ import process from 'node:process'
 import { closeWorkerDb, initWorkerDb, listEngineInvocations, listSessionEvents } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { runCli } from './aiworker'
+import { __seedWorkerForTest, runCli } from './aiworker'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
 
@@ -56,17 +56,11 @@ describe('Freeform CLI golden path', () => {
     const enabled = await runCliJson<{ app: { appId: string, status: string } }>('app', 'enable', FREEFORM_APP_ID)
     expect(enabled.app).toMatchObject({ appId: FREEFORM_APP_ID, status: 'enabled' })
 
-    const worker = await runCliJson<{ worker: { id: string, appId: string } }>(
-      'worker',
-      'create',
-      '--id',
-      'freeform-golden-worker',
-      '--name',
-      'Freeform Golden Worker',
-      '--app',
-      FREEFORM_APP_ID,
-    )
-    expect(worker.worker).toMatchObject({ id: 'freeform-golden-worker', appId: FREEFORM_APP_ID })
+    // `worker create` is now fleet-aware (builds a separate per-worker home); this
+    // golden path needs the worker in the current test home, so seed it there.
+    const worker = await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'freeform-golden-worker', name: 'Freeform Golden Worker' })
+    expect(worker).toMatchObject({ id: 'freeform-golden-worker', appId: FREEFORM_APP_ID })
+    closeWorkerDb()
 
     const savedConfig = await runCliJson<{
       config: {

@@ -101,7 +101,6 @@ describe('dist release smoke script contract', () => {
         'GET /api/info',
         'GET /api/settings',
         'PATCH /api/settings',
-        'POST /api/workers',
         'GET /api/workers',
         'GET /api/workers/{workerId}',
         'PATCH /api/workers/{workerId}',

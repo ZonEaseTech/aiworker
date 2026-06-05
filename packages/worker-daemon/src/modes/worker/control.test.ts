@@ -15,6 +15,9 @@ const FREEFORM_APP_ID = 'aiworker-freeform'
 
 describe('worker-daemon control contract endpoints', () => {
   let dir = ''
+  // Worker 创建只走 CLI/orchestrator(daemon 不再暴露 POST /api/workers)。经此 WeakMap
+  // 由 app 实例取回 daemon state,直接用 orchestrator 装配 worker。
+  const daemonStateByApp = new WeakMap<Awaited<ReturnType<typeof bootstrapWorkerApp>>['app'], Awaited<ReturnType<typeof bootstrapWorkerApp>>['state']>()
   // 与 worker.local.test 一致:收集 boot 出来的 daemon,afterEach 关库前 dispose,
   // 排空各运行体事件总线,防止还活着的订阅在 closeWorkerDb 后触发 DB 读(防御性,
   // 本文件当前不开 SSE / 不建 running invocation,故今天为惰性,但守住同一不变量)。
@@ -52,16 +55,18 @@ describe('worker-daemon control contract endpoints', () => {
       workersRoot: join(dir, 'workers'),
     })
     bootedDaemons.push(boot.state)
+    daemonStateByApp.set(boot.app, boot.state)
     return boot.app
   }
 
   async function createFreeformWorker(target: Awaited<ReturnType<typeof app>>, id = 'freeform-worker') {
-    const res = await target.request('/api/workers', {
-      body: JSON.stringify({ id, name: 'Freeform', appId: FREEFORM_APP_ID }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(res.status).toBe(201)
+    // Worker 装配走 orchestrator(与 CLI 同源),并复刻已删 POST /api/workers 路由的
+    // runtime 注册,使后续 requireRuntime 不 404。
+    const state = daemonStateByApp.get(target)
+    if (!state)
+      throw new Error('daemon state not registered for this app instance')
+    const created = await state.host.createSoulWorker({ id, name: 'Freeform', appId: FREEFORM_APP_ID })
+    state.runtimes.set(created.worker.id, created.runtime)
   }
 
   it('GET /api/control/health reports readiness', async () => {
