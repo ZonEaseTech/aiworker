@@ -1,7 +1,7 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 
 import { Database } from 'bun:sqlite'
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 
 import * as schema from './schema'
@@ -149,7 +149,11 @@ export function verifyAndConsumeProvisionToken(token: string, options: VerifyPro
   const candidates = getHostDb()
     .select()
     .from(schema.hostAssignments)
-    .where(isNull(schema.hostAssignments.provisionTokenConsumedAt))
+    .where(and(
+      eq(schema.hostAssignments.status, 'provisioning'),
+      isNull(schema.hostAssignments.provisionTokenConsumedAt),
+      isNull(schema.hostAssignments.revokedAt),
+    ))
     .all()
 
   const assignment = candidates.find(row =>
@@ -165,7 +169,9 @@ export function verifyAndConsumeProvisionToken(token: string, options: VerifyPro
     .set({ provisionTokenConsumedAt: at, updatedAt: at })
     .where(and(
       eq(schema.hostAssignments.assignmentId, assignment.assignmentId),
+      eq(schema.hostAssignments.status, 'provisioning'),
       isNull(schema.hostAssignments.provisionTokenConsumedAt),
+      isNull(schema.hostAssignments.revokedAt),
     ))
     .run()
 
@@ -180,7 +186,7 @@ export function markAssignmentCheckedIn(assignmentId: string, input: MarkAssignm
   assertNoLiteralSecrets(input.workerVersion, 'host_assignments.workerVersion')
   if (input.checkInAt)
     assertNoLiteralSecrets(input.checkInAt, 'host_assignments.checkedInAt')
-  getHostDb()
+  const result = getHostDb()
     .update(schema.hostAssignments)
     .set({
       status: 'checked_in',
@@ -189,8 +195,14 @@ export function markAssignmentCheckedIn(assignmentId: string, input: MarkAssignm
       checkedInAt: at,
       updatedAt: at,
     })
-    .where(eq(schema.hostAssignments.assignmentId, assignmentId))
+    .where(and(
+      eq(schema.hostAssignments.assignmentId, assignmentId),
+      eq(schema.hostAssignments.status, 'provisioning'),
+      isNull(schema.hostAssignments.revokedAt),
+    ))
     .run()
+  if (runChanges(result) !== 1)
+    return null
   return getAssignment(assignmentId)
 }
 
@@ -198,30 +210,46 @@ export function markAssignmentAccessReady(assignmentId: string, input: MarkAssig
   const at = input.accessReadyAt ?? new Date().toISOString()
   if (input.accessReadyAt)
     assertNoLiteralSecrets(input.accessReadyAt, 'host_assignments.accessReadyAt')
-  getHostDb()
+  const result = getHostDb()
     .update(schema.hostAssignments)
     .set({
       status: 'access_ready',
       accessReadyAt: at,
       updatedAt: at,
     })
-    .where(eq(schema.hostAssignments.assignmentId, assignmentId))
+    .where(and(
+      eq(schema.hostAssignments.assignmentId, assignmentId),
+      eq(schema.hostAssignments.status, 'checked_in'),
+      isNull(schema.hostAssignments.revokedAt),
+      isNotNull(schema.hostAssignments.workerId),
+      isNotNull(schema.hostAssignments.checkedInAt),
+    ))
     .run()
+  if (runChanges(result) !== 1)
+    return null
   return getAssignment(assignmentId)
 }
 
 export function markAssignmentReady(assignmentId: string, input: MarkAssignmentReadyInput): HostAssignmentRow | null {
   const at = new Date().toISOString()
   assertNoLiteralSecrets(input.workbenchUrl, 'host_assignments.workbenchUrl')
-  getHostDb()
+  const result = getHostDb()
     .update(schema.hostAssignments)
     .set({
       status: 'ready',
       workbenchUrl: input.workbenchUrl,
       updatedAt: at,
     })
-    .where(eq(schema.hostAssignments.assignmentId, assignmentId))
+    .where(and(
+      eq(schema.hostAssignments.assignmentId, assignmentId),
+      eq(schema.hostAssignments.status, 'access_ready'),
+      isNull(schema.hostAssignments.revokedAt),
+      isNotNull(schema.hostAssignments.workerId),
+      isNotNull(schema.hostAssignments.accessReadyAt),
+    ))
     .run()
+  if (runChanges(result) !== 1)
+    return null
   return getAssignment(assignmentId)
 }
 

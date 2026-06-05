@@ -99,6 +99,54 @@ describe('host sqlite assignment storage', () => {
     })).toBeNull()
   })
 
+  it('does not consume provision tokens after assignment revocation', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    revokeAssignment(created.assignment.assignmentId, 'admin@zonease.org')
+
+    expect(verifyAndConsumeProvisionToken(created.provisionToken)).toBeNull()
+    expect(listAssignments()[0]?.status).toBe('revoked')
+  })
+
+  it('does not advance revoked assignments back into readiness states', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    revokeAssignment(created.assignment.assignmentId, 'admin@zonease.org')
+
+    expect(markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: 'test',
+    })).toBeNull()
+    expect(markAssignmentAccessReady(created.assignment.assignmentId)).toBeNull()
+    expect(markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })).toBeNull()
+
+    expect(listAssignments()[0]?.status).toBe('revoked')
+  })
+
+  it('requires checked-in and access-ready prerequisites before later readiness states', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    expect(markAssignmentAccessReady(created.assignment.assignmentId)).toBeNull()
+    expect(markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })).toBeNull()
+    expect(listAssignments()[0]?.status).toBe('provisioning')
+  })
+
   it('moves through checked_in, access_ready, ready, and revoked without leaking secrets', () => {
     const created = createAssignment({
       assignedEmail: 'bob@zonease.org',

@@ -69,12 +69,22 @@ describe('host-control access adapter boundary', () => {
 
     expect(envelope).toEqual({
       type: 'request',
-      id: 'req_1',
+      id: envelope.id,
       method: 'GET',
       path: '/workers/wkr_82?tab=chat',
       headers: { accept: 'text/html' },
       bodyText: '',
     })
+    expect(envelope.id).toMatch(/^req_/)
+  })
+
+  test('creates unique request ids so access responses can be correlated', async () => {
+    const first = await createAccessRequestEnvelope(new Request('https://host.example/workers/wkr_82'))
+    const second = await createAccessRequestEnvelope(new Request('https://host.example/workers/wkr_82'))
+
+    expect(first.id).toMatch(/^req_/)
+    expect(second.id).toMatch(/^req_/)
+    expect(first.id).not.toBe(second.id)
   })
 
   test('parses worker access response envelopes through the protocol parser', () => {

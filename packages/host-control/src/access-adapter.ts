@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto'
+
 import {
   parseWorkerAccessResponseEnvelope,
   type WorkerAccessRequestEnvelope,
@@ -55,12 +57,16 @@ export async function createAccessRequestEnvelope(request: Request): Promise<Wor
 
   return {
     type: 'request',
-    id: 'req_1',
+    id: createAccessRequestId(),
     method: request.method,
     path: `${url.pathname}${url.search}`,
     headers,
     bodyText,
   }
+}
+
+function createAccessRequestId(): string {
+  return `req_${randomBytes(16).toString('base64url')}`
 }
 
 export function parseAccessResponseEnvelope(input: unknown): WorkerAccessResponseEnvelope {
