@@ -144,6 +144,28 @@ describe('assistant markdown', () => {
     expect(container.textContent).toContain('docs/runtime.md')
   })
 
+  it('preserves ordered list numbering when interrupted by nested content blocks', () => {
+    const { container } = render(
+      <AssistantMarkdown
+        markdown={[
+          '1. 会话身份',
+          '',
+          '- Soul worker: `w_kzqxxh894fbn`',
+          '',
+          '2. 工作区',
+          '',
+          '- 当前目录是 workspace',
+          '',
+          '3. 可用能力',
+        ].join('\n')}
+      />,
+    )
+
+    const orderedLists = [...container.querySelectorAll('ol')]
+    expect(orderedLists).toHaveLength(3)
+    expect(orderedLists.map(list => list.getAttribute('start'))).toEqual([null, '2', '3'])
+  })
+
   it('renders safe typed links and inline semantic tokens for paths and commands', () => {
     render(
       <AssistantMarkdown markdown="Open http://localhost:5173 and see `bun test`, docs/runtime.md, branch codex/refactor." />,

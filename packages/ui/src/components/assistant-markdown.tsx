@@ -11,7 +11,8 @@ export interface AssistantMarkdownProps {
 type MarkdownBlock
   = | { code: string, kind: 'code', language?: string }
     | { depth: number, kind: 'heading', text: string }
-    | { items: MarkdownListItem[], kind: 'ordered-list' | 'unordered-list' }
+    | { items: MarkdownListItem[], kind: 'unordered-list' }
+    | { items: MarkdownListItem[], kind: 'ordered-list', start: number }
     | { kind: 'paragraph', text: string }
     | { kind: 'quote', text: string }
     | { headers: string[], kind: 'table', rows: string[][] }
@@ -142,6 +143,7 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     }
 
     if (isOrderedListLine(line)) {
+      const start = readOrderedListStart(line)
       const items: MarkdownListItem[] = []
       while (index < lines.length && isOrderedListLine(lines[index] ?? '')) {
         const listLine = lines[index] ?? ''
@@ -152,7 +154,7 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
         })
         index += 1
       }
-      blocks.push({ items, kind: 'ordered-list' })
+      blocks.push({ items, kind: 'ordered-list', start })
       continue
     }
 
@@ -253,6 +255,14 @@ function readOrderedListContent(line: string): string {
   return readListContentAfter(line, index + 1)
 }
 
+function readOrderedListStart(line: string): number {
+  const start = firstNonWhitespaceIndex(line)
+  let index = start
+  while (isDigit(line[index] ?? ''))
+    index += 1
+  return Number.parseInt(line.slice(start, index), 10)
+}
+
 function readListContentAfter(line: string, markerEndIndex: number): string {
   let index = markerEndIndex
   while (isWhitespace(line[index] ?? ''))
@@ -344,7 +354,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
 
   if (block.kind === 'ordered-list') {
     return (
-      <ol key={`ol-${index}`} className="list-decimal space-y-1 pl-5">
+      <ol key={`ol-${index}`} start={block.start === 1 ? undefined : block.start} className="list-decimal space-y-1 pl-5">
         {block.items.map(item => renderListItem(item))}
       </ol>
     )
