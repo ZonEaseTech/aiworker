@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import {
+  mintWorkerId,
   parseSoulDescriptorV1,
   SOUL_DESCRIPTOR_OUTPUT_PATH,
   soulAppIdSchema,
@@ -66,6 +67,7 @@ import {
   FLEET_DEFAULT_BASE_PORT,
   fleetWorkerPaths,
   readFleet,
+  resolveDefault,
   resolveTargets,
   setDefault,
   upsertFleetWorker,
@@ -336,6 +338,16 @@ async function ensureDb(): Promise<LocalPaths> {
   return ensureDbAt(paths)
 }
 
+async function ensureDefaultDb(): Promise<LocalPaths> {
+  const paths = localPaths()
+  const root = fleetRootDir()
+  const index = readFleet(root)
+  const target = resolveDefault(index)
+  if (target && !existsSync(paths.dbPath))
+    return ensureDbAt(fleetWorkerPaths(root, target))
+  return ensureDbAt(paths)
+}
+
 // Open + migrate the SQLite DB for an explicit set of paths. The DB handle is a
 // process-global singleton, so callers must not interleave two homes in one
 // process; fleet commands that touch a specific worker's DB (`worker create`,
@@ -453,6 +465,19 @@ function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, offi
   })
 }
 
+function resolveWorkerFromOpenDb(workerOpt?: string): { requestedId?: string, worker: WorkerRow | null } {
+  const currentResolution = resolveSingleActiveWorker()
+  if (currentResolution.kind === 'multiple' && !workerOpt && !selectedWorkerId()) {
+    throw new Error(
+      `cannot resolve a standalone worker: the DB holds more than one active worker (${currentResolution.workers.map(worker => worker.id).join(', ')}); a daemon hosts at most one active worker. Pass --worker to disambiguate.`,
+    )
+  }
+  const requestedId = workerOpt
+    ?? selectedWorkerId()
+    ?? (currentResolution.kind === 'single' ? currentResolution.worker.id : undefined)
+  return { requestedId, worker: requestedId ? getWorker(requestedId) : null }
+}
+
 // Resolve the home + worker row that a runtime command targets. Current home wins:
 // when an explicit `--worker`, the per-home `selected-worker`, or the lone active
 // worker of the current home resolves a row, we serve it from the current home
@@ -466,23 +491,14 @@ function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, offi
 // and the caller builds `createHost` from the returned (target-home) paths — the
 // current and fleet DBs never interleave.
 async function resolveWorkerTarget(workerOpt?: string): Promise<{ paths: LocalPaths, worker: WorkerRow }> {
-  const currentPaths = await ensureDb()
-  // Probe the lone active worker of the current home without throwing on the
-  // multiple-active dirty-home case, so an unresolved current home can fall back to
-  // the fleet index. The multiple-active error is preserved below.
-  const currentResolution = resolveSingleActiveWorker()
-  if (currentResolution.kind === 'multiple' && !workerOpt && !selectedWorkerId()) {
-    throw new Error(
-      `cannot resolve a standalone worker: the DB holds more than one active worker (${currentResolution.workers.map(worker => worker.id).join(', ')}); a daemon hosts at most one active worker. Pass --worker to disambiguate.`,
-    )
-  }
-  const currentWorkerId = workerOpt
-    ?? selectedWorkerId()
-    ?? (currentResolution.kind === 'single' ? currentResolution.worker.id : undefined)
-  if (currentWorkerId) {
-    const currentWorker = getWorker(currentWorkerId)
-    if (currentWorker)
-      return { paths: currentPaths, worker: currentWorker }
+  const currentPaths = localPaths()
+  let currentWorkerId: string | undefined
+  if (existsSync(currentPaths.dbPath)) {
+    await ensureDbAt(currentPaths)
+    const current = resolveWorkerFromOpenDb(workerOpt)
+    currentWorkerId = current.requestedId
+    if (current.worker)
+      return { paths: currentPaths, worker: current.worker }
   }
 
   // Fleet fallback (by id): reopen the targeted worker's own home/DB.
@@ -496,6 +512,14 @@ async function resolveWorkerTarget(workerOpt?: string): Promise<{ paths: LocalPa
     const fleetWorker = getWorker(entry.id)
     if (fleetWorker)
       return { paths: fleetPaths, worker: fleetWorker }
+  }
+
+  if (!existsSync(currentPaths.dbPath) && index.workers.length === 0) {
+    await ensureDbAt(currentPaths)
+    const current = resolveWorkerFromOpenDb(workerOpt)
+    currentWorkerId = current.requestedId
+    if (current.worker)
+      return { paths: currentPaths, worker: current.worker }
   }
 
   if (currentWorkerId || targetId)
@@ -514,7 +538,7 @@ async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerR
 }
 
 async function ensureAllWorkers(): Promise<WorkerRow[]> {
-  await ensureDb()
+  await ensureDefaultDb()
   return listWorkers()
 }
 
@@ -576,7 +600,7 @@ async function runInit(): Promise<void> {
 }
 
 async function runDoctor(): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   const updateNotice = await maybeResolveDailyUpdateNotice()
   printJson({
     ok: true,
@@ -780,7 +804,7 @@ async function fetchUpdateText(url: string, fetchImpl: typeof fetch = fetch): Pr
 async function maybeResolveDailyUpdateNotice(): Promise<null | { channel: 'stable', command: 'aiworker update', currentVersion: string, targetVersion: string }> {
   const checkedAt = new Date()
   try {
-    await ensureDb()
+    await ensureDefaultDb()
     const setting = listSettings().find(setting => setting.key === 'update.notice')
     const previous = setting?.valueJson ?? null
     const state = readDailyUpdateNoticeState(previous, checkedAt)
@@ -1047,12 +1071,18 @@ export interface EnsuredStartWorker {
   id: string
 }
 
+interface EnsureStandaloneServiceReadyOptions {
+  appId?: string
+  id?: string
+  name?: string
+}
+
 // Idempotent CLI service bootstrap: ensure exactly one active Worker bound to
 // the bundled official Freeform Soul exists. Install + enable the bundled
 // descriptor, then reuse the single active Worker if present, or create one when
 // none exists. This convenience lives in the public CLI service-start commands;
 // the daemon package stays passive and never auto-creates a Worker.
-async function ensureStandaloneServiceReady(paths: LocalPaths): Promise<EnsuredStartWorker> {
+async function ensureStandaloneServiceReady(paths: LocalPaths, options: EnsureStandaloneServiceReadyOptions = {}): Promise<EnsuredStartWorker> {
   const host = createHost(paths)
   const bootstrap = await host.bootstrapOfficialSoulApps()
   if (bootstrap.status === 'fail')
@@ -1070,8 +1100,9 @@ async function ensureStandaloneServiceReady(paths: LocalPaths): Promise<EnsuredS
   }
 
   const created = await host.createSoulWorker({
-    appId: OFFICIAL_FREEFORM_APP_ID,
-    name: 'AIWorker Freeform',
+    appId: options.appId ?? OFFICIAL_FREEFORM_APP_ID,
+    id: options.id,
+    name: options.name ?? 'AIWorker Freeform',
   })
   return { appId: created.worker.appId, created: true, id: created.worker.id }
 }
@@ -1129,6 +1160,12 @@ async function runFleetStart(opts: StartCommandOptions = {}): Promise<void> {
         index = upsertFleetWorker(index, { ...target, port })
         writeFleet(root, index)
       }
+      await ensureDbAt(paths)
+      await ensureStandaloneServiceReady(paths, {
+        appId: target.app,
+        id: target.id,
+        name: target.id,
+      })
     }
     // Single-source the resolved host: the same `host` drives the live bind-probe
     // above, the daemon spawn/bind here, and the printed URL below — instead of
@@ -1400,9 +1437,9 @@ function legacyPortFromDaemonMeta(paths: LocalPaths): number | null {
 }
 
 // Adopt an existing single-home default into the fleet index in place (home '.'),
-// then seed a freeform fleet entry when the index is still empty so a bare
-// `aiworker start` matches today's zero-config behavior. The freeform worker row
-// itself is created by the daemon child in its own home (ensureStandaloneServiceReady).
+// then seed a Freeform fleet entry with a real Worker id when the index is still
+// empty so a bare `aiworker start` matches today's zero-config behavior. The
+// Worker row is ensured inside that fleet home before the daemon is spawned.
 function ensureFleetSeeded(root: string): FleetIndex {
   adoptLegacyHome(root, {
     readLegacyPort: legacyPortFromDaemonMeta,
@@ -1411,11 +1448,12 @@ function ensureFleetSeeded(root: string): FleetIndex {
   const index = readFleet(root)
   if (index.workers.length > 0)
     return index
+  const workerId = mintWorkerId()
   const seeded = upsertFleetWorker(index, {
     app: OFFICIAL_FREEFORM_APP_ID,
     createdAt: new Date().toISOString(),
-    home: path.relative(root, workerHomeDir(root, 'freeform')) || FLEET_ADOPTED_HOME,
-    id: 'freeform',
+    home: path.relative(root, workerHomeDir(root, workerId)) || FLEET_ADOPTED_HOME,
+    id: workerId,
     port: allocatePort(index, FLEET_DEFAULT_BASE_PORT),
   })
   writeFleet(root, seeded)
@@ -1484,10 +1522,7 @@ async function selectWorkerCommand(id: string): Promise<void> {
 }
 
 async function archiveWorkerCommand(id: string): Promise<void> {
-  await ensureDb()
-  const existing = getWorker(id)
-  if (!existing)
-    throw new Error(`worker not found: ${id}`)
+  const { worker: existing } = await resolveWorkerTarget(id)
   const worker = upsertWorker({
     defaultEngineId: existing.defaultEngineId,
     id: existing.id,
@@ -1500,10 +1535,7 @@ async function archiveWorkerCommand(id: string): Promise<void> {
 }
 
 async function deleteWorkerCommand(id: string): Promise<void> {
-  const paths = await ensureDb()
-  const worker = getWorker(id)
-  if (!worker)
-    throw new Error(`worker not found: ${id}`)
+  const { paths, worker } = await resolveWorkerTarget(id)
   const runtime = createHost(paths).createRuntimeForWorker(worker)
   const cleanedTargets: string[] = []
   for (const workspace of listWorkspaces(worker.id, Number.MAX_SAFE_INTEGER)) {
@@ -1523,14 +1555,12 @@ async function deleteWorkerCommand(id: string): Promise<void> {
 }
 
 async function listWorkerConfigCommand(workerId: string): Promise<void> {
-  await ensureDb()
-  const worker = requireWorkerRow(workerId)
+  const { worker } = await resolveWorkerTarget(workerId)
   printJson({ config: workerConfigResponse(worker.id) })
 }
 
 async function setWorkerConfigCommand(workerId: string, configKey: string, opts: WorkerConfigSetCommandOptions): Promise<void> {
-  await ensureDb()
-  const worker = requireWorkerRow(workerId)
+  const { worker } = await resolveWorkerTarget(workerId)
   const saved = upsertWorkerConfigValue({
     configKey: requireText(configKey, 'config key'),
     configValueJson: {
@@ -1548,8 +1578,7 @@ async function setWorkerConfigCommand(workerId: string, configKey: string, opts:
 }
 
 async function archiveWorkerConfigCommand(workerId: string, configKey: string): Promise<void> {
-  await ensureDb()
-  const worker = requireWorkerRow(workerId)
+  const { worker } = await resolveWorkerTarget(workerId)
   const key = requireText(configKey, 'config key')
   deleteWorkerConfigValue(worker.id, key)
   printJson({
@@ -1590,7 +1619,7 @@ async function createWorkspaceCommand(opts: { name?: string, type?: string, work
 
 async function listWorkspaceCommand(opts: { worker?: string }): Promise<void> {
   if (!opts.worker) {
-    await ensureDb()
+    await ensureDefaultDb()
     printJson({ workspaces: listWorkspaces() })
     return
   }
@@ -1599,7 +1628,7 @@ async function listWorkspaceCommand(opts: { worker?: string }): Promise<void> {
 }
 
 async function archiveWorkspaceCommand(id: string): Promise<void> {
-  await ensureDb()
+  await ensureDefaultDb()
   const workspace = getWorkspace(id)
   if (!workspace)
     throw new Error(`workspace not found: ${id}`)
@@ -1607,7 +1636,7 @@ async function archiveWorkspaceCommand(id: string): Promise<void> {
 }
 
 async function deleteWorkspaceCommand(id: string): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   const workspace = getWorkspace(id)
   if (!workspace)
     throw new Error(`workspace not found: ${id}`)
@@ -1630,7 +1659,7 @@ async function deleteWorkspaceCommand(id: string): Promise<void> {
 }
 
 async function refreshWorkspaceProjectionCommand(id: string, opts: WorkspaceProjectionRefreshCommandOptions): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   const workspace = getWorkspace(id)
   if (!workspace)
     throw new Error(`workspace not found: ${id}`)
@@ -1656,7 +1685,6 @@ function projectionReceiptStaleCliError(workspaceId: string): Error {
 }
 
 async function startSessionCommand(opts: { engine?: string, input?: string, model?: string, reasoning?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
-  await ensureDb()
   const runtime = await ensureRuntime({ requireEnabledApp: true, worker: opts.worker })
   const workspaceId = requireText(opts.workspace, 'workspace')
   const workspace = getWorkspace(workspaceId)
@@ -1686,7 +1714,7 @@ async function startSessionCommand(opts: { engine?: string, input?: string, mode
 }
 
 async function resolveSessionContinuationContext(opts: SessionContinuationCommandOptions): Promise<SessionContinuationContext> {
-  await ensureDb()
+  await ensureDefaultDb()
   const sessionId = requireText(opts.session, 'session')
   const session = getSession(sessionId)
   if (!session)
@@ -1812,7 +1840,7 @@ async function reconcileInvocationCommand(invocationId: string, opts: { diagnost
 }
 
 async function archiveSessionCommand(id: string): Promise<void> {
-  await ensureDb()
+  await ensureDefaultDb()
   const session = getSession(id)
   if (!session)
     throw new Error(`session not found: ${id}`)
@@ -1820,7 +1848,7 @@ async function archiveSessionCommand(id: string): Promise<void> {
 }
 
 async function deleteSessionCommand(id: string): Promise<void> {
-  await ensureDb()
+  await ensureDefaultDb()
   const session = getSession(id)
   if (!session)
     throw new Error(`session not found: ${id}`)
@@ -1834,7 +1862,7 @@ async function listWorkspaceFiles(opts: { workspace?: string }): Promise<void> {
 }
 
 async function showFile(filePath: string, opts: { workspace?: string, worker?: string }): Promise<void> {
-  await ensureDb()
+  await ensureDefaultDb()
   const workspaceId = requireText(opts.workspace, 'workspace')
   const workspace = getWorkspace(workspaceId)
   if (!workspace)
@@ -1849,50 +1877,50 @@ function redactCliInspectOutput(value: string): string {
 }
 
 async function listAppsCommand(): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   printJson({ apps: createHost(paths).listApps() })
 }
 
 async function showAppCommand(id: string): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   printJson({ app: createHost(paths).getApp(id) })
 }
 
 async function installAppCommand(descriptorPath: string): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   printJson({ app: await createHost(paths).installAppFromPath(descriptorPath) })
 }
 
 async function enableAppCommand(id: string): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   const host = createHost(paths)
   printJson({ app: host.enableApp(id), catalog: host.listCatalog() })
 }
 
 async function archiveAppCommand(id: string): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   const host = createHost(paths)
   printJson({ app: host.archiveApp(id), catalog: host.listCatalog() })
 }
 
 async function deleteAppCommand(id: string): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   printJson({ app: createHost(paths).deleteApp(id) })
 }
 
 async function doctorAppCommand(id: string): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   printJson({ app: createHost(paths).healthcheckApp(id) })
 }
 
 async function permissionsAppCommand(id: string): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   const app = createHost(paths).getApp(id)
   printJson({ appId: id, descriptor: app?.descriptor ?? null, permissions: [] })
 }
 
 async function bootstrapAppCommand(scope: string): Promise<void> {
-  const paths = await ensureDb()
+  const paths = await ensureDefaultDb()
   if (scope !== 'official')
     throw new Error(`unsupported app bootstrap scope: ${scope}`)
   const bootstrap = await createHost(paths).bootstrapOfficialSoulApps()
@@ -2278,7 +2306,7 @@ function registerCommands(): void {
   cli.command('soul create <name>', 'scaffold a descriptor-only SDK Soul').option('--dir <path>', 'target directory').action(createAppScaffoldCommand)
   cli.command('soul build [dir]', 'build a Soul descriptor from source').action((dir?: string) => buildSoulCommand(dir))
   cli.command('soul list', 'list installed app-projected vertical Souls').action(async () => {
-    const paths = await ensureDb()
+    const paths = await ensureDefaultDb()
     printJson({ souls: createHost(paths).listSouls() })
   })
   cli.command('worker create <id>', 'create a standalone fleet worker in its own home')
@@ -2288,12 +2316,20 @@ function registerCommands(): void {
     .action((id: string, opts: { app?: string, name?: string, port?: number[] }) =>
       createWorkerCommand({ app: opts.app, id, name: opts.name, port: optionalNumber(opts.port) }))
   cli.command('worker list', 'list local Soul workers').action(async () => {
-    await ensureAllWorkers()
-    printJson({ workers: listWorkers() })
+    printJson({ workers: await ensureAllWorkers() })
   })
   cli.command('worker show <id>', 'show one local Soul worker').action(async (id: string) => {
-    await ensureDb()
-    printJson({ worker: getWorker(id) })
+    try {
+      const { worker } = await resolveWorkerTarget(id)
+      printJson({ worker })
+    }
+    catch (error) {
+      if (error instanceof Error && error.message === `worker not found: ${id}`) {
+        printJson({ worker: null })
+        return
+      }
+      throw error
+    }
   })
   cli.command('worker select <id>', 'select default local Soul worker').action(selectWorkerCommand)
   cli.command('worker config list <workerId>', 'list worker-scoped Host config envelopes').action(listWorkerConfigCommand)
@@ -2312,7 +2348,7 @@ function registerCommands(): void {
   cli.command('workspace create', 'create a worker workspace').option('--name <text>', 'workspace name').option('--type <id>', 'workspace type').option('--worker <id>', 'worker id').action(createWorkspaceCommand)
   cli.command('workspace list', 'list worker workspaces').option('--worker <id>', 'worker id').action(listWorkspaceCommand)
   cli.command('workspace show <id>', 'show one workspace').action(async (id: string) => {
-    await ensureDb()
+    await ensureDefaultDb()
     printJson({ workspace: getWorkspace(id) })
   })
   cli.command('workspace projection refresh <id>', 'refresh workspace engine projection').option('--target <target>', 'projection target: codex or claude-code').action(refreshWorkspaceProjectionCommand)
@@ -2341,11 +2377,11 @@ function registerCommands(): void {
   cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)
 
   cli.command('settings list', 'list host daemon settings').action(async () => {
-    await ensureDb()
+    await ensureDefaultDb()
     printJson({ settings: listSettings() })
   })
   cli.command('engine select <engine>', 'set engine hint').action(async (engine: string) => {
-    await ensureDb()
+    await ensureDefaultDb()
     printJson({ setting: setSetting('engine.default', { engine }) })
   })
 

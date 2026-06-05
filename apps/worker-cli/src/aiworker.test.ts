@@ -383,7 +383,7 @@ describe('aiworker local CLI', () => {
     expect(resolveCliDefaultHomeDir(moduleDir)).toBe('.aiworker-dev')
     expect(paths.home).toBe(path.join(root, '.aiworker-dev'))
     expect(paths.dbPath).toBe(path.join(root, '.aiworker-dev', 'aiworker.db'))
-    expect(paths.workersRoot).toBe(path.join(root, '.aiworker-dev', 'workers'))
+    expect(paths.workersRoot).toBe(path.join(root, '.aiworker-dev'))
     expect(paths.pidFile).toBe(path.join(root, '.aiworker-dev', 'aiworker-daemon.pid'))
     expect(paths.logFile).toBe(path.join(root, '.aiworker-dev', 'aiworker-daemon.log'))
   })
@@ -401,7 +401,7 @@ describe('aiworker local CLI', () => {
     expect(resolveCliDefaultHomeDir(moduleDir)).toBe('.aiworker')
     expect(paths.home).toBe(path.join(root, '.aiworker'))
     expect(paths.dbPath).toBe(path.join(root, '.aiworker', 'aiworker.db'))
-    expect(paths.workersRoot).toBe(path.join(root, '.aiworker', 'workers'))
+    expect(paths.workersRoot).toBe(path.join(root, '.aiworker'))
   })
 
   it('keeps explicit home and db path ahead of source defaults', () => {
@@ -415,7 +415,7 @@ describe('aiworker local CLI', () => {
     expect(resolveCliDefaultHomeDir(moduleDir)).toBe('.aiworker-dev')
     expect(paths.home).toBe(path.join(root, 'explicit-home'))
     expect(paths.dbPath).toBe(path.join(root, 'explicit-home', 'custom.db'))
-    expect(paths.workersRoot).toBe(path.join(root, 'explicit-home', 'workers'))
+    expect(paths.workersRoot).toBe(path.join(root, 'explicit-home'))
   })
 
   it('applies the source default before init reads core env defaults', async () => {
@@ -428,7 +428,7 @@ describe('aiworker local CLI', () => {
 
     expect(body.home).toBe(path.join(root, '.aiworker-dev'))
     expect(body.dbPath).toBe(path.join(root, '.aiworker-dev', 'aiworker.db'))
-    expect(body.workersRoot).toBe(path.join(root, '.aiworker-dev', 'workers'))
+    expect(body.workersRoot).toBe(path.join(root, '.aiworker-dev'))
     await expect(stat(path.join(root, '.aiworker'))).rejects.toThrow()
   })
 
@@ -438,7 +438,7 @@ describe('aiworker local CLI', () => {
 
     expect(body.home).toBe(path.join(root, 'home'))
     expect(body.dbPath).toBe(path.join(root, 'home', 'aiworker.db'))
-    expect(body.workersRoot).toBe(path.join(root, 'home', 'workers'))
+    expect(body.workersRoot).toBe(path.join(root, 'home'))
     expect(body.workers).toEqual([])
     await expect(stat(path.join(root, '.aiworker'))).rejects.toThrow()
   })
@@ -572,51 +572,90 @@ describe('aiworker local CLI', () => {
     expect(currentHomeWorkspaces.map(entry => entry.id)).toContain(workspace.id)
   })
 
-  it('aiworker start seeds a freeform fleet worker, reuses a running daemon in its home, and stays background-only', async () => {
-    // Empty fleet → `start` seeds the freeform worker under workers/freeform and
-    // targets that home. Pre-seed a "running" daemon by pointing the freeform
-    // home's pid file at this test process so `start` takes the reuse branch and
-    // never spawns a real detached daemon.
-    const freeformHome = path.join(root, 'home', 'workers', 'freeform')
-    mkdirSync(freeformHome, { recursive: true })
-    await writeFile(path.join(freeformHome, 'aiworker-daemon.pid'), String(process.pid))
+  it('aiworker start seeds a real fleet worker id and keeps workspaces directly under that worker home', async () => {
+    const started = installFakeDaemonStarter(5151)
 
     expect(await runCli(argv('start'))).toBe(0)
     const first = JSON.parse(output) as {
       fleet: { default: string | null, root: string }
       started: Array<{ daemon: { started: boolean }, id: string, port: number, url: string }>
     }
+    const workerId = first.started[0]?.id
+    const port = first.started[0]?.port
+    expect(workerId).toMatch(/^w_/)
+    expect(typeof port).toBe('number')
     expect(first.started).toEqual([
       expect.objectContaining({
-        daemon: expect.objectContaining({ started: false }),
-        id: 'freeform',
-        port: 9217,
-        url: 'http://127.0.0.1:9217',
+        daemon: expect.objectContaining({ started: true }),
+        id: workerId,
+        port,
+        url: `http://127.0.0.1:${port}`,
       }),
     ])
-    expect(first.fleet.default).toBe('freeform')
+    expect(first.fleet.default).toBe(workerId)
+    expect(started).toEqual([{ host: '127.0.0.1', port }])
+    const fleet = JSON.parse(await readFile(path.join(root, 'home', 'fleet.json'), 'utf8')) as {
+      workers: Array<{ home: string, id: string }>
+    }
+    expect(fleet.workers).toEqual([expect.objectContaining({ home: `workers/${workerId}`, id: workerId })])
+    await expect(stat(path.join(root, 'home', 'aiworker.db'))).rejects.toThrow()
+    await expect(stat(path.join(root, 'home', 'workers', workerId, 'aiworker.db'))).resolves.toBeTruthy()
+    await expect(stat(path.join(root, 'home', 'workers', workerId, 'workspaces'))).resolves.toBeTruthy()
+    await expect(stat(path.join(root, 'home', 'workers', workerId, 'workers'))).rejects.toThrow()
     output = ''
 
     // Second start: idempotent — reuses the running daemon and keeps the same
     // single fleet entry (no duplicate seed, no "daemon already running" throw).
+    await writeFile(path.join(root, 'home', 'workers', workerId, 'aiworker-daemon.pid'), String(process.pid))
     expect(await runCli(argv('start'))).toBe(0)
     const second = JSON.parse(output) as { started: Array<{ daemon: { started: boolean }, id: string }> }
     expect(second.started).toEqual([
-      expect.objectContaining({ daemon: expect.objectContaining({ started: false }), id: 'freeform' }),
+      expect.objectContaining({ daemon: expect.objectContaining({ started: false }), id: workerId }),
     ])
   })
 
+  it('default fleet metadata commands read the worker home without creating a root DB', async () => {
+    installFakeDaemonStarter(5252)
+
+    expect(await runCli(argv('start'))).toBe(0)
+    const started = JSON.parse(output) as { started: Array<{ id: string }> }
+    const workerId = started.started[0]?.id
+    expect(workerId).toMatch(/^w_/)
+    await expect(stat(path.join(root, 'home', 'aiworker.db'))).rejects.toThrow()
+    output = ''
+
+    expect(await runCli(argv('app', 'list'))).toBe(0)
+    expect((JSON.parse(output) as { apps: Array<{ appId: string }> }).apps).toEqual(
+      expect.arrayContaining([expect.objectContaining({ appId: FREEFORM_APP_ID })]),
+    )
+    await expect(stat(path.join(root, 'home', 'aiworker.db'))).rejects.toThrow()
+    output = ''
+
+    expect(await runCli(argv('worker', 'list'))).toBe(0)
+    expect((JSON.parse(output) as { workers: Array<{ id: string }> }).workers).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: workerId })]),
+    )
+    await expect(stat(path.join(root, 'home', 'aiworker.db'))).rejects.toThrow()
+    output = ''
+
+    expect(await runCli(argv('workspace', 'list'))).toBe(0)
+    expect((JSON.parse(output) as { workspaces: unknown[] }).workspaces).toEqual([])
+    await expect(stat(path.join(root, 'home', 'aiworker.db'))).rejects.toThrow()
+  })
+
   it('bare aiworker (no subcommand) runs the zero-config fleet start entry', async () => {
-    const freeformHome = path.join(root, 'home', 'workers', 'freeform')
-    mkdirSync(freeformHome, { recursive: true })
-    await writeFile(path.join(freeformHome, 'aiworker-daemon.pid'), String(process.pid))
+    installFakeDaemonStarter(6161)
 
     // No command token at all: this must be rewritten to `start` (not an unknown
     // command error and not top-level help).
     expect(await runCli(argv())).toBe(0)
     const result = JSON.parse(output) as { started: Array<{ daemon: { started: boolean }, id: string, url: string }> }
+    const workerId = result.started[0]?.id
+    const url = result.started[0]?.url
+    expect(workerId).toMatch(/^w_/)
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
     expect(result.started).toEqual([
-      expect.objectContaining({ id: 'freeform', url: 'http://127.0.0.1:9217' }),
+      expect.objectContaining({ id: workerId, url }),
     ])
   })
 

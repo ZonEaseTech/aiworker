@@ -209,7 +209,7 @@ describe('fleet index', () => {
         home,
         logFile: path.join(home, 'aiworker-daemon.log'),
         pidFile: path.join(home, 'aiworker-daemon.pid'),
-        workersRoot: path.join(home, 'workers'),
+        workersRoot: home,
       })
     })
 

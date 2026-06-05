@@ -35,7 +35,7 @@ export function buildLocalPaths(home: string): LocalPaths {
     home,
     logFile: path.join(home, 'aiworker-daemon.log'),
     pidFile: path.join(home, 'aiworker-daemon.pid'),
-    workersRoot: path.join(home, FLEET_WORKERS_DIRNAME),
+    workersRoot: home,
   }
 }
 

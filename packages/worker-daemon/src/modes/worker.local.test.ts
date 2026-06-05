@@ -1070,6 +1070,35 @@ describe('local daemon API', () => {
     await expect(bootstrapWorkerApp(bootOptions)).rejects.toThrow(/more than one active worker/i)
   })
 
+  it('defaults the Worker home to the daemon DB directory without worker-id nesting', async () => {
+    const workerHome = join(dir, 'standalone-worker-home')
+    const boot = await bootstrapWorkerApp({
+      dbPath: join(workerHome, 'aiworker.db'),
+      engineScanner: () => fakeEngineRows(),
+      executor: {
+        async invoke(input) {
+          input.onEvent?.({ kind: 'text', text: 'done' })
+          return { artifacts: [], summary: 'done' }
+        },
+      },
+      runtimeVersion: 'test',
+    })
+    bootedDaemons.push(boot.state)
+
+    const created = await boot.state.host.createSoulWorker({
+      appId: FREEFORM_APP_ID,
+      id: 'default-home-worker',
+      name: 'Default Home Worker',
+    })
+    const workspace = await created.runtime.createWorkspace({ name: 'Default Home Workspace' })
+
+    expect(boot.state.workersRoot).toBe(workerHome)
+    expect(workspace.rootPath).toBe(join(workerHome, 'workspaces', workspace.id))
+    await expect(readFile(join(workerHome, 'workers', 'default-home-worker', 'workspaces', workspace.id, 'AGENTS.md'), 'utf8'))
+      .rejects
+      .toThrow()
+  })
+
   it('POST /api/workspace-locators rejects a ghost workerId that is not the active worker', async () => {
     const target = await app()
     await createFreeformWorker(target, 'real-worker')
@@ -1109,7 +1138,7 @@ describe('local daemon API', () => {
     // 非客户端选择。即使 body 带 rootPath(Zod 非 strict 会剥离未知字段),
     // 持久化的根必须是派生根,而不是这个请求的路径。
     const requestedRootPath = join(dir, 'requested-workspace-root')
-    const workspacesRoot = join(dir, 'workers', worker.id, 'workspaces')
+    const workspacesRoot = join(dir, 'workers', 'workspaces')
 
     const createRes = await target.request('/api/workspace-locators', {
       body: JSON.stringify({
@@ -2852,7 +2881,7 @@ describe('local daemon API', () => {
     })
     expect(JSON.stringify(put.config.value)).not.toContain('Worker Edited Freeform Session')
     // The file holds the content under the worker overlay store.
-    await expect(readFile(join(dir, 'workers', worker.id, 'overlays', 'skills', 'freeform-session', 'SKILL.md'), 'utf8'))
+    await expect(readFile(join(dir, 'workers', 'overlays', 'skills', 'freeform-session', 'SKILL.md'), 'utf8'))
       .resolves
       .toContain('Worker Edited Freeform Session')
 
@@ -2909,7 +2938,7 @@ describe('local daemon API', () => {
     expect(secretPutRes.status).toBe(422)
     expect(await secretPutRes.json()).toMatchObject({ error: { code: 'WORKER_CONFIG_CONTENT_SECRET' } })
     // No overlay file written for a rejected secret body.
-    await expect(readFile(join(dir, 'workers', worker.id, 'overlays', 'skills', 'freeform-session', 'SKILL.md'), 'utf8'))
+    await expect(readFile(join(dir, 'workers', 'overlays', 'skills', 'freeform-session', 'SKILL.md'), 'utf8'))
       .rejects
       .toThrow()
   })
@@ -2928,7 +2957,7 @@ describe('local daemon API', () => {
     expect(addRes.status).toBe(200)
     const added = await addRes.json() as { sourceRef: string }
     expect(added.sourceRef).toBe('worker-overlay://skills/freeform-extra/SKILL.md')
-    await expect(readFile(join(dir, 'workers', worker.id, 'overlays', 'skills', 'freeform-extra', 'SKILL.md'), 'utf8'))
+    await expect(readFile(join(dir, 'workers', 'overlays', 'skills', 'freeform-extra', 'SKILL.md'), 'utf8'))
       .resolves
       .toContain('Added Freeform Extra Skill')
 

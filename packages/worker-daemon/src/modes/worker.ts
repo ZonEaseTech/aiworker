@@ -105,8 +105,8 @@ export interface LocalDaemonState {
   runtimeVersion: string
   runtimes: Map<string, LocalWorkerRuntime>
   // Worker home root the daemon and runtime/projection share: overlay content
-  // files live under `<workersRoot>/<workerId>/overlays`, the same root the
-  // orchestrator hands each runtime. Must NOT diverge from the runtime's view.
+  // files live under `<workersRoot>/overlays`, sibling to `<workersRoot>/workspaces`.
+  // Must NOT diverge from the runtime's view.
   workersRoot: string
   now?: () => string
   // 关停 daemon:dispose 所有运行体(排空各自事件总线,断开还活着的 SSE live-tail
@@ -127,7 +127,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   runWorkerMigrations(options.migrationsFolder ?? workerEnv.WORKER_MIGRATIONS_FOLDER)
 
   const runtimeVersion = options.runtimeVersion ?? DEFAULT_RUNTIME_VERSION
-  const workersRoot = options.workersRoot ?? path.join(path.dirname(dbPath), 'workers')
+  const workersRoot = options.workersRoot ?? path.dirname(dbPath)
   const runtimes = new Map<string, LocalWorkerRuntime>()
   // 安装引擎扫描器(默认 = 真实 scanLocalEngines),必须早于任何 settings 加载
   // (bootstrapOfficialSoulApps / runtime.init / 后续请求路径)。
@@ -870,12 +870,12 @@ function overlaySourceRef(asset: OverlayConfigTarget): string {
   return `worker-overlay://${asset.storeKind}/${overlayStorePath(asset)}`
 }
 
-// The worker overlay store root, derived from the daemon's configured workersRoot
-// so the daemon writes to the exact same `<workersRoot>/<workerId>/overlays` the
-// orchestrator hands the runtime/projection — fs-layout's global-home resolver
-// would diverge from a daemon configured with an explicit workersRoot.
-function workerOverlaysRoot(state: LocalDaemonState, workerId: string): string {
-  return path.join(state.workersRoot, workerId, 'overlays')
+// The worker overlay store root, derived from the daemon's configured Worker home
+// so the daemon writes to the exact same `<workersRoot>/overlays` the orchestrator
+// hands the runtime/projection. fs-layout's global-home resolver would diverge
+// from a daemon configured with an explicit workersRoot.
+function workerOverlaysRoot(state: LocalDaemonState): string {
+  return path.join(state.workersRoot, 'overlays')
 }
 
 // Find an enabled worker-overlay config value for this configKey whose sourceRef
@@ -901,7 +901,7 @@ async function workerConfigContentReadResponse(c: Context, state: LocalDaemonSta
   const overlayRef = enabledWorkerOverlaySourceRef(worker.id, configKey)
   if (overlayRef) {
     const parsed = parseWorkerOverlaySourceRef(overlayRef)!
-    const file = resolveWorkerOverlayFile(workerOverlaysRoot(state, worker.id), parsed.kind, parsed.path)
+    const file = resolveWorkerOverlayFile(workerOverlaysRoot(state), parsed.kind, parsed.path)
     const content = await readFile(file, 'utf8')
     return c.json(workerConfigContentPayload(asset, content, 'overlay', overlayRef))
   }
@@ -969,7 +969,7 @@ async function workerConfigContentWriteResponse(c: Context, state: LocalDaemonSt
 
   // Content lives ONLY in the worker overlay file; the envelope holds just the
   // sourceRef + checksum (canon: no bulk content in worker metadata).
-  const overlaysRoot = workerOverlaysRoot(state, worker.id)
+  const overlaysRoot = workerOverlaysRoot(state)
   const storePath = overlayStorePath(asset)
   const file = resolveWorkerOverlayFile(overlaysRoot, asset.storeKind, storePath)
   await mkdir(path.dirname(file), { recursive: true })
