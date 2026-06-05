@@ -142,6 +142,11 @@ interface WorkspaceProjectionRefreshCommandOptions {
   target?: string
 }
 
+export interface ProvisionCommandInput {
+  host: string
+  token: string
+}
+
 interface SessionContinuationContext {
   engineCommand: string
   engineId: string
@@ -203,6 +208,31 @@ let daemonStarterForTest: DaemonStarter | null = null
 
 export function __setDaemonStarterForTest(starter: DaemonStarter | null): void {
   daemonStarterForTest = starter
+}
+
+export function buildProvisionEnv(input: ProvisionCommandInput): {
+  AIWORKER_HOST_URL: string
+  AIWORKER_PROVISION_TOKEN: string
+} {
+  return {
+    AIWORKER_HOST_URL: input.host,
+    AIWORKER_PROVISION_TOKEN: input.token,
+  }
+}
+
+export function redactProvisionCommandForLog(argv: string[]): string {
+  const redacted = argv.slice()
+  for (let i = 0; i < redacted.length; i++) {
+    const arg = redacted[i] ?? ''
+    if (arg === '--token' && i + 1 < redacted.length) {
+      redacted[i + 1] = '[REDACTED]'
+      i++
+      continue
+    }
+    if (arg.startsWith('--token='))
+      redacted[i] = '--token=[REDACTED]'
+  }
+  return redacted.join(' ')
 }
 
 // Test-only: seed an active worker row (with full orchestrator-populated
@@ -1365,6 +1395,16 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
   await runDaemonForegroundServer(await prepareDaemonForeground(opts))
 }
 
+async function provisionCommand(input: Partial<ProvisionCommandInput>): Promise<void> {
+  if (!input.host)
+    throw new Error('provision requires --host')
+  if (!input.token)
+    throw new Error('provision requires --token')
+  Object.assign(process.env, buildProvisionEnv({ host: input.host, token: input.token }))
+  consola.info(`[aiworker-provision] ${redactProvisionCommandForLog(process.argv.slice(2))}`)
+  await daemonForeground({})
+}
+
 async function daemonCheck(opts: { host?: string, port?: number } = {}): Promise<void> {
   const env = getWorkerEnv()
   const url = `http://${opts.host ?? env.AIWORKER_WORKER_HOST}:${opts.port ?? env.PORT}/health`
@@ -2292,6 +2332,10 @@ function registerCommands(): void {
   cli.command('daemon restart', 'ensure the bundled Freeform Worker and restart the local service').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => restartDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon logs', 'show local daemon logs').option('--tail <n>', 'line count', { type: [Number] }).action((opts: { tail?: number[] }) => showLogs({ tail: optionalNumber(opts.tail) }))
   cli.command('daemon check', 'check local daemon health').option('--host <host>', 'host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonCheck({ host: opts.host, port: optionalNumber(opts.port) }))
+  cli.command('provision', 'run this Worker and check in to a Host with a provision token')
+    .option('--host <url>', 'Host URL')
+    .option('--token <token>', 'provision token')
+    .action((opts: { host?: string, token?: string }) => provisionCommand({ host: opts.host, token: opts.token }))
 
   cli.command('app list', 'list installed Host Soul Apps').action(listAppsCommand)
   cli.command('app show <id>', 'show one installed Host Soul App').action(showAppCommand)
