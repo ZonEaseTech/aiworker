@@ -11,6 +11,7 @@ import {
   parseFleetStatus,
   resolveHarnessHost,
   shouldPurgeHome,
+  shouldRejectApiPortReuse,
   shouldRejectStartupPort,
   summarizeDaemonHealth,
   validateWorkerApp,
@@ -235,6 +236,24 @@ describe('dev fleet web health validation', () => {
     expect(shouldRejectStartupPort({ expectedHealthy: false, kind: 'api', listening: false })).toBe(false)
     expect(shouldRejectStartupPort({ kind: 'vite', listening: true })).toBe(true)
     expect(shouldRejectStartupPort({ kind: 'vite', listening: false })).toBe(false)
+  })
+
+  it('rejects matching daemon health when the listener is not the current worker daemon process', () => {
+    expect(shouldRejectApiPortReuse({
+      expectedPort: 9218,
+      healthMatchesExpected: true,
+      listening: true,
+      listenerProcess: 'bun 12345 ben 7u IPv4 TCP 127.0.0.1:9218 (LISTEN)',
+      workerDaemon: { metadataPid: 67890, metadataPort: 9218, pid: 67890 },
+    })).toBe(true)
+
+    expect(shouldRejectApiPortReuse({
+      expectedPort: 9218,
+      healthMatchesExpected: true,
+      listening: true,
+      listenerProcess: 'bun 67890 ben 7u IPv4 TCP 127.0.0.1:9218 (LISTEN)',
+      workerDaemon: { metadataPid: 67890, metadataPort: 9218, pid: 67890 },
+    })).toBe(false)
   })
 })
 

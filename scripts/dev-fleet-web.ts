@@ -30,6 +30,12 @@ interface CommandResult {
   status: number
 }
 
+export interface WorkerDaemonIdentity {
+  metadataPid: null | number
+  metadataPort: null | number
+  pid: null | number
+}
+
 interface CleanDependencies {
   env?: { AIWORKER_DEV_FLEET_PURGE?: string }
   home?: string
@@ -222,6 +228,35 @@ export function shouldRejectStartupPort(
   return true
 }
 
+export function parseListenerPid(processLine: null | string): null | number {
+  const match = processLine?.match(/^\S+\s+(\d+)\b/)
+  if (!match)
+    return null
+  const pid = Number.parseInt(match[1], 10)
+  return Number.isFinite(pid) ? pid : null
+}
+
+export function shouldRejectApiPortReuse(input: {
+  expectedPort: number
+  healthMatchesExpected: boolean
+  listenerProcess: null | string
+  listening: boolean
+  workerDaemon: WorkerDaemonIdentity
+}): boolean {
+  if (!input.listening)
+    return false
+  if (!input.healthMatchesExpected)
+    return true
+
+  const listenerPid = parseListenerPid(input.listenerProcess)
+  return listenerPid === null
+    || input.workerDaemon.pid === null
+    || input.workerDaemon.metadataPid === null
+    || input.workerDaemon.metadataPort !== input.expectedPort
+    || input.workerDaemon.pid !== listenerPid
+    || input.workerDaemon.metadataPid !== listenerPid
+}
+
 export function shouldPurgeHome(env: { AIWORKER_DEV_FLEET_PURGE?: string }): boolean {
   return env.AIWORKER_DEV_FLEET_PURGE === '1'
 }
@@ -329,6 +364,8 @@ async function assertApiPortReusable(entry: DevFleetEntry, host: string): Promis
     return
 
   const url = `http://${host}:${entry.apiPort}/health`
+  let healthMatchesExpected = false
+  let healthError: unknown = null
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(1000) })
     if (!response.ok)
@@ -340,13 +377,60 @@ async function assertApiPortReusable(entry: DevFleetEntry, host: string): Promis
       health,
       url,
     })
+    healthMatchesExpected = true
   }
   catch (error) {
-    if (shouldRejectStartupPort({ expectedHealthy: false, kind: 'api', listening: true })) {
-      throw new Error(
-        `API port ${entry.apiPort} is already in use but is not the expected fleet daemon:\n${port.process ?? formatPortStatus([port])}\n${error instanceof Error ? error.message : String(error)}`,
-      )
+    healthError = error
+  }
+
+  const workerDaemon = readWorkerDaemonIdentity(aiworkerHome(), entry.workerId)
+  if (shouldRejectApiPortReuse({
+    expectedPort: entry.apiPort,
+    healthMatchesExpected,
+    listenerProcess: port.process,
+    listening: true,
+    workerDaemon,
+  })) {
+    const listenerPid = parseListenerPid(port.process)
+    const reason = healthMatchesExpected
+      ? `listener is not the current AIWORKER_HOME worker daemon (listenerPid=${listenerPid ?? 'unknown'}, pidFile=${workerDaemon.pid ?? 'missing'}, metadataPid=${workerDaemon.metadataPid ?? 'missing'}, metadataPort=${workerDaemon.metadataPort ?? 'missing'})`
+      : healthError instanceof Error ? healthError.message : String(healthError)
+    throw new Error(
+      `API port ${entry.apiPort} is already in use but is not the expected current fleet daemon:\n${port.process ?? formatPortStatus([port])}\n${reason}`,
+    )
+  }
+}
+
+function readNumberFile(path: string): null | number {
+  try {
+    const value = Number.parseInt(readFileSync(path, 'utf8'), 10)
+    return Number.isFinite(value) ? value : null
+  }
+  catch {
+    return null
+  }
+}
+
+function readWorkerDaemonIdentity(home: string, workerId: string): WorkerDaemonIdentity {
+  const workerHome = join(home, 'workers', workerId)
+  let metadataPid: null | number = null
+  let metadataPort: null | number = null
+  try {
+    const metadata = JSON.parse(readFileSync(join(workerHome, 'aiworker-daemon.json'), 'utf8')) as {
+      pid?: unknown
+      port?: unknown
     }
+    metadataPid = typeof metadata.pid === 'number' && Number.isFinite(metadata.pid) ? metadata.pid : null
+    metadataPort = typeof metadata.port === 'number' && Number.isFinite(metadata.port) ? metadata.port : null
+  }
+  catch {
+    // Missing metadata means the fixed port cannot be proven to belong to this home.
+  }
+
+  return {
+    metadataPid,
+    metadataPort,
+    pid: readNumberFile(join(workerHome, 'aiworker-daemon.pid')),
   }
 }
 
