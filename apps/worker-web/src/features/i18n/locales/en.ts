@@ -53,7 +53,6 @@ export const en = {
     projectPlaceholders: {
       default: 'Checkout deploy checklist',
     },
-    soul: 'Soul',
     submit: 'Create workspace session',
   },
   languageOptions: {
@@ -111,8 +110,6 @@ export const en = {
     addSourceMaterials: 'Add source material',
     attachedSourceMaterials: 'Attached source materials',
     closeSourceMaterialPreview: 'Close source material preview',
-    createWorker: 'Create worker',
-    createWorkerHint: 'Bind a Soul to a worker before creating workspaces.',
     createWorkspace: 'Create workspace',
     createWorkspaceHint: 'Create a worker-scoped workspace. Sessions are created inside a workspace.',
     appApiRoute: routePrefix => `API ${routePrefix}`,
@@ -168,7 +165,6 @@ export const en = {
     workerId: 'Worker ID',
     workerList: 'Workers',
     workerListHint: 'Select a worker first, then manage its workspaces.',
-    workerName: 'Worker name',
     workerSoul: 'Soul binding',
     workerStatus: 'Worker status',
   },

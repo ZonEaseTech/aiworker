@@ -62,7 +62,6 @@ import {
   createBrokerEngineInvocationBodySchema,
   createBrokerSessionBodySchema,
   createSessionInvocationBodySchema,
-  createWorkerBodySchema,
   createWorkspaceLocatorBodySchema,
   installAppBodySchema,
   parseJsonBody,
@@ -290,29 +289,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
 
   app.get('/api/workers', c => c.json({ workers: listWorkers() }))
-  app.post('/api/workers', async (c) => {
-    const result = await parseJsonBody(c, createWorkerBodySchema, 'CREATE_WORKER_INVALID')
-    if (!result.ok)
-      return result.response
-    let created
-    try {
-      created = await state.host.createSoulWorker({
-        defaultEngineId: result.data.defaultEngineId,
-        id: result.data.id,
-        metadata: result.data.metadata,
-        name: result.data.name,
-        appId: result.data.appId,
-      })
-    }
-    catch (error) {
-      const response = hostMetadataValidationResponse(c, 'CREATE_WORKER_INVALID', error)
-      if (response)
-        return response
-      throw error
-    }
-    state.runtimes.set(created.worker.id, created.runtime)
-    return c.json({ worker: created.worker, snapshot: created.snapshot }, 201)
-  })
   app.get('/api/workers/:workerId', (c) => {
     const worker = getWorker(c.req.param('workerId'))
     if (!worker)

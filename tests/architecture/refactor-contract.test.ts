@@ -630,7 +630,9 @@ describe('destructive refactor contract bootstrap', () => {
     const daemon = readRepoFile('packages/worker-daemon/src/modes/worker.ts')
 
     expect(daemon).toContain('app.get(\'/api/workers\'')
-    expect(daemon).toContain('app.post(\'/api/workers\'')
+    // `POST /api/workers`（创建 worker）已移除：worker 都是 standalone，创建只在 CLI（fleet），
+    // per-worker daemon/web 结构性不能创建 worker。见 docs + worker-fleet 设计 §11。
+    expect(daemon).not.toContain('app.post(\'/api/workers\'')
     expect(daemon).not.toContain('app.get(\'/api/local/workers\'')
     expect(daemon).not.toContain('app.post(\'/api/local/workers\'')
   })

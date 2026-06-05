@@ -29,7 +29,7 @@ description: 用于把已解决的 TTPOS 工单沉淀为标准 KB 文章 + canne
 
 **标题：** 客人扫 PromptPay 付了钱，但机器显示「未付款」怎么办
 
-**分类 / 标签（Metadata）：** category=支付 / 泰国本地支付　tags=PromptPay, 已扣款未结账, 回调, kiosk　关联：#REDACTED（GitHub）/ KB-PAY-001
+**分类 / 标签（Metadata）：** category=支付 / 泰国本地支付 tags=PromptPay, 已扣款未结账, 回调, kiosk 关联：#REDACTED（GitHub）/ KB-PAY-001
 
 **最后核对日期：** 2026-06-04
 

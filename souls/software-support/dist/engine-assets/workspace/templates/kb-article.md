@@ -8,7 +8,7 @@
 
 **标题：** <商家会搜的话，如「客人扫 PromptPay 付了钱但显示未付款怎么办」>
 
-**分类 / 标签（Metadata）：** category=<故障域，如 支付/泰国本地支付>　tags=<>　关联工单/KB=<#脱敏 GitHub / KB-xxx>
+**分类 / 标签（Metadata）：** category=<故障域，如 支付/泰国本地支付> tags=<> 关联工单/KB=<#脱敏 GitHub / KB-xxx>
 
 **最后核对日期：** <YYYY-MM-DD>
 

@@ -616,25 +616,40 @@ describe('worker studio', () => {
     })
   })
 
-  it('centers the empty workspace composer in a bounded focus column', async () => {
+  it('pins the empty workspace composer to the bottom of a bounded focus column', async () => {
     currentSessions = []
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
     const main = await screen.findByLabelText('Soul workspaces and sessions')
-    const entry = main.querySelector('[data-workspace-empty-chat-entry="true"]')
+    // The column is the bounded vertical flex parent that fills the main area so
+    // the composer pins to the bottom — mirroring the session ChatSurface layout.
+    const column = main.querySelector('[data-workspace-empty-chat-column="true"]')
+    expect(column).toBeTruthy()
+    const columnElement = column as HTMLElement
+    expect(columnElement.className).toContain('mx-auto')
+    expect(columnElement.className).toContain('max-w-')
+    expect(columnElement.className).toContain('flex-1')
+    expect(columnElement.className).toContain('flex-col')
+
+    // The empty-state lives in a flex-1 region that grows and centers the prompt,
+    // pushing the composer down. The entry is now nested inside the column.
+    const entry = columnElement.querySelector('[data-workspace-empty-chat-entry="true"]')
     expect(entry).toBeTruthy()
     const entryElement = entry as HTMLElement
     expect(entryElement.className).toContain('flex-1')
     expect(entryElement.className).toContain('items-center')
     expect(entryElement.className).toContain('justify-center')
+    expect(within(entryElement).getByText('No sessions in this workspace yet.')).toBeTruthy()
+    // The entry box only holds the empty-state, not the composer.
+    expect(within(entryElement).queryByRole('textbox')).toBeNull()
 
-    const column = entryElement.querySelector('[data-workspace-empty-chat-column="true"]')
-    expect(column).toBeTruthy()
-    const columnElement = column as HTMLElement
-    expect(columnElement.className).toContain('mx-auto')
-    expect(columnElement.className).toContain('max-w-')
-    expect(within(columnElement).getByText('No sessions in this workspace yet.')).toBeTruthy()
+    // The composer is the last child of the column — the pinned-bottom slot that
+    // sits below the grow-to-fill entry, so it lands at the main area's bottom.
+    const composer = columnElement.querySelector('[data-slot="session-composer"]')
+    expect(composer).toBeTruthy()
+    expect(columnElement.lastElementChild).toBe(composer)
+    expect((composer as HTMLElement).querySelector('[data-session-slot="composer-field"]')).toBeTruthy()
     expect(within(columnElement).getByRole('textbox')).toBeTruthy()
   })
 

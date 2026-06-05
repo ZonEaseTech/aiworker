@@ -311,7 +311,6 @@ export function assertOpenApiBrokerRouteDocument(openapi: OpenApiBrokerRouteDocu
     'GET /api/info',
     'GET /api/settings',
     'PATCH /api/settings',
-    'POST /api/workers',
     'GET /api/workers',
     'GET /api/workers/{workerId}',
     'PATCH /api/workers/{workerId}',

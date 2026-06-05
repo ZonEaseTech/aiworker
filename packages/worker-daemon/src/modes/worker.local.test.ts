@@ -93,6 +93,9 @@ function parseSseFrames(body: string): Array<{ data: string, event?: string, id?
 describe('local daemon API', () => {
   let dir: string
   let originalPath: string | undefined
+  // Worker 创建只走 CLI/orchestrator(daemon 不再暴露 POST /api/workers)。测试经此
+  // WeakMap 由 app 实例取回其 daemon state,直接用 orchestrator 装配 worker。
+  const daemonStateByApp = new WeakMap<Awaited<ReturnType<typeof bootstrapWorkerApp>>['app'], Awaited<ReturnType<typeof bootstrapWorkerApp>>['state']>()
   // 收集本测试 boot 出来的 daemon,afterEach 在关库前 dispose,排空各运行体事件总线,
   // 断开还活着的 SSE live-tail 订阅,避免关库后被触发的订阅回调泄漏到下一个测试。
   let bootedDaemons: Array<{ shutdown: () => void }>
@@ -151,17 +154,24 @@ describe('local daemon API', () => {
       workersRoot: join(dir, 'workers'),
     })
     bootedDaemons.push(boot.state)
+    daemonStateByApp.set(boot.app, boot.state)
     return boot.app
   }
 
+  function daemonState(target: Awaited<ReturnType<typeof app>>) {
+    const state = daemonStateByApp.get(target)
+    if (!state)
+      throw new Error('daemon state not registered for this app instance')
+    return state
+  }
+
   async function createFreeformWorker(target: Awaited<ReturnType<typeof app>>, id = 'freeform-worker') {
-    const res = await target.request('/api/workers', {
-      body: JSON.stringify({ id, name: 'Freeform', appId: FREEFORM_APP_ID }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(res.status).toBe(201)
-    return (await res.json() as { worker: { id: string, appId: string } }).worker
+    // Worker 装配走 orchestrator(与 CLI 同源),并复刻已删 POST /api/workers 路由的
+    // runtime 注册,使后续 requireRuntime 不 404。
+    const state = daemonState(target)
+    const created = await state.host.createSoulWorker({ id, name: 'Freeform', appId: FREEFORM_APP_ID })
+    state.runtimes.set(created.worker.id, created.runtime)
+    return created.worker
   }
 
   async function createWorkspaceLocator(
@@ -265,8 +275,9 @@ describe('local daemon API', () => {
     const appsBody = await (await target.request('/api/app-installation/apps')).json() as {
       apps: Array<{ appId: string, projectedSoul: { id: string, status: string }, status: string }>
     }
-    expect(appsBody.apps).toEqual([expect.objectContaining({ appId: FREEFORM_APP_ID, status: 'enabled' })])
-    expect(appsBody.apps[0]!.projectedSoul).toMatchObject({ id: FREEFORM_APP_ID, status: 'available' })
+    expect(appsBody.apps.map(installed => installed.appId).sort()).toEqual([FREEFORM_APP_ID, 'google-ads', 'hr-manager', 'product-manager', 'software-support'])
+    expect(appsBody.apps.every(installed => installed.status === 'enabled')).toBe(true)
+    expect(appsBody.apps.find(installed => installed.appId === FREEFORM_APP_ID)!.projectedSoul).toMatchObject({ id: FREEFORM_APP_ID, status: 'available' })
     expect((await target.request('/api/local/apps')).status).toBe(404)
     expect((await target.request('/api/local/souls')).status).toBe(404)
 
@@ -278,13 +289,9 @@ describe('local daemon API', () => {
     })
     expect(legacyCollectionWriteRes.status).toBe(404)
 
-    const legacyRes = await target.request('/api/workers', {
-      body: JSON.stringify({ id: 'legacy-hr-worker', name: 'Legacy HR', appId: 'hr' }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(legacyRes.status).toBe(400)
-    expect(await legacyRes.json()).toMatchObject({ error: { code: 'SOUL_NOT_AVAILABLE' } })
+    await expect(daemonState(target).host.createSoulWorker({ id: 'legacy-hr-worker', name: 'Legacy HR', appId: 'hr' }))
+      .rejects
+      .toMatchObject({ code: 'SOUL_NOT_AVAILABLE', status: 400 })
 
     const worker = await createFreeformWorker(target, 'official-freeform-worker')
     expect(worker.appId).toBe(FREEFORM_APP_ID)
@@ -333,13 +340,9 @@ describe('local daemon API', () => {
     expect(archiveRes.status).toBe(200)
 
     const restarted = await app()
-    const workerRes = await restarted.request('/api/workers', {
-      body: JSON.stringify({ id: 'disabled-freeform-worker', name: 'Disabled Freeform', appId: FREEFORM_APP_ID }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workerRes.status).toBe(400)
-    expect(await workerRes.json()).toMatchObject({ error: { code: 'SOUL_NOT_AVAILABLE' } })
+    await expect(daemonState(restarted).host.createSoulWorker({ id: 'disabled-freeform-worker', name: 'Disabled Freeform', appId: FREEFORM_APP_ID }))
+      .rejects
+      .toMatchObject({ code: 'SOUL_NOT_AVAILABLE', status: 400 })
   })
 
   it('discards legacy HR worker metadata during daemon bootstrap', async () => {
@@ -1037,16 +1040,12 @@ describe('local daemon API', () => {
     expect(await rejectedPatchRes.json()).toMatchObject({ error: { code: 'PATCH_SESSION_INVALID' } })
   })
 
-  it('POST /api/workers rejects a second active worker with 409', async () => {
+  it('orchestrator rejects a second active worker with 409', async () => {
     const target = await app()
     await createFreeformWorker(target, 'first-active-worker')
-    const res = await target.request('/api/workers', {
-      body: JSON.stringify({ id: 'second-active-worker', name: 'Second', appId: FREEFORM_APP_ID }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(res.status).toBe(409)
-    expect(await res.json()).toMatchObject({ error: { code: 'WORKER_ALREADY_ACTIVE' } })
+    await expect(daemonState(target).host.createSoulWorker({ id: 'second-active-worker', name: 'Second', appId: FREEFORM_APP_ID }))
+      .rejects
+      .toMatchObject({ code: 'WORKER_ALREADY_ACTIVE', status: 409 })
   })
 
   it('bootstrap fails fast when the DB holds more than one active worker', async () => {
@@ -1853,6 +1852,7 @@ describe('local daemon API', () => {
       workersRoot: join(dir, 'workers'),
     })
     bootedDaemons.push(boot.state)
+    daemonStateByApp.set(boot.app, boot.state)
     const target = boot.app
     const worker = await createFreeformWorker(target, 'sse-shutdown-drain-worker')
     const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
@@ -2102,19 +2102,13 @@ describe('local daemon API', () => {
   it('rejects full native MCP files in broker metadata write bodies', async () => {
     const target = await app()
 
-    const workerMetadataRes = await target.request('/api/workers', {
-      body: JSON.stringify({
-        metadata: {
-          configToml: '[mcp_servers.local]\ncommand = "node"\n',
-        },
-        name: 'Embedded MCP Worker',
-        appId: FREEFORM_APP_ID,
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workerMetadataRes.status).toBe(422)
-    expect(await workerMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKER_INVALID' } })
+    await expect(daemonState(target).host.createSoulWorker({
+      metadata: {
+        configToml: '[mcp_servers.local]\ncommand = "node"\n',
+      },
+      name: 'Embedded MCP Worker',
+      appId: FREEFORM_APP_ID,
+    })).rejects.toThrow('Full native MCP files are not allowed in Worker metadata')
 
     const worker = await createFreeformWorker(target, 'metadata-guard-worker')
     const patchWorkerMetadataRes = await target.request(`/api/workers/${worker.id}`, {
@@ -2281,19 +2275,13 @@ describe('local daemon API', () => {
   it('rejects Soul-owned payloads in broker metadata write bodies', async () => {
     const target = await app()
 
-    const workerMetadataRes = await target.request('/api/workers', {
-      body: JSON.stringify({
-        metadata: {
-          reviewRecord: { decision: 'approved' },
-        },
-        name: 'Domain Payload Worker',
-        appId: FREEFORM_APP_ID,
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(workerMetadataRes.status).toBe(422)
-    expect(await workerMetadataRes.json()).toMatchObject({ error: { code: 'CREATE_WORKER_INVALID' } })
+    await expect(daemonState(target).host.createSoulWorker({
+      metadata: {
+        reviewRecord: { decision: 'approved' },
+      },
+      name: 'Domain Payload Worker',
+      appId: FREEFORM_APP_ID,
+    })).rejects.toThrow('Soul-owned payloads are not allowed in Worker metadata')
 
     const worker = await createFreeformWorker(target, 'domain-payload-guard-worker')
     const workspaceMetadataRes = await target.request('/api/workspace-locators', {
@@ -3211,7 +3199,6 @@ describe('local daemon API', () => {
       ['post', '/api/app-installation/apps/{appId}/enable'],
       ['post', '/api/app-installation/apps/{appId}/archive'],
       ['delete', '/api/app-installation/apps/{appId}'],
-      ['post', '/api/workers'],
       ['get', '/api/workers'],
       ['get', '/api/workers/{workerId}'],
       ['patch', '/api/workers/{workerId}'],
@@ -3296,21 +3283,6 @@ describe('local daemon API', () => {
       patch?: { requestBody?: unknown }
       put?: { requestBody?: unknown }
     }).patch?.requestBody).toEqual(workerConfigOperation?.requestBody)
-
-    const invalidWorker = await target.request('/api/workers', {
-      body: JSON.stringify({ appId: FREEFORM_APP_ID }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(invalidWorker.status).toBe(400)
-
-    const validWorker = await target.request('/api/workers', {
-      body: JSON.stringify({ extraField: 'ignored', name: 'Freeform Extra', appId: FREEFORM_APP_ID }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    expect(validWorker.status).toBe(201)
-    expect((await validWorker.json() as { worker: Record<string, unknown> }).worker).not.toHaveProperty('extraField')
   })
 
   it('classifies local API exposure warnings by host and token', () => {

@@ -26,6 +26,20 @@ const baseEnv = {
   PATH: `${binDir}:${process.env.PATH ?? ''}`,
   WORKER_DB_PATH: dbPath,
 }
+// `worker create` is fleet-aware: it builds the worker in its own per-worker home
+// under `<AIWORKER_HOME>/workers/<id>` and the CLI runtime commands reach it via the
+// fleet fallback in `ensureRuntime`. The worker/workspace/session therefore live in
+// the sub-home DB (derived purely from home, ignoring WORKER_DB_PATH), so the
+// daemon + the seed helpers must target the SAME sub-home to observe them. The CLI
+// commands keep running with `baseEnv` (root home) on purpose — that is what forces
+// `workspace create`/`session` through the fleet fallback this test exercises.
+const subHome = join(aiworkerHome, 'workers', workerId)
+const subDbPath = join(subHome, 'aiworker.db')
+const daemonEnv = {
+  ...baseEnv,
+  AIWORKER_HOME: subHome,
+  WORKER_DB_PATH: subDbPath,
+}
 const cliOutputs: Record<string, unknown> = {}
 const browserEvents: string[] = []
 
@@ -41,7 +55,6 @@ try {
   cliOutputs.worker = runCliJson(
     'worker',
     'create',
-    '--id',
     workerId,
     '--name',
     'Freeform CLI Golden Worker',
@@ -72,7 +85,15 @@ try {
     'Start the Freeform CLI browser golden path.',
   )
   cliOutputs.sessionStart = sessionResult
-  const followUpResult = runCliJson<{ invocation: { id: string, inputRef: string, sessionId: string, status: string } }>(
+  // `session invoke --session <id>` looks the session up via getSession against the
+  // CLI's current home BEFORE ensureRuntime resolves a worker — there is no
+  // worker id on this command to trigger the fleet fallback. The session genuinely
+  // lives in the worker's per-worker home, so run this follow-up against that home
+  // (the same home the daemon + browser ops use), matching the per-worker-daemon
+  // model. worker/workspace/session creation above stay on the root home on purpose
+  // to exercise ensureRuntime's fleet fallback.
+  const followUpResult = runCliJsonWithEnv<{ invocation: { id: string, inputRef: string, sessionId: string, status: string } }>(
+    daemonEnv,
     'session',
     'invoke',
     '--session',
@@ -109,7 +130,7 @@ try {
       String(port),
     ],
     cwd: repoRoot,
-    env: baseEnv,
+    env: daemonEnv,
     stderr: 'pipe',
     stdout: 'pipe',
   })
@@ -268,10 +289,17 @@ finally {
 }
 
 function runCliJson<T = unknown>(...args: string[]): T {
+  return runCliJsonWithEnv<T>(baseEnv, ...args)
+}
+
+// Run a CLI command under an explicit env (home). Defaults to the root home via
+// `runCliJson`; session-targeting commands that resolve a per-worker-home session
+// run under `daemonEnv` so getSession finds the row before ensureRuntime.
+function runCliJsonWithEnv<T = unknown>(env: Record<string, string | undefined>, ...args: string[]): T {
   const result = Bun.spawnSync({
     cmd: [process.execPath, 'apps/worker-cli/src/aiworker.ts', ...args],
     cwd: repoRoot,
-    env: baseEnv,
+    env,
     stderr: 'pipe',
     stdout: 'pipe',
   })
@@ -289,7 +317,7 @@ function runCliJson<T = unknown>(...args: string[]): T {
 }
 
 function seedInvocationsForBrowserEngineActions(sessionId: string): void {
-  initWorkerDb(dbPath)
+  initWorkerDb(subDbPath)
   try {
     createEngineInvocation({
       engineCommand: 'codex',
@@ -318,7 +346,7 @@ function seedInvocationsForBrowserEngineActions(sessionId: string): void {
 }
 
 function seedWorkbenchFixtures(workspaceId: string): void {
-  initWorkerDb(dbPath)
+  initWorkerDb(subDbPath)
   try {
     // Session artifacts are a workspace dimension (the invocation result never
     // carries files), so seed a workspace file the mounted ArtifactStrip renders.

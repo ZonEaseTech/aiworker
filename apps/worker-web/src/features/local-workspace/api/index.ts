@@ -43,9 +43,6 @@ export {
   projectWorkerWorkspaceOverlay,
 } from './worker-overlays'
 export {
-  createWorker,
-} from './workers'
-export {
   archiveSoulApp,
   enableSoulApp,
   loadLocalWorkspaceData,

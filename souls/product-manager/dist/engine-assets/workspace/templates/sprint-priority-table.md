@@ -13,7 +13,7 @@ sprintCandidateScore = urgency + estimateFit + age
 进评分的候选条件：status=Todo、Priority≤P1、SP>0、不在当前 sprint、未被 readiness 阻塞。
 
 ## 候选评分表
-**当前 sprint 容量**：<默认 40> SP　**已排**：<…> SP　**剩余**：<容量−已排> SP
+**当前 sprint 容量**：<默认 40> SP **已排**：<…> SP **剩余**：<容量−已排> SP
 
 | # | issue | Priority | priorityRank | SP | age(天) | urgency | estimateFit | age 分 | **score** | 容量判定 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
