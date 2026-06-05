@@ -254,10 +254,18 @@ export function redactSamplingText(text: string): string {
     .replace(/\bsk-[\w-]+/g, '[REDACTED]')
 }
 
-function assertSafeRunId(runId: string): void {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(runId) || runId === '.' || runId === '..') {
-    throw new Error(`Unsafe sampling runId: ${runId}`)
+function assertSafeSamplingId(value: string, label: 'caseId' | 'runId'): void {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
+    throw new Error(`Unsafe sampling ${label}: ${value}`)
   }
+}
+
+function assertSafeRunId(runId: string): void {
+  assertSafeSamplingId(runId, 'runId')
+}
+
+function assertSafeCaseId(caseId: string): void {
+  assertSafeSamplingId(caseId, 'caseId')
 }
 
 export function buildSamplingManifest(input: BuildSamplingManifestInput): SamplingManifest {
@@ -311,6 +319,8 @@ export function buildCliPlan(input: CliPlanInput): string[][] {
 }
 
 export function writeScorecard(input: ScorecardInput): void {
+  assertSafeCaseId(input.caseId)
+
   const scorecardsDir = join(input.root, 'scorecards')
   mkdirSync(scorecardsDir, { recursive: true })
 

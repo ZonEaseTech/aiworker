@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -164,5 +164,21 @@ describe('e2e soul sampling static contracts', () => {
     expect(text).not.toContain('sk-test-secret')
     expect(text).not.toContain('+66812345678')
     expect(text).not.toContain('MERCHANT-1234567890')
+  })
+
+  it('rejects scorecard case ids that escape the scorecards directory', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-scorecard-'))
+
+    expect(() => writeScorecard({
+      caseId: '../escape',
+      dimensions: [{ id: 'boundary-and-compliance', score: 2 }],
+      findingKinds: ['platform'],
+      outputSnippet: 'safe output',
+      prompt: 'safe prompt',
+      root: dir,
+      status: 'fail',
+    })).toThrow('Unsafe sampling caseId')
+
+    expect(existsSync(join(dir, 'escape.json'))).toBe(false)
   })
 })
