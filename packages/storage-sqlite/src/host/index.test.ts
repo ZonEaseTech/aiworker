@@ -133,6 +133,72 @@ describe('host sqlite assignment storage', () => {
     expect(listAssignments()[0]?.status).toBe('revoked')
   })
 
+  it('does not check in assignments before the provision token is consumed', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    expect(markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: 'test',
+    })).toBeNull()
+
+    const row = listAssignments()[0]
+    expect(row?.status).toBe('provisioning')
+    expect(row?.provisionTokenConsumedAt).toBeNull()
+  })
+
+  it('does not mark a polluted checked-in row access-ready without a consumed token', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    getHostDb().update(hostAssignments).set({
+      checkedInAt: '2026-06-06T00:01:00.000Z',
+      status: 'checked_in',
+      workerId: 'wkr_82',
+      workerVersion: 'test',
+    }).where(eq(hostAssignments.assignmentId, created.assignment.assignmentId)).run()
+
+    expect(markAssignmentAccessReady(created.assignment.assignmentId, {
+      accessReadyAt: '2026-06-06T00:02:00.000Z',
+    })).toBeNull()
+
+    const row = listAssignments()[0]
+    expect(row?.status).toBe('checked_in')
+    expect(row?.provisionTokenConsumedAt).toBeNull()
+    expect(row?.accessReadyAt).toBeNull()
+  })
+
+  it('does not mark a polluted access-ready row ready without check-in proof', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    getHostDb().update(hostAssignments).set({
+      accessReadyAt: '2026-06-06T00:02:00.000Z',
+      status: 'access_ready',
+      workerId: 'wkr_82',
+      workerVersion: 'test',
+    }).where(eq(hostAssignments.assignmentId, created.assignment.assignmentId)).run()
+
+    expect(markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })).toBeNull()
+
+    const row = listAssignments()[0]
+    expect(row?.status).toBe('access_ready')
+    expect(row?.checkedInAt).toBeNull()
+    expect(row?.provisionTokenConsumedAt).toBeNull()
+    expect(row?.workbenchUrl).toBeNull()
+  })
+
   it('requires checked-in and access-ready prerequisites before later readiness states', () => {
     const created = createAssignment({
       assignedEmail: 'bob@zonease.org',
@@ -154,6 +220,7 @@ describe('host sqlite assignment storage', () => {
       soulReleaseRef: 'ops-copilot@v1',
     })
 
+    verifyAndConsumeProvisionToken(created.provisionToken)
     markAssignmentCheckedIn(created.assignment.assignmentId, {
       workerId: 'wkr_82',
       workerVersion: 'test',
@@ -180,6 +247,7 @@ describe('host sqlite assignment storage', () => {
       soulReleaseRef: 'ops-copilot@v1',
     })
 
+    verifyAndConsumeProvisionToken(created.provisionToken)
     const checkedIn = markAssignmentCheckedIn(created.assignment.assignmentId, {
       workerId: 'wkr_82',
       workerVersion: 'test',

@@ -8,6 +8,7 @@ import {
   markAssignmentAccessReady,
   markAssignmentCheckedIn,
   markAssignmentReady,
+  verifyAndConsumeProvisionToken,
 } from '@zonease/aiworker-storage-sqlite/host'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
@@ -246,6 +247,7 @@ describe('host server', () => {
       serverRef: 'host-main',
       soulReleaseRef: 'soul_release_1',
     })
+    verifyAndConsumeProvisionToken(created.provisionToken)
     markAssignmentCheckedIn(created.assignment.assignmentId, {
       workerId: 'wkr_82',
       workerVersion: '1.0.0',
@@ -271,6 +273,7 @@ describe('host server', () => {
       serverRef: 'host-main',
       soulReleaseRef: 'soul_release_1',
     })
+    verifyAndConsumeProvisionToken(created.provisionToken)
     markAssignmentCheckedIn(created.assignment.assignmentId, {
       workerId: 'wkr_82',
       workerVersion: '1.0.0',
@@ -299,6 +302,7 @@ describe('host server', () => {
       serverRef: 'host-main',
       soulReleaseRef: 'soul_release_1',
     })
+    verifyAndConsumeProvisionToken(created.provisionToken)
     markAssignmentCheckedIn(created.assignment.assignmentId, {
       workerId: 'wkr_82',
       workerVersion: '1.0.0',

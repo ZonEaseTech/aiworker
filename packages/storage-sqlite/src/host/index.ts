@@ -199,6 +199,7 @@ export function markAssignmentCheckedIn(assignmentId: string, input: MarkAssignm
       eq(schema.hostAssignments.assignmentId, assignmentId),
       eq(schema.hostAssignments.status, 'provisioning'),
       isNull(schema.hostAssignments.revokedAt),
+      isNotNull(schema.hostAssignments.provisionTokenConsumedAt),
     ))
     .run()
   if (runChanges(result) !== 1)
@@ -221,6 +222,7 @@ export function markAssignmentAccessReady(assignmentId: string, input: MarkAssig
       eq(schema.hostAssignments.assignmentId, assignmentId),
       eq(schema.hostAssignments.status, 'checked_in'),
       isNull(schema.hostAssignments.revokedAt),
+      isNotNull(schema.hostAssignments.provisionTokenConsumedAt),
       isNotNull(schema.hostAssignments.workerId),
       isNotNull(schema.hostAssignments.checkedInAt),
     ))
@@ -244,7 +246,9 @@ export function markAssignmentReady(assignmentId: string, input: MarkAssignmentR
       eq(schema.hostAssignments.assignmentId, assignmentId),
       eq(schema.hostAssignments.status, 'access_ready'),
       isNull(schema.hostAssignments.revokedAt),
+      isNotNull(schema.hostAssignments.provisionTokenConsumedAt),
       isNotNull(schema.hostAssignments.workerId),
+      isNotNull(schema.hostAssignments.checkedInAt),
       isNotNull(schema.hostAssignments.accessReadyAt),
     ))
     .run()
