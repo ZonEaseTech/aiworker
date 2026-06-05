@@ -8,6 +8,10 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     },
+    "./host": {
+      "types": "./src/host/index.ts",
+      "import": "./src/host/index.ts"
+    },
     "./worker": {
       "types": "./src/worker/index.ts",
       "import": "./src/worker/index.ts"
