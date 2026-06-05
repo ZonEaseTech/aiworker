@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 
@@ -211,6 +211,10 @@ export function shouldRejectStartupPort(
   if (input.kind === 'api')
     return !input.expectedHealthy
   return true
+}
+
+export function shouldPurgeHome(env: { AIWORKER_DEV_FLEET_PURGE?: string }): boolean {
+  return env.AIWORKER_DEV_FLEET_PURGE === '1'
 }
 
 export function parseFleetStatus(text: string): FleetWorkerStatus[] {
@@ -502,6 +506,23 @@ async function status(): Promise<void> {
   }
 }
 
+function clean(): void {
+  const home = aiworkerHome()
+  for (const entry of DEV_FLEET_TOPOLOGY)
+    run('tmux', ['kill-session', '-t', entry.tmuxSession], { allowFailure: true })
+
+  cli(['stop', '--all'], { allowFailure: true })
+  rmSync(manifestPath(home), { force: true })
+
+  if (shouldPurgeHome(process.env)) {
+    rmSync(home, { force: true, recursive: true })
+    console.log(`[dev:fleet-web:clean] purged AIWORKER_HOME=${home}`)
+    return
+  }
+
+  console.log(`[dev:fleet-web:clean] kept AIWORKER_HOME=${home}`)
+}
+
 async function main(): Promise<void> {
   const mode = process.argv[2] || 'start'
   if (mode === 'start') {
@@ -516,7 +537,7 @@ async function main(): Promise<void> {
     throw new Error(`unsupported dev fleet web command: ${mode}`)
   }
 
-  throw new Error('dev fleet web clean command is unavailable in this incremental skeleton')
+  clean()
 }
 
 if (import.meta.main) {

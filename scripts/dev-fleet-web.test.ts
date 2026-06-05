@@ -9,6 +9,7 @@ import {
   formatPortStatus,
   parseFleetStatus,
   resolveHarnessHost,
+  shouldPurgeHome,
   shouldRejectStartupPort,
   summarizeDaemonHealth,
   validateWorkerApp,
@@ -233,5 +234,13 @@ describe('dev fleet web health validation', () => {
     expect(shouldRejectStartupPort({ expectedHealthy: false, kind: 'api', listening: false })).toBe(false)
     expect(shouldRejectStartupPort({ kind: 'vite', listening: true })).toBe(true)
     expect(shouldRejectStartupPort({ kind: 'vite', listening: false })).toBe(false)
+  })
+})
+
+describe('dev fleet web clean safety', () => {
+  it('does not purge AIWORKER_HOME unless explicitly requested', () => {
+    expect(shouldPurgeHome({ AIWORKER_DEV_FLEET_PURGE: undefined })).toBe(false)
+    expect(shouldPurgeHome({ AIWORKER_DEV_FLEET_PURGE: '0' })).toBe(false)
+    expect(shouldPurgeHome({ AIWORKER_DEV_FLEET_PURGE: '1' })).toBe(true)
   })
 })
