@@ -479,7 +479,13 @@ export async function runSamplingCaseWithCli(input: RunSamplingCaseWithCliInput)
   const invocationStatus = readNestedString(sessionOutput, 'invocation', 'status')
   const invocationError = readNestedString(sessionOutput, 'invocation', 'error')
 
-  parseJsonObject(await input.runCli(['session', 'events', invocationId], input.env))
+  parseJsonObject(await input.runCli([
+    'session',
+    'events',
+    invocationId,
+    '--worker',
+    input.scope.workerId,
+  ], input.env))
 
   if (invocationStatus !== 'succeeded') {
     throw new Error([

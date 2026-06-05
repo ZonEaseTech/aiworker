@@ -177,6 +177,7 @@ describe('e2e soul sampling static contracts', () => {
       '--input',
       '请自然处理这个请求。',
     ]))
+    expect(calls).toContainEqual(['session', 'events', 'invocation-1', '--worker', 'e2e-software-support'])
     expect(result).toEqual({
       invocationId: 'invocation-1',
       sessionId: 'session-1',
@@ -265,7 +266,7 @@ describe('e2e soul sampling static contracts', () => {
       scope: { appId: 'software-support', workerId: 'e2e-software-support' },
     })).rejects.toThrow('invocation invocation-1 failed')
 
-    expect(calls).toContainEqual(['session', 'events', 'invocation-1'])
+    expect(calls).toContainEqual(['session', 'events', 'invocation-1', '--worker', 'e2e-software-support'])
   })
 
   it('writes scorecards with redacted prompt and output snippets', () => {
