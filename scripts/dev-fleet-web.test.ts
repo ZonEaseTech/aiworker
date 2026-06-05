@@ -5,6 +5,8 @@ import { describe, expect, it } from 'bun:test'
 import {
   buildManifest,
   DEV_FLEET_TOPOLOGY,
+  formatPortStatus,
+  parseFleetStatus,
   validateWorkerApp,
 } from './dev-fleet-web'
 
@@ -128,5 +130,45 @@ describe('dev fleet web harness contracts', () => {
     expect(pkg.scripts?.['dev:fleet-web']).toBe('bun scripts/dev-fleet-web.ts start')
     expect(pkg.scripts?.['dev:fleet-web:status']).toBe('bun scripts/dev-fleet-web.ts status')
     expect(pkg.scripts?.['dev:fleet-web:clean']).toBe('bun scripts/dev-fleet-web.ts clean')
+  })
+})
+
+describe('dev fleet web status helpers', () => {
+  it('formats listener status without mutating runtime state', () => {
+    expect(formatPortStatus([
+      { listening: true, port: 5173, process: 'node 123 vite' },
+      { listening: false, port: 5174, process: null },
+    ])).toContain('5173: listening node 123 vite')
+    expect(formatPortStatus([
+      { listening: true, port: 5173, process: 'node 123 vite' },
+      { listening: false, port: 5174, process: null },
+    ])).toContain('5174: none')
+  })
+
+  it('parses fleet status JSON into app health summaries', () => {
+    const parsed = parseFleetStatus(JSON.stringify({
+      workers: [
+        {
+          app: 'google-ads',
+          health: { ok: true, status: 200 },
+          id: 'dev-google-ads',
+          port: 9218,
+          running: true,
+          url: 'http://127.0.0.1:9218',
+        },
+      ],
+    }))
+
+    expect(parsed).toEqual([
+      {
+        app: 'google-ads',
+        healthOk: true,
+        healthStatus: 200,
+        id: 'dev-google-ads',
+        port: 9218,
+        running: true,
+        url: 'http://127.0.0.1:9218',
+      },
+    ])
   })
 })
