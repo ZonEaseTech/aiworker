@@ -196,8 +196,21 @@ export function formatPortStatus(statuses: PortStatus[]): string {
     .join('\n')
 }
 
-export function shouldRejectStartupPort(input: { kind: 'daemon' | 'vite', listening: boolean }): boolean {
-  return input.kind === 'vite' && input.listening
+export function resolveHarnessHost(env: { AIWORKER_HOST?: string }): string {
+  const host = env.AIWORKER_HOST?.trim() || '127.0.0.1'
+  if (!/^[a-z0-9.-]+$/i.test(host))
+    throw new Error(`invalid AIWORKER_HOST: ${host}`)
+  return host
+}
+
+export function shouldRejectStartupPort(
+  input: { kind: 'api', listening: boolean, expectedHealthy: boolean } | { kind: 'vite', listening: boolean },
+): boolean {
+  if (!input.listening)
+    return false
+  if (input.kind === 'api')
+    return !input.expectedHealthy
+  return true
 }
 
 export function parseFleetStatus(text: string): FleetWorkerStatus[] {
@@ -297,6 +310,33 @@ function assertVitePortAvailable(port: number): void {
   throw new Error(`Vite port ${port} is already in use:\n${status.process ?? formatPortStatus([status])}`)
 }
 
+async function assertApiPortReusable(entry: DevFleetEntry, host: string): Promise<void> {
+  const port = listenerForPort(entry.apiPort)
+  if (!port.listening)
+    return
+
+  const url = `http://${host}:${entry.apiPort}/health`
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(1000) })
+    if (!response.ok)
+      throw new Error(`${response.status} ${response.statusText}`)
+    const health = await response.json() as DaemonHealthBody
+    assertExpectedHealth({
+      expectedAppId: entry.appId,
+      expectedWorkerId: entry.workerId,
+      health,
+      url,
+    })
+  }
+  catch (error) {
+    if (shouldRejectStartupPort({ expectedHealthy: false, kind: 'api', listening: true })) {
+      throw new Error(
+        `API port ${entry.apiPort} is already in use but is not the expected fleet daemon:\n${port.process ?? formatPortStatus([port])}\n${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+}
+
 function readWorkerRow(workerId: string): null | { appId?: unknown, id?: unknown } {
   const result = cli(['worker', 'show', workerId])
   const parsed = JSON.parse(result.stdout) as { worker?: null | { appId?: unknown, id?: unknown } }
@@ -333,6 +373,11 @@ function killHarnessTmuxSessions(): void {
 function assertVitePortsAvailable(): void {
   for (const entry of DEV_FLEET_TOPOLOGY)
     assertVitePortAvailable(entry.vitePort)
+}
+
+async function assertApiPortsReusable(host: string): Promise<void> {
+  for (const entry of DEV_FLEET_TOPOLOGY)
+    await assertApiPortReusable(entry, host)
 }
 
 function restartTmuxVite(entry: DevFleetEntry, host: string): void {
@@ -382,12 +427,13 @@ async function verifyVite(entry: DevFleetEntry, host: string): Promise<void> {
 }
 
 async function start(): Promise<void> {
-  const host = process.env.AIWORKER_HOST || '127.0.0.1'
+  const host = resolveHarnessHost(process.env)
   const home = aiworkerHome()
   mkdirSync(home, { recursive: true })
   requireTmux()
   killHarnessTmuxSessions()
   assertVitePortsAvailable()
+  await assertApiPortsReusable(host)
 
   console.log(`[dev:fleet-web] AIWORKER_HOME=${home}`)
   cli(['app', 'bootstrap', 'official'])
@@ -424,7 +470,7 @@ function formatDaemonStatus(worker: FleetWorkerStatus): string {
 
 async function status(): Promise<void> {
   const home = aiworkerHome()
-  const host = '127.0.0.1'
+  const host = resolveHarnessHost(process.env)
   console.log(`[dev:fleet-web:status] AIWORKER_HOME=${home}`)
 
   console.log('\n[daemon]')

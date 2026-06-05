@@ -8,6 +8,7 @@ import {
   DEV_FLEET_TOPOLOGY,
   formatPortStatus,
   parseFleetStatus,
+  resolveHarnessHost,
   shouldRejectStartupPort,
   summarizeDaemonHealth,
   validateWorkerApp,
@@ -206,6 +207,13 @@ describe('dev fleet web status helpers', () => {
 })
 
 describe('dev fleet web health validation', () => {
+  it('validates AIWORKER_HOST before embedding it in tmux commands', () => {
+    expect(resolveHarnessHost({ AIWORKER_HOST: undefined })).toBe('127.0.0.1')
+    expect(resolveHarnessHost({ AIWORKER_HOST: 'localhost' })).toBe('localhost')
+    expect(() => resolveHarnessHost({ AIWORKER_HOST: '127.0.0.1;touch /tmp/x' }))
+      .toThrow('invalid AIWORKER_HOST')
+  })
+
   it('rejects daemon health for the wrong active app', () => {
     expect(() =>
       assertExpectedHealth({
@@ -220,7 +228,9 @@ describe('dev fleet web health validation', () => {
   })
 
   it('allows daemon port reuse but rejects occupied Vite ports before start', () => {
-    expect(shouldRejectStartupPort({ kind: 'daemon', listening: true })).toBe(false)
+    expect(shouldRejectStartupPort({ expectedHealthy: true, kind: 'api', listening: true })).toBe(false)
+    expect(shouldRejectStartupPort({ expectedHealthy: false, kind: 'api', listening: true })).toBe(true)
+    expect(shouldRejectStartupPort({ expectedHealthy: false, kind: 'api', listening: false })).toBe(false)
     expect(shouldRejectStartupPort({ kind: 'vite', listening: true })).toBe(true)
     expect(shouldRejectStartupPort({ kind: 'vite', listening: false })).toBe(false)
   })
