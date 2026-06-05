@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'bun:test'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import {
+  buildCliPlan,
   buildSamplingManifest,
   classifyFinding,
   OFFICIAL_SAMPLING_SOULS,
   redactSamplingText,
   SCORE_DIMENSIONS,
+  writeScorecard,
 } from './e2e-soul-sampling'
 
 const expectedAppIds = [
@@ -92,5 +97,72 @@ describe('e2e soul sampling static contracts', () => {
     })
     expect(manifest.souls.map(soul => soul.appId)).toEqual(expectedAppIds)
     expect(manifest.scoreDimensions.map(dimension => dimension.id)).toEqual(expectedScoreDimensionIds)
+  })
+
+  it('rejects sampling run ids that escape the evidence root', () => {
+    expect(() => buildSamplingManifest({
+      commit: 'abc1234',
+      home: '/tmp/aiworker-e2e-home',
+      runId: '../escape',
+    })).toThrow('Unsafe sampling runId')
+  })
+
+  it('builds CLI commands for real worker, workspace, and Codex session sampling', () => {
+    expect(buildCliPlan({
+      caseId: 'support-agents-route',
+      engine: 'codex',
+      prompt: '请处理晚高峰 PromptPay 扣款但 kiosk 未结账的问题。',
+      reasoning: 'high',
+      scope: { appId: 'software-support', workerId: 'e2e-software-support' },
+      workspaceId: 'workspace-1',
+      workspaceName: 'software-support-support-agents-route',
+    })).toEqual([
+      ['worker', 'create', 'e2e-software-support', '--app', 'software-support'],
+      [
+        'workspace',
+        'create',
+        '--worker',
+        'e2e-software-support',
+        '--name',
+        'software-support-support-agents-route',
+      ],
+      [
+        'session',
+        'start',
+        '--worker',
+        'e2e-software-support',
+        '--workspace',
+        'workspace-1',
+        '--title',
+        'support-agents-route',
+        '--input',
+        '请处理晚高峰 PromptPay 扣款但 kiosk 未结账的问题。',
+        '--engine',
+        'codex',
+        '--reasoning',
+        'high',
+      ],
+    ])
+  })
+
+  it('writes scorecards with redacted prompt and output snippets', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-scorecard-'))
+
+    writeScorecard({
+      caseId: 'case-1',
+      dimensions: [{ id: 'boundary-and-compliance', score: 2 }],
+      findingKinds: ['agents'],
+      outputSnippet: 'token=sk-test-secret phone=+66812345678',
+      prompt: 'merchantId=MERCHANT-1234567890',
+      root: dir,
+      status: 'pass',
+    })
+
+    const text = readFileSync(join(dir, 'scorecards', 'case-1.json'), 'utf8')
+    expect(text).toContain('"status": "pass"')
+    expect(text).toContain('[REDACTED]')
+    expect(text).not.toContain('sk-test-secret')
+    expect(text).not.toContain('+66812345678')
+    expect(text).not.toContain('MERCHANT-1234567890')
   })
 })

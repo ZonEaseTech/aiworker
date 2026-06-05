@@ -1,4 +1,5 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import process from 'node:process'
 
 export type FindingKind = 'agents' | 'skill' | 'knowledge-template' | 'platform'
@@ -47,6 +48,32 @@ export interface BuildSamplingManifestInput {
   commit: string
   home: string
   runId: string
+}
+
+interface CliPlanInput {
+  caseId: string
+  engine: 'codex'
+  prompt: string
+  reasoning: string
+  scope: {
+    appId: string
+    workerId: string
+  }
+  workspaceId: string
+  workspaceName: string
+}
+
+export interface ScorecardInput {
+  caseId: string
+  dimensions: Array<{
+    id: string
+    score: 0 | 1 | 2
+  }>
+  findingKinds: FindingKind[]
+  outputSnippet: string
+  prompt: string
+  root: string
+  status: 'fail' | 'pass'
 }
 
 function makeCase(id: string, prompt: string, expectedEvidence: string): SamplingCase {
@@ -227,7 +254,15 @@ export function redactSamplingText(text: string): string {
     .replace(/\bsk-[\w-]+/g, '[REDACTED]')
 }
 
+function assertSafeRunId(runId: string): void {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(runId) || runId === '.' || runId === '..') {
+    throw new Error(`Unsafe sampling runId: ${runId}`)
+  }
+}
+
 export function buildSamplingManifest(input: BuildSamplingManifestInput): SamplingManifest {
+  assertSafeRunId(input.runId)
+
   const skills = OFFICIAL_SAMPLING_SOULS.reduce((count, soul) => count + soul.skills.length, 0)
   const minAgentsCasesPerSoul = Math.min(
     ...OFFICIAL_SAMPLING_SOULS.map(soul => soul.agentsCases.length),
@@ -250,6 +285,43 @@ export function buildSamplingManifest(input: BuildSamplingManifestInput): Sampli
     souls: OFFICIAL_SAMPLING_SOULS,
     scoreDimensions: SCORE_DIMENSIONS,
   }
+}
+
+export function buildCliPlan(input: CliPlanInput): string[][] {
+  return [
+    ['worker', 'create', input.scope.workerId, '--app', input.scope.appId],
+    ['workspace', 'create', '--worker', input.scope.workerId, '--name', input.workspaceName],
+    [
+      'session',
+      'start',
+      '--worker',
+      input.scope.workerId,
+      '--workspace',
+      input.workspaceId,
+      '--title',
+      input.caseId,
+      '--input',
+      input.prompt,
+      '--engine',
+      input.engine,
+      '--reasoning',
+      input.reasoning,
+    ],
+  ]
+}
+
+export function writeScorecard(input: ScorecardInput): void {
+  const scorecardsDir = join(input.root, 'scorecards')
+  mkdirSync(scorecardsDir, { recursive: true })
+
+  writeFileSync(join(scorecardsDir, `${input.caseId}.json`), `${JSON.stringify({
+    caseId: input.caseId,
+    dimensions: input.dimensions,
+    findingKinds: input.findingKinds,
+    outputSnippet: redactSamplingText(input.outputSnippet),
+    prompt: redactSamplingText(input.prompt),
+    status: input.status,
+  }, null, 2)}\n`)
 }
 
 export async function writeDryRunEvidence(manifest: SamplingManifest): Promise<{ manifestPath: string }> {
