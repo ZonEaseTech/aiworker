@@ -25,6 +25,7 @@ import {
 } from '@zonease/aiworker-worker-control-protocol'
 
 export interface HostServerOptions {
+  accessRegistry?: WorkerAccessRegistry
   authUser?: AuthenticatedHostUser | null
   dbPath: string
   publicBaseUrl: string
@@ -45,7 +46,7 @@ export async function createHostServer(options: HostServerOptions): Promise<Host
   runHostMigrations()
 
   const authProvider = createStaticAuthProvider(options.authUser ?? null)
-  const accessRegistry = createWorkerAccessRegistry()
+  const accessRegistry = options.accessRegistry ?? createWorkerAccessRegistry()
 
   return {
     async fetch(request) {
@@ -94,7 +95,7 @@ async function handleAssignments(
     return json({ error: { code: 'INVALID_JSON' } }, { status: 400 })
   }
 
-  if (!isNonEmptyString(body.assignedEmail) || !isNonEmptyString(body.serverRef) || !isNonEmptyString(body.soulReleaseRef))
+  if (!isNonEmptyString(body.assignedEmail) || !isEmail(body.assignedEmail) || !isNonEmptyString(body.serverRef) || !isNonEmptyString(body.soulReleaseRef))
     return json({ error: { code: 'INVALID_ASSIGNMENT_REQUEST' } }, { status: 400 })
 
   const created = createAssignment({
@@ -187,6 +188,10 @@ function createAccessToken(): string {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+function isEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
 }
 
 function json(value: unknown, init: ResponseInit = {}): Response {

@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { createWorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import {
   createAssignment,
   markAssignmentAccessReady,
@@ -93,6 +94,25 @@ describe('host server', () => {
 
     expect(listResponse.status).toBe(403)
     expect(createResponse.status).toBe(403)
+  })
+
+  it('rejects assignment creation before storage when assignedEmail is not an email', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })
+
+    const response = await server.fetch(new Request('http://host/api/host/assignments', {
+      body: JSON.stringify({
+        assignedEmail: 'not-an-email',
+        serverRef: 'host-main',
+        soulReleaseRef: 'soul_release_1',
+      }),
+      method: 'POST',
+    }))
+
+    expect(response.status).toBe(400)
   })
 
   it('consumes a provision token exactly once and returns a worker_access receipt', async () => {
@@ -187,6 +207,38 @@ describe('host server', () => {
     const response = await server.fetch(new Request('http://host/workers/wkr_82'))
 
     expect(response.status).toBe(403)
+  })
+
+  it('routes an assigned ready worker when access registry has the connection', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      dbPath: dbPath(),
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: '1.0.0',
+    })
+    markAssignmentAccessReady(created.assignment.assignmentId)
+    markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })
+    accessRegistry.register({
+      close() {},
+      workerId: 'wkr_82',
+    })
+
+    const response = await server.fetch(new Request('http://host/workers/wkr_82'))
+
+    expect(response.status).toBe(200)
+    expect(await json(response)).toEqual({ routed: true, workerId: 'wkr_82' })
   })
 
   it('returns upgrade required for worker access before websocket support exists', async () => {

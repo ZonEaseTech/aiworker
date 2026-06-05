@@ -26,6 +26,8 @@
       },
       "dependencies": {
         "@zonease/aiworker-host-control": "workspace:*",
+        "@zonease/aiworker-storage-sqlite": "workspace:*",
+        "@zonease/aiworker-worker-control-protocol": "workspace:*",
         "cac": "^6.7.14",
       },
       "devDependencies": {
