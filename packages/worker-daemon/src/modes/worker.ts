@@ -59,7 +59,7 @@ import { streamSSE } from 'hono/streaming'
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
 import { registerLocalOpenApiPaths } from './worker/openapi'
-import { checkInToHost } from './worker/provision-client'
+import { checkInToHost, maybeProvisionCheckIn } from './worker/provision-client'
 import {
   createBrokerEngineInvocationBodySchema,
   createBrokerSessionBodySchema,
@@ -183,18 +183,12 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const runtime = state.host.createRuntimeForWorker(activeResolution.worker)
     await runtime.init()
     runtimes.set(activeResolution.worker.id, runtime)
-    const host = process.env.AIWORKER_HOST_URL
-    const provisionToken = process.env.AIWORKER_PROVISION_TOKEN
-    if (host && provisionToken) {
-      await (options.provisionCheckIn ?? checkInToHost)({
-        host,
-        id: activeResolution.worker.appId,
-        provisionToken,
-        version: state.runtimeVersion,
-        workerId: activeResolution.worker.id,
-        workbenchUrl: '/',
-      })
-    }
+    await maybeProvisionCheckIn({
+      activeResolution,
+      checkIn: options.provisionCheckIn,
+      env: process.env,
+      runtimeVersion: state.runtimeVersion,
+    })
   }
 
   const app = new OpenAPIHono()

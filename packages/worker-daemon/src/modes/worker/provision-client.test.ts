@@ -1,8 +1,22 @@
-import { describe, expect, it } from 'bun:test'
+import { afterEach, describe, expect, it } from 'bun:test'
 
-import { buildCheckInBody, checkInToHost } from './provision-client'
+import { buildCheckInBody, checkInToHost, maybeProvisionCheckIn } from './provision-client'
 
 describe('worker provision check-in client', () => {
+  const originalHost = process.env.AIWORKER_HOST_URL
+  const originalToken = process.env.AIWORKER_PROVISION_TOKEN
+
+  afterEach(() => {
+    if (originalHost == null)
+      delete process.env.AIWORKER_HOST_URL
+    else
+      process.env.AIWORKER_HOST_URL = originalHost
+    if (originalToken == null)
+      delete process.env.AIWORKER_PROVISION_TOKEN
+    else
+      process.env.AIWORKER_PROVISION_TOKEN = originalToken
+  })
+
   it('builds the exact worker check-in request body', () => {
     const body = buildCheckInBody({
       id: 'aiworker-freeform',
@@ -105,5 +119,76 @@ describe('worker provision check-in client', () => {
     catch (error) {
       expect(String(error)).not.toContain('awp_secret')
     }
+  })
+
+  it('calls injected check-in once for a single active worker when provision env is present', async () => {
+    process.env.AIWORKER_HOST_URL = 'https://host.example'
+    process.env.AIWORKER_PROVISION_TOKEN = 'awp_secret'
+    const calls: unknown[] = []
+
+    await maybeProvisionCheckIn({
+      activeResolution: {
+        kind: 'single',
+        worker: {
+          appId: 'aiworker-freeform',
+          id: 'worker-1',
+        },
+      },
+      checkIn: async (input) => {
+        calls.push(input)
+        return {
+          access: { mode: 'worker_access', token: 'awt_token' },
+          assignment: {
+            assignedEmail: 'alice@example.com',
+            assignmentId: 'assignment-1',
+            soulReleaseRef: 'soul-release-1',
+            workerId: 'worker-1',
+          },
+        }
+      },
+      env: process.env,
+      runtimeVersion: '1.2.3',
+    })
+
+    expect(calls).toEqual([{
+      host: 'https://host.example',
+      id: 'aiworker-freeform',
+      provisionToken: 'awp_secret',
+      version: '1.2.3',
+      workerId: 'worker-1',
+      workbenchUrl: '/',
+    }])
+  })
+
+  it('does not call injected check-in when provision env is absent', async () => {
+    delete process.env.AIWORKER_HOST_URL
+    delete process.env.AIWORKER_PROVISION_TOKEN
+    const calls: unknown[] = []
+
+    await maybeProvisionCheckIn({
+      activeResolution: {
+        kind: 'single',
+        worker: {
+          appId: 'aiworker-freeform',
+          id: 'worker-1',
+        },
+      },
+      checkIn: async (input) => {
+        calls.push(input)
+        return {
+          access: { mode: 'worker_access', token: 'awt_token' },
+          assignment: {
+            assignedEmail: 'alice@example.com',
+            assignmentId: 'assignment-1',
+            soulReleaseRef: 'soul-release-1',
+            workerId: 'worker-1',
+          },
+        }
+      },
+      env: process.env,
+      runtimeVersion: '1.2.3',
+    })
+
+    expect(calls).toEqual([])
   })
 })

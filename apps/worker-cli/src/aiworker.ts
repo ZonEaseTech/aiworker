@@ -186,6 +186,7 @@ interface DaemonReuseResult {
 
 type DaemonStartResult = DaemonStartedResult | DaemonReuseResult
 export type DaemonStarter = (opts: { host?: string, port?: number }, paths: LocalPaths) => Promise<DaemonStartedResult>
+type DaemonForegroundRunner = (opts?: { host?: string, port?: number }) => Promise<void>
 
 interface DaemonStopResult {
   pid?: number
@@ -205,9 +206,14 @@ const CLI_MODULE_DIR = path.dirname(fileURLToPath(import.meta.url))
 const OFFICIAL_APP_DESCRIPTOR_FILENAME = 'dist/soul.descriptor.json'
 
 let daemonStarterForTest: DaemonStarter | null = null
+let daemonForegroundForTest: DaemonForegroundRunner | null = null
 
 export function __setDaemonStarterForTest(starter: DaemonStarter | null): void {
   daemonStarterForTest = starter
+}
+
+export function __setDaemonForegroundForTest(runner: DaemonForegroundRunner | null): void {
+  daemonForegroundForTest = runner
 }
 
 export function buildProvisionEnv(input: ProvisionCommandInput): {
@@ -1395,14 +1401,14 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
   await runDaemonForegroundServer(await prepareDaemonForeground(opts))
 }
 
-async function provisionCommand(input: Partial<ProvisionCommandInput>): Promise<void> {
+async function provisionCommand(input: Partial<ProvisionCommandInput>, argv: string[]): Promise<void> {
   if (!input.host)
     throw new Error('provision requires --host')
   if (!input.token)
     throw new Error('provision requires --token')
   Object.assign(process.env, buildProvisionEnv({ host: input.host, token: input.token }))
-  consola.info(`[aiworker-provision] ${redactProvisionCommandForLog(process.argv.slice(2))}`)
-  await daemonForeground({})
+  consola.info(`[aiworker-provision] ${redactProvisionCommandForLog(argv)}`)
+  await (daemonForegroundForTest ?? daemonForeground)({})
 }
 
 async function daemonCheck(opts: { host?: string, port?: number } = {}): Promise<void> {
@@ -2335,7 +2341,11 @@ function registerCommands(): void {
   cli.command('provision', 'run this Worker and check in to a Host with a provision token')
     .option('--host <url>', 'Host URL')
     .option('--token <token>', 'provision token')
-    .action((opts: { host?: string, token?: string }) => provisionCommand({ host: opts.host, token: opts.token }))
+    .action((opts: { host?: string, token?: string }) =>
+      provisionCommand(
+        { host: opts.host, token: opts.token },
+        ['provision', '--host', opts.host ?? '', '--token', opts.token ?? ''],
+      ))
 
   cli.command('app list', 'list installed Host Soul Apps').action(listAppsCommand)
   cli.command('app show <id>', 'show one installed Host Soul App').action(showAppCommand)
