@@ -3,8 +3,10 @@ import { describe, expect, test } from 'bun:test'
 import {
   parseWorkerAccessHello,
   parseWorkerAccessRequestEnvelope,
+  parseWorkerAccessReceipt,
   parseWorkerAccessResponseEnvelope,
   parseWorkerAssignmentEnvelope,
+  parseWorkerAssignmentReceipt,
   parseWorkerCheckInRequest,
   parseWorkerCheckInResponse,
   parseWorkerDescribe,
@@ -139,6 +141,35 @@ describe('worker-control-protocol contract', () => {
 
     expect(res.access.mode).toBe('worker_access')
     expect(res.assignment.assignedEmail).toBe('operator@example.com')
+  })
+
+  test('assignment receipt parser accepts assignment receipt only', () => {
+    const receipt = parseWorkerAssignmentReceipt({
+      assignedEmail: 'operator@example.com',
+      assignmentId: 'assignment-1',
+      soulReleaseRef: 'soul-release-1',
+      workerId: 'worker-1',
+    })
+
+    expect(receipt.assignmentId).toBe('assignment-1')
+
+    expect(() => parseWorkerAssignmentReceipt({
+      assignedEmail: 'operator@example.com',
+      assignmentId: 'assignment-1',
+      soulReleaseRef: 'soul-release-1',
+      workerId: 'worker-1',
+      extraData: 'leak',
+    } as never)).toThrow()
+  })
+
+  test('access receipt parser accepts worker access receipt', () => {
+    const receipt = parseWorkerAccessReceipt({
+      mode: 'worker_access',
+      token: 'awt_token',
+    })
+
+    expect(receipt.mode).toBe('worker_access')
+    expect(receipt.token).toBe('awt_token')
   })
 
   test('check-in response rejects transport-owned access data', () => {

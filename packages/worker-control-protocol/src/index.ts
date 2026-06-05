@@ -121,6 +121,14 @@ export function parseWorkerCheckInResponse(input: unknown): WorkerCheckInRespons
   return workerCheckInResponseSchema.parse(input)
 }
 
+export function parseWorkerAssignmentReceipt(input: unknown): WorkerAssignmentReceipt {
+  return workerAssignmentReceiptSchema.parse(input)
+}
+
+export function parseWorkerAccessReceipt(input: unknown): WorkerAccessReceipt {
+  return workerAccessReceiptSchema.parse(input)
+}
+
 export function parseWorkerAccessHello(input: unknown): WorkerAccessHello {
   return workerAccessHelloSchema.parse(input)
 }
