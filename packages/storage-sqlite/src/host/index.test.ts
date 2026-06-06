@@ -11,12 +11,14 @@ import {
   getAssignmentByWorkerId,
   getHostDb,
   initHostDb,
+  issueAssignmentAccessToken,
   listAssignments,
   markAssignmentAccessReady,
   markAssignmentCheckedIn,
   markAssignmentReady,
   revokeAssignment,
   runHostMigrations,
+  verifyAssignmentAccessToken,
   verifyAndConsumeProvisionToken,
   hostAssignments,
 } from './index'
@@ -293,6 +295,57 @@ describe('host sqlite assignment storage', () => {
     expect(ready?.status).toBe('ready')
     expect(ready?.accessReadyAt).toBe('2026-06-06T00:02:00.000Z')
     expect(ready?.workbenchUrl).toBe('https://aiworker.zonease.org/workers/wkr_82')
+  })
+
+  it('issues and verifies assignment access tokens only after check-in', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+
+    expect(issueAssignmentAccessToken(created.assignment.assignmentId)).toBeNull()
+    verifyAndConsumeProvisionToken(created.provisionToken)
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: 'test',
+    })
+
+    const issued = issueAssignmentAccessToken(created.assignment.assignmentId)
+    expect(issued?.accessToken).toMatch(/^awt_/)
+    expect(JSON.stringify(listAssignments())).not.toContain(issued!.accessToken)
+    expect(verifyAssignmentAccessToken({
+      assignmentId: created.assignment.assignmentId,
+      token: issued!.accessToken,
+      workerId: 'wkr_82',
+    })?.assignmentId).toBe(created.assignment.assignmentId)
+  })
+
+  it('rejects access tokens for wrong worker or revoked assignment', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'aissh:server-a',
+      soulReleaseRef: 'ops-copilot@v1',
+    })
+    verifyAndConsumeProvisionToken(created.provisionToken)
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: 'test',
+    })
+    const issued = issueAssignmentAccessToken(created.assignment.assignmentId)!
+
+    expect(verifyAssignmentAccessToken({
+      assignmentId: created.assignment.assignmentId,
+      token: issued.accessToken,
+      workerId: 'wkr_other',
+    })).toBeNull()
+
+    revokeAssignment(created.assignment.assignmentId, 'admin@zonease.org')
+    expect(verifyAssignmentAccessToken({
+      assignmentId: created.assignment.assignmentId,
+      token: issued.accessToken,
+      workerId: 'wkr_82',
+    })).toBeNull()
   })
 
   it('throws when assignment metadata contains literal secrets', () => {

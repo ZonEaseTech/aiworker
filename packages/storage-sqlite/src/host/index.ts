@@ -9,8 +9,11 @@ import { hostAssignmentStorageTestHooks } from './test-hooks'
 
 const TOKEN_PREFIX = 'awp_'
 const TOKEN_BYTES = 32
+const ACCESS_TOKEN_PREFIX = 'awt_'
+const ACCESS_TOKEN_BYTES = 32
 const SCRYPT_KEY_LENGTH = 64
 const DEFAULT_TOKEN_TTL_MS = 24 * 60 * 60 * 1000
+const DEFAULT_ACCESS_TOKEN_TTL_MS = 24 * 60 * 60 * 1000
 
 const LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,}|eyJ[\w-]+\.[\w-]+\.[\w-]+|-----BEGIN[A-Z ]*PRIVATE KEY-----|token=[^\s"']+|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["'][^"'\n]+["']/gi
 const REDACTED_LITERAL_SECRET_RE = /Bearer\s+\[REDACTED\]|sk-\[REDACTED\]|token=\[REDACTED\]|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["']\[REDACTED\]["']/i
@@ -62,6 +65,9 @@ export function runHostMigrations() {
       provision_token_hash TEXT NOT NULL,
       provision_token_expires_at TEXT NOT NULL,
       provision_token_consumed_at TEXT,
+      access_token_hash TEXT,
+      access_token_issued_at TEXT,
+      access_token_expires_at TEXT,
       metadata_json TEXT DEFAULT '{}' NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -71,6 +77,9 @@ export function runHostMigrations() {
       revoked_by TEXT
     )
   `))
+  addColumnIfMissing('host_assignments', 'access_token_hash', 'TEXT')
+  addColumnIfMissing('host_assignments', 'access_token_issued_at', 'TEXT')
+  addColumnIfMissing('host_assignments', 'access_token_expires_at', 'TEXT')
   getHostDb().run(sql.raw('CREATE INDEX IF NOT EXISTS host_assignments_assigned_email_idx ON host_assignments (assigned_email)'))
   getHostDb().run(sql.raw('CREATE INDEX IF NOT EXISTS host_assignments_status_updated_at_idx ON host_assignments (status, updated_at)'))
   getHostDb().run(sql.raw('CREATE UNIQUE INDEX IF NOT EXISTS host_assignments_worker_id_unique_idx ON host_assignments (worker_id)'))
@@ -224,6 +233,53 @@ export function markAssignmentCheckedIn(assignmentId: string, input: MarkAssignm
   return getAssignment(assignmentId)
 }
 
+export function issueAssignmentAccessToken(assignmentId: string, now: () => string = () => new Date().toISOString()): { assignment: HostAssignmentRow, accessToken: string } | null {
+  const at = now()
+  const accessToken = createAccessToken()
+  const result = getHostDb()
+    .update(schema.hostAssignments)
+    .set({
+      accessTokenHash: hashProvisionToken(accessToken),
+      accessTokenIssuedAt: at,
+      accessTokenExpiresAt: new Date(Date.parse(at) + DEFAULT_ACCESS_TOKEN_TTL_MS).toISOString(),
+      updatedAt: at,
+    })
+    .where(and(
+      eq(schema.hostAssignments.assignmentId, assignmentId),
+      eq(schema.hostAssignments.status, 'checked_in'),
+      isNull(schema.hostAssignments.revokedAt),
+      isNotNull(schema.hostAssignments.provisionTokenConsumedAt),
+      isNotNull(schema.hostAssignments.workerId),
+      isNotNull(schema.hostAssignments.checkedInAt),
+    ))
+    .run()
+  if (runChanges(result) !== 1)
+    return null
+  return { assignment: getAssignment(assignmentId)!, accessToken }
+}
+
+export function verifyAssignmentAccessToken(input: { assignmentId: string, token: string, workerId: string }, now: () => string = () => new Date().toISOString()): HostAssignmentRow | null {
+  const at = now()
+  const assignment = getHostDb()
+    .select()
+    .from(schema.hostAssignments)
+    .where(and(
+      eq(schema.hostAssignments.assignmentId, input.assignmentId),
+      eq(schema.hostAssignments.workerId, input.workerId),
+      isNull(schema.hostAssignments.revokedAt),
+      isNotNull(schema.hostAssignments.provisionTokenConsumedAt),
+      isNotNull(schema.hostAssignments.checkedInAt),
+    ))
+    .get()
+  if (!assignment?.accessTokenHash || !assignment.accessTokenExpiresAt)
+    return null
+  if (assignment.accessTokenExpiresAt <= at)
+    return null
+  if (!verifyProvisionTokenHash(input.token, assignment.accessTokenHash))
+    return null
+  return assignment
+}
+
 export function markAssignmentAccessReady(assignmentId: string, input: MarkAssignmentAccessReadyInput = {}): HostAssignmentRow | null {
   const at = input.accessReadyAt ?? new Date().toISOString()
   if (input.accessReadyAt)
@@ -298,6 +354,10 @@ function createProvisionToken(): string {
   return `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString('base64url')}`
 }
 
+function createAccessToken(): string {
+  return `${ACCESS_TOKEN_PREFIX}${randomBytes(ACCESS_TOKEN_BYTES).toString('base64url')}`
+}
+
 function hashProvisionToken(token: string): string {
   const salt = randomBytes(16).toString('base64url')
   const hash = scryptSync(token, salt, SCRYPT_KEY_LENGTH).toString('base64url')
@@ -327,6 +387,14 @@ function runChanges(result: unknown): number {
     return typeof changes === 'number' ? changes : 0
   }
   return 0
+}
+
+function addColumnIfMissing(tableName: string, columnName: string, ddl: string): void {
+  if (!sqliteHandle)
+    throw new Error('host sqlite handle is not initialized')
+  const columns = sqliteHandle.query<{ name: string }, []>(`PRAGMA table_info(${tableName})`).all()
+  if (!columns.some(column => column.name === columnName))
+    getHostDb().run(sql.raw(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${ddl}`))
 }
 
 function assertNoLiteralSecrets(value: unknown, context: string): void {
