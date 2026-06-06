@@ -24,7 +24,7 @@ import {
   runWorkerMigrations,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
-import { soulAppServiceEnv } from '@zonease/aiworker-worker-runtime'
+import { OFFICIAL_SOUL_APPS, soulAppServiceEnv } from '@zonease/aiworker-worker-runtime'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
@@ -2068,6 +2068,49 @@ describe('aiworker local CLI', () => {
 
     expect(builds).toBe(1)
     expect((JSON.parse(output) as { bootstrap: { status: string } }).bootstrap.status).toBe('pass')
+  })
+
+  it('uses packaged official apps without running the source Soul dist build', async () => {
+    const originalArgv = process.argv
+    const executablePath = path.join(root, 'bin', 'aiworker')
+    const officialAppsRoot = path.join(path.dirname(executablePath), 'official-apps')
+    mkdirSync(path.dirname(executablePath), { recursive: true })
+    writeFileSync(executablePath, '#!/usr/bin/env bun\n')
+    for (const definition of OFFICIAL_SOUL_APPS) {
+      const descriptorPath = path.join(officialAppsRoot, definition.id, 'dist', 'soul.descriptor.json')
+      mkdirSync(path.dirname(descriptorPath), { recursive: true })
+      writeFileSync(descriptorPath, JSON.stringify({
+        protocol: 'soul/v1',
+        identity: {
+          id: definition.id,
+          name: definition.id,
+          description: `${definition.id} packaged descriptor`,
+        },
+        engine: {},
+      }))
+    }
+    __setOfficialSoulDescriptorsReadyForTest(() => false)
+    __setOfficialSoulDistBuilderForTest(async () => {
+      throw new Error('source dist builder should not run for packaged official apps')
+    })
+
+    try {
+      process.argv = [originalArgv[0] ?? '/usr/bin/bun', executablePath]
+
+      expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    }
+    finally {
+      process.argv = originalArgv
+    }
+
+    const body = JSON.parse(output) as {
+      bootstrap: {
+        results: Array<{ descriptorPath: string }>
+        status: string
+      }
+    }
+    expect(body.bootstrap.status).toBe('pass')
+    expect(body.bootstrap.results.every(result => result.descriptorPath.startsWith(officialAppsRoot))).toBe(true)
   })
 
   it('discards legacy HR metadata during official app bootstrap', async () => {
