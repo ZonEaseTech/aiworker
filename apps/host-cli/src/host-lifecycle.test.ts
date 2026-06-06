@@ -101,6 +101,45 @@ describe('Host lifecycle', () => {
     }
   })
 
+  it('passes the Host websocket handler to foreground Bun.serve', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-foreground-websocket-'))
+    const webStaticDir = join(dir, 'web')
+    const manifestPath = join(dir, 'dev-host.json')
+    mkdirSync(webStaticDir, { recursive: true })
+    writeFileSync(join(webStaticDir, 'index.html'), '<!doctype html><div id="root">host daemon foreground websocket</div>')
+    const originalServe = Bun.serve
+    const serveCalls: Parameters<typeof Bun.serve>[] = []
+    const mutableBun = Bun as unknown as { serve: typeof Bun.serve }
+    mutableBun.serve = ((options: Parameters<typeof Bun.serve>[0]) => {
+      serveCalls.push([options])
+      return {
+        port: 19117,
+        stop() {},
+      } as ReturnType<typeof Bun.serve>
+    }) as typeof Bun.serve
+
+    const lifecycle = createHostLifecycle()
+    try {
+      await lifecycle.foreground({
+        dbPath: join(dir, 'host.db'),
+        host: '127.0.0.1',
+        manifestPath,
+        mode: 'prod',
+        port: 19117,
+        publicBaseUrl: 'http://127.0.0.1:19117',
+        webStaticDir,
+      })
+
+      expect(serveCalls[0]?.[0].websocket).toBeDefined()
+      expect(typeof serveCalls[0]?.[0].fetch).toBe('function')
+    }
+    finally {
+      mutableBun.serve = originalServe
+      await lifecycle.clean({ manifestPath })
+      rmSync(dir, { force: true, recursive: true })
+    }
+  })
+
   it('starts development Host daemon as the API service and Host Web in tmux', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-dev-lifecycle-'))
     const apiPort = reservePort()

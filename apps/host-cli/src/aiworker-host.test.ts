@@ -108,6 +108,9 @@ describe('aiworker-host control CLI', () => {
           async fetch() {
             return new Response('ok')
           },
+          websocket: {
+            message() {},
+          },
         }
       },
       bunServe(options) {
@@ -127,6 +130,8 @@ describe('aiworker-host control CLI', () => {
       },
     })
     expect(calls[1].type).toBe('serve')
+    expect(calls[1].options.websocket).toBeDefined()
+    expect(typeof calls[1].options.fetch).toBe('function')
     expect(calls[1].options.hostname).toBe('127.0.0.1')
     expect(calls[1].options.port).toBe(4321)
     expect(JSON.parse(output)).toEqual({
@@ -152,6 +157,9 @@ describe('aiworker-host control CLI', () => {
         return {
           async fetch() {
             return new Response('ok')
+          },
+          websocket: {
+            message() {},
           },
         }
       },
@@ -194,6 +202,9 @@ describe('aiworker-host control CLI', () => {
           async fetch() {
             return new Response('ok')
           },
+          websocket: {
+            message() {},
+          },
         }
       },
       bunServe(options) {
@@ -220,6 +231,7 @@ describe('aiworker-host control CLI', () => {
         hostname: '127.0.0.1',
         port: 4321,
         fetch: expect.any(Function),
+        websocket: expect.any(Object),
       },
     })
     expect(JSON.parse(output).publicBaseUrl).toBe('https://aiworker.zonease.org')

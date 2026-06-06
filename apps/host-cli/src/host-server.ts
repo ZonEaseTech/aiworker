@@ -1,18 +1,21 @@
 import type { AuthenticatedHostUser, AuthProvider, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
+import type { WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope } from '@zonease/aiworker-worker-control-protocol'
 import type { OidcClientConfig, OidcFetch, OidcLoginTransaction } from './host-oidc-client'
 import type { HostSessionPayload } from './host-session-cookie'
 import type { HostOptionsView, ProvisioningAdapterType, ProvisioningTargetMaturity } from './host-options'
 import type { ProvisioningDeliveryResult } from './provisioning-target-adapters'
 
-import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { extname, join, resolve, sep } from 'node:path'
 
 import {
+  createAccessRequestEnvelope,
   createAssignmentView,
   createStaticAuthProvider,
   createWorkerAccessRegistry,
+  mapWorkerAccessPath,
+  parseAccessResponseEnvelope,
   userCanOpenWorker,
   userIsHostAdmin,
 } from '@zonease/aiworker-host-control'
@@ -20,12 +23,17 @@ import {
   createAssignment,
   getAssignmentByWorkerId,
   initHostDb,
+  issueAssignmentAccessToken,
   listAssignments,
+  markAssignmentAccessReady,
   markAssignmentCheckedIn,
+  markAssignmentReady,
   runHostMigrations,
+  verifyAssignmentAccessToken,
   verifyAndConsumeProvisionToken,
 } from '@zonease/aiworker-storage-sqlite/host'
 import {
+  parseWorkerAccessFrame,
   parseWorkerCheckInRequest,
   parseWorkerCheckInResponse,
 } from '@zonease/aiworker-worker-control-protocol'
@@ -75,7 +83,13 @@ interface LegacyHostServerOptions extends HostServerBaseOptions {
 }
 
 export interface HostServer {
-  fetch: (request: Request) => Promise<Response>
+  fetch: (request: Request, server?: Bun.Server<WorkerAccessSocketData>) => Promise<Response>
+  websocket: Bun.WebSocketHandler<WorkerAccessSocketData>
+}
+
+interface WorkerAccessSocketData {
+  closing?: boolean
+  workerId?: string
 }
 
 interface CreateAssignmentRequest {
@@ -116,9 +130,111 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
     : authProvider
   const accessRegistry = options.accessRegistry ?? createWorkerAccessRegistry()
   const webStaticDir = options.webStaticDir ? normalizeStaticDir(options.webStaticDir) : null
+  const pending = new Map<string, {
+    reject: (error: Error) => void
+    resolve: (response: WorkerAccessResponseEnvelope) => void
+    timeout: ReturnType<typeof setTimeout>
+    ws: Bun.ServerWebSocket<WorkerAccessSocketData>
+  }>()
+  const normalizedHostBrowserBaseUrl = hostBrowserBaseUrl.replace(/\/+$/, '')
+
+  function sendSocketRequest(ws: Bun.ServerWebSocket<WorkerAccessSocketData>, envelope: WorkerAccessRequestEnvelope): Promise<WorkerAccessResponseEnvelope> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        if (pending.delete(envelope.id))
+          reject(new Error('worker access request timed out'))
+      }, 15000)
+      pending.set(envelope.id, { reject, resolve, timeout, ws })
+      ws.send(JSON.stringify(envelope))
+    })
+  }
+
+  function rejectPendingForSocket(ws: Bun.ServerWebSocket<WorkerAccessSocketData>, reason: string): void {
+    for (const [id, request] of pending) {
+      if (request.ws !== ws)
+        continue
+      clearTimeout(request.timeout)
+      pending.delete(id)
+      request.reject(new Error(reason))
+    }
+  }
+
+  async function handleWorkerAccessSocketMessage(ws: Bun.ServerWebSocket<WorkerAccessSocketData>, message: string | Buffer): Promise<void> {
+    const frame = parseWorkerAccessFrame(JSON.parse(String(message)))
+
+    if (frame.type === 'hello') {
+      const assignment = verifyAssignmentAccessToken({
+        assignmentId: frame.assignmentId,
+        token: frame.token,
+        workerId: frame.workerId,
+      })
+      if (!assignment) {
+        ws.close()
+        return
+      }
+
+      let readyAssignment = assignment
+      if (readyAssignment.status === 'checked_in') {
+        const accessReady = markAssignmentAccessReady(readyAssignment.assignmentId)
+        if (!accessReady) {
+          ws.close()
+          return
+        }
+        readyAssignment = accessReady
+      }
+      if (readyAssignment.status === 'access_ready') {
+        const ready = markAssignmentReady(readyAssignment.assignmentId, {
+          workbenchUrl: `${normalizedHostBrowserBaseUrl}/workers/${encodeURIComponent(frame.workerId)}`,
+        })
+        if (!ready) {
+          ws.close()
+          return
+        }
+      }
+
+      accessRegistry.register({
+        assignmentId: assignment.assignmentId,
+        close: () => {
+          if (ws.data.closing)
+            return
+          ws.data.closing = true
+          ws.close()
+        },
+        sendRequest: envelope => sendSocketRequest(ws, envelope),
+        workerId: frame.workerId,
+      })
+      ws.data.workerId = frame.workerId
+      return
+    }
+
+    if (frame.type === 'response') {
+      const request = pending.get(frame.id)
+      pending.delete(frame.id)
+      if (request) {
+        clearTimeout(request.timeout)
+        request.resolve(frame)
+      }
+      return
+    }
+
+    if (frame.type === 'close') {
+      const request = pending.get(frame.id)
+      pending.delete(frame.id)
+      if (request) {
+        clearTimeout(request.timeout)
+        request.reject(new Error(frame.reason ?? 'worker access request closed'))
+      }
+      return
+    }
+
+    if (frame.type === 'ping') {
+      ws.send(JSON.stringify({ type: 'pong', id: frame.id }))
+      return
+    }
+  }
 
   return {
-    async fetch(request) {
+    async fetch(request, server) {
       const url = new URL(request.url)
       const decodedPathname = decodePathname(url.pathname)
       if (!decodedPathname)
@@ -168,18 +284,34 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
       if (request.method === 'POST' && url.pathname === '/api/provision/check-in')
         return handleCheckIn(request)
 
-      if (request.method === 'GET' && url.pathname === '/api/provision/access')
-        return json({ error: { code: 'WORKER_ACCESS_UPGRADE_REQUIRED' } }, { status: 426 })
+      if (request.method === 'GET' && url.pathname === '/api/provision/access') {
+        if (!server)
+          return json({ error: { code: 'WORKER_ACCESS_UPGRADE_REQUIRED' } }, { status: 426 })
+        const upgraded = server.upgrade(request, { data: {} })
+        return upgraded ? new Response(null, { status: 101 }) : json({ error: { code: 'WORKER_ACCESS_UPGRADE_REQUIRED' } }, { status: 426 })
+      }
 
-      const workerMatch = /^\/workers\/([^/]+)$/.exec(url.pathname)
+      const workerMatch = /^\/workers\/([^/]+)(?:\/.*)?$/.exec(url.pathname)
       if (request.method === 'GET' && workerMatch) {
         const workerId = decodeURIComponent(workerMatch[1]!)
         if (options.sessionAuth && !readUserFromSessionCookie(request.headers, options.sessionAuth))
-          return redirectToLogin(`/workers/${encodeURIComponent(workerId)}`)
+          return redirectToLogin(`${url.pathname}${url.search}`)
         return handleWorkerRoute(request, effectiveAuthProvider, accessRegistry, workerId)
       }
 
       return json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
+    },
+    websocket: {
+      close(ws) {
+        rejectPendingForSocket(ws, 'worker access socket closed')
+        if (!ws.data.workerId)
+          return
+        ws.data.closing = true
+        accessRegistry.remove(ws.data.workerId)
+      },
+      message(ws, message) {
+        handleWorkerAccessSocketMessage(ws, message).catch(() => ws.close())
+      },
     },
   }
 }
@@ -467,10 +599,14 @@ async function handleCheckIn(request: Request): Promise<Response> {
   if (!checkedIn)
     return json({ error: { code: 'ASSIGNMENT_NOT_FOUND' } }, { status: 404 })
 
+  const issued = issueAssignmentAccessToken(checkedIn.assignmentId)
+  if (!issued)
+    return json({ error: { code: 'WORKER_ACCESS_TOKEN_NOT_ISSUED' } }, { status: 500 })
+
   const response = parseWorkerCheckInResponse({
     access: {
       mode: 'worker_access',
-      token: createAccessToken(),
+      token: issued.accessToken,
     },
     assignment: {
       assignedEmail: checkedIn.assignedEmail,
@@ -505,7 +641,23 @@ async function handleWorkerRoute(
   if (assignment.status !== 'ready' || !accessRegistry.has(workerId))
     return json({ error: { code: 'WORKER_ACCESS_NOT_READY' } }, { status: 503 })
 
-  return json({ routed: true, workerId })
+  const requestUrl = new URL(request.url)
+  let localPath: string
+  try {
+    localPath = mapWorkerAccessPath(`${requestUrl.pathname}${requestUrl.search}`, workerId)
+  }
+  catch {
+    return json({ error: { code: 'INVALID_WORKER_ACCESS_PATH' } }, { status: 400 })
+  }
+  const envelope = await createAccessRequestEnvelope(new Request(new URL(localPath, request.url), request))
+  const tunneled = await accessRegistry.sendRequest(workerId, envelope)
+  if (!tunneled)
+    return json({ error: { code: 'WORKER_ACCESS_NOT_READY' } }, { status: 503 })
+  const parsed = parseAccessResponseEnvelope(tunneled)
+  return new Response(parsed.bodyText, {
+    headers: sanitizeWorkerResponseHeaders(parsed.headers),
+    status: parsed.status,
+  })
 }
 
 function toAssignmentView(row: HostAssignmentRow) {
@@ -525,12 +677,16 @@ function toAssignmentView(row: HostAssignmentRow) {
   })
 }
 
-function createAccessToken(): string {
-  return `awt_${randomBytes(32).toString('base64url')}`
-}
-
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+function sanitizeWorkerResponseHeaders(source: Record<string, string>): Headers {
+  const headers = new Headers(source)
+  headers.delete('authorization')
+  headers.delete('proxy-authorization')
+  headers.delete('set-cookie')
+  return headers
 }
 
 function parseProvisioningTarget(value: unknown): ParsedProvisioningTarget | null {

@@ -494,16 +494,21 @@ describe('host server', () => {
     accessRegistry.register({
       assignmentId: created.assignment.assignmentId,
       close() {},
-      async sendRequest() {
-        throw new Error('sendRequest should not be called by the placeholder route')
-      },
+      sendRequest: async envelope => ({
+        type: 'response',
+        id: envelope.id,
+        status: 200,
+        headers: { 'content-type': 'text/plain', 'set-cookie': 'sid=worker' },
+        bodyText: `worker:${envelope.path}:${envelope.headers.authorization ?? 'no-auth'}`,
+      }),
       workerId: 'wkr_82',
     })
 
-    const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82', {
+    const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82/assets/app.js', {
       headers: {
         accept: 'text/html',
-        cookie: `aiworker_session=${sessionCookie({
+        authorization: 'Bearer employee',
+        cookie: `sid=employee; aiworker_session=${sessionCookie({
           email: 'bob@zonease.org',
           sub: 'usr_bob',
         })}`,
@@ -511,7 +516,53 @@ describe('host server', () => {
     }))
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ routed: true, workerId: 'wkr_82' })
+    expect(response.headers.get('set-cookie')).toBeNull()
+    expect(await response.text()).toBe('worker:/assets/app.js:no-auth')
+  })
+
+  it('rejects invalid signed-cookie worker access paths before forwarding', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    verifyAndConsumeProvisionToken(created.provisionToken)
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: '1.0.0',
+    })
+    markAssignmentAccessReady(created.assignment.assignmentId)
+    markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })
+    accessRegistry.register({
+      assignmentId: created.assignment.assignmentId,
+      close() {},
+      async sendRequest() {
+        throw new Error('sendRequest should not be called for invalid worker paths')
+      },
+      workerId: 'wkr_82',
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82/%2F..%2Fadmin', {
+      headers: {
+        cookie: `aiworker_session=${sessionCookie({
+          email: 'bob@zonease.org',
+          sub: 'usr_bob',
+        })}`,
+      },
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: { code: 'INVALID_WORKER_ACCESS_PATH' } })
   })
 
   it('returns 403 when a signed-cookie user opens a worker assigned to someone else', async () => {
@@ -1004,6 +1055,8 @@ describe('host server', () => {
       soulReleaseRef: 'soul_release_1',
       workerId: 'wkr_82',
     })
+    const listed = await json(await server.fetch(new Request('http://host/api/host/assignments')))
+    expect(JSON.stringify(listed)).not.toContain(receipt.access.token)
 
     const second = await server.fetch(new Request('http://host/api/provision/check-in', {
       body: JSON.stringify(checkInBody(created.provisionToken)),
@@ -1120,19 +1173,26 @@ describe('host server', () => {
     accessRegistry.register({
       assignmentId: created.assignment.assignmentId,
       close() {},
-      async sendRequest() {
-        throw new Error('sendRequest should not be called by the placeholder route')
-      },
+      sendRequest: async envelope => ({
+        type: 'response',
+        id: envelope.id,
+        status: 200,
+        headers: { 'content-type': 'text/plain', 'set-cookie': 'sid=worker' },
+        bodyText: `worker:${envelope.path}:${envelope.headers.authorization ?? 'no-auth'}`,
+      }),
       workerId: 'wkr_82',
     })
 
-    const response = await server.fetch(new Request('http://host/workers/wkr_82'))
+    const response = await server.fetch(new Request('http://host/workers/wkr_82/assets/app.js', {
+      headers: { authorization: 'Bearer employee', cookie: 'sid=employee' },
+    }))
 
     expect(response.status).toBe(200)
-    expect(await json(response)).toEqual({ routed: true, workerId: 'wkr_82' })
+    expect(response.headers.get('set-cookie')).toBeNull()
+    expect(await response.text()).toBe('worker:/assets/app.js:no-auth')
   })
 
-  it('returns upgrade required for worker access before websocket support exists', async () => {
+  it('returns upgrade required for worker access without a Bun websocket server', async () => {
     const server = await createHostServer({
       authUser: null,
       dbPath: dbPath(),
@@ -1143,6 +1203,80 @@ describe('host server', () => {
 
     expect(response.status).toBe(426)
     expect(await json(response)).toEqual({ error: { code: 'WORKER_ACCESS_UPGRADE_REQUIRED' } })
+  })
+
+  it('upgrades worker access websocket requests when Bun server is provided', async () => {
+    const upgrades: unknown[] = []
+    const server = await createHostServer({
+      authUser: null,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const bunServer = {
+      upgrade(request: Request, options: unknown) {
+        upgrades.push({ options, url: request.url })
+        return true
+      },
+    } as Bun.Server<{ workerId?: string }>
+
+    const response = await server.fetch(new Request('http://host/api/provision/access'), bunServer)
+
+    expect(response.status).toBe(101)
+    expect(upgrades).toHaveLength(1)
+  })
+
+  it('registers a websocket tunnel and forwards worker route requests through it', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    const checkInResponse = await json(await server.fetch(new Request('http://host/api/provision/check-in', {
+      body: JSON.stringify(checkInBody(created.provisionToken)),
+      method: 'POST',
+    })))
+    let closed = false
+    const ws = {
+      data: {},
+      close() {
+        closed = true
+      },
+      send(message: string) {
+        const frame = JSON.parse(message)
+        if (frame.type === 'request') {
+          queueMicrotask(() => {
+            server.websocket.message?.(ws as Bun.ServerWebSocket<{ workerId?: string }>, JSON.stringify({
+              type: 'response',
+              id: frame.id,
+              status: 200,
+              headers: { 'content-type': 'text/plain' },
+              bodyText: `from-worker:${frame.path}`,
+            }))
+          })
+        }
+        return 1
+      },
+    }
+
+    await server.websocket.message?.(ws as Bun.ServerWebSocket<{ workerId?: string }>, JSON.stringify({
+      type: 'hello',
+      assignmentId: created.assignment.assignmentId,
+      token: checkInResponse.access.token,
+      workerId: 'wkr_82',
+    }))
+
+    expect(closed).toBe(false)
+    expect(accessRegistry.has('wkr_82')).toBe(true)
+    const response = await server.fetch(new Request('http://host/workers/wkr_82/assets/app.js'))
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('from-worker:/assets/app.js')
   })
 })
 

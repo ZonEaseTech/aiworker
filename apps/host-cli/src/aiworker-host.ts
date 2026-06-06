@@ -508,9 +508,10 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
       })
       const bunServe = deps.bunServe ?? Bun.serve
       bunServe({
-        fetch: server.fetch,
+        fetch: (request, bunServer) => server.fetch(request, bunServer),
         hostname: options.host,
         port,
+        websocket: server.websocket,
       })
       printJson({
         host: options.host,

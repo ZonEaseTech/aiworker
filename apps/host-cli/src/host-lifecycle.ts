@@ -213,9 +213,10 @@ async function startHostProdForegroundLifecycle(input: HostLifecycleStartInput):
     webStaticDir,
   })
   const bunServer = Bun.serve({
-    fetch: server.fetch,
+    fetch: (request, bunServer) => server.fetch(request, bunServer),
     hostname: input.host,
     port: input.port,
+    websocket: server.websocket,
   })
   const actualPort = bunServer.port
   if (typeof actualPort !== 'number')
@@ -266,9 +267,10 @@ async function startHostDevForegroundLifecycle(input: HostLifecycleStartInput): 
     webBaseUrl: webUrl,
   })
   const bunServer = Bun.serve({
-    fetch: server.fetch,
+    fetch: (request, bunServer) => server.fetch(request, bunServer),
     hostname: input.host,
     port: input.port,
+    websocket: server.websocket,
   })
   const actualPort = bunServer.port
   if (typeof actualPort !== 'number')
