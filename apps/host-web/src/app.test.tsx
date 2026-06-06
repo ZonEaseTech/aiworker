@@ -74,7 +74,7 @@ const readyAssignment: HostAssignmentSummary = {
   soulReleaseRef: 'support@2026.06.01',
   status: 'ready',
   workerId: 'worker-mei',
-  workbenchUrl: 'https://worker.example.com/w/worker-mei',
+  workbenchUrl: 'http://127.0.0.1:9217',
 }
 
 function createApi(input: {
@@ -125,7 +125,7 @@ describe('host control plane', () => {
     expect(screen.getAllByText('Logto 未接入').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Worker Access Tunnel 未接入').length).toBeGreaterThan(0)
     expect(await screen.findByText('lin@example.com')).not.toBeNull()
-    expect(screen.getAllByText('Worker 已报到').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('连接中').length).toBeGreaterThan(0)
     expect(screen.queryByRole('link', { name: '打开 Worker' })).toBeNull()
     expect(container.querySelector('iframe')).toBeNull()
     expect(container.querySelector('micro-app')).toBeNull()
@@ -373,8 +373,24 @@ describe('host control plane', () => {
 
     render(<HostControlPlane api={api} />)
 
-    expect(await screen.findByText('可打开 Worker')).not.toBeNull()
+    expect(await screen.findByText('可访问')).not.toBeNull()
     const workerLink = screen.getByRole('link', { name: '打开 Worker' })
-    expect(workerLink.getAttribute('href')).toBe('https://worker.example.com/w/worker-mei')
+    expect(workerLink.getAttribute('href')).toBe('/workers/worker-mei')
+    expect(workerLink.getAttribute('href')).not.toContain('127.0.0.1')
+  })
+
+  it('shows tunnel connection states in plain product language', async () => {
+    const api = createApi({
+      listAssignments: vi.fn().mockResolvedValue([
+        { ...readyAssignment, assignmentId: 'asn_checked', status: 'checked_in', workerId: 'wkr_82', workbenchUrl: null },
+        { ...readyAssignment, assignmentId: 'asn_attention', status: 'needs_attention', workerId: 'wkr_83', workbenchUrl: null },
+      ]),
+    })
+
+    render(<HostControlPlane api={api} />)
+
+    expect(await screen.findByText('连接中')).not.toBeNull()
+    expect(screen.getByText('需处理')).not.toBeNull()
+    expect(screen.queryByRole('link', { name: '打开 Worker' })).toBeNull()
   })
 })

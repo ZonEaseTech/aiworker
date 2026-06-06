@@ -59,13 +59,12 @@ const navItems = ['AI Workers', 'Souls', 'Activity', 'Settings'] as const
 function statusLabel(status: AssignmentStatus | string) {
   switch (status) {
     case 'ready':
-      return '可打开 Worker'
+      return '可访问'
     case 'access_ready':
-      return '访问通道已就绪'
     case 'checked_in':
-      return 'Worker 已报到'
+      return '连接中'
     case 'provisioning':
-      return '等待 Worker check-in'
+      return '开通中'
     case 'needs_attention':
       return '需处理'
     case 'revoked':
@@ -349,7 +348,9 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                     </TableHeader>
                     <TableBody>
                       {assignments.map((assignment) => {
-                        const workerUrl = assignment.status === 'ready' ? assignment.workbenchUrl : null
+                        const workerUrl = assignment.status === 'ready' && assignment.workerId
+                          ? `/workers/${encodeURIComponent(assignment.workerId)}`
+                          : null
 
                         return (
                           <TableRow key={assignmentKey(assignment)}>
