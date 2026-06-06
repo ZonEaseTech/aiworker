@@ -23,7 +23,7 @@ import {
 } from '@zonease/aiworker-ui/components/empty'
 import { Input } from '@zonease/aiworker-ui/components/input'
 import { Label } from '@zonease/aiworker-ui/components/label'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createHostApiClient } from './host-api'
 
@@ -80,6 +80,8 @@ function assignmentKey(assignment: HostAssignmentSummary): string {
 
 export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
   const hostApi = useMemo(() => api ?? createHostApiClient(), [api])
+  const assignmentRequestIdRef = useRef(0)
+  const mountedRef = useRef(false)
   const [assignments, setAssignments] = useState<HostAssignmentSummary[]>([])
   const [formState, setFormState] = useState<AssignmentFormState>(emptyFormState)
   const [hasLoadedAssignments, setHasLoadedAssignments] = useState(false)
@@ -90,27 +92,45 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
   const [lastProvisionCommand, setLastProvisionCommand] = useState<null | string>(null)
 
   const refreshAssignments = useCallback(async () => {
-    setIsLoadingAssignments(true)
-    setListError(null)
+    const requestId = assignmentRequestIdRef.current + 1
+    assignmentRequestIdRef.current = requestId
+    if (mountedRef.current) {
+      setIsLoadingAssignments(true)
+      setListError(null)
+    }
+
+    const canApplyResult = () => mountedRef.current && assignmentRequestIdRef.current === requestId
+
     try {
-      setAssignments(await hostApi.listAssignments())
+      const nextAssignments = await hostApi.listAssignments()
+      if (canApplyResult())
+        setAssignments(nextAssignments)
     }
     catch (error) {
-      setListError(errorMessage(error))
+      if (canApplyResult())
+        setListError(errorMessage(error))
     }
     finally {
-      setHasLoadedAssignments(true)
-      setIsLoadingAssignments(false)
+      if (canApplyResult()) {
+        setHasLoadedAssignments(true)
+        setIsLoadingAssignments(false)
+      }
     }
   }, [hostApi])
 
   useEffect(() => {
+    mountedRef.current = true
     void refreshAssignments()
+    return () => {
+      mountedRef.current = false
+      assignmentRequestIdRef.current += 1
+    }
   }, [refreshAssignments])
 
   async function handleCreateAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setCreateError(null)
+    setLastProvisionCommand(null)
 
     const input = {
       assignedEmail: formState.assignedEmail.trim(),
@@ -121,15 +141,19 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
     setIsCreating(true)
     try {
       const created = await hostApi.createAssignment(input)
+      if (!mountedRef.current)
+        return
       setLastProvisionCommand(created.provisionCommand)
       setFormState(emptyFormState)
       await refreshAssignments()
     }
     catch (error) {
-      setCreateError(errorMessage(error))
+      if (mountedRef.current)
+        setCreateError(errorMessage(error))
     }
     finally {
-      setIsCreating(false)
+      if (mountedRef.current)
+        setIsCreating(false)
     }
   }
 
@@ -144,7 +168,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
 
       <Card data-slot="host-assignment-create">
         <CardHeader>
-          <CardTitle>创建 assignment</CardTitle>
+          <CardTitle>开通 AI Worker</CardTitle>
           <CardDescription>为员工绑定 aissh server 和 Soul release。</CardDescription>
         </CardHeader>
         <CardContent>
@@ -185,7 +209,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
               />
             </div>
             <Button type="submit" disabled={isCreating}>
-              {isCreating ? '创建中' : '创建 assignment'}
+              {isCreating ? '开通中' : '开通 AI Worker'}
             </Button>
           </form>
 
@@ -240,7 +264,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                 <Empty>
                   <EmptyHeader>
                     <EmptyTitle>暂无开通记录</EmptyTitle>
-                    <EmptyDescription>创建 assignment 后，这里会显示员工 Worker 开通状态。</EmptyDescription>
+                    <EmptyDescription>完成开通后，这里会显示员工 Worker 开通状态。</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               )

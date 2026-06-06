@@ -1,6 +1,6 @@
 import type { CreateHostAssignmentInput, HostApiClient, HostAssignmentSummary } from './host-api'
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { HostControlPlane } from './app'
@@ -33,6 +33,33 @@ function createApi(input: {
     createAssignment: input.createAssignment ?? vi.fn(),
     listAssignments: input.listAssignments,
   }
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return { promise, reject, resolve }
+}
+
+function fillCreateForm(input: CreateHostAssignmentInput) {
+  fireEvent.change(screen.getByLabelText('员工邮箱'), {
+    target: { value: input.assignedEmail },
+  })
+  fireEvent.change(screen.getByLabelText('aissh server'), {
+    target: { value: input.serverRef },
+  })
+  fireEvent.change(screen.getByLabelText('Soul release'), {
+    target: { value: input.soulReleaseRef },
+  })
+}
+
+function submitCreateForm() {
+  fireEvent.click(screen.getByRole('button', { name: '开通 AI Worker' }))
 }
 
 describe('host control plane', () => {
@@ -81,16 +108,12 @@ describe('host control plane', () => {
 
     render(<HostControlPlane api={api} />)
 
-    fireEvent.change(screen.getByLabelText('员工邮箱'), {
-      target: { value: 'mei@example.com' },
+    fillCreateForm({
+      assignedEmail: 'mei@example.com',
+      serverRef: 'aissh://server/ap-sg-03',
+      soulReleaseRef: 'freeform@2026.06.02',
     })
-    fireEvent.change(screen.getByLabelText('aissh server'), {
-      target: { value: 'aissh://server/ap-sg-03' },
-    })
-    fireEvent.change(screen.getByLabelText('Soul release'), {
-      target: { value: 'freeform@2026.06.02' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: '创建 assignment' }))
+    submitCreateForm()
 
     await waitFor(() => {
       expect(createAssignment).toHaveBeenCalledWith({
@@ -103,6 +126,99 @@ describe('host control plane', () => {
     expect(screen.getByText(/awp_secret/)).not.toBeNull()
     expect(screen.getByText('token 只显示一次')).not.toBeNull()
     expect(listAssignments).toHaveBeenCalledTimes(2)
+  })
+
+  it('clears the one-time provision command before a later create failure', async () => {
+    const createdAssignment: HostAssignmentSummary = {
+      assignedEmail: 'mei@example.com',
+      assignmentId: 'asn_new',
+      serverRef: 'aissh://server/ap-sg-03',
+      soulReleaseRef: 'freeform@2026.06.02',
+      status: 'provisioning',
+      workerId: null,
+      workbenchUrl: null,
+    }
+    const createAssignment = vi.fn()
+      .mockResolvedValueOnce({
+        assignment: createdAssignment,
+        provisionCommand: 'bun aiworker provision --token awp_secret',
+      })
+      .mockRejectedValueOnce(new Error('CREATE_FAILED'))
+    const listAssignments = vi.fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([createdAssignment])
+    const api = createApi({ createAssignment, listAssignments })
+
+    render(<HostControlPlane api={api} />)
+
+    fillCreateForm({
+      assignedEmail: 'mei@example.com',
+      serverRef: 'aissh://server/ap-sg-03',
+      soulReleaseRef: 'freeform@2026.06.02',
+    })
+    submitCreateForm()
+
+    expect(await screen.findByText(/awp_secret/)).not.toBeNull()
+
+    fillCreateForm({
+      assignedEmail: 'error@example.com',
+      serverRef: 'aissh://server/ap-sg-04',
+      soulReleaseRef: 'support@2026.06.03',
+    })
+    submitCreateForm()
+
+    expect(await screen.findByText(/CREATE_FAILED/)).not.toBeNull()
+    expect(screen.queryByText(/awp_secret/)).toBeNull()
+    expect(screen.queryByText('token 只显示一次')).toBeNull()
+  })
+
+  it('keeps refreshed assignments when an older list request resolves late', async () => {
+    const initialList = createDeferred<HostAssignmentSummary[]>()
+    const refreshedList = createDeferred<HostAssignmentSummary[]>()
+    const createdAssignment: HostAssignmentSummary = {
+      assignedEmail: 'mei@example.com',
+      assignmentId: 'asn_new',
+      serverRef: 'aissh://server/ap-sg-03',
+      soulReleaseRef: 'freeform@2026.06.02',
+      status: 'provisioning',
+      workerId: null,
+      workbenchUrl: null,
+    }
+    const createAssignment = vi.fn().mockResolvedValue({
+      assignment: createdAssignment,
+      provisionCommand: 'bun aiworker provision --token awp_secret',
+    })
+    const listAssignments = vi.fn()
+      .mockReturnValueOnce(initialList.promise)
+      .mockReturnValueOnce(refreshedList.promise)
+    const api = createApi({ createAssignment, listAssignments })
+
+    render(<HostControlPlane api={api} />)
+
+    fillCreateForm({
+      assignedEmail: 'mei@example.com',
+      serverRef: 'aissh://server/ap-sg-03',
+      soulReleaseRef: 'freeform@2026.06.02',
+    })
+    submitCreateForm()
+
+    await waitFor(() => {
+      expect(listAssignments).toHaveBeenCalledTimes(2)
+    })
+    await act(async () => {
+      refreshedList.resolve([createdAssignment])
+      await refreshedList.promise
+    })
+
+    expect(await screen.findByText('mei@example.com')).not.toBeNull()
+
+    await act(async () => {
+      initialList.resolve([])
+      await initialList.promise
+    })
+
+    expect(screen.getByText('mei@example.com')).not.toBeNull()
+    expect(screen.queryByText('暂无开通记录')).toBeNull()
   })
 
   it('shows API errors and can retry list loading', async () => {
