@@ -120,6 +120,9 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
   return {
     async fetch(request) {
       const url = new URL(request.url)
+      const decodedPathname = decodePathname(url.pathname)
+      if (!decodedPathname)
+        return json({ error: { code: 'INVALID_STATIC_PATH' } }, { status: 400 })
 
       if (request.method === 'GET' && url.pathname === '/auth/login')
         return handleAuthLogin(request, options.sessionAuth)
@@ -133,7 +136,7 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
       if (request.method === 'GET' && url.pathname === '/api/auth/me')
         return handleAuthMe(request, options.sessionAuth)
 
-      if (request.method === 'GET' && isHostBrowserRoute(url.pathname)) {
+      if (isHostBrowserMethod(request.method) && isHostBrowserRoute(decodedPathname)) {
         if (options.sessionAuth) {
           const user = readUserFromSessionCookie(request.headers, options.sessionAuth)
           if (!user)
@@ -306,6 +309,10 @@ function redirectToLogin(returnTo: string): Response {
     headers: { location: `/auth/login?returnTo=${encodeURIComponent(returnTo)}` },
     status: 302,
   })
+}
+
+function isHostBrowserMethod(method: string): boolean {
+  return method === 'GET' || method === 'HEAD'
 }
 
 function isHostBrowserRoute(pathname: string): boolean {

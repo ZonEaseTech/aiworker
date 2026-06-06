@@ -342,6 +342,71 @@ describe('host server', () => {
     expect(response.headers.get('location')).toBe('/auth/login?returnTo=%2Fhost')
   })
 
+  it('redirects encoded Host Web static shell paths to Logto login when session is missing', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+      webStaticDir: createHostWebDist(),
+    })
+
+    for (const path of ['/%68ost', '/ho%73t']) {
+      const response = await server.fetch(new Request(`http://localhost:54145${path}`, {
+        headers: { accept: 'text/html' },
+      }))
+
+      expect(response.status).toBe(302)
+      expect(response.headers.get('location')).toBe('/auth/login?returnTo=%2Fhost')
+      expect(await response.text()).not.toContain('host web shell')
+    }
+  })
+
+  it('redirects HEAD /host to Logto login when session is missing and Host Web static assets are configured', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+      webStaticDir: createHostWebDist(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/host', {
+      headers: { accept: 'text/html' },
+      method: 'HEAD',
+    }))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('/auth/login?returnTo=%2Fhost')
+    expect(await response.text()).toBe('')
+  })
+
+  it('serves HEAD /host without a body for signed-cookie Host admins', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+      webStaticDir: createHostWebDist(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/host', {
+      headers: {
+        accept: 'text/html',
+        cookie: `aiworker_session=${sessionCookie({
+          email: 'admin@zonease.org',
+          roles: ['host:admin'],
+          sub: 'usr_admin',
+        })}`,
+      },
+      method: 'HEAD',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('text/html')
+    expect(await response.text()).toBe('')
+  })
+
   it('serves /host for signed-cookie Host admins', async () => {
     const server = await createHostServer({
       dbPath: dbPath(),
