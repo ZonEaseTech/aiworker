@@ -436,6 +436,24 @@ describe('local daemon API', () => {
     expect('turns' in sessionBody).toBe(false)
   })
 
+  it('marks daemon PATCH session renames as user-owned titles', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'manual-rename-worker')
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    const patchRes = await target.request(`/api/sessions/${session.id}`, {
+      body: JSON.stringify({ title: 'Manual investigation title' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(patchRes.status).toBe(200)
+    const patchBody = await patchRes.json() as {
+      session: { metadataJson: Record<string, unknown>, title: string }
+    }
+    expect(patchBody.session.title).toBe('Manual investigation title')
+    expect(patchBody.session.metadataJson.titleSource).toBe('user')
+  })
+
   it('auto-names a session end-to-end when the daemon enables session auto-naming', async () => {
     const target = await app(undefined, undefined, undefined, undefined, true)
     const worker = await createFreeformWorker(target, 'autoname-worker')
