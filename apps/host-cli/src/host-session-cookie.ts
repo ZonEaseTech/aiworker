@@ -25,29 +25,39 @@ const forbiddenLogtoTokenKeys = new Set([
   'refreshToken',
 ])
 
+export function assertHostSessionSecret(secret: string): string {
+  const normalized = secret.trim()
+  if (normalized.length < 32)
+    throw new Error('Host session secret must be at least 32 non-whitespace characters')
+  return normalized
+}
+
 export function createSignedCookie<T extends { expiresAt: string }>(
   name: string,
   payload: T,
   options: SignedCookieOptions,
 ): string {
   assertNoLogtoTokens(payload)
+  const secret = assertHostSessionSecret(options.secret)
 
   const body = base64UrlEncode(JSON.stringify(payload))
-  const signature = sign(body, options.secret)
+  const signature = sign(name, body, secret)
   const value = `${body}.${signature}`
   return `${name}=${value}; ${sessionCookieAttributes(options)}`
 }
 
 export function readSignedCookie<T extends { expiresAt?: unknown }>(
+  name: string,
   value: string | null | undefined,
   options: { now?: () => Date, secret: string },
 ): T | null {
+  const secret = assertHostSessionSecret(options.secret)
   if (!value)
     return null
   const [body, signature, extra] = value.split('.')
   if (!body || !signature || extra)
     return null
-  if (!safeEqual(signature, sign(body, options.secret)))
+  if (!safeEqual(signature, sign(name, body, secret)))
     return null
 
   let parsed: unknown
@@ -116,8 +126,8 @@ export function clearCookieHeader(name: string, path: string, requestUrl: string
   })}`
 }
 
-function sign(body: string, secret: string): string {
-  return createHmac('sha256', secret).update(body).digest('base64url')
+function sign(name: string, body: string, secret: string): string {
+  return createHmac('sha256', secret).update(`${name.length}:${name}:${body}`).digest('base64url')
 }
 
 function safeEqual(left: string, right: string): boolean {

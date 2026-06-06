@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
 import {
+  assertHostSessionSecret,
   clearCookieHeader,
   createSignedCookie,
   parseCookieHeader,
@@ -9,7 +10,7 @@ import {
   type HostSessionPayload,
 } from './host-session-cookie'
 
-const secret = 'test-secret-with-enough-entropy'
+const secret = 'test-secret-with-enough-entropy-32'
 
 describe('host session signed cookies', () => {
   const payload: HostSessionPayload = {
@@ -39,8 +40,29 @@ describe('host session signed cookies', () => {
     expect(cookie).not.toContain('refresh_token')
     expect(cookie).not.toContain('id_token')
 
-    const value = parseCookieHeader(cookie).get('aiworker_session')!
-    expect(readSignedCookie<HostSessionPayload>(value, {
+    const value = cookieValueFromSetCookie(cookie)
+    expect(readSignedCookie<HostSessionPayload>('aiworker_session', value, {
+      now: () => new Date('2026-06-06T04:01:00.000Z'),
+      secret,
+    })).toEqual(payload)
+  })
+
+  it('binds signatures to the cookie name to prevent cross-purpose confusion', () => {
+    const cookie = createSignedCookie('aiworker_session', payload, {
+      maxAgeSeconds: 28800,
+      now: () => new Date('2026-06-06T04:00:00.000Z'),
+      path: '/',
+      requestUrl: 'https://aiworker.zonease.org/host',
+      sameSite: 'Lax',
+      secret,
+    })
+    const value = cookieValueFromSetCookie(cookie)
+
+    expect(readSignedCookie('aiworker_auth_txn', value, {
+      now: () => new Date('2026-06-06T04:01:00.000Z'),
+      secret,
+    })).toBeNull()
+    expect(readSignedCookie<HostSessionPayload>('aiworker_session', value, {
       now: () => new Date('2026-06-06T04:01:00.000Z'),
       secret,
     })).toEqual(payload)
@@ -55,17 +77,43 @@ describe('host session signed cookies', () => {
       sameSite: 'Lax',
       secret,
     })
-    const value = parseCookieHeader(cookie).get('aiworker_session')!
+    const value = cookieValueFromSetCookie(cookie)
     const tampered = `${value.slice(0, -1)}${value.endsWith('a') ? 'b' : 'a'}`
 
-    expect(readSignedCookie(tampered, {
+    expect(readSignedCookie('aiworker_session', tampered, {
       now: () => new Date('2026-06-06T04:01:00.000Z'),
       secret,
     })).toBeNull()
-    expect(readSignedCookie(value, {
+    expect(readSignedCookie('aiworker_session', value, {
       now: () => new Date('2026-06-06T13:00:00.000Z'),
       secret,
     })).toBeNull()
+  })
+
+  it('fails closed for blank or short session secrets', () => {
+    expect(assertHostSessionSecret(secret)).toBe(secret)
+    expect(() => assertHostSessionSecret('')).toThrow('Host session secret')
+    expect(() => assertHostSessionSecret('   ')).toThrow('Host session secret')
+    expect(() => assertHostSessionSecret('short-secret')).toThrow('Host session secret')
+
+    expect(() => createSignedCookie('aiworker_session', payload, {
+      maxAgeSeconds: 28800,
+      path: '/',
+      requestUrl: 'https://aiworker.zonease.org/host',
+      sameSite: 'Lax',
+      secret: 'short-secret',
+    })).toThrow('Host session secret')
+
+    const cookie = createSignedCookie('aiworker_session', payload, {
+      maxAgeSeconds: 28800,
+      path: '/',
+      requestUrl: 'https://aiworker.zonease.org/host',
+      sameSite: 'Lax',
+      secret,
+    })
+    expect(() => readSignedCookie('aiworker_session', cookieValueFromSetCookie(cookie), {
+      secret: '   ',
+    })).toThrow('Host session secret')
   })
 
   it('refuses to sign payloads containing Logto tokens', () => {
@@ -80,6 +128,14 @@ describe('host session signed cookies', () => {
       sameSite: 'Lax',
       secret,
     })).toThrow('Logto token')
+  })
+
+  it('parses real request Cookie headers', () => {
+    const cookies = parseCookieHeader('a=1; aiworker_session=value.with.signature; theme=dark')
+
+    expect(cookies.get('a')).toBe('1')
+    expect(cookies.get('aiworker_session')).toBe('value.with.signature')
+    expect(cookies.get('theme')).toBe('dark')
   })
 
   it('sets Secure only for https and clears cookies explicitly', () => {
@@ -99,3 +155,11 @@ describe('host session signed cookies', () => {
       .toContain('aiworker_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax; Secure')
   })
 })
+
+function cookieValueFromSetCookie(setCookie: string, name = 'aiworker_session'): string {
+  const [pair] = setCookie.split(';', 1)
+  const prefix = `${name}=`
+  if (!pair?.startsWith(prefix))
+    throw new Error(`Expected Set-Cookie to start with ${prefix}`)
+  return pair.slice(prefix.length)
+}
