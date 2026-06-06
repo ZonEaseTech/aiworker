@@ -8,12 +8,13 @@ import {
   discoverLogtoOidcIssuerConfiguration,
   exchangeLogtoHostedLoginCode,
   mapLogtoHostedLoginClaims,
-  mapLogtoZoneaseClaims,
+  mapLogtoHostClaims,
   type OidcClientConfig,
 } from './host-oidc-client'
 
 describe('host oidc client', () => {
   const config: OidcClientConfig = {
+    allowedEmailDomains: ['zonease.org'],
     clientId: 'aiworker-local-client',
     clientSecret: 'client-secret',
     endpoint: 'https://auth.zonease.org/',
@@ -155,52 +156,52 @@ describe('host oidc client', () => {
     expect(second.authorizationEndpoint).toBe('https://second.zonease.test/auth')
   })
 
-  it('maps only verified zonease.org claims to a Host session payload', () => {
-    expect(mapLogtoZoneaseClaims({
-      email: ' User@Zonease.org ',
+  it('maps only verified claims from configured email domains to a Host session payload', () => {
+    expect(mapLogtoHostClaims({
+      email: ' User@Example.com ',
       email_verified: true,
       roles: [' host:admin ', ''],
       sub: ' usr_user ',
-    })).toEqual({
-      email: 'user@zonease.org',
-      roles: ['host:admin'],
+    }, ['example.com'])).toEqual({
+      email: 'user@example.com',
+      roles: [],
       sub: 'usr_user',
     })
 
     expect(mapLogtoHostedLoginClaims({
-      email: ' Alice@Zonease.org ',
+      email: ' Alice@Example.com ',
       email_verified: true,
       roles: [' host:admin ', '', '  ', 42],
       sub: ' usr_alice ',
-    }, '2026-06-06T12:00:00.000Z')).toEqual({
-      email: 'alice@zonease.org',
+    }, '2026-06-06T12:00:00.000Z', ['example.com'])).toEqual({
+      email: 'alice@example.com',
       expiresAt: '2026-06-06T12:00:00.000Z',
-      roles: ['host:admin'],
+      roles: [],
       sub: 'usr_alice',
     })
 
     expect(mapLogtoHostedLoginClaims({
-      email: 'bob@zonease.org',
+      email: 'bob@example.com',
       email_verified: true,
       sub: 'usr_bob',
-    }, '2026-06-06T12:00:00.000Z')).toEqual({
-      email: 'bob@zonease.org',
+    }, '2026-06-06T12:00:00.000Z', ['example.com'])).toEqual({
+      email: 'bob@example.com',
       expiresAt: '2026-06-06T12:00:00.000Z',
       roles: [],
       sub: 'usr_bob',
     })
 
     expect(() => mapLogtoHostedLoginClaims({
-      email: 'alice@example.com',
+      email: 'alice@other.example',
       email_verified: true,
       sub: 'usr_alice',
-    }, '2026-06-06T12:00:00.000Z')).toThrow('zonease.org')
+    }, '2026-06-06T12:00:00.000Z', ['example.com'])).toThrow('allowed email domain')
 
     expect(() => mapLogtoHostedLoginClaims({
-      email: 'alice@zonease.org',
+      email: 'alice@example.com',
       email_verified: false,
       sub: 'usr_alice',
-    }, '2026-06-06T12:00:00.000Z')).toThrow('verified email')
+    }, '2026-06-06T12:00:00.000Z', ['example.com'])).toThrow('verified email')
   })
 
   it('exchanges an authorization code through discovered token and JWKS endpoints without returning Logto tokens', async () => {
@@ -217,7 +218,7 @@ describe('host oidc client', () => {
       expect(result).toEqual({
         email: 'alice@zonease.org',
         expiresAt: '2026-06-06T12:00:00.000Z',
-        roles: ['host:admin'],
+        roles: [],
         sub: 'usr_alice',
       })
       expect(JSON.stringify(result)).not.toContain('logto-access-token')
@@ -265,6 +266,37 @@ describe('host oidc client', () => {
       expect(message).toContain('authorization code expired')
       expect(message).not.toContain('access_token')
       expect(message).not.toContain('secret-token-value')
+    }
+    finally {
+      fixture.server.stop(true)
+    }
+  })
+
+  it('labels token request transport failures without leaking callback secrets', async () => {
+    const fixture = await createOidcFixture()
+    try {
+      let message = ''
+      try {
+        await exchangeLogtoHostedLoginCode(fixture.config, {
+          code: 'auth-code-with-sensitive-context',
+          codeVerifier: 'code-verifier',
+          fetch: async (input, init) => {
+            const pathname = new URL(String(input)).pathname
+            if (pathname === '/discovered/token')
+              throw new Error('request timed out code=auth-code-with-sensitive-context client_secret=client-secret')
+            return fixture.fetch(input, init)
+          },
+          nonce: 'nonce-123',
+        })
+      }
+      catch (error) {
+        message = error instanceof Error ? error.message : String(error)
+      }
+
+      expect(message).toContain('Logto token request failed')
+      expect(message).toContain('request timed out')
+      expect(message).not.toContain('auth-code-with-sensitive-context')
+      expect(message).not.toContain('client-secret')
     }
     finally {
       fixture.server.stop(true)
@@ -385,6 +417,7 @@ async function createOidcFixture(options: {
 
   return {
     config: {
+      allowedEmailDomains: ['zonease.org'],
       clientId: 'aiworker-local-client',
       clientSecret: 'client-secret',
       endpoint: `${origin}/`,

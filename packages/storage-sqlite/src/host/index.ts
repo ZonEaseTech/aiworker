@@ -83,10 +83,24 @@ export function runHostMigrations() {
   getHostDb().run(sql.raw('CREATE INDEX IF NOT EXISTS host_assignments_assigned_email_idx ON host_assignments (assigned_email)'))
   getHostDb().run(sql.raw('CREATE INDEX IF NOT EXISTS host_assignments_status_updated_at_idx ON host_assignments (status, updated_at)'))
   getHostDb().run(sql.raw('CREATE UNIQUE INDEX IF NOT EXISTS host_assignments_worker_id_unique_idx ON host_assignments (worker_id)'))
+  getHostDb().run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS host_user_authorizations (
+      email TEXT NOT NULL,
+      permission TEXT NOT NULL,
+      source TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `))
+  getHostDb().run(sql.raw('CREATE UNIQUE INDEX IF NOT EXISTS host_user_authorizations_email_permission_unique_idx ON host_user_authorizations (email, permission)'))
+  getHostDb().run(sql.raw('CREATE INDEX IF NOT EXISTS host_user_authorizations_permission_email_idx ON host_user_authorizations (permission, email)'))
 }
 
 export type HostAssignmentStatus = typeof schema.hostAssignments.$inferSelect['status']
 export type HostAssignmentRow = typeof schema.hostAssignments.$inferSelect
+export type HostUserAuthorizationRow = typeof schema.hostUserAuthorizations.$inferSelect
+export type HostUserPermission = HostUserAuthorizationRow['permission']
+export type HostUserAuthorizationSource = HostUserAuthorizationRow['source']
 
 export interface CreateAssignmentInput {
   assignedEmail: string
@@ -118,6 +132,99 @@ interface MarkAssignmentAccessReadyInput {
 
 interface MarkAssignmentReadyInput {
   workbenchUrl: string
+}
+
+interface BootstrapHostAdminEmailsOptions {
+  now?: () => string
+}
+
+interface UpsertHostUserAuthorizationInput {
+  email: string
+  permission: HostUserPermission
+  source: HostUserAuthorizationSource
+  now?: () => string
+}
+
+export function bootstrapHostAdminEmails(emails: string[], options: BootstrapHostAdminEmailsOptions = {}): HostUserAuthorizationRow[] {
+  const seen = new Set<string>()
+  for (const email of emails) {
+    const normalized = normalizeEmail(email)
+    if (!normalized || seen.has(normalized))
+      continue
+    seen.add(normalized)
+    upsertHostUserAuthorization({
+      email: normalized,
+      permission: 'host:admin',
+      source: 'bootstrap',
+      ...(options.now ? { now: options.now } : {}),
+    })
+  }
+  return listHostUserAuthorizations()
+}
+
+export function upsertHostUserAuthorization(input: UpsertHostUserAuthorizationInput): HostUserAuthorizationRow {
+  const at = readNow(input.now)
+  const email = normalizeEmail(input.email)
+  if (!email)
+    throw new Error('Host authorization requires an email')
+  assertNoLiteralSecrets(email, 'host_user_authorizations.email')
+  assertNoLiteralSecrets(input.permission, 'host_user_authorizations.permission')
+  assertNoLiteralSecrets(input.source, 'host_user_authorizations.source')
+
+  const existing = getHostDb()
+    .select()
+    .from(schema.hostUserAuthorizations)
+    .where(and(
+      eq(schema.hostUserAuthorizations.email, email),
+      eq(schema.hostUserAuthorizations.permission, input.permission),
+    ))
+    .get()
+
+  if (existing) {
+    getHostDb()
+      .update(schema.hostUserAuthorizations)
+      .set({ source: input.source, updatedAt: at })
+      .where(and(
+        eq(schema.hostUserAuthorizations.email, email),
+        eq(schema.hostUserAuthorizations.permission, input.permission),
+      ))
+      .run()
+  }
+  else {
+    getHostDb().insert(schema.hostUserAuthorizations).values({
+      createdAt: at,
+      email,
+      permission: input.permission,
+      source: input.source,
+      updatedAt: at,
+    }).run()
+  }
+
+  return getHostUserAuthorization(email, input.permission)!
+}
+
+export function getHostUserAuthorization(email: string, permission: HostUserPermission): HostUserAuthorizationRow | null {
+  return getHostDb()
+    .select()
+    .from(schema.hostUserAuthorizations)
+    .where(and(
+      eq(schema.hostUserAuthorizations.email, normalizeEmail(email)),
+      eq(schema.hostUserAuthorizations.permission, permission),
+    ))
+    .get() ?? null
+}
+
+export function userHasHostPermission(email: string, permission: HostUserPermission): boolean {
+  return getHostUserAuthorization(email, permission) !== null
+}
+
+export function listHostUserAuthorizations(limit = 200): HostUserAuthorizationRow[] {
+  return getHostDb()
+    .select()
+    .from(schema.hostUserAuthorizations)
+    .orderBy(schema.hostUserAuthorizations.email, schema.hostUserAuthorizations.permission)
+    .limit(limit)
+    .all()
 }
 
 export function createAssignment(input: CreateAssignmentInput): { assignment: HostAssignmentRow, provisionToken: string } {

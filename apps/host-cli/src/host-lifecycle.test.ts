@@ -118,7 +118,9 @@ describe('Host lifecycle', () => {
         port,
         publicBaseUrl: baseUrl,
         sessionAuth: {
+          bootstrapAdminEmails: ['admin@zonease.org'],
           oidc: {
+            allowedEmailDomains: ['zonease.org'],
             clientId: 'logto-client-id',
             clientSecret: 'literal-client-secret-value',
             endpoint: 'https://auth.zonease.org/',
@@ -161,7 +163,9 @@ describe('Host lifecycle', () => {
         port,
         publicBaseUrl: baseUrl,
         sessionAuth: {
+          bootstrapAdminEmails: ['admin@zonease.org'],
           oidc: {
+            allowedEmailDomains: ['zonease.org'],
             clientId: 'logto-client-id',
             clientSecret: 'literal-client-secret-value',
             endpoint: 'https://auth.zonease.org/',
@@ -415,6 +419,8 @@ function reservePort(): number {
 
 const logtoSessionEnvKeys = [
   'AIWORKER_HOST_SESSION_SECRET',
+  'AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS',
+  'AIWORKER_HOST_BOOTSTRAP_ADMINS',
   'LOGTO_CLIENT_ID',
   'LOGTO_CLIENT_SECRET',
   'LOGTO_ENDPOINT',

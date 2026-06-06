@@ -21,11 +21,11 @@ describe('logto auth adapter', () => {
       roles: [' host:admin ', 42, null, '', '  ', 'employee'],
       sub: ' usr_user ',
       workerId: 'wkr_not_a_permission',
-    })
+    }, ['zonease.org'])
 
     expect(user).toEqual({
       email: 'user@zonease.org',
-      roles: ['host:admin', 'employee'],
+      roles: [],
       subject: 'usr_user',
     })
     expect(user).not.toHaveProperty('workerId')
@@ -36,7 +36,7 @@ describe('logto auth adapter', () => {
       email: 'user@example.com',
       email_verified: true,
       sub: 'usr_user',
-    })).toThrow('zonease.org')
+    }, ['zonease.org'])).toThrow('allowed email domain')
   })
 
   it('rejects unverified email claims', () => {
@@ -44,20 +44,20 @@ describe('logto auth adapter', () => {
       email: 'alice@example.com',
       email_verified: false,
       sub: 'usr_alice',
-    })).toThrow('verified email')
+    }, ['example.com'])).toThrow('verified email')
   })
 
   it('rejects missing subject or email claims', () => {
     expect(() => mapLogtoClaimsToUser({
       email: 'alice@example.com',
       email_verified: true,
-    })).toThrow('subject')
+    }, ['example.com'])).toThrow('subject')
 
     expect(() => mapLogtoClaimsToUser({
       email: '',
       email_verified: true,
       sub: 'usr_alice',
-    })).toThrow('email')
+    }, ['example.com'])).toThrow('email')
   })
 
   it('authenticates a JWT against the discovery jwks_uri instead of a hand-built JWKS URL', async () => {
@@ -93,6 +93,7 @@ describe('logto auth adapter', () => {
     try {
       const issuer = `http://${jwksServer.hostname}:${jwksServer.port}/tenant/oidc`
       const provider = createLogtoAuthProvider({
+        allowedEmailDomains: ['zonease.org'],
         audience: 'host-cli',
         issuer,
       })
@@ -133,7 +134,7 @@ describe('logto auth adapter', () => {
       expect(await provider.authenticateRequest({ headers: new Headers() })).toBeNull()
       expect(await provider.authenticateRequest({ headers: new Headers({ Authorization: `Bearer ${token}` }) })).toEqual({
         email: 'user@zonease.org',
-        roles: ['host:admin'],
+        roles: [],
         subject: 'usr_user',
       })
       expect(await provider.authenticateRequest({ headers: new Headers({ Authorization: 'Bearer not-a-jwt' }) })).toBeNull()
@@ -182,6 +183,7 @@ describe('logto auth adapter', () => {
     try {
       const issuer = `http://${jwksServer.hostname}:${jwksServer.port}/`
       const provider = createLogtoAuthProvider({
+        allowedEmailDomains: ['zonease.org'],
         audience: 'host-cli',
         issuer,
       })
@@ -231,6 +233,7 @@ describe('logto auth adapter', () => {
     try {
       const issuer = `http://${jwksServer.hostname}:${jwksServer.port}/retry/oidc`
       const provider = createLogtoAuthProvider({
+        allowedEmailDomains: ['zonease.org'],
         audience: 'host-cli',
         fetch: async () => {
           discoveryAttempts += 1

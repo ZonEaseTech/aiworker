@@ -36,8 +36,19 @@ function readNonEmptyEnvValue(env: Record<string, string | undefined>, name: str
   return value ? value : undefined
 }
 
-const logtoSessionEnvKeys = [
+function readDelimitedEnvValues(env: Record<string, string | undefined>, name: string): string[] {
+  const value = readNonEmptyEnvValue(env, name)
+  if (!value)
+    return []
+  return Array.from(new Set(value
+    .split(',')
+    .map(item => item.trim().toLowerCase().replace(/^@+/, ''))
+    .filter(Boolean)))
+}
+
+const logtoSessionRequiredEnvKeys = [
   'AIWORKER_HOST_SESSION_SECRET',
+  'AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS',
   'LOGTO_CLIENT_ID',
   'LOGTO_CLIENT_SECRET',
   'LOGTO_ENDPOINT',
@@ -45,21 +56,24 @@ const logtoSessionEnvKeys = [
 ] as const
 
 function buildSessionAuthFromEnv(env: Record<string, string | undefined>, redirectBaseUrl: string) {
-  const hasAnySessionEnv = logtoSessionEnvKeys.some(key => env[key] !== undefined)
+  const hasAnySessionEnv = logtoSessionRequiredEnvKeys.some(key => env[key] !== undefined)
   if (!hasAnySessionEnv)
     return undefined
 
-  const missingKeys = logtoSessionEnvKeys.filter(key => !readNonEmptyEnvValue(env, key))
+  const missingKeys = logtoSessionRequiredEnvKeys.filter(key => !readNonEmptyEnvValue(env, key))
   if (missingKeys.length > 0)
     throw new Error(`Missing required Logto env: ${missingKeys.join(', ')}`)
 
   const sessionSecret = assertHostSessionSecret(readNonEmptyEnvValue(env, 'AIWORKER_HOST_SESSION_SECRET')!)
+  const allowedEmailDomains = readDelimitedEnvValues(env, 'AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS')
   const clientId = readNonEmptyEnvValue(env, 'LOGTO_CLIENT_ID')
   const clientSecret = readNonEmptyEnvValue(env, 'LOGTO_CLIENT_SECRET')
   const endpoint = readNonEmptyEnvValue(env, 'LOGTO_ENDPOINT')
   const issuer = readNonEmptyEnvValue(env, 'LOGTO_ISSUER')
   return {
+    bootstrapAdminEmails: readDelimitedEnvValues(env, 'AIWORKER_HOST_BOOTSTRAP_ADMINS'),
     oidc: {
+      allowedEmailDomains,
       clientId: clientId!,
       clientSecret: clientSecret!,
       endpoint: endpoint!,

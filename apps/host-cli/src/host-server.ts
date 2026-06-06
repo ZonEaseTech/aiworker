@@ -20,6 +20,7 @@ import {
   userIsHostAdmin,
 } from '@zonease/aiworker-host-control'
 import {
+  bootstrapHostAdminEmails,
   createAssignment,
   getAssignmentByWorkerId,
   initHostDb,
@@ -29,6 +30,7 @@ import {
   markAssignmentCheckedIn,
   markAssignmentReady,
   runHostMigrations,
+  userHasHostPermission,
   verifyAssignmentAccessToken,
   verifyAndConsumeProvisionToken,
 } from '@zonease/aiworker-storage-sqlite/host'
@@ -53,6 +55,7 @@ import {
 import { deliverProvisioningTarget } from './provisioning-target-adapters'
 
 interface HostSessionAuthOptions {
+  bootstrapAdminEmails?: string[]
   fetch?: OidcFetch
   now?: () => Date
   oidc: OidcClientConfig
@@ -133,6 +136,11 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
   activeHostDbPath = dbPath
   initHostDb(dbPath)
   runHostMigrations()
+  if (options.sessionAuth?.bootstrapAdminEmails?.length) {
+    bootstrapHostAdminEmails(options.sessionAuth.bootstrapAdminEmails, {
+      now: () => (options.sessionAuth!.now?.() ?? new Date()).toISOString(),
+    })
+  }
 
   const hostControlBaseUrl = options.hostControlBaseUrl ?? ('publicBaseUrl' in options ? options.publicBaseUrl : undefined)
   if (!hostControlBaseUrl)
@@ -405,7 +413,11 @@ async function handleAuthCallback(request: Request, sessionAuth: HostSessionAuth
       ...(sessionAuth.now ? { now: sessionAuth.now } : {}),
     })
   }
-  catch {
+  catch (error) {
+    console.warn(JSON.stringify({
+      event: 'host_auth_callback_failed',
+      reason: safeAuthFailureMessage(error),
+    }))
     return json({ error: { code: 'AUTH_CALLBACK_FAILED' } }, { status: 403 })
   }
 
@@ -461,7 +473,7 @@ function readUserFromSessionCookie(headers: Headers, sessionAuth: HostSessionAut
 
   return {
     email: session.email,
-    roles: session.roles,
+    roles: userHasHostPermission(session.email, 'host:admin') ? ['host:admin'] : [],
     subject: session.sub,
   }
 }
@@ -519,6 +531,16 @@ function isOidcLoginTransaction(value: OidcLoginTransaction & { expiresAt: strin
     && value.returnTo.length > 0
     && typeof value.state === 'string'
     && value.state.length > 0
+}
+
+function safeAuthFailureMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message
+    .replace(/\b(?:access_token|id_token|refresh_token|client_secret|code)\b\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
+    .replace(/\b(?:access_token|id_token|refresh_token|client_secret)\b/gi, '[redacted]')
+    .replace(/[A-Za-z0-9._~+/-]{32,}/g, '[redacted]')
+    .trim()
+    .slice(0, 240)
 }
 
 async function handleAssignments(
@@ -684,7 +706,7 @@ async function handleWorkerRoute(
 
   const assignmentView = toAssignmentView(assignment)
   const readyAuthView = createAssignmentView({ ...assignmentView, status: 'ready' })
-  if (!userCanOpenWorker(user, readyAuthView))
+  if (!userIsHostAdmin(user) && !userCanOpenWorker(user, readyAuthView))
     return json({ error: { code: 'FORBIDDEN' } }, { status: 403 })
 
   // Until a Worker access connection is registered, the employee URL is not ready and Host must not pretend it is. aissh success and check-in are not enough.

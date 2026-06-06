@@ -52,6 +52,8 @@ describe('aiworker-host control CLI', () => {
 
   const hostSessionEnvKeys = [
     'AIWORKER_HOST_SESSION_SECRET',
+    'AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS',
+    'AIWORKER_HOST_BOOTSTRAP_ADMINS',
     'LOGTO_CLIENT_ID',
     'LOGTO_CLIENT_SECRET',
     'LOGTO_ENDPOINT',
@@ -86,6 +88,8 @@ describe('aiworker-host control CLI', () => {
   }
 
   const completeLogtoEnv = {
+    AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS: 'zonease.org',
+    AIWORKER_HOST_BOOTSTRAP_ADMINS: 'ben@zonease.org',
     AIWORKER_HOST_SESSION_SECRET: 'literal-session-secret-value-1234567890',
     LOGTO_CLIENT_ID: 'logto-client-id',
     LOGTO_CLIENT_SECRET: 'literal-client-secret-value',
@@ -94,6 +98,7 @@ describe('aiworker-host control CLI', () => {
   } as const
 
   const partialLogtoEnv = {
+    AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS: completeLogtoEnv.AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS,
     AIWORKER_HOST_SESSION_SECRET: completeLogtoEnv.AIWORKER_HOST_SESSION_SECRET,
     LOGTO_CLIENT_ID: completeLogtoEnv.LOGTO_CLIENT_ID,
     LOGTO_ENDPOINT: completeLogtoEnv.LOGTO_ENDPOINT,
@@ -377,7 +382,9 @@ describe('aiworker-host control CLI', () => {
 
       expect(code).toBe(0)
       expect(calls[0].options.sessionAuth).toEqual({
+        bootstrapAdminEmails: ['ben@zonease.org'],
         oidc: {
+          allowedEmailDomains: ['zonease.org'],
           clientId: 'logto-client-id',
           clientSecret: 'literal-client-secret-value',
           endpoint: 'https://auth.zonease.org/',
@@ -386,6 +393,82 @@ describe('aiworker-host control CLI', () => {
         },
         sessionSecret: 'literal-session-secret-value-1234567890',
       })
+    })
+  })
+
+  it('normalizes allowed email domains and bootstrap admins from Logto env', async () => {
+    await withHostSessionEnv({
+      ...completeLogtoEnv,
+      AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS: ' @Zonease.org, Example.com, zonease.org ',
+      AIWORKER_HOST_BOOTSTRAP_ADMINS: ' Ben@Zonease.org, ben@zonease.org, Ops@Example.com ',
+    }, async () => {
+      const calls: any[] = []
+      const code = await runHostCli([
+        'serve',
+        '--db',
+        '/tmp/aiworker-host.db',
+        '--browser-base-url',
+        'https://host.zonease.app/',
+        '--host',
+        '127.0.0.1',
+        '--port',
+        '4321',
+      ], {
+        async serverFactory(options) {
+          calls.push({ type: 'factory', options })
+          return {
+            async fetch() {
+              return new Response('ok')
+            },
+            websocket: {
+              message() {},
+            },
+          }
+        },
+        bunServe(options) {
+          calls.push({ type: 'serve', options })
+          return {} as ReturnType<typeof Bun.serve>
+        },
+      })
+
+      expect(code).toBe(0)
+      expect(calls[0].options.sessionAuth.bootstrapAdminEmails).toEqual(['ben@zonease.org', 'ops@example.com'])
+      expect(calls[0].options.sessionAuth.oidc.allowedEmailDomains).toEqual(['zonease.org', 'example.com'])
+    })
+  })
+
+  it('requires allowed email domains when Logto session auth is configured', async () => {
+    await withHostSessionEnv({
+      ...completeLogtoEnv,
+      AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS: '',
+    }, async () => {
+      const calls: any[] = []
+      const code = await runHostCli([
+        'serve',
+        '--db',
+        '/tmp/aiworker-host.db',
+      ], {
+        async serverFactory(options) {
+          calls.push({ type: 'factory', options })
+          return {
+            async fetch() {
+              return new Response('ok')
+            },
+            websocket: {
+              message() {},
+            },
+          }
+        },
+        bunServe(options) {
+          calls.push({ type: 'serve', options })
+          return {} as ReturnType<typeof Bun.serve>
+        },
+      })
+
+      expect(code).toBe(1)
+      expect(calls).toEqual([])
+      expect(errorOutput.trim()).toBe('Missing required Logto env: AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS')
+      expectNoLogtoValuesInOutput(`${output}\n${errorOutput}`)
     })
   })
 
@@ -703,7 +786,9 @@ describe('aiworker-host control CLI', () => {
       expect(input.hostBrowserBaseUrl).toBe('https://host.zonease.app')
       expect(input.hostControlBaseUrl).toBe('https://control.zonease.app')
       expect(input.sessionAuth).toEqual({
+        bootstrapAdminEmails: ['ben@zonease.org'],
         oidc: {
+          allowedEmailDomains: ['zonease.org'],
           clientId: 'logto-client-id',
           clientSecret: 'literal-client-secret-value',
           endpoint: 'https://auth.zonease.org/',
@@ -1003,7 +1088,9 @@ describe('aiworker-host control CLI', () => {
       const input = calls[0]!.input
       expect(input.devAdminEmail).toBeUndefined()
       expect(input.sessionAuth).toEqual({
+        bootstrapAdminEmails: ['ben@zonease.org'],
         oidc: {
+          allowedEmailDomains: ['zonease.org'],
           clientId: 'logto-client-id',
           clientSecret: 'literal-client-secret-value',
           endpoint: 'https://auth.zonease.org/',

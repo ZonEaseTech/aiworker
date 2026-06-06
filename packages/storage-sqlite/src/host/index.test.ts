@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import {
+  bootstrapHostAdminEmails,
   closeHostDb,
   createAssignment,
   getAssignmentByWorkerId,
@@ -13,11 +14,13 @@ import {
   initHostDb,
   issueAssignmentAccessToken,
   listAssignments,
+  listHostUserAuthorizations,
   markAssignmentAccessReady,
   markAssignmentCheckedIn,
   markAssignmentReady,
   revokeAssignment,
   runHostMigrations,
+  userHasHostPermission,
   verifyAssignmentAccessToken,
   verifyAndConsumeProvisionToken,
   hostAssignments,
@@ -51,6 +54,32 @@ describe('host sqlite assignment storage', () => {
     expect(created.assignment.status).toBe('provisioning')
     expect(created.provisionToken).toMatch(/^awp_/)
     expect(JSON.stringify(listAssignments())).not.toContain(created.provisionToken)
+  })
+
+  it('bootstraps Host admin authorization from normalized email addresses', () => {
+    bootstrapHostAdminEmails([' Admin@Zonease.org ', 'admin@zonease.org', 'ops@example.com'], {
+      now: () => '2026-06-06T00:00:00.000Z',
+    })
+
+    expect(userHasHostPermission('admin@zonease.org', 'host:admin')).toBe(true)
+    expect(userHasHostPermission('ADMIN@ZONEASE.ORG', 'host:admin')).toBe(true)
+    expect(userHasHostPermission('employee@zonease.org', 'host:admin')).toBe(false)
+    expect(listHostUserAuthorizations()).toEqual([
+      {
+        createdAt: '2026-06-06T00:00:00.000Z',
+        email: 'admin@zonease.org',
+        permission: 'host:admin',
+        source: 'bootstrap',
+        updatedAt: '2026-06-06T00:00:00.000Z',
+      },
+      {
+        createdAt: '2026-06-06T00:00:00.000Z',
+        email: 'ops@example.com',
+        permission: 'host:admin',
+        source: 'bootstrap',
+        updatedAt: '2026-06-06T00:00:00.000Z',
+      },
+    ])
   })
 
   it('stores provisioning target metadata while preserving legacy server_ref', () => {

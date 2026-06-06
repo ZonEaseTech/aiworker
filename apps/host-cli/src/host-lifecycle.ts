@@ -43,6 +43,7 @@ export interface HostLifecycleStartInput {
 }
 
 export interface HostLifecycleSessionAuthOptions {
+  bootstrapAdminEmails?: string[]
   fetch?: OidcFetch
   now?: () => Date
   oidc: OidcClientConfig
@@ -80,6 +81,7 @@ export interface HostLifecycle {
 
 const modulePath = fileURLToPath(import.meta.url)
 const repoRoot = resolve(dirname(modulePath), '..', '..', '..')
+const DEFAULT_HOST_DEV_ADMIN_EMAIL = 'admin@example.com'
 let activeForegroundServer: ReturnType<typeof Bun.serve> | null = null
 
 export function createHostLifecycle(): HostLifecycle {
@@ -123,7 +125,7 @@ async function startHostDevLifecycle(input: HostLifecycleStartInput): Promise<Re
     AIWORKER_HOST_API_URL: normalizePublicBaseUrl(input.publicBaseUrl ?? `http://${input.host}:${input.port}`),
     AIWORKER_HOST_API_PORT: String(input.port),
     AIWORKER_HOST_DB: input.dbPath,
-    AIWORKER_HOST_DEV_ADMIN_EMAIL: input.devAdminEmail ?? process.env.AIWORKER_HOST_DEV_ADMIN_EMAIL ?? 'admin@zonease.org',
+    AIWORKER_HOST_DEV_ADMIN_EMAIL: input.devAdminEmail ?? process.env.AIWORKER_HOST_DEV_ADMIN_EMAIL ?? DEFAULT_HOST_DEV_ADMIN_EMAIL,
     ...(input.manifestPath ? { AIWORKER_HOST_MANIFEST: input.manifestPath } : {}),
     ...(input.hostBrowserBaseUrl ? { AIWORKER_HOST_BROWSER_BASE_URL: input.hostBrowserBaseUrl } : {}),
     ...(input.hostControlBaseUrl ? { AIWORKER_HOST_CONTROL_BASE_URL: input.hostControlBaseUrl } : {}),
@@ -513,6 +515,8 @@ function hostSessionAuthEnv(sessionAuth: HostLifecycleSessionAuthOptions | undef
     return {}
 
   return {
+    AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS: sessionAuth.oidc.allowedEmailDomains.join(','),
+    ...(sessionAuth.bootstrapAdminEmails?.length ? { AIWORKER_HOST_BOOTSTRAP_ADMINS: sessionAuth.bootstrapAdminEmails.join(',') } : {}),
     AIWORKER_HOST_SESSION_SECRET: sessionAuth.sessionSecret,
     LOGTO_CLIENT_ID: sessionAuth.oidc.clientId,
     LOGTO_CLIENT_SECRET: sessionAuth.oidc.clientSecret,

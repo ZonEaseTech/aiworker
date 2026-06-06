@@ -4,7 +4,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 import {
   discoverLogtoOidcIssuerConfiguration,
-  mapLogtoZoneaseClaims,
+  mapLogtoHostClaims,
   type OidcFetch,
 } from './host-oidc-client'
 
@@ -18,6 +18,7 @@ export interface LogtoClaims {
 
 export interface LogtoAuthOptions {
   audience: string
+  allowedEmailDomains: string[]
   fetch?: OidcFetch
   issuer: string
 }
@@ -31,8 +32,8 @@ export function extractBearerToken(headers: Headers): string | null {
   return match?.[1] ?? null
 }
 
-export function mapLogtoClaimsToUser(claims: LogtoClaims): AuthenticatedHostUser {
-  const identity = mapLogtoZoneaseClaims(claims)
+export function mapLogtoClaimsToUser(claims: LogtoClaims, allowedEmailDomains: string[]): AuthenticatedHostUser {
+  const identity = mapLogtoHostClaims(claims, allowedEmailDomains)
 
   return {
     email: identity.email,
@@ -55,7 +56,7 @@ export function createLogtoAuthProvider(options: LogtoAuthOptions): AuthProvider
           audience: options.audience,
           issuer: options.issuer,
         })
-        return mapLogtoClaimsToUser(payload as LogtoClaims)
+        return mapLogtoClaimsToUser(payload as LogtoClaims, options.allowedEmailDomains)
       }
       catch {
         return null

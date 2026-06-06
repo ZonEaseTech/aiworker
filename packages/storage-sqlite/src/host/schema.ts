@@ -31,3 +31,14 @@ export const hostAssignments = sqliteTable('host_assignments', {
   statusUpdatedAtIdx: index('host_assignments_status_updated_at_idx').on(table.status, table.updatedAt),
   workerIdUniqueIdx: uniqueIndex('host_assignments_worker_id_unique_idx').on(table.workerId),
 }))
+
+export const hostUserAuthorizations = sqliteTable('host_user_authorizations', {
+  email: text('email').notNull(),
+  permission: text('permission', { enum: ['host:admin'] }).notNull(),
+  source: text('source', { enum: ['bootstrap', 'manual'] }).notNull(),
+  createdAt: text('created_at').notNull().$defaultFn(nowIso),
+  updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+}, table => ({
+  emailPermissionUniqueIdx: uniqueIndex('host_user_authorizations_email_permission_unique_idx').on(table.email, table.permission),
+  permissionEmailIdx: index('host_user_authorizations_permission_email_idx').on(table.permission, table.email),
+}))

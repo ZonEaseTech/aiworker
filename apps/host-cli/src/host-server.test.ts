@@ -89,11 +89,13 @@ describe('host server', () => {
   }
 
   function sessionAuth(input: {
+    bootstrapAdminEmails?: string[]
     fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>
     now?: () => Date
     oidc?: OidcClientConfig
   } = {}) {
     return {
+      bootstrapAdminEmails: input.bootstrapAdminEmails ?? ['admin@zonease.org'],
       fetch: input.fetch ?? (async () => Response.json({
         authorization_endpoint: 'https://auth.zonease.org/oidc/auth',
         jwks_uri: 'https://auth.zonease.org/oidc/jwks',
@@ -101,6 +103,7 @@ describe('host server', () => {
       })),
       now: input.now,
       oidc: input.oidc ?? {
+        allowedEmailDomains: ['zonease.org'],
         clientId: 'client-id',
         clientSecret: 'client-secret',
         endpoint: 'https://auth.zonease.org/',
@@ -210,6 +213,7 @@ describe('host server', () => {
           })
         },
         oidc: {
+          allowedEmailDomains: ['zonease.org'],
           clientId: 'client-id',
           clientSecret: 'client-secret',
           endpoint: 'https://auth.zonease.org/',
@@ -280,11 +284,55 @@ describe('host server', () => {
       })).toEqual({
         email: 'bob@zonease.org',
         expiresAt: '2026-06-06T12:00:00.000Z',
-        roles: ['host:admin'],
+        roles: [],
         sub: 'usr_bob',
       })
     }
     finally {
+      fixture.server.stop(true)
+    }
+  })
+
+  it('logs a redacted reason when Logto callback code exchange fails', async () => {
+    const originalWarn = console.warn
+    const warnings: string[] = []
+    console.warn = (...values: unknown[]) => {
+      warnings.push(values.map(value => String(value)).join(' '))
+    }
+    const fixture = await createOidcFixture({
+      tokenBody: {
+        error: 'invalid_grant',
+        error_description: 'authorization code expired client_secret=client-secret code=auth-code-with-sensitive-context',
+      },
+      tokenStatus: 400,
+    })
+    try {
+      const server = await createHostServer({
+        dbPath: dbPath(),
+        hostBrowserBaseUrl: 'http://localhost:54145',
+        hostControlBaseUrl: 'http://localhost:54145',
+        sessionAuth: sessionAuth({
+          fetch: fixture.fetch,
+          oidc: fixture.config,
+        }),
+      })
+
+      const response = await server.fetch(new Request('http://localhost:54145/auth/callback?code=auth-code-with-sensitive-context&state=state-123', {
+        headers: {
+          cookie: `aiworker_auth_txn=${transactionCookie()}`,
+        },
+      }))
+
+      expect(response.status).toBe(403)
+      expect(await response.json()).toEqual({ error: { code: 'AUTH_CALLBACK_FAILED' } })
+      expect(warnings.length).toBe(1)
+      expect(warnings[0]).toContain('host_auth_callback_failed')
+      expect(warnings[0]).toContain('invalid_grant')
+      expect(warnings[0]).not.toContain('client-secret')
+      expect(warnings[0]).not.toContain('auth-code-with-sensitive-context')
+    }
+    finally {
+      console.warn = originalWarn
       fixture.server.stop(true)
     }
   })
@@ -366,10 +414,33 @@ describe('host server', () => {
     expect(await response.json()).toEqual({
       user: {
         email: 'bob@zonease.org',
-        roles: ['host:admin'],
+        roles: [],
         subject: 'usr_bob',
       },
     })
+  })
+
+  it('does not trust signed-cookie roles for Host admin authorization', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/host', {
+      headers: {
+        accept: 'text/html',
+        cookie: `aiworker_session=${sessionCookie({
+          email: 'eve@zonease.org',
+          roles: ['host:admin'],
+          sub: 'usr_eve',
+        })}`,
+      },
+    }))
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: { code: 'FORBIDDEN' } })
   })
 
   it('treats signed sessions with malformed roles as unauthenticated for browser Host routes', async () => {
@@ -1678,7 +1749,10 @@ interface OidcFixture {
   server: ReturnType<typeof Bun.serve>
 }
 
-async function createOidcFixture(): Promise<OidcFixture> {
+async function createOidcFixture(options: {
+  tokenBody?: unknown
+  tokenStatus?: number
+} = {}): Promise<OidcFixture> {
   const { privateKey, publicKey } = await generateKeyPair('RS256')
   const publicJwk = await exportJWK(publicKey)
   const server = Bun.serve({
@@ -1700,6 +1774,9 @@ async function createOidcFixture(): Promise<OidcFixture> {
       }
 
       if (url.pathname === '/discovered/token') {
+        if (options.tokenStatus)
+          return Response.json(options.tokenBody ?? { error: 'invalid_grant' }, { status: options.tokenStatus })
+
         const idToken = await new SignJWT({
           email: 'bob@zonease.org',
           email_verified: true,
@@ -1729,6 +1806,7 @@ async function createOidcFixture(): Promise<OidcFixture> {
 
   return {
     config: {
+      allowedEmailDomains: ['zonease.org'],
       clientId: 'client-id',
       clientSecret: 'client-secret',
       endpoint: `${origin}/`,

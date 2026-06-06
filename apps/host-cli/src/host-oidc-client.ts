@@ -5,6 +5,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { HostSessionPayload } from './host-session-cookie'
 
 export interface OidcClientConfig {
+  allowedEmailDomains: string[]
   clientId: string
   clientSecret: string
   endpoint: string
@@ -102,21 +103,34 @@ export async function exchangeLogtoHostedLoginCode(
   },
 ): Promise<HostSessionPayload> {
   const fetchFn = input.fetch ?? fetch
-  const discovery = await discoverLogtoOidcConfiguration(config, { fetch: fetchFn })
-  const response = await fetchFn(discovery.tokenEndpoint, {
-    body: new URLSearchParams({
-      client_id: config.clientId,
-      code: input.code,
-      code_verifier: input.codeVerifier,
-      grant_type: 'authorization_code',
-      redirect_uri: config.redirectUri,
-    }),
-    headers: {
-      authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-    method: 'POST',
-  })
+  let discovery: OidcDiscoveryMetadata
+  try {
+    discovery = await discoverLogtoOidcConfiguration(config, { fetch: fetchFn })
+  }
+  catch (error) {
+    throw new Error(`Logto discovery failed: ${safeOidcFailureMessage(error)}`)
+  }
+
+  let response: Response
+  try {
+    response = await fetchFn(discovery.tokenEndpoint, {
+      body: new URLSearchParams({
+        client_id: config.clientId,
+        code: input.code,
+        code_verifier: input.codeVerifier,
+        grant_type: 'authorization_code',
+        redirect_uri: config.redirectUri,
+      }),
+      headers: {
+        authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      method: 'POST',
+    })
+  }
+  catch (error) {
+    throw new Error(`Logto token request failed: ${safeOidcFailureMessage(error)}`)
+  }
 
   if (!response.ok)
     throw new Error(await tokenExchangeErrorMessage(response))
@@ -127,17 +141,24 @@ export async function exchangeLogtoHostedLoginCode(
     throw new Error('Logto token response is missing id_token')
 
   const jwks = createRemoteJWKSet(new URL(discovery.jwksUri))
-  const { payload } = await jwtVerify(body.id_token, jwks, {
-    audience: config.clientId,
-    issuer: normalizedIssuer(config.issuer),
-  })
+  let payload: Record<string, unknown>
+  try {
+    const verified = await jwtVerify(body.id_token, jwks, {
+      audience: config.clientId,
+      issuer: normalizedIssuer(config.issuer),
+    })
+    payload = verified.payload as Record<string, unknown>
+  }
+  catch (error) {
+    throw new Error(`Logto ID token verification failed: ${safeOidcFailureMessage(error)}`)
+  }
 
   if (payload.nonce !== input.nonce)
     throw new Error('Logto ID token nonce mismatch')
 
   const expiresAt = new Date((input.now?.() ?? new Date()).getTime() + 8 * 60 * 60 * 1000).toISOString()
 
-  return mapLogtoHostedLoginClaims(payload as Record<string, unknown>, expiresAt)
+  return mapLogtoHostedLoginClaims(payload as Record<string, unknown>, expiresAt, config.allowedEmailDomains)
 }
 
 export async function exchangeAuthorizationCode(
@@ -153,8 +174,12 @@ export async function exchangeAuthorizationCode(
   return exchangeLogtoHostedLoginCode(config, input)
 }
 
-export function mapLogtoHostedLoginClaims(claims: Record<string, unknown>, expiresAt: string): HostSessionPayload {
-  const identity = mapLogtoZoneaseClaims(claims)
+export function mapLogtoHostedLoginClaims(
+  claims: Record<string, unknown>,
+  expiresAt: string,
+  allowedEmailDomains: string[],
+): HostSessionPayload {
+  const identity = mapLogtoHostClaims(claims, allowedEmailDomains)
 
   return {
     ...identity,
@@ -162,7 +187,7 @@ export function mapLogtoHostedLoginClaims(claims: Record<string, unknown>, expir
   }
 }
 
-export function mapLogtoZoneaseClaims(claims: Record<string, unknown>): LogtoHostIdentity {
+export function mapLogtoHostClaims(claims: Record<string, unknown>, allowedEmailDomains: string[]): LogtoHostIdentity {
   if (typeof claims.sub !== 'string' || claims.sub.trim().length === 0)
     throw new Error('Logto token is missing a subject')
 
@@ -174,19 +199,25 @@ export function mapLogtoZoneaseClaims(claims: Record<string, unknown>): LogtoHos
 
   const email = claims.email.trim().toLowerCase()
 
-  if (!email.endsWith('@zonease.org'))
-    throw new Error('Logto token email must belong to zonease.org')
+  if (!emailBelongsToAllowedDomain(email, allowedEmailDomains))
+    throw new Error('Logto token email must belong to an allowed email domain')
 
   return {
     email,
-    roles: Array.isArray(claims.roles)
-      ? claims.roles
-          .filter((role): role is string => typeof role === 'string')
-          .map(role => role.trim())
-          .filter(Boolean)
-      : [],
+    roles: [],
     sub: claims.sub.trim(),
   }
+}
+
+function emailBelongsToAllowedDomain(email: string, allowedEmailDomains: string[]): boolean {
+  const at = email.lastIndexOf('@')
+  if (at <= 0 || at === email.length - 1)
+    return false
+  const emailDomain = email.slice(at + 1)
+  const allowedDomains = allowedEmailDomains
+    .map(domain => domain.trim().toLowerCase().replace(/^@+/, ''))
+    .filter(Boolean)
+  return allowedDomains.includes(emailDomain)
 }
 
 function buildAuthorizationRedirectFromEndpoint(
@@ -316,11 +347,21 @@ function sanitizeOAuthErrorField(value: unknown): string | null {
     return null
 
   const sanitized = value
-    .replace(/\b(?:access_token|id_token|refresh_token|client_secret)\b\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
+    .replace(/\b(?:access_token|id_token|refresh_token|client_secret|code)\b\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
     .replace(/\b(?:access_token|id_token|refresh_token|client_secret)\b/gi, '[redacted]')
     .replace(/[A-Za-z0-9._~+/-]{32,}/g, '[redacted]')
     .trim()
     .slice(0, 160)
 
   return sanitized.length > 0 ? sanitized : null
+}
+
+function safeOidcFailureMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message
+    .replace(/\b(?:access_token|id_token|refresh_token|client_secret|code)\b\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
+    .replace(/\b(?:access_token|id_token|refresh_token|client_secret)\b/gi, '[redacted]')
+    .replace(/[A-Za-z0-9._~+/-]{32,}/g, '[redacted]')
+    .trim()
+    .slice(0, 240)
 }
