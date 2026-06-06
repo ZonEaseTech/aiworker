@@ -85,6 +85,13 @@ describe('e2e soul sampling static contracts', () => {
       .toBe('分诊一条 PromptPay 已扣款但 SaleOrder 未结账的商家工单, 需要升级 issue。')
   })
 
+  it('keeps Product Manager asset citations out of temporary projection paths', () => {
+    const agents = readFileSync('souls/product-manager/engine/workspace/AGENTS.md', 'utf8')
+
+    expect(agents).toContain('不要输出投影工作区绝对路径')
+    expect(agents).toContain('knowledge/product-playbook.md')
+  })
+
   it('classifies sampling findings by remediation owner', () => {
     expect(classifyFinding('AGENTS.md 选路不稳, 领域边界和资产索引不清')).toBe('agents')
     expect(classifyFinding('SKILL.md 缺步骤、缺约束、触发描述不清、自检不足')).toBe('skill')
