@@ -1,5 +1,6 @@
 import type { AuthenticatedHostUser, AuthProvider, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
+import type { HostOptionsView } from './host-options'
 
 import { existsSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
@@ -25,13 +26,16 @@ import {
   parseWorkerCheckInRequest,
   parseWorkerCheckInResponse,
 } from '@zonease/aiworker-worker-control-protocol'
+import { buildHostOptions } from './host-options'
 
 export interface HostServerOptions {
   accessRegistry?: WorkerAccessRegistry
   authProvider?: AuthProvider
   authUser?: AuthenticatedHostUser | null
   dbPath: string
+  optionsProvider?: () => Promise<HostOptionsView>
   publicBaseUrl: string
+  webBaseUrl?: string
 }
 
 export interface HostServer {
@@ -64,10 +68,13 @@ export async function createHostServer(options: HostServerOptions): Promise<Host
       const url = new URL(request.url)
 
       if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/host'))
-        return text('AIWorker Host')
+        return devLanding(options.publicBaseUrl, options.webBaseUrl ?? 'http://127.0.0.1:5050')
 
       if (url.pathname === '/api/host/assignments')
         return handleAssignments(request, authProvider, options.publicBaseUrl)
+
+      if (request.method === 'GET' && url.pathname === '/api/host/options')
+        return handleOptions(request, authProvider, options.optionsProvider ?? buildHostOptions)
 
       if (request.method === 'POST' && url.pathname === '/api/provision/check-in')
         return handleCheckIn(request)
@@ -115,11 +122,24 @@ async function handleAssignments(
     serverRef: body.serverRef,
     soulReleaseRef: body.soulReleaseRef,
   })
+  const provisionCommand = buildProvisionCommand(publicBaseUrl, created.provisionToken)
   return json({
+    aisshCommand: buildAisshCommand(created.assignment.serverRef, created.assignment.assignedEmail, provisionCommand),
     assignment: toAssignmentView(created.assignment),
-    provisionCommand: buildProvisionCommand(publicBaseUrl, created.provisionToken),
+    provisionCommand,
     provisionToken: created.provisionToken,
   }, { status: 201 })
+}
+
+async function handleOptions(
+  request: Request,
+  authProvider: AuthProvider,
+  optionsProvider: () => Promise<HostOptionsView>,
+): Promise<Response> {
+  const user = await authProvider.authenticateRequest({ headers: request.headers })
+  if (!user || !userIsHostAdmin(user))
+    return json({ error: { code: 'FORBIDDEN' } }, { status: 403 })
+  return json(await optionsProvider())
 }
 
 async function handleCheckIn(request: Request): Promise<Response> {
@@ -204,6 +224,10 @@ function buildProvisionCommand(publicBaseUrl: string, provisionToken: string): s
   return `bun apps/worker-cli/src/aiworker.ts provision --host ${shellQuote(publicBaseUrl)} --token ${shellQuote(provisionToken)}`
 }
 
+function buildAisshCommand(serverRef: string, assignedEmail: string, provisionCommand: string): string {
+  return `aissh exec ${shellQuote(serverRef)} ${shellQuote(provisionCommand)} --reason=${shellQuote(`Provision AIWorker for ${assignedEmail}`)}`
+}
+
 function shellQuote(value: string): string {
   return /^[A-Za-z0-9_/:=.,@%+-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
 }
@@ -228,4 +252,14 @@ function json(value: unknown, init: ResponseInit = {}): Response {
 
 function text(value: string, init: ResponseInit = {}): Response {
   return new Response(value, init)
+}
+
+function devLanding(publicBaseUrl: string, webBaseUrl: string): Response {
+  const normalizedWebBaseUrl = webBaseUrl.replace(/\/+$/, '')
+  return text([
+    'AIWorker Host API is running.',
+    `Host Web: ${normalizedWebBaseUrl}/host`,
+    `Host API: ${publicBaseUrl}`,
+    'Endpoints: /api/host/options, /api/host/assignments, /api/provision/check-in',
+  ].join('\n'))
 }

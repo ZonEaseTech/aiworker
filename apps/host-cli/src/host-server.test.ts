@@ -172,6 +172,52 @@ describe('host server', () => {
     expect(allowed.status).toBe(200)
   })
 
+  it('returns a dev landing that points developers to the Host Web URL', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      publicBaseUrl: 'http://127.0.0.1:9117',
+      webBaseUrl: 'http://127.0.0.1:5050',
+    })
+
+    const response = await server.fetch(new Request('http://host/'))
+    const body = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(body).toContain('Host API is running')
+    expect(body).toContain('http://127.0.0.1:5050/host')
+    expect(body).toContain('/api/host/options')
+  })
+
+  it('returns Host options for Web and CLI without credentials', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      optionsProvider: async () => ({
+        access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
+        auth: { mode: 'dev-static', status: 'deferred-logto' },
+        servers: [{ id: 'srv-1', name: 'aiwork', source: 'aissh' }],
+        soulReleases: [{
+          descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
+          id: 'aiworker-freeform',
+          name: 'AIWorker Freeform',
+          releaseRef: 'aiworker-freeform@dev',
+          source: 'official',
+        }],
+      }),
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })
+
+    const response = await server.fetch(new Request('http://host/api/host/options'))
+    const body = await json(response)
+
+    expect(response.status).toBe(200)
+    expect(body.servers[0].id).toBe('srv-1')
+    expect(body.soulReleases[0].releaseRef).toBe('aiworker-freeform@dev')
+    expect(JSON.stringify(body)).not.toContain('token')
+    expect(JSON.stringify(body)).not.toContain('secret')
+  })
+
   it('rejects assignment creation before storage when assignedEmail is not an email', async () => {
     const server = await createHostServer({
       authUser: adminUser,
@@ -189,6 +235,27 @@ describe('host server', () => {
     }))
 
     expect(response.status).toBe(400)
+  })
+
+  it('includes an aissh exec command in assignment creation', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      publicBaseUrl: 'https://aiworker.zonease.org',
+    })
+
+    const created = await json(await server.fetch(new Request('http://host/api/host/assignments', {
+      body: JSON.stringify({
+        assignedEmail: 'bob@example.com',
+        serverRef: 'srv-1',
+        soulReleaseRef: 'aiworker-freeform@dev',
+      }),
+      method: 'POST',
+    })))
+
+    expect(created.aisshCommand).toContain('aissh exec srv-1')
+    expect(created.aisshCommand).toContain(created.provisionToken)
+    expect(created.aisshCommand).toContain('--reason=')
   })
 
   it('consumes a provision token exactly once and returns a worker_access receipt', async () => {
