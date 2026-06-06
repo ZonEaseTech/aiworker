@@ -14,11 +14,8 @@ const workerVersion = '2026.06.06-browser'
 const browserEvents: string[] = []
 const evidence: Record<string, unknown> = {}
 
-let apiProcess: ReturnType<typeof Bun.spawn> | null = null
-let webProcess: ReturnType<typeof Bun.spawn> | null = null
-let apiExitCode: number | null = null
-let webExitCode: number | null = null
 let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null
+let manifestPath: string | null = null
 
 await mkdir(evidenceRoot, { recursive: true })
 
@@ -29,26 +26,12 @@ try {
   const webUrl = `http://127.0.0.1:${webPort}`
   const hostUrl = new URL('/host', webUrl).toString()
   const dbPath = join(evidenceRoot, 'host.db')
+  manifestPath = join(evidenceRoot, 'dev-host.json')
 
-  apiProcess = startHostApi({ apiPort, apiUrl, dbPath })
-  apiProcess.exited.then((code) => {
-    apiExitCode = code
-  }).catch(() => {
-    apiExitCode = -1
-  })
-
+  const lifecycleStart = startHostDevLifecycle({ apiPort, dbPath, manifestPath, webPort })
+  evidence.lifecycleStart = lifecycleStart
   await waitForDocument(new URL('/host', apiUrl).toString(), 'Host API')
-  assertChildStillRunning('Host API', apiExitCode)
-
-  webProcess = startHostWeb({ apiUrl, webPort })
-  webProcess.exited.then((code) => {
-    webExitCode = code
-  }).catch(() => {
-    webExitCode = -1
-  })
-
   await waitForDocument(hostUrl, 'Host Web')
-  assertChildStillRunning('Host Web', webExitCode)
 
   browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { height: 900, width: 1440 } })
@@ -70,7 +53,9 @@ try {
   await fillIfFallbackInput(page, 'Soul release', 'aiworker-freeform@browser-proof')
   await page.getByRole('button', { name: '创建开通' }).click()
 
-  const command = await page.locator('pre').filter({ hasText: '--token' }).first().innerText({ timeout: 10000 })
+  const command = await page.locator('pre').filter({ hasText: '--token' }).first().textContent({ timeout: 10000 })
+  if (!command)
+    throw new Error('Host provision command was empty in the assignment drawer')
   const provisionToken = extractProvisionToken(command)
   await page.getByText('等待执行 provision command').waitFor({ state: 'visible', timeout: 10000 })
 
@@ -136,23 +121,18 @@ try {
   }
 
   await writeEvidence('proof.json', {
-    apiExitCode,
     browserEvents,
     commands: {
-      api: displayHostApiCommand({ apiPort, apiUrl, dbPath }),
-      web: displayHostWebCommand({ apiUrl, webPort }),
+      start: displayHostDevLifecycleCommand({ apiPort, dbPath, manifestPath, webPort }),
     },
-    webExitCode,
     ...evidence,
   })
 }
 
 catch (error) {
   await writeEvidence('failure.json', {
-    apiExitCode,
     browserEvents,
     error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
-    webExitCode,
     ...evidence,
   })
   throw error
@@ -160,8 +140,8 @@ catch (error) {
 finally {
   if (browser)
     await browser.close()
-  await stopProcess('host-web', webProcess)
-  await stopProcess('host-api', apiProcess)
+  if (manifestPath)
+    cleanHostDevLifecycle(manifestPath)
 }
 
 async function fillIfFallbackInput(page: Page, label: string, value: string): Promise<void> {
@@ -172,91 +152,53 @@ async function fillIfFallbackInput(page: Page, label: string, value: string): Pr
     await field.fill(value)
 }
 
-interface HostApiStartInput {
+interface HostDevLifecycleInput {
   apiPort: number
-  apiUrl: string
   dbPath: string
-}
-
-interface HostWebStartInput {
-  apiUrl: string
+  manifestPath: string
   webPort: number
 }
 
-function startHostApi(input: HostApiStartInput) {
-  return Bun.spawn({
-    cmd: [
-      process.execPath,
-      'apps/host-cli/src/aiworker-host.ts',
-      'serve',
-      '--db',
-      input.dbPath,
-      '--dev-admin-email',
-      adminEmail,
-      '--public-base-url',
-      input.apiUrl,
-      '--port',
-      String(input.apiPort),
-    ],
+function startHostDevLifecycle(input: HostDevLifecycleInput): unknown {
+  const result = Bun.spawnSync({
+    cmd: displayHostDevLifecycleCommand(input),
     cwd: repoRoot,
-    env: process.env,
+    stderr: 'pipe',
+    stdout: 'pipe',
+  })
+  const stdout = new TextDecoder().decode(result.stdout)
+  const stderr = new TextDecoder().decode(result.stderr)
+  if (result.exitCode !== 0)
+    throw new Error(`Host dev lifecycle start failed with ${result.exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`)
+  return JSON.parse(stdout)
+}
+
+function cleanHostDevLifecycle(manifest: string): void {
+  Bun.spawnSync({
+    cmd: [process.execPath, 'apps/host-cli/src/aiworker-host.ts', 'clean', '--manifest', manifest],
+    cwd: repoRoot,
     stderr: 'pipe',
     stdout: 'pipe',
   })
 }
 
-function startHostWeb(input: HostWebStartInput) {
-  return Bun.spawn({
-    cmd: [
-      process.execPath,
-      'run',
-      '--filter',
-      '@zonease/aiworker-host-web',
-      'dev',
-      '--',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(input.webPort),
-    ],
-    cwd: repoRoot,
-    env: {
-      ...process.env,
-      AIWORKER_HOST_API_URL: input.apiUrl,
-    },
-    stderr: 'pipe',
-    stdout: 'pipe',
-  })
-}
-
-function displayHostApiCommand(input: HostApiStartInput): string[] {
+function displayHostDevLifecycleCommand(input: HostDevLifecycleInput): string[] {
   return [
-    'bun',
+    process.execPath,
     'apps/host-cli/src/aiworker-host.ts',
-    'serve',
+    'start',
+    '--dev',
     '--db',
     input.dbPath,
     '--dev-admin-email',
     adminEmail,
-    '--public-base-url',
-    input.apiUrl,
-    '--port',
-    String(input.apiPort),
-  ]
-}
-
-function displayHostWebCommand(input: HostWebStartInput): string[] {
-  return [
-    'AIWORKER_HOST_API_URL=<apiUrl>',
-    'bun',
-    'run',
-    '--filter',
-    '@zonease/aiworker-host-web',
-    'dev',
-    '--',
     '--host',
     '127.0.0.1',
+    '--manifest',
+    input.manifestPath,
     '--port',
+    String(input.apiPort),
+    '--web-port',
     String(input.webPort),
   ]
 }
@@ -300,11 +242,6 @@ function isExpectedBrowserEvent(event: string): boolean {
   return normalized.includes('vite') && normalized.includes('websocket')
 }
 
-function assertChildStillRunning(name: string, exitCode: number | null): void {
-  if (exitCode !== null)
-    throw new Error(`${name} exited early with code ${exitCode}; see tmp/host-dev-loop-* stdout/stderr evidence.`)
-}
-
 function reservePort(): number {
   const probe = Bun.serve({
     fetch: () => new Response('ok'),
@@ -333,30 +270,6 @@ async function waitForDocument(url: string, label: string): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 250))
   }
   throw new Error(`${label} did not become reachable at ${url}: ${lastError instanceof Error ? lastError.message : String(lastError)}`)
-}
-
-async function stopProcess(name: string, child: ReturnType<typeof Bun.spawn> | null): Promise<void> {
-  if (!child)
-    return
-
-  const alreadyExited = await Promise.race([
-    child.exited.then(() => true).catch(() => true),
-    new Promise<boolean>(resolve => setTimeout(() => resolve(false), 0)),
-  ])
-  if (!alreadyExited) {
-    child.kill('SIGTERM')
-    const terminated = await Promise.race([
-      child.exited.then(() => true).catch(() => true),
-      new Promise<boolean>(resolve => setTimeout(() => resolve(false), 3000)),
-    ])
-    if (!terminated) {
-      child.kill('SIGKILL')
-      await child.exited.catch(() => undefined)
-    }
-  }
-
-  await writeEvidence(`${name}-stdout.log`, await new Response(child.stdout).text())
-  await writeEvidence(`${name}-stderr.log`, await new Response(child.stderr).text())
 }
 
 async function writeEvidence(name: string, value: unknown): Promise<void> {

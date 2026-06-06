@@ -156,21 +156,20 @@ describe('Host dev startup contract', () => {
     expect(script).not.toContain('AIWORKER_WEB_PORT="${AIWORKER_WEB_PORT:-5173}"')
   })
 
-  it('passes the configured Host bind address into the Host API serve command', () => {
+  it('passes the configured Host bind address into the lifecycle-managed Host API service', () => {
     const script = readOptionalRepoFile('scripts/dev-host.sh')
 
-    expect(script).toContain('serve --db $(shell_quote "$AIWORKER_HOST_DB") --dev-admin-email $(shell_quote "$AIWORKER_HOST_DEV_ADMIN_EMAIL") --host $(shell_quote "$AIWORKER_HOST")')
+    expect(script).toContain('start_host_api_background')
+    expect(script).toContain('AIWORKER_HOST_DB')
+    expect(script).toContain('AIWORKER_HOST_DEV_ADMIN_EMAIL')
+    expect(script).toContain('AIWORKER_HOST')
+    expect(script).not.toContain('AIWORKER_HOST_API_TMUX_SESSION')
   })
 
-  it('shell-quotes Host tmux command arguments that come from environment configuration', () => {
+  it('shell-quotes Host Web tmux command arguments that come from environment configuration', () => {
     const script = readOptionalRepoFile('scripts/dev-host.sh')
 
     expect(script).toContain('shell_quote()')
-    expect(script).toContain('--db $(shell_quote "$AIWORKER_HOST_DB")')
-    expect(script).toContain('--dev-admin-email $(shell_quote "$AIWORKER_HOST_DEV_ADMIN_EMAIL")')
-    expect(script).toContain('--host $(shell_quote "$AIWORKER_HOST")')
-    expect(script).toContain('--public-base-url $(shell_quote "$AIWORKER_HOST_API_URL")')
-    expect(script).toContain('--port $(shell_quote "$AIWORKER_HOST_API_PORT")')
     expect(script).toContain('AIWORKER_HOST_API_URL=$(shell_quote "$AIWORKER_HOST_API_URL")')
     expect(script).toContain('bun run dev --host $(shell_quote "$AIWORKER_HOST") --port $(shell_quote "$AIWORKER_HOST_WEB_PORT") --strictPort')
   })
@@ -205,25 +204,28 @@ describe('Host dev startup contract', () => {
     expect(script).toContain('"webUrl": "http://${AIWORKER_HOST}:${AIWORKER_HOST_WEB_PORT}/host"')
     expect(script).toContain('"kind": "host-api"')
     expect(script).toContain('"kind": "host-web"')
+    expect(script).not.toContain('"tmuxSession": "$AIWORKER_HOST_API_TMUX_SESSION"')
     expect(script.indexOf('restart_host_web_tmux'), 'Host Web should start before manifest is written')
       .toBeLessThan(script.lastIndexOf('write_host_manifest'))
   })
 
-  it('runs Host API and Host Web in fixed tmux sessions instead of foreground children', () => {
+  it('keeps Host API out of tmux and only runs Host Web Vite in tmux', () => {
     const script = readOptionalRepoFile('scripts/dev-host.sh')
     const controlScript = readOptionalRepoFile('scripts/dev-host-control.sh')
 
-    expect(script).toContain('AIWORKER_HOST_API_TMUX_SESSION="${AIWORKER_HOST_API_TMUX_SESSION:-aiworker-host-api}"')
     expect(script).toContain('AIWORKER_HOST_WEB_TMUX_SESSION="${AIWORKER_HOST_WEB_TMUX_SESSION:-aiworker-vite-host}"')
     expect(script).toContain('require_tmux')
-    expect(script).toContain('restart_host_api_tmux')
+    expect(script).toContain('start_host_api_background')
+    expect(script).not.toContain('nohup bun apps/host-cli/src/aiworker-host.ts serve')
     expect(script).toContain('restart_host_web_tmux')
     expect(script).toContain('tmux new-session')
     expect(script).toContain('--strictPort')
-    expect(script).toContain('"tmuxSession": "$AIWORKER_HOST_API_TMUX_SESSION"')
+    expect(script).not.toContain('AIWORKER_HOST_API_TMUX_SESSION')
+    expect(script).not.toContain('restart_host_api_tmux')
+    expect(script).not.toContain('"tmuxSession": "$AIWORKER_HOST_API_TMUX_SESSION"')
+    expect(script).not.toContain('[dev:host] tmux api:')
     expect(script).toContain('"tmuxSession": "$AIWORKER_HOST_WEB_TMUX_SESSION"')
-    expect(script).not.toContain('WEB_PID=$!')
-    expect(controlScript).toContain('tmux kill-session -t "$AIWORKER_HOST_API_TMUX_SESSION"')
+    expect(controlScript).not.toContain('AIWORKER_HOST_API_TMUX_SESSION')
     expect(controlScript).toContain('tmux kill-session -t "$AIWORKER_HOST_WEB_TMUX_SESSION"')
   })
 

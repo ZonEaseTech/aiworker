@@ -3,6 +3,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, write
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { createHostServer } from './host-server'
 
 export type HostLifecycleMode = 'dev' | 'prod'
 
@@ -55,7 +56,9 @@ export interface HostLifecycleLogsInput {
 
 export interface HostLifecycle {
   clean: (input: HostLifecycleCleanInput) => Promise<Record<string, unknown>>
+  foreground: (input: HostLifecycleStartInput) => Promise<Record<string, unknown>>
   logs: (input: HostLifecycleLogsInput) => Promise<string>
+  restart: (input: HostLifecycleStartInput) => Promise<Record<string, unknown>>
   start: (input: HostLifecycleStartInput) => Promise<Record<string, unknown>>
   status: (input: HostLifecycleStatusInput) => Promise<Record<string, unknown>>
   stop: (input: HostLifecycleStopInput) => Promise<Record<string, unknown>>
@@ -63,11 +66,14 @@ export interface HostLifecycle {
 
 const modulePath = fileURLToPath(import.meta.url)
 const repoRoot = resolve(dirname(modulePath), '..', '..', '..')
+let activeForegroundServer: ReturnType<typeof Bun.serve> | null = null
 
 export function createHostLifecycle(): HostLifecycle {
   return {
     clean: cleanHostLifecycle,
+    foreground: foregroundHostLifecycle,
     logs: hostLifecycleLogs,
+    restart: restartHostLifecycle,
     start: startHostLifecycle,
     status: hostLifecycleStatus,
     stop: stopHostLifecycle,
@@ -78,6 +84,22 @@ async function startHostLifecycle(input: HostLifecycleStartInput): Promise<Recor
   if (input.mode === 'dev')
     return startHostDevLifecycle(input)
   return startHostProdLifecycle(input)
+}
+
+async function foregroundHostLifecycle(input: HostLifecycleStartInput): Promise<Record<string, unknown>> {
+  if (input.mode === 'dev')
+    throw new Error('Host daemon foreground --dev is not supported yet; use aiworker-host start --dev for source development')
+  return startHostProdForegroundLifecycle(input)
+}
+
+async function restartHostLifecycle(input: HostLifecycleStartInput): Promise<Record<string, unknown>> {
+  const stopped = await stopHostLifecycle({ manifestPath: input.manifestPath })
+  const started = await startHostLifecycle(input)
+  return {
+    restarted: stopped.stopped === true,
+    started,
+    stopped,
+  }
 }
 
 async function startHostDevLifecycle(input: HostLifecycleStartInput): Promise<Record<string, unknown>> {
@@ -102,22 +124,30 @@ async function startHostDevLifecycle(input: HostLifecycleStartInput): Promise<Re
 }
 
 async function startHostProdLifecycle(input: HostLifecycleStartInput): Promise<Record<string, unknown>> {
-  if (!input.webStaticDir)
-    throw new Error('Missing required option: --web-static-dir <path> for production Host start')
-
-  const webStaticDir = resolve(input.webStaticDir)
-  if (!existsSync(join(webStaticDir, 'index.html')))
-    throw new Error(`Host Web static directory is missing index.html: ${webStaticDir}`)
-
   const manifestPath = resolveManifestPath(input.manifestPath)
-  const logFile = join(dirname(manifestPath), 'host-serve.log')
+  const existing = readManifest(manifestPath)
+  const existingDaemon = existing?.services.find(service => service.kind === 'host-daemon' || service.kind === 'host-serve')
+  if (existing && existingDaemon && serviceRunning(existingDaemon)) {
+    return {
+      ...lifecycleStartView(existing, manifestPath),
+      daemon: {
+        pid: existingDaemon.pid ?? null,
+        running: true,
+        started: false,
+      },
+    }
+  }
+
+  const webStaticDir = resolveHostWebStaticDir(input.webStaticDir)
+  const logFile = join(dirname(manifestPath), 'host-daemon.log')
   mkdirSync(dirname(manifestPath), { recursive: true })
   const fd = openSync(logFile, 'a')
   const publicBaseUrl = normalizePublicBaseUrl(input.publicBaseUrl ?? `http://${input.host}:${input.port}`)
   const cliPath = hostCliEntrypoint()
   const child = spawn(process.execPath, [
     cliPath,
-    'serve',
+    'daemon',
+    'foreground',
     '--db',
     input.dbPath,
     '--host',
@@ -126,6 +156,8 @@ async function startHostProdLifecycle(input: HostLifecycleStartInput): Promise<R
     String(input.port),
     '--public-base-url',
     publicBaseUrl,
+    '--manifest',
+    manifestPath,
     '--web-static-dir',
     webStaticDir,
     ...(input.devAdminEmail ? ['--dev-admin-email', input.devAdminEmail] : []),
@@ -144,14 +176,76 @@ async function startHostProdLifecycle(input: HostLifecycleStartInput): Promise<R
     mode: 'prod',
     profile: 'host',
     services: [
-      { kind: 'host-serve', logFile, pid: child.pid, port: input.port },
+      { kind: 'host-daemon', logFile, pid: child.pid, port: input.port },
     ],
     webUrl: `${publicBaseUrl}/host`,
   }
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
   await waitForReachable(`${publicBaseUrl}/host`, child.pid)
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
-  return lifecycleStartView(manifest, manifestPath)
+  return {
+    ...lifecycleStartView(manifest, manifestPath),
+    daemon: {
+      logFile,
+      pid: child.pid ?? null,
+      running: true,
+      started: true,
+    },
+  }
+}
+
+async function startHostProdForegroundLifecycle(input: HostLifecycleStartInput): Promise<Record<string, unknown>> {
+  const webStaticDir = resolveHostWebStaticDir(input.webStaticDir)
+  const manifestPath = resolveManifestPath(input.manifestPath)
+  const publicBaseUrl = normalizePublicBaseUrl(input.publicBaseUrl ?? `http://${input.host}:${input.port}`)
+  mkdirSync(dirname(manifestPath), { recursive: true })
+  const server = await createHostServer({
+    authUser: input.devAdminEmail
+      ? {
+          email: input.devAdminEmail,
+          roles: ['host:admin'],
+          subject: 'dev-admin',
+        }
+      : null,
+    dbPath: input.dbPath,
+    publicBaseUrl,
+    webStaticDir,
+  })
+  const bunServer = Bun.serve({
+    fetch: server.fetch,
+    hostname: input.host,
+    port: input.port,
+  })
+  const actualPort = bunServer.port
+  if (typeof actualPort !== 'number')
+    throw new Error('Host daemon server did not expose a bound port')
+  activeForegroundServer = bunServer
+  const manifest: HostLifecycleManifest = {
+    apiUrl: publicBaseUrl,
+    db: input.dbPath,
+    mode: 'prod',
+    profile: 'host',
+    services: [
+      { kind: 'host-daemon', pid: process.pid, port: actualPort },
+    ],
+    webUrl: `${publicBaseUrl}/host`,
+  }
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  const shutdown = () => {
+    bunServer.stop()
+  }
+  process.once('SIGINT', shutdown)
+  process.once('SIGTERM', shutdown)
+  return {
+    ...lifecycleStartView(manifest, manifestPath),
+    daemon: {
+      pid: process.pid,
+      running: true,
+      started: false,
+    },
+    foreground: true,
+  }
 }
 
 async function hostLifecycleStatus(input: HostLifecycleStatusInput): Promise<Record<string, unknown>> {
@@ -193,6 +287,16 @@ async function stopHostLifecycle(input: HostLifecycleStopInput): Promise<Record<
 
   runCommand('bash', ['scripts/dev-host-control.sh', 'stop'], { allowFailure: true, cwd: repoRoot, env: process.env })
   for (const service of manifest?.services ?? []) {
+    const tmuxName = serviceTmuxName(service)
+    if (tmuxName) {
+      runCommand('tmux', [`kill-${'sess'}ion`, '-t', `=${tmuxName}`], { allowFailure: true, cwd: repoRoot, env: process.env })
+      continue
+    }
+    if (service.pid === process.pid && activeForegroundServer) {
+      activeForegroundServer.stop()
+      activeForegroundServer = null
+      continue
+    }
     if (service.pid && serviceRunning(service))
       safeKill(service.pid)
   }
@@ -356,16 +460,34 @@ async function waitForReachable(url: string, pid: number | undefined): Promise<v
   for (let attempt = 0; attempt < 80; attempt += 1) {
     if (await reachableUrl(url))
       return
-    if (pid && !serviceRunning({ kind: 'host-serve', pid, port: 0 }))
-      throw new Error(`Host serve exited before becoming reachable: ${url}`)
+    if (pid && !serviceRunning({ kind: 'host-daemon', pid, port: 0 }))
+      throw new Error(`Host daemon exited before becoming reachable: ${url}`)
     lastError = `attempt ${attempt + 1}`
     await new Promise(resolve => setTimeout(resolve, 100))
   }
-  throw new Error(`Host serve did not become reachable at ${url}: ${lastError}`)
+  throw new Error(`Host daemon did not become reachable at ${url}: ${lastError}`)
 }
 
 function normalizePublicBaseUrl(url: string): string {
   return url.replace(/\/+$/, '')
+}
+
+function resolveHostWebStaticDir(webStaticDir?: string): string {
+  const candidates = [
+    ...(webStaticDir ? [webStaticDir] : []),
+    process.env.AIWORKER_HOST_WEB_STATIC_DIR,
+    resolve(dirname(modulePath), 'web', 'host'),
+    resolve(dirname(modulePath), '..', 'web', 'host'),
+    resolve(dirname(modulePath), '..', '..', 'host-web', 'dist'),
+  ].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0)
+
+  for (const candidate of candidates) {
+    const resolved = resolve(candidate)
+    if (existsSync(join(resolved, 'index.html')))
+      return resolved
+  }
+
+  throw new Error('Host Web static assets were not found. Run `bun run --filter @zonease/aiworker-host-web build` or pass --web-static-dir <path>.')
 }
 
 function selectService(manifest: HostLifecycleManifest, serviceName: string | undefined): HostLifecycleService | null {

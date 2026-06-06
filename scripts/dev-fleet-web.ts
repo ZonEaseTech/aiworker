@@ -66,6 +66,12 @@ interface DaemonHealthBody {
   }>
 }
 
+interface VerifyViteDependencies {
+  log?: (message: string) => void
+  restartVite?: (entry: DevFleetEntry, host: string) => void
+  waitForHttpOk?: (url: string) => Promise<Response>
+}
+
 interface FleetWorkerStatus {
   app: string
   healthOk: boolean
@@ -523,8 +529,28 @@ async function verifyDaemon(entry: DevFleetEntry, host: string): Promise<void> {
   })
 }
 
-async function verifyVite(entry: DevFleetEntry, host: string): Promise<void> {
-  await waitForHttpOk(`http://${host}:${entry.vitePort}/`)
+export async function verifyViteWithRestart(
+  entry: DevFleetEntry,
+  host: string,
+  deps: VerifyViteDependencies = {},
+): Promise<void> {
+  const url = `http://${host}:${entry.vitePort}/`
+  const wait = deps.waitForHttpOk ?? waitForHttpOk
+  try {
+    await wait(url)
+    return
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const log = deps.log ?? console.log
+    const restartVite = deps.restartVite ?? restartTmuxVite
+    log(
+      `[dev:fleet-web] Vite readiness failed for ${entry.appId} on ${entry.vitePort}; restarting ${entry.tmuxSession} once: ${message}`,
+    )
+    restartVite(entry, host)
+  }
+
+  await wait(url)
 }
 
 async function start(): Promise<void> {
@@ -549,7 +575,7 @@ async function start(): Promise<void> {
 
   for (const entry of DEV_FLEET_TOPOLOGY) {
     await verifyDaemon(entry, host)
-    await verifyVite(entry, host)
+    await verifyViteWithRestart(entry, host)
   }
 
   const manifest = buildManifest({

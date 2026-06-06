@@ -10,7 +10,6 @@ AIWORKER_HOST_WEB_PORT="${AIWORKER_HOST_WEB_PORT:-5050}"
 AIWORKER_HOST_API_URL="${AIWORKER_HOST_API_URL:-http://${AIWORKER_HOST}:${AIWORKER_HOST_API_PORT}}"
 AIWORKER_HOST_DB="${AIWORKER_HOST_DB:-${HOME}/.aiworker-dev/host.db}"
 AIWORKER_HOST_MANIFEST="${AIWORKER_HOST_MANIFEST:-${HOME}/.aiworker-dev/dev-host.json}"
-AIWORKER_HOST_API_TMUX_SESSION="${AIWORKER_HOST_API_TMUX_SESSION:-aiworker-host-api}"
 AIWORKER_HOST_WEB_TMUX_SESSION="${AIWORKER_HOST_WEB_TMUX_SESSION:-aiworker-vite-host}"
 
 listener_for_port() {
@@ -55,11 +54,6 @@ print_status() {
 
   echo
   echo "[dev:host:status] tmux:"
-  if tmux has-session -t "$AIWORKER_HOST_API_TMUX_SESSION" 2>/dev/null; then
-    echo "  $AIWORKER_HOST_API_TMUX_SESSION: running"
-  else
-    echo "  $AIWORKER_HOST_API_TMUX_SESSION: missing"
-  fi
   if tmux has-session -t "$AIWORKER_HOST_WEB_TMUX_SESSION" 2>/dev/null; then
     echo "  $AIWORKER_HOST_WEB_TMUX_SESSION: running"
   else
@@ -112,7 +106,7 @@ stop_port() {
 }
 
 stop_host() {
-  tmux kill-session -t "$AIWORKER_HOST_API_TMUX_SESSION" 2>/dev/null || true
+  tmux kill-session -t aiworker-host-api 2>/dev/null || true
   tmux kill-session -t "$AIWORKER_HOST_WEB_TMUX_SESSION" 2>/dev/null || true
   stop_port "$AIWORKER_HOST_API_PORT"
   stop_port "$AIWORKER_HOST_WEB_PORT"

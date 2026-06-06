@@ -44,7 +44,9 @@ observes the native engine, and exposes a local broker API.
 
 Host is an optional control plane for Soul release, distribution, permission
 allocation, connector authorization, and Worker provisioning records. Host is
-Phase 2 and is never on the runtime hot path. Host does not spawn, observe, or
+Phase 2 and is never on the runtime hot path. Host may run as its own installable
+daemon so an administrator can install AIWorker Host and start the control plane
+with one command, but that Host daemon owns only the control plane. Host does not spawn, observe, or
 hold engine processes. Host is not a domain workflow layer, a product backend, an
 agent runtime, a repository dashboard, a Soul configuration center, or a UI shell
 around a Worker.
@@ -134,7 +136,9 @@ Host (Phase 2) owns only control-plane metadata:
 - the worker registry: which employee Workers exist, identity, endpoint, health;
 - assignment metadata: assigned Soul version, connectors, engine/gateway profile, permissions;
 - permission allocation and connector authorization;
-- worker distribution and provisioning records.
+- worker distribution and provisioning records;
+- Host service lifecycle metadata: daemon pid, API/Web endpoint, readiness, and
+  redacted service logs.
 
 Host must not own session, invocation, projection, engine processes, domain
 state, or secrets. A Worker must not depend on Host to run. Worker packages must
@@ -149,6 +153,14 @@ Workbench web, and configuration without needing Host. In Phase 2, Worker may
 initiate provisioning check-in and Worker Access reverse tunnel connections to
 Host as distribution-plane signals only. These Worker-initiated signals are not
 runtime hot-path ownership.
+
+The Phase 2 Host daemon is a separate control-plane service. It exists for the
+npm/bun install experience and server lifecycle management: `aiworker-host start`
+starts Host in the background, `aiworker-host daemon foreground` runs the same
+service in the current process for supervisors, and `status`, `logs`, `stop`,
+`restart`, and `clean` manage the same Host lifecycle state. This daemon does not
+make Host a Worker runtime owner; it only serves Host API/Web and control-plane
+metadata.
 
 v1 scope: the standalone single-daemon path is the whole product — one daemon is
 one Worker with its own CLI, Workbench web, and configuration. Phase 2 adds Host

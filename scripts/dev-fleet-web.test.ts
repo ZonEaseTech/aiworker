@@ -17,6 +17,7 @@ import {
   stop,
   summarizeDaemonHealth,
   validateWorkerApp,
+  verifyViteWithRestart,
 } from './dev-fleet-web'
 
 const repoRoot = import.meta.dir === `${process.cwd()}/scripts`
@@ -261,6 +262,31 @@ describe('dev fleet web health validation', () => {
       listenerProcess: 'bun 67890 ben 7u IPv4 TCP 127.0.0.1:9218 (LISTEN)',
       workerDaemon: { metadataPid: 67890, metadataPort: 9218, pid: 67890 },
     })).toBe(false)
+  })
+
+  it('restarts a Vite tmux session once when readiness times out', async () => {
+    const entry = DEV_FLEET_TOPOLOGY[3]!
+    const calls: string[] = []
+    let attempts = 0
+
+    await verifyViteWithRestart(entry, '127.0.0.1', {
+      log: message => calls.push(`log:${message}`),
+      restartVite: restarted => calls.push(`restart:${restarted.tmuxSession}`),
+      waitForHttpOk: async (url) => {
+        calls.push(`wait:${url}`)
+        attempts += 1
+        if (attempts === 1)
+          throw new Error('Unable to connect. Is the computer able to access the url?')
+        return new Response('ok')
+      },
+    })
+
+    expect(calls).toEqual([
+      'wait:http://127.0.0.1:5176/',
+      'log:[dev:fleet-web] Vite readiness failed for product-manager on 5176; restarting aiworker-vite-product-manager once: Unable to connect. Is the computer able to access the url?',
+      'restart:aiworker-vite-product-manager',
+      'wait:http://127.0.0.1:5176/',
+    ])
   })
 })
 

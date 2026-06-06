@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -7,7 +7,7 @@ import { describe, expect, it } from 'bun:test'
 import { createHostLifecycle } from './host-lifecycle'
 
 describe('Host lifecycle', () => {
-  it('starts production Host API and static Web as one detached serve process', async () => {
+  it('starts production Host API and static Web as a background Host daemon', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-lifecycle-'))
     const port = reservePort()
     const baseUrl = `http://127.0.0.1:${port}`
@@ -30,8 +30,12 @@ describe('Host lifecycle', () => {
 
       expect(started).toMatchObject({
         apiUrl: baseUrl,
+        daemon: { running: true, started: true },
         manifestPath,
         mode: 'prod',
+        services: [
+          { kind: 'host-daemon', port },
+        ],
         webUrl: `${baseUrl}/host`,
       })
 
@@ -45,6 +49,102 @@ describe('Host lifecycle', () => {
         profile: 'host',
         running: true,
         web: { reachable: true, url: `${baseUrl}/host` },
+      })
+      await waitForFileToContain(join(dir, 'host-daemon.log'), `"manifestPath": "${manifestPath}"`)
+      const logs = await lifecycle.logs({ manifestPath, service: 'host-daemon', tail: 40 })
+      expect(logs).toContain(`"manifestPath": "${manifestPath}"`)
+    }
+    finally {
+      await lifecycle.clean({ manifestPath })
+      rmSync(dir, { force: true, recursive: true })
+    }
+  })
+
+  it('runs Host daemon foreground as the same API and static Web service in the current process', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-foreground-'))
+    const port = reservePort()
+    const baseUrl = `http://127.0.0.1:${port}`
+    const webStaticDir = join(dir, 'web')
+    const manifestPath = join(dir, 'dev-host.json')
+    mkdirSync(webStaticDir, { recursive: true })
+    writeFileSync(join(webStaticDir, 'index.html'), '<!doctype html><div id="root">host daemon foreground</div>')
+
+    const lifecycle = createHostLifecycle()
+    try {
+      const started = await lifecycle.foreground({
+        dbPath: join(dir, 'host.db'),
+        host: '127.0.0.1',
+        manifestPath,
+        mode: 'prod',
+        port,
+        publicBaseUrl: baseUrl,
+        webStaticDir,
+      })
+
+      expect(started).toMatchObject({
+        apiUrl: baseUrl,
+        daemon: { running: true, started: false },
+        foreground: true,
+        manifestPath,
+        mode: 'prod',
+        services: [
+          { kind: 'host-daemon', port },
+        ],
+        webUrl: `${baseUrl}/host`,
+      })
+      const hostHtml = await fetch(`${baseUrl}/host`).then(response => response.text())
+      expect(hostHtml).toContain('host daemon foreground')
+    }
+    finally {
+      await lifecycle.clean({ manifestPath })
+      rmSync(dir, { force: true, recursive: true })
+    }
+  })
+
+  it('starts development Host API as a persistent pid service and Host Web in tmux', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-dev-lifecycle-'))
+    const apiPort = reservePort()
+    const webPort = reservePort()
+    const apiUrl = `http://127.0.0.1:${apiPort}`
+    const webUrl = `http://127.0.0.1:${webPort}/host`
+    const manifestPath = join(dir, 'dev-host.json')
+
+    const lifecycle = createHostLifecycle()
+    try {
+      const started = await lifecycle.start({
+        dbPath: join(dir, 'host.db'),
+        host: '127.0.0.1',
+        manifestPath,
+        mode: 'dev',
+        port: apiPort,
+        publicBaseUrl: apiUrl,
+        webPort,
+      })
+
+      expect(started).toMatchObject({
+        apiUrl,
+        manifestPath,
+        mode: 'dev',
+        services: [
+          { kind: 'host-api', port: apiPort },
+          { kind: 'host-web', port: webPort, tmuxSession: 'aiworker-vite-host' },
+        ],
+        webUrl,
+      })
+
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      const status = await lifecycle.status({ manifestPath })
+      expect(status).toMatchObject({
+        api: { reachable: true, url: apiUrl },
+        mode: 'dev',
+        profile: 'host',
+        running: true,
+        services: [
+          { kind: 'host-api', port: apiPort, running: true },
+          { kind: 'host-web', port: webPort, running: true },
+        ],
+        web: { reachable: true, url: webUrl },
       })
     }
     finally {
@@ -89,6 +189,40 @@ describe('Host lifecycle', () => {
       rmSync(dir, { force: true, recursive: true })
     }
   })
+
+  it('stops tmux services recorded in a custom Host lifecycle manifest', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-dev-stop-'))
+    const manifestPath = join(dir, 'dev-host.json')
+    const apiTmux = `custom-host-api-test-${Date.now()}`
+    const webTmux = `custom-host-web-test-${Date.now()}`
+    writeFileSync(manifestPath, JSON.stringify({
+      apiUrl: 'http://127.0.0.1:19117',
+      db: join(dir, 'host.db'),
+      mode: 'dev',
+      profile: 'host',
+      services: [
+        { kind: 'host-api', port: 19117, tmuxSession: apiTmux },
+        { kind: 'host-web', port: 15050, tmuxSession: webTmux },
+      ],
+      webUrl: 'http://127.0.0.1:15050/host',
+    }))
+
+    createTmuxSession(apiTmux)
+    createTmuxSession(webTmux)
+
+    try {
+      const stopped = await createHostLifecycle().stop({ manifestPath })
+
+      expect(stopped).toMatchObject({ manifestPath, profile: 'host', stopped: true })
+      expect(tmuxSessionExists(apiTmux)).toBe(false)
+      expect(tmuxSessionExists(webTmux)).toBe(false)
+    }
+    finally {
+      killTmuxSession(apiTmux)
+      killTmuxSession(webTmux)
+      rmSync(dir, { force: true, recursive: true })
+    }
+  })
 })
 
 function reservePort(): number {
@@ -102,4 +236,48 @@ function reservePort(): number {
   if (!port)
     throw new Error('Failed to reserve a Host lifecycle test port')
   return port
+}
+
+function createTmuxSession(name: string): void {
+  const result = Bun.spawnSync({
+    cmd: ['tmux', 'new-session', '-d', '-s', name, 'sleep 300'],
+    stderr: 'pipe',
+    stdout: 'pipe',
+  })
+  if (result.exitCode !== 0) {
+    throw new Error(`failed to create tmux session ${name}: ${new TextDecoder().decode(result.stderr)}`)
+  }
+}
+
+function killTmuxSession(name: string): void {
+  Bun.spawnSync({
+    cmd: ['tmux', 'kill-session', '-t', name],
+    stderr: 'pipe',
+    stdout: 'pipe',
+  })
+}
+
+function tmuxSessionExists(name: string): boolean {
+  return Bun.spawnSync({
+    cmd: ['tmux', 'has-session', '-t', name],
+    stderr: 'pipe',
+    stdout: 'pipe',
+  }).exitCode === 0
+}
+
+async function waitForFileToContain(filePath: string, expected: string): Promise<void> {
+  const deadline = Date.now() + 2_000
+  let lastText = ''
+  while (Date.now() < deadline) {
+    try {
+      lastText = readFileSync(filePath, 'utf8')
+      if (lastText.includes(expected))
+        return
+    }
+    catch {
+      // The foreground child may not have flushed its startup output yet.
+    }
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+  expect(lastText).toContain(expected)
 }

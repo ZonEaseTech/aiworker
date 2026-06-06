@@ -66,7 +66,7 @@ Agent 不要自选新端口，也不要依赖 Vite 自动换端口；先运行�
 多 Soul：`bun run dev:fleet` / `:status` / `:stop` / `:clean`，默认 `9217-9221 + 5173-5177`。
 Host：`bun run dev:host` / `:status` / `:stop` / `:clean`，默认 `9117 + 5050`。
 
-所有 Worker Web Vite 必须显式绑定 daemon：`AIWORKER_API_URL=http://127.0.0.1:<daemon-port>`；Host Web 必须绑定 `AIWORKER_HOST_API_URL`。Vite 默认由固定 tmux session 托管，必须用固定端口和 `--strictPort`；Agent 不要前台起 Vite。Playwright 先读 status/manifest，再打开对应 URL。
+Worker daemon 和 Host API/daemon 都只能通过对应 profile lifecycle 启停，并由 status/manifest 回收；不要给 API/daemon 自造 tmux session。所有 Worker Web Vite 必须显式绑定 daemon：`AIWORKER_API_URL=http://127.0.0.1:<daemon-port>`；Host Web 必须绑定 `AIWORKER_HOST_API_URL`。只有 Vite 由固定 tmux session 托管，必须用固定端口和 `--strictPort`；Agent 不要前台起 Vite。Playwright 先读 status/manifest，再打开对应 URL。
 
 ## Workflow
 

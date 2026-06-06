@@ -63,6 +63,23 @@ session prompts to start the first session.
 Auto-bootstrap stops at the Worker; the first workspace is the employee's
 first action in the Workbench.
 
+## Host Service Entry (Phase 2)
+
+Host has its own service lifecycle because it is also a package-install target.
+The administrator-facing product entry is `aiworker-host start`: it starts the
+Host daemon in the background, writes Host lifecycle state, and prints the Host
+URL. `aiworker-host daemon start` is the scriptable equivalent, while
+`aiworker-host daemon foreground` runs the same Host API/Web service in the
+current process for systemd, Docker, PM2, aissh foreground execution, and
+debugging. `aiworker-host status`, `logs`, `stop`, `restart`, and `clean` manage
+the same Host daemon lifecycle state.
+
+This aligns Host and Worker at the service lifecycle layer, not the runtime
+ownership layer. Worker daemon owns Worker runtime, Workbench, projection, engine
+bridge, and native engine processes. Host daemon owns Host API/Web, assignment
+and provisioning metadata, check-in/access/auth control-plane state, readiness,
+and redacted logs.
+
 In Phase 2, a Host-provisioned employee Worker keeps the same Workbench
 experience. The first screen must read as "my AI worker is ready", not "Host
 mounted a remote surface". Host assignment may preselect the bound Soul version,

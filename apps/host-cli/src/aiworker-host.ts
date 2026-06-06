@@ -39,6 +39,56 @@ function hostLifecycleStatePath(options: { manifest?: string }): string | undefi
   return (options as Record<string, string | undefined>)[hostLifecycleStateOptionName]
 }
 
+interface HostLifecycleCommandOptions {
+  db?: string
+  dev?: boolean
+  devAdminEmail?: string
+  host?: string
+  manifest?: string
+  port?: string | number
+  publicBaseUrl?: string
+  webPort?: string | number
+  webStaticDir?: string
+}
+
+function hostLifecycleInput(options: HostLifecycleCommandOptions): {
+  dbPath: string
+  devAdminEmail?: string
+  host: string
+  manifestPath?: string
+  mode: 'dev' | 'prod'
+  port: number
+  publicBaseUrl?: string
+  webPort?: number
+  webStaticDir?: string
+} {
+  const mode = options.dev ? 'dev' : 'prod'
+  return {
+    dbPath: options.db ?? `${process.env.HOME ?? '.'}/.aiworker-dev/host.db`,
+    ...(options.devAdminEmail ? { devAdminEmail: options.devAdminEmail } : {}),
+    host: options.host ?? '127.0.0.1',
+    ...(hostLifecycleStatePath(options) ? { manifestPath: hostLifecycleStatePath(options) } : {}),
+    mode,
+    port: parsePositiveInteger(options.port ?? '9117', '--port'),
+    ...(options.publicBaseUrl ? { publicBaseUrl: options.publicBaseUrl } : {}),
+    ...(mode === 'dev' ? { webPort: parsePositiveInteger(options.webPort ?? '5050', '--web-port') } : {}),
+    ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
+  }
+}
+
+function addHostLifecycleStartOptions(command: ReturnType<typeof cac>['commands'][number]) {
+  return command
+    .option('--db <path>', 'Host sqlite database path', { default: `${process.env.HOME ?? '.'}/.aiworker-dev/host.db` })
+    .option('--dev', 'start development Host API plus Vite Host Web')
+    .option('--dev-admin-email <email>', 'development-only static host admin email')
+    .option('--host <host>', 'bind host', { default: '127.0.0.1' })
+    .option('--manifest <path>', 'Host lifecycle manifest path')
+    .option('--port <port>', 'Host API or production serve port', { default: '9117' })
+    .option('--public-base-url <url>', 'public Host base URL')
+    .option('--web-port <port>', 'development Host Web port', { default: '5050' })
+    .option('--web-static-dir <path>', 'Host Web static directory for production start')
+}
+
 async function readJsonResponse(response: Response): Promise<unknown> {
   try {
     return await response.json()
@@ -207,39 +257,63 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     })
   cli
     .command('start', 'start Host services with the same lifecycle shape as Worker')
-    .option('--db <path>', 'Host sqlite database path', { default: `${process.env.HOME ?? '.'}/.aiworker-dev/host.db` })
-    .option('--dev', 'start development Host API plus Vite Host Web')
-    .option('--dev-admin-email <email>', 'development-only static host admin email')
-    .option('--host <host>', 'bind host', { default: '127.0.0.1' })
+  addHostLifecycleStartOptions(cli.commands.at(-1)!)
+    .action(async (options: HostLifecycleCommandOptions) => {
+      printJson(await hostLifecycle.start(hostLifecycleInput(options)))
+    })
+  cli
+    .command('daemon start', 'start the Host daemon in background')
+  addHostLifecycleStartOptions(cli.commands.at(-1)!)
+    .action(async (options: HostLifecycleCommandOptions) => {
+      printJson(await hostLifecycle.start(hostLifecycleInput(options)))
+    })
+  cli
+    .command('daemon foreground', 'run the Host daemon in the current process')
+  addHostLifecycleStartOptions(cli.commands.at(-1)!)
+    .action(async (options: HostLifecycleCommandOptions) => {
+      printJson(await hostLifecycle.foreground(hostLifecycleInput(options)))
+    })
+  cli
+    .command('restart', 'restart Host services')
+  addHostLifecycleStartOptions(cli.commands.at(-1)!)
+    .action(async (options: HostLifecycleCommandOptions) => {
+      printJson(await hostLifecycle.restart(hostLifecycleInput(options)))
+    })
+  cli
+    .command('daemon restart', 'restart the Host daemon')
+  addHostLifecycleStartOptions(cli.commands.at(-1)!)
+    .action(async (options: HostLifecycleCommandOptions) => {
+      printJson(await hostLifecycle.restart(hostLifecycleInput(options)))
+    })
+  cli
+    .command('daemon status', 'show Host daemon lifecycle status')
     .option('--manifest <path>', 'Host lifecycle manifest path')
-    .option('--port <port>', 'Host API or production serve port', { default: '9117' })
-    .option('--public-base-url <url>', 'public Host base URL')
-    .option('--web-port <port>', 'development Host Web port', { default: '5050' })
-    .option('--web-static-dir <path>', 'Host Web static directory for production start')
-    .action(async (options: {
-      db: string
-      dev?: boolean
-      devAdminEmail?: string
-      host: string
-      manifest?: string
-      port: string | number
-      publicBaseUrl?: string
-      webPort: string | number
-      webStaticDir?: string
-    }) => {
-      const mode = options.dev ? 'dev' : 'prod'
-      const result = await hostLifecycle.start({
-        dbPath: options.db,
-        ...(options.devAdminEmail ? { devAdminEmail: options.devAdminEmail } : {}),
-        host: options.host,
-        ...(hostLifecycleStatePath(options) ? { manifestPath: hostLifecycleStatePath(options) } : {}),
-        mode,
-        port: parsePositiveInteger(options.port, '--port'),
-        ...(options.publicBaseUrl ? { publicBaseUrl: options.publicBaseUrl } : {}),
-        ...(mode === 'dev' ? { webPort: parsePositiveInteger(options.webPort, '--web-port') } : {}),
-        ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
-      })
-      printJson(result)
+    .action(async (options: { manifest?: string }) => {
+      printJson(await hostLifecycle.status({ manifestPath: hostLifecycleStatePath(options) }))
+    })
+  cli
+    .command('daemon stop', 'stop the Host daemon')
+    .option('--manifest <path>', 'Host lifecycle manifest path')
+    .action(async (options: { manifest?: string }) => {
+      printJson(await hostLifecycle.stop({ manifestPath: hostLifecycleStatePath(options) }))
+    })
+  cli
+    .command('daemon clean', 'stop the Host daemon and remove lifecycle manifest')
+    .option('--manifest <path>', 'Host lifecycle manifest path')
+    .action(async (options: { manifest?: string }) => {
+      printJson(await hostLifecycle.clean({ manifestPath: hostLifecycleStatePath(options) }))
+    })
+  cli
+    .command('daemon logs', 'show Host daemon logs')
+    .option('--manifest <path>', 'Host lifecycle manifest path')
+    .option('--service <service>', 'service kind or short name, such as api/web/host-daemon')
+    .option('--tail <n>', 'line count', { default: '80' })
+    .action(async (options: { manifest?: string, service?: string, tail?: string | number }) => {
+      process.stdout.write(await hostLifecycle.logs({
+        manifestPath: hostLifecycleStatePath(options),
+        service: options.service,
+        tail: parsePositiveInteger(options.tail, '--tail'),
+      }))
     })
   cli
     .command('status', 'show Host service lifecycle status')

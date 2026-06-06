@@ -197,6 +197,11 @@ describe('aiworker-host control CLI', () => {
       const landing = await fetch(`${apiUrl}/host`).then(response => response.text())
       expect(landing).toContain('Host API is running')
       expect(landing).toContain('http://127.0.0.1:5050/host')
+
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      expect(child.exitCode).toBeNull()
+      const secondLanding = await fetch(`${apiUrl}/host`).then(response => response.text())
+      expect(secondLanding).toContain('Host API is running')
     }
     finally {
       child.kill('SIGTERM')
@@ -252,7 +257,7 @@ describe('aiworker-host control CLI', () => {
     })
   })
 
-  it('starts Host production lifecycle as one detached API plus static Web service', async () => {
+  it('starts Host production lifecycle as a background Host daemon with static Web', async () => {
     const calls: Array<{ input: Record<string, unknown>, method: string }> = []
     const hostLifecycle = {
       async start(input: Record<string, unknown>) {
@@ -298,6 +303,135 @@ describe('aiworker-host control CLI', () => {
     })
   })
 
+  it('routes Host daemon start through the same product startup lifecycle as top-level start', async () => {
+    const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+    const hostLifecycle = {
+      async start(input: Record<string, unknown>) {
+        calls.push({ input, method: 'start' })
+        return {
+          apiUrl: 'https://aiworker.zonease.org',
+          daemon: { pid: 1234, running: true, started: true },
+          mode: input.mode,
+          webUrl: 'https://aiworker.zonease.org/host',
+        }
+      },
+    }
+
+    const code = await runHostCli([
+      'daemon',
+      'start',
+      '--host',
+      '0.0.0.0',
+      '--port',
+      '9117',
+      '--db',
+      '/srv/aiworker/host.db',
+      '--public-base-url',
+      'https://aiworker.zonease.org',
+      '--web-static-dir',
+      '/srv/aiworker/host-web/dist',
+    ], { hostLifecycle } as any)
+
+    expect(code).toBe(0)
+    expect(calls).toEqual([{
+      input: {
+        dbPath: '/srv/aiworker/host.db',
+        host: '0.0.0.0',
+        mode: 'prod',
+        port: 9117,
+        publicBaseUrl: 'https://aiworker.zonease.org',
+        webStaticDir: '/srv/aiworker/host-web/dist',
+      },
+      method: 'start',
+    }])
+    expect(JSON.parse(output)).toEqual({
+      apiUrl: 'https://aiworker.zonease.org',
+      daemon: { pid: 1234, running: true, started: true },
+      mode: 'prod',
+      webUrl: 'https://aiworker.zonease.org/host',
+    })
+  })
+
+  it('routes Host daemon foreground to the foreground lifecycle without spawning a background process', async () => {
+    const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+    const hostLifecycle = {
+      async foreground(input: Record<string, unknown>) {
+        calls.push({ input, method: 'foreground' })
+        return {
+          apiUrl: 'https://aiworker.zonease.org',
+          foreground: true,
+          mode: input.mode,
+          webUrl: 'https://aiworker.zonease.org/host',
+        }
+      },
+    }
+
+    const code = await runHostCli([
+      'daemon',
+      'foreground',
+      '--host',
+      '0.0.0.0',
+      '--port',
+      '9117',
+      '--db',
+      '/srv/aiworker/host.db',
+      '--public-base-url',
+      'https://aiworker.zonease.org',
+      '--web-static-dir',
+      '/srv/aiworker/host-web/dist',
+    ], { hostLifecycle } as any)
+
+    expect(code).toBe(0)
+    expect(calls).toEqual([{
+      input: {
+        dbPath: '/srv/aiworker/host.db',
+        host: '0.0.0.0',
+        mode: 'prod',
+        port: 9117,
+        publicBaseUrl: 'https://aiworker.zonease.org',
+        webStaticDir: '/srv/aiworker/host-web/dist',
+      },
+      method: 'foreground',
+    }])
+    expect(JSON.parse(output)).toEqual({
+      apiUrl: 'https://aiworker.zonease.org',
+      foreground: true,
+      mode: 'prod',
+      webUrl: 'https://aiworker.zonease.org/host',
+    })
+  })
+
+  it('routes Host restart aliases through the daemon lifecycle', async () => {
+    const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+    const hostLifecycle = {
+      async restart(input: Record<string, unknown>) {
+        calls.push({ input, method: 'restart' })
+        return {
+          restarted: true,
+          started: { apiUrl: 'http://127.0.0.1:9117', webUrl: 'http://127.0.0.1:9117/host' },
+        }
+      },
+    }
+
+    expect(await runHostCli(['restart', '--host', '127.0.0.1', '--port', '9117'], { hostLifecycle } as any)).toBe(0)
+    expect(JSON.parse(output)).toEqual({
+      restarted: true,
+      started: { apiUrl: 'http://127.0.0.1:9117', webUrl: 'http://127.0.0.1:9117/host' },
+    })
+
+    output = ''
+    expect(await runHostCli(['daemon', 'restart', '--host', '127.0.0.1', '--port', '9117'], { hostLifecycle } as any)).toBe(0)
+    expect(JSON.parse(output)).toEqual({
+      restarted: true,
+      started: { apiUrl: 'http://127.0.0.1:9117', webUrl: 'http://127.0.0.1:9117/host' },
+    })
+
+    expect(calls).toEqual([
+      { input: { dbPath: `${process.env.HOME ?? '.'}/.aiworker-dev/host.db`, host: '127.0.0.1', mode: 'prod', port: 9117 }, method: 'restart' },
+      { input: { dbPath: `${process.env.HOME ?? '.'}/.aiworker-dev/host.db`, host: '127.0.0.1', mode: 'prod', port: 9117 }, method: 'restart' },
+    ])
+  })
+
   it('exposes Host lifecycle status stop clean and logs as first-class CLI commands', async () => {
     const calls: Array<{ input: Record<string, unknown>, method: string }> = []
     const hostLifecycle = {
@@ -337,6 +471,50 @@ describe('aiworker-host control CLI', () => {
     expect(calls).toEqual([
       { input: { manifestPath: undefined }, method: 'status' },
       { input: { manifestPath: undefined, service: 'api', tail: 5 }, method: 'logs' },
+      { input: { manifestPath: undefined }, method: 'stop' },
+      { input: { manifestPath: undefined }, method: 'clean' },
+    ])
+  })
+
+  it('exposes Host daemon status stop clean and logs as explicit daemon commands', async () => {
+    const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+    const hostLifecycle = {
+      async clean(input: Record<string, unknown>) {
+        calls.push({ input, method: 'clean' })
+        return { cleaned: true, manifestPath: '/tmp/dev-host.json' }
+      },
+      async logs(input: Record<string, unknown>) {
+        calls.push({ input, method: 'logs' })
+        return 'host daemon log\n'
+      },
+      async status(input: Record<string, unknown>) {
+        calls.push({ input, method: 'status' })
+        return { daemon: { running: true }, profile: 'host' }
+      },
+      async stop(input: Record<string, unknown>) {
+        calls.push({ input, method: 'stop' })
+        return { stopped: true }
+      },
+    }
+
+    expect(await runHostCli(['daemon', 'status'], { hostLifecycle } as any)).toBe(0)
+    expect(JSON.parse(output)).toEqual({ daemon: { running: true }, profile: 'host' })
+
+    output = ''
+    expect(await runHostCli(['daemon', 'logs', '--service', 'host-daemon', '--tail', '7'], { hostLifecycle } as any)).toBe(0)
+    expect(output).toBe('host daemon log\n')
+
+    output = ''
+    expect(await runHostCli(['daemon', 'stop'], { hostLifecycle } as any)).toBe(0)
+    expect(JSON.parse(output)).toEqual({ stopped: true })
+
+    output = ''
+    expect(await runHostCli(['daemon', 'clean'], { hostLifecycle } as any)).toBe(0)
+    expect(JSON.parse(output)).toEqual({ cleaned: true, manifestPath: '/tmp/dev-host.json' })
+
+    expect(calls).toEqual([
+      { input: { manifestPath: undefined }, method: 'status' },
+      { input: { manifestPath: undefined, service: 'host-daemon', tail: 7 }, method: 'logs' },
       { input: { manifestPath: undefined }, method: 'stop' },
       { input: { manifestPath: undefined }, method: 'clean' },
     ])
