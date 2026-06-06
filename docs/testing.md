@@ -204,9 +204,11 @@ The worker-autonomy inversion is guarded by `tests/architecture/inversion-guards
 - C2 engine launch lives only in worker-* — G2.
 - C3 host-control owns no runtime/domain/secret state — G4.
 - C4 Soul = Template definition; Worker is its instance — covered by package/doc gates.
-- C5 only Host->Worker surface is worker-control-protocol — G5.
+- C5 only Host->Worker surface is worker-control-protocol — G5, G9, G10.
 - C6 secret redaction holds on both planes — G6.
+- Remote aissh target callback URLs reject loopback — G7.
 - Phase 2.1 managed employee remote access does not make Worker runtime depend on Host — G8.
+- Phase 2 provisioning uses target adapters instead of hard-coded aissh servers — G11.
 
 Guards whose code lands in later inversion plans start as `test.todo` and are
 promoted to real assertions when that plan lands.

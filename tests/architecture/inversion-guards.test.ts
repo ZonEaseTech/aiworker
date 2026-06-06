@@ -213,7 +213,7 @@ test('G5: the only Host->Worker contract is worker-control-protocol', () => {
   }
 })
 
-test('G5 phase-2 access: Worker may initiate only provisioning check-in and access tunnel signals', () => {
+test('G9 phase-2 access: Worker may initiate only provisioning check-in and access tunnel signals', () => {
   const architecture = read('docs/architecture.md')
   const protocol = read('docs/protocol.md')
   const runtime = read('docs/runtime.md')
@@ -251,11 +251,11 @@ test('G8 phase-2 managed access does not make Worker runtime depend on Host', ()
   expect(runtime).toContain('Host or tunnel outage makes managed remote access unavailable, but does not make the Worker runtime unusable')
 })
 
-// G5 clause-2 ↔ C5：唯一 Host→Worker 契约 worker-control-protocol 必须 transport-agnostic——
+// G10 ↔ C5 clause-2：唯一 Host→Worker 契约 worker-control-protocol 必须 transport-agnostic——
 // 契约源不得 hardcode transport（往 schema 加 httpUrl/wsEndpoint 等不该被任何测试漏过）。
 // 剥注释后断言不出现 transport token（注释合法地提到 "transport"，故须剥注释，与 G4 同法）。
 // 证非空：往任一 schema 加 `httpUrl: z.string()` 字段即变红。
-test('G5 clause-2: the control protocol contract type hardcodes no transport', () => {
+test('G10 clause-2: the control protocol contract type hardcodes no transport', () => {
   const contractPath = 'packages/worker-control-protocol/src/index.ts'
   const code = stripComments(read(contractPath))
   // 子串 token（大小写不敏感）——抓 camelCase 字段名如 httpUrl/wsEndpoint/baseUrl。
@@ -268,7 +268,7 @@ test('G5 clause-2: the control protocol contract type hardcodes no transport', (
   expect(/wss?:\/\//i.test(code), `${contractPath} must not hardcode a ws(s):// transport literal`).toBe(false)
 })
 
-test('G6 phase-2 provisioning uses target adapters instead of hard-coded aissh servers', () => {
+test('G11 phase-2 provisioning uses target adapters instead of hard-coded aissh servers', () => {
   const architecture = read('docs/architecture.md')
   const protocol = read('docs/protocol.md')
   const runtime = read('docs/runtime.md')
