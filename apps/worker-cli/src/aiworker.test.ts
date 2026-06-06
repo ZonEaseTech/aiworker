@@ -30,6 +30,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import {
   __seedWorkerForTest,
   __setDaemonStarterForTest,
+  __setOfficialSoulDescriptorsReadyForTest,
+  __setOfficialSoulDistBuilderForTest,
   downloadAndReplaceGitHubBundle,
   inspectCliOfficialAppsResource,
   prepareDaemonForeground,
@@ -72,6 +74,8 @@ describe('aiworker local CLI', () => {
 
   afterEach(async () => {
     __setDaemonStarterForTest(null)
+    __setOfficialSoulDescriptorsReadyForTest(null)
+    __setOfficialSoulDistBuilderForTest(null)
     closeWorkerDb()
     process.exitCode = 0
     for (const key of Object.keys(process.env))
@@ -2051,6 +2055,19 @@ describe('aiworker local CLI', () => {
 
     expect(await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'official-freeform', name: 'Official Freeform' }))
       .toMatchObject({ appId: FREEFORM_APP_ID })
+  })
+
+  it('builds source official Soul dist before bootstrapping official apps when descriptors are absent', async () => {
+    let builds = 0
+    __setOfficialSoulDescriptorsReadyForTest(() => false)
+    __setOfficialSoulDistBuilderForTest(async () => {
+      builds += 1
+    })
+
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+
+    expect(builds).toBe(1)
+    expect((JSON.parse(output) as { bootstrap: { status: string } }).bootstrap.status).toBe('pass')
   })
 
   it('discards legacy HR metadata during official app bootstrap', async () => {
