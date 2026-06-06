@@ -34,6 +34,10 @@ is_aiworker_host_dev_process() {
     return 0
   fi
 
+  if [[ "$command" == *"apps/host-cli/src/aiworker-host.ts daemon foreground"* ]] && is_path_inside_root "$cwd"; then
+    return 0
+  fi
+
   if [[ "$cwd" == "$ROOT_DIR/apps/host-web"* && "$command" == *"vite"* ]]; then
     return 0
   fi

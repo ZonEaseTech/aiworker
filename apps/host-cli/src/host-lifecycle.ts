@@ -88,7 +88,7 @@ async function startHostLifecycle(input: HostLifecycleStartInput): Promise<Recor
 
 async function foregroundHostLifecycle(input: HostLifecycleStartInput): Promise<Record<string, unknown>> {
   if (input.mode === 'dev')
-    throw new Error('Host daemon foreground --dev is not supported yet; use aiworker-host start --dev for source development')
+    return startHostDevForegroundLifecycle(input)
   return startHostProdForegroundLifecycle(input)
 }
 
@@ -230,6 +230,59 @@ async function startHostProdForegroundLifecycle(input: HostLifecycleStartInput):
       { kind: 'host-daemon', pid: process.pid, port: actualPort },
     ],
     webUrl: `${publicBaseUrl}/host`,
+  }
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  const shutdown = () => {
+    bunServer.stop()
+  }
+  process.once('SIGINT', shutdown)
+  process.once('SIGTERM', shutdown)
+  return {
+    ...lifecycleStartView(manifest, manifestPath),
+    daemon: {
+      pid: process.pid,
+      running: true,
+      started: false,
+    },
+    foreground: true,
+  }
+}
+
+async function startHostDevForegroundLifecycle(input: HostLifecycleStartInput): Promise<Record<string, unknown>> {
+  const manifestPath = resolveManifestPath(input.manifestPath)
+  const publicBaseUrl = normalizePublicBaseUrl(input.publicBaseUrl ?? `http://${input.host}:${input.port}`)
+  const webUrl = `http://${input.host}:${input.webPort ?? 5050}/host`
+  mkdirSync(dirname(manifestPath), { recursive: true })
+  const server = await createHostServer({
+    authUser: input.devAdminEmail
+      ? {
+          email: input.devAdminEmail,
+          roles: ['host:admin'],
+          subject: 'dev-admin',
+        }
+      : null,
+    dbPath: input.dbPath,
+    publicBaseUrl,
+    webBaseUrl: webUrl,
+  })
+  const bunServer = Bun.serve({
+    fetch: server.fetch,
+    hostname: input.host,
+    port: input.port,
+  })
+  const actualPort = bunServer.port
+  if (typeof actualPort !== 'number')
+    throw new Error('Host daemon server did not expose a bound port')
+  activeForegroundServer = bunServer
+  const manifest: HostLifecycleManifest = {
+    apiUrl: publicBaseUrl,
+    db: input.dbPath,
+    mode: 'dev',
+    profile: 'host',
+    services: [
+      { kind: 'host-daemon', pid: process.pid, port: actualPort },
+    ],
+    webUrl,
   }
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
   const shutdown = () => {
@@ -492,7 +545,11 @@ function resolveHostWebStaticDir(webStaticDir?: string): string {
 
 function selectService(manifest: HostLifecycleManifest, serviceName: string | undefined): HostLifecycleService | null {
   if (!serviceName)
-    return manifest.services.find(service => service.kind === 'host-api' || service.kind === 'host-serve') ?? manifest.services[0] ?? null
+    return manifest.services.find(service => service.kind === 'host-api' || service.kind === 'host-daemon' || service.kind === 'host-serve') ?? manifest.services[0] ?? null
+  if (serviceName === 'api')
+    return manifest.services.find(service => service.kind === 'host-api' || service.kind === 'host-daemon' || service.kind === 'host-serve') ?? null
+  if (serviceName === 'daemon')
+    return manifest.services.find(service => service.kind === 'host-daemon') ?? null
   return manifest.services.find(service => service.kind === serviceName || service.kind === `host-${serviceName}`) ?? null
 }
 

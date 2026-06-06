@@ -46,6 +46,8 @@ exit 0
 printf '%s\\n' "$*" >> "${logPath}"
 if [[ "$*" == *"apps/host-cli/src/aiworker-host.ts serve"* ]]; then
   sleep 30
+elif [[ "$*" == *"apps/host-cli/src/aiworker-host.ts daemon foreground"* ]]; then
+  sleep 30
 elif [[ "$*" == *"run dev"* ]]; then
   exit "\${FAKE_HOST_WEB_EXIT_CODE:-42}"
 else
@@ -156,10 +158,10 @@ describe('Host dev startup contract', () => {
     expect(script).not.toContain('AIWORKER_WEB_PORT="${AIWORKER_WEB_PORT:-5173}"')
   })
 
-  it('passes the configured Host bind address into the lifecycle-managed Host API service', () => {
+  it('passes the configured Host bind address into the lifecycle-managed Host daemon service', () => {
     const script = readOptionalRepoFile('scripts/dev-host.sh')
 
-    expect(script).toContain('start_host_api_background')
+    expect(script).toContain('start_host_daemon_background')
     expect(script).toContain('AIWORKER_HOST_DB')
     expect(script).toContain('AIWORKER_HOST_DEV_ADMIN_EMAIL')
     expect(script).toContain('AIWORKER_HOST')
@@ -202,7 +204,8 @@ describe('Host dev startup contract', () => {
     expect(script).toContain('"profile": "host"')
     expect(script).toContain('"apiUrl": "$AIWORKER_HOST_API_URL"')
     expect(script).toContain('"webUrl": "http://${AIWORKER_HOST}:${AIWORKER_HOST_WEB_PORT}/host"')
-    expect(script).toContain('"kind": "host-api"')
+    expect(script).toContain('"kind": "host-daemon"')
+    expect(script).not.toContain('"kind": "host-api"')
     expect(script).toContain('"kind": "host-web"')
     expect(script).not.toContain('"tmuxSession": "$AIWORKER_HOST_API_TMUX_SESSION"')
     expect(script.indexOf('restart_host_web_tmux'), 'Host Web should start before manifest is written')
@@ -215,7 +218,9 @@ describe('Host dev startup contract', () => {
 
     expect(script).toContain('AIWORKER_HOST_WEB_TMUX_SESSION="${AIWORKER_HOST_WEB_TMUX_SESSION:-aiworker-vite-host}"')
     expect(script).toContain('require_tmux')
-    expect(script).toContain('start_host_api_background')
+    expect(script).toContain('start_host_daemon_background')
+    expect(script).toContain('daemon foreground')
+    expect(script).not.toContain('apps/host-cli/src/aiworker-host.ts serve')
     expect(script).not.toContain('nohup bun apps/host-cli/src/aiworker-host.ts serve')
     expect(script).toContain('restart_host_web_tmux')
     expect(script).toContain('tmux new-session')
@@ -225,6 +230,7 @@ describe('Host dev startup contract', () => {
     expect(script).not.toContain('"tmuxSession": "$AIWORKER_HOST_API_TMUX_SESSION"')
     expect(script).not.toContain('[dev:host] tmux api:')
     expect(script).toContain('"tmuxSession": "$AIWORKER_HOST_WEB_TMUX_SESSION"')
+    expect(controlScript).toContain('apps/host-cli/src/aiworker-host.ts daemon foreground')
     expect(controlScript).not.toContain('AIWORKER_HOST_API_TMUX_SESSION')
     expect(controlScript).toContain('tmux kill-session -t "$AIWORKER_HOST_WEB_TMUX_SESSION"')
   })

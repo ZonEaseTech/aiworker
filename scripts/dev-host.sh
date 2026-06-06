@@ -10,11 +10,11 @@ AIWORKER_HOST_API_URL="${AIWORKER_HOST_API_URL:-http://${AIWORKER_HOST}:${AIWORK
 AIWORKER_HOST_DB="${AIWORKER_HOST_DB:-${HOME}/.aiworker-dev/host.db}"
 AIWORKER_HOST_MANIFEST="${AIWORKER_HOST_MANIFEST:-${HOME}/.aiworker-dev/dev-host.json}"
 AIWORKER_HOST_LOG_DIR="${AIWORKER_HOST_LOG_DIR:-$(dirname "$AIWORKER_HOST_MANIFEST")}"
-AIWORKER_HOST_API_LOG="${AIWORKER_HOST_API_LOG:-${AIWORKER_HOST_LOG_DIR}/host-api.log}"
+AIWORKER_HOST_DAEMON_LOG="${AIWORKER_HOST_DAEMON_LOG:-${AIWORKER_HOST_LOG_DIR}/host-daemon.log}"
 AIWORKER_HOST_DEV_ADMIN_EMAIL="${AIWORKER_HOST_DEV_ADMIN_EMAIL:-admin@zonease.org}"
 AIWORKER_HOST_WEB_TMUX_SESSION="${AIWORKER_HOST_WEB_TMUX_SESSION:-aiworker-vite-host}"
 
-API_PID=""
+DAEMON_PID=""
 
 listener_for_port() {
   lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null || true
@@ -54,8 +54,8 @@ cleanup() {
   trap - EXIT INT TERM
   tmux kill-session -t "$AIWORKER_HOST_WEB_TMUX_SESSION" 2>/dev/null || true
 
-  if [[ -n "$API_PID" ]] && kill -0 "$API_PID" 2>/dev/null; then
-    kill -TERM "$API_PID" 2>/dev/null || true
+  if [[ -n "$DAEMON_PID" ]] && kill -0 "$DAEMON_PID" 2>/dev/null; then
+    kill -TERM "$DAEMON_PID" 2>/dev/null || true
   fi
 
   exit "$status"
@@ -95,21 +95,24 @@ stop_legacy_host_api_tmux() {
   tmux kill-session -t aiworker-host-api 2>/dev/null || true
 }
 
-start_host_api_background() {
-  echo "[dev:host] starting Host API on ${AIWORKER_HOST_API_URL}"
-  mkdir -p "$(dirname "$AIWORKER_HOST_API_LOG")"
+start_host_daemon_background() {
+  echo "[dev:host] starting Host daemon on ${AIWORKER_HOST_API_URL}"
+  mkdir -p "$(dirname "$AIWORKER_HOST_DAEMON_LOG")"
   (
     cd "$ROOT_DIR"
-    exec bun apps/host-cli/src/aiworker-host.ts serve \
+    exec bun apps/host-cli/src/aiworker-host.ts daemon foreground \
+      --dev \
       --db "$AIWORKER_HOST_DB" \
       --dev-admin-email "$AIWORKER_HOST_DEV_ADMIN_EMAIL" \
       --host "$AIWORKER_HOST" \
+      --manifest "$AIWORKER_HOST_MANIFEST" \
       --public-base-url "$AIWORKER_HOST_API_URL" \
       --port "$AIWORKER_HOST_API_PORT" \
-      >> "$AIWORKER_HOST_API_LOG" 2>&1
+      --web-port "$AIWORKER_HOST_WEB_PORT" \
+      >> "$AIWORKER_HOST_DAEMON_LOG" 2>&1
   ) &
-  API_PID=$!
-  echo "[dev:host] Host API pid=$API_PID log=$AIWORKER_HOST_API_LOG"
+  DAEMON_PID=$!
+  echo "[dev:host] Host daemon pid=$DAEMON_PID log=$AIWORKER_HOST_DAEMON_LOG"
 }
 
 restart_host_web_tmux() {
@@ -131,7 +134,7 @@ write_host_manifest() {
   "webUrl": "http://${AIWORKER_HOST}:${AIWORKER_HOST_WEB_PORT}/host",
   "db": "$AIWORKER_HOST_DB",
   "services": [
-    { "kind": "host-api", "port": $AIWORKER_HOST_API_PORT, "pid": $API_PID, "logFile": "$AIWORKER_HOST_API_LOG" },
+    { "kind": "host-daemon", "port": $AIWORKER_HOST_API_PORT, "pid": $DAEMON_PID, "logFile": "$AIWORKER_HOST_DAEMON_LOG" },
     { "kind": "host-web", "port": $AIWORKER_HOST_WEB_PORT, "tmuxSession": "$AIWORKER_HOST_WEB_TMUX_SESSION" }
   ]
 }
@@ -152,7 +155,7 @@ trap cleanup EXIT INT TERM
 echo "[dev:host] AIWORKER_HOST_DB=$AIWORKER_HOST_DB"
 echo "[dev:host] AIWORKER_HOST_DEV_ADMIN_EMAIL=$AIWORKER_HOST_DEV_ADMIN_EMAIL"
 
-start_host_api_background
+start_host_daemon_background
 wait_for_host_api
 ensure_port_free "$AIWORKER_HOST_WEB_PORT"
 restart_host_web_tmux
@@ -162,7 +165,7 @@ write_host_manifest
 echo
 echo "[dev:host] web: http://${AIWORKER_HOST}:${AIWORKER_HOST_WEB_PORT}/host"
 echo "[dev:host] api: $AIWORKER_HOST_API_URL"
-echo "[dev:host] api log: $AIWORKER_HOST_API_LOG"
+echo "[dev:host] daemon log: $AIWORKER_HOST_DAEMON_LOG"
 echo "[dev:host] tmux web: tmux attach -t $AIWORKER_HOST_WEB_TMUX_SESSION"
 echo "[dev:host] stop: bun run dev:host:stop"
 echo

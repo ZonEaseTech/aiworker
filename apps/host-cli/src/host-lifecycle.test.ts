@@ -101,13 +101,16 @@ describe('Host lifecycle', () => {
     }
   })
 
-  it('starts development Host API as a persistent pid service and Host Web in tmux', async () => {
+  it('starts development Host daemon as the API service and Host Web in tmux', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-dev-lifecycle-'))
     const apiPort = reservePort()
     const webPort = reservePort()
     const apiUrl = `http://127.0.0.1:${apiPort}`
     const webUrl = `http://127.0.0.1:${webPort}/host`
     const manifestPath = join(dir, 'dev-host.json')
+    const previousTmuxSession = process.env.AIWORKER_HOST_WEB_TMUX_SESSION
+    const tmuxSession = `aiworker-vite-host-test-${Date.now()}`
+    process.env.AIWORKER_HOST_WEB_TMUX_SESSION = tmuxSession
 
     const lifecycle = createHostLifecycle()
     try {
@@ -126,8 +129,8 @@ describe('Host lifecycle', () => {
         manifestPath,
         mode: 'dev',
         services: [
-          { kind: 'host-api', port: apiPort },
-          { kind: 'host-web', port: webPort, tmuxSession: 'aiworker-vite-host' },
+          { kind: 'host-daemon', port: apiPort },
+          { kind: 'host-web', port: webPort, tmuxSession },
         ],
         webUrl,
       })
@@ -141,7 +144,7 @@ describe('Host lifecycle', () => {
         profile: 'host',
         running: true,
         services: [
-          { kind: 'host-api', port: apiPort, running: true },
+          { kind: 'host-daemon', port: apiPort, running: true },
           { kind: 'host-web', port: webPort, running: true },
         ],
         web: { reachable: true, url: webUrl },
@@ -149,6 +152,10 @@ describe('Host lifecycle', () => {
     }
     finally {
       await lifecycle.clean({ manifestPath })
+      if (previousTmuxSession === undefined)
+        delete process.env.AIWORKER_HOST_WEB_TMUX_SESSION
+      else
+        process.env.AIWORKER_HOST_WEB_TMUX_SESSION = previousTmuxSession
       rmSync(dir, { force: true, recursive: true })
     }
   })
@@ -184,6 +191,33 @@ describe('Host lifecycle', () => {
       expect(logs).not.toContain('awp_secret')
       expect(logs).not.toContain('sk-host-secret')
       expect(logs).not.toContain('literal-secret-value')
+    }
+    finally {
+      rmSync(dir, { force: true, recursive: true })
+    }
+  })
+
+  it('treats api logs as Host daemon logs when the manifest uses host-daemon', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-daemon-logs-'))
+    const manifestPath = join(dir, 'dev-host.json')
+    const logFile = join(dir, 'host-daemon.log')
+    writeFileSync(logFile, 'host daemon ready\n')
+    writeFileSync(manifestPath, JSON.stringify({
+      apiUrl: 'http://127.0.0.1:9117',
+      db: join(dir, 'host.db'),
+      mode: 'dev',
+      profile: 'host',
+      services: [
+        { kind: 'host-daemon', logFile, port: 9117 },
+        { kind: 'host-web', port: 5050, tmuxSession: 'aiworker-vite-host' },
+      ],
+      webUrl: 'http://127.0.0.1:5050/host',
+    }))
+
+    try {
+      const logs = await createHostLifecycle().logs({ manifestPath, service: 'api', tail: 10 })
+
+      expect(logs).toContain('host daemon ready')
     }
     finally {
       rmSync(dir, { force: true, recursive: true })
