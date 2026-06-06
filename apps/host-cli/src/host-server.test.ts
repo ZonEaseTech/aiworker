@@ -201,6 +201,67 @@ describe('host server', () => {
     expect(listed.assignments).toHaveLength(0)
   })
 
+  it('maps storage validation errors without leaking literal secrets', async () => {
+    const server = await createHostServer({
+      authUser: { email: 'admin@zonease.org', roles: ['host:admin'], subject: 'usr_admin_zonease' },
+      dbPath: ':memory:',
+      hostBrowserBaseUrl: 'http://127.0.0.1:5050',
+      hostControlBaseUrl: 'http://127.0.0.1:9117',
+    })
+
+    const response = await server.fetch(new Request('http://host/api/host/assignments', {
+      body: JSON.stringify({
+        assignedEmail: 'bob@zonease.org',
+        provisioningTarget: {
+          adapterType: 'local',
+          maturity: 'dev',
+          ref: 'local://default?token=literal-secret',
+        },
+        soulReleaseRef: 'aiworker-freeform@dev',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }))
+    const responseText = await response.text()
+
+    expect(response.status).toBe(400)
+    expect(JSON.parse(responseText)).toEqual({ error: { code: 'INVALID_ASSIGNMENT_REQUEST' } })
+    expect(responseText).not.toContain('literal-secret')
+    expect(responseText).not.toContain('token=')
+
+    const listed = await json(await server.fetch(new Request('http://host/api/host/assignments')))
+    expect(listed.assignments).toHaveLength(0)
+  })
+
+  it('rejects invalid provisioning target shape before storage', async () => {
+    const server = await createHostServer({
+      authUser: { email: 'admin@zonease.org', roles: ['host:admin'], subject: 'usr_admin_zonease' },
+      dbPath: ':memory:',
+      hostBrowserBaseUrl: 'http://127.0.0.1:5050',
+      hostControlBaseUrl: 'http://127.0.0.1:9117',
+    })
+
+    const response = await server.fetch(new Request('http://host/api/host/assignments', {
+      body: JSON.stringify({
+        assignedEmail: 'bob@zonease.org',
+        provisioningTarget: {
+          adapterType: 'kubernetes',
+          maturity: 'dev',
+          ref: 'k8s://default',
+        },
+        soulReleaseRef: 'aiworker-freeform@dev',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: { code: 'INVALID_ASSIGNMENT_REQUEST' } })
+
+    const listed = await json(await server.fetch(new Request('http://host/api/host/assignments')))
+    expect(listed.assignments).toHaveLength(0)
+  })
+
   it('quotes unsafe host values in one-time provision commands', async () => {
     const hostControlBaseUrl = 'https://aiworker.zonease.org/~host'
     const server = await createHostServer({

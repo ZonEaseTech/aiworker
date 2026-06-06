@@ -180,11 +180,17 @@ async function handleAssignments(
     return json({ error: { code: 'INVALID_ASSIGNMENT_REQUEST' } }, { status: 400 })
   }
 
-  const created = createAssignment({
-    assignedEmail: body.assignedEmail,
-    provisioningTarget,
-    soulReleaseRef: body.soulReleaseRef,
-  })
+  let created: ReturnType<typeof createAssignment>
+  try {
+    created = createAssignment({
+      assignedEmail: body.assignedEmail,
+      provisioningTarget,
+      soulReleaseRef: body.soulReleaseRef,
+    })
+  }
+  catch {
+    return json({ error: { code: 'INVALID_ASSIGNMENT_REQUEST' } }, { status: 400 })
+  }
 
   let delivery: ProvisioningDeliveryResult
   try {
