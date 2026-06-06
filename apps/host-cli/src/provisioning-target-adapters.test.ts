@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import { spawnSync } from 'node:child_process'
 
 import { deliverProvisioningTarget } from './provisioning-target-adapters'
 
@@ -29,6 +30,26 @@ describe('provisioning target adapters', () => {
     expect(JSON.stringify(delivery)).not.toContain('awp_secret')
   })
 
+  it('keeps nested aissh provision command separate from top-level reason argv', () => {
+    const delivery = deliverProvisioningTarget({
+      ...baseInput,
+      adapterRuntimeControlBaseUrl: 'https://dev-host.example.com',
+      adapterType: 'aissh',
+      assignedEmail: 'bob.o\'connor@zonease.org',
+      maturity: 'production',
+      targetRef: 'srv-1',
+    })
+
+    const argv = parseAisshArgv(delivery.deliveryReceipt.command)
+
+    expect(argv).toEqual([
+      'exec',
+      'srv-1',
+      'bun apps/worker-cli/src/aiworker.ts provision --host https://dev-host.example.com --token awp_[REDACTED]',
+      '--reason=Provision AIWorker for bob.o\'connor@zonease.org',
+    ])
+  })
+
   it('rejects remote aissh loopback callback URL', () => {
     expect(() => deliverProvisioningTarget({
       ...baseInput,
@@ -50,6 +71,7 @@ describe('provisioning target adapters', () => {
     expect(delivery.deliveryReceipt.command).toContain('docker run')
     expect(delivery.deliveryReceipt.command).toContain('AIWORKER_HOME=/home/aiworker/.aiworker')
     expect(delivery.deliveryReceipt.command).toContain('aiworker-worker-asn_1')
+    expectShellSyntaxValid(delivery.deliveryReceipt.command)
   })
 
   it('builds local delivery command with isolated AIWORKER_HOME', () => {
@@ -63,4 +85,34 @@ describe('provisioning target adapters', () => {
     expect(delivery.deliveryReceipt.command).toContain('AIWORKER_HOME=')
     expect(delivery.deliveryReceipt.command).toContain('apps/worker-cli/src/aiworker.ts provision')
   })
+
+  it('redacts non-awp provision token from all returned strings', () => {
+    const delivery = deliverProvisioningTarget({
+      ...baseInput,
+      adapterType: 'local',
+      maturity: 'dev',
+      provisionToken: 'plain-secret-token',
+      targetRef: 'local://default',
+    })
+
+    expect(JSON.stringify(delivery)).not.toContain('plain-secret-token')
+  })
 })
+
+function parseAisshArgv(command: string): string[] {
+  const result = spawnSync('bash', ['-c', `aissh() { printf '%s\\0' "$@"; }\n${command}`], {
+    encoding: 'buffer',
+  })
+  if (result.status !== 0) {
+    throw new Error(`Failed to parse aissh command:\n${String(result.stderr)}`)
+  }
+  return result.stdout.toString('utf8').split('\0').filter(Boolean)
+}
+
+function expectShellSyntaxValid(command: string): void {
+  const result = spawnSync('bash', ['-n', '-c', command], {
+    encoding: 'utf8',
+  })
+  expect(result.stderr).toBe('')
+  expect(result.status).toBe(0)
+}

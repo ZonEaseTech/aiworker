@@ -85,9 +85,19 @@ function buildLocalCommand(assignmentId: string, provisionCommand: string): stri
 function shellQuote(value: string): string {
   if (/^[\w/:=.,@%+-]+$/.test(value))
     return value
-  return `'${value.replaceAll(/'/g, String.raw`'\''`)}`
+  return `'${value.replaceAll('\'', String.raw`'\''`)}'`
 }
 
 function redactProvisioningCommand(command: string, provisionToken: string): string {
-  return command.replaceAll(provisionToken, redactProvisionToken(provisionToken))
+  if (provisionToken.length === 0)
+    return command
+  const redactedProvisionToken = redactProvisionTokenValue(provisionToken)
+  return command
+    .replaceAll(shellQuote(provisionToken), redactedProvisionToken)
+    .replaceAll(provisionToken, redactedProvisionToken)
+}
+
+function redactProvisionTokenValue(provisionToken: string): string {
+  const redactedProvisionToken = redactProvisionToken(provisionToken)
+  return redactedProvisionToken === provisionToken ? '[REDACTED]' : redactedProvisionToken
 }
