@@ -83,22 +83,36 @@ describe('createHostApiClient', () => {
 
   it('creates assignments with the expected method and body', async () => {
     const fetchImpl = createFetch(jsonResponse({
-      aisshCommand: 'aissh exec srv-1 "bun aiworker provision --token awp_secret" --reason=test',
       assignment: readyAssignment,
-      provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --token awp_secret',
+      deliveryReceipt: {
+        adapterType: 'docker',
+        command: 'docker run aiworker-worker-asn_1 bun apps/worker-cli/src/aiworker.ts provision --token awp_[REDACTED]',
+        targetRef: 'docker://local/default',
+      },
+      deliveryStatus: 'delivered',
+      provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --host http://host.test --token awp_[REDACTED]',
     }))
     const client = createHostApiClient({ baseUrl: '', fetch: fetchImpl })
 
     const input = {
       assignedEmail: 'lin@example.com',
-      serverRef: 'aissh://server/ap-sg-01',
+      provisioningTarget: {
+        adapterType: 'docker',
+        maturity: 'preview',
+        ref: 'docker://local/default',
+      },
       soulReleaseRef: 'freeform@2026.06.01',
-    }
+    } as const
 
     await expect(client.createAssignment(input)).resolves.toEqual({
-      aisshCommand: 'aissh exec srv-1 "bun aiworker provision --token awp_secret" --reason=test',
       assignment: readyAssignment,
-      provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --token awp_secret',
+      deliveryReceipt: {
+        adapterType: 'docker',
+        command: 'docker run aiworker-worker-asn_1 bun apps/worker-cli/src/aiworker.ts provision --token awp_[REDACTED]',
+        targetRef: 'docker://local/default',
+      },
+      deliveryStatus: 'delivered',
+      provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --host http://host.test --token awp_[REDACTED]',
     })
 
     expect(fetchImpl.calls).toHaveLength(1)
@@ -107,11 +121,47 @@ describe('createHostApiClient', () => {
     expect(JSON.parse(String(fetchImpl.calls[0]?.init?.body))).toEqual(input)
   })
 
+  it('includes the adapter runtime callback URL when creating assignments', async () => {
+    const fetchImpl = createFetch(jsonResponse({
+      assignment: readyAssignment,
+      provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --token awp_[REDACTED]',
+    }))
+    const client = createHostApiClient({ baseUrl: '', fetch: fetchImpl })
+
+    await client.createAssignment({
+      adapterRuntimeControlBaseUrl: 'https://host.example.com',
+      assignedEmail: 'lin@example.com',
+      provisioningTarget: {
+        adapterType: 'aissh',
+        maturity: 'production',
+        ref: 'srv-1',
+      },
+      soulReleaseRef: 'freeform@2026.06.01',
+    })
+
+    expect(JSON.parse(String(fetchImpl.calls[0]?.init?.body))).toMatchObject({
+      adapterRuntimeControlBaseUrl: 'https://host.example.com',
+      provisioningTarget: {
+        adapterType: 'aissh',
+        maturity: 'production',
+        ref: 'srv-1',
+      },
+    })
+  })
+
   it('loads Host options from the configured API base URL', async () => {
     const fetchImpl = createFetch(jsonResponse({
       access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
       auth: { mode: 'dev-static', status: 'deferred-logto' },
-      provisioningTargets: [{ id: 'srv-1', displayName: 'aiwork', adapterType: 'aissh', maturity: 'production', ref: 'srv-1' }],
+      provisioningTargets: [{
+        adapterType: 'aissh',
+        capabilities: ['remote-delivery'],
+        displayName: 'aiwork',
+        health: 'ready',
+        id: 'srv-1',
+        maturity: 'production',
+        ref: 'srv-1',
+      }],
       soulReleases: [{
         descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
         id: 'aiworker-freeform',

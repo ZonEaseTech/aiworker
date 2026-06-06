@@ -11,6 +11,9 @@ export type AssignmentStatus
 export interface HostAssignmentSummary {
   assignedEmail: string
   assignmentId?: string
+  provisioningAdapterType?: ProvisioningAdapterType
+  provisioningTargetMaturity?: ProvisioningTargetMaturity
+  provisioningTargetRef?: string
   revokedAt?: null | string
   serverRef: string
   soulReleaseRef: string
@@ -20,15 +23,28 @@ export interface HostAssignmentSummary {
 }
 
 export interface CreateHostAssignmentInput {
+  adapterRuntimeControlBaseUrl?: string
   assignedEmail: string
-  serverRef: string
+  provisioningTarget: {
+    adapterType: HostProvisioningTargetOption['adapterType']
+    maturity: HostProvisioningTargetOption['maturity']
+    ref: string
+  }
   soulReleaseRef: string
 }
 
 export interface CreateHostAssignmentResult {
-  aisshCommand?: string
   assignment: HostAssignmentSummary
+  deliveryReceipt?: {
+    adapterType: ProvisioningAdapterType
+    command: string
+    targetRef: string
+  }
+  deliveryStatus?: 'delivered'
+  expectedCheckInDeadline?: string
+  operatorHint?: string
   provisionCommand: string
+  provisionToken?: string
 }
 
 export type ProvisioningAdapterType = 'aissh' | 'docker' | 'local'
@@ -137,8 +153,11 @@ export function createHostApiClient(options: CreateHostApiClientOptions = {}): H
     async createAssignment(input) {
       return requestJson<CreateHostAssignmentResult>(fetchImpl, assignmentsUrl, {
         body: JSON.stringify({
+          ...(input.adapterRuntimeControlBaseUrl
+            ? { adapterRuntimeControlBaseUrl: input.adapterRuntimeControlBaseUrl }
+            : {}),
           assignedEmail: input.assignedEmail,
-          serverRef: input.serverRef,
+          provisioningTarget: input.provisioningTarget,
           soulReleaseRef: input.soulReleaseRef,
         }),
         headers: { 'content-type': 'application/json' },

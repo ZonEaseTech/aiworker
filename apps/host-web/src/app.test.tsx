@@ -13,7 +13,35 @@ import { HostControlPlane } from './app'
 const hostOptions: HostOptionsSummary = {
   access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
   auth: { mode: 'dev-static', status: 'deferred-logto' },
-  servers: [{ host: '172.105.219.50', id: 'srv-1', name: 'aiwork', source: 'aissh' }],
+  provisioningTargets: [
+    {
+      adapterType: 'aissh',
+      capabilities: ['remote-delivery'],
+      displayName: 'aiwork',
+      health: 'ready',
+      id: 'aissh:srv-1',
+      maturity: 'production',
+      ref: 'srv-1',
+    },
+    {
+      adapterType: 'docker',
+      capabilities: ['clean-container'],
+      displayName: 'Docker 预发布环境',
+      health: 'ready',
+      id: 'docker:local-default',
+      maturity: 'preview',
+      ref: 'docker://local/default',
+    },
+    {
+      adapterType: 'local',
+      capabilities: ['local-process'],
+      displayName: '本机开发环境',
+      health: 'ready',
+      id: 'local:default',
+      maturity: 'dev',
+      ref: 'local://default',
+    },
+  ],
   soulReleases: [{
     descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
     id: 'aiworker-freeform',
@@ -26,6 +54,9 @@ const hostOptions: HostOptionsSummary = {
 const checkedInAssignment: HostAssignmentSummary = {
   assignedEmail: 'lin@example.com',
   assignmentId: 'asn_lin',
+  provisioningAdapterType: 'aissh',
+  provisioningTargetMaturity: 'production',
+  provisioningTargetRef: 'srv-1',
   serverRef: 'srv-1',
   soulReleaseRef: 'aiworker-freeform@dev',
   status: 'checked_in',
@@ -36,6 +67,9 @@ const checkedInAssignment: HostAssignmentSummary = {
 const readyAssignment: HostAssignmentSummary = {
   assignedEmail: 'mei@example.com',
   assignmentId: 'asn_mei',
+  provisioningAdapterType: 'aissh',
+  provisioningTargetMaturity: 'production',
+  provisioningTargetRef: 'srv-2',
   serverRef: 'srv-2',
   soulReleaseRef: 'support@2026.06.01',
   status: 'ready',
@@ -107,10 +141,13 @@ describe('host control plane', () => {
     expect(await screen.findByText('暂无开通记录')).not.toBeNull()
   })
 
-  it('uses Host options for server and Soul selection when creating an assignment', async () => {
+  it('uses Host options for provisioning target and Soul selection when creating an assignment', async () => {
     const createdAssignment: HostAssignmentSummary = {
       assignedEmail: 'mei@example.com',
       assignmentId: 'asn_new',
+      provisioningAdapterType: 'aissh',
+      provisioningTargetMaturity: 'production',
+      provisioningTargetRef: 'srv-1',
       serverRef: 'srv-1',
       soulReleaseRef: 'aiworker-freeform@dev',
       status: 'provisioning',
@@ -118,9 +155,14 @@ describe('host control plane', () => {
       workbenchUrl: null,
     }
     const createAssignment = vi.fn().mockResolvedValue({
-      aisshCommand: 'aissh exec srv-1 "bun aiworker provision --token awp_secret" --reason=test',
       assignment: createdAssignment,
-      provisionCommand: 'bun aiworker provision --token awp_secret',
+      deliveryReceipt: {
+        adapterType: 'aissh',
+        command: 'aissh exec srv-1 "bun aiworker provision --token awp_[REDACTED]" --reason=test',
+        targetRef: 'srv-1',
+      },
+      provisionCommand: 'bun aiworker provision --token awp_[REDACTED]',
+      provisionToken: 'awp_secret',
     })
     const listAssignments = vi.fn()
       .mockResolvedValueOnce([])
@@ -130,27 +172,71 @@ describe('host control plane', () => {
     render(<HostControlPlane api={api} />)
 
     expect((await screen.findAllByText(/aiwork/)).length).toBeGreaterThan(0)
+    expect(screen.getByLabelText('provisioning target')).not.toBeNull()
+    expect(screen.queryByLabelText('aissh server')).toBeNull()
+    expect(screen.getByText('docker · preview')).not.toBeNull()
+    expect(screen.getByText('local · dev')).not.toBeNull()
     fillEmployeeEmail('mei@example.com')
     submitCreateForm()
 
     await waitFor(() => {
       expect(createAssignment).toHaveBeenCalledWith({
         assignedEmail: 'mei@example.com',
-        serverRef: 'srv-1',
+        provisioningTarget: {
+          adapterType: 'aissh',
+          maturity: 'production',
+          ref: 'srv-1',
+        },
         soulReleaseRef: 'aiworker-freeform@dev',
       } satisfies CreateHostAssignmentInput)
     })
     expect(await screen.findByText('mei@example.com')).not.toBeNull()
     expect(screen.getByText('Provision command')).not.toBeNull()
-    expect(screen.getByText('aissh exec command')).not.toBeNull()
-    expect(screen.getAllByText(/awp_secret/).length).toBeGreaterThan(0)
+    expect(screen.getByText('Delivery command')).not.toBeNull()
+    expect(screen.getByText('Provision token')).not.toBeNull()
+    expect(screen.getAllByText(/awp_secret/).length).toBe(1)
     expect(listAssignments).toHaveBeenCalledTimes(2)
+  })
+
+  it('sends callback URL only for aissh provisioning targets', async () => {
+    const createAssignment = vi.fn().mockResolvedValue({
+      assignment: checkedInAssignment,
+      provisionCommand: 'bun aiworker provision --token awp_[REDACTED]',
+    })
+    const api = createApi({
+      createAssignment,
+      listAssignments: vi.fn().mockResolvedValue([]),
+    })
+
+    render(<HostControlPlane api={api} />)
+
+    expect(await screen.findByLabelText('Worker callback URL')).not.toBeNull()
+    fireEvent.change(screen.getByLabelText('Worker callback URL'), {
+      target: { value: 'https://host.example.com' },
+    })
+    fillEmployeeEmail('remote@example.com')
+    submitCreateForm()
+
+    await waitFor(() => {
+      expect(createAssignment).toHaveBeenCalledWith(expect.objectContaining({
+        adapterRuntimeControlBaseUrl: 'https://host.example.com',
+        provisioningTarget: expect.objectContaining({ adapterType: 'aissh' }),
+      }))
+    })
+
+    fireEvent.change(screen.getByLabelText('provisioning target'), {
+      target: { value: 'local:default' },
+    })
+    expect(screen.queryByLabelText('Worker callback URL')).toBeNull()
   })
 
   it('clears one-time commands before a later create failure', async () => {
     const createdAssignment: HostAssignmentSummary = {
       assignedEmail: 'mei@example.com',
       assignmentId: 'asn_new',
+      provisioningAdapterType: 'aissh',
+      provisioningTargetMaturity: 'production',
+      provisioningTargetRef: 'srv-1',
       serverRef: 'srv-1',
       soulReleaseRef: 'aiworker-freeform@dev',
       status: 'provisioning',
@@ -159,9 +245,14 @@ describe('host control plane', () => {
     }
     const createAssignment = vi.fn()
       .mockResolvedValueOnce({
-        aisshCommand: 'aissh exec srv-1 "bun aiworker provision --token awp_secret" --reason=test',
         assignment: createdAssignment,
-        provisionCommand: 'bun aiworker provision --token awp_secret',
+        deliveryReceipt: {
+          adapterType: 'aissh',
+          command: 'aissh exec srv-1 "bun aiworker provision --token awp_[REDACTED]" --reason=test',
+          targetRef: 'srv-1',
+        },
+        provisionCommand: 'bun aiworker provision --token awp_[REDACTED]',
+        provisionToken: 'awp_secret',
       })
       .mockRejectedValueOnce(new Error('CREATE_FAILED'))
     const listAssignments = vi.fn()
@@ -183,7 +274,7 @@ describe('host control plane', () => {
     expect(await screen.findByText(/CREATE_FAILED/)).not.toBeNull()
     expect(screen.queryByText(/awp_secret/)).toBeNull()
     expect(screen.queryByText('Provision command')).toBeNull()
-    expect(screen.queryByText('aissh exec command')).toBeNull()
+    expect(screen.queryByText('Delivery command')).toBeNull()
   })
 
   it('keeps refreshed assignments when an older list request resolves late', async () => {
@@ -192,6 +283,9 @@ describe('host control plane', () => {
     const createdAssignment: HostAssignmentSummary = {
       assignedEmail: 'mei@example.com',
       assignmentId: 'asn_new',
+      provisioningAdapterType: 'aissh',
+      provisioningTargetMaturity: 'production',
+      provisioningTargetRef: 'srv-1',
       serverRef: 'srv-1',
       soulReleaseRef: 'aiworker-freeform@dev',
       status: 'provisioning',

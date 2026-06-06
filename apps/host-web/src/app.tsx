@@ -5,6 +5,7 @@ import type {
   HostApiClient,
   HostAssignmentSummary,
   HostOptionsSummary,
+  HostProvisioningTargetOption,
 } from './host-api'
 
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
@@ -40,14 +41,16 @@ export interface HostControlPlaneProps {
 }
 
 interface AssignmentFormState {
+  adapterRuntimeControlBaseUrl: string
   assignedEmail: string
-  serverRef: string
+  provisioningTargetId: string
   soulReleaseRef: string
 }
 
 const emptyFormState: AssignmentFormState = {
+  adapterRuntimeControlBaseUrl: '',
   assignedEmail: '',
-  serverRef: '',
+  provisioningTargetId: '',
   soulReleaseRef: '',
 }
 
@@ -107,11 +110,19 @@ function assignmentKey(assignment: HostAssignmentSummary): string {
   return assignment.assignmentId ?? `${assignment.assignedEmail}-${assignment.soulReleaseRef}`
 }
 
-function selectedServerLabel(options: HostOptionsSummary | null, serverRef: string): string {
-  const server = options?.servers.find(item => item.id === serverRef)
-  if (!server)
-    return serverRef || '未选择'
-  return server.name ? `${server.name} (${server.id})` : server.id
+function targetLabel(target: HostProvisioningTargetOption): string {
+  return `${target.displayName} · ${target.adapterType} · ${target.maturity}`
+}
+
+function selectedTarget(options: HostOptionsSummary | null, targetId: string): HostProvisioningTargetOption | null {
+  return options?.provisioningTargets.find(item => item.id === targetId || item.ref === targetId) ?? null
+}
+
+function selectedTargetDescription(options: HostOptionsSummary | null, targetId: string): string {
+  const target = selectedTarget(options, targetId)
+  if (!target)
+    return targetId || '未选择'
+  return target.description ? `${targetLabel(target)} · ${target.description}` : targetLabel(target)
 }
 
 function selectedSoulLabel(options: HostOptionsSummary | null, soulReleaseRef: string): string {
@@ -139,6 +150,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
   const [options, setOptions] = useState<HostOptionsSummary | null>(null)
   const [optionsError, setOptionsError] = useState<null | string>(null)
   const [lastCreateResult, setLastCreateResult] = useState<CreateHostAssignmentResult | null>(null)
+  const currentTarget = selectedTarget(options, formState.provisioningTargetId)
 
   const refreshAssignments = useCallback(async () => {
     const requestId = assignmentRequestIdRef.current + 1
@@ -176,7 +188,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
       setOptionsError(null)
       setFormState(current => ({
         ...current,
-        serverRef: current.serverRef || nextOptions.servers[0]?.id || '',
+        provisioningTargetId: current.provisioningTargetId || nextOptions.provisioningTargets[0]?.id || '',
         soulReleaseRef: current.soulReleaseRef || nextOptions.soulReleases[0]?.releaseRef || '',
       }))
     }
@@ -201,9 +213,22 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
     setCreateError(null)
     setLastCreateResult(null)
 
+    const target = selectedTarget(options, formState.provisioningTargetId)
+    if (!target) {
+      setCreateError('请选择 provisioning target')
+      return
+    }
+
     const input = {
+      ...(target.adapterType === 'aissh' && formState.adapterRuntimeControlBaseUrl.trim()
+        ? { adapterRuntimeControlBaseUrl: formState.adapterRuntimeControlBaseUrl.trim() }
+        : {}),
       assignedEmail: formState.assignedEmail.trim(),
-      serverRef: formState.serverRef.trim(),
+      provisioningTarget: {
+        adapterType: target.adapterType,
+        maturity: target.maturity,
+        ref: target.ref,
+      },
       soulReleaseRef: formState.soulReleaseRef.trim(),
     }
 
@@ -215,7 +240,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
       setLastCreateResult(created)
       setFormState(current => ({
         ...emptyFormState,
-        serverRef: current.serverRef,
+        provisioningTargetId: current.provisioningTargetId,
         soulReleaseRef: current.soulReleaseRef,
       }))
       await refreshAssignments()
@@ -277,7 +302,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
 
           <section className="grid gap-3 sm:grid-cols-3" aria-label="Host readiness summary">
             <SummaryBlock label="Assignments" value={String(assignments.length)} />
-            <SummaryBlock label="aissh servers" value={String(options?.servers.length ?? 0)} />
+            <SummaryBlock label="Provisioning targets" value={String(options?.provisioningTargets.length ?? 0)} />
             <SummaryBlock label="Soul releases" value={String(options?.soulReleases.length ?? 0)} />
           </section>
 
@@ -316,7 +341,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                     <TableHeader>
                       <TableRow>
                         <TableHead>员工</TableHead>
-                        <TableHead>Server</TableHead>
+                        <TableHead>Target</TableHead>
                         <TableHead>Soul</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Next</TableHead>
@@ -336,7 +361,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                                 </p>
                               </div>
                             </TableCell>
-                            <TableCell>{assignment.serverRef}</TableCell>
+                            <TableCell>{assignment.provisioningTargetRef ?? assignment.serverRef}</TableCell>
                             <TableCell>{assignment.soulReleaseRef}</TableCell>
                             <TableCell>
                               <Badge variant={assignment.status === 'ready' ? 'default' : 'secondary'}>
@@ -371,7 +396,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
               <div className="flex flex-col gap-1">
                 <h2 className="text-lg font-semibold">开通 AI Worker</h2>
                 <p className="text-muted-foreground text-sm">
-                  给员工账号绑定 aissh server 和 Soul release。
+                  给员工账号绑定开通目标和 Soul release。
                 </p>
               </div>
 
@@ -383,10 +408,10 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                   )
                 : null}
 
-              {options?.serverSourceError
+              {options?.provisioningTargetSourceError
                 ? (
                     <Alert variant="destructive">
-                      <AlertDescription>{options.serverSourceError}</AlertDescription>
+                      <AlertDescription>{options.provisioningTargetSourceError}</AlertDescription>
                     </Alert>
                   )
                 : null}
@@ -409,36 +434,66 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                   </Field>
 
                   <Field>
-                    <FieldLabel htmlFor="serverRef">aissh server</FieldLabel>
-                    {options && options.servers.length > 0
+                    <FieldLabel htmlFor="provisioningTargetId">provisioning target</FieldLabel>
+                    {options && options.provisioningTargets.length > 0
                       ? (
                           <NativeSelect
-                            id="serverRef"
+                            id="provisioningTargetId"
                             required
-                            value={formState.serverRef}
+                            value={formState.provisioningTargetId}
                             onChange={(event) => {
-                              setFormState(current => ({ ...current, serverRef: event.target.value }))
+                              setFormState(current => ({ ...current, provisioningTargetId: event.target.value }))
                             }}
                           >
-                            {options.servers.map(server => (
-                              <NativeSelectOption key={server.id} value={server.id}>
-                                {server.name ? `${server.name} (${server.id})` : server.id}
+                            {options.provisioningTargets.map(target => (
+                              <NativeSelectOption key={target.id} value={target.id}>
+                                {targetLabel(target)}
                               </NativeSelectOption>
                             ))}
                           </NativeSelect>
                         )
                       : (
                           <Input
-                            id="serverRef"
+                            id="provisioningTargetId"
                             required
-                            value={formState.serverRef}
+                            value={formState.provisioningTargetId}
                             onChange={(event) => {
-                              setFormState(current => ({ ...current, serverRef: event.target.value }))
+                              setFormState(current => ({ ...current, provisioningTargetId: event.target.value }))
                             }}
                           />
                         )}
-                    <FieldDescription>{selectedServerLabel(options, formState.serverRef)}</FieldDescription>
+                    <FieldDescription>{selectedTargetDescription(options, formState.provisioningTargetId)}</FieldDescription>
+                    {options && options.provisioningTargets.length > 0
+                      ? (
+                          <div className="flex flex-wrap gap-1" aria-label="provisioning target summaries">
+                            {options.provisioningTargets.map(target => (
+                              <Badge key={target.id} variant="outline">
+                                <BadgeLabel>{target.adapterType} · {target.maturity}</BadgeLabel>
+                              </Badge>
+                            ))}
+                          </div>
+                        )
+                      : null}
+                    {currentTarget && currentTarget.maturity !== 'production'
+                      ? <FieldDescription>此目标用于测试开通链路，不建议作为员工长期生产 Worker。</FieldDescription>
+                      : null}
                   </Field>
+
+                  {currentTarget?.adapterType === 'aissh'
+                    ? (
+                        <Field>
+                          <FieldLabel htmlFor="adapterRuntimeControlBaseUrl">Worker callback URL</FieldLabel>
+                          <Input
+                            id="adapterRuntimeControlBaseUrl"
+                            value={formState.adapterRuntimeControlBaseUrl}
+                            onChange={(event) => {
+                              setFormState(current => ({ ...current, adapterRuntimeControlBaseUrl: event.target.value }))
+                            }}
+                          />
+                          <FieldDescription>远程 aissh 目标必须能访问这个 Host API URL；不能使用本机 localhost。</FieldDescription>
+                        </Field>
+                      )
+                    : null}
 
                   <Field>
                     <FieldLabel htmlFor="soulReleaseRef">Soul release</FieldLabel>
@@ -499,9 +554,12 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                 ? (
                     <section className="flex flex-col gap-3" aria-label="One-time provision commands">
                       <p className="text-sm font-medium">token 只显示一次</p>
+                      {lastCreateResult.provisionToken
+                        ? <CommandBlock title="Provision token" command={lastCreateResult.provisionToken} />
+                        : null}
                       <CommandBlock title="Provision command" command={lastCreateResult.provisionCommand} />
-                      {lastCreateResult.aisshCommand
-                        ? <CommandBlock title="aissh exec command" command={lastCreateResult.aisshCommand} />
+                      {lastCreateResult.deliveryReceipt?.command
+                        ? <CommandBlock title="Delivery command" command={lastCreateResult.deliveryReceipt.command} />
                         : null}
                     </section>
                   )
