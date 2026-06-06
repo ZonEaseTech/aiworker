@@ -51,6 +51,30 @@ describe('host sqlite assignment storage', () => {
     expect(JSON.stringify(listAssignments())).not.toContain(created.provisionToken)
   })
 
+  it('stores provisioning target metadata while preserving legacy server_ref', () => {
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      metadataJson: {
+        provisioningAdapterType: 'aissh',
+        provisioningTargetMaturity: 'production',
+        provisioningTargetRef: 'aissh://stale/server',
+      },
+      provisioningTarget: {
+        adapterType: 'docker',
+        maturity: 'preview',
+        ref: 'docker://local/default',
+      },
+      soulReleaseRef: 'aiworker-freeform@dev',
+    })
+
+    expect(created.assignment.serverRef).toBe('docker://local/default')
+    expect(created.assignment.metadataJson).toMatchObject({
+      provisioningAdapterType: 'docker',
+      provisioningTargetMaturity: 'preview',
+      provisioningTargetRef: 'docker://local/default',
+    })
+  })
+
   it('consumes a provision token exactly once', () => {
     const created = createAssignment({
       assignedEmail: 'bob@zonease.org',
@@ -277,6 +301,18 @@ describe('host sqlite assignment storage', () => {
       metadataJson: { apiKey: 'sk-literal-secret-abcdef123456' },
       serverRef: 'aissh:server-a',
       soulReleaseRef: 'ops-copilot@v1',
+    })).toThrow(/Literal secrets are not allowed/)
+  })
+
+  it('rejects literal secrets inside provisioning target metadata', () => {
+    expect(() => createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      provisioningTarget: {
+        adapterType: 'aissh',
+        maturity: 'production',
+        ref: 'srv-1 token=literal-secret',
+      },
+      soulReleaseRef: 'aiworker-freeform@dev',
     })).toThrow(/Literal secrets are not allowed/)
   })
 

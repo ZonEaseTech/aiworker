@@ -81,7 +81,12 @@ export type HostAssignmentRow = typeof schema.hostAssignments.$inferSelect
 
 export interface CreateAssignmentInput {
   assignedEmail: string
-  serverRef: string
+  provisioningTarget?: {
+    adapterType: 'aissh' | 'docker' | 'local'
+    maturity: 'production' | 'preview' | 'dev'
+    ref: string
+  }
+  serverRef?: string
   soulReleaseRef: string
   metadataJson?: Record<string, unknown>
   expiresAt?: string
@@ -108,9 +113,21 @@ interface MarkAssignmentReadyInput {
 
 export function createAssignment(input: CreateAssignmentInput): { assignment: HostAssignmentRow, provisionToken: string } {
   const at = readNow(input.now)
-  const metadataJson = input.metadataJson ?? {}
+  const targetRef = input.provisioningTarget?.ref ?? input.serverRef
+  if (!targetRef)
+    throw new Error('createAssignment requires provisioningTarget.ref')
+  const metadataJson = {
+    ...(input.metadataJson ?? {}),
+    ...(input.provisioningTarget
+      ? {
+          provisioningAdapterType: input.provisioningTarget.adapterType,
+          provisioningTargetMaturity: input.provisioningTarget.maturity,
+          provisioningTargetRef: input.provisioningTarget.ref,
+        }
+      : {}),
+  }
   assertNoLiteralSecrets(input.assignedEmail, 'host_assignments.assignedEmail')
-  assertNoLiteralSecrets(input.serverRef, 'host_assignments.serverRef')
+  assertNoLiteralSecrets(targetRef, 'host_assignments.serverRef')
   assertNoLiteralSecrets(input.soulReleaseRef, 'host_assignments.soulReleaseRef')
   assertNoLiteralSecrets(metadataJson, 'host_assignments.metadataJson')
 
@@ -119,7 +136,7 @@ export function createAssignment(input: CreateAssignmentInput): { assignment: Ho
   getHostDb().insert(schema.hostAssignments).values({
     assignmentId,
     assignedEmail: normalizeEmail(input.assignedEmail),
-    serverRef: input.serverRef,
+    serverRef: targetRef,
     soulReleaseRef: input.soulReleaseRef,
     status: 'provisioning',
     provisionTokenHash: hashProvisionToken(provisionToken),
