@@ -10,7 +10,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { runHostCli } from './aiworker-host'
 
 describe('aiworker-host control CLI', () => {
+  const originalStderrWrite = process.stderr.write
   const originalWrite = process.stdout.write
+  let errorOutput = ''
   let output = ''
 
   function testFetch(impl: (...args: Parameters<typeof fetch>) => Promise<Response>): typeof fetch {
@@ -18,7 +20,12 @@ describe('aiworker-host control CLI', () => {
   }
 
   beforeEach(() => {
+    errorOutput = ''
     output = ''
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      errorOutput += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
+      return true
+    }) as typeof process.stderr.write
     process.stdout.write = ((chunk: string | Uint8Array) => {
       output += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
       return true
@@ -26,6 +33,7 @@ describe('aiworker-host control CLI', () => {
   })
 
   afterEach(() => {
+    process.stderr.write = originalStderrWrite
     process.stdout.write = originalWrite
   })
 
@@ -280,7 +288,45 @@ describe('aiworker-host control CLI', () => {
     expect(JSON.parse(output).publicBaseUrl).toBe('https://aiworker.zonease.org')
   })
 
-  it('passes Logto session auth options to serve when env is complete', async () => {
+  it('uses public base URL for Logto redirect URI when browser base URL is not explicit', async () => {
+    await withHostSessionEnv(completeLogtoEnv, async () => {
+      const calls: any[] = []
+      const code = await runHostCli([
+        'serve',
+        '--db',
+        '/tmp/aiworker-host.db',
+        '--public-base-url',
+        'https://aiworker.zonease.org',
+        '--control-base-url',
+        'https://control.zonease.app',
+        '--host',
+        '127.0.0.1',
+        '--port',
+        '4321',
+      ], {
+        async serverFactory(options) {
+          calls.push({ type: 'factory', options })
+          return {
+            async fetch() {
+              return new Response('ok')
+            },
+            websocket: {
+              message() {},
+            },
+          }
+        },
+        bunServe(options) {
+          calls.push({ type: 'serve', options })
+          return {} as ReturnType<typeof Bun.serve>
+        },
+      })
+
+      expect(code).toBe(0)
+      expect(calls[0].options.sessionAuth.oidc.redirectUri).toBe('https://aiworker.zonease.org/auth/callback')
+    })
+  })
+
+  it('uses explicit browser base URL for Logto redirect URI when provided', async () => {
     await withHostSessionEnv(completeLogtoEnv, async () => {
       const calls: any[] = []
       const code = await runHostCli([
@@ -329,10 +375,12 @@ describe('aiworker-host control CLI', () => {
     })
   })
 
-  it('does not set Logto session auth when env is incomplete', async () => {
+  it('fails serve before creating a server when Logto env is partially configured', async () => {
     await withHostSessionEnv({
       AIWORKER_HOST_SESSION_SECRET: completeLogtoEnv.AIWORKER_HOST_SESSION_SECRET,
       LOGTO_CLIENT_ID: completeLogtoEnv.LOGTO_CLIENT_ID,
+      LOGTO_ENDPOINT: completeLogtoEnv.LOGTO_ENDPOINT,
+      LOGTO_ISSUER: completeLogtoEnv.LOGTO_ISSUER,
     }, async () => {
       const calls: any[] = []
       const code = await runHostCli([
@@ -357,8 +405,52 @@ describe('aiworker-host control CLI', () => {
         },
       })
 
-      expect(code).toBe(0)
-      expect(calls[0].options.sessionAuth).toBeUndefined()
+      expect(code).toBe(1)
+      expect(calls).toEqual([])
+      const combinedOutput = `${output}\n${errorOutput}`
+      expect(errorOutput).toContain('LOGTO_CLIENT_SECRET')
+      expect(combinedOutput).not.toContain('literal-session-secret-value-1234567890')
+      expect(combinedOutput).not.toContain('logto-client-id')
+      expect(combinedOutput).not.toContain('https://auth.zonease.org')
+    })
+  })
+
+  it('fails partial Logto env even when dev admin email is provided', async () => {
+    await withHostSessionEnv({
+      AIWORKER_HOST_SESSION_SECRET: completeLogtoEnv.AIWORKER_HOST_SESSION_SECRET,
+      LOGTO_CLIENT_ID: completeLogtoEnv.LOGTO_CLIENT_ID,
+      LOGTO_ENDPOINT: completeLogtoEnv.LOGTO_ENDPOINT,
+      LOGTO_ISSUER: completeLogtoEnv.LOGTO_ISSUER,
+    }, async () => {
+      const calls: any[] = []
+      const code = await runHostCli([
+        'serve',
+        '--db',
+        '/tmp/aiworker-host.db',
+        '--dev-admin-email',
+        'admin@example.com',
+      ], {
+        async serverFactory(options) {
+          calls.push({ type: 'factory', options })
+          return {
+            async fetch() {
+              return new Response('ok')
+            },
+            websocket: {
+              message() {},
+            },
+          }
+        },
+        bunServe(options) {
+          calls.push({ type: 'serve', options })
+          return {} as ReturnType<typeof Bun.serve>
+        },
+      })
+
+      expect(code).toBe(1)
+      expect(calls).toEqual([])
+      expect(errorOutput).toContain('LOGTO_CLIENT_SECRET')
+      expect(`${output}\n${errorOutput}`).not.toContain('literal-session-secret-value-1234567890')
     })
   })
 

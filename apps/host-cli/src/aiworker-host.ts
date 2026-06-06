@@ -36,22 +36,35 @@ function readNonEmptyEnvValue(env: Record<string, string | undefined>, name: str
   return value ? value : undefined
 }
 
-function buildSessionAuthFromEnv(env: Record<string, string | undefined>, browserBaseUrl: string) {
+const logtoSessionEnvKeys = [
+  'AIWORKER_HOST_SESSION_SECRET',
+  'LOGTO_CLIENT_ID',
+  'LOGTO_CLIENT_SECRET',
+  'LOGTO_ENDPOINT',
+  'LOGTO_ISSUER',
+] as const
+
+function buildSessionAuthFromEnv(env: Record<string, string | undefined>, redirectBaseUrl: string) {
+  const hasAnySessionEnv = logtoSessionEnvKeys.some(key => env[key] !== undefined)
+  if (!hasAnySessionEnv)
+    return undefined
+
+  const missingKeys = logtoSessionEnvKeys.filter(key => !readNonEmptyEnvValue(env, key))
+  if (missingKeys.length > 0)
+    throw new Error(`Missing required Logto env: ${missingKeys.join(', ')}`)
+
+  const sessionSecret = assertHostSessionSecret(readNonEmptyEnvValue(env, 'AIWORKER_HOST_SESSION_SECRET')!)
   const clientId = readNonEmptyEnvValue(env, 'LOGTO_CLIENT_ID')
   const clientSecret = readNonEmptyEnvValue(env, 'LOGTO_CLIENT_SECRET')
   const endpoint = readNonEmptyEnvValue(env, 'LOGTO_ENDPOINT')
   const issuer = readNonEmptyEnvValue(env, 'LOGTO_ISSUER')
-  if (!clientId || !clientSecret || !endpoint || !issuer)
-    return undefined
-
-  const sessionSecret = assertHostSessionSecret(env.AIWORKER_HOST_SESSION_SECRET ?? '')
   return {
     oidc: {
-      clientId,
-      clientSecret,
-      endpoint,
-      issuer,
-      redirectUri: `${normalizeBaseUrl(browserBaseUrl)}/auth/callback`,
+      clientId: clientId!,
+      clientSecret: clientSecret!,
+      endpoint: endpoint!,
+      issuer: issuer!,
+      redirectUri: `${normalizeBaseUrl(redirectBaseUrl)}/auth/callback`,
     },
     sessionSecret,
   }
@@ -523,7 +536,7 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
 
       const publicBaseUrl = options.publicBaseUrl
       const hostBrowserBaseUrl = options.browserBaseUrl ?? (options.webStaticDir ? undefined : 'http://127.0.0.1:5050')
-      const sessionAuth = buildSessionAuthFromEnv(process.env, hostBrowserBaseUrl ?? publicBaseUrl)
+      const sessionAuth = buildSessionAuthFromEnv(process.env, options.browserBaseUrl ?? publicBaseUrl)
       const server = await (deps.serverFactory ?? createHostServer)({
         authUser: !sessionAuth && options.devAdminEmail
           ? {
