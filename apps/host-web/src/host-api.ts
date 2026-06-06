@@ -26,12 +26,39 @@ export interface CreateHostAssignmentInput {
 }
 
 export interface CreateHostAssignmentResult {
+  aisshCommand?: string
   assignment: HostAssignmentSummary
   provisionCommand: string
 }
 
+export interface HostServerOption {
+  host?: string
+  id: string
+  name?: string
+  notes?: string
+  source: 'aissh'
+}
+
+export interface HostSoulReleaseOption {
+  descriptorPath: string
+  id: string
+  name: string
+  releaseRef: string
+  source: 'official'
+}
+
+export interface HostOptionsSummary {
+  access: { mode: string, status: string }
+  auth: { mode: string, status: string }
+  servers: HostServerOption[]
+  soulReleases: HostSoulReleaseOption[]
+  serverSourceError?: string
+  soulSourceErrors?: string[]
+}
+
 export interface HostApiClient {
   createAssignment: (input: CreateHostAssignmentInput) => Promise<CreateHostAssignmentResult>
+  getOptions: () => Promise<HostOptionsSummary>
   listAssignments: () => Promise<HostAssignmentSummary[]>
 }
 
@@ -97,6 +124,7 @@ export function createHostApiClient(options: CreateHostApiClientOptions = {}): H
   const baseUrl = (options.baseUrl ?? hostApiBaseUrl()).replace(/\/+$/, '')
   const fetchImpl = options.fetch ?? fetch
   const assignmentsUrl = `${baseUrl}/api/host/assignments`
+  const optionsUrl = `${baseUrl}/api/host/options`
 
   return {
     async createAssignment(input) {
@@ -109,6 +137,9 @@ export function createHostApiClient(options: CreateHostApiClientOptions = {}): H
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       })
+    },
+    async getOptions() {
+      return requestJson<HostOptionsSummary>(fetchImpl, optionsUrl)
     },
     async listAssignments() {
       const result = await requestJson<ListAssignmentsResponse>(fetchImpl, assignmentsUrl)

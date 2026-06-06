@@ -83,6 +83,7 @@ describe('createHostApiClient', () => {
 
   it('creates assignments with the expected method and body', async () => {
     const fetchImpl = createFetch(jsonResponse({
+      aisshCommand: 'aissh exec srv-1 "bun aiworker provision --token awp_secret" --reason=test',
       assignment: readyAssignment,
       provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --token awp_secret',
     }))
@@ -95,6 +96,7 @@ describe('createHostApiClient', () => {
     }
 
     await expect(client.createAssignment(input)).resolves.toEqual({
+      aisshCommand: 'aissh exec srv-1 "bun aiworker provision --token awp_secret" --reason=test',
       assignment: readyAssignment,
       provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --token awp_secret',
     })
@@ -103,6 +105,28 @@ describe('createHostApiClient', () => {
     expect(fetchImpl.calls[0]?.input).toBe('/api/host/assignments')
     expect(fetchImpl.calls[0]?.init?.method).toBe('POST')
     expect(JSON.parse(String(fetchImpl.calls[0]?.init?.body))).toEqual(input)
+  })
+
+  it('loads Host options from the configured API base URL', async () => {
+    const fetchImpl = createFetch(jsonResponse({
+      access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
+      auth: { mode: 'dev-static', status: 'deferred-logto' },
+      servers: [{ id: 'srv-1', name: 'aiwork', source: 'aissh' }],
+      soulReleases: [{
+        descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
+        id: 'aiworker-freeform',
+        name: 'AIWorker Freeform',
+        releaseRef: 'aiworker-freeform@dev',
+        source: 'official',
+      }],
+    }))
+    const client = createHostApiClient({ baseUrl: 'http://host.test', fetch: fetchImpl })
+
+    const options = await client.getOptions()
+
+    expect(fetchImpl.calls[0]?.input).toBe('http://host.test/api/host/options')
+    expect(options.servers[0]?.id).toBe('srv-1')
+    expect(options.soulReleases[0]?.releaseRef).toBe('aiworker-freeform@dev')
   })
 
   it('throws stable HostApiError details for non-ok responses', async () => {
