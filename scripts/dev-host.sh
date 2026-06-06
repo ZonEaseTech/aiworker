@@ -28,6 +28,13 @@ ensure_port_free() {
   fi
 }
 
+ensure_distinct_ports() {
+  if [[ "$AIWORKER_HOST_API_PORT" == "$AIWORKER_HOST_WEB_PORT" ]]; then
+    echo "[dev:host] Host API and Web ports must not be the same: $AIWORKER_HOST_API_PORT" >&2
+    exit 1
+  fi
+}
+
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
@@ -86,13 +93,14 @@ start_host_web() {
   (
     cd "$ROOT_DIR/apps/host-web"
     AIWORKER_HOST_API_URL="$AIWORKER_HOST_API_URL" \
-      bun run dev --host "$AIWORKER_HOST" --port "$AIWORKER_HOST_WEB_PORT"
+      bun run dev --host "$AIWORKER_HOST" --port "$AIWORKER_HOST_WEB_PORT" --strictPort
   ) &
   WEB_PID=$!
   echo "[dev:host] Host Web pid=$WEB_PID"
 }
 
 mkdir -p "$(dirname "$AIWORKER_HOST_DB")"
+ensure_distinct_ports
 ensure_port_free "$AIWORKER_HOST_API_PORT"
 ensure_port_free "$AIWORKER_HOST_WEB_PORT"
 
@@ -103,6 +111,7 @@ echo "[dev:host] AIWORKER_HOST_DEV_ADMIN_EMAIL=$AIWORKER_HOST_DEV_ADMIN_EMAIL"
 
 start_host_api
 wait_for_host_api
+ensure_port_free "$AIWORKER_HOST_WEB_PORT"
 start_host_web
 
 while true; do
@@ -113,9 +122,13 @@ while true; do
   fi
 
   if [[ -n "$WEB_PID" ]] && ! kill -0 "$WEB_PID" 2>/dev/null; then
+    status=0
     echo "[dev:host] Host Web process exited"
-    wait "$WEB_PID" || true
-    exit 0
+    wait "$WEB_PID" || status=$?
+    if [[ "$status" -eq 0 ]]; then
+      status=1
+    fi
+    exit "$status"
   fi
 
   sleep 1
