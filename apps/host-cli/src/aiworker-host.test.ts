@@ -169,6 +169,60 @@ describe('aiworker-host control CLI', () => {
     })
   })
 
+  it('accepts browser and control base URL options on serve', async () => {
+    const calls: any[] = []
+    const code = await runHostCli([
+      'serve',
+      '--db',
+      '/tmp/aiworker-host.db',
+      '--public-base-url',
+      'https://aiworker.zonease.org',
+      '--browser-base-url',
+      'https://host.zonease.app',
+      '--control-base-url',
+      'https://control.zonease.app',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      '4321',
+      '--web-static-dir',
+      '/tmp/host-web-dist',
+    ], {
+      async serverFactory(options) {
+        calls.push({ type: 'factory', options })
+        return {
+          async fetch() {
+            return new Response('ok')
+          },
+        }
+      },
+      bunServe(options) {
+        calls.push({ type: 'serve', options })
+        return {} as ReturnType<typeof Bun.serve>
+      },
+    })
+
+    expect(code).toBe(0)
+    expect(calls[0]).toEqual({
+      type: 'factory',
+      options: {
+        authUser: null,
+        dbPath: '/tmp/aiworker-host.db',
+        publicBaseUrl: 'https://aiworker.zonease.org',
+        webStaticDir: '/tmp/host-web-dist',
+      },
+    })
+    expect(calls[1]).toEqual({
+      type: 'serve',
+      options: {
+        hostname: '127.0.0.1',
+        port: 4321,
+        fetch: expect.any(Function),
+      },
+    })
+    expect(JSON.parse(output).publicBaseUrl).toBe('https://aiworker.zonease.org')
+  })
+
   it('keeps the foreground serve command running and reachable', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-cli-serve-'))
     const port = reservePort()
@@ -280,6 +334,56 @@ describe('aiworker-host control CLI', () => {
       '/srv/aiworker/host.db',
       '--public-base-url',
       'https://aiworker.zonease.org',
+      '--web-static-dir',
+      '/srv/aiworker/host-web/dist',
+    ], { hostLifecycle } as any)
+
+    expect(code).toBe(0)
+    expect(calls).toEqual([{
+      input: {
+        dbPath: '/srv/aiworker/host.db',
+        host: '0.0.0.0',
+        mode: 'prod',
+        port: 9117,
+        publicBaseUrl: 'https://aiworker.zonease.org',
+        webStaticDir: '/srv/aiworker/host-web/dist',
+      },
+      method: 'start',
+    }])
+    expect(JSON.parse(output)).toEqual({
+      apiUrl: 'https://aiworker.zonease.org',
+      mode: 'prod',
+      webUrl: 'https://aiworker.zonease.org/host',
+    })
+  })
+
+  it('accepts browser and control base URL options on start and keeps public-base-url behavior', async () => {
+    const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+    const hostLifecycle = {
+      async start(input: Record<string, unknown>) {
+        calls.push({ input, method: 'start' })
+        return {
+          apiUrl: 'https://aiworker.zonease.org',
+          mode: input.mode,
+          webUrl: 'https://aiworker.zonease.org/host',
+        }
+      },
+    }
+
+    const code = await runHostCli([
+      'start',
+      '--host',
+      '0.0.0.0',
+      '--port',
+      '9117',
+      '--db',
+      '/srv/aiworker/host.db',
+      '--public-base-url',
+      'https://aiworker.zonease.org',
+      '--browser-base-url',
+      'https://host.zonease.app',
+      '--control-base-url',
+      'https://control.zonease.app',
       '--web-static-dir',
       '/srv/aiworker/host-web/dist',
     ], { hostLifecycle } as any)

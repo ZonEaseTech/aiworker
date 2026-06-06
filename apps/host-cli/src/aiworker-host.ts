@@ -81,6 +81,8 @@ function addHostLifecycleStartOptions(command: ReturnType<typeof cac>['commands'
     .option('--db <path>', 'Host sqlite database path', { default: `${process.env.HOME ?? '.'}/.aiworker-dev/host.db` })
     .option('--dev', 'start development Host API plus Vite Host Web')
     .option('--dev-admin-email <email>', 'development-only static host admin email')
+    .option('--browser-base-url <url>', 'Host browser base URL for /host and /workers/:workerId')
+    .option('--control-base-url <url>', 'Host control/API base URL for Worker check-in')
     .option('--host <host>', 'bind host', { default: '127.0.0.1' })
     .option('--manifest <path>', 'Host lifecycle manifest path')
     .option('--port <port>', 'Host API or production serve port', { default: '9117' })
@@ -401,6 +403,8 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     .option('--dev-admin-email <email>', 'development-only static host admin email')
     .option('--host <host>', 'bind host', { default: '127.0.0.1' })
     .option('--public-base-url <url>', 'public Host base URL', { default: 'http://127.0.0.1:9310' })
+    .option('--browser-base-url <url>', 'Host browser base URL for /host and /workers/:workerId')
+    .option('--control-base-url <url>', 'Host control/API base URL for Worker check-in')
     .option('--port <port>', 'listen port', { default: '9310' })
     .option('--web-static-dir <path>', 'Host Web static directory to serve from this process')
     .action(async (options: { db: string, devAdminEmail?: string, host: string, port: string | number, publicBaseUrl: string, webStaticDir?: string }) => {
