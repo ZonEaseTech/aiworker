@@ -36,9 +36,12 @@ export function applyAutoEngineTitle(
   session: Pick<SessionRow, 'metadataJson' | 'title'>,
   title: string,
 ): SessionTitlePatch | null {
-  if (!validTitleChange(session.title, title))
+  if (!validTitleText(title))
     return null
-  if (readSessionTitleSource(session) === 'user')
+  const source = readSessionTitleSource(session)
+  if (source === 'user')
+    return null
+  if (title === session.title && source === 'auto-engine')
     return null
   return titlePatch(session, title, 'auto-engine')
 }
@@ -65,6 +68,10 @@ function titlePatch(
 
 function validTitleChange(currentTitle: string, nextTitle: string): boolean {
   return nextTitle.trim().length > 0 && nextTitle !== currentTitle
+}
+
+function validTitleText(nextTitle: string): boolean {
+  return nextTitle.trim().length > 0
 }
 
 function readRecord(value: unknown): Record<string, unknown> {

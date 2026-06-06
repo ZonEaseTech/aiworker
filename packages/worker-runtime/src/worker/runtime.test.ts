@@ -2784,6 +2784,24 @@ describe('LocalWorkerRuntime', () => {
       return { session, workspace }
     }
 
+    it('normalizes unknown title source to auto-default on session creation', async () => {
+      const workerRuntime = autoNameRuntime({
+        async invoke() {
+          return { summary: 'main answer' }
+        },
+      })
+      await workerRuntime.init()
+      const workspace = await workerRuntime.createWorkspace({ name: 'Auto Name Workspace' })
+      const session = await workerRuntime.createSession({
+        workspaceId: workspace.id,
+        title: 'Untitled session',
+        metadata: { titleSource: 'legacy' },
+      })
+
+      expect(session.metadataJson.titleSource).toBe('auto-default')
+      expect(getSession(session.id)?.metadataJson.titleSource).toBe('auto-default')
+    })
+
     it('refines the title with an engine-generated name on the first invocation', async () => {
       const workerRuntime = autoNameRuntime({
         async invoke(input) {
@@ -2860,7 +2878,7 @@ describe('LocalWorkerRuntime', () => {
 
       const named = getSession(session.id)!
       expect(named.title).toBe('Please r')
-      expect(named.metadataJson.titleSource).toBe('auto-truncated')
+      expect(named.metadataJson.titleSource).toBe('auto-engine')
     })
 
     it('returns the truncated placeholder session when starting a detached invocation', async () => {

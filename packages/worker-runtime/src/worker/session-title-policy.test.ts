@@ -45,10 +45,15 @@ describe('session title policy', () => {
       title: 'Build failure',
       metadataJson: { titleSource: 'auto-engine' },
     })
+    expect(applyAutoEngineTitle(session({ metadataJson: { titleSource: 'auto-truncated' }, title: 'Build failure' }), 'Build failure')).toEqual({
+      title: 'Build failure',
+      metadataJson: { titleSource: 'auto-engine' },
+    })
     expect(applyAutoEngineTitle(session({ metadataJson: { titleSource: 'auto-engine' } }), 'Better title')).toEqual({
       title: 'Better title',
       metadataJson: { titleSource: 'auto-engine' },
     })
+    expect(applyAutoEngineTitle(session({ metadataJson: { titleSource: 'auto-engine' }, title: 'Better title' }), 'Better title')).toBeNull()
     expect(applyAutoEngineTitle(session({ metadataJson: { titleSource: 'user' }, title: 'Manual' }), 'Robot')).toBeNull()
   })
 

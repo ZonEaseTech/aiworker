@@ -424,7 +424,7 @@ export class LocalWorkerRuntime {
     this.requireActiveWorker()
     const workspace = this.requireActiveWorkspace(input.workspaceId)
     const baseSessionMetadata = freezeSessionEngineMetadata(input.metadata ?? {}, this.requestedSessionEngine(input.metadata ?? {}))
-    const sessionMetadata = { ...baseSessionMetadata, titleSource: readString(baseSessionMetadata.titleSource, 'auto-default') }
+    const sessionMetadata = { ...baseSessionMetadata, titleSource: readSessionTitleSource({ metadataJson: baseSessionMetadata }) }
     const session = createSession({
       id: randomUUID(),
       workerId: this.workerId,
