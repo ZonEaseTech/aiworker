@@ -41,7 +41,7 @@ describe('provisioning target adapters', () => {
     })
 
     const argv = parseAisshArgv(delivery.deliveryReceipt.command)
-    const provisionArgv = parseShellArgv(argv[2])
+    const provisionArgv = parseShellArgv(requiredArg(argv, 2))
 
     expect(argv.slice(0, 2)).toEqual(['exec', 'srv-1'])
     expect(provisionArgv).toEqual([
@@ -116,7 +116,7 @@ describe('provisioning target adapters', () => {
     })
 
     const aisshArgv = parseAisshArgv(delivery.deliveryReceipt.command)
-    const provisionArgv = parseShellArgv(aisshArgv[2])
+    const provisionArgv = parseShellArgv(requiredArg(aisshArgv, 2))
 
     expect(provisionArgv.at(-1)).toBe('[REDACTED]')
     expect(JSON.stringify(delivery)).not.toContain(provisionToken)
@@ -180,4 +180,11 @@ function parseShellArgv(command: string): string[] {
     throw new Error(`Failed to parse shell argv:\n${String(result.stderr)}`)
   }
   return result.stdout.toString('utf8').split('\0').filter(Boolean)
+}
+
+function requiredArg(argv: string[], index: number): string {
+  const value = argv[index]
+  if (value === undefined)
+    throw new Error(`Missing argv[${index}] in ${JSON.stringify(argv)}`)
+  return value
 }
