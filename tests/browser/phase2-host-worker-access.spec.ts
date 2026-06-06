@@ -127,6 +127,8 @@ async function gotoDocument(
 
 function isExpectedBrowserEvent(event: string): boolean {
   const normalized = event.toLowerCase()
+  if (normalized.includes('/api/host/options') && normalized.includes('err_aborted'))
+    return true
   if (normalized.startsWith('response:404:') && normalized.includes('/api/host/options'))
     return true
   if (normalized.startsWith('response:404:') && normalized.includes('/workers/wkr_82'))
