@@ -97,13 +97,16 @@ describe('host server', () => {
     })))
 
     expect(created.provisionToken).toStartWith('awp_')
+    expect(created.provisionCommand).toBe(`bun apps/worker-cli/src/aiworker.ts provision --host https://aiworker.zonease.org --token ${created.provisionToken}`)
     expect(created.assignment.assignedEmail).toBe('bob@example.com')
     expect(created.assignment.provisionTokenHash).toBeUndefined()
 
     const listed = await json(await server.fetch(new Request('http://host/api/host/assignments')))
     expect(listed.assignments).toHaveLength(1)
     expect(JSON.stringify(listed)).not.toContain(created.provisionToken)
+    expect(JSON.stringify(listed)).not.toContain('provisionToken')
     expect(JSON.stringify(listed)).not.toContain('provisionTokenHash')
+    expect(JSON.stringify(listed)).not.toContain('provisionCommand')
   })
 
   it('blocks non-admin users from listing or creating assignments', async () => {

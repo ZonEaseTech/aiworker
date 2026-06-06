@@ -67,7 +67,7 @@ export async function createHostServer(options: HostServerOptions): Promise<Host
         return text('AIWorker Host')
 
       if (url.pathname === '/api/host/assignments')
-        return handleAssignments(request, authProvider)
+        return handleAssignments(request, authProvider, options.publicBaseUrl)
 
       if (request.method === 'POST' && url.pathname === '/api/provision/check-in')
         return handleCheckIn(request)
@@ -87,6 +87,7 @@ export async function createHostServer(options: HostServerOptions): Promise<Host
 async function handleAssignments(
   request: Request,
   authProvider: AuthProvider,
+  publicBaseUrl: string,
 ): Promise<Response> {
   const user = await authProvider.authenticateRequest({ headers: request.headers })
   if (!user || !userIsHostAdmin(user))
@@ -116,6 +117,7 @@ async function handleAssignments(
   })
   return json({
     assignment: toAssignmentView(created.assignment),
+    provisionCommand: buildProvisionCommand(publicBaseUrl, created.provisionToken),
     provisionToken: created.provisionToken,
   }, { status: 201 })
 }
@@ -196,6 +198,10 @@ function toAssignmentView(row: HostAssignmentRow) {
 
 function createAccessToken(): string {
   return `awt_${randomBytes(32).toString('base64url')}`
+}
+
+function buildProvisionCommand(publicBaseUrl: string, provisionToken: string): string {
+  return `bun apps/worker-cli/src/aiworker.ts provision --host ${publicBaseUrl} --token ${provisionToken}`
 }
 
 function isNonEmptyString(value: unknown): value is string {
