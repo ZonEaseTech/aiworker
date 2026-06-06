@@ -72,7 +72,7 @@ export async function beginLogtoHostedLogin(
     returnTo: string
   },
 ): Promise<{ redirectUrl: string, transaction: OidcLoginTransaction }> {
-  const returnTo = normalizeReturnTo(input.returnTo)
+  const returnTo = normalizeLogtoReturnTo(input.returnTo)
   const discovery = await discoverLogtoOidcConfiguration(config, { fetch: input.fetch })
   return buildAuthorizationRedirectFromEndpoint(config, discovery.authorizationEndpoint, {
     ...input,
@@ -260,7 +260,7 @@ function readRequiredUrl(body: Record<string, unknown>, key: string): string {
   return new URL(value).toString()
 }
 
-function normalizeReturnTo(returnTo: string): string {
+export function normalizeLogtoReturnTo(returnTo: string): string {
   if (
     returnTo.length === 0
     || returnTo !== returnTo.trim()

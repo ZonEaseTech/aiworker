@@ -11,12 +11,20 @@ import {
   verifyAndConsumeProvisionToken,
 } from '@zonease/aiworker-storage-sqlite/host'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 
+import {
+  createSignedCookie,
+  readSignedCookie,
+  type HostSessionPayload,
+} from './host-session-cookie'
+import type { OidcClientConfig } from './host-oidc-client'
 import { createHostServer } from './host-server'
 
 const adminUser = { email: 'admin@example.com', roles: ['host:admin'], subject: 'usr_admin' }
 const bobUser = { email: 'bob@example.com', roles: [], subject: 'usr_bob' }
 const aliceUser = { email: 'alice@example.com', roles: [], subject: 'usr_alice' }
+const sessionSecret = 'test-host-session-secret-with-enough-entropy'
 
 describe('host server', () => {
   let dir = ''
@@ -79,6 +87,421 @@ describe('host server', () => {
       },
     }
   }
+
+  function sessionAuth(input: {
+    fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>
+    now?: () => Date
+    oidc?: OidcClientConfig
+  } = {}) {
+    return {
+      fetch: input.fetch ?? (async () => Response.json({
+        authorization_endpoint: 'https://auth.zonease.org/oidc/auth',
+        jwks_uri: 'https://auth.zonease.org/oidc/jwks',
+        token_endpoint: 'https://auth.zonease.org/oidc/token',
+      })),
+      now: input.now,
+      oidc: input.oidc ?? {
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        endpoint: 'https://auth.zonease.org/',
+        issuer: 'https://auth.zonease.org/oidc',
+        redirectUri: 'http://localhost:54145/auth/callback',
+      },
+      sessionSecret,
+    }
+  }
+
+  function sessionCookie(user: {
+    email: string
+    expiresAt?: string
+    roles?: string[]
+    sub: string
+  }): string {
+    return cookieValueFromSetCookie(createSignedCookie('aiworker_session', {
+      email: user.email,
+      expiresAt: user.expiresAt ?? '2099-01-01T00:00:00.000Z',
+      roles: user.roles ?? [],
+      sub: user.sub,
+    }, {
+      maxAgeSeconds: 28800,
+      path: '/',
+      requestUrl: 'http://localhost:54145/host',
+      sameSite: 'Lax',
+      secret: sessionSecret,
+    }))
+  }
+
+  function transactionCookie(input: {
+    codeVerifier?: string
+    nonce?: string
+    returnTo?: string
+    state?: string
+  } = {}): string {
+    return cookieValueFromSetCookie(createSignedCookie('aiworker_auth_txn', {
+      codeVerifier: input.codeVerifier ?? 'code-verifier',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      nonce: input.nonce ?? 'nonce-123',
+      returnTo: input.returnTo ?? '/host',
+      state: input.state ?? 'state-123',
+    }, {
+      maxAgeSeconds: 600,
+      path: '/auth',
+      requestUrl: 'http://localhost:54145/auth/login',
+      sameSite: 'Lax',
+      secret: sessionSecret,
+    }), 'aiworker_auth_txn')
+  }
+
+  it('creates an auth transaction cookie and redirects /auth/login to Logto Hosted Login', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/auth/login?returnTo=/workers/wkr_82'))
+
+    expect(response.status).toBe(302)
+    const location = new URL(response.headers.get('location')!)
+    expect(location.origin + location.pathname).toBe('https://auth.zonease.org/oidc/auth')
+    expect(location.searchParams.get('client_id')).toBe('client-id')
+    expect(location.searchParams.get('redirect_uri')).toBe('http://localhost:54145/auth/callback')
+    expect(location.searchParams.get('state')).toBeTruthy()
+
+    const authTxnSetCookie = setCookieHeaders(response).find(cookie => cookie.startsWith('aiworker_auth_txn='))
+    expect(authTxnSetCookie).toBeTruthy()
+    expect(authTxnSetCookie).toContain('HttpOnly')
+    expect(authTxnSetCookie).toContain('Path=/auth')
+    expect(readSignedCookie('aiworker_auth_txn', cookieValueFromSetCookie(authTxnSetCookie!, 'aiworker_auth_txn'), {
+      secret: sessionSecret,
+    })).toMatchObject({
+      returnTo: '/workers/wkr_82',
+      state: location.searchParams.get('state'),
+    })
+  })
+
+  it('rejects unsafe login returnTo values before redirecting', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth({
+        fetch: async () => {
+          throw new Error('discovery should not run for unsafe returnTo')
+        },
+      }),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/auth/login?returnTo=https://evil.example'))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: { code: 'INVALID_RETURN_TO' } })
+  })
+
+  it('exchanges a valid auth callback, writes a signed session cookie, clears transaction, and redirects to safe returnTo', async () => {
+    const fixture = await createOidcFixture()
+    try {
+      const server = await createHostServer({
+        dbPath: dbPath(),
+        hostBrowserBaseUrl: 'http://localhost:54145',
+        hostControlBaseUrl: 'http://localhost:54145',
+        sessionAuth: sessionAuth({
+          fetch: fixture.fetch,
+          now: () => new Date('2026-06-06T04:00:00.000Z'),
+          oidc: fixture.config,
+        }),
+      })
+
+      const response = await server.fetch(new Request('http://localhost:54145/auth/callback?code=auth-code&state=state-123', {
+        headers: {
+          cookie: `aiworker_auth_txn=${transactionCookie({ returnTo: '/workers/wkr_82' })}`,
+        },
+      }))
+
+      expect(response.status).toBe(302)
+      expect(response.headers.get('location')).toBe('/workers/wkr_82')
+      const cookies = setCookieHeaders(response)
+      expect(cookies.some(cookie => cookie.startsWith('aiworker_auth_txn=;') && cookie.includes('Max-Age=0'))).toBe(true)
+      const sessionSetCookie = cookies.find(cookie => cookie.startsWith('aiworker_session='))
+      expect(sessionSetCookie).toBeTruthy()
+      expect(sessionSetCookie).toContain('HttpOnly')
+      expect(sessionSetCookie).not.toContain('id_token')
+      expect(sessionSetCookie).not.toContain('access_token')
+      expect(readSignedCookie<HostSessionPayload>('aiworker_session', cookieValueFromSetCookie(sessionSetCookie!, 'aiworker_session'), {
+        now: () => new Date('2026-06-06T04:01:00.000Z'),
+        secret: sessionSecret,
+      })).toEqual({
+        email: 'bob@zonease.org',
+        expiresAt: '2026-06-06T12:00:00.000Z',
+        roles: ['host:admin'],
+        sub: 'usr_bob',
+      })
+    }
+    finally {
+      fixture.server.stop(true)
+    }
+  })
+
+  it('rejects auth callback state mismatch before exchanging the code', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth({
+        fetch: async () => {
+          throw new Error('exchange should not run for state mismatch')
+        },
+      }),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/auth/callback?code=auth-code&state=wrong-state', {
+      headers: {
+        cookie: `aiworker_auth_txn=${transactionCookie({ state: 'state-123' })}`,
+      },
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: { code: 'INVALID_AUTH_TRANSACTION' } })
+  })
+
+  it('clears the session cookie and redirects logout to a safe Host path', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/auth/logout?returnTo=/workers/wkr_82', {
+      method: 'POST',
+    }))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('/workers/wkr_82')
+    expect(response.headers.get('set-cookie')).toContain('aiworker_session=;')
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0')
+    expect(response.headers.get('set-cookie')).toContain('HttpOnly')
+  })
+
+  it('returns 401 from /api/auth/me without a session', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/api/auth/me'))
+
+    expect(response.status).toBe(401)
+    expect(await response.json()).toEqual({ error: { code: 'UNAUTHENTICATED' } })
+  })
+
+  it('returns the current signed-cookie session user from /api/auth/me', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/api/auth/me', {
+      headers: {
+        cookie: `aiworker_session=${sessionCookie({
+          email: 'bob@zonease.org',
+          roles: ['host:admin'],
+          sub: 'usr_bob',
+        })}`,
+      },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      user: {
+        email: 'bob@zonease.org',
+        roles: ['host:admin'],
+        subject: 'usr_bob',
+      },
+    })
+  })
+
+  it('redirects browser /host requests to Logto login when session is missing', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/host', {
+      headers: { accept: 'text/html' },
+    }))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('/auth/login?returnTo=%2Fhost')
+  })
+
+  it('serves /host for signed-cookie Host admins', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/host', {
+      headers: {
+        accept: 'text/html',
+        cookie: `aiworker_session=${sessionCookie({
+          email: 'admin@zonease.org',
+          roles: ['host:admin'],
+          sub: 'usr_admin',
+        })}`,
+      },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('Host API is running')
+  })
+
+  it('returns 403 from /host for signed-cookie non-admin users', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/host', {
+      headers: {
+        accept: 'text/html',
+        cookie: `aiworker_session=${sessionCookie({
+          email: 'bob@zonease.org',
+          sub: 'usr_bob',
+        })}`,
+      },
+    }))
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: { code: 'FORBIDDEN' } })
+  })
+
+  it('redirects browser worker routes to Logto login when session is missing', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82', {
+      headers: { accept: 'text/html' },
+    }))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('/auth/login?returnTo=%2Fworkers%2Fwkr_82')
+  })
+
+  it('routes a signed-cookie assigned user to their ready worker', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    verifyAndConsumeProvisionToken(created.provisionToken)
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: '1.0.0',
+    })
+    markAssignmentAccessReady(created.assignment.assignmentId)
+    markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })
+    accessRegistry.register({
+      assignmentId: created.assignment.assignmentId,
+      close() {},
+      async sendRequest() {
+        throw new Error('sendRequest should not be called by the placeholder route')
+      },
+      workerId: 'wkr_82',
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82', {
+      headers: {
+        accept: 'text/html',
+        cookie: `aiworker_session=${sessionCookie({
+          email: 'bob@zonease.org',
+          sub: 'usr_bob',
+        })}`,
+      },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ routed: true, workerId: 'wkr_82' })
+  })
+
+  it('returns 403 when a signed-cookie user opens a worker assigned to someone else', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    verifyAndConsumeProvisionToken(created.provisionToken)
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: '1.0.0',
+    })
+    markAssignmentAccessReady(created.assignment.assignmentId)
+    markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82', {
+      headers: {
+        accept: 'text/html',
+        cookie: `aiworker_session=${sessionCookie({
+          email: 'alice@zonease.org',
+          sub: 'usr_alice',
+        })}`,
+      },
+    }))
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: { code: 'FORBIDDEN' } })
+  })
+
+  it('returns JSON 403 for API routes when session auth is configured and no session exists', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/api/host/assignments', {
+      headers: { accept: 'text/html' },
+    }))
+
+    expect(response.status).toBe(403)
+    expect(response.headers.get('location')).toBeNull()
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(await response.json()).toEqual({ error: { code: 'FORBIDDEN' } })
+  })
 
   it('allows repeated server creation for the same dbPath', async () => {
     const path = dbPath()
@@ -657,3 +1080,89 @@ describe('host server', () => {
     expect(await json(response)).toEqual({ error: { code: 'WORKER_ACCESS_UPGRADE_REQUIRED' } })
   })
 })
+
+interface OidcFixture {
+  config: OidcClientConfig
+  fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>
+  server: ReturnType<typeof Bun.serve>
+}
+
+async function createOidcFixture(): Promise<OidcFixture> {
+  const { privateKey, publicKey } = await generateKeyPair('RS256')
+  const publicJwk = await exportJWK(publicKey)
+  const server = Bun.serve({
+    fetch: async request => {
+      const url = new URL(request.url)
+
+      if (url.pathname === '/oidc/.well-known/openid-configuration') {
+        return Response.json({
+          authorization_endpoint: `${url.origin}/discovered/auth`,
+          jwks_uri: `${url.origin}/discovered/jwks`,
+          token_endpoint: `${url.origin}/discovered/token`,
+        })
+      }
+
+      if (url.pathname === '/discovered/jwks') {
+        return Response.json({
+          keys: [{ ...publicJwk, alg: 'RS256', kid: 'key-1', use: 'sig' }],
+        })
+      }
+
+      if (url.pathname === '/discovered/token') {
+        const idToken = await new SignJWT({
+          email: 'bob@zonease.org',
+          email_verified: true,
+          nonce: 'nonce-123',
+          roles: ['host:admin'],
+        })
+          .setProtectedHeader({ alg: 'RS256', kid: 'key-1' })
+          .setSubject('usr_bob')
+          .setIssuer(`${url.origin}/oidc`)
+          .setAudience('client-id')
+          .setExpirationTime('5m')
+          .sign(privateKey)
+
+        return Response.json({
+          access_token: 'logto-access-token-that-must-not-be-stored',
+          id_token: idToken,
+          token_type: 'Bearer',
+        })
+      }
+
+      return new Response('not found', { status: 404 })
+    },
+    port: 0,
+  })
+
+  const origin = `http://${server.hostname}:${server.port}`
+
+  return {
+    config: {
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      endpoint: `${origin}/`,
+      issuer: `${origin}/oidc`,
+      redirectUri: 'http://localhost:54145/auth/callback',
+    },
+    fetch: async (input, init) => fetch(input, init),
+    server,
+  }
+}
+
+function setCookieHeaders(response: Response): string[] {
+  const headers = response.headers as Headers & { getSetCookie?: () => string[] }
+  const values = headers.getSetCookie?.()
+  if (values?.length)
+    return values
+
+  const header = response.headers.get('set-cookie')
+  return header ? header.split(/,\s*(?=[^;,]+=)/) : []
+}
+
+function cookieValueFromSetCookie(setCookie: string, name = 'aiworker_session'): string {
+  const [pair] = setCookie.split(';', 1)
+  const prefix = `${name}=`
+  if (!pair?.startsWith(prefix))
+    throw new Error(`Expected Set-Cookie to start with ${prefix}`)
+  return pair.slice(prefix.length)
+}

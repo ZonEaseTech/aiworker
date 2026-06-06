@@ -1,5 +1,7 @@
 import type { AuthenticatedHostUser, AuthProvider, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
+import type { OidcClientConfig, OidcFetch, OidcLoginTransaction } from './host-oidc-client'
+import type { HostSessionPayload } from './host-session-cookie'
 import type { HostOptionsView, ProvisioningAdapterType, ProvisioningTargetMaturity } from './host-options'
 import type { ProvisioningDeliveryResult } from './provisioning-target-adapters'
 
@@ -27,9 +29,28 @@ import {
   parseWorkerCheckInRequest,
   parseWorkerCheckInResponse,
 } from '@zonease/aiworker-worker-control-protocol'
+import {
+  buildAuthorizationRedirect,
+  exchangeAuthorizationCode,
+  normalizeLogtoReturnTo,
+} from './host-oidc-client'
 import { buildHostOptions } from './host-options'
 import { assertRemoteAisshCallbackReachable, resolveAdapterRuntimeControlBaseUrl } from './host-url-contract'
+import {
+  clearCookieHeader,
+  createSignedCookie,
+  parseCookieHeader,
+  readSignedCookie,
+} from './host-session-cookie'
 import { deliverProvisioningTarget } from './provisioning-target-adapters'
+
+interface HostSessionAuthOptions {
+  fetch?: OidcFetch
+  now?: () => Date
+  oidc: OidcClientConfig
+  randomBytes?: (size: number) => Buffer
+  sessionSecret: string
+}
 
 interface HostServerBaseOptions {
   accessRegistry?: WorkerAccessRegistry
@@ -37,6 +58,7 @@ interface HostServerBaseOptions {
   authUser?: AuthenticatedHostUser | null
   dbPath: string
   optionsProvider?: () => Promise<HostOptionsView>
+  sessionAuth?: HostSessionAuthOptions
   webBaseUrl?: string
   webStaticDir?: string
 }
@@ -89,6 +111,9 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
   const hostBrowserBaseUrl = options.hostBrowserBaseUrl ?? options.webBaseUrl ?? hostControlBaseUrl
 
   const authProvider = options.authProvider ?? createStaticAuthProvider(options.authUser ?? null)
+  const effectiveAuthProvider = options.sessionAuth
+    ? createCookieBackedAuthProvider(options.sessionAuth)
+    : authProvider
   const accessRegistry = options.accessRegistry ?? createWorkerAccessRegistry()
   const webStaticDir = options.webStaticDir ? normalizeStaticDir(options.webStaticDir) : null
 
@@ -96,21 +121,46 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
     async fetch(request) {
       const url = new URL(request.url)
 
+      if (request.method === 'GET' && url.pathname === '/auth/login')
+        return handleAuthLogin(request, options.sessionAuth)
+
+      if (request.method === 'GET' && url.pathname === '/auth/callback')
+        return handleAuthCallback(request, options.sessionAuth)
+
+      if (request.method === 'POST' && url.pathname === '/auth/logout')
+        return handleAuthLogout(request)
+
+      if (request.method === 'GET' && url.pathname === '/api/auth/me')
+        return handleAuthMe(request, options.sessionAuth)
+
+      if (request.method === 'GET' && isHostBrowserRoute(url.pathname)) {
+        if (options.sessionAuth) {
+          const user = readUserFromSessionCookie(request.headers, options.sessionAuth)
+          if (!user)
+            return redirectToLogin('/host')
+          if (!userIsHostAdmin(user))
+            return json({ error: { code: 'FORBIDDEN' } }, { status: 403 })
+        }
+
+        const hostWebResponse = await serveHostWebStatic(request, webStaticDir)
+        if (hostWebResponse)
+          return hostWebResponse
+
+        return devLanding(hostControlBaseUrl, options.webBaseUrl ?? hostBrowserBaseUrl)
+      }
+
       const hostWebResponse = await serveHostWebStatic(request, webStaticDir)
       if (hostWebResponse)
         return hostWebResponse
 
-      if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/host'))
-        return devLanding(hostControlBaseUrl, options.webBaseUrl ?? hostBrowserBaseUrl)
-
       if (url.pathname === '/api/host/assignments')
-        return handleAssignments(request, authProvider, {
+        return handleAssignments(request, effectiveAuthProvider, {
           hostBrowserBaseUrl,
           hostControlBaseUrl,
         })
 
       if (request.method === 'GET' && url.pathname === '/api/host/options')
-        return handleOptions(request, authProvider, options.optionsProvider ?? buildHostOptions)
+        return handleOptions(request, effectiveAuthProvider, options.optionsProvider ?? buildHostOptions)
 
       if (request.method === 'POST' && url.pathname === '/api/provision/check-in')
         return handleCheckIn(request)
@@ -119,12 +169,167 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
         return json({ error: { code: 'WORKER_ACCESS_UPGRADE_REQUIRED' } }, { status: 426 })
 
       const workerMatch = /^\/workers\/([^/]+)$/.exec(url.pathname)
-      if (request.method === 'GET' && workerMatch)
-        return handleWorkerRoute(request, authProvider, accessRegistry, decodeURIComponent(workerMatch[1]!))
+      if (request.method === 'GET' && workerMatch) {
+        const workerId = decodeURIComponent(workerMatch[1]!)
+        if (options.sessionAuth && !readUserFromSessionCookie(request.headers, options.sessionAuth))
+          return redirectToLogin(`/workers/${encodeURIComponent(workerId)}`)
+        return handleWorkerRoute(request, effectiveAuthProvider, accessRegistry, workerId)
+      }
 
       return json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
     },
   }
+}
+
+async function handleAuthLogin(request: Request, sessionAuth: HostSessionAuthOptions | undefined): Promise<Response> {
+  if (!sessionAuth)
+    return json({ error: { code: 'AUTH_NOT_CONFIGURED' } }, { status: 501 })
+
+  const url = new URL(request.url)
+  const returnToResult = normalizeSafeReturnTo(url.searchParams.get('returnTo') ?? '/host')
+  if (!returnToResult.ok)
+    return json({ error: { code: 'INVALID_RETURN_TO' } }, { status: 400 })
+
+  const redirect = await buildAuthorizationRedirect(sessionAuth.oidc, {
+    returnTo: returnToResult.value,
+    ...(sessionAuth.fetch ? { fetch: sessionAuth.fetch } : {}),
+    ...(sessionAuth.randomBytes ? { randomBytes: sessionAuth.randomBytes } : {}),
+  })
+  const now = sessionAuth.now?.() ?? new Date()
+  const headers = new Headers()
+  headers.set('location', redirect.redirectUrl)
+  headers.append('set-cookie', createSignedCookie<OidcLoginTransaction & { expiresAt: string }>('aiworker_auth_txn', {
+    ...redirect.transaction,
+    expiresAt: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
+  }, {
+    maxAgeSeconds: 600,
+    path: '/auth',
+    requestUrl: request.url,
+    sameSite: 'Lax',
+    secret: sessionAuth.sessionSecret,
+  }))
+  return new Response(null, { headers, status: 302 })
+}
+
+async function handleAuthCallback(request: Request, sessionAuth: HostSessionAuthOptions | undefined): Promise<Response> {
+  if (!sessionAuth)
+    return json({ error: { code: 'AUTH_NOT_CONFIGURED' } }, { status: 501 })
+
+  const url = new URL(request.url)
+  const code = url.searchParams.get('code')
+  const state = url.searchParams.get('state')
+  if (!code || !state)
+    return json({ error: { code: 'INVALID_AUTH_CALLBACK' } }, { status: 400 })
+
+  const transactionValue = parseCookieHeader(request.headers.get('cookie')).get('aiworker_auth_txn')
+  const transaction = readSignedCookie<OidcLoginTransaction & { expiresAt: string }>('aiworker_auth_txn', transactionValue, {
+    secret: sessionAuth.sessionSecret,
+    ...(sessionAuth.now ? { now: sessionAuth.now } : {}),
+  })
+  const returnToResult = transaction ? normalizeSafeReturnTo(transaction.returnTo) : { ok: false as const }
+  if (!transaction || transaction.state !== state || !returnToResult.ok || !isOidcLoginTransaction(transaction))
+    return json({ error: { code: 'INVALID_AUTH_TRANSACTION' } }, { status: 400 })
+
+  let session: HostSessionPayload
+  try {
+    session = await exchangeAuthorizationCode(sessionAuth.oidc, {
+      code,
+      codeVerifier: transaction.codeVerifier,
+      nonce: transaction.nonce,
+      ...(sessionAuth.fetch ? { fetch: sessionAuth.fetch } : {}),
+      ...(sessionAuth.now ? { now: sessionAuth.now } : {}),
+    })
+  }
+  catch {
+    return json({ error: { code: 'AUTH_CALLBACK_FAILED' } }, { status: 403 })
+  }
+
+  const headers = new Headers()
+  headers.set('location', returnToResult.value)
+  headers.append('set-cookie', clearCookieHeader('aiworker_auth_txn', '/auth', request.url))
+  headers.append('set-cookie', createSignedCookie('aiworker_session', session, {
+    maxAgeSeconds: 8 * 60 * 60,
+    path: '/',
+    requestUrl: request.url,
+    sameSite: 'Lax',
+    secret: sessionAuth.sessionSecret,
+  }))
+  return new Response(null, { headers, status: 302 })
+}
+
+function handleAuthLogout(request: Request): Response {
+  const url = new URL(request.url)
+  const returnToResult = normalizeSafeReturnTo(url.searchParams.get('returnTo') ?? '/host')
+  const headers = new Headers()
+  headers.set('location', returnToResult.ok ? returnToResult.value : '/host')
+  headers.append('set-cookie', clearCookieHeader('aiworker_session', '/', request.url))
+  return new Response(null, { headers, status: 302 })
+}
+
+async function handleAuthMe(request: Request, sessionAuth: HostSessionAuthOptions | undefined): Promise<Response> {
+  if (!sessionAuth)
+    return json({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 })
+
+  const user = readUserFromSessionCookie(request.headers, sessionAuth)
+  if (!user)
+    return json({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 })
+
+  return json({ user })
+}
+
+function createCookieBackedAuthProvider(sessionAuth: HostSessionAuthOptions): AuthProvider {
+  return {
+    async authenticateRequest({ headers }) {
+      return readUserFromSessionCookie(headers, sessionAuth)
+    },
+  }
+}
+
+function readUserFromSessionCookie(headers: Headers, sessionAuth: HostSessionAuthOptions): AuthenticatedHostUser | null {
+  const value = parseCookieHeader(headers.get('cookie')).get('aiworker_session')
+  const session = readSignedCookie<HostSessionPayload>('aiworker_session', value, {
+    secret: sessionAuth.sessionSecret,
+    ...(sessionAuth.now ? { now: sessionAuth.now } : {}),
+  })
+  if (!session)
+    return null
+
+  return {
+    email: session.email,
+    roles: session.roles,
+    subject: session.sub,
+  }
+}
+
+function redirectToLogin(returnTo: string): Response {
+  return new Response(null, {
+    headers: { location: `/auth/login?returnTo=${encodeURIComponent(returnTo)}` },
+    status: 302,
+  })
+}
+
+function isHostBrowserRoute(pathname: string): boolean {
+  return pathname === '/' || pathname === '/host' || pathname.startsWith('/host/')
+}
+
+function normalizeSafeReturnTo(value: string): { ok: true, value: string } | { ok: false } {
+  try {
+    return { ok: true, value: normalizeLogtoReturnTo(value) }
+  }
+  catch {
+    return { ok: false }
+  }
+}
+
+function isOidcLoginTransaction(value: OidcLoginTransaction & { expiresAt: string }): boolean {
+  return typeof value.codeVerifier === 'string'
+    && value.codeVerifier.length > 0
+    && typeof value.nonce === 'string'
+    && value.nonce.length > 0
+    && typeof value.returnTo === 'string'
+    && value.returnTo.length > 0
+    && typeof value.state === 'string'
+    && value.state.length > 0
 }
 
 async function handleAssignments(
