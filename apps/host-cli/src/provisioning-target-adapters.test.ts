@@ -41,13 +41,19 @@ describe('provisioning target adapters', () => {
     })
 
     const argv = parseAisshArgv(delivery.deliveryReceipt.command)
+    const provisionArgv = parseShellArgv(argv[2])
 
-    expect(argv).toEqual([
-      'exec',
-      'srv-1',
-      'bun apps/worker-cli/src/aiworker.ts provision --host https://dev-host.example.com --token awp_[REDACTED]',
-      '--reason=Provision AIWorker for bob.o\'connor@zonease.org',
+    expect(argv.slice(0, 2)).toEqual(['exec', 'srv-1'])
+    expect(provisionArgv).toEqual([
+      'bun',
+      'apps/worker-cli/src/aiworker.ts',
+      'provision',
+      '--host',
+      'https://dev-host.example.com',
+      '--token',
+      'awp_[REDACTED]',
     ])
+    expect(argv[3]).toBe('--reason=Provision AIWorker for bob.o\'connor@zonease.org')
   })
 
   it('rejects remote aissh loopback callback URL', () => {
@@ -97,6 +103,45 @@ describe('provisioning target adapters', () => {
 
     expect(JSON.stringify(delivery)).not.toContain('plain-secret-token')
   })
+
+  it('redacts quoted non-awp token from nested aissh provision argv', () => {
+    const provisionToken = 'plain secret\'token'
+    const delivery = deliverProvisioningTarget({
+      ...baseInput,
+      adapterRuntimeControlBaseUrl: 'https://dev-host.example.com',
+      adapterType: 'aissh',
+      maturity: 'production',
+      provisionToken,
+      targetRef: 'srv-1',
+    })
+
+    const aisshArgv = parseAisshArgv(delivery.deliveryReceipt.command)
+    const provisionArgv = parseShellArgv(aisshArgv[2])
+
+    expect(provisionArgv.at(-1)).toBe('[REDACTED]')
+    expect(JSON.stringify(delivery)).not.toContain(provisionToken)
+    expect(JSON.stringify(delivery)).not.toContain('plain secret')
+  })
+
+  it('redacts quoted non-awp token from docker receipt and target refs', () => {
+    const provisionToken = 'plain secret\'token'
+    const delivery = deliverProvisioningTarget({
+      ...baseInput,
+      adapterRuntimeControlBaseUrl: 'http://host.docker.internal:9117',
+      adapterType: 'docker',
+      maturity: 'preview',
+      provisionToken,
+      targetRef: `docker://local/${provisionToken}`,
+    })
+
+    const dockerArgv = parseDockerArgv(delivery.deliveryReceipt.command)
+    const provisionArgv = parseShellArgv(dockerArgv.at(-1) ?? '')
+
+    expect(provisionArgv.at(-1)).toBe('[REDACTED]')
+    expect(delivery.deliveryReceipt.targetRef).toBe('docker://local/[REDACTED]')
+    expect(JSON.stringify(delivery)).not.toContain(provisionToken)
+    expect(JSON.stringify(delivery)).not.toContain('plain secret')
+  })
 })
 
 function parseAisshArgv(command: string): string[] {
@@ -115,4 +160,24 @@ function expectShellSyntaxValid(command: string): void {
   })
   expect(result.stderr).toBe('')
   expect(result.status).toBe(0)
+}
+
+function parseDockerArgv(command: string): string[] {
+  const result = spawnSync('bash', ['-c', `docker() { printf '%s\\0' "$@"; }\n${command}`], {
+    encoding: 'buffer',
+  })
+  if (result.status !== 0) {
+    throw new Error(`Failed to parse docker command:\n${String(result.stderr)}`)
+  }
+  return result.stdout.toString('utf8').split('\0').filter(Boolean)
+}
+
+function parseShellArgv(command: string): string[] {
+  const result = spawnSync('bash', ['-c', `printf '%s\\0' ${command}`], {
+    encoding: 'buffer',
+  })
+  if (result.status !== 0) {
+    throw new Error(`Failed to parse shell argv:\n${String(result.stderr)}`)
+  }
+  return result.stdout.toString('utf8').split('\0').filter(Boolean)
 }

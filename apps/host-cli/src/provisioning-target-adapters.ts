@@ -34,11 +34,13 @@ export function deliverProvisioningTarget(input: ProvisioningDeliveryInput): Pro
     adapterType: input.adapterType,
     hostControlBaseUrl: input.hostControlBaseUrl,
   })
-  const provisionCommand = buildProvisionCommand(adapterRuntimeControlBaseUrl, input.provisionToken)
+  const provisionCommand = buildProvisionCommand(adapterRuntimeControlBaseUrl, redactProvisionTokenValue(input.provisionToken))
+  const targetRef = scrubProvisionSecret(input.targetRef, input.provisionToken)
+  const assignedEmail = scrubProvisionSecret(input.assignedEmail, input.provisionToken)
 
   if (input.adapterType === 'aissh') {
-    assertRemoteAisshCallbackReachable({ adapterRuntimeControlBaseUrl, targetRef: input.targetRef })
-    return result(input, buildAisshCommand(input.targetRef, input.assignedEmail, provisionCommand), provisionCommand, '等待远程 Worker 回连 Host。')
+    assertRemoteAisshCallbackReachable({ adapterRuntimeControlBaseUrl, targetRef })
+    return result(input, buildAisshCommand(targetRef, assignedEmail, provisionCommand), provisionCommand, '等待远程 Worker 回连 Host。')
   }
   if (input.adapterType === 'docker') {
     return result(input, buildDockerCommand(input.assignmentId, provisionCommand), provisionCommand, '等待 Docker container 内 Worker 回连 Host。')
@@ -55,13 +57,13 @@ function result(
   return {
     deliveryReceipt: {
       adapterType: input.adapterType,
-      command: redactProvisioningCommand(command, input.provisionToken),
-      targetRef: input.targetRef,
+      command: scrubProvisionSecret(command, input.provisionToken),
+      targetRef: scrubProvisionSecret(input.targetRef, input.provisionToken),
     },
     deliveryStatus: 'delivered',
     expectedCheckInDeadline: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-    operatorHint,
-    provisionCommand: redactProvisioningCommand(provisionCommand, input.provisionToken),
+    operatorHint: scrubProvisionSecret(operatorHint, input.provisionToken),
+    provisionCommand: scrubProvisionSecret(provisionCommand, input.provisionToken),
   }
 }
 
@@ -88,12 +90,12 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll('\'', String.raw`'\''`)}'`
 }
 
-function redactProvisioningCommand(command: string, provisionToken: string): string {
+function scrubProvisionSecret(value: string, provisionToken: string): string {
   if (provisionToken.length === 0)
-    return command
+    return value
   const redactedProvisionToken = redactProvisionTokenValue(provisionToken)
-  return command
-    .replaceAll(shellQuote(provisionToken), redactedProvisionToken)
+  return value
+    .replaceAll(shellQuote(provisionToken), shellQuote(redactedProvisionToken))
     .replaceAll(provisionToken, redactedProvisionToken)
 }
 
