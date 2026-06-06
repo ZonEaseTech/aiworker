@@ -9,6 +9,7 @@ import { createWorkerRegistry } from '@zonease/aiworker-host-control'
 import cac from 'cac'
 import { createHostLifecycle } from './host-lifecycle'
 import { createHostServer } from './host-server'
+import { assertHostSessionSecret } from './host-session-cookie'
 
 export interface HostCliDeps {
   bunServe?: typeof Bun.serve
@@ -24,6 +25,36 @@ function printJson(value: unknown): void {
 
 function normalizeHostUrl(input: string | undefined): string {
   return (input ?? 'http://127.0.0.1:9117').replace(/\/+$/, '')
+}
+
+function normalizeBaseUrl(input: string): string {
+  return input.replace(/\/+$/, '')
+}
+
+function readNonEmptyEnvValue(env: Record<string, string | undefined>, name: string): string | undefined {
+  const value = env[name]?.trim()
+  return value ? value : undefined
+}
+
+function buildSessionAuthFromEnv(env: Record<string, string | undefined>, browserBaseUrl: string) {
+  const clientId = readNonEmptyEnvValue(env, 'LOGTO_CLIENT_ID')
+  const clientSecret = readNonEmptyEnvValue(env, 'LOGTO_CLIENT_SECRET')
+  const endpoint = readNonEmptyEnvValue(env, 'LOGTO_ENDPOINT')
+  const issuer = readNonEmptyEnvValue(env, 'LOGTO_ISSUER')
+  if (!clientId || !clientSecret || !endpoint || !issuer)
+    return undefined
+
+  const sessionSecret = assertHostSessionSecret(env.AIWORKER_HOST_SESSION_SECRET ?? '')
+  return {
+    oidc: {
+      clientId,
+      clientSecret,
+      endpoint,
+      issuer,
+      redirectUri: `${normalizeBaseUrl(browserBaseUrl)}/auth/callback`,
+    },
+    sessionSecret,
+  }
 }
 
 function parsePositiveInteger(value: number | string | undefined, name: string): number {
@@ -492,8 +523,9 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
 
       const publicBaseUrl = options.publicBaseUrl
       const hostBrowserBaseUrl = options.browserBaseUrl ?? (options.webStaticDir ? undefined : 'http://127.0.0.1:5050')
+      const sessionAuth = buildSessionAuthFromEnv(process.env, hostBrowserBaseUrl ?? publicBaseUrl)
       const server = await (deps.serverFactory ?? createHostServer)({
-        authUser: options.devAdminEmail
+        authUser: !sessionAuth && options.devAdminEmail
           ? {
               email: options.devAdminEmail,
               roles: ['host:admin'],
@@ -504,6 +536,7 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
         ...(hostBrowserBaseUrl ? { hostBrowserBaseUrl } : {}),
         ...(options.controlBaseUrl ? { hostControlBaseUrl: options.controlBaseUrl } : {}),
         publicBaseUrl,
+        ...(sessionAuth ? { sessionAuth } : {}),
         ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
       })
       const bunServe = deps.bunServe ?? Bun.serve

@@ -42,6 +42,49 @@ describe('aiworker-host control CLI', () => {
     return port
   }
 
+  const hostSessionEnvKeys = [
+    'AIWORKER_HOST_SESSION_SECRET',
+    'LOGTO_CLIENT_ID',
+    'LOGTO_CLIENT_SECRET',
+    'LOGTO_ENDPOINT',
+    'LOGTO_ISSUER',
+  ] as const
+
+  async function withHostSessionEnv<T>(
+    env: Partial<Record<typeof hostSessionEnvKeys[number], string>>,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    const previous = new Map<typeof hostSessionEnvKeys[number], string | undefined>()
+    for (const key of hostSessionEnvKeys) {
+      previous.set(key, process.env[key])
+      if (Object.prototype.hasOwnProperty.call(env, key))
+        process.env[key] = env[key]
+      else
+        delete process.env[key]
+    }
+
+    try {
+      return await action()
+    }
+    finally {
+      for (const key of hostSessionEnvKeys) {
+        const value = previous.get(key)
+        if (value === undefined)
+          delete process.env[key]
+        else
+          process.env[key] = value
+      }
+    }
+  }
+
+  const completeLogtoEnv = {
+    AIWORKER_HOST_SESSION_SECRET: 'literal-session-secret-value-1234567890',
+    LOGTO_CLIENT_ID: 'logto-client-id',
+    LOGTO_CLIENT_SECRET: 'literal-client-secret-value',
+    LOGTO_ENDPOINT: 'https://auth.zonease.org/',
+    LOGTO_ISSUER: 'https://auth.zonease.org/oidc',
+  } as const
+
   async function waitForHostApiOrExit(url: string, child: ReturnType<typeof Bun.spawn>): Promise<'exited' | 'ready'> {
     let exited = false
     child.exited.then(() => {
@@ -235,6 +278,186 @@ describe('aiworker-host control CLI', () => {
       },
     })
     expect(JSON.parse(output).publicBaseUrl).toBe('https://aiworker.zonease.org')
+  })
+
+  it('passes Logto session auth options to serve when env is complete', async () => {
+    await withHostSessionEnv(completeLogtoEnv, async () => {
+      const calls: any[] = []
+      const code = await runHostCli([
+        'serve',
+        '--db',
+        '/tmp/aiworker-host.db',
+        '--public-base-url',
+        'https://aiworker.zonease.org',
+        '--browser-base-url',
+        'https://host.zonease.app/',
+        '--control-base-url',
+        'https://control.zonease.app',
+        '--host',
+        '127.0.0.1',
+        '--port',
+        '4321',
+      ], {
+        async serverFactory(options) {
+          calls.push({ type: 'factory', options })
+          return {
+            async fetch() {
+              return new Response('ok')
+            },
+            websocket: {
+              message() {},
+            },
+          }
+        },
+        bunServe(options) {
+          calls.push({ type: 'serve', options })
+          return {} as ReturnType<typeof Bun.serve>
+        },
+      })
+
+      expect(code).toBe(0)
+      expect(calls[0].options.sessionAuth).toEqual({
+        oidc: {
+          clientId: 'logto-client-id',
+          clientSecret: 'literal-client-secret-value',
+          endpoint: 'https://auth.zonease.org/',
+          issuer: 'https://auth.zonease.org/oidc',
+          redirectUri: 'https://host.zonease.app/auth/callback',
+        },
+        sessionSecret: 'literal-session-secret-value-1234567890',
+      })
+    })
+  })
+
+  it('does not set Logto session auth when env is incomplete', async () => {
+    await withHostSessionEnv({
+      AIWORKER_HOST_SESSION_SECRET: completeLogtoEnv.AIWORKER_HOST_SESSION_SECRET,
+      LOGTO_CLIENT_ID: completeLogtoEnv.LOGTO_CLIENT_ID,
+    }, async () => {
+      const calls: any[] = []
+      const code = await runHostCli([
+        'serve',
+        '--db',
+        '/tmp/aiworker-host.db',
+      ], {
+        async serverFactory(options) {
+          calls.push({ type: 'factory', options })
+          return {
+            async fetch() {
+              return new Response('ok')
+            },
+            websocket: {
+              message() {},
+            },
+          }
+        },
+        bunServe(options) {
+          calls.push({ type: 'serve', options })
+          return {} as ReturnType<typeof Bun.serve>
+        },
+      })
+
+      expect(code).toBe(0)
+      expect(calls[0].options.sessionAuth).toBeUndefined()
+    })
+  })
+
+  it('fails serve before creating a server when the Host session secret is too short', async () => {
+    await withHostSessionEnv({
+      ...completeLogtoEnv,
+      AIWORKER_HOST_SESSION_SECRET: 'short-secret',
+    }, async () => {
+      const calls: any[] = []
+      const code = await runHostCli([
+        'serve',
+        '--db',
+        '/tmp/aiworker-host.db',
+      ], {
+        async serverFactory(options) {
+          calls.push({ type: 'factory', options })
+          return {
+            async fetch() {
+              return new Response('ok')
+            },
+            websocket: {
+              message() {},
+            },
+          }
+        },
+        bunServe(options) {
+          calls.push({ type: 'serve', options })
+          return {} as ReturnType<typeof Bun.serve>
+        },
+      })
+
+      expect(code).toBe(1)
+      expect(calls).toEqual([])
+    })
+  })
+
+  it('uses Logto session auth as authority when dev admin email is also provided', async () => {
+    await withHostSessionEnv(completeLogtoEnv, async () => {
+      const calls: any[] = []
+      const code = await runHostCli([
+        'serve',
+        '--db',
+        '/tmp/aiworker-host.db',
+        '--dev-admin-email',
+        'admin@example.com',
+      ], {
+        async serverFactory(options) {
+          calls.push({ type: 'factory', options })
+          return {
+            async fetch() {
+              return new Response('ok')
+            },
+            websocket: {
+              message() {},
+            },
+          }
+        },
+        bunServe(options) {
+          calls.push({ type: 'serve', options })
+          return {} as ReturnType<typeof Bun.serve>
+        },
+      })
+
+      expect(code).toBe(0)
+      expect(calls[0].options.sessionAuth).toBeDefined()
+      expect(calls[0].options.authUser).toBeNull()
+    })
+  })
+
+  it('does not print Logto client or Host session secrets in serve JSON output', async () => {
+    await withHostSessionEnv(completeLogtoEnv, async () => {
+      const calls: any[] = []
+      const code = await runHostCli([
+        'serve',
+        '--db',
+        '/tmp/aiworker-host.db',
+      ], {
+        async serverFactory(options) {
+          calls.push({ type: 'factory', options })
+          return {
+            async fetch() {
+              return new Response('ok')
+            },
+            websocket: {
+              message() {},
+            },
+          }
+        },
+        bunServe(options) {
+          calls.push({ type: 'serve', options })
+          return {} as ReturnType<typeof Bun.serve>
+        },
+      })
+
+      expect(code).toBe(0)
+      expect(calls[0].options.sessionAuth).toBeDefined()
+      expect(output).not.toContain('literal-session-secret-value-1234567890')
+      expect(output).not.toContain('literal-client-secret-value')
+    })
   })
 
   it('keeps the foreground serve command running and reachable', async () => {
