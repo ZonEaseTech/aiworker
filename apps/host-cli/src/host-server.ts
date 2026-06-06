@@ -201,7 +201,11 @@ function createAccessToken(): string {
 }
 
 function buildProvisionCommand(publicBaseUrl: string, provisionToken: string): string {
-  return `bun apps/worker-cli/src/aiworker.ts provision --host ${publicBaseUrl} --token ${provisionToken}`
+  return `bun apps/worker-cli/src/aiworker.ts provision --host ${shellQuote(publicBaseUrl)} --token ${shellQuote(provisionToken)}`
+}
+
+function shellQuote(value: string): string {
+  return /^[A-Za-z0-9_/:=.,@%+-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
 }
 
 function isNonEmptyString(value: unknown): value is string {

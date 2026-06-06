@@ -109,6 +109,27 @@ describe('host server', () => {
     expect(JSON.stringify(listed)).not.toContain('provisionCommand')
   })
 
+  it('quotes unsafe host values in one-time provision commands', async () => {
+    const publicBaseUrl = 'https://aiworker.zonease.org/host?next=a&debug=1'
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      publicBaseUrl,
+    })
+
+    const created = await json(await server.fetch(new Request('http://host/api/host/assignments', {
+      body: JSON.stringify({
+        assignedEmail: 'Bob@Example.com',
+        serverRef: 'host-main',
+        soulReleaseRef: 'soul_release_1',
+      }),
+      method: 'POST',
+    })))
+
+    expect(created.provisionToken).toStartWith('awp_')
+    expect(created.provisionCommand).toBe(`bun apps/worker-cli/src/aiworker.ts provision --host '${publicBaseUrl}' --token ${created.provisionToken}`)
+  })
+
   it('blocks non-admin users from listing or creating assignments', async () => {
     const server = await createHostServer({
       authUser: bobUser,
