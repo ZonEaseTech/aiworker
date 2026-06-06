@@ -5,8 +5,10 @@ import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 
 import {
   beginLogtoHostedLogin,
+  discoverLogtoOidcIssuerConfiguration,
   exchangeLogtoHostedLoginCode,
   mapLogtoHostedLoginClaims,
+  mapLogtoZoneaseClaims,
   type OidcClientConfig,
 } from './host-oidc-client'
 
@@ -63,7 +65,39 @@ describe('host oidc client', () => {
     })).rejects.toThrow('path-only')
   })
 
+  it('discovers issuer metadata without requiring a confidential client config', async () => {
+    const discoveryRequests: string[] = []
+    const discovery = await discoverLogtoOidcIssuerConfiguration('https://issuer.zonease.test/oidc/', {
+      fetch: async input => {
+        discoveryRequests.push(String(input))
+        return Response.json({
+          authorization_endpoint: 'https://issuer.zonease.test/custom/auth',
+          jwks_uri: 'https://issuer.zonease.test/custom/jwks',
+          token_endpoint: 'https://issuer.zonease.test/custom/token',
+        })
+      },
+    })
+
+    expect(discoveryRequests).toEqual(['https://issuer.zonease.test/oidc/.well-known/openid-configuration'])
+    expect(discovery).toEqual({
+      authorizationEndpoint: 'https://issuer.zonease.test/custom/auth',
+      jwksUri: 'https://issuer.zonease.test/custom/jwks',
+      tokenEndpoint: 'https://issuer.zonease.test/custom/token',
+    })
+  })
+
   it('maps only verified zonease.org claims to a Host session payload', () => {
+    expect(mapLogtoZoneaseClaims({
+      email: ' User@Zonease.org ',
+      email_verified: true,
+      roles: [' host:admin ', ''],
+      sub: ' usr_user ',
+    })).toEqual({
+      email: 'user@zonease.org',
+      roles: ['host:admin'],
+      sub: 'usr_user',
+    })
+
     expect(mapLogtoHostedLoginClaims({
       email: ' Alice@Zonease.org ',
       email_verified: true,

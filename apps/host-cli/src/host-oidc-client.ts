@@ -25,6 +25,12 @@ export interface OidcDiscoveryMetadata {
   tokenEndpoint: string
 }
 
+export interface LogtoHostIdentity {
+  email: string
+  roles: string[]
+  sub: string
+}
+
 export type OidcFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
 const discoveryCache = new Map<string, Promise<OidcDiscoveryMetadata>>()
@@ -34,6 +40,14 @@ export async function discoverLogtoOidcConfiguration(
   input: { fetch?: OidcFetch } = {},
 ): Promise<OidcDiscoveryMetadata> {
   const issuer = normalizedIssuer(config.issuer)
+  return discoverLogtoOidcIssuerConfiguration(issuer, input)
+}
+
+export async function discoverLogtoOidcIssuerConfiguration(
+  issuerInput: string,
+  input: { fetch?: OidcFetch } = {},
+): Promise<OidcDiscoveryMetadata> {
+  const issuer = normalizedIssuer(issuerInput)
   const cached = discoveryCache.get(issuer)
   if (cached)
     return cached
@@ -134,6 +148,15 @@ export async function exchangeAuthorizationCode(
 }
 
 export function mapLogtoHostedLoginClaims(claims: Record<string, unknown>, expiresAt: string): HostSessionPayload {
+  const identity = mapLogtoZoneaseClaims(claims)
+
+  return {
+    ...identity,
+    expiresAt,
+  }
+}
+
+export function mapLogtoZoneaseClaims(claims: Record<string, unknown>): LogtoHostIdentity {
   if (typeof claims.sub !== 'string' || claims.sub.trim().length === 0)
     throw new Error('Logto token is missing a subject')
 
@@ -150,7 +173,6 @@ export function mapLogtoHostedLoginClaims(claims: Record<string, unknown>, expir
 
   return {
     email,
-    expiresAt,
     roles: Array.isArray(claims.roles)
       ? claims.roles
           .filter((role): role is string => typeof role === 'string')

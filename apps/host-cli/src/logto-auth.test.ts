@@ -16,19 +16,27 @@ describe('logto auth adapter', () => {
 
   it('maps verified Logto claims to a Host user without worker permissions', () => {
     const user = mapLogtoClaimsToUser({
-      email: '  Alice@Example.COM ',
+      email: '  User@Zonease.org ',
       email_verified: true,
       roles: [' host:admin ', 42, null, '', '  ', 'employee'],
-      sub: ' usr_alice ',
+      sub: ' usr_user ',
       workerId: 'wkr_not_a_permission',
     })
 
     expect(user).toEqual({
-      email: 'alice@example.com',
+      email: 'user@zonease.org',
       roles: ['host:admin', 'employee'],
-      subject: 'usr_alice',
+      subject: 'usr_user',
     })
     expect(user).not.toHaveProperty('workerId')
+  })
+
+  it('rejects verified non-zonease email claims', () => {
+    expect(() => mapLogtoClaimsToUser({
+      email: 'user@example.com',
+      email_verified: true,
+      sub: 'usr_user',
+    })).toThrow('zonease.org')
   })
 
   it('rejects unverified email claims', () => {
@@ -52,15 +60,27 @@ describe('logto auth adapter', () => {
     })).toThrow('email')
   })
 
-  it('authenticates a JWT against a path-preserving Logto JWKS URL', async () => {
+  it('authenticates a JWT against the discovery jwks_uri instead of a hand-built JWKS URL', async () => {
     const { privateKey, publicKey } = await generateKeyPair('RS256')
     const publicJwk = await exportJWK(publicKey)
-    const jwksRequests: string[] = []
+    const requests: string[] = []
     const jwksServer = Bun.serve({
       fetch(request) {
         const url = new URL(request.url)
-        jwksRequests.push(url.pathname)
-        if (url.pathname !== '/tenant/oidc/jwks')
+        requests.push(url.pathname)
+
+        if (url.pathname === '/tenant/oidc/.well-known/openid-configuration') {
+          return Response.json({
+            authorization_endpoint: `${url.origin}/tenant/oidc/auth`,
+            jwks_uri: `${url.origin}/discovered/jwks`,
+            token_endpoint: `${url.origin}/tenant/oidc/token`,
+          })
+        }
+
+        if (url.pathname === '/tenant/oidc/jwks')
+          return new Response('hand-built jwks path is not allowed', { status: 500 })
+
+        if (url.pathname !== '/discovered/jwks')
           return new Response('not found', { status: 404 })
 
         return Response.json({
@@ -77,7 +97,7 @@ describe('logto auth adapter', () => {
         issuer,
       })
       const token = await new SignJWT({
-        email: 'User@Example.com',
+        email: 'User@Zonease.org',
         email_verified: true,
         roles: ['host:admin'],
       })
@@ -88,7 +108,7 @@ describe('logto auth adapter', () => {
         .setExpirationTime('5m')
         .sign(privateKey)
       const wrongAudienceToken = await new SignJWT({
-        email: 'User@Example.com',
+        email: 'User@Zonease.org',
         email_verified: true,
         roles: ['host:admin'],
       })
@@ -99,7 +119,7 @@ describe('logto auth adapter', () => {
         .setExpirationTime('5m')
         .sign(privateKey)
       const unverifiedEmailToken = await new SignJWT({
-        email: 'User@Example.com',
+        email: 'User@Zonease.org',
         email_verified: false,
         roles: ['host:admin'],
       })
@@ -112,29 +132,44 @@ describe('logto auth adapter', () => {
 
       expect(await provider.authenticateRequest({ headers: new Headers() })).toBeNull()
       expect(await provider.authenticateRequest({ headers: new Headers({ Authorization: `Bearer ${token}` }) })).toEqual({
-        email: 'user@example.com',
+        email: 'user@zonease.org',
         roles: ['host:admin'],
         subject: 'usr_user',
       })
       expect(await provider.authenticateRequest({ headers: new Headers({ Authorization: 'Bearer not-a-jwt' }) })).toBeNull()
       expect(await provider.authenticateRequest({ headers: new Headers({ Authorization: `Bearer ${wrongAudienceToken}` }) })).toBeNull()
       expect(await provider.authenticateRequest({ headers: new Headers({ Authorization: `Bearer ${unverifiedEmailToken}` }) })).toBeNull()
-      expect(jwksRequests).toEqual(['/tenant/oidc/jwks'])
+      expect(requests).toEqual([
+        '/tenant/oidc/.well-known/openid-configuration',
+        '/discovered/jwks',
+      ])
     }
     finally {
       jwksServer.stop(true)
     }
   })
 
-  it('uses /oidc/jwks for a root issuer URL', async () => {
+  it('uses discovery jwks_uri for a root issuer URL', async () => {
     const { privateKey, publicKey } = await generateKeyPair('RS256')
     const publicJwk = await exportJWK(publicKey)
-    const jwksRequests: string[] = []
+    const requests: string[] = []
     const jwksServer = Bun.serve({
       fetch(request) {
         const url = new URL(request.url)
-        jwksRequests.push(url.pathname)
-        if (url.pathname !== '/oidc/jwks')
+        requests.push(url.pathname)
+
+        if (url.pathname === '/.well-known/openid-configuration') {
+          return Response.json({
+            authorization_endpoint: `${url.origin}/oidc/auth`,
+            jwks_uri: `${url.origin}/root-discovered/jwks`,
+            token_endpoint: `${url.origin}/oidc/token`,
+          })
+        }
+
+        if (url.pathname === '/oidc/jwks')
+          return new Response('hand-built root jwks path is not allowed', { status: 500 })
+
+        if (url.pathname !== '/root-discovered/jwks')
           return new Response('not found', { status: 404 })
 
         return Response.json({
@@ -151,7 +186,7 @@ describe('logto auth adapter', () => {
         issuer,
       })
       const token = await new SignJWT({
-        email: 'root@example.com',
+        email: 'root@zonease.org',
         email_verified: true,
       })
         .setProtectedHeader({ alg: 'RS256', kid: 'root-key' })
@@ -162,11 +197,14 @@ describe('logto auth adapter', () => {
         .sign(privateKey)
 
       expect(await provider.authenticateRequest({ headers: new Headers({ Authorization: `Bearer ${token}` }) })).toEqual({
-        email: 'root@example.com',
+        email: 'root@zonease.org',
         roles: [],
         subject: 'usr_root',
       })
-      expect(jwksRequests).toEqual(['/oidc/jwks'])
+      expect(requests).toEqual([
+        '/.well-known/openid-configuration',
+        '/root-discovered/jwks',
+      ])
     }
     finally {
       jwksServer.stop(true)

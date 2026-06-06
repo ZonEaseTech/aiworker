@@ -2,6 +2,12 @@ import type { AuthProvider, AuthenticatedHostUser } from '@zonease/aiworker-host
 
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
+import {
+  discoverLogtoOidcIssuerConfiguration,
+  mapLogtoZoneaseClaims,
+  type OidcFetch,
+} from './host-oidc-client'
+
 export interface LogtoClaims {
   email?: unknown
   email_verified?: unknown
@@ -12,6 +18,7 @@ export interface LogtoClaims {
 
 export interface LogtoAuthOptions {
   audience: string
+  fetch?: OidcFetch
   issuer: string
 }
 
@@ -25,29 +32,17 @@ export function extractBearerToken(headers: Headers): string | null {
 }
 
 export function mapLogtoClaimsToUser(claims: LogtoClaims): AuthenticatedHostUser {
-  if (typeof claims.sub !== 'string' || claims.sub.trim().length === 0)
-    throw new Error('Logto token is missing a subject')
-
-  if (typeof claims.email !== 'string' || claims.email.trim().length === 0)
-    throw new Error('Logto token is missing an email')
-
-  if (claims.email_verified !== true)
-    throw new Error('Logto token must contain a verified email')
+  const identity = mapLogtoZoneaseClaims(claims)
 
   return {
-    email: claims.email.trim().toLowerCase(),
-    roles: Array.isArray(claims.roles)
-      ? claims.roles
-          .filter((role): role is string => typeof role === 'string')
-          .map(role => role.trim())
-          .filter(Boolean)
-      : [],
-    subject: claims.sub.trim(),
+    email: identity.email,
+    roles: identity.roles,
+    subject: identity.sub,
   }
 }
 
 export function createLogtoAuthProvider(options: LogtoAuthOptions): AuthProvider {
-  const jwks = createRemoteJWKSet(logtoJwksUrl(options.issuer))
+  let jwksPromise: Promise<ReturnType<typeof createRemoteJWKSet>> | null = null
 
   return {
     async authenticateRequest({ headers }) {
@@ -56,7 +51,7 @@ export function createLogtoAuthProvider(options: LogtoAuthOptions): AuthProvider
         return null
 
       try {
-        const { payload } = await jwtVerify(token, jwks, {
+        const { payload } = await jwtVerify(token, await resolveJwks(), {
           audience: options.audience,
           issuer: options.issuer,
         })
@@ -67,10 +62,10 @@ export function createLogtoAuthProvider(options: LogtoAuthOptions): AuthProvider
       }
     },
   }
-}
 
-function logtoJwksUrl(issuer: string): URL {
-  const issuerUrl = new URL(issuer)
-  const basePath = issuerUrl.pathname === '/' ? '/oidc' : issuerUrl.pathname.replace(/\/$/, '')
-  return new URL(`${basePath}/jwks`, issuerUrl.origin)
+  async function resolveJwks(): Promise<ReturnType<typeof createRemoteJWKSet>> {
+    jwksPromise ??= discoverLogtoOidcIssuerConfiguration(options.issuer, { fetch: options.fetch })
+      .then(discovery => createRemoteJWKSet(new URL(discovery.jwksUri)))
+    return jwksPromise
+  }
 }
