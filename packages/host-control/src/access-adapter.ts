@@ -45,6 +45,8 @@ export function createWorkerAccessRegistry(): WorkerAccessRegistry {
 }
 
 export function mapWorkerAccessPath(hostPathWithSearch: string, workerId: string): string {
+  if (hostPathWithSearch.trim() !== hostPathWithSearch)
+    throw new Error('invalid worker access path')
   if (/^[a-z][a-z\d+.-]*:/i.test(hostPathWithSearch) || hostPathWithSearch.startsWith('//'))
     throw new Error('invalid worker access path')
   const url = new URL(hostPathWithSearch, 'https://host.invalid')

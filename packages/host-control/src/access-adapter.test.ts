@@ -73,6 +73,12 @@ describe('host-control access adapter boundary', () => {
     expect(() => mapWorkerAccessPath('//evil.example/workers/wkr_82/assets', 'wkr_82')).toThrow('invalid worker access path')
   })
 
+  test('rejects leading whitespace before absolute Host worker paths', () => {
+    expect(() => mapWorkerAccessPath(' https://evil.example/workers/wkr_82/assets', 'wkr_82')).toThrow('invalid worker access path')
+    expect(() => mapWorkerAccessPath('\nhttps://evil.example/workers/wkr_82/assets', 'wkr_82')).toThrow('invalid worker access path')
+    expect(() => mapWorkerAccessPath('\thttps://evil.example/workers/wkr_82/assets', 'wkr_82')).toThrow('invalid worker access path')
+  })
+
   test('rejects encoded slash and backslash in Worker-local path segments', () => {
     expect(() => mapWorkerAccessPath('/workers/wkr_82/%2F..%2Fadmin', 'wkr_82')).toThrow('invalid worker access path')
     expect(() => mapWorkerAccessPath('/workers/wkr_82/%5C..%5Cadmin', 'wkr_82')).toThrow('invalid worker access path')
