@@ -186,7 +186,9 @@ describe('aiworker-host control CLI', () => {
 
     try {
       await expect(waitForHostApiOrExit(`${apiUrl}/host`, child)).resolves.toBe('ready')
-      expect(await fetch(`${apiUrl}/host`).then(response => response.text())).toBe('AIWorker Host')
+      const landing = await fetch(`${apiUrl}/host`).then(response => response.text())
+      expect(landing).toContain('Host API is running')
+      expect(landing).toContain('http://127.0.0.1:5050/host')
     }
     finally {
       child.kill('SIGTERM')
@@ -241,6 +243,61 @@ describe('aiworker-host control CLI', () => {
     expect(parsed.assignment.assignedEmail).toBe('bob@zonease.org')
     expect(parsed.provisionCommand).toContain('--token awp_secret')
     expect(output).not.toContain('"provisionToken"')
+  })
+
+  it('prints aisshCommand from assignment create but still omits provisionToken field', async () => {
+    const code = await runHostCli(['assignment', 'create', '--email', 'bob@zonease.org', '--server', 'srv-1', '--soul', 'aiworker-freeform@dev'], {
+      fetch: testFetch(async () => {
+        return new Response(JSON.stringify({
+          aisshCommand: 'aissh exec srv-1 "bun aiworker provision --token awp_secret" --reason=test',
+          assignment: {
+            assignedEmail: 'bob@zonease.org',
+            assignmentId: 'asn_1',
+            serverRef: 'srv-1',
+            soulReleaseRef: 'aiworker-freeform@dev',
+            status: 'provisioning',
+            workerId: null,
+            workbenchUrl: null,
+          },
+          provisionCommand: 'bun aiworker provision --token awp_secret',
+          provisionToken: 'awp_secret',
+        }), { headers: { 'content-type': 'application/json' }, status: 201 })
+      }),
+    })
+
+    expect(code).toBe(0)
+    const parsed = JSON.parse(output)
+    expect(parsed.aisshCommand).toContain('aissh exec srv-1')
+    expect(parsed.provisionCommand).toContain('awp_secret')
+    expect(parsed.provisionToken).toBeUndefined()
+  })
+
+  it('lists Host options through the Host API', async () => {
+    const code = await runHostCli(['option', 'list', '--host', 'http://127.0.0.1:9117'], {
+      fetch: testFetch(async (input, init) => {
+        const request = new Request(input, init)
+        expect(request.method).toBe('GET')
+        expect(request.url).toBe('http://127.0.0.1:9117/api/host/options')
+        return new Response(JSON.stringify({
+          access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
+          auth: { mode: 'dev-static', status: 'deferred-logto' },
+          servers: [{ id: 'srv-1', name: 'aiwork', source: 'aissh', token: 'secret' }],
+          soulReleases: [{
+            descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
+            id: 'aiworker-freeform',
+            name: 'AIWorker Freeform',
+            releaseRef: 'aiworker-freeform@dev',
+            source: 'official',
+          }],
+        }), { headers: { 'content-type': 'application/json' } })
+      }),
+    })
+
+    expect(code).toBe(0)
+    const parsed = JSON.parse(output)
+    expect(parsed.servers[0].id).toBe('srv-1')
+    expect(parsed.soulReleases[0].releaseRef).toBe('aiworker-freeform@dev')
+    expect(output).not.toContain('secret')
   })
 
   it('lists assignments through the Host API without printing tokens', async () => {

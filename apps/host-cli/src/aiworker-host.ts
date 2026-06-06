@@ -80,6 +80,7 @@ function projectAssignmentCreateResponse(value: unknown): Record<string, unknown
   if (typeof record.provisionCommand !== 'string')
     throw new Error('Invalid Host API response: provisionCommand must be a string')
   return {
+    ...(typeof record.aisshCommand === 'string' ? { aisshCommand: record.aisshCommand } : {}),
     assignment: projectAssignmentView(record.assignment),
     provisionCommand: record.provisionCommand,
   }
@@ -91,6 +92,32 @@ function projectAssignmentListResponse(value: unknown): Record<string, unknown> 
     throw new Error('Invalid Host API response: assignments must be an array')
   return {
     assignments: record.assignments.map(projectAssignmentView),
+  }
+}
+
+function projectAllowedFields(value: unknown, fields: string[]): Record<string, unknown> {
+  const record = requireRecord(value, 'projected value')
+  const view: Record<string, unknown> = {}
+  for (const field of fields) {
+    if (field in record)
+      view[field] = record[field]
+  }
+  return view
+}
+
+function projectHostOptions(value: unknown): Record<string, unknown> {
+  const record = requireRecord(value, 'host options')
+  return {
+    ...(record.serverSourceError ? { serverSourceError: record.serverSourceError } : {}),
+    access: record.access,
+    auth: record.auth,
+    servers: Array.isArray(record.servers)
+      ? record.servers.map(server => projectAllowedFields(server, ['id', 'name', 'host', 'notes', 'source']))
+      : [],
+    soulReleases: Array.isArray(record.soulReleases)
+      ? record.soulReleases.map(soul => projectAllowedFields(soul, ['id', 'name', 'releaseRef', 'descriptorPath', 'source']))
+      : [],
+    ...(record.soulSourceErrors ? { soulSourceErrors: record.soulSourceErrors } : {}),
   }
 }
 
@@ -118,6 +145,14 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     .command('worker list', 'list workers registered with this Host control plane')
     .action(() => {
       printJson({ workers: registry.list() })
+    })
+  cli
+    .command('option list', 'list aissh servers and Soul releases through the Host API')
+    .option('--host <url>', 'Host API base URL', { default: 'http://127.0.0.1:9117' })
+    .action(async (options: { host?: string }) => {
+      const host = normalizeHostUrl(options.host)
+      const result = await requestHostJson(fetchImpl, `${host}/api/host/options`)
+      printJson(projectHostOptions(result))
     })
   cli
     .command('assignment create', 'create a Worker assignment through the Host API')
