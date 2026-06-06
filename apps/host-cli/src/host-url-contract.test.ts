@@ -24,6 +24,23 @@ describe('Host URL contract', () => {
       adapterType: 'docker',
       hostControlBaseUrl: 'http://127.0.0.1:9117',
     })).toBe('http://host.docker.internal:9117')
+
+    expect(resolveAdapterRuntimeControlBaseUrl({
+      adapterType: 'docker',
+      hostControlBaseUrl: 'http://localhost:9117',
+    })).toBe('http://host.docker.internal:9117')
+
+    expect(resolveAdapterRuntimeControlBaseUrl({
+      adapterType: 'docker',
+      hostControlBaseUrl: 'http://[::1]:9117',
+    })).toBe('http://host.docker.internal:9117')
+  })
+
+  it('requires explicit adapterRuntimeControlBaseUrl for remote aissh targets', () => {
+    expect(() => resolveAdapterRuntimeControlBaseUrl({
+      adapterType: 'aissh',
+      hostControlBaseUrl: 'http://127.0.0.1:9117',
+    })).toThrow('Remote aissh target requires an explicit Host callback URL via adapterRuntimeControlBaseUrl')
   })
 
   it('rejects remote aissh loopback callback URL', () => {
@@ -33,4 +50,3 @@ describe('Host URL contract', () => {
     })).toThrow('Remote aissh target cannot use a loopback Host callback URL')
   })
 })
-

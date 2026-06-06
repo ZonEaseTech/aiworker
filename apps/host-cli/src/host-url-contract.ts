@@ -31,6 +31,10 @@ export function resolveAdapterRuntimeControlBaseUrl(input: ResolveAdapterRuntime
   if (input.adapterRuntimeControlBaseUrl)
     return normalizeBaseUrl(input.adapterRuntimeControlBaseUrl)
 
+  if (input.adapterType === 'aissh') {
+    throw new Error('Remote aissh target requires an explicit Host callback URL via adapterRuntimeControlBaseUrl')
+  }
+
   const normalizedControl = normalizeBaseUrl(input.hostControlBaseUrl)
   if (input.adapterType === 'docker' && isLoopbackUrl(normalizedControl)) {
     const url = new URL(normalizedControl)
@@ -45,4 +49,3 @@ export function assertRemoteAisshCallbackReachable(input: RemoteAisshCallbackInp
     throw new Error(`Remote aissh target cannot use a loopback Host callback URL: ${input.targetRef}`)
   }
 }
-
