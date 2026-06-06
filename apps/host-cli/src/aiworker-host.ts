@@ -122,6 +122,33 @@ function requireRecord(value: unknown, name: string): Record<string, unknown> {
   return value
 }
 
+const allowedProvisioningAdapters = ['aissh', 'docker', 'local'] as const
+const allowedProvisioningMaturities = ['production', 'preview', 'dev'] as const
+
+type ProvisioningAdapterOption = typeof allowedProvisioningAdapters[number]
+type ProvisioningMaturityOption = typeof allowedProvisioningMaturities[number]
+
+function requireTrimmedOption(value: unknown, optionName: string): string {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  if (!trimmed)
+    throw new Error(`Missing required option: ${optionName}`)
+  return trimmed
+}
+
+function requireProvisioningAdapter(value: unknown): ProvisioningAdapterOption {
+  const adapter = typeof value === 'string' ? value.trim() : ''
+  if (allowedProvisioningAdapters.includes(adapter as ProvisioningAdapterOption))
+    return adapter as ProvisioningAdapterOption
+  throw new Error(`Invalid --adapter <type>: ${value}. Expected one of: ${allowedProvisioningAdapters.join(', ')}`)
+}
+
+function requireProvisioningMaturity(value: unknown): ProvisioningMaturityOption {
+  const maturity = typeof value === 'string' ? value.trim() : ''
+  if (allowedProvisioningMaturities.includes(maturity as ProvisioningMaturityOption))
+    return maturity as ProvisioningMaturityOption
+  throw new Error(`Invalid --maturity <level>: ${value}. Expected one of: ${allowedProvisioningMaturities.join(', ')}`)
+}
+
 const assignmentViewFields = [
   'assignedEmail',
   'assignmentId',
@@ -149,6 +176,7 @@ function projectAssignmentCreateResponse(value: unknown): Record<string, unknown
   const record = requireRecord(value, 'assignment create response')
   if (typeof record.provisionCommand !== 'string')
     throw new Error('Invalid Host API response: provisionCommand must be a string')
+  const provisionToken = typeof record.provisionToken === 'string' ? record.provisionToken : undefined
   const view = projectAllowedFields(record, [
     'deliveryReceipt',
     'deliveryStatus',
@@ -157,9 +185,24 @@ function projectAssignmentCreateResponse(value: unknown): Record<string, unknown
     'provisionCommand',
     'provisionToken',
   ])
+  if (provisionToken) {
+    view.provisionCommand = scrubExplicitProvisionToken(view.provisionCommand, provisionToken)
+    if (isRecord(view.deliveryReceipt) && typeof view.deliveryReceipt.command === 'string') {
+      view.deliveryReceipt = {
+        ...view.deliveryReceipt,
+        command: scrubExplicitProvisionToken(view.deliveryReceipt.command, provisionToken),
+      }
+    }
+  }
   if ('assignment' in record)
     view.assignment = projectAssignmentView(record.assignment)
   return view
+}
+
+function scrubExplicitProvisionToken(value: unknown, provisionToken: string): unknown {
+  if (typeof value !== 'string' || provisionToken.length === 0)
+    return value
+  return value.replaceAll(provisionToken, '<redacted>')
 }
 
 function projectAssignmentListResponse(value: unknown): Record<string, unknown> {
@@ -261,7 +304,7 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
       printJson({ workers: registry.list() })
     })
   cli
-    .command('option list', 'list aissh servers and Soul releases through the Host API')
+    .command('option list', 'list provisioning targets and Soul releases through the Host API')
     .option('--host <url>', 'Host API base URL', { default: 'http://127.0.0.1:9117' })
     .action(async (options: { host?: string }) => {
       const host = normalizeHostUrl(options.host)
@@ -275,7 +318,7 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     .option('--adapter <type>', 'provisioning adapter type: aissh, docker, local')
     .option('--maturity <level>', 'target maturity: production, preview, dev')
     .option('--callback-url <url>', 'Worker-reachable Host control URL for this target')
-    .option('--server <server>', 'legacy alias for --target with aissh production provisioning')
+    .option('--server <server>', 'legacy alias for --target; maps to aissh production provisioning')
     .option('--soul <soul>', 'Soul release reference')
     .option('--host <url>', 'Host API base URL', { default: 'http://127.0.0.1:9117' })
     .action(async (options: {
@@ -290,15 +333,21 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     }) => {
       if (!options.email)
         throw new Error('Missing required option: --email <email>')
-      const target = options.target ?? options.server
-      const adapter = options.adapter ?? (options.server ? 'aissh' : undefined)
-      const maturity = options.maturity ?? (options.server ? 'production' : undefined)
-      if (!target)
-        throw new Error('Missing required option: --target <ref>')
-      if (!adapter)
-        throw new Error('Missing required option: --adapter <type>')
-      if (!maturity)
-        throw new Error('Missing required option: --maturity <level>')
+      if (options.target !== undefined && options.server !== undefined)
+        throw new Error('Cannot combine --target <ref> with legacy --server <server>')
+      const target = options.server !== undefined
+        ? requireTrimmedOption(options.server, '--server <server>')
+        : requireTrimmedOption(options.target, '--target <ref>')
+      const adapter = options.server !== undefined
+        ? 'aissh'
+        : requireProvisioningAdapter(options.adapter ?? 'aissh')
+      const maturity = options.server !== undefined
+        ? 'production'
+        : requireProvisioningMaturity(options.maturity ?? 'production')
+      if (options.adapter !== undefined)
+        requireProvisioningAdapter(options.adapter)
+      if (options.maturity !== undefined)
+        requireProvisioningMaturity(options.maturity)
       if (!options.soul)
         throw new Error('Missing required option: --soul <soul>')
 
