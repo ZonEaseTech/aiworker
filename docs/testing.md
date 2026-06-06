@@ -315,6 +315,11 @@ and `开通 AI Worker`, and that `/workers/:workerId` is not accepted as a
 Host-mounted Worker UI. The proof must not find `micro-app` or `iframe` on
 either `/host` or the Worker access path. Static preview/history fallback is not an end-to-end Worker Access Adapter proof.
 
+`bun run test:browser:host-dev` proves Host Web creates a real assignment
+through Host API, real check-in moves it to `checked_in`, and Web refresh/reload
+shows `Worker 已报到`. It does not claim Worker Access `ready` or opening a
+Worker URL.
+
 ## Pending Implementation (Phase-B Teardown)
 
 Phase A flipped the canonical docs and doc gates to the worker-owns-workbench,

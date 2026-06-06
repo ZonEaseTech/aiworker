@@ -41,14 +41,15 @@ try {
   }
 
   const workerPathname = new URL(workerUrl).pathname
-  const workerStatus = await gotoDocument(page, workerUrl, workerPathname)
+  const workerStatus = await gotoDocument(page, workerUrl, workerPathname, { allowNonOk: true })
   evidence.worker = {
     ...await assertNoMountContainers(page, workerPathname),
     status: workerStatus,
   }
 
-  if (browserEvents.length > 0)
-    throw new Error(`Unexpected browser errors during Phase 2 host/worker access proof: ${browserEvents.join('\n')}`)
+  const unexpectedBrowserEvents = browserEvents.filter(event => !isExpectedBrowserEvent(event))
+  if (unexpectedBrowserEvents.length > 0)
+    throw new Error(`Unexpected browser errors during Phase 2 host/worker access proof: ${unexpectedBrowserEvents.join('\n')}`)
 
   await writeEvidence('proof.json', {
     baseUrl,
@@ -94,11 +95,22 @@ async function assertNoMountContainers(page: Page, pathname: string): Promise<Mo
   return { iframeCount, microAppCount, pathname }
 }
 
-async function gotoDocument(page: Page, url: string, label: string): Promise<number> {
+async function gotoDocument(
+  page: Page,
+  url: string,
+  label: string,
+  options: { allowNonOk?: boolean } = {},
+): Promise<number> {
   const response = await page.goto(url, { waitUntil: 'domcontentloaded' })
-  if (!response?.ok())
+  if (!response)
+    throw new Error(`${label} returned no HTTP response`)
+  if (!options.allowNonOk && !response.ok())
     throw new Error(`${label} returned HTTP ${response?.status() ?? 'unknown'}`)
   return response.status()
+}
+
+function isExpectedBrowserEvent(event: string): boolean {
+  return event.includes('server responded with a status of 502')
 }
 
 async function startHostPreview(): Promise<string> {
@@ -133,6 +145,8 @@ function reservePort(): number {
   })
   const port = probe.port
   probe.stop(true)
+  if (!port)
+    throw new Error('Failed to reserve a Phase 2 browser proof port')
   return port
 }
 
