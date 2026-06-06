@@ -68,6 +68,16 @@ describe('host-control access adapter boundary', () => {
     expect(() => mapWorkerAccessPath('/workers/wkr_82//evil.com', 'wkr_82')).toThrow('invalid worker access path')
   })
 
+  test('rejects absolute and protocol-relative Host worker paths before normalization', () => {
+    expect(() => mapWorkerAccessPath('https://evil.example/workers/wkr_82/assets', 'wkr_82')).toThrow('invalid worker access path')
+    expect(() => mapWorkerAccessPath('//evil.example/workers/wkr_82/assets', 'wkr_82')).toThrow('invalid worker access path')
+  })
+
+  test('rejects encoded slash and backslash in Worker-local path segments', () => {
+    expect(() => mapWorkerAccessPath('/workers/wkr_82/%2F..%2Fadmin', 'wkr_82')).toThrow('invalid worker access path')
+    expect(() => mapWorkerAccessPath('/workers/wkr_82/%5C..%5Cadmin', 'wkr_82')).toThrow('invalid worker access path')
+  })
+
   test('registered tunnel connection resolves matching request responses', async () => {
     const registry = createWorkerAccessRegistry()
     registry.register({
@@ -102,6 +112,7 @@ describe('host-control access adapter boundary', () => {
       'proxy-authorization': 'Basic secret',
       'set-cookie': 'sid=secret',
       'x-aiworker-user-email': 'worker@example.com',
+      'x-forwarded-user': 'worker@example.com',
     }))
 
     expect(headers.get('authorization')).toBeNull()
@@ -109,6 +120,7 @@ describe('host-control access adapter boundary', () => {
     expect(headers.get('proxy-authorization')).toBeNull()
     expect(headers.get('set-cookie')).toBeNull()
     expect(headers.get('x-aiworker-user-email')).toBeNull()
+    expect(headers.get('x-forwarded-user')).toBeNull()
     expect(headers.get('accept')).toBe('text/html')
   })
 

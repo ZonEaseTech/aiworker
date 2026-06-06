@@ -45,11 +45,15 @@ export function createWorkerAccessRegistry(): WorkerAccessRegistry {
 }
 
 export function mapWorkerAccessPath(hostPathWithSearch: string, workerId: string): string {
+  if (/^[a-z][a-z\d+.-]*:/i.test(hostPathWithSearch) || hostPathWithSearch.startsWith('//'))
+    throw new Error('invalid worker access path')
   const url = new URL(hostPathWithSearch, 'https://host.invalid')
   const prefix = `/workers/${encodeURIComponent(workerId)}`
   if (url.pathname !== prefix && !url.pathname.startsWith(`${prefix}/`))
     throw new Error('worker path mismatch')
   const localPath = url.pathname.slice(prefix.length) || '/'
+  if (/%2f|%5c/i.test(localPath))
+    throw new Error('invalid worker access path')
   if (!localPath.startsWith('/') || localPath.startsWith('//') || localPath.includes('/../') || localPath.endsWith('/..'))
     throw new Error('invalid worker access path')
   return `${localPath}${url.search}`
@@ -62,6 +66,7 @@ export function sanitizeForwardHeaders(source: Headers): Headers {
   next.delete('proxy-authorization')
   next.delete('set-cookie')
   next.delete('x-aiworker-user-email')
+  next.delete('x-forwarded-user')
   return next
 }
 
