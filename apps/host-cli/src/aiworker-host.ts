@@ -206,4 +206,4 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
 }
 
 if (import.meta.main)
-  process.exit(await runHostCli(process.argv.slice(2)))
+  process.exitCode = await runHostCli(process.argv.slice(2))

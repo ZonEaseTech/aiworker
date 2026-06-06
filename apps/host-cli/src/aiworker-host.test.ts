@@ -1,4 +1,7 @@
 import { Buffer } from 'node:buffer'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import process from 'node:process'
 
 import { createWorkerRegistry } from '@zonease/aiworker-host-control'
@@ -25,6 +28,43 @@ describe('aiworker-host control CLI', () => {
   afterEach(() => {
     process.stdout.write = originalWrite
   })
+
+  function reservePort(): number {
+    const probe = Bun.serve({
+      fetch: () => new Response('ok'),
+      hostname: '127.0.0.1',
+      port: 0,
+    })
+    const port = probe.port
+    probe.stop(true)
+    if (!port)
+      throw new Error('Failed to reserve a Host CLI test port')
+    return port
+  }
+
+  async function waitForHostApiOrExit(url: string, child: ReturnType<typeof Bun.spawn>): Promise<'exited' | 'ready'> {
+    let exited = false
+    child.exited.then(() => {
+      exited = true
+    }).catch(() => {
+      exited = true
+    })
+
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      if (exited)
+        return 'exited'
+      try {
+        const response = await fetch(url)
+        if (response.ok)
+          return 'ready'
+      }
+      catch {
+        // Server may still be starting.
+      }
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    return exited ? 'exited' : 'ready'
+  }
 
   it('lists workers from the injected host-control registry', async () => {
     const registry = createWorkerRegistry()
@@ -119,6 +159,40 @@ describe('aiworker-host control CLI', () => {
       roles: ['host:admin'],
       subject: 'dev-admin',
     })
+  })
+
+  it('keeps the foreground serve command running and reachable', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-cli-serve-'))
+    const port = reservePort()
+    const apiUrl = `http://127.0.0.1:${port}`
+    const child = Bun.spawn({
+      cmd: [
+        process.execPath,
+        'apps/host-cli/src/aiworker-host.ts',
+        'serve',
+        '--db',
+        join(dir, 'host.db'),
+        '--dev-admin-email',
+        'admin@example.com',
+        '--public-base-url',
+        apiUrl,
+        '--port',
+        String(port),
+      ],
+      cwd: join(import.meta.dir, '..', '..', '..'),
+      stderr: 'pipe',
+      stdout: 'pipe',
+    })
+
+    try {
+      await expect(waitForHostApiOrExit(`${apiUrl}/host`, child)).resolves.toBe('ready')
+      expect(await fetch(`${apiUrl}/host`).then(response => response.text())).toBe('AIWorker Host')
+    }
+    finally {
+      child.kill('SIGTERM')
+      await child.exited.catch(() => undefined)
+      rmSync(dir, { force: true, recursive: true })
+    }
   })
 
   it('creates an assignment through the Host API', async () => {
