@@ -31,12 +31,19 @@ export interface CreateHostAssignmentResult {
   provisionCommand: string
 }
 
-export interface HostServerOption {
-  host?: string
+export type ProvisioningAdapterType = 'aissh' | 'docker' | 'local'
+export type ProvisioningTargetMaturity = 'production' | 'preview' | 'dev'
+export type ProvisioningTargetHealth = 'ready' | 'degraded' | 'unavailable'
+
+export interface HostProvisioningTargetOption {
+  adapterType: ProvisioningAdapterType
+  capabilities: string[]
+  description?: string
+  displayName: string
+  health: ProvisioningTargetHealth
   id: string
-  name?: string
-  notes?: string
-  source: 'aissh'
+  maturity: ProvisioningTargetMaturity
+  ref: string
 }
 
 export interface HostSoulReleaseOption {
@@ -50,9 +57,9 @@ export interface HostSoulReleaseOption {
 export interface HostOptionsSummary {
   access: { mode: string, status: string }
   auth: { mode: string, status: string }
-  servers: HostServerOption[]
+  provisioningTargets: HostProvisioningTargetOption[]
+  provisioningTargetSourceError?: string
   soulReleases: HostSoulReleaseOption[]
-  serverSourceError?: string
   soulSourceErrors?: string[]
 }
 

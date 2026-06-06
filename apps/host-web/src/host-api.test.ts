@@ -111,7 +111,7 @@ describe('createHostApiClient', () => {
     const fetchImpl = createFetch(jsonResponse({
       access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
       auth: { mode: 'dev-static', status: 'deferred-logto' },
-      servers: [{ id: 'srv-1', name: 'aiwork', source: 'aissh' }],
+      provisioningTargets: [{ id: 'srv-1', displayName: 'aiwork', adapterType: 'aissh', maturity: 'production', ref: 'srv-1' }],
       soulReleases: [{
         descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
         id: 'aiworker-freeform',
@@ -125,7 +125,12 @@ describe('createHostApiClient', () => {
     const options = await client.getOptions()
 
     expect(fetchImpl.calls[0]?.input).toBe('http://host.test/api/host/options')
-    expect(options.servers[0]?.id).toBe('srv-1')
+    expect(options.provisioningTargets[0]).toMatchObject({
+      adapterType: 'aissh',
+      displayName: 'aiwork',
+      maturity: 'production',
+      ref: 'srv-1',
+    })
     expect(options.soulReleases[0]?.releaseRef).toBe('aiworker-freeform@dev')
   })
 

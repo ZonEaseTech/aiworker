@@ -32,11 +32,14 @@ describe('host options provider', () => {
     }))
 
     expect(parsed).toEqual([{
-      host: '172.105.219.50',
-      id: '693660ea-3c2a-4f15-8b50-7dd9e5651877',
-      name: 'aiwork',
-      notes: 'aiwork项目平台服务器',
-      source: 'aissh',
+      adapterType: 'aissh',
+      capabilities: ['remote-delivery', 'worker-check-in', 'worker-access'],
+      description: 'aiwork项目平台服务器',
+      displayName: 'aiwork',
+      health: 'ready',
+      id: 'aissh:693660ea-3c2a-4f15-8b50-7dd9e5651877',
+      maturity: 'production',
+      ref: '693660ea-3c2a-4f15-8b50-7dd9e5651877',
     }])
     expect(JSON.stringify(parsed)).not.toContain('secret')
   })
@@ -85,7 +88,45 @@ describe('host options provider', () => {
       repoRoot: tempDir,
     })
 
-    expect(options.servers).toEqual([])
-    expect(options.serverSourceError).toContain('AISSH_DOWN')
+    expect(options.provisioningTargets.map(target => target.id)).toEqual([
+      'docker:local-default',
+      'local:default',
+    ])
+    expect(options.provisioningTargetSourceError).toContain('AISSH_DOWN')
+  })
+
+  it('maps aissh server list output into production provisioning targets', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'host-options-map-'))
+    const options = await buildHostOptions({
+      aisshServerList: async () => JSON.stringify({
+        servers: [{ host: '172.105.219.50', id: 'srv-1', name: 'aiwork', notes: 'aiwork project' }],
+      }),
+      repoRoot: tempDir,
+    })
+
+    expect(options.provisioningTargets).toContainEqual({
+      adapterType: 'aissh',
+      capabilities: ['remote-delivery', 'worker-check-in', 'worker-access'],
+      displayName: 'aiwork',
+      health: 'ready',
+      id: 'aissh:srv-1',
+      maturity: 'production',
+      ref: 'srv-1',
+      description: 'aiwork project',
+    })
+    expect('servers' in options).toBe(false)
+  })
+
+  it('includes docker preview and local dev targets for development proof', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'host-options-dev-targets-'))
+    const options = await buildHostOptions({
+      aisshServerList: async () => JSON.stringify({ servers: [] }),
+      repoRoot: tempDir,
+    })
+
+    expect(options.provisioningTargets.map(target => target.id)).toEqual([
+      'docker:local-default',
+      'local:default',
+    ])
   })
 })
