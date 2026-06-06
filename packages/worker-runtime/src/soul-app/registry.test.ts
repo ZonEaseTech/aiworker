@@ -137,15 +137,22 @@ describe('Host Soul descriptor registry', () => {
   it('bootstraps official Freeform without re-enabling disabled apps', async () => {
     // Scope to Freeform: this test exercises the disabled-app preservation
     // mechanism, not the full official catalog (covered in orchestrator.test.ts).
+    const repoRoot = path.join(dir, 'repo')
+    const descriptorRoot = path.join(repoRoot, 'souls', FREEFORM_APP_ID, 'dist')
+    mkdirSync(descriptorRoot, { recursive: true })
+    writeFileSync(path.join(descriptorRoot, 'soul.descriptor.json'), JSON.stringify(freeformDescriptor))
+
     const definitions = [{ descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json', id: FREEFORM_APP_ID }]
     const first = await bootstrapOfficialSoulApps({
       definitions,
       hostVersion: '0.19.3',
       now: () => '2026-05-13T12:25:00.000Z',
+      repoRoot,
     })
     expect(first.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'installed_enabled'],
     ])
+    expect(first[0]?.descriptorPath).toBe(path.join(repoRoot, definitions[0].descriptorPath))
     expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('available')
     expect(findCatalogSoul('hr')).toBeUndefined()
 
@@ -153,20 +160,24 @@ describe('Host Soul descriptor registry', () => {
       definitions,
       hostVersion: '0.19.3',
       now: () => '2026-05-13T12:26:00.000Z',
+      repoRoot,
     })
     expect(second.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'refreshed'],
     ])
+    expect(second[0]?.descriptorPath).toBe(path.join(repoRoot, definitions[0].descriptorPath))
 
     archiveSoulApp(FREEFORM_APP_ID, { now: () => '2026-05-13T12:27:00.000Z' })
     const third = await bootstrapOfficialSoulApps({
       definitions,
       hostVersion: '0.19.3',
       now: () => '2026-05-13T12:28:00.000Z',
+      repoRoot,
     })
     expect(third.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'preserved_disabled'],
     ])
+    expect(third[0]?.descriptorPath).toBe(path.join(repoRoot, definitions[0].descriptorPath))
     expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
   })
 

@@ -24,12 +24,14 @@ import {
   runWorkerMigrations,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
-import { soulAppServiceEnv } from '@zonease/aiworker-worker-runtime'
+import { OFFICIAL_SOUL_APPS, soulAppServiceEnv } from '@zonease/aiworker-worker-runtime'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
   __seedWorkerForTest,
   __setDaemonStarterForTest,
+  __setOfficialSoulDescriptorsReadyForTest,
+  __setOfficialSoulDistBuilderForTest,
   downloadAndReplaceGitHubBundle,
   inspectCliOfficialAppsResource,
   prepareDaemonForeground,
@@ -72,6 +74,8 @@ describe('aiworker local CLI', () => {
 
   afterEach(async () => {
     __setDaemonStarterForTest(null)
+    __setOfficialSoulDescriptorsReadyForTest(null)
+    __setOfficialSoulDistBuilderForTest(null)
     closeWorkerDb()
     process.exitCode = 0
     for (const key of Object.keys(process.env))
@@ -1003,7 +1007,7 @@ describe('aiworker local CLI', () => {
     closeWorkerDb()
   })
 
-  it('reports a restart-orphaned running engine invocation as lost through CLI cancel', async () => {
+  it('reconciles a running invocation without an active process before CLI cancel', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
@@ -1040,11 +1044,11 @@ describe('aiworker local CLI', () => {
 
     expect(await runCli(argv('session', 'cancel', invocation.id, '--reason', 'operator pressed Ctrl+C token=sk-cli-active-cancel-secret'))).toBe(0)
 
-    const cancelled = JSON.parse(output) as {
+    const reconciled = JSON.parse(output) as {
       invocation: { failureCode: string | null, id: string, processState: string, sessionId: string, status: string, summary: string | null }
       session: { id: string, status: string }
     }
-    expect(cancelled.invocation).toMatchObject({
+    expect(reconciled.invocation).toMatchObject({
       failureCode: 'ENGINE_PROCESS_LOST',
       id: invocation.id,
       processState: 'lost',
@@ -1052,7 +1056,7 @@ describe('aiworker local CLI', () => {
       status: 'lost',
       summary: 'Native engine process was lost.',
     })
-    expect(cancelled.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(reconciled.session).toMatchObject({ id: session.id, status: 'active' })
     expect(output).not.toContain('sk-cli-active-cancel-secret')
 
     initWorkerDb(process.env.WORKER_DB_PATH!)
@@ -1065,6 +1069,70 @@ describe('aiworker local CLI', () => {
       invocationId: invocation.id,
       processState: 'lost',
       status: 'lost',
+    })
+    closeWorkerDb()
+  })
+
+  it('cancels a queued engine invocation through CLI by invocation id', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'cancel-queued-worker', name: 'Cancel Queued Worker' })
+    output = ''
+    expect(await runCli(argv('worker', 'select', 'cancel-queued-worker'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('workspace', 'create', '--name', 'Cancel Queued Workspace', '--type', 'freeform', '--worker', 'cancel-queued-worker'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
+    output = ''
+
+    closeWorkerDb()
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    const session = createSession({
+      id: 'cancel-queued-session-1',
+      metadataJson: {},
+      title: 'Cancel queued invocation',
+      workerId: 'cancel-queued-worker',
+      workspaceId: workspace.id,
+      at: '2026-05-28T00:00:00.000Z',
+    })
+    const invocation = createEngineInvocation({
+      engineCommand: 'codex',
+      engineId: 'codex',
+      id: 'cancel-queued-invocation-1',
+      inputRef: `aiworker://sessions/${session.id}/invocations/cancel-queued-invocation-1/input`,
+      processState: 'not_spawned',
+      seq: 1,
+      sessionId: session.id,
+      status: 'queued',
+    })
+    closeWorkerDb()
+
+    expect(await runCli(argv('session', 'cancel', invocation.id, '--reason', 'operator cancelled queued token=sk-cli-queued-cancel-secret'))).toBe(0)
+
+    const cancelled = JSON.parse(output) as {
+      invocation: { id: string, processState: string, sessionId: string, status: string, summary: string | null }
+      session: { id: string, status: string }
+    }
+    expect(cancelled.invocation).toMatchObject({
+      id: invocation.id,
+      processState: 'not_spawned',
+      sessionId: session.id,
+      status: 'cancelled',
+      summary: 'Invocation cancelled.',
+    })
+    expect(cancelled.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(output).not.toContain('sk-cli-queued-cancel-secret')
+
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    const persisted = getEngineInvocation(invocation.id)
+    expect(persisted).toMatchObject({ status: 'cancelled', processState: 'not_spawned' })
+    const events = listSessionEvents(session.id).filter(event => event.invocationId === invocation.id)
+    expect(events.at(-1)?.payloadJson).toMatchObject({
+      bridgeEvent: 'invocation.cancelled',
+      invocationId: invocation.id,
+      processState: 'not_spawned',
+      status: 'cancelled',
     })
     closeWorkerDb()
   })
@@ -2053,6 +2121,62 @@ describe('aiworker local CLI', () => {
 
     expect(await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'official-freeform', name: 'Official Freeform' }))
       .toMatchObject({ appId: FREEFORM_APP_ID })
+  })
+
+  it('builds source official Soul dist before bootstrapping official apps when descriptors are absent', async () => {
+    let builds = 0
+    __setOfficialSoulDescriptorsReadyForTest(() => false)
+    __setOfficialSoulDistBuilderForTest(async () => {
+      builds += 1
+    })
+
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+
+    expect(builds).toBe(1)
+    expect((JSON.parse(output) as { bootstrap: { status: string } }).bootstrap.status).toBe('pass')
+  })
+
+  it('uses packaged official apps without running the source Soul dist build', async () => {
+    const originalArgv = process.argv
+    const executablePath = path.join(root, 'bin', 'aiworker')
+    const officialAppsRoot = path.join(path.dirname(executablePath), 'official-apps')
+    mkdirSync(path.dirname(executablePath), { recursive: true })
+    writeFileSync(executablePath, '#!/usr/bin/env bun\n')
+    for (const definition of OFFICIAL_SOUL_APPS) {
+      const descriptorPath = path.join(officialAppsRoot, definition.id, 'dist', 'soul.descriptor.json')
+      mkdirSync(path.dirname(descriptorPath), { recursive: true })
+      writeFileSync(descriptorPath, JSON.stringify({
+        protocol: 'soul/v1',
+        identity: {
+          id: definition.id,
+          name: definition.id,
+          description: `${definition.id} packaged descriptor`,
+        },
+        engine: {},
+      }))
+    }
+    __setOfficialSoulDescriptorsReadyForTest(() => false)
+    __setOfficialSoulDistBuilderForTest(async () => {
+      throw new Error('source dist builder should not run for packaged official apps')
+    })
+
+    try {
+      process.argv = [originalArgv[0] ?? '/usr/bin/bun', executablePath]
+
+      expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    }
+    finally {
+      process.argv = originalArgv
+    }
+
+    const body = JSON.parse(output) as {
+      bootstrap: {
+        results: Array<{ descriptorPath: string }>
+        status: string
+      }
+    }
+    expect(body.bootstrap.status).toBe('pass')
+    expect(body.bootstrap.results.every(result => result.descriptorPath.startsWith(officialAppsRoot))).toBe(true)
   })
 
   it('discards legacy HR metadata during official app bootstrap', async () => {

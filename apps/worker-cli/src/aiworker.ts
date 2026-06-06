@@ -51,6 +51,7 @@ import {
 import {
   createWorkerOrchestrator,
   getWorkerEnv,
+  OFFICIAL_SOUL_APPS,
   readFrozenSessionEngine,
   resolveLocalCliEngine,
   scanLocalEngines,
@@ -206,10 +207,20 @@ const CLI_MODULE_DIR = path.dirname(fileURLToPath(import.meta.url))
 const OFFICIAL_APP_DESCRIPTOR_FILENAME = 'dist/soul.descriptor.json'
 
 let daemonStarterForTest: DaemonStarter | null = null
+let officialSoulDistBuilderForTest: (() => Promise<void>) | null = null
+let officialSoulDescriptorsReadyForTest: (() => boolean) | null = null
 let daemonForegroundForTest: DaemonForegroundRunner | null = null
 
 export function __setDaemonStarterForTest(starter: DaemonStarter | null): void {
   daemonStarterForTest = starter
+}
+
+export function __setOfficialSoulDistBuilderForTest(builder: (() => Promise<void>) | null): void {
+  officialSoulDistBuilderForTest = builder
+}
+
+export function __setOfficialSoulDescriptorsReadyForTest(check: (() => boolean) | null): void {
+  officialSoulDescriptorsReadyForTest = check
 }
 
 export function __setDaemonForegroundForTest(runner: DaemonForegroundRunner | null): void {
@@ -281,14 +292,21 @@ function packagedResourceRoots(moduleDir = CLI_MODULE_DIR, options: CliResourceR
 }
 
 export function resolveCliOfficialAppsRoot(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string | undefined {
+  const packaged = resolveCliPackagedOfficialAppsRoot(moduleDir, options)
+  if (packaged)
+    return packaged
+  const source = path.resolve(moduleDir, '../../../souls')
+  if (existsSync(path.join(source, 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME)))
+    return source
+  return undefined
+}
+
+function resolveCliPackagedOfficialAppsRoot(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string | undefined {
   for (const root of packagedResourceRoots(moduleDir, options)) {
     const packaged = path.resolve(root, 'official-apps')
     if (existsSync(path.join(packaged, 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME)))
       return packaged
   }
-  const source = path.resolve(moduleDir, '../../../souls')
-  if (existsSync(path.join(source, 'aiworker-freeform', OFFICIAL_APP_DESCRIPTOR_FILENAME)))
-    return source
   return undefined
 }
 
@@ -307,6 +325,37 @@ export function inspectCliOfficialAppsResource(moduleDir = CLI_MODULE_DIR, optio
     officialAppsRoot,
     officialFreeformDescriptorReady,
   }
+}
+
+function sourceRepoRoot(moduleDir = CLI_MODULE_DIR): string {
+  return path.resolve(moduleDir, '..', '..', '..')
+}
+
+function sourceOfficialSoulDescriptorsReady(moduleDir = CLI_MODULE_DIR): boolean {
+  if (officialSoulDescriptorsReadyForTest)
+    return officialSoulDescriptorsReadyForTest()
+  const repoRoot = sourceRepoRoot(moduleDir)
+  return OFFICIAL_SOUL_APPS.every(definition => existsSync(path.resolve(repoRoot, definition.descriptorPath)))
+}
+
+async function ensureSourceOfficialSoulDists(): Promise<void> {
+  if (resolveCliPackagedOfficialAppsRoot())
+    return
+  if (sourceOfficialSoulDescriptorsReady())
+    return
+  const builder = officialSoulDistBuilderForTest ?? runOfficialSoulDistBuildCommand
+  await builder()
+}
+
+async function runOfficialSoulDistBuildCommand(): Promise<void> {
+  const proc = Bun.spawn(['bun', 'run', 'build:official-souls'], {
+    cwd: sourceRepoRoot(),
+    stderr: 'inherit',
+    stdout: 'inherit',
+  })
+  const exitCode = await proc.exited
+  if (exitCode !== 0)
+    throw new Error(`failed to build official Soul dist: bun run build:official-souls exited ${exitCode}`)
 }
 
 export function resolveCliWorkerWebStaticDir(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string | undefined {
@@ -499,6 +548,11 @@ function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, offi
     registryContext: options.registryContext ?? registryContext,
     workersRoot: paths.workersRoot,
   })
+}
+
+async function bootstrapOfficialSoulApps(host: WorkerOrchestrator): Promise<Awaited<ReturnType<WorkerOrchestrator['bootstrapOfficialSoulApps']>>> {
+  await ensureSourceOfficialSoulDists()
+  return host.bootstrapOfficialSoulApps()
 }
 
 function resolveWorkerFromOpenDb(workerOpt?: string): { requestedId?: string, worker: WorkerRow | null } {
@@ -1120,7 +1174,7 @@ interface EnsureStandaloneServiceReadyOptions {
 // the daemon package stays passive and never auto-creates a Worker.
 async function ensureStandaloneServiceReady(paths: LocalPaths, options: EnsureStandaloneServiceReadyOptions = {}): Promise<EnsuredStartWorker> {
   const host = createHost(paths)
-  const bootstrap = await host.bootstrapOfficialSoulApps()
+  const bootstrap = await bootstrapOfficialSoulApps(host)
   if (bootstrap.status === 'fail')
     throw new Error('failed to install the bundled official Freeform Soul App')
 
@@ -1525,7 +1579,7 @@ async function createWorkerCommand(opts: { id?: string, name?: string, app?: str
   await ensureDbAt(paths)
   try {
     const host = createHost(paths)
-    const bootstrap = await host.bootstrapOfficialSoulApps()
+    const bootstrap = await bootstrapOfficialSoulApps(host)
     if (bootstrap.status === 'fail')
       throw new Error('failed to install the bundled official Soul Apps for the new worker home')
     const created = await host.createSoulWorker({
@@ -1975,7 +2029,7 @@ async function bootstrapAppCommand(scope: string): Promise<void> {
   const paths = await ensureDefaultDb()
   if (scope !== 'official')
     throw new Error(`unsupported app bootstrap scope: ${scope}`)
-  const bootstrap = await createHost(paths).bootstrapOfficialSoulApps()
+  const bootstrap = await bootstrapOfficialSoulApps(createHost(paths))
   printJson({ bootstrap, catalog: bootstrap.catalog })
   if (bootstrap.status === 'fail')
     process.exitCode = 1
@@ -1984,7 +2038,7 @@ async function bootstrapAppCommand(scope: string): Promise<void> {
 export async function convergeHostAfterCliUpgrade(): Promise<{ bootstrap: Awaited<ReturnType<WorkerOrchestrator['bootstrapOfficialSoulApps']>>, home: string }> {
   const paths = await ensureDb()
   const host = createHost(paths)
-  const bootstrap = await host.bootstrapOfficialSoulApps()
+  const bootstrap = await bootstrapOfficialSoulApps(host)
   if (bootstrap.status === 'fail')
     throw new Error('host convergence failed while bootstrapping official Soul Apps')
   return { bootstrap, home: paths.home }

@@ -1,3 +1,0 @@
-# 谷歌推广 Soul 的 Codex 原生 MCP 占位配置。
-# 如需接入 Google Ads API / Google Analytics / 关键词工具等 MCP server，在此声明。
-# 作者可在本地文件中写入真实密钥，但密钥不会被复制进 descriptor、数据库、日志或 UI。

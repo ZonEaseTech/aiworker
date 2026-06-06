@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { describe, expect, test } from 'bun:test'
+import { beforeAll, describe, expect, test } from 'bun:test'
 
+import { buildSoul } from '../../packages/soul-sdk/src/index'
 import { parseSoulDescriptorV1 } from '../../packages/soul-descriptor/src/index'
 
 const repoRoot = join(import.meta.dir, '..', '..')
@@ -62,6 +63,10 @@ function findForbiddenDescriptorPaths(value: unknown, path: string[] = []): stri
     return [...localFailures, ...findForbiddenDescriptorPaths(item, currentPath)]
   })
 }
+
+beforeAll(async () => {
+  await buildSoul(freeformRoot)
+})
 
 describe('Freeform Soul descriptor contract', () => {
   test('root workspaces include souls/* and Freeform lives only under souls/', () => {
@@ -147,6 +152,17 @@ describe('Freeform Soul descriptor contract', () => {
 
     expect(strongAcceptanceSoulPaths).not.toContain('souls/aiworker-qa/dist/soul.descriptor.json')
     expect(strongAcceptanceSoulPaths).not.toContain('souls/aiworker-hr/dist/soul.descriptor.json')
+  })
+
+  test('Soul dist output is generated locally and not tracked by Git', () => {
+    const tracked = Bun.spawnSync(['git', 'ls-files', 'souls/**/dist/**'], {
+      cwd: repoRoot,
+      stderr: 'pipe',
+      stdout: 'pipe',
+    })
+
+    expect(tracked.exitCode).toBe(0)
+    expect(tracked.stdout.toString().trim()).toBe('')
   })
 
   test('SDK public surface exposes descriptor authoring builders and validators, not old source entrypoints', async () => {

@@ -40,6 +40,7 @@
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '@zonease/aiworker-worker-daemon' build && bun run --filter '@zonease/aiworker-worker-web' build && bun run --filter '@zonease/aiworker-cli' build:bundle",
+    "build:official-souls": "bun scripts/official-soul-dist.ts",
     "smoke:dist-release": "bun run --filter '@zonease/aiworker-cli' smoke:dist-release",
     "smoke:standalone-release": "bun apps/worker-cli/scripts/smoke-standalone-release.ts",
     "smoke:standalone-runtime": "bun apps/worker-cli/scripts/smoke-standalone-runtime.ts",
