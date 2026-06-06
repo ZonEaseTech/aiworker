@@ -630,7 +630,11 @@ describe('host server', () => {
       workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
     })
     accessRegistry.register({
+      assignmentId: created.assignment.assignmentId,
       close() {},
+      async sendRequest() {
+        throw new Error('sendRequest should not be called by the placeholder route')
+      },
       workerId: 'wkr_82',
     })
 
