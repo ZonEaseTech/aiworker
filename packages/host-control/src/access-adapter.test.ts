@@ -60,6 +60,34 @@ describe('host-control access adapter boundary', () => {
     expect(registry.get('worker-1')).toBe(nextConnection)
   })
 
+  test('removes a connection only when the closing socket is still current', () => {
+    const registry = createWorkerAccessRegistry()
+    const oldConnection = {
+      assignmentId: 'asn_old',
+      close() {},
+      async sendRequest() {
+        throw new Error('unexpected old connection request')
+      },
+      workerId: 'worker-1',
+    }
+    const nextConnection = {
+      assignmentId: 'asn_next',
+      close() {},
+      async sendRequest() {
+        throw new Error('unexpected next connection request')
+      },
+      workerId: 'worker-1',
+    }
+
+    registry.register(oldConnection)
+    registry.register(nextConnection)
+
+    expect(registry.removeIfCurrent('worker-1', oldConnection)).toBe(false)
+    expect(registry.get('worker-1')).toBe(nextConnection)
+    expect(registry.removeIfCurrent('worker-1', nextConnection)).toBe(true)
+    expect(registry.get('worker-1')).toBeUndefined()
+  })
+
   test('maps Host worker paths to Worker-local paths without exposing localhost', () => {
     expect(mapWorkerAccessPath('/workers/wkr_82', 'wkr_82')).toBe('/')
     expect(mapWorkerAccessPath('/workers/wkr_82/', 'wkr_82')).toBe('/')
@@ -114,18 +142,30 @@ describe('host-control access adapter boundary', () => {
     const headers = sanitizeForwardHeaders(new Headers({
       accept: 'text/html',
       authorization: 'Bearer secret',
+      connection: 'upgrade',
+      'content-length': '999',
       cookie: 'sid=secret',
+      host: 'host.example',
       'proxy-authorization': 'Basic secret',
       'set-cookie': 'sid=secret',
+      'transfer-encoding': 'chunked',
+      upgrade: 'websocket',
       'x-aiworker-user-email': 'worker@example.com',
+      'x-forwarded-for': '127.0.0.1',
       'x-forwarded-user': 'worker@example.com',
     }))
 
     expect(headers.get('authorization')).toBeNull()
+    expect(headers.get('connection')).toBeNull()
+    expect(headers.get('content-length')).toBeNull()
     expect(headers.get('cookie')).toBeNull()
+    expect(headers.get('host')).toBeNull()
     expect(headers.get('proxy-authorization')).toBeNull()
     expect(headers.get('set-cookie')).toBeNull()
+    expect(headers.get('transfer-encoding')).toBeNull()
+    expect(headers.get('upgrade')).toBeNull()
     expect(headers.get('x-aiworker-user-email')).toBeNull()
+    expect(headers.get('x-forwarded-for')).toBeNull()
     expect(headers.get('x-forwarded-user')).toBeNull()
     expect(headers.get('accept')).toBe('text/html')
   })

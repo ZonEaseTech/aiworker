@@ -1,4 +1,4 @@
-import type { AuthenticatedHostUser, AuthProvider, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
+import type { AuthenticatedHostUser, AuthProvider, WorkerAccessConnection, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
 import type { WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope } from '@zonease/aiworker-worker-control-protocol'
 import type { OidcClientConfig, OidcFetch, OidcLoginTransaction } from './host-oidc-client'
@@ -88,9 +88,24 @@ export interface HostServer {
 }
 
 interface WorkerAccessSocketData {
+  accessConnection?: WorkerAccessConnection
   closing?: boolean
   workerId?: string
 }
+
+const WORKER_RESPONSE_HEADER_DENYLIST = [
+  'authorization',
+  'connection',
+  'content-length',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'set-cookie',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+] as const
 
 interface CreateAssignmentRequest {
   assignedEmail?: unknown
@@ -192,7 +207,7 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
         }
       }
 
-      accessRegistry.register({
+      const connection: WorkerAccessConnection = {
         assignmentId: assignment.assignmentId,
         close: () => {
           if (ws.data.closing)
@@ -202,28 +217,30 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
         },
         sendRequest: envelope => sendSocketRequest(ws, envelope),
         workerId: frame.workerId,
-      })
+      }
+      accessRegistry.register(connection)
       ws.data.workerId = frame.workerId
+      ws.data.accessConnection = connection
       return
     }
 
     if (frame.type === 'response') {
       const request = pending.get(frame.id)
+      if (!request || request.ws !== ws)
+        return
       pending.delete(frame.id)
-      if (request) {
-        clearTimeout(request.timeout)
-        request.resolve(frame)
-      }
+      clearTimeout(request.timeout)
+      request.resolve(frame)
       return
     }
 
     if (frame.type === 'close') {
       const request = pending.get(frame.id)
+      if (!request || request.ws !== ws)
+        return
       pending.delete(frame.id)
-      if (request) {
-        clearTimeout(request.timeout)
-        request.reject(new Error(frame.reason ?? 'worker access request closed'))
-      }
+      clearTimeout(request.timeout)
+      request.reject(new Error('worker access request closed'))
       return
     }
 
@@ -292,10 +309,13 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
       }
 
       const workerMatch = /^\/workers\/([^/]+)(?:\/.*)?$/.exec(url.pathname)
-      if (request.method === 'GET' && workerMatch) {
+      if (workerMatch && isWorkerAccessMethod(request.method)) {
         const workerId = decodeURIComponent(workerMatch[1]!)
-        if (options.sessionAuth && !readUserFromSessionCookie(request.headers, options.sessionAuth))
-          return redirectToLogin(`${url.pathname}${url.search}`)
+        if (options.sessionAuth && !readUserFromSessionCookie(request.headers, options.sessionAuth)) {
+          if (request.method === 'GET' || request.method === 'HEAD')
+            return redirectToLogin(`${url.pathname}${url.search}`)
+          return json({ error: { code: 'FORBIDDEN' } }, { status: 403 })
+        }
         return handleWorkerRoute(request, effectiveAuthProvider, accessRegistry, workerId)
       }
 
@@ -304,10 +324,10 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
     websocket: {
       close(ws) {
         rejectPendingForSocket(ws, 'worker access socket closed')
-        if (!ws.data.workerId)
+        if (!ws.data.workerId || !ws.data.accessConnection)
           return
         ws.data.closing = true
-        accessRegistry.remove(ws.data.workerId)
+        accessRegistry.removeIfCurrent(ws.data.workerId, ws.data.accessConnection)
       },
       message(ws, message) {
         handleWorkerAccessSocketMessage(ws, message).catch(() => ws.close())
@@ -445,6 +465,16 @@ function redirectToLogin(returnTo: string): Response {
 
 function isHostBrowserMethod(method: string): boolean {
   return method === 'GET' || method === 'HEAD'
+}
+
+function isWorkerAccessMethod(method: string): boolean {
+  return method === 'GET'
+    || method === 'HEAD'
+    || method === 'POST'
+    || method === 'PUT'
+    || method === 'PATCH'
+    || method === 'DELETE'
+    || method === 'OPTIONS'
 }
 
 function isHostBrowserRoute(pathname: string): boolean {
@@ -650,10 +680,22 @@ async function handleWorkerRoute(
     return json({ error: { code: 'INVALID_WORKER_ACCESS_PATH' } }, { status: 400 })
   }
   const envelope = await createAccessRequestEnvelope(new Request(new URL(localPath, request.url), request))
-  const tunneled = await accessRegistry.sendRequest(workerId, envelope)
+  let tunneled: WorkerAccessResponseEnvelope | null
+  try {
+    tunneled = await accessRegistry.sendRequest(workerId, envelope)
+  }
+  catch {
+    return json({ error: { code: 'WORKER_ACCESS_FAILED' } }, { status: 502 })
+  }
   if (!tunneled)
     return json({ error: { code: 'WORKER_ACCESS_NOT_READY' } }, { status: 503 })
-  const parsed = parseAccessResponseEnvelope(tunneled)
+  let parsed: WorkerAccessResponseEnvelope
+  try {
+    parsed = parseAccessResponseEnvelope(tunneled)
+  }
+  catch {
+    return json({ error: { code: 'WORKER_ACCESS_FAILED' } }, { status: 502 })
+  }
   return new Response(parsed.bodyText, {
     headers: sanitizeWorkerResponseHeaders(parsed.headers),
     status: parsed.status,
@@ -683,9 +725,8 @@ function isNonEmptyString(value: unknown): value is string {
 
 function sanitizeWorkerResponseHeaders(source: Record<string, string>): Headers {
   const headers = new Headers(source)
-  headers.delete('authorization')
-  headers.delete('proxy-authorization')
-  headers.delete('set-cookie')
+  for (const header of WORKER_RESPONSE_HEADER_DENYLIST)
+    headers.delete(header)
   return headers
 }
 

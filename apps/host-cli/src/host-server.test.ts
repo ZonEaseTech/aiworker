@@ -468,6 +468,25 @@ describe('host server', () => {
     expect(response.headers.get('location')).toBe('/auth/login?returnTo=%2Fworkers%2Fwkr_82')
   })
 
+  it('returns JSON 403 for non-GET worker route requests when session is missing', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82/api/sessions', {
+      body: JSON.stringify({ title: 'New session' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }))
+
+    expect(response.status).toBe(403)
+    expect(response.headers.get('location')).toBeNull()
+    expect(await response.json()).toEqual({ error: { code: 'FORBIDDEN' } })
+  })
+
   it('routes a signed-cookie assigned user to their ready worker', async () => {
     const accessRegistry = createWorkerAccessRegistry()
     const server = await createHostServer({
@@ -498,8 +517,15 @@ describe('host server', () => {
         type: 'response',
         id: envelope.id,
         status: 200,
-        headers: { 'content-type': 'text/plain', 'set-cookie': 'sid=worker' },
-        bodyText: `worker:${envelope.path}:${envelope.headers.authorization ?? 'no-auth'}`,
+        headers: {
+          connection: 'upgrade',
+          'content-length': '999',
+          'content-type': 'text/plain',
+          'set-cookie': 'sid=worker',
+          'transfer-encoding': 'chunked',
+          upgrade: 'websocket',
+        },
+        bodyText: `worker:${envelope.path}:${envelope.headers.authorization ?? 'no-auth'}:${envelope.headers.connection ?? 'no-connection'}`,
       }),
       workerId: 'wkr_82',
     })
@@ -508,16 +534,22 @@ describe('host server', () => {
       headers: {
         accept: 'text/html',
         authorization: 'Bearer employee',
+        connection: 'upgrade',
         cookie: `sid=employee; aiworker_session=${sessionCookie({
           email: 'bob@zonease.org',
           sub: 'usr_bob',
         })}`,
+        upgrade: 'websocket',
       },
     }))
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('connection')).toBeNull()
+    expect(response.headers.get('content-length')).toBeNull()
     expect(response.headers.get('set-cookie')).toBeNull()
-    expect(await response.text()).toBe('worker:/assets/app.js:no-auth')
+    expect(response.headers.get('transfer-encoding')).toBeNull()
+    expect(response.headers.get('upgrade')).toBeNull()
+    expect(await response.text()).toBe('worker:/assets/app.js:no-auth:no-connection')
   })
 
   it('rejects invalid signed-cookie worker access paths before forwarding', async () => {
@@ -563,6 +595,69 @@ describe('host server', () => {
 
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({ error: { code: 'INVALID_WORKER_ACCESS_PATH' } })
+  })
+
+  it('forwards signed-cookie worker POST routes with sanitized headers and body', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@zonease.org',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    verifyAndConsumeProvisionToken(created.provisionToken)
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: '1.0.0',
+    })
+    markAssignmentAccessReady(created.assignment.assignmentId)
+    markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })
+    accessRegistry.register({
+      assignmentId: created.assignment.assignmentId,
+      close() {},
+      sendRequest: async envelope => ({
+        type: 'response',
+        id: envelope.id,
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+        bodyText: JSON.stringify({
+          bodyText: envelope.bodyText,
+          cookie: envelope.headers.cookie ?? null,
+          method: envelope.method,
+          path: envelope.path,
+        }),
+      }),
+      workerId: 'wkr_82',
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82/api/sessions?source=host', {
+      body: JSON.stringify({ title: 'New session' }),
+      headers: {
+        authorization: 'Bearer employee',
+        'content-type': 'application/json',
+        cookie: `sid=employee; aiworker_session=${sessionCookie({
+          email: 'bob@zonease.org',
+          sub: 'usr_bob',
+        })}`,
+      },
+      method: 'POST',
+    }))
+
+    expect(response.status).toBe(201)
+    expect(await response.json()).toEqual({
+      bodyText: JSON.stringify({ title: 'New session' }),
+      cookie: null,
+      method: 'POST',
+      path: '/api/sessions?source=host',
+    })
   })
 
   it('returns 403 when a signed-cookie user opens a worker assigned to someone else', async () => {
@@ -1192,6 +1287,45 @@ describe('host server', () => {
     expect(await response.text()).toBe('worker:/assets/app.js:no-auth')
   })
 
+  it('returns a fixed worker access failure without leaking worker error text', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    verifyAndConsumeProvisionToken(created.provisionToken)
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: '1.0.0',
+    })
+    markAssignmentAccessReady(created.assignment.assignmentId)
+    markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })
+    accessRegistry.register({
+      assignmentId: created.assignment.assignmentId,
+      close() {},
+      async sendRequest() {
+        throw new Error('token=awt_secret_should_not_escape')
+      },
+      workerId: 'wkr_82',
+    })
+
+    const response = await server.fetch(new Request('http://host/workers/wkr_82/api/info'))
+    const body = await response.text()
+
+    expect(response.status).toBe(502)
+    expect(body).toBe(JSON.stringify({ error: { code: 'WORKER_ACCESS_FAILED' } }))
+    expect(body).not.toContain('awt_secret_should_not_escape')
+  })
+
   it('returns upgrade required for worker access without a Bun websocket server', async () => {
     const server = await createHostServer({
       authUser: null,
@@ -1277,6 +1411,137 @@ describe('host server', () => {
     const response = await server.fetch(new Request('http://host/workers/wkr_82/assets/app.js'))
     expect(response.status).toBe(200)
     expect(await response.text()).toBe('from-worker:/assets/app.js')
+  })
+
+  it('keeps a new websocket tunnel registered when the old duplicate socket closes late', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    const checkInResponse = await json(await server.fetch(new Request('http://host/api/provision/check-in', {
+      body: JSON.stringify(checkInBody(created.provisionToken)),
+      method: 'POST',
+    })))
+    let oldClosed = 0
+    let newClosed = 0
+    const oldWs = {
+      data: {},
+      close() {
+        oldClosed += 1
+      },
+      send() {
+        return 1
+      },
+    }
+    const newWs = {
+      data: {},
+      close() {
+        newClosed += 1
+      },
+      send(message: string) {
+        const frame = JSON.parse(message)
+        if (frame.type === 'request') {
+          queueMicrotask(() => {
+            server.websocket.message?.(newWs as never, JSON.stringify({
+              type: 'response',
+              id: frame.id,
+              status: 200,
+              headers: { 'content-type': 'text/plain' },
+              bodyText: 'new-tunnel',
+            }))
+          })
+        }
+        return 1
+      },
+    }
+    const hello = JSON.stringify({
+      type: 'hello',
+      assignmentId: created.assignment.assignmentId,
+      token: checkInResponse.access.token,
+      workerId: 'wkr_82',
+    })
+
+    await server.websocket.message?.(oldWs as never, hello)
+    await server.websocket.message?.(newWs as never, hello)
+    server.websocket.close?.(oldWs as never, 1000, '')
+
+    expect(oldClosed).toBe(1)
+    expect(newClosed).toBe(0)
+    expect(accessRegistry.has('wkr_82')).toBe(true)
+    const response = await server.fetch(new Request('http://host/workers/wkr_82/api/info'))
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('new-tunnel')
+  })
+
+  it('ignores response frames for pending requests owned by a different socket', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    const checkInResponse = await json(await server.fetch(new Request('http://host/api/provision/check-in', {
+      body: JSON.stringify(checkInBody(created.provisionToken)),
+      method: 'POST',
+    })))
+    const wrongWs = {
+      data: {},
+      close() {},
+      send() {
+        return 1
+      },
+    }
+    const ownerWs = {
+      data: {},
+      close() {},
+      send(message: string) {
+        const frame = JSON.parse(message)
+        if (frame.type === 'request') {
+          queueMicrotask(async () => {
+            await server.websocket.message?.(wrongWs as never, JSON.stringify({
+              type: 'response',
+              id: frame.id,
+              status: 200,
+              headers: { 'content-type': 'text/plain' },
+              bodyText: 'wrong-socket',
+            }))
+            await server.websocket.message?.(ownerWs as never, JSON.stringify({
+              type: 'response',
+              id: frame.id,
+              status: 200,
+              headers: { 'content-type': 'text/plain' },
+              bodyText: 'owner-socket',
+            }))
+          })
+        }
+        return 1
+      },
+    }
+
+    await server.websocket.message?.(ownerWs as never, JSON.stringify({
+      type: 'hello',
+      assignmentId: created.assignment.assignmentId,
+      token: checkInResponse.access.token,
+      workerId: 'wkr_82',
+    }))
+
+    const response = await server.fetch(new Request('http://host/workers/wkr_82/api/info'))
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('owner-socket')
   })
 })
 

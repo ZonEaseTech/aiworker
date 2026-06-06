@@ -18,8 +18,30 @@ export interface WorkerAccessRegistry {
   has: (workerId: string) => boolean
   register: (connection: WorkerAccessConnection) => void
   remove: (workerId: string) => void
+  removeIfCurrent: (workerId: string, connection: WorkerAccessConnection) => boolean
   sendRequest: (workerId: string, envelope: WorkerAccessRequestEnvelope) => Promise<WorkerAccessResponseEnvelope | null>
 }
+
+const FORWARDED_HEADER_DENYLIST = [
+  'authorization',
+  'connection',
+  'content-length',
+  'cookie',
+  'host',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'set-cookie',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'x-aiworker-user-email',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+  'x-forwarded-user',
+] as const
 
 export function createWorkerAccessRegistry(): WorkerAccessRegistry {
   const connections = new Map<string, WorkerAccessConnection>()
@@ -37,6 +59,12 @@ export function createWorkerAccessRegistry(): WorkerAccessRegistry {
     remove(workerId) {
       connections.get(workerId)?.close()
       connections.delete(workerId)
+    },
+    removeIfCurrent(workerId, connection) {
+      if (connections.get(workerId) !== connection)
+        return false
+      connections.delete(workerId)
+      return true
     },
     async sendRequest(workerId, envelope) {
       return connections.get(workerId)?.sendRequest(envelope) ?? null
@@ -63,12 +91,8 @@ export function mapWorkerAccessPath(hostPathWithSearch: string, workerId: string
 
 export function sanitizeForwardHeaders(source: Headers): Headers {
   const next = new Headers(source)
-  next.delete('authorization')
-  next.delete('cookie')
-  next.delete('proxy-authorization')
-  next.delete('set-cookie')
-  next.delete('x-aiworker-user-email')
-  next.delete('x-forwarded-user')
+  for (const header of FORWARDED_HEADER_DENYLIST)
+    next.delete(header)
   return next
 }
 
