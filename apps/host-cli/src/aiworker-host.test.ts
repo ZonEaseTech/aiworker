@@ -208,6 +208,8 @@ describe('aiworker-host control CLI', () => {
       options: {
         authUser: null,
         dbPath: '/tmp/aiworker-host.db',
+        hostBrowserBaseUrl: 'https://host.zonease.app',
+        hostControlBaseUrl: 'https://control.zonease.app',
         publicBaseUrl: 'https://aiworker.zonease.org',
         webStaticDir: '/tmp/host-web-dist',
       },
@@ -626,13 +628,18 @@ describe('aiworker-host control CLI', () => {
 
   it('creates an assignment through the Host API', async () => {
     const requests: Request[] = []
+    let fetchBody: unknown
     const code = await runHostCli([
       'assignment',
       'create',
       '--email',
       'Bob@Zonease.org',
-      '--server',
-      'aissh://server/ap-sg-01',
+      '--target',
+      'docker://local/default',
+      '--adapter',
+      'docker',
+      '--maturity',
+      'preview',
       '--soul',
       'aiworker-freeform@dev',
       '--host',
@@ -643,23 +650,27 @@ describe('aiworker-host control CLI', () => {
         requests.push(request)
         expect(request.method).toBe('POST')
         expect(request.url).toBe('http://127.0.0.1:9117/api/host/assignments')
-        expect(await request.json()).toEqual({
+        fetchBody = await request.json()
+        expect(fetchBody).toMatchObject({
           assignedEmail: 'Bob@Zonease.org',
-          serverRef: 'aissh://server/ap-sg-01',
+          provisioningTarget: {
+            adapterType: 'docker',
+            maturity: 'preview',
+            ref: 'docker://local/default',
+          },
           soulReleaseRef: 'aiworker-freeform@dev',
         })
         return new Response(JSON.stringify({
           assignment: {
             assignedEmail: 'bob@zonease.org',
             assignmentId: 'asn_1',
-            serverRef: 'aissh://server/ap-sg-01',
             soulReleaseRef: 'aiworker-freeform@dev',
             status: 'provisioning',
             workerId: null,
             workbenchUrl: null,
           },
           provisionToken: 'awp_secret',
-          provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --host http://127.0.0.1:9117 --token awp_secret',
+          provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --host http://127.0.0.1:9117 --token <redacted>',
         }), { headers: { 'content-type': 'application/json' }, status: 201 })
       }),
     })
@@ -668,25 +679,84 @@ describe('aiworker-host control CLI', () => {
     expect(requests).toHaveLength(1)
     const parsed = JSON.parse(output)
     expect(parsed.assignment.assignedEmail).toBe('bob@zonease.org')
-    expect(parsed.provisionCommand).toContain('--token awp_secret')
-    expect(output).not.toContain('"provisionToken"')
+    expect(parsed.provisionCommand).toContain('--token <redacted>')
+    expect(parsed.provisionToken).toBe('awp_secret')
   })
 
-  it('prints aisshCommand from assignment create but still omits provisionToken field', async () => {
-    const code = await runHostCli(['assignment', 'create', '--email', 'bob@zonease.org', '--server', 'srv-1', '--soul', 'aiworker-freeform@dev'], {
+  it('passes callback URL when creating an assignment', async () => {
+    let fetchBody: any
+    const code = await runHostCli([
+      'assignment',
+      'create',
+      '--email',
+      'bob@zonease.org',
+      '--target',
+      'docker://local/default',
+      '--adapter',
+      'docker',
+      '--maturity',
+      'preview',
+      '--callback-url',
+      'https://host.example.com',
+      '--soul',
+      'aiworker-freeform@dev',
+    ], {
+      fetch: testFetch(async (input, init) => {
+        const request = new Request(input, init)
+        fetchBody = await request.json()
+        return new Response(JSON.stringify({
+          assignment: {
+            assignedEmail: 'bob@zonease.org',
+            assignmentId: 'asn_1',
+            soulReleaseRef: 'aiworker-freeform@dev',
+            status: 'provisioning',
+            workerId: null,
+            workbenchUrl: null,
+          },
+          provisionCommand: 'bun aiworker provision --token <redacted>',
+          provisionToken: 'awp_secret',
+        }), { headers: { 'content-type': 'application/json' }, status: 201 })
+      }),
+    })
+
+    expect(code).toBe(0)
+    expect(fetchBody.adapterRuntimeControlBaseUrl).toBe('https://host.example.com')
+  })
+
+  it('projects safe fields from assignment create responses', async () => {
+    const code = await runHostCli([
+      'assignment',
+      'create',
+      '--email',
+      'bob@zonease.org',
+      '--target',
+      'srv-1',
+      '--adapter',
+      'aissh',
+      '--maturity',
+      'production',
+      '--soul',
+      'aiworker-freeform@dev',
+    ], {
       fetch: testFetch(async () => {
         return new Response(JSON.stringify({
           aisshCommand: 'aissh exec srv-1 "bun aiworker provision --token awp_secret" --reason=test',
           assignment: {
             assignedEmail: 'bob@zonease.org',
             assignmentId: 'asn_1',
-            serverRef: 'srv-1',
             soulReleaseRef: 'aiworker-freeform@dev',
             status: 'provisioning',
             workerId: null,
             workbenchUrl: null,
           },
-          provisionCommand: 'bun aiworker provision --token awp_secret',
+          deliveryReceipt: {
+            command: 'bun aiworker provision --token <redacted>',
+          },
+          deliveryStatus: 'pending',
+          expectedCheckInDeadline: '2026-06-06T12:00:00.000Z',
+          ignoredSecret: 'secret',
+          operatorHint: 'Run the command on the selected target.',
+          provisionCommand: 'bun aiworker provision --token <redacted>',
           provisionToken: 'awp_secret',
         }), { headers: { 'content-type': 'application/json' }, status: 201 })
       }),
@@ -694,9 +764,42 @@ describe('aiworker-host control CLI', () => {
 
     expect(code).toBe(0)
     const parsed = JSON.parse(output)
-    expect(parsed.aisshCommand).toContain('aissh exec srv-1')
-    expect(parsed.provisionCommand).toContain('awp_secret')
-    expect(parsed.provisionToken).toBeUndefined()
+    expect(parsed.aisshCommand).toBeUndefined()
+    expect(parsed.deliveryReceipt.command).toContain('<redacted>')
+    expect(parsed.deliveryStatus).toBe('pending')
+    expect(parsed.expectedCheckInDeadline).toBe('2026-06-06T12:00:00.000Z')
+    expect(parsed.operatorHint).toBe('Run the command on the selected target.')
+    expect(parsed.provisionCommand).toContain('<redacted>')
+    expect(parsed.provisionToken).toBe('awp_secret')
+    expect(parsed.ignoredSecret).toBeUndefined()
+  })
+
+  it('projects provisioning targets from option list', async () => {
+    const code = await runHostCli(['option', 'list', '--host', 'http://host.test'], {
+      fetch: testFetch(async () => new Response(JSON.stringify({
+        access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
+        auth: { mode: 'dev-static', status: 'deferred-logto' },
+        provisioningTargets: [{
+          adapterType: 'docker',
+          capabilities: ['clean-container'],
+          displayName: 'Docker 预发布环境',
+          health: 'ready',
+          id: 'docker:local-default',
+          maturity: 'preview',
+          ref: 'docker://local/default',
+        }],
+        soulReleases: [],
+      }), { headers: { 'content-type': 'application/json' } })),
+    })
+
+    expect(code).toBe(0)
+    const parsed = JSON.parse(output)
+    expect(parsed.provisioningTargets[0]).toMatchObject({
+      adapterType: 'docker',
+      displayName: 'Docker 预发布环境',
+      maturity: 'preview',
+    })
+    expect('servers' in parsed).toBe(false)
   })
 
   it('lists Host options through the Host API', async () => {
@@ -818,8 +921,12 @@ describe('aiworker-host control CLI', () => {
       'create',
       '--email',
       'bad',
-      '--server',
+      '--target',
       'aissh://server/ap-sg-01',
+      '--adapter',
+      'aissh',
+      '--maturity',
+      'production',
       '--soul',
       'aiworker-freeform@dev',
     ], {

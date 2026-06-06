@@ -126,6 +126,8 @@ const assignmentViewFields = [
   'assignedEmail',
   'assignmentId',
   'serverRef',
+  'provisioningTargetRef',
+  'provisioningTargetMaturity',
   'soulReleaseRef',
   'status',
   'workerId',
@@ -147,11 +149,17 @@ function projectAssignmentCreateResponse(value: unknown): Record<string, unknown
   const record = requireRecord(value, 'assignment create response')
   if (typeof record.provisionCommand !== 'string')
     throw new Error('Invalid Host API response: provisionCommand must be a string')
-  return {
-    ...(typeof record.aisshCommand === 'string' ? { aisshCommand: record.aisshCommand } : {}),
-    assignment: projectAssignmentView(record.assignment),
-    provisionCommand: record.provisionCommand,
-  }
+  const view = projectAllowedFields(record, [
+    'deliveryReceipt',
+    'deliveryStatus',
+    'expectedCheckInDeadline',
+    'operatorHint',
+    'provisionCommand',
+    'provisionToken',
+  ])
+  if ('assignment' in record)
+    view.assignment = projectAssignmentView(record.assignment)
+  return view
 }
 
 function projectAssignmentListResponse(value: unknown): Record<string, unknown> {
@@ -171,25 +179,6 @@ function projectAllowedFields(value: unknown, fields: string[]): Record<string, 
       view[field] = record[field]
   }
   return view
-}
-
-function projectProvisioningTarget(value: unknown): Record<string, unknown> | undefined {
-  const record = requireRecord(value, 'provisioning target')
-  if (typeof record.id !== 'string' || record.id.trim().length === 0)
-    return
-
-  return {
-    id: record.id,
-    ...(typeof record.displayName === 'string' ? { displayName: record.displayName } : {}),
-    ...(typeof record.adapterType === 'string' ? { adapterType: record.adapterType } : {}),
-    ...(typeof record.maturity === 'string' ? { maturity: record.maturity } : {}),
-    ...(typeof record.ref === 'string' ? { ref: record.ref } : {}),
-    ...(typeof record.description === 'string' ? { description: record.description } : {}),
-    ...(typeof record.health === 'string' ? { health: record.health } : {}),
-    ...(Array.isArray(record.capabilities)
-      ? { capabilities: record.capabilities.filter((entry: unknown): entry is string => typeof entry === 'string') }
-      : {}),
-  }
 }
 
 function mapLegacyServerToProvisioningTarget(server: unknown): Record<string, unknown> | undefined {
@@ -216,10 +205,16 @@ function projectHostOptions(value: unknown): Record<string, unknown> {
       : (typeof record.serverSourceError === 'string' ? record.serverSourceError : undefined)
 
   const provisioningTargets = Array.isArray(record.provisioningTargets)
-    ? record.provisioningTargets.flatMap((target) => {
-      const projectedTarget = projectProvisioningTarget(target)
-      return projectedTarget ? [projectedTarget] : []
-    })
+    ? record.provisioningTargets.map(target => projectAllowedFields(target, [
+      'id',
+      'displayName',
+      'adapterType',
+      'maturity',
+      'ref',
+      'description',
+      'capabilities',
+      'health',
+    ]))
     : Array.isArray(record.servers)
       ? record.servers.flatMap((server) => {
         const projectedServer = mapLegacyServerToProvisioningTarget(server)
@@ -276,14 +271,34 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
   cli
     .command('assignment create', 'create a Worker assignment through the Host API')
     .option('--email <email>', 'assigned employee email')
-    .option('--server <server>', 'server reference for provisioning')
+    .option('--target <ref>', 'provisioning target reference')
+    .option('--adapter <type>', 'provisioning adapter type: aissh, docker, local')
+    .option('--maturity <level>', 'target maturity: production, preview, dev')
+    .option('--callback-url <url>', 'Worker-reachable Host control URL for this target')
+    .option('--server <server>', 'legacy alias for --target with aissh production provisioning')
     .option('--soul <soul>', 'Soul release reference')
     .option('--host <url>', 'Host API base URL', { default: 'http://127.0.0.1:9117' })
-    .action(async (options: { email?: string, host?: string, server?: string, soul?: string }) => {
+    .action(async (options: {
+      adapter?: string
+      callbackUrl?: string
+      email?: string
+      host?: string
+      maturity?: string
+      server?: string
+      soul?: string
+      target?: string
+    }) => {
       if (!options.email)
         throw new Error('Missing required option: --email <email>')
-      if (!options.server)
-        throw new Error('Missing required option: --server <server>')
+      const target = options.target ?? options.server
+      const adapter = options.adapter ?? (options.server ? 'aissh' : undefined)
+      const maturity = options.maturity ?? (options.server ? 'production' : undefined)
+      if (!target)
+        throw new Error('Missing required option: --target <ref>')
+      if (!adapter)
+        throw new Error('Missing required option: --adapter <type>')
+      if (!maturity)
+        throw new Error('Missing required option: --maturity <level>')
       if (!options.soul)
         throw new Error('Missing required option: --soul <soul>')
 
@@ -291,7 +306,12 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
       const result = await requestHostJson(fetchImpl, `${host}/api/host/assignments`, {
         body: JSON.stringify({
           assignedEmail: options.email,
-          serverRef: options.server,
+          ...(options.callbackUrl ? { adapterRuntimeControlBaseUrl: options.callbackUrl } : {}),
+          provisioningTarget: {
+            adapterType: adapter,
+            maturity,
+            ref: target,
+          },
           soulReleaseRef: options.soul,
         }),
         headers: { 'content-type': 'application/json' },
@@ -407,12 +427,22 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     .option('--control-base-url <url>', 'Host control/API base URL for Worker check-in')
     .option('--port <port>', 'listen port', { default: '9310' })
     .option('--web-static-dir <path>', 'Host Web static directory to serve from this process')
-    .action(async (options: { db: string, devAdminEmail?: string, host: string, port: string | number, publicBaseUrl: string, webStaticDir?: string }) => {
+    .action(async (options: {
+      browserBaseUrl?: string
+      controlBaseUrl?: string
+      db: string
+      devAdminEmail?: string
+      host: string
+      port: string | number
+      publicBaseUrl: string
+      webStaticDir?: string
+    }) => {
       const port = Number(options.port)
       if (!Number.isInteger(port) || port <= 0)
         throw new Error(`Invalid port: ${options.port}`)
 
       const publicBaseUrl = options.publicBaseUrl
+      const hostBrowserBaseUrl = options.browserBaseUrl ?? (options.webStaticDir ? undefined : 'http://127.0.0.1:5050')
       const server = await (deps.serverFactory ?? createHostServer)({
         authUser: options.devAdminEmail
           ? {
@@ -422,6 +452,8 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
             }
           : null,
         dbPath: options.db,
+        ...(hostBrowserBaseUrl ? { hostBrowserBaseUrl } : {}),
+        ...(options.controlBaseUrl ? { hostControlBaseUrl: options.controlBaseUrl } : {}),
         publicBaseUrl,
         ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
       })
