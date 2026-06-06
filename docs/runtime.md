@@ -325,6 +325,11 @@ A remote aissh target must not use localhost, 127.0.0.1, or ::1 as its adapter r
 
 Phase 2 provisioning check-in and Worker Access tunnel signals are distribution-plane signals.
 These Worker-initiated signals are not runtime hot-path ownership. Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.
+
+Phase 2.1 tunnel signals are distribution-plane signals. Host or tunnel outage makes managed remote access unavailable, but does not make the Worker runtime unusable.
+The standalone Worker path and localhost Worker Web remain valid local operator
+and break-glass paths.
+
 In Phase 2, assignment changes may update Worker-scoped authorization and
 selection metadata at explicit sync points, but they must not expose session
 content to Host, interrupt native engine execution, replace projection ownership,

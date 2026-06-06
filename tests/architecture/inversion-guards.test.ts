@@ -239,6 +239,18 @@ test('G5 phase-2 access: Worker may initiate only provisioning check-in and acce
   }
 })
 
+test('G7 phase-2 managed access does not make Worker runtime depend on Host', () => {
+  const architecture = read('docs/architecture.md')
+  const protocol = read('docs/protocol.md')
+  const runtime = read('docs/runtime.md')
+
+  expect(architecture).toContain('Host-only applies only to managed employee remote access')
+  expect(architecture).toContain('Worker Web and CLI remain locally operable without Host')
+  expect(protocol).toContain('WebSocket is the only Worker Access tunnel transport in Phase 2.1')
+  expect(protocol).toContain('Do not add AIWORKER_WORKER_ACCESS_LOCAL_URL')
+  expect(runtime).toContain('Host or tunnel outage makes managed remote access unavailable, but does not make the Worker runtime unusable')
+})
+
 // G5 clause-2 ↔ C5：唯一 Host→Worker 契约 worker-control-protocol 必须 transport-agnostic——
 // 契约源不得 hardcode transport（往 schema 加 httpUrl/wsEndpoint 等不该被任何测试漏过）。
 // 剥注释后断言不出现 transport token（注释合法地提到 "transport"，故须剥注释，与 G4 同法）。

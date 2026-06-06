@@ -219,6 +219,29 @@ GET    /api/provision/access
 GET    /workers/:workerId
 ```
 
+Phase 2.1 Worker Access tunnel:
+
+```text
+GET /api/provision/access
+Upgrade: websocket
+Authorization: Bearer <worker-access-token>
+```
+
+WebSocket is the only Worker Access tunnel transport in Phase 2.1. There is no
+HTTP long-poll fallback. Host performs transport-level forwarding over the
+Worker-initiated tunnel; Host does not mount, iframe, proxy-render, own, or
+semantically interpret the Worker Workbench.
+
+Provisioning adapters must deliver only:
+
+```text
+AIWORKER_HOST_URL
+AIWORKER_PROVISION_TOKEN
+```
+
+Do not add AIWORKER_WORKER_ACCESS_LOCAL_URL. Fleet owns worker id, worker home,
+and daemon port; the Worker runtime resolves its own local handler.
+
 Host URLs are environment-specific:
 
 - `hostBrowserBaseUrl` generates `/host` and `/workers/:workerId`.

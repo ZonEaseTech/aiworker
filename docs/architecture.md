@@ -87,6 +87,21 @@ but it must not wrap, embed, render, or reinterpret the Workbench. The product
 value is capability replication, version rollout, permission governance, and
 low-friction employee onboarding.
 
+Phase 2.1 managed employee access uses Host as the enterprise URL and
+authorization boundary, but only for managed employee remote access. Host-only applies only to managed employee remote access.
+Host-only does not mean the Worker runtime depends on Host for survival.
+
+Managed employee access goes through:
+
+```text
+employee browser -> Host /workers/:workerId -> Logto -> assignment -> Worker-initiated tunnel -> Worker-owned Workbench
+```
+
+Worker Web and CLI remain locally operable without Host. Host or tunnel outage
+makes managed remote access unavailable, but does not make the Worker runtime
+unusable. Localhost Worker Web is diagnostic/local-only and must not be shown as
+the employee-facing product URL.
+
 ## Decision Coverage Index
 
 tmp/refactor decisions are evidence until promoted. Accepted refactor decisions
