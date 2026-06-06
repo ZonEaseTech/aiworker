@@ -4,8 +4,8 @@ import { describe, expect, it } from 'bun:test'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 
 import {
-  buildAuthorizationRedirect,
-  exchangeAuthorizationCode,
+  beginLogtoHostedLogin,
+  exchangeLogtoHostedLoginCode,
   mapLogtoHostedLoginClaims,
   type OidcClientConfig,
 } from './host-oidc-client'
@@ -19,16 +19,25 @@ describe('host oidc client', () => {
     redirectUri: 'http://localhost:54145/auth/callback',
   }
 
-  it('builds a Logto authorization redirect with PKCE, state, nonce and returnTo', async () => {
-    const result = await buildAuthorizationRedirect(config, {
-      authorizationEndpoint: 'https://auth.zonease.org/oidc/auth',
+  it('discovers the authorization endpoint and builds a PKCE redirect with state and nonce', async () => {
+    const discoveryRequests: string[] = []
+    const result = await beginLogtoHostedLogin(config, {
+      fetch: async input => {
+        discoveryRequests.push(String(input))
+        return Response.json({
+          authorization_endpoint: 'https://login.zonease.test/custom/auth',
+          jwks_uri: 'https://login.zonease.test/custom/jwks',
+          token_endpoint: 'https://login.zonease.test/custom/token',
+        })
+      },
       randomBytes: size => Buffer.alloc(size, 1),
       returnTo: '/workers/wkr_82',
     })
 
     const url = new URL(result.redirectUrl)
 
-    expect(url.origin + url.pathname).toBe('https://auth.zonease.org/oidc/auth')
+    expect(discoveryRequests).toEqual(['https://auth.zonease.org/oidc/.well-known/openid-configuration'])
+    expect(url.origin + url.pathname).toBe('https://login.zonease.test/custom/auth')
     expect(url.searchParams.get('client_id')).toBe('aiworker-local-client')
     expect(url.searchParams.get('redirect_uri')).toBe('http://localhost:54145/auth/callback')
     expect(url.searchParams.get('response_type')).toBe('code')
@@ -43,6 +52,15 @@ describe('host oidc client', () => {
     expect(result.transaction.codeVerifier.length).toBeGreaterThan(40)
     expect(result.transaction.state.length).toBeGreaterThan(20)
     expect(result.transaction.nonce.length).toBeGreaterThan(20)
+  })
+
+  it('rejects absolute returnTo values before discovery', async () => {
+    await expect(beginLogtoHostedLogin(config, {
+      fetch: async () => {
+        throw new Error('discovery should not run for unsafe returnTo')
+      },
+      returnTo: 'https://evil.example/workers/wkr_82',
+    })).rejects.toThrow('path-only')
   })
 
   it('maps only verified zonease.org claims to a Host session payload', () => {
@@ -82,59 +100,15 @@ describe('host oidc client', () => {
     }, '2026-06-06T12:00:00.000Z')).toThrow('verified email')
   })
 
-  it('exchanges an authorization code and validates the ID token without returning Logto tokens', async () => {
-    const { privateKey, publicKey } = await generateKeyPair('RS256')
-    const publicJwk = await exportJWK(publicKey)
-    const tokenRequests: Record<string, string>[] = []
-    const server = Bun.serve({
-      fetch: async request => {
-        const url = new URL(request.url)
-
-        if (url.pathname === '/oidc/jwks') {
-          return Response.json({
-            keys: [{ ...publicJwk, alg: 'RS256', kid: 'key-1', use: 'sig' }],
-          })
-        }
-
-        if (url.pathname === '/oidc/token') {
-          const form = Object.fromEntries(await request.formData()) as Record<string, string>
-          tokenRequests.push(form)
-          const idToken = await new SignJWT({
-            email: 'alice@zonease.org',
-            email_verified: true,
-            nonce: 'nonce-123',
-            roles: ['host:admin'],
-          })
-            .setProtectedHeader({ alg: 'RS256', kid: 'key-1' })
-            .setSubject('usr_alice')
-            .setIssuer(`${url.origin}/oidc`)
-            .setAudience('aiworker-local-client')
-            .setExpirationTime('5m')
-            .sign(privateKey)
-
-          return Response.json({
-            access_token: 'logto-access-token',
-            expires_in: 300,
-            id_token: idToken,
-            token_type: 'Bearer',
-          })
-        }
-
-        return new Response('not found', { status: 404 })
-      },
-      port: 0,
-    })
-
+  it('exchanges an authorization code through discovered token and JWKS endpoints without returning Logto tokens', async () => {
+    const fixture = await createOidcFixture()
     try {
-      const result = await exchangeAuthorizationCode({
-        ...config,
-        issuer: `http://${server.hostname}:${server.port}/oidc`,
-      }, {
+      const result = await exchangeLogtoHostedLoginCode(fixture.config, {
         code: 'auth-code',
         codeVerifier: 'code-verifier',
+        fetch: fixture.fetch,
         nonce: 'nonce-123',
         now: () => new Date('2026-06-06T04:00:00.000Z'),
-        tokenEndpoint: `http://${server.hostname}:${server.port}/oidc/token`,
       })
 
       expect(result).toEqual({
@@ -144,7 +118,10 @@ describe('host oidc client', () => {
         sub: 'usr_alice',
       })
       expect(JSON.stringify(result)).not.toContain('logto-access-token')
-      expect(tokenRequests[0]).toMatchObject({
+      expect(fixture.requests).toContain('GET /oidc/.well-known/openid-configuration')
+      expect(fixture.requests).toContain('POST /discovered/token')
+      expect(fixture.requests).toContain('GET /discovered/jwks')
+      expect(fixture.tokenRequests[0]).toMatchObject({
         client_id: 'aiworker-local-client',
         code: 'auth-code',
         code_verifier: 'code-verifier',
@@ -153,36 +130,167 @@ describe('host oidc client', () => {
       })
     }
     finally {
-      server.stop(true)
+      fixture.server.stop(true)
     }
   })
 
-  it('does not expose token endpoint response bodies when exchange fails', async () => {
-    const server = Bun.serve({
-      fetch: request => {
-        const url = new URL(request.url)
-
-        if (url.pathname === '/oidc/token')
-          return new Response('access_token=secret-token', { status: 500 })
-
-        return new Response('not found', { status: 404 })
+  it('redacts OAuth JSON error responses without exposing token-like values', async () => {
+    const fixture = await createOidcFixture({
+      tokenBody: {
+        access_token: 'secret-token-value-that-must-not-leak-abcdefghijklmnopqrstuvwxyz',
+        error: 'invalid_grant',
+        error_description: 'authorization code expired secret-token-value-that-must-not-leak-abcdefghijklmnopqrstuvwxyz',
       },
-      port: 0,
+      tokenStatus: 400,
     })
 
     try {
-      await expect(exchangeAuthorizationCode({
-        ...config,
-        issuer: `http://${server.hostname}:${server.port}/oidc`,
-      }, {
-        code: 'auth-code',
-        codeVerifier: 'code-verifier',
-        nonce: 'nonce-123',
-        tokenEndpoint: `http://${server.hostname}:${server.port}/oidc/token`,
-      })).rejects.not.toThrow('secret-token')
+      let message = ''
+      try {
+        await exchangeLogtoHostedLoginCode(fixture.config, {
+          code: 'auth-code',
+          codeVerifier: 'code-verifier',
+          fetch: fixture.fetch,
+          nonce: 'nonce-123',
+        })
+      }
+      catch (error) {
+        message = error instanceof Error ? error.message : String(error)
+      }
+
+      expect(message).toContain('invalid_grant')
+      expect(message).toContain('authorization code expired')
+      expect(message).not.toContain('access_token')
+      expect(message).not.toContain('secret-token-value')
     }
     finally {
-      server.stop(true)
+      fixture.server.stop(true)
+    }
+  })
+
+  it('fails closed when the ID token nonce does not match the login transaction', async () => {
+    const fixture = await createOidcFixture({
+      tokenClaims: { nonce: 'wrong-nonce' },
+    })
+
+    try {
+      await expect(exchangeLogtoHostedLoginCode(fixture.config, {
+        code: 'auth-code',
+        codeVerifier: 'code-verifier',
+        fetch: fixture.fetch,
+        nonce: 'nonce-123',
+      })).rejects.toThrow('nonce mismatch')
+    }
+    finally {
+      fixture.server.stop(true)
+    }
+  })
+
+  it('fails closed when the ID token audience does not match the Host client', async () => {
+    const fixture = await createOidcFixture({
+      tokenAudience: 'other-client',
+    })
+
+    try {
+      await expect(exchangeLogtoHostedLoginCode(fixture.config, {
+        code: 'auth-code',
+        codeVerifier: 'code-verifier',
+        fetch: fixture.fetch,
+        nonce: 'nonce-123',
+      })).rejects.toThrow()
+    }
+    finally {
+      fixture.server.stop(true)
     }
   })
 })
+
+interface OidcFixture {
+  config: OidcClientConfig
+  fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>
+  requests: string[]
+  server: ReturnType<typeof Bun.serve>
+  tokenRequests: Record<string, string>[]
+}
+
+async function createOidcFixture(options: {
+  tokenAudience?: string
+  tokenBody?: unknown
+  tokenClaims?: Record<string, unknown>
+  tokenIssuer?: string
+  tokenStatus?: number
+} = {}): Promise<OidcFixture> {
+  const { privateKey, publicKey } = await generateKeyPair('RS256')
+  const publicJwk = await exportJWK(publicKey)
+  const requests: string[] = []
+  const tokenRequests: Record<string, string>[] = []
+  const server = Bun.serve({
+    fetch: async request => {
+      const url = new URL(request.url)
+      requests.push(`${request.method} ${url.pathname}`)
+
+      if (url.pathname === '/oidc/.well-known/openid-configuration') {
+        return Response.json({
+          authorization_endpoint: `${url.origin}/discovered/auth`,
+          jwks_uri: `${url.origin}/discovered/jwks`,
+          token_endpoint: `${url.origin}/discovered/token`,
+        })
+      }
+
+      if (url.pathname === '/discovered/jwks') {
+        return Response.json({
+          keys: [{ ...publicJwk, alg: 'RS256', kid: 'key-1', use: 'sig' }],
+        })
+      }
+
+      if (url.pathname === '/discovered/token') {
+        const form = Object.fromEntries(await request.formData())
+        tokenRequests.push(Object.fromEntries(
+          Object.entries(form).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+        ))
+
+        if (options.tokenStatus)
+          return Response.json(options.tokenBody ?? { error: 'invalid_grant' }, { status: options.tokenStatus })
+
+        const idToken = await new SignJWT({
+          email: 'alice@zonease.org',
+          email_verified: true,
+          nonce: 'nonce-123',
+          roles: ['host:admin'],
+          ...options.tokenClaims,
+        })
+          .setProtectedHeader({ alg: 'RS256', kid: 'key-1' })
+          .setSubject('usr_alice')
+          .setIssuer(options.tokenIssuer ?? `${url.origin}/oidc`)
+          .setAudience(options.tokenAudience ?? 'aiworker-local-client')
+          .setExpirationTime('5m')
+          .sign(privateKey)
+
+        return Response.json({
+          access_token: 'logto-access-token',
+          expires_in: 300,
+          id_token: idToken,
+          token_type: 'Bearer',
+        })
+      }
+
+      return new Response('not found', { status: 404 })
+    },
+    port: 0,
+  })
+  const origin = `http://${server.hostname}:${server.port}`
+
+  return {
+    config: {
+      clientId: 'aiworker-local-client',
+      clientSecret: 'client-secret',
+      endpoint: `${origin}/`,
+      issuer: `${origin}/oidc`,
+      redirectUri: 'http://localhost:54145/auth/callback',
+    },
+    fetch: async (input, init) => fetch(input, init),
+    requests,
+    server,
+    tokenRequests,
+  }
+}
