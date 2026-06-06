@@ -229,17 +229,11 @@ async function findProofApplication(
   const body = await safeResponseJson(response, 'lookup')
   if (isManagementFailure(body))
     return body
-  const applications = Array.isArray(body)
-    ? body
-    : body && typeof body === 'object' && Array.isArray((body as { data?: unknown }).data)
-      ? (body as { data: unknown[] }).data
-      : []
-  const app = applications.find(item =>
-    item
-    && typeof item === 'object'
-    && (item as { name?: unknown }).name === LOGTO_PROOF_APP_NAME
-    && typeof (item as { id?: unknown }).id === 'string'
-  ) as { id: string } | undefined
+  const applications = parseApplicationList(body)
+  if (isManagementFailure(applications))
+    return applications
+
+  const app = applications.find(item => item.name === LOGTO_PROOF_APP_NAME)
 
   return app ? { id: app.id } : false
 }
@@ -282,8 +276,12 @@ async function createProofApplication(
     }
   }
 
-  return typeof body.secret === 'string' && body.secret.length > 0
-    ? { deprecatedSecret: body.secret, id: body.id }
+  const deprecatedSecret = typeof body.secret === 'string' && body.secret.trim().length > 0
+    ? body.secret.trim()
+    : undefined
+
+  return deprecatedSecret
+    ? { deprecatedSecret, id: body.id }
     : { id: body.id }
 }
 
@@ -338,9 +336,9 @@ async function readApplicationSecret(
   }
 
   const first = body.find(item =>
-    item
-    && typeof item === 'object'
-    && typeof (item as { value?: unknown }).value === 'string'
+    isJsonRecord(item)
+    && typeof item.value === 'string'
+    && item.value.trim().length > 0
   ) as { value: string } | undefined
   if (!first) {
     return {
@@ -350,7 +348,7 @@ async function readApplicationSecret(
     }
   }
 
-  return first.value
+  return first.value.trim()
 }
 
 async function safeFetch(
@@ -444,6 +442,35 @@ function isManagementFailure(value: unknown): value is LogtoManagementFailure {
     && 'stage' in value
     && 'status' in value,
   )
+}
+
+function parseApplicationList(body: unknown): Array<{ id: string, name: string }> | LogtoManagementFailure {
+  const rawApplications = Array.isArray(body)
+    ? body
+    : isJsonRecord(body) && Array.isArray(body.data)
+      ? body.data
+      : null
+  if (!rawApplications) {
+    return {
+      reason: 'invalid_lookup_response',
+      stage: 'lookup',
+      status: 'invalid_response',
+    }
+  }
+
+  const applications: Array<{ id: string, name: string }> = []
+  for (const item of rawApplications) {
+    if (!isJsonRecord(item) || typeof item.id !== 'string' || typeof item.name !== 'string') {
+      return {
+        reason: 'invalid_lookup_response',
+        stage: 'lookup',
+        status: 'invalid_response',
+      }
+    }
+    applications.push({ id: item.id, name: item.name })
+  }
+
+  return applications
 }
 
 function isJsonRecord(value: unknown): value is Record<string, unknown> {

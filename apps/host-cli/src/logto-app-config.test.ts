@@ -258,6 +258,40 @@ describe('logto proof app config', () => {
     expect(result).toEqual(manualFallback('lookup', 403, 'management_api_request_failed'))
   })
 
+  it('fails closed on malformed lookup response without creating duplicate app', async () => {
+    const cases: [string, unknown][] = [
+      ['null lookup', null],
+      ['malformed object lookup', { unexpected: true }],
+      ['invalid array element lookup', [{ id: 42, name: 'AIWorker Local Auth Proof' }]],
+    ]
+
+    for (const [name, lookupBody] of cases) {
+      let createCalls = 0
+      const result = await ensureLogtoProofApplication({
+        config: tenantConfig,
+        fetch: async (input, init) => {
+          const url = input.toString()
+          if (url.endsWith('/oidc/token'))
+            return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
+          if (url.endsWith('/api/applications') && init?.method === 'GET')
+            return Response.json(lookupBody)
+          if (url.endsWith('/api/applications') && init?.method === 'POST') {
+            createCalls += 1
+            return Response.json({ id: 'duplicate-web-app-id', type: 'Traditional' })
+          }
+
+          return new Response('not found', { status: 404 })
+        },
+        hostBrowserBaseUrl: 'http://localhost:54145',
+      })
+
+      expect(result, name).toEqual(manualFallback('lookup', 'invalid_response', 'invalid_lookup_response'))
+      expect(createCalls, name).toBe(0)
+      expect(JSON.stringify(result), name).not.toContain('management-token')
+      expect(JSON.stringify(result), name).not.toContain('duplicate-web-app-id')
+    }
+  })
+
   it('returns manual configuration for Management API failures without exposing secrets', async () => {
     const cases: [string, ManualConfiguration['stage'], LogtoFetch][] = [
       ['token 500', 'token', async input => input.toString().endsWith('/oidc/token')
@@ -321,6 +355,57 @@ describe('logto proof app config', () => {
     expect(result).toEqual(manualFallback('token', 'invalid_response', 'invalid_management_api_response'))
     expect(JSON.stringify(result)).not.toContain('m2m-secret')
     expect(JSON.stringify(result)).not.toContain('management-token')
+  })
+
+  it('uses deprecated create response secret when secrets endpoint only returns empty value', async () => {
+    const result = await ensureLogtoProofApplication({
+      config: tenantConfig,
+      fetch: async (input, init) => {
+        const url = input.toString()
+        if (url.endsWith('/oidc/token'))
+          return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
+        if (url.endsWith('/api/applications') && init?.method === 'GET')
+          return Response.json([])
+        if (url.endsWith('/api/applications') && init?.method === 'POST')
+          return Response.json({ id: 'web-app-id', secret: 'deprecated-create-secret', type: 'Traditional' })
+        if (url.endsWith('/api/applications/web-app-id/secrets'))
+          return Response.json([{ value: '   ' }])
+
+        return new Response('not found', { status: 404 })
+      },
+      hostBrowserBaseUrl: 'http://localhost:54145',
+    })
+
+    expect(result).toEqual({
+      clientId: 'web-app-id',
+      clientSecret: 'deprecated-create-secret',
+      redirectUri: 'http://localhost:54145/auth/callback',
+    })
+    expect(JSON.stringify(redactLogtoProofApplication(result))).not.toContain('deprecated-create-secret')
+  })
+
+  it('returns manual fallback when secrets endpoint value is empty and no create fallback exists', async () => {
+    const result = await ensureLogtoProofApplication({
+      config: tenantConfig,
+      fetch: async (input, init) => {
+        const url = input.toString()
+        if (url.endsWith('/oidc/token'))
+          return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
+        if (url.endsWith('/api/applications') && init?.method === 'GET')
+          return Response.json([])
+        if (url.endsWith('/api/applications') && init?.method === 'POST')
+          return Response.json({ id: 'web-app-id', type: 'Traditional' })
+        if (url.endsWith('/api/applications/web-app-id/secrets'))
+          return Response.json([{ value: '' }])
+
+        return new Response('not found', { status: 404 })
+      },
+      hostBrowserBaseUrl: 'http://localhost:54145',
+    })
+
+    expect(result).toEqual(manualFallback('secret-read', 'invalid_response', 'missing_application_secret'))
+    expect(JSON.stringify(result)).not.toContain('m2m-secret')
+    expect(JSON.stringify(result)).not.toContain('web-app-id')
   })
 
   function manualFallback(
