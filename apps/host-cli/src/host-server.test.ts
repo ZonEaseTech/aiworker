@@ -131,6 +131,19 @@ describe('host server', () => {
     }))
   }
 
+  function malformedSessionCookie(payload: Record<string, unknown>): string {
+    return cookieValueFromSetCookie(createSignedCookie('aiworker_session', {
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      ...payload,
+    }, {
+      maxAgeSeconds: 28800,
+      path: '/',
+      requestUrl: 'http://localhost:54145/host',
+      sameSite: 'Lax',
+      secret: sessionSecret,
+    }))
+  }
+
   function transactionCookie(input: {
     codeVerifier?: string
     nonce?: string
@@ -326,6 +339,51 @@ describe('host server', () => {
     })
   })
 
+  it('treats signed sessions with malformed roles as unauthenticated for browser Host routes', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/host', {
+      headers: {
+        accept: 'text/html',
+        cookie: `aiworker_session=${malformedSessionCookie({
+          email: 'admin@zonease.org',
+          roles: 'host:admin',
+          sub: 'usr_admin',
+        })}`,
+      },
+    }))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('/auth/login?returnTo=%2Fhost')
+  })
+
+  it('returns 401 from /api/auth/me for signed sessions with malformed shape', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/api/auth/me', {
+      headers: {
+        cookie: `aiworker_session=${malformedSessionCookie({
+          email: 'admin@zonease.org',
+          roles: 'host:admin',
+          sub: 'usr_admin',
+        })}`,
+      },
+    }))
+
+    expect(response.status).toBe(401)
+    expect(await response.json()).toEqual({ error: { code: 'UNAUTHENTICATED' } })
+  })
+
   it('redirects browser /host requests to Logto login when session is missing', async () => {
     const server = await createHostServer({
       dbPath: dbPath(),
@@ -466,6 +524,42 @@ describe('host server', () => {
 
     expect(response.status).toBe(302)
     expect(response.headers.get('location')).toBe('/auth/login?returnTo=%2Fworkers%2Fwkr_82')
+  })
+
+  it('canonicalizes unauthenticated worker subpath login returnTo to the worker root', async () => {
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82/assets/app.js', {
+      headers: { accept: 'text/html' },
+    }))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('/auth/login?returnTo=%2Fworkers%2Fwkr_82')
+  })
+
+  it('uses sessionAuth as authority when static authUser is also configured', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+      sessionAuth: sessionAuth(),
+    })
+
+    const hostResponse = await server.fetch(new Request('http://localhost:54145/host', {
+      headers: { accept: 'text/html' },
+    }))
+    const apiResponse = await server.fetch(new Request('http://localhost:54145/api/host/assignments'))
+
+    expect(hostResponse.status).toBe(302)
+    expect(hostResponse.headers.get('location')).toBe('/auth/login?returnTo=%2Fhost')
+    expect(apiResponse.status).toBe(403)
+    expect(await apiResponse.json()).toEqual({ error: { code: 'FORBIDDEN' } })
   })
 
   it('returns JSON 403 for non-GET worker route requests when session is missing', async () => {

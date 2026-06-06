@@ -313,7 +313,7 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
         const workerId = decodeURIComponent(workerMatch[1]!)
         if (options.sessionAuth && !readUserFromSessionCookie(request.headers, options.sessionAuth)) {
           if (request.method === 'GET' || request.method === 'HEAD')
-            return redirectToLogin(`${url.pathname}${url.search}`)
+            return redirectToLogin(`/workers/${encodeURIComponent(workerId)}`)
           return json({ error: { code: 'FORBIDDEN' } }, { status: 403 })
         }
         return handleWorkerRoute(request, effectiveAuthProvider, accessRegistry, workerId)
@@ -446,7 +446,7 @@ function readUserFromSessionCookie(headers: Headers, sessionAuth: HostSessionAut
     secret: sessionAuth.sessionSecret,
     ...(sessionAuth.now ? { now: sessionAuth.now } : {}),
   })
-  if (!session)
+  if (!isHostSessionPayload(session))
     return null
 
   return {
@@ -475,6 +475,16 @@ function isWorkerAccessMethod(method: string): boolean {
     || method === 'PATCH'
     || method === 'DELETE'
     || method === 'OPTIONS'
+}
+
+function isHostSessionPayload(value: HostSessionPayload | null): value is HostSessionPayload {
+  return value !== null
+    && typeof value.email === 'string'
+    && value.email.trim().length > 0
+    && typeof value.sub === 'string'
+    && value.sub.trim().length > 0
+    && Array.isArray(value.roles)
+    && value.roles.every(role => typeof role === 'string')
 }
 
 function isHostBrowserRoute(pathname: string): boolean {
