@@ -23,6 +23,32 @@ describe('host-control assignment boundary', () => {
     }).assignedEmail).toBe('ben@example.com')
   })
 
+  test('creates assignment views with provisioning target compatibility fields', () => {
+    expect(createAssignmentView({
+      assignedEmail: 'worker@example.com',
+      assignmentId: 'assign-1',
+      serverRef: 'srv-1',
+      soulReleaseRef: 'soul-release-1',
+      status: 'draft',
+    }).provisioningTargetRef).toBe('srv-1')
+
+    expect(createAssignmentView({
+      assignedEmail: 'worker@example.com',
+      assignmentId: 'assign-2',
+      provisioningAdapterType: 'local',
+      provisioningTargetMaturity: 'dev',
+      provisioningTargetRef: 'local://default',
+      serverRef: 'legacy-ref',
+      soulReleaseRef: 'soul-release-1',
+      status: 'draft',
+    })).toMatchObject({
+      provisioningAdapterType: 'local',
+      provisioningTargetMaturity: 'dev',
+      provisioningTargetRef: 'local://default',
+      serverRef: 'legacy-ref',
+    })
+  })
+
   test('allows only the assigned user to open a ready assignment', () => {
     const assignment = createAssignmentView({
       assignedEmail: 'worker@example.com',

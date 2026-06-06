@@ -1,6 +1,7 @@
 import type { AuthenticatedHostUser, AuthProvider, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
-import type { HostOptionsView } from './host-options'
+import type { HostOptionsView, ProvisioningAdapterType, ProvisioningTargetMaturity } from './host-options'
+import type { ProvisioningDeliveryResult } from './provisioning-target-adapters'
 
 import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -27,16 +28,28 @@ import {
   parseWorkerCheckInResponse,
 } from '@zonease/aiworker-worker-control-protocol'
 import { buildHostOptions } from './host-options'
+import { assertRemoteAisshCallbackReachable, resolveAdapterRuntimeControlBaseUrl } from './host-url-contract'
+import { deliverProvisioningTarget } from './provisioning-target-adapters'
 
-export interface HostServerOptions {
+interface HostServerBaseOptions {
   accessRegistry?: WorkerAccessRegistry
   authProvider?: AuthProvider
   authUser?: AuthenticatedHostUser | null
   dbPath: string
   optionsProvider?: () => Promise<HostOptionsView>
-  publicBaseUrl: string
   webBaseUrl?: string
   webStaticDir?: string
+}
+
+export interface HostServerOptions extends HostServerBaseOptions {
+  hostBrowserBaseUrl: string
+  hostControlBaseUrl: string
+}
+
+interface LegacyHostServerOptions extends HostServerBaseOptions {
+  hostBrowserBaseUrl?: string
+  hostControlBaseUrl?: string
+  publicBaseUrl: string
 }
 
 export interface HostServer {
@@ -45,13 +58,22 @@ export interface HostServer {
 
 interface CreateAssignmentRequest {
   assignedEmail?: unknown
-  serverRef?: unknown
+  adapterRuntimeControlBaseUrl?: unknown
+  provisioningTarget?: unknown
   soulReleaseRef?: unknown
+}
+
+interface ParsedProvisioningTarget {
+  adapterType: ProvisioningAdapterType
+  maturity: ProvisioningTargetMaturity
+  ref: string
 }
 
 let activeHostDbPath: string | null = null
 
-export async function createHostServer(options: HostServerOptions): Promise<HostServer> {
+export async function createHostServer(options: HostServerOptions): Promise<HostServer>
+export async function createHostServer(options: LegacyHostServerOptions): Promise<HostServer>
+export async function createHostServer(options: HostServerOptions | LegacyHostServerOptions): Promise<HostServer> {
   const dbPath = normalizeDbPath(options.dbPath)
   if (activeHostDbPath && activeHostDbPath !== dbPath && existsSync(activeHostDbPath)) {
     throw new Error(`Cannot create Host server with different Host dbPath in one process: active=${activeHostDbPath} requested=${dbPath}`)
@@ -60,6 +82,11 @@ export async function createHostServer(options: HostServerOptions): Promise<Host
   activeHostDbPath = dbPath
   initHostDb(dbPath)
   runHostMigrations()
+
+  const hostControlBaseUrl = options.hostControlBaseUrl ?? ('publicBaseUrl' in options ? options.publicBaseUrl : undefined)
+  if (!hostControlBaseUrl)
+    throw new Error('Host server requires hostControlBaseUrl')
+  const hostBrowserBaseUrl = options.hostBrowserBaseUrl ?? options.webBaseUrl ?? hostControlBaseUrl
 
   const authProvider = options.authProvider ?? createStaticAuthProvider(options.authUser ?? null)
   const accessRegistry = options.accessRegistry ?? createWorkerAccessRegistry()
@@ -74,10 +101,13 @@ export async function createHostServer(options: HostServerOptions): Promise<Host
         return hostWebResponse
 
       if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/host'))
-        return devLanding(options.publicBaseUrl, options.webBaseUrl ?? 'http://127.0.0.1:5050')
+        return devLanding(hostControlBaseUrl, options.webBaseUrl ?? hostBrowserBaseUrl)
 
       if (url.pathname === '/api/host/assignments')
-        return handleAssignments(request, authProvider, options.publicBaseUrl)
+        return handleAssignments(request, authProvider, {
+          hostBrowserBaseUrl,
+          hostControlBaseUrl,
+        })
 
       if (request.method === 'GET' && url.pathname === '/api/host/options')
         return handleOptions(request, authProvider, options.optionsProvider ?? buildHostOptions)
@@ -100,7 +130,10 @@ export async function createHostServer(options: HostServerOptions): Promise<Host
 async function handleAssignments(
   request: Request,
   authProvider: AuthProvider,
-  publicBaseUrl: string,
+  urls: {
+    hostBrowserBaseUrl: string
+    hostControlBaseUrl: string
+  },
 ): Promise<Response> {
   const user = await authProvider.authenticateRequest({ headers: request.headers })
   if (!user || !userIsHostAdmin(user))
@@ -120,19 +153,67 @@ async function handleAssignments(
     return json({ error: { code: 'INVALID_JSON' } }, { status: 400 })
   }
 
-  if (!isNonEmptyString(body.assignedEmail) || !isEmail(body.assignedEmail) || !isNonEmptyString(body.serverRef) || !isNonEmptyString(body.soulReleaseRef))
+  const provisioningTarget = parseProvisioningTarget(body.provisioningTarget)
+  if (
+    !isNonEmptyString(body.assignedEmail)
+    || !isEmail(body.assignedEmail)
+    || !provisioningTarget
+    || !isNonEmptyString(body.soulReleaseRef)
+    || (body.adapterRuntimeControlBaseUrl !== undefined && !isNonEmptyString(body.adapterRuntimeControlBaseUrl))
+  ) {
     return json({ error: { code: 'INVALID_ASSIGNMENT_REQUEST' } }, { status: 400 })
+  }
+
+  let adapterRuntimeControlBaseUrl: string
+  try {
+    adapterRuntimeControlBaseUrl = resolveAdapterRuntimeControlBaseUrl({
+      adapterRuntimeControlBaseUrl: isNonEmptyString(body.adapterRuntimeControlBaseUrl) ? body.adapterRuntimeControlBaseUrl : undefined,
+      adapterType: provisioningTarget.adapterType,
+      hostControlBaseUrl: urls.hostControlBaseUrl,
+    })
+    if (provisioningTarget.adapterType === 'aissh')
+      assertRemoteAisshCallbackReachable({ adapterRuntimeControlBaseUrl, targetRef: provisioningTarget.ref })
+  }
+  catch (error) {
+    if (isProvisioningTargetUnreachable(error))
+      return json({ error: { code: 'PROVISIONING_TARGET_UNREACHABLE' } }, { status: 400 })
+    return json({ error: { code: 'INVALID_ASSIGNMENT_REQUEST' } }, { status: 400 })
+  }
 
   const created = createAssignment({
     assignedEmail: body.assignedEmail,
-    serverRef: body.serverRef,
+    provisioningTarget,
     soulReleaseRef: body.soulReleaseRef,
   })
-  const provisionCommand = buildProvisionCommand(publicBaseUrl, created.provisionToken)
+
+  let delivery: ProvisioningDeliveryResult
+  try {
+    delivery = deliverProvisioningTarget({
+      adapterRuntimeControlBaseUrl,
+      adapterType: provisioningTarget.adapterType,
+      assignedEmail: created.assignment.assignedEmail,
+      assignmentId: created.assignment.assignmentId,
+      hostBrowserBaseUrl: urls.hostBrowserBaseUrl,
+      hostControlBaseUrl: urls.hostControlBaseUrl,
+      maturity: provisioningTarget.maturity,
+      provisionToken: created.provisionToken,
+      soulReleaseRef: body.soulReleaseRef,
+      targetRef: provisioningTarget.ref,
+    })
+  }
+  catch (error) {
+    if (isProvisioningTargetUnreachable(error))
+      return json({ error: { code: 'PROVISIONING_TARGET_UNREACHABLE' } }, { status: 400 })
+    return json({ error: { code: 'INVALID_ASSIGNMENT_REQUEST' } }, { status: 400 })
+  }
+
   return json({
-    aisshCommand: buildAisshCommand(created.assignment.serverRef, created.assignment.assignedEmail, provisionCommand),
     assignment: toAssignmentView(created.assignment),
-    provisionCommand,
+    deliveryReceipt: delivery.deliveryReceipt,
+    deliveryStatus: delivery.deliveryStatus,
+    expectedCheckInDeadline: delivery.expectedCheckInDeadline,
+    operatorHint: delivery.operatorHint,
+    provisionCommand: delivery.provisionCommand,
     provisionToken: created.provisionToken,
   }, { status: 201 })
 }
@@ -210,9 +291,13 @@ async function handleWorkerRoute(
 }
 
 function toAssignmentView(row: HostAssignmentRow) {
+  const metadata = readAssignmentMetadata(row.metadataJson)
   return createAssignmentView({
     assignedEmail: row.assignedEmail,
     assignmentId: row.assignmentId,
+    provisioningAdapterType: metadata.provisioningAdapterType,
+    provisioningTargetMaturity: metadata.provisioningTargetMaturity,
+    provisioningTargetRef: metadata.provisioningTargetRef ?? row.serverRef,
     revokedAt: row.revokedAt,
     serverRef: row.serverRef,
     soulReleaseRef: row.soulReleaseRef,
@@ -226,22 +311,51 @@ function createAccessToken(): string {
   return `awt_${randomBytes(32).toString('base64url')}`
 }
 
-function buildProvisionCommand(publicBaseUrl: string, provisionToken: string): string {
-  return `bun apps/worker-cli/src/aiworker.ts provision --host ${shellQuote(publicBaseUrl)} --token ${shellQuote(provisionToken)}`
-}
-
-function buildAisshCommand(serverRef: string, assignedEmail: string, provisionCommand: string): string {
-  return `aissh exec ${shellQuote(serverRef)} ${shellQuote(provisionCommand)} --reason=${shellQuote(`Provision AIWorker for ${assignedEmail}`)}`
-}
-
-function shellQuote(value: string): string {
-  if (/^[\w/:=.,@%+-]+$/.test(value))
-    return value
-  return `'${value.replaceAll(/'/g, String.raw`'\''`)}'`
-}
-
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+function parseProvisioningTarget(value: unknown): ParsedProvisioningTarget | null {
+  if (!value || typeof value !== 'object')
+    return null
+  const record = value as Record<string, unknown>
+  if (record.adapterType !== 'aissh' && record.adapterType !== 'docker' && record.adapterType !== 'local')
+    return null
+  if (record.maturity !== 'production' && record.maturity !== 'preview' && record.maturity !== 'dev')
+    return null
+  if (typeof record.ref !== 'string' || record.ref.trim().length === 0)
+    return null
+  return {
+    adapterType: record.adapterType,
+    maturity: record.maturity,
+    ref: record.ref,
+  }
+}
+
+function readAssignmentMetadata(value: unknown): {
+  provisioningAdapterType?: ProvisioningAdapterType
+  provisioningTargetMaturity?: ProvisioningTargetMaturity
+  provisioningTargetRef?: string
+} {
+  if (!value || typeof value !== 'object')
+    return {}
+
+  const record = value as Record<string, unknown>
+  return {
+    ...(record.provisioningAdapterType === 'aissh' || record.provisioningAdapterType === 'docker' || record.provisioningAdapterType === 'local'
+      ? { provisioningAdapterType: record.provisioningAdapterType }
+      : {}),
+    ...(record.provisioningTargetMaturity === 'production' || record.provisioningTargetMaturity === 'preview' || record.provisioningTargetMaturity === 'dev'
+      ? { provisioningTargetMaturity: record.provisioningTargetMaturity }
+      : {}),
+    ...(typeof record.provisioningTargetRef === 'string' && record.provisioningTargetRef.trim().length > 0
+      ? { provisioningTargetRef: record.provisioningTargetRef }
+      : {}),
+  }
+}
+
+function isProvisioningTargetUnreachable(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('Remote aissh target cannot use a loopback Host callback URL')
 }
 
 function isEmail(value: string): boolean {

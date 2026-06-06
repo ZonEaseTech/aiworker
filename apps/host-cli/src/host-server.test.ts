@@ -33,6 +33,21 @@ describe('host server', () => {
     return join(dir, 'host.db')
   }
 
+  function hostUrls(hostControlBaseUrl = 'https://aiworker.zonease.org') {
+    return {
+      hostBrowserBaseUrl: 'http://127.0.0.1:5050',
+      hostControlBaseUrl,
+    }
+  }
+
+  function localProvisioningTarget(ref = 'local://default') {
+    return {
+      adapterType: 'local' as const,
+      maturity: 'dev' as const,
+      ref,
+    }
+  }
+
   function createHostWebDist() {
     const webStaticDir = join(dir, 'host-web-dist')
     mkdirSync(join(webStaticDir, 'assets'), { recursive: true })
@@ -71,13 +86,13 @@ describe('host server', () => {
     await createHostServer({
       authUser: adminUser,
       dbPath: path,
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
 
     await expect(createHostServer({
       authUser: bobUser,
       dbPath: path,
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })).resolves.toBeDefined()
   })
 
@@ -85,13 +100,13 @@ describe('host server', () => {
     await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
 
     await expect(createHostServer({
       authUser: bobUser,
       dbPath: join(dir, 'other-host.db'),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })).rejects.toThrow('different Host dbPath')
   })
 
@@ -99,21 +114,22 @@ describe('host server', () => {
     const server = await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
 
     const created = await json(await server.fetch(new Request('http://host/api/host/assignments', {
       body: JSON.stringify({
         assignedEmail: 'Bob@Example.com',
-        serverRef: 'host-main',
+        provisioningTarget: localProvisioningTarget(),
         soulReleaseRef: 'soul_release_1',
       }),
       method: 'POST',
     })))
 
     expect(created.provisionToken).toStartWith('awp_')
-    expect(created.provisionCommand).toBe(`bun apps/worker-cli/src/aiworker.ts provision --host https://aiworker.zonease.org --token ${created.provisionToken}`)
+    expect(created.provisionCommand).toBe('bun apps/worker-cli/src/aiworker.ts provision --host https://aiworker.zonease.org --token \'awp_[REDACTED]\'')
     expect(created.assignment.assignedEmail).toBe('bob@example.com')
+    expect(created.assignment.provisioningTargetRef).toBe('local://default')
     expect(created.assignment.provisionTokenHash).toBeUndefined()
 
     const listed = await json(await server.fetch(new Request('http://host/api/host/assignments')))
@@ -124,39 +140,100 @@ describe('host server', () => {
     expect(JSON.stringify(listed)).not.toContain('provisionCommand')
   })
 
+  it('creates assignment through provisioning target and URL contract', async () => {
+    const server = await createHostServer({
+      authUser: { email: 'admin@zonease.org', roles: ['host:admin'], subject: 'usr_admin_zonease' },
+      dbPath: ':memory:',
+      hostBrowserBaseUrl: 'http://127.0.0.1:5050',
+      hostControlBaseUrl: 'http://127.0.0.1:9117',
+    })
+
+    const response = await server.fetch(new Request('http://host/api/host/assignments', {
+      body: JSON.stringify({
+        assignedEmail: 'bob@zonease.org',
+        provisioningTarget: {
+          adapterType: 'local',
+          maturity: 'dev',
+          ref: 'local://default',
+        },
+        soulReleaseRef: 'aiworker-freeform@dev',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(body.assignment.provisioningTargetRef).toBe('local://default')
+    expect(body.assignment.provisioningAdapterType).toBe('local')
+    expect(body.assignment.provisioningTargetMaturity).toBe('dev')
+    expect(body.provisionCommand).toContain('--host http://127.0.0.1:9117')
+    expect(body.deliveryReceipt.command).not.toContain(body.provisionToken)
+  })
+
+  it('rejects remote aissh assignment when callback URL is loopback', async () => {
+    const server = await createHostServer({
+      authUser: { email: 'admin@zonease.org', roles: ['host:admin'], subject: 'usr_admin_zonease' },
+      dbPath: ':memory:',
+      hostBrowserBaseUrl: 'http://127.0.0.1:5050',
+      hostControlBaseUrl: 'http://127.0.0.1:9117',
+    })
+
+    const response = await server.fetch(new Request('http://host/api/host/assignments', {
+      body: JSON.stringify({
+        adapterRuntimeControlBaseUrl: 'http://127.0.0.1:9117',
+        assignedEmail: 'bob@zonease.org',
+        provisioningTarget: {
+          adapterType: 'aissh',
+          maturity: 'production',
+          ref: 'srv-1',
+        },
+        soulReleaseRef: 'aiworker-freeform@dev',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: { code: 'PROVISIONING_TARGET_UNREACHABLE' } })
+
+    const listed = await json(await server.fetch(new Request('http://host/api/host/assignments')))
+    expect(listed.assignments).toHaveLength(0)
+  })
+
   it('quotes unsafe host values in one-time provision commands', async () => {
-    const publicBaseUrl = 'https://aiworker.zonease.org/host?next=a&debug=1'
+    const hostControlBaseUrl = 'https://aiworker.zonease.org/~host'
     const server = await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
-      publicBaseUrl,
+      ...hostUrls(hostControlBaseUrl),
     })
 
     const created = await json(await server.fetch(new Request('http://host/api/host/assignments', {
       body: JSON.stringify({
         assignedEmail: 'Bob@Example.com',
-        serverRef: 'host-main',
+        provisioningTarget: localProvisioningTarget(),
         soulReleaseRef: 'soul_release_1',
       }),
       method: 'POST',
     })))
 
     expect(created.provisionToken).toStartWith('awp_')
-    expect(created.provisionCommand).toBe(`bun apps/worker-cli/src/aiworker.ts provision --host '${publicBaseUrl}' --token ${created.provisionToken}`)
+    expect(created.provisionCommand).toBe(`bun apps/worker-cli/src/aiworker.ts provision --host '${hostControlBaseUrl}' --token 'awp_[REDACTED]'`)
   })
 
   it('blocks non-admin users from listing or creating assignments', async () => {
     const server = await createHostServer({
       authUser: bobUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
 
     const listResponse = await server.fetch(new Request('http://host/api/host/assignments'))
     const createResponse = await server.fetch(new Request('http://host/api/host/assignments', {
       body: JSON.stringify({
         assignedEmail: 'bob@example.com',
-        serverRef: 'host-main',
+        provisioningTarget: localProvisioningTarget(),
         soulReleaseRef: 'soul_release_1',
       }),
       method: 'POST',
@@ -175,7 +252,7 @@ describe('host server', () => {
       },
       authUser: null,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
 
     const forbidden = await server.fetch(new Request('http://host/api/host/assignments'))
@@ -191,7 +268,8 @@ describe('host server', () => {
     const server = await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'http://127.0.0.1:9117',
+      hostBrowserBaseUrl: 'http://127.0.0.1:5050',
+      hostControlBaseUrl: 'http://127.0.0.1:9117',
       webBaseUrl: 'http://127.0.0.1:5050',
     })
 
@@ -211,10 +289,18 @@ describe('host server', () => {
       optionsProvider: async () => ({
         access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
         auth: { mode: 'dev-static', status: 'deferred-logto' },
-        servers: [{ id: 'srv-1', name: 'aiwork', source: 'aissh' }],
+        provisioningTargets: [{
+          adapterType: 'aissh',
+          capabilities: ['remote-delivery'],
+          displayName: 'aiwork',
+          health: 'ready',
+          id: 'aissh:srv-1',
+          maturity: 'production',
+          ref: 'srv-1',
+        }],
         soulReleases: [],
       }),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
       webStaticDir: createHostWebDist(),
     })
 
@@ -236,7 +322,7 @@ describe('host server', () => {
     const optionsResponse = await server.fetch(new Request('http://host/api/host/options'))
     const optionsBody = await json(optionsResponse)
     expect(optionsResponse.status).toBe(200)
-    expect(optionsBody.servers[0].id).toBe('srv-1')
+    expect(optionsBody.provisioningTargets[0].id).toBe('aissh:srv-1')
   })
 
   it('does not serve files outside the Host Web static directory', async () => {
@@ -245,7 +331,7 @@ describe('host server', () => {
     const server = await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
       webStaticDir: createHostWebDist(),
     })
 
@@ -263,7 +349,15 @@ describe('host server', () => {
       optionsProvider: async () => ({
         access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
         auth: { mode: 'dev-static', status: 'deferred-logto' },
-        servers: [{ id: 'srv-1', name: 'aiwork', source: 'aissh' }],
+        provisioningTargets: [{
+          adapterType: 'aissh',
+          capabilities: ['remote-delivery'],
+          displayName: 'aiwork',
+          health: 'ready',
+          id: 'aissh:srv-1',
+          maturity: 'production',
+          ref: 'srv-1',
+        }],
         soulReleases: [{
           descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
           id: 'aiworker-freeform',
@@ -272,14 +366,14 @@ describe('host server', () => {
           source: 'official',
         }],
       }),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
 
     const response = await server.fetch(new Request('http://host/api/host/options'))
     const body = await json(response)
 
     expect(response.status).toBe(200)
-    expect(body.servers[0].id).toBe('srv-1')
+    expect(body.provisioningTargets[0].id).toBe('aissh:srv-1')
     expect(body.soulReleases[0].releaseRef).toBe('aiworker-freeform@dev')
     expect(JSON.stringify(body)).not.toContain('token')
     expect(JSON.stringify(body)).not.toContain('secret')
@@ -289,13 +383,13 @@ describe('host server', () => {
     const server = await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
 
     const response = await server.fetch(new Request('http://host/api/host/assignments', {
       body: JSON.stringify({
         assignedEmail: 'not-an-email',
-        serverRef: 'host-main',
+        provisioningTarget: localProvisioningTarget(),
         soulReleaseRef: 'soul_release_1',
       }),
       method: 'POST',
@@ -308,33 +402,38 @@ describe('host server', () => {
     const server = await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls('https://aiworker.zonease.org'),
     })
 
     const created = await json(await server.fetch(new Request('http://host/api/host/assignments', {
       body: JSON.stringify({
+        adapterRuntimeControlBaseUrl: 'https://aiworker.zonease.org',
         assignedEmail: 'bob@example.com',
-        serverRef: 'srv-1',
+        provisioningTarget: {
+          adapterType: 'aissh',
+          maturity: 'production',
+          ref: 'srv-1',
+        },
         soulReleaseRef: 'aiworker-freeform@dev',
       }),
       method: 'POST',
     })))
 
-    expect(created.aisshCommand).toContain('aissh exec srv-1')
-    expect(created.aisshCommand).toContain(created.provisionToken)
-    expect(created.aisshCommand).toContain('--reason=')
+    expect(created.deliveryReceipt.command).toContain('aissh exec srv-1')
+    expect(created.deliveryReceipt.command).not.toContain(created.provisionToken)
+    expect(created.deliveryReceipt.command).toContain('--reason=')
   })
 
   it('consumes a provision token exactly once and returns a worker_access receipt', async () => {
     const server = await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
     const created = await json(await server.fetch(new Request('http://host/api/host/assignments', {
       body: JSON.stringify({
         assignedEmail: 'bob@example.com',
-        serverRef: 'host-main',
+        provisioningTarget: localProvisioningTarget(),
         soulReleaseRef: 'soul_release_1',
       }),
       method: 'POST',
@@ -368,12 +467,12 @@ describe('host server', () => {
     const adminServer = await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
     const created = await json(await adminServer.fetch(new Request('http://host/api/host/assignments', {
       body: JSON.stringify({
         assignedEmail: 'bob@example.com',
-        serverRef: 'host-main',
+        provisioningTarget: localProvisioningTarget(),
         soulReleaseRef: 'soul_release_1',
       }),
       method: 'POST',
@@ -386,7 +485,7 @@ describe('host server', () => {
     const employeeServer = await createHostServer({
       authUser: bobUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
     const response = await employeeServer.fetch(new Request('http://host/workers/wkr_82'))
 
@@ -398,7 +497,7 @@ describe('host server', () => {
     const server = await createHostServer({
       authUser: aliceUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
     const created = createAssignment({
       assignedEmail: 'bob@example.com',
@@ -424,7 +523,7 @@ describe('host server', () => {
     const server = await createHostServer({
       authUser: bobUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
     const created = createAssignment({
       assignedEmail: 'bob@example.com',
@@ -453,7 +552,7 @@ describe('host server', () => {
       accessRegistry,
       authUser: bobUser,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
     const created = createAssignment({
       assignedEmail: 'bob@example.com',
@@ -484,7 +583,7 @@ describe('host server', () => {
     const server = await createHostServer({
       authUser: null,
       dbPath: dbPath(),
-      publicBaseUrl: 'https://aiworker.zonease.org',
+      ...hostUrls(),
     })
 
     const response = await server.fetch(new Request('http://host/api/provision/access'))

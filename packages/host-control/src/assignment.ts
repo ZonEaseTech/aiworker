@@ -1,8 +1,13 @@
 export type AssignmentStatus = 'draft' | 'provisioning' | 'checked_in' | 'access_ready' | 'ready' | 'needs_attention' | 'revoked' | 'archived'
+export type ProvisioningAdapterType = 'aissh' | 'docker' | 'local'
+export type ProvisioningTargetMaturity = 'production' | 'preview' | 'dev'
 
 export interface AssignmentView {
   assignedEmail: string
   assignmentId: string
+  provisioningAdapterType?: ProvisioningAdapterType
+  provisioningTargetMaturity?: ProvisioningTargetMaturity
+  provisioningTargetRef?: string
   serverRef: string
   soulReleaseRef: string
   status: AssignmentStatus
@@ -31,7 +36,11 @@ export function normalizeAssignedEmail(email: string): string {
 }
 
 export function createAssignmentView(input: AssignmentView): AssignmentView {
-  return { ...input, assignedEmail: normalizeAssignedEmail(input.assignedEmail) }
+  return {
+    ...input,
+    assignedEmail: normalizeAssignedEmail(input.assignedEmail),
+    provisioningTargetRef: input.provisioningTargetRef ?? input.serverRef,
+  }
 }
 
 export function canAdvanceAssignment(from: AssignmentStatus, to: AssignmentStatus): boolean {
