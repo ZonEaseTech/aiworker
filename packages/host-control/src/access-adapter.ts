@@ -7,7 +7,9 @@ import {
 } from '@zonease/aiworker-worker-control-protocol'
 
 export interface WorkerAccessConnection {
+  assignmentId: string
   close: () => void
+  sendRequest: (envelope: WorkerAccessRequestEnvelope) => Promise<WorkerAccessResponseEnvelope>
   workerId: string
 }
 
@@ -16,6 +18,7 @@ export interface WorkerAccessRegistry {
   has: (workerId: string) => boolean
   register: (connection: WorkerAccessConnection) => void
   remove: (workerId: string) => void
+  sendRequest: (workerId: string, envelope: WorkerAccessRequestEnvelope) => Promise<WorkerAccessResponseEnvelope | null>
 }
 
 export function createWorkerAccessRegistry(): WorkerAccessRegistry {
@@ -35,7 +38,21 @@ export function createWorkerAccessRegistry(): WorkerAccessRegistry {
       connections.get(workerId)?.close()
       connections.delete(workerId)
     },
+    async sendRequest(workerId, envelope) {
+      return connections.get(workerId)?.sendRequest(envelope) ?? null
+    },
   }
+}
+
+export function mapWorkerAccessPath(hostPathWithSearch: string, workerId: string): string {
+  const url = new URL(hostPathWithSearch, 'https://host.invalid')
+  const prefix = `/workers/${encodeURIComponent(workerId)}`
+  if (url.pathname !== prefix && !url.pathname.startsWith(`${prefix}/`))
+    throw new Error('worker path mismatch')
+  const localPath = url.pathname.slice(prefix.length) || '/'
+  if (!localPath.startsWith('/') || localPath.startsWith('//') || localPath.includes('/../') || localPath.endsWith('/..'))
+    throw new Error('invalid worker access path')
+  return `${localPath}${url.search}`
 }
 
 export function sanitizeForwardHeaders(source: Headers): Headers {

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   createAccessRequestEnvelope,
   createWorkerAccessRegistry,
+  mapWorkerAccessPath,
   parseAccessResponseEnvelope,
   sanitizeForwardHeaders,
 } from './access-adapter'
@@ -11,7 +12,14 @@ describe('host-control access adapter boundary', () => {
   test('registers and removes access connections', () => {
     const registry = createWorkerAccessRegistry()
     let closed = 0
-    const connection = { close() { closed += 1 }, workerId: 'worker-1' }
+    const connection = {
+      assignmentId: 'asn_1',
+      close() { closed += 1 },
+      async sendRequest() {
+        throw new Error('unexpected connection request')
+      },
+      workerId: 'worker-1',
+    }
 
     registry.register(connection)
 
@@ -28,14 +36,62 @@ describe('host-control access adapter boundary', () => {
   test('closes the previous connection when registering a duplicate worker id', () => {
     const registry = createWorkerAccessRegistry()
     let closed = 0
-    const oldConnection = { close() { closed += 1 }, workerId: 'worker-1' }
-    const nextConnection = { close() {}, workerId: 'worker-1' }
+    const oldConnection = {
+      assignmentId: 'asn_old',
+      close() { closed += 1 },
+      async sendRequest() {
+        throw new Error('unexpected old connection request')
+      },
+      workerId: 'worker-1',
+    }
+    const nextConnection = {
+      assignmentId: 'asn_next',
+      close() {},
+      async sendRequest() {
+        throw new Error('unexpected next connection request')
+      },
+      workerId: 'worker-1',
+    }
 
     registry.register(oldConnection)
     registry.register(nextConnection)
 
     expect(closed).toBe(1)
     expect(registry.get('worker-1')).toBe(nextConnection)
+  })
+
+  test('maps Host worker paths to Worker-local paths without exposing localhost', () => {
+    expect(mapWorkerAccessPath('/workers/wkr_82', 'wkr_82')).toBe('/')
+    expect(mapWorkerAccessPath('/workers/wkr_82/', 'wkr_82')).toBe('/')
+    expect(mapWorkerAccessPath('/workers/wkr_82/assets/app.js?x=1', 'wkr_82')).toBe('/assets/app.js?x=1')
+    expect(() => mapWorkerAccessPath('/workers/wkr_other/assets/app.js', 'wkr_82')).toThrow('worker path mismatch')
+    expect(() => mapWorkerAccessPath('/workers/wkr_82//evil.com', 'wkr_82')).toThrow('invalid worker access path')
+  })
+
+  test('registered tunnel connection resolves matching request responses', async () => {
+    const registry = createWorkerAccessRegistry()
+    registry.register({
+      assignmentId: 'asn_1',
+      close() {},
+      sendRequest: async envelope => ({
+        type: 'response',
+        id: envelope.id,
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+        bodyText: `ok:${envelope.path}`,
+      }),
+      workerId: 'wkr_82',
+    })
+
+    const response = await registry.sendRequest('wkr_82', {
+      type: 'request',
+      id: 'req_test',
+      method: 'GET',
+      path: '/',
+      headers: {},
+      bodyText: '',
+    })
+    expect(response?.bodyText).toBe('ok:/')
   })
 
   test('removes credential headers while preserving routing headers', () => {
