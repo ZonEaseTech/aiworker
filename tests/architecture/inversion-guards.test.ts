@@ -239,7 +239,7 @@ test('G5 phase-2 access: Worker may initiate only provisioning check-in and acce
   }
 })
 
-test('G7 phase-2 managed access does not make Worker runtime depend on Host', () => {
+test('G8 phase-2 managed access does not make Worker runtime depend on Host', () => {
   const architecture = read('docs/architecture.md')
   const protocol = read('docs/protocol.md')
   const runtime = read('docs/runtime.md')

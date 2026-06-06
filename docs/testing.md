@@ -183,7 +183,7 @@ Coverage status values:
 | --- | --- | --- | --- |
 | Worker autonomy / Host control plane | `docs/architecture.md`, `AGENTS.md` | `bun run docs:check`, `bun run test:contracts` | docs+tests |
 | Phase 2 Soul distribution MVP | `docs/architecture.md`, `docs/protocol.md`, `docs/runtime.md` | docs check, host-control assignment tests, future Phase 2 journey proof | docs+tests |
-| Phase 2.1 Worker Access Tunnel | `docs/architecture.md`, `docs/protocol.md`, `docs/runtime.md` | `inversion-guards`, host tunnel tests, worker tunnel tests, browser phase2 proof | docs+tests |
+| Phase 2.1 Worker Access Tunnel | `docs/architecture.md`, `docs/protocol.md`, `docs/runtime.md` | canonical wording + `inversion-guards` baseline; host/worker tunnel tests and browser proof added by later implementation tasks | docs+tests baseline |
 | Descriptor-only Host/Soul boundary | `docs/protocol.md`, `docs/soul-authoring.md` | `packages/soul-descriptor` tests, architecture tests | docs+tests |
 | Worker-owned workbench | `docs/architecture.md`, `docs/runtime.md` | browser Freeform proof, refactor-contract tests | docs+tests |
 | Session lifecycle and invocation state split | `docs/runtime.md` | architecture tests and engine bridge tests | docs+tests |
