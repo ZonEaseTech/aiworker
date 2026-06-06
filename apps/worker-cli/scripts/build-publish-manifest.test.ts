@@ -1,11 +1,11 @@
 import { mkdirSync } from 'node:fs'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { copyDir, copyOfficialApp, shouldSkipOfficialAppResource } from './build-publish-manifest'
+import { copyDir, copyOfficialApp, copyOfficialApps, shouldSkipOfficialAppResource } from './build-publish-manifest'
 
 describe('CLI publish manifest builder', () => {
   let root: string
@@ -71,5 +71,39 @@ describe('CLI publish manifest builder', () => {
     await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'engine-assets', 'workspace', 'AGENTS.md'))).resolves.toBeTruthy()
     await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'engine-assets', 'workspace', 'AGENTS.test.ts'))).rejects.toThrow()
     await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'host-adapter', 'legacy.js'))).rejects.toThrow()
+  })
+
+  it('builds official Soul dist before copying official apps into the publish manifest', async () => {
+    const soulsRoot = path.join(root, 'souls')
+    const officialAppsRoot = path.join(root, 'dist', 'official-apps')
+    const appRoot = path.join(soulsRoot, 'aiworker-demo')
+    const calls: string[] = []
+
+    await mkdir(path.join(appRoot, 'engine', 'workspace'), { recursive: true })
+
+    await copyOfficialApps({
+      appIds: ['aiworker-demo'],
+      ensureOfficialSoulDists: async () => {
+        calls.push('ensure')
+        mkdirSync(path.join(appRoot, 'dist', 'engine-assets', 'workspace'), { recursive: true })
+        await writeFile(path.join(appRoot, 'dist', 'soul.descriptor.json'), JSON.stringify({
+          engine: {
+            workspaceAssets: { source: 'dist/engine-assets/workspace' },
+          },
+          identity: {
+            id: 'aiworker-demo',
+            name: 'Demo',
+          },
+          protocol: 'soul/v1',
+        }))
+        await writeFile(path.join(appRoot, 'dist', 'engine-assets', 'workspace', 'AGENTS.md'), '# Demo\n')
+      },
+      officialAppsRoot,
+      soulsRoot,
+    })
+
+    expect(calls).toEqual(['ensure'])
+    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'soul.descriptor.json'))).resolves.toBeTruthy()
+    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'engine-assets', 'workspace', 'AGENTS.md'))).resolves.toBeTruthy()
   })
 })

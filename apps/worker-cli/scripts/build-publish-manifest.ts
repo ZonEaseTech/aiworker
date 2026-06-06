@@ -3,6 +3,8 @@ import { resolve } from 'node:path'
 
 import { OFFICIAL_SOUL_APPS } from '@zonease/aiworker-worker-runtime'
 
+import { ensureOfficialSoulDists as ensureOfficialSoulDistsFromSource } from '../../../scripts/official-soul-dist'
+
 const cliDir = resolve(import.meta.dirname, '..')
 const repoRoot = resolve(cliDir, '..', '..')
 const distDir = resolve(cliDir, 'dist')
@@ -12,6 +14,13 @@ const binShimDst = resolve(distDir, 'aiworker.js')
 const officialApps = OFFICIAL_SOUL_APPS.map(app => app.id)
 const officialAppsDst = resolve(distDir, 'official-apps')
 const publishedDescriptor = 'dist/soul.descriptor.json'
+
+export interface CopyOfficialAppsOptions {
+  appIds?: readonly string[]
+  ensureOfficialSoulDists?: () => Promise<unknown>
+  officialAppsRoot?: string
+  soulsRoot?: string
+}
 
 export async function buildPublishManifest(): Promise<void> {
   const pkg = JSON.parse(await readFile(resolve(cliDir, 'package.json'), 'utf8'))
@@ -64,9 +73,21 @@ export async function buildPublishManifest(): Promise<void> {
 
   // 把官方维护的 Soul descriptor 发布资源拷到 dist/official-apps/，让 npm-installed
   // CLI 能通过 descriptor registry 安装/启用它们，无需访问源码仓库路径。
-  await rm(officialAppsDst, { recursive: true, force: true })
-  for (const appId of officialApps)
-    await copyOfficialApp(appId)
+  await copyOfficialApps()
+}
+
+export async function copyOfficialApps(options: CopyOfficialAppsOptions = {}): Promise<void> {
+  const appIds = options.appIds ?? officialApps
+  const destinationRoot = options.officialAppsRoot ?? officialAppsDst
+
+  await (options.ensureOfficialSoulDists ?? (() => ensureOfficialSoulDistsFromSource({ repoRoot })))()
+  await rm(destinationRoot, { recursive: true, force: true })
+  for (const appId of appIds) {
+    await copyOfficialApp(appId, {
+      officialAppsRoot: destinationRoot,
+      soulsRoot: options.soulsRoot,
+    })
+  }
 }
 
 export async function copyDir(src: string, dst: string, options: { skip?: (entryName: string, srcPath: string) => boolean } = {}): Promise<void> {
