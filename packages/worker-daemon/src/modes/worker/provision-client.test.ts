@@ -4,6 +4,7 @@ import {
   buildAccessHello,
   buildCheckInBody,
   checkInToHost,
+  connectWorkerAccessTunnel,
   handleAccessRequestEnvelope,
   maybeProvisionCheckIn,
 } from './provision-client'
@@ -147,7 +148,7 @@ describe('worker provision check-in client', () => {
     process.env.AIWORKER_PROVISION_TOKEN = 'awp_secret'
     const calls: unknown[] = []
 
-    await maybeProvisionCheckIn({
+    const receipt = await maybeProvisionCheckIn({
       activeResolution: {
         kind: 'single',
         worker: {
@@ -171,6 +172,7 @@ describe('worker provision check-in client', () => {
       runtimeVersion: '1.2.3',
     })
 
+    expect(receipt?.access.token).toBe('awt_token')
     expect(calls).toEqual([{
       host: 'https://host.example',
       id: 'aiworker-freeform',
@@ -186,7 +188,7 @@ describe('worker provision check-in client', () => {
     delete process.env.AIWORKER_PROVISION_TOKEN
     const calls: unknown[] = []
 
-    await maybeProvisionCheckIn({
+    const receipt = await maybeProvisionCheckIn({
       activeResolution: {
         kind: 'single',
         worker: {
@@ -210,7 +212,97 @@ describe('worker provision check-in client', () => {
       runtimeVersion: '1.2.3',
     })
 
+    expect(receipt).toBeNull()
     expect(calls).toEqual([])
+  })
+
+  it('does not require or read a worker access local url env', async () => {
+    const env = {
+      AIWORKER_HOST_URL: 'https://host.example',
+      AIWORKER_PROVISION_TOKEN: 'awp_secret',
+      AIWORKER_WORKER_ACCESS_LOCAL_URL: 'http://wrong.example',
+    }
+    const sent: unknown[] = []
+    const urls: string[] = []
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: {
+        assignedEmail: 'bob@example.com',
+        assignmentId: 'asn_1',
+        soulReleaseRef: 'soul_1',
+        workerId: 'wkr_82',
+      },
+      createWebSocket: (url) => {
+        urls.push(url.toString())
+        return fakeWebSocket(url, sent)
+      },
+      env,
+      localFetch: async request => new Response(`local:${new URL(request.url).pathname}`),
+    })
+
+    expect(urls).toEqual(['wss://host.example/api/provision/access'])
+    expect(sent[0]).toEqual({
+      type: 'hello',
+      assignmentId: 'asn_1',
+      token: 'awt_secret',
+      workerId: 'wkr_82',
+    })
+  })
+
+  it('forwards tunnel request frames to the injected local runtime handler', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('wss://host.example/api/provision/access'), sent)
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: {
+        assignedEmail: 'bob@example.com',
+        assignmentId: 'asn_1',
+        soulReleaseRef: 'soul_1',
+        workerId: 'wkr_82',
+      },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'https://host.example' },
+      localFetch: async request => new Response(`ok:${new URL(request.url).pathname}`, { status: 201 }),
+    })
+
+    await socket.dispatchMessage({
+      type: 'request',
+      id: 'req_1',
+      method: 'GET',
+      path: '/api/info',
+      headers: {},
+      bodyText: '',
+    })
+
+    expect(sent.at(-1)).toEqual({
+      type: 'response',
+      id: 'req_1',
+      status: 201,
+      headers: {},
+      bodyText: 'ok:/api/info',
+    })
+  })
+
+  it('responds to tunnel ping frames', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sent)
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: {
+        assignedEmail: 'bob@example.com',
+        assignmentId: 'asn_1',
+        soulReleaseRef: 'soul_1',
+        workerId: 'wkr_82',
+      },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+    })
+
+    await socket.dispatchMessage({ type: 'ping', id: 'ping_1' })
+
+    expect(sent.at(-1)).toEqual({ type: 'pong', id: 'ping_1' })
   })
 
   it('forwards a worker access GET envelope to the local workbench and returns a response envelope', async () => {
@@ -225,26 +317,25 @@ describe('worker provision check-in client', () => {
         headers: { accept: 'text/html' },
         bodyText: 'must-not-forward',
       },
-      fetch: async (url, init) => {
+      localFetch: async (request) => {
         calls.push({
-          body: init?.body,
-          headers: init?.headers,
-          method: init?.method ?? 'GET',
-          url: String(url),
+          body: await request.text(),
+          headers: Object.fromEntries(request.headers.entries()),
+          method: request.method,
+          url: request.url,
         })
         return new Response('<main>worker</main>', {
           headers: { 'content-type': 'text/html' },
           status: 202,
         })
       },
-      localBaseUrl: 'http://127.0.0.1:9217',
     })
 
     expect(calls).toEqual([{
-      body: undefined,
+      body: '',
       headers: { accept: 'text/html' },
       method: 'GET',
-      url: 'http://127.0.0.1:9217/workers/wkr_82',
+      url: 'http://aiworker.local/workers/wkr_82',
     }])
     expect(response).toEqual({
       type: 'response',
@@ -267,23 +358,22 @@ describe('worker provision check-in client', () => {
         headers: { 'content-type': 'application/json' },
         bodyText: '{"text":"hello"}',
       },
-      fetch: async (url, init) => {
+      localFetch: async (request) => {
         calls.push({
-          body: init?.body,
-          headers: init?.headers,
-          method: init?.method ?? 'GET',
-          url: String(url),
+          body: await request.text(),
+          headers: Object.fromEntries(request.headers.entries()),
+          method: request.method,
+          url: request.url,
         })
         return Response.json({ ok: true })
       },
-      localBaseUrl: 'http://127.0.0.1:9217',
     })
 
     expect(calls).toEqual([{
       body: '{"text":"hello"}',
       headers: { 'content-type': 'application/json' },
       method: 'POST',
-      url: 'http://127.0.0.1:9217/workers/wkr_82/api/messages',
+      url: 'http://aiworker.local/workers/wkr_82/api/messages',
     }])
   })
 
@@ -300,14 +390,34 @@ describe('worker provision check-in client', () => {
           headers: {},
           bodyText: '',
         },
-        fetch: async () => {
+        localFetch: async () => {
           calls += 1
           return Response.json({ ok: true })
         },
-        localBaseUrl: 'http://127.0.0.1:9217',
       })).rejects.toThrow('invalid worker access path')
     }
 
     expect(calls).toBe(0)
   })
 })
+
+function fakeWebSocket(url: URL, sent: unknown[]) {
+  let onmessage: ((event: { data: string }) => Promise<void> | void) | null = null
+  return {
+    async dispatchMessage(frame: unknown) {
+      await onmessage?.({ data: JSON.stringify(frame) })
+    },
+    send(value: string) {
+      sent.push(JSON.parse(value))
+    },
+    set onmessage(handler: ((event: { data: string }) => Promise<void> | void) | null) {
+      onmessage = handler
+    },
+    get onmessage() {
+      return onmessage
+    },
+    get url() {
+      return url.toString()
+    },
+  }
+}

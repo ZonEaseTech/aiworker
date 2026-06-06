@@ -61,7 +61,7 @@ import { streamSSE } from 'hono/streaming'
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
 import { registerLocalOpenApiPaths } from './worker/openapi'
-import { checkInToHost, maybeProvisionCheckIn } from './worker/provision-client'
+import { checkInToHost, connectWorkerAccessTunnel, maybeProvisionCheckIn, type WorkerAccessTunnelHandle } from './worker/provision-client'
 import {
   createBrokerEngineInvocationBodySchema,
   createBrokerSessionBodySchema,
@@ -101,6 +101,7 @@ export interface BootstrapWorkerAppOptions {
   sessionAutoName?: boolean
   now?: () => string
   provisionCheckIn?: typeof checkInToHost
+  connectWorkerAccessTunnel?: typeof connectWorkerAccessTunnel
 }
 
 export interface LocalDaemonState {
@@ -134,6 +135,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const runtimeVersion = options.runtimeVersion ?? DEFAULT_RUNTIME_VERSION
   const workersRoot = options.workersRoot ?? path.dirname(dbPath)
   const runtimes = new Map<string, LocalWorkerRuntime>()
+  const workerAccessTunnels = new Set<WorkerAccessTunnelHandle>()
   // 安装引擎扫描器(默认 = 真实 scanLocalEngines),必须早于任何 settings 加载
   // (bootstrapOfficialSoulApps / runtime.init / 后续请求路径)。
   setEngineScanner(options.engineScanner ?? null)
@@ -162,6 +164,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     workersRoot,
     now: options.now,
     shutdown: () => {
+      for (const tunnel of workerAccessTunnels)
+        tunnel.close()
+      workerAccessTunnels.clear()
       for (const runtime of runtimes.values())
         runtime.dispose()
       runtimes.clear()
@@ -185,12 +190,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const runtime = state.host.createRuntimeForWorker(activeResolution.worker)
     await runtime.init()
     runtimes.set(activeResolution.worker.id, runtime)
-    await maybeProvisionCheckIn({
-      activeResolution,
-      checkIn: options.provisionCheckIn,
-      env: process.env,
-      runtimeVersion: state.runtimeVersion,
-    })
   }
 
   const app = new OpenAPIHono()
@@ -712,6 +711,25 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/assets/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `assets/${c.req.param('path')}`))
   app.get('/fonts/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `fonts/${c.req.param('path')}`))
   app.get('/engine-icons/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `engine-icons/${c.req.param('path')}`))
+
+  if (activeResolution.kind === 'single') {
+    const checkIn = await maybeProvisionCheckIn({
+      activeResolution,
+      checkIn: options.provisionCheckIn,
+      env: process.env,
+      runtimeVersion: state.runtimeVersion,
+    })
+    if (checkIn) {
+      const tunnel = await (options.connectWorkerAccessTunnel ?? connectWorkerAccessTunnel)({
+        access: checkIn.access,
+        assignment: checkIn.assignment,
+        env: process.env,
+        localFetch: async request => app.fetch(request),
+      })
+      if (tunnel)
+        workerAccessTunnels.add(tunnel)
+    }
+  }
 
   return { app, port: workerEnv.PORT, state }
 }

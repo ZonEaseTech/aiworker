@@ -1,4 +1,5 @@
 import {
+  parseWorkerAccessFrame,
   parseWorkerCheckInResponse,
   type WorkerAccessHello,
   type WorkerAccessRequestEnvelope,
@@ -8,7 +9,17 @@ import {
 } from '@zonease/aiworker-worker-control-protocol'
 
 export type CheckInFetch = (url: URL, init: RequestInit) => Promise<Response>
-export type AccessForwardFetch = (url: URL, init: RequestInit) => Promise<Response>
+export type WorkerAccessLocalFetch = (request: Request) => Promise<Response>
+export type WorkerAccessWebSocket = Pick<WebSocket, 'send'> & {
+  close?: () => void
+  onmessage: ((event: { data: string }) => Promise<void> | void) | null
+  onopen?: (() => void) | null
+  readyState?: number
+}
+
+export interface WorkerAccessTunnelHandle {
+  close: () => void
+}
 
 export interface BuildCheckInInput {
   id: string
@@ -41,8 +52,15 @@ export interface MaybeProvisionCheckInInput {
 
 export interface HandleAccessRequestEnvelopeInput {
   envelope: WorkerAccessRequestEnvelope
-  fetch?: AccessForwardFetch
-  localBaseUrl: string
+  localFetch: WorkerAccessLocalFetch
+}
+
+export interface ConnectWorkerAccessTunnelInput {
+  access: WorkerCheckInResponse['access']
+  assignment: WorkerCheckInResponse['assignment']
+  createWebSocket?: (url: URL) => WorkerAccessWebSocket
+  env: Record<string, string | undefined>
+  localFetch: WorkerAccessLocalFetch
 }
 
 export function buildCheckInBody(input: BuildCheckInInput): WorkerCheckInRequest {
@@ -78,14 +96,14 @@ export async function checkInToHost(input: CheckInInput): Promise<WorkerCheckInR
   return parseWorkerCheckInResponse(await res.json())
 }
 
-export async function maybeProvisionCheckIn(input: MaybeProvisionCheckInInput): Promise<void> {
+export async function maybeProvisionCheckIn(input: MaybeProvisionCheckInInput): Promise<WorkerCheckInResponse | null> {
   if (input.activeResolution.kind !== 'single' || !('worker' in input.activeResolution))
-    return
+    return null
   const host = input.env.AIWORKER_HOST_URL
   const provisionToken = input.env.AIWORKER_PROVISION_TOKEN
   if (!host || !provisionToken)
-    return
-  await (input.checkIn ?? checkInToHost)({
+    return null
+  return await (input.checkIn ?? checkInToHost)({
     host,
     id: input.activeResolution.worker.appId,
     provisionToken,
@@ -95,11 +113,64 @@ export async function maybeProvisionCheckIn(input: MaybeProvisionCheckInInput): 
   })
 }
 
+export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnelInput): Promise<WorkerAccessTunnelHandle | null> {
+  const host = input.env.AIWORKER_HOST_URL
+  if (!host || input.access.mode !== 'worker_access')
+    return null
+
+  const url = new URL('/api/provision/access', host)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  const socket = input.createWebSocket?.(url) ?? new WebSocket(url) as WorkerAccessWebSocket
+  socket.onmessage = async (event) => {
+    const frame = parseWorkerAccessFrame(JSON.parse(String(event.data)))
+    if (frame.type === 'request') {
+      try {
+        const response = await handleAccessRequestEnvelope({
+          envelope: frame,
+          localFetch: input.localFetch,
+        })
+        socket.send(JSON.stringify(response))
+      }
+      catch {
+        socket.send(JSON.stringify({
+          type: 'response',
+          id: frame.id,
+          status: 502,
+          headers: {},
+          bodyText: '',
+        }))
+      }
+      return
+    }
+
+    if (frame.type === 'ping')
+      socket.send(JSON.stringify({ type: 'pong', id: frame.id }))
+  }
+
+  const sendHello = () => {
+    socket.send(JSON.stringify({
+      type: 'hello',
+      assignmentId: input.assignment.assignmentId,
+      token: input.access.token,
+      workerId: input.assignment.workerId,
+    }))
+  }
+  if (typeof socket.readyState === 'number' && socket.readyState !== 1)
+    socket.onopen = sendHello
+  else
+    sendHello()
+
+  return {
+    close() {
+      socket.close?.()
+    },
+  }
+}
+
 export async function handleAccessRequestEnvelope(
   input: HandleAccessRequestEnvelopeInput,
 ): Promise<WorkerAccessResponseEnvelope> {
-  const doFetch = input.fetch ?? fetch
-  const url = resolveLocalAccessPath(input.localBaseUrl, input.envelope.path)
+  const url = resolveLocalAccessPath('http://aiworker.local', input.envelope.path)
   const init: RequestInit = {
     headers: input.envelope.headers,
     method: input.envelope.method,
@@ -107,7 +178,7 @@ export async function handleAccessRequestEnvelope(
   if (input.envelope.method !== 'GET' && input.envelope.method !== 'HEAD')
     init.body = input.envelope.bodyText
 
-  const response = await doFetch(url, init)
+  const response = await input.localFetch(new Request(url, init))
   return {
     type: 'response',
     id: input.envelope.id,

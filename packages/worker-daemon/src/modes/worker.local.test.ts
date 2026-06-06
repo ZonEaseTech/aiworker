@@ -1143,6 +1143,120 @@ describe('local daemon API', () => {
     await expect(bootstrapWorkerApp(bootOptions)).rejects.toThrow(/more than one active worker/i)
   })
 
+  it('keeps standalone Worker app bootable when Host provision env is absent', async () => {
+    const originalHostUrl = process.env.AIWORKER_HOST_URL
+    const originalProvisionToken = process.env.AIWORKER_PROVISION_TOKEN
+    delete process.env.AIWORKER_HOST_URL
+    delete process.env.AIWORKER_PROVISION_TOKEN
+    try {
+      const boot = await bootstrapWorkerApp({
+        dbPath: join(dir, 'standalone-worker.db'),
+        engineScanner: () => fakeEngineRows(),
+        executor: {
+          async invoke(input) {
+            input.onEvent?.({ kind: 'text', text: 'done' })
+            return { artifacts: [], summary: 'done' }
+          },
+        },
+        runtimeVersion: 'test',
+        workersRoot: join(dir, 'standalone-workers'),
+      })
+      bootedDaemons.push(boot.state)
+
+      const response = await boot.app.request('/health')
+
+      expect(response.status).toBe(200)
+    }
+    finally {
+      if (originalHostUrl == null)
+        delete process.env.AIWORKER_HOST_URL
+      else
+        process.env.AIWORKER_HOST_URL = originalHostUrl
+      if (originalProvisionToken == null)
+        delete process.env.AIWORKER_PROVISION_TOKEN
+      else
+        process.env.AIWORKER_PROVISION_TOKEN = originalProvisionToken
+    }
+  })
+
+  it('connects provisioned worker access tunnel through the local Worker app fetch handler', async () => {
+    const originalHostUrl = process.env.AIWORKER_HOST_URL
+    const originalProvisionToken = process.env.AIWORKER_PROVISION_TOKEN
+    const dbPath = join(dir, 'worker-access-tunnel.db')
+    const officialAppsRoot = join(dir, 'worker-access-tunnel-apps')
+    writePackagedFreeform(officialAppsRoot)
+    closeWorkerDb()
+    initWorkerDb(dbPath)
+    runWorkerMigrations()
+    upsertWorker({ id: 'wkr_82', appId: FREEFORM_APP_ID, name: 'Freeform', status: 'active' })
+    closeWorkerDb()
+
+    let localFetch: ((request: Request) => Promise<Response>) | null = null
+    let closed = 0
+    process.env.AIWORKER_HOST_URL = 'https://host.example'
+    process.env.AIWORKER_PROVISION_TOKEN = 'awp_secret'
+    try {
+      const boot = await bootstrapWorkerApp({
+        connectWorkerAccessTunnel: async (input) => {
+          expect(input.access).toEqual({ mode: 'worker_access', token: 'awt_secret' })
+          expect(input.assignment.workerId).toBe('wkr_82')
+          expect(input.env.AIWORKER_HOST_URL).toBe('https://host.example')
+          localFetch = input.localFetch
+          return {
+            close() {
+              closed += 1
+            },
+          }
+        },
+        dbPath,
+        engineScanner: () => fakeEngineRows(),
+        executor: {
+          async invoke(input) {
+            input.onEvent?.({ kind: 'text', text: 'done' })
+            return { artifacts: [], summary: 'done' }
+          },
+        },
+        officialAppsRoot,
+        provisionCheckIn: async (input) => {
+          expect(input.host).toBe('https://host.example')
+          expect(input.provisionToken).toBe('awp_secret')
+          expect(input.workerId).toBe('wkr_82')
+          return {
+            access: { mode: 'worker_access', token: 'awt_secret' },
+            assignment: {
+              assignedEmail: 'bob@example.com',
+              assignmentId: 'asn_1',
+              soulReleaseRef: 'soul_1',
+              workerId: 'wkr_82',
+            },
+          }
+        },
+        runtimeVersion: 'test',
+        workersRoot: join(dir, 'worker-access-tunnel-workers'),
+      })
+
+      expect(localFetch).toBeTruthy()
+      const response = await localFetch!(new Request('http://aiworker.local/api/info'))
+      const body = await response.json() as { runtimeVersion: string, workers: Array<{ id: string }> }
+      expect(response.status).toBe(200)
+      expect(body.runtimeVersion).toBe('test')
+      expect(body.workers.map(worker => worker.id)).toEqual(['wkr_82'])
+
+      boot.state.shutdown()
+      expect(closed).toBe(1)
+    }
+    finally {
+      if (originalHostUrl == null)
+        delete process.env.AIWORKER_HOST_URL
+      else
+        process.env.AIWORKER_HOST_URL = originalHostUrl
+      if (originalProvisionToken == null)
+        delete process.env.AIWORKER_PROVISION_TOKEN
+      else
+        process.env.AIWORKER_PROVISION_TOKEN = originalProvisionToken
+    }
+  })
+
   it('defaults the Worker home to the daemon DB directory without worker-id nesting', async () => {
     const workerHome = join(dir, 'standalone-worker-home')
     const boot = await bootstrapWorkerApp({
