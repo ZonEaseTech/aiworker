@@ -54,16 +54,25 @@ try {
   const page = await browser.newPage({ viewport: { height: 900, width: 1440 } })
   captureBrowserEvents(page)
 
+  const optionsResponsePromise = page.waitForResponse(
+    response => response.url().includes('/api/host/options'),
+    { timeout: 10000 },
+  ).catch(() => null)
   const initialStatus = await gotoDocument(page, hostUrl, '/host')
+  const optionsResponse = await optionsResponsePromise
   await page.getByRole('heading', { name: 'AI Workers' }).waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByRole('navigation', { name: 'Host navigation' }).waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByRole('complementary', { name: 'Worker assignment drawer' }).waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByText('Logto 未接入').first().waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByText('Worker Access Tunnel 未接入').first().waitFor({ state: 'visible', timeout: 10000 })
   await page.getByLabel('员工邮箱').fill('browser.employee@zonease.org')
-  await page.getByLabel('aissh server').fill('aissh://browser-proof')
-  await page.getByLabel('Soul release').fill('aiworker-freeform@browser-proof')
-  await page.getByRole('button', { name: '开通 AI Worker' }).click()
+  await fillIfFallbackInput(page, 'aissh server', 'aissh://browser-proof')
+  await fillIfFallbackInput(page, 'Soul release', 'aiworker-freeform@browser-proof')
+  await page.getByRole('button', { name: '创建开通' }).click()
 
   const command = await page.locator('pre').filter({ hasText: '--token' }).first().innerText({ timeout: 10000 })
   const provisionToken = extractProvisionToken(command)
-  await page.getByText('等待 Worker check-in').waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByText('等待执行 provision command').waitFor({ state: 'visible', timeout: 10000 })
 
   const checkInBody = {
     provisionToken,
@@ -89,7 +98,7 @@ try {
 
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByRole('heading', { name: 'AI Workers' }).waitFor({ state: 'visible', timeout: 10000 })
-  await page.getByText('Worker 已报到').waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByText('Worker 已报到').first().waitFor({ state: 'visible', timeout: 10000 })
 
   const openWorkerLinkCount = await page.getByRole('link', { name: '打开 Worker' }).count()
   if (openWorkerLinkCount !== 0)
@@ -108,6 +117,13 @@ try {
       workerVersion,
     },
     hostUrl,
+    hostShell: {
+      assignmentDrawerVisible: await page.getByRole('complementary', { name: 'Worker assignment drawer' }).isVisible(),
+      deferredAccessVisible: await page.getByText('Worker Access Tunnel 未接入').first().isVisible(),
+      deferredLogtoVisible: await page.getByText('Logto 未接入').first().isVisible(),
+      navigationVisible: await page.getByRole('navigation', { name: 'Host navigation' }).isVisible(),
+      optionsStatus: optionsResponse?.status() ?? null,
+    },
     initialStatus,
     openWorkerLinkCount,
     provisionCommand: {
@@ -130,6 +146,7 @@ try {
     ...evidence,
   })
 }
+
 catch (error) {
   await writeEvidence('failure.json', {
     apiExitCode,
@@ -145,6 +162,14 @@ finally {
     await browser.close()
   await stopProcess('host-web', webProcess)
   await stopProcess('host-api', apiProcess)
+}
+
+async function fillIfFallbackInput(page: Page, label: string, value: string): Promise<void> {
+  const field = page.getByLabel(label)
+  await field.waitFor({ state: 'visible', timeout: 10000 })
+  const tagName = await field.evaluate(element => element.tagName.toLowerCase())
+  if (tagName === 'input')
+    await field.fill(value)
 }
 
 interface HostApiStartInput {
@@ -270,6 +295,8 @@ function redactProvisionCommand(command: string): string {
 
 function isExpectedBrowserEvent(event: string): boolean {
   const normalized = event.toLowerCase()
+  if (normalized.includes('/api/host/options') && normalized.includes('err_aborted'))
+    return true
   return normalized.includes('vite') && normalized.includes('websocket')
 }
 

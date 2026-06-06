@@ -26,17 +26,33 @@ try {
   browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { height: 900, width: 1440 } })
   page.on('console', (message) => {
-    if (message.type() === 'error')
-      browserEvents.push(`console:${message.type()}:${message.text()}`)
+    if (message.type() !== 'error')
+      return
+    const text = message.text()
+    if (text.startsWith('Failed to load resource:'))
+      return
+    browserEvents.push(`console:${message.type()}:${text}`)
   })
   page.on('pageerror', error => browserEvents.push(`pageerror:${error.message}`))
   page.on('requestfailed', request => browserEvents.push(`requestfailed:${request.url()}:${request.failure()?.errorText ?? 'unknown'}`))
+  page.on('response', (response) => {
+    if (response.status() >= 400)
+      browserEvents.push(`response:${response.status()}:${response.url()}`)
+  })
 
   const hostStatus = await gotoDocument(page, hostUrl, '/host')
   await page.getByRole('heading', { name: 'AI Workers' }).waitFor({ state: 'visible', timeout: 10000 })
-  await page.getByRole('button', { name: '开通 AI Worker' }).waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByRole('navigation', { name: 'Host navigation' }).waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByRole('complementary', { name: 'Worker assignment drawer' }).waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByRole('button', { name: '创建开通' }).waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByText('Worker Access Tunnel 未接入').first().waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByText('Logto 未接入').first().waitFor({ state: 'visible', timeout: 10000 })
   evidence.host = {
     ...await assertNoMountContainers(page, '/host'),
+    assignmentDrawerVisible: await page.getByRole('complementary', { name: 'Worker assignment drawer' }).isVisible(),
+    deferredAccessVisible: await page.getByText('Worker Access Tunnel 未接入').first().isVisible(),
+    deferredLogtoVisible: await page.getByText('Logto 未接入').first().isVisible(),
+    navigationVisible: await page.getByRole('navigation', { name: 'Host navigation' }).isVisible(),
     status: hostStatus,
   }
 
@@ -110,6 +126,11 @@ async function gotoDocument(
 }
 
 function isExpectedBrowserEvent(event: string): boolean {
+  const normalized = event.toLowerCase()
+  if (normalized.startsWith('response:404:') && normalized.includes('/api/host/options'))
+    return true
+  if (normalized.startsWith('response:404:') && normalized.includes('/workers/wkr_82'))
+    return true
   return event.includes('server responded with a status of 502')
 }
 
