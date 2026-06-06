@@ -557,9 +557,9 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                       {lastCreateResult.provisionToken
                         ? <CommandBlock title="Provision token" command={lastCreateResult.provisionToken} />
                         : null}
-                      <CommandBlock title="Provision command" command={lastCreateResult.provisionCommand} />
+                      <CommandBlock title="Provision command" command={redactCommand(lastCreateResult.provisionCommand, lastCreateResult.provisionToken)} />
                       {lastCreateResult.deliveryReceipt?.command
-                        ? <CommandBlock title="Delivery command" command={lastCreateResult.deliveryReceipt.command} />
+                        ? <CommandBlock title="Delivery command" command={redactCommand(lastCreateResult.deliveryReceipt.command, lastCreateResult.provisionToken)} />
                         : null}
                     </section>
                   )
@@ -601,6 +601,12 @@ function CommandBlock({ command, title }: { command: string, title: string }) {
       </pre>
     </div>
   )
+}
+
+function redactCommand(command: string, provisionToken?: string): string {
+  if (!provisionToken)
+    return command
+  return command.split(provisionToken).join('[REDACTED]')
 }
 
 function StatusStep({ active, label }: { active: boolean, label: string }) {

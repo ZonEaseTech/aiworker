@@ -201,7 +201,13 @@ describe('host control plane', () => {
   it('sends callback URL only for aissh provisioning targets', async () => {
     const createAssignment = vi.fn().mockResolvedValue({
       assignment: checkedInAssignment,
-      provisionCommand: 'bun aiworker provision --token awp_[REDACTED]',
+      deliveryReceipt: {
+        adapterType: 'aissh',
+        command: 'aissh exec srv-1 "bun aiworker provision --token awp_secret" --reason=test',
+        targetRef: 'srv-1',
+      },
+      provisionCommand: 'bun aiworker provision --token awp_secret',
+      provisionToken: 'awp_secret',
     })
     const api = createApi({
       createAssignment,
@@ -228,6 +234,25 @@ describe('host control plane', () => {
       target: { value: 'local:default' },
     })
     expect(screen.queryByLabelText('Worker callback URL')).toBeNull()
+    fillEmployeeEmail('local@example.com')
+    submitCreateForm()
+
+    await waitFor(() => {
+      expect(createAssignment).toHaveBeenLastCalledWith({
+        assignedEmail: 'local@example.com',
+        provisioningTarget: {
+          adapterType: 'local',
+          maturity: 'dev',
+          ref: 'local://default',
+        },
+        soulReleaseRef: 'aiworker-freeform@dev',
+      } satisfies CreateHostAssignmentInput)
+    })
+
+    expect(screen.getAllByText(/awp_secret/).length).toBe(1)
+    expect(screen.getByText('Provision token')).not.toBeNull()
+    expect(screen.getByText('Provision command').parentElement?.textContent).not.toContain('awp_secret')
+    expect(screen.getByText('Delivery command').parentElement?.textContent).not.toContain('awp_secret')
   })
 
   it('clears one-time commands before a later create failure', async () => {
