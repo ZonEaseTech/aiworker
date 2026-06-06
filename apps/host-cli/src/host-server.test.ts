@@ -194,6 +194,39 @@ describe('host server', () => {
     })
   })
 
+  it('redirects mismatched auth login origins to the configured callback origin before creating a transaction', async () => {
+    let discoveryRequests = 0
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://127.0.0.1:54145',
+      hostControlBaseUrl: 'http://127.0.0.1:54145',
+      sessionAuth: sessionAuth({
+        fetch: async () => {
+          discoveryRequests += 1
+          return Response.json({
+            authorization_endpoint: 'https://auth.zonease.org/oidc/auth',
+            jwks_uri: 'https://auth.zonease.org/oidc/jwks',
+            token_endpoint: 'https://auth.zonease.org/oidc/token',
+          })
+        },
+        oidc: {
+          clientId: 'client-id',
+          clientSecret: 'client-secret',
+          endpoint: 'https://auth.zonease.org/',
+          issuer: 'https://auth.zonease.org/oidc',
+          redirectUri: 'http://127.0.0.1:54145/auth/callback',
+        },
+      }),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/auth/login?returnTo=/host'))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('http://127.0.0.1:54145/auth/login?returnTo=%2Fhost')
+    expect(setCookieHeaders(response).some(cookie => cookie.startsWith('aiworker_auth_txn='))).toBe(false)
+    expect(discoveryRequests).toBe(0)
+  })
+
   it('rejects unsafe login returnTo values before redirecting', async () => {
     const server = await createHostServer({
       dbPath: dbPath(),

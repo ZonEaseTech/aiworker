@@ -345,6 +345,16 @@ async function handleAuthLogin(request: Request, sessionAuth: HostSessionAuthOpt
   if (!returnToResult.ok)
     return json({ error: { code: 'INVALID_RETURN_TO' } }, { status: 400 })
 
+  const callbackOrigin = new URL(sessionAuth.oidc.redirectUri).origin
+  if (url.origin !== callbackOrigin) {
+    const canonicalLoginUrl = new URL('/auth/login', callbackOrigin)
+    canonicalLoginUrl.searchParams.set('returnTo', returnToResult.value)
+    return new Response(null, {
+      headers: { location: canonicalLoginUrl.toString() },
+      status: 302,
+    })
+  }
+
   const redirect = await buildAuthorizationRedirect(sessionAuth.oidc, {
     returnTo: returnToResult.value,
     ...(sessionAuth.fetch ? { fetch: sessionAuth.fetch } : {}),
