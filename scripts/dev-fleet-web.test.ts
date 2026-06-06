@@ -7,12 +7,14 @@ import {
   buildManifest,
   clean,
   DEV_FLEET_TOPOLOGY,
+  fleetWorkerCommandArgs,
   formatPortStatus,
   parseFleetStatus,
   resolveHarnessHost,
   shouldPurgeHome,
   shouldRejectApiPortReuse,
   shouldRejectStartupPort,
+  stop,
   summarizeDaemonHealth,
   validateWorkerApp,
 } from './dev-fleet-web'
@@ -137,6 +139,11 @@ describe('dev fleet web harness contracts', () => {
     expect(pkg.scripts?.['dev:fleet-web']).toBe('bun scripts/dev-fleet-web.ts start')
     expect(pkg.scripts?.['dev:fleet-web:status']).toBe('bun scripts/dev-fleet-web.ts status')
     expect(pkg.scripts?.['dev:fleet-web:clean']).toBe('bun scripts/dev-fleet-web.ts clean')
+  })
+
+  it('starts and stops only the fixed harness workers instead of every fleet worker', () => {
+    expect(fleetWorkerCommandArgs('start')).toEqual(DEV_FLEET_TOPOLOGY.map(entry => ['start', entry.workerId]))
+    expect(fleetWorkerCommandArgs('stop')).toEqual(DEV_FLEET_TOPOLOGY.map(entry => ['stop', entry.workerId]))
   })
 })
 
@@ -284,6 +291,30 @@ describe('dev fleet web clean safety', () => {
     })))
   })
 
+  it('stops fleet services without removing the manifest', () => {
+    const commands: Array<{ args: string[], command: string }> = []
+    const removed: string[] = []
+    const logs: string[] = []
+
+    stop({
+      home: '/tmp/aiworker-dev',
+      log: message => logs.push(message),
+      removePath: path => removed.push(path),
+      runCli: () => ({ stderr: '', stdout: '', status: 0 }),
+      runCommand: (command, args) => {
+        commands.push({ args, command })
+        return { stderr: '', stdout: '', status: 0 }
+      },
+    })
+
+    expect(commands).toEqual(DEV_FLEET_TOPOLOGY.map(entry => ({
+      args: ['kill-session', '-t', entry.tmuxSession],
+      command: 'tmux',
+    })))
+    expect(removed).toEqual([])
+    expect(logs).toContain('[dev:fleet-web:stop] stopped fleet services for AIWORKER_HOME=/tmp/aiworker-dev')
+  })
+
   it('prints stop failure details before continuing idempotent cleanup', () => {
     const logs: string[] = []
 
@@ -291,13 +322,15 @@ describe('dev fleet web clean safety', () => {
       home: '/tmp/aiworker-dev',
       log: message => logs.push(message),
       removePath: () => {},
-      runCli: () => ({ stderr: 'db locked', stdout: 'partial stop', status: 42 }),
+      runCli: args => args[1] === 'dev-google-ads'
+        ? { stderr: 'db locked', stdout: 'partial stop', status: 42 }
+        : { stderr: '', stdout: '', status: 0 },
       runCommand: () => ({ stderr: '', stdout: '', status: 0 }),
     })
 
-    expect(logs).toContain('[dev:fleet-web:clean] aiworker stop --all exited with status 42')
-    expect(logs).toContain('[dev:fleet-web:clean] aiworker stop --all stdout:\npartial stop')
-    expect(logs).toContain('[dev:fleet-web:clean] aiworker stop --all stderr:\ndb locked')
+    expect(logs).toContain('[dev:fleet-web:clean] aiworker stop dev-google-ads exited with status 42')
+    expect(logs).toContain('[dev:fleet-web:clean] aiworker stop dev-google-ads stdout:\npartial stop')
+    expect(logs).toContain('[dev:fleet-web:clean] aiworker stop dev-google-ads stderr:\ndb locked')
     expect(logs).toContain('[dev:fleet-web:clean] kept AIWORKER_HOME=/tmp/aiworker-dev')
   })
 

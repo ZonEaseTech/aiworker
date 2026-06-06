@@ -1,3 +1,4 @@
+/* eslint-disable no-template-curly-in-string */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -43,6 +44,45 @@ describe('Worker startup contract', () => {
     expect(script, 'dev-local must inspect fleet.json instead of assuming the root home pid file').toContain('fleet.json')
     expect(script, 'dev-local must resolve per-worker homes under AIWORKER_HOME/workers').toContain('workers')
     expect(script, 'dev-local must read the fleet worker pid file after aiworker start').toContain('pid_file="$(default_worker_pid_file)"')
+  })
+
+  it('writes an agent-readable worker dev manifest with fixed API and Web URLs', () => {
+    const script = readRepoFile('scripts/dev-local.sh')
+    const statusScript = readRepoFile('scripts/dev-status.sh')
+
+    expect(script).toContain('AIWORKER_WORKER_MANIFEST="${AIWORKER_WORKER_MANIFEST:-${AIWORKER_HOME}/dev-worker.json}"')
+    expect(script).toContain('default_worker_id()')
+    expect(script).toContain('"profile": "worker"')
+    expect(script).toContain('"apiUrl": "$AIWORKER_API_URL"')
+    expect(script).toContain('"webUrl": "http://${AIWORKER_HOST}:${AIWORKER_WEB_PORT}"')
+    expect(script).toContain('"kind": "worker-daemon"')
+    expect(script).toContain('"kind": "worker-web"')
+    expect(statusScript).toContain('AIWORKER_WORKER_MANIFEST="${AIWORKER_WORKER_MANIFEST:-${AIWORKER_HOME}/dev-worker.json}"')
+    expect(statusScript).toContain('[dev:status] manifest:')
+  })
+
+  it('runs Worker Web Vite in a fixed tmux session instead of a foreground child', () => {
+    const script = readRepoFile('scripts/dev-local.sh')
+    const cleanScript = readRepoFile('scripts/dev-clean.sh')
+    const statusScript = readRepoFile('scripts/dev-status.sh')
+
+    expect(script).toContain('AIWORKER_WORKER_WEB_TMUX_SESSION="${AIWORKER_WORKER_WEB_TMUX_SESSION:-aiworker-vite-worker}"')
+    expect(script).toContain('require_tmux')
+    expect(script).toContain('restart_worker_web_tmux')
+    expect(script).toContain('tmux new-session')
+    expect(script).toContain('--strictPort')
+    expect(script).toContain('"tmuxSession": "$AIWORKER_WORKER_WEB_TMUX_SESSION"')
+    expect(script).not.toContain('WEB_PID=$!')
+    expect(cleanScript).toContain('tmux kill-session -t "$AIWORKER_WORKER_WEB_TMUX_SESSION"')
+    expect(statusScript).toContain('tmux has-session -t "$AIWORKER_WORKER_WEB_TMUX_SESSION"')
+  })
+
+  it('shell-quotes Worker Web tmux command arguments that come from environment configuration', () => {
+    const script = readRepoFile('scripts/dev-local.sh')
+
+    expect(script).toContain('shell_quote()')
+    expect(script).toContain('AIWORKER_API_URL=$(shell_quote "$AIWORKER_API_URL")')
+    expect(script).toContain('bun run dev --host $(shell_quote "$AIWORKER_HOST") --port $(shell_quote "$AIWORKER_WEB_PORT") --strictPort')
   })
 
   it('restarts an existing dev daemon before checking the daemon port', () => {

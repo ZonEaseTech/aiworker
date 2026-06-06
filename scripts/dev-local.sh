@@ -9,12 +9,25 @@ AIWORKER_WORKER_HOST="${AIWORKER_WORKER_HOST:-$AIWORKER_HOST}"
 PORT="${PORT:-9217}"
 AIWORKER_WEB_PORT="${AIWORKER_WEB_PORT:-5173}"
 AIWORKER_API_URL="${AIWORKER_API_URL:-http://${AIWORKER_HOST}:${PORT}}"
+AIWORKER_WORKER_MANIFEST="${AIWORKER_WORKER_MANIFEST:-${AIWORKER_HOME}/dev-worker.json}"
+AIWORKER_WORKER_WEB_TMUX_SESSION="${AIWORKER_WORKER_WEB_TMUX_SESSION:-aiworker-vite-worker}"
 
 DAEMON_PID=""
 WEB_PID=""
 
 listener_for_port() {
   lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null || true
+}
+
+require_tmux() {
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "[dev] tmux is required for Worker Web dev server" >&2
+    exit 1
+  fi
+}
+
+shell_quote() {
+  printf '%q' "$1"
 }
 
 process_cwd() {
@@ -131,9 +144,23 @@ restart_existing_dev_daemon() {
   sleep 1
 }
 
+stop_worker_web_tmux() {
+  tmux kill-session -t "$AIWORKER_WORKER_WEB_TMUX_SESSION" 2>/dev/null || true
+}
+
+restart_worker_web_tmux() {
+  stop_worker_web_tmux
+  tmux new-session \
+    -d \
+    -s "$AIWORKER_WORKER_WEB_TMUX_SESSION" \
+    -c "$ROOT_DIR/apps/worker-web" \
+    "AIWORKER_API_URL=$(shell_quote "$AIWORKER_API_URL") bun run dev --host $(shell_quote "$AIWORKER_HOST") --port $(shell_quote "$AIWORKER_WEB_PORT") --strictPort"
+}
+
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
+  stop_worker_web_tmux
 
   for pid in "$WEB_PID" "$DAEMON_PID"; do
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
@@ -167,6 +194,21 @@ wait_for_health() {
   done
 
   echo "[dev] daemon healthcheck timed out: $url"
+  return 1
+}
+
+wait_for_web() {
+  local url="http://${AIWORKER_HOST}:${AIWORKER_WEB_PORT}/"
+  local attempts=60
+
+  for _ in $(seq 1 "$attempts"); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  echo "[dev] Worker Web healthcheck timed out: $url"
   return 1
 }
 
@@ -208,6 +250,23 @@ read_daemon_pid() {
   return 1
 }
 
+default_worker_id() {
+  AIWORKER_HOME="$AIWORKER_HOME" bun -e '
+import { join } from "node:path"
+
+const home = process.env.AIWORKER_HOME
+if (!home)
+  process.exit(1)
+
+const index = await Bun.file(join(home, "fleet.json")).json()
+const defaultWorker = index.workers?.find((worker) => worker.id === index.default) ?? index.workers?.[0]
+if (!defaultWorker?.id)
+  process.exit(1)
+
+console.log(defaultWorker.id)
+'
+}
+
 stop_daemon_after_start_failure() {
   local listener
   local pid
@@ -237,7 +296,9 @@ start_daemon_with_worker() {
 }
 
 mkdir -p "$AIWORKER_HOME"
+require_tmux
 restart_existing_dev_daemon
+stop_worker_web_tmux
 ensure_port_free "$PORT"
 ensure_port_free "$AIWORKER_WEB_PORT"
 
@@ -250,30 +311,31 @@ start_daemon_with_worker
 wait_for_health
 
 echo "[dev] starting Worker Web on http://${AIWORKER_HOST}:${AIWORKER_WEB_PORT}"
-(
-  cd "$ROOT_DIR/apps/worker-web"
-  AIWORKER_API_URL="$AIWORKER_API_URL" \
-    bun run dev --host "$AIWORKER_HOST" --port "$AIWORKER_WEB_PORT"
-) &
-WEB_PID=$!
+restart_worker_web_tmux
+wait_for_web
+
+mkdir -p "$(dirname "$AIWORKER_WORKER_MANIFEST")"
+cat > "$AIWORKER_WORKER_MANIFEST" <<EOF
+{
+  "profile": "worker",
+  "home": "$AIWORKER_HOME",
+  "workerId": "$(default_worker_id)",
+  "apiUrl": "$AIWORKER_API_URL",
+  "webUrl": "http://${AIWORKER_HOST}:${AIWORKER_WEB_PORT}",
+  "services": [
+    { "kind": "worker-daemon", "port": $PORT, "pid": $DAEMON_PID },
+    { "kind": "worker-web", "port": $AIWORKER_WEB_PORT, "tmuxSession": "$AIWORKER_WORKER_WEB_TMUX_SESSION" }
+  ]
+}
+EOF
+echo "[dev] manifest=$AIWORKER_WORKER_MANIFEST"
 
 echo
 echo "[dev] web: http://${AIWORKER_HOST}:${AIWORKER_WEB_PORT}"
 echo "[dev] api: $AIWORKER_API_URL"
 echo "[dev] apps: bun run dev:apps"
-echo "[dev] stop: Ctrl-C"
+echo "[dev] tmux: tmux attach -t $AIWORKER_WORKER_WEB_TMUX_SESSION"
+echo "[dev] stop: bun run dev:worker:stop"
 echo
-
-while kill -0 "$DAEMON_PID" 2>/dev/null && kill -0 "$WEB_PID" 2>/dev/null; do
-  sleep 1
-done
-
-status=0
-if ! kill -0 "$DAEMON_PID" 2>/dev/null; then
-  wait "$DAEMON_PID" 2>/dev/null || true
-  status=1
-elif ! kill -0 "$WEB_PID" 2>/dev/null; then
-  wait "$WEB_PID" || status=$?
-fi
-
-exit "$status"
+trap - EXIT INT TERM
+exit 0

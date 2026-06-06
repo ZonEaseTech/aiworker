@@ -1,3 +1,4 @@
+/* eslint-disable no-template-curly-in-string */
 import { spawn } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -126,9 +127,13 @@ describe('Host dev startup contract', () => {
   it('routes dev:host through the Host startup script instead of worker daemon foreground', () => {
     const pkg = JSON.parse(readRepoFile('package.json')) as PackageJson
 
-    expect(pkg.scripts?.['dev:host']).toBe('bash scripts/dev-host.sh')
+    expect(pkg.scripts?.['dev:host']).toBe('bun apps/host-cli/src/aiworker-host.ts start --dev')
     expect(pkg.scripts?.['dev:host']).not.toContain('daemon foreground')
     expect(pkg.scripts?.['dev:host']).not.toContain('apps/worker-cli/src/aiworker.ts')
+    expect(pkg.scripts?.['dev:host:status']).toBe('bun apps/host-cli/src/aiworker-host.ts status')
+    expect(pkg.scripts?.['dev:host:stop']).toBe('bun apps/host-cli/src/aiworker-host.ts stop')
+    expect(pkg.scripts?.['dev:host:clean']).toBe('bun apps/host-cli/src/aiworker-host.ts clean')
+    expect(pkg.scripts?.['dev:host:logs']).toBe('bun apps/host-cli/src/aiworker-host.ts logs')
   })
 
   it('keeps the old worker daemon shortcut under dev:worker-daemon', () => {
@@ -151,14 +156,33 @@ describe('Host dev startup contract', () => {
     expect(script).not.toContain('AIWORKER_WEB_PORT="${AIWORKER_WEB_PORT:-5173}"')
   })
 
+  it('passes the configured Host bind address into the Host API serve command', () => {
+    const script = readOptionalRepoFile('scripts/dev-host.sh')
+
+    expect(script).toContain('serve --db $(shell_quote "$AIWORKER_HOST_DB") --dev-admin-email $(shell_quote "$AIWORKER_HOST_DEV_ADMIN_EMAIL") --host $(shell_quote "$AIWORKER_HOST")')
+  })
+
+  it('shell-quotes Host tmux command arguments that come from environment configuration', () => {
+    const script = readOptionalRepoFile('scripts/dev-host.sh')
+
+    expect(script).toContain('shell_quote()')
+    expect(script).toContain('--db $(shell_quote "$AIWORKER_HOST_DB")')
+    expect(script).toContain('--dev-admin-email $(shell_quote "$AIWORKER_HOST_DEV_ADMIN_EMAIL")')
+    expect(script).toContain('--host $(shell_quote "$AIWORKER_HOST")')
+    expect(script).toContain('--public-base-url $(shell_quote "$AIWORKER_HOST_API_URL")')
+    expect(script).toContain('--port $(shell_quote "$AIWORKER_HOST_API_PORT")')
+    expect(script).toContain('AIWORKER_HOST_API_URL=$(shell_quote "$AIWORKER_HOST_API_URL")')
+    expect(script).toContain('bun run dev --host $(shell_quote "$AIWORKER_HOST") --port $(shell_quote "$AIWORKER_HOST_WEB_PORT") --strictPort')
+  })
+
   it('waits for Host API /host before starting Host Web on the configured port', () => {
     const script = readOptionalRepoFile('scripts/dev-host.sh')
     const healthIndex = script.indexOf('${AIWORKER_HOST_API_URL}/host')
-    const webDirectoryIndex = script.indexOf('cd "$ROOT_DIR/apps/host-web"')
-    const webPortIndex = script.indexOf('bun run dev --host "$AIWORKER_HOST" --port "$AIWORKER_HOST_WEB_PORT"')
+    const webDirectoryIndex = script.indexOf('-c "$ROOT_DIR/apps/host-web"')
+    const webPortIndex = script.indexOf('bun run dev --host $(shell_quote "$AIWORKER_HOST") --port $(shell_quote "$AIWORKER_HOST_WEB_PORT") --strictPort')
 
     expect(healthIndex, 'dev-host must poll the Host API /host endpoint').toBeGreaterThanOrEqual(0)
-    expect(webDirectoryIndex, 'dev-host must launch Host Web from apps/host-web').toBeGreaterThanOrEqual(0)
+    expect(webDirectoryIndex, 'dev-host must launch Host Web from apps/host-web in tmux').toBeGreaterThanOrEqual(0)
     expect(webPortIndex, 'dev-host must pass the configured Host Web port to Vite').toBeGreaterThanOrEqual(0)
     expect(healthIndex, 'Host API readiness must gate Host Web startup').toBeLessThan(webDirectoryIndex)
   })
@@ -171,12 +195,36 @@ describe('Host dev startup contract', () => {
     expect(script).toMatch(/Host API and Web ports must not be the same/)
   })
 
-  it('preserves an unexpected Host Web child exit code', async () => {
-    const result = await runDevHostWithFakeTools({
-      FAKE_HOST_WEB_EXIT_CODE: '42',
-    })
+  it('writes an agent-readable Host dev manifest with fixed API and Web URLs', () => {
+    const script = readOptionalRepoFile('scripts/dev-host.sh')
 
-    expect(result.exitCode).toBe(42)
+    expect(script).toContain('AIWORKER_HOST_MANIFEST="${AIWORKER_HOST_MANIFEST:-${HOME}/.aiworker-dev/dev-host.json}"')
+    expect(script).toContain('write_host_manifest()')
+    expect(script).toContain('"profile": "host"')
+    expect(script).toContain('"apiUrl": "$AIWORKER_HOST_API_URL"')
+    expect(script).toContain('"webUrl": "http://${AIWORKER_HOST}:${AIWORKER_HOST_WEB_PORT}/host"')
+    expect(script).toContain('"kind": "host-api"')
+    expect(script).toContain('"kind": "host-web"')
+    expect(script.indexOf('restart_host_web_tmux'), 'Host Web should start before manifest is written')
+      .toBeLessThan(script.lastIndexOf('write_host_manifest'))
+  })
+
+  it('runs Host API and Host Web in fixed tmux sessions instead of foreground children', () => {
+    const script = readOptionalRepoFile('scripts/dev-host.sh')
+    const controlScript = readOptionalRepoFile('scripts/dev-host-control.sh')
+
+    expect(script).toContain('AIWORKER_HOST_API_TMUX_SESSION="${AIWORKER_HOST_API_TMUX_SESSION:-aiworker-host-api}"')
+    expect(script).toContain('AIWORKER_HOST_WEB_TMUX_SESSION="${AIWORKER_HOST_WEB_TMUX_SESSION:-aiworker-vite-host}"')
+    expect(script).toContain('require_tmux')
+    expect(script).toContain('restart_host_api_tmux')
+    expect(script).toContain('restart_host_web_tmux')
+    expect(script).toContain('tmux new-session')
+    expect(script).toContain('--strictPort')
+    expect(script).toContain('"tmuxSession": "$AIWORKER_HOST_API_TMUX_SESSION"')
+    expect(script).toContain('"tmuxSession": "$AIWORKER_HOST_WEB_TMUX_SESSION"')
+    expect(script).not.toContain('WEB_PID=$!')
+    expect(controlScript).toContain('tmux kill-session -t "$AIWORKER_HOST_API_TMUX_SESSION"')
+    expect(controlScript).toContain('tmux kill-session -t "$AIWORKER_HOST_WEB_TMUX_SESSION"')
   })
 
   it('fails fast when Host API and Web ports are identical', async () => {

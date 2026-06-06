@@ -8,13 +8,27 @@ AIWORKER_HOST_API_PORT="${AIWORKER_HOST_API_PORT:-9117}"
 AIWORKER_HOST_WEB_PORT="${AIWORKER_HOST_WEB_PORT:-5050}"
 AIWORKER_HOST_API_URL="${AIWORKER_HOST_API_URL:-http://${AIWORKER_HOST}:${AIWORKER_HOST_API_PORT}}"
 AIWORKER_HOST_DB="${AIWORKER_HOST_DB:-${HOME}/.aiworker-dev/host.db}"
+AIWORKER_HOST_MANIFEST="${AIWORKER_HOST_MANIFEST:-${HOME}/.aiworker-dev/dev-host.json}"
 AIWORKER_HOST_DEV_ADMIN_EMAIL="${AIWORKER_HOST_DEV_ADMIN_EMAIL:-admin@zonease.org}"
+AIWORKER_HOST_API_TMUX_SESSION="${AIWORKER_HOST_API_TMUX_SESSION:-aiworker-host-api}"
+AIWORKER_HOST_WEB_TMUX_SESSION="${AIWORKER_HOST_WEB_TMUX_SESSION:-aiworker-vite-host}"
 
 API_PID=""
 WEB_PID=""
 
 listener_for_port() {
   lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null || true
+}
+
+require_tmux() {
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "[dev:host] tmux is required for Host dev services" >&2
+    exit 1
+  fi
+}
+
+shell_quote() {
+  printf '%q' "$1"
 }
 
 ensure_port_free() {
@@ -38,18 +52,8 @@ ensure_distinct_ports() {
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
-
-  for pid in "$WEB_PID" "$API_PID"; do
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      kill -TERM "$pid" 2>/dev/null || true
-    fi
-  done
-
-  for pid in "$WEB_PID" "$API_PID"; do
-    if [[ -n "$pid" ]]; then
-      wait "$pid" 2>/dev/null || true
-    fi
-  done
+  tmux kill-session -t "$AIWORKER_HOST_WEB_TMUX_SESSION" 2>/dev/null || true
+  tmux kill-session -t "$AIWORKER_HOST_API_TMUX_SESSION" 2>/dev/null || true
 
   exit "$status"
 }
@@ -62,11 +66,6 @@ wait_for_host_api() {
     if curl -fsS "$url" >/dev/null 2>&1; then
       return 0
     fi
-    if [[ -n "$API_PID" ]] && ! kill -0 "$API_PID" 2>/dev/null; then
-      echo "[dev:host] Host API exited before becoming reachable"
-      wait "$API_PID" || true
-      return 1
-    fi
     sleep 0.5
   done
 
@@ -74,33 +73,63 @@ wait_for_host_api() {
   return 1
 }
 
-start_host_api() {
-  echo "[dev:host] starting Host API on ${AIWORKER_HOST_API_URL}"
-  (
-    cd "$ROOT_DIR"
-    bun apps/host-cli/src/aiworker-host.ts serve \
-      --db "$AIWORKER_HOST_DB" \
-      --dev-admin-email "$AIWORKER_HOST_DEV_ADMIN_EMAIL" \
-      --public-base-url "$AIWORKER_HOST_API_URL" \
-      --port "$AIWORKER_HOST_API_PORT"
-  ) &
-  API_PID=$!
-  echo "[dev:host] Host API pid=$API_PID"
+wait_for_host_web() {
+  local url="http://${AIWORKER_HOST}:${AIWORKER_HOST_WEB_PORT}/host"
+  local attempts=60
+
+  for _ in $(seq 1 "$attempts"); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  echo "[dev:host] Host Web healthcheck timed out: $url"
+  return 1
 }
 
-start_host_web() {
+restart_host_api_tmux() {
+  echo "[dev:host] starting Host API on ${AIWORKER_HOST_API_URL}"
+  tmux kill-session -t "$AIWORKER_HOST_API_TMUX_SESSION" 2>/dev/null || true
+  tmux new-session \
+    -d \
+    -s "$AIWORKER_HOST_API_TMUX_SESSION" \
+    -c "$ROOT_DIR" \
+    "bun apps/host-cli/src/aiworker-host.ts serve --db $(shell_quote "$AIWORKER_HOST_DB") --dev-admin-email $(shell_quote "$AIWORKER_HOST_DEV_ADMIN_EMAIL") --host $(shell_quote "$AIWORKER_HOST") --public-base-url $(shell_quote "$AIWORKER_HOST_API_URL") --port $(shell_quote "$AIWORKER_HOST_API_PORT")"
+}
+
+restart_host_web_tmux() {
   echo "[dev:host] starting Host Web on http://${AIWORKER_HOST}:${AIWORKER_HOST_WEB_PORT}"
-  (
-    cd "$ROOT_DIR/apps/host-web"
-    AIWORKER_HOST_API_URL="$AIWORKER_HOST_API_URL" \
-      bun run dev --host "$AIWORKER_HOST" --port "$AIWORKER_HOST_WEB_PORT" --strictPort
-  ) &
-  WEB_PID=$!
-  echo "[dev:host] Host Web pid=$WEB_PID"
+  tmux kill-session -t "$AIWORKER_HOST_WEB_TMUX_SESSION" 2>/dev/null || true
+  tmux new-session \
+    -d \
+    -s "$AIWORKER_HOST_WEB_TMUX_SESSION" \
+    -c "$ROOT_DIR/apps/host-web" \
+    "AIWORKER_HOST_API_URL=$(shell_quote "$AIWORKER_HOST_API_URL") bun run dev --host $(shell_quote "$AIWORKER_HOST") --port $(shell_quote "$AIWORKER_HOST_WEB_PORT") --strictPort"
+}
+
+write_host_manifest() {
+  mkdir -p "$(dirname "$AIWORKER_HOST_MANIFEST")"
+  cat > "$AIWORKER_HOST_MANIFEST" <<EOF
+{
+  "profile": "host",
+  "apiUrl": "$AIWORKER_HOST_API_URL",
+  "webUrl": "http://${AIWORKER_HOST}:${AIWORKER_HOST_WEB_PORT}/host",
+  "db": "$AIWORKER_HOST_DB",
+  "services": [
+    { "kind": "host-api", "port": $AIWORKER_HOST_API_PORT, "tmuxSession": "$AIWORKER_HOST_API_TMUX_SESSION" },
+    { "kind": "host-web", "port": $AIWORKER_HOST_WEB_PORT, "tmuxSession": "$AIWORKER_HOST_WEB_TMUX_SESSION" }
+  ]
+}
+EOF
+  echo "[dev:host] manifest=$AIWORKER_HOST_MANIFEST"
 }
 
 mkdir -p "$(dirname "$AIWORKER_HOST_DB")"
 ensure_distinct_ports
+require_tmux
+tmux kill-session -t "$AIWORKER_HOST_WEB_TMUX_SESSION" 2>/dev/null || true
+tmux kill-session -t "$AIWORKER_HOST_API_TMUX_SESSION" 2>/dev/null || true
 ensure_port_free "$AIWORKER_HOST_API_PORT"
 ensure_port_free "$AIWORKER_HOST_WEB_PORT"
 
@@ -109,27 +138,20 @@ trap cleanup EXIT INT TERM
 echo "[dev:host] AIWORKER_HOST_DB=$AIWORKER_HOST_DB"
 echo "[dev:host] AIWORKER_HOST_DEV_ADMIN_EMAIL=$AIWORKER_HOST_DEV_ADMIN_EMAIL"
 
-start_host_api
+restart_host_api_tmux
 wait_for_host_api
 ensure_port_free "$AIWORKER_HOST_WEB_PORT"
-start_host_web
+restart_host_web_tmux
+wait_for_host_web
+write_host_manifest
 
-while true; do
-  if [[ -n "$API_PID" ]] && ! kill -0 "$API_PID" 2>/dev/null; then
-    echo "[dev:host] Host API process exited"
-    wait "$API_PID" || true
-    exit 1
-  fi
+echo
+echo "[dev:host] web: http://${AIWORKER_HOST}:${AIWORKER_HOST_WEB_PORT}/host"
+echo "[dev:host] api: $AIWORKER_HOST_API_URL"
+echo "[dev:host] tmux api: tmux attach -t $AIWORKER_HOST_API_TMUX_SESSION"
+echo "[dev:host] tmux web: tmux attach -t $AIWORKER_HOST_WEB_TMUX_SESSION"
+echo "[dev:host] stop: bun run dev:host:stop"
+echo
 
-  if [[ -n "$WEB_PID" ]] && ! kill -0 "$WEB_PID" 2>/dev/null; then
-    status=0
-    echo "[dev:host] Host Web process exited"
-    wait "$WEB_PID" || status=$?
-    if [[ "$status" -eq 0 ]]; then
-      status=1
-    fi
-    exit "$status"
-  fi
-
-  sleep 1
-done
+trap - EXIT INT TERM
+exit 0

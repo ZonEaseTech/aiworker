@@ -1,16 +1,19 @@
 #!/usr/bin/env bun
 import type { WorkerRegistry } from '@zonease/aiworker-host-control'
+import type { HostLifecycle } from './host-lifecycle'
 import type { createHostServer as createHostServerType } from './host-server'
 
 import process from 'node:process'
 
 import { createWorkerRegistry } from '@zonease/aiworker-host-control'
 import cac from 'cac'
+import { createHostLifecycle } from './host-lifecycle'
 import { createHostServer } from './host-server'
 
 export interface HostCliDeps {
   bunServe?: typeof Bun.serve
   fetch?: typeof fetch
+  hostLifecycle?: HostLifecycle
   registry?: WorkerRegistry
   serverFactory?: typeof createHostServerType
 }
@@ -21,6 +24,19 @@ function printJson(value: unknown): void {
 
 function normalizeHostUrl(input: string | undefined): string {
   return (input ?? 'http://127.0.0.1:9117').replace(/\/+$/, '')
+}
+
+function parsePositiveInteger(value: number | string | undefined, name: string): number {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0)
+    throw new Error(`Invalid ${name}: ${value}`)
+  return parsed
+}
+
+const hostLifecycleStateOptionName = 'manifest'
+
+function hostLifecycleStatePath(options: { manifest?: string }): string | undefined {
+  return (options as Record<string, string | undefined>)[hostLifecycleStateOptionName]
 }
 
 async function readJsonResponse(response: Response): Promise<unknown> {
@@ -140,6 +156,7 @@ export function preprocessHostArgv(argv: string[], commandNames: string[]): stri
 export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promise<number> {
   const registry = deps.registry ?? createWorkerRegistry()
   const fetchImpl = deps.fetch ?? fetch
+  const hostLifecycle = deps.hostLifecycle ?? createHostLifecycle()
   const cli = cac('aiworker-host')
   cli
     .command('worker list', 'list workers registered with this Host control plane')
@@ -187,6 +204,72 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
       const host = normalizeHostUrl(options.host)
       const result = await requestHostJson(fetchImpl, `${host}/api/host/assignments`)
       printJson(projectAssignmentListResponse(result))
+    })
+  cli
+    .command('start', 'start Host services with the same lifecycle shape as Worker')
+    .option('--db <path>', 'Host sqlite database path', { default: `${process.env.HOME ?? '.'}/.aiworker-dev/host.db` })
+    .option('--dev', 'start development Host API plus Vite Host Web')
+    .option('--dev-admin-email <email>', 'development-only static host admin email')
+    .option('--host <host>', 'bind host', { default: '127.0.0.1' })
+    .option('--manifest <path>', 'Host lifecycle manifest path')
+    .option('--port <port>', 'Host API or production serve port', { default: '9117' })
+    .option('--public-base-url <url>', 'public Host base URL')
+    .option('--web-port <port>', 'development Host Web port', { default: '5050' })
+    .option('--web-static-dir <path>', 'Host Web static directory for production start')
+    .action(async (options: {
+      db: string
+      dev?: boolean
+      devAdminEmail?: string
+      host: string
+      manifest?: string
+      port: string | number
+      publicBaseUrl?: string
+      webPort: string | number
+      webStaticDir?: string
+    }) => {
+      const mode = options.dev ? 'dev' : 'prod'
+      const result = await hostLifecycle.start({
+        dbPath: options.db,
+        ...(options.devAdminEmail ? { devAdminEmail: options.devAdminEmail } : {}),
+        host: options.host,
+        ...(hostLifecycleStatePath(options) ? { manifestPath: hostLifecycleStatePath(options) } : {}),
+        mode,
+        port: parsePositiveInteger(options.port, '--port'),
+        ...(options.publicBaseUrl ? { publicBaseUrl: options.publicBaseUrl } : {}),
+        ...(mode === 'dev' ? { webPort: parsePositiveInteger(options.webPort, '--web-port') } : {}),
+        ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
+      })
+      printJson(result)
+    })
+  cli
+    .command('status', 'show Host service lifecycle status')
+    .option('--manifest <path>', 'Host lifecycle manifest path')
+    .action(async (options: { manifest?: string }) => {
+      printJson(await hostLifecycle.status({ manifestPath: hostLifecycleStatePath(options) }))
+    })
+  cli
+    .command('stop', 'stop Host services')
+    .option('--manifest <path>', 'Host lifecycle manifest path')
+    .action(async (options: { manifest?: string }) => {
+      printJson(await hostLifecycle.stop({ manifestPath: hostLifecycleStatePath(options) }))
+    })
+  cli
+    .command('clean', 'stop Host services and remove lifecycle manifest')
+    .option('--manifest <path>', 'Host lifecycle manifest path')
+    .action(async (options: { manifest?: string }) => {
+      printJson(await hostLifecycle.clean({ manifestPath: hostLifecycleStatePath(options) }))
+    })
+  cli
+    .command('logs', 'show Host service logs')
+    .option('--manifest <path>', 'Host lifecycle manifest path')
+    .option('--service <service>', 'service kind or short name, such as api/web/host-serve')
+    .option('--tail <n>', 'line count', { default: '80' })
+    .action(async (options: { manifest?: string, service?: string, tail?: string | number }) => {
+      process.stdout.write(await hostLifecycle.logs({
+        manifestPath: hostLifecycleStatePath(options),
+        service: options.service,
+        tail: parsePositiveInteger(options.tail, '--tail'),
+      }))
     })
   cli
     .command('serve', 'serve the Host provisioning/control API')

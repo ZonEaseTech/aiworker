@@ -133,6 +133,10 @@ export function buildManifest(input: { generatedAt: string, home: string, host: 
   }
 }
 
+export function fleetWorkerCommandArgs(command: 'start' | 'stop'): string[][] {
+  return DEV_FLEET_TOPOLOGY.map(entry => [command, entry.workerId])
+}
+
 export function validateWorkerApp(input: {
   expectedAppId: string
   row: {
@@ -537,7 +541,8 @@ async function start(): Promise<void> {
   for (const entry of DEV_FLEET_TOPOLOGY)
     ensureWorker(entry)
 
-  cli(['start', '--all'])
+  for (const args of fleetWorkerCommandArgs('start'))
+    cli(args)
 
   for (const entry of DEV_FLEET_TOPOLOGY)
     restartTmuxVite(entry, host)
@@ -599,25 +604,36 @@ async function status(): Promise<void> {
   }
 }
 
-export function clean(deps: CleanDependencies = {}): void {
+export function stop(deps: CleanDependencies = {}): void {
   const home = deps.home ?? aiworkerHome()
-  const env = deps.env ?? process.env
   const log = deps.log ?? console.log
-  const removePath = deps.removePath ?? rmSync
   const runCommand = deps.runCommand ?? run
   const runCli = deps.runCli ?? cli
 
   for (const entry of DEV_FLEET_TOPOLOGY)
     runCommand('tmux', ['kill-session', '-t', entry.tmuxSession], { allowFailure: true })
 
-  const stopResult = runCli(['stop', '--all'], { allowFailure: true })
-  if (stopResult.status !== 0) {
-    log(`[dev:fleet-web:clean] aiworker stop --all exited with status ${stopResult.status}`)
-    if (stopResult.stdout.trim())
-      log(`[dev:fleet-web:clean] aiworker stop --all stdout:\n${stopResult.stdout.trim()}`)
-    if (stopResult.stderr.trim())
-      log(`[dev:fleet-web:clean] aiworker stop --all stderr:\n${stopResult.stderr.trim()}`)
+  for (const args of fleetWorkerCommandArgs('stop')) {
+    const stopResult = runCli(args, { allowFailure: true })
+    const label = args.join(' ')
+    if (stopResult.status !== 0) {
+      log(`[dev:fleet-web:clean] aiworker ${label} exited with status ${stopResult.status}`)
+      if (stopResult.stdout.trim())
+        log(`[dev:fleet-web:clean] aiworker ${label} stdout:\n${stopResult.stdout.trim()}`)
+      if (stopResult.stderr.trim())
+        log(`[dev:fleet-web:clean] aiworker ${label} stderr:\n${stopResult.stderr.trim()}`)
+    }
   }
+  log(`[dev:fleet-web:stop] stopped fleet services for AIWORKER_HOME=${home}`)
+}
+
+export function clean(deps: CleanDependencies = {}): void {
+  const home = deps.home ?? aiworkerHome()
+  const env = deps.env ?? process.env
+  const log = deps.log ?? console.log
+  const removePath = deps.removePath ?? rmSync
+
+  stop(deps)
 
   removePath(manifestPath(home), { force: true })
 
@@ -638,6 +654,10 @@ async function main(): Promise<void> {
   }
   if (mode === 'status') {
     await status()
+    return
+  }
+  if (mode === 'stop') {
+    stop()
     return
   }
   if (mode !== 'clean') {

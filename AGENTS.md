@@ -58,6 +58,16 @@ Engine target 默认 worker、可 session 覆盖。Native engine 采用 B+ struc
 
 Author-owned native MCP files may contain literal secrets, but AIWorker must not copy secrets into descriptor, DB, receipt, log, diagnostic output, OpenAPI example, or UI.
 
+## Dev Services
+
+Agent 不要自选新端口，也不要依赖 Vite 自动换端口；先运行对应 `:status`，复用已启动的 profile，或先 `:stop` / `:clean` 回收。
+
+单 Worker：`bun run dev:worker` / `:status` / `:stop` / `:clean`，默认 `9217 + 5173`。
+多 Soul：`bun run dev:fleet` / `:status` / `:stop` / `:clean`，默认 `9217-9221 + 5173-5177`。
+Host：`bun run dev:host` / `:status` / `:stop` / `:clean`，默认 `9117 + 5050`。
+
+所有 Worker Web Vite 必须显式绑定 daemon：`AIWORKER_API_URL=http://127.0.0.1:<daemon-port>`；Host Web 必须绑定 `AIWORKER_HOST_API_URL`。Vite 默认由固定 tmux session 托管，必须用固定端口和 `--strictPort`；Agent 不要前台起 Vite。Playwright 先读 status/manifest，再打开对应 URL。
+
 ## Workflow
 
 Use Superpowers for brainstorming, non-trivial planning, TDD, systematic debugging, and verification before completion.
