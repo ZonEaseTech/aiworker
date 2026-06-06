@@ -101,6 +101,44 @@ describe('Host lifecycle', () => {
     }
   })
 
+  it('uses session auth instead of static dev admin authority in foreground server creation', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-foreground-session-auth-'))
+    const port = reservePort()
+    const baseUrl = `http://127.0.0.1:${port}`
+    const manifestPath = join(dir, 'dev-host.json')
+
+    const lifecycle = createHostLifecycle()
+    try {
+      await lifecycle.foreground({
+        dbPath: join(dir, 'host.db'),
+        devAdminEmail: 'admin@zonease.org',
+        host: '127.0.0.1',
+        manifestPath,
+        mode: 'dev',
+        port,
+        publicBaseUrl: baseUrl,
+        sessionAuth: {
+          oidc: {
+            clientId: 'logto-client-id',
+            clientSecret: 'literal-client-secret-value',
+            endpoint: 'https://auth.zonease.org/',
+            issuer: 'https://auth.zonease.org/oidc',
+            redirectUri: `${baseUrl}/auth/callback`,
+          },
+          sessionSecret: 'literal-session-secret-value-1234567890',
+        },
+      })
+
+      const response = await fetch(`${baseUrl}/api/host/options`)
+      expect(response.status).toBe(403)
+      await expect(response.json()).resolves.toEqual({ error: { code: 'FORBIDDEN' } })
+    }
+    finally {
+      await lifecycle.clean({ manifestPath })
+      rmSync(dir, { force: true, recursive: true })
+    }
+  })
+
   it('passes the Host websocket handler to foreground Bun.serve', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-foreground-websocket-'))
     const webStaticDir = join(dir, 'web')

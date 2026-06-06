@@ -93,6 +93,20 @@ describe('aiworker-host control CLI', () => {
     LOGTO_ISSUER: 'https://auth.zonease.org/oidc',
   } as const
 
+  const partialLogtoEnv = {
+    AIWORKER_HOST_SESSION_SECRET: completeLogtoEnv.AIWORKER_HOST_SESSION_SECRET,
+    LOGTO_CLIENT_ID: completeLogtoEnv.LOGTO_CLIENT_ID,
+    LOGTO_ENDPOINT: completeLogtoEnv.LOGTO_ENDPOINT,
+    LOGTO_ISSUER: completeLogtoEnv.LOGTO_ISSUER,
+  } as const
+
+  function expectNoLogtoValuesInOutput(value: string): void {
+    expect(value).not.toContain('literal-session-secret-value-1234567890')
+    expect(value).not.toContain('literal-client-secret-value')
+    expect(value).not.toContain('logto-client-id')
+    expect(value).not.toContain('https://auth.zonease.org')
+  }
+
   async function waitForHostApiOrExit(url: string, child: ReturnType<typeof Bun.spawn>): Promise<'exited' | 'ready'> {
     let exited = false
     child.exited.then(() => {
@@ -376,12 +390,7 @@ describe('aiworker-host control CLI', () => {
   })
 
   it('fails serve before creating a server when Logto env is partially configured', async () => {
-    await withHostSessionEnv({
-      AIWORKER_HOST_SESSION_SECRET: completeLogtoEnv.AIWORKER_HOST_SESSION_SECRET,
-      LOGTO_CLIENT_ID: completeLogtoEnv.LOGTO_CLIENT_ID,
-      LOGTO_ENDPOINT: completeLogtoEnv.LOGTO_ENDPOINT,
-      LOGTO_ISSUER: completeLogtoEnv.LOGTO_ISSUER,
-    }, async () => {
+    await withHostSessionEnv(partialLogtoEnv, async () => {
       const calls: any[] = []
       const code = await runHostCli([
         'serve',
@@ -408,20 +417,13 @@ describe('aiworker-host control CLI', () => {
       expect(code).toBe(1)
       expect(calls).toEqual([])
       const combinedOutput = `${output}\n${errorOutput}`
-      expect(errorOutput).toContain('LOGTO_CLIENT_SECRET')
-      expect(combinedOutput).not.toContain('literal-session-secret-value-1234567890')
-      expect(combinedOutput).not.toContain('logto-client-id')
-      expect(combinedOutput).not.toContain('https://auth.zonease.org')
+      expect(errorOutput.trim()).toBe('Missing required Logto env: LOGTO_CLIENT_SECRET')
+      expectNoLogtoValuesInOutput(combinedOutput)
     })
   })
 
   it('fails partial Logto env even when dev admin email is provided', async () => {
-    await withHostSessionEnv({
-      AIWORKER_HOST_SESSION_SECRET: completeLogtoEnv.AIWORKER_HOST_SESSION_SECRET,
-      LOGTO_CLIENT_ID: completeLogtoEnv.LOGTO_CLIENT_ID,
-      LOGTO_ENDPOINT: completeLogtoEnv.LOGTO_ENDPOINT,
-      LOGTO_ISSUER: completeLogtoEnv.LOGTO_ISSUER,
-    }, async () => {
+    await withHostSessionEnv(partialLogtoEnv, async () => {
       const calls: any[] = []
       const code = await runHostCli([
         'serve',
@@ -449,8 +451,8 @@ describe('aiworker-host control CLI', () => {
 
       expect(code).toBe(1)
       expect(calls).toEqual([])
-      expect(errorOutput).toContain('LOGTO_CLIENT_SECRET')
-      expect(`${output}\n${errorOutput}`).not.toContain('literal-session-secret-value-1234567890')
+      expect(errorOutput.trim()).toBe('Missing required Logto env: LOGTO_CLIENT_SECRET')
+      expectNoLogtoValuesInOutput(`${output}\n${errorOutput}`)
     })
   })
 
@@ -640,6 +642,109 @@ describe('aiworker-host control CLI', () => {
     })
   })
 
+  it('fails Host lifecycle start before calling lifecycle when Logto env is partial', async () => {
+    await withHostSessionEnv(partialLogtoEnv, async () => {
+      const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+      const hostLifecycle = {
+        async start(input: Record<string, unknown>) {
+          calls.push({ input, method: 'start' })
+          return { apiUrl: 'http://127.0.0.1:9117', webUrl: 'http://127.0.0.1:5050/host' }
+        },
+      }
+
+      const code = await runHostCli([
+        'start',
+        '--dev-admin-email',
+        'admin@zonease.org',
+      ], { hostLifecycle } as any)
+
+      expect(code).toBe(1)
+      expect(calls).toEqual([])
+      expect(errorOutput.trim()).toBe('Missing required Logto env: LOGTO_CLIENT_SECRET')
+      expectNoLogtoValuesInOutput(`${output}\n${errorOutput}`)
+    })
+  })
+
+  it('passes Logto session auth to lifecycle start and does not pass static admin authority', async () => {
+    await withHostSessionEnv(completeLogtoEnv, async () => {
+      const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+      const hostLifecycle = {
+        async start(input: Record<string, unknown>) {
+          calls.push({ input, method: 'start' })
+          return {
+            apiUrl: 'https://aiworker.zonease.org',
+            mode: input.mode,
+            webUrl: 'https://host.zonease.app/host',
+          }
+        },
+      }
+
+      const code = await runHostCli([
+        'start',
+        '--host',
+        '0.0.0.0',
+        '--port',
+        '9117',
+        '--db',
+        '/srv/aiworker/host.db',
+        '--public-base-url',
+        'https://aiworker.zonease.org',
+        '--browser-base-url',
+        'https://host.zonease.app',
+        '--control-base-url',
+        'https://control.zonease.app',
+        '--dev-admin-email',
+        'admin@zonease.org',
+      ], { hostLifecycle } as any)
+
+      expect(code).toBe(0)
+      const input = calls[0]!.input
+      expect(input.devAdminEmail).toBeUndefined()
+      expect(input.hostBrowserBaseUrl).toBe('https://host.zonease.app')
+      expect(input.hostControlBaseUrl).toBe('https://control.zonease.app')
+      expect(input.sessionAuth).toEqual({
+        oidc: {
+          clientId: 'logto-client-id',
+          clientSecret: 'literal-client-secret-value',
+          endpoint: 'https://auth.zonease.org/',
+          issuer: 'https://auth.zonease.org/oidc',
+          redirectUri: 'https://host.zonease.app/auth/callback',
+        },
+        sessionSecret: 'literal-session-secret-value-1234567890',
+      })
+    })
+  })
+
+  it('keeps lifecycle dev admin behavior when Logto env is absent', async () => {
+    await withHostSessionEnv({}, async () => {
+      const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+      const hostLifecycle = {
+        async start(input: Record<string, unknown>) {
+          calls.push({ input, method: 'start' })
+          return {
+            apiUrl: 'http://127.0.0.1:9117',
+            mode: input.mode,
+            webUrl: 'http://127.0.0.1:5050/host',
+          }
+        },
+      }
+
+      const code = await runHostCli([
+        'start',
+        '--dev',
+        '--db',
+        '/tmp/host.db',
+        '--dev-admin-email',
+        'admin@zonease.org',
+      ], { hostLifecycle } as any)
+
+      expect(code).toBe(0)
+      const input = calls[0]!.input
+      expect(input.devAdminEmail).toBe('admin@zonease.org')
+      expect(input.sessionAuth).toBeUndefined()
+    })
+  })
+
   it('starts Host production lifecycle as a background Host daemon with static Web', async () => {
     const calls: Array<{ input: Record<string, unknown>, method: string }> = []
     const hostLifecycle = {
@@ -721,6 +826,8 @@ describe('aiworker-host control CLI', () => {
     expect(calls).toEqual([{
       input: {
         dbPath: '/srv/aiworker/host.db',
+        hostBrowserBaseUrl: 'https://host.zonease.app',
+        hostControlBaseUrl: 'https://control.zonease.app',
         host: '0.0.0.0',
         mode: 'prod',
         port: 9117,
@@ -831,6 +938,80 @@ describe('aiworker-host control CLI', () => {
       foreground: true,
       mode: 'prod',
       webUrl: 'https://aiworker.zonease.org/host',
+    })
+  })
+
+  it('fails Host daemon foreground before calling lifecycle when Logto env is partial', async () => {
+    await withHostSessionEnv(partialLogtoEnv, async () => {
+      const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+      const hostLifecycle = {
+        async foreground(input: Record<string, unknown>) {
+          calls.push({ input, method: 'foreground' })
+          return {
+            apiUrl: 'https://aiworker.zonease.org',
+            foreground: true,
+            webUrl: 'https://aiworker.zonease.org/host',
+          }
+        },
+      }
+
+      const code = await runHostCli([
+        'daemon',
+        'foreground',
+        '--dev-admin-email',
+        'admin@zonease.org',
+      ], { hostLifecycle } as any)
+
+      expect(code).toBe(1)
+      expect(calls).toEqual([])
+      expect(errorOutput.trim()).toBe('Missing required Logto env: LOGTO_CLIENT_SECRET')
+      expectNoLogtoValuesInOutput(`${output}\n${errorOutput}`)
+    })
+  })
+
+  it('passes Logto session auth to daemon foreground lifecycle and does not pass static admin authority', async () => {
+    await withHostSessionEnv(completeLogtoEnv, async () => {
+      const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+      const hostLifecycle = {
+        async foreground(input: Record<string, unknown>) {
+          calls.push({ input, method: 'foreground' })
+          return {
+            apiUrl: 'https://aiworker.zonease.org',
+            foreground: true,
+            mode: input.mode,
+            webUrl: 'https://aiworker.zonease.org/host',
+          }
+        },
+      }
+
+      const code = await runHostCli([
+        'daemon',
+        'foreground',
+        '--host',
+        '0.0.0.0',
+        '--port',
+        '9117',
+        '--db',
+        '/srv/aiworker/host.db',
+        '--public-base-url',
+        'https://aiworker.zonease.org',
+        '--dev-admin-email',
+        'admin@zonease.org',
+      ], { hostLifecycle } as any)
+
+      expect(code).toBe(0)
+      const input = calls[0]!.input
+      expect(input.devAdminEmail).toBeUndefined()
+      expect(input.sessionAuth).toEqual({
+        oidc: {
+          clientId: 'logto-client-id',
+          clientSecret: 'literal-client-secret-value',
+          endpoint: 'https://auth.zonease.org/',
+          issuer: 'https://auth.zonease.org/oidc',
+          redirectUri: 'https://aiworker.zonease.org/auth/callback',
+        },
+        sessionSecret: 'literal-session-secret-value-1234567890',
+      })
     })
   })
 

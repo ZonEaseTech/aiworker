@@ -84,6 +84,8 @@ function hostLifecycleStatePath(options: { manifest?: string }): string | undefi
 }
 
 interface HostLifecycleCommandOptions {
+  browserBaseUrl?: string
+  controlBaseUrl?: string
   db?: string
   dev?: boolean
   devAdminEmail?: string
@@ -99,22 +101,34 @@ function hostLifecycleInput(options: HostLifecycleCommandOptions): {
   dbPath: string
   devAdminEmail?: string
   host: string
+  hostBrowserBaseUrl?: string
+  hostControlBaseUrl?: string
   manifestPath?: string
   mode: 'dev' | 'prod'
   port: number
   publicBaseUrl?: string
+  sessionAuth?: ReturnType<typeof buildSessionAuthFromEnv>
   webPort?: number
   webStaticDir?: string
 } {
   const mode = options.dev ? 'dev' : 'prod'
+  const host = options.host ?? '127.0.0.1'
+  const port = parsePositiveInteger(options.port ?? '9117', '--port')
+  const hostBrowserBaseUrl = options.browserBaseUrl ?? readNonEmptyEnvValue(process.env, 'AIWORKER_HOST_BROWSER_BASE_URL')
+  const hostControlBaseUrl = options.controlBaseUrl ?? readNonEmptyEnvValue(process.env, 'AIWORKER_HOST_CONTROL_BASE_URL')
+  const publicBaseUrl = options.publicBaseUrl ?? readNonEmptyEnvValue(process.env, 'AIWORKER_HOST_API_URL')
+  const sessionAuth = buildSessionAuthFromEnv(process.env, hostBrowserBaseUrl ?? publicBaseUrl ?? `http://${host}:${port}`)
   return {
     dbPath: options.db ?? `${process.env.HOME ?? '.'}/.aiworker-dev/host.db`,
-    ...(options.devAdminEmail ? { devAdminEmail: options.devAdminEmail } : {}),
-    host: options.host ?? '127.0.0.1',
+    ...(!sessionAuth && options.devAdminEmail ? { devAdminEmail: options.devAdminEmail } : {}),
+    host,
+    ...(hostBrowserBaseUrl ? { hostBrowserBaseUrl } : {}),
+    ...(hostControlBaseUrl ? { hostControlBaseUrl } : {}),
     ...(hostLifecycleStatePath(options) ? { manifestPath: hostLifecycleStatePath(options) } : {}),
     mode,
-    port: parsePositiveInteger(options.port ?? '9117', '--port'),
-    ...(options.publicBaseUrl ? { publicBaseUrl: options.publicBaseUrl } : {}),
+    port,
+    ...(publicBaseUrl ? { publicBaseUrl } : {}),
+    ...(sessionAuth ? { sessionAuth } : {}),
     ...(mode === 'dev' ? { webPort: parsePositiveInteger(options.webPort ?? '5050', '--web-port') } : {}),
     ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
   }

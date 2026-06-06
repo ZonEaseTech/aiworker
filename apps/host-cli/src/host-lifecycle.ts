@@ -3,6 +3,9 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, write
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+
+import type { OidcClientConfig, OidcFetch } from './host-oidc-client'
+
 import { createHostServer } from './host-server'
 
 export type HostLifecycleMode = 'dev' | 'prod'
@@ -28,12 +31,23 @@ export interface HostLifecycleStartInput {
   dbPath: string
   devAdminEmail?: string
   host: string
+  hostBrowserBaseUrl?: string
+  hostControlBaseUrl?: string
   manifestPath?: string
   mode: HostLifecycleMode
   port: number
   publicBaseUrl?: string
+  sessionAuth?: HostLifecycleSessionAuthOptions
   webPort?: number
   webStaticDir?: string
+}
+
+export interface HostLifecycleSessionAuthOptions {
+  fetch?: OidcFetch
+  now?: () => Date
+  oidc: OidcClientConfig
+  randomBytes?: (size: number) => Buffer
+  sessionSecret: string
 }
 
 export interface HostLifecycleStatusInput {
@@ -106,10 +120,13 @@ async function startHostDevLifecycle(input: HostLifecycleStartInput): Promise<Re
   const env = {
     ...process.env,
     AIWORKER_HOST: input.host,
+    AIWORKER_HOST_API_URL: normalizePublicBaseUrl(input.publicBaseUrl ?? `http://${input.host}:${input.port}`),
     AIWORKER_HOST_API_PORT: String(input.port),
     AIWORKER_HOST_DB: input.dbPath,
     AIWORKER_HOST_DEV_ADMIN_EMAIL: input.devAdminEmail ?? process.env.AIWORKER_HOST_DEV_ADMIN_EMAIL ?? 'admin@zonease.org',
     ...(input.manifestPath ? { AIWORKER_HOST_MANIFEST: input.manifestPath } : {}),
+    ...(input.hostBrowserBaseUrl ? { AIWORKER_HOST_BROWSER_BASE_URL: input.hostBrowserBaseUrl } : {}),
+    ...(input.hostControlBaseUrl ? { AIWORKER_HOST_CONTROL_BASE_URL: input.hostControlBaseUrl } : {}),
     ...(input.webPort ? { AIWORKER_HOST_WEB_PORT: String(input.webPort) } : {}),
   }
   const result = runCommand('bash', ['scripts/dev-host.sh'], { cwd: repoRoot, env })
@@ -160,7 +177,9 @@ async function startHostProdLifecycle(input: HostLifecycleStartInput): Promise<R
     manifestPath,
     '--web-static-dir',
     webStaticDir,
-    ...(input.devAdminEmail ? ['--dev-admin-email', input.devAdminEmail] : []),
+    ...(input.hostBrowserBaseUrl ? ['--browser-base-url', input.hostBrowserBaseUrl] : []),
+    ...(input.hostControlBaseUrl ? ['--control-base-url', input.hostControlBaseUrl] : []),
+    ...(!input.sessionAuth && input.devAdminEmail ? ['--dev-admin-email', input.devAdminEmail] : []),
   ], {
     cwd: repoRoot,
     detached: true,
@@ -201,7 +220,7 @@ async function startHostProdForegroundLifecycle(input: HostLifecycleStartInput):
   const publicBaseUrl = normalizePublicBaseUrl(input.publicBaseUrl ?? `http://${input.host}:${input.port}`)
   mkdirSync(dirname(manifestPath), { recursive: true })
   const server = await createHostServer({
-    authUser: input.devAdminEmail
+    authUser: !input.sessionAuth && input.devAdminEmail
       ? {
           email: input.devAdminEmail,
           roles: ['host:admin'],
@@ -209,7 +228,10 @@ async function startHostProdForegroundLifecycle(input: HostLifecycleStartInput):
         }
       : null,
     dbPath: input.dbPath,
+    ...(input.hostBrowserBaseUrl ? { hostBrowserBaseUrl: input.hostBrowserBaseUrl } : {}),
+    ...(input.hostControlBaseUrl ? { hostControlBaseUrl: input.hostControlBaseUrl } : {}),
     publicBaseUrl,
+    ...(input.sessionAuth ? { sessionAuth: input.sessionAuth } : {}),
     webStaticDir,
   })
   const bunServer = Bun.serve({
@@ -255,7 +277,7 @@ async function startHostDevForegroundLifecycle(input: HostLifecycleStartInput): 
   const webUrl = `http://${input.host}:${input.webPort ?? 5050}/host`
   mkdirSync(dirname(manifestPath), { recursive: true })
   const server = await createHostServer({
-    authUser: input.devAdminEmail
+    authUser: !input.sessionAuth && input.devAdminEmail
       ? {
           email: input.devAdminEmail,
           roles: ['host:admin'],
@@ -263,7 +285,10 @@ async function startHostDevForegroundLifecycle(input: HostLifecycleStartInput): 
         }
       : null,
     dbPath: input.dbPath,
+    ...(input.hostBrowserBaseUrl ? { hostBrowserBaseUrl: input.hostBrowserBaseUrl } : {}),
+    ...(input.hostControlBaseUrl ? { hostControlBaseUrl: input.hostControlBaseUrl } : {}),
     publicBaseUrl,
+    ...(input.sessionAuth ? { sessionAuth: input.sessionAuth } : {}),
     webBaseUrl: webUrl,
   })
   const bunServer = Bun.serve({
