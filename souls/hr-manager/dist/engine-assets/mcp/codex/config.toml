@@ -1,3 +1,0 @@
-# 人事经理 Soul 的 Codex 原生 MCP 占位配置。
-# 如需接入招聘系统 / HRIS / 日历等 MCP server，在此声明。
-# 作者可在本地文件中写入真实密钥，但密钥不会被复制进 descriptor、数据库、日志或 UI。

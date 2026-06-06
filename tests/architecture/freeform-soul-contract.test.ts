@@ -154,6 +154,17 @@ describe('Freeform Soul descriptor contract', () => {
     expect(strongAcceptanceSoulPaths).not.toContain('souls/aiworker-hr/dist/soul.descriptor.json')
   })
 
+  test('Soul dist output is generated locally and not tracked by Git', () => {
+    const tracked = Bun.spawnSync(['git', 'ls-files', 'souls/**/dist/**'], {
+      cwd: repoRoot,
+      stderr: 'pipe',
+      stdout: 'pipe',
+    })
+
+    expect(tracked.exitCode).toBe(0)
+    expect(tracked.stdout.toString().trim()).toBe('')
+  })
+
   test('SDK public surface exposes descriptor authoring builders and validators, not old source entrypoints', async () => {
     const sdk = await import('../../packages/soul-sdk/src/index')
 
