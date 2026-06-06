@@ -10,12 +10,38 @@ import { createHostServer } from './host-server'
 
 export interface HostCliDeps {
   bunServe?: typeof Bun.serve
+  fetch?: typeof fetch
   registry?: WorkerRegistry
   serverFactory?: typeof createHostServerType
 }
 
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`)
+}
+
+function normalizeHostUrl(input: string | undefined): string {
+  return (input ?? 'http://127.0.0.1:9117').replace(/\/+$/, '')
+}
+
+async function readJsonResponse(response: Response): Promise<unknown> {
+  try {
+    return await response.json()
+  }
+  catch {
+    return null
+  }
+}
+
+async function requestHostJson(fetchImpl: typeof fetch, url: string, init?: RequestInit): Promise<unknown> {
+  const response = await fetchImpl(url, init)
+  const body = await readJsonResponse(response)
+  if (!response.ok) {
+    const code = typeof body === 'object' && body && 'error' in body
+      ? JSON.stringify((body as { error: unknown }).error)
+      : `HTTP ${response.status}`
+    throw new Error(`Host API request failed: ${code}`)
+  }
+  return body
 }
 
 // cac 不支持多词子命令的逐 token 匹配：把 ['worker','list'] 合并成单 token
@@ -36,11 +62,46 @@ export function preprocessHostArgv(argv: string[], commandNames: string[]): stri
 
 export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promise<number> {
   const registry = deps.registry ?? createWorkerRegistry()
+  const fetchImpl = deps.fetch ?? fetch
   const cli = cac('aiworker-host')
   cli
     .command('worker list', 'list workers registered with this Host control plane')
     .action(() => {
       printJson({ workers: registry.list() })
+    })
+  cli
+    .command('assignment create', 'create a Worker assignment through the Host API')
+    .option('--email <email>', 'assigned employee email')
+    .option('--server <server>', 'server reference for provisioning')
+    .option('--soul <soul>', 'Soul release reference')
+    .option('--host <url>', 'Host API base URL', { default: 'http://127.0.0.1:9117' })
+    .action(async (options: { email?: string, host?: string, server?: string, soul?: string }) => {
+      if (!options.email)
+        throw new Error('Missing required option: --email <email>')
+      if (!options.server)
+        throw new Error('Missing required option: --server <server>')
+      if (!options.soul)
+        throw new Error('Missing required option: --soul <soul>')
+
+      const host = normalizeHostUrl(options.host)
+      const result = await requestHostJson(fetchImpl, `${host}/api/host/assignments`, {
+        body: JSON.stringify({
+          assignedEmail: options.email,
+          serverRef: options.server,
+          soulReleaseRef: options.soul,
+        }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      })
+      printJson(result)
+    })
+  cli
+    .command('assignment list', 'list Worker assignments through the Host API')
+    .option('--host <url>', 'Host API base URL', { default: 'http://127.0.0.1:9117' })
+    .action(async (options: { host?: string }) => {
+      const host = normalizeHostUrl(options.host)
+      const result = await requestHostJson(fetchImpl, `${host}/api/host/assignments`)
+      printJson(result)
     })
   cli
     .command('serve', 'serve the Host provisioning/control API')

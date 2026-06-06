@@ -10,6 +10,10 @@ describe('aiworker-host control CLI', () => {
   const originalWrite = process.stdout.write
   let output = ''
 
+  function testFetch(impl: (...args: Parameters<typeof fetch>) => Promise<Response>): typeof fetch {
+    return Object.assign(impl, { preconnect: (() => {}) as typeof fetch.preconnect }) as typeof fetch
+  }
+
   beforeEach(() => {
     output = ''
     process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -115,5 +119,104 @@ describe('aiworker-host control CLI', () => {
       roles: ['host:admin'],
       subject: 'dev-admin',
     })
+  })
+
+  it('creates an assignment through the Host API', async () => {
+    const requests: Request[] = []
+    const code = await runHostCli([
+      'assignment',
+      'create',
+      '--email',
+      'Bob@Zonease.org',
+      '--server',
+      'aissh://server/ap-sg-01',
+      '--soul',
+      'aiworker-freeform@dev',
+      '--host',
+      'http://127.0.0.1:9117',
+    ], {
+      fetch: testFetch(async (input, init) => {
+        const request = new Request(input, init)
+        requests.push(request)
+        expect(request.method).toBe('POST')
+        expect(request.url).toBe('http://127.0.0.1:9117/api/host/assignments')
+        expect(await request.json()).toEqual({
+          assignedEmail: 'Bob@Zonease.org',
+          serverRef: 'aissh://server/ap-sg-01',
+          soulReleaseRef: 'aiworker-freeform@dev',
+        })
+        return new Response(JSON.stringify({
+          assignment: {
+            assignedEmail: 'bob@zonease.org',
+            assignmentId: 'asn_1',
+            serverRef: 'aissh://server/ap-sg-01',
+            soulReleaseRef: 'aiworker-freeform@dev',
+            status: 'provisioning',
+            workerId: null,
+            workbenchUrl: null,
+          },
+          provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --host http://127.0.0.1:9117 --token awp_secret',
+        }), { headers: { 'content-type': 'application/json' }, status: 201 })
+      }),
+    })
+
+    expect(code).toBe(0)
+    expect(requests).toHaveLength(1)
+    const parsed = JSON.parse(output)
+    expect(parsed.assignment.assignedEmail).toBe('bob@zonease.org')
+    expect(parsed.provisionCommand).toContain('--token awp_secret')
+  })
+
+  it('lists assignments through the Host API without printing tokens', async () => {
+    const code = await runHostCli([
+      'assignment',
+      'list',
+      '--host',
+      'http://127.0.0.1:9117',
+    ], {
+      fetch: testFetch(async (input, init) => {
+        const request = new Request(input, init)
+        expect(request.method).toBe('GET')
+        expect(request.url).toBe('http://127.0.0.1:9117/api/host/assignments')
+        return new Response(JSON.stringify({
+          assignments: [{
+            assignedEmail: 'bob@zonease.org',
+            assignmentId: 'asn_1',
+            serverRef: 'aissh://server/ap-sg-01',
+            soulReleaseRef: 'aiworker-freeform@dev',
+            status: 'checked_in',
+            workerId: 'wkr_82',
+            workbenchUrl: null,
+          }],
+        }), { headers: { 'content-type': 'application/json' } })
+      }),
+    })
+
+    expect(code).toBe(0)
+    expect(output).toContain('bob@zonease.org')
+    expect(output).not.toContain('awp_')
+    expect(output).not.toContain('provisionToken')
+  })
+
+  it('returns exit code 1 when assignment create receives a Host API error', async () => {
+    const code = await runHostCli([
+      'assignment',
+      'create',
+      '--email',
+      'bad',
+      '--server',
+      'aissh://server/ap-sg-01',
+      '--soul',
+      'aiworker-freeform@dev',
+    ], {
+      fetch: testFetch(async () => {
+        return new Response(JSON.stringify({ error: { code: 'INVALID_ASSIGNMENT_REQUEST' } }), {
+          headers: { 'content-type': 'application/json' },
+          status: 400,
+        })
+      }),
+    })
+
+    expect(code).toBe(1)
   })
 })
