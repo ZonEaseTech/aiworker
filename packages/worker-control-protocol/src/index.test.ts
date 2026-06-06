@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   parseWorkerAccessHello,
+  parseWorkerAccessFrame,
   parseWorkerAccessRequestEnvelope,
   parseWorkerAccessReceipt,
   parseWorkerAccessResponseEnvelope,
@@ -200,6 +201,55 @@ describe('worker-control-protocol contract', () => {
       token: 'awt_token',
       workerId: 'worker-1',
     })
+  })
+
+  test('worker access hello frame binds worker assignment and token without extras', () => {
+    expect(parseWorkerAccessFrame({
+      type: 'hello',
+      assignmentId: 'asn_1',
+      token: 'awt_secret',
+      workerId: 'wkr_82',
+    })).toEqual({
+      type: 'hello',
+      assignmentId: 'asn_1',
+      token: 'awt_secret',
+      workerId: 'wkr_82',
+    })
+
+    expect(() => parseWorkerAccessFrame({
+      type: 'hello',
+      assignmentId: 'asn_1',
+      token: 'awt_secret',
+      workerId: 'wkr_82',
+      localUrl: 'http://127.0.0.1:9217',
+    } as never)).toThrow()
+  })
+
+  test('worker access frame parser accepts request response ping pong and close only', () => {
+    const request = parseWorkerAccessFrame({
+      type: 'request',
+      id: 'req_1',
+      method: 'GET',
+      path: '/api/info',
+      headers: {},
+      bodyText: '',
+    })
+    expect(request.type).toBe('request')
+    expect(parseWorkerAccessFrame({ type: 'response', id: 'req_1', status: 200, headers: {}, bodyText: '' })).toEqual({
+      type: 'response',
+      id: 'req_1',
+      status: 200,
+      headers: {},
+      bodyText: '',
+    })
+    expect(parseWorkerAccessFrame({ type: 'ping', id: 'ping_1' })).toEqual({ type: 'ping', id: 'ping_1' })
+    expect(parseWorkerAccessFrame({ type: 'pong', id: 'ping_1' })).toEqual({ type: 'pong', id: 'ping_1' })
+    expect(parseWorkerAccessFrame({ type: 'close', id: 'req_1', reason: 'client-aborted' })).toEqual({
+      type: 'close',
+      id: 'req_1',
+      reason: 'client-aborted',
+    })
+    expect(() => parseWorkerAccessFrame({ type: 'long_poll', id: 'x' } as never)).toThrow()
   })
 
   test('access request envelope is strict', () => {

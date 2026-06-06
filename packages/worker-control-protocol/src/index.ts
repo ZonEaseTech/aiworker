@@ -89,6 +89,38 @@ export const workerAccessResponseEnvelopeSchema = z.object({
   bodyText: z.string(),
 }).strict()
 
+export const workerAccessHelloFrameSchema = z.object({
+  type: z.literal('hello'),
+  assignmentId: z.string().min(1),
+  token: z.string().min(1),
+  workerId: z.string().min(1),
+}).strict()
+
+export const workerAccessPingFrameSchema = z.object({
+  type: z.literal('ping'),
+  id: z.string().min(1),
+}).strict()
+
+export const workerAccessPongFrameSchema = z.object({
+  type: z.literal('pong'),
+  id: z.string().min(1),
+}).strict()
+
+export const workerAccessCloseFrameSchema = z.object({
+  type: z.literal('close'),
+  id: z.string().min(1),
+  reason: z.string().min(1).optional(),
+}).strict()
+
+export const workerAccessFrameSchema = z.discriminatedUnion('type', [
+  workerAccessHelloFrameSchema,
+  workerAccessPingFrameSchema,
+  workerAccessPongFrameSchema,
+  workerAccessRequestEnvelopeSchema,
+  workerAccessResponseEnvelopeSchema,
+  workerAccessCloseFrameSchema,
+])
+
 export type WorkerHealth = z.infer<typeof workerHealthSchema>
 export type WorkerDescribe = z.infer<typeof workerDescribeSchema>
 export type WorkerLifecycle = z.infer<typeof workerLifecycleSchema>
@@ -97,6 +129,11 @@ export type WorkerAccessReceipt = z.infer<typeof workerAccessReceiptSchema>
 export type WorkerAccessHello = z.infer<typeof workerAccessHelloSchema>
 export type WorkerAccessRequestEnvelope = z.infer<typeof workerAccessRequestEnvelopeSchema>
 export type WorkerAccessResponseEnvelope = z.infer<typeof workerAccessResponseEnvelopeSchema>
+export type WorkerAccessHelloFrame = z.infer<typeof workerAccessHelloFrameSchema>
+export type WorkerAccessPingFrame = z.infer<typeof workerAccessPingFrameSchema>
+export type WorkerAccessPongFrame = z.infer<typeof workerAccessPongFrameSchema>
+export type WorkerAccessCloseFrame = z.infer<typeof workerAccessCloseFrameSchema>
+export type WorkerAccessFrame = z.infer<typeof workerAccessFrameSchema>
 export type WorkerAssignmentReceipt = z.infer<typeof workerAssignmentReceiptSchema>
 export type WorkerCheckInRequest = z.infer<typeof workerCheckInRequestSchema>
 export type WorkerCheckInResponse = z.infer<typeof workerCheckInResponseSchema>
@@ -139,4 +176,8 @@ export function parseWorkerAccessRequestEnvelope(input: unknown): WorkerAccessRe
 
 export function parseWorkerAccessResponseEnvelope(input: unknown): WorkerAccessResponseEnvelope {
   return workerAccessResponseEnvelopeSchema.parse(input)
+}
+
+export function parseWorkerAccessFrame(input: unknown): WorkerAccessFrame {
+  return workerAccessFrameSchema.parse(input)
 }
