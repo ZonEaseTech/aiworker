@@ -5,10 +5,11 @@
 This spec designs a repo-local Codex skill for repeating the AIWorker Soul
 AGENTS.md and skill real-E2E tuning workflow.
 
-The workflow is specific to `/Users/ben/projects/aiworker`. It depends on the
-AIWorker canonical docs, official Soul package layout, `scripts/e2e-soul-sampling.ts`,
-real Worker CLI/Codex execution, ignored evidence under `tmp/e2e-soul-sampling/`,
-and source/dist Soul asset synchronization.
+The workflow is specific to AIWorker repository/worktree identity, not to one
+absolute local path. It depends on the AIWorker canonical docs, official Soul
+package layout, `scripts/e2e-soul-sampling.ts`, real Worker CLI/Codex execution,
+ignored evidence under `tmp/e2e-soul-sampling/`, and source/dist Soul asset
+synchronization.
 
 The skill will live at:
 
@@ -46,24 +47,58 @@ sampling loop without reducing it to a status report.
 
 ## Triggering
 
-The skill should trigger for AIWorker repo requests such as:
+The skill should trigger only when all three gates are satisfied:
+
+1. The current workspace is identified as an AIWorker repo/worktree, not merely
+   any checkout path with a similar directory name.
+2. The user is asking to run, continue, triage, retest, or tune the official
+   Soul output-quality sampling loop.
+3. The requested target is existing official Soul `AGENTS.md` or projected
+   skills, or existing evidence under `tmp/e2e-soul-sampling/`.
+
+Good trigger examples:
 
 - "继续 Soul 真实采样"
-- "多轮采样这些 souls/skills"
-- "不要 fake engine，真实 Codex 跑"
-- "调教 AGENTS.md 和 skill 到真实可用"
-- "复测 full-* evidence 里的失败"
-- "AIWorker Soul E2E sampling loop"
+- "多轮采样这些 souls/skills, 不要 fake engine"
+- "复测 full-product-manager evidence 里的失败"
+- "基于 tmp/e2e-soul-sampling 的结果调教官方 Soul"
+- "继续 AIWorker Soul output-quality sampling loop"
 
-The description should be explicit and pushy enough to trigger when the user
-mentions AIWorker Souls, AGENTS.md, skill tuning, real Codex sampling, or
-`tmp/e2e-soul-sampling`.
+The frontmatter description should be narrow and path-independent:
+
+```yaml
+description: Use only inside an AIWorker repository/worktree for the official Soul output-quality sampling loop: real Worker CLI/Codex runs over existing Soul AGENTS.md and projected skills, evidence under tmp/e2e-soul-sampling, and sampling-evidence-driven tuning/retest. Trigger when the user asks to run, continue, triage, or retest real multi-round Soul sampling, or says no fake engine for Soul calibration. Do not use for ordinary AIWorker feature work, generic E2E tests, normal Soul authoring, new skill creation, sampling harness development, or AGENTS/SKILL edits not driven by sampling evidence.
+```
+
+Do not use this skill for:
+
+- ordinary AIWorker feature development or bug fixes
+- generic E2E, contract, or smoke testing
+- creating a new Soul or a new skill
+- editing `AGENTS.md` or `SKILL.md` as normal content work
+- developing `scripts/e2e-soul-sampling.ts` itself
+- docs-only architecture work
+- any task without real sampling intent or sampling evidence
+
+If the user asks an ambiguous request such as "改 product-manager skill" or
+"跑 e2e", ask one clarifying question to distinguish the Soul sampling loop
+from ordinary project development.
 
 ## Skill Behavior
 
 ### 1. Start With Zero-Trust Context
 
-On trigger, the agent reads current repo truth before choosing work:
+Before acting, locate the git root from the current working directory and verify
+AIWorker repo identity without depending on an absolute local path. The identity
+check should confirm:
+
+- root `AGENTS.md` exists and is the AIWorker Agent Bootstrap
+- the five canonical docs exist
+- `scripts/e2e-soul-sampling.ts` exists
+- official Soul packages exist under `souls/*`
+
+If the identity check fails, do not use this skill. If it passes, read current
+repo truth before choosing work:
 
 - `AGENTS.md`
 - `docs/architecture.md`
