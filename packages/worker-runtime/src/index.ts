@@ -68,6 +68,14 @@ export {
   type LocalWorkerEventKind,
 } from './worker/events'
 export {
+  applyAutoEngineTitle,
+  applyAutoTruncatedTitle,
+  applyUserTitle,
+  readSessionTitleSource,
+  type SessionTitlePatch,
+  type SessionTitleSource,
+} from './worker/session-title-policy'
+export {
   createExternalEngineExecutor,
   DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS,
   type ExternalEngineExecutorOptions,
