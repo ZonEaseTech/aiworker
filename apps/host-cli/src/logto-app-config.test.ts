@@ -97,7 +97,7 @@ describe('logto proof app config', () => {
           return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
         if (url === 'https://explicit-tenant.logto.app/api/applications') {
           if (init?.method === 'GET')
-            return Response.json([])
+            return Response.json(lookupPage([]))
 
           return Response.json({ id: 'web-app-id', type: 'Traditional' })
         }
@@ -157,7 +157,7 @@ describe('logto proof app config', () => {
 
         if (url === 'https://zonease-test.logto.app/api/applications') {
           if (init?.method === 'GET')
-            return Response.json([])
+            return Response.json(lookupPage([]))
 
           return Response.json({ id: 'web-app-id', secret: 'deprecated-create-secret', type: 'Traditional' })
         }
@@ -224,7 +224,7 @@ describe('logto proof app config', () => {
           if (url.endsWith('/oidc/token'))
             return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
           if (url.endsWith('/api/applications') && init?.method === 'GET')
-            return Response.json([])
+            return Response.json(lookupPage([]))
           if (url.endsWith('/api/applications') && init?.method === 'POST')
             return Response.json({ id: 'web-app-id', secret: 'deprecated-create-secret', type: 'Traditional' })
           if (url.endsWith('/api/applications/web-app-id/secrets'))
@@ -258,10 +258,113 @@ describe('logto proof app config', () => {
     expect(result).toEqual(manualFallback('lookup', 403, 'management_api_request_failed'))
   })
 
+  it('scans paginated lookup before updating existing proof app', async () => {
+    const calls: { method: string, url: string }[] = []
+    const result = await ensureLogtoProofApplication({
+      config: tenantConfig,
+      fetch: async (input, init) => {
+        const url = input.toString()
+        const parsed = new URL(url)
+        const method = init?.method ?? 'GET'
+        calls.push({ method, url })
+        if (url.endsWith('/oidc/token'))
+          return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
+        if (parsed.pathname === '/api/applications' && method === 'GET') {
+          const page = parsed.searchParams.get('page') ?? '1'
+          if (page === '1') {
+            return Response.json({
+              data: [{ id: 'other-app-id', name: 'Other App' }],
+              page: 1,
+              page_size: 1,
+              total: 2,
+            })
+          }
+          if (page === '2') {
+            return Response.json({
+              data: [{ id: 'web-app-id', name: 'AIWorker Local Auth Proof' }],
+              page: 2,
+              page_size: 1,
+              total: 2,
+            })
+          }
+        }
+        if (url === 'https://zonease-test.logto.app/api/applications/web-app-id' && method === 'PATCH')
+          return Response.json({ id: 'web-app-id' })
+        if (url === 'https://zonease-test.logto.app/api/applications/web-app-id/secrets')
+          return Response.json([{ value: 'existing-secret' }])
+        if (parsed.pathname === '/api/applications' && method === 'POST')
+          return Response.json({ id: 'duplicate-web-app-id', type: 'Traditional' })
+
+        return new Response('not found', { status: 404 })
+      },
+      hostBrowserBaseUrl: 'http://localhost:54145',
+    })
+
+    expect(result).toEqual({
+      clientId: 'web-app-id',
+      clientSecret: 'existing-secret',
+      redirectUri: 'http://localhost:54145/auth/callback',
+    })
+    expect(calls).toContainEqual({
+      method: 'GET',
+      url: 'https://zonease-test.logto.app/api/applications?page=2&page_size=1',
+    })
+    expect(calls).toContainEqual({
+      method: 'PATCH',
+      url: 'https://zonease-test.logto.app/api/applications/web-app-id',
+    })
+    expect(calls.some(call => call.method === 'POST' && call.url.includes('/api/applications'))).toBe(false)
+  })
+
+  it('updates an existing proof app from lookup before reading secrets', async () => {
+    const calls: { method: string, url: string }[] = []
+    const result = await ensureLogtoProofApplication({
+      config: tenantConfig,
+      fetch: async (input, init) => {
+        const url = input.toString()
+        const method = init?.method ?? 'GET'
+        calls.push({ method, url })
+        if (url.endsWith('/oidc/token'))
+          return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
+        if (url === 'https://zonease-test.logto.app/api/applications' && method === 'GET') {
+          return Response.json({
+            data: [{ id: 'web-app-id', name: 'AIWorker Local Auth Proof' }],
+            page: 1,
+            pageSize: 20,
+            totalCount: 1,
+          })
+        }
+        if (url === 'https://zonease-test.logto.app/api/applications/web-app-id' && method === 'PATCH')
+          return Response.json({ id: 'web-app-id' })
+        if (url === 'https://zonease-test.logto.app/api/applications/web-app-id/secrets')
+          return Response.json([{ value: 'existing-secret' }])
+
+        return new Response('not found', { status: 404 })
+      },
+      hostBrowserBaseUrl: 'http://localhost:54145',
+    })
+
+    expect(result).toEqual({
+      clientId: 'web-app-id',
+      clientSecret: 'existing-secret',
+      redirectUri: 'http://localhost:54145/auth/callback',
+    })
+    expect(calls).toContainEqual({
+      method: 'PATCH',
+      url: 'https://zonease-test.logto.app/api/applications/web-app-id',
+    })
+    expect(calls).toContainEqual({
+      method: 'GET',
+      url: 'https://zonease-test.logto.app/api/applications/web-app-id/secrets',
+    })
+    expect(calls.some(call => call.method === 'POST' && call.url.includes('/api/applications'))).toBe(false)
+  })
+
   it('fails closed on malformed lookup response without creating duplicate app', async () => {
     const cases: [string, unknown][] = [
       ['null lookup', null],
       ['malformed object lookup', { unexpected: true }],
+      ['bare array lookup', []],
       ['invalid array element lookup', [{ id: 42, name: 'AIWorker Local Auth Proof' }]],
     ]
 
@@ -305,7 +408,7 @@ describe('logto proof app config', () => {
         if (url.endsWith('/oidc/token'))
           return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
         if (url.endsWith('/api/applications') && init?.method === 'GET')
-          return Response.json([])
+          return Response.json(lookupPage([]))
         return new Response('server-response-secret', { status: 500 })
       }],
       ['update 500', 'update', async (input, init) => {
@@ -313,7 +416,7 @@ describe('logto proof app config', () => {
         if (url.endsWith('/oidc/token'))
           return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
         if (url.endsWith('/api/applications') && init?.method === 'GET')
-          return Response.json([{ id: 'web-app-id', name: 'AIWorker Local Auth Proof' }])
+          return Response.json(lookupPage([{ id: 'web-app-id', name: 'AIWorker Local Auth Proof' }]))
         return new Response('server-response-secret', { status: 500 })
       }],
       ['secret-read 500', 'secret-read', async (input, init) => {
@@ -321,7 +424,7 @@ describe('logto proof app config', () => {
         if (url.endsWith('/oidc/token'))
           return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
         if (url.endsWith('/api/applications') && init?.method === 'GET')
-          return Response.json([])
+          return Response.json(lookupPage([]))
         if (url.endsWith('/api/applications') && init?.method === 'POST')
           return Response.json({ id: 'web-app-id', type: 'Traditional' })
         return new Response('server-response-secret', { status: 500 })
@@ -365,7 +468,7 @@ describe('logto proof app config', () => {
         if (url.endsWith('/oidc/token'))
           return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
         if (url.endsWith('/api/applications') && init?.method === 'GET')
-          return Response.json([])
+          return Response.json(lookupPage([]))
         if (url.endsWith('/api/applications') && init?.method === 'POST')
           return Response.json({ id: 'web-app-id', secret: 'deprecated-create-secret', type: 'Traditional' })
         if (url.endsWith('/api/applications/web-app-id/secrets'))
@@ -392,7 +495,7 @@ describe('logto proof app config', () => {
         if (url.endsWith('/oidc/token'))
           return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
         if (url.endsWith('/api/applications') && init?.method === 'GET')
-          return Response.json([])
+          return Response.json(lookupPage([]))
         if (url.endsWith('/api/applications') && init?.method === 'POST')
           return Response.json({ id: 'web-app-id', type: 'Traditional' })
         if (url.endsWith('/api/applications/web-app-id/secrets'))
@@ -407,6 +510,20 @@ describe('logto proof app config', () => {
     expect(JSON.stringify(result)).not.toContain('m2m-secret')
     expect(JSON.stringify(result)).not.toContain('web-app-id')
   })
+
+  function lookupPage(
+    data: unknown[],
+    input: { page?: number, pageSize?: number, total?: number } = {},
+  ) {
+    const page = input.page ?? 1
+    const pageSize = input.pageSize ?? 20
+    return {
+      data,
+      page,
+      page_size: pageSize,
+      total: input.total ?? data.length,
+    }
+  }
 
   function manualFallback(
     stage: ManualConfiguration['stage'],

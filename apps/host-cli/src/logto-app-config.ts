@@ -43,6 +43,14 @@ interface LogtoApplication {
   id: string
 }
 
+interface LogtoApplicationListPage {
+  applications: Array<{ id: string, name: string }>
+  page?: number
+  pageSize?: number
+  pageSizeParameter?: 'pageSize' | 'page_size'
+  total?: number
+}
+
 interface LogtoManagementConfig {
   apiIndicator: string
   endpoint: string
@@ -217,25 +225,38 @@ async function findProofApplication(
   fetchImpl: LogtoFetch,
   token: string,
 ): Promise<LogtoApplication | false | LogtoManagementFailure> {
-  const response = await safeFetch('lookup', fetchImpl, new URL('/api/applications', management.endpoint), {
-    headers: { authorization: `Bearer ${token}` },
-    method: 'GET',
-  })
-  if (isManagementFailure(response))
-    return response
-  if (!response.ok)
-    return managementRequestFailure('lookup', response.status)
+  let page = 1
+  let pageSize: number | undefined
+  let pageSizeParameter: 'pageSize' | 'page_size' = 'page_size'
 
-  const body = await safeResponseJson(response, 'lookup')
-  if (isManagementFailure(body))
-    return body
-  const applications = parseApplicationList(body)
-  if (isManagementFailure(applications))
-    return applications
+  while (true) {
+    const response = await safeFetch('lookup', fetchImpl, applicationLookupUrl(management, page, pageSize, pageSizeParameter), {
+      headers: { authorization: `Bearer ${token}` },
+      method: 'GET',
+    })
+    if (isManagementFailure(response))
+      return response
+    if (!response.ok)
+      return managementRequestFailure('lookup', response.status)
 
-  const app = applications.find(item => item.name === LOGTO_PROOF_APP_NAME)
+    const body = await safeResponseJson(response, 'lookup')
+    if (isManagementFailure(body))
+      return body
+    const applicationPage = parseApplicationListPage(body)
+    if (isManagementFailure(applicationPage))
+      return applicationPage
 
-  return app ? { id: app.id } : false
+    const app = applicationPage.applications.find(item => item.name === LOGTO_PROOF_APP_NAME)
+    if (app)
+      return { id: app.id }
+
+    if (!hasNextApplicationListPage(applicationPage))
+      return false
+
+    page = applicationPage.page + 1
+    pageSize = applicationPage.pageSize
+    pageSizeParameter = applicationPage.pageSizeParameter
+  }
 }
 
 async function createProofApplication(
@@ -444,33 +465,85 @@ function isManagementFailure(value: unknown): value is LogtoManagementFailure {
   )
 }
 
-function parseApplicationList(body: unknown): Array<{ id: string, name: string }> | LogtoManagementFailure {
-  const rawApplications = Array.isArray(body)
-    ? body
-    : isJsonRecord(body) && Array.isArray(body.data)
-      ? body.data
-      : null
-  if (!rawApplications) {
-    return {
-      reason: 'invalid_lookup_response',
-      stage: 'lookup',
-      status: 'invalid_response',
-    }
+function applicationLookupUrl(
+  management: LogtoManagementConfig,
+  page: number,
+  pageSize: number | undefined,
+  pageSizeParameter: 'pageSize' | 'page_size',
+) {
+  const url = new URL('/api/applications', management.endpoint)
+  if (page > 1) {
+    url.searchParams.set('page', String(page))
+    if (pageSize)
+      url.searchParams.set(pageSizeParameter, String(pageSize))
   }
 
+  return url
+}
+
+function parseApplicationListPage(body: unknown): LogtoApplicationListPage | LogtoManagementFailure {
+  if (!isJsonRecord(body) || !Array.isArray(body.data))
+    return invalidLookupResponse()
+
+  const applications = parseApplicationItems(body.data)
+  if (isManagementFailure(applications))
+    return applications
+
+  const page = body.page
+  const total = body.totalCount ?? body.total
+  const pageSizeParameter = typeof body.page_size === 'number' ? 'page_size' : 'pageSize'
+  const pageSize = body[pageSizeParameter]
+  if (!isPositiveInteger(page) || !isPositiveInteger(pageSize) || !isNonNegativeInteger(total))
+    return invalidLookupResponse()
+
+  return {
+    applications,
+    page,
+    pageSize,
+    pageSizeParameter,
+    total,
+  }
+}
+
+function parseApplicationItems(rawApplications: unknown[]): Array<{ id: string, name: string }> | LogtoManagementFailure {
   const applications: Array<{ id: string, name: string }> = []
   for (const item of rawApplications) {
-    if (!isJsonRecord(item) || typeof item.id !== 'string' || typeof item.name !== 'string') {
-      return {
-        reason: 'invalid_lookup_response',
-        stage: 'lookup',
-        status: 'invalid_response',
-      }
-    }
+    if (!isJsonRecord(item) || typeof item.id !== 'string' || typeof item.name !== 'string')
+      return invalidLookupResponse()
+
     applications.push({ id: item.id, name: item.name })
   }
 
   return applications
+}
+
+function hasNextApplicationListPage(page: LogtoApplicationListPage): page is LogtoApplicationListPage & {
+  page: number
+  pageSize: number
+  pageSizeParameter: 'pageSize' | 'page_size'
+  total: number
+} {
+  return typeof page.page === 'number'
+    && typeof page.pageSize === 'number'
+    && typeof page.pageSizeParameter === 'string'
+    && typeof page.total === 'number'
+    && page.page * page.pageSize < page.total
+}
+
+function invalidLookupResponse(): LogtoManagementFailure {
+  return {
+    reason: 'invalid_lookup_response',
+    stage: 'lookup',
+    status: 'invalid_response',
+  }
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
 }
 
 function isJsonRecord(value: unknown): value is Record<string, unknown> {
