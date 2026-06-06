@@ -42,10 +42,64 @@ export const workerAssignmentEnvelopeSchema = z.object({
   }),
 }).strict()
 
+export const workerCheckInRequestSchema = z.object({
+  provisionToken: z.string().min(1),
+  worker: workerDescribeSchema,
+}).strict()
+
+export const workerAssignmentReceiptSchema = z.object({
+  assignedEmail: z.string().email(),
+  assignmentId: z.string().min(1),
+  soulReleaseRef: z.string().min(1),
+  workerId: z.string().min(1),
+}).strict()
+
+export const workerAccessReceiptSchema = z.object({
+  mode: z.literal('worker_access'),
+  token: z.string().min(1),
+}).strict()
+
+export const workerCheckInResponseSchema = z.object({
+  access: workerAccessReceiptSchema,
+  assignment: workerAssignmentReceiptSchema,
+}).strict()
+
+export const workerAccessHelloSchema = z.object({
+  assignmentId: z.string().min(1),
+  token: z.string().min(1),
+  workerId: z.string().min(1),
+}).strict()
+
+const workerAccessHeadersSchema = z.record(z.string(), z.string())
+
+export const workerAccessRequestEnvelopeSchema = z.object({
+  type: z.literal('request'),
+  id: z.string().min(1),
+  method: z.string().min(1),
+  path: z.string().min(1),
+  headers: workerAccessHeadersSchema,
+  bodyText: z.string(),
+}).strict()
+
+export const workerAccessResponseEnvelopeSchema = z.object({
+  type: z.literal('response'),
+  id: z.string().min(1),
+  status: z.number().int().min(100).max(599),
+  headers: workerAccessHeadersSchema,
+  bodyText: z.string(),
+}).strict()
+
 export type WorkerHealth = z.infer<typeof workerHealthSchema>
 export type WorkerDescribe = z.infer<typeof workerDescribeSchema>
 export type WorkerLifecycle = z.infer<typeof workerLifecycleSchema>
 export type WorkerAssignmentEnvelope = z.infer<typeof workerAssignmentEnvelopeSchema>
+export type WorkerAccessReceipt = z.infer<typeof workerAccessReceiptSchema>
+export type WorkerAccessHello = z.infer<typeof workerAccessHelloSchema>
+export type WorkerAccessRequestEnvelope = z.infer<typeof workerAccessRequestEnvelopeSchema>
+export type WorkerAccessResponseEnvelope = z.infer<typeof workerAccessResponseEnvelopeSchema>
+export type WorkerAssignmentReceipt = z.infer<typeof workerAssignmentReceiptSchema>
+export type WorkerCheckInRequest = z.infer<typeof workerCheckInRequestSchema>
+export type WorkerCheckInResponse = z.infer<typeof workerCheckInResponseSchema>
 
 export function parseWorkerDescribe(input: unknown): WorkerDescribe {
   return workerDescribeSchema.parse(input)
@@ -57,4 +111,32 @@ export function parseWorkerLifecycle(input: unknown): WorkerLifecycle {
 
 export function parseWorkerAssignmentEnvelope(input: unknown): WorkerAssignmentEnvelope {
   return workerAssignmentEnvelopeSchema.parse(input)
+}
+
+export function parseWorkerCheckInRequest(input: unknown): WorkerCheckInRequest {
+  return workerCheckInRequestSchema.parse(input)
+}
+
+export function parseWorkerCheckInResponse(input: unknown): WorkerCheckInResponse {
+  return workerCheckInResponseSchema.parse(input)
+}
+
+export function parseWorkerAssignmentReceipt(input: unknown): WorkerAssignmentReceipt {
+  return workerAssignmentReceiptSchema.parse(input)
+}
+
+export function parseWorkerAccessReceipt(input: unknown): WorkerAccessReceipt {
+  return workerAccessReceiptSchema.parse(input)
+}
+
+export function parseWorkerAccessHello(input: unknown): WorkerAccessHello {
+  return workerAccessHelloSchema.parse(input)
+}
+
+export function parseWorkerAccessRequestEnvelope(input: unknown): WorkerAccessRequestEnvelope {
+  return workerAccessRequestEnvelopeSchema.parse(input)
+}
+
+export function parseWorkerAccessResponseEnvelope(input: unknown): WorkerAccessResponseEnvelope {
+  return workerAccessResponseEnvelopeSchema.parse(input)
 }

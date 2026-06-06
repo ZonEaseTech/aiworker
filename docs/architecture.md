@@ -143,10 +143,12 @@ plane is dormant in v1.
 
 ## Daemon Topology (daemon-per-worker)
 
-A Worker daemon hosts at most one active Worker. A Worker daemon carries zero
-fleet/Host awareness: it is a passive local server that serves its own CLI,
-Workbench web, and configuration. The Worker never registers with or pushes to
-Host.
+A Worker daemon hosts at most one active Worker. In v1, the daemon remains
+standalone and carries no fleet/Host runtime dependency: it serves its own CLI,
+Workbench web, and configuration without needing Host. In Phase 2, Worker may
+initiate provisioning check-in and Worker Access reverse tunnel connections to
+Host as distribution-plane signals only. These Worker-initiated signals are not
+runtime hot-path ownership.
 
 v1 scope: the standalone single-daemon path is the whole product — one daemon is
 one Worker with its own CLI, Workbench web, and configuration. Phase 2 adds Host
@@ -220,11 +222,13 @@ rendered by `apps/worker-web` from `packages/ui` primitives, driven by the local
 broker API and the engine bridge event stream.
 
 Host↔Worker integration is Phase 2 and is over-the-wire only, with zero code
-intrusion in either direction. Host does not mount, frame, or render the
-Workbench. The only Host-to-Worker product contract is the transport-agnostic
-control contract owned by `packages/worker-control-protocol`, where a Worker is
-the passive control server, Host is the client, and a Worker never initiates a
-connection to Host.
+intrusion in either direction. Phase 2 Host integration has two
+distribution-plane directions:
+
+- Host initiates provisioning through aissh and owns assignment/readiness records.
+- Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host.
+
+These Worker-initiated signals are not runtime hot-path ownership. Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.
 
 The control contract covers worker describe, health, instance lifecycle, and an
 assignment envelope. It must not carry session, invocation, projection, engine,

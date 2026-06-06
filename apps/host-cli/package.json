@@ -17,7 +17,10 @@
   },
   "dependencies": {
     "@zonease/aiworker-host-control": "workspace:*",
-    "cac": "^6.7.14"
+    "@zonease/aiworker-storage-sqlite": "workspace:*",
+    "@zonease/aiworker-worker-control-protocol": "workspace:*",
+    "cac": "^6.7.14",
+    "jose": "^6.1.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",

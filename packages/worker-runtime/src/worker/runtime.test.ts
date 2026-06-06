@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { appendSessionEvent, closeWorkerDb, createEngineInvocation, getEngineInvocation, getSession, getWorkerConfigValue, initWorkerDb, listEngineInvocations, listSessionEvents, runWorkerMigrations, updateSession, updateWorkspace, upsertWorker, upsertWorkerConfigValue } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
+import type { LocalExecutorInput } from './executor'
 import { LocalExecutorFailure } from './executor'
 import { LocalWorkerRuntime } from './runtime'
 import {
@@ -1600,6 +1601,72 @@ describe('LocalWorkerRuntime', () => {
     })
   })
 
+  it('interrupts a detached local executor on cancel and preserves cancelled state', async () => {
+    let entered!: () => void
+    let interrupted!: () => void
+    const capture: {
+      input?: LocalExecutorInput
+      releaseExecutor?: () => void
+    } = {}
+    const executorEntered = new Promise<void>(resolve => entered = resolve)
+    const executorInterrupted = new Promise<void>(resolve => interrupted = resolve)
+    const workerRuntime = runtime({
+      async invoke(input) {
+        capture.input = input
+        entered()
+        const { signal } = input
+        return await new Promise((resolve, reject) => {
+          capture.releaseExecutor = () => resolve({ summary: 'late answer' })
+          signal?.addEventListener('abort', () => {
+            interrupted()
+            reject(new LocalExecutorFailure('Interrupted by AIWorker Stop.'))
+          }, { once: true })
+        })
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Interrupt Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      title: 'Interrupt session',
+    })
+
+    try {
+      const started = await workerRuntime.startInvocationDetached({
+        sessionId: session.id,
+        input: 'Run until stopped.',
+        engineId: 'codex',
+        engineCommand: 'codex',
+      })
+      await executorEntered
+
+      if (!capture.input)
+        throw new Error('Executor input was not captured.')
+      expect(capture.input.signal).toBeInstanceOf(AbortSignal)
+      expect(capture.input.signal?.aborted).toBe(false)
+
+      const cancelled = await workerRuntime.cancelEngineInvocation(started.invocation.id, { reason: 'user-stop' })
+      expect(cancelled.invocation).toMatchObject({
+        id: started.invocation.id,
+        processState: 'killed',
+        status: 'cancelled',
+      })
+      await executorInterrupted
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(getEngineInvocation(started.invocation.id)).toMatchObject({
+        id: started.invocation.id,
+        processState: 'killed',
+        status: 'cancelled',
+        summary: 'Invocation cancelled.',
+      })
+      expect(listSessionEvents(session.id).filter(event => event.invocationId === started.invocation.id && event.type === 'error')).toEqual([])
+    }
+    finally {
+      capture.releaseExecutor?.()
+    }
+  })
+
   it('uses the engine bridge protocol cancel chain when a process handle is available', async () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({
@@ -2046,6 +2113,63 @@ describe('LocalWorkerRuntime', () => {
       status: 'lost',
     })
     expect(JSON.stringify(result)).not.toContain('sk-runtime-secret')
+  })
+
+  it('marks restart-orphaned running engine invocations lost on init', async () => {
+    const workerRuntime = runtime({
+      async invoke() {
+        return { summary: 'unused' }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Restart Reconcile Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      title: 'Restart reconcile session',
+    })
+    const invocation = createEngineInvocation({
+      id: 'restart-orphaned-invocation-1',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/restart-orphaned-invocation-1/input`,
+      metadataJson: {
+        processHandle: {
+          command: 'codex',
+          invocationId: 'restart-orphaned-invocation-1',
+          leaseId: 'previous-runtime-lease',
+          pgid: 999_999,
+          pid: 999_999,
+        },
+      },
+      processState: 'spawned',
+      status: 'running',
+      startedAt: now(),
+      at: now(),
+    })
+
+    const restartedRuntime = runtime({
+      async invoke() {
+        return { summary: 'unused' }
+      },
+    })
+    await restartedRuntime.init()
+
+    expect(getEngineInvocation(invocation.id)).toMatchObject({
+      failureCode: 'ENGINE_PROCESS_LOST',
+      processState: 'lost',
+      status: 'lost',
+      summary: 'Native engine process was lost.',
+    })
+    expect(getSession(session.id)?.status).toBe('active')
+    expect(listSessionEvents(session.id).at(-1)?.payloadJson).toMatchObject({
+      bridgeEvent: 'process.lost',
+      failureCode: 'ENGINE_PROCESS_LOST',
+      invocationId: invocation.id,
+      processState: 'lost',
+      status: 'lost',
+    })
   })
 
   it('materializes simplified session locator files with cwd, engine, and soul-app files', async () => {

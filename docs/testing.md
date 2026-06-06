@@ -102,6 +102,33 @@ apps/worker-cli/src/aiworker.test.ts
 tests/browser/freeform-cli-golden-path.spec.ts
 ```
 
+Real local engine CLI acceptance:
+
+```text
+tests/engine-real/engine-management.acceptance.ts
+```
+
+This gate intentionally uses the authenticated local `codex` and `claude`
+commands. It must not replace either engine with fake behavior. It validates
+the Worker runtime's process-management contract against both real CLIs:
+preflight/version, structured output parsing, Stop/cancel interrupt, hard
+timeout escalation, runtime dispose cleanup, and restart reconciliation to
+`lost`. The evidence JSON records the git head/dirty state, timeout settings,
+sample count, per-case process handles, process-group cleanup checks, and
+per-engine pass-rate summary. It is not part of the default `bun run test` or CI
+release gates because it depends on local engine authentication and may spend
+real model quota. Run the single-sample smoke explicitly with:
+
+```text
+bun run test:engine-real
+```
+
+For release-style local evidence, run repeated real samples:
+
+```text
+AIWORKER_ENGINE_REAL_SAMPLES=5 bun run test:engine-real
+```
+
 CLI release smoke contract tests:
 
 ```text
@@ -192,6 +219,7 @@ bun run test:contracts
 bun run test:protocol
 bun run test:cli
 bun run test:browser:freeform
+bun run test:browser:phase2
 bun run typecheck
 bun run lint
 bun run build
@@ -270,8 +298,22 @@ The product acceptance criteria are:
 - governance: assignment records carry only Soul version identity, connector
   authorization, permissions, gateway/profile refs, and lifecycle/provisioning
   metadata;
+- Phase 2 provisioning: aissh success is not ready until Worker check-in and access ready.
+- Worker access: `/workers/:workerId` is employee navigation through Worker Access Adapter, not Host-rendered UI.
+- Auth: Logto proves identity; AIWorker assignment decides exact Worker access.
 - anti-mount: no Phase 2 acceptance test may treat micro-app, mounted workbench,
   iframe, or Host-rendered Worker UI as product value.
+
+The Phase 2 browser proof gate is:
+
+```text
+bun run test:browser:phase2
+```
+
+It verifies that `/host` is the administrator control plane with `AI Workers`
+and `开通 AI Worker`, and that `/workers/:workerId` is not accepted as a
+Host-mounted Worker UI. The proof must not find `micro-app` or `iframe` on
+either `/host` or the Worker access path. Static preview/history fallback is not an end-to-end Worker Access Adapter proof.
 
 ## Pending Implementation (Phase-B Teardown)
 

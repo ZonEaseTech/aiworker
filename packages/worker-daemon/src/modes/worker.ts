@@ -7,6 +7,7 @@ import type { Context } from 'hono'
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
@@ -58,6 +59,7 @@ import { streamSSE } from 'hono/streaming'
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
 import { registerLocalOpenApiPaths } from './worker/openapi'
+import { checkInToHost, maybeProvisionCheckIn } from './worker/provision-client'
 import {
   createBrokerEngineInvocationBodySchema,
   createBrokerSessionBodySchema,
@@ -96,6 +98,7 @@ export interface BootstrapWorkerAppOptions {
   // 真实 CLI 入口 (aiworker start/daemon) 传 true 开启。见 docs/runtime.md。
   sessionAutoName?: boolean
   now?: () => string
+  provisionCheckIn?: typeof checkInToHost
 }
 
 export interface LocalDaemonState {
@@ -180,6 +183,12 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const runtime = state.host.createRuntimeForWorker(activeResolution.worker)
     await runtime.init()
     runtimes.set(activeResolution.worker.id, runtime)
+    await maybeProvisionCheckIn({
+      activeResolution,
+      checkIn: options.provisionCheckIn,
+      env: process.env,
+      runtimeVersion: state.runtimeVersion,
+    })
   }
 
   const app = new OpenAPIHono()

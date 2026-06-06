@@ -182,8 +182,12 @@ broker deterministic. They do not turn the daemon into a product backend.
 The Host control plane is Phase 2 and is not on the v1 runtime path.
 `packages/worker-control-protocol` defines a transport-agnostic control contract.
 It covers worker.describe, worker.health, worker.lifecycle, and a worker.assignment
-envelope. The Worker is the passive control server; Host is the client. A Worker
-never initiates a connection to Host.
+envelope. Phase 2 Host integration has two distribution-plane directions:
+
+- Host initiates provisioning through aissh and owns assignment/readiness records.
+- Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host.
+
+These Worker-initiated signals are not runtime hot-path ownership. Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.
 
 Phase 2 Host-to-Worker integration is over-the-wire only, with zero code
 intrusion in either direction. Host does not mount, frame, embed, render, or proxy
@@ -205,6 +209,14 @@ The Phase 2 MVP contract is therefore:
 
 ```text
 publish Soul version -> assign to employee/group -> provision employee Worker -> employee opens Worker Workbench
+```
+
+Phase 2 route block:
+
+```text
+POST   /api/provision/check-in
+GET    /api/provision/access
+GET    /workers/:workerId
 ```
 
 Host owns the publish/assign/provision governance path. Worker owns the

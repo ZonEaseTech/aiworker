@@ -1,13 +1,17 @@
 #!/usr/bin/env bun
 import type { WorkerRegistry } from '@zonease/aiworker-host-control'
+import type { createHostServer as createHostServerType } from './host-server'
 
 import process from 'node:process'
 
 import { createWorkerRegistry } from '@zonease/aiworker-host-control'
 import cac from 'cac'
+import { createHostServer } from './host-server'
 
 export interface HostCliDeps {
+  bunServe?: typeof Bun.serve
   registry?: WorkerRegistry
+  serverFactory?: typeof createHostServerType
 }
 
 function printJson(value: unknown): void {
@@ -37,6 +41,36 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     .command('worker list', 'list workers registered with this Host control plane')
     .action(() => {
       printJson({ workers: registry.list() })
+    })
+  cli
+    .command('serve', 'serve the Host provisioning/control API')
+    .option('--db <path>', 'Host sqlite database path', { default: 'host.db' })
+    .option('--dev-admin-email <email>', 'development-only static host admin email')
+    .option('--public-base-url <url>', 'public Host base URL', { default: 'http://127.0.0.1:9310' })
+    .option('--port <port>', 'listen port', { default: '9310' })
+    .action(async (options: { db: string, devAdminEmail?: string, port: string | number, publicBaseUrl: string }) => {
+      const port = Number(options.port)
+      if (!Number.isInteger(port) || port <= 0)
+        throw new Error(`Invalid port: ${options.port}`)
+
+      const publicBaseUrl = options.publicBaseUrl
+      const server = await (deps.serverFactory ?? createHostServer)({
+        authUser: options.devAdminEmail
+          ? {
+              email: options.devAdminEmail,
+              roles: ['host:admin'],
+              subject: 'dev-admin',
+            }
+          : null,
+        dbPath: options.db,
+        publicBaseUrl,
+      })
+      const bunServe = deps.bunServe ?? Bun.serve
+      bunServe({
+        fetch: server.fetch,
+        port,
+      })
+      printJson({ listening: true, port, publicBaseUrl })
     })
   cli.help()
 

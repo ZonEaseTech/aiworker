@@ -293,6 +293,13 @@ action and is not the default lifecycle behavior.
 
 Host→Worker assignment and lifecycle signals are Phase 2 distribution inputs. In
 v1 the Worker runs standalone and no Host signal affects its runtime execution.
+Phase 2 Host integration has two distribution-plane directions:
+
+- Host initiates provisioning through aissh and owns assignment/readiness records.
+- Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host.
+
+Phase 2 provisioning check-in and Worker Access tunnel signals are distribution-plane signals.
+These Worker-initiated signals are not runtime hot-path ownership. Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.
 In Phase 2, assignment changes may update Worker-scoped authorization and
 selection metadata at explicit sync points, but they must not expose session
 content to Host, interrupt native engine execution, replace projection ownership,

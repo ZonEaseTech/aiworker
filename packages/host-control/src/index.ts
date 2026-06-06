@@ -2,6 +2,11 @@ import type { WorkerAssignmentEnvelope, WorkerHealth } from '@zonease/aiworker-w
 
 import { parseWorkerAssignmentEnvelope } from '@zonease/aiworker-worker-control-protocol'
 
+export * from './access-adapter'
+export * from './assignment'
+export * from './auth'
+export * from './provision-token'
+
 export interface WorkerRegistryEntry {
   workerId: string
   // id 存 describe 响应里 worker 所运行 Soul 的单一 id（descriptor identity 已收口为

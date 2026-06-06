@@ -2187,7 +2187,9 @@ describe('destructive refactor contract bootstrap', () => {
 
     // canon 明文(needle 须 backtick-free + 不跨换行,与写入文本逐字一致)
     expect(architecture).toContain('A Worker daemon hosts at most one active Worker.')
-    expect(architecture).toContain('The Worker never registers with or pushes to\nHost.')
+    expect(architecture).toContain('In v1, the daemon remains\nstandalone and carries no fleet/Host runtime dependency')
+    expect(architecture).toContain('Worker may\ninitiate provisioning check-in and Worker Access reverse tunnel connections to\nHost as distribution-plane signals only.')
+    expect(architecture).toContain('These Worker-initiated signals are not\nruntime hot-path ownership.')
     expect(protocol).toContain('rejects creation when the daemon already hosts an active')
     expect(runtime).toContain('A daemon reconstitutes at most one active Worker at bootstrap')
 
