@@ -52,7 +52,7 @@ export class HostApiError extends Error {
 }
 
 interface CreateHostApiClientOptions {
-  baseUrl: string
+  baseUrl?: string
   fetch?: typeof fetch
 }
 
@@ -89,12 +89,12 @@ async function requestJson<T>(fetchImpl: typeof fetch, url: string, init?: Reque
   return body as T
 }
 
-export function hostApiBaseUrl(env: HostApiEnv): string {
+export function hostApiBaseUrl(env: HostApiEnv = {}): string {
   return (env.AIWORKER_HOST_API_URL ?? '').replace(/\/+$/, '')
 }
 
-export function createHostApiClient(options: CreateHostApiClientOptions): HostApiClient {
-  const baseUrl = options.baseUrl.replace(/\/+$/, '')
+export function createHostApiClient(options: CreateHostApiClientOptions = {}): HostApiClient {
+  const baseUrl = (options.baseUrl ?? hostApiBaseUrl()).replace(/\/+$/, '')
   const fetchImpl = options.fetch ?? fetch
   const assignmentsUrl = `${baseUrl}/api/host/assignments`
 

@@ -48,7 +48,7 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 
 describe('hostApiBaseUrl', () => {
   it('uses same-origin API paths by default', () => {
-    expect(hostApiBaseUrl({})).toBe('')
+    expect(hostApiBaseUrl()).toBe('')
   })
 
   it('trims trailing slashes from explicit Host API URLs', () => {
@@ -57,6 +57,10 @@ describe('hostApiBaseUrl', () => {
 })
 
 describe('createHostApiClient', () => {
+  it('can be constructed without options for same-origin runtime paths', () => {
+    expect(() => createHostApiClient()).not.toThrow()
+  })
+
   it('lists assignments from the configured Host API base URL', async () => {
     const fetchImpl = createFetch(jsonResponse({ assignments: [readyAssignment] }))
     const client = createHostApiClient({ baseUrl: 'http://host.test', fetch: fetchImpl })
@@ -70,7 +74,7 @@ describe('createHostApiClient', () => {
 
   it('uses same-origin assignment paths when the base URL is empty', async () => {
     const fetchImpl = createFetch(jsonResponse({ assignments: [] }))
-    const client = createHostApiClient({ baseUrl: '', fetch: fetchImpl })
+    const client = createHostApiClient({ fetch: fetchImpl })
 
     await client.listAssignments()
 
