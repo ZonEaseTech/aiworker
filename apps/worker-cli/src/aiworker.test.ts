@@ -1007,7 +1007,7 @@ describe('aiworker local CLI', () => {
     closeWorkerDb()
   })
 
-  it('cancels an active running engine invocation through CLI by invocation id', async () => {
+  it('reconciles a running invocation without an active process before CLI cancel', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
@@ -1044,28 +1044,92 @@ describe('aiworker local CLI', () => {
 
     expect(await runCli(argv('session', 'cancel', invocation.id, '--reason', 'operator pressed Ctrl+C token=sk-cli-active-cancel-secret'))).toBe(0)
 
+    const reconciled = JSON.parse(output) as {
+      invocation: { id: string, processState: string, sessionId: string, status: string, summary: string | null }
+      session: { id: string, status: string }
+    }
+    expect(reconciled.invocation).toMatchObject({
+      id: invocation.id,
+      processState: 'lost',
+      sessionId: session.id,
+      status: 'lost',
+      summary: 'Native engine process was lost.',
+    })
+    expect(reconciled.session).toMatchObject({ id: session.id, status: 'active' })
+    expect(output).not.toContain('sk-cli-active-cancel-secret')
+
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    const persisted = getEngineInvocation(invocation.id)
+    expect(persisted).toMatchObject({ status: 'lost', processState: 'lost' })
+    const events = listSessionEvents(session.id).filter(event => event.invocationId === invocation.id)
+    expect(events.at(-1)?.payloadJson).toMatchObject({
+      bridgeEvent: 'process.lost',
+      invocationId: invocation.id,
+      processState: 'lost',
+      status: 'lost',
+    })
+    closeWorkerDb()
+  })
+
+  it('cancels a queued engine invocation through CLI by invocation id', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'cancel-queued-worker', name: 'Cancel Queued Worker' })
+    output = ''
+    expect(await runCli(argv('worker', 'select', 'cancel-queued-worker'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('workspace', 'create', '--name', 'Cancel Queued Workspace', '--type', 'freeform', '--worker', 'cancel-queued-worker'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string } }).workspace
+    output = ''
+
+    closeWorkerDb()
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    const session = createSession({
+      id: 'cancel-queued-session-1',
+      metadataJson: {},
+      title: 'Cancel queued invocation',
+      workerId: 'cancel-queued-worker',
+      workspaceId: workspace.id,
+      at: '2026-05-28T00:00:00.000Z',
+    })
+    const invocation = createEngineInvocation({
+      engineCommand: 'codex',
+      engineId: 'codex',
+      id: 'cancel-queued-invocation-1',
+      inputRef: `aiworker://sessions/${session.id}/invocations/cancel-queued-invocation-1/input`,
+      processState: 'not_spawned',
+      seq: 1,
+      sessionId: session.id,
+      status: 'queued',
+    })
+    closeWorkerDb()
+
+    expect(await runCli(argv('session', 'cancel', invocation.id, '--reason', 'operator cancelled queued token=sk-cli-queued-cancel-secret'))).toBe(0)
+
     const cancelled = JSON.parse(output) as {
       invocation: { id: string, processState: string, sessionId: string, status: string, summary: string | null }
       session: { id: string, status: string }
     }
     expect(cancelled.invocation).toMatchObject({
       id: invocation.id,
-      processState: 'killed',
+      processState: 'not_spawned',
       sessionId: session.id,
       status: 'cancelled',
       summary: 'Invocation cancelled.',
     })
     expect(cancelled.session).toMatchObject({ id: session.id, status: 'active' })
-    expect(output).not.toContain('sk-cli-active-cancel-secret')
+    expect(output).not.toContain('sk-cli-queued-cancel-secret')
 
     initWorkerDb(process.env.WORKER_DB_PATH!)
     const persisted = getEngineInvocation(invocation.id)
-    expect(persisted).toMatchObject({ status: 'cancelled', processState: 'killed' })
+    expect(persisted).toMatchObject({ status: 'cancelled', processState: 'not_spawned' })
     const events = listSessionEvents(session.id).filter(event => event.invocationId === invocation.id)
     expect(events.at(-1)?.payloadJson).toMatchObject({
       bridgeEvent: 'invocation.cancelled',
       invocationId: invocation.id,
-      processState: 'killed',
+      processState: 'not_spawned',
       status: 'cancelled',
     })
     closeWorkerDb()
