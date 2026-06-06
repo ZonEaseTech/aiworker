@@ -286,6 +286,8 @@ function reservePort(): number {
   })
   const port = probe.port
   probe.stop(true)
+  if (!port)
+    throw new Error('Failed to reserve a Host dev loop browser proof port')
   return port
 }
 
