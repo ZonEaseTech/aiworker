@@ -1,7 +1,7 @@
 import { access, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { OFFICIAL_SOUL_APPS } from '../packages/worker-runtime/src/soul-app/official'
+import { OFFICIAL_SOUL_APPS } from '../packages/worker-runtime/src/soul-app/official-definitions'
 
 export interface OfficialSoulDistBuildDefinition {
   descriptorPath: string

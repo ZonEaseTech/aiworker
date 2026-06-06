@@ -65,4 +65,11 @@ describe('official Soul dist builder', () => {
       runCommand: async () => undefined,
     })).rejects.toThrow('Official Soul build did not create descriptor for aiworker-demo')
   })
+
+  it('imports official Soul definitions without loading runtime registry dependencies', async () => {
+    const source = await readFile(join(import.meta.dirname, 'official-soul-dist.ts'), 'utf8')
+
+    expect(source).not.toMatch(/worker-runtime\/src\/soul-app\/official['"]/)
+    expect(source).toContain('worker-runtime/src/soul-app/official-definitions')
+  })
 })

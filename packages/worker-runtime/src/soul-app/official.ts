@@ -1,4 +1,5 @@
 import type { HostedSoulApp } from '@zonease/aiworker-soul-descriptor'
+import type { OfficialSoulAppDefinition } from './official-definitions'
 import type { SoulAppRegistryContext } from './registry'
 
 import path from 'node:path'
@@ -6,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { discardRetiredSoulMetadata, getSoulApp } from '@zonease/aiworker-storage-sqlite/worker'
 
+import { OFFICIAL_SOUL_APPS } from './official-definitions'
 import {
   archiveSoulApp,
   enableSoulApp,
@@ -13,10 +15,8 @@ import {
   installSoulAppFromPath,
 } from './registry'
 
-export interface OfficialSoulAppDefinition {
-  id: string
-  descriptorPath: string
-}
+export { OFFICIAL_SOUL_APPS }
+export type { OfficialSoulAppDefinition }
 
 export interface OfficialSoulAppBootstrapOptions extends SoulAppRegistryContext {
   definitions?: readonly OfficialSoulAppDefinition[]
@@ -38,29 +38,6 @@ export interface OfficialRetiredMetadataDiscardResult {
   retiredAppIds: string[]
   workersDeleted: number
 }
-
-export const OFFICIAL_SOUL_APPS = [
-  {
-    descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
-    id: 'aiworker-freeform',
-  },
-  {
-    descriptorPath: 'souls/google-ads/dist/soul.descriptor.json',
-    id: 'google-ads',
-  },
-  {
-    descriptorPath: 'souls/hr-manager/dist/soul.descriptor.json',
-    id: 'hr-manager',
-  },
-  {
-    descriptorPath: 'souls/product-manager/dist/soul.descriptor.json',
-    id: 'product-manager',
-  },
-  {
-    descriptorPath: 'souls/software-support/dist/soul.descriptor.json',
-    id: 'software-support',
-  },
-] as const satisfies readonly OfficialSoulAppDefinition[]
 
 const DEFAULT_OFFICIAL_DESCRIPTOR_FILENAME = 'dist/soul.descriptor.json'
 
