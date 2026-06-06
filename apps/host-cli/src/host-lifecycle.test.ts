@@ -139,6 +139,70 @@ describe('Host lifecycle', () => {
     }
   })
 
+  it('propagates session auth into the background Host daemon before serving /host', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-background-session-auth-'))
+    const port = reservePort()
+    const baseUrl = `http://127.0.0.1:${port}`
+    const webStaticDir = join(dir, 'web')
+    const manifestPath = join(dir, 'dev-host.json')
+    const previousEnv = captureLogtoSessionEnv()
+    mkdirSync(webStaticDir, { recursive: true })
+    writeFileSync(join(webStaticDir, 'index.html'), '<!doctype html><div id="root">host background session auth</div>')
+    clearLogtoSessionEnv()
+
+    const lifecycle = createHostLifecycle()
+    try {
+      const started = await lifecycle.start({
+        dbPath: join(dir, 'host.db'),
+        devAdminEmail: 'admin@zonease.org',
+        host: '127.0.0.1',
+        manifestPath,
+        mode: 'prod',
+        port,
+        publicBaseUrl: baseUrl,
+        sessionAuth: {
+          oidc: {
+            clientId: 'logto-client-id',
+            clientSecret: 'literal-client-secret-value',
+            endpoint: 'https://auth.zonease.org/',
+            issuer: 'https://auth.zonease.org/oidc',
+            redirectUri: `${baseUrl}/auth/callback`,
+          },
+          sessionSecret: 'literal-session-secret-value-1234567890',
+        },
+        webStaticDir,
+      })
+
+      expect(started).toMatchObject({
+        apiUrl: baseUrl,
+        daemon: { running: true, started: true },
+        manifestPath,
+        mode: 'prod',
+        webUrl: `${baseUrl}/host`,
+      })
+
+      const hostResponse = await fetch(`${baseUrl}/host`, { redirect: 'manual' })
+      expect(hostResponse.status).toBe(302)
+      expect(hostResponse.headers.get('location')).toBe('/auth/login?returnTo=%2Fhost')
+
+      const optionsResponse = await fetch(`${baseUrl}/api/host/options`)
+      expect(optionsResponse.status).toBe(403)
+      await expect(optionsResponse.json()).resolves.toEqual({ error: { code: 'FORBIDDEN' } })
+
+      const manifestText = readFileSync(manifestPath, 'utf8')
+      const logText = await lifecycle.logs({ manifestPath, service: 'host-daemon', tail: 80 })
+      expect(manifestText).not.toContain('literal-session-secret-value-1234567890')
+      expect(manifestText).not.toContain('literal-client-secret-value')
+      expect(logText).not.toContain('literal-session-secret-value-1234567890')
+      expect(logText).not.toContain('literal-client-secret-value')
+    }
+    finally {
+      restoreLogtoSessionEnv(previousEnv)
+      await lifecycle.clean({ manifestPath })
+      rmSync(dir, { force: true, recursive: true })
+    }
+  })
+
   it('passes the Host websocket handler to foreground Bun.serve', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-host-foreground-websocket-'))
     const webStaticDir = join(dir, 'web')
@@ -347,6 +411,36 @@ function reservePort(): number {
   if (!port)
     throw new Error('Failed to reserve a Host lifecycle test port')
   return port
+}
+
+const logtoSessionEnvKeys = [
+  'AIWORKER_HOST_SESSION_SECRET',
+  'LOGTO_CLIENT_ID',
+  'LOGTO_CLIENT_SECRET',
+  'LOGTO_ENDPOINT',
+  'LOGTO_ISSUER',
+] as const
+
+function captureLogtoSessionEnv(): Partial<Record<typeof logtoSessionEnvKeys[number], string>> {
+  const captured: Partial<Record<typeof logtoSessionEnvKeys[number], string>> = {}
+  for (const key of logtoSessionEnvKeys) {
+    if (process.env[key] !== undefined)
+      captured[key] = process.env[key]
+  }
+  return captured
+}
+
+function clearLogtoSessionEnv(): void {
+  for (const key of logtoSessionEnvKeys)
+    delete process.env[key]
+}
+
+function restoreLogtoSessionEnv(values: Partial<Record<typeof logtoSessionEnvKeys[number], string>>): void {
+  clearLogtoSessionEnv()
+  for (const key of logtoSessionEnvKeys) {
+    if (values[key] !== undefined)
+      process.env[key] = values[key]
+  }
 }
 
 function createTmuxSession(name: string): void {

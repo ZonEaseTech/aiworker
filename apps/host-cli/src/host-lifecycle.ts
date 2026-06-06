@@ -128,6 +128,7 @@ async function startHostDevLifecycle(input: HostLifecycleStartInput): Promise<Re
     ...(input.hostBrowserBaseUrl ? { AIWORKER_HOST_BROWSER_BASE_URL: input.hostBrowserBaseUrl } : {}),
     ...(input.hostControlBaseUrl ? { AIWORKER_HOST_CONTROL_BASE_URL: input.hostControlBaseUrl } : {}),
     ...(input.webPort ? { AIWORKER_HOST_WEB_PORT: String(input.webPort) } : {}),
+    ...hostSessionAuthEnv(input.sessionAuth),
   }
   const result = runCommand('bash', ['scripts/dev-host.sh'], { cwd: repoRoot, env })
   if (result.status !== 0)
@@ -183,7 +184,10 @@ async function startHostProdLifecycle(input: HostLifecycleStartInput): Promise<R
   ], {
     cwd: repoRoot,
     detached: true,
-    env: process.env,
+    env: {
+      ...process.env,
+      ...hostSessionAuthEnv(input.sessionAuth),
+    },
     stdio: ['ignore', fd, fd],
   })
   closeSync(fd)
@@ -496,11 +500,24 @@ function formatCommandFailure(message: string, result: { status: number, stderr:
 
 async function reachableUrl(url: string): Promise<boolean> {
   try {
-    const response = await fetch(url)
-    return response.ok
+    const response = await fetch(url, { redirect: 'manual' })
+    return response.status >= 200 && response.status < 400
   }
   catch {
     return false
+  }
+}
+
+function hostSessionAuthEnv(sessionAuth: HostLifecycleSessionAuthOptions | undefined): NodeJS.ProcessEnv {
+  if (!sessionAuth)
+    return {}
+
+  return {
+    AIWORKER_HOST_SESSION_SECRET: sessionAuth.sessionSecret,
+    LOGTO_CLIENT_ID: sessionAuth.oidc.clientId,
+    LOGTO_CLIENT_SECRET: sessionAuth.oidc.clientSecret,
+    LOGTO_ENDPOINT: sessionAuth.oidc.endpoint,
+    LOGTO_ISSUER: sessionAuth.oidc.issuer,
   }
 }
 
