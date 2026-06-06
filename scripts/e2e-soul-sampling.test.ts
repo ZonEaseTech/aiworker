@@ -92,6 +92,33 @@ describe('e2e soul sampling static contracts', () => {
     expect(agents).toContain('knowledge/product-playbook.md')
   })
 
+  it('keeps Google Ads monthly review deliverables from collapsing into a short summary', () => {
+    const source = readFileSync(
+      'souls/google-ads/engine/skills/client-performance-review/SKILL.md',
+      'utf8',
+    )
+    const dist = readFileSync(
+      'souls/google-ads/dist/engine-assets/skills/client-performance-review/SKILL.md',
+      'utf8',
+    )
+
+    for (const skill of [source, dist]) {
+      expect(skill).toContain('最低可交付月报')
+      expect(skill).toContain('分区月报草案')
+      expect(skill).toContain('不要退化成几段摘要')
+      expect(skill).toContain('输出时必须保留这些小节标题')
+      expect(skill).toContain('客户健康度')
+      expect(skill).toContain('客户可以进入复盘会议的月报草案')
+    }
+  })
+
+  it('keeps the repo-local sampling skill frontmatter loadable by Codex', () => {
+    const skill = readFileSync('.agents/skills/aiworker-soul-e2e-sampling/SKILL.md', 'utf8')
+
+    expect(skill.startsWith('---\nname: aiworker-soul-e2e-sampling\n')).toBe(true)
+    expect(skill).toContain('description: "Use only inside an AIWorker repository/worktree')
+  })
+
   it('classifies sampling findings by remediation owner', () => {
     expect(classifyFinding('AGENTS.md 选路不稳, 领域边界和资产索引不清')).toBe('agents')
     expect(classifyFinding('SKILL.md 缺步骤、缺约束、触发描述不清、自检不足')).toBe('skill')

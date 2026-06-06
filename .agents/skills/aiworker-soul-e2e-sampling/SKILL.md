@@ -1,6 +1,6 @@
 ---
 name: aiworker-soul-e2e-sampling
-description: Use only inside an AIWorker repository/worktree for the official Soul output-quality sampling loop: real Worker CLI/Codex runs over existing Soul AGENTS.md and projected skills, evidence under tmp/e2e-soul-sampling, and sampling-evidence-driven tuning/retest. Trigger when the user asks to run, continue, triage, or retest real multi-round Soul sampling, or says no fake engine for Soul calibration. Do not use for ordinary AIWorker feature work, generic E2E tests, normal Soul authoring, new skill creation, sampling harness development, or AGENTS/SKILL edits not driven by sampling evidence.
+description: "Use only inside an AIWorker repository/worktree for the official Soul output-quality sampling loop: real Worker CLI/Codex runs over existing Soul AGENTS.md and projected skills, evidence under tmp/e2e-soul-sampling, and sampling-evidence-driven tuning/retest. Trigger when the user asks to run, continue, triage, or retest real multi-round Soul sampling, or says no fake engine for Soul calibration. Do not use for ordinary AIWorker feature work, generic E2E tests, normal Soul authoring, new skill creation, sampling harness development, or AGENTS/SKILL edits not driven by sampling evidence."
 ---
 
 # AIWorker Soul E2E Sampling
