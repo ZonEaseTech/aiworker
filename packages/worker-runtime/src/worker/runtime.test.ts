@@ -2840,6 +2840,29 @@ describe('LocalWorkerRuntime', () => {
       expect(getSession(session.id)!.title).toBe('机器名')
     })
 
+    it('keeps the truncated source when the engine returns the same title', async () => {
+      const workerRuntime = autoNameRuntime({
+        async invoke(input) {
+          if (input.metadata?.purpose === 'session-autoname')
+            return { summary: 'Please r' }
+          return { summary: 'main answer' }
+        },
+      })
+      const { session } = await freshSession(workerRuntime)
+
+      await workerRuntime.startInvocation({
+        sessionId: session.id,
+        input: 'Please refactor the authentication module thoroughly',
+        engineId: 'codex',
+        engineCommand: 'codex',
+      })
+      await workerRuntime.drainBackgroundWork()
+
+      const named = getSession(session.id)!
+      expect(named.title).toBe('Please r')
+      expect(named.metadataJson.titleSource).toBe('auto-truncated')
+    })
+
     it('returns the truncated placeholder session when starting a detached invocation', async () => {
       const workerRuntime = autoNameRuntime({
         async invoke(input) {

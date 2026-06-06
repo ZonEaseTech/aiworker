@@ -54,6 +54,11 @@ import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
 import { LocalWorkspaceFiles } from './files'
 import { LocalEngineProcessManager } from './process-manager'
 import {
+  applyAutoEngineTitle,
+  applyAutoTruncatedTitle,
+  readSessionTitleSource,
+} from './session-title-policy'
+import {
   freezeSessionEngineMetadata,
 
   inferLatestInvocationEngine,
@@ -480,8 +485,7 @@ export class LocalWorkerRuntime {
   private maybeKickSessionAutoName(context: LocalInvocationStartContext): void {
     if (!this.#sessionAutoName)
       return
-    const titleSource = readString(readRecord(context.session.metadataJson).titleSource, 'auto-default')
-    if (titleSource !== 'auto-default')
+    if (readSessionTitleSource(context.session) !== 'auto-default')
       return
     const placeholder = truncateAutoNameTitle(context.input.input)
     if (!placeholder)
@@ -581,13 +585,15 @@ export class LocalWorkerRuntime {
     const session = getSession(sessionId)
     if (!session)
       return null
-    const currentSource = readString(readRecord(session.metadataJson).titleSource, 'auto-default')
-    if (currentSource === 'user')
+    const patch = source === 'auto-truncated'
+      ? applyAutoTruncatedTitle(session, title)
+      : applyAutoEngineTitle(session, title)
+    if (!patch)
       return null
     const updated = updateSession({
       id: sessionId,
-      title,
-      metadataJson: { ...readRecord(session.metadataJson), titleSource: source },
+      title: patch.title,
+      metadataJson: patch.metadataJson,
       at: this.#now(),
     })
     this.bus.emit({ kind: 'session', workspaceId: updated.workspaceId, sessionId, payload: { status: updated.status }, at: this.#now() })
