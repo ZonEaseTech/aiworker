@@ -220,7 +220,7 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
     model: readString(input.metadata?.model, ''),
     reasoning: readString(input.metadata?.reasoning, ''),
   })
-  const timeoutMs = options.timeoutMs ?? DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS
+  const timeoutMs = resolveLocalCliEngineTimeoutMs(options)
   const maxSummaryChars = options.maxSummaryChars ?? DEFAULT_LOCAL_CLI_ENGINE_SUMMARY_LIMIT_CHARS
   const finalMessage = createBoundedTextBuffer()
   let externalSessionRef: Record<string, unknown> | null = null
@@ -299,6 +299,20 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
     externalSessionRef: encodeLocalExternalSessionRef(externalSessionRef),
     summary: summary || `${engine.name} completed.`,
   }
+}
+
+function resolveLocalCliEngineTimeoutMs(options: ExternalEngineExecutorOptions): number {
+  if (options.timeoutMs !== undefined)
+    return options.timeoutMs
+
+  const raw = process.env.AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS?.trim()
+  if (!raw)
+    return DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS
+
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS
 }
 
 async function runByokExecutor(input: LocalExecutorInput): Promise<LocalExecutorResult> {

@@ -915,6 +915,16 @@ describe('aiworker local CLI', () => {
     expect(all.events.every(event => event.invocationId === invocation.id && event.sessionId === session.id)).toBe(true)
     output = ''
 
+    expect(await runCli(argv('session', 'events', invocation.id, '--worker', 'events-worker'))).toBe(0)
+    const workerScoped = JSON.parse(output) as {
+      events: Array<{ id: number, invocationId: string, payloadJson: Record<string, unknown>, sessionId: string, type: string }>
+      invocation: { id: string, processState: string, sessionId: string, status: string }
+    }
+    expect(workerScoped.invocation).toEqual(all.invocation)
+    expect(workerScoped.events.map(event => event.id)).toEqual(ids)
+    expect(workerScoped.events.every(event => event.invocationId === invocation.id && event.sessionId === session.id)).toBe(true)
+    output = ''
+
     expect(await runCli(argv('session', 'events', invocation.id, '--limit', '2'))).toBe(0)
     const limited = JSON.parse(output) as { events: Array<{ id: number }> }
     expect(limited.events.map(event => event.id)).toEqual(ids.slice(0, 2))

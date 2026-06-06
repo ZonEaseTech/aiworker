@@ -1831,8 +1831,11 @@ async function showSession(id: string): Promise<void> {
   })
 }
 
-async function showInvocationEventsCommand(invocationId: string, opts: { after?: number[], limit?: number[] }): Promise<void> {
-  await ensureAllWorkers()
+async function showInvocationEventsCommand(invocationId: string, opts: { after?: number[], limit?: number[], worker?: string }): Promise<void> {
+  if (opts.worker)
+    await ensureRuntime({ worker: opts.worker })
+  else
+    await ensureAllWorkers()
   const invocation = getEngineInvocation(invocationId)
   if (!invocation)
     throw new Error(`invocation not found: ${invocationId}`)
@@ -2424,7 +2427,7 @@ function registerCommands(): void {
   cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').action(listSessionCommand)
   cli.command('session show <id>', 'show one session').action(showSession)
   cli.command('session invoke', 'create a session-level engine invocation').option('--session <id>', 'session id').option('--input <text>', 'invocation input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(invokeSessionCommand)
-  cli.command('session events <invocationId>', 'list normalized bridge events for an engine invocation').option('--after <seq>', 'return only events after this seq', { type: [Number] }).option('--limit <n>', 'maximum events to return', { type: [Number] }).action(showInvocationEventsCommand)
+  cli.command('session events <invocationId>', 'list normalized bridge events for an engine invocation').option('--after <seq>', 'return only events after this seq', { type: [Number] }).option('--limit <n>', 'maximum events to return', { type: [Number] }).option('--worker <id>', 'worker id').action(showInvocationEventsCommand)
   cli.command('session reconcile <invocationId>', 'reconcile native engine process state for an engine invocation').option('--worker <id>', 'worker id').option('--state <processState>', 'observed process state: not_spawned/spawned/exited/killed/lost').option('--diagnostic <text>', 'reconcile diagnostic (redacted before persistence)').action(reconcileInvocationCommand)
   cli.command('session cancel <invocationId>', 'cancel an engine invocation by id').option('--worker <id>', 'worker id').option('--reason <text>', 'cancel reason (redacted before persistence)').action(cancelInvocationCommand)
   cli.command('session archive <id>', 'archive an AIWorker session').action(archiveSessionCommand)
