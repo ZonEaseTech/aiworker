@@ -119,6 +119,37 @@ describe('e2e soul sampling static contracts', () => {
     expect(skill).toContain('description: "Use only inside an AIWorker repository/worktree')
   })
 
+  it('keeps official Soul answers focused on deliverables instead of internal process narration', () => {
+    for (const soul of expectedAppIds) {
+      const source = readFileSync(`souls/${soul}/engine/workspace/AGENTS.md`, 'utf8')
+      const dist = readFileSync(`souls/${soul}/dist/engine-assets/workspace/AGENTS.md`, 'utf8')
+
+      for (const agents of [source, dist]) {
+        expect(agents).toContain('不要把内部过程写给用户')
+        expect(agents).toContain('直接给结论、交付物、必要假设和下一步')
+        expect(agents).toContain('不要用“我会先读取 / 我先检查 / 我将调用”')
+      }
+    }
+  })
+
+  it('keeps official Soul skills from starting user answers with tool-use narration', () => {
+    for (const soul of OFFICIAL_SAMPLING_SOULS) {
+      for (const skill of soul.skills) {
+        const source = readFileSync(skill.sourcePath, 'utf8')
+        const dist = readFileSync(
+          skill.sourcePath.replace('/engine/skills/', '/dist/engine-assets/skills/'),
+          'utf8',
+        )
+
+        for (const skillText of [source, dist]) {
+          expect(skillText).toContain('回答从结果开始')
+          expect(skillText).toContain('不要以“使用 `')
+          expect(skillText).toContain('不要以“使用 `skill` / 我会按 / 我会先 / 我先读取 / 已确认”')
+        }
+      }
+    }
+  })
+
   it('classifies sampling findings by remediation owner', () => {
     expect(classifyFinding('AGENTS.md 选路不稳, 领域边界和资产索引不清')).toBe('agents')
     expect(classifyFinding('SKILL.md 缺步骤、缺约束、触发描述不清、自检不足')).toBe('skill')

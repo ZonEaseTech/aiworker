@@ -1265,6 +1265,10 @@ describe('LocalWorkerRuntime', () => {
 
     expect(prompts[0]).not.toContain('Capability:')
     expect(prompts[0]).toContain('Output kind: freeform-summary')
+    expect(prompts[0]).toContain('User-visible answer style:')
+    expect(prompts[0]).toContain('Do not start with tool, file, or skill usage narration')
+    expect(prompts[0]).toContain('Forbidden visible openings include: 我会, 我先, 我将, 已确认, 使用 `skill`, 使用 `')
+    expect(prompts[0]).toContain('If the draft starts with process narration, rewrite the opening before sending')
     expect(result.invocation.metadataJson).toMatchObject({ executionMode: 'local-cli', outputKind: 'freeform-summary' })
   })
 
