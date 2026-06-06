@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import { describe, expect, it } from 'bun:test'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 
@@ -32,6 +34,11 @@ describe('host oidc client', () => {
     expect(url.searchParams.get('response_type')).toBe('code')
     expect(url.searchParams.get('scope')).toBe('openid profile email')
     expect(url.searchParams.get('code_challenge_method')).toBe('S256')
+    expect(url.searchParams.get('state')).toBe(result.transaction.state)
+    expect(url.searchParams.get('nonce')).toBe(result.transaction.nonce)
+    expect(url.searchParams.get('code_challenge')).toBe(createHash('sha256')
+      .update(result.transaction.codeVerifier)
+      .digest('base64url'))
     expect(result.transaction.returnTo).toBe('/workers/wkr_82')
     expect(result.transaction.codeVerifier.length).toBeGreaterThan(40)
     expect(result.transaction.state.length).toBeGreaterThan(20)
