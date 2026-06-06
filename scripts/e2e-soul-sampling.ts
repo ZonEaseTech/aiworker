@@ -893,8 +893,12 @@ function samplingCliScope(appId: string): SamplingCliScope {
   }
 }
 
-function buildCliEnv(manifest: SamplingManifest): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = { ...process.env, AIWORKER_HOME: manifest.home }
+export function buildCliEnv(manifest: SamplingManifest): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    AIWORKER_HOME: manifest.home,
+    AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS: process.env.AIWORKER_E2E_ENGINE_TIMEOUT_MS ?? '900000',
+  }
   delete env.WORKER_DB_PATH
   return env
 }

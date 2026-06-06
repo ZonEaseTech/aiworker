@@ -178,4 +178,29 @@ exec perl -e '$SIG{TERM}=sub{}; select undef,undef,undef,0.01 while 1'
     ).resolves.toContain('Process exceeded 250ms and was terminated.')
     expect(DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS).toBe(300_000)
   })
+
+  it('uses AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS when no explicit timeout is configured', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+sleep 2
+printf '%s\\n' '{"type":"item.completed","item":{"type":"assistant_message","text":"done"}}'
+`)
+    const previous = process.env.AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS
+
+    try {
+      process.env.AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS = '250'
+      await expect(Promise.race([
+        createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout env was ignored')), 1200)),
+      ])).rejects.toThrow('Process exceeded 250ms and was terminated.')
+    }
+    finally {
+      if (previous === undefined)
+        delete process.env.AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS
+      else
+        process.env.AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS = previous
+    }
+  })
 })

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 import {
   buildCliPlan,
+  buildCliEnv,
   buildSamplingManifest,
   classifyFinding,
   OFFICIAL_SAMPLING_SOULS,
@@ -123,6 +124,29 @@ describe('e2e soul sampling static contracts', () => {
     })
     expect(manifest.souls.map(soul => soul.appId)).toEqual(expectedAppIds)
     expect(manifest.scoreDimensions.map(dimension => dimension.id)).toEqual(expectedScoreDimensionIds)
+  })
+
+  it('passes an extended local engine timeout to real sampling CLI runs', () => {
+    const previous = process.env.AIWORKER_E2E_ENGINE_TIMEOUT_MS
+    const manifest = buildSamplingManifest({
+      commit: 'abc1234',
+      home: '/tmp/aiworker-e2e-home',
+      runId: 'timeout-env',
+    })
+
+    try {
+      delete process.env.AIWORKER_E2E_ENGINE_TIMEOUT_MS
+      expect(buildCliEnv(manifest).AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS).toBe('900000')
+
+      process.env.AIWORKER_E2E_ENGINE_TIMEOUT_MS = '1200000'
+      expect(buildCliEnv(manifest).AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS).toBe('1200000')
+    }
+    finally {
+      if (previous === undefined)
+        delete process.env.AIWORKER_E2E_ENGINE_TIMEOUT_MS
+      else
+        process.env.AIWORKER_E2E_ENGINE_TIMEOUT_MS = previous
+    }
   })
 
   it('rejects sampling run ids that escape the evidence root', () => {
