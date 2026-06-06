@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer'
+import { readFile } from 'node:fs/promises'
 
+const DEFAULT_LOGTO_CONFIG_PATH = 'tmp/.logto'
 const LOGTO_PROOF_APP_NAME = 'AIWorker Local Auth Proof'
 
 export interface LogtoM2MConfig {
@@ -25,9 +27,19 @@ export interface ManualLogtoConfiguration {
 }
 
 type LogtoFetch = (input: Request | string | URL, init?: RequestInit) => Promise<Response>
+type LogtoConfigReader = (path: string) => Promise<string> | string
 
 interface LogtoApplication {
   id: string
+}
+
+export async function loadLogtoM2MConfigFile(input: {
+  configPath?: string
+  readText?: LogtoConfigReader
+} = {}): Promise<LogtoM2MConfig> {
+  const configPath = input.configPath ?? DEFAULT_LOGTO_CONFIG_PATH
+  const readText = input.readText ?? ((path: string) => readFile(path, 'utf8'))
+  return loadLogtoM2MConfigText(await readText(configPath))
 }
 
 export function loadLogtoM2MConfigText(text: string): LogtoM2MConfig {
@@ -65,19 +77,23 @@ export async function ensureLogtoProofApplication(input: {
   const hostBrowserBaseUrl = input.hostBrowserBaseUrl.replace(/\/+$/, '')
   const redirectUri = `${hostBrowserBaseUrl}/auth/callback`
   const postLogoutRedirectUri = `${hostBrowserBaseUrl}/host`
-  const token = await requestManagementToken(input.config, fetchImpl)
-  const app = await ensureProofApplication(input.config, fetchImpl, token, redirectUri, postLogoutRedirectUri)
-  if (!app)
-    return buildManualConfiguration(input.config, redirectUri, postLogoutRedirectUri)
+  const manualConfiguration = buildManualConfiguration(input.config, redirectUri, postLogoutRedirectUri)
+  const token = await requestManagementToken(input.config, fetchImpl).catch(() => null)
+  if (!token)
+    return manualConfiguration
 
-  const secret = await readApplicationSecret(input.config, fetchImpl, token, app.id)
+  const app = await ensureProofApplication(input.config, fetchImpl, token, redirectUri, postLogoutRedirectUri).catch(() => null)
+  if (!app)
+    return manualConfiguration
+
+  const secret = await readApplicationSecret(input.config, fetchImpl, token, app.id).catch(() => null)
   if (!secret)
-    return buildManualConfiguration(input.config, redirectUri, postLogoutRedirectUri)
+    return manualConfiguration
 
   return { clientId: app.id, clientSecret: secret, redirectUri }
 }
 
-async function requestManagementToken(config: LogtoM2MConfig, fetchImpl: LogtoFetch): Promise<string> {
+async function requestManagementToken(config: LogtoM2MConfig, fetchImpl: LogtoFetch): Promise<string | null> {
   const response = await fetchImpl(new URL('/oidc/token', config.endpoint), {
     body: new URLSearchParams({
       grant_type: 'client_credentials',
@@ -91,11 +107,11 @@ async function requestManagementToken(config: LogtoM2MConfig, fetchImpl: LogtoFe
     method: 'POST',
   })
   if (!response.ok)
-    throw new Error(`Logto Management API token request failed with status ${response.status}`)
+    return null
 
   const body = await response.json() as { access_token?: unknown }
   if (typeof body.access_token !== 'string' || body.access_token.length === 0)
-    throw new Error('Logto Management API token response is missing access_token')
+    return null
 
   return body.access_token
 }
@@ -131,7 +147,7 @@ async function findProofApplication(
   if (response.status === 401 || response.status === 403)
     return null
   if (!response.ok)
-    throw new Error(`Logto application lookup failed with status ${response.status}`)
+    return null
 
   const body = await response.json() as unknown
   const applications = Array.isArray(body)
@@ -167,7 +183,7 @@ async function createProofApplication(
   if (response.status === 401 || response.status === 403)
     return null
   if (!response.ok)
-    throw new Error(`Logto application create failed with status ${response.status}`)
+    return null
 
   const body = await response.json() as { id?: unknown }
   return typeof body.id === 'string' ? { id: body.id } : null
@@ -192,7 +208,7 @@ async function updateProofApplication(
   if (response.status === 401 || response.status === 403)
     return false
   if (!response.ok)
-    throw new Error(`Logto application update failed with status ${response.status}`)
+    return false
 
   return true
 }
@@ -210,7 +226,7 @@ async function readApplicationSecret(
   if (response.status === 401 || response.status === 403)
     return null
   if (!response.ok)
-    throw new Error(`Logto application secret read failed with status ${response.status}`)
+    return null
 
   const body = await response.json() as unknown
   if (!Array.isArray(body))
