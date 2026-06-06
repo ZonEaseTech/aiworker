@@ -1833,7 +1833,7 @@ async function showSession(id: string): Promise<void> {
 
 async function showInvocationEventsCommand(invocationId: string, opts: { after?: number[], limit?: number[], worker?: string }): Promise<void> {
   if (opts.worker)
-    await ensureRuntime({ worker: opts.worker })
+    await resolveWorkerTarget(opts.worker)
   else
     await ensureAllWorkers()
   const invocation = getEngineInvocation(invocationId)

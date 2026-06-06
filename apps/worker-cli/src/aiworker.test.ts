@@ -1003,7 +1003,7 @@ describe('aiworker local CLI', () => {
     closeWorkerDb()
   })
 
-  it('cancels an active running engine invocation through CLI by invocation id', async () => {
+  it('reports a restart-orphaned running engine invocation as lost through CLI cancel', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
 
@@ -1041,28 +1041,30 @@ describe('aiworker local CLI', () => {
     expect(await runCli(argv('session', 'cancel', invocation.id, '--reason', 'operator pressed Ctrl+C token=sk-cli-active-cancel-secret'))).toBe(0)
 
     const cancelled = JSON.parse(output) as {
-      invocation: { id: string, processState: string, sessionId: string, status: string, summary: string | null }
+      invocation: { failureCode: string | null, id: string, processState: string, sessionId: string, status: string, summary: string | null }
       session: { id: string, status: string }
     }
     expect(cancelled.invocation).toMatchObject({
+      failureCode: 'ENGINE_PROCESS_LOST',
       id: invocation.id,
-      processState: 'killed',
+      processState: 'lost',
       sessionId: session.id,
-      status: 'cancelled',
-      summary: 'Invocation cancelled.',
+      status: 'lost',
+      summary: 'Native engine process was lost.',
     })
     expect(cancelled.session).toMatchObject({ id: session.id, status: 'active' })
     expect(output).not.toContain('sk-cli-active-cancel-secret')
 
     initWorkerDb(process.env.WORKER_DB_PATH!)
     const persisted = getEngineInvocation(invocation.id)
-    expect(persisted).toMatchObject({ status: 'cancelled', processState: 'killed' })
+    expect(persisted).toMatchObject({ failureCode: 'ENGINE_PROCESS_LOST', status: 'lost', processState: 'lost' })
     const events = listSessionEvents(session.id).filter(event => event.invocationId === invocation.id)
     expect(events.at(-1)?.payloadJson).toMatchObject({
-      bridgeEvent: 'invocation.cancelled',
+      bridgeEvent: 'process.lost',
+      failureCode: 'ENGINE_PROCESS_LOST',
       invocationId: invocation.id,
-      processState: 'killed',
-      status: 'cancelled',
+      processState: 'lost',
+      status: 'lost',
     })
     closeWorkerDb()
   })
