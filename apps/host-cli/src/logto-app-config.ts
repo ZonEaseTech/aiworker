@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 
 const DEFAULT_LOGTO_CONFIG_PATH = 'tmp/.logto'
+const LOGTO_APPLICATION_LOOKUP_PAGE_SIZE = 100
 const LOGTO_PROOF_APP_NAME = 'AIWorker Local Auth Proof'
 
 export interface LogtoM2MConfig {
@@ -45,10 +46,7 @@ interface LogtoApplication {
 
 interface LogtoApplicationListPage {
   applications: Array<{ id: string, name: string }>
-  page?: number
-  pageSize?: number
-  pageSizeParameter?: 'pageSize' | 'page_size'
-  total?: number
+  nextPage: false | number
 }
 
 interface LogtoManagementConfig {
@@ -226,11 +224,9 @@ async function findProofApplication(
   token: string,
 ): Promise<LogtoApplication | false | LogtoManagementFailure> {
   let page = 1
-  let pageSize: number | undefined
-  let pageSizeParameter: 'pageSize' | 'page_size' = 'page_size'
 
   while (true) {
-    const response = await safeFetch('lookup', fetchImpl, applicationLookupUrl(management, page, pageSize, pageSizeParameter), {
+    const response = await safeFetch('lookup', fetchImpl, applicationLookupUrl(management, page), {
       headers: { authorization: `Bearer ${token}` },
       method: 'GET',
     })
@@ -242,7 +238,10 @@ async function findProofApplication(
     const body = await safeResponseJson(response, 'lookup')
     if (isManagementFailure(body))
       return body
-    const applicationPage = parseApplicationListPage(body)
+    const applicationPage = parseApplicationListPage(body, response.headers, {
+      page,
+      pageSize: LOGTO_APPLICATION_LOOKUP_PAGE_SIZE,
+    })
     if (isManagementFailure(applicationPage))
       return applicationPage
 
@@ -250,12 +249,10 @@ async function findProofApplication(
     if (app)
       return { id: app.id }
 
-    if (!hasNextApplicationListPage(applicationPage))
+    if (applicationPage.nextPage === false)
       return false
 
-    page = applicationPage.page + 1
-    pageSize = applicationPage.pageSize
-    pageSizeParameter = applicationPage.pageSizeParameter
+    page = applicationPage.nextPage
   }
 }
 
@@ -468,20 +465,28 @@ function isManagementFailure(value: unknown): value is LogtoManagementFailure {
 function applicationLookupUrl(
   management: LogtoManagementConfig,
   page: number,
-  pageSize: number | undefined,
-  pageSizeParameter: 'pageSize' | 'page_size',
 ) {
   const url = new URL('/api/applications', management.endpoint)
-  if (page > 1) {
-    url.searchParams.set('page', String(page))
-    if (pageSize)
-      url.searchParams.set(pageSizeParameter, String(pageSize))
-  }
+  url.searchParams.set('page', String(page))
+  url.searchParams.set('page_size', String(LOGTO_APPLICATION_LOOKUP_PAGE_SIZE))
 
   return url
 }
 
-function parseApplicationListPage(body: unknown): LogtoApplicationListPage | LogtoManagementFailure {
+function parseApplicationListPage(
+  body: unknown,
+  headers: Headers,
+  current: { page: number, pageSize: number },
+): LogtoApplicationListPage | LogtoManagementFailure {
+  if (Array.isArray(body)) {
+    const applications = parseApplicationItems(body)
+    if (isManagementFailure(applications))
+      return applications
+
+    const nextPage = parseNextApplicationListPage(headers, current)
+    return isManagementFailure(nextPage) ? nextPage : { applications, nextPage }
+  }
+
   if (!isJsonRecord(body) || !Array.isArray(body.data))
     return invalidLookupResponse()
 
@@ -498,10 +503,7 @@ function parseApplicationListPage(body: unknown): LogtoApplicationListPage | Log
 
   return {
     applications,
-    page,
-    pageSize,
-    pageSizeParameter,
-    total,
+    nextPage: page * pageSize < total ? page + 1 : false,
   }
 }
 
@@ -517,19 +519,6 @@ function parseApplicationItems(rawApplications: unknown[]): Array<{ id: string, 
   return applications
 }
 
-function hasNextApplicationListPage(page: LogtoApplicationListPage): page is LogtoApplicationListPage & {
-  page: number
-  pageSize: number
-  pageSizeParameter: 'pageSize' | 'page_size'
-  total: number
-} {
-  return typeof page.page === 'number'
-    && typeof page.pageSize === 'number'
-    && typeof page.pageSizeParameter === 'string'
-    && typeof page.total === 'number'
-    && page.page * page.pageSize < page.total
-}
-
 function invalidLookupResponse(): LogtoManagementFailure {
   return {
     reason: 'invalid_lookup_response',
@@ -538,12 +527,73 @@ function invalidLookupResponse(): LogtoManagementFailure {
   }
 }
 
+function parseNextApplicationListPage(
+  headers: Headers,
+  current: { page: number, pageSize: number },
+): false | number | LogtoManagementFailure {
+  const nextPageFromLink = parseNextPageFromLinkHeader(headers.get('Link'), current.page)
+  if (isManagementFailure(nextPageFromLink) || typeof nextPageFromLink === 'number')
+    return nextPageFromLink
+
+  const totalNumber = parseNonNegativeIntegerText(headers.get('Total-Number'))
+  if (totalNumber === null)
+    return invalidLookupResponse()
+
+  return current.page * current.pageSize < totalNumber ? current.page + 1 : false
+}
+
+function parseNextPageFromLinkHeader(
+  linkHeader: null | string,
+  currentPage: number,
+): null | number | LogtoManagementFailure {
+  if (!linkHeader)
+    return null
+
+  for (const entry of linkHeader.split(',')) {
+    const [urlPart, ...parameters] = entry.split(';').map(part => part.trim())
+    const isNext = parameters.some(parameter => /^rel="?next"?$/i.test(parameter))
+    if (!isNext)
+      continue
+
+    const match = /^<(.+)>$/.exec(urlPart ?? '')
+    const nextUrlText = match?.[1]
+    if (!nextUrlText)
+      return invalidLookupResponse()
+
+    const nextUrl = new URL(nextUrlText, 'https://logto.local')
+    const nextPage = parsePositiveIntegerText(nextUrl.searchParams.get('page'))
+    if (nextPage === null || nextPage <= currentPage)
+      return invalidLookupResponse()
+
+    return nextPage
+  }
+
+  return null
+}
+
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
 
 function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+function parsePositiveIntegerText(value: null | string): null | number {
+  const number = parseNonNegativeIntegerText(value)
+  return number && number > 0 ? number : null
+}
+
+function parseNonNegativeIntegerText(value: null | string): null | number {
+  if (value === null)
+    return null
+
+  const trimmed = value.trim()
+  if (!/^\d+$/.test(trimmed))
+    return null
+
+  const number = Number(trimmed)
+  return isNonNegativeInteger(number) ? number : null
 }
 
 function isJsonRecord(value: unknown): value is Record<string, unknown> {
