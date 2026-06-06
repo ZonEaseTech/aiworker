@@ -104,10 +104,24 @@ Docker 预发布环境       docker preview
 
 ## URL Contract
 
-Phase 2 MVP 使用同一个公网域名：
+URL 合同分为浏览器入口和 Worker 回连入口。生产模式下它们通常相同；开发模式下它们经常不同，不能把生产域名当成默认前提。
 
 ```text
-https://aiworker.zonease.org
+hostBrowserBaseUrl
+  管理员与员工浏览器打开的 Host Web 入口，用来生成 /host 与 /workers/:workerId。
+
+hostControlBaseUrl
+  Worker、adapter、provision command 调用的 Host control/API 入口，用来访问 /api/provision/*。
+
+adapterRuntimeControlBaseUrl
+  可选。某些 adapter 的运行环境看到的 Host control URL 与 Host 自己展示的 URL 不同，例如 Docker container 内不能用宿主机的 127.0.0.1。
+```
+
+Production 示例：
+
+```text
+hostBrowserBaseUrl = https://aiworker.zonease.org
+hostControlBaseUrl = https://aiworker.zonease.org
 ```
 
 路径合同：
@@ -144,6 +158,27 @@ https://:workerId.aiworker.zonease.org
 
 但 MVP 先使用 path URL，避免 Cloudflare 深层 wildcard DNS/TLS 与证书复杂度。
 
+Development 示例：
+
+```text
+local-dev:
+  hostBrowserBaseUrl = http://127.0.0.1:5050
+  hostControlBaseUrl = http://127.0.0.1:9117
+  adapterRuntimeControlBaseUrl = http://127.0.0.1:9117
+
+docker-dev:
+  hostBrowserBaseUrl = http://127.0.0.1:5050
+  hostControlBaseUrl = http://127.0.0.1:9117
+  adapterRuntimeControlBaseUrl = http://host.docker.internal:9117
+
+aissh-dev:
+  hostBrowserBaseUrl = <browser-reachable Host Web URL>
+  hostControlBaseUrl = <Host API URL>
+  adapterRuntimeControlBaseUrl = <URL reachable from the aissh target>
+```
+
+`aissh` dev 是远程可达性证明，不是本机开发捷径。普通远程 aissh target 不得使用 `localhost`、`127.0.0.1` 或 `::1` 作为 `adapterRuntimeControlBaseUrl`，因为这些地址指向远程机器自己。若需要用 aissh 验证本地开发 Host，开发者必须显式提供一个目标机器可访问的 callback URL，例如临时 tunnel 或部署在可达服务器上的 dev Host。否则应先使用 `local` 或 `docker` adapter 验证本机链路。
+
 ## Provisioning Flow
 
 管理员动作：
@@ -163,7 +198,7 @@ Host 后台动作：
 3. 调用目标对应的 Provisioning Target Adapter，下发或启动 `aiworker provision`
 4. 等待 Worker check-in
 5. 等待 Worker Access Adapter 看到 access connection ready
-6. 标记 Worker ready，生成 /workers/:workerId
+6. 标记 Worker ready，用 hostBrowserBaseUrl 生成 /workers/:workerId
 ```
 
 Adapter 成功只表示开通动作送达或进程已尝试启动，不表示产品成功。`aissh exec` 成功、Docker container started、local process spawned 都不能直接标记 `ready`。产品成功必须同时满足：
@@ -184,7 +219,9 @@ assignmentId
 assignedEmail
 soulReleaseRef
 provisionToken
-hostPublicBaseUrl
+hostBrowserBaseUrl
+hostControlBaseUrl
+adapterRuntimeControlBaseUrl
 targetRef
 ```
 
@@ -274,7 +311,7 @@ Adapter 禁止：
 Access connection 使用 WebSocket reverse tunnel：
 
 ```text
-Worker -> Host public service /api/provision/access
+Worker -> adapterRuntimeControlBaseUrl /api/provision/access
 ```
 
 选择 WebSocket reverse tunnel 的原因：
@@ -282,6 +319,7 @@ Worker -> Host public service /api/provision/access
 - Worker 只需要出站连接，不要求本机、Docker container 或 aissh 目标公网入站。
 - 能覆盖本机 Worker、容器 Worker、内网 Worker、任意 aissh 目标。
 - 能支持 Workbench 需要的 streaming / WebSocket 行为。
+- 开发模式不要求生产域名存在；只要求 Worker 所在运行环境能访问 `adapterRuntimeControlBaseUrl`。
 
 ## Auth Boundary
 
@@ -449,7 +487,7 @@ Soul Builder 是 Host 的第二主流程。
 员工收到或打开：
 
 ```text
-https://aiworker.zonease.org/workers/:workerId
+<hostBrowserBaseUrl>/workers/:workerId
 ```
 
 如果未登录：
@@ -519,6 +557,7 @@ redirect to Logto login -> return to /workers/:workerId
 - Host readiness 必须等待 Worker check-in 与 access ready。
 - Host provisioning 必须通过 Provisioning Target Adapter，不得把 aissh 写死成唯一开通方式。
 - `docker` preview 与 `local` dev adapter 必须走同一 assignment、provision token、check-in、access ready 合同，用来验证 adapter 抽象真实成立。
+- Host URL 必须环境化：生产可以使用同一个公网域名，开发必须支持独立的 `hostBrowserBaseUrl`、`hostControlBaseUrl` 与 adapter 运行环境可达的 `adapterRuntimeControlBaseUrl`。
 
 因此，在进入实现前，必须先把以下 canonical docs 更新为新合同：
 
@@ -539,11 +578,14 @@ Phase 2 MVP 体验验收：
 - Host 创建 assignment，并生成一次性 provision token。
 - Adapter delivery 成功后，Host 状态仍为 `provisioning` 或 `checked_in`，不误报 `ready`。
 - `aissh` adapter 使用已验证的 `aissh exec [server_id] <command> --reason ...` 形态；实现前不得猜测未验证的 aissh 能力。
+- `aissh` dev 对远程 target 必须要求显式 worker-reachable callback URL；不能默认使用本机 `localhost` / `127.0.0.1` / `::1`。
 - `docker` adapter 能在干净 container 中启动 Worker，并使用独立 worker home / volume。
+- `docker` dev 能把 `adapterRuntimeControlBaseUrl` 配成 container 可达的 Host API URL，例如 `http://host.docker.internal:9117`。
 - `local` adapter 能在本机独立 `AIWORKER_HOME` 中启动 Worker，用于 dev/demo 和浏览器 E2E。
+- `local` dev 能使用 `http://127.0.0.1:5050/workers/:workerId` 作为浏览器入口，并用 `http://127.0.0.1:9117` 作为 Worker 回连入口。
 - Worker check-in 后，Host 绑定 `worker_id` 与 assignment。
 - Worker 建立 WebSocket reverse tunnel。
-- Host 生成 `https://aiworker.zonease.org/workers/:workerId`。
+- Host 根据 `hostBrowserBaseUrl` 生成 `<hostBrowserBaseUrl>/workers/:workerId`。
 - 员工打开该 URL，未登录时走 Logto。
 - 登录邮箱与 assignment 匹配时进入 Worker-owned Workbench。
 - 登录邮箱不匹配时被拒绝。
@@ -559,7 +601,9 @@ Phase 2 MVP 体验验收：
 - assignment safety：不持久化明文 provision token、Logto token、Host session、native engine secret。
 - exact email gate：同域用户但邮箱不匹配不能访问 Worker。
 - provisioning target schema：Host options 暴露 `provisioningTargets[]`，不再把新 API/UI 命名为 `servers[]`。
+- URL environment contract：生产域名只是 production 示例；开发模式支持 browser/control/callback URL 分离。
 - adapter maturity：`production` / `preview` / `dev` 的 UI 标签与限制文案存在。
+- remote aissh reachability：远程 aissh target 使用 loopback callback URL 时必须被拒绝或提示改用可达 URL。
 - readiness state：adapter delivery success 不等于 ready。
 - aissh CLI contract：围绕已验证的 `server list` JSON 与 `exec [server_id] <command> --reason` 形态写测试，不臆造 tag/group/file/approval 能力。
 - access adapter boundary：只允许 `/workers/:workerId` access routing，不允许通用 gateway 能力扩散。
@@ -569,6 +613,8 @@ Phase 2 MVP 体验验收：
 
 - Host provisioning happy path。
 - aissh production target happy path。
+- aissh remote-dev target with explicit reachable callback URL。
+- aissh remote-dev rejects localhost callback URL for remote target。
 - docker preview target happy path：干净 container + 独立 volume + Worker check-in。
 - local dev target happy path：独立 `AIWORKER_HOME` + Worker check-in + browser E2E。
 - Worker check-in happy path。
