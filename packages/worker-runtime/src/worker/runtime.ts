@@ -57,6 +57,7 @@ import {
   applyAutoEngineTitle,
   applyAutoTruncatedTitle,
   readSessionTitleSource,
+  stripSessionTitleSourceMetadata,
 } from './session-title-policy'
 import {
   freezeSessionEngineMetadata,
@@ -423,8 +424,9 @@ export class LocalWorkerRuntime {
   async createSession(input: CreateLocalSessionInput): Promise<SessionRow> {
     this.requireActiveWorker()
     const workspace = this.requireActiveWorkspace(input.workspaceId)
-    const baseSessionMetadata = freezeSessionEngineMetadata(input.metadata ?? {}, this.requestedSessionEngine(input.metadata ?? {}))
-    const sessionMetadata = { ...baseSessionMetadata, titleSource: readSessionTitleSource({ metadataJson: baseSessionMetadata }) }
+    const requestedMetadata = stripSessionTitleSourceMetadata(input.metadata)
+    const baseSessionMetadata = freezeSessionEngineMetadata(requestedMetadata, this.requestedSessionEngine(requestedMetadata))
+    const sessionMetadata = { ...baseSessionMetadata, titleSource: 'auto-default' as const }
     const session = createSession({
       id: randomUUID(),
       workerId: this.workerId,

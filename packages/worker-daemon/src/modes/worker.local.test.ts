@@ -442,7 +442,10 @@ describe('local daemon API', () => {
     const { session } = await createWorkspaceAndSession(target, worker.id)
 
     const patchRes = await target.request(`/api/sessions/${session.id}`, {
-      body: JSON.stringify({ title: 'Manual investigation title' }),
+      body: JSON.stringify({
+        metadata: { custom: 'rename-kept' },
+        title: 'Manual investigation title',
+      }),
       headers: { 'content-type': 'application/json' },
       method: 'PATCH',
     })
@@ -451,7 +454,59 @@ describe('local daemon API', () => {
       session: { metadataJson: Record<string, unknown>, title: string }
     }
     expect(patchBody.session.title).toBe('Manual investigation title')
+    expect(patchBody.session.metadataJson.custom).toBe('rename-kept')
     expect(patchBody.session.metadataJson.titleSource).toBe('user')
+  })
+
+  it('strips external titleSource when creating a session through the daemon while keeping other metadata', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'create-title-source-worker')
+    const workspace = await createWorkspaceLocator(target, worker.id, { name: 'Create Session Metadata Workspace' })
+
+    const sessionRes = await target.request('/api/sessions', {
+      body: JSON.stringify({
+        metadata: {
+          custom: 'keep-me',
+          titleSource: 'user',
+        },
+        title: 'Create session metadata',
+        workerId: worker.id,
+        workspaceId: workspace.id,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(sessionRes.status).toBe(201)
+    const body = await sessionRes.json() as {
+      session: { metadataJson: Record<string, unknown> }
+    }
+
+    expect(body.session.metadataJson.custom).toBe('keep-me')
+    expect(body.session.metadataJson.titleSource).toBe('auto-default')
+  })
+
+  it('does not let metadata-only PATCH override titleSource while preserving custom metadata', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'patch-title-source-worker')
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    const patchRes = await target.request(`/api/sessions/${session.id}`, {
+      body: JSON.stringify({
+        metadata: {
+          custom: 'kept',
+          titleSource: 'user',
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(patchRes.status).toBe(200)
+    const patchBody = await patchRes.json() as {
+      session: { metadataJson: Record<string, unknown> }
+    }
+
+    expect(patchBody.session.metadataJson.custom).toBe('kept')
+    expect(patchBody.session.metadataJson.titleSource).toBe('auto-default')
   })
 
   it('auto-names a session end-to-end when the daemon enables session auto-naming', async () => {

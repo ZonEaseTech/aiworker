@@ -53,6 +53,7 @@ import {
   LocalEngineResolutionError,
   resolveLocalCliEngine,
   applyUserTitle,
+  stripSessionTitleSourceMetadata,
   workerEnv,
 } from '@zonease/aiworker-worker-runtime'
 import { streamSSE } from 'hono/streaming'
@@ -513,7 +514,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return result.response
     try {
       const incomingMetadata = result.data.metadata
-        ? { ...(session.metadataJson ?? {}), ...result.data.metadata }
+        ? { ...(session.metadataJson ?? {}), ...stripSessionTitleSourceMetadata(result.data.metadata) }
         : session.metadataJson
       const titlePatch = typeof result.data.title === 'string'
         ? applyUserTitle({ title: session.title, metadataJson: incomingMetadata }, result.data.title)
@@ -1501,7 +1502,7 @@ async function createWorkspaceSessionFromBody(
   const settings = loadLocalSettings()
   const execution = resolvedExecutionMetadata(settings, body.engineId)
   const metadata = {
-    ...(body.metadata ?? {}),
+    ...stripSessionTitleSourceMetadata(body.metadata),
     ...execution,
   }
   let session

@@ -72,6 +72,7 @@ export {
   applyAutoTruncatedTitle,
   applyUserTitle,
   readSessionTitleSource,
+  stripSessionTitleSourceMetadata,
   type SessionTitlePatch,
   type SessionTitleSource,
 } from './worker/session-title-policy'

@@ -14,6 +14,12 @@ const TITLE_SOURCES = new Set<SessionTitleSource>([
   'user',
 ])
 
+export function stripSessionTitleSourceMetadata(metadata: unknown): Record<string, unknown> {
+  const record = readRecord(metadata)
+  const { titleSource: _titleSource, ...rest } = record
+  return rest
+}
+
 export function readSessionTitleSource(session: Pick<SessionRow, 'metadataJson'>): SessionTitleSource {
   const source = readRecord(session.metadataJson).titleSource
   return typeof source === 'string' && TITLE_SOURCES.has(source as SessionTitleSource)

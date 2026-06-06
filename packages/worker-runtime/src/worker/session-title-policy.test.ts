@@ -7,6 +7,7 @@ import {
   applyAutoTruncatedTitle,
   applyUserTitle,
   readSessionTitleSource,
+  stripSessionTitleSourceMetadata,
 } from './session-title-policy'
 
 function session(input: Partial<SessionRow> = {}): SessionRow {
@@ -70,5 +71,25 @@ describe('session title policy', () => {
       title: 'Manual title',
       metadataJson: { engineId: 'codex', titleSource: 'user' },
     })
+  })
+
+  it('strips top-level titleSource without mutating other metadata', () => {
+    const metadata = {
+      custom: 'x',
+      engineCommand: 'codex',
+      engineId: 'codex',
+      executionMode: 'local-cli',
+      nested: { titleSource: 'leave-me-alone' },
+      titleSource: 'user',
+    }
+
+    expect(stripSessionTitleSourceMetadata(metadata)).toEqual({
+      custom: 'x',
+      engineCommand: 'codex',
+      engineId: 'codex',
+      executionMode: 'local-cli',
+      nested: { titleSource: 'leave-me-alone' },
+    })
+    expect(metadata.titleSource).toBe('user')
   })
 })
