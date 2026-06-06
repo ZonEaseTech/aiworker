@@ -465,7 +465,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                     <FieldDescription>{selectedTargetDescription(options, formState.provisioningTargetId)}</FieldDescription>
                     {options && options.provisioningTargets.length > 0
                       ? (
-                          <div className="flex flex-wrap gap-1" aria-label="provisioning target summaries">
+                          <div className="flex flex-wrap gap-1" aria-label="target maturity summaries">
                             {options.provisioningTargets.map(target => (
                               <Badge key={target.id} variant="outline">
                                 <BadgeLabel>{target.adapterType} · {target.maturity}</BadgeLabel>

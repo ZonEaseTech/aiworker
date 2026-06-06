@@ -45,6 +45,9 @@ try {
   await page.getByRole('navigation', { name: 'Host navigation' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('complementary', { name: 'Worker assignment drawer' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('button', { name: '创建开通' }).waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByLabel('provisioning target').waitFor({ state: 'visible', timeout: 10000 })
+  if (await page.getByLabel('aissh server').count() !== 0)
+    throw new Error('Host Web still exposed legacy aissh server label')
   await page.getByText('Worker Access Tunnel 未接入').first().waitFor({ state: 'visible', timeout: 10000 })
   await page.getByText('Logto 未接入').first().waitFor({ state: 'visible', timeout: 10000 })
   evidence.host = {
@@ -132,6 +135,10 @@ function isExpectedBrowserEvent(event: string): boolean {
   if (normalized.startsWith('response:404:') && normalized.includes('/api/host/options'))
     return true
   if (normalized.startsWith('response:404:') && normalized.includes('/workers/wkr_82'))
+    return true
+  if (normalized.startsWith('response:502:') && normalized.includes('/api/host/'))
+    return true
+  if (normalized.startsWith('response:502:') && normalized.includes('/workers/wkr_82'))
     return true
   return event.includes('server responded with a status of 502')
 }

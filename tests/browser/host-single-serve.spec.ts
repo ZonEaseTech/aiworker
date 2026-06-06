@@ -37,6 +37,12 @@ try {
   const optionsText = await optionsResponse.text()
   if (!optionsResponse.ok)
     throw new Error(`Host options failed with HTTP ${optionsResponse.status}: ${optionsText}`)
+  const options = JSON.parse(optionsText) as {
+    provisioningTargets?: Array<{ adapterType?: string, displayName?: string, maturity?: string, ref?: string }>
+  }
+  const localTarget = options.provisioningTargets?.find(target => target.adapterType === 'local' && target.maturity === 'dev')
+  if (!localTarget)
+    throw new Error(`Host options did not include local dev provisioning target: ${optionsText}`)
 
   browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { height: 900, width: 1440 } })
@@ -47,6 +53,9 @@ try {
   await page.getByRole('navigation', { name: 'Host navigation' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('complementary', { name: 'Worker assignment drawer' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('button', { name: '创建开通' }).waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByLabel('provisioning target').waitFor({ state: 'visible', timeout: 10000 })
+  if (await page.getByLabel('aissh server').count() !== 0)
+    throw new Error('Host single serve still exposed legacy aissh server label')
 
   const unexpectedBrowserEvents = browserEvents.filter(event => !isExpectedBrowserEvent(event))
   if (unexpectedBrowserEvents.length > 0)
@@ -60,6 +69,8 @@ try {
     },
     hostUrl,
     optionsStatus: optionsResponse.status,
+    optionsTargets: options.provisioningTargets,
+    provisioningTargetVisible: await page.getByLabel('provisioning target').isVisible(),
     sameOriginApi: new URL('/api/host/options', baseUrl).toString(),
     status,
   }

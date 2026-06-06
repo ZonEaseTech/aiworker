@@ -48,16 +48,41 @@ try {
   await page.getByRole('complementary', { name: 'Worker assignment drawer' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByText('Logto 未接入').first().waitFor({ state: 'visible', timeout: 10000 })
   await page.getByText('Worker Access Tunnel 未接入').first().waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByLabel('provisioning target').waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByLabel('provisioning target').selectOption('local:default')
+  await page.locator('[data-slot="field-description"]').filter({ hasText: '本机开发环境 · local · dev' }).waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByLabel('target maturity summaries').getByText('local · dev').waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByLabel('target maturity summaries').getByText('docker · preview').waitFor({ state: 'visible', timeout: 10000 })
   await page.getByLabel('员工邮箱').fill('browser.employee@zonease.org')
-  await fillIfFallbackInput(page, 'aissh server', 'aissh://browser-proof')
   await fillIfFallbackInput(page, 'Soul release', 'aiworker-freeform@browser-proof')
   await page.getByRole('button', { name: '创建开通' }).click()
 
-  const command = await page.locator('pre').filter({ hasText: '--token' }).first().textContent({ timeout: 10000 })
+  const provisionToken = await commandBlockText(page, 'Provision token')
+  const command = await commandBlockText(page, 'Provision command')
   if (!command)
     throw new Error('Host provision command was empty in the assignment drawer')
-  const provisionToken = extractProvisionToken(command)
+  if (!command.includes(`--host ${apiUrl}`))
+    throw new Error(`Host provision command did not use the local Host API callback ${apiUrl}: ${redactProvisionCommand(command)}`)
   await page.getByText('等待执行 provision command').waitFor({ state: 'visible', timeout: 10000 })
+
+  const loopbackAisshResponse = await fetch(new URL('/api/host/assignments', apiUrl), {
+    body: JSON.stringify({
+      adapterRuntimeControlBaseUrl: apiUrl,
+      assignedEmail: 'remote-aissh-loopback@zonease.org',
+      provisioningTarget: {
+        adapterType: 'aissh',
+        maturity: 'production',
+        ref: 'srv-1',
+      },
+      soulReleaseRef: 'aiworker-freeform@dev',
+    }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+  const loopbackAisshBody = await loopbackAisshResponse.json() as unknown
+  if (loopbackAisshResponse.status !== 400 || JSON.stringify(loopbackAisshBody) !== JSON.stringify({ error: { code: 'PROVISIONING_TARGET_UNREACHABLE' } })) {
+    throw new Error(`Remote aissh loopback assignment should be rejected, got ${loopbackAisshResponse.status}: ${JSON.stringify(loopbackAisshBody)}`)
+  }
 
   const checkInBody = {
     provisionToken,
@@ -115,6 +140,10 @@ try {
       hasHost: command.includes(`--host ${apiUrl}`),
       hasToken: true,
       token: redactProvisionToken(provisionToken),
+    },
+    remoteAisshLoopback: {
+      response: loopbackAisshBody,
+      status: loopbackAisshResponse.status,
     },
     refreshMechanism: 'page.reload(domcontentloaded)',
     webUrl,
@@ -219,12 +248,11 @@ async function gotoDocument(page: Page, url: string, label: string): Promise<num
   return response.status()
 }
 
-function extractProvisionToken(command: string): string {
-  const match = /--token\s+(?:'([^']+)'|"([^"]+)"|(\S+))/.exec(command)
-  const token = match?.[1] ?? match?.[2] ?? match?.[3]
-  if (!token)
-    throw new Error(`Provision command did not contain a --token value: ${redactProvisionCommand(command)}`)
-  return token
+async function commandBlockText(page: Page, title: string): Promise<string> {
+  const text = await page.getByText(title).locator('xpath=..').locator('pre').textContent({ timeout: 10000 })
+  if (!text)
+    throw new Error(`${title} block was empty`)
+  return text.trim()
 }
 
 function redactProvisionToken(token: string): string {
