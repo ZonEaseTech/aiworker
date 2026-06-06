@@ -604,7 +604,17 @@ describe('aiworker-host control CLI', () => {
         return new Response(JSON.stringify({
           access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
           auth: { mode: 'dev-static', status: 'deferred-logto' },
-          servers: [{ id: 'srv-1', name: 'aiwork', source: 'aissh', token: 'secret' }],
+          provisioningTargetSourceError: 'no remote env',
+          provisioningTargets: [{
+            id: 'aissh:srv-1',
+            adapterType: 'aissh',
+            capabilities: ['remote-delivery', 'worker-check-in', 'worker-access'],
+            description: 'from new backend',
+            displayName: 'aiwork',
+            health: 'ready',
+            maturity: 'production',
+            ref: 'srv-1',
+          }],
           soulReleases: [{
             descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
             id: 'aiworker-freeform',
@@ -618,8 +628,47 @@ describe('aiworker-host control CLI', () => {
 
     expect(code).toBe(0)
     const parsed = JSON.parse(output)
-    expect(parsed.servers[0].id).toBe('srv-1')
+    expect(parsed.provisioningTargets[0].id).toBe('aissh:srv-1')
+    expect(parsed.provisioningTargetSourceError).toBe('no remote env')
     expect(parsed.soulReleases[0].releaseRef).toBe('aiworker-freeform@dev')
+    expect(output).not.toContain('secret')
+    expect('servers' in parsed).toBe(false)
+  })
+
+  it('maps old Host option shape servers into compatibility provisioning targets', async () => {
+    const code = await runHostCli(['option', 'list', '--host', 'http://127.0.0.1:9117'], {
+      fetch: testFetch(async (input, init) => {
+        const request = new Request(input, init)
+        expect(request.method).toBe('GET')
+        expect(request.url).toBe('http://127.0.0.1:9117/api/host/options')
+        return new Response(JSON.stringify({
+          access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
+          auth: { mode: 'dev-static', status: 'deferred-logto' },
+          servers: [{ id: 'srv-1', name: 'aiwork', notes: 'aiwork project', source: 'aissh', token: 'secret' }],
+          soulReleases: [{
+            descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
+            id: 'aiworker-freeform',
+            name: 'AIWorker Freeform',
+            releaseRef: 'aiworker-freeform@dev',
+            source: 'official',
+          }],
+        }), { headers: { 'content-type': 'application/json' } })
+      }),
+    })
+
+    expect(code).toBe(0)
+    const parsed = JSON.parse(output)
+    expect(parsed.provisioningTargets).toEqual([{
+      adapterType: 'aissh',
+      capabilities: ['remote-delivery', 'worker-check-in', 'worker-access'],
+      description: 'aiwork project',
+      displayName: 'aiwork',
+      health: 'ready',
+      id: 'aissh:srv-1',
+      maturity: 'production',
+      ref: 'srv-1',
+    }])
+    expect('servers' in parsed).toBe(false)
     expect(output).not.toContain('secret')
   })
 

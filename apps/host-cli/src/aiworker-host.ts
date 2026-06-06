@@ -171,15 +171,65 @@ function projectAllowedFields(value: unknown, fields: string[]): Record<string, 
   return view
 }
 
+function projectProvisioningTarget(value: unknown): Record<string, unknown> | undefined {
+  const record = requireRecord(value, 'provisioning target')
+  if (typeof record.id !== 'string' || record.id.trim().length === 0)
+    return
+
+  return {
+    id: record.id,
+    ...(typeof record.displayName === 'string' ? { displayName: record.displayName } : {}),
+    ...(typeof record.adapterType === 'string' ? { adapterType: record.adapterType } : {}),
+    ...(typeof record.maturity === 'string' ? { maturity: record.maturity } : {}),
+    ...(typeof record.ref === 'string' ? { ref: record.ref } : {}),
+    ...(typeof record.description === 'string' ? { description: record.description } : {}),
+    ...(typeof record.health === 'string' ? { health: record.health } : {}),
+    ...(Array.isArray(record.capabilities)
+      ? { capabilities: record.capabilities.filter((entry: unknown): entry is string => typeof entry === 'string') }
+      : {}),
+  }
+}
+
+function mapLegacyServerToProvisioningTarget(server: unknown): Record<string, unknown> | undefined {
+  const record = requireRecord(server, 'legacy host server')
+  if (typeof record.id !== 'string' || record.id.trim().length === 0)
+    return
+
+  return {
+    adapterType: 'aissh',
+    capabilities: ['remote-delivery', 'worker-check-in', 'worker-access'],
+    ...(typeof record.notes === 'string' ? { description: record.notes } : {}),
+    displayName: typeof record.name === 'string' && record.name.trim() ? record.name : record.id,
+    health: 'ready',
+    id: `aissh:${record.id}`,
+    maturity: 'production',
+    ref: record.id,
+  }
+}
+
 function projectHostOptions(value: unknown): Record<string, unknown> {
   const record = requireRecord(value, 'host options')
+  const provisioningTargetSourceError
+    = typeof record.provisioningTargetSourceError === 'string' ? record.provisioningTargetSourceError
+      : (typeof record.serverSourceError === 'string' ? record.serverSourceError : undefined)
+
+  const provisioningTargets = Array.isArray(record.provisioningTargets)
+    ? record.provisioningTargets.flatMap((target) => {
+      const projectedTarget = projectProvisioningTarget(target)
+      return projectedTarget ? [projectedTarget] : []
+    })
+    : Array.isArray(record.servers)
+      ? record.servers.flatMap((server) => {
+        const projectedServer = mapLegacyServerToProvisioningTarget(server)
+        return projectedServer ? [projectedServer] : []
+      })
+      : []
+
   return {
-    ...(record.serverSourceError ? { serverSourceError: record.serverSourceError } : {}),
+    ...(provisioningTargetSourceError ? { provisioningTargetSourceError } : {}),
     access: record.access,
     auth: record.auth,
-    servers: Array.isArray(record.servers)
-      ? record.servers.map(server => projectAllowedFields(server, ['id', 'name', 'host', 'notes', 'source']))
-      : [],
+    provisioningTargets,
     soulReleases: Array.isArray(record.soulReleases)
       ? record.soulReleases.map(soul => projectAllowedFields(soul, ['id', 'name', 'releaseRef', 'descriptorPath', 'source']))
       : [],
