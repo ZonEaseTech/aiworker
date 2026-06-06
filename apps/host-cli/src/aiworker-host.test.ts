@@ -95,8 +95,12 @@ describe('aiworker-host control CLI', () => {
       '/tmp/aiworker-host.db',
       '--public-base-url',
       'https://aiworker.zonease.org',
+      '--host',
+      '127.0.0.1',
       '--port',
       '4321',
+      '--web-static-dir',
+      '/tmp/host-web-dist',
     ], {
       async serverFactory(options) {
         calls.push({ type: 'factory', options })
@@ -119,14 +123,18 @@ describe('aiworker-host control CLI', () => {
         authUser: null,
         dbPath: '/tmp/aiworker-host.db',
         publicBaseUrl: 'https://aiworker.zonease.org',
+        webStaticDir: '/tmp/host-web-dist',
       },
     })
     expect(calls[1].type).toBe('serve')
+    expect(calls[1].options.hostname).toBe('127.0.0.1')
     expect(calls[1].options.port).toBe(4321)
     expect(JSON.parse(output)).toEqual({
+      host: '127.0.0.1',
       listening: true,
       port: 4321,
       publicBaseUrl: 'https://aiworker.zonease.org',
+      webStaticDir: '/tmp/host-web-dist',
     })
   })
 

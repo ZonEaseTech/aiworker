@@ -192,9 +192,11 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     .command('serve', 'serve the Host provisioning/control API')
     .option('--db <path>', 'Host sqlite database path', { default: 'host.db' })
     .option('--dev-admin-email <email>', 'development-only static host admin email')
+    .option('--host <host>', 'bind host', { default: '127.0.0.1' })
     .option('--public-base-url <url>', 'public Host base URL', { default: 'http://127.0.0.1:9310' })
     .option('--port <port>', 'listen port', { default: '9310' })
-    .action(async (options: { db: string, devAdminEmail?: string, port: string | number, publicBaseUrl: string }) => {
+    .option('--web-static-dir <path>', 'Host Web static directory to serve from this process')
+    .action(async (options: { db: string, devAdminEmail?: string, host: string, port: string | number, publicBaseUrl: string, webStaticDir?: string }) => {
       const port = Number(options.port)
       if (!Number.isInteger(port) || port <= 0)
         throw new Error(`Invalid port: ${options.port}`)
@@ -210,13 +212,21 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
           : null,
         dbPath: options.db,
         publicBaseUrl,
+        ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
       })
       const bunServe = deps.bunServe ?? Bun.serve
       bunServe({
         fetch: server.fetch,
+        hostname: options.host,
         port,
       })
-      printJson({ listening: true, port, publicBaseUrl })
+      printJson({
+        host: options.host,
+        listening: true,
+        port,
+        publicBaseUrl,
+        ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
+      })
     })
   cli.help()
 

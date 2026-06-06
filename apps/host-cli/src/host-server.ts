@@ -2,9 +2,9 @@ import type { AuthenticatedHostUser, AuthProvider, WorkerAccessRegistry } from '
 import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
 import type { HostOptionsView } from './host-options'
 
-import { existsSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { extname, join, resolve, sep } from 'node:path'
 
 import {
   createAssignmentView,
@@ -36,6 +36,7 @@ export interface HostServerOptions {
   optionsProvider?: () => Promise<HostOptionsView>
   publicBaseUrl: string
   webBaseUrl?: string
+  webStaticDir?: string
 }
 
 export interface HostServer {
@@ -62,10 +63,15 @@ export async function createHostServer(options: HostServerOptions): Promise<Host
 
   const authProvider = options.authProvider ?? createStaticAuthProvider(options.authUser ?? null)
   const accessRegistry = options.accessRegistry ?? createWorkerAccessRegistry()
+  const webStaticDir = options.webStaticDir ? normalizeStaticDir(options.webStaticDir) : null
 
   return {
     async fetch(request) {
       const url = new URL(request.url)
+
+      const hostWebResponse = await serveHostWebStatic(request, webStaticDir)
+      if (hostWebResponse)
+        return hostWebResponse
 
       if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/host'))
         return devLanding(options.publicBaseUrl, options.webBaseUrl ?? 'http://127.0.0.1:5050')
@@ -229,7 +235,9 @@ function buildAisshCommand(serverRef: string, assignedEmail: string, provisionCo
 }
 
 function shellQuote(value: string): string {
-  return /^[A-Za-z0-9_/:=.,@%+-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
+  if (/^[\w/:=.,@%+-]+$/.test(value))
+    return value
+  return `'${value.replaceAll(/'/g, String.raw`'\''`)}'`
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -237,11 +245,97 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+  const normalized = value.trim()
+  if (/\s/.test(normalized))
+    return false
+
+  const at = normalized.indexOf('@')
+  if (at <= 0 || at !== normalized.lastIndexOf('@'))
+    return false
+
+  const emailHost = normalized.slice(at + 1)
+  return emailHost.includes('.') && !emailHost.startsWith('.') && !emailHost.endsWith('.')
 }
 
 function normalizeDbPath(dbPath: string): string {
   return dbPath === ':memory:' ? dbPath : resolve(dbPath)
+}
+
+function normalizeStaticDir(webStaticDir: string): string {
+  const root = resolve(webStaticDir)
+  const indexPath = join(root, 'index.html')
+  if (!existsSync(indexPath))
+    throw new Error(`Host Web static directory is missing index.html: ${root}`)
+  return root
+}
+
+async function serveHostWebStatic(request: Request, webStaticDir: null | string): Promise<null | Response> {
+  if (!webStaticDir || (request.method !== 'GET' && request.method !== 'HEAD'))
+    return null
+
+  const url = new URL(request.url)
+  const pathname = decodePathname(url.pathname)
+  if (!pathname)
+    return json({ error: { code: 'INVALID_STATIC_PATH' } }, { status: 400 })
+
+  const filePath = resolveStaticFilePath(webStaticDir, pathname)
+  if (!filePath)
+    return null
+
+  if (!isPathInsideRoot(webStaticDir, filePath))
+    return null
+
+  const file = Bun.file(filePath)
+  if (!await file.exists())
+    return null
+
+  const headers = new Headers()
+  headers.set('content-type', contentTypeForPath(filePath))
+  return new Response(request.method === 'HEAD' ? null : file, { headers })
+}
+
+function decodePathname(pathname: string): null | string {
+  try {
+    return decodeURIComponent(pathname)
+  }
+  catch {
+    return null
+  }
+}
+
+function resolveStaticFilePath(webStaticDir: string, pathname: string): null | string {
+  if (pathname === '/' || pathname === '/host' || pathname.startsWith('/host/'))
+    return resolve(webStaticDir, 'index.html')
+
+  if (pathname === '/favicon.svg' || pathname.startsWith('/assets/'))
+    return resolve(webStaticDir, pathname.replace(/^\/+/, ''))
+
+  return null
+}
+
+function isPathInsideRoot(root: string, candidate: string): boolean {
+  const normalizedRoot = root.endsWith(sep) ? root : `${root}${sep}`
+  return candidate === root || candidate.startsWith(normalizedRoot)
+}
+
+function contentTypeForPath(filePath: string): string {
+  switch (extname(filePath).toLowerCase()) {
+    case '.css':
+      return 'text/css; charset=utf-8'
+    case '.html':
+      return 'text/html; charset=utf-8'
+    case '.js':
+    case '.mjs':
+      return 'application/javascript; charset=utf-8'
+    case '.json':
+      return 'application/json; charset=utf-8'
+    case '.svg':
+      return 'image/svg+xml'
+    case '.woff2':
+      return 'font/woff2'
+    default:
+      return 'application/octet-stream'
+  }
 }
 
 function json(value: unknown, init: ResponseInit = {}): Response {

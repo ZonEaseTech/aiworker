@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -31,6 +31,21 @@ describe('host server', () => {
 
   function dbPath() {
     return join(dir, 'host.db')
+  }
+
+  function createHostWebDist() {
+    const webStaticDir = join(dir, 'host-web-dist')
+    mkdirSync(join(webStaticDir, 'assets'), { recursive: true })
+    writeFileSync(join(webStaticDir, 'index.html'), [
+      '<!DOCTYPE html>',
+      '<html>',
+      '<head><title>AIWorker Host Web</title><link rel="icon" href="/favicon.svg"></head>',
+      '<body><div id="root">host web shell</div><script type="module" src="/assets/app.js"></script></body>',
+      '</html>',
+    ].join(''))
+    writeFileSync(join(webStaticDir, 'assets', 'app.js'), 'window.__AIWORKER_HOST_WEB__ = true;')
+    writeFileSync(join(webStaticDir, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"></svg>')
+    return webStaticDir
   }
 
   async function json(response: Response) {
@@ -187,6 +202,58 @@ describe('host server', () => {
     expect(body).toContain('Host API is running')
     expect(body).toContain('http://127.0.0.1:5050/host')
     expect(body).toContain('/api/host/options')
+  })
+
+  it('serves Host Web static assets from the Host API process when webStaticDir is configured', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      optionsProvider: async () => ({
+        access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
+        auth: { mode: 'dev-static', status: 'deferred-logto' },
+        servers: [{ id: 'srv-1', name: 'aiwork', source: 'aissh' }],
+        soulReleases: [],
+      }),
+      publicBaseUrl: 'https://aiworker.zonease.org',
+      webStaticDir: createHostWebDist(),
+    })
+
+    const hostResponse = await server.fetch(new Request('http://host/host'))
+    const hostBody = await hostResponse.text()
+    expect(hostResponse.status).toBe(200)
+    expect(hostResponse.headers.get('content-type')).toContain('text/html')
+    expect(hostBody).toContain('host web shell')
+
+    const assetResponse = await server.fetch(new Request('http://host/assets/app.js'))
+    expect(assetResponse.status).toBe(200)
+    expect(assetResponse.headers.get('content-type')).toContain('application/javascript')
+    expect(await assetResponse.text()).toContain('__AIWORKER_HOST_WEB__')
+
+    const faviconResponse = await server.fetch(new Request('http://host/favicon.svg'))
+    expect(faviconResponse.status).toBe(200)
+    expect(faviconResponse.headers.get('content-type')).toContain('image/svg+xml')
+
+    const optionsResponse = await server.fetch(new Request('http://host/api/host/options'))
+    const optionsBody = await json(optionsResponse)
+    expect(optionsResponse.status).toBe(200)
+    expect(optionsBody.servers[0].id).toBe('srv-1')
+  })
+
+  it('does not serve files outside the Host Web static directory', async () => {
+    writeFileSync(join(dir, 'secret.txt'), 'do-not-leak')
+
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      publicBaseUrl: 'https://aiworker.zonease.org',
+      webStaticDir: createHostWebDist(),
+    })
+
+    const response = await server.fetch(new Request('http://host/assets/%2e%2e/secret.txt'))
+    const body = await response.text()
+
+    expect(response.status).toBe(404)
+    expect(body).not.toContain('do-not-leak')
   })
 
   it('returns Host options for Web and CLI without credentials', async () => {
