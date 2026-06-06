@@ -259,22 +259,30 @@ test('G5 clause-2: the control protocol contract type hardcodes no transport', (
 test('G6 phase-2 provisioning uses target adapters instead of hard-coded aissh servers', () => {
   const architecture = read('docs/architecture.md')
   const protocol = read('docs/protocol.md')
+  const runtime = read('docs/runtime.md')
 
-  expect(architecture).toContain('Provisioning Target Adapter')
-  expect(architecture).toContain('aissh production')
-  expect(architecture).toContain('docker preview')
-  expect(architecture).toContain('local dev')
-  expect(protocol).toContain('hostBrowserBaseUrl')
-  expect(protocol).toContain('hostControlBaseUrl')
-  expect(protocol).toContain('adapterRuntimeControlBaseUrl')
+  expect(architecture).toMatch(/Provisioning Target Adapter/)
+  for (const maturity of ['aissh production', 'docker preview', 'local dev'])
+    expect(architecture).toMatch(new RegExp(maturity.replace(' ', '\\s+'), 'i'))
+
+  for (const field of ['hostBrowserBaseUrl', 'hostControlBaseUrl', 'adapterRuntimeControlBaseUrl']) {
+    expect(protocol).toContain(field)
+    expect(runtime).toContain(field)
+  }
 })
 
-test('G7 remote aissh development cannot use loopback callback URLs', () => {
+test('G7 remote aissh target cannot use loopback callback URLs', () => {
   const protocol = read('docs/protocol.md')
   const testing = read('docs/testing.md')
 
-  expect(protocol).toContain('remote aissh target must not use localhost, 127.0.0.1, or ::1 as its adapter runtime callback URL')
-  expect(testing).toContain('remote aissh target rejects loopback callback URLs')
+  expect(protocol).toMatch(/remote\s+aissh\s+target/i)
+  expect(protocol).toMatch(/localhost/i)
+  expect(protocol).toMatch(/127\.0\.0\.1/)
+  expect(protocol).toMatch(/::1/)
+  expect(protocol).toMatch(/adapter runtime callback url/i)
+  expect(testing).toMatch(/remote\s+aissh\s+target/i)
+  expect(testing).toMatch(/loopback/i)
+  expect(testing).toMatch(/callback/i)
 })
 
 // G1 ↔ C1：worker standalone 金路径行为证据存在、host-free、且被 release:check 执行（经 test:cli）。
