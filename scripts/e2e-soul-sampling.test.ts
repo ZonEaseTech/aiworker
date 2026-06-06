@@ -93,23 +93,17 @@ describe('e2e soul sampling static contracts', () => {
   })
 
   it('keeps Google Ads monthly review deliverables from collapsing into a short summary', () => {
-    const source = readFileSync(
+    const skill = readFileSync(
       'souls/google-ads/engine/skills/client-performance-review/SKILL.md',
       'utf8',
     )
-    const dist = readFileSync(
-      'souls/google-ads/dist/engine-assets/skills/client-performance-review/SKILL.md',
-      'utf8',
-    )
 
-    for (const skill of [source, dist]) {
-      expect(skill).toContain('最低可交付月报')
-      expect(skill).toContain('分区月报草案')
-      expect(skill).toContain('不要退化成几段摘要')
-      expect(skill).toContain('输出时必须保留这些小节标题')
-      expect(skill).toContain('客户健康度')
-      expect(skill).toContain('客户可以进入复盘会议的月报草案')
-    }
+    expect(skill).toContain('最低可交付月报')
+    expect(skill).toContain('分区月报草案')
+    expect(skill).toContain('不要退化成几段摘要')
+    expect(skill).toContain('输出时必须保留这些小节标题')
+    expect(skill).toContain('客户健康度')
+    expect(skill).toContain('客户可以进入复盘会议的月报草案')
   })
 
   it('keeps the repo-local sampling skill frontmatter loadable by Codex', () => {
@@ -121,31 +115,22 @@ describe('e2e soul sampling static contracts', () => {
 
   it('keeps official Soul answers focused on deliverables instead of internal process narration', () => {
     for (const soul of expectedAppIds) {
-      const source = readFileSync(`souls/${soul}/engine/workspace/AGENTS.md`, 'utf8')
-      const dist = readFileSync(`souls/${soul}/dist/engine-assets/workspace/AGENTS.md`, 'utf8')
+      const agents = readFileSync(`souls/${soul}/engine/workspace/AGENTS.md`, 'utf8')
 
-      for (const agents of [source, dist]) {
-        expect(agents).toContain('不要把内部过程写给用户')
-        expect(agents).toContain('直接给结论、交付物、必要假设和下一步')
-        expect(agents).toContain('不要用“我会先读取 / 我先检查 / 我将调用”')
-      }
+      expect(agents).toContain('不要把内部过程写给用户')
+      expect(agents).toContain('直接给结论、交付物、必要假设和下一步')
+      expect(agents).toContain('不要用“我会先读取 / 我先检查 / 我将调用”')
     }
   })
 
   it('keeps official Soul skills from starting user answers with tool-use narration', () => {
     for (const soul of OFFICIAL_SAMPLING_SOULS) {
       for (const skill of soul.skills) {
-        const source = readFileSync(skill.sourcePath, 'utf8')
-        const dist = readFileSync(
-          skill.sourcePath.replace('/engine/skills/', '/dist/engine-assets/skills/'),
-          'utf8',
-        )
+        const skillText = readFileSync(skill.sourcePath, 'utf8')
 
-        for (const skillText of [source, dist]) {
-          expect(skillText).toContain('回答从结果开始')
-          expect(skillText).toContain('不要以“使用 `')
-          expect(skillText).toContain('不要以“使用 `skill` / 我会按 / 我会先 / 我先读取 / 已确认”')
-        }
+        expect(skillText).toContain('回答从结果开始')
+        expect(skillText).toContain('不要以“使用 `')
+        expect(skillText).toContain('不要以“使用 `skill` / 我会按 / 我会先 / 我先读取 / 已确认”')
       }
     }
   })
