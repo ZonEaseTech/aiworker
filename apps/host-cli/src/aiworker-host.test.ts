@@ -155,6 +155,7 @@ describe('aiworker-host control CLI', () => {
             workerId: null,
             workbenchUrl: null,
           },
+          provisionToken: 'awp_secret',
           provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --host http://127.0.0.1:9117 --token awp_secret',
         }), { headers: { 'content-type': 'application/json' }, status: 201 })
       }),
@@ -165,6 +166,7 @@ describe('aiworker-host control CLI', () => {
     const parsed = JSON.parse(output)
     expect(parsed.assignment.assignedEmail).toBe('bob@zonease.org')
     expect(parsed.provisionCommand).toContain('--token awp_secret')
+    expect(output).not.toContain('"provisionToken"')
   })
 
   it('lists assignments through the Host API without printing tokens', async () => {
@@ -187,6 +189,9 @@ describe('aiworker-host control CLI', () => {
             status: 'checked_in',
             workerId: 'wkr_82',
             workbenchUrl: null,
+            provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --host http://127.0.0.1:9117 --token awp_secret',
+            provisionToken: 'awp_secret',
+            provisionTokenHash: 'hash_secret',
           }],
         }), { headers: { 'content-type': 'application/json' } })
       }),
@@ -195,7 +200,9 @@ describe('aiworker-host control CLI', () => {
     expect(code).toBe(0)
     expect(output).toContain('bob@zonease.org')
     expect(output).not.toContain('awp_')
+    expect(output).not.toContain('provisionCommand')
     expect(output).not.toContain('provisionToken')
+    expect(output).not.toContain('provisionTokenHash')
   })
 
   it('returns exit code 1 when assignment create receives a Host API error', async () => {
@@ -218,5 +225,19 @@ describe('aiworker-host control CLI', () => {
     })
 
     expect(code).toBe(1)
+  })
+
+  it('returns exit code 1 when assignment list receives a non-JSON success response', async () => {
+    const code = await runHostCli(['assignment', 'list'], {
+      fetch: testFetch(async () => {
+        return new Response('ok', {
+          headers: { 'content-type': 'text/plain' },
+          status: 200,
+        })
+      }),
+    })
+
+    expect(code).toBe(1)
+    expect(output).toBe('')
   })
 })

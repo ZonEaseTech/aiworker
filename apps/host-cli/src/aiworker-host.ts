@@ -28,7 +28,7 @@ async function readJsonResponse(response: Response): Promise<unknown> {
     return await response.json()
   }
   catch {
-    return null
+    throw new Error('Host API response was not valid JSON')
   }
 }
 
@@ -42,6 +42,56 @@ async function requestHostJson(fetchImpl: typeof fetch, url: string, init?: Requ
     throw new Error(`Host API request failed: ${code}`)
   }
   return body
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function requireRecord(value: unknown, name: string): Record<string, unknown> {
+  if (!isRecord(value))
+    throw new Error(`Invalid Host API response: ${name} must be an object`)
+  return value
+}
+
+const assignmentViewFields = [
+  'assignedEmail',
+  'assignmentId',
+  'serverRef',
+  'soulReleaseRef',
+  'status',
+  'workerId',
+  'workbenchUrl',
+  'revokedAt',
+] as const
+
+function projectAssignmentView(value: unknown): Record<string, unknown> {
+  const record = requireRecord(value, 'assignment')
+  const view: Record<string, unknown> = {}
+  for (const field of assignmentViewFields) {
+    if (field in record)
+      view[field] = record[field]
+  }
+  return view
+}
+
+function projectAssignmentCreateResponse(value: unknown): Record<string, unknown> {
+  const record = requireRecord(value, 'assignment create response')
+  if (typeof record.provisionCommand !== 'string')
+    throw new Error('Invalid Host API response: provisionCommand must be a string')
+  return {
+    assignment: projectAssignmentView(record.assignment),
+    provisionCommand: record.provisionCommand,
+  }
+}
+
+function projectAssignmentListResponse(value: unknown): Record<string, unknown> {
+  const record = requireRecord(value, 'assignment list response')
+  if (!Array.isArray(record.assignments))
+    throw new Error('Invalid Host API response: assignments must be an array')
+  return {
+    assignments: record.assignments.map(projectAssignmentView),
+  }
 }
 
 // cac 不支持多词子命令的逐 token 匹配：把 ['worker','list'] 合并成单 token
@@ -93,7 +143,7 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       })
-      printJson(result)
+      printJson(projectAssignmentCreateResponse(result))
     })
   cli
     .command('assignment list', 'list Worker assignments through the Host API')
@@ -101,7 +151,7 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     .action(async (options: { host?: string }) => {
       const host = normalizeHostUrl(options.host)
       const result = await requestHostJson(fetchImpl, `${host}/api/host/assignments`)
-      printJson(result)
+      printJson(projectAssignmentListResponse(result))
     })
   cli
     .command('serve', 'serve the Host provisioning/control API')
