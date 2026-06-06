@@ -7,8 +7,11 @@ const LOGTO_PROOF_APP_NAME = 'AIWorker Local Auth Proof'
 export interface LogtoM2MConfig {
   endpoint: string
   issuer: string
+  managementApiIndicator?: string
+  managementEndpoint?: string
   m2mAppId: string
   m2mAppSecret: string
+  tenantId?: string
 }
 
 export interface LogtoProofApplication {
@@ -19,18 +22,36 @@ export interface LogtoProofApplication {
 
 export interface ManualLogtoConfiguration {
   manualConfiguration: {
+    appName: string
     applicationType: 'Traditional'
     issuer: string
     postLogoutRedirectUri: string
+    reason: string
     redirectUri: string
+    stage: LogtoManualConfigurationStage
+    status: LogtoManualConfigurationStatus
   }
 }
 
 type LogtoFetch = (input: Request | string | URL, init?: RequestInit) => Promise<Response>
 type LogtoConfigReader = (path: string) => Promise<string> | string
+type LogtoManualConfigurationStage = 'configuration' | 'create' | 'lookup' | 'secret-read' | 'token' | 'update'
+type LogtoManualConfigurationStatus = 'invalid_response' | 'not_configured' | 'request_failed' | number
 
 interface LogtoApplication {
   id: string
+  secret?: string
+}
+
+interface LogtoManagementConfig {
+  apiIndicator: string
+  endpoint: string
+}
+
+interface LogtoManagementFailure {
+  reason: string
+  stage: LogtoManualConfigurationStage
+  status: LogtoManualConfigurationStatus
 }
 
 export async function loadLogtoM2MConfigFile(input: {
@@ -56,16 +77,38 @@ export function loadLogtoM2MConfigText(text: string): LogtoM2MConfig {
     values.set(trimmed.slice(0, index), trimmed.slice(index + 1))
   }
 
-  return {
-    endpoint: requireValue(values, 'LOGTO_ENDPOINT'),
+  const tenantId = optionalValue(values, 'LOGTO_TENANT_ID')
+  const config: LogtoM2MConfig = {
+    endpoint: normalizeEndpoint(requireValue(values, 'LOGTO_ENDPOINT')),
     issuer: requireValue(values, 'LOGTO_ISSUER'),
     m2mAppId: requireValue(values, 'LOGTO_M2M_APP_ID'),
     m2mAppSecret: requireValue(values, 'LOGTO_M2M_APP_SECRET'),
   }
+  if (tenantId)
+    config.tenantId = tenantId
+
+  const derivedManagementEndpoint = tenantId ? `https://${tenantId}.logto.app/` : undefined
+  const derivedManagementApiIndicator = tenantId ? `https://${tenantId}.logto.app/api` : undefined
+  const managementEndpoint = optionalValue(values, 'LOGTO_MANAGEMENT_ENDPOINT') ?? derivedManagementEndpoint
+  const managementApiIndicator = optionalValue(values, 'LOGTO_MANAGEMENT_API_INDICATOR') ?? derivedManagementApiIndicator
+
+  if (managementEndpoint)
+    config.managementEndpoint = normalizeEndpoint(managementEndpoint)
+  if (managementApiIndicator)
+    config.managementApiIndicator = normalizeApiIndicator(managementApiIndicator)
+
+  return config
 }
 
 export function redactLogtoConfigForOutput(config: LogtoM2MConfig) {
   return { ...config, m2mAppSecret: '[REDACTED]' }
+}
+
+export function redactLogtoProofApplication(result: LogtoProofApplication | ManualLogtoConfiguration) {
+  if ('manualConfiguration' in result)
+    return result
+
+  return { ...result, clientSecret: '[REDACTED]' }
 }
 
 export async function ensureLogtoProofApplication(input: {
@@ -77,27 +120,44 @@ export async function ensureLogtoProofApplication(input: {
   const hostBrowserBaseUrl = input.hostBrowserBaseUrl.replace(/\/+$/, '')
   const redirectUri = `${hostBrowserBaseUrl}/auth/callback`
   const postLogoutRedirectUri = `${hostBrowserBaseUrl}/host`
-  const manualConfiguration = buildManualConfiguration(input.config, redirectUri, postLogoutRedirectUri)
-  const token = await requestManagementToken(input.config, fetchImpl).catch(() => null)
-  if (!token)
-    return manualConfiguration
+  const manualConfiguration = (failure: LogtoManagementFailure) =>
+    buildManualConfiguration(input.config, redirectUri, postLogoutRedirectUri, failure)
+  const management = resolveManagementConfig(input.config)
+  if (!management) {
+    return manualConfiguration({
+      reason: 'missing_management_api_config',
+      stage: 'configuration',
+      status: 'not_configured',
+    })
+  }
 
-  const app = await ensureProofApplication(input.config, fetchImpl, token, redirectUri, postLogoutRedirectUri).catch(() => null)
-  if (!app)
-    return manualConfiguration
+  const token = await requestManagementToken(input.config, management, fetchImpl)
+  if (isManagementFailure(token))
+    return manualConfiguration(token)
 
-  const secret = await readApplicationSecret(input.config, fetchImpl, token, app.id).catch(() => null)
-  if (!secret)
-    return manualConfiguration
+  const app = await ensureProofApplication(management, fetchImpl, token, redirectUri, postLogoutRedirectUri)
+  if (isManagementFailure(app))
+    return manualConfiguration(app)
+
+  if (app.secret)
+    return { clientId: app.id, clientSecret: app.secret, redirectUri }
+
+  const secret = await readApplicationSecret(management, fetchImpl, token, app.id)
+  if (isManagementFailure(secret))
+    return manualConfiguration(secret)
 
   return { clientId: app.id, clientSecret: secret, redirectUri }
 }
 
-async function requestManagementToken(config: LogtoM2MConfig, fetchImpl: LogtoFetch): Promise<string | null> {
-  const response = await fetchImpl(new URL('/oidc/token', config.endpoint), {
+async function requestManagementToken(
+  config: LogtoM2MConfig,
+  management: LogtoManagementConfig,
+  fetchImpl: LogtoFetch,
+): Promise<string | LogtoManagementFailure> {
+  const response = await safeFetch('token', fetchImpl, new URL('/oidc/token', management.endpoint), {
     body: new URLSearchParams({
       grant_type: 'client_credentials',
-      resource: new URL('/api', config.endpoint).toString().replace(/\/$/, ''),
+      resource: management.apiIndicator,
       scope: 'all',
     }),
     headers: {
@@ -106,50 +166,68 @@ async function requestManagementToken(config: LogtoM2MConfig, fetchImpl: LogtoFe
     },
     method: 'POST',
   })
+  if (isManagementFailure(response))
+    return response
   if (!response.ok)
-    return null
+    return managementRequestFailure('token', response.status)
 
-  const body = await response.json() as { access_token?: unknown }
-  if (typeof body.access_token !== 'string' || body.access_token.length === 0)
-    return null
+  const body = await safeResponseJson(response, 'token')
+  if (isManagementFailure(body))
+    return body
+  if (!isJsonRecord(body)) {
+    return {
+      reason: 'invalid_management_api_response',
+      stage: 'token',
+      status: 'invalid_response',
+    }
+  }
+  if (typeof body.access_token !== 'string' || body.access_token.length === 0) {
+    return {
+      reason: 'missing_access_token',
+      stage: 'token',
+      status: 'invalid_response',
+    }
+  }
 
   return body.access_token
 }
 
 async function ensureProofApplication(
-  config: LogtoM2MConfig,
+  management: LogtoManagementConfig,
   fetchImpl: LogtoFetch,
   token: string,
   redirectUri: string,
   postLogoutRedirectUri: string,
-): Promise<LogtoApplication | null> {
-  const existing = await findProofApplication(config, fetchImpl, token)
-  if (existing === null)
-    return null
+): Promise<LogtoApplication | LogtoManagementFailure> {
+  const existing = await findProofApplication(management, fetchImpl, token)
+  if (isManagementFailure(existing))
+    return existing
 
   if (existing) {
-    const updated = await updateProofApplication(config, fetchImpl, token, existing.id, redirectUri, postLogoutRedirectUri)
-    return updated ? existing : null
+    const updated = await updateProofApplication(management, fetchImpl, token, existing.id, redirectUri, postLogoutRedirectUri)
+    return isManagementFailure(updated) ? updated : existing
   }
 
-  return createProofApplication(config, fetchImpl, token, redirectUri, postLogoutRedirectUri)
+  return createProofApplication(management, fetchImpl, token, redirectUri, postLogoutRedirectUri)
 }
 
 async function findProofApplication(
-  config: LogtoM2MConfig,
+  management: LogtoManagementConfig,
   fetchImpl: LogtoFetch,
   token: string,
-): Promise<LogtoApplication | false | null> {
-  const response = await fetchImpl(new URL('/api/applications', config.endpoint), {
+): Promise<LogtoApplication | false | LogtoManagementFailure> {
+  const response = await safeFetch('lookup', fetchImpl, new URL('/api/applications', management.endpoint), {
     headers: { authorization: `Bearer ${token}` },
     method: 'GET',
   })
-  if (response.status === 401 || response.status === 403)
-    return null
+  if (isManagementFailure(response))
+    return response
   if (!response.ok)
-    return null
+    return managementRequestFailure('lookup', response.status)
 
-  const body = await response.json() as unknown
+  const body = await safeResponseJson(response, 'lookup')
+  if (isManagementFailure(body))
+    return body
   const applications = Array.isArray(body)
     ? body
     : body && typeof body === 'object' && Array.isArray((body as { data?: unknown }).data)
@@ -166,13 +244,13 @@ async function findProofApplication(
 }
 
 async function createProofApplication(
-  config: LogtoM2MConfig,
+  management: LogtoManagementConfig,
   fetchImpl: LogtoFetch,
   token: string,
   redirectUri: string,
   postLogoutRedirectUri: string,
-): Promise<LogtoApplication | null> {
-  const response = await fetchImpl(new URL('/api/applications', config.endpoint), {
+): Promise<LogtoApplication | LogtoManagementFailure> {
+  const response = await safeFetch('create', fetchImpl, new URL('/api/applications', management.endpoint), {
     body: JSON.stringify(proofApplicationPayload(redirectUri, postLogoutRedirectUri)),
     headers: {
       authorization: `Bearer ${token}`,
@@ -180,24 +258,43 @@ async function createProofApplication(
     },
     method: 'POST',
   })
-  if (response.status === 401 || response.status === 403)
-    return null
+  if (isManagementFailure(response))
+    return response
   if (!response.ok)
-    return null
+    return managementRequestFailure('create', response.status)
 
-  const body = await response.json() as { id?: unknown }
-  return typeof body.id === 'string' ? { id: body.id } : null
+  const body = await safeResponseJson(response, 'create')
+  if (isManagementFailure(body))
+    return body
+  if (!isJsonRecord(body)) {
+    return {
+      reason: 'invalid_management_api_response',
+      stage: 'create',
+      status: 'invalid_response',
+    }
+  }
+  if (typeof body.id !== 'string') {
+    return {
+      reason: 'missing_application_id',
+      stage: 'create',
+      status: 'invalid_response',
+    }
+  }
+
+  return typeof body.secret === 'string' && body.secret.length > 0
+    ? { id: body.id, secret: body.secret }
+    : { id: body.id }
 }
 
 async function updateProofApplication(
-  config: LogtoM2MConfig,
+  management: LogtoManagementConfig,
   fetchImpl: LogtoFetch,
   token: string,
   appId: string,
   redirectUri: string,
   postLogoutRedirectUri: string,
-): Promise<boolean> {
-  const response = await fetchImpl(new URL(`/api/applications/${encodeURIComponent(appId)}`, config.endpoint), {
+): Promise<true | LogtoManagementFailure> {
+  const response = await safeFetch('update', fetchImpl, new URL(`/api/applications/${encodeURIComponent(appId)}`, management.endpoint), {
     body: JSON.stringify(proofApplicationPayload(redirectUri, postLogoutRedirectUri)),
     headers: {
       authorization: `Bearer ${token}`,
@@ -205,39 +302,100 @@ async function updateProofApplication(
     },
     method: 'PATCH',
   })
-  if (response.status === 401 || response.status === 403)
-    return false
+  if (isManagementFailure(response))
+    return response
   if (!response.ok)
-    return false
+    return managementRequestFailure('update', response.status)
 
   return true
 }
 
 async function readApplicationSecret(
-  config: LogtoM2MConfig,
+  management: LogtoManagementConfig,
   fetchImpl: LogtoFetch,
   token: string,
   appId: string,
-): Promise<string | null> {
-  const response = await fetchImpl(new URL(`/api/applications/${encodeURIComponent(appId)}/secrets`, config.endpoint), {
+): Promise<string | LogtoManagementFailure> {
+  const response = await safeFetch('secret-read', fetchImpl, new URL(`/api/applications/${encodeURIComponent(appId)}/secrets`, management.endpoint), {
     headers: { authorization: `Bearer ${token}` },
     method: 'GET',
   })
-  if (response.status === 401 || response.status === 403)
-    return null
+  if (isManagementFailure(response))
+    return response
   if (!response.ok)
-    return null
+    return managementRequestFailure('secret-read', response.status)
 
-  const body = await response.json() as unknown
-  if (!Array.isArray(body))
-    return null
+  const body = await safeResponseJson(response, 'secret-read')
+  if (isManagementFailure(body))
+    return body
+  if (!Array.isArray(body)) {
+    return {
+      reason: 'invalid_secret_response',
+      stage: 'secret-read',
+      status: 'invalid_response',
+    }
+  }
 
   const first = body.find(item =>
     item
     && typeof item === 'object'
     && typeof (item as { value?: unknown }).value === 'string'
   ) as { value: string } | undefined
-  return first?.value ?? null
+  if (!first) {
+    return {
+      reason: 'missing_application_secret',
+      stage: 'secret-read',
+      status: 'invalid_response',
+    }
+  }
+
+  return first.value
+}
+
+async function safeFetch(
+  stage: LogtoManualConfigurationStage,
+  fetchImpl: LogtoFetch,
+  input: URL,
+  init: RequestInit,
+): Promise<Response | LogtoManagementFailure> {
+  try {
+    return await fetchImpl(input, init)
+  }
+  catch {
+    return {
+      reason: 'management_api_request_failed',
+      stage,
+      status: 'request_failed',
+    }
+  }
+}
+
+async function safeResponseJson(
+  response: Response,
+  stage: LogtoManualConfigurationStage,
+): Promise<Record<string, unknown> | unknown[] | LogtoManagementFailure> {
+  try {
+    return await response.json() as Record<string, unknown> | unknown[]
+  }
+  catch {
+    return {
+      reason: 'invalid_management_api_response',
+      stage,
+      status: 'invalid_response',
+    }
+  }
+}
+
+function resolveManagementConfig(config: LogtoM2MConfig): LogtoManagementConfig | null {
+  const managementEndpoint = config.managementEndpoint ?? (config.tenantId ? `https://${config.tenantId}.logto.app/` : undefined)
+  const managementApiIndicator = config.managementApiIndicator ?? (config.tenantId ? `https://${config.tenantId}.logto.app/api` : undefined)
+  if (!managementEndpoint || !managementApiIndicator)
+    return null
+
+  return {
+    apiIndicator: normalizeApiIndicator(managementApiIndicator),
+    endpoint: normalizeEndpoint(managementEndpoint),
+  }
 }
 
 function proofApplicationPayload(redirectUri: string, postLogoutRedirectUri: string) {
@@ -256,15 +414,47 @@ function buildManualConfiguration(
   config: LogtoM2MConfig,
   redirectUri: string,
   postLogoutRedirectUri: string,
+  failure: LogtoManagementFailure,
 ): ManualLogtoConfiguration {
   return {
     manualConfiguration: {
+      appName: LOGTO_PROOF_APP_NAME,
       applicationType: 'Traditional',
       issuer: config.issuer,
       postLogoutRedirectUri,
+      reason: failure.reason,
       redirectUri,
+      stage: failure.stage,
+      status: failure.status,
     },
   }
+}
+
+function managementRequestFailure(stage: LogtoManualConfigurationStage, status: number): LogtoManagementFailure {
+  return {
+    reason: 'management_api_request_failed',
+    stage,
+    status,
+  }
+}
+
+function isManagementFailure(value: unknown): value is LogtoManagementFailure {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && 'reason' in value
+    && 'stage' in value
+    && 'status' in value,
+  )
+}
+
+function isJsonRecord(value: Record<string, unknown> | unknown[]): value is Record<string, unknown> {
+  return !Array.isArray(value)
+}
+
+function optionalValue(values: Map<string, string>, key: string): string | undefined {
+  const value = values.get(key)
+  return value && value.length > 0 ? value : undefined
 }
 
 function requireValue(values: Map<string, string>, key: string): string {
@@ -273,4 +463,12 @@ function requireValue(values: Map<string, string>, key: string): string {
     throw new Error(`Missing ${key} in Logto config`)
 
   return value
+}
+
+function normalizeEndpoint(endpoint: string): string {
+  return `${endpoint.replace(/\/+$/, '')}/`
+}
+
+function normalizeApiIndicator(apiIndicator: string): string {
+  return apiIndicator.replace(/\/+$/, '')
 }
