@@ -77,6 +77,52 @@ describe('logto proof app config', () => {
     })
   })
 
+  it('uses explicit management endpoint and API indicator for token and API URLs', async () => {
+    const explicitConfig = loadLogtoM2MConfigText([
+      fakeEnvText,
+      'LOGTO_MANAGEMENT_ENDPOINT=https://explicit-tenant.logto.app',
+      'LOGTO_MANAGEMENT_API_INDICATOR=https://explicit-tenant.logto.app/api/',
+    ].join('\n'))
+    const calls: { body: string, method: string, url: string }[] = []
+    const result = await ensureLogtoProofApplication({
+      config: explicitConfig,
+      fetch: async (input, init) => {
+        const url = input.toString()
+        calls.push({
+          body: init?.body?.toString() ?? '',
+          method: init?.method ?? 'GET',
+          url,
+        })
+        if (url === 'https://explicit-tenant.logto.app/oidc/token')
+          return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
+        if (url === 'https://explicit-tenant.logto.app/api/applications') {
+          if (init?.method === 'GET')
+            return Response.json([])
+
+          return Response.json({ id: 'web-app-id', type: 'Traditional' })
+        }
+        if (url === 'https://explicit-tenant.logto.app/api/applications/web-app-id/secrets')
+          return Response.json([{ value: 'explicit-secret' }])
+
+        return new Response('not found', { status: 404 })
+      },
+      hostBrowserBaseUrl: 'http://localhost:54145',
+    })
+
+    expect(explicitConfig).toMatchObject({
+      managementApiIndicator: 'https://explicit-tenant.logto.app/api',
+      managementEndpoint: 'https://explicit-tenant.logto.app/',
+    })
+    expect(result).toMatchObject({ clientSecret: 'explicit-secret' })
+    expect(calls.map(call => call.url)).toEqual([
+      'https://explicit-tenant.logto.app/oidc/token',
+      'https://explicit-tenant.logto.app/api/applications',
+      'https://explicit-tenant.logto.app/api/applications',
+      'https://explicit-tenant.logto.app/api/applications/web-app-id/secrets',
+    ])
+    expect(new URLSearchParams(calls[0]?.body).get('resource')).toBe('https://explicit-tenant.logto.app/api')
+  })
+
   it('does not call Management API through a custom login endpoint without management config', async () => {
     let fetchCalls = 0
     const result = await ensureLogtoProofApplication({
@@ -93,7 +139,7 @@ describe('logto proof app config', () => {
     expect(JSON.stringify(result)).not.toContain('m2m-secret')
   })
 
-  it('creates a Traditional app through the default tenant endpoint and uses create response secret', async () => {
+  it('prefers secrets endpoint value over deprecated create response secret', async () => {
     const calls: { body: string, hasAuthorization: boolean, method: string, url: string }[] = []
     const result = await ensureLogtoProofApplication({
       config: tenantConfig,
@@ -113,8 +159,11 @@ describe('logto proof app config', () => {
           if (init?.method === 'GET')
             return Response.json([])
 
-          return Response.json({ id: 'web-app-id', secret: 'web-secret', type: 'Traditional' })
+          return Response.json({ id: 'web-app-id', secret: 'deprecated-create-secret', type: 'Traditional' })
         }
+
+        if (url === 'https://zonease-test.logto.app/api/applications/web-app-id/secrets')
+          return Response.json([{ value: 'secrets-endpoint-secret' }])
 
         return new Response('not found', { status: 404 })
       },
@@ -123,7 +172,7 @@ describe('logto proof app config', () => {
 
     expect(result).toEqual({
       clientId: 'web-app-id',
-      clientSecret: 'web-secret',
+      clientSecret: 'secrets-endpoint-secret',
       redirectUri: 'http://localhost:54145/auth/callback',
     })
     expect(redactLogtoProofApplication(result)).toEqual({
@@ -131,9 +180,10 @@ describe('logto proof app config', () => {
       clientSecret: '[REDACTED]',
       redirectUri: 'http://localhost:54145/auth/callback',
     })
-    expect(JSON.stringify(redactLogtoProofApplication(result))).not.toContain('web-secret')
+    expect(JSON.stringify(redactLogtoProofApplication(result))).not.toContain('secrets-endpoint-secret')
+    expect(JSON.stringify(redactLogtoProofApplication(result))).not.toContain('deprecated-create-secret')
     expect(JSON.stringify(redactLogtoProofApplication(result))).not.toContain('m2m-secret')
-    expect(calls.map(call => call.url)).not.toContain('https://zonease-test.logto.app/api/applications/web-app-id/secrets')
+    expect(calls.map(call => call.url)).toContain('https://zonease-test.logto.app/api/applications/web-app-id/secrets')
 
     const tokenCall = calls.find(call => call.url === 'https://zonease-test.logto.app/oidc/token')
     expect(tokenCall).toMatchObject({
@@ -156,6 +206,44 @@ describe('logto proof app config', () => {
       },
       type: 'Traditional',
     })
+  })
+
+  it('uses deprecated create response secret only when secrets endpoint has no value', async () => {
+    const cases: [string, Response][] = [
+      ['empty secrets', Response.json([])],
+      ['failed secrets', new Response('secret-service-body', { status: 500 })],
+    ]
+
+    for (const [name, secretsResponse] of cases) {
+      const calls: string[] = []
+      const result = await ensureLogtoProofApplication({
+        config: tenantConfig,
+        fetch: async (input, init) => {
+          const url = input.toString()
+          calls.push(url)
+          if (url.endsWith('/oidc/token'))
+            return Response.json({ access_token: 'management-token', token_type: 'Bearer' })
+          if (url.endsWith('/api/applications') && init?.method === 'GET')
+            return Response.json([])
+          if (url.endsWith('/api/applications') && init?.method === 'POST')
+            return Response.json({ id: 'web-app-id', secret: 'deprecated-create-secret', type: 'Traditional' })
+          if (url.endsWith('/api/applications/web-app-id/secrets'))
+            return secretsResponse.clone()
+
+          return new Response('not found', { status: 404 })
+        },
+        hostBrowserBaseUrl: 'http://localhost:54145',
+      })
+
+      expect(result, name).toEqual({
+        clientId: 'web-app-id',
+        clientSecret: 'deprecated-create-secret',
+        redirectUri: 'http://localhost:54145/auth/callback',
+      })
+      expect(calls, name).toContain('https://zonease-test.logto.app/api/applications/web-app-id/secrets')
+      expect(JSON.stringify(redactLogtoProofApplication(result)), name).not.toContain('deprecated-create-secret')
+      expect(JSON.stringify(redactLogtoProofApplication(result)), name).not.toContain('secret-service-body')
+    }
   })
 
   it('returns a manual configuration requirement when Management API is forbidden', async () => {
@@ -219,6 +307,20 @@ describe('logto proof app config', () => {
       expect(JSON.stringify(result), name).not.toContain('management-token')
       expect(JSON.stringify(result), name).not.toContain('server-response-secret')
     }
+  })
+
+  it('returns safe manual fallback when token endpoint responds with JSON null', async () => {
+    const result = await ensureLogtoProofApplication({
+      config: tenantConfig,
+      fetch: async input => input.toString().endsWith('/oidc/token')
+        ? Response.json(null)
+        : new Response('unexpected', { status: 500 }),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+    })
+
+    expect(result).toEqual(manualFallback('token', 'invalid_response', 'invalid_management_api_response'))
+    expect(JSON.stringify(result)).not.toContain('m2m-secret')
+    expect(JSON.stringify(result)).not.toContain('management-token')
   })
 
   function manualFallback(

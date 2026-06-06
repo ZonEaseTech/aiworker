@@ -39,8 +39,8 @@ type LogtoManualConfigurationStage = 'configuration' | 'create' | 'lookup' | 'se
 type LogtoManualConfigurationStatus = 'invalid_response' | 'not_configured' | 'request_failed' | number
 
 interface LogtoApplication {
+  deprecatedSecret?: string
   id: string
-  secret?: string
 }
 
 interface LogtoManagementConfig {
@@ -139,12 +139,13 @@ export async function ensureLogtoProofApplication(input: {
   if (isManagementFailure(app))
     return manualConfiguration(app)
 
-  if (app.secret)
-    return { clientId: app.id, clientSecret: app.secret, redirectUri }
-
   const secret = await readApplicationSecret(management, fetchImpl, token, app.id)
-  if (isManagementFailure(secret))
+  if (isManagementFailure(secret)) {
+    if (app.deprecatedSecret)
+      return { clientId: app.id, clientSecret: app.deprecatedSecret, redirectUri }
+
     return manualConfiguration(secret)
+  }
 
   return { clientId: app.id, clientSecret: secret, redirectUri }
 }
@@ -282,7 +283,7 @@ async function createProofApplication(
   }
 
   return typeof body.secret === 'string' && body.secret.length > 0
-    ? { id: body.id, secret: body.secret }
+    ? { deprecatedSecret: body.secret, id: body.id }
     : { id: body.id }
 }
 
@@ -370,12 +371,9 @@ async function safeFetch(
   }
 }
 
-async function safeResponseJson(
-  response: Response,
-  stage: LogtoManualConfigurationStage,
-): Promise<Record<string, unknown> | unknown[] | LogtoManagementFailure> {
+async function safeResponseJson(response: Response, stage: LogtoManualConfigurationStage): Promise<LogtoManagementFailure | unknown> {
   try {
-    return await response.json() as Record<string, unknown> | unknown[]
+    return await response.json() as unknown
   }
   catch {
     return {
@@ -448,8 +446,8 @@ function isManagementFailure(value: unknown): value is LogtoManagementFailure {
   )
 }
 
-function isJsonRecord(value: Record<string, unknown> | unknown[]): value is Record<string, unknown> {
-  return !Array.isArray(value)
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
 function optionalValue(values: Map<string, string>, key: string): string | undefined {
