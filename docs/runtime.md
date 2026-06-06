@@ -315,6 +315,14 @@ Phase 2 Host integration has two distribution-plane directions:
 - Host initiates provisioning through aissh and owns assignment/readiness records.
 - Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host.
 
+Host URLs are environment-specific:
+
+- `hostBrowserBaseUrl` generates `/host` and `/workers/:workerId`.
+- `hostControlBaseUrl` is the Host API URL.
+- `adapterRuntimeControlBaseUrl` is the URL reachable from the Worker runtime environment.
+
+A remote aissh target must not use localhost, 127.0.0.1, or ::1 as its adapter runtime callback URL.
+
 Phase 2 provisioning check-in and Worker Access tunnel signals are distribution-plane signals.
 These Worker-initiated signals are not runtime hot-path ownership. Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.
 In Phase 2, assignment changes may update Worker-scoped authorization and

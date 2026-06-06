@@ -240,6 +240,16 @@ distribution-plane directions:
 - Host initiates provisioning through aissh and owns assignment/readiness records.
 - Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host.
 
+The Provisioning Target Adapter is the Phase 2 Host-owned delivery boundary. Host
+lists and validates provisioning targets; Worker only receives a provision token
+and a callback URL it can reach.
+
+The first adapter maturity levels are:
+
+- aissh production: remote provisioning through verified `aissh exec [server_id] <command> --reason ...`.
+- docker preview: clean container, isolated worker home / volume, release bundle verification.
+- local dev: same-machine process with isolated `AIWORKER_HOME`.
+
 These Worker-initiated signals are not runtime hot-path ownership. Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.
 
 The control contract covers worker describe, health, instance lifecycle, and an

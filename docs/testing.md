@@ -299,6 +299,7 @@ The product acceptance criteria are:
   authorization, permissions, gateway/profile refs, and lifecycle/provisioning
   metadata;
 - Phase 2 provisioning: aissh success is not ready until Worker check-in and access ready.
+- remote aissh target rejects loopback callback URLs.
 - Worker access: `/workers/:workerId` is employee navigation through Worker Access Adapter, not Host-rendered UI.
 - Auth: Logto proves identity; AIWorker assignment decides exact Worker access.
 - anti-mount: no Phase 2 acceptance test may treat micro-app, mounted workbench,

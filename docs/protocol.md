@@ -219,6 +219,14 @@ GET    /api/provision/access
 GET    /workers/:workerId
 ```
 
+Host URLs are environment-specific:
+
+- `hostBrowserBaseUrl` generates `/host` and `/workers/:workerId`.
+- `hostControlBaseUrl` is the Host API URL.
+- `adapterRuntimeControlBaseUrl` is the URL reachable from the Worker runtime environment.
+
+A remote aissh target must not use localhost, 127.0.0.1, or ::1 as its adapter runtime callback URL.
+
 Host owns the publish/assign/provision governance path. Worker owns the
 Workbench, workspace, session, invocation, projection, engine bridge, runtime
 configuration overlays, and redaction. This split is what makes Soul replication

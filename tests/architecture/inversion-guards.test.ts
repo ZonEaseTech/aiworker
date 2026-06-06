@@ -256,6 +256,27 @@ test('G5 clause-2: the control protocol contract type hardcodes no transport', (
   expect(/wss?:\/\//i.test(code), `${contractPath} must not hardcode a ws(s):// transport literal`).toBe(false)
 })
 
+test('G6 phase-2 provisioning uses target adapters instead of hard-coded aissh servers', () => {
+  const architecture = read('docs/architecture.md')
+  const protocol = read('docs/protocol.md')
+
+  expect(architecture).toContain('Provisioning Target Adapter')
+  expect(architecture).toContain('aissh production')
+  expect(architecture).toContain('docker preview')
+  expect(architecture).toContain('local dev')
+  expect(protocol).toContain('hostBrowserBaseUrl')
+  expect(protocol).toContain('hostControlBaseUrl')
+  expect(protocol).toContain('adapterRuntimeControlBaseUrl')
+})
+
+test('G7 remote aissh development cannot use loopback callback URLs', () => {
+  const protocol = read('docs/protocol.md')
+  const testing = read('docs/testing.md')
+
+  expect(protocol).toContain('remote aissh target must not use localhost, 127.0.0.1, or ::1 as its adapter runtime callback URL')
+  expect(testing).toContain('remote aissh target rejects loopback callback URLs')
+})
+
 // G1 ↔ C1：worker standalone 金路径行为证据存在、host-free、且被 release:check 执行（经 test:cli）。
 // 与 G3（包依赖方向）区分：锚定「自治行为证据存在且 host-free 且真的跑」。
 test('G1: worker standalone golden path passes with Host absent', () => {
