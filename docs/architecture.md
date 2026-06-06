@@ -88,7 +88,7 @@ value is capability replication, version rollout, permission governance, and
 low-friction employee onboarding.
 
 Phase 2.1 managed employee access uses Host as the enterprise URL and
-authorization boundary for employees. Host-only applies only to managed employee remote access: Host is the enterprise URL and authorization boundary for employees, not a Worker runtime dependency.
+authorization boundary for employees. Host-only applies only to managed employee remote access; it is not a Worker runtime dependency.
 
 Managed employee access goes through:
 

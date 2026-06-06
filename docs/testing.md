@@ -206,6 +206,7 @@ The worker-autonomy inversion is guarded by `tests/architecture/inversion-guards
 - C4 Soul = Template definition; Worker is its instance — covered by package/doc gates.
 - C5 only Host->Worker surface is worker-control-protocol — G5.
 - C6 secret redaction holds on both planes — G6.
+- Phase 2.1 managed employee remote access does not make Worker runtime depend on Host — G8.
 
 Guards whose code lands in later inversion plans start as `test.todo` and are
 promoted to real assertions when that plan lands.
