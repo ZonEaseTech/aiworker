@@ -65,7 +65,25 @@ export function createLogtoAuthProvider(options: LogtoAuthOptions): AuthProvider
 
   async function resolveJwks(): Promise<ReturnType<typeof createRemoteJWKSet>> {
     jwksPromise ??= discoverLogtoOidcIssuerConfiguration(options.issuer, { fetch: options.fetch })
-      .then(discovery => createRemoteJWKSet(new URL(discovery.jwksUri)))
+      .then(discovery => {
+        const remoteJwks = createRemoteJWKSet(new URL(discovery.jwksUri))
+        const retryingJwks = (async (
+          ...args: Parameters<ReturnType<typeof createRemoteJWKSet>>
+        ) => {
+          try {
+            return await remoteJwks(...args)
+          }
+          catch (error) {
+            jwksPromise = null
+            throw error
+          }
+        }) as ReturnType<typeof createRemoteJWKSet>
+        return retryingJwks
+      })
+      .catch((error: unknown) => {
+        jwksPromise = null
+        throw error
+      })
     return jwksPromise
   }
 }

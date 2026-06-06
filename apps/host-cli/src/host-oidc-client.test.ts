@@ -62,7 +62,55 @@ describe('host oidc client', () => {
         throw new Error('discovery should not run for unsafe returnTo')
       },
       returnTo: 'https://evil.example/workers/wkr_82',
-    })).rejects.toThrow('path-only')
+    })).rejects.toThrow('returnTo')
+  })
+
+  it('allows only normalized Host and Worker returnTo paths', async () => {
+    const discovery = {
+      authorization_endpoint: 'https://login.zonease.test/custom/auth',
+      jwks_uri: 'https://login.zonease.test/custom/jwks',
+      token_endpoint: 'https://login.zonease.test/custom/token',
+    }
+    const host = await beginLogtoHostedLogin({
+      ...config,
+      issuer: 'https://safe-return.zonease.test/oidc-host',
+    }, {
+      fetch: async () => Response.json(discovery),
+      returnTo: '/host',
+    })
+    const worker = await beginLogtoHostedLogin({
+      ...config,
+      issuer: 'https://safe-return.zonease.test/oidc-worker',
+    }, {
+      fetch: async () => Response.json(discovery),
+      returnTo: '/workers/wkr_82?tab=chat#latest',
+    })
+
+    expect(host.transaction.returnTo).toBe('/host')
+    expect(worker.transaction.returnTo).toBe('/workers/wkr_82?tab=chat#latest')
+  })
+
+  it('rejects returnTo values that could escape the same-site Host surface', async () => {
+    const unsafeReturnToValues = [
+      '//evil.example',
+      '/\\evil.example',
+      '/%5Cevil.example',
+      '/%2Fevil.example',
+      '/workers/%2fwkr_82',
+      '/workers/wkr_82%5cadmin',
+      '/auth/callback',
+      'https://evil.example/host',
+      '/host\u0000',
+    ]
+
+    for (const returnTo of unsafeReturnToValues) {
+      await expect(beginLogtoHostedLogin(config, {
+        fetch: async () => {
+          throw new Error('discovery should not run for unsafe returnTo')
+        },
+        returnTo,
+      })).rejects.toThrow('returnTo')
+    }
   })
 
   it('discovers issuer metadata without requiring a confidential client config', async () => {
@@ -84,6 +132,27 @@ describe('host oidc client', () => {
       jwksUri: 'https://issuer.zonease.test/custom/jwks',
       tokenEndpoint: 'https://issuer.zonease.test/custom/token',
     })
+  })
+
+  it('keeps injected discovery fetch results isolated for the same issuer', async () => {
+    const issuer = 'https://isolated-fetch.zonease.test/oidc'
+    const first = await discoverLogtoOidcIssuerConfiguration(issuer, {
+      fetch: async () => Response.json({
+        authorization_endpoint: 'https://first.zonease.test/auth',
+        jwks_uri: 'https://first.zonease.test/jwks',
+        token_endpoint: 'https://first.zonease.test/token',
+      }),
+    })
+    const second = await discoverLogtoOidcIssuerConfiguration(issuer, {
+      fetch: async () => Response.json({
+        authorization_endpoint: 'https://second.zonease.test/auth',
+        jwks_uri: 'https://second.zonease.test/jwks',
+        token_endpoint: 'https://second.zonease.test/token',
+      }),
+    })
+
+    expect(first.authorizationEndpoint).toBe('https://first.zonease.test/auth')
+    expect(second.authorizationEndpoint).toBe('https://second.zonease.test/auth')
   })
 
   it('maps only verified zonease.org claims to a Host session payload', () => {

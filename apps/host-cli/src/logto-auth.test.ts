@@ -210,4 +210,63 @@ describe('logto auth adapter', () => {
       jwksServer.stop(true)
     }
   })
+
+  it('retries OIDC discovery after an initial provider failure', async () => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256')
+    const publicJwk = await exportJWK(publicKey)
+    let discoveryAttempts = 0
+    const jwksServer = Bun.serve({
+      fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname !== '/retry-discovered/jwks')
+          return new Response('not found', { status: 404 })
+
+        return Response.json({
+          keys: [{ ...publicJwk, alg: 'RS256', kid: 'retry-key', use: 'sig' }],
+        })
+      },
+      port: 0,
+    })
+
+    try {
+      const issuer = `http://${jwksServer.hostname}:${jwksServer.port}/retry/oidc`
+      const provider = createLogtoAuthProvider({
+        audience: 'host-cli',
+        fetch: async () => {
+          discoveryAttempts += 1
+          if (discoveryAttempts === 1)
+            return new Response('temporary discovery failure', { status: 500 })
+
+          return Response.json({
+            authorization_endpoint: `${issuer}/auth`,
+            jwks_uri: `http://${jwksServer.hostname}:${jwksServer.port}/retry-discovered/jwks`,
+            token_endpoint: `${issuer}/token`,
+          })
+        },
+        issuer,
+      })
+      const token = await new SignJWT({
+        email: 'retry@zonease.org',
+        email_verified: true,
+      })
+        .setProtectedHeader({ alg: 'RS256', kid: 'retry-key' })
+        .setSubject('usr_retry')
+        .setIssuer(issuer)
+        .setAudience('host-cli')
+        .setExpirationTime('5m')
+        .sign(privateKey)
+      const request = { headers: new Headers({ Authorization: `Bearer ${token}` }) }
+
+      expect(await provider.authenticateRequest(request)).toBeNull()
+      expect(await provider.authenticateRequest(request)).toEqual({
+        email: 'retry@zonease.org',
+        roles: [],
+        subject: 'usr_retry',
+      })
+      expect(discoveryAttempts).toBe(2)
+    }
+    finally {
+      jwksServer.stop(true)
+    }
+  })
 })

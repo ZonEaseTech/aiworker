@@ -48,11 +48,14 @@ export async function discoverLogtoOidcIssuerConfiguration(
   input: { fetch?: OidcFetch } = {},
 ): Promise<OidcDiscoveryMetadata> {
   const issuer = normalizedIssuer(issuerInput)
+  if (input.fetch)
+    return fetchLogtoOidcConfiguration(issuer, input.fetch)
+
   const cached = discoveryCache.get(issuer)
   if (cached)
     return cached
 
-  const promise = fetchLogtoOidcConfiguration(issuer, input.fetch ?? fetch)
+  const promise = fetchLogtoOidcConfiguration(issuer, fetch)
     .catch((error: unknown) => {
       discoveryCache.delete(issuer)
       throw error
@@ -69,9 +72,12 @@ export async function beginLogtoHostedLogin(
     returnTo: string
   },
 ): Promise<{ redirectUrl: string, transaction: OidcLoginTransaction }> {
-  assertPathOnlyReturnTo(input.returnTo)
+  const returnTo = normalizeReturnTo(input.returnTo)
   const discovery = await discoverLogtoOidcConfiguration(config, { fetch: input.fetch })
-  return buildAuthorizationRedirectFromEndpoint(config, discovery.authorizationEndpoint, input)
+  return buildAuthorizationRedirectFromEndpoint(config, discovery.authorizationEndpoint, {
+    ...input,
+    returnTo,
+  })
 }
 
 export async function buildAuthorizationRedirect(
@@ -254,9 +260,32 @@ function readRequiredUrl(body: Record<string, unknown>, key: string): string {
   return new URL(value).toString()
 }
 
-function assertPathOnlyReturnTo(returnTo: string): void {
-  if (!returnTo.startsWith('/') || returnTo.startsWith('//'))
-    throw new Error('Logto returnTo must be a path-only URL')
+function normalizeReturnTo(returnTo: string): string {
+  if (
+    returnTo.length === 0
+    || returnTo !== returnTo.trim()
+    || /[\u0000-\u001F\u007F]/.test(returnTo)
+    || /\\/.test(returnTo)
+    || /%(?:2f|5c|0[0-9a-f]|1[0-9a-f])/i.test(returnTo)
+    || !returnTo.startsWith('/')
+    || returnTo.startsWith('//')
+  ) {
+    throw new Error('Logto returnTo must stay on an allowed same-site Host path')
+  }
+
+  const baseOrigin = 'https://aiworker.local'
+  const url = new URL(returnTo, baseOrigin)
+  if (url.origin !== baseOrigin)
+    throw new Error('Logto returnTo must stay on an allowed same-site Host path')
+
+  const normalized = `${url.pathname}${url.search}${url.hash}`
+  if (url.pathname === '/host')
+    return normalized
+
+  if (/^\/workers\/[A-Za-z0-9_-]+$/.test(url.pathname))
+    return normalized
+
+  throw new Error('Logto returnTo must stay on an allowed same-site Host path')
 }
 
 async function tokenExchangeErrorMessage(response: Response): Promise<string> {
