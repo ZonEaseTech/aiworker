@@ -11,6 +11,8 @@ import {
   redactSamplingText,
   runSamplingCaseWithCli,
   SCORE_DIMENSIONS,
+  samplingOutputSnippet,
+  writeCaseEvents,
   writeScorecard,
 } from './e2e-soul-sampling'
 
@@ -57,6 +59,29 @@ describe('e2e soul sampling static contracts', () => {
 
   it('locks the rubric dimension order', () => {
     expect(SCORE_DIMENSIONS.map(dimension => dimension.id)).toEqual(expectedScoreDimensionIds)
+  })
+
+  it('uses real pilot prompts from the first live sampling evidence', () => {
+    const freeform = OFFICIAL_SAMPLING_SOULS.find(soul => soul.appId === 'aiworker-freeform')
+    const support = OFFICIAL_SAMPLING_SOULS.find(soul => soul.appId === 'software-support')
+    const ticketTriage = support?.skills.find(skill => skill.id === 'ticket-triage')
+
+    expect(freeform?.agentsCases).toEqual([
+      {
+        expectedEvidence: 'AGENTS instructions route the task to the right skill or base workflow',
+        id: 'aiworker-freeform-agents-routing',
+        prompt: '我想在这个 workspace 里整理一份本周工作复盘, 请先看当前投影文件再开始。',
+      },
+      {
+        expectedEvidence: 'AGENTS instructions surface assets, boundaries, and self-check points',
+        id: 'aiworker-freeform-agents-assets',
+        prompt: '请不要套任何 HR/广告/客服流程, 只帮我做一个通用分析框架。',
+      },
+    ])
+    expect(support?.agentsCases.find(item => item.id === 'software-support-agents-routing')?.prompt)
+      .toBe('曼谷门店晚高峰 PromptPay 扣款但 kiosk 未结账, 店长很急。')
+    expect(ticketTriage?.cases.find(item => item.id === 'ticket-triage-happy-path')?.prompt)
+      .toBe('分诊一条 PromptPay 已扣款但 SaleOrder 未结账的商家工单, 需要升级 issue。')
   })
 
   it('classifies sampling findings by remediation owner', () => {
@@ -155,7 +180,17 @@ describe('e2e soul sampling static contracts', () => {
       if (args[0] === 'session' && args[1] === 'start')
         return '{"invocation":{"id":"invocation-1","status":"succeeded"},"session":{"id":"session-1"}}'
       if (args[0] === 'session' && args[1] === 'events')
-        return '{"events":[{"type":"invocation.completed"}]}'
+        return JSON.stringify({
+          events: [
+            {
+              payloadJson: {
+                data: { text: '请先补充商家原始描述、门店终端和涉资金状态。' },
+              },
+              type: 'invocation.output.snapshot',
+            },
+            { type: 'invocation.completed' },
+          ],
+        })
       return '{"ok":true}'
     }
 
@@ -179,6 +214,16 @@ describe('e2e soul sampling static contracts', () => {
     ]))
     expect(calls).toContainEqual(['session', 'events', 'invocation-1', '--worker', 'e2e-software-support'])
     expect(result).toEqual({
+      assistantText: '请先补充商家原始描述、门店终端和涉资金状态。',
+      events: [
+        {
+          payloadJson: {
+            data: { text: '请先补充商家原始描述、门店终端和涉资金状态。' },
+          },
+          type: 'invocation.output.snapshot',
+        },
+        { type: 'invocation.completed' },
+      ],
       invocationId: 'invocation-1',
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
@@ -192,7 +237,7 @@ describe('e2e soul sampling static contracts', () => {
       if (args[0] === 'session' && args[1] === 'start')
         return 'starting session\n{"invocation":{"id":"invocation-1","status":"succeeded"},"session":{"id":"session-1"}}\nstarted'
       if (args[0] === 'session' && args[1] === 'events')
-        return 'events\n{"events":[{"type":"invocation.completed"}]}\ndone'
+        return 'events\n{"events":[{"payloadJson":{"data":{"text":"第一段。"}}},{"payloadJson":{"data":{"text":"第二段。"}}},{"type":"invocation.completed"}]}\ndone'
       return '{"ok":true}'
     }
 
@@ -202,6 +247,12 @@ describe('e2e soul sampling static contracts', () => {
       runCli,
       scope: { appId: 'software-support', workerId: 'e2e-software-support' },
     })).resolves.toEqual({
+      assistantText: '第一段。\n第二段。',
+      events: [
+        { payloadJson: { data: { text: '第一段。' } } },
+        { payloadJson: { data: { text: '第二段。' } } },
+        { type: 'invocation.completed' },
+      ],
       invocationId: 'invocation-1',
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
@@ -240,6 +291,8 @@ describe('e2e soul sampling static contracts', () => {
       'software-support-case-1',
     ])
     expect(result).toEqual({
+      assistantText: '',
+      events: [{ type: 'invocation.completed' }],
       invocationId: 'invocation-1',
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
@@ -288,6 +341,61 @@ describe('e2e soul sampling static contracts', () => {
     expect(text).not.toContain('sk-test-secret')
     expect(text).not.toContain('+66812345678')
     expect(text).not.toContain('MERCHANT-1234567890')
+  })
+
+  it('prefers assistant text over id-only summaries for scorecard output snippets', () => {
+    expect(samplingOutputSnippet({
+      assistantText: 'token=sk-test-secret\n请先补充商家原始描述。',
+      events: [{ type: 'invocation.output.snapshot' }],
+      invocationId: 'invocation-1',
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+    })).toBe('token=sk-test-secret\n请先补充商家原始描述。')
+
+    expect(samplingOutputSnippet({
+      assistantText: '',
+      events: [{ type: 'invocation.completed' }],
+      invocationId: 'invocation-1',
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+    })).toBe('workspaceId=workspace-1 sessionId=session-1 invocationId=invocation-1 events=fetched')
+  })
+
+  it('writes parsed events for a sampling case under a safe evidence path', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-events-'))
+
+    writeCaseEvents({
+      caseId: 'case-1',
+      events: [
+        {
+          payloadJson: { data: { text: '真实 assistant 输出' } },
+          type: 'invocation.output.snapshot',
+        },
+      ],
+      root: dir,
+    })
+
+    expect(readFileSync(join(dir, 'events', 'case-1.json'), 'utf8')).toBe(`${JSON.stringify({
+      caseId: 'case-1',
+      events: [
+        {
+          payloadJson: { data: { text: '真实 assistant 输出' } },
+          type: 'invocation.output.snapshot',
+        },
+      ],
+    }, null, 2)}\n`)
+  })
+
+  it('rejects event case ids that escape the events directory', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-events-'))
+
+    expect(() => writeCaseEvents({
+      caseId: '../escape',
+      events: [],
+      root: dir,
+    })).toThrow('Unsafe sampling caseId')
+
+    expect(existsSync(join(dir, 'escape.json'))).toBe(false)
   })
 
   it('rejects scorecard case ids that escape the scorecards directory', () => {

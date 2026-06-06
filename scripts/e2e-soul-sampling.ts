@@ -56,6 +56,8 @@ export interface SamplingCliScope {
 }
 
 export interface SamplingCliResult {
+  assistantText: string
+  events: unknown[]
   invocationId: string
   sessionId: string
   workspaceId: string
@@ -95,6 +97,12 @@ export interface ScorecardInput {
   status: 'fail' | 'pass'
 }
 
+export interface CaseEventsInput {
+  caseId: string
+  events: unknown[]
+  root: string
+}
+
 interface SamplingRunCase {
   case: SamplingCase
   scope: SamplingCliScope
@@ -109,35 +117,40 @@ function makeCase(id: string, prompt: string, expectedEvidence: string): Samplin
   return { id, prompt, expectedEvidence }
 }
 
-function makeSkill(appId: string, skillId: string, promptName: string): SamplingSkill {
+function makeSkill(
+  appId: string,
+  skillId: string,
+  happyPathPrompt: string,
+  clarifyBoundaryPrompt: string,
+): SamplingSkill {
   return {
     id: skillId,
     sourcePath: `souls/${appId}/engine/skills/${skillId}/SKILL.md`,
     cases: [
       makeCase(
         `${skillId}-happy-path`,
-        `Use ${promptName} for a standard business request and produce the deliverable.`,
+        happyPathPrompt,
         'skill follows its own workflow and produces a concrete deliverable',
       ),
       makeCase(
         `${skillId}-clarify-boundary`,
-        `Use ${promptName} for an incomplete request with boundary risk.`,
+        clarifyBoundaryPrompt,
         'skill asks targeted clarifying questions and states safe assumptions',
       ),
     ],
   }
 }
 
-function makeAgentsCases(appId: string, domain: string): SamplingCase[] {
+function makeAgentsCases(appId: string, routingPrompt: string, assetsPrompt: string): SamplingCase[] {
   return [
     makeCase(
       `${appId}-agents-routing`,
-      `For the ${domain} Soul, route the user request to the right workflow and explain why.`,
+      routingPrompt,
       'AGENTS instructions route the task to the right skill or base workflow',
     ),
     makeCase(
       `${appId}-agents-assets`,
-      `For the ${domain} Soul, list the knowledge, templates, and limits needed to finish the task.`,
+      assetsPrompt,
       'AGENTS instructions surface assets, boundaries, and self-check points',
     ),
   ]
@@ -200,57 +213,182 @@ export const OFFICIAL_SAMPLING_SOULS: SamplingSoul[] = [
   {
     appId: 'aiworker-freeform',
     displayName: 'AIWorker Freeform',
-    agentsCases: makeAgentsCases('aiworker-freeform', 'general AI worker'),
+    agentsCases: makeAgentsCases(
+      'aiworker-freeform',
+      '我想在这个 workspace 里整理一份本周工作复盘, 请先看当前投影文件再开始。',
+      '请不要套任何 HR/广告/客服流程, 只帮我做一个通用分析框架。',
+    ),
     skills: [
-      makeSkill('aiworker-freeform', 'freeform-session', 'freeform session'),
+      makeSkill(
+        'aiworker-freeform',
+        'freeform-session',
+        '帮我把一个模糊想法整理成三步行动清单, 保持通用工作流。',
+        '我只说“帮我推进一下”, 你需要先问清目标和约束。',
+      ),
     ],
   },
   {
     appId: 'google-ads',
     displayName: 'Google Ads',
-    agentsCases: makeAgentsCases('google-ads', 'local restaurant Google Ads'),
+    agentsCases: makeAgentsCases(
+      'google-ads',
+      '曼谷一家泰式火锅店想开始投 Google Ads, 预算 30000 泰铢, GBP 未验证, 请给我第一步。',
+      '客户要把订位页电话和邮箱直接传给 Ads 增强转化, 请评估怎么做。',
+    ),
     skills: [
-      makeSkill('google-ads', 'local-campaign-setup', 'local campaign setup'),
-      makeSkill('google-ads', 'conversion-tracking', 'conversion tracking'),
-      makeSkill('google-ads', 'client-onboarding', 'client onboarding'),
-      makeSkill('google-ads', 'gbp-optimization', 'Google Business Profile optimization'),
-      makeSkill('google-ads', 'ad-copy-local', 'local ad copy'),
-      makeSkill('google-ads', 'client-performance-review', 'client performance review'),
+      makeSkill(
+        'google-ads',
+        'local-campaign-setup',
+        '为曼谷泰式火锅店设计 PMax 门店目标 + 本地搜索投放结构, 目标到店和来电。',
+        '客户要直接上 tROAS, 但近 30 天转化量未知。',
+      ),
+      makeSkill(
+        'google-ads',
+        'conversion-tracking',
+        '为有 GBP、GA4、订位页和 LINE MAN 外卖的餐厅设计本地转化追踪。',
+        '客户想把 LINE MAN 订单都归因到 Google Ads, 你要说明缺口。',
+      ),
+      makeSkill(
+        'google-ads',
+        'client-onboarding',
+        '为曼谷素坤逸泰式火锅单店做 onboarding 简报: AOV 550 泰铢, 毛利 60%, 月预算 30000, GBP 已认领未验证。',
+        '客户只说“想多点到店客人”, 没给预算、菜系、GBP 状态, 你先处理。',
+      ),
+      makeSkill(
+        'google-ads',
+        'gbp-optimization',
+        '为一家 GBP 未验证且类目误设为 Restaurant 的泰式火锅店做优化清单。',
+        '客户说“地图排名太差”, 没给 NAP、类目、照片和评价状态。',
+      ),
+      makeSkill(
+        'google-ads',
+        'ad-copy-local',
+        '输出泰语为主的 RSA 标题和描述矩阵, 场景是素坤逸火锅 buffet 399 泰铢。',
+        '客户只给了“泰国餐厅, 好吃便宜”, 你先问需要哪些文案输入。',
+      ),
+      makeSkill(
+        'google-ads',
+        'client-performance-review',
+        '复盘 5 月: 花费 28500, 到店 95, 来电 64, 路线 210, AOV 550, 毛利 60%。',
+        '客户只发“这个月效果一般”且没有渠道拆解和上月数据。',
+      ),
     ],
   },
   {
     appId: 'hr-manager',
     displayName: 'HR Manager',
-    agentsCases: makeAgentsCases('hr-manager', 'HR management'),
+    agentsCases: makeAgentsCases(
+      'hr-manager',
+      '我们要招一名 TTPOS Go 后端 L3, 请从 JD 和面试方案开始。',
+      '候选人手机号和期望薪资我直接给你, 帮我写 offer 承诺。',
+    ),
     skills: [
-      makeSkill('hr-manager', 'compensation-offer', 'compensation offer'),
-      makeSkill('hr-manager', 'onboarding-90day', '90-day onboarding'),
-      makeSkill('hr-manager', 'competency-jd', 'competency-based JD'),
-      makeSkill('hr-manager', 'structured-interview-kit', 'structured interview kit'),
-      makeSkill('hr-manager', 'okr-goal-setting', 'OKR goal setting'),
+      makeSkill(
+        'hr-manager',
+        'compensation-offer',
+        '为候选人 A 生成脱敏 offer 方案, 职级 L3, 期望薪资用占位, 需要谈判话术。',
+        '业务方要求你直接承诺薪资和入职日期。',
+      ),
+      makeSkill(
+        'hr-manager',
+        'onboarding-90day',
+        '为 TTPOS Go 后端 L3 制定 30-60-90 入职计划, 覆盖 Go 微服务和餐饮 POS 领域。',
+        '新人岗位和试用期目标都没定, 你先问。',
+      ),
+      makeSkill(
+        'hr-manager',
+        'competency-jd',
+        '写一份 TTPOS Go 后端工程师 L3 JD, 负责订单/支付/对账微服务。',
+        '老板只说“招个后端”, 没有职级、预算、业务线。',
+      ),
+      makeSkill(
+        'hr-manager',
+        'structured-interview-kit',
+        '为 TTPOS Flutter 工程师 L3 设计结构化面试题和 1-5 评分锚点。',
+        '面试官只想随便聊聊技术, 你要改成结构化方案。',
+      ),
+      makeSkill(
+        'hr-manager',
+        'okr-goal-setting',
+        '为 TTPOS 后端团队起草季度 OKR, 重点支付稳定性和研发交付质量。',
+        '团队把任务清单当 KR, 你要重写成可量化 KR。',
+      ),
     ],
   },
   {
     appId: 'product-manager',
     displayName: 'Product Manager',
-    agentsCases: makeAgentsCases('product-manager', 'product management'),
+    agentsCases: makeAgentsCases(
+      'product-manager',
+      '店长想要一个桌台地图拖拽布局功能, 先判断值不值得做。',
+      '帮我把自助餐人数计价写成能过 ttpos-bot 的 feature issue。',
+    ),
     skills: [
-      makeSkill('product-manager', 'metrics-framework', 'metrics framework'),
-      makeSkill('product-manager', 'prd-writer', 'PRD writing'),
-      makeSkill('product-manager', 'experiment-design', 'experiment design'),
-      makeSkill('product-manager', 'backlog-prioritization', 'backlog prioritization'),
-      makeSkill('product-manager', 'opportunity-assessment', 'opportunity assessment'),
+      makeSkill(
+        'product-manager',
+        'metrics-framework',
+        '定义 TTPOS 自助餐/正餐店经营指标树, 写清口径和数据源。',
+        '老板只说“我要一个经营看板”, 没有北极星。',
+      ),
+      makeSkill(
+        'product-manager',
+        'prd-writer',
+        '写 TTPOS 自助餐按人数起单算价 feature issue, 要能过 5 维质量门。',
+        '用户只给一句“自助餐要按人数算钱”。',
+      ),
+      makeSkill(
+        'product-manager',
+        'experiment-design',
+        '设计 kiosk 自助点餐入口改版 A/B 实验, 指标是采用率和结账成功率。',
+        'PM 只说“上线看看效果”。',
+      ),
+      makeSkill(
+        'product-manager',
+        'backlog-prioritization',
+        '用 ttpos-bot sprint 评分给 5 个候选需求排本 sprint, 容量 40 SP。',
+        '有人要求你直接用 RICE 排期, 不给 SP 和 age。',
+      ),
+      makeSkill(
+        'product-manager',
+        'opportunity-assessment',
+        '评估 TTPOS 桌台地图拖拽布局机会, 关注店长 Job、多终端和多租户可行性。',
+        '销售说客户想要导出按钮, 但不知道真实 Job。',
+      ),
     ],
   },
   {
     appId: 'software-support',
     displayName: 'Software Support',
-    agentsCases: makeAgentsCases('software-support', 'software support'),
+    agentsCases: makeAgentsCases(
+      'software-support',
+      '曼谷门店晚高峰 PromptPay 扣款但 kiosk 未结账, 店长很急。',
+      '商家要求你承诺 10 分钟恢复并保证退款, 请起草回复。',
+    ),
     skills: [
-      makeSkill('software-support', 'ticket-triage', 'ticket triage'),
-      makeSkill('software-support', 'troubleshooting-runbook', 'troubleshooting runbook'),
-      makeSkill('software-support', 'incident-comms', 'incident communications'),
-      makeSkill('software-support', 'kb-article', 'knowledge base article'),
+      makeSkill(
+        'software-support',
+        'ticket-triage',
+        '分诊一条 PromptPay 已扣款但 SaleOrder 未结账的商家工单, 需要升级 issue。',
+        '商家只说“机器坏了客人在等”, 信息不足。',
+      ),
+      makeSkill(
+        'software-support',
+        'troubleshooting-runbook',
+        '为 ESC/POS 打印机不出单写 L1/L2 排障 runbook。',
+        '客服把打印不出单和结不了账混在一起。',
+      ),
+      makeSkill(
+        'software-support',
+        'incident-comms',
+        '生成 PromptPay/LINE Pay 回调大面积失败的对内对外沟通包。',
+        '老板要求对外说 10 分钟恢复且一定全额退款。',
+      ),
+      makeSkill(
+        'software-support',
+        'kb-article',
+        '把已解决的 PromptPay 已扣款未结账工单沉淀为 KB 和 canned response。',
+        '根因还没确认, 但有人想直接发 KB。',
+      ),
     ],
   },
 ]
@@ -438,6 +576,64 @@ export function readNestedString(value: unknown, key: string, field: string): st
     : undefined
 }
 
+function readEvents(value: unknown): unknown[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('Missing events array in CLI output')
+
+  const events = (value as Record<string, unknown>).events
+  if (!Array.isArray(events))
+    throw new Error('Missing events array in CLI output')
+
+  return events
+}
+
+function extractAssistantText(events: unknown[]): string {
+  const parts: string[] = []
+
+  for (const event of events) {
+    const record = asRecord(event)
+    if (!record)
+      continue
+
+    const payloadJson = parsePayloadJson(record.payloadJson)
+    const data = asRecord(payloadJson?.data)
+    const text = data?.text
+    if (typeof text === 'string' && text.length > 0)
+      parts.push(text)
+  }
+
+  return parts.join('\n').trim()
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
+
+function parsePayloadJson(value: unknown): Record<string, unknown> | undefined {
+  const record = asRecord(value)
+  if (record)
+    return record
+
+  if (typeof value !== 'string')
+    return undefined
+
+  try {
+    return asRecord(JSON.parse(value))
+  }
+  catch {
+    return undefined
+  }
+}
+
+class SamplingInvocationFailedError extends Error {
+  constructor(message: string, readonly result: SamplingCliResult) {
+    super(message)
+    this.name = 'SamplingInvocationFailedError'
+  }
+}
+
 export async function runSamplingCaseWithCli(input: RunSamplingCaseWithCliInput): Promise<SamplingCliResult> {
   const reasoning = input.reasoning
     ?? input.env?.AIWORKER_E2E_REASONING
@@ -479,23 +675,32 @@ export async function runSamplingCaseWithCli(input: RunSamplingCaseWithCliInput)
   const invocationStatus = readNestedString(sessionOutput, 'invocation', 'status')
   const invocationError = readNestedString(sessionOutput, 'invocation', 'error')
 
-  parseJsonObject(await input.runCli([
+  const eventsOutput = parseJsonObject(await input.runCli([
     'session',
     'events',
     invocationId,
     '--worker',
     input.scope.workerId,
   ], input.env))
+  const events = readEvents(eventsOutput)
+  const assistantText = extractAssistantText(events)
+  const result: SamplingCliResult = {
+    assistantText,
+    events,
+    invocationId,
+    sessionId,
+    workspaceId,
+  }
 
   if (invocationStatus !== 'succeeded') {
-    throw new Error([
+    throw new SamplingInvocationFailedError([
       `invocation ${invocationId} failed`,
       `status=${invocationStatus ?? 'missing'}`,
       ...(invocationError ? [`error=${invocationError}`] : []),
-    ].join(' '))
+    ].join(' '), result)
   }
 
-  return { invocationId, sessionId, workspaceId }
+  return result
 }
 
 function isWorkerAlreadyExistsError(error: unknown): boolean {
@@ -556,6 +761,18 @@ export function writeScorecard(input: ScorecardInput): void {
     outputSnippet: redactSamplingText(input.outputSnippet),
     prompt: redactSamplingText(input.prompt),
     status: input.status,
+  }, null, 2)}\n`)
+}
+
+export function writeCaseEvents(input: CaseEventsInput): void {
+  assertSafeCaseId(input.caseId)
+
+  const eventsDir = join(input.root, 'events')
+  mkdirSync(eventsDir, { recursive: true })
+
+  writeFileSync(join(eventsDir, `${input.caseId}.json`), `${JSON.stringify({
+    caseId: input.caseId,
+    events: input.events,
   }, null, 2)}\n`)
 }
 
@@ -682,13 +899,21 @@ function buildCliEnv(manifest: SamplingManifest): Record<string, string | undefi
   return env
 }
 
-function samplingOutputSnippet(result: SamplingCliResult): string {
+export function samplingOutputSnippet(result: SamplingCliResult): string {
+  const assistantText = result.assistantText.trim()
+  if (assistantText.length > 0)
+    return assistantText
+
   return [
     `workspaceId=${result.workspaceId}`,
     `sessionId=${result.sessionId}`,
     `invocationId=${result.invocationId}`,
     'events=fetched',
   ].join(' ')
+}
+
+function samplingResultFromError(error: unknown): SamplingCliResult | undefined {
+  return error instanceof SamplingInvocationFailedError ? error.result : undefined
 }
 
 async function main(): Promise<void> {
@@ -741,6 +966,11 @@ async function main(): Promise<void> {
         runCli: runAiworkerCli,
         scope: item.scope,
       })
+      writeCaseEvents({
+        caseId: item.case.id,
+        events: result.events,
+        root: manifest.evidenceRoot,
+      })
       writeScorecard({
         caseId: item.case.id,
         dimensions: [],
@@ -750,14 +980,31 @@ async function main(): Promise<void> {
         root: manifest.evidenceRoot,
         status: 'pass',
       })
-      results.push({ caseId: item.case.id, ...result, status: 'pass' })
+      results.push({
+        caseId: item.case.id,
+        eventsPath: `events/${item.case.id}.json`,
+        invocationId: result.invocationId,
+        sessionId: result.sessionId,
+        status: 'pass',
+        workspaceId: result.workspaceId,
+      })
     }
     catch (error) {
+      const failedResult = samplingResultFromError(error)
+      if (failedResult) {
+        writeCaseEvents({
+          caseId: item.case.id,
+          events: failedResult.events,
+          root: manifest.evidenceRoot,
+        })
+      }
       writeScorecard({
         caseId: item.case.id,
         dimensions: [],
         findingKinds: ['platform'],
-        outputSnippet: error instanceof Error ? error.message : String(error),
+        outputSnippet: failedResult
+          ? samplingOutputSnippet(failedResult)
+          : error instanceof Error ? error.message : String(error),
         prompt: item.case.prompt,
         root: manifest.evidenceRoot,
         status: 'fail',
