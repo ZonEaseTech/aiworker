@@ -52,6 +52,8 @@ import {
   createWorkerOrchestrator,
   LocalEngineResolutionError,
   resolveLocalCliEngine,
+  applyUserTitle,
+  stripSessionTitleSourceMetadata,
   workerEnv,
 } from '@zonease/aiworker-worker-runtime'
 import { streamSSE } from 'hono/streaming'
@@ -511,17 +513,22 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     if (!result.ok)
       return result.response
     try {
-      // 员工显式改名(标题确有变化)→ 标记 titleSource='user',使会话自动命名
-      // 永不覆盖。占位标题原样回填不算改名,避免过早锁死自动命名。
-      const renaming = typeof result.data.title === 'string' && result.data.title.length > 0 && result.data.title !== session.title
-      const metadataJson = result.data.metadata || renaming
-        ? { ...(session.metadataJson ?? {}), ...(result.data.metadata ?? {}), ...(renaming ? { titleSource: 'user' } : {}) }
-        : undefined
+      const incomingMetadata = result.data.metadata
+        ? { ...(session.metadataJson ?? {}), ...stripSessionTitleSourceMetadata(result.data.metadata) }
+        : session.metadataJson
+      const titlePatch = typeof result.data.title === 'string'
+        ? applyUserTitle({ title: session.title, metadataJson: incomingMetadata }, result.data.title)
+        : null
+      const metadataJson = titlePatch
+        ? titlePatch.metadataJson
+        : result.data.metadata
+          ? incomingMetadata
+          : undefined
       return c.json({ session: updateSession({
         id: session.id,
         metadataJson,
         status: result.data.status,
-        title: result.data.title,
+        title: titlePatch?.title,
       }) })
     }
     catch (error) {
@@ -1495,7 +1502,7 @@ async function createWorkspaceSessionFromBody(
   const settings = loadLocalSettings()
   const execution = resolvedExecutionMetadata(settings, body.engineId)
   const metadata = {
-    ...(body.metadata ?? {}),
+    ...stripSessionTitleSourceMetadata(body.metadata),
     ...execution,
   }
   let session

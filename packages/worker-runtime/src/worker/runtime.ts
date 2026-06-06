@@ -54,6 +54,12 @@ import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
 import { LocalWorkspaceFiles } from './files'
 import { LocalEngineProcessManager } from './process-manager'
 import {
+  applyAutoEngineTitle,
+  applyAutoTruncatedTitle,
+  readSessionTitleSource,
+  stripSessionTitleSourceMetadata,
+} from './session-title-policy'
+import {
   freezeSessionEngineMetadata,
 
   inferLatestInvocationEngine,
@@ -418,8 +424,9 @@ export class LocalWorkerRuntime {
   async createSession(input: CreateLocalSessionInput): Promise<SessionRow> {
     this.requireActiveWorker()
     const workspace = this.requireActiveWorkspace(input.workspaceId)
-    const baseSessionMetadata = freezeSessionEngineMetadata(input.metadata ?? {}, this.requestedSessionEngine(input.metadata ?? {}))
-    const sessionMetadata = { ...baseSessionMetadata, titleSource: readString(baseSessionMetadata.titleSource, 'auto-default') }
+    const requestedMetadata = stripSessionTitleSourceMetadata(input.metadata)
+    const baseSessionMetadata = freezeSessionEngineMetadata(requestedMetadata, this.requestedSessionEngine(requestedMetadata))
+    const sessionMetadata = { ...baseSessionMetadata, titleSource: 'auto-default' as const }
     const session = createSession({
       id: randomUUID(),
       workerId: this.workerId,
@@ -480,8 +487,7 @@ export class LocalWorkerRuntime {
   private maybeKickSessionAutoName(context: LocalInvocationStartContext): void {
     if (!this.#sessionAutoName)
       return
-    const titleSource = readString(readRecord(context.session.metadataJson).titleSource, 'auto-default')
-    if (titleSource !== 'auto-default')
+    if (readSessionTitleSource(context.session) !== 'auto-default')
       return
     const placeholder = truncateAutoNameTitle(context.input.input)
     if (!placeholder)
@@ -581,13 +587,15 @@ export class LocalWorkerRuntime {
     const session = getSession(sessionId)
     if (!session)
       return null
-    const currentSource = readString(readRecord(session.metadataJson).titleSource, 'auto-default')
-    if (currentSource === 'user')
+    const patch = source === 'auto-truncated'
+      ? applyAutoTruncatedTitle(session, title)
+      : applyAutoEngineTitle(session, title)
+    if (!patch)
       return null
     const updated = updateSession({
       id: sessionId,
-      title,
-      metadataJson: { ...readRecord(session.metadataJson), titleSource: source },
+      title: patch.title,
+      metadataJson: patch.metadataJson,
       at: this.#now(),
     })
     this.bus.emit({ kind: 'session', workspaceId: updated.workspaceId, sessionId, payload: { status: updated.status }, at: this.#now() })

@@ -2784,6 +2784,60 @@ describe('LocalWorkerRuntime', () => {
       return { session, workspace }
     }
 
+    it('normalizes unknown title source to auto-default on session creation', async () => {
+      const workerRuntime = autoNameRuntime({
+        async invoke() {
+          return { summary: 'main answer' }
+        },
+      })
+      await workerRuntime.init()
+      const workspace = await workerRuntime.createWorkspace({ name: 'Auto Name Workspace' })
+      const session = await workerRuntime.createSession({
+        workspaceId: workspace.id,
+        title: 'Untitled session',
+        metadata: { titleSource: 'legacy' },
+      })
+
+      expect(session.metadataJson.titleSource).toBe('auto-default')
+      expect(getSession(session.id)?.metadataJson.titleSource).toBe('auto-default')
+    })
+
+    it('strips external titleSource on session creation while keeping frozen engine metadata', async () => {
+      const workerRuntime = autoNameRuntime({
+        async invoke() {
+          return { summary: 'main answer' }
+        },
+      })
+      await workerRuntime.init()
+      const workspace = await workerRuntime.createWorkspace({ name: 'Auto Name Workspace' })
+      const session = await workerRuntime.createSession({
+        workspaceId: workspace.id,
+        title: 'Untitled session',
+        metadata: {
+          custom: 'keep-me',
+          engineCommand: 'codex',
+          engineId: 'codex',
+          executionMode: 'local-cli',
+          titleSource: 'user',
+        },
+      })
+
+      expect(session.metadataJson).toMatchObject({
+        custom: 'keep-me',
+        engineCommand: 'codex',
+        engineId: 'codex',
+        executionMode: 'local-cli',
+        titleSource: 'auto-default',
+      })
+      expect(getSession(session.id)?.metadataJson).toMatchObject({
+        custom: 'keep-me',
+        engineCommand: 'codex',
+        engineId: 'codex',
+        executionMode: 'local-cli',
+        titleSource: 'auto-default',
+      })
+    })
+
     it('refines the title with an engine-generated name on the first invocation', async () => {
       const workerRuntime = autoNameRuntime({
         async invoke(input) {
@@ -2838,6 +2892,29 @@ describe('LocalWorkerRuntime', () => {
       releaseTitle()
       await workerRuntime.drainBackgroundWork()
       expect(getSession(session.id)!.title).toBe('机器名')
+    })
+
+    it('keeps the truncated source when the engine returns the same title', async () => {
+      const workerRuntime = autoNameRuntime({
+        async invoke(input) {
+          if (input.metadata?.purpose === 'session-autoname')
+            return { summary: 'Please r' }
+          return { summary: 'main answer' }
+        },
+      })
+      const { session } = await freshSession(workerRuntime)
+
+      await workerRuntime.startInvocation({
+        sessionId: session.id,
+        input: 'Please refactor the authentication module thoroughly',
+        engineId: 'codex',
+        engineCommand: 'codex',
+      })
+      await workerRuntime.drainBackgroundWork()
+
+      const named = getSession(session.id)!
+      expect(named.title).toBe('Please r')
+      expect(named.metadataJson.titleSource).toBe('auto-engine')
     })
 
     it('returns the truncated placeholder session when starting a detached invocation', async () => {
