@@ -25,7 +25,7 @@ This plan is one subsystem: `Logto 托管登录 + Host Session Gate`. It does no
 - Create `apps/host-cli/src/host-oidc-client.test.ts`
   - Contract tests with local JWKS and token endpoint fixtures.
 - Create `apps/host-cli/src/logto-app-config.ts`
-  - Owns reading `tmp/.logto`, redacted config loading, M2M token acquisition, Logto app lookup/create/update, and manual fallback output.
+  - Owns reading root `.env`, redacted config loading, M2M token acquisition, Logto app lookup/create/update, and manual fallback output.
 - Create `apps/host-cli/src/logto-app-config.test.ts`
   - Fetch-mock tests for M2M token, app creation/update, secret handling, and permission failure fallback.
 - Modify `apps/host-cli/src/logto-auth.ts`
@@ -868,7 +868,7 @@ function requireValue(values: Map<string, string>, key: string): string {
 }
 ```
 
-If a test reveals that Logto Cloud custom domains cannot serve Management API token or `/api` routes, change `LOGTO_ENDPOINT` in `tmp/.logto` to the default tenant endpoint and keep `LOGTO_ISSUER` as `https://auth.zonease.org/oidc`. Do not print the old secret.
+If a test reveals that Logto Cloud custom domains cannot serve Management API token or `/api` routes, change `LOGTO_M2M_ENDPOINT` in root `.env` to the default tenant endpoint and keep `LOGTO_M2M_ISSUER` as `https://auth.zonease.org/oidc`. Do not print the old secret.
 
 - [ ] **Step 4: Run config tests**
 
@@ -1507,11 +1507,11 @@ git commit -m "test(host): 添加 logto 登录浏览器证明脚本"
 
 - [ ] **Step 1: Start Host with Logto env**
 
-Use `tmp/.logto` without printing secrets:
+Use root `.env` without printing secrets:
 
 ```bash
 set -a
-source tmp/.logto
+source .env
 set +a
 export AIWORKER_HOST_SESSION_SECRET="$(openssl rand -base64 32)"
 source tmp/logto-auth-proof/web-app.env

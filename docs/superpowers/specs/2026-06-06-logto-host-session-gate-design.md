@@ -40,12 +40,12 @@ Logto 托管登录 + Host Session Gate
 
 ### 已满足
 
-- `tmp/.logto` 存在，字段齐全：
+- 根 `.env` 存在 Logto M2M/setup 字段：
   - `LOGTO_M2M_APP_ID`
   - `LOGTO_M2M_APP_SECRET`
-  - `LOGTO_ISSUER`
-  - `LOGTO_ENDPOINT`
-- `tmp/.logto` 被 `.gitignore` 覆盖，不进入 git。
+  - `LOGTO_M2M_ISSUER`
+  - `LOGTO_M2M_ENDPOINT`
+- 根 `.env` 被 `.gitignore` 覆盖，不进入 git。
 - `apps/host-cli/src/logto-auth.ts` 已有 `createLogtoAuthProvider`，能验证 Bearer JWT 的 issuer、audience、JWKS、`email_verified`。
 - `packages/host-control/src/auth.ts` 已有 `AuthProvider` 抽象。
 - `apps/host-cli/src/host-server.ts` 的 Host assignment API、options API、Worker route 已经消费 `authProvider`。
@@ -350,7 +350,7 @@ Host 每次访问 `/workers/:workerId` 都重新查 assignment，不能信任 co
 
 ## Logto 配置策略
 
-第一优先级：用 `tmp/.logto` 的 M2M 凭证自动准备本地 proof Web App。
+第一优先级：用根 `.env` 的 M2M 凭证自动准备本地 proof Web App。
 
 动作：
 
@@ -524,7 +524,7 @@ API entry：
 
 1. `host-session-cookie`：签名 cookie、parse/verify、HttpOnly attributes、tests。
 2. `host-oidc-client`：authorization URL、PKCE、callback token exchange、ID token validation、tests。
-3. `logto-app-config`：读取 `tmp/.logto`、Management API proof app prepare、secret redaction、tests with fetch mock。
+3. `logto-app-config`：读取根 `.env`、Management API proof app prepare、secret redaction、tests with fetch mock。
 4. `host-auth-routes`：`/auth/login`、`/auth/callback`、`/auth/logout`、`/api/auth/me`。
 5. `host-route-gates`：`/host`、`/api/host/*`、`/workers/:workerId` 的 browser/API gate。
 6. `browser-proof`：真实 Logto proof script，支持人工登录。
@@ -573,7 +573,7 @@ roles: []
 
 本设计完成的验收标准：
 
-- `tmp/.logto` secret 不进入 git、日志、测试快照。
+- 根 `.env` secret 不进入 git、日志、测试快照。
 - 本地 Logto Web App redirect URI 已自动确认或人工确认。
 - 浏览器访问 `/host` 未登录时跳到 Logto。
 - Logto 登录后 callback 成功，Host 写入 signed HttpOnly session cookie。

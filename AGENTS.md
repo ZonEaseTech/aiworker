@@ -72,7 +72,7 @@ Worker daemon 和 Host API/daemon 都只能通过对应 profile lifecycle 启停
 
 Worker-owned process env 放 `packages/worker-daemon/.env.example` 和 ignored `packages/worker-daemon/.env`，包括 Worker provisioning、engine invocation、BYOK provider secret refs。`dev:worker`、`dev:worker-daemon`、`dev:fleet` 和 `dev:fleet-web` 的 Worker daemon 启动链路必须显式加载 `packages/worker-daemon/.env`，否则不能把这些变量算作启动有效。
 
-Host Logto session auth 的 6 个 runtime key 放根 `.env`：`AIWORKER_HOST_SESSION_SECRET`、`AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS`、`LOGTO_CLIENT_ID`、`LOGTO_CLIENT_SECRET`、`LOGTO_ENDPOINT`、`LOGTO_ISSUER`。它们是 all-or-nothing：只填一部分会让 Host dev 启动失败。Logto Management API setup/M2M key 不属于 Host runtime env，保存在 ignored `tmp/.logto`，由 `apps/host-cli/src/logto-app-config.ts` 的 setup helper 读取；不要因为它们在代码里出现就塞进根 `.env.example`。
+Logto setup/M2M key 是项目开发配置，放根 `.env.example` / ignored `.env`，不要把长期可复用配置埋进 `tmp/`。Host Logto session auth 的 6 个 runtime key 也放根 `.env`：`AIWORKER_HOST_SESSION_SECRET`、`AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS`、`LOGTO_CLIENT_ID`、`LOGTO_CLIENT_SECRET`、`LOGTO_ENDPOINT`、`LOGTO_ISSUER`。Host session auth 是 all-or-nothing：只填一部分会让 Host dev 启动失败；Logto setup 优先用 `LOGTO_M2M_ENDPOINT` / `LOGTO_M2M_ISSUER`，不要为了 setup 半填 runtime 的 `LOGTO_ENDPOINT` / `LOGTO_ISSUER`。
 
 ## Workflow
 

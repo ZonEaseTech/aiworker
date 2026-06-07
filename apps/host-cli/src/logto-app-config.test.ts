@@ -1,3 +1,5 @@
+import type { ManualLogtoConfiguration } from './logto-app-config'
+
 import { describe, expect, it } from 'bun:test'
 
 import {
@@ -7,7 +9,6 @@ import {
   redactLogtoConfigForOutput,
   redactLogtoProofApplication,
 } from './logto-app-config'
-import type { ManualLogtoConfiguration } from './logto-app-config'
 
 type LogtoFetch = NonNullable<Parameters<typeof ensureLogtoProofApplication>[0]['fetch']>
 type ManualConfiguration = ManualLogtoConfiguration['manualConfiguration']
@@ -18,6 +19,12 @@ describe('logto proof app config', () => {
     'LOGTO_M2M_APP_SECRET=m2m-secret',
     'LOGTO_ISSUER=https://auth.zonease.org/oidc',
     'LOGTO_ENDPOINT=https://auth.zonease.org/',
+  ].join('\n')
+  const m2mNamedEnvText = [
+    'LOGTO_M2M_APP_ID=m2m-id',
+    'LOGTO_M2M_APP_SECRET=m2m-secret',
+    'LOGTO_M2M_ISSUER=https://auth.zonease.org/oidc',
+    'LOGTO_M2M_ENDPOINT=https://auth.zonease.org/',
   ].join('\n')
   const tenantEnvText = [
     fakeEnvText,
@@ -46,25 +53,29 @@ describe('logto proof app config', () => {
     })
   })
 
-  it('loads M2M config through an injectable tmp/.logto reader', async () => {
+  it('loads M2M config from root .env by default and keeps explicit path support', async () => {
     const readPaths: string[] = []
     const defaultConfig = await loadLogtoM2MConfigFile({
-      readText: async path => {
+      readText: async (path) => {
         readPaths.push(path)
-        return fakeEnvText
+        return m2mNamedEnvText
       },
     })
     const explicitConfig = await loadLogtoM2MConfigFile({
-      configPath: 'fake/tmp/.logto',
-      readText: async path => {
+      configPath: 'custom.logto.env',
+      readText: async (path) => {
         readPaths.push(path)
         return fakeEnvText
       },
     })
 
-    expect(readPaths).toEqual(['tmp/.logto', 'fake/tmp/.logto'])
+    expect(readPaths).toEqual(['.env', 'custom.logto.env'])
     expect(defaultConfig).toEqual(explicitConfig)
     expect(JSON.stringify(redactLogtoConfigForOutput(defaultConfig))).not.toContain('m2m-secret')
+  })
+
+  it('supports M2M-specific endpoint and issuer names without Host runtime names', () => {
+    expect(loadLogtoM2MConfigText(m2mNamedEnvText)).toEqual(baseConfig)
   })
 
   it('derives Logto Cloud management endpoint and API indicator from tenant id', () => {
@@ -197,7 +208,7 @@ describe('logto proof app config', () => {
     expect(JSON.stringify(calls)).not.toContain('m2m-secret')
 
     const createCall = calls.find(call =>
-      call.url === 'https://zonease-test.logto.app/api/applications' && call.method === 'POST'
+      call.url === 'https://zonease-test.logto.app/api/applications' && call.method === 'POST',
     )
     expect(JSON.parse(createCall?.body ?? '{}')).toMatchObject({
       oidcClientMetadata: {

@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 
-const DEFAULT_LOGTO_CONFIG_PATH = 'tmp/.logto'
+const DEFAULT_LOGTO_CONFIG_PATH = '.env'
 const LOGTO_APPLICATION_LOOKUP_PAGE_SIZE = 100
 const LOGTO_PROOF_APP_NAME = 'AIWorker Local Auth Proof'
 
@@ -64,9 +64,12 @@ export async function loadLogtoM2MConfigFile(input: {
   configPath?: string
   readText?: LogtoConfigReader
 } = {}): Promise<LogtoM2MConfig> {
-  const configPath = input.configPath ?? DEFAULT_LOGTO_CONFIG_PATH
   const readText = input.readText ?? ((path: string) => readFile(path, 'utf8'))
-  return loadLogtoM2MConfigText(await readText(configPath))
+
+  if (input.configPath)
+    return loadLogtoM2MConfigText(await readText(input.configPath))
+
+  return loadLogtoM2MConfigText(await readText(DEFAULT_LOGTO_CONFIG_PATH))
 }
 
 export function loadLogtoM2MConfigText(text: string): LogtoM2MConfig {
@@ -85,8 +88,8 @@ export function loadLogtoM2MConfigText(text: string): LogtoM2MConfig {
 
   const tenantId = optionalValue(values, 'LOGTO_TENANT_ID')
   const config: LogtoM2MConfig = {
-    endpoint: normalizeEndpoint(requireValue(values, 'LOGTO_ENDPOINT')),
-    issuer: requireValue(values, 'LOGTO_ISSUER'),
+    endpoint: normalizeEndpoint(requireAnyValue(values, ['LOGTO_M2M_ENDPOINT', 'LOGTO_ENDPOINT'])),
+    issuer: requireAnyValue(values, ['LOGTO_M2M_ISSUER', 'LOGTO_ISSUER']),
     m2mAppId: requireValue(values, 'LOGTO_M2M_APP_ID'),
     m2mAppSecret: requireValue(values, 'LOGTO_M2M_APP_SECRET'),
   }
@@ -168,7 +171,7 @@ async function requestManagementToken(
       scope: 'all',
     }),
     headers: {
-      authorization: `Basic ${Buffer.from(`${config.m2mAppId}:${config.m2mAppSecret}`).toString('base64')}`,
+      'authorization': `Basic ${Buffer.from(`${config.m2mAppId}:${config.m2mAppSecret}`).toString('base64')}`,
       'content-type': 'application/x-www-form-urlencoded',
     },
     method: 'POST',
@@ -266,7 +269,7 @@ async function createProofApplication(
   const response = await safeFetch('create', fetchImpl, new URL('/api/applications', management.endpoint), {
     body: JSON.stringify(proofApplicationPayload(redirectUri, postLogoutRedirectUri)),
     headers: {
-      authorization: `Bearer ${token}`,
+      'authorization': `Bearer ${token}`,
       'content-type': 'application/json',
     },
     method: 'POST',
@@ -314,7 +317,7 @@ async function updateProofApplication(
   const response = await safeFetch('update', fetchImpl, new URL(`/api/applications/${encodeURIComponent(appId)}`, management.endpoint), {
     body: JSON.stringify(proofApplicationPayload(redirectUri, postLogoutRedirectUri)),
     headers: {
-      authorization: `Bearer ${token}`,
+      'authorization': `Bearer ${token}`,
       'content-type': 'application/json',
     },
     method: 'PATCH',
@@ -356,7 +359,7 @@ async function readApplicationSecret(
   const first = body.find(item =>
     isJsonRecord(item)
     && typeof item.value === 'string'
-    && item.value.trim().length > 0
+    && item.value.trim().length > 0,
   ) as { value: string } | undefined
   if (!first) {
     return {
@@ -611,6 +614,16 @@ function requireValue(values: Map<string, string>, key: string): string {
     throw new Error(`Missing ${key} in Logto config`)
 
   return value
+}
+
+function requireAnyValue(values: Map<string, string>, keys: string[]): string {
+  for (const key of keys) {
+    const value = optionalValue(values, key)
+    if (value)
+      return value
+  }
+
+  throw new Error(`Missing ${keys.join(' or ')} in Logto config`)
 }
 
 function normalizeEndpoint(endpoint: string): string {

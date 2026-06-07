@@ -46,8 +46,8 @@ describe('dev service contract', () => {
     expect(agents).toContain('多 Soul：`bun run dev:fleet` / `:status` / `:stop` / `:clean`，默认 `9217-9221 + 5173-5177`。')
     expect(agents).toContain('Host：`bun run dev:host` / `:status` / `:stop` / `:clean`，默认 `9117 + 5050`。')
     expect(agents).toContain('环境变量按真实加载路径归属，不按代码字符串归属')
-    expect(agents).toContain('Host Logto session auth 的 6 个 runtime key 放根 `.env`')
-    expect(agents).toContain('Logto Management API setup/M2M key 不属于 Host runtime env，保存在 ignored `tmp/.logto`')
+    expect(agents).toContain('Host Logto session auth 的 6 个 runtime key 也放根 `.env`')
+    expect(agents).toContain('Logto setup/M2M key 是项目开发配置，放根 `.env.example` / ignored `.env`')
   })
 
   it('documents Host daemon as package-install service lifecycle without Worker runtime ownership', () => {
