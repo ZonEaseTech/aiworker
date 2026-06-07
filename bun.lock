@@ -20,19 +20,17 @@
     },
     "apps/host-cli": {
       "name": "@zonease/aiworker-host-cli",
-      "version": "0.0.0",
+      "version": "1.0.0-rc.1",
       "bin": {
         "aiworker-host": "./dist/aiworker-host.js",
       },
-      "dependencies": {
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
         "@zonease/aiworker-host-control": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
         "@zonease/aiworker-worker-control-protocol": "workspace:*",
         "cac": "^6.7.14",
         "jose": "^6.1.0",
-      },
-      "devDependencies": {
-        "@types/bun": "^1.2.13",
         "typescript": "^5.8.3",
       },
     },
@@ -60,7 +58,7 @@
     },
     "apps/worker-cli": {
       "name": "@zonease/aiworker-cli",
-      "version": "0.19.3",
+      "version": "1.0.0-rc.1",
       "bin": {
         "aiworker": "./dist/aiworker.js",
       },
