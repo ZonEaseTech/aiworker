@@ -228,6 +228,7 @@ bun run typecheck
 bun run lint
 bun run build
 bun run smoke:dist-release
+bun run smoke:host-dist-release
 bun run smoke:standalone-release
 bun run smoke:standalone-runtime
 bun run smoke:npm-package
