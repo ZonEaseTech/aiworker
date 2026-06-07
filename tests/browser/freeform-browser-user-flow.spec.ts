@@ -301,7 +301,9 @@ async function archiveWorkspaceLifecycleFromUi(
   const main = page.getByRole('region', { name: 'Soul workspaces and sessions' })
   await assertWorkerArchiveAbsentFromUi(page)
 
-  await page.getByRole('button', { name: 'Archive session' }).click()
+  // 归档已收敛进 "More actions" overflow 菜单(worker-studio HeaderMoreActionsMenu);先开菜单再点条目。
+  await page.getByRole('button', { name: 'More actions for current session' }).click()
+  await page.getByRole('menuitem', { name: 'Archive' }).click()
   await confirmArchiveDialog(page, 'Archive session?', 'Archive session')
   await page.waitForURL(new RegExp(`/workers/${escapeRegExp(routeIds.workerId)}/workspaces/${escapeRegExp(routeIds.workspaceId)}$`), {
     timeout: WORKBENCH_RENDER_TIMEOUT_MS,
@@ -317,7 +319,8 @@ async function archiveWorkspaceLifecycleFromUi(
     method: 'POST',
   })
 
-  await page.getByRole('button', { exact: true, name: 'Archive workspace' }).click()
+  await page.getByRole('button', { name: 'More actions for current workspace' }).click()
+  await page.getByRole('menuitem', { name: 'Archive' }).click()
   await confirmArchiveDialog(page, 'Archive workspace?', 'Archive workspace')
   await page.waitForURL(new RegExp(`/workers/${escapeRegExp(routeIds.workerId)}$`), { timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   await main.getByText('No workspaces yet').waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
