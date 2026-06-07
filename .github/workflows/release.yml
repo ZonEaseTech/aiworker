@@ -48,13 +48,13 @@ jobs:
         working-directory: apps/worker-cli/dist
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag rc
 
       - name: Publish Host CLI to npm
         working-directory: apps/host-cli/dist
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag rc
 
       - name: Attach binaries to GitHub Release
         uses: softprops/action-gh-release@v3
