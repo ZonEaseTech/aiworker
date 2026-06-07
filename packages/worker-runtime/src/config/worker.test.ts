@@ -49,6 +49,25 @@ describe('getWorkerEnv', () => {
     expect(env.WORKER_MIGRATIONS_FOLDER).toBe(defaultWorkerMigrationsFolder)
   })
 
+  it('treats blank dotenv placeholders as unset for optional and defaulted values', () => {
+    process.env.PORT = ''
+    process.env.AIWORKER_WORKER_HOST = ''
+    process.env.WORKER_DB_PATH = ''
+    process.env.WORKER_MIGRATIONS_FOLDER = ''
+    process.env.WORKER_WORKSPACE_ROOT = ''
+    process.env.AIWORKER_LOCAL_TOKEN = ''
+    __resetWorkerEnvCacheForTest()
+
+    const env = getWorkerEnv()
+
+    expect(env.PORT).toBe(9217)
+    expect(env.AIWORKER_WORKER_HOST).toBe('127.0.0.1')
+    expect(env.WORKER_DB_PATH).toBe(path.resolve(homedir(), '.aiworker', 'aiworker.db'))
+    expect(env.WORKER_WORKSPACE_ROOT).toBe(path.resolve(homedir(), '.aiworker', 'workers'))
+    expect(env.WORKER_MIGRATIONS_FOLDER).toBe(defaultWorkerMigrationsFolder)
+    expect(env.AIWORKER_LOCAL_TOKEN).toBeUndefined()
+  })
+
   it('respects explicit local daemon paths', () => {
     process.env.AIWORKER_HOME = '/tmp/aiworker-home'
     process.env.WORKER_DB_PATH = '/tmp/custom-worker.db'
@@ -68,5 +87,12 @@ describe('getWorkerEnv', () => {
     __resetWorkerEnvCacheForTest()
 
     expect(getWorkerEnv().AIWORKER_LOCAL_TOKEN).toBe('local-token-123456')
+  })
+
+  it('rejects a non-empty local bearer token that is too short', () => {
+    process.env.AIWORKER_LOCAL_TOKEN = 'short'
+    __resetWorkerEnvCacheForTest()
+
+    expect(() => getWorkerEnv()).toThrow(/at least 16 character/)
   })
 })

@@ -56,7 +56,7 @@ const logtoSessionRequiredEnvKeys = [
 ] as const
 
 function buildSessionAuthFromEnv(env: Record<string, string | undefined>, redirectBaseUrl: string) {
-  const hasAnySessionEnv = logtoSessionRequiredEnvKeys.some(key => env[key] !== undefined)
+  const hasAnySessionEnv = logtoSessionRequiredEnvKeys.some(key => readNonEmptyEnvValue(env, key) !== undefined)
   if (!hasAnySessionEnv)
     return undefined
 

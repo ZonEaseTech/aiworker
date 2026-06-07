@@ -12,6 +12,7 @@ import { runHostCli } from './aiworker-host'
 describe('aiworker-host control CLI', () => {
   const originalStderrWrite = process.stderr.write
   const originalWrite = process.stdout.write
+  const originalHostApiUrl = process.env.AIWORKER_HOST_API_URL
   let errorOutput = ''
   let output = ''
 
@@ -30,11 +31,16 @@ describe('aiworker-host control CLI', () => {
       output += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
       return true
     }) as typeof process.stdout.write
+    delete process.env.AIWORKER_HOST_API_URL
   })
 
   afterEach(() => {
     process.stderr.write = originalStderrWrite
     process.stdout.write = originalWrite
+    if (originalHostApiUrl === undefined)
+      delete process.env.AIWORKER_HOST_API_URL
+    else
+      process.env.AIWORKER_HOST_API_URL = originalHostApiUrl
   })
 
   function reservePort(): number {
@@ -802,6 +808,44 @@ describe('aiworker-host control CLI', () => {
 
   it('keeps lifecycle dev admin behavior when Logto env is absent', async () => {
     await withHostSessionEnv({}, async () => {
+      const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+      const hostLifecycle = {
+        async start(input: Record<string, unknown>) {
+          calls.push({ input, method: 'start' })
+          return {
+            apiUrl: 'http://127.0.0.1:9117',
+            mode: input.mode,
+            webUrl: 'http://127.0.0.1:5050/host',
+          }
+        },
+      }
+
+      const code = await runHostCli([
+        'start',
+        '--dev',
+        '--db',
+        '/tmp/host.db',
+        '--dev-admin-email',
+        'admin@zonease.org',
+      ], { hostLifecycle } as any)
+
+      expect(code).toBe(0)
+      const input = calls[0]!.input
+      expect(input.devAdminEmail).toBe('admin@zonease.org')
+      expect(input.sessionAuth).toBeUndefined()
+    })
+  })
+
+  it('keeps lifecycle dev admin behavior when Logto env entries are blank placeholders', async () => {
+    await withHostSessionEnv({
+      AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS: '',
+      AIWORKER_HOST_BOOTSTRAP_ADMINS: '',
+      AIWORKER_HOST_SESSION_SECRET: '',
+      LOGTO_CLIENT_ID: '',
+      LOGTO_CLIENT_SECRET: '',
+      LOGTO_ENDPOINT: '',
+      LOGTO_ISSUER: '',
+    }, async () => {
       const calls: Array<{ input: Record<string, unknown>, method: string }> = []
       const hostLifecycle = {
         async start(input: Record<string, unknown>) {
