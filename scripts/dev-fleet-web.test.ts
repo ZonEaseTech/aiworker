@@ -18,6 +18,7 @@ import {
   summarizeDaemonHealth,
   validateWorkerApp,
   verifyViteWithRestart,
+  workerDaemonEnvFile,
 } from './dev-fleet-web'
 
 const repoRoot = import.meta.dir === `${process.cwd()}/scripts`
@@ -137,9 +138,19 @@ describe('dev fleet web harness contracts', () => {
       scripts?: Record<string, string>
     }
 
-    expect(pkg.scripts?.['dev:fleet-web']).toBe('bun scripts/dev-fleet-web.ts start')
-    expect(pkg.scripts?.['dev:fleet-web:status']).toBe('bun scripts/dev-fleet-web.ts status')
+    expect(pkg.scripts?.['dev:fleet-web']).toBe('bun run dev:env:check && bun --env-file=packages/worker-daemon/.env scripts/dev-fleet-web.ts start')
+    expect(pkg.scripts?.['dev:fleet-web:status']).toBe('bun run dev:env:check && bun --env-file=packages/worker-daemon/.env scripts/dev-fleet-web.ts status')
     expect(pkg.scripts?.['dev:fleet-web:clean']).toBe('bun scripts/dev-fleet-web.ts clean')
+  })
+
+  it('loads Worker daemon env for direct fleet CLI invocations', () => {
+    const script = readFileSync(join(repoRoot, 'scripts/dev-fleet-web.ts'), 'utf8')
+
+    expect(workerDaemonEnvFile()).toBe(join(repoRoot, 'packages/worker-daemon/.env'))
+    expect(script).toContain('return join(repoRoot(), \'packages/worker-daemon/.env\')')
+    expect(script).toContain('return run(\'bun\', [')
+    expect(script).toContain('workerDaemonEnvFile()')
+    expect(script).toContain('\'apps/worker-cli/src/aiworker.ts\', ...args')
   })
 
   it('starts and stops only the fixed harness workers instead of every fleet worker', () => {

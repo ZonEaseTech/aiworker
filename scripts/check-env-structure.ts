@@ -1,6 +1,11 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import process from 'node:process'
+
+export interface EnvStructurePair {
+  actualPath: string
+  expectedPath: string
+}
 
 export interface EnvStructureLine {
   line: number
@@ -17,6 +22,13 @@ export interface EnvStructureCheckResult {
   status: 0 | 1
   stderr: string
   stdout: string
+}
+
+export function defaultEnvStructurePairs(): EnvStructurePair[] {
+  return [
+    { actualPath: '.env', expectedPath: '.env.example' },
+    { actualPath: 'packages/worker-daemon/.env', expectedPath: 'packages/worker-daemon/.env.example' },
+  ]
 }
 
 const assignmentPattern = /^\s*([a-z_]\w*)\s*=/i
@@ -165,7 +177,19 @@ export function runEnvStructureCheck(options: {
     }
   }
 
+  const expected = readFileSync(expectedPath, 'utf8')
+
   if (!existsSync(actualPath)) {
+    if (options.write) {
+      mkdirSync(dirname(actualPath), { recursive: true })
+      writeFileSync(actualPath, expected)
+      return {
+        status: 0,
+        stderr: '',
+        stdout: `[env:check] created .env from .env.example (${expectedPath} -> ${actualPath})\n`,
+      }
+    }
+
     return {
       status: 1,
       stderr: `[env:check] missing .env at ${actualPath}; copy .env.example to .env and fill values without changing comments or keys.\n`,
@@ -173,7 +197,6 @@ export function runEnvStructureCheck(options: {
     }
   }
 
-  const expected = readFileSync(expectedPath, 'utf8')
   const actual = readFileSync(actualPath, 'utf8')
   const comparison = compareEnvStructure(expected, actual)
 
@@ -207,7 +230,40 @@ export function runEnvStructureCheck(options: {
   }
 }
 
-function cliArgs(argv: string[]): { actualPath?: string, expectedPath?: string, write: boolean } {
+export function runEnvStructureChecks(options: {
+  cwd?: string
+  pairs?: EnvStructurePair[]
+  write?: boolean
+} = {}): EnvStructureCheckResult {
+  const cwd = options.cwd ?? process.cwd()
+  const pairs = options.pairs ?? defaultEnvStructurePairs()
+  const stdout: string[] = []
+  const stderr: string[] = []
+  let status: 0 | 1 = 0
+
+  for (const pair of pairs) {
+    const result = runEnvStructureCheck({
+      actualPath: pair.actualPath,
+      cwd,
+      expectedPath: pair.expectedPath,
+      write: options.write,
+    })
+    if (result.stdout)
+      stdout.push(result.stdout)
+    if (result.stderr)
+      stderr.push(result.stderr)
+    if (result.status !== 0)
+      status = 1
+  }
+
+  return {
+    status,
+    stderr: stderr.join(''),
+    stdout: stdout.join(''),
+  }
+}
+
+function cliArgs(argv: string[]): { positional: string[], write: boolean } {
   const positional: string[] = []
   let write = false
 
@@ -220,19 +276,20 @@ function cliArgs(argv: string[]): { actualPath?: string, expectedPath?: string, 
   }
 
   return {
-    actualPath: positional[1],
-    expectedPath: positional[0],
+    positional,
     write,
   }
 }
 
 if (import.meta.main) {
   const args = cliArgs(process.argv.slice(2))
-  const result = runEnvStructureCheck({
-    actualPath: args.actualPath,
-    expectedPath: args.expectedPath,
-    write: args.write,
-  })
+  const result = args.positional.length === 0
+    ? runEnvStructureChecks({ write: args.write })
+    : runEnvStructureCheck({
+        actualPath: args.positional[1],
+        expectedPath: args.positional[0],
+        write: args.write,
+      })
   if (result.stdout)
     process.stdout.write(result.stdout)
   if (result.stderr)

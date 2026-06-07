@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+WORKER_DAEMON_ENV_FILE="$ROOT_DIR/packages/worker-daemon/.env"
 
 AIWORKER_HOME="${AIWORKER_HOME:-$HOME/.aiworker-dev}"
 AIWORKER_HOST="${AIWORKER_HOST:-127.0.0.1}"
@@ -286,7 +287,7 @@ start_daemon_with_worker() {
     AIWORKER_HOME="$AIWORKER_HOME" \
       AIWORKER_WORKER_HOST="$AIWORKER_WORKER_HOST" \
       PORT="$PORT" \
-      bun apps/worker-cli/src/aiworker.ts start --host "$AIWORKER_HOST" --port "$PORT" >/dev/null
+      bun --env-file="$WORKER_DAEMON_ENV_FILE" apps/worker-cli/src/aiworker.ts start --host "$AIWORKER_HOST" --port "$PORT" >/dev/null
   )
   if ! DAEMON_PID="$(read_daemon_pid)"; then
     stop_daemon_after_start_failure

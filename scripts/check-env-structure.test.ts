@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
   compareEnvStructure,
+  defaultEnvStructurePairs,
   normalizeEnvStructure,
   runEnvStructureCheck,
+  runEnvStructureChecks,
   syncEnvStructure,
 } from './check-env-structure'
 
@@ -94,6 +97,13 @@ describe('env structure checker', () => {
     expect(result.stderr).toBe('')
   })
 
+  it('defaults project checks to root and Worker daemon env files', () => {
+    expect(defaultEnvStructurePairs()).toEqual([
+      { actualPath: '.env', expectedPath: '.env.example' },
+      { actualPath: 'packages/worker-daemon/.env', expectedPath: 'packages/worker-daemon/.env.example' },
+    ])
+  })
+
   it('syncs local values into the example structure and drops extra fields', () => {
     const expected = [
       '# Header',
@@ -126,6 +136,46 @@ describe('env structure checker', () => {
 
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('missing .env')
+  })
+
+  it('creates a missing .env from the example in write mode', async () => {
+    await writeFile(join(root, '.env.example'), '# A\nA=default\n')
+
+    const result = runEnvStructureCheck({ cwd: root, write: true })
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('created .env from .env.example')
+    expect(await readFile(join(root, '.env'), 'utf8')).toBe('# A\nA=default\n')
+  })
+
+  it('checks the root and Worker daemon env pairs for project development', async () => {
+    await mkdir(join(root, 'packages/worker-daemon'), { recursive: true })
+    await writeFile(join(root, '.env.example'), '# Root\nROOT=\n')
+    await writeFile(join(root, '.env'), '# Root\nROOT=local\n')
+    await writeFile(join(root, 'packages/worker-daemon/.env.example'), '# Worker\nWORKER=\n')
+    await writeFile(join(root, 'packages/worker-daemon/.env'), '# Worker\nWORKER=local\n')
+
+    const result = runEnvStructureChecks({ cwd: root })
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain(`${join(root, '.env.example')} <-> ${join(root, '.env')}`)
+    expect(result.stdout).toContain(`${join(root, 'packages/worker-daemon/.env.example')} <-> ${join(root, 'packages/worker-daemon/.env')}`)
+  })
+
+  it('supports explicit example and env paths through the CLI', async () => {
+    const expectedPath = join(root, 'custom.env.example')
+    const actualPath = join(root, 'custom.env')
+    await writeFile(expectedPath, '# Custom\nCUSTOM=\n')
+    await writeFile(actualPath, '# Custom\nCUSTOM=local\n')
+
+    const result = Bun.spawnSync(['bun', join(import.meta.dirname, 'check-env-structure.ts'), expectedPath, actualPath], {
+      cwd: root,
+      stderr: 'pipe',
+      stdout: 'pipe',
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(Buffer.from(result.stdout).toString('utf8')).toContain(`${expectedPath} <-> ${actualPath}`)
   })
 
   it('registers the checker for development commands without wiring it into build checks', async () => {

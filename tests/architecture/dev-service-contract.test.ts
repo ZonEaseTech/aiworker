@@ -15,18 +15,18 @@ describe('dev service contract', () => {
 
     expect(pkg.scripts?.dev).toBe('bun run dev:worker')
 
-    expect(pkg.scripts?.['dev:worker']).toBe('bash scripts/dev-local.sh')
-    expect(pkg.scripts?.['dev:worker:status']).toBe('bash scripts/dev-status.sh')
+    expect(pkg.scripts?.['dev:worker']).toBe('bun run dev:env:check && bash scripts/dev-local.sh')
+    expect(pkg.scripts?.['dev:worker:status']).toBe('bun run dev:env:check && bash scripts/dev-status.sh')
     expect(pkg.scripts?.['dev:worker:stop']).toBe('bash scripts/dev-clean.sh stop')
     expect(pkg.scripts?.['dev:worker:clean']).toBe('bash scripts/dev-clean.sh clean')
 
-    expect(pkg.scripts?.['dev:fleet']).toBe('bun scripts/dev-fleet-web.ts start')
-    expect(pkg.scripts?.['dev:fleet:status']).toBe('bun scripts/dev-fleet-web.ts status')
+    expect(pkg.scripts?.['dev:fleet']).toBe('bun run dev:env:check && bun --env-file=packages/worker-daemon/.env scripts/dev-fleet-web.ts start')
+    expect(pkg.scripts?.['dev:fleet:status']).toBe('bun run dev:env:check && bun --env-file=packages/worker-daemon/.env scripts/dev-fleet-web.ts status')
     expect(pkg.scripts?.['dev:fleet:stop']).toBe('bun scripts/dev-fleet-web.ts stop')
     expect(pkg.scripts?.['dev:fleet:clean']).toBe('bun scripts/dev-fleet-web.ts clean')
 
-    expect(pkg.scripts?.['dev:host']).toBe('bun apps/host-cli/src/aiworker-host.ts start --dev')
-    expect(pkg.scripts?.['dev:host:status']).toBe('bun apps/host-cli/src/aiworker-host.ts status')
+    expect(pkg.scripts?.['dev:host']).toBe('bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts start --dev')
+    expect(pkg.scripts?.['dev:host:status']).toBe('bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts status')
     expect(pkg.scripts?.['dev:host:stop']).toBe('bun apps/host-cli/src/aiworker-host.ts stop')
     expect(pkg.scripts?.['dev:host:clean']).toBe('bun apps/host-cli/src/aiworker-host.ts clean')
     expect(pkg.scripts?.['dev:host:logs']).toBe('bun apps/host-cli/src/aiworker-host.ts logs')
@@ -45,6 +45,9 @@ describe('dev service contract', () => {
     expect(agents).toContain('单 Worker：`bun run dev:worker` / `:status` / `:stop` / `:clean`，默认 `9217 + 5173`。')
     expect(agents).toContain('多 Soul：`bun run dev:fleet` / `:status` / `:stop` / `:clean`，默认 `9217-9221 + 5173-5177`。')
     expect(agents).toContain('Host：`bun run dev:host` / `:status` / `:stop` / `:clean`，默认 `9117 + 5050`。')
+    expect(agents).toContain('环境变量按真实加载路径归属，不按代码字符串归属')
+    expect(agents).toContain('Host Logto session auth 的 6 个 runtime key 放根 `.env`')
+    expect(agents).toContain('Logto Management API setup/M2M key 不属于 Host runtime env，保存在 ignored `tmp/.logto`')
   })
 
   it('documents Host daemon as package-install service lifecycle without Worker runtime ownership', () => {

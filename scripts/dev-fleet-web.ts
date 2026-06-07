@@ -161,6 +161,10 @@ function repoRoot(): string {
   return resolve(import.meta.dir, '..')
 }
 
+export function workerDaemonEnvFile(): string {
+  return join(repoRoot(), 'packages/worker-daemon/.env')
+}
+
 function aiworkerHome(): string {
   return process.env.AIWORKER_HOME || join(process.env.HOME || '.', '.aiworker-dev')
 }
@@ -191,7 +195,7 @@ function run(
 }
 
 function cli(args: string[], options: { allowFailure?: boolean } = {}): CommandResult {
-  return run('bun', ['apps/worker-cli/src/aiworker.ts', ...args], {
+  return run('bun', [`--env-file=${workerDaemonEnvFile()}`, 'apps/worker-cli/src/aiworker.ts', ...args], {
     allowFailure: options.allowFailure,
     cwd: repoRoot(),
     env: {

@@ -68,6 +68,12 @@ Host：`bun run dev:host` / `:status` / `:stop` / `:clean`，默认 `9117 + 5050
 
 Worker daemon 和 Host API/daemon 都只能通过对应 profile lifecycle 启停，并由 status/manifest 回收；不要给 API/daemon 自造 tmux session。所有 Worker Web Vite 必须显式绑定 daemon：`AIWORKER_API_URL=http://127.0.0.1:<daemon-port>`；Host Web 必须绑定 `AIWORKER_HOST_API_URL`。只有 Vite 由固定 tmux session 托管，必须用固定端口和 `--strictPort`；Agent 不要前台起 Vite。Playwright 先读 status/manifest，再打开对应 URL。
 
+环境变量按真实加载路径归属，不按代码字符串归属。根 `.env.example` / ignored `.env` 只放 source-checkout dev profile 和 Host dev/runtime 会从根启动读取的值；`dev:env:check` / `dev:env:sync` 必须保持根 `.env` 与 `.env.example`、`packages/worker-daemon/.env` 与 `packages/worker-daemon/.env.example` 的字段、注释、空行、顺序严格一致，且只挂 dev/status 入口，不挂 build/lint/release。
+
+Worker-owned process env 放 `packages/worker-daemon/.env.example` 和 ignored `packages/worker-daemon/.env`，包括 Worker provisioning、engine invocation、BYOK provider secret refs。`dev:worker`、`dev:worker-daemon`、`dev:fleet` 和 `dev:fleet-web` 的 Worker daemon 启动链路必须显式加载 `packages/worker-daemon/.env`，否则不能把这些变量算作启动有效。
+
+Host Logto session auth 的 6 个 runtime key 放根 `.env`：`AIWORKER_HOST_SESSION_SECRET`、`AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS`、`LOGTO_CLIENT_ID`、`LOGTO_CLIENT_SECRET`、`LOGTO_ENDPOINT`、`LOGTO_ISSUER`。它们是 all-or-nothing：只填一部分会让 Host dev 启动失败。Logto Management API setup/M2M key 不属于 Host runtime env，保存在 ignored `tmp/.logto`，由 `apps/host-cli/src/logto-app-config.ts` 的 setup helper 读取；不要因为它们在代码里出现就塞进根 `.env.example`。
+
 ## Workflow
 
 Use Superpowers for brainstorming, non-trivial planning, TDD, systematic debugging, and verification before completion.

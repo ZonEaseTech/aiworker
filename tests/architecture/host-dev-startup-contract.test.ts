@@ -8,7 +8,7 @@ import { describe, expect, it } from 'bun:test'
 
 const repoRoot = resolve(import.meta.dir, '..', '..')
 
-const workerDaemonCommand = 'AIWORKER_HOME=${AIWORKER_HOME:-$HOME/.aiworker-dev} AIWORKER_WORKER_HOST=${AIWORKER_WORKER_HOST:-127.0.0.1} PORT=${PORT:-9217} bun apps/worker-cli/src/aiworker.ts daemon foreground --host ${AIWORKER_WORKER_HOST:-127.0.0.1} --port ${PORT:-9217}'
+const workerDaemonCommand = 'bun run dev:env:check && AIWORKER_HOME=${AIWORKER_HOME:-$HOME/.aiworker-dev} AIWORKER_WORKER_HOST=${AIWORKER_WORKER_HOST:-127.0.0.1} PORT=${PORT:-9217} bun --env-file=packages/worker-daemon/.env apps/worker-cli/src/aiworker.ts daemon foreground --host ${AIWORKER_WORKER_HOST:-127.0.0.1} --port ${PORT:-9217}'
 
 interface ScriptResult {
   exitCode: number | null
@@ -129,10 +129,10 @@ describe('Host dev startup contract', () => {
   it('routes dev:host through the Host startup script instead of worker daemon foreground', () => {
     const pkg = JSON.parse(readRepoFile('package.json')) as PackageJson
 
-    expect(pkg.scripts?.['dev:host']).toBe('bun apps/host-cli/src/aiworker-host.ts start --dev')
+    expect(pkg.scripts?.['dev:host']).toBe('bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts start --dev')
     expect(pkg.scripts?.['dev:host']).not.toContain('daemon foreground')
     expect(pkg.scripts?.['dev:host']).not.toContain('apps/worker-cli/src/aiworker.ts')
-    expect(pkg.scripts?.['dev:host:status']).toBe('bun apps/host-cli/src/aiworker-host.ts status')
+    expect(pkg.scripts?.['dev:host:status']).toBe('bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts status')
     expect(pkg.scripts?.['dev:host:stop']).toBe('bun apps/host-cli/src/aiworker-host.ts stop')
     expect(pkg.scripts?.['dev:host:clean']).toBe('bun apps/host-cli/src/aiworker-host.ts clean')
     expect(pkg.scripts?.['dev:host:logs']).toBe('bun apps/host-cli/src/aiworker-host.ts logs')
@@ -153,7 +153,7 @@ describe('Host dev startup contract', () => {
     expect(script).toContain('AIWORKER_HOST_WEB_PORT="${AIWORKER_HOST_WEB_PORT:-5050}"')
     expect(script).toContain('AIWORKER_HOST_API_URL="${AIWORKER_HOST_API_URL:-http://${AIWORKER_HOST}:${AIWORKER_HOST_API_PORT}}"')
     expect(script).toContain('${HOME}/.aiworker-dev/host.db')
-    expect(script).toContain('admin@zonease.org')
+    expect(script).toContain('admin@example.com')
     expect(script).not.toContain('PORT="${PORT:-9217}"')
     expect(script).not.toContain('AIWORKER_WEB_PORT="${AIWORKER_WEB_PORT:-5173}"')
   })

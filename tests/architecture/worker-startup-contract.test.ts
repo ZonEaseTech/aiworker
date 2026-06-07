@@ -46,6 +46,15 @@ describe('Worker startup contract', () => {
     expect(script, 'dev-local must read the fleet worker pid file after aiworker start').toContain('pid_file="$(default_worker_pid_file)"')
   })
 
+  it('loads Worker daemon process env when starting the dev Worker daemon', () => {
+    const script = readRepoFile('scripts/dev-local.sh')
+    const envFileIndex = script.indexOf('WORKER_DAEMON_ENV_FILE="$ROOT_DIR/packages/worker-daemon/.env"')
+    const startIndex = script.indexOf('bun --env-file="$WORKER_DAEMON_ENV_FILE" apps/worker-cli/src/aiworker.ts start')
+
+    expect(envFileIndex, 'dev-local must name the Worker daemon env file explicitly').toBeGreaterThanOrEqual(0)
+    expect(startIndex, 'dev-local must pass Worker daemon env to the CLI start path').toBeGreaterThan(envFileIndex)
+  })
+
   it('writes an agent-readable worker dev manifest with fixed API and Web URLs', () => {
     const script = readRepoFile('scripts/dev-local.sh')
     const statusScript = readRepoFile('scripts/dev-status.sh')
