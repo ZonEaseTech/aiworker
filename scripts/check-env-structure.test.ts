@@ -156,4 +156,24 @@ describe('env structure checker', () => {
       expect(pkg.scripts[scriptName]).not.toContain('dev:env:check')
     }
   })
+
+  it('keeps Worker-owned process env out of the root dev env example', async () => {
+    const rootExample = await readFile(join(import.meta.dirname, '..', '.env.example'), 'utf8')
+    const workerDaemonExample = await readFile(join(import.meta.dirname, '..', 'packages/worker-daemon/.env.example'), 'utf8')
+    const workerOwnedKeys = [
+      'AIWORKER_HOST_URL',
+      'AIWORKER_PROVISION_TOKEN',
+      'AIWORKER_CODEX_DISABLE_PLUGINS',
+      'AIWORKER_CODEX_IGNORE_USER_CONFIG',
+      'AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS',
+      'OD_CODEX_DISABLE_PLUGINS',
+      'OPENAI_API_KEY',
+      'ANTHROPIC_API_KEY',
+    ]
+
+    for (const key of workerOwnedKeys) {
+      expect(rootExample).not.toContain(`${key}=`)
+      expect(workerDaemonExample).toContain(`${key}=`)
+    }
+  })
 })

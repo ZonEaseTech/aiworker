@@ -1,5 +1,10 @@
 # AIWorker environment inventory
 
+Status: superseded for current root `.env.example` membership. Use
+`docs/superpowers/specs/2026-06-07-env-single-item-evidence.md` as the current
+single-item ledger. This earlier inventory is kept as process history from the
+first startup-loading audit.
+
 This file records the environment variables audited on 2026-06-07. The evidence
 standard is startup/runtime loading, not plain text presence in the repository.
 
@@ -139,4 +144,3 @@ from root `.env.example`.
 | `PROCESS_KILL_TIMEOUT_MS` | Older process manager timeout default. | No current AIWorker startup reader. | `rg PROCESS_KILL_TIMEOUT_MS apps packages scripts` has no reader. |
 | `PROCESS_AUTO_CLEANUP_DELAY_MS` | Older process cleanup delay default. | No current AIWorker startup reader. | `rg PROCESS_AUTO_CLEANUP_DELAY_MS apps packages scripts` has no reader. |
 | `PROCESS_GC_INTERVAL_MS` | Older process GC interval default. | No current AIWorker startup reader. | `rg PROCESS_GC_INTERVAL_MS apps packages scripts` has no reader. |
-

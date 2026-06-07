@@ -2,7 +2,8 @@
 
 Date: 2026-06-07
 
-This ledger audits the variables currently present in root `.env.example`.
+This ledger audits the variables currently present in root `.env.example`, plus
+the Worker-owned process variables that were intentionally moved out of root.
 The standard is not "the string exists in code"; the standard is:
 
 1. A supported project-dev entry starts through `bun run` or Bun.
@@ -45,14 +46,14 @@ bun run dev:host:status
 - `engine-invocation`: local native engine command invocation.
 - `byok`: BYOK provider secret reference lookup.
 
-## Active Root Variables
+## Root Dev Variables
 
 ### AIWORKER_HOME
 
 - Scope: `root-dev`, `worker-dev`, `worker-runtime`, `fleet-dev`, `worker-daemon-package`.
 - Purpose: root AIWorker home. Source dev defaults to `~/.aiworker-dev`; packaged CLI defaults to `~/.aiworker`.
 - Root example: `.env.example:11`.
-- Package subset: `packages/worker-daemon/.env.example:5`.
+- Package subset: `packages/worker-daemon/.env.example:6`.
 - Load chain: `package.json:19`, `package.json:20`, `package.json:30`, `package.json:31`, `package.json:33`, `package.json:34` start through `bun run dev:env:check && ...`, so root `.env` is loaded by Bun before shell/TS entry execution.
 - Read chain: `scripts/dev-local.sh:6`, `scripts/dev-status.sh:6`, `scripts/dev-clean.sh:7`, `scripts/dev-apps.sh:6`, `scripts/dev-fleet-web.ts:165`, `packages/fs-layout/src/index.ts:52`, `apps/worker-cli/src/aiworker.ts:410`.
 - Runtime proof: `bun run dev:status` printed `AIWORKER_HOME=/Users/ben/.aiworker-dev`.
@@ -74,7 +75,7 @@ bun run dev:host:status
 - Scope: `root-dev`, `worker-dev`, `worker-runtime`, `worker-daemon-package`.
 - Purpose: Worker daemon bind host.
 - Root example: `.env.example:17`.
-- Package subset: `packages/worker-daemon/.env.example:7`.
+- Package subset: `packages/worker-daemon/.env.example:8`.
 - Load chain: `package.json:28` passes it into `dev:worker-daemon`; `scripts/dev-local.sh:8` derives it from `AIWORKER_HOST` when unset.
 - Read chain: `packages/worker-runtime/src/config/worker.ts:14`, `apps/worker-cli/src/aiworker.ts:1105`, `apps/worker-cli/src/aiworker.ts:1419`, `apps/worker-cli/src/aiworker.ts:1469`.
 - Runtime effect: daemon bind/check URL uses this value.
@@ -85,7 +86,7 @@ bun run dev:host:status
 - Scope: `root-dev`, `worker-dev`, `worker-runtime`, `worker-daemon-package`.
 - Purpose: Worker daemon port.
 - Root example: `.env.example:20`.
-- Package subset: `packages/worker-daemon/.env.example:6`.
+- Package subset: `packages/worker-daemon/.env.example:7`.
 - Load chain: `package.json:28`, `scripts/dev-local.sh:9`, `scripts/dev-status.sh:8`, `scripts/dev-clean.sh:8`.
 - Read chain: `packages/worker-runtime/src/config/worker.ts:13`, `apps/worker-cli/src/aiworker.ts:1106`, `apps/worker-cli/src/aiworker.ts:1421`, `apps/worker-cli/src/aiworker.ts:1470`, `packages/worker-daemon/src/modes/worker.ts:734`.
 - Runtime proof: `bun run dev:status` printed listener check for port `9217`.
@@ -151,7 +152,7 @@ bun run dev:host:status
 - Scope: `root-dev`, `worker-runtime`, `worker-daemon-package`.
 - Purpose: optional local bearer token for Worker API; warning when absent and host is exposed beyond loopback.
 - Root example: `.env.example:39`.
-- Package subset: `packages/worker-daemon/.env.example:11`.
+- Package subset: `packages/worker-daemon/.env.example:12`.
 - Load chain: Worker daemon entries start via `package.json:28` or CLI daemon paths and parse `process.env`.
 - Read chain: `packages/worker-runtime/src/config/worker.ts:18`, `packages/worker-daemon/src/modes/worker.ts:159`, `apps/worker-cli/src/aiworker.ts:1423`, `packages/worker-daemon/src/modes/worker.ts:758`.
 - Runtime effect: creates local bearer auth provider and exposure warning.
@@ -162,7 +163,7 @@ bun run dev:host:status
 - Scope: `root-dev`, `worker-runtime`, `worker-daemon-package`.
 - Purpose: single-home Worker SQLite DB override.
 - Root example: `.env.example:43`.
-- Package subset: `packages/worker-daemon/.env.example:13`.
+- Package subset: `packages/worker-daemon/.env.example:14`.
 - Load chain: Worker daemon/CLI starts inherit `process.env`; CLI also writes derived value into child daemon env.
 - Read chain: `packages/worker-runtime/src/config/worker.ts:15`, `packages/worker-daemon/src/modes/worker.ts:129`, `apps/worker-cli/src/aiworker.ts:405`, `apps/worker-cli/src/aiworker.ts:1095`.
 - Runtime effect: controls Worker DB path for direct/single-home daemon.
@@ -173,7 +174,7 @@ bun run dev:host:status
 - Scope: `root-dev`, `worker-runtime`, `worker-daemon-package`.
 - Purpose: optional SQLite migrations folder override.
 - Root example: `.env.example:47`.
-- Package subset: `packages/worker-daemon/.env.example:14`.
+- Package subset: `packages/worker-daemon/.env.example:15`.
 - Load chain: Worker daemon/CLI starts inherit `process.env`; CLI sets a derived default when absent.
 - Read chain: `packages/worker-runtime/src/config/worker.ts:16`, `packages/worker-daemon/src/modes/worker.ts:133`, `apps/worker-cli/src/aiworker.ts:412`, `apps/worker-cli/src/aiworker.ts:444`.
 - Runtime effect: controls migration source path before Worker DB bootstrap.
@@ -184,28 +185,17 @@ bun run dev:host:status
 - Scope: `root-dev`, `worker-runtime`, `worker-daemon-package`.
 - Purpose: optional Worker workspace root override.
 - Root example: `.env.example:51`.
-- Package subset: `packages/worker-daemon/.env.example:15`.
+- Package subset: `packages/worker-daemon/.env.example:16`.
 - Load chain: Worker daemon parses `process.env` through `getWorkerEnv`.
 - Read chain: `packages/worker-runtime/src/config/worker.ts:17`.
 - Runtime effect: affects workspace root when runtime code requests `workerEnv.WORKER_WORKSPACE_ROOT`.
 - Limitation: current daemon bootstrap also derives `workersRoot` from DB path at `packages/worker-daemon/src/modes/worker.ts:136`; this variable is valid schema but has narrower current runtime reach than DB/migrations.
 
-### AIWORKER_BUN_BIN
-
-- Scope: `cli-shim`.
-- Purpose: custom Bun executable override for packaged npm/bunx CLI shim.
-- Root example: `.env.example:59`.
-- Package subset: no.
-- Load chain: this is not loaded by source `bun run dev:*`; it is read by the external shell environment of the packaged shim.
-- Read chain: `apps/worker-cli/scripts/aiworker-bin-shim.sh:28`, user-facing fallback text at `apps/worker-cli/scripts/aiworker-bin-shim.sh:58`.
-- Runtime effect: shell shim executes that Bun binary before checking PATH.
-- Limitation: project root `.env` is not automatically read by this POSIX shell shim; this entry is documentation for CLI packaging/developer testing, not source dev startup.
-
 ### AIWORKER_DEV_FLEET_PURGE
 
 - Scope: `root-dev`, `fleet-dev`.
 - Purpose: opt-in destructive purge for `dev:fleet:clean`.
-- Root example: `.env.example:66`.
+- Root example: `.env.example:58`.
 - Package subset: no.
 - Load chain: fleet scripts start through `package.json:33` and `package.json:34`; clean itself is not prechecked but Bun still starts `scripts/dev-fleet-web.ts`.
 - Read chain: `scripts/dev-fleet-web.ts:270`, `scripts/dev-fleet-web.ts:656`, `scripts/dev-fleet-web.ts:666`.
@@ -216,7 +206,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-dev`.
 - Purpose: Host API dev port.
-- Root example: `.env.example:73`.
+- Root example: `.env.example:65`.
 - Package subset: no.
 - Load chain: `package.json:23` starts Host dev through Bun; `scripts/dev-host.sh:7` reads/defaults it.
 - Read chain: `scripts/dev-host.sh:46`, `scripts/dev-host.sh:110`, `scripts/dev-host.sh:137`, `apps/host-cli/src/host-lifecycle.ts:126`.
@@ -227,7 +217,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-dev`.
 - Purpose: Host Web dev Vite port.
-- Root example: `.env.example:74`.
+- Root example: `.env.example:66`.
 - Package subset: no.
 - Load chain: `scripts/dev-host.sh:8` or Host lifecycle env at `apps/host-cli/src/host-lifecycle.ts:132`.
 - Read chain: `scripts/dev-host.sh:46`, `scripts/dev-host.sh:80`, `scripts/dev-host.sh:111`, `scripts/dev-host.sh:125`, `scripts/dev-host.sh:134`, `scripts/dev-host.sh:138`.
@@ -238,7 +228,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-dev`, `host-cli`.
 - Purpose: public Host API base URL and Host Web proxy target.
-- Root example: `.env.example:77`.
+- Root example: `.env.example:69`.
 - Package subset: no.
 - Load chain: `scripts/dev-host.sh:9`; Host lifecycle propagates it in `apps/host-cli/src/host-lifecycle.ts:125`.
 - Read chain: `scripts/dev-host.sh:65`, `scripts/dev-host.sh:109`, `scripts/dev-host.sh:125`, `scripts/dev-host.sh:133`, `apps/host-cli/src/aiworker-host.ts:133`, `apps/host-web/vite.config.ts:9`, `apps/host-web/src/host-api.ts:142`.
@@ -249,7 +239,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-dev`.
 - Purpose: Host local SQLite DB path.
-- Root example: `.env.example:80`.
+- Root example: `.env.example:72`.
 - Package subset: no.
 - Load chain: `scripts/dev-host.sh:10`.
 - Read chain: `scripts/dev-host.sh:105`, `scripts/dev-host.sh:135`, `scripts/dev-host.sh:145`, `scripts/dev-host.sh:155`, `apps/host-cli/src/host-lifecycle.ts:127`.
@@ -260,7 +250,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-dev`, `host-cli`.
 - Purpose: Host lifecycle manifest path.
-- Root example: `.env.example:81`.
+- Root example: `.env.example:73`.
 - Package subset: no.
 - Load chain: `scripts/dev-host.sh:11` and Host CLI status/start paths.
 - Read chain: `scripts/dev-host.sh:108`, `scripts/dev-host.sh:129`, `scripts/dev-host.sh:142`, `apps/host-cli/src/host-lifecycle.ts:129`, `apps/host-cli/src/host-lifecycle.ts:462`.
@@ -271,7 +261,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-dev`.
 - Purpose: Host dev log directory used to derive daemon log default.
-- Root example: `.env.example:82`.
+- Root example: `.env.example:74`.
 - Package subset: no.
 - Load chain: `scripts/dev-host.sh:12`.
 - Read chain: `scripts/dev-host.sh:13` derives `AIWORKER_HOST_DAEMON_LOG`.
@@ -282,7 +272,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-dev`.
 - Purpose: Host daemon log path.
-- Root example: `.env.example:83`.
+- Root example: `.env.example:75`.
 - Package subset: no.
 - Load chain: `scripts/dev-host.sh:13`.
 - Read chain: `scripts/dev-host.sh:100`, `scripts/dev-host.sh:112`, `scripts/dev-host.sh:115`, `scripts/dev-host.sh:137`, `scripts/dev-host.sh:168`.
@@ -293,7 +283,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-dev`.
 - Purpose: Host Web tmux session name.
-- Root example: `.env.example:84`.
+- Root example: `.env.example:76`.
 - Package subset: no.
 - Load chain: `scripts/dev-host.sh:15`.
 - Read chain: `scripts/dev-host.sh:55`, `scripts/dev-host.sh:120`, `scripts/dev-host.sh:123`, `scripts/dev-host.sh:138`, `scripts/dev-host.sh:169`.
@@ -304,7 +294,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-dev`, `host-cli`.
 - Purpose: development-only static Host admin email when Logto/session auth is not active.
-- Root example: `.env.example:87`.
+- Root example: `.env.example:79`.
 - Package subset: no.
 - Load chain: `scripts/dev-host.sh:14`; Host lifecycle defaults from env at `apps/host-cli/src/host-lifecycle.ts:128`.
 - Read chain: `scripts/dev-host.sh:106`, `scripts/dev-host.sh:156`, `apps/host-cli/src/host-lifecycle.ts:128`.
@@ -315,7 +305,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-cli`.
 - Purpose: browser-facing Host base URL for auth redirects.
-- Root example: `.env.example:90`.
+- Root example: `.env.example:82`.
 - Package subset: no.
 - Load chain: Host CLI starts through `package.json:23` or `package.json:24` and reads `process.env`.
 - Read chain: `apps/host-cli/src/aiworker-host.ts:131`, propagated in `apps/host-cli/src/host-lifecycle.ts:130`.
@@ -326,7 +316,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-cli`.
 - Purpose: Worker control/check-in URL override for Host.
-- Root example: `.env.example:91`.
+- Root example: `.env.example:83`.
 - Package subset: no.
 - Load chain: Host CLI reads `process.env`.
 - Read chain: `apps/host-cli/src/aiworker-host.ts:132`, propagated in `apps/host-cli/src/host-lifecycle.ts:131`.
@@ -337,7 +327,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-cli`.
 - Purpose: production Host Web static asset directory override.
-- Root example: `.env.example:94`.
+- Root example: `.env.example:86`.
 - Package subset: no.
 - Load chain: Host prod/static serve path reads `process.env`.
 - Read chain: `apps/host-cli/src/host-lifecycle.ts:576`.
@@ -348,7 +338,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-cli`.
 - Purpose: Host session secret for Logto-backed session auth.
-- Root example: `.env.example:103`.
+- Root example: `.env.example:95`.
 - Package subset: no.
 - Load chain: Host CLI reads `process.env` when any Logto session env is set.
 - Read chain: required key list at `apps/host-cli/src/aiworker-host.ts:49`, validation at `apps/host-cli/src/aiworker-host.ts:67`, propagation at `apps/host-cli/src/host-lifecycle.ts:520`.
@@ -359,7 +349,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-cli`.
 - Purpose: allowed email domains for Host Logto session auth.
-- Root example: `.env.example:104`.
+- Root example: `.env.example:96`.
 - Package subset: no.
 - Load chain: same Logto session auth path as `AIWORKER_HOST_SESSION_SECRET`.
 - Read chain: `apps/host-cli/src/aiworker-host.ts:51`, parsing at `apps/host-cli/src/aiworker-host.ts:68`, propagation at `apps/host-cli/src/host-lifecycle.ts:518`.
@@ -370,7 +360,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-cli`.
 - Purpose: Logto OIDC client id for Host session auth.
-- Root example: `.env.example:105`.
+- Root example: `.env.example:97`.
 - Package subset: no.
 - Load chain: Host CLI reads `process.env` when Logto session auth is active.
 - Read chain: `apps/host-cli/src/aiworker-host.ts:52`, `apps/host-cli/src/aiworker-host.ts:69`, `apps/host-cli/src/host-lifecycle.ts:521`.
@@ -381,7 +371,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-cli`.
 - Purpose: Logto OIDC client secret for Host session auth.
-- Root example: `.env.example:106`.
+- Root example: `.env.example:98`.
 - Package subset: no.
 - Load chain: Host CLI reads `process.env` when Logto session auth is active.
 - Read chain: `apps/host-cli/src/aiworker-host.ts:53`, `apps/host-cli/src/aiworker-host.ts:70`, `apps/host-cli/src/host-lifecycle.ts:522`.
@@ -392,7 +382,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-cli`.
 - Purpose: Logto endpoint for Host session auth.
-- Root example: `.env.example:107`.
+- Root example: `.env.example:99`.
 - Package subset: no.
 - Load chain: Host CLI reads `process.env` when Logto session auth is active.
 - Read chain: `apps/host-cli/src/aiworker-host.ts:54`, `apps/host-cli/src/aiworker-host.ts:71`, `apps/host-cli/src/host-lifecycle.ts:523`.
@@ -403,7 +393,7 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-cli`.
 - Purpose: Logto issuer for Host session auth.
-- Root example: `.env.example:108`.
+- Root example: `.env.example:100`.
 - Package subset: no.
 - Load chain: Host CLI reads `process.env` when Logto session auth is active.
 - Read chain: `apps/host-cli/src/aiworker-host.ts:55`, `apps/host-cli/src/aiworker-host.ts:72`, `apps/host-cli/src/host-lifecycle.ts:524`.
@@ -414,99 +404,81 @@ bun run dev:host:status
 
 - Scope: `root-dev`, `host-cli`.
 - Purpose: optional comma-separated bootstrap admin emails for Host session auth.
-- Root example: `.env.example:111`.
+- Root example: `.env.example:103`.
 - Package subset: no.
 - Load chain: Host CLI reads this during Logto session auth build.
 - Read chain: `apps/host-cli/src/aiworker-host.ts:74`, propagation at `apps/host-cli/src/host-lifecycle.ts:519`.
 - Runtime effect: seeds bootstrap admins into session auth options.
 - Limitation: currently only used when session auth exists; static dev admin uses `AIWORKER_HOST_DEV_ADMIN_EMAIL`.
 
-### AIWORKER_HOST_URL
+## Worker-Owned Process Variables, Not Root Dev
 
-- Scope: `root-dev`, `provisioning`, `worker-daemon-package`.
+These variables still exist and are still valid, but they belong to the Worker
+process environment. They are intentionally absent from root `.env.example` so
+they do not look like repo-level project config.
+
+#### AIWORKER_HOST_URL
+
+- Scope: `provisioning`, `worker-daemon-package`.
 - Purpose: Host URL for provisioned Worker check-in and Worker Access tunnel.
-- Root example: `.env.example:118`.
-- Package subset: `packages/worker-daemon/.env.example:18`.
-- Load chain: provision command can set it with `buildProvisionEnv`; direct provisioned daemon can inherit it from env.
+- Package example: `packages/worker-daemon/.env.example`.
 - Read chain: `apps/worker-cli/src/aiworker.ts:230`, `apps/worker-cli/src/aiworker.ts:1463`, `packages/worker-daemon/src/modes/worker.ts:715`, `packages/worker-daemon/src/modes/worker/provision-client.ts:102`, `packages/worker-daemon/src/modes/worker/provision-client.ts:117`.
-- Runtime effect: Worker check-in and Worker Access websocket target.
 - Limitation: ignored unless the active Worker resolution is single and provisioning data is present.
 
-### AIWORKER_PROVISION_TOKEN
+#### AIWORKER_PROVISION_TOKEN
 
-- Scope: `root-dev`, `provisioning`, `worker-daemon-package`.
+- Scope: `provisioning`, `worker-daemon-package`.
 - Purpose: provisioning token paired with `AIWORKER_HOST_URL`.
-- Root example: `.env.example:119`.
-- Package subset: `packages/worker-daemon/.env.example:19`.
-- Load chain: provision command or inherited provisioned daemon env.
+- Package example: `packages/worker-daemon/.env.example`.
 - Read chain: `apps/worker-cli/src/aiworker.ts:231`, `apps/worker-cli/src/aiworker.ts:1463`, `packages/worker-daemon/src/modes/worker/provision-client.ts:103`.
-- Runtime effect: authenticates Worker check-in to Host.
 - Limitation: no check-in occurs unless both host and token are set.
 
-### AIWORKER_CODEX_DISABLE_PLUGINS
+#### AIWORKER_CODEX_DISABLE_PLUGINS
 
-- Scope: `root-dev`, `engine-invocation`, `worker-daemon-package`.
+- Scope: `engine-invocation`, `worker-daemon-package`.
 - Purpose: add `--disable plugins` to Codex native engine invocation.
-- Root example: `.env.example:126`.
-- Package subset: `packages/worker-daemon/.env.example:22`.
-- Load chain: Worker daemon process inherits root `.env`; engine executor reads `process.env` during invocation.
+- Package example: `packages/worker-daemon/.env.example`.
 - Read chain: `packages/worker-runtime/src/worker/executor.ts:118`.
-- Runtime effect: when set to `1`, disables Codex plugins for the spawned engine process.
 - Limitation: not read at daemon boot; only when an engine invocation is built.
 
-### AIWORKER_CODEX_IGNORE_USER_CONFIG
+#### AIWORKER_CODEX_IGNORE_USER_CONFIG
 
-- Scope: `root-dev`, `engine-invocation`, `worker-daemon-package`.
+- Scope: `engine-invocation`, `worker-daemon-package`.
 - Purpose: add `--ignore-user-config` to Codex native engine invocation.
-- Root example: `.env.example:127`.
-- Package subset: `packages/worker-daemon/.env.example:23`.
-- Load chain: Worker daemon process inherits root `.env`; executor reads `process.env` during invocation.
+- Package example: `packages/worker-daemon/.env.example`.
 - Read chain: `packages/worker-runtime/src/worker/executor.ts:120`.
-- Runtime effect: when set to `1`, Codex is launched without user config.
-- Limitation: not a daemon startup setting; it affects only command construction for Codex invocations.
+- Limitation: not read at daemon boot; only when an engine invocation is built.
 
-### AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS
+#### AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS
 
-- Scope: `root-dev`, `engine-invocation`, `worker-daemon-package`.
+- Scope: `engine-invocation`, `worker-daemon-package`.
 - Purpose: default timeout for local CLI engine execution.
-- Root example: `.env.example:130`.
-- Package subset: `packages/worker-daemon/.env.example:24`.
-- Load chain: Worker runtime executor reads inherited `process.env` when no explicit timeout is configured.
+- Package example: `packages/worker-daemon/.env.example`.
 - Read chain: `packages/worker-runtime/src/worker/executor.ts:304`, `packages/worker-runtime/src/worker/executor.ts:308`.
-- Runtime effect: controls local CLI engine timeout.
 - Limitation: explicit invocation timeout takes precedence.
 
-### OD_CODEX_DISABLE_PLUGINS
+#### OD_CODEX_DISABLE_PLUGINS
 
-- Scope: `root-dev`, `engine-invocation`, `worker-daemon-package`.
+- Scope: `engine-invocation`, `worker-daemon-package`.
 - Purpose: legacy/compat flag that also disables Codex plugins.
-- Root example: `.env.example:133`.
-- Package subset: `packages/worker-daemon/.env.example:25`.
-- Load chain: Worker runtime executor reads inherited `process.env`.
+- Package example: `packages/worker-daemon/.env.example`.
 - Read chain: `packages/worker-runtime/src/worker/executor.ts:118`.
-- Runtime effect: same effect as `AIWORKER_CODEX_DISABLE_PLUGINS=1`.
 - Limitation: kept for compatibility; prefer `AIWORKER_CODEX_DISABLE_PLUGINS`.
 
-### OPENAI_API_KEY
+#### OPENAI_API_KEY
 
-- Scope: `root-dev`, `byok`, `worker-daemon-package`.
+- Scope: `byok`, `worker-daemon-package`.
 - Purpose: BYOK secret target for settings references such as `env:OPENAI_API_KEY`.
-- Root example: `.env.example:137`.
-- Package subset: `packages/worker-daemon/.env.example:26`.
-- Load chain: Worker runtime inherits env; settings store references only the env name; executor resolves it during BYOK invocation.
+- Package example: `packages/worker-daemon/.env.example`.
 - Read chain: example placeholder in `packages/worker-runtime/src/worker/executor.ts:486`, actual lookup at `packages/worker-runtime/src/worker/executor.ts:490`, UI placeholder at `apps/worker-web/src/features/settings/components/settings-dialog.tsx:437`.
-- Runtime effect: provides the actual secret when BYOK config references it.
 - Limitation: not read unless the selected engine/settings reference this env name.
 
-### ANTHROPIC_API_KEY
+#### ANTHROPIC_API_KEY
 
-- Scope: `root-dev`, `byok`, `worker-daemon-package`.
-- Purpose: BYOK secret target for Anthropic-compatible settings references.
-- Root example: `.env.example:138`.
-- Package subset: `packages/worker-daemon/.env.example:27`.
-- Load chain: Worker runtime inherits env; executor can resolve arbitrary `env:NAME` refs through the same BYOK lookup.
+- Scope: `byok`, `worker-daemon-package`.
+- Purpose: BYOK secret target for settings references such as `env:ANTHROPIC_API_KEY`.
+- Package example: `packages/worker-daemon/.env.example`.
 - Read chain: generic lookup at `packages/worker-runtime/src/worker/executor.ts:483`, `packages/worker-runtime/src/worker/executor.ts:490`; propagation behavior is tested in `packages/worker-runtime/src/worker/engine-env.test.ts`.
-- Runtime effect: provides the actual secret when BYOK config references `env:ANTHROPIC_API_KEY`.
 - Limitation: not read by name in production code; included because BYOK supports arbitrary `env:NAME` references and tests cover this provider key.
 
 ## Excluded Classes
@@ -515,6 +487,8 @@ The following classes are intentionally not in root `.env.example` unless a real
 project-dev startup path is added:
 
 - External local reverse-proxy values such as `CADDY_BASIC_AUTH_*`.
+- CLI shim process values such as `AIWORKER_BUN_BIN`; the npm/bunx shell shim
+  reads the caller's shell environment, not root `.env`.
 - Logto M2M app setup text parser keys such as `LOGTO_M2M_APP_ID`,
   `LOGTO_M2M_APP_SECRET`, `LOGTO_TENANT_ID`,
   `LOGTO_MANAGEMENT_ENDPOINT`, and `LOGTO_MANAGEMENT_API_INDICATOR`.
@@ -524,4 +498,3 @@ project-dev startup path is added:
   `AIWORKER_MODE`, `AIWORKER_MASTER_KEY`, `INTERNAL_SHARED_SECRET`,
   `CLOUD_GATEWAY_*`, `OPENAI_BASE_URL`, `OPENAI_MODEL`,
   `OPENAI_TIMEOUT_MS`, `MAX_CONCURRENT_TOTAL`, and `PROCESS_*`.
-
