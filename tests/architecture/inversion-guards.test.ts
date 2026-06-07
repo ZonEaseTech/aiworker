@@ -177,10 +177,62 @@ test('G3: worker-* packages and souls never depend on host-* packages', () => {
 })
 
 // G4 ↔ C3：host-control 仅控制面——deps 不含 engine/worker 运行时包；且所有 host-* 控制面源
-// （host-control + 壳 host-cli/host-web）剥注释后不出现 session/invocation/projection/engine/
-// domain/secret 归属。子串匹配（非 \b）以抓 camelCase（createSession/EngineInvocation/startEngine），
-// 全文件递归（非仅 index.ts），含 domain（C3 领域归属）。
-test('G4: host-control deps + all host-* source carry no session/invocation/projection/engine/domain/secret ownership', () => {
+// （host-control + 壳 host-cli/host-web）剥注释后不携带 **Worker 的** session/invocation/
+// projection/engine/native-secret/domain-业务态归属。Host **自身**的 Logto 登录 session /
+// OIDC 凭证 / email 域门是 Phase 2.1 钦定的合法职责，按下方显式可审计 allowlist 排除——这缩小
+// 误报、不削弱守卫。权威设计：docs/superpowers/specs/2026-06-07-g4-host-auth-reconciliation-design.md。
+//
+// 严扫类（invocation/projection/engine）：无歧义的 Worker-runtime 归属，Host 无合法用法，保持
+// 裸子串 includes 严扫（改前全量扫描 host-* 源对这三个零命中）。
+const STRICT_OWNERSHIP_TOKENS = ['invocation', 'projection', 'engine'] as const
+// 歧义类（session/secret/domain）：Host-auth 与 Worker-归属共用词根。改为 word-token 精确
+// allowlist——把源切成 [\w$]+ 词元，只放行*精确等于*某 Host-auth 词元的项。子串删除法对裸
+// `session`（session.email / "Host session" 字面量 / './host-session-cookie' import）无解：删裸
+// 'session' 会连 `workerChatSession` 一起消掉=开后门；word-token 下 `workerchatsession` 是单独
+// 词元 ≠ `session`，仍被抓（见 G4 negative 测试）。一个*恰好*命名为 session/secret/domain 的
+// Worker-owned 变量本身只是名字，真要操纵 Worker 运行时须 import worker-*，那条由 G2/G3/G5 依赖
+// 守卫兜底——本源扫描与依赖守卫互补。
+const AMBIGUOUS_OWNERSHIP_TOKENS = ['session', 'secret', 'domain'] as const
+// 显式 Host-auth allowlist（全小写 word-token；新增 auth 标识符*必须*显式加入=强制一次 review，
+// 这正是 spec 的防后门目标）。标准：仅放行 Host *自身* 的 Logto 登录 session / OIDC 凭证 /
+// email 域门 / provision-secret 脱敏。来源=对 host-* 源全量枚举（见 spec）。
+const HOST_AUTH_ALLOWLIST = new Set<string>([
+  // —— 登录 session（Host 管理员的 Logto 登录态：cookie / payload / env / 校验）——
+  'session', 'hostsession', 'hostsessionpayload', 'ishostsessionpayload',
+  'sessionauth', 'hostsessionauthoptions', 'hostlifecyclesessionauthoptions', 'hostsessionauthenv',
+  'sessionsecret', 'asserthostsessionsecret', 'aiworker_host_session_secret',
+  'sessioncookieattributes', 'readuserfromsessioncookie', 'aiworker_session',
+  'logtosessionrequiredenvkeys', 'buildsessionauthfromenv', 'hasanysessionenv',
+  // —— OIDC 凭证（Logto client / application / m2m secret）——
+  'secret', 'secrets', 'clientsecret', 'client_secret', 'logto_client_secret',
+  'm2mappsecret', 'logto_m2m_app_secret', 'deprecatedsecret',
+  'readapplicationsecret', 'missing_application_secret', 'invalid_secret_response',
+  // —— email 域门（允许登录的企业邮箱域）——
+  'domain', 'emaildomain', 'alloweddomains', 'allowedemaildomains',
+  'emailbelongstoalloweddomain', 'aiworker_host_allowed_email_domains',
+  // —— provision-secret 脱敏（把 provisionToken 从 receipt/command 中*清除*的防泄漏函数，
+  //    携带零 Worker secret；见 provisioning-target-adapters.ts:93 scrubProvisionSecret）——
+  'scrubprovisionsecret',
+])
+
+// 返回命中的 forbidden token 列表（空=干净）。rawCode 期望已 stripComments（未小写也可，内部小写）。
+function scanHostOwnership(rawCode: string): string[] {
+  const code = rawCode.toLowerCase()
+  const hits: string[] = []
+  // 严扫类：裸子串（最大严格度，不经 allowlist）。
+  for (const token of STRICT_OWNERSHIP_TOKENS)
+    if (code.includes(token))
+      hits.push(token)
+  // 歧义类：word-token 精确 allowlist——任一*含*该 token 且*不在* allowlist 的词元=违规。
+  const words = code.match(/[\w$]+/g) ?? []
+  for (const token of AMBIGUOUS_OWNERSHIP_TOKENS) {
+    if (words.some(word => word.includes(token) && !HOST_AUTH_ALLOWLIST.has(word)))
+      hits.push(token)
+  }
+  return hits
+}
+
+test('G4: host-control deps + all host-* source carry no Worker session/invocation/projection/engine/domain/secret ownership', () => {
   const deps = zonaseDependencyNames('packages/host-control')
   for (const forbiddenDep of [
     '@zonease/aiworker-engine-bridge',
@@ -190,15 +242,29 @@ test('G4: host-control deps + all host-* source carry no session/invocation/proj
   ])
     expect(deps, `host-control must not depend on ${forbiddenDep}`).not.toContain(forbiddenDep)
 
-  const forbiddenTokens = ['session', 'invocation', 'projection', 'engine', 'domain', 'secret']
   const ownershipDirs = ['packages/host-control/src', 'apps/host-cli/src', 'apps/host-web/src']
   for (const dir of ownershipDirs) {
     for (const file of sourceFilesUnder(dir)) {
-      const code = stripComments(read(file)).toLowerCase()
-      for (const token of forbiddenTokens)
-        expect(code.includes(token), `${file} must not carry '${token}' ownership (host-* control plane)`).toBe(false)
+      const hits = scanHostOwnership(stripComments(read(file)))
+      expect(hits, `${file} must not carry Worker ownership (host-* control plane): ${hits.join(', ')}`).toEqual([])
     }
   }
+})
+
+// 负向断言（A1）：证明 Host-auth allowlist 排除*没有*削弱守卫、没开后门。每条都是只含一个
+// 歧义 token 的伪造 Worker-归属标识符（单 word-token，多数不带伴随 strict token）——最能验证
+// word-token allowlist 不因复合词漏放（`workerChatSession` 是单独词元 ≠ allowlisted 的裸 `session`）。
+test('G4 negative: Worker-ownership identifiers stay caught despite the Host-auth allowlist', () => {
+  // spec 钦定的两个基线
+  expect(scanHostOwnership('const workerChatSession = 1')).toContain('session')
+  expect(scanHostOwnership('const engineSecret = 2')).toEqual(expect.arrayContaining(['engine', 'secret']))
+  // 纯歧义单 token（不带 strict token、不是 allowlisted 裸词）——证明复合词不漏
+  expect(scanHostOwnership('createWorkerSession()')).toContain('session')
+  expect(scanHostOwnership('const workerSessionStore = {}')).toContain('session')
+  expect(scanHostOwnership('type WorkerDomainState = unknown')).toContain('domain')
+  expect(scanHostOwnership('function readWorkerInvocationSecret() {}')).toEqual(expect.arrayContaining(['invocation', 'secret']))
+  // 反向：纯 Host-auth 词元集合必须干净（不误报）
+  expect(scanHostOwnership('const session = readUserFromSessionCookie(); const clientSecret = x; const allowedEmailDomains = []')).toEqual([])
 })
 
 // G5 ↔ C5：唯一 Host→Worker 契约是 worker-control-protocol——host-* 包除该契约外
