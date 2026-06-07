@@ -4,6 +4,8 @@ import { join } from 'node:path'
 
 import { chromium } from 'playwright'
 
+import { devAdminHostEnv } from './host-serve-env'
+
 const repoRoot = join(import.meta.dir, '..', '..')
 const runId = new Date().toISOString().replace(/[:.]/g, '-')
 const evidenceRoot = join(repoRoot, 'tmp', `host-dev-loop-${runId}`)
@@ -192,6 +194,9 @@ function startHostDevLifecycle(input: HostDevLifecycleInput): unknown {
   const result = Bun.spawnSync({
     cmd: displayHostDevLifecycleCommand(input),
     cwd: repoRoot,
+    // dev-admin 模式（清空 Logto session env，见 ./host-serve-env）；空 Logto keys 沿
+    // start → dev-host.sh → daemon 全链传递，否则 daemon /host 走真 Logto 登录 → healthcheck 超时。
+    env: devAdminHostEnv(),
     stderr: 'pipe',
     stdout: 'pipe',
   })

@@ -4,6 +4,8 @@ import { join } from 'node:path'
 
 import { chromium } from 'playwright'
 
+import { devAdminHostEnv } from './host-serve-env'
+
 const repoRoot = join(import.meta.dir, '..', '..')
 const evidenceRoot = join(repoRoot, 'tmp', `host-single-serve-${new Date().toISOString().replace(/[:.]/g, '-')}`)
 const adminEmail = 'admin@zonease.org'
@@ -124,7 +126,9 @@ function startHostServe(input: HostServeInput) {
       input.webStaticDir,
     ],
     cwd: repoRoot,
-    env: process.env,
+    // dev-admin 模式（清空 Logto session env，见 ./host-serve-env），否则根 .env 的 Logto keys
+    // 会让 /host 走真 Logto 登录 → 400。产品登录门不变，仅本 dev-serve 证明不配置 Logto。
+    env: devAdminHostEnv(),
     stderr: 'pipe',
     stdout: 'pipe',
   })
