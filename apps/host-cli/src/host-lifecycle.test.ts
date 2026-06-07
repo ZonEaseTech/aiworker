@@ -15,6 +15,10 @@ describe('Host lifecycle', () => {
     const manifestPath = join(dir, 'dev-host.json')
     mkdirSync(webStaticDir, { recursive: true })
     writeFileSync(join(webStaticDir, 'index.html'), '<!doctype html><div id="root">host lifecycle shell</div>')
+    // 清空 ambient 根 .env 的 Logto session env,否则 spawn 的 daemon 走真 Logto 登录、/host
+    // 重定向到 auth.zonease.org → 不返静态壳(无 sessionAuth 用例期望 dev-admin 直渲)。
+    const previousEnv = captureLogtoSessionEnv()
+    clearLogtoSessionEnv()
 
     const lifecycle = createHostLifecycle()
     try {
@@ -55,6 +59,7 @@ describe('Host lifecycle', () => {
       expect(logs).toContain(`"manifestPath": "${manifestPath}"`)
     }
     finally {
+      restoreLogtoSessionEnv(previousEnv)
       await lifecycle.clean({ manifestPath })
       rmSync(dir, { force: true, recursive: true })
     }
@@ -437,15 +442,20 @@ function captureLogtoSessionEnv(): Partial<Record<typeof logtoSessionEnvKeys[num
 }
 
 function clearLogtoSessionEnv(): void {
+  // 置空串(非 delete):被 spawn 的 Host daemon 子进程会重新自动加载根 .env，唯有显式空串能
+  // 覆盖之、强制 dev-admin(delete 会被子进程的 .env 重载抵消)。显式注入 sessionAuth 的用例
+  // 经 hostSessionAuthEnv 覆盖,不受影响;空串经 readNonEmptyEnvValue 视作未配置。
   for (const key of logtoSessionEnvKeys)
-    delete process.env[key]
+    process.env[key] = ''
 }
 
 function restoreLogtoSessionEnv(values: Partial<Record<typeof logtoSessionEnvKeys[number], string>>): void {
-  clearLogtoSessionEnv()
   for (const key of logtoSessionEnvKeys) {
-    if (values[key] !== undefined)
-      process.env[key] = values[key]
+    const value = values[key]
+    if (value === undefined)
+      delete process.env[key]
+    else
+      process.env[key] = value
   }
 }
 

@@ -662,6 +662,9 @@ describe('aiworker-host control CLI', () => {
         String(port),
       ],
       cwd: join(import.meta.dir, '..', '..', '..'),
+      // 清空 ambient 根 .env 的 Logto session env(显式空串覆盖子进程的 .env 自动加载),
+      // 否则 --dev-admin-email 被 sessionAuth 抢占、/host 走真 Logto 登录 → 不返 dev landing。
+      env: { ...process.env, ...Object.fromEntries(hostSessionEnvKeys.map(key => [key, ''])) },
       stderr: 'pipe',
       stdout: 'pipe',
     })
