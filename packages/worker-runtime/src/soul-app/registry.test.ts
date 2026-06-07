@@ -152,7 +152,7 @@ describe('Host Soul descriptor registry', () => {
     expect(first.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'installed_enabled'],
     ])
-    expect(first[0]?.descriptorPath).toBe(path.join(repoRoot, definitions[0].descriptorPath))
+    expect(first[0]?.descriptorPath).toBe(path.join(repoRoot, definitions[0]!.descriptorPath))
     expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('available')
     expect(findCatalogSoul('hr')).toBeUndefined()
 
@@ -165,7 +165,7 @@ describe('Host Soul descriptor registry', () => {
     expect(second.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'refreshed'],
     ])
-    expect(second[0]?.descriptorPath).toBe(path.join(repoRoot, definitions[0].descriptorPath))
+    expect(second[0]?.descriptorPath).toBe(path.join(repoRoot, definitions[0]!.descriptorPath))
 
     archiveSoulApp(FREEFORM_APP_ID, { now: () => '2026-05-13T12:27:00.000Z' })
     const third = await bootstrapOfficialSoulApps({
@@ -177,7 +177,7 @@ describe('Host Soul descriptor registry', () => {
     expect(third.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'preserved_disabled'],
     ])
-    expect(third[0]?.descriptorPath).toBe(path.join(repoRoot, definitions[0].descriptorPath))
+    expect(third[0]?.descriptorPath).toBe(path.join(repoRoot, definitions[0]!.descriptorPath))
     expect(findCatalogSoul(FREEFORM_APP_ID)?.status).toBe('coming_soon')
   })
 
