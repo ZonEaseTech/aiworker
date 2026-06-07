@@ -526,7 +526,13 @@ function cliInstallationDiagnostics(): {
 } {
   const officialApps = inspectCliOfficialAppsResource()
   const workerWebStaticDir = resolveCliWorkerWebStaticDir() ?? null
-  const migrationsFolder = getWorkerEnv().WORKER_MIGRATIONS_FOLDER || null
+  // 诊断须镜像*实际跑迁移*的 ensureDbAt（resolveCliMigrationsFolder() ?? env），并与
+  // officialApps / workerWeb 对称——CLI resolver（经 cliExecutableDirs 找 packaged drizzle/worker
+  // sidecar）优先，env 仅作 source-checkout 回落。不能信 getWorkerEnv().WORKER_MIGRATIONS_FOLDER
+  // 的默认值：在 compile 二进制里 defaultWorkerMigrationsFolder 解析成不存在的 `/drizzle/worker`
+  // （storage-sqlite resolveMigrationsFolder 的 bunfs 浅路径 fallback），doctor 据此误报
+  // migrationsReady:false——而迁移其实从 sidecar 正常跑（见 ensureDbAt）。
+  const migrationsFolder = resolveCliMigrationsFolder() ?? (getWorkerEnv().WORKER_MIGRATIONS_FOLDER || null)
   return {
     resources: {
       migrationsFolder,
