@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'bun:test'
 import { spawnSync } from 'node:child_process'
+import { describe, expect, it } from 'bun:test'
 
 import { deliverProvisioningTarget } from './provisioning-target-adapters'
 

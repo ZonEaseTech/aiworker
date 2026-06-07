@@ -1,11 +1,12 @@
 import type { AuthenticatedHostUser, AuthProvider, WorkerAccessConnection, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
 import type { WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope } from '@zonease/aiworker-worker-control-protocol'
+import type { Buffer } from 'node:buffer'
 import type { OidcClientConfig, OidcFetch, OidcLoginTransaction } from './host-oidc-client'
 import type { HostOptionsView, ProvisioningAdapterType, ProvisioningTargetMaturity } from './host-options'
 import type { HostSessionPayload } from './host-session-cookie'
-import type { ProvisioningDeliveryResult } from './provisioning-target-adapters'
 
+import type { ProvisioningDeliveryResult } from './provisioning-target-adapters'
 import { existsSync } from 'node:fs'
 import { extname, join, resolve, sep } from 'node:path'
 
@@ -536,7 +537,7 @@ function isOidcLoginTransaction(value: OidcLoginTransaction & { expiresAt: strin
 function safeAuthFailureMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
   return message
-    .replace(/\b(?:access_token|id_token|refresh_token|client_secret|code)\b\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
+    .replace(/\b(?:access_token|id_token|refresh_token|client_secret|code)\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
     .replace(/\b(?:access_token|id_token|refresh_token|client_secret)\b/gi, '[redacted]')
     .replace(/[\w.~+/-]{32,}/g, '[redacted]')
     .trim()

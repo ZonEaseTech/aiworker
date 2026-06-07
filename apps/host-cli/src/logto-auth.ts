@@ -1,11 +1,12 @@
-import type { AuthProvider, AuthenticatedHostUser } from '@zonease/aiworker-host-control'
+import type { AuthenticatedHostUser, AuthProvider } from '@zonease/aiworker-host-control'
+
+import type { OidcFetch } from './host-oidc-client'
 
 import { createRemoteJWKSet, jwtVerify } from 'jose'
-
 import {
   discoverLogtoOidcIssuerConfiguration,
   mapLogtoHostClaims,
-  type OidcFetch,
+
 } from './host-oidc-client'
 
 export interface LogtoClaims {
@@ -66,7 +67,7 @@ export function createLogtoAuthProvider(options: LogtoAuthOptions): AuthProvider
 
   async function resolveJwks(): Promise<ReturnType<typeof createRemoteJWKSet>> {
     jwksPromise ??= discoverLogtoOidcIssuerConfiguration(options.issuer, { fetch: options.fetch })
-      .then(discovery => {
+      .then((discovery) => {
         const remoteJwks = createRemoteJWKSet(new URL(discovery.jwksUri))
         const retryingJwks = (async (
           ...args: Parameters<ReturnType<typeof createRemoteJWKSet>>

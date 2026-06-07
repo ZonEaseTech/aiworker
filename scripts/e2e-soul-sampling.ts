@@ -422,7 +422,7 @@ export function redactSamplingText(text: string): string {
 }
 
 function assertSafeSamplingId(value: string, label: 'caseId' | 'runId'): void {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
+  if (!/^[A-Z0-9][\w.-]*$/i.test(value)) {
     throw new Error(`Unsafe sampling ${label}: ${value}`)
   }
 }

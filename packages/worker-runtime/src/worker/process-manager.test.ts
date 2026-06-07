@@ -1,11 +1,12 @@
+import type { LocalEngineProcessHandle } from './process-manager'
 import { mkdtempSync } from 'node:fs'
 import { chmod, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+
 import path from 'node:path'
 
 import { afterEach, describe, expect, it } from 'bun:test'
-
-import { LocalEngineProcessManager, type LocalEngineProcessHandle } from './process-manager'
+import { LocalEngineProcessManager } from './process-manager'
 
 describe('LocalEngineProcessManager', () => {
   let roots: string[] = []

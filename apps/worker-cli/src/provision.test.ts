@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {

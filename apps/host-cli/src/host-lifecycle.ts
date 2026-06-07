@@ -1,10 +1,11 @@
+import type { Buffer } from 'node:buffer'
+import type { OidcClientConfig, OidcFetch } from './host-oidc-client'
 import { spawn } from 'node:child_process'
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
 
-import type { OidcClientConfig, OidcFetch } from './host-oidc-client'
+import { fileURLToPath } from 'node:url'
 
 import { createHostServer } from './host-server'
 

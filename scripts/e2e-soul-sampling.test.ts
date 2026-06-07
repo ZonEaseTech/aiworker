@@ -1,18 +1,18 @@
-import { describe, expect, it } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { describe, expect, it } from 'bun:test'
 
 import {
-  buildCliPlan,
   buildCliEnv,
+  buildCliPlan,
   buildSamplingManifest,
   classifyFinding,
   OFFICIAL_SAMPLING_SOULS,
   redactSamplingText,
   runSamplingCaseWithCli,
-  SCORE_DIMENSIONS,
   samplingOutputSnippet,
+  SCORE_DIMENSIONS,
   writeCaseEvents,
   writeScorecard,
 } from './e2e-soul-sampling'
@@ -253,7 +253,7 @@ describe('e2e soul sampling static contracts', () => {
         return '{"workspace":{"id":"workspace-1"}}'
       if (args[0] === 'session' && args[1] === 'start')
         return '{"invocation":{"id":"invocation-1","status":"succeeded"},"session":{"id":"session-1"}}'
-      if (args[0] === 'session' && args[1] === 'events')
+      if (args[0] === 'session' && args[1] === 'events') {
         return JSON.stringify({
           events: [
             {
@@ -265,6 +265,7 @@ describe('e2e soul sampling static contracts', () => {
             { type: 'invocation.completed' },
           ],
         })
+      }
       return '{"ok":true}'
     }
 

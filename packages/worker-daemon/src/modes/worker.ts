@@ -4,6 +4,7 @@ import type { SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-stor
 
 import type { LocalExecutor, LocalWorkerRuntime, LocalWorkerRuntimeOptions, WorkerApiAuthProvider, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 import type { Context } from 'hono'
+import type { checkInToHost, WorkerAccessTunnelHandle } from './worker/provision-client'
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -47,21 +48,21 @@ import {
   parseWorkerAssignmentEnvelope,
   parseWorkerLifecycle,
 } from '@zonease/aiworker-worker-control-protocol'
+
 import {
+  applyUserTitle,
   createLocalBearerAuthProvider,
   createWorkerOrchestrator,
   LocalEngineResolutionError,
   resolveLocalCliEngine,
-  applyUserTitle,
   stripSessionTitleSourceMetadata,
   workerEnv,
 } from '@zonease/aiworker-worker-runtime'
 import { streamSSE } from 'hono/streaming'
-
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
 import { registerLocalOpenApiPaths } from './worker/openapi'
-import { checkInToHost, connectWorkerAccessTunnel, maybeProvisionCheckIn, type WorkerAccessTunnelHandle } from './worker/provision-client'
+import { connectWorkerAccessTunnel, maybeProvisionCheckIn } from './worker/provision-client'
 import {
   createBrokerEngineInvocationBodySchema,
   createBrokerSessionBodySchema,

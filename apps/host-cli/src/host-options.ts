@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import process from 'node:process'
 
 export type ProvisioningAdapterType = 'aissh' | 'docker' | 'local'
 export type ProvisioningTargetMaturity = 'production' | 'preview' | 'dev'

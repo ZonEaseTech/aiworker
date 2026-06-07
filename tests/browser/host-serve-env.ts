@@ -1,3 +1,5 @@
+import process from 'node:process'
+
 // Host 浏览器证明给被 spawn 的 Host 一个**干净 env**：清空根 `.env` 注入的整套
 // `AIWORKER_HOST_*` 与 `LOGTO_*` source-checkout dev profile，使 spec 自己的显式 CLI flags
 // （`--port` / `--public-base-url` / `--db` / `--dev-admin-email` …）成为唯一真相源。

@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'bun:test'
+import type { HostSessionPayload } from './host-session-cookie'
 
+import { describe, expect, it } from 'bun:test'
 import {
   assertHostSessionSecret,
   clearCookieHeader,
   createSignedCookie,
+
   parseCookieHeader,
   readSignedCookie,
   sessionCookieAttributes,
-  type HostSessionPayload,
 } from './host-session-cookie'
 
 const secret = 'test-secret-with-enough-entropy-32'

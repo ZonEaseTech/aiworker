@@ -33,7 +33,7 @@ function normalizeBaseUrl(input: string): string {
 
 function readNonEmptyEnvValue(env: Record<string, string | undefined>, name: string): string | undefined {
   const value = env[name]?.trim()
-  return value ? value : undefined
+  return value || undefined
 }
 
 function readDelimitedEnvValues(env: Record<string, string | undefined>, name: string): string[] {
@@ -316,25 +316,26 @@ function mapLegacyServerToProvisioningTarget(server: unknown): Record<string, un
 function projectHostOptions(value: unknown): Record<string, unknown> {
   const record = requireRecord(value, 'host options')
   const provisioningTargetSourceError
-    = typeof record.provisioningTargetSourceError === 'string' ? record.provisioningTargetSourceError
+    = typeof record.provisioningTargetSourceError === 'string'
+      ? record.provisioningTargetSourceError
       : (typeof record.serverSourceError === 'string' ? record.serverSourceError : undefined)
 
   const provisioningTargets = Array.isArray(record.provisioningTargets)
     ? record.provisioningTargets.map(target => projectAllowedFields(target, [
-      'id',
-      'displayName',
-      'adapterType',
-      'maturity',
-      'ref',
-      'description',
-      'capabilities',
-      'health',
-    ]))
+        'id',
+        'displayName',
+        'adapterType',
+        'maturity',
+        'ref',
+        'description',
+        'capabilities',
+        'health',
+      ]))
     : Array.isArray(record.servers)
       ? record.servers.flatMap((server) => {
-        const projectedServer = mapLegacyServerToProvisioningTarget(server)
-        return projectedServer ? [projectedServer] : []
-      })
+          const projectedServer = mapLegacyServerToProvisioningTarget(server)
+          return projectedServer ? [projectedServer] : []
+        })
       : []
 
   return {

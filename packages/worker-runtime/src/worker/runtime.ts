@@ -54,18 +54,18 @@ import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
 import { LocalWorkspaceFiles } from './files'
 import { LocalEngineProcessManager } from './process-manager'
 import {
-  applyAutoEngineTitle,
-  applyAutoTruncatedTitle,
-  readSessionTitleSource,
-  stripSessionTitleSourceMetadata,
-} from './session-title-policy'
-import {
   freezeSessionEngineMetadata,
 
   inferLatestInvocationEngine,
   readFrozenSessionEngine,
   resolveFrozenSessionEngine,
 } from './session-engine'
+import {
+  applyAutoEngineTitle,
+  applyAutoTruncatedTitle,
+  readSessionTitleSource,
+  stripSessionTitleSourceMetadata,
+} from './session-title-policy'
 
 type LocalEngineBridgeOptions = Pick<
   EngineBridgeOptions,

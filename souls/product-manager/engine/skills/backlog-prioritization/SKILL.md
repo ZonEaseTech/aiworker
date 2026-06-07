@@ -8,7 +8,6 @@ description: 用 ttpos-bot 真实 sprint 评分（urgency+estimateFit+age）+ �
 
 回答从结果开始：先给结论、交付物、必要假设或需要用户补充的关键信息，再给细节。可以在内部读取 AGENTS、knowledge、templates 或 MCP 配置，但不要把内部过程写成用户可见开场。不要以“使用 `skill` / 我会按 / 我会先 / 我先读取 / 已确认”开头；除非用户明确要求解释过程或需要说明阻塞原因，否则不叙述工具调用和资产读取过程。
 
-
 ## 产出物
 
 一张《Sprint 优先级评分表》（对齐 `templates/sprint-priority-table.md`）：每个候选算出 `sprintCandidateScore`、按容量定 `sprint_candidate` / `sprint_risk`、列超期清理动作 + 显式取舍。**用 ttpos-bot 真实公式，不是 RICE 直接拍。**

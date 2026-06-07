@@ -68,15 +68,6 @@ export {
   type LocalWorkerEventKind,
 } from './worker/events'
 export {
-  applyAutoEngineTitle,
-  applyAutoTruncatedTitle,
-  applyUserTitle,
-  readSessionTitleSource,
-  stripSessionTitleSourceMetadata,
-  type SessionTitlePatch,
-  type SessionTitleSource,
-} from './worker/session-title-policy'
-export {
   createExternalEngineExecutor,
   DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS,
   type ExternalEngineExecutorOptions,
@@ -121,6 +112,15 @@ export {
   type ResolvedSessionEngine,
   resolveFrozenSessionEngine,
 } from './worker/session-engine'
+export {
+  applyAutoEngineTitle,
+  applyAutoTruncatedTitle,
+  applyUserTitle,
+  readSessionTitleSource,
+  type SessionTitlePatch,
+  type SessionTitleSource,
+  stripSessionTitleSourceMetadata,
+} from './worker/session-title-policy'
 export {
   AppError,
   mintWorkerId,

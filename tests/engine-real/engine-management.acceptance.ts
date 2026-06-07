@@ -84,9 +84,11 @@ const DRAIN_MS = readPositiveInteger(process.env.AIWORKER_ENGINE_REAL_DRAIN_MS, 
 const SAMPLE_COUNT = readPositiveInteger(process.env.AIWORKER_ENGINE_REAL_SAMPLES, 1)
 
 if (process.argv.includes('--crash-child')) {
+  // eslint-disable-next-line antfu/no-top-level-await -- acceptance harness 脚本入口,top-level await 即预期入口点
   await runCrashChild()
 }
 else {
+  // eslint-disable-next-line antfu/no-top-level-await -- acceptance harness 脚本入口,top-level await 即预期入口点
   await runAcceptance()
 }
 
@@ -135,13 +137,13 @@ async function runAcceptance(): Promise<void> {
     const evidencePath = path.join(root, 'engine-management-evidence.json')
     evidence.evidencePath = evidencePath
     writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8')
-    console.log(`[engine-real] evidence: ${evidencePath}`)
+    console.warn(`[engine-real] evidence: ${evidencePath}`)
     if (failed || evidence.cases.some(item => !item.ok)) {
       console.error(JSON.stringify(evidence.cases.filter(item => !item.ok), null, 2))
       process.exitCode = 1
     }
     else {
-      console.log(`[engine-real] ${evidence.cases.length} real engine checks passed across ${SAMPLE_COUNT} sample(s).`)
+      console.warn(`[engine-real] ${evidence.cases.length} real engine checks passed across ${SAMPLE_COUNT} sample(s).`)
     }
   }
 }
@@ -166,7 +168,7 @@ async function recordCase(
       ok: true,
       sample,
     })
-    console.log(`[engine-real] PASS sample ${sample}/${SAMPLE_COUNT} ${engine.id} ${name}`)
+    console.warn(`[engine-real] PASS sample ${sample}/${SAMPLE_COUNT} ${engine.id} ${name}`)
   }
   catch (error) {
     evidence.cases.push({
@@ -614,7 +616,7 @@ function summarizeEvidence(cases: EvidenceCase[]): EvidenceSummary {
 
   const passedCases = cases.filter(item => item.ok).length
   return {
-    byEngineCase: [...byEngineCase.values()].map(item => {
+    byEngineCase: [...byEngineCase.values()].map((item) => {
       const total = item.passed + item.failed
       return {
         averageDurationMs: average(item.durations),

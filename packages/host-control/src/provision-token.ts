@@ -1,4 +1,4 @@
-const PROVISION_TOKEN_RE = /^awp_[A-Za-z0-9_-]+$/
+const PROVISION_TOKEN_RE = /^awp_[\w-]+$/
 
 export function isProvisionTokenLike(value: string): boolean {
   return PROVISION_TOKEN_RE.test(value)

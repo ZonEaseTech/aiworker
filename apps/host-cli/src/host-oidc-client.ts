@@ -1,8 +1,9 @@
+import type { HostSessionPayload } from './host-session-cookie'
+
+import { Buffer } from 'node:buffer'
 import { createHash, randomBytes as nodeRandomBytes } from 'node:crypto'
 
 import { createRemoteJWKSet, jwtVerify } from 'jose'
-
-import type { HostSessionPayload } from './host-session-cookie'
 
 export interface OidcClientConfig {
   allowedEmailDomains: string[]
@@ -122,7 +123,7 @@ export async function exchangeLogtoHostedLoginCode(
         redirect_uri: config.redirectUri,
       }),
       headers: {
-        authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
+        'authorization': `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
         'content-type': 'application/x-www-form-urlencoded',
       },
       method: 'POST',
@@ -295,6 +296,7 @@ export function normalizeLogtoReturnTo(returnTo: string): string {
   if (
     returnTo.length === 0
     || returnTo !== returnTo.trim()
+    // eslint-disable-next-line no-control-regex -- 故意检测控制字符(NUL..US / DEL)以拒绝 returnTo 注入;控制符本身即检测目标
     || /[\u0000-\u001F\u007F]/.test(returnTo)
     || /\\/.test(returnTo)
     || /%(?:2f|5c|0[0-9a-f]|1[0-9a-f])/i.test(returnTo)
@@ -313,7 +315,7 @@ export function normalizeLogtoReturnTo(returnTo: string): string {
   if (url.pathname === '/host')
     return normalized
 
-  if (/^\/workers\/[A-Za-z0-9_-]+$/.test(url.pathname))
+  if (/^\/workers\/[\w-]+$/.test(url.pathname))
     return normalized
 
   throw new Error('Logto returnTo must stay on an allowed same-site Host path')
@@ -347,9 +349,9 @@ function sanitizeOAuthErrorField(value: unknown): string | null {
     return null
 
   const sanitized = value
-    .replace(/\b(?:access_token|id_token|refresh_token|client_secret|code)\b\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
+    .replace(/\b(?:access_token|id_token|refresh_token|client_secret|code)\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
     .replace(/\b(?:access_token|id_token|refresh_token|client_secret)\b/gi, '[redacted]')
-    .replace(/[A-Za-z0-9._~+/-]{32,}/g, '[redacted]')
+    .replace(/[\w.~+/-]{32,}/g, '[redacted]')
     .trim()
     .slice(0, 160)
 
@@ -359,9 +361,9 @@ function sanitizeOAuthErrorField(value: unknown): string | null {
 function safeOidcFailureMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
   return message
-    .replace(/\b(?:access_token|id_token|refresh_token|client_secret|code)\b\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
+    .replace(/\b(?:access_token|id_token|refresh_token|client_secret|code)\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
     .replace(/\b(?:access_token|id_token|refresh_token|client_secret)\b/gi, '[redacted]')
-    .replace(/[A-Za-z0-9._~+/-]{32,}/g, '[redacted]')
+    .replace(/[\w.~+/-]{32,}/g, '[redacted]')
     .trim()
     .slice(0, 240)
 }

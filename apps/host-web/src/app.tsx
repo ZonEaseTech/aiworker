@@ -469,7 +469,13 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                           <div className="flex flex-wrap gap-1" aria-label="target maturity summaries">
                             {options.provisioningTargets.map(target => (
                               <Badge key={target.id} variant="outline">
-                                <BadgeLabel>{target.adapterType} · {target.maturity}</BadgeLabel>
+                                <BadgeLabel>
+                                  {target.adapterType}
+                                  {' '}
+                                  ·
+                                  {' '}
+                                  {target.maturity}
+                                </BadgeLabel>
                               </Badge>
                             ))}
                           </div>
@@ -510,7 +516,11 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
                           >
                             {options.soulReleases.map(soul => (
                               <NativeSelectOption key={soul.releaseRef} value={soul.releaseRef}>
-                                {soul.name} ({soul.releaseRef})
+                                {soul.name}
+                                {' '}
+                                (
+                                {soul.releaseRef}
+                                )
                               </NativeSelectOption>
                             ))}
                           </NativeSelect>

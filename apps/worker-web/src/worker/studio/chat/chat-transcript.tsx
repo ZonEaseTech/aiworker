@@ -216,7 +216,7 @@ function dropStaleProgressOnlyTurns(turns: TranscriptTurnModel[], activeInvocati
     return !turn.items.every(item =>
       item.kind === 'timeline-step'
       && item.status === 'running'
-      && (item.category === 'progress' || item.category === 'lifecycle')
+      && (item.category === 'progress' || item.category === 'lifecycle'),
     )
   })
 }

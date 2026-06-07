@@ -140,16 +140,16 @@ describe('host-control access adapter boundary', () => {
 
   test('removes credential headers while preserving routing headers', () => {
     const headers = sanitizeForwardHeaders(new Headers({
-      accept: 'text/html',
-      authorization: 'Bearer secret',
-      connection: 'upgrade',
+      'accept': 'text/html',
+      'authorization': 'Bearer secret',
+      'connection': 'upgrade',
       'content-length': '999',
-      cookie: 'sid=secret',
-      host: 'host.example',
+      'cookie': 'sid=secret',
+      'host': 'host.example',
       'proxy-authorization': 'Basic secret',
       'set-cookie': 'sid=secret',
       'transfer-encoding': 'chunked',
-      upgrade: 'websocket',
+      'upgrade': 'websocket',
       'x-aiworker-user-email': 'worker@example.com',
       'x-forwarded-for': '127.0.0.1',
       'x-forwarded-user': 'worker@example.com',
@@ -173,9 +173,9 @@ describe('host-control access adapter boundary', () => {
   test('creates a minimal worker access request envelope with sanitized headers', async () => {
     const envelope = await createAccessRequestEnvelope(new Request('https://host.example/workers/wkr_82?tab=chat', {
       headers: {
-        accept: 'text/html',
-        authorization: 'Bearer secret',
-        cookie: 'sid=secret',
+        'accept': 'text/html',
+        'authorization': 'Bearer secret',
+        'cookie': 'sid=secret',
         'x-aiworker-user-email': 'bob@example.com',
       },
       method: 'GET',

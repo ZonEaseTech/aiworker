@@ -2137,6 +2137,7 @@ function setCookieHeaders(response: Response): string[] {
     return values
 
   const header = response.headers.get('set-cookie')
+  // eslint-disable-next-line regexp/no-super-linear-backtracking -- test helper splitting the test's own set-cookie header (trusted, bounded input)
   return header ? header.split(/,\s*(?=[^;,]+=)/) : []
 }
 

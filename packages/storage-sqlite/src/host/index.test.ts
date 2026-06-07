@@ -11,6 +11,7 @@ import {
   createAssignment,
   getAssignmentByWorkerId,
   getHostDb,
+  hostAssignments,
   initHostDb,
   issueAssignmentAccessToken,
   listAssignments,
@@ -21,9 +22,8 @@ import {
   revokeAssignment,
   runHostMigrations,
   userHasHostPermission,
-  verifyAssignmentAccessToken,
   verifyAndConsumeProvisionToken,
-  hostAssignments,
+  verifyAssignmentAccessToken,
 } from './index'
 import { setHostAssignmentStorageTestHooks } from './test-hooks'
 
@@ -127,7 +127,7 @@ describe('host sqlite assignment storage', () => {
     const racedAt = '2026-06-06T00:03:00.000Z'
 
     setHostAssignmentStorageTestHooks({
-      beforeConsumeUpdate: assignment => {
+      beforeConsumeUpdate: (assignment) => {
         getHostDb().update(hostAssignments).set({
           provisionTokenConsumedAt: racedAt,
           updatedAt: racedAt,

@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { beforeAll, describe, expect, test } from 'bun:test'
 
-import { buildSoul } from '../../packages/soul-sdk/src/index'
 import { parseSoulDescriptorV1 } from '../../packages/soul-descriptor/src/index'
+import { buildSoul } from '../../packages/soul-sdk/src/index'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const freeformPath = 'souls/aiworker-freeform'

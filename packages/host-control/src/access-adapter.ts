@@ -1,9 +1,9 @@
-import { randomBytes } from 'node:crypto'
+import type { WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope } from '@zonease/aiworker-worker-control-protocol'
 
+import { randomBytes } from 'node:crypto'
 import {
   parseWorkerAccessResponseEnvelope,
-  type WorkerAccessRequestEnvelope,
-  type WorkerAccessResponseEnvelope,
+
 } from '@zonease/aiworker-worker-control-protocol'
 
 export interface WorkerAccessConnection {

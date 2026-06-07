@@ -198,18 +198,42 @@ const AMBIGUOUS_OWNERSHIP_TOKENS = ['session', 'secret', 'domain'] as const
 // email 域门 / provision-secret 脱敏。来源=对 host-* 源全量枚举（见 spec）。
 const HOST_AUTH_ALLOWLIST = new Set<string>([
   // —— 登录 session（Host 管理员的 Logto 登录态：cookie / payload / env / 校验）——
-  'session', 'hostsession', 'hostsessionpayload', 'ishostsessionpayload',
-  'sessionauth', 'hostsessionauthoptions', 'hostlifecyclesessionauthoptions', 'hostsessionauthenv',
-  'sessionsecret', 'asserthostsessionsecret', 'aiworker_host_session_secret',
-  'sessioncookieattributes', 'readuserfromsessioncookie', 'aiworker_session',
-  'logtosessionrequiredenvkeys', 'buildsessionauthfromenv', 'hasanysessionenv',
+  'session',
+  'hostsession',
+  'hostsessionpayload',
+  'ishostsessionpayload',
+  'sessionauth',
+  'hostsessionauthoptions',
+  'hostlifecyclesessionauthoptions',
+  'hostsessionauthenv',
+  'sessionsecret',
+  'asserthostsessionsecret',
+  'aiworker_host_session_secret',
+  'sessioncookieattributes',
+  'readuserfromsessioncookie',
+  'aiworker_session',
+  'logtosessionrequiredenvkeys',
+  'buildsessionauthfromenv',
+  'hasanysessionenv',
   // —— OIDC 凭证（Logto client / application / m2m secret）——
-  'secret', 'secrets', 'clientsecret', 'client_secret', 'logto_client_secret',
-  'm2mappsecret', 'logto_m2m_app_secret', 'deprecatedsecret',
-  'readapplicationsecret', 'missing_application_secret', 'invalid_secret_response',
+  'secret',
+  'secrets',
+  'clientsecret',
+  'client_secret',
+  'logto_client_secret',
+  'm2mappsecret',
+  'logto_m2m_app_secret',
+  'deprecatedsecret',
+  'readapplicationsecret',
+  'missing_application_secret',
+  'invalid_secret_response',
   // —— email 域门（允许登录的企业邮箱域）——
-  'domain', 'emaildomain', 'alloweddomains', 'allowedemaildomains',
-  'emailbelongstoalloweddomain', 'aiworker_host_allowed_email_domains',
+  'domain',
+  'emaildomain',
+  'alloweddomains',
+  'allowedemaildomains',
+  'emailbelongstoalloweddomain',
+  'aiworker_host_allowed_email_domains',
   // —— provision-secret 脱敏（把 provisionToken 从 receipt/command 中*清除*的防泄漏函数，
   //    携带零 Worker secret；见 provisioning-target-adapters.ts:93 scrubProvisionSecret）——
   'scrubprovisionsecret',
@@ -220,9 +244,10 @@ function scanHostOwnership(rawCode: string): string[] {
   const code = rawCode.toLowerCase()
   const hits: string[] = []
   // 严扫类：裸子串（最大严格度，不经 allowlist）。
-  for (const token of STRICT_OWNERSHIP_TOKENS)
+  for (const token of STRICT_OWNERSHIP_TOKENS) {
     if (code.includes(token))
       hits.push(token)
+  }
   // 歧义类：word-token 精确 allowlist——任一*含*该 token 且*不在* allowlist 的词元=违规。
   const words = code.match(/[\w$]+/g) ?? []
   for (const token of AMBIGUOUS_OWNERSHIP_TOKENS) {

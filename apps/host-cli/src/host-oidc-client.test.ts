@@ -1,15 +1,17 @@
+import type { OidcClientConfig } from './host-oidc-client'
+
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-
 import { describe, expect, it } from 'bun:test'
-import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 
+import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 import {
   beginLogtoHostedLogin,
   discoverLogtoOidcIssuerConfiguration,
   exchangeLogtoHostedLoginCode,
-  mapLogtoHostedLoginClaims,
   mapLogtoHostClaims,
-  type OidcClientConfig,
+  mapLogtoHostedLoginClaims,
+
 } from './host-oidc-client'
 
 describe('host oidc client', () => {
@@ -25,7 +27,7 @@ describe('host oidc client', () => {
   it('discovers the authorization endpoint and builds a PKCE redirect with state and nonce', async () => {
     const discoveryRequests: string[] = []
     const result = await beginLogtoHostedLogin(config, {
-      fetch: async input => {
+      fetch: async (input) => {
         discoveryRequests.push(String(input))
         return Response.json({
           authorization_endpoint: 'https://login.zonease.test/custom/auth',
@@ -117,7 +119,7 @@ describe('host oidc client', () => {
   it('discovers issuer metadata without requiring a confidential client config', async () => {
     const discoveryRequests: string[] = []
     const discovery = await discoverLogtoOidcIssuerConfiguration('https://issuer.zonease.test/oidc/', {
-      fetch: async input => {
+      fetch: async (input) => {
         discoveryRequests.push(String(input))
         return Response.json({
           authorization_endpoint: 'https://issuer.zonease.test/custom/auth',
@@ -360,7 +362,7 @@ async function createOidcFixture(options: {
   const requests: string[] = []
   const tokenRequests: Record<string, string>[] = []
   const server = Bun.serve({
-    fetch: async request => {
+    fetch: async (request) => {
       const url = new URL(request.url)
       requests.push(`${request.method} ${url.pathname}`)
 

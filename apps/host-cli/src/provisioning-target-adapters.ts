@@ -1,6 +1,8 @@
-import { redactProvisionToken } from '@zonease/aiworker-host-control'
-
 import type { ProvisioningAdapterType, ProvisioningTargetMaturity } from './host-options'
+
+import process from 'node:process'
+
+import { redactProvisionToken } from '@zonease/aiworker-host-control'
 import { assertRemoteAisshCallbackReachable, resolveAdapterRuntimeControlBaseUrl } from './host-url-contract'
 
 export interface ProvisioningDeliveryInput {
