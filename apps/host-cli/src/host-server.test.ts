@@ -1,7 +1,9 @@
+import type { OidcClientConfig } from './host-oidc-client'
+import type { HostSessionPayload } from './host-session-cookie'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
 import { createWorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import {
   createAssignment,
@@ -10,16 +12,15 @@ import {
   markAssignmentReady,
   verifyAndConsumeProvisionToken,
 } from '@zonease/aiworker-storage-sqlite/host'
+
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
-
+import { createHostServer } from './host-server'
 import {
   createSignedCookie,
+
   readSignedCookie,
-  type HostSessionPayload,
 } from './host-session-cookie'
-import type { OidcClientConfig } from './host-oidc-client'
-import { createHostServer } from './host-server'
 
 const adminUser = { email: 'admin@example.com', roles: ['host:admin'], subject: 'usr_admin' }
 const bobUser = { email: 'bob@example.com', roles: [], subject: 'usr_bob' }
@@ -716,12 +717,12 @@ describe('host server', () => {
         id: envelope.id,
         status: 200,
         headers: {
-          connection: 'upgrade',
+          'connection': 'upgrade',
           'content-length': '999',
           'content-type': 'text/plain',
           'set-cookie': 'sid=worker',
           'transfer-encoding': 'chunked',
-          upgrade: 'websocket',
+          'upgrade': 'websocket',
         },
         bodyText: `worker:${envelope.path}:${envelope.headers.authorization ?? 'no-auth'}:${envelope.headers.connection ?? 'no-connection'}`,
       }),
@@ -839,9 +840,9 @@ describe('host server', () => {
     const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82/api/sessions?source=host', {
       body: JSON.stringify({ title: 'New session' }),
       headers: {
-        authorization: 'Bearer employee',
+        'authorization': 'Bearer employee',
         'content-type': 'application/json',
-        cookie: `sid=employee; aiworker_session=${sessionCookie({
+        'cookie': `sid=employee; aiworker_session=${sessionCookie({
           email: 'bob@zonease.org',
           sub: 'usr_bob',
         })}`,
@@ -1741,6 +1742,317 @@ describe('host server', () => {
     expect(response.status).toBe(200)
     expect(await response.text()).toBe('owner-socket')
   })
+
+  it('closes a websocket that sends a hello frame with an invalid access token (cannot reach ready without a valid tunnel hello)', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    // consume the token so an assignment exists in checked_in state
+    const checkInResponse = await json(await server.fetch(new Request('http://host/api/provision/check-in', {
+      body: JSON.stringify(checkInBody(created.provisionToken)),
+      method: 'POST',
+    })))
+    expect(checkInResponse.access.mode).toBe('worker_access')
+
+    let closed = false
+    const ws = {
+      data: {},
+      close() { closed = true },
+      send() { return 1 },
+    }
+
+    // Send hello with a forged/wrong access token — verifyAssignmentAccessToken returns null → ws.close()
+    await server.websocket.message?.(ws as unknown as Bun.ServerWebSocket<{ workerId?: string }>, JSON.stringify({
+      type: 'hello',
+      assignmentId: created.assignment.assignmentId,
+      token: 'awt_forged_invalid_token',
+      workerId: 'wkr_82',
+    }))
+
+    expect(closed).toBe(true)
+    expect(accessRegistry.has('wkr_82')).toBe(false)
+  })
+
+  it('emits a redacted per-request forward log without body, headers, secrets, or query', async () => {
+    const originalInfo = console.warn
+    const logs: string[] = []
+    console.warn = (...values: unknown[]) => {
+      logs.push(values.map(value => String(value)).join(' '))
+    }
+    try {
+      const accessRegistry = createWorkerAccessRegistry()
+      const server = await createHostServer({
+        accessRegistry,
+        dbPath: dbPath(),
+        hostBrowserBaseUrl: 'http://localhost:54145',
+        hostControlBaseUrl: 'http://localhost:54145',
+        sessionAuth: sessionAuth(),
+      })
+      const created = createAssignment({
+        assignedEmail: 'bob@zonease.org',
+        serverRef: 'host-main',
+        soulReleaseRef: 'soul_release_1',
+      })
+      verifyAndConsumeProvisionToken(created.provisionToken)
+      markAssignmentCheckedIn(created.assignment.assignmentId, {
+        workerId: 'wkr_82',
+        workerVersion: '1.0.0',
+      })
+      markAssignmentAccessReady(created.assignment.assignmentId)
+      markAssignmentReady(created.assignment.assignmentId, {
+        workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+      })
+      accessRegistry.register({
+        assignmentId: created.assignment.assignmentId,
+        close() {},
+        sendRequest: async envelope => ({
+          type: 'response',
+          id: envelope.id,
+          status: 200,
+          headers: { 'content-type': 'text/plain' },
+          bodyText: 'worker-body-SENTINEL_BODY',
+        }),
+        workerId: 'wkr_82',
+      })
+
+      const response = await server.fetch(new Request('http://localhost:54145/workers/wkr_82/api/sessions?token=SENTINEL_TK&email=leak@secret.test', {
+        body: 'SENTINEL_REQ_BODY',
+        headers: {
+          'authorization': 'Bearer SENTINEL_AUTH',
+          'content-type': 'application/json',
+          'cookie': `sid=SENTINEL_COOKIE; aiworker_session=${sessionCookie({
+            email: 'bob@zonease.org',
+            sub: 'usr_bob',
+          })}`,
+          'x-aiworker-user-email': 'bob@zonease.org',
+        },
+        method: 'POST',
+      }))
+
+      expect(response.status).toBe(200)
+
+      const forwardLogs = logs.filter(line => line.includes('worker_route_forwarded'))
+      expect(forwardLogs.length).toBe(1)
+      const record = JSON.parse(forwardLogs[0]!) as Record<string, unknown>
+      expect(record.event).toBe('worker_route_forwarded')
+      expect(record.workerId).toBe('wkr_82')
+      expect(record.localPath).toBe('/api/sessions')
+      expect(record.responseStatus).toBe(200)
+      expect(typeof record.requestId).toBe('string')
+      expect((record.requestId as string).length).toBeGreaterThan(0)
+      expect(Object.keys(record).sort()).toEqual(['event', 'localPath', 'requestId', 'responseStatus', 'workerId'])
+
+      const line = forwardLogs[0]!
+      expect(line).not.toContain('SENTINEL_BODY')
+      expect(line).not.toContain('SENTINEL_REQ_BODY')
+      expect(line).not.toContain('SENTINEL_AUTH')
+      expect(line).not.toContain('SENTINEL_COOKIE')
+      expect(line).not.toContain('SENTINEL_TK')
+      expect(line).not.toContain('leak@secret.test')
+      expect(line).not.toContain('bob@zonease.org')
+      expect(line).not.toContain('authorization')
+      expect(line).not.toContain('cookie')
+      expect(line).not.toContain('x-aiworker-user-email')
+    }
+    finally {
+      console.warn = originalInfo
+    }
+  })
+
+  it('emits a forward log carrying the failure responseStatus when the tunnel fails', async () => {
+    const originalInfo = console.warn
+    const logs: string[] = []
+    console.warn = (...values: unknown[]) => {
+      logs.push(values.map(value => String(value)).join(' '))
+    }
+    try {
+      const accessRegistry = createWorkerAccessRegistry()
+      const server = await createHostServer({
+        accessRegistry,
+        authUser: bobUser,
+        dbPath: dbPath(),
+        ...hostUrls(),
+      })
+      const created = createAssignment({
+        assignedEmail: 'bob@example.com',
+        serverRef: 'host-main',
+        soulReleaseRef: 'soul_release_1',
+      })
+      verifyAndConsumeProvisionToken(created.provisionToken)
+      markAssignmentCheckedIn(created.assignment.assignmentId, {
+        workerId: 'wkr_82',
+        workerVersion: '1.0.0',
+      })
+      markAssignmentAccessReady(created.assignment.assignmentId)
+      markAssignmentReady(created.assignment.assignmentId, {
+        workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+      })
+      accessRegistry.register({
+        assignmentId: created.assignment.assignmentId,
+        close() {},
+        async sendRequest() {
+          throw new Error('tunnel down')
+        },
+        workerId: 'wkr_82',
+      })
+
+      const response = await server.fetch(new Request('http://host/workers/wkr_82/api/info'))
+      expect(response.status).toBe(502)
+
+      const forwardLogs = logs.filter(line => line.includes('worker_route_forwarded'))
+      expect(forwardLogs.length).toBe(1)
+      const record = JSON.parse(forwardLogs[0]!) as Record<string, unknown>
+      expect(record.workerId).toBe('wkr_82')
+      expect(record.localPath).toBe('/api/info')
+      expect(record.responseStatus).toBe(502)
+      expect(typeof record.requestId).toBe('string')
+    }
+    finally {
+      console.warn = originalInfo
+    }
+  })
+
+  it('emits a forward log with the 502 responseStatus when the worker response is malformed', async () => {
+    const originalInfo = console.warn
+    const logs: string[] = []
+    console.warn = (...values: unknown[]) => {
+      logs.push(values.map(value => String(value)).join(' '))
+    }
+    try {
+      const accessRegistry = createWorkerAccessRegistry()
+      const server = await createHostServer({
+        accessRegistry,
+        authUser: bobUser,
+        dbPath: dbPath(),
+        ...hostUrls(),
+      })
+      const created = createAssignment({
+        assignedEmail: 'bob@example.com',
+        serverRef: 'host-main',
+        soulReleaseRef: 'soul_release_1',
+      })
+      verifyAndConsumeProvisionToken(created.provisionToken)
+      markAssignmentCheckedIn(created.assignment.assignmentId, {
+        workerId: 'wkr_82',
+        workerVersion: '1.0.0',
+      })
+      markAssignmentAccessReady(created.assignment.assignmentId)
+      markAssignmentReady(created.assignment.assignmentId, {
+        workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+      })
+      accessRegistry.register({
+        assignmentId: created.assignment.assignmentId,
+        close() {},
+        sendRequest: async envelope => ({
+          type: 'response',
+          id: envelope.id,
+          status: 999,
+          headers: {},
+          bodyText: '',
+        }) as never,
+        workerId: 'wkr_82',
+      })
+
+      const response = await server.fetch(new Request('http://host/workers/wkr_82/api/info'))
+      expect(response.status).toBe(502)
+
+      const forwardLogs = logs.filter(line => line.includes('worker_route_forwarded'))
+      expect(forwardLogs.length).toBe(1)
+      const record = JSON.parse(forwardLogs[0]!) as Record<string, unknown>
+      expect(record.workerId).toBe('wkr_82')
+      expect(record.localPath).toBe('/api/info')
+      expect(record.responseStatus).toBe(502)
+      expect(typeof record.requestId).toBe('string')
+    }
+    finally {
+      console.warn = originalInfo
+    }
+  })
+
+  it('keeps concurrent worker forward logs attributed to their own worker', async () => {
+    const originalInfo = console.warn
+    const logs: string[] = []
+    console.warn = (...values: unknown[]) => {
+      logs.push(values.map(value => String(value)).join(' '))
+    }
+    try {
+      const accessRegistry = createWorkerAccessRegistry()
+      const server = await createHostServer({
+        accessRegistry,
+        dbPath: dbPath(),
+        hostBrowserBaseUrl: 'http://localhost:54145',
+        hostControlBaseUrl: 'http://localhost:54145',
+        sessionAuth: sessionAuth(),
+      })
+
+      for (const { email, workerId } of [
+        { email: 'alice@zonease.org', sub: 'usr_alice', workerId: 'wkr_aaa' },
+        { email: 'bob@zonease.org', sub: 'usr_bob', workerId: 'wkr_bbb' },
+      ]) {
+        const created = createAssignment({
+          assignedEmail: email,
+          serverRef: 'host-main',
+          soulReleaseRef: 'soul_release_1',
+        })
+        verifyAndConsumeProvisionToken(created.provisionToken)
+        markAssignmentCheckedIn(created.assignment.assignmentId, {
+          workerId,
+          workerVersion: '1.0.0',
+        })
+        markAssignmentAccessReady(created.assignment.assignmentId)
+        markAssignmentReady(created.assignment.assignmentId, {
+          workbenchUrl: `https://aiworker.zonease.org/workers/${workerId}`,
+        })
+        accessRegistry.register({
+          assignmentId: created.assignment.assignmentId,
+          close() {},
+          sendRequest: async envelope => ({
+            type: 'response',
+            id: envelope.id,
+            status: 200,
+            headers: { 'content-type': 'text/plain' },
+            bodyText: workerId,
+          }),
+          workerId,
+        })
+      }
+
+      const requestFor = (email: string, sub: string, workerId: string) =>
+        server.fetch(new Request(`http://localhost:54145/workers/${workerId}/api/info`, {
+          headers: {
+            cookie: `aiworker_session=${sessionCookie({ email, sub })}`,
+          },
+        }))
+
+      const [resA, resB] = await Promise.all([
+        requestFor('alice@zonease.org', 'usr_alice', 'wkr_aaa'),
+        requestFor('bob@zonease.org', 'usr_bob', 'wkr_bbb'),
+      ])
+      expect(resA.status).toBe(200)
+      expect(resB.status).toBe(200)
+
+      const forwardLogs = logs
+        .filter(line => line.includes('worker_route_forwarded'))
+        .map(line => JSON.parse(line) as Record<string, unknown>)
+      expect(forwardLogs.length).toBe(2)
+      const byWorker = new Map(forwardLogs.map(record => [record.workerId, record]))
+      expect(byWorker.get('wkr_aaa')?.localPath).toBe('/api/info')
+      expect(byWorker.get('wkr_bbb')?.localPath).toBe('/api/info')
+      expect(forwardLogs.every(record => record.workerId === 'wkr_aaa' || record.workerId === 'wkr_bbb')).toBe(true)
+    }
+    finally {
+      console.warn = originalInfo
+    }
+  })
 })
 
 interface OidcFixture {
@@ -1756,7 +2068,7 @@ async function createOidcFixture(options: {
   const { privateKey, publicKey } = await generateKeyPair('RS256')
   const publicJwk = await exportJWK(publicKey)
   const server = Bun.serve({
-    fetch: async request => {
+    fetch: async (request) => {
       const url = new URL(request.url)
 
       if (url.pathname === '/oidc/.well-known/openid-configuration') {

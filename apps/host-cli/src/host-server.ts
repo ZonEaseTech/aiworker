@@ -2,8 +2,8 @@ import type { AuthenticatedHostUser, AuthProvider, WorkerAccessConnection, Worke
 import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
 import type { WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope } from '@zonease/aiworker-worker-control-protocol'
 import type { OidcClientConfig, OidcFetch, OidcLoginTransaction } from './host-oidc-client'
-import type { HostSessionPayload } from './host-session-cookie'
 import type { HostOptionsView, ProvisioningAdapterType, ProvisioningTargetMaturity } from './host-options'
+import type { HostSessionPayload } from './host-session-cookie'
 import type { ProvisioningDeliveryResult } from './provisioning-target-adapters'
 
 import { existsSync } from 'node:fs'
@@ -31,8 +31,8 @@ import {
   markAssignmentReady,
   runHostMigrations,
   userHasHostPermission,
-  verifyAssignmentAccessToken,
   verifyAndConsumeProvisionToken,
+  verifyAssignmentAccessToken,
 } from '@zonease/aiworker-storage-sqlite/host'
 import {
   parseWorkerAccessFrame,
@@ -45,13 +45,13 @@ import {
   normalizeLogtoReturnTo,
 } from './host-oidc-client'
 import { buildHostOptions } from './host-options'
-import { assertRemoteAisshCallbackReachable, resolveAdapterRuntimeControlBaseUrl } from './host-url-contract'
 import {
   clearCookieHeader,
   createSignedCookie,
   parseCookieHeader,
   readSignedCookie,
 } from './host-session-cookie'
+import { assertRemoteAisshCallbackReachable, resolveAdapterRuntimeControlBaseUrl } from './host-url-contract'
 import { deliverProvisioningTarget } from './provisioning-target-adapters'
 
 interface HostSessionAuthOptions {
@@ -254,7 +254,6 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
 
     if (frame.type === 'ping') {
       ws.send(JSON.stringify({ type: 'pong', id: frame.id }))
-      return
     }
   }
 
@@ -297,11 +296,12 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
       if (hostWebResponse)
         return hostWebResponse
 
-      if (url.pathname === '/api/host/assignments')
+      if (url.pathname === '/api/host/assignments') {
         return handleAssignments(request, effectiveAuthProvider, {
           hostBrowserBaseUrl,
           hostControlBaseUrl,
         })
+      }
 
       if (request.method === 'GET' && url.pathname === '/api/host/options')
         return handleOptions(request, effectiveAuthProvider, options.optionsProvider ?? buildHostOptions)
@@ -538,7 +538,7 @@ function safeAuthFailureMessage(error: unknown): string {
   return message
     .replace(/\b(?:access_token|id_token|refresh_token|client_secret|code)\b\s*[:=]\s*["']?[^,\s"'}]+/gi, '[redacted]')
     .replace(/\b(?:access_token|id_token|refresh_token|client_secret)\b/gi, '[redacted]')
-    .replace(/[A-Za-z0-9._~+/-]{32,}/g, '[redacted]')
+    .replace(/[\w.~+/-]{32,}/g, '[redacted]')
     .trim()
     .slice(0, 240)
 }
@@ -722,22 +722,41 @@ async function handleWorkerRoute(
     return json({ error: { code: 'INVALID_WORKER_ACCESS_PATH' } }, { status: 400 })
   }
   const envelope = await createAccessRequestEnvelope(new Request(new URL(localPath, request.url), request))
+  const requestId = envelope.id
+  // Redacted per-request forwarding log. This closure closes over only the four
+  // scalar fields below, so it structurally cannot see body, headers, or secrets.
+  // localPath drops the query string because it may carry token/email/secret.
+  const logForwardedRequestPath = localPath.split('?', 1)[0] ?? '/'
+  const logForward = (responseStatus: number): void => {
+    console.warn(JSON.stringify({
+      event: 'worker_route_forwarded',
+      workerId,
+      requestId,
+      localPath: logForwardedRequestPath,
+      responseStatus,
+    }))
+  }
   let tunneled: WorkerAccessResponseEnvelope | null
   try {
     tunneled = await accessRegistry.sendRequest(workerId, envelope)
   }
   catch {
+    logForward(502)
     return json({ error: { code: 'WORKER_ACCESS_FAILED' } }, { status: 502 })
   }
-  if (!tunneled)
+  if (!tunneled) {
+    logForward(503)
     return json({ error: { code: 'WORKER_ACCESS_NOT_READY' } }, { status: 503 })
+  }
   let parsed: WorkerAccessResponseEnvelope
   try {
     parsed = parseAccessResponseEnvelope(tunneled)
   }
   catch {
+    logForward(502)
     return json({ error: { code: 'WORKER_ACCESS_FAILED' } }, { status: 502 })
   }
+  logForward(parsed.status)
   return new Response(parsed.bodyText, {
     headers: sanitizeWorkerResponseHeaders(parsed.headers),
     status: parsed.status,

@@ -305,6 +305,217 @@ describe('worker provision check-in client', () => {
     expect(sent.at(-1)).toEqual({ type: 'pong', id: 'ping_1' })
   })
 
+  it('sends a keepalive ping once per configured interval', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sent)
+    const clock = fakeKeepaliveClock()
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: {
+        assignedEmail: 'bob@example.com',
+        assignmentId: 'asn_1',
+        soulReleaseRef: 'soul_1',
+        workerId: 'wkr_82',
+      },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      keepaliveIntervalMs: 25_000,
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clock.startKeepalive,
+    })
+
+    expect(clock.lastIntervalMs).toBe(25_000)
+    // The hello frame is the only thing sent before any tick.
+    const helloOnly = sent.filter(frame => (frame as { type: string }).type === 'ping')
+    expect(helloOnly).toEqual([])
+
+    clock.advance(3)
+    const pings = sent.filter(frame => (frame as { type: string }).type === 'ping')
+    expect(pings).toHaveLength(3)
+    for (const ping of pings)
+      expect((ping as { type: string }).type).toBe('ping')
+    // Each keepalive ping carries a non-empty id so the host pong path can echo it.
+    const ids = pings.map(ping => (ping as { id: string }).id)
+    expect(ids.every(id => typeof id === 'string' && id.length > 0)).toBe(true)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('keeps sending keepalive pings after the host pong reply (no death detection)', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sent)
+    const clock = fakeKeepaliveClock()
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: {
+        assignedEmail: 'bob@example.com',
+        assignmentId: 'asn_1',
+        soulReleaseRef: 'soul_1',
+        workerId: 'wkr_82',
+      },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clock.startKeepalive,
+    })
+
+    clock.advance(1)
+    const firstPing = sent.filter(frame => (frame as { type: string }).type === 'ping').at(-1) as { id: string }
+    // Host replies pong with the same id; the worker must not throw or stop keepalive.
+    await socket.dispatchMessage({ type: 'pong', id: firstPing.id })
+    clock.advance(1)
+
+    const pings = sent.filter(frame => (frame as { type: string }).type === 'ping')
+    expect(pings).toHaveLength(2)
+  })
+
+  it('clears the keepalive timer on close so no further pings are sent (no leak)', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sent)
+    const clock = fakeKeepaliveClock()
+    const handle = await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: {
+        assignedEmail: 'bob@example.com',
+        assignmentId: 'asn_1',
+        soulReleaseRef: 'soul_1',
+        workerId: 'wkr_82',
+      },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clock.startKeepalive,
+    })
+
+    clock.advance(1)
+    expect(sent.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(1)
+    expect(clock.stopped).toBe(false)
+
+    handle?.close()
+    expect(clock.stopped).toBe(true)
+
+    // Ticks delivered after close must not produce more pings.
+    clock.advance(5)
+    expect(sent.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(1)
+  })
+
+  it('runs an independent keepalive timer per tunnel connection', async () => {
+    const sentA: unknown[] = []
+    const sentB: unknown[] = []
+    const socketA = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sentA)
+    const socketB = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sentB)
+    const clockA = fakeKeepaliveClock()
+    const clockB = fakeKeepaliveClock()
+
+    const handleA = await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'a@example.com', assignmentId: 'asn_a', soulReleaseRef: 'soul_a', workerId: 'wkr_a' },
+      createWebSocket: () => socketA,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clockA.startKeepalive,
+    })
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_b', soulReleaseRef: 'soul_b', workerId: 'wkr_b' },
+      createWebSocket: () => socketB,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clockB.startKeepalive,
+    })
+
+    clockA.advance(2)
+    // B has not ticked at all.
+    expect(sentA.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(2)
+    expect(sentB.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(0)
+
+    // Closing A must not affect B's keepalive.
+    handleA?.close()
+    expect(clockA.stopped).toBe(true)
+    expect(clockB.stopped).toBe(false)
+
+    clockB.advance(3)
+    expect(sentB.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(3)
+    // A stays closed → no extra pings.
+    expect(sentA.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(2)
+  })
+
+  it('reads the keepalive interval from env when no explicit interval is given', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sent)
+    const clock = fakeKeepaliveClock()
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: {
+        assignedEmail: 'bob@example.com',
+        assignmentId: 'asn_1',
+        soulReleaseRef: 'soul_1',
+        workerId: 'wkr_82',
+      },
+      createWebSocket: () => socket,
+      env: {
+        AIWORKER_HOST_URL: 'http://host.example',
+        AIWORKER_WORKER_ACCESS_KEEPALIVE_MS: '12000',
+      },
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clock.startKeepalive,
+    })
+
+    expect(clock.lastIntervalMs).toBe(12_000)
+  })
+
+  it('ignores a non-positive env keepalive interval and falls back to the default', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sent)
+    const clock = fakeKeepaliveClock()
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: {
+        assignedEmail: 'bob@example.com',
+        assignmentId: 'asn_1',
+        soulReleaseRef: 'soul_1',
+        workerId: 'wkr_82',
+      },
+      createWebSocket: () => socket,
+      env: {
+        AIWORKER_HOST_URL: 'http://host.example',
+        AIWORKER_WORKER_ACCESS_KEEPALIVE_MS: 'not-a-number',
+      },
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clock.startKeepalive,
+    })
+
+    expect(clock.lastIntervalMs).toBe(25_000)
+  })
+
+  it('clears the keepalive timer when the host drops the socket (onclose), no leak', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sent)
+    const clock = fakeKeepaliveClock()
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: {
+        assignedEmail: 'bob@example.com',
+        assignmentId: 'asn_1',
+        soulReleaseRef: 'soul_1',
+        workerId: 'wkr_82',
+      },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clock.startKeepalive,
+    })
+
+    clock.advance(1)
+    expect(sent.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(1)
+
+    // Host drops the socket: the worker must clear its keepalive timer.
+    socket.dispatchClose()
+    expect(clock.stopped).toBe(true)
+
+    clock.advance(5)
+    expect(sent.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(1)
+  })
+
   it('forwards a worker access GET envelope to the local workbench and returns a response envelope', async () => {
     const calls: Array<{ body: unknown, headers: unknown, method: string, url: string }> = []
 
@@ -401,14 +612,53 @@ describe('worker provision check-in client', () => {
   })
 })
 
+function fakeKeepaliveClock() {
+  const state = {
+    lastIntervalMs: null as number | null,
+    stopped: false,
+    tick: null as (() => void) | null,
+  }
+  return {
+    advance(ticks: number) {
+      for (let i = 0; i < ticks; i += 1)
+        state.tick?.()
+    },
+    get lastIntervalMs() {
+      return state.lastIntervalMs
+    },
+    startKeepalive(tick: () => void, intervalMs: number): () => void {
+      state.lastIntervalMs = intervalMs
+      state.tick = tick
+      state.stopped = false
+      return () => {
+        state.stopped = true
+        state.tick = null
+      }
+    },
+    get stopped() {
+      return state.stopped
+    },
+  }
+}
+
 function fakeWebSocket(url: URL, sent: unknown[]) {
   let onmessage: ((event: { data: string }) => Promise<void> | void) | null = null
+  let onclose: (() => void) | null = null
   return {
+    dispatchClose() {
+      onclose?.()
+    },
     async dispatchMessage(frame: unknown) {
       await onmessage?.({ data: JSON.stringify(frame) })
     },
     send(value: string) {
       sent.push(JSON.parse(value))
+    },
+    set onclose(handler: (() => void) | null) {
+      onclose = handler
+    },
+    get onclose() {
+      return onclose
     },
     set onmessage(handler: ((event: { data: string }) => Promise<void> | void) | null) {
       onmessage = handler

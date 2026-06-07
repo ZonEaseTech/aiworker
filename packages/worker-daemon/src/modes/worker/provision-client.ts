@@ -1,17 +1,15 @@
+import type { WorkerAccessHello, WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope, WorkerCheckInRequest, WorkerCheckInResponse } from '@zonease/aiworker-worker-control-protocol'
 import {
   parseWorkerAccessFrame,
   parseWorkerCheckInResponse,
-  type WorkerAccessHello,
-  type WorkerAccessRequestEnvelope,
-  type WorkerAccessResponseEnvelope,
-  type WorkerCheckInRequest,
-  type WorkerCheckInResponse,
+
 } from '@zonease/aiworker-worker-control-protocol'
 
 export type CheckInFetch = (url: URL, init: RequestInit) => Promise<Response>
 export type WorkerAccessLocalFetch = (request: Request) => Promise<Response>
 export type WorkerAccessWebSocket = Pick<WebSocket, 'send'> & {
   close?: () => void
+  onclose?: (() => void) | null
   onmessage: ((event: { data: string }) => Promise<void> | void) | null
   onopen?: (() => void) | null
   readyState?: number
@@ -39,9 +37,9 @@ export interface ProvisionActiveWorker {
   id: string
 }
 
-export type ProvisionActiveResolution =
-  | { kind: 'single', worker: ProvisionActiveWorker }
-  | { kind: string }
+export type ProvisionActiveResolution
+  = | { kind: 'single', worker: ProvisionActiveWorker }
+    | { kind: string }
 
 export interface MaybeProvisionCheckInInput {
   activeResolution: ProvisionActiveResolution
@@ -60,7 +58,39 @@ export interface ConnectWorkerAccessTunnelInput {
   assignment: WorkerCheckInResponse['assignment']
   createWebSocket?: (url: URL) => WorkerAccessWebSocket
   env: Record<string, string | undefined>
+  /**
+   * 应用层 keepalive ping 间隔（毫秒）。每隔该间隔，Worker 主动向 Host 发一个 ping 帧，
+   * Host 回 pong，产生双向流量，避免反向代理因 idle 掐断长时间空闲的 tunnel。
+   * 默认 25s，留在典型反代 60s+ idle 之下作安全裕度。
+   */
+  keepaliveIntervalMs?: number
   localFetch: WorkerAccessLocalFetch
+  /**
+   * 启动周期 keepalive 的注入缝（测试用可控时钟）。返回一个清理函数；连接关闭时调用以清除定时器，
+   * 防止 tunnel 断开/重连泄漏 timer。默认包装 setInterval 且 unref，避免阻塞进程退出。
+   */
+  startKeepalive?: (tick: () => void, intervalMs: number) => () => void
+}
+
+const DEFAULT_KEEPALIVE_INTERVAL_MS = 25_000
+
+function defaultStartKeepalive(tick: () => void, intervalMs: number): () => void {
+  const timer = setInterval(tick, intervalMs)
+  ;(timer as unknown as { unref?: () => void }).unref?.()
+  return () => clearInterval(timer)
+}
+
+/**
+ * keepalive 间隔解析优先级：显式 input.keepaliveIntervalMs > 环境变量
+ * AIWORKER_WORKER_ACCESS_KEEPALIVE_MS（正整数）> 默认 25s。非正/NaN 的 env 值被忽略。
+ */
+function resolveKeepaliveIntervalMs(input: ConnectWorkerAccessTunnelInput): number {
+  if (typeof input.keepaliveIntervalMs === 'number' && input.keepaliveIntervalMs > 0)
+    return input.keepaliveIntervalMs
+  const fromEnv = Number(input.env.AIWORKER_WORKER_ACCESS_KEEPALIVE_MS)
+  if (Number.isFinite(fromEnv) && fromEnv > 0)
+    return fromEnv
+  return DEFAULT_KEEPALIVE_INTERVAL_MS
 }
 
 export function buildCheckInBody(input: BuildCheckInInput): WorkerCheckInRequest {
@@ -160,8 +190,34 @@ export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnel
   else
     sendHello()
 
+  let keepaliveSeq = 0
+  const sendKeepalivePing = () => {
+    // 仅在连接处于 CONNECTING 时跳过，避免在 open 前 send 抛错；readyState 不可知（如注入的
+    // fake socket）时照常发送。语义与 sendHello 的 readyState 守卫一致。
+    if (typeof socket.readyState === 'number' && socket.readyState !== 1)
+      return
+    keepaliveSeq += 1
+    socket.send(JSON.stringify({ type: 'ping', id: `wkr-keepalive-${keepaliveSeq}` }))
+  }
+  const stopTimer = (input.startKeepalive ?? defaultStartKeepalive)(
+    sendKeepalivePing,
+    resolveKeepaliveIntervalMs(input),
+  )
+  // 幂等清理：close() 与 socket 端 onclose（host 主动断开/重连）都收口到这里，
+  // 任一路径都清掉定时器，杜绝 tunnel 断开后 timer 泄漏。
+  let keepaliveStopped = false
+  const stopKeepalive = () => {
+    if (keepaliveStopped)
+      return
+    keepaliveStopped = true
+    stopTimer()
+  }
+  // host 侧断开 socket 时同样清理（不追踪 pong/不做 death-detection，仅对真实 close 事件做清理）。
+  socket.onclose = stopKeepalive
+
   return {
     close() {
+      stopKeepalive()
       socket.close?.()
     },
   }

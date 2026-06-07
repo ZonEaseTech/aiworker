@@ -1,4 +1,5 @@
 import type { Page } from 'playwright'
+import type { WorkerAccessLocalFetch, WorkerAccessTunnelHandle } from '../../packages/worker-daemon/src/modes/worker/provision-client'
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,6 +9,7 @@ import { chromium } from 'playwright'
 
 import { createHostServer } from '../../apps/host-cli/src/host-server'
 import { closeHostDb, createAssignment } from '../../packages/storage-sqlite/src/host'
+import { connectWorkerAccessTunnel } from '../../packages/worker-daemon/src/modes/worker/provision-client'
 
 const repoRoot = join(import.meta.dir, '..', '..')
 const evidenceRoot = join(repoRoot, 'tmp', `phase2-host-worker-access-${new Date().toISOString().replace(/[:.]/g, '-')}`)
@@ -18,7 +20,7 @@ const evidence: Record<string, unknown> = {}
 
 let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null
 let hostServer: ReturnType<typeof Bun.serve> | null = null
-let workerSocket: WebSocket | null = null
+let primaryTunnel: WorkerAccessTunnelHandle | null = null
 let workRoot: string | null = null
 
 await mkdir(evidenceRoot, { recursive: true })
@@ -41,43 +43,18 @@ try {
     websocket: host.websocket,
   })
 
-  const created = createAssignment({
-    assignedEmail,
-    serverRef: 'browser-proof-server',
-    soulReleaseRef: 'aiworker-freeform@browser-proof',
-  })
-  const checkInResponse = await fetch(new URL('/api/provision/check-in', baseUrl), {
-    body: JSON.stringify({
-      provisionToken: created.provisionToken,
-      worker: {
-        health: { ready: true },
-        id: 'aiworker-freeform',
-        version: 'browser-proof',
-        workerId,
-        workbenchUrl: '/',
-      },
-    }),
-    headers: { 'content-type': 'application/json' },
-    method: 'POST',
-  })
-  if (!checkInResponse.ok)
-    throw new Error(`Worker check-in failed: ${checkInResponse.status} ${await checkInResponse.text()}`)
-  const checkIn = await checkInResponse.json() as {
-    access: { mode: 'worker_access', token: string }
-    assignment: { assignmentId: string, workerId: string }
-  }
+  const primaryCheckIn = await provisionWorker(baseUrl, { assignedEmail, workerId })
   evidence.checkIn = {
-    assignmentId: checkIn.assignment.assignmentId,
-    mode: checkIn.access.mode,
-    workerId: checkIn.assignment.workerId,
+    assignmentId: primaryCheckIn.assignment.assignmentId,
+    mode: primaryCheckIn.access.mode,
+    workerId: primaryCheckIn.assignment.workerId,
   }
 
-  workerSocket = await connectFakeWorkerTunnel(baseUrl, {
-    assignmentId: checkIn.assignment.assignmentId,
-    token: checkIn.access.token,
-    workerId,
-  })
-  await waitForWorkerAccess(baseUrl)
+  // Real-loopback tunnel: the real connectWorkerAccessTunnel client opens a real
+  // ws://127.0.0.1 socket to the real Host and proxies frames into a real Worker
+  // fetch handler. No fabricated response envelope exists anywhere in this proof.
+  primaryTunnel = await connectRealWorkerTunnel(baseUrl, primaryCheckIn)
+  await waitForWorkerAccess(baseUrl, workerId)
 
   browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { height: 900, width: 1440 } })
@@ -98,7 +75,7 @@ try {
 
   const workerStatus = await gotoDocument(page, workerUrl, `/workers/${workerId}`)
   await page.locator(`[data-worker-web="${workerId}"]`).waitFor({ state: 'visible', timeout: 10000 })
-  const workerText = await page.locator(`[data-worker-web="${workerId}"]`).innerText()
+  const workerText = (await page.locator(`[data-worker-web="${workerId}"]`).textContent()) ?? ''
   const postProof = await page.evaluate(async () => {
     const response = await fetch('/workers/wkr_82/api/sessions', {
       body: JSON.stringify({ title: 'Browser proof session' }),
@@ -123,6 +100,8 @@ try {
   if (unexpectedBrowserEvents.length > 0)
     throw new Error(`Unexpected browser errors during Phase 2 host/worker access proof: ${unexpectedBrowserEvents.join('\n')}`)
 
+  evidence.concurrency = await runConcurrentRealLoopbackGate(baseUrl)
+
   await writeEvidence('proof.json', {
     baseUrl,
     browserEvents,
@@ -142,8 +121,8 @@ catch (error) {
 finally {
   if (browser)
     await browser.close()
-  if (workerSocket)
-    workerSocket.close()
+  if (primaryTunnel)
+    primaryTunnel.close()
   if (hostServer)
     hostServer.stop(true)
   closeHostDb()
@@ -151,10 +130,9 @@ finally {
     await rm(workRoot, { force: true, recursive: true })
 }
 
-interface FakeWorkerIdentity {
-  assignmentId: string
-  token: string
-  workerId: string
+interface WorkerCheckInIdentity {
+  access: { mode: 'worker_access', token: string }
+  assignment: { assignedEmail: string, assignmentId: string, soulReleaseRef: string, workerId: string }
 }
 
 interface MountContainerProof {
@@ -180,87 +158,229 @@ function captureBrowserEvents(page: Page): void {
   })
 }
 
-async function connectFakeWorkerTunnel(baseUrl: string, identity: FakeWorkerIdentity): Promise<WebSocket> {
-  const url = new URL('/api/provision/access', baseUrl)
-  url.protocol = 'ws:'
-  const socket = new WebSocket(url)
-
-  socket.addEventListener('open', () => {
-    socket.send(JSON.stringify({
-      type: 'hello',
-      assignmentId: identity.assignmentId,
-      token: identity.token,
-      workerId: identity.workerId,
-    }))
+async function provisionWorker(
+  baseUrl: string,
+  identity: { assignedEmail: string, workerId: string },
+): Promise<WorkerCheckInIdentity> {
+  const created = createAssignment({
+    assignedEmail: identity.assignedEmail,
+    serverRef: 'browser-proof-server',
+    soulReleaseRef: 'aiworker-freeform@browser-proof',
   })
-  socket.addEventListener('message', (event) => {
-    void handleWorkerAccessFrame(socket, JSON.parse(String(event.data)))
+  const checkInResponse = await fetch(new URL('/api/provision/check-in', baseUrl), {
+    body: JSON.stringify({
+      provisionToken: created.provisionToken,
+      worker: {
+        health: { ready: true },
+        id: 'aiworker-freeform',
+        version: 'browser-proof',
+        workerId: identity.workerId,
+        workbenchUrl: '/',
+      },
+    }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
   })
-  await waitForSocketOpen(socket)
-  return socket
+  if (!checkInResponse.ok)
+    throw new Error(`Worker check-in failed: ${checkInResponse.status} ${await checkInResponse.text()}`)
+  return await checkInResponse.json() as WorkerCheckInIdentity
 }
 
-async function handleWorkerAccessFrame(socket: WebSocket, frame: Record<string, unknown>): Promise<void> {
-  if (frame.type === 'ping') {
-    socket.send(JSON.stringify({ type: 'pong', id: frame.id }))
-    return
+// A real Worker-side fetch handler. It routes on the Worker-local path, which the
+// Host has already stripped of the /workers/:id prefix via mapWorkerAccessPath, so
+// it sees `/`, `/api/sessions`, `/probe`. Each handler closes over its own workerId
+// so its body is self-identifying and cross-attribution is observable.
+function createWorkerLocalFetch(boundWorkerId: string): WorkerAccessLocalFetch {
+  return async (request) => {
+    const { method } = request
+    const { pathname } = new URL(request.url)
+    if (method === 'POST' && pathname === '/api/sessions') {
+      const bodyText = await request.text()
+      return new Response(JSON.stringify({ bodyText, method, path: pathname, workerId: boundWorkerId }), {
+        headers: { 'content-type': 'application/json' },
+        status: 201,
+      })
+    }
+    if (method === 'GET' && pathname === '/probe') {
+      return new Response(`worker=${boundWorkerId}`, {
+        headers: { 'content-type': 'text/plain' },
+        status: 200,
+      })
+    }
+    return new Response(
+      `<!doctype html><main data-worker-web="${boundWorkerId}">Worker via tunnel ${escapeHtml(pathname)}</main>`,
+      { headers: { 'content-type': 'text/html' }, status: 200 },
+    )
   }
-  if (frame.type !== 'request')
-    return
-
-  const method = String(frame.method)
-  const path = String(frame.path)
-  if (method === 'POST' && path === '/api/sessions') {
-    socket.send(JSON.stringify({
-      type: 'response',
-      id: frame.id,
-      status: 201,
-      headers: { 'content-type': 'application/json' },
-      bodyText: JSON.stringify({
-        bodyText: frame.bodyText,
-        method,
-        path,
-        workerId,
-      }),
-    }))
-    return
-  }
-
-  socket.send(JSON.stringify({
-    type: 'response',
-    id: frame.id,
-    status: 200,
-    headers: { 'content-type': 'text/html' },
-    bodyText: `<!doctype html><main data-worker-web="${workerId}">Worker via tunnel ${escapeHtml(path)}</main>`,
-  }))
 }
 
-async function waitForSocketOpen(socket: WebSocket): Promise<void> {
-  if (socket.readyState === WebSocket.OPEN)
-    return
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Worker access websocket did not open')), 10000)
-    socket.addEventListener('open', () => {
-      clearTimeout(timeout)
-      resolve()
-    }, { once: true })
-    socket.addEventListener('error', () => {
-      clearTimeout(timeout)
-      reject(new Error('Worker access websocket failed to open'))
-    }, { once: true })
+async function connectRealWorkerTunnel(baseUrl: string, identity: WorkerCheckInIdentity): Promise<WorkerAccessTunnelHandle> {
+  const handle = await connectWorkerAccessTunnel({
+    access: identity.access,
+    assignment: identity.assignment,
+    env: { AIWORKER_HOST_URL: baseUrl },
+    localFetch: createWorkerLocalFetch(identity.assignment.workerId),
   })
+  if (!handle)
+    throw new Error(`connectWorkerAccessTunnel returned no handle for ${identity.assignment.workerId}`)
+  return handle
 }
 
-async function waitForWorkerAccess(baseUrl: string): Promise<void> {
-  let lastStatus = 0
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    const response = await fetch(new URL(`/workers/${workerId}`, baseUrl))
-    lastStatus = response.status
-    if (response.ok)
-      return
-    await new Promise(resolve => setTimeout(resolve, 100))
+interface ForwardLog {
+  localPath: string
+  requestId: string
+  responseStatus: number
+  workerId: string
+}
+
+async function runConcurrentRealLoopbackGate(baseUrl: string): Promise<Record<string, unknown>> {
+  const workerA = 'wkr_alpha'
+  const workerB = 'wkr_beta'
+  const emailA = 'alpha.employee@zonease.org'
+  const emailB = 'beta.employee@zonease.org'
+
+  const checkInA = await provisionWorker(baseUrl, { assignedEmail: emailA, workerId: workerA })
+  const checkInB = await provisionWorker(baseUrl, { assignedEmail: emailB, workerId: workerB })
+  if (checkInA.assignment.workerId !== workerA || checkInB.assignment.workerId !== workerB)
+    throw new Error('Concurrent gate provisioning returned mismatched worker ids')
+
+  const forwardLogs: ForwardLog[] = []
+  const restoreConsoleInfo = captureForwardLogs(forwardLogs)
+
+  const tunnelA = await connectRealWorkerTunnel(baseUrl, checkInA)
+  const tunnelB = await connectRealWorkerTunnel(baseUrl, checkInB)
+
+  try {
+    // Each hello registers exactly one connection keyed by its own workerId.
+    await waitForWorkerAccess(baseUrl, workerA)
+    await waitForWorkerAccess(baseUrl, workerB)
+
+    // Interleaved concurrent burst across both workers. Distinguishable probe path
+    // per worker proves the body that comes back was produced by the right handler.
+    const burst: Array<Promise<{ body: string, status: number, target: string }>> = []
+    for (let i = 0; i < 12; i += 1) {
+      const target = i % 2 === 0 ? workerA : workerB
+      burst.push(fetchWorkerProbe(baseUrl, target))
+    }
+    const results = await Promise.all(burst)
+
+    for (const result of results) {
+      if (result.status !== 200)
+        throw new Error(`Concurrent probe to ${result.target} returned HTTP ${result.status}`)
+      // Frame correlation: the response body must come from the targeted worker's
+      // own handler, never the sibling's — interleaved frames must not cross.
+      if (result.body !== `worker=${result.target}`)
+        throw new Error(`Routing crossed: /workers/${result.target} returned ${JSON.stringify(result.body)}`)
+    }
+
+    // Interleaved POST /api/sessions per worker: the 201 JSON workerId field must
+    // match the targeted worker (response envelope paired to the right request).
+    const sessionResults = await Promise.all([
+      postWorkerSession(baseUrl, workerA),
+      postWorkerSession(baseUrl, workerB),
+      postWorkerSession(baseUrl, workerA),
+      postWorkerSession(baseUrl, workerB),
+    ])
+    for (const result of sessionResults) {
+      if (result.status !== 201)
+        throw new Error(`Concurrent POST to ${result.target} returned HTTP ${result.status}`)
+      if (result.workerId !== result.target)
+        throw new Error(`POST routing crossed: ${result.target} got workerId ${result.workerId}`)
+    }
+
+    // US-001 forwarding log: every worker_route_forwarded entry for a worker must
+    // carry that worker's id — zero cross-attribution under the interleaved burst.
+    const logsForA = forwardLogs.filter(log => log.localPath === '/probe' && log.workerId === workerA)
+    const logsForB = forwardLogs.filter(log => log.localPath === '/probe' && log.workerId === workerB)
+    if (logsForA.length === 0 || logsForB.length === 0)
+      throw new Error(`Missing forwarding logs: A=${logsForA.length} B=${logsForB.length}`)
+    const requestIds = new Set<string>()
+    for (const log of forwardLogs) {
+      if (log.localPath !== '/probe')
+        continue
+      if (log.workerId !== workerA && log.workerId !== workerB)
+        throw new Error(`Forwarding log carried foreign workerId ${log.workerId}`)
+      if (requestIds.has(log.requestId))
+        throw new Error(`Duplicate forwarding requestId ${log.requestId} — frame ids must not collide across workers`)
+      requestIds.add(log.requestId)
+    }
+
+    // N2 negative: disconnect A's real socket. After the close propagates to the
+    // Host, /workers/:A must return 503 (accessRegistry.has(A) === false) while B
+    // remains routable — no residual hit on B's registered connection.
+    tunnelA.close()
+    await waitForWorkerUnavailable(baseUrl, workerA)
+    const afterDisconnectA = await fetchWorkerProbe(baseUrl, workerA)
+    if (afterDisconnectA.status !== 503)
+      throw new Error(`Disconnected worker A returned HTTP ${afterDisconnectA.status}, expected 503`)
+    if (afterDisconnectA.body.includes(`worker=${workerB}`))
+      throw new Error('Disconnected worker A response leaked worker B content')
+    const bStillRoutable = await fetchWorkerProbe(baseUrl, workerB)
+    if (bStillRoutable.status !== 200 || bStillRoutable.body !== `worker=${workerB}`)
+      throw new Error(`Worker B no longer routable after A disconnect: HTTP ${bStillRoutable.status} body ${JSON.stringify(bStillRoutable.body)}`)
+
+    return {
+      forwardLogCount: forwardLogs.length,
+      logsForA: logsForA.length,
+      logsForB: logsForB.length,
+      n2DisconnectedStatus: afterDisconnectA.status,
+      probeResults: results.map(result => ({ body: result.body, status: result.status, target: result.target })),
+      sessionResults,
+      siblingStillRoutableStatus: bStillRoutable.status,
+      uniqueForwardRequestIds: requestIds.size,
+    }
   }
-  throw new Error(`Worker tunnel did not become reachable, last HTTP status ${lastStatus}`)
+  finally {
+    restoreConsoleInfo()
+    tunnelA.close()
+    tunnelB.close()
+  }
+}
+
+function captureForwardLogs(sink: ForwardLog[]): () => void {
+  const original = console.warn
+  console.warn = (...args: unknown[]): void => {
+    const [first] = args
+    if (typeof first === 'string') {
+      try {
+        const parsed = JSON.parse(first) as Partial<ForwardLog> & { event?: string }
+        if (parsed.event === 'worker_route_forwarded'
+          && typeof parsed.workerId === 'string'
+          && typeof parsed.requestId === 'string'
+          && typeof parsed.localPath === 'string'
+          && typeof parsed.responseStatus === 'number') {
+          sink.push({
+            localPath: parsed.localPath,
+            requestId: parsed.requestId,
+            responseStatus: parsed.responseStatus,
+            workerId: parsed.workerId,
+          })
+        }
+      }
+      catch {
+        // not a forwarding log; ignore
+      }
+    }
+    original(...(args as []))
+  }
+  return () => {
+    console.warn = original
+  }
+}
+
+async function fetchWorkerProbe(baseUrl: string, targetWorkerId: string): Promise<{ body: string, status: number, target: string }> {
+  const response = await fetch(new URL(`/workers/${targetWorkerId}/probe`, baseUrl))
+  return { body: await response.text(), status: response.status, target: targetWorkerId }
+}
+
+async function postWorkerSession(baseUrl: string, targetWorkerId: string): Promise<{ status: number, target: string, workerId: unknown }> {
+  const response = await fetch(new URL(`/workers/${targetWorkerId}/api/sessions`, baseUrl), {
+    body: JSON.stringify({ title: `session-${targetWorkerId}` }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+  const body = await response.json() as { workerId?: unknown }
+  return { status: response.status, target: targetWorkerId, workerId: body.workerId }
 }
 
 async function assertNoMountContainers(page: Page, pathname: string): Promise<MountContainerProof> {
@@ -288,6 +408,31 @@ function isExpectedBrowserEvent(event: string): boolean {
   if (normalized.includes('/favicon.ico') && event.startsWith('response:404:'))
     return true
   return normalized.includes('/api/host/options') && normalized.includes('err_aborted')
+}
+
+async function waitForWorkerAccess(baseUrl: string, targetWorkerId: string): Promise<void> {
+  let lastStatus = 0
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const response = await fetch(new URL(`/workers/${targetWorkerId}`, baseUrl))
+    lastStatus = response.status
+    if (response.ok)
+      return
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  throw new Error(`Worker ${targetWorkerId} tunnel did not become reachable, last HTTP status ${lastStatus}`)
+}
+
+async function waitForWorkerUnavailable(baseUrl: string, targetWorkerId: string): Promise<void> {
+  let lastStatus = 0
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const response = await fetch(new URL(`/workers/${targetWorkerId}/probe`, baseUrl))
+    lastStatus = response.status
+    await response.text()
+    if (response.status === 503)
+      return
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  throw new Error(`Worker ${targetWorkerId} did not become unavailable after disconnect, last HTTP status ${lastStatus}`)
 }
 
 function reservePort(): number {
