@@ -105,6 +105,14 @@ WORKER_MIGRATIONS_FOLDER=
 WORKER_WORKSPACE_ROOT=
 
 ###############################################################################
+# CLI package shim
+###############################################################################
+
+# Optional Bun executable override used by the npm/bunx CLI shim when Bun is not
+# on PATH.
+AIWORKER_BUN_BIN=
+
+###############################################################################
 # Fleet dev harness
 ###############################################################################
 
@@ -348,7 +356,7 @@ PROCESS_GC_INTERVAL_MS=30000
 Run:
 
 ```bash
-bun <<'EOF'
+bun run - <<'EOF'
 const fs = await import('node:fs')
 
 function readEnv(path) {
@@ -420,7 +428,7 @@ Expected output includes:
 Run:
 
 ```bash
-bun <<'EOF'
+bun run - <<'EOF'
 const fs = await import('node:fs')
 const path = await import('node:path')
 const childProcess = await import('node:child_process')
@@ -483,6 +491,9 @@ const fixtureOnly = new Set([
   'AIWORKER_PHASE2_WORKER_URL',
   'AIWORKER_WORKER_ACCESS_LOCAL_URL',
   'AIWORKER_BOOTSTRAP_TOKEN',
+  'AIWORKER_ARGS_DISPLAY',
+  'AIWORKER_BUN_BUNDLE',
+  'AIWORKER_SHIM_DIR',
   'TEST_ENGINE_ENV_LOG',
 ])
 

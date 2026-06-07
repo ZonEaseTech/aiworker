@@ -103,6 +103,10 @@ Worker Web:
 
 - `AIWORKER_API_URL`
 
+CLI package shim:
+
+- `AIWORKER_BUN_BIN`
+
 Fleet dev harness:
 
 - `AIWORKER_DEV_FLEET_PURGE`
