@@ -30,6 +30,19 @@ jobs:
       - name: Install Playwright browser
         run: bunx playwright install --with-deps chromium
 
+      - name: Assert git tag matches package versions
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          worker_version="$(node -p "require('./apps/worker-cli/package.json').version")"
+          host_version="$(node -p "require('./apps/host-cli/package.json').version")"
+          if [[ "$tag_version" != "$worker_version" || "$tag_version" != "$host_version" ]]; then
+            echo "git tag/package version mismatch — tag=$tag_version worker-cli=$worker_version host-cli=$host_version" >&2
+            echo "tag name and both publishable package.json versions must agree before publish" >&2
+            exit 1
+          fi
+          echo "git tag matches package versions: $tag_version"
+
       - name: Release check
         run: bun run release:check
 
@@ -80,6 +93,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             aiworker-linux-x64.tar.gz
             aiworker-linux-arm64.tar.gz

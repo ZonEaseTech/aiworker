@@ -10,6 +10,7 @@
 - **版本号 source of truth = 两个 `package.json`**：`apps/worker-cli/package.json` + `apps/host-cli/package.json` 的 `version` 字段。`dist/package.json` 由 `bun run build` 重生，不要手改。两处必须一致。
 - **发版唯一触发 = push `v*` tag**。`.github/workflows/release.yml` 只被 `tags: ['v*']` 驱动。合并到 `main` **不**发版（只跑 `lint.yml`）。没有 tag 就没有 npm 发布。
 - **渠道由 tag 名派生，不手改 workflow**：agent 选渠道 = 选 tag 名。见下表。`release.yml` 的「Derive npm dist-tag」步骤从 `GITHUB_REF_NAME` 解析，两处 `npm publish` 用派生出的 `--tag`。
+- **tag 名的版本号必须等于两个 `package.json` 的 `version`**（`v1.0.0-rc.5` ⇔ 两包都是 `1.0.0-rc.5`）。渠道从 **tag 名**派生、发布的版本号从 **package.json** 取，两者必须自洽，否则会把 rc 发进 `latest` 或把稳定版发进 `rc`。`release.yml` 在 `release:check` 前用「Assert git tag matches package versions」步骤 fail-fast 守这条：不一致秒级红、绝不发版。**bump（第 4 步）和打 tag（第 8 步）是两个独立动作，最易错位——务必让 tag 名 = 两包版本号。**
 - **npm 版本不可覆盖**：一旦某 `version` 发过，重发同版本必失败。改了就 bump，绝不复用版本号。
 - **带 rc tag 的发布分支若要合 main，必须 merge-commit 或 `--ff-only`，绝不 squash/rebase**（squash 会孤儿化已存在的 tag）。本闭环的常规姿势是「先合 main，再在 main 上打 tag」，分支本身不携带 tag，故常规 feature 分支用任意合并方式都可；只有当分支已被 rc tag 指向时才受此约束。
 - **`release:check` 是权威发版门**，由 CI 在 tag push 后跑（见 `release.yml`）。它必须精确等于 `docs/testing.md` 的 Current Release Gates 清单；改门要同步改 `docs/testing.md` + 根 `package.json`，否则 `docs:check` 红。
@@ -24,6 +25,8 @@
 | `v1.0.0` | `latest` | 正式 GA，成为 `npm i` 默认安装版，覆盖旧 `latest` |
 
 派生规则（`release.yml` 内实现）：tag 含 `-`（SemVer prerelease）→ 取 `-` 后的字母标识（`rc.4`→`rc`）；不含 `-` → `latest`。**所以要发哪个渠道，只改你打的 tag 名，不碰 workflow。**
+
+> GitHub Release 的 prerelease 标志同样从 tag 名派生：`prerelease: ${{ contains(github.ref_name, '-') }}`（含 `-` 即 prerelease）。**触发条件 = 首个干净 GA tag（`vX.Y.Z`）落地前必须确认它已生效**：在没有任何稳定版时，rc 占着 GitHub「Latest release」徽章无害；一旦切了第一个 GA，未标 prerelease 的 rc 会抢走 GA 的 `/releases/latest` 二进制。
 
 > 当前状态锚点（执行前用 `npm view` 复核，勿凭此条拍板）：`@zonease/aiworker-cli` 的 `latest` 还停在 pre-refactor 的 `0.19.3`，`rc` 在 `1.0.0-rc.x`。即默认 `npm i` 仍装旧版——这正是将来切 GA（打干净 `vX.Y.Z`）要解决的事。
 
