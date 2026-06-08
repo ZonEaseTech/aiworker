@@ -4,8 +4,10 @@ import type {
   CreateHostAssignmentResult,
   HostApiClient,
   HostAssignmentSummary,
+  HostOperator,
   HostOptionsSummary,
   HostProvisioningTargetOption,
+  HostSoulReleaseOption,
 } from './host-api'
 
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
@@ -32,12 +34,26 @@ import {
 } from '@zonease/aiworker-ui/components/table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { createHostApiClient } from './host-api'
+import { createHostApiClient, HostApiError } from './host-api'
 
-export type { AssignmentStatus, HostAssignmentSummary, HostOptionsSummary } from './host-api'
+export type { AssignmentStatus, HostAssignmentSummary, HostOperator, HostOptionsSummary } from './host-api'
 
 export interface HostControlPlaneProps {
   api?: HostApiClient
+  /**
+   * Live status poll interval (ms). Provisioning → ready transitions happen
+   * out-of-band (worker check-in, access tunnel), so production polls. Defaults
+   * to off (0) so unit tests stay deterministic; `main.tsx` enables it.
+   */
+  pollIntervalMs?: number
+}
+
+type NavKey = 'AI Workers' | 'Souls' | 'Activity' | 'Settings'
+
+interface NavItem {
+  key: NavKey
+  /** Honestly mark sections that have no backend yet so the nav never lies. */
+  todo: boolean
 }
 
 interface AssignmentFormState {
@@ -47,6 +63,11 @@ interface AssignmentFormState {
   soulReleaseRef: string
 }
 
+interface UiError {
+  kind: 'forbidden' | 'generic' | 'relogin'
+  message: string
+}
+
 const emptyFormState: AssignmentFormState = {
   adapterRuntimeControlBaseUrl: '',
   assignedEmail: '',
@@ -54,7 +75,24 @@ const emptyFormState: AssignmentFormState = {
   soulReleaseRef: '',
 }
 
-const navItems = ['AI Workers', 'Souls', 'Activity', 'Settings'] as const
+const navItems: NavItem[] = [
+  { key: 'AI Workers', todo: false },
+  { key: 'Souls', todo: false },
+  { key: 'Activity', todo: true },
+  { key: 'Settings', todo: true },
+]
+
+const LOGIN_URL = '/auth/login?returnTo=/host'
+const LOGOUT_URL = '/auth/logout'
+
+// Lifecycle progress order; non-progress states (needs_attention/revoked/
+// archived/draft) rank 0 so they never light up a forward step.
+const STATUS_RANK: Record<string, number> = {
+  access_ready: 3,
+  checked_in: 2,
+  provisioning: 1,
+  ready: 4,
+}
 
 function statusLabel(status: AssignmentStatus | string) {
   switch (status) {
@@ -105,6 +143,18 @@ function errorMessage(error: unknown): string {
   return 'Host API 请求失败'
 }
 
+// Map raw API failures to operator-facing states. 401/403 are real control-plane
+// conditions (expired operator / missing admin role), not generic errors.
+function toUiError(error: unknown): UiError {
+  if (error instanceof HostApiError) {
+    if (error.status === 401)
+      return { kind: 'relogin', message: '登录已过期，请重新登录。' }
+    if (error.status === 403)
+      return { kind: 'forbidden', message: '需要 Host 管理员账号才能访问。' }
+  }
+  return { kind: 'generic', message: errorMessage(error) }
+}
+
 function assignmentKey(assignment: HostAssignmentSummary): string {
   return assignment.assignmentId ?? `${assignment.assignedEmail}-${assignment.soulReleaseRef}`
 }
@@ -131,30 +181,38 @@ function selectedSoulLabel(options: HostOptionsSummary | null, soulReleaseRef: s
   return `${soul.name} (${soul.releaseRef})`
 }
 
-function isCheckedInOrBeyond(status: AssignmentStatus | string): boolean {
-  return ['checked_in', 'access_ready', 'ready'].includes(status)
+function anyAssignmentAtLeast(assignments: HostAssignmentSummary[], status: AssignmentStatus): boolean {
+  const threshold = STATUS_RANK[status] ?? 0
+  return assignments.some(assignment => (STATUS_RANK[assignment.status] ?? 0) >= threshold)
 }
 
-export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
+export function HostControlPlane({ api, pollIntervalMs = 0 }: HostControlPlaneProps = {}) {
   const hostApi = useMemo(() => api ?? createHostApiClient(), [api])
   const assignmentRequestIdRef = useRef(0)
   const mountedRef = useRef(false)
+  const emailInputRef = useRef<HTMLInputElement>(null)
+  const [activeNav, setActiveNav] = useState<NavKey>('AI Workers')
   const [assignments, setAssignments] = useState<HostAssignmentSummary[]>([])
   const [formState, setFormState] = useState<AssignmentFormState>(emptyFormState)
   const [hasLoadedAssignments, setHasLoadedAssignments] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false)
-  const [createError, setCreateError] = useState<null | string>(null)
-  const [listError, setListError] = useState<null | string>(null)
+  const [createError, setCreateError] = useState<null | UiError>(null)
+  const [listError, setListError] = useState<null | UiError>(null)
   const [options, setOptions] = useState<HostOptionsSummary | null>(null)
-  const [optionsError, setOptionsError] = useState<null | string>(null)
+  const [optionsError, setOptionsError] = useState<null | UiError>(null)
+  const [operator, setOperator] = useState<HostOperator | null>(null)
+  const [operatorLoaded, setOperatorLoaded] = useState(false)
   const [lastCreateResult, setLastCreateResult] = useState<CreateHostAssignmentResult | null>(null)
   const currentTarget = selectedTarget(options, formState.provisioningTargetId)
 
-  const refreshAssignments = useCallback(async () => {
+  const refreshAssignments = useCallback(async (opts: { silent?: boolean } = {}) => {
     const requestId = assignmentRequestIdRef.current + 1
     assignmentRequestIdRef.current = requestId
-    if (mountedRef.current) {
+    // Only foreground loads touch the spinner/error up front. A silent poll must
+    // NOT clear a standing error banner (e.g. a 401 re-login prompt) — otherwise
+    // the next tick wipes it and a silent failure never restores it.
+    if (mountedRef.current && !opts.silent) {
       setIsLoadingAssignments(true)
       setListError(null)
     }
@@ -163,18 +221,25 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
 
     try {
       const nextAssignments = await hostApi.listAssignments()
-      if (canApplyResult())
+      if (canApplyResult()) {
         setAssignments(nextAssignments)
+        // Success clears any standing error banner (incl. recovering from a 401),
+        // for background polls and foreground loads alike.
+        setListError(null)
+        setHasLoadedAssignments(true)
+      }
     }
     catch (error) {
-      if (canApplyResult())
-        setListError(errorMessage(error))
+      // Background polls keep the last good view and the standing banner; only
+      // foreground loads surface a fresh error.
+      if (canApplyResult() && !opts.silent)
+        setListError(toUiError(error))
     }
     finally {
-      if (canApplyResult()) {
-        setHasLoadedAssignments(true)
+      // The foreground call owns the spinner and always clears it, even if a
+      // silent poll superseded its requestId — otherwise 刷新 soft-locks.
+      if (mountedRef.current && !opts.silent)
         setIsLoadingAssignments(false)
-      }
     }
   }, [hostApi])
 
@@ -193,7 +258,23 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
     }
     catch (error) {
       if (mountedRef.current)
-        setOptionsError(errorMessage(error))
+        setOptionsError(toUiError(error))
+    }
+  }, [hostApi])
+
+  const loadOperator = useCallback(async () => {
+    try {
+      const nextOperator = await hostApi.getOperator()
+      if (mountedRef.current)
+        setOperator(nextOperator)
+    }
+    catch {
+      if (mountedRef.current)
+        setOperator(null)
+    }
+    finally {
+      if (mountedRef.current)
+        setOperatorLoaded(true)
     }
   }, [hostApi])
 
@@ -201,11 +282,23 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
     mountedRef.current = true
     void refreshAssignments()
     void loadOptions()
+    void loadOperator()
     return () => {
       mountedRef.current = false
       assignmentRequestIdRef.current += 1
     }
-  }, [loadOptions, refreshAssignments])
+  }, [loadOptions, loadOperator, refreshAssignments])
+
+  useEffect(() => {
+    if (!(pollIntervalMs > 0))
+      return
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden)
+        return
+      void refreshAssignments({ silent: true })
+    }, pollIntervalMs)
+    return () => clearInterval(id)
+  }, [pollIntervalMs, refreshAssignments])
 
   async function handleCreateAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -214,7 +307,7 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
 
     const target = selectedTarget(options, formState.provisioningTargetId)
     if (!target) {
-      setCreateError('请选择 provisioning target')
+      setCreateError({ kind: 'generic', message: '请选择 provisioning target' })
       return
     }
 
@@ -246,13 +339,23 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
     }
     catch (error) {
       if (mountedRef.current)
-        setCreateError(errorMessage(error))
+        setCreateError(toUiError(error))
     }
     finally {
       if (mountedRef.current)
         setIsCreating(false)
     }
   }
+
+  function focusAssignmentForm() {
+    // The button only renders inside the AI Workers view, so the drawer form is
+    // already mounted and the email input can take focus synchronously.
+    setLastCreateResult(null)
+    emailInputRef.current?.focus()
+  }
+
+  const onlineCount = assignments.filter(assignment => assignment.status === 'ready').length
+  const connectingCount = assignments.filter(assignment => assignment.status === 'checked_in' || assignment.status === 'access_ready').length
 
   return (
     <div className="min-h-svh bg-background text-foreground">
@@ -265,332 +368,535 @@ export function HostControlPlane({ api }: HostControlPlaneProps = {}) {
           <nav aria-label="Host navigation" className="flex flex-col gap-1">
             {navItems.map(item => (
               <button
-                key={item}
+                key={item.key}
                 type="button"
-                aria-current={item === 'AI Workers' ? 'page' : undefined}
-                className="data-[active=true]:bg-background data-[active=true]:text-foreground text-muted-foreground hover:bg-background/70 flex h-8 items-center rounded-md px-2 text-left text-xs font-medium"
-                data-active={item === 'AI Workers'}
+                aria-current={item.key === activeNav ? 'page' : undefined}
+                onClick={() => setActiveNav(item.key)}
+                className="data-[active=true]:bg-background data-[active=true]:text-foreground text-muted-foreground hover:bg-background/70 flex h-8 items-center justify-between gap-2 rounded-md px-2 text-left text-xs font-medium"
+                data-active={item.key === activeNav}
               >
-                {item}
+                <span className="truncate">{item.key}</span>
+                {item.todo
+                  ? (
+                      <Badge variant="outline">
+                        <BadgeLabel>规划中</BadgeLabel>
+                      </Badge>
+                    )
+                  : null}
               </button>
             ))}
           </nav>
           <Separator />
-          <div className="flex flex-col gap-2">
-            <Badge variant="secondary">
-              <BadgeLabel>Logto 未接入</BadgeLabel>
-            </Badge>
-            <Badge variant="secondary">
-              <BadgeLabel>Worker Access Tunnel 未接入</BadgeLabel>
-            </Badge>
-          </div>
+          <SidebarOperator operator={operator} operatorLoaded={operatorLoaded} />
+          <WorkerAccessSummary online={onlineCount} connecting={connectingCount} />
         </aside>
 
-        <main className="flex min-w-0 flex-col gap-5 p-4 sm:p-6">
-          <header className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-semibold">AI Workers</h1>
-              <p className="text-muted-foreground text-sm">
-                管理员工 AI Worker 的开通、check-in 和可访问状态。
-              </p>
-            </div>
-            <Button type="button" onClick={() => setLastCreateResult(null)}>
-              开通 AI Worker
-            </Button>
-          </header>
-
-          <section className="grid gap-3 sm:grid-cols-3" aria-label="Host readiness summary">
-            <SummaryBlock label="Assignments" value={String(assignments.length)} />
-            <SummaryBlock label="Provisioning targets" value={String(options?.provisioningTargets.length ?? 0)} />
-            <SummaryBlock label="Soul releases" value={String(options?.soulReleases.length ?? 0)} />
-          </section>
-
-          {listError
-            ? (
-                <Alert variant="destructive">
-                  <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <span>{listError}</span>
-                    <Button type="button" size="sm" variant="outline" disabled={isLoadingAssignments} onClick={() => void refreshAssignments()}>
-                      重试
+        {activeNav === 'AI Workers'
+          ? (
+              <>
+                <main className="flex min-w-0 flex-col gap-5 p-4 sm:p-6">
+                  <header className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <h1 className="text-2xl font-semibold">AI Workers</h1>
+                      <p className="text-muted-foreground text-sm">
+                        管理员工 AI Worker 的开通、check-in 和可访问状态。
+                      </p>
+                    </div>
+                    <Button type="button" onClick={focusAssignmentForm}>
+                      开通 AI Worker
                     </Button>
-                  </AlertDescription>
-                </Alert>
-              )
-            : null}
+                  </header>
 
-          <section className="min-w-0 rounded-md border border-border bg-background" aria-label="AI Workers list">
-            {!listError && isLoadingAssignments && !hasLoadedAssignments
-              ? <p className="text-muted-foreground p-4 text-sm">正在加载开通清单...</p>
-              : null}
+                  <section className="grid gap-3 sm:grid-cols-3" aria-label="Host readiness summary">
+                    <SummaryBlock label="Assignments" value={String(assignments.length)} />
+                    <SummaryBlock label="Provisioning targets" value={String(options?.provisioningTargets.length ?? 0)} />
+                    <SummaryBlock label="Soul releases" value={String(options?.soulReleases.length ?? 0)} />
+                  </section>
 
-            {!listError && hasLoadedAssignments && assignments.length === 0
-              ? (
-                  <Empty className="p-6">
-                    <EmptyHeader>
-                      <EmptyTitle>暂无开通记录</EmptyTitle>
-                      <EmptyDescription>完成开通后，这里会显示员工 Worker 开通状态。</EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                )
-              : null}
-
-            {assignments.length > 0
-              ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>员工</TableHead>
-                        <TableHead>Target</TableHead>
-                        <TableHead>Soul</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Next</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {assignments.map((assignment) => {
-                        const workerUrl = assignment.status === 'ready' && assignment.workerId
-                          ? `/workers/${encodeURIComponent(assignment.workerId)}`
-                          : null
-
-                        return (
-                          <TableRow key={assignmentKey(assignment)}>
-                            <TableCell>
-                              <div className="min-w-0">
-                                <p className="truncate font-medium">{assignment.assignedEmail}</p>
-                                <p className="text-muted-foreground truncate">
-                                  {assignment.workerId ?? 'Worker 待创建'}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell>{assignment.provisioningTargetRef ?? assignment.serverRef}</TableCell>
-                            <TableCell>{assignment.soulReleaseRef}</TableCell>
-                            <TableCell>
-                              <Badge variant={assignment.status === 'ready' ? 'default' : 'secondary'}>
-                                <BadgeLabel>{statusLabel(assignment.status)}</BadgeLabel>
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <span className="text-muted-foreground">{nextStepLabel(assignment.status)}</span>
-                                {workerUrl
-                                  ? (
-                                      <Button asChild size="sm" variant="outline">
-                                        <a href={workerUrl}>打开 Worker</a>
-                                      </Button>
-                                    )
-                                  : null}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                )
-              : null}
-          </section>
-        </main>
-
-        <aside aria-label="Worker assignment drawer" className="border-border bg-muted/20 min-w-0 border-l">
-          <ScrollArea className="h-svh">
-            <div className="flex flex-col gap-5 p-4">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-lg font-semibold">开通 AI Worker</h2>
-                <p className="text-muted-foreground text-sm">
-                  给员工账号绑定开通目标和 Soul release。
-                </p>
-              </div>
-
-              {optionsError
-                ? (
-                    <Alert variant="destructive">
-                      <AlertDescription>{optionsError}</AlertDescription>
-                    </Alert>
-                  )
-                : null}
-
-              {options?.provisioningTargetSourceError
-                ? (
-                    <Alert variant="destructive">
-                      <AlertDescription>{options.provisioningTargetSourceError}</AlertDescription>
-                    </Alert>
-                  )
-                : null}
-
-              <form className="flex flex-col gap-4" onSubmit={handleCreateAssignment}>
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor="assignedEmail">员工邮箱</FieldLabel>
-                    <Input
-                      id="assignedEmail"
-                      autoComplete="email"
-                      required
-                      type="email"
-                      value={formState.assignedEmail}
-                      onChange={(event) => {
-                        setFormState(current => ({ ...current, assignedEmail: event.target.value }))
-                      }}
-                    />
-                    <FieldDescription>必须是员工企业邮箱。</FieldDescription>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="provisioningTargetId">provisioning target</FieldLabel>
-                    {options && options.provisioningTargets.length > 0
-                      ? (
-                          <NativeSelect
-                            id="provisioningTargetId"
-                            required
-                            value={formState.provisioningTargetId}
-                            onChange={(event) => {
-                              setFormState(current => ({ ...current, provisioningTargetId: event.target.value }))
-                            }}
-                          >
-                            {options.provisioningTargets.map(target => (
-                              <NativeSelectOption key={target.id} value={target.id}>
-                                {targetLabel(target)}
-                              </NativeSelectOption>
-                            ))}
-                          </NativeSelect>
-                        )
-                      : (
-                          <Input
-                            id="provisioningTargetId"
-                            required
-                            value={formState.provisioningTargetId}
-                            onChange={(event) => {
-                              setFormState(current => ({ ...current, provisioningTargetId: event.target.value }))
-                            }}
-                          />
-                        )}
-                    <FieldDescription>{selectedTargetDescription(options, formState.provisioningTargetId)}</FieldDescription>
-                    {options && options.provisioningTargets.length > 0
-                      ? (
-                          <div className="flex flex-wrap gap-1" aria-label="target maturity summaries">
-                            {options.provisioningTargets.map(target => (
-                              <Badge key={target.id} variant="outline">
-                                <BadgeLabel>
-                                  {target.adapterType}
-                                  {' '}
-                                  ·
-                                  {' '}
-                                  {target.maturity}
-                                </BadgeLabel>
-                              </Badge>
-                            ))}
-                          </div>
-                        )
-                      : null}
-                    {currentTarget && currentTarget.maturity !== 'production'
-                      ? <FieldDescription>此目标用于测试开通链路，不建议作为员工长期生产 Worker。</FieldDescription>
-                      : null}
-                  </Field>
-
-                  {currentTarget?.adapterType === 'aissh'
+                  {listError
                     ? (
-                        <Field>
-                          <FieldLabel htmlFor="adapterRuntimeControlBaseUrl">Worker callback URL</FieldLabel>
-                          <Input
-                            id="adapterRuntimeControlBaseUrl"
-                            value={formState.adapterRuntimeControlBaseUrl}
-                            onChange={(event) => {
-                              setFormState(current => ({ ...current, adapterRuntimeControlBaseUrl: event.target.value }))
-                            }}
-                          />
-                          <FieldDescription>远程 aissh 目标必须能访问这个 Host API URL；不能使用本机 localhost。</FieldDescription>
-                        </Field>
+                        <Alert variant="destructive">
+                          <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <span>{listError.message}</span>
+                            {listError.kind === 'relogin'
+                              ? (
+                                  <Button asChild size="sm" variant="outline">
+                                    <a href={LOGIN_URL}>重新登录</a>
+                                  </Button>
+                                )
+                              : (
+                                  <Button type="button" size="sm" variant="outline" disabled={isLoadingAssignments} onClick={() => void refreshAssignments()}>
+                                    重试
+                                  </Button>
+                                )}
+                          </AlertDescription>
+                        </Alert>
                       )
                     : null}
 
-                  <Field>
-                    <FieldLabel htmlFor="soulReleaseRef">Soul release</FieldLabel>
-                    {options && options.soulReleases.length > 0
+                  <section className="min-w-0 rounded-md border border-border bg-background" aria-label="AI Workers list">
+                    <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
+                      <p className="text-muted-foreground text-xs">开通清单实时刷新</p>
+                      <Button type="button" size="sm" variant="outline" disabled={isLoadingAssignments} onClick={() => void refreshAssignments()}>
+                        {isLoadingAssignments ? '刷新中' : '刷新'}
+                      </Button>
+                    </div>
+
+                    {!listError && isLoadingAssignments && !hasLoadedAssignments
+                      ? <p className="text-muted-foreground p-4 text-sm">正在加载开通清单...</p>
+                      : null}
+
+                    {!listError && hasLoadedAssignments && assignments.length === 0
                       ? (
-                          <NativeSelect
-                            id="soulReleaseRef"
-                            required
-                            value={formState.soulReleaseRef}
-                            onChange={(event) => {
-                              setFormState(current => ({ ...current, soulReleaseRef: event.target.value }))
-                            }}
-                          >
-                            {options.soulReleases.map(soul => (
-                              <NativeSelectOption key={soul.releaseRef} value={soul.releaseRef}>
-                                {soul.name}
-                                {' '}
-                                (
-                                {soul.releaseRef}
-                                )
-                              </NativeSelectOption>
-                            ))}
-                          </NativeSelect>
+                          <Empty className="p-6">
+                            <EmptyHeader>
+                              <EmptyTitle>暂无开通记录</EmptyTitle>
+                              <EmptyDescription>完成开通后，这里会显示员工 Worker 开通状态。</EmptyDescription>
+                            </EmptyHeader>
+                          </Empty>
                         )
-                      : (
-                          <Input
-                            id="soulReleaseRef"
-                            required
-                            value={formState.soulReleaseRef}
-                            onChange={(event) => {
-                              setFormState(current => ({ ...current, soulReleaseRef: event.target.value }))
-                            }}
-                          />
-                        )}
-                    <FieldDescription>{selectedSoulLabel(options, formState.soulReleaseRef)}</FieldDescription>
-                  </Field>
-                </FieldGroup>
+                      : null}
 
-                <section className="rounded-md border border-border bg-background p-3" aria-label="Configuration passthrough summary">
-                  <p className="text-sm font-medium">配置透传摘要</p>
-                  <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
-                    <p>配置随 Soul release 透传</p>
-                    <p>Host 不在开通时编辑 raw config</p>
-                    <p>Skills / entry file / MCP 由 descriptor 携带</p>
-                  </div>
-                </section>
+                    {assignments.length > 0
+                      ? (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>员工</TableHead>
+                                <TableHead>Target</TableHead>
+                                <TableHead>Soul</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Next</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {assignments.map((assignment) => {
+                                const workerUrl = assignment.status === 'ready' && assignment.workerId
+                                  ? `/workers/${encodeURIComponent(assignment.workerId)}`
+                                  : null
 
-                <Button type="submit" disabled={isCreating}>
-                  {isCreating ? '创建中' : '创建开通'}
-                </Button>
-              </form>
+                                return (
+                                  <TableRow key={assignmentKey(assignment)}>
+                                    <TableCell>
+                                      <div className="min-w-0">
+                                        <p className="truncate font-medium">{assignment.assignedEmail}</p>
+                                        <p className="text-muted-foreground truncate">
+                                          {assignment.workerId ?? 'Worker 待创建'}
+                                        </p>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>{assignment.provisioningTargetRef ?? assignment.serverRef}</TableCell>
+                                    <TableCell>{assignment.soulReleaseRef}</TableCell>
+                                    <TableCell>
+                                      <Badge variant={assignment.status === 'ready' ? 'default' : 'secondary'}>
+                                        <BadgeLabel>{statusLabel(assignment.status)}</BadgeLabel>
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground">{nextStepLabel(assignment.status)}</span>
+                                        {workerUrl
+                                          ? (
+                                              <Button asChild size="sm" variant="outline">
+                                                <a href={workerUrl}>打开 Worker</a>
+                                              </Button>
+                                            )
+                                          : null}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )
+                              })}
+                            </TableBody>
+                          </Table>
+                        )
+                      : null}
+                  </section>
+                </main>
 
-              {createError
-                ? (
-                    <Alert variant="destructive">
-                      <AlertDescription>{createError}</AlertDescription>
-                    </Alert>
-                  )
-                : null}
+                <aside aria-label="Worker assignment drawer" className="border-border bg-muted/20 min-w-0 border-l">
+                  <ScrollArea className="h-svh">
+                    <div className="flex flex-col gap-5 p-4">
+                      <div className="flex flex-col gap-1">
+                        <h2 className="text-lg font-semibold">开通 AI Worker</h2>
+                        <p className="text-muted-foreground text-sm">
+                          给员工账号绑定开通目标和 Soul release。
+                        </p>
+                      </div>
 
-              {lastCreateResult
-                ? (
-                    <section className="flex flex-col gap-3" aria-label="One-time provision commands">
-                      <p className="text-sm font-medium">token 只显示一次</p>
-                      {lastCreateResult.provisionToken
-                        ? <CommandBlock title="Provision token" command={lastCreateResult.provisionToken} />
+                      {optionsError
+                        ? (
+                            <Alert variant="destructive">
+                              <AlertDescription className="flex flex-col gap-2">
+                                <span>{optionsError.message}</span>
+                                {optionsError.kind === 'relogin'
+                                  ? <a className="text-xs underline" href={LOGIN_URL}>重新登录</a>
+                                  : null}
+                              </AlertDescription>
+                            </Alert>
+                          )
                         : null}
-                      <CommandBlock title="Provision command" command={redactCommand(lastCreateResult.provisionCommand, lastCreateResult.provisionToken)} />
-                      {lastCreateResult.deliveryReceipt?.command
-                        ? <CommandBlock title="Delivery command" command={redactCommand(lastCreateResult.deliveryReceipt.command, lastCreateResult.provisionToken)} />
+
+                      {options?.provisioningTargetSourceError
+                        ? (
+                            <Alert variant="destructive">
+                              <AlertDescription>{options.provisioningTargetSourceError}</AlertDescription>
+                            </Alert>
+                          )
                         : null}
-                    </section>
-                  )
-                : null}
 
-              <Separator />
+                      {options?.soulSourceErrors && options.soulSourceErrors.length > 0
+                        ? (
+                            <Alert variant="destructive">
+                              <AlertDescription className="flex flex-col gap-1">
+                                <span>部分 Soul release 无法读取：</span>
+                                {options.soulSourceErrors.map(message => (
+                                  <span key={message} className="text-xs">{message}</span>
+                                ))}
+                              </AlertDescription>
+                            </Alert>
+                          )
+                        : null}
 
-              <section className="flex flex-col gap-3" aria-label="Phase 2 status gates">
-                <h3 className="text-sm font-medium">状态闭环</h3>
-                <StatusStep label="Assignment 已创建" active={Boolean(lastCreateResult) || assignments.length > 0} />
-                <StatusStep label="等待执行 provision command" active={Boolean(lastCreateResult)} />
-                <StatusStep label="Worker 已报到" active={assignments.some(assignment => isCheckedInOrBeyond(assignment.status))} />
-                <StatusStep label="Worker Access Tunnel 未接入" active />
-                <StatusStep label="Logto 未接入" active />
-              </section>
-            </div>
-          </ScrollArea>
-        </aside>
+                      <form className="flex flex-col gap-4" onSubmit={handleCreateAssignment}>
+                        <FieldGroup>
+                          <Field>
+                            <FieldLabel htmlFor="assignedEmail">员工邮箱</FieldLabel>
+                            <Input
+                              id="assignedEmail"
+                              ref={emailInputRef}
+                              autoComplete="email"
+                              required
+                              type="email"
+                              value={formState.assignedEmail}
+                              onChange={(event) => {
+                                setFormState(current => ({ ...current, assignedEmail: event.target.value }))
+                              }}
+                            />
+                            <FieldDescription>必须是员工企业邮箱。</FieldDescription>
+                          </Field>
+
+                          <Field>
+                            <FieldLabel htmlFor="provisioningTargetId">provisioning target</FieldLabel>
+                            {options && options.provisioningTargets.length > 0
+                              ? (
+                                  <NativeSelect
+                                    id="provisioningTargetId"
+                                    required
+                                    value={formState.provisioningTargetId}
+                                    onChange={(event) => {
+                                      setFormState(current => ({ ...current, provisioningTargetId: event.target.value }))
+                                    }}
+                                  >
+                                    {options.provisioningTargets.map(target => (
+                                      <NativeSelectOption key={target.id} value={target.id}>
+                                        {targetLabel(target)}
+                                      </NativeSelectOption>
+                                    ))}
+                                  </NativeSelect>
+                                )
+                              : (
+                                  <Input
+                                    id="provisioningTargetId"
+                                    required
+                                    value={formState.provisioningTargetId}
+                                    onChange={(event) => {
+                                      setFormState(current => ({ ...current, provisioningTargetId: event.target.value }))
+                                    }}
+                                  />
+                                )}
+                            <FieldDescription>{selectedTargetDescription(options, formState.provisioningTargetId)}</FieldDescription>
+                            {options && options.provisioningTargets.length > 0
+                              ? (
+                                  <div className="flex flex-wrap gap-1" aria-label="target maturity summaries">
+                                    {options.provisioningTargets.map(target => (
+                                      <Badge key={target.id} variant="outline">
+                                        <BadgeLabel>
+                                          {target.adapterType}
+                                          {' '}
+                                          ·
+                                          {' '}
+                                          {target.maturity}
+                                        </BadgeLabel>
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )
+                              : null}
+                            {currentTarget && currentTarget.maturity !== 'production'
+                              ? <FieldDescription>此目标用于测试开通链路，不建议作为员工长期生产 Worker。</FieldDescription>
+                              : null}
+                          </Field>
+
+                          {currentTarget?.adapterType === 'aissh'
+                            ? (
+                                <Field>
+                                  <FieldLabel htmlFor="adapterRuntimeControlBaseUrl">Worker callback URL</FieldLabel>
+                                  <Input
+                                    id="adapterRuntimeControlBaseUrl"
+                                    value={formState.adapterRuntimeControlBaseUrl}
+                                    onChange={(event) => {
+                                      setFormState(current => ({ ...current, adapterRuntimeControlBaseUrl: event.target.value }))
+                                    }}
+                                  />
+                                  <FieldDescription>远程 aissh 目标必须能访问这个 Host API URL；不能使用本机 localhost。</FieldDescription>
+                                </Field>
+                              )
+                            : null}
+
+                          <Field>
+                            <FieldLabel htmlFor="soulReleaseRef">Soul release</FieldLabel>
+                            {options && options.soulReleases.length > 0
+                              ? (
+                                  <NativeSelect
+                                    id="soulReleaseRef"
+                                    required
+                                    value={formState.soulReleaseRef}
+                                    onChange={(event) => {
+                                      setFormState(current => ({ ...current, soulReleaseRef: event.target.value }))
+                                    }}
+                                  >
+                                    {options.soulReleases.map(soul => (
+                                      <NativeSelectOption key={soul.releaseRef} value={soul.releaseRef}>
+                                        {soul.name}
+                                        {' '}
+                                        (
+                                        {soul.releaseRef}
+                                        )
+                                      </NativeSelectOption>
+                                    ))}
+                                  </NativeSelect>
+                                )
+                              : (
+                                  <Input
+                                    id="soulReleaseRef"
+                                    required
+                                    value={formState.soulReleaseRef}
+                                    onChange={(event) => {
+                                      setFormState(current => ({ ...current, soulReleaseRef: event.target.value }))
+                                    }}
+                                  />
+                                )}
+                            <FieldDescription>{selectedSoulLabel(options, formState.soulReleaseRef)}</FieldDescription>
+                          </Field>
+                        </FieldGroup>
+
+                        <section className="rounded-md border border-border bg-background p-3" aria-label="Configuration passthrough summary">
+                          <p className="text-sm font-medium">配置透传摘要</p>
+                          <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+                            <p>配置随 Soul release 透传</p>
+                            <p>Host 不在开通时编辑 raw config</p>
+                            <p>Skills / entry file / MCP 由 descriptor 携带</p>
+                          </div>
+                        </section>
+
+                        <Button type="submit" disabled={isCreating}>
+                          {isCreating ? '创建中' : '创建开通'}
+                        </Button>
+                      </form>
+
+                      {createError
+                        ? (
+                            <Alert variant="destructive">
+                              <AlertDescription>{createError.message}</AlertDescription>
+                            </Alert>
+                          )
+                        : null}
+
+                      {lastCreateResult
+                        ? (
+                            <section className="flex flex-col gap-3" aria-label="One-time provision commands">
+                              <p className="text-sm font-medium">token 只显示一次</p>
+                              {lastCreateResult.provisionToken
+                                ? <CommandBlock title="Provision token" command={lastCreateResult.provisionToken} />
+                                : null}
+                              <CommandBlock title="Provision command" command={redactCommand(lastCreateResult.provisionCommand, lastCreateResult.provisionToken)} />
+                              {lastCreateResult.deliveryReceipt?.command
+                                ? <CommandBlock title="Delivery command" command={redactCommand(lastCreateResult.deliveryReceipt.command, lastCreateResult.provisionToken)} />
+                                : null}
+                            </section>
+                          )
+                        : null}
+
+                      <Separator />
+
+                      <section className="flex flex-col gap-3" aria-label="Phase 2 status gates">
+                        <h3 className="text-sm font-medium">状态闭环</h3>
+                        <StatusStep label="Assignment 已创建" active={Boolean(lastCreateResult) || assignments.length > 0} />
+                        <StatusStep label="等待执行 provision command" active={Boolean(lastCreateResult) || assignments.some(assignment => assignment.status === 'provisioning')} />
+                        <StatusStep label="Worker 已报到" active={anyAssignmentAtLeast(assignments, 'checked_in')} />
+                        <StatusStep label="Worker Access 已建立" active={anyAssignmentAtLeast(assignments, 'access_ready')} />
+                        <StatusStep label="Worker 可访问" active={anyAssignmentAtLeast(assignments, 'ready')} />
+                      </section>
+                    </div>
+                  </ScrollArea>
+                </aside>
+              </>
+            )
+          : activeNav === 'Souls'
+            ? <SoulsPanel options={options} optionsError={optionsError} />
+            : <RoadmapPanel section={activeNav} />}
       </div>
     </div>
+  )
+}
+
+function SidebarOperator({ operator, operatorLoaded }: { operator: HostOperator | null, operatorLoaded: boolean }) {
+  return (
+    <div className="flex flex-col gap-2" aria-label="Host operator identity">
+      {operator
+        ? (
+            <>
+              <div className="min-w-0 rounded-md border border-border bg-background p-2">
+                <p className="text-muted-foreground text-xs">已登录</p>
+                <p className="truncate text-xs font-medium">{operator.email}</p>
+                {operator.roles.includes('host:admin')
+                  ? (
+                      <Badge variant="secondary">
+                        <BadgeLabel>Host 管理员</BadgeLabel>
+                      </Badge>
+                    )
+                  : (
+                      <Badge variant="outline">
+                        <BadgeLabel>非管理员</BadgeLabel>
+                      </Badge>
+                    )}
+              </div>
+              <form method="post" action={LOGOUT_URL}>
+                <Button type="submit" size="sm" variant="outline" className="w-full">
+                  退出登录
+                </Button>
+              </form>
+            </>
+          )
+        : operatorLoaded
+          ? (
+              <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-2">
+                <p className="text-muted-foreground text-xs">未登录</p>
+                <Button asChild size="sm" variant="outline" className="w-full">
+                  <a href={LOGIN_URL}>登录</a>
+                </Button>
+              </div>
+            )
+          : <p className="text-muted-foreground text-xs">正在确认登录状态...</p>}
+    </div>
+  )
+}
+
+function WorkerAccessSummary({ connecting, online }: { connecting: number, online: number }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md border border-border bg-background p-2" aria-label="Worker access summary">
+      <p className="text-muted-foreground text-xs">Worker Access</p>
+      <div className="flex flex-wrap gap-1">
+        <Badge variant={online > 0 ? 'default' : 'secondary'}>
+          <BadgeLabel>
+            在线
+            {' '}
+            {online}
+          </BadgeLabel>
+        </Badge>
+        <Badge variant="outline">
+          <BadgeLabel>
+            连接中
+            {' '}
+            {connecting}
+          </BadgeLabel>
+        </Badge>
+      </div>
+    </div>
+  )
+}
+
+function SoulsPanel({ options, optionsError }: { options: HostOptionsSummary | null, optionsError: UiError | null }) {
+  const soulReleases: HostSoulReleaseOption[] = options?.soulReleases ?? []
+  return (
+    <main className="flex min-w-0 flex-col gap-5 p-4 sm:p-6 lg:col-span-2" aria-label="Souls panel">
+      <header className="min-w-0">
+        <h1 className="text-2xl font-semibold">Souls</h1>
+        <p className="text-muted-foreground text-sm">
+          Host 可分发的官方 Soul release（descriptor-only）。
+        </p>
+      </header>
+
+      {optionsError
+        ? (
+            <Alert variant="destructive">
+              <AlertDescription>{optionsError.message}</AlertDescription>
+            </Alert>
+          )
+        : null}
+
+      {options?.soulSourceErrors && options.soulSourceErrors.length > 0
+        ? (
+            <Alert variant="destructive">
+              <AlertDescription className="flex flex-col gap-1">
+                <span>部分 Soul release 无法读取：</span>
+                {options.soulSourceErrors.map(message => (
+                  <span key={message} className="text-xs">{message}</span>
+                ))}
+              </AlertDescription>
+            </Alert>
+          )
+        : null}
+
+      <section className="min-w-0 rounded-md border border-border bg-background" aria-label="Soul releases list">
+        {soulReleases.length === 0
+          ? (
+              <Empty className="p-6">
+                <EmptyHeader>
+                  <EmptyTitle>暂无 Soul release</EmptyTitle>
+                  <EmptyDescription>构建官方 Soul 后，这里会显示可分发的 descriptor。</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            )
+          : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>名称</TableHead>
+                    <TableHead>Release</TableHead>
+                    <TableHead>Descriptor</TableHead>
+                    <TableHead>来源</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {soulReleases.map(soul => (
+                    <TableRow key={soul.releaseRef}>
+                      <TableCell className="font-medium">{soul.name}</TableCell>
+                      <TableCell>{soul.releaseRef}</TableCell>
+                      <TableCell className="text-muted-foreground">{soul.descriptorPath}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          <BadgeLabel>{soul.source}</BadgeLabel>
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+      </section>
+    </main>
+  )
+}
+
+function RoadmapPanel({ section }: { section: NavKey }) {
+  const description = section === 'Activity'
+    ? '开通与访问审计流水线尚未接入，规划中。'
+    : 'Host 设置（权限、connector 授权）尚未接入，规划中。'
+  return (
+    <main className="flex min-w-0 flex-col gap-5 p-4 sm:p-6 lg:col-span-2" aria-label={`${section} panel`}>
+      <header className="min-w-0">
+        <h1 className="text-2xl font-semibold">{section}</h1>
+        <p className="text-muted-foreground text-sm">{description}</p>
+      </header>
+      <Empty className="p-6">
+        <EmptyHeader>
+          <EmptyTitle>规划中</EmptyTitle>
+          <EmptyDescription>此功能尚未接入后端，是后续阶段的 TODO。</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    </main>
   )
 }
 

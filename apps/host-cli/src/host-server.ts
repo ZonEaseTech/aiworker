@@ -275,7 +275,7 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
         return handleAuthLogout(request)
 
       if (request.method === 'GET' && url.pathname === '/api/auth/me')
-        return handleAuthMe(request, options.sessionAuth)
+        return handleAuthMe(request, effectiveAuthProvider)
 
       if (isHostBrowserMethod(request.method) && isHostBrowserRoute(decodedPathname)) {
         if (options.sessionAuth) {
@@ -444,11 +444,13 @@ function handleAuthLogout(request: Request): Response {
   return new Response(null, { headers, status: 302 })
 }
 
-async function handleAuthMe(request: Request, sessionAuth: HostSessionAuthOptions | undefined): Promise<Response> {
-  if (!sessionAuth)
-    return json({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 })
-
-  const user = readUserFromSessionCookie(request.headers, sessionAuth)
+// `/api/auth/me` is the Host Web's operator-identity probe. It runs through the
+// effective auth provider so it answers truthfully in BOTH modes: the
+// cookie-backed Logto provider when sessionAuth is configured (prod path stays
+// byte-identical), and the static dev-admin provider otherwise — so a local
+// `--dev-admin-email` operator is reported instead of a misleading 401.
+async function handleAuthMe(request: Request, authProvider: AuthProvider): Promise<Response> {
+  const user = await authProvider.authenticateRequest({ headers: request.headers })
   if (!user)
     return json({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 })
 

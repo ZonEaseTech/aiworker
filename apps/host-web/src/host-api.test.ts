@@ -184,6 +184,35 @@ describe('createHostApiClient', () => {
     expect(options.soulReleases[0]?.releaseRef).toBe('aiworker-freeform@dev')
   })
 
+  it('returns the operator from /api/auth/me', async () => {
+    const fetchImpl = createFetch(jsonResponse({
+      user: { email: 'admin@zonease.org', roles: ['host:admin'], subject: 'usr_admin' },
+    }))
+    const client = createHostApiClient({ baseUrl: 'http://host.test', fetch: fetchImpl })
+
+    await expect(client.getOperator()).resolves.toEqual({
+      email: 'admin@zonease.org',
+      roles: ['host:admin'],
+      subject: 'usr_admin',
+    })
+    expect(fetchImpl.calls[0]?.input).toBe('http://host.test/api/auth/me')
+  })
+
+  it('treats a 401 from /api/auth/me as an unauthenticated null operator', async () => {
+    const fetchImpl = createFetch(jsonResponse({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 }))
+    const client = createHostApiClient({ baseUrl: '', fetch: fetchImpl })
+
+    await expect(client.getOperator()).resolves.toBeNull()
+  })
+
+  it('throws HostApiError for non-401 operator failures', async () => {
+    expect.assertions(1)
+    const fetchImpl = createFetch(jsonResponse({ error: { code: 'BOOM' } }, { status: 500 }))
+    const client = createHostApiClient({ baseUrl: '', fetch: fetchImpl })
+
+    await expect(client.getOperator()).rejects.toMatchObject({ code: 'BOOM', status: 500 })
+  })
+
   it('throws stable HostApiError details for non-ok responses', async () => {
     expect.assertions(3)
     const fetchImpl = createFetch(jsonResponse({ error: { code: 'FORBIDDEN' } }, { status: 403 }))

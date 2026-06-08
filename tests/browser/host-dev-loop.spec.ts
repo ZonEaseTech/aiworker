@@ -48,8 +48,11 @@ try {
   await page.getByRole('heading', { name: 'AI Workers' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('navigation', { name: 'Host navigation' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('complementary', { name: 'Worker assignment drawer' }).waitFor({ state: 'visible', timeout: 10000 })
-  await page.getByText('Logto 未接入').first().waitFor({ state: 'visible', timeout: 10000 })
-  await page.getByText('Worker Access Tunnel 未接入').first().waitFor({ state: 'visible', timeout: 10000 })
+  // Operator identity now comes from the real /api/auth/me probe (dev-admin
+  // operator in this lifecycle), and the worker-access summary is derived live —
+  // both replace the old hardcoded "未接入" stubs.
+  await page.getByText(adminEmail).first().waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByLabel('Worker access summary').waitFor({ state: 'visible', timeout: 10000 })
   await page.getByLabel('provisioning target').waitFor({ state: 'visible', timeout: 10000 })
   await page.getByLabel('provisioning target').selectOption('local:default')
   await page.locator('[data-slot="field-description"]').filter({ hasText: '本机开发环境 · local · dev' }).waitFor({ state: 'visible', timeout: 10000 })
@@ -131,9 +134,9 @@ try {
     hostUrl,
     hostShell: {
       assignmentDrawerVisible: await page.getByRole('complementary', { name: 'Worker assignment drawer' }).isVisible(),
-      deferredAccessVisible: await page.getByText('Worker Access Tunnel 未接入').first().isVisible(),
-      deferredLogtoVisible: await page.getByText('Logto 未接入').first().isVisible(),
       navigationVisible: await page.getByRole('navigation', { name: 'Host navigation' }).isVisible(),
+      operatorIdentityVisible: await page.getByText(adminEmail).first().isVisible(),
+      workerAccessSummaryVisible: await page.getByLabel('Worker access summary').isVisible(),
       optionsStatus: optionsResponse?.status() ?? null,
     },
     initialStatus,
