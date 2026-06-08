@@ -1599,6 +1599,103 @@ describe('host server', () => {
     expect(await response.text()).toBe('worker:/assets/app.js:no-auth')
   })
 
+  it('redirects the bare Workbench entry to a trailing slash so relative SPA assets resolve under the worker prefix', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    verifyAndConsumeProvisionToken(created.provisionToken)
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: '1.0.0',
+    })
+    markAssignmentAccessReady(created.assignment.assignmentId)
+    markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })
+    let forwardedToWorker = false
+    accessRegistry.register({
+      assignmentId: created.assignment.assignmentId,
+      close() {},
+      sendRequest: async (envelope) => {
+        forwardedToWorker = true
+        return {
+          type: 'response',
+          id: envelope.id,
+          status: 200,
+          headers: { 'content-type': 'text/html' },
+          bodyText: `worker:${envelope.path}`,
+        }
+      },
+      workerId: 'wkr_82',
+    })
+
+    const response = await server.fetch(new Request('http://host/workers/wkr_82', { redirect: 'manual' }))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('/workers/wkr_82/')
+    // The bare entry redirect is route-only: it must not forward to the worker.
+    expect(forwardedToWorker).toBe(false)
+  })
+
+  it('forwards a /workers/:id subpath without redirecting so assets and api reach the worker', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const created = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: 'soul_release_1',
+    })
+    verifyAndConsumeProvisionToken(created.provisionToken)
+    markAssignmentCheckedIn(created.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: '1.0.0',
+    })
+    markAssignmentAccessReady(created.assignment.assignmentId)
+    markAssignmentReady(created.assignment.assignmentId, {
+      workbenchUrl: 'https://aiworker.zonease.org/workers/wkr_82',
+    })
+    accessRegistry.register({
+      assignmentId: created.assignment.assignmentId,
+      close() {},
+      sendRequest: async envelope => ({
+        type: 'response',
+        id: envelope.id,
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+        bodyText: `worker:${envelope.path}`,
+      }),
+      workerId: 'wkr_82',
+    })
+
+    // The trailing-slash entry maps to the worker root, and a deeper subpath
+    // maps to its stripped local path — neither is redirected.
+    const rootEntry = await server.fetch(new Request('http://host/workers/wkr_82/', { redirect: 'manual' }))
+    expect(rootEntry.status).toBe(200)
+    expect(await rootEntry.text()).toBe('worker:/')
+
+    const subpath = await server.fetch(new Request('http://host/workers/wkr_82/api/sessions', { redirect: 'manual' }))
+    expect(subpath.status).toBe(200)
+    expect(await subpath.text()).toBe('worker:/api/sessions')
+
+    const asset = await server.fetch(new Request('http://host/workers/wkr_82/assets/app.js', { redirect: 'manual' }))
+    expect(asset.status).toBe(200)
+    expect(await asset.text()).toBe('worker:/assets/app.js')
+  })
+
   it('returns a fixed worker access failure without leaking worker error text', async () => {
     const accessRegistry = createWorkerAccessRegistry()
     const server = await createHostServer({

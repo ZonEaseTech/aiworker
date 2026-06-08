@@ -1,5 +1,7 @@
+import { apiUrl } from './base-path'
+
 export async function localJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     headers: {
       ...(init?.body ? { 'content-type': 'application/json' } : {}),
@@ -30,7 +32,7 @@ export class LocalApiError extends Error {
 }
 
 export async function localJsonStrict<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     headers: {
       ...(init?.body ? { 'content-type': 'application/json' } : {}),
@@ -47,7 +49,7 @@ export async function localJsonStrict<T>(path: string, init?: RequestInit): Prom
 }
 
 export async function localText(path: string): Promise<string> {
-  const res = await fetch(path)
+  const res = await fetch(apiUrl(path))
   if (!res.ok)
     throw new Error(`Local file ${res.status}: ${path}`)
   return await res.text()

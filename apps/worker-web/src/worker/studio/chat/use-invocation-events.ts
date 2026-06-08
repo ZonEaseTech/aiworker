@@ -7,6 +7,7 @@ import type { TranscriptTurnModel } from '@zonease/aiworker-ui/components/transc
 import { useEffect, useMemo, useReducer, useRef } from 'react'
 
 import { fetchInvocationEvents } from '../../../features/local-workspace/api/session-invocations'
+import { apiUrl } from '../../../shared/api/base-path'
 import { buildInvocationTurns } from './bridge-event-mapper'
 
 const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'lost'])
@@ -117,7 +118,7 @@ export function useInvocationEvents(
       return
 
     if (eventSourceEnabled && sessionId && typeof EventSource !== 'undefined') {
-      source = new EventSource(invocationEventsPath(invocationId, cursor))
+      source = new EventSource(apiUrl(invocationEventsPath(invocationId, cursor)))
       const stopSourceAndPolling = () => {
         if (timer) {
           clearTimeout(timer)

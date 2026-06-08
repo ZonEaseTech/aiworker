@@ -34,7 +34,12 @@ function markdownTextImports() {
 
 export default defineConfig({
   root: repoWebRoot,
-  base: '/',
+  // Relative base so the built index.html references `./assets/...` instead of
+  // origin-absolute `/assets/...`. When the Workbench is served behind the Host
+  // tunnel prefix `/workers/:id/`, absolute asset URLs would hit the Host root
+  // (404); relative URLs resolve under the prefix. Standalone (root entry) is
+  // unaffected because `./` resolves to `/` at the root.
+  base: './',
   publicDir: fileURLToPath(new URL('./public', import.meta.url)),
   plugins: [
     markdownTextImports(),

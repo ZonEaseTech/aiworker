@@ -2,7 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!--
+      Runtime <base href> for the Host tunnel. The Workbench SPA may be served
+      under `/workers/:id/...` (Host strips that prefix before forwarding) or at
+      the standalone root. Vite builds relative asset URLs (`./assets/...`), and
+      relative URLs resolve against the document directory — which breaks on any
+      deep route (`/workers/:id/workspaces/.../sessions/...`). A synchronous
+      <base href> pinned to the worker prefix root makes every relative asset
+      resolve to `/workers/:id/<asset>` regardless of route depth. This runs
+      before Vite's injected <script>/<link> so the preload scanner honours it.
+      window.__AIWORKER_API_BASE__ carries the same prefix to the API client.
+    -->
+    <script>
+      (function () {
+        var m = window.location.pathname.match(/^\/workers\/[^/]+/)
+        var base = m ? m[0] : ''
+        window.__AIWORKER_API_BASE__ = base
+        document.write('<base href="' + (base || '') + '/">')
+      })()
+    </script>
+    <link rel="icon" type="image/png" href="./favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AIWorker · Soul Workspace</title>
   </head>

@@ -733,6 +733,22 @@ async function handleWorkerRoute(
     return json({ error: { code: 'WORKER_ACCESS_NOT_READY' } }, { status: 503 })
 
   const requestUrl = new URL(request.url)
+  // Thin trailing-slash redirect for the bare Workbench entry, applied only
+  // after assignment/auth/readiness gates pass so 403/404/503 still take
+  // precedence for the bare URL. The Workbench SPA is built with a relative
+  // asset base (`./assets/...`), so it must load under a trailing-slash
+  // document URL for the browser to resolve those assets against
+  // `/workers/:id/` instead of `/workers/`. Only the bare GET/HEAD entry is
+  // redirected; every `/workers/:id/<subpath>` (including the trailing-slash
+  // root itself) forwards through mapWorkerAccessPath unchanged. Route only,
+  // never the body.
+  if ((request.method === 'GET' || request.method === 'HEAD')
+    && requestUrl.pathname === `/workers/${encodeURIComponent(workerId)}`) {
+    return new Response(null, {
+      headers: { location: `${requestUrl.pathname}/${requestUrl.search}` },
+      status: 302,
+    })
+  }
   let localPath: string
   try {
     localPath = mapWorkerAccessPath(`${requestUrl.pathname}${requestUrl.search}`, workerId)
