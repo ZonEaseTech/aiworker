@@ -1,5 +1,10 @@
 # Ops Runbook — Managed-Access RC（首个真实员工开通）
 
+> ⚠️ **2026-06-07 REALITY CHECK：以下部分步骤被实测推翻，待共存决策后改写。**
+> aissh 实测 `172.105.219.50`：该机**已在跑另一套 live 系统**（`127.0.0.1:9218` 一个 bun gateway，Caddy `:80` catch-all 服务 `aiw.jbcnet.co.jp`，`auto_https off` + Cloudflare 终结 TLS，basic-auth fail-closed）。`aiworker.zonease.org` 解析到 **Cloudflare**（非直连源站）。
+> 因此被推翻的假设：① Caddy ACME 自动 TLS（实为 CF 终结 + 裸 :80）；② 独占 `/etc/caddy/Caddyfile`（实为承重 catch-all，禁止 clobber）；③ `/etc/aiworker/host.env`（该目录已被 `gateway.env` 占用）。
+> 步骤 3 的 Caddy/TLS 部分待「共存模型 + Cloudflare 路径」决策后改写；`deploy/Caddyfile` 模板同样 superseded。
+
 > 运维 runbook（**不是** canonical 合同文档；`docs/` 被 docs:check 锁定为 architecture/protocol/runtime/soul-authoring/testing + superpowers，故 runbook 落在 `deploy/` 下与配置同处）。
 > 决策依据见 `.omc/specs/deep-interview-ws2-decisions.md`；计划见 `.omc/plans/ralplan-phase2-managed-access-rc.md`。
 > 同目录模板：`Caddyfile` · `aiworker-host.service` · `host.env.example`。
