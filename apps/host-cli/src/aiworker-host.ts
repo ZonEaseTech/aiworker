@@ -3,11 +3,16 @@ import type { WorkerRegistry } from '@zonease/aiworker-host-control'
 import type { HostLifecycle } from './host-lifecycle'
 import type { createHostServer as createHostServerType } from './host-server'
 
+import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
 
+import { renderText, runChecks } from '@zonease/aiworker-cli-doctor'
 import { createWorkerRegistry } from '@zonease/aiworker-host-control'
 import cac from 'cac'
+import { buildHostChecks } from './doctor-checks'
 import { createHostLifecycle } from './host-lifecycle'
+import { buildHostOptions } from './host-options'
 import { createHostServer } from './host-server'
 import { assertHostSessionSecret } from './host-session-cookie'
 
@@ -46,7 +51,7 @@ function readDelimitedEnvValues(env: Record<string, string | undefined>, name: s
     .filter(Boolean)))
 }
 
-const logtoSessionRequiredEnvKeys = [
+export const logtoSessionRequiredEnvKeys = [
   'AIWORKER_HOST_SESSION_SECRET',
   'AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS',
   'LOGTO_CLIENT_ID',
@@ -366,10 +371,85 @@ export function preprocessHostArgv(argv: string[], commandNames: string[]): stri
   return argv
 }
 
+async function spawnSucceeds(command: string[]): Promise<{ detail?: string, ok: boolean }> {
+  try {
+    const proc = Bun.spawn(command, { stderr: 'pipe', stdout: 'pipe' })
+    const [stderr, exitCode] = await Promise.all([
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    if (exitCode === 0)
+      return { ok: true }
+    return { detail: stderr.trim() || `exited ${exitCode}`, ok: false }
+  }
+  catch (error) {
+    return { detail: error instanceof Error ? error.message : String(error), ok: false }
+  }
+}
+
+export async function runHostDoctor(
+  options: { json?: boolean, manifest?: string, probe?: boolean, strict?: boolean },
+  context: { hostLifecycle: HostLifecycle },
+): Promise<number> {
+  const probe = options.probe === true
+  const strict = options.strict === true
+  const manifestPath = hostLifecycleStatePath(options)
+
+  const soulReleaseCount = async (): Promise<number> => {
+    // Skip the aissh spawn here — soul count never needs it, keeping the
+    // default tier sub-second even when aissh is off-PATH on the box.
+    const view = await buildHostOptions({
+      aisshServerList: async () => {
+        throw new Error('skipped')
+      },
+    })
+    return view.soulReleases.length
+  }
+
+  const checks = buildHostChecks({
+    aisshConnectivity: () => spawnSucceeds(['aissh', 'server', 'list']),
+    daemonRunning: async () => {
+      const status = await context.hostLifecycle.status({ manifestPath })
+      return (status as { running?: boolean }).running === true
+    },
+    dockerConnectivity: () => spawnSucceeds(['docker', 'ps']),
+    homeBunPath: path.join(os.homedir(), '.bun', 'bin', 'bun'),
+    optionsUrl: 'http://127.0.0.1:9117/api/host/options',
+    soulReleaseCount,
+  })
+
+  const report = await runChecks(checks, { probe, strict })
+
+  if (options.json === true) {
+    const view = await buildHostOptions({
+      aisshServerList: async () => {
+        throw new Error('skipped')
+      },
+    })
+    printJson({
+      ...report,
+      context: {
+        ...(view.provisioningTargetSourceError ? { provisioningTargetSourceError: view.provisioningTargetSourceError } : {}),
+        provisioningTargets: view.provisioningTargets.map(target => target.id),
+        soulReleases: view.soulReleases.length,
+        ...(view.soulSourceErrors ? { soulSourceErrors: view.soulSourceErrors } : {}),
+      },
+    })
+  }
+  else {
+    process.stdout.write(`${renderText(report, { title: 'AIWorker Host Doctor' })}\n`)
+  }
+
+  return report.exitCode
+}
+
 export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promise<number> {
   const registry = deps.registry ?? createWorkerRegistry()
   const fetchImpl = deps.fetch ?? fetch
   const hostLifecycle = deps.hostLifecycle ?? createHostLifecycle()
+  // doctor grades health and reflects it in the exit code without throwing —
+  // cac discards an action's return value, so thread the code via this closure.
+  let doctorExit: number | null = null
   const cli = cac('aiworker-host')
   cli
     .command('worker list', 'list workers registered with this Host control plane')
@@ -596,6 +676,15 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
         ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
       })
     })
+  cli
+    .command('doctor', 'inspect Host control-plane readiness')
+    .option('--json', 'emit a machine-readable DoctorReport')
+    .option('--probe', 'run active connectivity probes (aissh/docker/Host API)')
+    .option('--strict', 'treat warnings as failures (warn → exit 1)')
+    .option('--manifest <path>', 'Host lifecycle manifest path')
+    .action(async (options: { json?: boolean, manifest?: string, probe?: boolean, strict?: boolean }) => {
+      doctorExit = await runHostDoctor(options, { hostLifecycle })
+    })
   cli.help()
 
   const processed = preprocessHostArgv(argv, cli.commands.map(command => command.name))
@@ -610,7 +699,7 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
       return 0
     }
     await cli.runMatchedCommand()
-    return 0
+    return doctorExit ?? 0
   }
   catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)

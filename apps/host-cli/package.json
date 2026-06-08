@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",
+    "@zonease/aiworker-cli-doctor": "workspace:*",
     "@zonease/aiworker-host-control": "workspace:*",
     "@zonease/aiworker-storage-sqlite": "workspace:*",
     "@zonease/aiworker-worker-control-protocol": "workspace:*",

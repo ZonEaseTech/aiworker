@@ -17,12 +17,14 @@ interface CommandResult {
 }
 
 interface DoctorOutput {
-  installation?: {
-    resources?: {
-      migrationsReady?: boolean
-      officialAppsReady?: boolean
-      officialFreeformDescriptorReady?: boolean
-      workerWebReady?: boolean
+  context?: {
+    installation?: {
+      resources?: {
+        migrationsReady?: boolean
+        officialAppsReady?: boolean
+        officialFreeformDescriptorReady?: boolean
+        workerWebReady?: boolean
+      }
     }
   }
 }
@@ -77,7 +79,9 @@ async function main(): Promise<number> {
     await assertDaemonProjectionReceiptBoundary(port)
     const html = await assertHttpText(`http://127.0.0.1:${port}/`, /<!doctype html>/i)
     await assertWorkerWebAsset(port, html)
-    const doctor = await assertCli(cli, ['doctor'], { env, label: 'doctor' })
+    // doctor exit reflects worker health (no native engine in CI → exit 1); this
+    // smoke only asserts packaged resources, so runCli (no exit assertion) is right.
+    const doctor = await runCli(cli, ['doctor', '--json'], env)
     assertPackagedResourcesReady(doctor.stdout)
 
     const apps = await getJson<{ apps: Array<{ appId: string, status: string }> }>(`http://127.0.0.1:${port}/api/app-installation/apps`)
@@ -409,7 +413,7 @@ function assertCatalogApps(apps: Array<{ appId: string, status: string }>): void
 
 function assertPackagedResourcesReady(stdout: string): void {
   const body = JSON.parse(stdout) as DoctorOutput
-  const resources = body.installation?.resources
+  const resources = body.context?.installation?.resources
   if (resources?.officialAppsReady !== true)
     throw new Error(`dist doctor must report packaged official apps ready: ${stdout}`)
   if (resources?.officialFreeformDescriptorReady !== true)

@@ -10,9 +10,11 @@ import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { renderText, runChecks } from '@zonease/aiworker-cli-doctor'
 import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import {
@@ -60,6 +62,7 @@ import {
 import cac from 'cac'
 import consola from 'consola'
 import packageJson from '../package.json' with { type: 'json' }
+import { buildWorkerChecks } from './doctor-checks'
 import {
   adoptLegacyHome,
   allocatePort,
@@ -695,21 +698,50 @@ async function runInit(): Promise<void> {
   })
 }
 
-async function runDoctor(): Promise<void> {
+interface DoctorCliOptions {
+  json?: boolean
+  probe?: boolean
+  strict?: boolean
+  verbose?: boolean
+}
+
+async function runDoctor(opts: DoctorCliOptions = {}): Promise<void> {
   const paths = await ensureDefaultDb()
   const updateNotice = await maybeResolveDailyUpdateNotice()
-  printJson({
-    ok: true,
+  const installation = cliInstallationDiagnostics()
+  const context = {
     home: paths.home,
     dbPath: paths.dbPath,
     apps: createHost(paths).listApps(),
     workers: listWorkers(),
     workspaces: listWorkspaces(),
     daemon: daemonStatus(),
-    installation: cliInstallationDiagnostics(),
+    installation,
     settings: listSettings(),
     updateNotice,
-  })
+  }
+
+  const report = await runChecks(
+    buildWorkerChecks({
+      homeBunPath: path.join(os.homedir(), '.bun/bin/bun'),
+      daemonRunning: () => daemonStatus().running,
+      migrationsReady: () => installation.resources.migrationsReady,
+      migrationsFolder: () => installation.resources.migrationsFolder,
+      scanEngines: () => scanLocalEngines(),
+    }),
+    { probe: opts.probe, strict: opts.strict },
+  )
+
+  if (opts.json) {
+    printJson({ ...report, context })
+  }
+  else {
+    process.stdout.write(`${renderText(report, { title: 'AIWorker Worker Doctor' })}\n`)
+    if (opts.verbose)
+      process.stdout.write(`\ncontext:\n${JSON.stringify(redactEngineBridgeValue(context), null, 2)}\n`)
+  }
+
+  process.exitCode = report.exitCode
 }
 
 async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptions): Promise<void> {
@@ -2367,7 +2399,12 @@ function ensureScaffoldSdkLink(targetDir: string): void {
 
 function registerCommands(): void {
   cli.command('init', 'initialize host-local AIWorker home and Soul workers').action(runInit)
-  cli.command('doctor', 'inspect host-local daemon readiness').action(runDoctor)
+  cli.command('doctor', 'grade worker runtime/engine/service health and surface fixes')
+    .option('--json', 'emit the DoctorReport plus full context as JSON')
+    .option('--probe', 'run deeper connectivity probes (slower)')
+    .option('--strict', 'treat warnings as failures (warn → exit 1)')
+    .option('--verbose', 'print the diagnostic context summary alongside the report')
+    .action((opts: DoctorCliOptions) => runDoctor(opts))
   cli.command('update', 'check or apply an AIWorker CLI update')
     .option('--check', 'check for updates without changing files')
     .option('--dry-run', 'print planned update actions without applying them')

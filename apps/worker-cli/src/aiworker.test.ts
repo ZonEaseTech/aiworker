@@ -2014,14 +2014,19 @@ describe('aiworker local CLI', () => {
       throw new Error('network down')
     }) as unknown as typeof fetch
 
-    expect(await runCli(argv('doctor'))).toBe(0)
+    const exitCode = await runCli(argv('doctor', '--json'))
+    expect([0, 1]).toContain(exitCode)
     const body = JSON.parse(output) as {
-      settings: Array<{ key: string, valueJson: Record<string, unknown> }>
-      updateNotice: null | unknown
+      results: Array<{ id: string }>
+      context: {
+        settings: Array<{ key: string, valueJson: Record<string, unknown> }>
+        updateNotice: null | unknown
+      }
     }
-    const noticeSetting = body.settings.find(setting => setting.key === 'update.notice')
+    const noticeSetting = body.context.settings.find(setting => setting.key === 'update.notice')
 
-    expect(body.updateNotice).toBeNull()
+    expect(body.results.some(result => result.id === 'worker.engine')).toBe(true)
+    expect(body.context.updateNotice).toBeNull()
     expect(noticeSetting?.valueJson.errorMessage).toBe('network down')
   })
 
@@ -2030,29 +2035,32 @@ describe('aiworker local CLI', () => {
       throw new Error('network down')
     }) as unknown as typeof fetch
 
-    expect(await runCli(argv('doctor'))).toBe(0)
+    const exitCode = await runCli(argv('doctor', '--json'))
+    expect([0, 1]).toContain(exitCode)
     const body = JSON.parse(output) as {
-      installation: {
-        resources: {
-          migrationsFolder: string | null
-          migrationsReady: boolean
-          officialAppsReady: boolean
-          officialFreeformDescriptorReady: boolean
-          workerWebReady: boolean
+      context: {
+        installation: {
+          resources: {
+            migrationsFolder: string | null
+            migrationsReady: boolean
+            officialAppsReady: boolean
+            officialFreeformDescriptorReady: boolean
+            workerWebReady: boolean
+          }
+          source: { canAutoUpgrade: boolean, kind: string }
         }
-        source: { canAutoUpgrade: boolean, kind: string }
       }
     }
 
-    expect(body.installation.source).toMatchObject({
+    expect(body.context.installation.source).toMatchObject({
       canAutoUpgrade: false,
       kind: 'source-checkout',
     })
-    expect(body.installation.resources.migrationsFolder).toContain('drizzle/worker')
-    expect(body.installation.resources.migrationsReady).toBe(true)
-    expect(typeof body.installation.resources.officialAppsReady).toBe('boolean')
-    expect(typeof body.installation.resources.officialFreeformDescriptorReady).toBe('boolean')
-    expect(typeof body.installation.resources.workerWebReady).toBe('boolean')
+    expect(body.context.installation.resources.migrationsFolder).toContain('drizzle/worker')
+    expect(body.context.installation.resources.migrationsReady).toBe(true)
+    expect(typeof body.context.installation.resources.officialAppsReady).toBe('boolean')
+    expect(typeof body.context.installation.resources.officialFreeformDescriptorReady).toBe('boolean')
+    expect(typeof body.context.installation.resources.workerWebReady).toBe('boolean')
   })
 
   it('reports packaged official apps unready when Freeform descriptor is not v1', async () => {

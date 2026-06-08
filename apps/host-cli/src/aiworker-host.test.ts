@@ -1180,6 +1180,47 @@ describe('aiworker-host control CLI', () => {
     ])
   })
 
+  const runningLifecycle = {
+    async status() {
+      return { running: true }
+    },
+  }
+
+  it('doctor reports unhealthy (exit 1) under partial Logto config', async () => {
+    const code = await withHostSessionEnv(partialLogtoEnv, () =>
+      runHostCli(['doctor'], { hostLifecycle: runningLifecycle } as any))
+    expect(code).toBe(1)
+    expect(output).toContain('AIWorker Host Doctor')
+    expect(output).toContain('Logto')
+    expectNoLogtoValuesInOutput(output)
+  })
+
+  it('doctor exits 0 with all Logto cleared (dev-static warn), 1 under --strict', async () => {
+    const ok = await withHostSessionEnv({}, () =>
+      runHostCli(['doctor'], { hostLifecycle: runningLifecycle } as any))
+    expect(ok).toBe(0)
+    const strict = await withHostSessionEnv({}, () =>
+      runHostCli(['doctor', '--strict'], { hostLifecycle: runningLifecycle } as any))
+    expect(strict).toBe(1)
+  })
+
+  it('doctor --json emits a DoctorReport with a context summary', async () => {
+    const code = await withHostSessionEnv(completeLogtoEnv, () =>
+      runHostCli(['doctor', '--json'], { hostLifecycle: runningLifecycle } as any))
+    const parsed = JSON.parse(output) as {
+      context: { provisioningTargets: string[], soulReleases: number }
+      exitCode: number
+      overall: string
+      results: { id: string }[]
+    }
+    expect(typeof parsed.exitCode).toBe('number')
+    expect(parsed.results.some(result => result.id === 'host.auth.logto')).toBe(true)
+    expect(Array.isArray(parsed.context.provisioningTargets)).toBe(true)
+    expect(typeof parsed.context.soulReleases).toBe('number')
+    expect(code).toBe(parsed.exitCode)
+    expectNoLogtoValuesInOutput(output)
+  })
+
   it('exposes Host lifecycle status stop clean and logs as first-class CLI commands', async () => {
     const calls: Array<{ input: Record<string, unknown>, method: string }> = []
     const hostLifecycle = {

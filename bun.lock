@@ -20,12 +20,13 @@
     },
     "apps/host-cli": {
       "name": "@zonease/aiworker-host-cli",
-      "version": "1.0.0-rc.1",
+      "version": "1.0.0-rc.7",
       "bin": {
         "aiworker-host": "./dist/aiworker-host.js",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
+        "@zonease/aiworker-cli-doctor": "workspace:*",
         "@zonease/aiworker-host-control": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
         "@zonease/aiworker-worker-control-protocol": "workspace:*",
@@ -37,6 +38,8 @@
     "apps/host-web": {
       "name": "@zonease/aiworker-host-web",
       "dependencies": {
+        "@hugeicons/core-free-icons": "^4.1.4",
+        "@hugeicons/react": "^1.1.6",
         "@tailwindcss/vite": "^4.2.2",
         "@zonease/aiworker-ui": "workspace:*",
         "react": "^19.1.0",
@@ -58,12 +61,13 @@
     },
     "apps/worker-cli": {
       "name": "@zonease/aiworker-cli",
-      "version": "1.0.0-rc.1",
+      "version": "1.0.0-rc.7",
       "bin": {
         "aiworker": "./dist/aiworker.js",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
+        "@zonease/aiworker-cli-doctor": "workspace:*",
         "@zonease/aiworker-engine-bridge": "workspace:*",
         "@zonease/aiworker-fs-layout": "workspace:*",
         "@zonease/aiworker-soul-descriptor": "workspace:*",
@@ -102,6 +106,13 @@
         "typescript": "^5.8.3",
         "vite": "^8",
         "vitest": "4",
+      },
+    },
+    "packages/cli-doctor": {
+      "name": "@zonease/aiworker-cli-doctor",
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
       },
     },
     "packages/engine-bridge": {
@@ -931,6 +942,8 @@
     "@vue/shared": ["@vue/shared@3.5.32", "", {}, "sha512-ksNyrmRQzWJJ8n3cRDuSF7zNNontuJg1YHnmWRJd2AMu8Ij2bqwiiri2lH5rHtYPZjj4STkNcgcmiQqlOjiYGg=="],
 
     "@zonease/aiworker-cli": ["@zonease/aiworker-cli@workspace:apps/worker-cli"],
+
+    "@zonease/aiworker-cli-doctor": ["@zonease/aiworker-cli-doctor@workspace:packages/cli-doctor"],
 
     "@zonease/aiworker-engine-bridge": ["@zonease/aiworker-engine-bridge@workspace:packages/engine-bridge"],
 

@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",
+    "@zonease/aiworker-cli-doctor": "workspace:*",
     "@zonease/aiworker-engine-bridge": "workspace:*",
     "@zonease/aiworker-fs-layout": "workspace:*",
     "@zonease/aiworker-soul-descriptor": "workspace:*",
