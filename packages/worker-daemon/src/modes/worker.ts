@@ -194,6 +194,28 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   }
 
   const app = new OpenAPIHono()
+  // Standalone Workbench-prefix strip (mirror of Host's mapWorkerAccessPath).
+  // Standalone serves the Workbench at the daemon root, so the SPA's runtime
+  // <base href>/API_BASE compute `/workers/:id` from the entry URL and the
+  // browser requests `/workers/:id/assets/x`, `/workers/:id/api/x`,
+  // `/workers/:id/workspaces/...` even on a deep-route fresh reload. The daemon
+  // only has root routes, so those prefixed paths would 404 (assets/API) or
+  // mis-route. Strip a single leading `/workers/<seg>` and RE-DISPATCH the
+  // request through the same app so it lands on the existing root handler. This
+  // must run before every route (Hono selects the handler before middleware, so
+  // mutating c.req.path is too late — re-entrant app.fetch re-runs full routing
+  // on the stripped path). Behind the Host tunnel the prefix is already stripped
+  // by the Host, so the daemon receives root paths and this is a no-op. The only
+  // root route under `/workers/` is the SPA catch-all; `/api/workers/:workerId`
+  // is under `^/api/`, so this never mis-strips worker-config/data routes.
+  app.use('*', async (c, next) => {
+    const stripped = stripWorkerWebPrefix(c.req.path)
+    if (stripped === null)
+      return next()
+    const url = new URL(c.req.url)
+    url.pathname = stripped
+    return app.fetch(new Request(url, c.req.raw))
+  })
   app.use(requestLogger)
   app.onError(errorHandler)
   app.use('/api/*', async (c, next) => {
@@ -738,6 +760,22 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
 export async function createWorkerApp(): Promise<{ app: OpenAPIHono, port: number }> {
   const { app, port } = await bootstrapWorkerApp()
   return { app, port }
+}
+
+/**
+ * Strip a single leading `/workers/<seg>` Workbench prefix from a request path,
+ * mirroring Host's mapWorkerAccessPath. Returns the root-relative remainder
+ * (`/` when the prefix was the whole path), or null when there is no such prefix
+ * (a genuine root path → middleware no-op). Pure + exported for unit testing.
+ *
+ * `/api/workers/:workerId` is under `^/api/` and never matches `^/workers/`, so
+ * worker-config/data routes are not affected.
+ */
+export function stripWorkerWebPrefix(pathname: string): string | null {
+  const match = /^\/workers\/[^/]+/.exec(pathname)
+  if (!match)
+    return null
+  return pathname.slice(match[0].length) || '/'
 }
 
 /**

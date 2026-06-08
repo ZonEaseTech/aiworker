@@ -26,7 +26,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { bootstrapWorkerApp, localApiExposureWarning } from './worker'
+import { bootstrapWorkerApp, localApiExposureWarning, stripWorkerWebPrefix } from './worker'
 import { setEngineScanner } from './worker/settings'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
@@ -3506,5 +3506,110 @@ describe('local daemon API', () => {
     expect(localApiExposureWarning('[::1]', undefined)).toContain('loopback')
     expect(localApiExposureWarning('0.0.0.0', null)).toContain('非 loopback')
     expect(localApiExposureWarning('0.0.0.0', 'token')).toBeNull()
+  })
+
+  // Standalone Workbench-prefix strip: the SPA's runtime <base href>/API_BASE
+  // prefix same-origin requests with `/workers/:id` even on a deep-route fresh
+  // reload, but the daemon only has root routes. The strip middleware
+  // re-dispatches a single leading `/workers/<seg>` prefix to the existing root
+  // handler so prefixed asset/API/SPA requests reach their real handler instead
+  // of falling through to a 404 or the SPA catch-all (the standalone deep-reload
+  // white-screen regression). `/api/workers/:workerId` must never be mis-stripped.
+  describe('Workbench-prefix strip', () => {
+    function writeWorkerWeb(): string {
+      const root = join(dir, 'worker-web-static')
+      mkdirSync(join(root, 'assets'), { recursive: true })
+      writeFileSync(join(root, 'index.html'), '<!doctype html><html data-spa="worker-web"></html>')
+      writeFileSync(join(root, 'assets', 'app.js'), 'console.log("worker-web-asset")')
+      return root
+    }
+
+    it('pure helper strips a single leading /workers/<seg> prefix and no-ops on root paths', () => {
+      expect(stripWorkerWebPrefix('/workers/w_X/assets/app.js')).toBe('/assets/app.js')
+      expect(stripWorkerWebPrefix('/workers/w_X/api/sessions')).toBe('/api/sessions')
+      expect(stripWorkerWebPrefix('/workers/w_X/workspaces/ws/sessions/s')).toBe('/workspaces/ws/sessions/s')
+      expect(stripWorkerWebPrefix('/workers/w_X')).toBe('/')
+      expect(stripWorkerWebPrefix('/workers/w_X/')).toBe('/')
+      // Genuine root paths → null (middleware no-op; Host-tunnel path already stripped).
+      expect(stripWorkerWebPrefix('/assets/app.js')).toBeNull()
+      expect(stripWorkerWebPrefix('/api/sessions')).toBeNull()
+      expect(stripWorkerWebPrefix('/')).toBeNull()
+      // `/api/workers/:workerId` is under `^/api/`, never matched by `^/workers/`.
+      expect(stripWorkerWebPrefix('/api/workers/w_X/config')).toBeNull()
+    })
+
+    it('serves prefixed asset, API, and SPA requests through the existing root handlers', async () => {
+      const staticDir = writeWorkerWeb()
+      const target = await app(undefined, staticDir)
+      const worker = await createFreeformWorker(target)
+
+      // Deep-reload assets: base href makes the browser request `/workers/:id/assets/x`.
+      const prefixedAsset = await target.request(`/workers/${worker.id}/assets/app.js`)
+      expect(prefixedAsset.status).toBe(200)
+      expect(await prefixedAsset.text()).toBe('console.log("worker-web-asset")')
+      expect(prefixedAsset.headers.get('content-type')).toContain('text/javascript')
+
+      // API_BASE prefixes API calls; the strip must reach the real API route and
+      // preserve the query string (`url.pathname =` retains `url.search`).
+      const prefixedApi = await target.request(`/workers/${worker.id}/api/sessions?workerId=${worker.id}`)
+      expect(prefixedApi.status).toBe(200)
+      const apiBody = await prefixedApi.json() as { sessions: unknown[] }
+      expect(Array.isArray(apiBody.sessions)).toBe(true)
+
+      // Deep SPA route → catch-all SPA index (served after strip via `/workspaces/...`).
+      const prefixedSpa = await target.request(`/workers/${worker.id}/workspaces/ws/sessions/s`)
+      expect(prefixedSpa.status).toBe(200)
+      expect(prefixedSpa.headers.get('content-type')).toContain('text/html')
+      expect(await prefixedSpa.text()).toContain('data-spa="worker-web"')
+
+      // `/workers/:id` bare prefix → SPA index (strips to `/`).
+      const prefixedRoot = await target.request(`/workers/${worker.id}`)
+      expect(prefixedRoot.status).toBe(200)
+      expect(await prefixedRoot.text()).toContain('data-spa="worker-web"')
+    })
+
+    it('leaves genuine root paths unchanged and never mis-strips /api/workers/:workerId', async () => {
+      const staticDir = writeWorkerWeb()
+      const target = await app(undefined, staticDir)
+      const worker = await createFreeformWorker(target)
+
+      // Root asset is served by the existing root handler, not double-stripped.
+      const rootAsset = await target.request('/assets/app.js')
+      expect(rootAsset.status).toBe(200)
+      expect(await rootAsset.text()).toBe('console.log("worker-web-asset")')
+
+      // `/api/workers/:workerId` is data, not a Workbench prefix: must reach the
+      // worker-show API and return the worker, NOT be stripped to `/:workerId`.
+      const workerConfig = await target.request(`/api/workers/${worker.id}/config`)
+      expect(workerConfig.status).toBe(200)
+      const configBody = await workerConfig.json() as { workerId: string }
+      expect(configBody.workerId).toBe(worker.id)
+    })
+
+    it('re-dispatches a prefixed POST with its body and preserves authorization', async () => {
+      const staticDir = writeWorkerWeb()
+      const token = 'strip-token'
+      const target = await app(token, staticDir)
+      const worker = await createFreeformWorker(target)
+
+      // A prefixed write must carry method + JSON body + Authorization through the
+      // re-dispatch so the API auth middleware and handler both see them.
+      const created = await target.request(`/workers/${worker.id}/api/workspace-locators`, {
+        body: JSON.stringify({ name: 'Prefixed workspace', type: 'workspace', workerId: worker.id }),
+        headers: { 'authorization': `Bearer ${token}`, 'content-type': 'application/json' },
+        method: 'POST',
+      })
+      expect(created.status).toBe(201)
+      const createdBody = await created.json() as { workspace: { name: string, workerId: string } }
+      expect(createdBody.workspace).toMatchObject({ name: 'Prefixed workspace', workerId: worker.id })
+
+      // Without the bearer the re-dispatched API request is still rejected (auth preserved).
+      const denied = await target.request(`/workers/${worker.id}/api/workspace-locators`, {
+        body: JSON.stringify({ name: 'No auth', type: 'workspace', workerId: worker.id }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      })
+      expect(denied.status).toBe(401)
+    })
   })
 })
