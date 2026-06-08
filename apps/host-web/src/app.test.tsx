@@ -2,13 +2,21 @@ import type {
   CreateHostAssignmentInput,
   HostApiClient,
   HostAssignmentSummary,
+  HostOperator,
   HostOptionsSummary,
 } from './host-api'
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { HostControlPlane } from './app'
+import { HostApiError } from './host-api'
+
+const adminOperator: HostOperator = {
+  email: 'admin@example.com',
+  roles: ['host:admin'],
+  subject: 'usr_admin',
+}
 
 const hostOptions: HostOptionsSummary = {
   access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
@@ -80,13 +88,20 @@ const readyAssignment: HostAssignmentSummary = {
 function createApi(input: {
   createAssignment?: HostApiClient['createAssignment']
   getOptions?: HostApiClient['getOptions']
+  getOperator?: HostApiClient['getOperator']
   listAssignments: HostApiClient['listAssignments']
 }): HostApiClient {
   return {
     createAssignment: input.createAssignment ?? vi.fn(),
     getOptions: input.getOptions ?? vi.fn().mockResolvedValue(hostOptions),
+    getOperator: input.getOperator ?? vi.fn().mockResolvedValue(adminOperator),
     listAssignments: input.listAssignments,
   }
+}
+
+// Polling is disabled by default in tests so list-call counts stay deterministic.
+function renderPlane(api: HostApiClient, props: { pollIntervalMs?: number } = {}) {
+  return render(<HostControlPlane api={api} pollIntervalMs={props.pollIntervalMs ?? 0} />)
 }
 
 function createDeferred<T>() {
@@ -116,14 +131,21 @@ describe('host control plane', () => {
       listAssignments: vi.fn().mockResolvedValue([checkedInAssignment]),
     })
 
-    const { container } = render(<HostControlPlane api={api} />)
+    const { container } = renderPlane(api)
 
     expect(await screen.findByRole('heading', { name: 'AI Workers' })).not.toBeNull()
     expect(screen.getByRole('navigation', { name: 'Host navigation' })).not.toBeNull()
     expect(screen.getByRole('complementary', { name: 'Worker assignment drawer' })).not.toBeNull()
     expect(screen.getByRole('heading', { name: '开通 AI Worker' })).not.toBeNull()
-    expect(screen.getAllByText('Logto 未接入').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Worker Access Tunnel 未接入').length).toBeGreaterThan(0)
+    // Real-scenario wiring replaced the hardcoded "未接入" stubs: operator
+    // identity now comes from /api/auth/me, and the worker-access summary is
+    // derived live from assignment statuses.
+    expect(await screen.findByText('admin@example.com')).not.toBeNull()
+    expect(screen.queryByText('Logto 未接入')).toBeNull()
+    expect(screen.queryByText('Worker Access Tunnel 未接入')).toBeNull()
+    const accessSummary = screen.getByLabelText('Worker access summary')
+    expect(accessSummary.textContent).toContain('在线 0')
+    expect(accessSummary.textContent).toContain('连接中 1')
     expect(await screen.findByText('lin@example.com')).not.toBeNull()
     expect(screen.getAllByText('连接中').length).toBeGreaterThan(0)
     expect(screen.queryByRole('link', { name: '打开 Worker' })).toBeNull()
@@ -136,7 +158,7 @@ describe('host control plane', () => {
       listAssignments: vi.fn().mockResolvedValue([]),
     })
 
-    render(<HostControlPlane api={api} />)
+    renderPlane(api)
 
     expect(await screen.findByText('暂无开通记录')).not.toBeNull()
   })
@@ -169,7 +191,7 @@ describe('host control plane', () => {
       .mockResolvedValueOnce([createdAssignment])
     const api = createApi({ createAssignment, listAssignments })
 
-    render(<HostControlPlane api={api} />)
+    renderPlane(api)
 
     expect((await screen.findAllByText(/aiwork/)).length).toBeGreaterThan(0)
     expect(screen.getByLabelText('provisioning target')).not.toBeNull()
@@ -214,7 +236,7 @@ describe('host control plane', () => {
       listAssignments: vi.fn().mockResolvedValue([]),
     })
 
-    render(<HostControlPlane api={api} />)
+    renderPlane(api)
 
     expect(await screen.findByLabelText('Worker callback URL')).not.toBeNull()
     fireEvent.change(screen.getByLabelText('Worker callback URL'), {
@@ -285,7 +307,7 @@ describe('host control plane', () => {
       .mockResolvedValueOnce([createdAssignment])
     const api = createApi({ createAssignment, listAssignments })
 
-    render(<HostControlPlane api={api} />)
+    renderPlane(api)
 
     await screen.findAllByText(/aiwork/)
     fillEmployeeEmail('mei@example.com')
@@ -326,7 +348,7 @@ describe('host control plane', () => {
       .mockReturnValueOnce(refreshedList.promise)
     const api = createApi({ createAssignment, listAssignments })
 
-    render(<HostControlPlane api={api} />)
+    renderPlane(api)
 
     await screen.findAllByText(/aiwork/)
     fillEmployeeEmail('mei@example.com')
@@ -357,7 +379,7 @@ describe('host control plane', () => {
       .mockResolvedValueOnce([checkedInAssignment])
     const api = createApi({ listAssignments })
 
-    render(<HostControlPlane api={api} />)
+    renderPlane(api)
 
     expect(await screen.findByText(/FORBIDDEN/)).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '重试' }))
@@ -371,7 +393,7 @@ describe('host control plane', () => {
       listAssignments: vi.fn().mockResolvedValue([readyAssignment]),
     })
 
-    render(<HostControlPlane api={api} />)
+    renderPlane(api)
 
     expect(await screen.findByText('可访问')).not.toBeNull()
     const workerLink = screen.getByRole('link', { name: '打开 Worker' })
@@ -387,10 +409,161 @@ describe('host control plane', () => {
       ]),
     })
 
-    render(<HostControlPlane api={api} />)
+    renderPlane(api)
 
     expect(await screen.findByText('连接中')).not.toBeNull()
     expect(screen.getByText('需处理')).not.toBeNull()
     expect(screen.queryByRole('link', { name: '打开 Worker' })).toBeNull()
+  })
+
+  it('offers a login link when the operator operator is unauthenticated', async () => {
+    const api = createApi({
+      getOperator: vi.fn().mockResolvedValue(null),
+      listAssignments: vi.fn().mockResolvedValue([]),
+    })
+
+    renderPlane(api)
+
+    const loginLink = await screen.findByRole('link', { name: '登录' })
+    expect(loginLink.getAttribute('href')).toBe('/auth/login?returnTo=/host')
+    expect(screen.queryByText('退出登录')).toBeNull()
+  })
+
+  it('shows a logout control for an authenticated operator', async () => {
+    const api = createApi({
+      listAssignments: vi.fn().mockResolvedValue([]),
+    })
+
+    renderPlane(api)
+
+    expect(await screen.findByText('admin@example.com')).not.toBeNull()
+    expect(screen.getByText('Host 管理员')).not.toBeNull()
+    const logout = screen.getByRole('button', { name: '退出登录' })
+    expect(logout.closest('form')?.getAttribute('action')).toBe('/auth/logout')
+    expect(logout.closest('form')?.getAttribute('method')).toBe('post')
+  })
+
+  it('switches to the Souls panel and lists real Soul releases', async () => {
+    const api = createApi({
+      listAssignments: vi.fn().mockResolvedValue([]),
+    })
+
+    renderPlane(api)
+
+    await screen.findByRole('heading', { name: 'AI Workers' })
+    fireEvent.click(screen.getByRole('button', { name: 'Souls' }))
+
+    expect(await screen.findByLabelText('Soul releases list')).not.toBeNull()
+    expect(screen.getByText('AIWorker Freeform')).not.toBeNull()
+    expect(screen.getByText('aiworker-freeform@dev')).not.toBeNull()
+    // The provisioning drawer belongs to AI Workers, not Souls.
+    expect(screen.queryByRole('complementary', { name: 'Worker assignment drawer' })).toBeNull()
+  })
+
+  it('keeps planned nav sections but labels them honestly as TODO', async () => {
+    const api = createApi({
+      listAssignments: vi.fn().mockResolvedValue([]),
+    })
+
+    renderPlane(api)
+
+    await screen.findByRole('heading', { name: 'AI Workers' })
+    fireEvent.click(screen.getByRole('button', { name: /Activity/ }))
+
+    const activityPanel = await screen.findByLabelText('Activity panel')
+    expect(within(activityPanel).getByText('规划中')).not.toBeNull()
+    expect(within(activityPanel).getByText('此功能尚未接入后端，是后续阶段的 TODO。')).not.toBeNull()
+    // The TODO marker is also present on the nav button itself, honestly.
+    expect(screen.getByRole('button', { name: /Settings/ }).textContent).toContain('规划中')
+  })
+
+  it('focuses the assignment form when the header action is clicked', async () => {
+    const api = createApi({
+      listAssignments: vi.fn().mockResolvedValue([]),
+    })
+
+    renderPlane(api)
+
+    await screen.findByRole('heading', { name: 'AI Workers' })
+    fireEvent.click(screen.getByRole('button', { name: '开通 AI Worker' }))
+
+    expect(document.activeElement).toBe(screen.getByLabelText('员工邮箱'))
+  })
+
+  it('surfaces Soul source errors from Host options', async () => {
+    const api = createApi({
+      getOptions: vi.fn().mockResolvedValue({ ...hostOptions, soulSourceErrors: ['Invalid Soul descriptor identity: hr-manager'] }),
+      listAssignments: vi.fn().mockResolvedValue([]),
+    })
+
+    renderPlane(api)
+
+    expect(await screen.findByText('Invalid Soul descriptor identity: hr-manager')).not.toBeNull()
+  })
+
+  it('prompts re-login when the assignments API returns 401', async () => {
+    const api = createApi({
+      listAssignments: vi.fn().mockRejectedValue(new HostApiError({ code: 'UNAUTHENTICATED', status: 401 })),
+    })
+
+    renderPlane(api)
+
+    const reloginLink = await screen.findByRole('link', { name: '重新登录' })
+    expect(reloginLink.getAttribute('href')).toBe('/auth/login?returnTo=/host')
+    expect(screen.getByText('登录已过期，请重新登录。')).not.toBeNull()
+  })
+
+  it('shows an admin-required message when the assignments API returns 403', async () => {
+    const api = createApi({
+      listAssignments: vi.fn().mockRejectedValue(new HostApiError({ code: 'FORBIDDEN', status: 403 })),
+    })
+
+    renderPlane(api)
+
+    expect(await screen.findByText('需要 Host 管理员账号才能访问。')).not.toBeNull()
+  })
+
+  it('polls assignments live on the configured interval', async () => {
+    const listAssignments = vi.fn().mockResolvedValue([])
+    const api = createApi({ listAssignments })
+
+    renderPlane(api, { pollIntervalMs: 20 })
+
+    await waitFor(() => {
+      expect(listAssignments.mock.calls.length).toBeGreaterThanOrEqual(3)
+    })
+  })
+
+  it('keeps the re-login banner across poll ticks under a persistent 401', async () => {
+    const listAssignments = vi.fn().mockRejectedValue(new HostApiError({ code: 'UNAUTHENTICATED', status: 401 }))
+    const api = createApi({ listAssignments })
+
+    renderPlane(api, { pollIntervalMs: 20 })
+
+    // The initial foreground load surfaces the re-login banner.
+    expect(await screen.findByRole('link', { name: '重新登录' })).not.toBeNull()
+
+    // Let several silent poll ticks fire against the same persistent 401.
+    await waitFor(() => {
+      expect(listAssignments.mock.calls.length).toBeGreaterThanOrEqual(3)
+    })
+
+    // Silent polls must NOT wipe the standing banner.
+    expect(screen.getByRole('link', { name: '重新登录' })).not.toBeNull()
+    expect(screen.getByText('登录已过期，请重新登录。')).not.toBeNull()
+  })
+
+  it('drops the error banner once a poll recovers', async () => {
+    const listAssignments = vi.fn()
+      .mockRejectedValueOnce(new HostApiError({ code: 'UNAUTHENTICATED', status: 401 }))
+      .mockResolvedValue([])
+    const api = createApi({ listAssignments })
+
+    renderPlane(api, { pollIntervalMs: 20 })
+
+    expect(await screen.findByRole('link', { name: '重新登录' })).not.toBeNull()
+    // A later successful poll clears the standing banner and shows the list state.
+    expect(await screen.findByText('暂无开通记录')).not.toBeNull()
+    expect(screen.queryByRole('link', { name: '重新登录' })).toBeNull()
   })
 })

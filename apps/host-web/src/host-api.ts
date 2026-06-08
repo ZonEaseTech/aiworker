@@ -79,9 +79,16 @@ export interface HostOptionsSummary {
   soulSourceErrors?: string[]
 }
 
+export interface HostOperator {
+  email: string
+  roles: string[]
+  subject: string
+}
+
 export interface HostApiClient {
   createAssignment: (input: CreateHostAssignmentInput) => Promise<CreateHostAssignmentResult>
   getOptions: () => Promise<HostOptionsSummary>
+  getOperator: () => Promise<HostOperator | null>
   listAssignments: () => Promise<HostAssignmentSummary[]>
 }
 
@@ -148,6 +155,7 @@ export function createHostApiClient(options: CreateHostApiClientOptions = {}): H
   const fetchImpl = options.fetch ?? fetch
   const assignmentsUrl = `${baseUrl}/api/host/assignments`
   const optionsUrl = `${baseUrl}/api/host/options`
+  const operatorUrl = `${baseUrl}/api/auth/me`
 
   return {
     async createAssignment(input) {
@@ -166,6 +174,22 @@ export function createHostApiClient(options: CreateHostApiClientOptions = {}): H
     },
     async getOptions() {
       return requestJson<HostOptionsSummary>(fetchImpl, optionsUrl)
+    },
+    async getOperator() {
+      const response = await fetchImpl(operatorUrl)
+      if (response.status === 401)
+        return null
+      const body = await readJson(response)
+      if (!response.ok)
+        throw new HostApiError({ code: errorCodeFromBody(body, response.status), status: response.status })
+      const user = isRecord(body) && isRecord(body.user) ? body.user : null
+      if (!user || typeof user.email !== 'string')
+        return null
+      return {
+        email: user.email,
+        roles: Array.isArray(user.roles) ? user.roles.filter((role): role is string => typeof role === 'string') : [],
+        subject: typeof user.subject === 'string' ? user.subject : '',
+      }
     },
     async listAssignments() {
       const result = await requestJson<ListAssignmentsResponse>(fetchImpl, assignmentsUrl)

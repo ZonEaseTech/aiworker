@@ -10,6 +10,6 @@ if (!rootElement)
 
 createRoot(rootElement).render(
   <StrictMode>
-    <HostControlPlane />
+    <HostControlPlane pollIntervalMs={5000} />
   </StrictMode>,
 )

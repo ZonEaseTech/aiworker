@@ -24,6 +24,12 @@ export default defineConfig({
         changeOrigin: true,
         target: hostApiProxyTarget,
       },
+      // Operator login/logout/callback must reach the Host in dev too, so the
+      // identity + logout controls work behind the Vite dev server.
+      '/auth': {
+        changeOrigin: true,
+        target: hostApiProxyTarget,
+      },
       '/workers': {
         changeOrigin: true,
         target: hostApiProxyTarget,

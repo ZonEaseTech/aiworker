@@ -534,6 +534,34 @@ describe('host server', () => {
     })
   })
 
+  it('returns the static dev-admin operator from /api/auth/me when sessionAuth is not configured', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/api/auth/me'))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ user: adminUser })
+  })
+
+  it('returns 401 from /api/auth/me when neither sessionAuth nor a static operator is configured', async () => {
+    const server = await createHostServer({
+      authUser: null,
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://localhost:54145',
+      hostControlBaseUrl: 'http://localhost:54145',
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/api/auth/me'))
+
+    expect(response.status).toBe(401)
+    expect(await response.json()).toEqual({ error: { code: 'UNAUTHENTICATED' } })
+  })
+
   it('does not trust signed-cookie roles for Host admin authorization', async () => {
     const server = await createHostServer({
       dbPath: dbPath(),
