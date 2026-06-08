@@ -1,8 +1,26 @@
-# AIWorker 迭代与发版闭环（agent runbook）
+---
+name: release-loop
+description: "Use inside an AIWorker checkout when a releasable change is ready to ship to npm. Drives the full iterate-and-release loop: branch → PR → merge main → push a `v*` tag → CI publishes @zonease/aiworker-cli + @zonease/aiworker-host-cli (npm dist-tag derived from the tag name) → verify with `npm view`. Trigger when you (or the user) want to cut/ship a release, bump the publishable version, publish to npm, push a release tag, or continue the next release round (\"发版\", \"打 tag\", \"发 rc\", \"release\", \"publish\", \"ship\"). A development agent is authorized to run this end-to-end, including the public npm publish, without asking each time; the safety guards are built in. Do NOT use outside an AIWorker checkout, for ordinary feature work that is not being released, or for the generic OMC `release` skill."
+---
 
-> 写给 agent 的可重复执行手册，不是人类教程。一轮 = 阶段性开发 → PR → 合并 main → 打 tag → CI 发版 → 验证 npm 已发布 → 下一轮。
-> 这是运维/流程 runbook，不是 canonical 合同文档（`docs/` 被 `docs:check` 锁死为固定 5 文件，故落仓根，与 `deploy/RUNBOOK.md` 同级别）。
-> 不变量优先级低于 `AGENTS.md` 与 canonical docs；与它们冲突时以后者为准。
+# AIWorker 迭代与发版闭环
+
+把一个可发布的改动从工作区送上 npm 的可重复闭环：阶段性开发 → PR → 合并 main → 打 `v*` tag → CI 发版 → `npm view` 验证 → 下一轮。这是发版执行 workflow，写给 agent；它取代了旧的 `RELEASE_LOOP.md`。
+
+> 本 skill 是流程 runbook，不是 canonical 合同。优先级低于 `AGENTS.md` 与 canonical docs（`docs/architecture|protocol|runtime|soul-authoring|testing.md`）；与它们冲突时以后者为准。
+
+## Trigger Gate（用前确认三条，全中才用）
+
+1. **AIWorker repo 身份**：从 cwd 定位 git root；确认根 `AGENTS.md` 含 `AIWorker Agent Bootstrap`、`.github/workflows/release.yml` 存在、两个可发布包 `apps/worker-cli/package.json`（`@zonease/aiworker-cli`）与 `apps/host-cli/package.json`（`@zonease/aiworker-host-cli`）存在。
+2. **发版意图**：你或用户要发版 / bump 版本 / 打 tag / publish npm / 续下一轮发版。普通 feature 开发（不发版）不触发本 skill。
+3. **非 OMC release**：这是 AIWorker 专属闭环，不是通用 `oh-my-claudecode:release`。
+
+## 谁用 / 何时用 / 授权
+
+- **谁**：在 AIWorker 上干活的开发 agent。这套发版流程是你的常规能力，不是只给某个特定会话或人类的。
+- **何时**：每完成一个可发布的阶段（feature / 优化 / 修复）后。不必等人开口，也不必每次重新设计流程——直接按下面的步骤走。
+- **授权**：你被授权自主走完整闭环，**含打 `v*` tag 触发公开 npm 发布**，无需逐次向用户申请。安全不靠“先问人”，而靠内置硬门兜底：发版前本地过 `release:check`（第 3 步）、CI 强制 tag↔package 版本一致（不一致绝不发）、npm 版本不可覆盖、`release:check` 失败发生在 publish 之前 = 零发布副作用可重试。
+- **唯一要先问人的例外**：跨越既往明确裁决（如当前“仍不打 GA、只走 rc 线”）、或要改这套流程本身的不变量。其余照常自主走。
 
 ## 不变量（违反即停，先回到这里对照）
 
@@ -32,7 +50,7 @@
 
 ## 一轮闭环（按序执行，命令可直接抄）
 
-每步带确切命令。`<pkg>` 指两个可发布包，`<version>` 指本轮目标版本（如 `1.0.0-rc.4`），`<tag>` = `v<version>`。
+每步带确切命令。`<pkg>` 指两个可发布包，`<version>` 指本轮目标版本（如 `1.0.0-rc.6`），`<tag>` = `v<version>`。
 
 ### 1. 起分支（绝不在 main 上改）
 ```sh
@@ -89,27 +107,27 @@ gh pr merge --squash --delete-branch   # 常规 feature 分支
 ### 8. 打 tag + 推 CI 发版
 ```sh
 git checkout main && git pull --ff-only
-git tag <tag>                 # 例: v1.0.0-rc.4（tag 名即决定渠道）
+git tag <tag>                 # 例: v1.0.0-rc.6（tag 名即决定渠道）
 git push origin <tag>         # 唯一发版触发
 ```
 
 ### 9. 监控 release.yml
 ```sh
 gh run watch                  # 跟最新 run
-# 顺序：install → playwright → release:check → compile 4 binaries
-#       → package bundles → smoke artifacts → publish <pkg>(派生渠道) → attach GH release
+# 顺序：install → playwright → assert tag==版本 → release:check → compile 4 binaries
+#       → package bundles → smoke artifacts → derive 渠道 → publish <pkg> → attach GH release
 ```
 
 ### 10. 验证 npm 已发布（权威，轮询直到出现）
 ```sh
 npm view @zonease/aiworker-cli@<version> version
 npm view @zonease/aiworker-host-cli@<version> version
-npm view @zonease/aiworker-cli dist-tags     # 确认进了预期渠道
+npm view @zonease/aiworker-cli dist-tags     # 确认进了预期渠道、latest 是否如预期
 ```
 > `smoke:npm-package` 验的是**本地 pack 的 tarball**，不是已发布包；「验证 npm 已发布」必须用 `npm view <pkg>@<version>` 实查 registry。
 
 ### 11. 收尾 + 下一轮
-- 把本轮的非显然决策/陷阱写进项目记忆或本 runbook。
+- 把本轮的非显然决策/陷阱写进项目记忆或本 skill。
 - 回到第 1 步开下一轮（开发 / 优化 / 修复）。
 
 ## 失败处置
@@ -122,11 +140,11 @@ npm view @zonease/aiworker-cli dist-tags     # 确认进了预期渠道
 - **`release:check` 绿但 `npm publish` 红**：常见 = 版本号已发过（不可覆盖，bump 后重来）/ `NPM_TOKEN`（GH secret）失效 / `--access public` 权限。查 run 日志对症。
 - **tag 已 push 但想改内容**：不要 force-move 已驱动过发布的 tag。bump 到下一个版本号重走。
 - **PR CI（lint.yml）红**：在分支上修，重 push，回第 6 步。
-- **`test` 门 flaky（并发负载偶发单测失败）**：`release:check` 的 `bun run --filter '*' test` 在并发/有遗留进程时会偶发单测失败（已知非确定性，非版本改动引入）。判别 = **隔离重跑该包**：`bun run --filter '<失败包>' test`；绿即 flake。flake 不是确定性失败，CI 干净 runner 更不易复现。release:check 失败发生在 publish **之前** = 零发布副作用，故 CI 上遇 flake 直接 `gh run rerun <run-id>` 重试**同一个 tag**（无需删 tag / bump）。只有确定性失败才走上面「删 tag、修、重打」。
+- **`test` 门 flaky（并发负载偶发单测失败）**：`release:check` 的 `bun run --filter '*' test` 在并发/有遗留进程时会偶发单测失败（已知非确定性，非版本改动引入）。判别 = **隔离重跑该包**：`bun run --filter '<失败包>' test`；绿即 flake。flake 不是确定性失败，CI 干净 runner 更不易复现。`release:check` 失败发生在 publish **之前** = 零发布副作用，故 CI 上遇 flake 直接 `gh run rerun <run-id>` 重试**同一个 tag**（无需删 tag / bump）。只有确定性失败才走上面「删 tag、修、重打」。
 
 ## 关键文件锚点
 
-- `.github/workflows/release.yml` — tag 发版管线（release:check → compile → package → smoke → publish 派生渠道 → attach）。
+- `.github/workflows/release.yml` — tag 发版管线（assert tag==版本 → release:check → compile → package → smoke → derive 渠道 → publish → attach）。
 - `.github/workflows/lint.yml` — PR/push main 的 lint + web 门。
 - `apps/worker-cli/package.json` / `apps/host-cli/package.json` — 版本 source of truth。
 - 根 `package.json` `release:check` — 权威门聚合器，须等于 `docs/testing.md` Current Release Gates。

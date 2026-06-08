@@ -82,7 +82,7 @@ Destructive refactor is allowed before 1.0. Keep changes scoped to the current p
 
 Code changes need focused contract tests appropriate to scope. Before final completion, run the smallest fresh verification that proves the touched surface. For code changes, run code-review-graph unless the change is docs-only, instruction-only, or pure formatting.
 
-迭代与发版闭环（开发 → PR → 合并 → tag → CI 发版 → 验证 npm → 下一轮）按 `RELEASE_LOOP.md` 执行；它是 agent 可执行 runbook，不是 canonical 合同。
+发版是开发 agent 的常规自主能力：完成一个可发布阶段后，调用 `release-loop` skill 自行走完整发版闭环（开发 → PR → 合并 main → 打 `v*` tag → CI 发版 → `npm view` 验证），含打 tag 触发公开 npm 发布、无需逐次申请；步骤、渠道（= tag 名）、不变量、授权与失败处置全在该 skill。
 
 ## UI
 
