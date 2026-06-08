@@ -125,6 +125,17 @@ function submitCreateForm() {
   fireEvent.click(screen.getByRole('button', { name: '创建开通' }))
 }
 
+// The provisioning form now lives in an on-demand right drawer (Sheet) instead
+// of a permanently pinned column. The header action opens it; the empty-state
+// CTA shares the label, so target the first match (header) deterministically.
+async function openCreateSheet() {
+  const [headerAction] = screen.getAllByRole('button', { name: '开通 AI Worker' })
+  if (!headerAction)
+    throw new Error('open create action not found')
+  fireEvent.click(headerAction)
+  return screen.findByRole('dialog', { name: '开通 AI Worker' })
+}
+
 describe('host control plane', () => {
   it('renders the Phase 2 Host console shell with nav, list, and right drawer', async () => {
     const api = createApi({
@@ -135,8 +146,10 @@ describe('host control plane', () => {
 
     expect(await screen.findByRole('heading', { name: 'AI Workers' })).not.toBeNull()
     expect(screen.getByRole('navigation', { name: 'Host navigation' })).not.toBeNull()
-    expect(screen.getByRole('complementary', { name: 'Worker assignment drawer' })).not.toBeNull()
-    expect(screen.getByRole('heading', { name: '开通 AI Worker' })).not.toBeNull()
+    // The provisioning surface is an on-demand drawer (Sheet), closed by default —
+    // no permanently pinned column sitting empty.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: '开通 AI Worker' })).not.toBeNull()
     // Real-scenario wiring replaced the hardcoded "未接入" stubs: operator
     // identity now comes from /api/auth/me, and the worker-access summary is
     // derived live from assignment statuses.
@@ -144,13 +157,20 @@ describe('host control plane', () => {
     expect(screen.queryByText('Logto 未接入')).toBeNull()
     expect(screen.queryByText('Worker Access Tunnel 未接入')).toBeNull()
     const accessSummary = screen.getByLabelText('Worker access summary')
-    expect(accessSummary.textContent).toContain('在线 0')
+    // Online is the headline metric; 连接中 is the muted sub-line.
+    expect(accessSummary.textContent).toContain('在线')
+    expect(within(accessSummary).getByText('0')).not.toBeNull()
     expect(accessSummary.textContent).toContain('连接中 1')
     expect(await screen.findByText('lin@example.com')).not.toBeNull()
     expect(screen.getAllByText('连接中').length).toBeGreaterThan(0)
     expect(screen.queryByRole('link', { name: '打开 Worker' })).toBeNull()
     expect(container.querySelector('iframe')).toBeNull()
     expect(container.querySelector('micro-app')).toBeNull()
+
+    // The header action opens the provisioning drawer on demand.
+    fireEvent.click(screen.getByRole('button', { name: '开通 AI Worker' }))
+    expect(await screen.findByRole('dialog', { name: '开通 AI Worker' })).not.toBeNull()
+    expect(screen.getByRole('heading', { name: '开通 AI Worker' })).not.toBeNull()
   })
 
   it('shows the empty state from the API shape', async () => {
@@ -192,12 +212,13 @@ describe('host control plane', () => {
     const api = createApi({ createAssignment, listAssignments })
 
     renderPlane(api)
+    await openCreateSheet()
 
     expect((await screen.findAllByText(/aiwork/)).length).toBeGreaterThan(0)
     expect(screen.getByLabelText('provisioning target')).not.toBeNull()
     expect(screen.queryByLabelText('aissh server')).toBeNull()
-    expect(screen.getByText('docker · preview')).not.toBeNull()
-    expect(screen.getByText('local · dev')).not.toBeNull()
+    // Only the selected target's maturity is surfaced, not a wall of every target.
+    expect(screen.getByText('aissh · production')).not.toBeNull()
     fillEmployeeEmail('mei@example.com')
     submitCreateForm()
 
@@ -237,6 +258,7 @@ describe('host control plane', () => {
     })
 
     renderPlane(api)
+    await openCreateSheet()
 
     expect(await screen.findByLabelText('Worker callback URL')).not.toBeNull()
     fireEvent.change(screen.getByLabelText('Worker callback URL'), {
@@ -251,6 +273,9 @@ describe('host control plane', () => {
         provisioningTarget: expect.objectContaining({ adapterType: 'aissh' }),
       }))
     })
+
+    // Success replaced the form; re-open it to provision the next worker.
+    fireEvent.click(screen.getByRole('button', { name: '再开通一个' }))
 
     fireEvent.change(screen.getByLabelText('provisioning target'), {
       target: { value: 'local:default' },
@@ -308,12 +333,16 @@ describe('host control plane', () => {
     const api = createApi({ createAssignment, listAssignments })
 
     renderPlane(api)
+    await openCreateSheet()
 
     await screen.findAllByText(/aiwork/)
     fillEmployeeEmail('mei@example.com')
     submitCreateForm()
 
     expect((await screen.findAllByText(/awp_secret/)).length).toBeGreaterThan(0)
+
+    // Success replaces the form; re-open it (clears the stale one-time token).
+    fireEvent.click(screen.getByRole('button', { name: '再开通一个' }))
 
     fillEmployeeEmail('error@example.com')
     submitCreateForm()
@@ -349,6 +378,7 @@ describe('host control plane', () => {
     const api = createApi({ createAssignment, listAssignments })
 
     renderPlane(api)
+    await openCreateSheet()
 
     await screen.findAllByText(/aiwork/)
     fillEmployeeEmail('mei@example.com')
@@ -456,8 +486,10 @@ describe('host control plane', () => {
     expect(await screen.findByLabelText('Soul releases list')).not.toBeNull()
     expect(screen.getByText('AIWorker Freeform')).not.toBeNull()
     expect(screen.getByText('aiworker-freeform@dev')).not.toBeNull()
-    // The provisioning drawer belongs to AI Workers, not Souls.
-    expect(screen.queryByRole('complementary', { name: 'Worker assignment drawer' })).toBeNull()
+    // The provisioning drawer belongs to AI Workers, not Souls, and its header
+    // action is gone on this section.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('button', { name: '开通 AI Worker' })).toBeNull()
   })
 
   it('keeps planned nav sections but labels them honestly as TODO', async () => {
@@ -477,7 +509,7 @@ describe('host control plane', () => {
     expect(screen.getByRole('button', { name: /Settings/ }).textContent).toContain('规划中')
   })
 
-  it('focuses the assignment form when the header action is clicked', async () => {
+  it('opens and focuses the assignment drawer when the header action is clicked', async () => {
     const api = createApi({
       listAssignments: vi.fn().mockResolvedValue([]),
     })
@@ -485,8 +517,13 @@ describe('host control plane', () => {
     renderPlane(api)
 
     await screen.findByRole('heading', { name: 'AI Workers' })
-    fireEvent.click(screen.getByRole('button', { name: '开通 AI Worker' }))
+    // The empty state shares the 开通 AI Worker label, so click the header action.
+    const [headerAction] = screen.getAllByRole('button', { name: '开通 AI Worker' })
+    if (!headerAction)
+      throw new Error('open create action not found')
+    fireEvent.click(headerAction)
 
+    expect(await screen.findByRole('dialog', { name: '开通 AI Worker' })).not.toBeNull()
     expect(document.activeElement).toBe(screen.getByLabelText('员工邮箱'))
   })
 

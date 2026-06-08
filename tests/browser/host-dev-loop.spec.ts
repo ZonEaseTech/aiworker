@@ -47,17 +47,20 @@ try {
   const optionsResponse = await optionsResponsePromise
   await page.getByRole('heading', { name: 'AI Workers' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('navigation', { name: 'Host navigation' }).waitFor({ state: 'visible', timeout: 10000 })
-  await page.getByRole('complementary', { name: 'Worker assignment drawer' }).waitFor({ state: 'visible', timeout: 10000 })
   // Operator identity now comes from the real /api/auth/me probe (dev-admin
   // operator in this lifecycle), and the worker-access summary is derived live —
   // both replace the old hardcoded "未接入" stubs.
   await page.getByText(adminEmail).first().waitFor({ state: 'visible', timeout: 10000 })
   await page.getByLabel('Worker access summary').waitFor({ state: 'visible', timeout: 10000 })
+  // Provisioning is an on-demand right drawer (Sheet) now — open it on demand,
+  // it is no longer a permanently pinned column.
+  await page.getByRole('button', { name: '开通 AI Worker' }).first().click()
+  await page.getByRole('dialog', { name: '开通 AI Worker' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByLabel('provisioning target').waitFor({ state: 'visible', timeout: 10000 })
   await page.getByLabel('provisioning target').selectOption('local:default')
   await page.locator('[data-slot="field-description"]').filter({ hasText: '本机开发环境 · local · dev' }).waitFor({ state: 'visible', timeout: 10000 })
-  await page.getByLabel('target maturity summaries').getByText('local · dev').waitFor({ state: 'visible', timeout: 10000 })
-  await page.getByLabel('target maturity summaries').getByText('docker · preview').waitFor({ state: 'visible', timeout: 10000 })
+  // Only the selected target's maturity badge is shown (no wall of every target).
+  await page.getByLabel('selected target maturity').getByText('local · dev').waitFor({ state: 'visible', timeout: 10000 })
   await page.getByLabel('员工邮箱').fill('browser.employee@zonease.org')
   await fillIfFallbackInput(page, 'Soul release', 'aiworker-freeform@browser-proof')
   await page.getByRole('button', { name: '创建开通' }).click()
@@ -133,7 +136,7 @@ try {
     },
     hostUrl,
     hostShell: {
-      assignmentDrawerVisible: await page.getByRole('complementary', { name: 'Worker assignment drawer' }).isVisible(),
+      createActionVisible: await page.getByRole('button', { name: '开通 AI Worker' }).first().isVisible(),
       navigationVisible: await page.getByRole('navigation', { name: 'Host navigation' }).isVisible(),
       operatorIdentityVisible: await page.getByText(adminEmail).first().isVisible(),
       workerAccessSummaryVisible: await page.getByLabel('Worker access summary').isVisible(),
@@ -257,7 +260,7 @@ async function gotoDocument(page: Page, url: string, label: string): Promise<num
 }
 
 async function commandBlockText(page: Page, title: string): Promise<string> {
-  const text = await page.getByText(title).locator('xpath=..').locator('pre').textContent({ timeout: 10000 })
+  const text = await page.getByLabel(`command ${title}`).locator('pre').textContent({ timeout: 10000 })
   if (!text)
     throw new Error(`${title} block was empty`)
   return text.trim()
