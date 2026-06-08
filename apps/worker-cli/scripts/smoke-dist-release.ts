@@ -219,7 +219,7 @@ async function assertHttpText(url: string, expected: RegExp | string): Promise<s
 }
 
 async function assertWorkerWebAsset(port: number, html: string): Promise<void> {
-  const match = html.match(/["']\/?(assets\/[^"']+\.(?:js|css))["']/)
+  const match = html.match(/["']\.?\/?(assets\/[^"']+\.(?:js|css))["']/)
   if (!match?.[1])
     throw new Error(`Worker Web HTML does not reference a built asset:\n${html.slice(0, 400)}`)
   const assetUrl = `http://127.0.0.1:${port}/${match[1]}`
