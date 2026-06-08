@@ -58,6 +58,8 @@ bun run build && bun run release:check
 ```
 > `release:check` 是 CI tag 发版前会跑的同一道门；本地先跑一遍可避免「打了 tag 却在 CI 挂掉、白烧一个 tag」。涉及不可逆公开发版时，打 tag 前应本地过 `release:check`。
 
+> ⚠️ **陷阱：`cmd | tail` 掩盖退出码。** `bun run release:check 2>&1 | tail -N` 的退出码（以及后台任务通知里的「exit code 0」）是 **`tail` 的**，不是 `release:check` 的——`release:check` 失败（exit 1）也会被报成 0。**判绿不能只看管道/通知退出码**，必须读输出尾巴确认没有 `error: script "..." exited with code N`、且最后一道门 `check` 真的收尾（如 `docs contract ok`）。需要可靠退出码时：用 `set -o pipefail`、读 `${PIPESTATUS[0]}`，或对判绿用的那次跑**别接 `| tail`**（输出落文件后再 `tail` 文件）。
+
 ### 4. bump 版本（决定版本号 = 决定渠道）
 两个 `package.json` 的 `version` 同步改成 `<version>`：
 ```sh
@@ -120,6 +122,7 @@ npm view @zonease/aiworker-cli dist-tags     # 确认进了预期渠道
 - **`release:check` 绿但 `npm publish` 红**：常见 = 版本号已发过（不可覆盖，bump 后重来）/ `NPM_TOKEN`（GH secret）失效 / `--access public` 权限。查 run 日志对症。
 - **tag 已 push 但想改内容**：不要 force-move 已驱动过发布的 tag。bump 到下一个版本号重走。
 - **PR CI（lint.yml）红**：在分支上修，重 push，回第 6 步。
+- **`test` 门 flaky（并发负载偶发单测失败）**：`release:check` 的 `bun run --filter '*' test` 在并发/有遗留进程时会偶发单测失败（已知非确定性，非版本改动引入）。判别 = **隔离重跑该包**：`bun run --filter '<失败包>' test`；绿即 flake。flake 不是确定性失败，CI 干净 runner 更不易复现。release:check 失败发生在 publish **之前** = 零发布副作用，故 CI 上遇 flake 直接 `gh run rerun <run-id>` 重试**同一个 tag**（无需删 tag / bump）。只有确定性失败才走上面「删 tag、修、重打」。
 
 ## 关键文件锚点
 
