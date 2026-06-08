@@ -4,6 +4,13 @@
 > 这是运维/流程 runbook，不是 canonical 合同文档（`docs/` 被 `docs:check` 锁死为固定 5 文件，故落仓根，与 `deploy/RUNBOOK.md` 同级别）。
 > 不变量优先级低于 `AGENTS.md` 与 canonical docs；与它们冲突时以后者为准。
 
+## 谁用 / 何时用 / 授权
+
+- **谁**：在 AIWorker 上干活的开发 agent。这套发版流程是你的常规能力，不是只给某个特定会话或人类的。
+- **何时**：每完成一个可发布的阶段（feature / 优化 / 修复）后。不必等人开口，也不必每次重新设计流程——直接按下面的步骤走。
+- **授权**：你被授权自主走完整闭环，**含打 `v*` tag 触发公开 npm 发布**，无需逐次向用户申请。安全不靠"先问人"，而靠内置硬门兜底：发版前本地过 `release:check`（第 3 步）、CI 强制 tag↔package 版本一致（不一致绝不发）、npm 版本不可覆盖、release:check 失败发生在 publish 之前 = 零发布副作用可重试。
+- **唯一要先问人的例外**：跨越既往明确裁决（如当前“仍不打 GA、只走 rc 线”）、或要改这套流程本身的不变量。其余照常自主走。
+
 ## 不变量（违反即停，先回到这里对照）
 
 - **可发布包只有两个，永远同版本号同步发**：`@zonease/aiworker-cli`（`apps/worker-cli`）、`@zonease/aiworker-host-cli`（`apps/host-cli`）。其余 `souls/*`、`packages/*`、`apps/*-web` 全是 `private: true`，不发 npm。
