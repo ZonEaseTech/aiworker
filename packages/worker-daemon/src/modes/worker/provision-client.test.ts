@@ -487,10 +487,11 @@ describe('worker provision check-in client', () => {
     expect(clock.lastIntervalMs).toBe(25_000)
   })
 
-  it('clears the keepalive timer when the host drops the socket (onclose), no leak', async () => {
+  it('clears the keepalive timer and schedules a reconnect when the host drops the socket (onclose)', async () => {
     const sent: unknown[] = []
     const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sent)
     const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
     await connectWorkerAccessTunnel({
       access: { mode: 'worker_access', token: 'awt_secret' },
       assignment: {
@@ -502,18 +503,264 @@ describe('worker provision check-in client', () => {
       createWebSocket: () => socket,
       env: { AIWORKER_HOST_URL: 'http://host.example' },
       localFetch: async () => new Response('unused'),
+      logger: fakeLogger(),
       startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
     })
 
     clock.advance(1)
     expect(sent.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(1)
 
-    // Host drops the socket: the worker must clear its keepalive timer.
+    // Host drops the socket: the worker clears its keepalive timer (no leak) and schedules a reconnect.
     socket.dispatchClose()
     expect(clock.stopped).toBe(true)
+    expect(reconnect.lastDelayMs).toBeGreaterThan(0)
 
+    // The dead socket's keepalive never fires again.
     clock.advance(5)
     expect(sent.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(1)
+  })
+
+  it('force-closes and reconnects after the missed-pong limit (death detection on a half-open socket)', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const socketSents: unknown[][] = []
+    const sockets: ReturnType<typeof fakeWebSocket>[] = []
+    const create = (url: URL) => {
+      const sent: unknown[] = []
+      socketSents.push(sent)
+      const socket = fakeWebSocket(url, sent)
+      sockets.push(socket)
+      return socket
+    }
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: create,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      logger: fakeLogger(),
+      missedPongLimit: 3,
+      random: () => 1,
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+    })
+
+    // Three keepalive pings go unanswered; no death yet.
+    clock.advance(3)
+    expect(socketSents[0]!.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(3)
+    expect(reconnect.lastDelayMs).toBeNull()
+
+    // Fourth tick: missed pongs reach the limit → force close → schedule reconnect.
+    clock.advance(1)
+    expect(reconnect.lastDelayMs).toBe(1000)
+    expect(clock.stopped).toBe(true)
+    // The dead socket sent no fourth ping.
+    expect(socketSents[0]!.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(3)
+
+    // Backoff elapses → a brand new socket opens and re-sends hello with the same token.
+    reconnect.fire()
+    expect(sockets).toHaveLength(2)
+    expect(socketSents[1]![0]).toEqual({ type: 'hello', assignmentId: 'asn_1', token: 'awt_secret', workerId: 'wkr_82' })
+  })
+
+  it('keeps a healthy connection alive past the missed-pong limit when pongs arrive (no false death)', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), sent)
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      missedPongLimit: 3,
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+    })
+
+    // Every ping is answered with a pong → the missed counter never reaches the limit.
+    for (let i = 0; i < 10; i += 1) {
+      clock.advance(1)
+      const lastPing = sent.filter(frame => (frame as { type: string }).type === 'ping').at(-1) as { id: string }
+      await socket.dispatchMessage({ type: 'pong', id: lastPing.id })
+    }
+
+    expect(sent.filter(frame => (frame as { type: string }).type === 'ping')).toHaveLength(10)
+    expect(reconnect.lastDelayMs).toBeNull()
+  })
+
+  it('reconnects after an unexpected close, re-sending hello with the same access token (no re-provision)', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const socketSents: unknown[][] = []
+    const sockets: ReturnType<typeof fakeWebSocket>[] = []
+    const create = (url: URL) => {
+      const sent: unknown[] = []
+      socketSents.push(sent)
+      const socket = fakeWebSocket(url, sent)
+      sockets.push(socket)
+      return socket
+    }
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: create,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      logger: fakeLogger(),
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+    })
+
+    expect(socketSents[0]![0]).toEqual({ type: 'hello', assignmentId: 'asn_1', token: 'awt_secret', workerId: 'wkr_82' })
+
+    // Host restarts → the socket closes.
+    sockets[0]!.dispatchClose()
+    expect(reconnect.lastDelayMs).toBeGreaterThan(0)
+
+    reconnect.fire()
+    expect(sockets).toHaveLength(2)
+    // The same durable access token is reused — no re-provision, no new check-in.
+    expect(socketSents[1]![0]).toEqual({ type: 'hello', assignmentId: 'asn_1', token: 'awt_secret', workerId: 'wkr_82' })
+  })
+
+  it('uses exponential backoff capped at the max across consecutive failed reconnects', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const sockets: ReturnType<typeof fakeWebSocket>[] = []
+    const create = (url: URL) => {
+      const socket = fakeWebSocket(url, [])
+      sockets.push(socket)
+      return socket
+    }
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: create,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      logger: fakeLogger(),
+      reconnectBaseDelayMs: 1000,
+      reconnectMaxDelayMs: 30_000,
+      random: () => 1,
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+    })
+
+    const seen: Array<number | null> = []
+    for (let i = 0; i < 7; i += 1) {
+      // Each fresh socket dies immediately without ever carrying traffic → attempts keep growing.
+      sockets.at(-1)!.dispatchClose()
+      seen.push(reconnect.lastDelayMs)
+      reconnect.fire()
+    }
+
+    expect(seen).toEqual([1000, 2000, 4000, 8000, 16_000, 30_000, 30_000])
+  })
+
+  it('does not reconnect after an intentional close()', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const sockets: ReturnType<typeof fakeWebSocket>[] = []
+    const create = (url: URL) => {
+      const socket = fakeWebSocket(url, [])
+      sockets.push(socket)
+      return socket
+    }
+
+    const handle = await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: create,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+    })
+
+    handle?.close()
+    expect(clock.stopped).toBe(true)
+
+    // A late close event from the now-orphaned socket must not schedule a reconnect.
+    sockets[0]!.dispatchClose()
+    expect(reconnect.lastDelayMs).toBeNull()
+    expect(sockets).toHaveLength(1)
+  })
+
+  it('resets the backoff after a healthy reconnection (inbound frame received)', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const sockets: ReturnType<typeof fakeWebSocket>[] = []
+    const create = (url: URL) => {
+      const socket = fakeWebSocket(url, [])
+      sockets.push(socket)
+      return socket
+    }
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: create,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      logger: fakeLogger(),
+      reconnectBaseDelayMs: 1000,
+      reconnectMaxDelayMs: 30_000,
+      random: () => 1,
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+    })
+
+    sockets[0]!.dispatchClose()
+    expect(reconnect.lastDelayMs).toBe(1000)
+    reconnect.fire()
+
+    sockets[1]!.dispatchClose()
+    expect(reconnect.lastDelayMs).toBe(2000)
+    reconnect.fire()
+
+    // The third socket actually carries traffic → connection is healthy → backoff resets.
+    await sockets[2]!.dispatchMessage({ type: 'pong', id: 'wkr-keepalive-1' })
+    sockets[2]!.dispatchClose()
+    expect(reconnect.lastDelayMs).toBe(1000)
+  })
+
+  it('warns that re-provision may be required after repeated failed reconnects', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const logger = fakeLogger()
+    const sockets: ReturnType<typeof fakeWebSocket>[] = []
+    const create = (url: URL) => {
+      const socket = fakeWebSocket(url, [])
+      sockets.push(socket)
+      return socket
+    }
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: create,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      logger,
+      reconnectReprovisionHintAfter: 3,
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+    })
+
+    for (let i = 0; i < 3; i += 1) {
+      sockets.at(-1)!.dispatchClose()
+      reconnect.fire()
+    }
+
+    expect(logger.infos.some(message => /reconnect/i.test(message))).toBe(true)
+    expect(logger.warns.some(message => /re-provision/i.test(message))).toBe(true)
   })
 
   it('forwards a worker access GET envelope to the local workbench and returns a response envelope', async () => {
@@ -637,6 +884,60 @@ function fakeKeepaliveClock() {
     },
     get stopped() {
       return state.stopped
+    },
+  }
+}
+
+function fakeReconnectScheduler() {
+  const state = {
+    canceled: false,
+    delays: [] as number[],
+    lastDelayMs: null as number | null,
+    run: null as (() => void) | null,
+  }
+  return {
+    get canceled() {
+      return state.canceled
+    },
+    get delays() {
+      return state.delays
+    },
+    fire() {
+      const run = state.run
+      state.run = null
+      run?.()
+    },
+    get lastDelayMs() {
+      return state.lastDelayMs
+    },
+    startReconnectTimer(run: () => void, delayMs: number): () => void {
+      state.run = run
+      state.lastDelayMs = delayMs
+      state.delays.push(delayMs)
+      state.canceled = false
+      return () => {
+        state.canceled = true
+        state.run = null
+      }
+    },
+  }
+}
+
+function fakeLogger() {
+  const infos: string[] = []
+  const warns: string[] = []
+  return {
+    info(message: string) {
+      infos.push(message)
+    },
+    get infos() {
+      return infos
+    },
+    warn(message: string) {
+      warns.push(message)
+    },
+    get warns() {
+      return warns
     },
   }
 }

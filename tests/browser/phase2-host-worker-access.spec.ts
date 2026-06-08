@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { chromium } from 'playwright'
 
 import { createHostServer } from '../../apps/host-cli/src/host-server'
-import { closeHostDb, createAssignment } from '../../packages/storage-sqlite/src/host'
+import { closeHostDb, createAssignment, getAssignmentByWorkerId } from '../../packages/storage-sqlite/src/host'
 import { connectWorkerAccessTunnel } from '../../packages/worker-daemon/src/modes/worker/provision-client'
 
 const repoRoot = join(import.meta.dir, '..', '..')
@@ -29,19 +29,26 @@ try {
   workRoot = await mkdtemp(join(tmpdir(), 'aiworker-phase2-access-'))
   const port = reservePort()
   const baseUrl = `http://127.0.0.1:${port}`
-  const host = await createHostServer({
-    authUser: { email: assignedEmail, roles: ['host:admin'], subject: 'usr_browser_employee' },
-    dbPath: join(workRoot, 'host.db'),
-    hostBrowserBaseUrl: baseUrl,
-    hostControlBaseUrl: baseUrl,
-    webStaticDir: join(repoRoot, 'apps/host-web/dist'),
-  })
-  hostServer = Bun.serve({
-    fetch: (request, server) => host.fetch(request, server),
-    hostname: '127.0.0.1',
-    port,
-    websocket: host.websocket,
-  })
+  const dbPath = join(workRoot, 'host.db')
+  // Restartable Host process bound to a fixed port + durable host.db. Restarting wipes
+  // the in-memory access registry while the persisted access token survives — exactly a
+  // production Host restart, which the worker tunnel must auto-recover from.
+  const startHostServer = async (): Promise<ReturnType<typeof Bun.serve>> => {
+    const host = await createHostServer({
+      authUser: { email: assignedEmail, roles: ['host:admin'], subject: 'usr_browser_employee' },
+      dbPath,
+      hostBrowserBaseUrl: baseUrl,
+      hostControlBaseUrl: baseUrl,
+      webStaticDir: join(repoRoot, 'apps/host-web/dist'),
+    })
+    return Bun.serve({
+      fetch: (request, server) => host.fetch(request, server),
+      hostname: '127.0.0.1',
+      port,
+      websocket: host.websocket,
+    })
+  }
+  hostServer = await startHostServer()
 
   const primaryCheckIn = await provisionWorker(baseUrl, { assignedEmail, workerId })
   evidence.checkIn = {
@@ -101,6 +108,12 @@ try {
     throw new Error(`Unexpected browser errors during Phase 2 host/worker access proof: ${unexpectedBrowserEvents.join('\n')}`)
 
   evidence.concurrency = await runConcurrentRealLoopbackGate(baseUrl)
+
+  evidence.hostRestartReconnect = await runHostRestartReconnectGate(baseUrl, async () => {
+    if (hostServer)
+      hostServer.stop(true)
+    hostServer = await startHostServer()
+  })
 
   await writeEvidence('proof.json', {
     baseUrl,
@@ -214,16 +227,75 @@ function createWorkerLocalFetch(boundWorkerId: string): WorkerAccessLocalFetch {
   }
 }
 
-async function connectRealWorkerTunnel(baseUrl: string, identity: WorkerCheckInIdentity): Promise<WorkerAccessTunnelHandle> {
+async function connectRealWorkerTunnel(
+  baseUrl: string,
+  identity: WorkerCheckInIdentity,
+  overrides: Partial<{ reconnectBaseDelayMs: number, reconnectMaxDelayMs: number }> = {},
+): Promise<WorkerAccessTunnelHandle> {
   const handle = await connectWorkerAccessTunnel({
     access: identity.access,
     assignment: identity.assignment,
     env: { AIWORKER_HOST_URL: baseUrl },
     localFetch: createWorkerLocalFetch(identity.assignment.workerId),
+    ...overrides,
   })
   if (!handle)
     throw new Error(`connectWorkerAccessTunnel returned no handle for ${identity.assignment.workerId}`)
   return handle
+}
+
+// Host-restart resilience proof: a real worker tunnel must auto-reconnect after the
+// real Host process restarts, reusing the durable access token persisted in host.db —
+// no re-provision, no second check-in. This closes the operational gap where a Host
+// restart used to strand the worker until it was manually re-provisioned.
+async function runHostRestartReconnectGate(
+  baseUrl: string,
+  restartHost: () => Promise<void>,
+): Promise<Record<string, unknown>> {
+  const restartWorkerId = 'wkr_restart'
+  const checkIn = await provisionWorker(baseUrl, {
+    assignedEmail: 'restart.employee@zonease.org',
+    workerId: restartWorkerId,
+  })
+  const assignmentId = checkIn.assignment.assignmentId
+  // Fast backoff keeps the proof quick and deterministic.
+  const tunnel = await connectRealWorkerTunnel(baseUrl, checkIn, {
+    reconnectBaseDelayMs: 50,
+    reconnectMaxDelayMs: 200,
+  })
+  try {
+    await waitForWorkerAccess(baseUrl, restartWorkerId)
+    const before = getAssignmentByWorkerId(restartWorkerId)
+    const consumedBefore = before?.provisionTokenConsumedAt ?? null
+    const checkedInBefore = before?.checkedInAt ?? null
+
+    // Restart the Host: in-memory access registry is wiped, host.db survives.
+    await restartHost()
+
+    // The worker must auto-reconnect and become routable again with no human action.
+    await waitForWorkerAccess(baseUrl, restartWorkerId)
+    const probe = await fetchWorkerProbe(baseUrl, restartWorkerId)
+    if (probe.status !== 200 || probe.body !== `worker=${restartWorkerId}`)
+      throw new Error(`Worker not routable after Host restart: HTTP ${probe.status} body ${JSON.stringify(probe.body)}`)
+
+    const after = getAssignmentByWorkerId(restartWorkerId)
+    if (!after || after.assignmentId !== assignmentId)
+      throw new Error('Host restart reconnect bound a different assignment — expected the same durable assignment')
+    if ((after.provisionTokenConsumedAt ?? null) !== consumedBefore)
+      throw new Error('Provision token was re-consumed after Host restart — reconnect must not re-provision')
+    if ((after.checkedInAt ?? null) !== checkedInBefore)
+      throw new Error('Worker re-checked-in after Host restart — reconnect must reuse the durable access token')
+
+    return {
+      assignmentId,
+      reconnectedWithoutReprovision: true,
+      restartWorkerId,
+      routableAfterRestartStatus: probe.status,
+    }
+  }
+  finally {
+    tunnel.close()
+  }
 }
 
 interface ForwardLog {
