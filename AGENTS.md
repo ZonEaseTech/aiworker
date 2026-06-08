@@ -82,6 +82,8 @@ Destructive refactor is allowed before 1.0. Keep changes scoped to the current p
 
 Code changes need focused contract tests appropriate to scope. Before final completion, run the smallest fresh verification that proves the touched surface. For code changes, run code-review-graph unless the change is docs-only, instruction-only, or pure formatting.
 
+迭代与发版闭环（开发 → PR → 合并 → tag → CI 发版 → 验证 npm → 下一轮）按 `RELEASE_LOOP.md` 执行；它是 agent 可执行 runbook，不是 canonical 合同。
+
 ## UI
 
 UI work must use shadcn-managed primitives and `packages/ui` as the shared UI source. Do not create ad-hoc component systems. Soul provides no UI; the Worker owns and renders the Workbench. Host must not render Soul domain UI.

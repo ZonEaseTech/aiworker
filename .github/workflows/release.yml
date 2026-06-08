@@ -47,17 +47,34 @@ jobs:
       - name: Smoke release artifacts
         run: bun apps/worker-cli/scripts/smoke-release-artifacts.ts
 
+      - name: Derive npm dist-tag from git tag
+        id: channel
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$tag" == *-* ]]; then
+            channel="$(printf '%s' "$tag" | sed -E 's/^v[0-9]+\.[0-9]+\.[0-9]+-([A-Za-z]+).*/\1/')"
+          else
+            channel="latest"
+          fi
+          if [[ -z "$channel" ]]; then
+            echo "could not derive npm dist-tag from git tag: $tag" >&2
+            exit 1
+          fi
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "npm dist-tag for $tag => $channel"
+
       - name: Publish to npm
         working-directory: apps/worker-cli/dist
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public --tag rc
+        run: npm publish --provenance --access public --tag "${{ steps.channel.outputs.channel }}"
 
       - name: Publish Host CLI to npm
         working-directory: apps/host-cli/dist
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public --tag rc
+        run: npm publish --provenance --access public --tag "${{ steps.channel.outputs.channel }}"
 
       - name: Attach binaries to GitHub Release
         uses: softprops/action-gh-release@v3
