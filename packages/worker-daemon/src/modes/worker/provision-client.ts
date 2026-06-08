@@ -53,6 +53,15 @@ export interface HandleAccessRequestEnvelopeInput {
   localFetch: WorkerAccessLocalFetch
 }
 
+/**
+ * tunnel 运维日志出口。默认走 console；测试可注入捕获器。只输出非敏感的连接生命周期信息，
+ * 绝不打印 access token / provision token。
+ */
+export interface TunnelLogger {
+  info: (message: string) => void
+  warn: (message: string) => void
+}
+
 export interface ConnectWorkerAccessTunnelInput {
   access: WorkerCheckInResponse['access']
   assignment: WorkerCheckInResponse['assignment']
@@ -66,18 +75,72 @@ export interface ConnectWorkerAccessTunnelInput {
   keepaliveIntervalMs?: number
   localFetch: WorkerAccessLocalFetch
   /**
+   * tunnel 生命周期日志出口（断连/重连/疑似需 re-provision）。默认 console，可注入捕获。
+   */
+  logger?: TunnelLogger
+  /**
+   * 死连接探测阈值：连续这么多个 keepalive ping 都没收到 pong，即判定 socket 半开
+   * （如反代丢了上游却没发 FIN，onclose 永不触发）→ 主动 force-close 触发重连。默认 3。
+   */
+  missedPongLimit?: number
+  /**
+   * 重连退避的抖动源（注入缝，测试用可控值）。默认 Math.random。
+   */
+  random?: () => number
+  /**
+   * 重连退避基准毫秒（指数退避的第一档）。默认 1s。
+   */
+  reconnectBaseDelayMs?: number
+  /**
+   * 重连退避上限毫秒（指数退避封顶，避免长 Host 宕机时打爆 Host）。默认 30s。
+   */
+  reconnectMaxDelayMs?: number
+  /**
+   * 连续这么多次重连仍未恢复，就 warn 提示「access token 可能过期/assignment 被 revoke，
+   * 可能需要 re-provision」，让运维能区分「重连中」与「卡死」。默认 5。
+   */
+  reconnectReprovisionHintAfter?: number
+  /**
    * 启动周期 keepalive 的注入缝（测试用可控时钟）。返回一个清理函数；连接关闭时调用以清除定时器，
    * 防止 tunnel 断开/重连泄漏 timer。默认包装 setInterval 且 unref，避免阻塞进程退出。
    */
   startKeepalive?: (tick: () => void, intervalMs: number) => () => void
+  /**
+   * 调度一次重连（延迟 delayMs 后调用 run）的注入缝（测试用可控时钟）。返回一个取消函数，
+   * 主动 close() 时调用以撤销待发重连。默认包装 setTimeout 且 unref。
+   */
+  startReconnectTimer?: (run: () => void, delayMs: number) => () => void
 }
 
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 25_000
+const DEFAULT_MISSED_PONG_LIMIT = 3
+const DEFAULT_RECONNECT_BASE_DELAY_MS = 1_000
+const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000
+const DEFAULT_RECONNECT_REPROVISION_HINT_AFTER = 5
 
 function defaultStartKeepalive(tick: () => void, intervalMs: number): () => void {
   const timer = setInterval(tick, intervalMs)
   ;(timer as unknown as { unref?: () => void }).unref?.()
   return () => clearInterval(timer)
+}
+
+function defaultStartReconnectTimer(run: () => void, delayMs: number): () => void {
+  const timer = setTimeout(run, delayMs)
+  ;(timer as unknown as { unref?: () => void }).unref?.()
+  return () => clearTimeout(timer)
+}
+
+function resolvePositiveInt(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+/**
+ * 指数退避 + equal jitter。attempt 从 1 起：exponential = base * 2^(attempt-1)，封顶 max；
+ * 取一半固定 + 一半抖动（random ∈ [0,1)）。既避免对 Host 的惊群，又把上限钉死在 max。
+ */
+function computeReconnectDelayMs(attempt: number, baseMs: number, maxMs: number, random: () => number): number {
+  const exponential = Math.min(maxMs, baseMs * 2 ** (attempt - 1))
+  return Math.round(exponential / 2 + random() * (exponential / 2))
 }
 
 /**
@@ -150,75 +213,167 @@ export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnel
 
   const url = new URL('/api/provision/access', host)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-  const socket = input.createWebSocket?.(url) ?? new WebSocket(url) as WorkerAccessWebSocket
-  socket.onmessage = async (event) => {
-    const frame = parseWorkerAccessFrame(JSON.parse(String(event.data)))
-    if (frame.type === 'request') {
-      try {
-        const response = await handleAccessRequestEnvelope({
-          envelope: frame,
-          localFetch: input.localFetch,
-        })
-        socket.send(JSON.stringify(response))
-      }
-      catch {
-        socket.send(JSON.stringify({
-          type: 'response',
-          id: frame.id,
-          status: 502,
-          headers: {},
-          bodyText: '',
-        }))
-      }
+
+  const startKeepalive = input.startKeepalive ?? defaultStartKeepalive
+  const startReconnectTimer = input.startReconnectTimer ?? defaultStartReconnectTimer
+  const keepaliveIntervalMs = resolveKeepaliveIntervalMs(input)
+  const missedPongLimit = resolvePositiveInt(input.missedPongLimit, DEFAULT_MISSED_PONG_LIMIT)
+  const reconnectBaseDelayMs = resolvePositiveInt(input.reconnectBaseDelayMs, DEFAULT_RECONNECT_BASE_DELAY_MS)
+  const reconnectMaxDelayMs = resolvePositiveInt(input.reconnectMaxDelayMs, DEFAULT_RECONNECT_MAX_DELAY_MS)
+  const reprovisionHintAfter = resolvePositiveInt(input.reconnectReprovisionHintAfter, DEFAULT_RECONNECT_REPROVISION_HINT_AFTER)
+  const random = input.random ?? Math.random
+  const logger: TunnelLogger = input.logger ?? console
+
+  // 跨重连的持久状态（每个 socket 周期内的状态在 openConnection 里重置）。
+  let intentionallyClosed = false
+  let failedAttempts = 0
+  let cancelReconnect: (() => void) | null = null
+  let currentSocket: WorkerAccessWebSocket | null = null
+  let currentStopKeepalive: (() => void) | null = null
+
+  function scheduleReconnect(): void {
+    if (intentionallyClosed)
       return
+    failedAttempts += 1
+    const delayMs = computeReconnectDelayMs(failedAttempts, reconnectBaseDelayMs, reconnectMaxDelayMs, random)
+    // 仅记录连接生命周期，不含任何 token。
+    logger.info(`[worker-access] tunnel disconnected; reconnecting (attempt ${failedAttempts}, retry in ${delayMs}ms)`)
+    // 跨过阈值时告警一次，之后每 reprovisionHintAfter 次再复述一次：长宕机下保持可见，
+    // 又不至于每次重连（封顶 ~30s）都刷屏。
+    if (failedAttempts >= reprovisionHintAfter && failedAttempts % reprovisionHintAfter === 0) {
+      logger.warn(`[worker-access] tunnel still down after ${failedAttempts} reconnect attempts; the worker access token may be expired or the assignment revoked — re-provision may be required`)
+    }
+    cancelReconnect = startReconnectTimer(() => {
+      cancelReconnect = null
+      openConnection()
+    }, delayMs)
+  }
+
+  function openConnection(): void {
+    // 主动 close() 与一个已派发的重连 timer 之间的兜底：若期间已主动关停，则不再新建连接。
+    // 默认 scheduler 下 close() 会 clearTimeout 故此分支不可达，仅为注入式 scheduler 加保险。
+    if (intentionallyClosed)
+      return
+    const socket = input.createWebSocket?.(url) ?? new WebSocket(url) as WorkerAccessWebSocket
+    currentSocket = socket
+
+    // 每个 socket 周期独立的状态。
+    let connectionLost = false
+    let healthy = false
+    let missedPongs = 0
+    let keepaliveSeq = 0
+    let keepaliveStopped = false
+    // keepalive 清理函数：keepalive 启动后赋值。提前声明以便 stopKeepalive 在词法上先于其定义引用。
+    let stopTimer: (() => void) | null = null
+
+    function stopKeepalive(): void {
+      if (keepaliveStopped)
+        return
+      keepaliveStopped = true
+      stopTimer?.()
     }
 
-    if (frame.type === 'ping')
-      socket.send(JSON.stringify({ type: 'pong', id: frame.id }))
-  }
+    // 幂等收口：socket onclose（host 重启/断开）与死连接 force-close 都走这里——清 keepalive 定时器，
+    // 若非主动 close 则按退避调度重连。connectionLost 守卫保证两条路径只处理一次。
+    const handleConnectionLost = (): void => {
+      if (connectionLost)
+        return
+      connectionLost = true
+      stopKeepalive()
+      if (intentionallyClosed)
+        return
+      scheduleReconnect()
+    }
 
-  const sendHello = () => {
-    socket.send(JSON.stringify({
-      type: 'hello',
-      assignmentId: input.assignment.assignmentId,
-      token: input.access.token,
-      workerId: input.assignment.workerId,
-    }))
-  }
-  if (typeof socket.readyState === 'number' && socket.readyState !== 1)
-    socket.onopen = sendHello
-  else
-    sendHello()
+    socket.onmessage = async (event) => {
+      const frame = parseWorkerAccessFrame(JSON.parse(String(event.data)))
 
-  let keepaliveSeq = 0
-  const sendKeepalivePing = () => {
-    // 仅在连接处于 CONNECTING 时跳过，避免在 open 前 send 抛错；readyState 不可知（如注入的
-    // fake socket）时照常发送。语义与 sendHello 的 readyState 守卫一致。
+      // 任一入站帧都证明 tunnel 真在承载流量 → 标记健康、把退避计数清零（仅记一次「reconnected」）。
+      if (!healthy) {
+        healthy = true
+        if (failedAttempts > 0) {
+          logger.info(`[worker-access] tunnel reconnected after ${failedAttempts} attempt(s)`)
+          failedAttempts = 0
+        }
+      }
+
+      if (frame.type === 'request') {
+        try {
+          const response = await handleAccessRequestEnvelope({
+            envelope: frame,
+            localFetch: input.localFetch,
+          })
+          socket.send(JSON.stringify(response))
+        }
+        catch {
+          socket.send(JSON.stringify({
+            type: 'response',
+            id: frame.id,
+            status: 502,
+            headers: {},
+            bodyText: '',
+          }))
+        }
+        return
+      }
+
+      if (frame.type === 'ping') {
+        socket.send(JSON.stringify({ type: 'pong', id: frame.id }))
+        return
+      }
+
+      if (frame.type === 'pong') {
+        // host 应答了我们的 keepalive → 连接存活，清死连接计数。
+        missedPongs = 0
+      }
+    }
+
+    const sendHello = () => {
+      socket.send(JSON.stringify({
+        type: 'hello',
+        assignmentId: input.assignment.assignmentId,
+        token: input.access.token,
+        workerId: input.assignment.workerId,
+      }))
+    }
     if (typeof socket.readyState === 'number' && socket.readyState !== 1)
-      return
-    keepaliveSeq += 1
-    socket.send(JSON.stringify({ type: 'ping', id: `wkr-keepalive-${keepaliveSeq}` }))
+      socket.onopen = sendHello
+    else
+      sendHello()
+
+    const sendKeepalivePing = () => {
+      if (connectionLost)
+        return
+      // 连续 missedPongLimit 个 ping 都没等到 pong → 判定半开（反代丢了上游却没发 FIN，
+      // onclose 可能永不触发）→ 主动 close 并收口到重连，让 tunnel 自愈。
+      if (missedPongs >= missedPongLimit) {
+        socket.close?.()
+        handleConnectionLost()
+        return
+      }
+      // 仅在连接处于 CONNECTING 时跳过，避免在 open 前 send 抛错；readyState 不可知（如注入的
+      // fake socket）时照常发送。语义与 sendHello 的 readyState 守卫一致。
+      if (typeof socket.readyState === 'number' && socket.readyState !== 1)
+        return
+      keepaliveSeq += 1
+      missedPongs += 1
+      socket.send(JSON.stringify({ type: 'ping', id: `wkr-keepalive-${keepaliveSeq}` }))
+    }
+    stopTimer = startKeepalive(sendKeepalivePing, keepaliveIntervalMs)
+    currentStopKeepalive = stopKeepalive
+
+    socket.onclose = handleConnectionLost
   }
-  const stopTimer = (input.startKeepalive ?? defaultStartKeepalive)(
-    sendKeepalivePing,
-    resolveKeepaliveIntervalMs(input),
-  )
-  // 幂等清理：close() 与 socket 端 onclose（host 主动断开/重连）都收口到这里，
-  // 任一路径都清掉定时器，杜绝 tunnel 断开后 timer 泄漏。
-  let keepaliveStopped = false
-  const stopKeepalive = () => {
-    if (keepaliveStopped)
-      return
-    keepaliveStopped = true
-    stopTimer()
-  }
-  // host 侧断开 socket 时同样清理（不追踪 pong/不做 death-detection，仅对真实 close 事件做清理）。
-  socket.onclose = stopKeepalive
+
+  openConnection()
 
   return {
     close() {
-      stopKeepalive()
-      socket.close?.()
+      intentionallyClosed = true
+      cancelReconnect?.()
+      cancelReconnect = null
+      currentStopKeepalive?.()
+      currentSocket?.close?.()
     },
   }
 }
