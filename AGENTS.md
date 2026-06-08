@@ -1,189 +1,87 @@
-# AIWorker Agent Guide
+# AIWorker Agent Bootstrap
 
-AIWorker 当前目标是 **Local Shell + Engine Bridge for Soul Apps**。Host 只保留
-start / shell / locate / mount / bridge：启动 Soul App、提供本地 Web/CLI/daemon 壳、定位
-worker/workspace/session、挂载 app-owned UI/API，并为 session 准备 cwd/context/engine 调用入口。
+默认用中文与用户交流。文档、代码注释、commit message、PR title/description 也默认中文，除非用户另有要求。
 
-默认产品路径：
+## Authority
+
+AIWorker 当前合同只看 canonical docs：
+
+- `docs/architecture.md`
+- `docs/protocol.md`
+- `docs/runtime.md`
+- `docs/soul-authoring.md`
+- `docs/testing.md`
+
+Temporary drafts live in `tmp/`。旧 changelog、历史 E2E、旧 project-local skills 只可作为证据，不能覆盖 canonical docs。tmp/refactor accepted decisions must be promoted to canonical docs or tests before implementation。
+
+## Product Boundary
+
+AIWorker 的核心 = 让一个懂行的人，把一套专业能力做成 Soul、快速迭代，再低成本复制给一群不懂技术的员工；每个员工因此拥有一个开箱即用的专属 AI 工作者。
+
+Soul = 能力载体；Host = 迭代 + 复制的杠杆；Worker = 员工侧开箱即用的终端。一个人的能力 → 全员的产能。
+
+Worker 是自治 CLI-first 运行体，拥有 engine 启动权；Host 是可选控制面：Soul 发布 / 分发 / 管理 / 权限分配 / connector 授权 / Worker provisioning（Phase 2）。
+
+v1 只发 standalone Worker：Host 与 control-protocol 全是 Phase 2，永不在运行热路径上。Worker 创建时绑定一个 Soul（终生不变），拥有并直接渲染自己的 Workbench。默认路径：
 
 ```text
-AIWorker -> Soul App -> workspace -> session -> app-owned work
+Worker -> Workbench -> workspace -> session (chat) -> native engine
 ```
 
-第一原则：Host 是 shell / locator / mount / bridge，不是 Soul App 的上层配置中心。
-Host-owned Worker Configuration 的 trigger、dialog shell 和配置边界只到 **Soul worker**；
-同一 Soul App 下不同 worker 必须彼此隔离。workspace/session 只可作为不透明 locator/context
-传给 mounted Soul surface 或 engine bridge，不能成为 Host 配置层。Soul 如需让 Host 知道
-可选项，只能通过 manifest/protocol descriptor 告知；Host 泛化消费 descriptor，不解释、不保存
-领域配置字段，不允许 Soul 向 Host left panel、header、toolbar 或 Worker Configuration slot 注册
-自定义 UI。
+Workbench 管 workspace、workspace 下的 session（= chat composer + view）、以及 worker 自配置。Soul 是 template：descriptor-only 的 skills / mcp / entry-file（如 AGENTS.md、CLAUDE.md）资产束，没有 UI、没有 app-owned API、没有 capability。
 
-不要把默认体验拉回 developer-only work order、admin dashboard、远程控制面、通用 agent runtime
-平台，或任何 Host-owned 领域工作流。
+## Monorepo Boundary
 
-## 必读入口
+- `apps/*`：可运行产品壳（worker-cli、worker-web；host-* 为 Phase 2 休眠桩）。
+- `souls/*`：descriptor-producing Soul template 包。
+- `packages/*`：协议、runtime、daemon、storage、projection、engine bridge、SDK、fs layout、UI 等可复用能力。
 
-- `docs/architecture.md`：当前唯一架构合同；`Constraint Registry` 是 Host / Soul App /
-  protocol / data / engine / UI / documentation 硬约束源头。
-- `.agents/skills/aiworker-host-dev/SKILL.md`：修改 Host platform、local daemon/API、
-  Worker Web Shell、CLI lifecycle、thin local adapter、shared protocol 或 storage schema
-  前必须读取。
-- `.agents/skills/aiworker-soul-app-dev/SKILL.md`：修改 Soul App、manifest、standalone、
-  Host mounted、capability、artifact/review 或 authoring 文档前必须读取。
+禁止创建 `core-v2` / `shared-v2`。`packages/core` 与 `packages/shared` 最终消失。`apps/api` 迁移为 `packages/worker-daemon`。
 
-不要把历史外部产品映射或旧重启计划当作当前实现约束。当前规范入口只有本文件和
-`docs/architecture.md`；PMA、changelog、Superpowers spec/plan 都是审计轨迹，不能覆盖
-`docs/architecture.md#constraint-registry`。
+`worker-*` 包禁止 import `host-*` 包。Worker 必须能脱离 Host 独立运行。Workbench 并入 `apps/worker-web`，不再有 soul-workbench / soul-app-runtime 包。
 
-## 按任务读取
+## Protocol Boundary
 
-- CLI 行为或命令文档：`docs/cli.md`。
-- 本地 daemon、打包或 operator 运行路径：`docs/deployment.md`。
-- 外部 engine 安装、登录和 readiness：`docs/executor-engines.md`。
-- Host platform、daemon API、registry、local enablement、thin adapter、storage schema：
-  `docs/architecture.md` 和 `aiworker-host-dev` skill。
-- Host Web Shell、Settings、Worker Configuration、workbench mount：`docs/architecture.md`、`aiworker-host-dev` skill，
-  非平凡前端改动再读取 `/pma-web`；shadcn/ui 相关改动再读取 `.agents/skills/shadcn/SKILL.md`。
-- CLI lifecycle、daemon/app/worker/workspace/session 命令：`docs/cli.md` 和
-  `aiworker-host-dev` skill。
-- Soul App authoring：先读 `docs/architecture.md#constraint-registry` 和
-  `aiworker-soul-app-dev` skill；`docs/soul-app-developer.md` 只是冻结的命令与目录速查。
-- 历史 PMA、changelog、Superpowers spec/plan 只作为审计轨迹；不能覆盖当前架构合同。
+Host/Soul 是 descriptor-only：Host 与 Workbench 只消费 `dist/soul.descriptor.json`，不读 Soul source、不 import Soul 私有模块、不解释领域字段。
 
-## 工作方式
+Worker 拥有并直接渲染 Workbench；v1 没有 micro-app、没有 mounted-workbench、没有 Soul 提供的 UI。Phase 2 Host 不 mount / frame / render Worker Workbench。Phase 2 允许 Worker 主动 check-in Host 并建立 Worker Access reverse tunnel；这些只属于分发/访问闭环，不让 Host 进入 Worker runtime 热路径。Descriptor v1 极简：`protocol / identity / engine` 资产束，无 workbench / api / capability。
 
-- 默认用中文与用户交流；文档、代码注释、commit message、PR title/description 也默认中文。
-- 非平凡开发任务遵循 PMA：先调查，再 proposal，获批后实现，并同步 `docs/task/*.md` 与
-  `docs/plan/*.md`；后端参考 `/pma-bun`，前端参考 `/pma-web`，代码评审参考 `/pma-cr`。
-- 保持改动收敛，优先修当前路径；不要为未要求的旧入口、别名、shim 或兼容层扩范围。
-- 1.0.0 前允许破坏性收敛；判断标准是当前架构语义、代码归属和用户可理解的产品路径。
-- 不创建非必要说明文件；临时产物放 `tmp/`。
-- 修改代码文件后，最终回复前介入 code-review-graph 做变更审查；仅改文档、注释、纯格式或
-  用户明确要求跳过时可以跳过，并说明原因。
+## Runtime Boundary
 
-## 当前实现地图
+Session 只保留 lifecycle：`active | archived | deleted`。Execution/process 状态属于 `engine_invocations`。Follow-up API 是 session-level：
 
-- `apps/cli`：`aiworker` CLI，本地 daemon lifecycle、Soul App install/enable、worker/workspace/
-  session 命令入口。
-- `apps/api`：local daemon API 与 Worker Web 静态托管。
-- `apps/web`：Host Web Shell、worker-scoped Worker Configuration、locator chrome 与 mounted surface container。
-- `apps/aiworker-hr`、`apps/aiworker-qa`：官方维护的参考 Soul App；它们必须通过 install/enable
-  进入 Host，不得被 Host 内置。
-- `packages/core`：local runtime、Host services、engine adapter 与 protocol 消费侧。
-- `packages/shared`：共享 schema、Host/Soul App protocol 类型与工具。
-- `packages/soul-app-sdk`：Soul App authoring 的公开 SDK。
-- `packages/soul-app-runtime`：standalone 与 Host mounted runtime harness。
-- `packages/ui`：shadcn-managed shared UI primitives、theme variables、CLI-owned component output；
-  Host Web 与官方 Soul App web 的唯一共享 UI 来源。
-- `packages/storage-sqlite`：Host metadata schema 与 migration；真实业务产物属于 app/workspace
-  命名空间，DB 只存平台 metadata、引用或协议 descriptor。
-- `packages/fs-layout`：`AIWORKER_HOME`、worker home、workspace 与 `.aiworker/` 布局。
+```text
+POST /api/sessions/:sessionId/invocations
+```
 
-## 产品与实现边界
+Engine target 默认 worker、可 session 覆盖。Native engine 采用 B+ structured bridge。Worker 管 projection、process observation、redacted raw chunks、normalized bridge events、opaque external refs、cancel、reattach、reconciler、engine 启动；native engine 自己管理模型、tool loop、approval、sandbox、auth/profile 和 native session。
 
-硬约束以 `docs/architecture.md#constraint-registry` 为准；本段只是 agent 执行时的速查路由。
+Author-owned native MCP files may contain literal secrets, but AIWorker must not copy secrets into descriptor, DB, receipt, log, diagnostic output, OpenAPI example, or UI.
 
-- Host 是本地运行壳和 engine bridge，不是领域数据解释者，也不是通用治理平台。
-- Host 只拥有 start / shell / locate / mount / bridge。
-- Soul App 是领域主权方，拥有业务对象、领域状态、领域 UI/API、app-owned outputs、
-  app-owned confirmation actions、standalone 体验和 Host mounted product surface。
-- Host 只能消费 Soul App 通过 manifest/protocol 暴露的 route、mounted UI、action descriptor、
-  workspace context、session context 或 lightweight UI event；workspace/session context 仅是
-  不透明 locator/bridge context，不是 Host configuration scope。
-- Host left panel、Host header、Worker Configuration trigger/dialog shell 属于 Host-owned chrome；
-  Soul App 不向这些 Host chrome 注册按钮、slot、renderer 或领域配置字段。
-- Worker Configuration 只保存 worker-scoped Host shell preference、worker overlay/local enablement
-  和 manifest-derived 泛化选项。需要 workspace/session/domain 配置时，进入 Soul-owned micro-app
-  或 app-owned API，由 Soul 自己解释和保存。
-- 如果 Soul App 不暴露某个 surface，Host 不取、不猜、不补。
-- Host 不拥有领域工作流、领域状态、跨 Soul 编排或通用 agent runtime。
-- Workspace/project 是业务作用域，不等同于软件仓库；HR 可以是岗位或候选人池，QA 可以是
-  release 或 test suite，DevOps 可以是 service、incident 或 runbook。
-- 外部 engine 负责自己的 tool loop、模型、sandbox、approval、auth/profile、native session
-  和插件生态；AIWorker 只在 session 层准备 cwd/context、调用或观察 engine。
-- Developer Soul 只是 supporting role，用于 code review、release evidence、repo report、
-  handoff、risk audit 等；不要让 repo/PMA/coding loop 成为产品中心。
+## Dev Services
 
-## 数据与 API 规则
+Agent 不要自选新端口，也不要依赖 Vite 自动换端口；先运行对应 `:status`，复用已启动的 profile，或先 `:stop` / `:clean` 回收。
 
-- `worker.db` 只存 Host metadata：installed/enabled apps、workers、workspaces、sessions、
-  engine invocation references、protocol cache needed for routing、mounted surface references
-  和 platform file references。
-- 真实业务文件和 artifact 留在 Soul App 的 workspace 文件夹或对象存储命名空间；领域事实、
-  领域状态、业务确认和 app-owned history 都不是 Host product primitives。
-- Host 不合成 HR profile，不解释 QA release verdict，不把 Soul App 记忆提升规则硬编码进平台。
-- API 文档以代码为准：OpenAPIHono `app.doc('/openapi.json')` + `/docs`。
-- 新增或修改 API 时同步 zod schema、OpenAPI metadata、typed client/proto 和相关测试。
-- Schema 变更通过 `packages/storage-sqlite` 的 Drizzle schema 与 migration 生成，不手写应用层绕过。
-- Secret 只能放 `.env` 或 vault/ref；不要写入 engine config、manifest、`.aiworker/*.json`、
-  DB metadata、日志、prompt、review rubric 或 skill 文件。
+单 Worker：`bun run dev:worker` / `:status` / `:stop` / `:clean`，默认 `9217 + 5173`。
+多 Soul：`bun run dev:fleet` / `:status` / `:stop` / `:clean`，默认 `9217-9221 + 5173-5177`。
+Host：`bun run dev:host` / `:status` / `:stop` / `:clean`，默认 `9117 + 5050`。
 
-## UI 规则
+Worker daemon 和 Host API/daemon 都只能通过对应 profile lifecycle 启停，并由 status/manifest 回收；不要给 API/daemon 自造 tmux session。所有 Worker Web Vite 必须显式绑定 daemon：`AIWORKER_API_URL=http://127.0.0.1:<daemon-port>`；Host Web 必须绑定 `AIWORKER_HOST_API_URL`。只有 Vite 由固定 tmux session 托管，必须用固定端口和 `--strictPort`；Agent 不要前台起 Vite。Playwright 先读 status/manifest，再打开对应 URL。
 
-- Worker Web 应是 Soul worker / workspace / session / artifact/profile 工作台，不是设置页、
-  日志页或治理概念陈列。
-- Host 拥有当前 shell layout 与 full-width Host header；header action 是 Host 固化平台 action，
-  不再下放给 Soul App 作为 slot 配置。
-- Host left panel 中的 Worker Configuration 入口是 Host 固化平台 action。它针对当前 Soul
-  worker，不针对 Soul App 全局，也不针对 workspace/session 下钻。
-- Soul App 仍可通过 manifest/protocol 暴露 app-owned `ui.workbench` actions/search/settings 与
-  `ui.workspaceContext`，例如让未来 Host-owned web terminal 知道 workspace context；Host
-  只能按 descriptor 调用或定位，不解释领域语义。
-- Standalone 模式下 Soul App 拥有自己的完整 shell；Host mounted 模式下 Soul App 适配 Host 壳。
-- Host mounted 的 app-owned UI 统一通过 `@micro-zoe/micro-app` 挂载；Host 只提供
-  通用 mount container、theme/context data 与 protocol/thin adapter 入口，不在 `apps/web`
-  内实现 Soul 领域 renderer。`universal-workbench` 与领域专属 workbench 都是 Soul-owned
-  micro-app surface；Host 不 import、不特判、不渲染它们。
-- 新增或修改 Host Web / Soul App UI 时，从 `packages/ui` 查找 shadcn-managed primitives，
-  并在 app 中组合这些 primitives。可复用 UI 归入 `packages/ui`；领域专属 UI 留在 owning app。
-- 新增 app-local UI 组件或 CSS 前说明归属：shadcn primitive 组合、Soul App 领域语义，
-  或临时迁移步骤。可复用缺口优先通过 `packages/ui` primitives 组合解决。
-- 非平凡 UI 设计或 Superpowers spec/plan 包含 `Component Library Preflight`：列出已检查的
-  `packages/ui` primitive、说明 app-local UI 归属，并在最终验证跑 `bun run ui:check`。
-- 交互组件使用成熟 headless UI；不要手写 focus trap、scroll lock、ARIA 或键盘导航。
-- shadcn-managed primitives 与主题变量由 `packages/ui` 承载，并优先通过官方 shadcn CLI
-  维护。当前视觉约束来自 shadcn theme、semantic tokens、`packages/ui/components.json` 和本文件；
-  历史 PMA/changelog 中的 `DESIGN.md` 只作为审计记录。
-- app/web 与官方 Soul App web 的图标也必须跟随 `packages/ui/components.json` 中的
-  shadcn `iconLibrary`。当前 preset 是 `hugeicons`，所以可见 UI 不再新增 `lucide-react`
-  导入；需要图标时使用 `@hugeicons/core-free-icons` + `HugeiconsIcon`，让 shadcn Button /
-  Item / Badge 等 primitive 接管尺寸、颜色与状态。
-- 视觉值使用 shadcn semantic CSS variables、Tailwind CSS v4 `@theme` 或
-  package-owned tokens；不要在 feature component 中新增 hex 字面量或 arbitrary value。
-- shadcn-first 迁移完成前，不能只用冒烟验证收口；必须运行 `bun run ui:check` 或
-  `bun scripts/check-web-ui-components.ts --all --audit`，并审查 class dimension、framed
-  surface、semantic theme token、custom class、light/dark 截图与可见 radius/border/font
-  干扰。若发现多层边框、异常大圆角、字体/明暗模式不一致或 app-local class 漏网，必须先修复
-  或明确登记为 domain-owned / temporary migration debt，不能标记迁移 goal 完成。
-- 文案用用户能理解的业务对象：Soul App、Soul worker、workspace、session、artifact、profile、
-  review、lesson。仅在开发者/诊断界面暴露 invocation、engine、adapter 等底层词汇。
+环境变量按真实加载路径归属，不按代码字符串归属。根 `.env.example` / ignored `.env` 只放 source-checkout dev profile 和 Host dev/runtime 会从根启动读取的值；`dev:env:check` / `dev:env:sync` 必须保持根 `.env` 与 `.env.example`、`packages/worker-daemon/.env` 与 `packages/worker-daemon/.env.example` 的字段、注释、空行、顺序严格一致，且只挂 dev/status 入口，不挂 build/lint/release。
 
-## 常用命令
+Worker-owned process env 放 `packages/worker-daemon/.env.example` 和 ignored `packages/worker-daemon/.env`，包括 Worker provisioning、engine invocation、BYOK provider secret refs。`dev:worker`、`dev:worker-daemon`、`dev:fleet` 和 `dev:fleet-web` 的 Worker daemon 启动链路必须显式加载 `packages/worker-daemon/.env`，否则不能把这些变量算作启动有效。
 
-- 安装依赖：`bun install`
-- 类型检查：`bun run typecheck`
-- Lint：`bun run lint`
-- 测试：`bun run test`
-- 常规 gate：`bun run check`
-- UI 组件治理检查：`bun run ui:check`
-- 构建：`bun run build`
-- Web 构建：`bun run --filter '@zonease/aiworker-web' build`
-- API 构建：`bun run --filter '@zonease/aiworker-api' build`
-- CLI bundle：`bun run --filter '@zonease/aiworker-cli' build:bundle`
-- Worker DB schema：`bun run db:generate:worker`
-- code-review-graph：`bun run crg:status` / `bun run crg:update` / `bun run crg:review`
+Logto setup/M2M key 是项目开发配置，放根 `.env.example` / ignored `.env`，不要把长期可复用配置埋进 `tmp/`。Host Logto session auth 的 6 个 runtime key 也放根 `.env`：`AIWORKER_HOST_SESSION_SECRET`、`AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS`、`LOGTO_CLIENT_ID`、`LOGTO_CLIENT_SECRET`、`LOGTO_ENDPOINT`、`LOGTO_ISSUER`。Host session auth 是 all-or-nothing：只填一部分会让 Host dev 启动失败；Logto setup 优先用 `LOGTO_M2M_ENDPOINT` / `LOGTO_M2M_ISSUER`，不要为了 setup 半填 runtime 的 `LOGTO_ENDPOINT` / `LOGTO_ISSUER`。
 
-优先跑与改动范围匹配的聚焦命令；跨 package、发布、迁移、安全或公共 API 改动再跑全量 gate。
+## Workflow
 
-## Shell、Git 与验证
+Use Superpowers for brainstorming, non-trivial planning, TDD, systematic debugging, and verification before completion.
 
-- 命令默认用 `bash`。
-- 长驻进程优先放 tmux，session name 用 `{basename}-{hash}`；没有 tmux 时用 `setsid`/`nohup`
-  + 明确 pidfile/logfile，并在完成后清理。
-- 禁止 `kill $(lsof -ti:PORT)`；如需按端口处理，只匹配监听进程，例如
-  `lsof -tiTCP:PORT -sTCP:LISTEN`。
-- Commit message / PR title / PR description 使用中文；Conventional Commit type 保持英文，例如
-  `feat:`、`fix:`、`refactor:`、`docs:`、`chore:`、`test:`、`ops:`。
-- 提交前说明已运行的验证命令和结果；未能运行的 gate 要说明原因。
-- 简单文件查找优先 `rg` / `rg --files`。
-- 单文件文档/配置改动直接读写即可，不需要强行使用 MCP 或 code-review-graph。
+Destructive refactor is allowed before 1.0. Keep changes scoped to the current phase. Do not change the new architecture to satisfy old E2E assumptions.
+
+Code changes need focused contract tests appropriate to scope. Before final completion, run the smallest fresh verification that proves the touched surface. For code changes, run code-review-graph unless the change is docs-only, instruction-only, or pure formatting.
+
+## UI
+
+UI work must use shadcn-managed primitives and `packages/ui` as the shared UI source. Do not create ad-hoc component systems. Soul provides no UI; the Worker owns and renders the Workbench. Host must not render Soul domain UI.

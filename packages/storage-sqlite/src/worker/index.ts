@@ -1,7 +1,13 @@
+import type { LocalWorkerConfigUpdatedBy } from '@zonease/aiworker-soul-descriptor'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
+import { fileURLToPath } from 'node:url'
+import {
+
+  localWorkerConfigValueInputSchema,
+  localWorkerConfigValueSchema,
+} from '@zonease/aiworker-soul-descriptor'
 import { Database } from 'bun:sqlite'
 import { and, desc, eq, gt, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -10,6 +16,11 @@ import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import * as schema from './schema'
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+
+// Descriptor v1 identity collapsed to a single `id`; `version`/`soulId` are no longer
+// descriptor concepts. The historical `soul_apps.version` column survives only behind
+// the storage boundary and is fed this fixed placeholder.
+const SOUL_APP_LEGACY_VERSION = '0.0.0'
 
 function resolveMigrationsFolder(rel: string): string {
   const dev = path.resolve(moduleDir, '../../drizzle', rel)
@@ -24,15 +35,23 @@ function resolveMigrationsFolder(rel: string): string {
 export const defaultWorkerMigrationsFolder: string = resolveMigrationsFolder('worker')
 
 let db: ReturnType<typeof createDb> | null = null
+let sqliteHandle: Database | null = null
+const LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,}|eyJ[\w-]+\.[\w-]+\.[\w-]+|-----BEGIN[A-Z ]*PRIVATE KEY-----|token=[^\s"']+|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["'][^"'\n]+["']/gi
+const REDACTED_LITERAL_SECRET_RE = /Bearer\s+\[REDACTED\]|sk-\[REDACTED\]|token=\[REDACTED\]|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["']\[REDACTED\]["']/i
+const NATIVE_MCP_FILE_RE = /(?:^|\n)\s*\[mcp_servers(?:\.|\])|["']mcpServers["']\s*:/i
+const SOUL_OWNED_PAYLOAD_KEY_RE = /^(?:artifact|artifactBody|artifactContent|artifactJson|artifactPayload|artifactRecord|businessActionState|candidate|candidateBody|candidateContent|candidateId|candidateJson|candidatePayload|candidateRecord|confirmationState|content|contentBody|contentJson|contentPayload|entryFileBody|entryFileContent|history|historyEntries|historyJson|profile|profileBody|profileContent|profileId|profileJson|profilePayload|profileRecord|prompt|promptBody|promptContent|promptText|review|reviewBody|reviewContent|reviewId|reviewJson|reviewPayload|reviewRecord|skillBody|skillMarkdown)$/i
 
 function createDb(dbPath: string) {
   const sqlite = new Database(dbPath, { create: true })
   sqlite.exec('PRAGMA journal_mode = WAL')
+  sqlite.exec('PRAGMA busy_timeout = 5000')
   sqlite.exec('PRAGMA foreign_keys = ON')
+  sqliteHandle = sqlite
   return drizzle(sqlite, { schema })
 }
 
 export function initWorkerDb(dbPath: string) {
+  closeWorkerDb()
   db = createDb(dbPath)
   return db
 }
@@ -44,79 +63,294 @@ export function getWorkerDb() {
 }
 
 export function closeWorkerDb() {
+  if (sqliteHandle) {
+    sqliteHandle.close(false)
+    sqliteHandle = null
+  }
   db = null
 }
 
 export function runWorkerMigrations(migrationsFolder: string = defaultWorkerMigrationsFolder) {
   migrate(getWorkerDb(), { migrationsFolder })
-  repairWorkerOverlayAssets()
+  discardLegacyWorkerOverlayAssets()
+  repairWorkerLifecycleStatuses()
   repairWorkerIndexes()
 }
 
-function repairWorkerOverlayAssets() {
-  getWorkerDb().run(sql.raw(`
-    CREATE TABLE IF NOT EXISTS worker_overlay_assets (
-      worker_id text NOT NULL,
-      id text NOT NULL,
-      kind text NOT NULL,
-      target text NOT NULL,
-      enabled integer DEFAULT true NOT NULL,
-      content text NOT NULL,
-      metadata_json text NOT NULL,
-      created_at text NOT NULL,
-      updated_at text NOT NULL,
-      FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE cascade
-    )
-  `))
-  getWorkerDb().run(sql.raw(`
-    CREATE UNIQUE INDEX IF NOT EXISTS worker_overlay_assets_worker_kind_target_id_idx
-    ON worker_overlay_assets (worker_id, kind, target, id)
-  `))
-  getWorkerDb().run(sql.raw(`
-    CREATE INDEX IF NOT EXISTS worker_overlay_assets_worker_kind_idx
-    ON worker_overlay_assets (worker_id, kind)
-  `))
+function discardLegacyWorkerOverlayAssets() {
+  getWorkerDb().run(sql.raw('DROP TABLE IF EXISTS worker_overlay_assets'))
 }
 
 function repairWorkerIndexes() {
   const rows = getWorkerDb().all<{ name: string, unique: number }>(sql.raw('PRAGMA index_list("workers")'))
-  const soulIndex = rows.find(row => row.name === 'workers_soul_idx')
-  if (soulIndex?.unique === 1)
-    getWorkerDb().run(sql.raw('DROP INDEX IF EXISTS workers_soul_idx'))
-  if (!soulIndex || soulIndex.unique === 1)
-    getWorkerDb().run(sql.raw('CREATE INDEX IF NOT EXISTS workers_soul_idx ON workers (soul_id)'))
+  const appIndex = rows.find(row => row.name === 'workers_app_idx')
+  if (appIndex?.unique === 1)
+    getWorkerDb().run(sql.raw('DROP INDEX IF EXISTS workers_app_idx'))
+  if (!appIndex || appIndex.unique === 1)
+    getWorkerDb().run(sql.raw('CREATE INDEX IF NOT EXISTS workers_app_idx ON workers (app_id)'))
+}
+
+function repairWorkerLifecycleStatuses() {
+  getWorkerDb().run(sql.raw('UPDATE workers SET status = \'archived\' WHERE status IN (\'paused\', \'disabled\')'))
+}
+
+function assertNoLiteralSecrets(value: unknown, context: string): void {
+  if (typeof value === 'string') {
+    if (NATIVE_MCP_FILE_RE.test(value))
+      throw new Error(`Full native MCP files are not allowed in Worker metadata: ${context}`)
+    if (containsLiteralSecret(value))
+      throw new Error(`Literal secrets are not allowed in Worker metadata: ${context}`)
+    return
+  }
+  if (!value || typeof value !== 'object')
+    return
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoLiteralSecrets(item, `${context}[${index}]`))
+    return
+  }
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof nested === 'string' && isSecretKey(key) && !isSecretReference(nested))
+      throw new Error(`Literal secrets are not allowed in Worker metadata: ${context}.${key}`)
+    assertNoLiteralSecrets(nested, `${context}.${key}`)
+  }
+}
+
+function assertNoFullNativeMcpFiles(value: unknown, context: string): void {
+  if (typeof value === 'string') {
+    if (NATIVE_MCP_FILE_RE.test(value))
+      throw new Error(`Full native MCP files are not allowed in Worker metadata: ${context}`)
+    return
+  }
+  if (!value || typeof value !== 'object')
+    return
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoFullNativeMcpFiles(item, `${context}[${index}]`))
+    return
+  }
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>))
+    assertNoFullNativeMcpFiles(nested, `${context}.${key}`)
+}
+
+function assertNoSoulOwnedPayloads(value: unknown, context: string, label = 'Soul-owned payloads'): void {
+  if (!value || typeof value !== 'object')
+    return
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoSoulOwnedPayloads(item, `${context}[${index}]`, label))
+    return
+  }
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (SOUL_OWNED_PAYLOAD_KEY_RE.test(key))
+      throw new Error(`${label} are not allowed in Worker metadata: ${context}.${key}`)
+    assertNoSoulOwnedPayloads(nested, `${context}.${key}`, label)
+  }
+}
+
+function containsLiteralSecret(value: string): boolean {
+  for (const match of value.matchAll(LITERAL_SECRET_RE)) {
+    if (!isRedactedPlaceholder(match[0]))
+      return true
+  }
+  return false
+}
+
+function isRedactedPlaceholder(value: string): boolean {
+  return REDACTED_LITERAL_SECRET_RE.test(value.trim())
+}
+
+function isSecretKey(key: string): boolean {
+  return /api[_-]?key|authorization|password|secret|token/i.test(key)
+}
+
+const SECRET_REFERENCE_PREFIXES = ['$', 'env:', 'secretref:'] as const
+
+function isSecretReference(value: string): boolean {
+  const trimmed = value.trim()
+  if (trimmed.length === 0 || trimmed === '[REDACTED]')
+    return true
+  const prefix = SECRET_REFERENCE_PREFIXES.find(candidate => trimmed.startsWith(candidate))
+  if (!prefix)
+    return false
+  // Guard against prefix disguise, e.g. 'env:OPENAI_API_KEY=sk-...' or '$X=literal':
+  // the reference body must name a lookup target, not embed an assignment or a
+  // literal secret value.
+  const body = trimmed.slice(prefix.length)
+  if (body.includes('='))
+    return false
+  return !containsLiteralSecret(body)
+}
+
+function normalizeWorkerConfigEnvelope(
+  value: Record<string, unknown>,
+  context: string,
+  defaults: { updatedAt: string, updatedBy: LocalWorkerConfigUpdatedBy },
+): Record<string, unknown> {
+  assertNoLiteralSecrets(value, context)
+  assertNoFullNativeMcpFiles(value, context)
+  const parsed = localWorkerConfigValueInputSchema.safeParse(value)
+  if (!parsed.success)
+    throw workerConfigEnvelopeError(parsed.error, context)
+  assertNoSoulOwnedPayloads(parsed.data.options, `${context}.options`, 'Soul-owned config payloads')
+
+  const normalized = {
+    ...parsed.data,
+    updatedAt: readString(parsed.data.updatedAt, defaults.updatedAt),
+    updatedBy: parsed.data.updatedBy ?? defaults.updatedBy,
+  }
+  const full = localWorkerConfigValueSchema.safeParse(normalized)
+  if (!full.success)
+    throw workerConfigEnvelopeError(full.error, context)
+  return full.data
+}
+
+function workerConfigEnvelopeError(error: { issues: Array<{ code: string, path: Array<number | string> }> }, context: string): Error {
+  const field = String(error.issues[0]?.path[0] ?? '')
+  if (field === 'kind')
+    return new Error(`Invalid Host worker config envelope kind: ${context}.kind`)
+  if (field === 'target')
+    return new Error(`Invalid Host worker config envelope target: ${context}.target`)
+  if (field === 'enabled')
+    return new Error(`Invalid Host worker config envelope enabled flag: ${context}.enabled`)
+  if (field === 'options')
+    return new Error(`Invalid Host worker config envelope options: ${context}.options`)
+  if (field === 'updatedBy')
+    return new Error(`Invalid Host worker config envelope updatedBy: ${context}.updatedBy`)
+  return new Error(`Invalid Host worker config envelope field: ${context}`)
+}
+
+function defaultWorkerConfigUpdatedBy(source: WorkerConfigRow['source'] | undefined): LocalWorkerConfigUpdatedBy {
+  if (source === 'web' || source === 'app-owned-api')
+    return source
+  return 'cli'
+}
+
+function isWorkerOverlayKind(value: unknown): value is WorkerOverlayAssetRow['kind'] {
+  return value === 'entry-file' || value === 'mcp-client' || value === 'skill'
+}
+
+function readString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
+}
+
+function readNullableString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+}
+
+function readWorkerConfigOptions(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function readJsonObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function localOverlayKindForWorkerConfig(kind: unknown): WorkerOverlayAssetRow['kind'] | null {
+  if (kind === 'entry-file-overlay')
+    return 'entry-file'
+  if (kind === 'mcp-overlay')
+    return 'mcp-client'
+  if (kind === 'skill-overlay')
+    return 'skill'
+  return null
+}
+
+function workerConfigOverlaySourceRef(value: Record<string, unknown>, options: Record<string, unknown>): string | null {
+  return readNullableString(value.sourceRef)
+    ?? readNullableString(options.replaces)
+    ?? readNullableString(options.replacesSourceRef)
+}
+
+function workerConfigOverlayId(row: WorkerConfigRow, kind: WorkerOverlayAssetRow['kind'], sourceRef: string, options: Record<string, unknown>): string | null {
+  const replacementRef = readNullableString(options.replaces) ?? readNullableString(options.replacesSourceRef)
+  const ref = replacementRef ?? sourceRef
+  if (kind === 'entry-file')
+    return readNullableString(options.targetPath) ?? workspaceOverlayIdFromRef(ref) ?? workerConfigKeyId(row.configKey)
+  if (kind === 'skill')
+    return skillOverlayIdFromRef(ref) ?? workerConfigKeyId(row.configKey)
+  return workerConfigKeyId(row.configKey)
+}
+
+function workerConfigOverlayTargets(kind: WorkerOverlayAssetRow['kind'], target: unknown): string[] {
+  if (kind === 'entry-file')
+    return ['workspace']
+  if (target === 'codex' || target === 'claude-code')
+    return [target]
+  if (kind === 'skill' && target === 'all')
+    return ['codex', 'claude-code']
+  return []
+}
+
+function workerConfigKeyId(configKey: string): string | null {
+  const separatorIndex = configKey.indexOf(':')
+  if (separatorIndex < 0)
+    return null
+  const rawId = configKey.slice(separatorIndex + 1)
+  if (!rawId)
+    return null
+  try {
+    return decodeURIComponent(rawId)
+  }
+  catch {
+    return rawId
+  }
+}
+
+function workspaceOverlayIdFromRef(ref: string): string | null {
+  for (const prefix of ['descriptor://engine/workspaceAssets/', 'descriptor://engine/workspace/']) {
+    if (ref.startsWith(prefix))
+      return ref.slice(prefix.length)
+  }
+  return null
+}
+
+function skillOverlayIdFromRef(ref: string): string | null {
+  const prefix = 'descriptor://engine/skills/'
+  if (!ref.startsWith(prefix))
+    return null
+  return ref.slice(prefix.length).replace(/\/SKILL\.md$/, '')
 }
 
 export type WorkerDatabase = ReturnType<typeof createDb>
 export type WorkerRow = typeof schema.workers.$inferSelect
-export type WorkerOverlayAssetRow = typeof schema.workerOverlayAssets.$inferSelect
 export type WorkspaceRow = typeof schema.workspaces.$inferSelect
 export type SessionRow = typeof schema.sessions.$inferSelect
-export type TurnRow = typeof schema.turns.$inferSelect
 export type EngineInvocationRow = typeof schema.engineInvocations.$inferSelect
-export type WorkerEngineInvocationRow = typeof schema.workerEngineInvocations.$inferSelect
-export type SessionEventRow = typeof schema.sessionEvents.$inferSelect
+export type BridgeEventRow = typeof schema.bridgeEvents.$inferSelect
 export type FileRow = typeof schema.files.$inferSelect
 export type SoulAppRow = typeof schema.soulApps.$inferSelect
 export type SettingRow = typeof schema.settings.$inferSelect
+export type WorkerConfigRow = typeof schema.workerConfig.$inferSelect
+
+export interface WorkerOverlayAssetRow {
+  checksum: string | null
+  enabled: boolean
+  id: string
+  kind: 'entry-file' | 'mcp-client' | 'skill'
+  metadataJson: Record<string, unknown>
+  optionsJson: Record<string, unknown>
+  sourceRef: string
+  target: string
+  updatedAt: string
+  workerId: string
+}
+
+export interface SessionEventRow {
+  createdAt: string
+  id: number
+  invocationId: string
+  payloadJson: Record<string, unknown>
+  seq: number
+  sessionId: string
+  type: 'status' | 'assistant_delta' | 'tool' | 'file_change' | 'artifact' | 'error' | 'log'
+}
 
 export interface UpsertWorkerInput {
   id: string
-  soulId: string
+  appId: string
   name: string
   status?: WorkerRow['status']
   defaultEngineId?: string | null
   metadataJson?: Record<string, unknown>
   at?: string
-}
-
-export interface WorkerOverlayAssetInput {
-  content: string
-  enabled: boolean
-  id: string
-  kind: 'entry-file' | 'mcp-client' | 'skill'
-  metadataJson?: Record<string, unknown>
-  target: string
 }
 
 export interface CreateWorkspaceInput {
@@ -144,9 +378,7 @@ export interface CreateSessionInput {
   id: string
   workerId: string
   workspaceId: string
-  capabilityTemplateId: string
   title: string
-  context?: string
   status?: SessionRow['status']
   metadataJson?: Record<string, unknown>
   startedAt?: string | null
@@ -156,7 +388,6 @@ export interface CreateSessionInput {
 
 export interface UpdateSessionInput {
   id: string
-  context?: string
   status?: SessionRow['status']
   metadataJson?: Record<string, unknown>
   startedAt?: string | null
@@ -165,36 +396,20 @@ export interface UpdateSessionInput {
   at?: string
 }
 
-export interface CreateTurnInput {
-  id: string
-  sessionId: string
-  seq: number
-  input: string
-  response?: string | null
-  status?: TurnRow['status']
-  error?: string | null
-  metadataJson?: Record<string, unknown>
-  at?: string
-}
-
-export interface UpdateTurnInput {
-  id: string
-  response?: string | null
-  status?: TurnRow['status']
-  error?: string | null
-  metadataJson?: Record<string, unknown>
-  at?: string
-}
-
 export interface CreateEngineInvocationInput {
   id: string
   sessionId: string
-  turnId: string
   seq: number
   engineId: string
   engineCommand?: string | null
   status?: EngineInvocationRow['status']
-  prompt: string
+  processState?: EngineInvocationRow['processState']
+  projectionReceiptId?: string | null
+  externalSessionRef?: string | null
+  rawLogRef?: string | null
+  eventLogRef?: string | null
+  failureCode?: string | null
+  inputRef: string
   summary?: string | null
   error?: string | null
   metadataJson?: Record<string, unknown>
@@ -206,6 +421,12 @@ export interface CreateEngineInvocationInput {
 export interface UpdateEngineInvocationInput {
   id: string
   status?: EngineInvocationRow['status']
+  processState?: EngineInvocationRow['processState']
+  projectionReceiptId?: string | null
+  externalSessionRef?: string | null
+  rawLogRef?: string | null
+  eventLogRef?: string | null
+  failureCode?: string | null
   summary?: string | null
   error?: string | null
   metadataJson?: Record<string, unknown>
@@ -214,46 +435,20 @@ export interface UpdateEngineInvocationInput {
   at?: string
 }
 
-export interface CreateWorkerEngineInvocationInput {
-  id: string
-  workerId: string
-  seq: number
-  engineId: string
-  engineCommand?: string | null
-  status?: WorkerEngineInvocationRow['status']
-  cwd: string
-  inputRef?: string | null
-  stdoutRef?: string | null
-  stderrRef?: string | null
-  exitCode?: number | null
-  signal?: string | null
-  metadataJson?: Record<string, unknown>
-  startedAt?: string | null
-  finishedAt?: string | null
-  at?: string
-}
-
-export interface UpdateWorkerEngineInvocationInput {
-  id: string
-  status?: WorkerEngineInvocationRow['status']
-  inputRef?: string | null
-  stdoutRef?: string | null
-  stderrRef?: string | null
-  exitCode?: number | null
-  signal?: string | null
-  metadataJson?: Record<string, unknown>
-  startedAt?: string | null
-  finishedAt?: string | null
-  at?: string
-}
-
 export interface AppendSessionEventInput {
   sessionId: string
-  turnId?: string | null
-  invocationId?: string | null
+  invocationId: string
   seq: number
   type: SessionEventRow['type']
   payloadJson?: Record<string, unknown>
+  at?: string
+}
+
+export interface UpsertWorkerConfigInput {
+  workerId: string
+  configKey: string
+  configValueJson: Record<string, unknown>
+  source?: WorkerConfigRow['source']
   at?: string
 }
 
@@ -272,14 +467,12 @@ export interface UpsertFileInput {
 export interface UpsertSoulAppInput {
   id: string
   name: string
-  version: string
   protocol: string
-  soulId: string
   status?: SoulAppRow['status']
   sourceKind: SoulAppRow['sourceKind']
   sourceRef: string
-  manifestDigest: string
-  manifestJson: SoulAppRow['manifestJson']
+  descriptorDigest: string
+  descriptorJson: SoulAppRow['descriptorJson']
   validationIssuesJson?: SoulAppRow['validationIssuesJson']
   healthStatus?: SoulAppRow['healthStatus']
   healthMessage?: string | null
@@ -300,23 +493,27 @@ export interface UpdateSoulAppLifecycleInput {
   at?: string
 }
 
-export interface DiscardLegacySoulMetadataInput {
-  soulIds: readonly string[]
+export interface DiscardRetiredSoulMetadataInput {
+  appIds: readonly string[]
   at?: string
 }
 
-export interface DiscardLegacySoulMetadataResult {
-  legacySoulIds: string[]
+export interface DiscardRetiredSoulMetadataResult {
+  retiredAppIds: string[]
   workersDeleted: number
 }
 
 export function upsertWorker(input: UpsertWorkerInput): WorkerRow {
   const now = input.at ?? new Date().toISOString()
   const existing = getWorker(input.id)
+  if (input.metadataJson) {
+    assertNoLiteralSecrets(input.metadataJson, 'workers.metadataJson')
+    assertNoSoulOwnedPayloads(input.metadataJson, 'workers.metadataJson')
+  }
   if (!existing) {
     getWorkerDb().insert(schema.workers).values({
       id: input.id,
-      soulId: input.soulId,
+      appId: input.appId,
       name: input.name,
       status: input.status ?? 'active',
       defaultEngineId: input.defaultEngineId ?? null,
@@ -330,7 +527,7 @@ export function upsertWorker(input: UpsertWorkerInput): WorkerRow {
       defaultEngineId: input.defaultEngineId ?? existing.defaultEngineId,
       metadataJson: input.metadataJson ?? existing.metadataJson,
       name: input.name,
-      soulId: input.soulId,
+      appId: input.appId,
       status: input.status ?? existing.status,
       updatedAt: now,
     }).where(eq(schema.workers.id, input.id)).run()
@@ -342,43 +539,112 @@ export function getWorker(id: string): WorkerRow | null {
   return getWorkerDb().select().from(schema.workers).where(eq(schema.workers.id, id)).get() ?? null
 }
 
+export function deleteWorker(id: string): WorkerRow | null {
+  const existing = getWorker(id)
+  if (!existing)
+    return null
+  getWorkerDb()
+    .delete(schema.workers)
+    .where(eq(schema.workers.id, id))
+    .run()
+  return existing
+}
+
 export function listWorkers(limit = 100): WorkerRow[] {
   return getWorkerDb().select().from(schema.workers).orderBy(schema.workers.id).limit(limit).all()
 }
 
-export function listWorkerOverlayAssets(workerId: string): (WorkerOverlayAssetRow & { source: 'overlay' })[] {
-  return getWorkerDb()
-    .select()
-    .from(schema.workerOverlayAssets)
-    .where(eq(schema.workerOverlayAssets.workerId, workerId))
-    .all()
-    .map(row => ({ ...row, source: 'overlay' as const }))
+export type SingleActiveWorkerResolution
+  = | { kind: 'none' }
+    | { kind: 'single', worker: WorkerRow }
+    | { kind: 'multiple', workers: WorkerRow[] }
+
+/**
+ * Resolve the single active Worker for the daemon-per-worker topology.
+ *
+ * A daemon hosts at most one active Worker. This is the shared source of truth
+ * for "the active worker" used by the daemon bootstrap, the `/api/control/worker`
+ * route, and the standalone CLI so all three agree byte-for-byte on what
+ * "active" means and never silently pick among a dirty multi-active DB.
+ */
+export function resolveSingleActiveWorker(workers: WorkerRow[] = listWorkers()): SingleActiveWorkerResolution {
+  const active = workers.filter(worker => worker.status === 'active')
+  if (active.length === 0)
+    return { kind: 'none' }
+  if (active.length > 1)
+    return { kind: 'multiple', workers: active }
+  return { kind: 'single', worker: active[0]! }
 }
 
-export function upsertWorkerOverlayAssets(workerId: string, assets: WorkerOverlayAssetInput[], at = new Date().toISOString()): void {
-  const db = getWorkerDb()
-  db.delete(schema.workerOverlayAssets)
-    .where(eq(schema.workerOverlayAssets.workerId, workerId))
-    .run()
-  for (const asset of assets) {
-    db.insert(schema.workerOverlayAssets)
-      .values({
-        content: asset.content,
-        createdAt: at,
-        enabled: asset.enabled,
-        id: asset.id,
-        kind: asset.kind,
-        metadataJson: asset.metadataJson ?? {},
-        target: asset.target,
-        updatedAt: at,
-        workerId,
-      })
-      .run()
-  }
+export function listWorkerOverlayAssets(workerId: string): (WorkerOverlayAssetRow & { source: 'overlay' })[] {
+  return listWorkerConfigValues(workerId)
+    .flatMap((row) => {
+      if (!row.configKey.startsWith('overlay:'))
+        return standardWorkerConfigOverlayAssets(row)
+
+      const options = row.configValueJson.options
+      if (!options || typeof options !== 'object' || Array.isArray(options))
+        return []
+      const record = options as Record<string, unknown>
+      const kind = record.overlayKind
+      const id = record.overlayId
+      const target = record.overlayTarget
+      if (!isWorkerOverlayKind(kind) || typeof id !== 'string' || typeof target !== 'string')
+        return []
+      return [{
+        checksum: readNullableString(row.configValueJson.checksum),
+        enabled: row.configValueJson.enabled === true,
+        id,
+        kind,
+        metadataJson: readJsonObject(record.metadataJson),
+        optionsJson: readJsonObject(record.optionsJson),
+        source: 'overlay' as const,
+        sourceRef: readString(row.configValueJson.sourceRef, ''),
+        target,
+        updatedAt: row.updatedAt,
+        workerId: row.workerId,
+      }]
+    })
+}
+
+function standardWorkerConfigOverlayAssets(row: WorkerConfigRow): (WorkerOverlayAssetRow & { source: 'overlay' })[] {
+  const kind = localOverlayKindForWorkerConfig(row.configValueJson.kind)
+  if (!kind)
+    return []
+
+  const options = readWorkerConfigOptions(row.configValueJson.options)
+  if (readNullableString(options.overlayId) && readNullableString(options.overlayKind))
+    return []
+
+  const sourceRef = workerConfigOverlaySourceRef(row.configValueJson, options)
+  if (!sourceRef)
+    return []
+
+  const id = workerConfigOverlayId(row, kind, sourceRef, options)
+  if (!id)
+    return []
+
+  return workerConfigOverlayTargets(kind, row.configValueJson.target).map(target => ({
+    checksum: readNullableString(row.configValueJson.checksum),
+    enabled: row.configValueJson.enabled !== false,
+    id,
+    kind,
+    metadataJson: readJsonObject(options.metadataJson),
+    optionsJson: readJsonObject(options.optionsJson),
+    source: 'overlay' as const,
+    sourceRef,
+    target,
+    updatedAt: row.updatedAt,
+    workerId: row.workerId,
+  }))
 }
 
 export function createWorkspace(input: CreateWorkspaceInput): WorkspaceRow {
   const now = input.at ?? new Date().toISOString()
+  assertNoLiteralSecrets(input.sourcePointersJson ?? [], 'workspaces.sourcePointersJson')
+  assertNoLiteralSecrets(input.metadataJson ?? {}, 'workspaces.metadataJson')
+  assertNoSoulOwnedPayloads(input.sourcePointersJson ?? [], 'workspaces.sourcePointersJson')
+  assertNoSoulOwnedPayloads(input.metadataJson ?? {}, 'workspaces.metadataJson')
   getWorkerDb().insert(schema.workspaces).values({
     id: input.id,
     workerId: input.workerId,
@@ -402,6 +668,14 @@ export function updateWorkspace(input: UpdateWorkspaceInput): WorkspaceRow {
   const existing = getWorkspace(input.id)
   if (!existing)
     throw new Error(`Workspace not found: ${input.id}`)
+  if (input.sourcePointersJson)
+    assertNoLiteralSecrets(input.sourcePointersJson, 'workspaces.sourcePointersJson')
+  if (input.metadataJson) {
+    assertNoLiteralSecrets(input.metadataJson, 'workspaces.metadataJson')
+    assertNoSoulOwnedPayloads(input.metadataJson, 'workspaces.metadataJson')
+  }
+  if (input.sourcePointersJson)
+    assertNoSoulOwnedPayloads(input.sourcePointersJson, 'workspaces.sourcePointersJson')
   getWorkerDb().update(schema.workspaces).set({
     metadataJson: input.metadataJson ?? existing.metadataJson,
     name: input.name ?? existing.name,
@@ -410,6 +684,17 @@ export function updateWorkspace(input: UpdateWorkspaceInput): WorkspaceRow {
     updatedAt: input.at ?? new Date().toISOString(),
   }).where(eq(schema.workspaces.id, input.id)).run()
   return getWorkspace(input.id)!
+}
+
+export function deleteWorkspace(id: string): WorkspaceRow | null {
+  const existing = getWorkspace(id)
+  if (!existing)
+    return null
+  getWorkerDb()
+    .delete(schema.workspaces)
+    .where(eq(schema.workspaces.id, id))
+    .run()
+  return existing
 }
 
 export function listWorkspaces(workerId?: string, limit = 200): WorkspaceRow[] {
@@ -426,13 +711,13 @@ export function listWorkspaces(workerId?: string, limit = 200): WorkspaceRow[] {
 
 export function createSession(input: CreateSessionInput): SessionRow {
   const now = input.at ?? new Date().toISOString()
+  assertNoLiteralSecrets(input.metadataJson ?? {}, 'sessions.metadataJson')
+  assertNoSoulOwnedPayloads(input.metadataJson ?? {}, 'sessions.metadataJson')
   getWorkerDb().insert(schema.sessions).values({
     id: input.id,
     workerId: input.workerId,
     workspaceId: input.workspaceId,
-    capabilityTemplateId: input.capabilityTemplateId,
     title: input.title,
-    context: input.context ?? '',
     status: input.status ?? 'active',
     metadataJson: input.metadataJson ?? {},
     startedAt: input.startedAt ?? now,
@@ -451,9 +736,12 @@ export function updateSession(input: UpdateSessionInput): SessionRow {
   const existing = getSession(input.id)
   if (!existing)
     throw new Error(`Session not found: ${input.id}`)
+  if (input.metadataJson) {
+    assertNoLiteralSecrets(input.metadataJson, 'sessions.metadataJson')
+    assertNoSoulOwnedPayloads(input.metadataJson, 'sessions.metadataJson')
+  }
   const has = (key: keyof UpdateSessionInput) => Object.hasOwn(input, key)
   getWorkerDb().update(schema.sessions).set({
-    context: input.context ?? existing.context,
     endedAt: has('endedAt') ? input.endedAt ?? null : existing.endedAt,
     metadataJson: input.metadataJson ?? existing.metadataJson,
     startedAt: has('startedAt') ? input.startedAt ?? null : existing.startedAt,
@@ -462,6 +750,17 @@ export function updateSession(input: UpdateSessionInput): SessionRow {
     updatedAt: input.at ?? new Date().toISOString(),
   }).where(eq(schema.sessions.id, input.id)).run()
   return getSession(input.id)!
+}
+
+export function deleteSession(id: string): SessionRow | null {
+  const existing = getSession(id)
+  if (!existing)
+    return null
+  getWorkerDb()
+    .delete(schema.sessions)
+    .where(eq(schema.sessions.id, id))
+    .run()
+  return existing
 }
 
 export function listSessions(workspaceId?: string, limit = 200): SessionRow[] {
@@ -476,102 +775,61 @@ export function listSessions(workspaceId?: string, limit = 200): SessionRow[] {
   return query.orderBy(desc(schema.sessions.updatedAt)).limit(limit).all()
 }
 
-export function discardLegacySoulMetadata(input: DiscardLegacySoulMetadataInput): DiscardLegacySoulMetadataResult {
-  const legacySoulIds = [...new Set(input.soulIds)].sort()
+export function discardRetiredSoulMetadata(input: DiscardRetiredSoulMetadataInput): DiscardRetiredSoulMetadataResult {
+  const retiredAppIds = [...new Set(input.appIds)].sort()
   let workersDeleted = 0
 
-  for (const soulId of legacySoulIds) {
-    const legacyWorkers = getWorkerDb()
+  for (const appId of retiredAppIds) {
+    const retiredWorkers = getWorkerDb()
       .select({ id: schema.workers.id })
       .from(schema.workers)
-      .where(eq(schema.workers.soulId, soulId))
+      .where(eq(schema.workers.appId, appId))
       .all()
-    if (legacyWorkers.length === 0)
+    if (retiredWorkers.length === 0)
       continue
 
     getWorkerDb()
       .delete(schema.workers)
-      .where(eq(schema.workers.soulId, soulId))
+      .where(eq(schema.workers.appId, appId))
       .run()
-    workersDeleted += legacyWorkers.length
+    workersDeleted += retiredWorkers.length
   }
 
   return {
-    legacySoulIds,
+    retiredAppIds,
     workersDeleted,
   }
 }
 
-export function createTurn(input: CreateTurnInput): TurnRow {
-  const now = input.at ?? new Date().toISOString()
-  getWorkerDb().insert(schema.turns).values({
-    id: input.id,
-    sessionId: input.sessionId,
-    seq: input.seq,
-    input: input.input,
-    response: input.response ?? null,
-    status: input.status ?? 'queued',
-    error: input.error ?? null,
-    metadataJson: input.metadataJson ?? {},
-    createdAt: now,
-    updatedAt: now,
-  }).run()
-  return getTurn(input.id)!
-}
-
-export function getTurn(id: string): TurnRow | null {
-  return getWorkerDb().select().from(schema.turns).where(eq(schema.turns.id, id)).get() ?? null
-}
-
-export function updateTurn(input: UpdateTurnInput): TurnRow {
-  const existing = getTurn(input.id)
-  if (!existing)
-    throw new Error(`Turn not found: ${input.id}`)
-  const has = (key: keyof UpdateTurnInput) => Object.hasOwn(input, key)
-  getWorkerDb().update(schema.turns).set({
-    error: has('error') ? input.error ?? null : existing.error,
-    metadataJson: input.metadataJson ?? existing.metadataJson,
-    response: has('response') ? input.response ?? null : existing.response,
-    status: input.status ?? existing.status,
-    updatedAt: input.at ?? new Date().toISOString(),
-  }).where(eq(schema.turns.id, input.id)).run()
-  return getTurn(input.id)!
-}
-
-export function listTurns(sessionId?: string, limit = 200): TurnRow[] {
-  const query = getWorkerDb().select().from(schema.turns)
-  if (sessionId) {
-    return query
-      .where(eq(schema.turns.sessionId, sessionId))
-      .orderBy(schema.turns.seq)
-      .limit(limit)
-      .all()
-  }
-  return query.orderBy(desc(schema.turns.updatedAt)).limit(limit).all()
-}
-
-export function nextTurnSeq(sessionId: string): number {
-  const latest = getWorkerDb()
-    .select({ seq: schema.turns.seq })
-    .from(schema.turns)
-    .where(eq(schema.turns.sessionId, sessionId))
-    .orderBy(desc(schema.turns.seq))
-    .limit(1)
-    .get()
-  return (latest?.seq ?? 0) + 1
-}
-
 export function createEngineInvocation(input: CreateEngineInvocationInput): EngineInvocationRow {
   const now = input.at ?? new Date().toISOString()
+  assertNoLiteralSecrets({
+    engineCommand: input.engineCommand,
+    error: input.error,
+    eventLogRef: input.eventLogRef,
+    externalSessionRef: input.externalSessionRef,
+    failureCode: input.failureCode,
+    inputRef: input.inputRef,
+    projectionReceiptId: input.projectionReceiptId,
+    rawLogRef: input.rawLogRef,
+    summary: input.summary,
+  }, 'engine_invocations')
+  assertNoLiteralSecrets(input.metadataJson ?? {}, 'engine_invocations.metadataJson')
+  assertNoSoulOwnedPayloads(input.metadataJson ?? {}, 'engine_invocations.metadataJson')
   getWorkerDb().insert(schema.engineInvocations).values({
     id: input.id,
     sessionId: input.sessionId,
-    turnId: input.turnId,
     seq: input.seq,
     engineId: input.engineId,
     engineCommand: input.engineCommand ?? null,
     status: input.status ?? 'queued',
-    prompt: input.prompt,
+    processState: input.processState ?? 'not_spawned',
+    projectionReceiptId: input.projectionReceiptId ?? null,
+    externalSessionRef: input.externalSessionRef ?? null,
+    rawLogRef: input.rawLogRef ?? null,
+    eventLogRef: input.eventLogRef ?? null,
+    failureCode: input.failureCode ?? null,
+    inputRef: input.inputRef,
     summary: input.summary ?? null,
     error: input.error ?? null,
     metadataJson: input.metadataJson ?? {},
@@ -592,10 +850,29 @@ export function updateEngineInvocation(input: UpdateEngineInvocationInput): Engi
   if (!existing)
     throw new Error(`Engine invocation not found: ${input.id}`)
   const has = (key: keyof UpdateEngineInvocationInput) => Object.hasOwn(input, key)
+  assertNoLiteralSecrets({
+    error: has('error') ? input.error : null,
+    eventLogRef: has('eventLogRef') ? input.eventLogRef : null,
+    externalSessionRef: has('externalSessionRef') ? input.externalSessionRef : null,
+    failureCode: has('failureCode') ? input.failureCode : null,
+    projectionReceiptId: has('projectionReceiptId') ? input.projectionReceiptId : null,
+    rawLogRef: has('rawLogRef') ? input.rawLogRef : null,
+    summary: has('summary') ? input.summary : null,
+  }, 'engine_invocations')
+  if (input.metadataJson) {
+    assertNoLiteralSecrets(input.metadataJson, 'engine_invocations.metadataJson')
+    assertNoSoulOwnedPayloads(input.metadataJson, 'engine_invocations.metadataJson')
+  }
   getWorkerDb().update(schema.engineInvocations).set({
+    eventLogRef: has('eventLogRef') ? input.eventLogRef ?? null : existing.eventLogRef,
     error: has('error') ? input.error ?? null : existing.error,
+    externalSessionRef: has('externalSessionRef') ? input.externalSessionRef ?? null : existing.externalSessionRef,
+    failureCode: has('failureCode') ? input.failureCode ?? null : existing.failureCode,
     finishedAt: has('finishedAt') ? input.finishedAt ?? null : existing.finishedAt,
     metadataJson: input.metadataJson ?? existing.metadataJson,
+    processState: input.processState ?? existing.processState,
+    projectionReceiptId: has('projectionReceiptId') ? input.projectionReceiptId ?? null : existing.projectionReceiptId,
+    rawLogRef: has('rawLogRef') ? input.rawLogRef ?? null : existing.rawLogRef,
     startedAt: has('startedAt') ? input.startedAt ?? null : existing.startedAt,
     status: input.status ?? existing.status,
     summary: has('summary') ? input.summary ?? null : existing.summary,
@@ -627,115 +904,148 @@ export function nextEngineInvocationSeq(sessionId: string): number {
   return (latest?.seq ?? 0) + 1
 }
 
-export function createWorkerEngineInvocation(input: CreateWorkerEngineInvocationInput): WorkerEngineInvocationRow {
-  const now = input.at ?? new Date().toISOString()
-  getWorkerDb().insert(schema.workerEngineInvocations).values({
-    id: input.id,
-    workerId: input.workerId,
-    seq: input.seq,
-    engineId: input.engineId,
-    engineCommand: input.engineCommand ?? null,
-    status: input.status ?? 'queued',
-    cwd: input.cwd,
-    inputRef: input.inputRef ?? null,
-    stdoutRef: input.stdoutRef ?? null,
-    stderrRef: input.stderrRef ?? null,
-    exitCode: input.exitCode ?? null,
-    signal: input.signal ?? null,
-    metadataJson: input.metadataJson ?? {},
-    startedAt: input.startedAt ?? null,
-    finishedAt: input.finishedAt ?? null,
-    createdAt: now,
-    updatedAt: now,
-  }).run()
-  return getWorkerEngineInvocation(input.id)!
-}
-
-export function getWorkerEngineInvocation(id: string): WorkerEngineInvocationRow | null {
-  return getWorkerDb().select().from(schema.workerEngineInvocations).where(eq(schema.workerEngineInvocations.id, id)).get() ?? null
-}
-
-export function updateWorkerEngineInvocation(input: UpdateWorkerEngineInvocationInput): WorkerEngineInvocationRow {
-  const existing = getWorkerEngineInvocation(input.id)
-  if (!existing)
-    throw new Error(`Worker engine invocation not found: ${input.id}`)
-  const has = (key: keyof UpdateWorkerEngineInvocationInput) => Object.hasOwn(input, key)
-  getWorkerDb().update(schema.workerEngineInvocations).set({
-    exitCode: has('exitCode') ? input.exitCode ?? null : existing.exitCode,
-    finishedAt: has('finishedAt') ? input.finishedAt ?? null : existing.finishedAt,
-    inputRef: has('inputRef') ? input.inputRef ?? null : existing.inputRef,
-    metadataJson: input.metadataJson ?? existing.metadataJson,
-    signal: has('signal') ? input.signal ?? null : existing.signal,
-    startedAt: has('startedAt') ? input.startedAt ?? null : existing.startedAt,
-    status: input.status ?? existing.status,
-    stderrRef: has('stderrRef') ? input.stderrRef ?? null : existing.stderrRef,
-    stdoutRef: has('stdoutRef') ? input.stdoutRef ?? null : existing.stdoutRef,
-    updatedAt: input.at ?? new Date().toISOString(),
-  }).where(eq(schema.workerEngineInvocations.id, input.id)).run()
-  return getWorkerEngineInvocation(input.id)!
-}
-
-export function listWorkerEngineInvocations(workerId?: string, limit = 200): WorkerEngineInvocationRow[] {
-  const query = getWorkerDb().select().from(schema.workerEngineInvocations)
-  if (workerId) {
-    return query
-      .where(eq(schema.workerEngineInvocations.workerId, workerId))
-      .orderBy(desc(schema.workerEngineInvocations.updatedAt))
-      .limit(limit)
-      .all()
-  }
-  return query.orderBy(desc(schema.workerEngineInvocations.updatedAt)).limit(limit).all()
-}
-
-export function nextWorkerEngineInvocationSeq(workerId: string): number {
-  const latest = getWorkerDb()
-    .select({ seq: schema.workerEngineInvocations.seq })
-    .from(schema.workerEngineInvocations)
-    .where(eq(schema.workerEngineInvocations.workerId, workerId))
-    .orderBy(desc(schema.workerEngineInvocations.seq))
-    .limit(1)
-    .get()
-  return (latest?.seq ?? 0) + 1
-}
-
 export function appendSessionEvent(input: AppendSessionEventInput): SessionEventRow {
-  getWorkerDb().insert(schema.sessionEvents).values({
-    sessionId: input.sessionId,
-    turnId: input.turnId ?? null,
-    invocationId: input.invocationId ?? null,
+  const invocation = getEngineInvocation(input.invocationId)
+  if (!invocation || invocation.sessionId !== input.sessionId)
+    throw new Error(`Engine invocation not found for session event: ${input.invocationId}`)
+  const eventJson = {
+    payload: input.payloadJson ?? {},
+    sessionEventType: input.type,
     seq: input.seq,
-    type: input.type,
-    payloadJson: input.payloadJson ?? {},
+    version: 1,
+  }
+  assertNoLiteralSecrets(eventJson, 'bridge_events.eventJson')
+  getWorkerDb().insert(schema.bridgeEvents).values({
     createdAt: input.at ?? new Date().toISOString(),
+    eventJson,
+    eventType: bridgeEventTypeFromSessionEventType(input.type),
+    invocationId: input.invocationId,
   }).run()
-  return getWorkerDb()
-    .select()
-    .from(schema.sessionEvents)
-    .where(and(eq(schema.sessionEvents.sessionId, input.sessionId), eq(schema.sessionEvents.seq, input.seq)))
-    .get()!
+  const id = getWorkerDb().all<{ id: number }>(sql.raw('SELECT last_insert_rowid() AS id'))[0]?.id
+  const row = id
+    ? listSessionEvents(input.sessionId, { after: id - 1, limit: 1 })[0]
+    : listSessionEvents(input.sessionId, { limit: 1 }).at(-1)
+  if (!row)
+    throw new Error(`Bridge event write failed: ${input.invocationId}`)
+  return row
 }
 
 export function nextSessionEventSeq(sessionId: string): number {
-  const latest = getWorkerDb()
-    .select({ seq: schema.sessionEvents.seq })
-    .from(schema.sessionEvents)
-    .where(eq(schema.sessionEvents.sessionId, sessionId))
-    .orderBy(desc(schema.sessionEvents.seq))
-    .limit(1)
-    .get()
-  return (latest?.seq ?? 0) + 1
+  return listSessionEvents(sessionId).reduce((max, event) => Math.max(max, event.seq), 0) + 1
 }
 
 export function listSessionEvents(sessionId?: string, options: { after?: number, limit?: number } = {}): SessionEventRow[] {
   const limit = options.limit ?? 500
-  const query = getWorkerDb().select().from(schema.sessionEvents)
+  const query = getWorkerDb()
+    .select({
+      createdAt: schema.bridgeEvents.createdAt,
+      eventJson: schema.bridgeEvents.eventJson,
+      eventType: schema.bridgeEvents.eventType,
+      id: schema.bridgeEvents.id,
+      invocationId: schema.bridgeEvents.invocationId,
+      sessionId: schema.engineInvocations.sessionId,
+    })
+    .from(schema.bridgeEvents)
+    .innerJoin(schema.engineInvocations, eq(schema.bridgeEvents.invocationId, schema.engineInvocations.id))
+
   if (sessionId) {
-    const filters = [eq(schema.sessionEvents.sessionId, sessionId)]
+    const filters = [eq(schema.engineInvocations.sessionId, sessionId)]
     if (options.after !== undefined && Number.isFinite(options.after) && options.after > 0)
-      filters.push(gt(schema.sessionEvents.id, options.after))
-    return query.where(and(...filters)).orderBy(schema.sessionEvents.seq).limit(limit).all()
+      filters.push(gt(schema.bridgeEvents.id, options.after))
+    return query
+      .where(and(...filters))
+      .orderBy(schema.bridgeEvents.id)
+      .limit(limit)
+      .all()
+      .map(mapBridgeEventToSessionEvent)
   }
-  return query.orderBy(desc(schema.sessionEvents.createdAt)).limit(limit).all()
+
+  return query
+    .orderBy(desc(schema.bridgeEvents.createdAt))
+    .limit(limit)
+    .all()
+    .map(mapBridgeEventToSessionEvent)
+}
+
+export function listInvocationEvents(invocationId: string, options: { after?: number, limit?: number } = {}): SessionEventRow[] {
+  const limit = options.limit ?? 500
+  const filters = [eq(schema.bridgeEvents.invocationId, invocationId)]
+  if (options.after !== undefined && Number.isFinite(options.after) && options.after > 0)
+    filters.push(gt(schema.bridgeEvents.id, options.after))
+  return getWorkerDb()
+    .select({
+      createdAt: schema.bridgeEvents.createdAt,
+      eventJson: schema.bridgeEvents.eventJson,
+      eventType: schema.bridgeEvents.eventType,
+      id: schema.bridgeEvents.id,
+      invocationId: schema.bridgeEvents.invocationId,
+      sessionId: schema.engineInvocations.sessionId,
+    })
+    .from(schema.bridgeEvents)
+    .innerJoin(schema.engineInvocations, eq(schema.bridgeEvents.invocationId, schema.engineInvocations.id))
+    .where(and(...filters))
+    .orderBy(schema.bridgeEvents.id)
+    .limit(limit)
+    .all()
+    .map(mapBridgeEventToSessionEvent)
+}
+
+function bridgeEventTypeFromSessionEventType(type: SessionEventRow['type']): BridgeEventRow['eventType'] {
+  if (type === 'status')
+    return 'invocation.progress'
+  if (type === 'assistant_delta')
+    return 'invocation.output.delta'
+  if (type === 'tool')
+    return 'invocation.tool.observed'
+  if (type === 'error')
+    return 'invocation.error'
+  return 'invocation.progress'
+}
+
+function sessionEventTypeFromBridgeEventType(type: string): SessionEventRow['type'] {
+  if (type === 'invocation.output.delta' || type === 'invocation.output.snapshot' || type === 'engine.output')
+    return 'assistant_delta'
+  if (type === 'invocation.tool.observed' || type === 'engine.tool')
+    return 'tool'
+  if (type === 'invocation.error' || type === 'error')
+    return 'error'
+  if (type === 'invocation.progress' || type === 'invocation.status')
+    return 'status'
+  return 'log'
+}
+
+function mapBridgeEventToSessionEvent(row: {
+  createdAt: string
+  eventJson: Record<string, unknown>
+  eventType: string
+  id: number
+  invocationId: string
+  sessionId: string
+}): SessionEventRow {
+  const eventJson = row.eventJson ?? {}
+  const payload = readJsonObject(eventJson.payload)
+  const type = isSessionEventType(eventJson.sessionEventType)
+    ? eventJson.sessionEventType
+    : sessionEventTypeFromBridgeEventType(row.eventType)
+  return {
+    createdAt: row.createdAt,
+    id: row.id,
+    invocationId: row.invocationId,
+    payloadJson: payload,
+    seq: typeof eventJson.seq === 'number' ? eventJson.seq : row.id,
+    sessionId: row.sessionId,
+    type,
+  }
+}
+
+function isSessionEventType(value: unknown): value is SessionEventRow['type'] {
+  return value === 'status'
+    || value === 'assistant_delta'
+    || value === 'tool'
+    || value === 'file_change'
+    || value === 'artifact'
+    || value === 'error'
+    || value === 'log'
 }
 
 export function upsertFile(input: UpsertFileInput): FileRow {
@@ -785,18 +1095,22 @@ export function upsertSoulApp(input: UpsertSoulAppInput): SoulAppRow {
   const status = input.status ?? existing?.status ?? 'installed'
   const enabledAt = input.enabledAt ?? (status === 'enabled' ? existing?.enabledAt ?? now : existing?.enabledAt ?? null)
   const disabledAt = input.disabledAt ?? (status === 'disabled' ? now : existing?.disabledAt ?? null)
+  assertNoLiteralSecrets(input.descriptorJson, 'soul_apps.descriptorJson')
+  assertNoLiteralSecrets(input.validationIssuesJson ?? [], 'soul_apps.validationIssuesJson')
   if (!existing) {
     getWorkerDb().insert(schema.soulApps).values({
       id: input.id,
       name: input.name,
-      version: input.version,
+      // Historical columns retained only behind the storage boundary. Descriptor v1
+      // identity collapsed to a single `id`; these are no longer descriptor concepts.
+      version: SOUL_APP_LEGACY_VERSION,
       protocol: input.protocol,
-      soulId: input.soulId,
+      soulId: input.id,
       status,
       sourceKind: input.sourceKind,
       sourceRef: input.sourceRef,
-      manifestDigest: input.manifestDigest,
-      manifestJson: input.manifestJson,
+      descriptorDigest: input.descriptorDigest,
+      descriptorJson: input.descriptorJson,
       validationIssuesJson: input.validationIssuesJson ?? [],
       healthStatus: input.healthStatus ?? 'unknown',
       healthMessage: input.healthMessage ?? null,
@@ -811,14 +1125,14 @@ export function upsertSoulApp(input: UpsertSoulAppInput): SoulAppRow {
   else {
     getWorkerDb().update(schema.soulApps).set({
       name: input.name,
-      version: input.version,
+      version: SOUL_APP_LEGACY_VERSION,
       protocol: input.protocol,
-      soulId: input.soulId,
+      soulId: input.id,
       status,
       sourceKind: input.sourceKind,
       sourceRef: input.sourceRef,
-      manifestDigest: input.manifestDigest,
-      manifestJson: input.manifestJson,
+      descriptorDigest: input.descriptorDigest,
+      descriptorJson: input.descriptorJson,
       validationIssuesJson: input.validationIssuesJson ?? existing.validationIssuesJson,
       healthStatus: input.healthStatus ?? existing.healthStatus,
       healthMessage: Object.hasOwn(input, 'healthMessage') ? input.healthMessage ?? null : existing.healthMessage,
@@ -836,6 +1150,17 @@ export function getSoulApp(id: string): SoulAppRow | null {
   return getWorkerDb().select().from(schema.soulApps).where(eq(schema.soulApps.id, id)).get() ?? null
 }
 
+export function deleteSoulApp(id: string): SoulAppRow | null {
+  const existing = getSoulApp(id)
+  if (!existing)
+    return null
+  getWorkerDb()
+    .delete(schema.soulApps)
+    .where(eq(schema.soulApps.id, id))
+    .run()
+  return existing
+}
+
 export function listSoulApps(limit = 200): SoulAppRow[] {
   return getWorkerDb().select().from(schema.soulApps).orderBy(schema.soulApps.id).limit(limit).all()
 }
@@ -845,6 +1170,8 @@ export function updateSoulAppLifecycle(input: UpdateSoulAppLifecycleInput): Soul
   if (!existing)
     throw new Error(`Soul App not found: ${input.id}`)
   const now = input.at ?? new Date().toISOString()
+  if (input.validationIssuesJson)
+    assertNoLiteralSecrets(input.validationIssuesJson, 'soul_apps.validationIssuesJson')
   getWorkerDb().update(schema.soulApps).set({
     disabledAt: input.status === 'disabled' ? now : existing.disabledAt,
     enabledAt: input.status === 'enabled' ? now : existing.enabledAt,
@@ -858,6 +1185,65 @@ export function updateSoulAppLifecycle(input: UpdateSoulAppLifecycleInput): Soul
   return getSoulApp(input.id)!
 }
 
+export function upsertWorkerConfigValue(input: UpsertWorkerConfigInput): WorkerConfigRow {
+  const now = input.at ?? new Date().toISOString()
+  const existing = getWorkerDb()
+    .select()
+    .from(schema.workerConfig)
+    .where(and(eq(schema.workerConfig.workerId, input.workerId), eq(schema.workerConfig.configKey, input.configKey)))
+    .get()
+  const source = input.source ?? existing?.source ?? 'cli'
+  const configValueJson = normalizeWorkerConfigEnvelope(input.configValueJson, `worker_config.${input.configKey}.configValueJson`, {
+    updatedAt: now,
+    updatedBy: defaultWorkerConfigUpdatedBy(source),
+  })
+  if (!existing) {
+    getWorkerDb().insert(schema.workerConfig).values({
+      configKey: input.configKey,
+      configValueJson,
+      createdAt: now,
+      source,
+      updatedAt: now,
+      workerId: input.workerId,
+    }).run()
+  }
+  else {
+    getWorkerDb().update(schema.workerConfig).set({
+      configValueJson,
+      source,
+      updatedAt: now,
+    }).where(and(eq(schema.workerConfig.workerId, input.workerId), eq(schema.workerConfig.configKey, input.configKey))).run()
+  }
+  return getWorkerConfigValue(input.workerId, input.configKey)!
+}
+
+export function deleteWorkerConfigValue(workerId: string, configKey: string): void {
+  getWorkerDb()
+    .delete(schema.workerConfig)
+    .where(and(eq(schema.workerConfig.workerId, workerId), eq(schema.workerConfig.configKey, configKey)))
+    .run()
+}
+
+export function getWorkerConfigValue(workerId: string, configKey: string): WorkerConfigRow | null {
+  return getWorkerDb()
+    .select()
+    .from(schema.workerConfig)
+    .where(and(eq(schema.workerConfig.workerId, workerId), eq(schema.workerConfig.configKey, configKey)))
+    .get() ?? null
+}
+
+export function listWorkerConfigValues(workerId?: string, limit = 500): WorkerConfigRow[] {
+  const query = getWorkerDb().select().from(schema.workerConfig)
+  if (workerId) {
+    return query
+      .where(eq(schema.workerConfig.workerId, workerId))
+      .orderBy(schema.workerConfig.configKey)
+      .limit(limit)
+      .all()
+  }
+  return query.orderBy(desc(schema.workerConfig.updatedAt)).limit(limit).all()
+}
+
 export function getSetting(key: string): SettingRow | null {
   return getWorkerDb().select().from(schema.settings).where(eq(schema.settings.key, key)).get() ?? null
 }
@@ -867,6 +1253,7 @@ export function listSettings(): SettingRow[] {
 }
 
 export function setSetting(key: string, valueJson: Record<string, unknown>, at = new Date().toISOString()): SettingRow {
+  assertNoLiteralSecrets(valueJson, `settings.${key}`)
   const existing = getSetting(key)
   if (!existing) {
     getWorkerDb().insert(schema.settings).values({ key, valueJson, updatedAt: at }).run()

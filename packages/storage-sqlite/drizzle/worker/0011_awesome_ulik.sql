@@ -1,0 +1,1 @@
+DROP TABLE `worker_engine_invocations`;

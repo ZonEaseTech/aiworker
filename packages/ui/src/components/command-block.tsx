@@ -4,7 +4,7 @@ import type { TranscriptActivityStatus } from './transcript-types'
 import { Badge, BadgeLabel } from '#components/badge'
 import { Button } from '#components/button'
 import { cn } from '#lib/utils'
-import { useEffect, useState } from 'react'
+import { useReducer, useState } from 'react'
 
 export interface CommandBlockProps {
   className?: string
@@ -16,24 +16,25 @@ export interface CommandBlockProps {
   title?: ReactNode
 }
 
+type ExpandedAction = boolean | ((current: boolean) => boolean)
+
+function expandedReducer(current: boolean, action: ExpandedAction): boolean {
+  return typeof action === 'function' ? action(current) : action
+}
+
 export function CommandBlock({
   className,
   command,
-  defaultExpanded = true,
+  defaultExpanded = false,
   language = 'shell',
   output,
   status = 'idle',
   title,
 }: CommandBlockProps) {
   const hasOutput = output !== undefined && output !== ''
-  const [expanded, setExpanded] = useState(status === 'failed' ? true : defaultExpanded)
-  const [wrapped, setWrapped] = useState(false)
+  const [expanded, dispatchExpanded] = useReducer(expandedReducer, defaultExpanded)
+  const [wrapped, setWrapped] = useState(true)
   const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    if (status === 'failed' && hasOutput)
-      setExpanded(true)
-  }, [hasOutput, status])
 
   async function copyCommand() {
     if (!navigator.clipboard)
@@ -53,7 +54,7 @@ export function CommandBlock({
       data-transcript-slot="command-block"
       data-transcript-command-status={status}
       className={cn(
-        'min-w-0 overflow-hidden rounded-md border border-border bg-muted/30 text-xs/relaxed',
+        'min-w-0 overflow-hidden rounded-md border border-border bg-muted/20 text-xs/relaxed shadow-none',
         status === 'failed' && 'border-destructive/40 bg-destructive/5',
         className,
       )}
@@ -91,7 +92,7 @@ export function CommandBlock({
                   size="sm"
                   aria-label={expanded ? 'Collapse command output' : 'Expand command output'}
                   aria-expanded={expanded}
-                  onClick={() => setExpanded(value => !value)}
+                  onClick={() => dispatchExpanded(value => !value)}
                 >
                   {expanded ? 'Collapse' : 'Expand'}
                 </Button>
@@ -104,7 +105,7 @@ export function CommandBlock({
         data-testid="command-command"
         data-transcript-wrapped={wrapped ? 'true' : 'false'}
         className={cn(
-          'overflow-x-auto p-3 font-mono text-foreground',
+          'no-scrollbar overflow-x-auto p-3 font-mono text-foreground',
           wrapped ? 'whitespace-pre-wrap break-words' : 'whitespace-pre',
         )}
         dir="ltr"
@@ -118,7 +119,7 @@ export function CommandBlock({
               data-testid="command-output"
               data-transcript-wrapped={wrapped ? 'true' : 'false'}
               className={cn(
-                'max-h-72 overflow-auto border-t border-border p-3 font-mono text-muted-foreground',
+                'no-scrollbar max-h-72 overflow-auto border-t border-border p-3 font-mono text-muted-foreground',
                 status === 'failed' && 'text-foreground',
                 wrapped ? 'whitespace-pre-wrap break-words' : 'whitespace-pre',
               )}

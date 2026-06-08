@@ -1,0 +1,127 @@
+import { access, chmod, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+
+import { OFFICIAL_SOUL_APPS } from '@zonease/aiworker-worker-runtime'
+
+import { ensureOfficialSoulDists as ensureOfficialSoulDistsFromSource } from '../../../scripts/official-soul-dist'
+
+const cliDir = resolve(import.meta.dirname, '..')
+const repoRoot = resolve(cliDir, '..', '..')
+const distDir = resolve(cliDir, 'dist')
+const binShimSrc = resolve(cliDir, 'scripts/aiworker-bin-shim.sh')
+const binShimDst = resolve(distDir, 'aiworker.js')
+
+const officialApps = OFFICIAL_SOUL_APPS.map(app => app.id)
+const officialAppsDst = resolve(distDir, 'official-apps')
+const publishedDescriptor = 'dist/soul.descriptor.json'
+
+export interface CopyOfficialAppsOptions {
+  appIds?: readonly string[]
+  ensureOfficialSoulDists?: () => Promise<unknown>
+  officialAppsRoot?: string
+  soulsRoot?: string
+}
+
+export async function buildPublishManifest(): Promise<void> {
+  const pkg = JSON.parse(await readFile(resolve(cliDir, 'package.json'), 'utf8'))
+
+  const stripped: Record<string, unknown> = {
+    name: pkg.name,
+    version: pkg.version,
+    description: pkg.description,
+    license: pkg.license,
+    type: pkg.type,
+    repository: pkg.repository,
+    homepage: pkg.homepage,
+    publishConfig: pkg.publishConfig,
+    bin: { aiworker: 'aiworker.js' },
+    // dist 必须含 worker drizzle migrations，storage 的 bundle fallback 会找 sibling drizzle/。
+    // dist 还含 Worker Web 静态资源和官方 Soul App 发布资源，local daemon 会在运行期托管或安装它们。
+    files: ['aiworker.js', 'aiworker-bun.js', 'README.md', 'drizzle/', 'web/', 'official-apps/'],
+    engines: pkg.engines,
+  }
+
+  await copyFile(binShimSrc, binShimDst)
+  await chmod(binShimDst, 0o755)
+
+  await writeFile(resolve(distDir, 'package.json'), `${JSON.stringify(stripped, null, 2)}\n`, 'utf8')
+
+  const readmeRoot = resolve(repoRoot, 'README.md')
+  try {
+    await access(readmeRoot)
+    await copyFile(readmeRoot, resolve(distDir, 'README.md'))
+  }
+  catch {
+    await writeFile(resolve(distDir, 'README.md'), `# ${pkg.name}\n\n${pkg.description}\n`, 'utf8')
+  }
+
+  // 把 packages/storage-sqlite/drizzle/worker 拷到 dist/drizzle/，让
+  // npm-installed bundle 在运行时能找到 migrations，无需访问仓库源码。
+  const drizzleSrc = resolve(repoRoot, 'packages/storage-sqlite/drizzle')
+  const drizzleDst = resolve(distDir, 'drizzle')
+  await copyDir(drizzleSrc, drizzleDst)
+
+  // 把 apps/worker-web/dist/worker 拷到 dist/web/，让 npm-installed CLI 能通过
+  // local daemon 托管 Worker Web。只复制生产 bundle，避免旧 hash chunks
+  // 从 apps/worker-web/dist 根目录漏进发布包。
+  const webDistSrc = resolve(repoRoot, 'apps/worker-web/dist')
+  const webDistDst = resolve(distDir, 'web')
+  await rm(webDistDst, { recursive: true, force: true })
+  const workerWebSrc = resolve(webDistSrc, 'worker')
+  await access(resolve(workerWebSrc, 'index.html'))
+  await copyDir(workerWebSrc, resolve(webDistDst, 'worker'))
+
+  // 把官方维护的 Soul descriptor 发布资源拷到 dist/official-apps/，让 npm-installed
+  // CLI 能通过 descriptor registry 安装/启用它们，无需访问源码仓库路径。
+  await copyOfficialApps()
+}
+
+export async function copyOfficialApps(options: CopyOfficialAppsOptions = {}): Promise<void> {
+  const appIds = options.appIds ?? officialApps
+  const destinationRoot = options.officialAppsRoot ?? officialAppsDst
+
+  await (options.ensureOfficialSoulDists ?? (() => ensureOfficialSoulDistsFromSource({ repoRoot })))()
+  await rm(destinationRoot, { recursive: true, force: true })
+  for (const appId of appIds) {
+    await copyOfficialApp(appId, {
+      officialAppsRoot: destinationRoot,
+      soulsRoot: options.soulsRoot,
+    })
+  }
+}
+
+export async function copyDir(src: string, dst: string, options: { skip?: (entryName: string, srcPath: string) => boolean } = {}): Promise<void> {
+  await mkdir(dst, { recursive: true })
+  const entries = await readdir(src, { withFileTypes: true })
+  for (const entry of entries) {
+    const srcPath = resolve(src, entry.name)
+    if (options.skip?.(entry.name, srcPath))
+      continue
+    const dstPath = resolve(dst, entry.name)
+    if (entry.isDirectory())
+      await copyDir(srcPath, dstPath, options)
+    else if (entry.isFile())
+      await copyFile(srcPath, dstPath)
+  }
+}
+
+export async function copyOfficialApp(appId: string, options: { officialAppsRoot?: string, soulsRoot?: string } = {}): Promise<void> {
+  const appSrc = resolve(options.soulsRoot ?? resolve(repoRoot, 'souls'), appId)
+  const appDst = resolve(options.officialAppsRoot ?? officialAppsDst, appId)
+  await rm(appDst, { recursive: true, force: true })
+  await copyDir(resolve(appSrc, 'dist'), resolve(appDst, 'dist'), { skip: shouldSkipOfficialAppResource })
+  await access(resolve(appDst, publishedDescriptor))
+}
+
+export function shouldSkipOfficialAppResource(entryName: string, srcPath = ''): boolean {
+  const normalizedSrcPath = srcPath.replaceAll('\\', '/')
+  return entryName === 'node_modules'
+    || entryName.endsWith('.spec.ts')
+    || entryName.endsWith('.spec.tsx')
+    || entryName.endsWith('.test.ts')
+    || entryName.endsWith('.test.tsx')
+    || normalizedSrcPath.includes('/host-adapter/')
+}
+
+if (import.meta.main)
+  await buildPublishManifest()

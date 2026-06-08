@@ -1,4 +1,4 @@
-import type { ClipboardEvent, FormEvent, KeyboardEvent, ReactNode } from 'react'
+import type { ClipboardEvent, FormEvent, KeyboardEvent, ReactNode, RefObject } from 'react'
 
 import { Alert, AlertDescription } from '#components/alert'
 import { Badge, BadgeLabel } from '#components/badge'
@@ -20,17 +20,7 @@ import {
   MailSend02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { useEffect, useId, useMemo, useState } from 'react'
-
-export type SessionComposerMaterialEncoding = 'base64' | 'utf8'
-
-export interface SessionComposerMaterial {
-  content: string
-  encoding: SessionComposerMaterialEncoding
-  mimeType: string
-  name: string
-  size: number
-}
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 export interface SessionComposerAttachmentItem {
   id: string
@@ -94,6 +84,11 @@ export interface SessionComposerProps {
   disabled?: boolean
   disabledReason?: ReactNode
   error?: ReactNode
+  /**
+   * Parent-owned request nonce for returning keyboard focus to the textarea
+   * after a workflow such as submit, remount, or route restore.
+   */
+  focusRequestToken?: number | string
   mentionOptions?: SessionComposerMentionOption[]
   mentionQuery?: SessionComposerMentionQuery
   onAddAttachmentFiles?: (files: File[]) => void
@@ -102,21 +97,21 @@ export interface SessionComposerProps {
   onMentionSelect?: (option: SessionComposerMentionOption) => void
   onRemoveAttachment?: (id: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
-  onTemplateChange?: (value: string) => void
+  onModeChange?: (value: string) => void
   onValueChange: (value: string) => void
   placeholder?: string
   secondaryActions?: SessionComposerAction[]
-  selectedTemplateId?: string
+  selectedModeId?: string
   statusAction?: SessionComposerAction
   submitAriaLabel: string
   submitDisabled?: boolean
   submitIcon?: ReactNode
   submitting?: boolean
   submitTitle?: string
-  templateClassName?: string
-  templateContentClassName?: string
-  templateLabel?: string
-  templateOptions?: SessionComposerOption[]
+  modeClassName?: string
+  modeContentClassName?: string
+  modeLabel?: string
+  modeOptions?: SessionComposerOption[]
   title?: ReactNode
   usage?: SessionComposerUsage
   value: string
@@ -130,23 +125,24 @@ export interface SessionComposerActionBarProps {
   attachmentTriggerLabel?: string
   disabled?: boolean
   onAddAttachments?: () => void
-  onTemplateChange?: (value: string) => void
+  onModeChange?: (value: string) => void
   secondaryActions?: SessionComposerAction[]
-  selectedTemplateId?: string
+  selectedModeId?: string
   statusAction?: SessionComposerAction
   submitAriaLabel: string
   submitIcon?: ReactNode
   submitting?: boolean
   submitTitle?: string
-  templateClassName?: string
-  templateContentClassName?: string
-  templateLabel?: string
-  templateOptions?: SessionComposerOption[]
+  modeClassName?: string
+  modeContentClassName?: string
+  modeLabel?: string
+  modeOptions?: SessionComposerOption[]
   usage?: SessionComposerUsage
 }
 
 const EMPTY_ATTACHMENTS: SessionComposerAttachmentItem[] = []
 const EMPTY_COMPOSER_ACTIONS: SessionComposerAction[] = []
+const EMPTY_MENTION_OPTIONS: SessionComposerMentionOption[] = []
 const EMPTY_COMPOSER_OPTIONS: SessionComposerOption[] = []
 
 export function SessionComposer({
@@ -160,7 +156,8 @@ export function SessionComposer({
   disabled = false,
   disabledReason,
   error,
-  mentionOptions = [],
+  focusRequestToken,
+  mentionOptions = EMPTY_MENTION_OPTIONS,
   mentionQuery,
   onAddAttachmentFiles,
   onAddAttachments,
@@ -168,26 +165,27 @@ export function SessionComposer({
   onMentionSelect,
   onRemoveAttachment,
   onSubmit,
-  onTemplateChange,
+  onModeChange,
   onValueChange,
   placeholder,
   secondaryActions = EMPTY_COMPOSER_ACTIONS,
-  selectedTemplateId,
+  selectedModeId,
   statusAction,
   submitAriaLabel,
   submitDisabled = false,
   submitIcon,
   submitting = false,
   submitTitle,
-  templateClassName,
-  templateContentClassName,
-  templateLabel,
-  templateOptions = EMPTY_COMPOSER_OPTIONS,
+  modeClassName,
+  modeContentClassName,
+  modeLabel,
+  modeOptions = EMPTY_COMPOSER_OPTIONS,
   title,
   usage,
   value,
   variant = 'large',
 }: SessionComposerProps) {
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null)
   const canSubmit = !disabled && !submitDisabled && !submitting && (allowSubmitWithoutText || value.trim().length > 0 || attachments.length > 0)
   const mentionListboxId = useId()
   const mentionTypeaheadOpen = mentionQuery?.active === true && mentionQuery.trigger === '$'
@@ -199,7 +197,11 @@ export function SessionComposer({
     () => filteredMentionOptions.filter(option => !option.disabled),
     [filteredMentionOptions],
   )
-  const [activeMentionOptionIndex, setActiveMentionOptionIndex] = useState(0)
+  const enabledMentionOptionKey = enabledMentionOptions.map(option => option.id).join('\0')
+  const [activeMentionOptionState, setActiveMentionOptionState] = useState({ index: 0, optionKey: '' })
+  const activeMentionOptionIndex = activeMentionOptionState.optionKey === enabledMentionOptionKey
+    ? activeMentionOptionState.index
+    : 0
   const activeMentionOption = mentionTypeaheadOpen
     ? enabledMentionOptions[activeMentionOptionIndex] ?? enabledMentionOptions[0]
     : undefined
@@ -208,8 +210,10 @@ export function SessionComposer({
     : undefined
 
   useEffect(() => {
-    setActiveMentionOptionIndex(0)
-  }, [enabledMentionOptions])
+    if (focusRequestToken === undefined || disabled || submitting)
+      return undefined
+    return scheduleSessionComposerInputFocus(composerInputRef)
+  }, [disabled, focusRequestToken, submitting])
 
   return (
     <form
@@ -236,8 +240,8 @@ export function SessionComposer({
       <InputGroup
         data-session-slot="composer-field"
         className={cn(
-          'h-auto min-h-0 flex-col items-stretch overflow-hidden',
-          variant === 'large' && 'min-h-44',
+          'h-auto min-h-0 flex-col items-stretch overflow-hidden border-border bg-background shadow-none has-[[data-slot=input-group-control]:focus-visible]:!border-border has-[[data-slot=input-group-control]:focus-visible]:!ring-0 dark:bg-background',
+          variant === 'large' && 'min-h-24',
           variant === 'panel' && 'min-h-0 flex-1',
         )}
         data-disabled={disabled || submitting ? true : undefined}
@@ -251,11 +255,13 @@ export function SessionComposer({
         />
         <SessionAttachmentList attachments={attachments} onRemoveAttachment={onRemoveAttachment} removeDisabled={disabled || submitting} />
         <InputGroupTextarea
+          ref={composerInputRef}
+          data-codex-composer="true"
           data-session-slot="composer-input"
           aria-label={ariaLabel}
           className={cn(
             'min-h-16 max-h-40 w-full',
-            variant === 'large' && 'min-h-32',
+            variant === 'large' && 'min-h-16',
             variant === 'compact' && 'min-h-12',
             variant === 'panel' && 'min-h-0 max-h-none flex-1 field-sizing-fixed',
           )}
@@ -267,14 +273,18 @@ export function SessionComposer({
           placeholder={placeholder}
           value={value}
           onChange={event => onValueChange(event.target.value)}
-          onKeyDown={event => handleMentionTypeaheadKeyDown(event, {
-            activeIndex: activeMentionOptionIndex,
-            enabledOptions: enabledMentionOptions,
-            isOpen: mentionTypeaheadOpen,
-            onDismiss: onMentionDismiss,
-            onSelect: onMentionSelect,
-            setActiveIndex: setActiveMentionOptionIndex,
-          })}
+          onKeyDown={(event) => {
+            if (handleSessionComposerSubmitKeyDown(event, { canSubmit }))
+              return
+            handleMentionTypeaheadKeyDown(event, {
+              activeIndex: activeMentionOptionIndex,
+              enabledOptions: enabledMentionOptions,
+              isOpen: mentionTypeaheadOpen,
+              onDismiss: onMentionDismiss,
+              onSelect: onMentionSelect,
+              setActiveIndex: index => setActiveMentionOptionState({ index, optionKey: enabledMentionOptionKey }),
+            })
+          }}
           onPaste={event => handleAttachmentPaste(event, onAddAttachmentFiles)}
         />
         {error || disabledReason
@@ -292,23 +302,49 @@ export function SessionComposer({
           attachmentTriggerLabel={attachmentTriggerLabel}
           disabled={!canSubmit}
           onAddAttachments={onAddAttachments}
-          onTemplateChange={onTemplateChange}
+          onModeChange={onModeChange}
           secondaryActions={secondaryActions}
-          selectedTemplateId={selectedTemplateId}
+          selectedModeId={selectedModeId}
           statusAction={statusAction}
           submitAriaLabel={submitAriaLabel}
           submitIcon={submitIcon}
           submitting={submitting}
           submitTitle={submitTitle}
-          templateClassName={templateClassName}
-          templateContentClassName={templateContentClassName}
-          templateLabel={templateLabel}
-          templateOptions={templateOptions}
+          modeClassName={modeClassName}
+          modeContentClassName={modeContentClassName}
+          modeLabel={modeLabel}
+          modeOptions={modeOptions}
           usage={usage}
         />
       </InputGroup>
     </form>
   )
+}
+
+function scheduleSessionComposerInputFocus(inputRef: RefObject<HTMLTextAreaElement | null>) {
+  let cancelled = false
+  const focusInput = () => {
+    if (cancelled)
+      return
+    const input = inputRef.current
+    if (!input || input.disabled)
+      return
+    input.focus({ preventScroll: true })
+  }
+
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    const frame = window.requestAnimationFrame(focusInput)
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(frame)
+    }
+  }
+
+  const timeout = setTimeout(focusInput, 0)
+  return () => {
+    cancelled = true
+    clearTimeout(timeout)
+  }
 }
 
 function SessionComposerTypeahead({
@@ -388,6 +424,31 @@ function filterSessionComposerMentionOptions(
 
 function getMentionOptionDomId(listboxId: string, option: SessionComposerMentionOption) {
   return `${listboxId}-option-${option.id.replace(/[^\w-]/g, '-')}`
+}
+
+function handleSessionComposerSubmitKeyDown(
+  event: KeyboardEvent<HTMLTextAreaElement>,
+  { canSubmit }: { canSubmit: boolean },
+): boolean {
+  if (event.key !== 'Enter' || event.shiftKey || (!event.metaKey && !event.ctrlKey))
+    return false
+
+  event.preventDefault()
+
+  if (!canSubmit)
+    return true
+
+  const form = event.currentTarget.form
+  if (!form)
+    return true
+
+  if (typeof form.requestSubmit === 'function') {
+    form.requestSubmit()
+    return true
+  }
+
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  return true
 }
 
 function handleMentionTypeaheadKeyDown(
@@ -480,25 +541,25 @@ export function SessionComposerActionBar({
   attachmentTriggerLabel,
   disabled = false,
   onAddAttachments,
-  onTemplateChange,
+  onModeChange,
   secondaryActions = EMPTY_COMPOSER_ACTIONS,
-  selectedTemplateId,
+  selectedModeId,
   statusAction,
   submitAriaLabel,
   submitIcon,
   submitting = false,
   submitTitle,
-  templateClassName,
-  templateContentClassName,
-  templateLabel = 'Proposal type',
-  templateOptions = EMPTY_COMPOSER_OPTIONS,
+  modeClassName,
+  modeContentClassName,
+  modeLabel = 'Mode',
+  modeOptions = EMPTY_COMPOSER_OPTIONS,
   usage,
 }: SessionComposerActionBarProps) {
-  const templateSelect = onTemplateChange && templateOptions.length > 0
-    ? { onChange: onTemplateChange, value: selectedTemplateId }
+  const modeSelect = onModeChange && modeOptions.length > 0
+    ? { onChange: onModeChange, value: selectedModeId }
     : null
-  const selectedTemplateOption = templateSelect
-    ? templateOptions.find(option => option.value === templateSelect.value)
+  const selectedModeOption = modeSelect
+    ? modeOptions.find(option => option.value === modeSelect.value)
     : null
 
   return (
@@ -530,21 +591,21 @@ export function SessionComposerActionBar({
       </ItemActions>
 
       <ItemActions data-session-slot="composer-action-main" className="min-w-0 flex-1 justify-end gap-2">
-        {templateSelect
+        {modeSelect
           ? (
-              <Select value={templateSelect.value ?? ''} onValueChange={templateSelect.onChange}>
+              <Select value={modeSelect.value ?? ''} onValueChange={modeSelect.onChange}>
                 <SelectTrigger
-                  aria-label={templateLabel}
-                  className={cn('max-w-full', templateClassName)}
+                  aria-label={modeLabel}
+                  className={cn('max-w-full', modeClassName)}
                   size="sm"
                 >
                   <span data-slot="select-value" className="flex min-w-0 items-center gap-1.5 truncate">
-                    {selectedTemplateOption?.label ?? templateLabel}
+                    {selectedModeOption?.label ?? modeLabel}
                   </span>
                 </SelectTrigger>
-                <SelectContent className={templateContentClassName} side="top" data-side="top">
+                <SelectContent className={modeContentClassName} side="top" data-side="top">
                   <SelectGroup>
-                    {templateOptions.map(option => (
+                    {modeOptions.map(option => (
                       <SelectItem key={option.value} value={option.value} textValue={typeof option.label === 'string' ? option.label : undefined}>
                         <ItemContent asChild className="min-w-0 gap-0.5">
                           <span>
@@ -621,14 +682,9 @@ export function SessionAttachmentList({
   removeDisabled?: boolean
 }) {
   const [previewAttachment, setPreviewAttachment] = useState<SessionComposerAttachmentItem | null>(null)
-
-  useEffect(() => {
-    setPreviewAttachment((current) => {
-      if (!current)
-        return null
-      return attachments.find(attachment => attachment.id === current.id && attachment.previewUrl === current.previewUrl) ?? null
-    })
-  }, [attachments])
+  const visiblePreviewAttachment = previewAttachment
+    ? attachments.find(attachment => attachment.id === previewAttachment.id && attachment.previewUrl === previewAttachment.previewUrl) ?? null
+    : null
 
   if (attachments.length === 0)
     return null
@@ -693,15 +749,15 @@ export function SessionAttachmentList({
           )
         })}
       </InputGroupAddon>
-      <Dialog open={Boolean(previewAttachment?.previewUrl)} onOpenChange={open => !open && setPreviewAttachment(null)}>
-        {previewAttachment?.previewUrl
+      <Dialog open={Boolean(visiblePreviewAttachment?.previewUrl)} onOpenChange={open => !open && setPreviewAttachment(null)}>
+        {visiblePreviewAttachment?.previewUrl
           ? (
-              <DialogContent className="max-w-3xl p-3" closeButtonLabel={previewAttachment.closePreviewLabel}>
-                <DialogTitle className="sr-only">{previewAttachment.previewTitle ?? previewAttachment.name}</DialogTitle>
-                <DialogDescription className="sr-only">{previewAttachment.name}</DialogDescription>
-                <img className="max-h-dvh w-full object-contain" src={previewAttachment.previewUrl} alt={previewAttachment.previewAlt ?? previewAttachment.name} />
+              <DialogContent className="max-w-3xl p-3" closeButtonLabel={visiblePreviewAttachment.closePreviewLabel}>
+                <DialogTitle className="sr-only">{visiblePreviewAttachment.previewTitle ?? visiblePreviewAttachment.name}</DialogTitle>
+                <DialogDescription className="sr-only">{visiblePreviewAttachment.name}</DialogDescription>
+                <img className="max-h-dvh w-full object-contain" src={visiblePreviewAttachment.previewUrl} alt={visiblePreviewAttachment.previewAlt ?? visiblePreviewAttachment.name} />
                 <ItemDescription asChild className="max-w-full truncate">
-                  <span>{previewAttachment.name}</span>
+                  <span>{visiblePreviewAttachment.name}</span>
                 </ItemDescription>
               </DialogContent>
             )
@@ -754,63 +810,4 @@ function SessionComposerStatusAction({ action }: { action: SessionComposerAction
   )
 }
 
-export async function createComposerAttachment(file: File): Promise<SessionComposerMaterial> {
-  const encoding: SessionComposerMaterialEncoding = isTextLikeFile(file) ? 'utf8' : 'base64'
-  const content = encoding === 'utf8'
-    ? await file.text()
-    : arrayBufferToBase64(await file.arrayBuffer())
-
-  return {
-    content,
-    encoding,
-    mimeType: file.type || 'application/octet-stream',
-    name: file.name,
-    size: file.size,
-  }
-}
-
-export function formatSessionAttachmentKind(file: Pick<File, 'name' | 'type'>): string {
-  const extension = file.name.includes('.') ? file.name.split('.').pop() : ''
-  return (extension || file.type.split('/').pop() || 'file').slice(0, 5).toUpperCase()
-}
-
-export function formatSessionAttachmentSize(size: number): string {
-  if (size < 1024)
-    return `${size} B`
-  if (size < 1024 * 1024)
-    return `${Math.round(size / 102.4) / 10} KB`
-  return `${Math.round(size / 1024 / 102.4) / 10} MB`
-}
-
-export function isSessionAttachmentImage(file: Pick<File, 'name' | 'type'>): boolean {
-  return file.type.startsWith('image/') || /\.(?:avif|gif|jpe?g|png|webp)$/i.test(file.name)
-}
-
-function isTextLikeFile(file: Pick<File, 'name' | 'type'>): boolean {
-  if (file.type.startsWith('text/'))
-    return true
-  if (/(?:json|javascript|typescript|xml|csv|yaml|yml|markdown|x-www-form-urlencoded)$/i.test(file.type))
-    return true
-  return /\.(?:cjs|css|csv|html|js|json|jsx|log|md|mdx|mjs|sql|svg|toml|ts|tsx|txt|xml|yaml|yml)$/i.test(file.name)
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  let binary = ''
-  const bytes = new Uint8Array(buffer)
-  for (const byte of bytes)
-    binary += String.fromCharCode(byte)
-  return btoa(binary)
-}
-
-export {
-  ManagedSessionComposer,
-  useSessionComposerDraft,
-} from './managed-session-composer'
-export type {
-  ManagedSessionComposerAttachment,
-  ManagedSessionComposerAttachmentLabels,
-  ManagedSessionComposerDraft,
-  ManagedSessionComposerProps,
-  UseSessionComposerDraftOptions,
-  UseSessionComposerDraftResult,
-} from './managed-session-composer'
+export type { SessionComposerMaterial, SessionComposerMaterialEncoding } from './session-composer-attachments'

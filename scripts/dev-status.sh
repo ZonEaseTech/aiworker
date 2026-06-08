@@ -8,6 +8,8 @@ AIWORKER_HOST="${AIWORKER_HOST:-127.0.0.1}"
 PORT="${PORT:-9217}"
 AIWORKER_WEB_PORT="${AIWORKER_WEB_PORT:-5173}"
 AIWORKER_API_URL="${AIWORKER_API_URL:-http://${AIWORKER_HOST}:${PORT}}"
+AIWORKER_WORKER_MANIFEST="${AIWORKER_WORKER_MANIFEST:-${AIWORKER_HOME}/dev-worker.json}"
+AIWORKER_WORKER_WEB_TMUX_SESSION="${AIWORKER_WORKER_WEB_TMUX_SESSION:-aiworker-vite-worker}"
 
 export AIWORKER_HOME
 
@@ -31,6 +33,14 @@ for port in "$PORT" "$AIWORKER_WEB_PORT"; do
 done
 
 echo
+echo "[dev:status] tmux:"
+if tmux has-session -t "$AIWORKER_WORKER_WEB_TMUX_SESSION" 2>/dev/null; then
+  echo "  $AIWORKER_WORKER_WEB_TMUX_SESSION: running"
+else
+  echo "  $AIWORKER_WORKER_WEB_TMUX_SESSION: missing"
+fi
+
+echo
 echo "[dev:status] installed apps:"
 format_apps() {
   bun -e '
@@ -44,10 +54,17 @@ if (apps.length === 0) {
   process.exit(0)
 }
 for (const app of apps) {
-  const prefix = app.mountedContribution?.apiRoutePrefix ?? "no mounted api"
-  console.log(`  ${app.appId}: ${app.status}, health=${app.healthStatus}, api=${prefix}`)
+  console.log(`  ${app.appId}: ${app.status}, health=${app.healthStatus}, api=no app api`)
 }
 '
 }
 
-bun apps/cli/src/aiworker.ts app list | format_apps
+bun apps/worker-cli/src/aiworker.ts app list | format_apps
+
+echo
+echo "[dev:status] manifest:"
+if [[ -f "$AIWORKER_WORKER_MANIFEST" ]]; then
+  cat "$AIWORKER_WORKER_MANIFEST"
+else
+  echo "  $AIWORKER_WORKER_MANIFEST: missing"
+fi

@@ -1,235 +1,292 @@
+<div align="center">
+
 # AIWorker
 
-AIWorker 正在收敛为 **Local Shell + Engine Bridge for Soul Apps**。
+**Run an autonomous, local-first AI worker — bind one Soul template to a native engine and get a self-hosting runtime with its own web Workbench.**
 
-它不做另一个 developer engine、admin dashboard、远程控制面、通用平台或通用 agent runtime。
-Host 只负责启动 Soul App、提供本地 Web/CLI/daemon 壳、定位 worker/workspace/session、挂载
-app-owned surface，并为 session 准备 cwd/context/engine 调用入口。业务对象、业务输出、
-确认动作和历史记录由 Soul App 自己拥有。
+[![npm version](https://img.shields.io/npm/v/@zonease/aiworker-cli?logo=npm&label=npm)](https://www.npmjs.com/package/@zonease/aiworker-cli)
+[![lint](https://github.com/ZonEaseTech/aiworker/actions/workflows/lint.yml/badge.svg)](https://github.com/ZonEaseTech/aiworker/actions/workflows/lint.yml)
+[![release](https://github.com/ZonEaseTech/aiworker/actions/workflows/release.yml/badge.svg)](https://github.com/ZonEaseTech/aiworker/actions/workflows/release.yml)
+[![license](https://img.shields.io/npm/l/@zonease/aiworker-cli?color=blue)](./LICENSE)
+[![node](https://img.shields.io/node/v/@zonease/aiworker-cli?logo=node.js&logoColor=white)](https://github.com/ZonEaseTech/aiworker/blob/main/package.json)
+[![last commit](https://img.shields.io/github/last-commit/ZonEaseTech/aiworker?logo=git&logoColor=white)](https://github.com/ZonEaseTech/aiworker/commits)
+[![built with Bun](https://img.shields.io/badge/built%20with-Bun-000000?logo=bun&logoColor=white)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+
+**English** · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md)
+
+</div>
+
+> [!NOTE]
+> **Status: `0.x` preview.** v1 ships the **standalone Worker** only. The Host control plane is **Phase 2** and is never on the runtime hot path. The architecture below is the canonical contract — see [`docs/architecture.md`](./docs/architecture.md).
+
+AIWorker is a **worker-centric, local-first AI runtime**. A **Worker** is an autonomous, CLI-first process that runs one **Soul** through a **native engine** (Codex / Claude Code), owns engine launch, and serves its own web **Workbench**. No cloud backend, no control server required — one command brings up a self-hosting AI worker on your machine.
+
+- 🧍 **Worker-centric** — each Worker is an autonomous, CLI-first runtime bound to one Soul *for life*. It owns engine launch and runs fully standalone, with Host absent.
+- 🧩 **Soul = template** — a descriptor-only bundle of engine assets (workspace files, skills, native MCP files, entry files like `AGENTS.md` / `CLAUDE.md`). No UI, no app-owned API, no lock-in. Author once, project to any supported engine.
+- 🖥️ **Owns its Workbench** — the Worker renders its own web UI (workspaces, sessions, chat). No mounted micro-app, no Soul-provided UI.
+- 🔌 **Native engine bridge** — drives the engine through a structured bridge (process management, redaction, cancel, reattach, reconcile). The engine keeps model calls, tool loops, approval, sandbox, and auth.
+- 🔒 **Local-first & secret-safe** — one local daemon, SQLite metadata, and a strict redaction boundary: secrets never land in descriptor, DB, logs, receipts, or UI.
+- ⚡ **Zero-config start** — `bunx @zonease/aiworker-cli start` bootstraps the DB, the bundled Freeform Soul, and the Worker, then opens the Workbench.
+
+---
+
+## Table of contents
+
+- [What is AIWorker?](#what-is-aiworker)
+- [Who is it for?](#who-is-it-for)
+- [Mental model](#mental-model)
+- [Architecture](#architecture)
+- [Quickstart](#quickstart)
+- [First run](#first-run)
+- [Author a Soul](#author-a-soul)
+- [Monorepo layout](#monorepo-layout)
+- [Development](#development)
+- [Testing & release gates](#testing--release-gates)
+- [Roadmap](#roadmap)
+- [Documentation map](#documentation-map)
+- [Contributing](#contributing)
+- [License](#license)
+
+## What is AIWorker?
+
+Most AI tooling is either a developer IDE/agent or a cloud platform you rent. AIWorker is neither. It is the **runtime layer** that turns *one engine + one template* into a standalone, self-hosting **AI worker** you own and run locally.
+
+The separation of concerns is strict and is the whole point:
+
+| Layer | Owns | Does **not** own |
+| --- | --- | --- |
+| **Worker** | local daemon, Workbench web, workspaces, sessions, projection, engine launch, storage, redaction | model calls, tool loops, approval, sandbox |
+| **Soul** (template) | engine assets: workspace files, skills, native MCP, entry files | UI, API, capabilities, domain backend |
+| **Native engine** | model calls, tool loops, approval, sandbox, auth, native sessions | locating workspaces, persisting Worker state |
+| **Host** *(Phase 2)* | distribution, management, permission allocation, connector authorization | session, invocation, projection, engine processes, secrets |
+
+A Worker never depends on Host to run, and `worker-*` packages never import `host-*` packages — the autonomy boundary is enforced in code.
+
+## Who is it for?
+
+AIWorker is built for people who want a **local, self-contained AI worker** for vertical and organizational workflows — **not** another developer IDE or rented agent platform.
+
+Author a Soul for any vertical and the Worker runs it standalone:
+
+- **PM** — PRD, decision record, roadmap slice, status report
+- **Quality** — test plan, regression matrix, defect evidence, release gate
+- **People ops** — candidate screen, interview brief, role rubric, hiring risk
+- **DevOps** — deployment checklist, incident review, runbook update, capacity summary
+- **finance / legal / ops** — domain review, templated output, evidence chains
+
+v1 ships one acceptance Soul, **`aiworker-freeform`**, that proves the full standalone loop. HR and QA Souls follow later as descriptor-producing templates.
+
+## Mental model
+
+Five nouns, one direction:
 
 ```text
-AIWorker -> Soul App -> workspace -> session -> app-owned work
+Worker → Workbench → workspace → session (chat) → native engine
 ```
 
-当前架构合同见 `docs/architecture.md`，其中 `Constraint Registry` 是 Host / Soul App /
-protocol / data / engine / UI / documentation 的硬约束源头。旧北极星文档已经移除，避免开发入口
-被拆成多套叙事。
-
-第一原则：Host 是 shell / locator / mount / bridge，不是 Soul App 的上层配置中心。Host-owned
-Worker Configuration 只到 Soul worker 级别；同一 Soul App 的不同 worker 必须彼此隔离。
-workspace/session 只作为不透明 locator/context 传给 mounted Soul surface 或 engine bridge，
-不能成为 Host 配置层。Soul 通过 manifest/protocol descriptor 告知 Host 可泛化消费的选项；
-领域配置 UI、字段和保存逻辑属于 Soul-owned micro-app 或 app-owned API。
-
-## 文档地图
-
-- `docs/architecture.md`：当前架构合同。
-- `docs/cli.md`：当前 CLI 命令参考。
-- `docs/deployment.md`：local daemon、packaged CLI 和 operator 运行手册。
-- `docs/executor-engines.md`：外部 engine 安装、登录和 readiness 说明。
-- `docs/soul-app-developer.md`：冻结的 Soul App 命令与目录速查，不是架构合同。
-
-## Developer Route
-
-| 我要修改 | 从这里开始 |
+| Concept | What it is |
 | --- | --- |
-| Host daemon/API、registry、local enablement、storage metadata | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
-| Host Web Shell、Settings、Worker Configuration、mounted workbench | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md`，前端实现再用 `/pma-web`；shadcn/ui 相关改动再用 `.agents/skills/shadcn/SKILL.md` |
-| CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/cli.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
-| 官方 HR/QA Soul App、manifest、standalone、Host mounted、artifact/profile/review/lesson | `docs/architecture.md#constraint-registry` + `.agents/skills/aiworker-soul-app-dev/SKILL.md`；命令速查见 `docs/soul-app-developer.md` |
-| 新第三方 Soul App | `docs/architecture.md#constraint-registry` + `.agents/skills/aiworker-soul-app-dev/SKILL.md`；创建命令用 `aiworker app create`，目录/命令速查见 `docs/soul-app-developer.md` |
-| Host/Soul App 边界、shared protocol、manifest-declared adapter/context | 先读 `docs/architecture.md#constraint-registry`，判断 ownership 后进入 Host 或 Soul App skill |
+| **Worker** | An autonomous, CLI-first runtime, bound to exactly one Soul when created (fixed for its whole life). Starts its own local daemon, serves its Workbench, owns projection and the engine bridge, launches and observes the native engine, and exposes a local broker API. |
+| **Soul** | The human-facing name for a **template** — a descriptor-only bundle of engine assets. It has no UI, no API, no capability layer. Installed via `dist/soul.descriptor.json`. |
+| **Workbench** | The Worker's own web UI (in `apps/worker-web`, built from `packages/ui`). Manages workspaces, the sessions nested under each, the session chat, and the Worker's own configuration. |
+| **Workspace** | A business scope under a Worker (e.g. a candidate, a release, an incident). Its root is derived under the Worker home — not an arbitrary repo path. |
+| **Session** | A chat — a composer and a transcript — over one workspace. Lifecycle: `active │ archived │ deleted`. The first composer message becomes the session's first invocation. |
+| **Engine invocation** | Execution/process state owned by the Worker, kept separate from session lifecycle. Follow-up is session-level: `POST /api/sessions/:sessionId/invocations`. |
+| **Engine bridge** | A B+ structured native bridge: per-engine adapters (Codex, Claude Code), process management, redacted raw chunks, normalized events, opaque session refs, cancel, reattach, reconcile. |
 
-## 为什么改成这个形态
+## Architecture
 
-开发领域已经有成熟的一线 engine。AIWorker 不应该默认以 developer 为中心，更不应该把自己
-做成完整开发平台。Developer Soul 可以存在，但它应服务 code review、release evidence、
-repo report、handoff、risk audit 等 supporting workflows。
+```mermaid
+flowchart LR
+  subgraph Worker["Worker (autonomous, standalone)"]
+    direction LR
+    CLI["aiworker CLI"] --> D["Local daemon<br/>broker API"]
+    WB["Web Workbench"] --> D
+    D --> RT["worker-runtime"]
+    RT -->|projection| PJ["engine assets<br/>(skills · MCP · entry files)"]
+    RT --> BR["Engine bridge<br/>(B+ structured)"]
+  end
+  SOUL["Soul = template<br/>descriptor-only"] -.->|bound for life| RT
+  BR --> ENG[["Native engine<br/>Codex / Claude Code"]]
+  HOST["Host control plane"] -. "Phase 2 · over-the-wire only" .-> Worker
 
-AIWorker 的主要价值在更需要组织沉淀的垂直职能：
-
-- HR：candidate screen、interview brief、role rubric、people profile、hiring risk；
-- PM：PRD、decision record、roadmap slice、status report；
-- QA：test plan、regression matrix、defect evidence、release gate；
-- DevOps：deployment checklist、incident review、runbook update、capacity summary；
-- finance/legal/ops：各自领域的审查、模板化输出、证据链和复用经验。
-
-## Soul App 模型
-
-Soul App 是可独立部署、也可挂载到 AIWorker Host 的垂直产品单元。例如 `aiworker-hr`
-可以作为 HR-first 本地应用独立运行，也可以被 Host 挂载，与 `aiworker-qa` 等其他 Soul App
-共存在同一个 local daemon 中。
-
-```text
-Standalone:
-aiworker-hr -> app-local runtime/settings/storage -> HR workspace/session
-
-Host mounted:
-aiworker-host -> app registry -> manifest/protocol -> aiworker-hr / aiworker-qa
+  classDef p2 stroke-dasharray:4 4,opacity:0.6;
+  class HOST p2;
 ```
 
-两种模式应复用同一份 manifest、domain logic、artifact schema、review policy 和权限声明。
-Host 不 import 垂直 app 内部源码；Soul App 不直接控制 Host engine、connector、secret、DB 或
-全局 memory。
-
-## Host 的职责
-
-Host 是本地运行壳和 engine bridge，只负责：
-
-- start：发现、安装、启用、禁用、路由和启动 Soul App；
-- shell：提供 local daemon API、Web shell、CLI 入口和运行 shell 所需的本地设置；
-- locate：维护 Soul worker、workspace、session、selected engine 和本地路径上下文；
-- mount：解析 manifest 声明的 routes、micro-app surfaces、action descriptors 和 app-owned
-  local adapter；
-- bridge：为 session 准备 cwd、context files、selected engine metadata 和 invocation boundary；
-- metadata：保存 installed/enabled app state、workers、workspaces、sessions、routing protocol
-  cache、mounted surface references 和 platform file references。
-
-Host 不负责解释 HR profile、QA release verdict、artifact 内容、review verdict 或 lesson/memory
-的领域意义。它只能消费 Soul App 通过 manifest/protocol 暴露的 route、mounted UI、action
-descriptor、workspace context、session context 或 lightweight UI event；如果 app 没有暴露，
-Host 停止，不取、不猜、不补。
-
-Host left panel、header、Worker Configuration trigger/dialog shell 属于 Host-owned chrome。
-Worker Configuration 只保存 worker-scoped Host shell preference、worker overlay/local
-enablement 和 manifest-derived 泛化选项；它不是 Soul/App 全局设置页，也不是 workspace/session
-配置页。需要 workspace/session/domain 配置时，进入 Soul-owned micro-app 或 app-owned API。
-
-## Soul App 的职责
-
-Soul App 是领域主权方，负责：
-
-- 垂直领域 UI/API；
-- workspace type 与 session workflow；
-- capability prompt；
-- artifact schema、内容、生命周期与含义；
-- profile 组合；
-- review rubric 与 verdict 语义；
-- lesson/memory promotion 语义；
-- app-scoped storage content；
-- standalone shell；
-- Host mounted service entrypoints。
-
-例如 HR People Profile 应由 HR App 从候选人 artifact、面试 evidence、人工 review 和业务规则
-组合而成。Host 可以定位并展示 HR App 暴露的 profile view，但不应该知道 profile 如何合成。
-
-## 基础设施模型
-
-```text
-1 Host
-  -> 1 local daemon
-    -> N installed/enabled Soul Apps
-      -> N Soul workers
-        -> N workspaces/projects
-          -> N sessions
-            -> protocol-exposed views/actions/descriptors
-```
-
-- Host 是承载环境，不是垂直产品对象。
-- Local daemon 是唯一的本地控制面，负责 Web/API、SQLite、engine inventory、BYOK、
-  connectors、MCP、settings 和 app registry。
-- Worker 绑定一个 Soul App，并拥有该 worker 的 Host shell preference、capabilities 投影和
-  app-scoped namespaces；同一 Soul App 下不同 worker 的配置彼此隔离。
-- Workspace/project 是某个 worker 下的业务作用域，例如候选人、需求、release、incident 或
-  runbook。
-- Session 是 workspace 内持续上下文，也是 engine native session 的绑定点和接管点。
-- Engine invocation 只是内部审计对象；用户不创建、不维护 run。
+**Daemon topology is one daemon per Worker.** A Worker daemon hosts at most one active Worker and carries zero fleet/Host awareness — a passive local server that serves its own CLI, Workbench web, and configuration. In Phase 2 the Host frames the Worker's own Workbench as a sandboxed micro-app over HTTP and drives a transport-agnostic control contract; the Worker stays pure and behaves identically whether a Host is present or not.
 
 ## Quickstart
 
-目标 operator 路径应是一个本地 daemon 生命周期和一个 Web URL，而不是要求用户分别理解 API
-dev server 与 Web dev server。
+> **Prerequisites:** [Bun](https://bun.sh) `>=1.1` (recommended) or Node.js `>=20.19`. A native engine ([Codex](https://github.com/openai/codex) or [Claude Code](https://www.anthropic.com/claude-code)) on `PATH` for the `local-cli` path; without one, the BYOK fallback applies.
 
-目标 source-checkout 调试入口：
-
-```bash
-bun run dev
-```
-
-目标 packaged/npm preview 入口：
+Run the packaged CLI — it bootstraps everything and opens the Workbench:
 
 ```bash
-bunx @zonease/aiworker-cli daemon start --port 9217
-# or, if Bun is already available for the shim:
-npx @zonease/aiworker-cli daemon start --port 9217
+bunx @zonease/aiworker-cli start --port 9217
+# or, using npm's runner:
+npx @zonease/aiworker-cli start --port 9217
 ```
 
-这是 `0.x preview`：Host Web/API 启动、worker DB migrations，以及官方 HR/QA Soul App
-bootstrap 需要能从 npm package 直接工作。HR/QA 业务 workflow、第三方 Soul App authoring、
-standalone SDK/runtime npm publication 仍是 preview surface，不是 1.0 承诺。
+`aiworker start` ensures a single active Worker bound to the bundled Freeform Soul (installing the descriptor and creating the Worker when none exists, reusing it otherwise), starts the local daemon in the background, and opens the Workbench URL.
 
-Source checkout 调试也走同一个 daemon；先构建一次 Web 静态资源，然后以前台 daemon 托管 Web/API：
+<details>
+<summary><b>Other lifecycle commands</b></summary>
 
 ```bash
-bun run --filter '@zonease/aiworker-web' build
-bun apps/cli/src/aiworker.ts daemon foreground --port 9217
+aiworker daemon start --port 9217        # same service, background, no browser
+aiworker daemon foreground --port 9217   # same service, current process, no browser
+aiworker daemon status                   # show daemon status
+aiworker daemon logs --tail 100          # tail daemon logs
+aiworker daemon restart --port 9217      # ensure Worker + restart service
+aiworker daemon stop                     # stop the daemon
+aiworker doctor                          # inspect local daemon readiness
 ```
 
-源码态默认使用 `~/.aiworker-dev` 作为开发 profile；发布包和 npm preview
-默认仍使用 `~/.aiworker`。两种入口都可以通过 `AIWORKER_HOME=<path>` 显式覆盖。
-`aiworker dev` 仅保留为 source-checkout compatibility alias；日常 operator
-lifecycle 使用 `daemon start|stop|restart|status|logs`。
+All service-start commands are idempotent at the Worker readiness layer. The published path uses one service port; `5173` only belongs to the source-checkout Vite dev server.
 
-打开 Web 后，首屏应帮助用户 install/enable 官方或第三方 Soul App，再创建 Soul worker 与
-workspace/session。Settings 由明确 settings button 打开，支持 Local CLI / BYOK、engine
-scan/test、connectors、MCP、language、appearance、autosave 和 Soul App 管理。
+</details>
 
-## 仓库结构
+## First run
+
+After the Workbench opens, the standalone Worker already has a Freeform-bound active Worker — there is **no** create-Worker or Soul-catalog UI. The empty states *are* the first-run experience:
+
+1. An empty Workbench prompts you to **create your first workspace** by name (its root is derived under the Worker home).
+2. A workspace with no session prompts you to **start your first session**.
+3. The session opens an empty chat; your **first message** becomes the first engine invocation. Follow-ups stay on the same session.
+
+Settings open from an explicit button and cover Local CLI / BYOK, engine scan & test, connectors, MCP, language, appearance, and autosave.
+
+`AIWORKER_HOME` defaults to `~/.aiworker` for the packaged CLI and `~/.aiworker-dev` for source checkouts; override either with `AIWORKER_HOME=<path>`.
+
+## Author a Soul
+
+A Soul is SDK-authored and CLI-first. The 30-second path:
+
+```bash
+aiworker soul create my-soul                 # scaffolds ./my-soul (and builds its descriptor)
+cd my-soul
+aiworker soul build                          # rebuild after edits → dist/soul.descriptor.json
+aiworker app install dist/soul.descriptor.json
+aiworker worker create --app my-soul         # bind a Worker to the Soul
+```
+
+A Soul is a template of **engine assets only** — no `web/`, no `api/`, no capabilities. The SDK discovers the common authoring layout by convention:
+
+```text
+my-soul/
+  soul.config.ts            # identity + explicit overrides
+  engine/
+    workspace/              # projected workspace files
+    skills/                 # projected skills
+    mcp/
+      codex/config.toml     # native MCP per engine target
+      claude-code/.mcp.json
+```
+
+See [`docs/soul-authoring.md`](./docs/soul-authoring.md) for the full authoring contract, and [`packages/soul-sdk`](./packages/soul-sdk) for the SDK surface.
+
+## Monorepo layout
 
 ```text
 apps/
-  api/            local daemon API and Worker Web host
-  cli/            aiworker CLI and packaged local daemon entry
-  web/            Host Web Shell and worker workbench
-  aiworker-hr/    official HR Soul App
-  aiworker-qa/    official QA Soul App
+  worker-cli/    aiworker CLI + packaged local daemon entry
+  worker-web/    the Worker-owned Workbench web (workspaces, sessions, chat)
+  host-cli/      Phase 2 control-plane shell  (dormant stub)
+  host-web/      Phase 2 control-plane shell  (dormant stub)
+
+souls/
+  aiworker-freeform/   v1 strong-acceptance descriptor Soul
+
 packages/
-  core/              local runtime, Host services and engine adapters
-  storage-sqlite/    worker.db schema, migrations and repositories
-  fs-layout/         AIWORKER_HOME, worker and workspace path helpers
-  shared/            shared schemas, Host/Soul App protocol and utilities
-  ui/                shadcn-managed shared UI primitives and theme variables
-  soul-app-sdk/      public SDK for Soul App authors
-  soul-app-runtime/  standalone/mounted Soul App runtime harness
+  worker-runtime/           Worker locator/runtime orchestration + engine adapters
+  worker-daemon/            local broker API + Workbench web host
+  soul-descriptor/          descriptor format + validation (soul/v1)
+  soul-sdk/                 Soul authoring SDK + descriptor build
+  engine-bridge/            B+ native engine bridge (adapters, process, events, redaction)
+  engine-projection/        materialize engine-facing files from descriptor + overlays
+  storage-sqlite/           worker.db schema, migrations, repositories
+  fs-layout/                AIWORKER_HOME / worker / workspace path helpers
+  ui/                       shadcn-managed shared UI primitives + theme
+  host-control/             Phase 2 control plane            (dormant stub)
+  worker-control-protocol/  Phase 2 Host↔Worker control contract (dormant stub)
 ```
 
-## 开发命令
+> Boundaries are load-bearing: `apps/*` are runnable product shells, `souls/*` are descriptor-producing templates, and package names are plane-prefixed (`worker-*` is the autonomous runtime, `host-*` is the dormant Phase 2 control plane). `worker-*` packages must not import `host-*` packages.
 
-安装依赖：
+## Development
 
 ```bash
-bun install
+bun install        # install workspace dependencies
+bun run dev        # source-checkout dev: build web once, foreground the daemon
 ```
 
-常用检查：
+<details>
+<summary><b>Common checks & focused builds</b></summary>
 
 ```bash
-bun run typecheck
-bun run lint
-bun run test
-bun run check
-bun run build
-```
+bun run typecheck   # all workspaces
+bun run lint        # eslint + boundary + ui + docs checks
+bun run test        # all workspace tests
+bun run check       # typecheck + lint
+bun run build       # worker-daemon + worker-web + CLI bundle
 
-聚焦命令：
-
-```bash
-bun run --filter '@zonease/aiworker-core' test
-bun run --filter '@zonease/aiworker-api' build
-bun run --filter '@zonease/aiworker-web' build
+# focused
+bun run --filter '@zonease/aiworker-worker-runtime' test
+bun run --filter '@zonease/aiworker-worker-web' build
 bun run --filter '@zonease/aiworker-cli' build:bundle
 ```
 
-## 当前路线
+Source checkout without the `dev` script — build the web assets once, then foreground the daemon:
 
-当前重构阶段重新排优先级：
+```bash
+bun run --filter '@zonease/aiworker-worker-web' build
+bun apps/worker-cli/src/aiworker.ts daemon foreground --port 9217
+```
 
-1. 架构入口收敛为 `AGENTS.md` + `docs/architecture.md`；
-2. Host 作为平台定位、能力壳、安装启用、安全设置和 shell contract；
-3. Soul App 作为 app-level standalone + Host mounted 垂直产品；
-4. 官方 HR/QA Soul App 通过快捷 install/enable 进入 Host，而不是被 Host 内置；
-5. Worker Web 首屏围绕 Soul App、worker、workspace、session 和 app-owned workbench；
-6. Settings 管理 Local CLI / BYOK、engine scan/test、connectors、MCP、language、
-   appearance、autosave 和 installed Soul Apps；
-7. Host/Soul protocol 继续收敛 route、action descriptor、workspace/session context、event 和 mount mode；
-8. Developer onboarding、验证、发布证据和第三方 app authoring 继续完善。
+</details>
+
+## Testing & release gates
+
+Contract tests are the primary guardrail — focused static, unit, package, CLI, and browser proofs over large historical E2E. The aggregator is:
+
+```bash
+bun run release:check
+```
+
+which runs, in order: `docs:check` → `test:contracts` → `test:protocol` → `test:cli` → `test:browser:freeform` → `typecheck` → `lint` → `build` → the release smokes (`dist-release`, `standalone-release`, `standalone-runtime`, `npm-package`) → `test` → `check`. The v1 browser proof is Freeform-only and standalone. See [`docs/testing.md`](./docs/testing.md).
+
+## Roadmap
+
+| Phase | Scope |
+| --- | --- |
+| **v1 — now** | Standalone Worker · `aiworker-freeform` Soul · worker-owns-Workbench · native engine bridge (Codex / Claude Code) · zero-config `aiworker start` · BYOK fallback |
+| **Phase 2 — Host control plane** | Optional distributor / manager / permission allocator / connector authorizer · micro-app framing over HTTP · transport-agnostic control contract. Never on the runtime hot path. |
+| **Later** | HR, QA, and more vertical Souls re-authored as descriptor-producing templates |
+
+## Documentation map
+
+The five canonical docs are the single source of truth; older notes are evidence only.
+
+| Doc | Owns |
+| --- | --- |
+| [`AGENTS.md`](./AGENTS.md) | Agent bootstrap, product/monorepo/protocol/runtime boundaries |
+| [`docs/architecture.md`](./docs/architecture.md) | Architecture contract, ownership, monorepo boundary, migration rules |
+| [`docs/protocol.md`](./docs/protocol.md) | Descriptor v1, broker routes, Phase 2 control contract |
+| [`docs/runtime.md`](./docs/runtime.md) | Session lifecycle, engine invocation, bridge, projection, secret boundary |
+| [`docs/soul-authoring.md`](./docs/soul-authoring.md) | SDK authoring, convention discovery, build output, native MCP |
+| [`docs/testing.md`](./docs/testing.md) | Coverage ledger, guardrails, release gates, browser proof scope |
+
+## Contributing
+
+Issues and PRs are welcome. Before opening a PR:
+
+1. Read [`AGENTS.md`](./AGENTS.md) and the relevant canonical doc — the docs are authority; code follows them.
+2. Keep changes scoped to the current phase and add focused contract tests for the touched surface.
+3. Run `bun run check` (and `bun run release:check` for runtime-affecting changes) before pushing.
+4. Default to Chinese for commits, comments, and PR descriptions unless you have a reason not to.
+
+## License
+
+[MIT](./LICENSE) © ZonEase Tech

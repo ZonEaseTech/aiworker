@@ -11,7 +11,7 @@ echo "[dev:apps] AIWORKER_HOME=$AIWORKER_HOME"
 
 run_cli() {
   local output
-  if ! output="$(bun apps/cli/src/aiworker.ts "$@" 2>&1)"; then
+  if ! output="$(bun apps/worker-cli/src/aiworker.ts "$@" 2>&1)"; then
     echo "$output"
     exit 1
   fi
@@ -29,17 +29,12 @@ if (apps.length === 0) {
   process.exit(0)
 }
 for (const app of apps) {
-  const prefix = app.mountedContribution?.apiRoutePrefix ?? "no mounted api"
-  console.log(`  ${app.appId}: ${app.status}, health=${app.healthStatus}, api=${prefix}`)
+  console.log(`  ${app.appId}: ${app.status}, health=${app.healthStatus}, api=no app api`)
 }
 '
 }
 
-run_cli app install apps/aiworker-hr/soul-app.manifest.json
-run_cli app enable aiworker-hr
-
-run_cli app install apps/aiworker-qa/soul-app.manifest.json
-run_cli app enable aiworker-qa
+run_cli app bootstrap official
 
 echo "[dev:apps] enabled apps:"
-bun apps/cli/src/aiworker.ts app list | format_apps
+bun apps/worker-cli/src/aiworker.ts app list | format_apps

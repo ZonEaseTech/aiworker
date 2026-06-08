@@ -1,0 +1,43 @@
+{
+  "name": "@zonease/aiworker-worker-daemon",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./bootstrap": {
+      "types": "./src/modes/worker.ts",
+      "import": "./src/modes/worker.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "dev": "bun --watch src/dev.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --timeout=15000"
+  },
+  "dependencies": {
+    "@hono/zod-openapi": "^0.19.6",
+    "@scalar/hono-api-reference": "^0.5.180",
+    "@zonease/aiworker-engine-bridge": "workspace:*",
+    "@zonease/aiworker-engine-projection": "workspace:*",
+    "@zonease/aiworker-fs-layout": "workspace:*",
+    "@zonease/aiworker-soul-descriptor": "workspace:*",
+    "@zonease/aiworker-storage-sqlite": "workspace:*",
+    "@zonease/aiworker-worker-control-protocol": "workspace:*",
+    "@zonease/aiworker-worker-runtime": "workspace:*",
+    "consola": "^3.4.2",
+    "drizzle-orm": "^0.44.1",
+    "hono": "^4.7.7",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.13",
+    "typescript": "^5.8.3"
+  }
+}

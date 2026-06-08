@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
+import type { FormEvent } from 'react'
+
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ManagedSessionComposer, SessionComposer } from './session-composer'
+import { ManagedSessionComposer } from './managed-session-composer'
+import { SessionComposer } from './session-composer'
 
 afterEach(() => cleanup())
 
@@ -50,6 +53,33 @@ describe('sessionComposer', () => {
 
     expect(screen.queryByRole('button', { name: /\$ skill/i })).toBeNull()
     expect(screen.queryByRole('combobox')).toBeNull()
+  })
+
+  it('renders the large chat composer as a solid, lower-height input instead of a translucent panel', () => {
+    const { container } = render(
+      <SessionComposer
+        ariaLabel="Session input"
+        onSubmit={vi.fn()}
+        onValueChange={vi.fn()}
+        submitAriaLabel="Start"
+        value=""
+        variant="large"
+      />,
+    )
+
+    const field = container.querySelector('[data-session-slot="composer-field"]')
+    const textarea = container.querySelector('[data-session-slot="composer-input"]')
+    expect(field?.className).toContain('bg-background')
+    expect(field?.className).toContain('border-border')
+    expect(field?.className).toContain('shadow-none')
+    expect(field?.className).toContain('has-[[data-slot=input-group-control]:focus-visible]:!border-border')
+    expect(field?.className).toContain('has-[[data-slot=input-group-control]:focus-visible]:!ring-0')
+    expect(field?.className).toContain('min-h-24')
+    expect(field?.className).not.toContain('bg-input/')
+    expect(field?.className).not.toContain('shadow-sm')
+    expect(field?.className).not.toContain('min-h-44')
+    expect(textarea?.className).toContain('min-h-16')
+    expect(textarea?.className).not.toContain('min-h-32')
   })
 
   it('navigates active mention options from the textarea and skips disabled options', () => {
@@ -101,6 +131,96 @@ describe('sessionComposer', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it('submits the form from the textarea with Cmd+Enter or Ctrl+Enter only', () => {
+    const onSubmit = vi.fn((event: FormEvent<HTMLFormElement>) => event.preventDefault())
+
+    render(
+      <SessionComposer
+        ariaLabel="Session input"
+        onSubmit={onSubmit}
+        onValueChange={vi.fn()}
+        submitAriaLabel="Start"
+        value="Start the focused session"
+        variant="large"
+      />,
+    )
+
+    const textarea = screen.getByRole('textbox', { name: 'Session input' })
+
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    expect(fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })).toBe(false)
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+
+    expect(fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })).toBe(false)
+    expect(onSubmit).toHaveBeenCalledTimes(2)
+  })
+
+  it('restores keyboard focus to the textarea when the focus request token changes', async () => {
+    const props = {
+      ariaLabel: 'Session input',
+      onSubmit: vi.fn((event: FormEvent<HTMLFormElement>) => event.preventDefault()),
+      onValueChange: vi.fn(),
+      submitAriaLabel: 'Start',
+      value: 'Ready to send',
+      variant: 'large' as const,
+    }
+
+    const { rerender } = render(<SessionComposer {...props} />)
+
+    const submitButton = screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement
+    submitButton.focus()
+    expect(document.activeElement).toBe(submitButton)
+
+    rerender(<SessionComposer {...props} focusRequestToken={1} />)
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Session input' }))
+    })
+  })
+
+  it('keeps modifier-enter behind the same submit eligibility guard as the send button', () => {
+    const onSubmit = vi.fn((event: FormEvent<HTMLFormElement>) => event.preventDefault())
+    const props = {
+      ariaLabel: 'Session input',
+      onSubmit,
+      onValueChange: vi.fn(),
+      submitAriaLabel: 'Start',
+      variant: 'large' as const,
+    }
+
+    const { rerender } = render(<SessionComposer {...props} value="" />)
+    const textarea = screen.getByRole('textbox', { name: 'Session input' })
+
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    rerender(<SessionComposer {...props} value="Ready" submitDisabled />)
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Session input' }), { key: 'Enter', metaKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    rerender(<SessionComposer {...props} value="Ready" submitting />)
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Session input' }), { key: 'Enter', ctrlKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    rerender(
+      <SessionComposer
+        {...props}
+        attachments={[{
+          id: 'notes',
+          kind: 'TXT',
+          name: 'notes.txt',
+          removeLabel: 'Remove notes.txt',
+        }]}
+        value=""
+      />,
+    )
+    expect(fireEvent.keyDown(screen.getByRole('textbox', { name: 'Session input' }), { key: 'Enter', ctrlKey: true })).toBe(false)
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+  })
+
   it('dismisses the active mention typeahead from the textarea', () => {
     const onMentionDismiss = vi.fn()
 
@@ -124,16 +244,16 @@ describe('sessionComposer', () => {
     expect(onMentionDismiss).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the selected template trigger to one title line while menu options can include descriptions', () => {
+  it('keeps the selected mode trigger to one title line while mode options can include descriptions', () => {
     const { container } = render(
       <SessionComposer
         ariaLabel="Profile context"
         onSubmit={vi.fn()}
-        onTemplateChange={vi.fn()}
+        onModeChange={vi.fn()}
         onValueChange={vi.fn()}
-        selectedTemplateId="profile-update-proposal"
+        selectedModeId="profile-update-proposal"
         submitAriaLabel="Send"
-        templateOptions={[
+        modeOptions={[
           {
             description: 'profile-update-proposal',
             label: '候选人档案草案',
@@ -270,7 +390,7 @@ describe('sessionComposer', () => {
     expect(previewButton.closest('[data-slot="card"]')).toBeNull()
   })
 
-  it('submits a neutral managed draft with text, materials, template and mentions', async () => {
+  it('submits a neutral managed draft with text, materials, mode and mentions', async () => {
     const onSubmitDraft = vi.fn()
     const onValueChange = vi.fn()
     const file = new File(['hello'], 'notes.txt', { type: 'text/plain' })
@@ -289,9 +409,9 @@ describe('sessionComposer', () => {
         mentionOptions={[{ id: 'review-notes', label: 'Review notes' }]}
         onSubmitDraft={onSubmitDraft}
         onValueChange={onValueChange}
-        selectedTemplateId="review-template"
+        selectedModeId="review-mode"
         submitAriaLabel="Start"
-        templateOptions={[{ label: 'Review template', value: 'review-template' }]}
+        modeOptions={[{ label: 'Review mode', value: 'review-mode' }]}
         value="Use $review-notes"
         variant="large"
       />,
@@ -306,7 +426,7 @@ describe('sessionComposer', () => {
     const draft = onSubmitDraft.mock.calls[0]?.[0]
     expect(draft).toMatchObject({
       text: 'Use $review-notes',
-      selectedTemplateId: 'review-template',
+      selectedModeId: 'review-mode',
       mentions: [{ id: 'review-notes', kind: 'skill', label: 'Review notes' }],
       materials: [{
         content: 'hello',
@@ -319,7 +439,42 @@ describe('sessionComposer', () => {
     expect(draft.files[0]).toBe(file)
   })
 
-  it('shows the controlled selected template label and submits its id', async () => {
+  it('reads TSV attachments without a MIME type as utf8 source material', async () => {
+    const onSubmitDraft = vi.fn()
+    const file = new File(['col_a\tcol_b\n1\t2\n'], 'burn-20260528021436.tsv')
+
+    render(
+      <ManagedSessionComposer
+        ariaLabel="Session input"
+        attachmentLabels={{
+          add: 'Add material',
+          attached: 'Attached materials',
+          closePreview: name => `Close preview ${name}`,
+          materialReadError: 'Could not read material',
+          preview: name => `Preview ${name}`,
+          remove: name => `Remove ${name}`,
+        }}
+        defaultValue="Read this"
+        onSubmitDraft={onSubmitDraft}
+        submitAriaLabel="Start"
+      />,
+    )
+
+    fireEvent.change(screen.getByTestId('managed-session-file-input'), {
+      target: { files: [file] },
+    })
+    fireEvent.submit(screen.getByRole('form', { name: 'Session input' }))
+
+    await waitFor(() => expect(onSubmitDraft).toHaveBeenCalledTimes(1))
+    expect(onSubmitDraft.mock.calls[0]?.[0].materials[0]).toMatchObject({
+      content: 'col_a\tcol_b\n1\t2\n',
+      encoding: 'utf8',
+      mimeType: 'application/octet-stream',
+      name: 'burn-20260528021436.tsv',
+    })
+  })
+
+  it('shows the controlled selected mode label and submits its id', async () => {
     const onSubmitDraft = vi.fn()
 
     render(
@@ -335,26 +490,26 @@ describe('sessionComposer', () => {
         }}
         defaultValue="Create the profile"
         onSubmitDraft={onSubmitDraft}
-        onTemplateChange={vi.fn()}
-        selectedTemplateId="aiworker-hr.person-profile"
+        onModeChange={vi.fn()}
+        selectedModeId="aiworker-demo-people.profile"
         submitAriaLabel="Start"
-        templateLabel="Capability/template"
-        templateOptions={[{
+        modeLabel="Mode"
+        modeOptions={[{
           description: 'Create a source-backed people profile snapshot.',
           label: 'Person Profile',
-          value: 'aiworker-hr.person-profile',
+          value: 'aiworker-demo-people.profile',
         }]}
       />,
     )
 
-    expect(screen.getByRole('combobox', { name: 'Capability/template' }).textContent).toContain('Person Profile')
+    expect(screen.getByRole('combobox', { name: 'Mode' }).textContent).toContain('Person Profile')
     expect((screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement).disabled).toBe(false)
 
     fireEvent.submit(screen.getByRole('form', { name: 'Session input' }))
 
     await waitFor(() => expect(onSubmitDraft).toHaveBeenCalledTimes(1))
     expect(onSubmitDraft.mock.calls[0]?.[0]).toMatchObject({
-      selectedTemplateId: 'aiworker-hr.person-profile',
+      selectedModeId: 'aiworker-demo-people.profile',
       text: 'Create the profile',
     })
   })

@@ -4,6 +4,14 @@ Two-tier review: subtasks self-review before reporting, then the coordinator
 runs logs filter assessment. Assess immediately on each subtask completion;
 do not wait for all subtasks to finish.
 
+## Table of Contents
+
+- [Pipeline Order](#pipeline-order)
+- [1. Logs Filter Assessment](#1-logs-filter-assessment)
+- [2. Subtask Self-Review (done by the subtask, not the coordinator)](#2-subtask-self-review-done-by-the-subtask-not-the-coordinator)
+- [Key Rules](#key-rules)
+
+
 ## Pipeline Order
 
 ```

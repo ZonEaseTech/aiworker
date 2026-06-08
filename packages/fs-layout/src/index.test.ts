@@ -9,8 +9,9 @@ import {
   ensureWorkerHome,
   resolveAiworkerHome,
   resolveAiworkerScope,
-  resolveProjectRoot,
   resolveWorkerHome,
+  resolveWorkerOverlayFile,
+  resolveWorkerOverlaysRoot,
   resolveWorkspacesRoot,
 } from './index'
 
@@ -100,8 +101,7 @@ describe('host-local AIWorker home resolution', () => {
       process.env.HOME = tmp
       await mkdir(path.join(tmp, 'project', '.aiworker'), { recursive: true })
 
-      expect(resolveProjectRoot(path.join(tmp, 'project'))).toBe(null)
-      expect(resolveAiworkerScope({ cwd: path.join(tmp, 'project') })).toEqual({
+      expect(resolveAiworkerScope()).toEqual({
         scope: 'user',
         home: path.join(tmp, '.aiworker'),
         source: 'user-default',
@@ -143,8 +143,30 @@ describe('worker workspace roots', () => {
   it('places each worker under the host home workers directory', () => {
     process.env.AIWORKER_HOME = '/tmp/aiworker-home'
 
-    expect(resolveWorkerHome('hr-worker')).toBe('/tmp/aiworker-home/workers/hr-worker')
-    expect(resolveWorkspacesRoot('hr-worker')).toBe('/tmp/aiworker-home/workers/hr-worker/workspaces')
+    expect(resolveWorkerHome('demo-worker')).toBe('/tmp/aiworker-home/workers/demo-worker')
+    expect(resolveWorkspacesRoot('demo-worker')).toBe('/tmp/aiworker-home/workers/demo-worker/workspaces')
+  })
+
+  it('places the worker overlay store as a sibling of workspaces', () => {
+    process.env.AIWORKER_HOME = '/tmp/aiworker-home'
+
+    expect(resolveWorkerOverlaysRoot('demo-worker')).toBe('/tmp/aiworker-home/workers/demo-worker/overlays')
+  })
+
+  it('resolves overlay files under the kind directory and rejects unsafe paths', () => {
+    const overlaysRoot = '/tmp/aiworker-home/workers/demo-worker/overlays'
+
+    expect(resolveWorkerOverlayFile(overlaysRoot, 'skills', 'freeform-session/SKILL.md'))
+      .toBe('/tmp/aiworker-home/workers/demo-worker/overlays/skills/freeform-session/SKILL.md')
+    expect(resolveWorkerOverlayFile(overlaysRoot, 'entry-files', 'NOTES.md'))
+      .toBe('/tmp/aiworker-home/workers/demo-worker/overlays/entry-files/NOTES.md')
+    expect(resolveWorkerOverlayFile(overlaysRoot, 'mcp', 'codex/config.toml'))
+      .toBe('/tmp/aiworker-home/workers/demo-worker/overlays/mcp/codex/config.toml')
+
+    expect(() => resolveWorkerOverlayFile(overlaysRoot, 'plugins', 'x.md')).toThrow()
+    expect(() => resolveWorkerOverlayFile(overlaysRoot, 'skills', '../../etc/passwd')).toThrow()
+    expect(() => resolveWorkerOverlayFile(overlaysRoot, 'skills', '/abs/path')).toThrow()
+    expect(() => resolveWorkerOverlayFile(overlaysRoot, 'skills', '')).toThrow()
   })
 
   it('rejects worker ids that escape the home root', () => {
@@ -159,7 +181,7 @@ describe('worker workspace roots', () => {
 
   it('accepts a well-formed worker id', () => {
     process.env.AIWORKER_HOME = '/tmp/aiworker-home'
-    expect(resolveWorkerHome('hr-worker').endsWith(path.join('workers', 'hr-worker'))).toBe(true)
+    expect(resolveWorkerHome('demo-worker').endsWith(path.join('workers', 'demo-worker'))).toBe(true)
     // #7: 中間のドット・アンダースコアは合法
     expect(resolveWorkerHome('my.worker_1').endsWith(path.join('workers', 'my.worker_1'))).toBe(true)
   })
@@ -169,11 +191,11 @@ describe('worker workspace roots', () => {
     try {
       process.env.AIWORKER_HOME = path.join(tmp, '.aiworker')
 
-      await ensureWorkerHome('qa-worker')
+      await ensureWorkerHome('sample-worker')
 
-      const workspaces = await stat(path.join(tmp, '.aiworker', 'workers', 'qa-worker', 'workspaces'))
+      const workspaces = await stat(path.join(tmp, '.aiworker', 'workers', 'sample-worker', 'workspaces'))
       expect(workspaces.isDirectory()).toBe(true)
-      await expect(stat(path.join(tmp, '.aiworker', 'workers', 'qa-worker', 'SOUL.md'))).rejects.toThrow()
+      await expect(stat(path.join(tmp, '.aiworker', 'workers', 'sample-worker', 'SOUL.md'))).rejects.toThrow()
       await expect(stat(path.join(tmp, 'project', '.aiworker'))).rejects.toThrow()
     }
     finally {

@@ -16,13 +16,20 @@ Keep this entry file small. Load only the references needed for the current turn
 2. Prefer `curl -s` piped to `jq` so results are easy to inspect.
 3. Use the safe issue execution flow: create in `todo` -> follow-up -> move to `working`.
 4. Check `/processes/capacity` before starting any execution.
-6. Move finished work to `review`, not `done`. Use `done` only after human confirmation.
-7. Use follow-up for all inter-issue communication.
-8. Treat project and issue deletions as soft-delete unless the API says otherwise.
-9. Expect all responses to use `{ success, data }` or `{ success, error }`.
-10. Never use `sleep` to wait for subtasks or long-running operations. Create a cron job (`issue-follow-up`) to callback the coordinator issue on a schedule, then let the current turn end.
+5. Move finished work to `review`, not `done`. Use `done` only after human confirmation.
+6. Use follow-up for all inter-issue communication.
+7. Treat project and issue deletions as soft-delete unless the API says otherwise.
+8. Expect all responses to use `{ success, data }` or `{ success, error }`.
+9. Never use `sleep` to wait for subtasks or long-running operations. Create a cron job (`issue-follow-up`) to callback the coordinator issue on a schedule, then let the current turn end.
 
 ## Core Workflow
+
+### Three-Tier Coordination Shortcut
+
+When the user says a short phrase such as "use bkd to start coordination" or
+"start BKD L1", treat the current agent session as L1 and load
+`references/three-tier-coordination.md`. The user does not need to repeat the
+full L1/L2/L3 rules in the prompt.
 
 ### Single Issue Execution
 
@@ -73,13 +80,17 @@ Load only what the current task needs:
   Use for subtask self-review responsibilities, coordinator logs filter assessment, and signal classification.
 - `references/merge-strategy.md`
   Use for worktree branch merging, conflict resolution, post-merge verification, and cleanup after subtasks complete in worktree mode.
+- `references/three-tier-coordination.md`
+  Use for the L1/L2/L3 cron-driven autonomous coordination pattern: user-facing agent session (L1) reports to user only, BKD scheduling issue (L2) owns DAG decomposition + dispatch via 15-min self cron, short-lived subtasks (L3). Engine-agnostic — L1/L2/L3 may each run on different engines (Claude Code, Codex, etc.). Pick over `orchestration.md` when the campaign spans sessions/hours, needs capacity-aware DAG scheduling, and must run sleep-free.
 
 ## Quick Routing
 
 Choose references by intent:
 
 - Single issue CRUD, cron jobs, or API details: load `references/rest-api.md`.
+- Short activation phrases like "use bkd to start coordination" or "start BKD L1": load `references/three-tier-coordination.md`.
 - Multi-subtask dispatch or orchestration: load `references/orchestration.md`.
 - Subtask quality assessment or code review: load `references/quality-review.md`.
 - Branch merging after worktree subtasks: load `references/merge-strategy.md`.
+- Long-running, cron-driven L1/L2/L3 autonomous coordination across heterogeneous engines: load `references/three-tier-coordination.md` (use instead of `orchestration.md` when the user wants the user-facing agent to only talk to the user while BKD self-drives dispatch via cron, and when L2/L3 may run on different engines than L1).
 - Full orchestration pipeline: load `references/orchestration.md`, then `references/quality-review.md`, then `references/merge-strategy.md` as each phase is reached.

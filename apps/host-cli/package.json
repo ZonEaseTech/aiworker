@@ -1,0 +1,43 @@
+{
+  "name": "@zonease/aiworker-host-cli",
+  "type": "module",
+  "version": "1.0.0-rc.3",
+  "description": "AIWorker Host control-plane CLI (aiworker-host)",
+  "license": "MIT",
+  "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZonEaseTech/aiworker.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "aiworker-host": "./dist/aiworker-host.js"
+  },
+  "files": [
+    "README.md",
+    "dist/"
+  ],
+  "engines": {
+    "bun": ">=1.1",
+    "node": ">=20.19.0 <21 || >=22.12.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "build": "bun run --filter '@zonease/aiworker-host-web' build && bun run build:bundle",
+    "build:bundle": "bun build --target=bun --minify --outfile=dist/aiworker-host-bun.js src/aiworker-host.ts && bun scripts/build-publish-manifest.ts",
+    "prepublishOnly": "bun run build",
+    "smoke:dist-release": "bun scripts/smoke-npm-package.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.13",
+    "@zonease/aiworker-host-control": "workspace:*",
+    "@zonease/aiworker-storage-sqlite": "workspace:*",
+    "@zonease/aiworker-worker-control-protocol": "workspace:*",
+    "cac": "^6.7.14",
+    "jose": "^6.1.0",
+    "typescript": "^5.8.3"
+  }
+}

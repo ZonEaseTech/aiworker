@@ -3,6 +3,20 @@
 Use this file when the `bkd` skill needs exact BKD routes, payload shapes, or
 operational examples.
 
+## Table of Contents
+
+- [Setup](#setup)
+- [Health](#health)
+- [Capacity Check](#capacity-check)
+- [Projects](#projects)
+- [Issues](#issues)
+- [Issue Execution](#issue-execution)
+- [Issue Changes](#issue-changes)
+- [Issue Logs](#issue-logs)
+- [Worktrees](#worktrees)
+- [Cron Jobs](#cron-jobs)
+
+
 ## Setup
 
 ```bash

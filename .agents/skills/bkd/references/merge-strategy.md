@@ -3,6 +3,17 @@
 Branch merging for worktree-mode subtasks. Simple-mode subtasks skip this entirely
 since they work directly on the main branch.
 
+## Table of Contents
+
+- [Branch Architecture](#branch-architecture)
+- [1. Handle Main Branch State Before Merge](#1-handle-main-branch-state-before-merge)
+- [2. Merge Strategies](#2-merge-strategies)
+- [3. Post-Merge Verification](#3-post-merge-verification)
+- [4. Merge Failure Handling](#4-merge-failure-handling)
+- [5. Worktree Cleanup](#5-worktree-cleanup)
+- [Key Rules](#key-rules)
+
+
 ## Branch Architecture
 
 The coordinator issue always runs on the main branch. Subtasks with `useWorktree: true`

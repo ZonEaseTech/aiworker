@@ -340,7 +340,7 @@ function matrixPairs(matrix: MatrixName): PairSpec[] {
   ]
   if (matrix === 'compact')
     return compact
-  const souls = ['developer', 'hr-recruiting', 'finance-ops', 'qa-reviewer', 'general-assistant']
+  const souls = ['developer', 'research-assistant', 'finance-ops', 'quality-reviewer', 'general-assistant']
   return souls.flatMap(soul => [
     { engine: 'codex' as const, soul },
     { engine: 'claude-code' as const, soul },
@@ -393,7 +393,7 @@ function resolveProduct(options: HarnessOptions): AiworkerCommand {
     })
     if (build.code !== 0)
       throw new Error(`source CLI build failed; see ${build.logPath}`)
-    const bundle = path.join(SCRIPT_ROOT, 'apps/cli/dist/aiworker-bun.js')
+    const bundle = path.join(SCRIPT_ROOT, 'apps/worker-cli/dist/aiworker-bun.js')
     if (!existsSync(bundle))
       throw new Error(`source CLI bundle not found: ${bundle}`)
     return { argsPrefix: [bundle], command: 'bun', display: `bun ${bundle}` }
@@ -743,7 +743,7 @@ async function restSmoke(
     checks.push({
       detail: `/admin/ status=${admin.status}`,
       evidence: path.join(debugRoot, 'logs', `${pairId}-rest-smoke.json`),
-      name: `${pairId} Worker Admin mount`,
+      name: `${pairId} Worker Admin surface`,
       status: admin.status === 200 ? 'pass' : 'fail',
     })
 

@@ -15,5 +15,9 @@ coverage/
 .code-review-graph/
 .aissh.yaml
 .playwright-mcp/
+.playwright-cli/
+output/
 .worktrees/
 .superpowers/
+
+.omc

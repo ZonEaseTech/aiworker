@@ -16,20 +16,16 @@ describe('check-web-ui-components audit output', () => {
     expect(result.stderr).toBe('')
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('web UI framed surface classification (accepted, enforced):')
-    expect(result.stdout).toContain('apps/web/src/worker/worker-studio.tsx: alert x1')
-    expect(result.stdout).toContain('apps/web/src/worker/studio/first-run-soul-app-home.tsx: card x1')
-    expect(result.stdout).toContain('apps/web/src/worker/studio/mounted-surface.tsx: alert x2')
-    expect(result.stdout).toContain('apps/web/src/worker/studio/workspace-fallback.tsx: input-frame x1')
-    expect(result.stdout).toContain('apps/web/src/worker/worker-configuration-dialog.tsx: slotless-native-class x18')
-    expect(result.stdout).toContain('apps/web/src/worker/worker-workbench-tree.tsx: scoped-native-layout x1')
-    expect(result.stdout).toContain('apps/aiworker-hr/product/web/people-workbench/app.tsx: input-frame x3')
-    expect(result.stdout).toContain('apps/aiworker-hr/product/web/people-workbench/surface.tsx: scoped-native-layout x1')
+    expect(result.stdout).toContain('apps/worker-web/src/worker/worker-studio.tsx: alert x1')
+    expect(result.stdout).toContain('apps/worker-web/src/worker/studio/workspace-tree.tsx: scoped-native-layout x2')
+    expect(result.stdout).toContain('apps/worker-web/src/worker/studio/workspace-tree.tsx: slotless-native-class x5')
+    expect(result.stdout).toContain('apps/worker-web/src/worker/worker-configuration-dialog.tsx: slotless-native-class x22')
     expect(result.stdout).toContain('web UI raw native control classification (accepted, enforced):')
     expect(result.stdout).toContain('darkSelector=:root.dark')
-    expect(result.stdout).toContain('apps/web/src/worker/worker-configuration-dialog.tsx: raw-button x2')
-    expect(result.stdout).not.toContain('apps/web/src/features/session/')
-    expect(result.stdout).not.toContain('apps/web/src/worker/session-detail.tsx')
-    expect(result.stdout).not.toContain('apps/web/src/worker/session-turn-composer.tsx')
+    expect(result.stdout).toContain('apps/worker-web/src/worker/worker-configuration-dialog.tsx: raw-button x2')
+    expect(result.stdout).not.toContain('apps/worker-web/src/features/session/')
+    expect(result.stdout).not.toContain('apps/worker-web/src/worker/session-detail.tsx')
+    expect(result.stdout).not.toContain('apps/worker-web/src/worker/session-turn-composer.tsx')
     expect(result.stdout).not.toContain('web UI Host-embedded Soul renderer debt')
     expect(result.stdout).toContain('slotlessNativeClassName=0')
     expect(result.stdout).not.toContain('rawNativeClassName=2')
@@ -45,11 +41,11 @@ describe('check-web-ui-components audit output', () => {
 
     expect(result.status).toBe(0)
     expect(result.stdout).not.toContain('web UI Host-embedded Soul renderer debt')
-    expect(result.stderr).not.toContain('apps/web/src/worker/souls')
+    expect(result.stderr).not.toContain('apps/worker-web/src/worker/souls')
   })
 
   test('blocks reintroducing the retired component package', () => {
-    const tempFile = resolve(repoRoot, 'apps/web/src/__retired-component-import.guard.tsx')
+    const tempFile = resolve(repoRoot, 'apps/worker-web/src/__retired-component-import.guard.tsx')
     writeFileSync(tempFile, [
       'import { Button } from \'@zonease/aiworker-component\'',
       '',

@@ -4,27 +4,8 @@
     "bkd": {
       "source": "zzci/skills",
       "sourceType": "github",
-      "computedHash": "204ac9b584cb27ac63dc2bbfef5b462af5125b701f4a161124eb5820a0565f77"
-    },
-    "pma": {
-      "source": "zzci/skills",
-      "sourceType": "github",
-      "computedHash": "6ce29c3a658a1f1e38100d604b5401451f73339c0f13701a1d37b500bcd011a3"
-    },
-    "pma-bun": {
-      "source": "zzci/skills",
-      "sourceType": "github",
-      "computedHash": "e6d6e0627b6907eb686b5d31477a3c6610046d35c6048d7bb279cdaa2f775917"
-    },
-    "pma-cr": {
-      "source": "zzci/skills",
-      "sourceType": "github",
-      "computedHash": "86d5ee301a0456c2061f721c37653be8dcceae84efc688739fe6de241bb18dbe"
-    },
-    "pma-web": {
-      "source": "zzci/skills",
-      "sourceType": "github",
-      "computedHash": "6d5d00fdd091e7400db2720d9b5081f86c22cabd1ac920c09810bda2f12e4319"
+      "skillPath": "skills/bkd/SKILL.md",
+      "computedHash": "b356966f4c1f993f3010f67c662e34dcfc6f6367baeb1fb867104c7994b1a49c"
     },
     "shadcn": {
       "source": "shadcn/ui",

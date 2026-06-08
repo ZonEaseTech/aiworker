@@ -2,19 +2,19 @@ import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 
 import type {
   SessionComposerAttachmentItem,
-  SessionComposerMaterial,
   SessionComposerMentionOption,
   SessionComposerMentionQuery,
   SessionComposerProps,
 } from './session-composer'
+import type { SessionComposerMaterial } from './session-composer-attachments'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { SessionComposer } from './session-composer'
 import {
   createComposerAttachment,
   formatSessionAttachmentKind,
   formatSessionAttachmentSize,
   isSessionAttachmentImage,
-  SessionComposer,
-} from './session-composer'
+} from './session-composer-attachments'
 
 type ManagedSessionComposerOwnedProps
   = | 'attachmentCountLabel'
@@ -34,7 +34,7 @@ export interface ManagedSessionComposerDraft {
   text: string
   files: File[]
   materials: SessionComposerMaterial[]
-  selectedTemplateId?: string
+  selectedModeId?: string
   mentions: Array<{ id: string, kind: 'skill', label: string }>
 }
 
@@ -82,7 +82,9 @@ export interface UseSessionComposerDraftResult {
 }
 
 const TRAILING_MENTION_PATTERN = /(^|\s)\$([\w-]*)$/
+const EMPTY_MENTION_OPTIONS: SessionComposerMentionOption[] = []
 
+// eslint-disable-next-line react-refresh/only-export-components -- public composer hook exported beside the managed component.
 export function useSessionComposerDraft({
   defaultValue = '',
   dedupeAttachments = true,
@@ -166,11 +168,11 @@ export function ManagedSessionComposer({
   dedupeAttachments = true,
   disabled = false,
   error,
-  mentionOptions = [],
+  mentionOptions = EMPTY_MENTION_OPTIONS,
   mentionQuery,
   onSubmitDraft,
   onValueChange,
-  selectedTemplateId,
+  selectedModeId,
   submitDisabled = false,
   submitting = false,
   value,
@@ -231,7 +233,7 @@ export function ManagedSessionComposer({
         text: draft.text,
         files: draft.files,
         materials,
-        selectedTemplateId,
+        selectedModeId,
         mentions: resolveSessionMentions(draft.text, mentionOptions),
       }, event)
       draft.clear()
@@ -250,7 +252,7 @@ export function ManagedSessionComposer({
     draft,
     mentionOptions,
     onSubmitDraft,
-    selectedTemplateId,
+    selectedModeId,
     submitDisabled,
     submitting,
   ])
@@ -286,7 +288,7 @@ export function ManagedSessionComposer({
         onRemoveAttachment={draft.removeAttachment}
         onSubmit={handleSubmit}
         onValueChange={draft.setText}
-        selectedTemplateId={selectedTemplateId}
+        selectedModeId={selectedModeId}
         submitDisabled={submitDisabled}
         submitting={composerSubmitting}
         value={draft.text}

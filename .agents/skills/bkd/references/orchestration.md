@@ -3,6 +3,19 @@
 Multi-subtask dispatch through a coordinator issue that manages subtask lifecycle,
 follow-up communication, and completion tracking.
 
+## Table of Contents
+
+- [Flow Overview](#flow-overview)
+- [1. Pre-Flight](#1-pre-flight)
+- [2. Create Coordinator Issue](#2-create-coordinator-issue)
+- [3. Mode Selection](#3-mode-selection)
+- [4. Subtask Creation and Execution](#4-subtask-creation-and-execution)
+- [5. Subtask Self-Review, Fix, and Reporting](#5-subtask-self-review-fix-and-reporting)
+- [6. Final Confirmation](#6-final-confirmation)
+- [Status Flow](#status-flow)
+- [Key Constraints](#key-constraints)
+
+
 ## Flow Overview
 
 ```

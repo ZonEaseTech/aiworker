@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+MODE="${1:-stop}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 AIWORKER_HOME="${AIWORKER_HOME:-$HOME/.aiworker-dev}"
 PORT="${PORT:-9217}"
 AIWORKER_WEB_PORT="${AIWORKER_WEB_PORT:-5173}"
+AIWORKER_WORKER_MANIFEST="${AIWORKER_WORKER_MANIFEST:-${AIWORKER_HOME}/dev-worker.json}"
+AIWORKER_WORKER_WEB_TMUX_SESSION="${AIWORKER_WORKER_WEB_TMUX_SESSION:-aiworker-vite-worker}"
 
 export AIWORKER_HOME
 
 cd "$ROOT_DIR"
 
 echo "[dev:clean] AIWORKER_HOME=$AIWORKER_HOME"
-bun apps/cli/src/aiworker.ts daemon stop || true
+bun apps/worker-cli/src/aiworker.ts daemon stop || true
+tmux kill-session -t "$AIWORKER_WORKER_WEB_TMUX_SESSION" 2>/dev/null || true
 
 process_cwd() {
   lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1
@@ -23,15 +27,15 @@ is_aiworker_dev_process() {
   local command="$2"
   local cwd="$3"
 
-  if [[ "$command" == *"apps/cli/src/aiworker.ts daemon foreground"* ]]; then
+  if [[ "$command" == *"apps/worker-cli/src/aiworker.ts daemon foreground"* ]]; then
     return 0
   fi
 
-  if [[ "$cwd" == "$ROOT_DIR/apps/web"* && "$command" == *"vite"* ]]; then
+  if [[ "$cwd" == "$ROOT_DIR/apps/worker-web"* && "$command" == *"vite"* ]]; then
     return 0
   fi
 
-  if [[ "$cwd" == "$ROOT_DIR"* && "$command" == *"apps/cli/src/aiworker.ts"* ]]; then
+  if [[ "$cwd" == "$ROOT_DIR"* && "$command" == *"apps/worker-cli/src/aiworker.ts"* ]]; then
     return 0
   fi
 
@@ -78,5 +82,10 @@ for port in "$PORT" "$AIWORKER_WEB_PORT"; do
     echo "  port $port: none"
   fi
 done
+
+if [[ "$MODE" == "clean" ]]; then
+  rm -f "$AIWORKER_WORKER_MANIFEST"
+  echo "[dev:clean] removed manifest $AIWORKER_WORKER_MANIFEST"
+fi
 
 exit "$remaining"
