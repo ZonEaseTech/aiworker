@@ -14,12 +14,14 @@ interface NpmPackEntry {
 }
 
 interface DoctorOutput {
-  installation?: {
-    resources?: {
-      migrationsReady?: boolean
-      officialAppsReady?: boolean
-      officialFreeformDescriptorReady?: boolean
-      workerWebReady?: boolean
+  context?: {
+    installation?: {
+      resources?: {
+        migrationsReady?: boolean
+        officialAppsReady?: boolean
+        officialFreeformDescriptorReady?: boolean
+        workerWebReady?: boolean
+      }
     }
   }
 }
@@ -146,12 +148,15 @@ async function assertInstalledPackageRuntime(tempDir: string, archivePath: strin
     AIWORKER_HOME: home,
     WORKER_DB_PATH: resolve(home, 'aiworker.db'),
   }
-  const doctor = await run([bin, 'doctor'], {
+  // doctor exit reflects worker health (e.g. no native engine in CI → exit 1);
+  // this smoke only asserts packaged resources, so tolerate a non-zero exit.
+  const doctor = await run([bin, 'doctor', '--json'], {
+    allowFailure: true,
     cwd: installRoot,
     env,
   })
   const body = JSON.parse(doctor.stdout) as DoctorOutput
-  const resources = body.installation?.resources
+  const resources = body.context?.installation?.resources
   if (resources?.officialAppsReady !== true)
     throw new Error(`installed npm package doctor must report packaged official apps ready: ${doctor.stdout}`)
   if (resources?.officialFreeformDescriptorReady !== true)
@@ -220,7 +225,7 @@ async function assertInstalledDescriptorRefs(
   }
 }
 
-async function run(command: string[], options: { cwd: string, env?: NodeJS.ProcessEnv }): Promise<{ stderr: string, stdout: string }> {
+async function run(command: string[], options: { allowFailure?: boolean, cwd: string, env?: NodeJS.ProcessEnv }): Promise<{ stderr: string, stdout: string }> {
   const proc = spawn(command, {
     cwd: options.cwd,
     env: options.env,
@@ -232,7 +237,7 @@ async function run(command: string[], options: { cwd: string, env?: NodeJS.Proce
     new Response(proc.stderr).text(),
     proc.exited,
   ])
-  if (code !== 0)
+  if (code !== 0 && !options.allowFailure)
     throw new Error(`${command.join(' ')} failed with ${code}\nstdout:\n${stdout}\nstderr:\n${stderr}`)
   return { stderr, stdout }
 }

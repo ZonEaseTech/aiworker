@@ -20,15 +20,17 @@ interface AppListOutput {
 }
 
 interface DoctorOutput {
-  installation?: {
-    resources?: {
-      migrationsReady?: boolean
-      officialAppsReady?: boolean
-      officialFreeformDescriptorReady?: boolean
-      workerWebReady?: boolean
-    }
-    source?: {
-      kind?: string
+  context?: {
+    installation?: {
+      resources?: {
+        migrationsReady?: boolean
+        officialAppsReady?: boolean
+        officialFreeformDescriptorReady?: boolean
+        workerWebReady?: boolean
+      }
+      source?: {
+        kind?: string
+      }
     }
   }
 }
@@ -62,7 +64,9 @@ async function main(): Promise<number> {
     delete env.WORKER_MIGRATIONS_FOLDER
 
     await assertStandaloneBinaryVersion(binary, expectedVersion)
-    const doctor = await run([binary, 'doctor'], { env })
+    // doctor exit reflects health (no native engine → exit 1); this smoke only
+    // checks packaged resources/source, so tolerate a non-zero exit.
+    const doctor = await run([binary, 'doctor', '--json'], { allowFailure: true, env })
     assertStandaloneDoctor(doctor.stdout)
     await run([binary, 'app', 'bootstrap', 'official'], { env })
     const list = await run([binary, 'app', 'list'], { env })
@@ -107,7 +111,7 @@ function currentTarget(): string {
 
 function assertStandaloneDoctor(stdout: string): void {
   const body = JSON.parse(stdout) as DoctorOutput
-  const installation = body.installation
+  const installation = body.context?.installation
   if (installation?.source?.kind !== 'github-tarball')
     throw new Error(`standalone doctor must report github-tarball install source: ${stdout}`)
   if (installation.resources?.officialAppsReady !== true)
@@ -183,7 +187,7 @@ async function cleanup(): Promise<void> {
   await Promise.all(generatedPaths.map(path => rm(resolve(path), { force: true, recursive: true })))
 }
 
-async function run(command: string[], options: { env?: NodeJS.ProcessEnv } = {}): Promise<CommandResult> {
+async function run(command: string[], options: { allowFailure?: boolean, env?: NodeJS.ProcessEnv } = {}): Promise<CommandResult> {
   const proc = spawn(command, {
     env: options.env ?? process.env,
     stderr: 'pipe',
@@ -194,7 +198,7 @@ async function run(command: string[], options: { env?: NodeJS.ProcessEnv } = {})
     new Response(proc.stderr).text(),
     proc.exited,
   ])
-  if (code !== 0)
+  if (code !== 0 && !options.allowFailure)
     throw new Error(`${command.join(' ')} failed with ${code}\nstdout:\n${stdout}\nstderr:\n${stderr}`)
   return { stderr, stdout }
 }
