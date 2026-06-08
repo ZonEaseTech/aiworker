@@ -260,7 +260,7 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
 
   return {
     async fetch(request, server) {
-      const url = new URL(request.url)
+      const url = resolveForwardedUrl(request)
       const decodedPathname = decodePathname(url.pathname)
       if (!decodedPathname)
         return json({ error: { code: 'INVALID_STATIC_PATH' } }, { status: 400 })
@@ -349,7 +349,7 @@ async function handleAuthLogin(request: Request, sessionAuth: HostSessionAuthOpt
   if (!sessionAuth)
     return json({ error: { code: 'AUTH_NOT_CONFIGURED' } }, { status: 501 })
 
-  const url = new URL(request.url)
+  const url = resolveForwardedUrl(request)
   const returnToResult = normalizeSafeReturnTo(url.searchParams.get('returnTo') ?? '/host')
   if (!returnToResult.ok)
     return json({ error: { code: 'INVALID_RETURN_TO' } }, { status: 400 })
@@ -378,7 +378,7 @@ async function handleAuthLogin(request: Request, sessionAuth: HostSessionAuthOpt
   }, {
     maxAgeSeconds: 600,
     path: '/auth',
-    requestUrl: request.url,
+    requestUrl: url.href,
     sameSite: 'Lax',
     secret: sessionAuth.sessionSecret,
   }))
@@ -389,7 +389,7 @@ async function handleAuthCallback(request: Request, sessionAuth: HostSessionAuth
   if (!sessionAuth)
     return json({ error: { code: 'AUTH_NOT_CONFIGURED' } }, { status: 501 })
 
-  const url = new URL(request.url)
+  const url = resolveForwardedUrl(request)
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
   if (!code || !state)
@@ -424,11 +424,11 @@ async function handleAuthCallback(request: Request, sessionAuth: HostSessionAuth
 
   const headers = new Headers()
   headers.set('location', returnToResult.value)
-  headers.append('set-cookie', clearCookieHeader('aiworker_auth_txn', '/auth', request.url))
+  headers.append('set-cookie', clearCookieHeader('aiworker_auth_txn', '/auth', url.href))
   headers.append('set-cookie', createSignedCookie('aiworker_session', session, {
     maxAgeSeconds: 8 * 60 * 60,
     path: '/',
-    requestUrl: request.url,
+    requestUrl: url.href,
     sameSite: 'Lax',
     secret: sessionAuth.sessionSecret,
   }))
@@ -436,11 +436,11 @@ async function handleAuthCallback(request: Request, sessionAuth: HostSessionAuth
 }
 
 function handleAuthLogout(request: Request): Response {
-  const url = new URL(request.url)
+  const url = resolveForwardedUrl(request)
   const returnToResult = normalizeSafeReturnTo(url.searchParams.get('returnTo') ?? '/host')
   const headers = new Headers()
   headers.set('location', returnToResult.ok ? returnToResult.value : '/host')
-  headers.append('set-cookie', clearCookieHeader('aiworker_session', '/', request.url))
+  headers.append('set-cookie', clearCookieHeader('aiworker_session', '/', url.href))
   return new Response(null, { headers, status: 302 })
 }
 
@@ -477,6 +477,24 @@ function readUserFromSessionCookie(headers: Headers, sessionAuth: HostSessionAut
     roles: userHasHostPermission(session.email, 'host:admin') ? ['host:admin'] : [],
     subject: session.sub,
   }
+}
+
+// The Host binds to 127.0.0.1 (loopback); only a co-located reverse proxy
+// (e.g. Caddy terminating TLS in front of Cloudflare) can connect, so the
+// X-Forwarded-* headers it injects are trusted here. The proxy reaches the
+// Host over plaintext http, which makes Bun's request.url scheme http even
+// when the external request is https; this helper recovers the real external
+// scheme/host for auth-origin decisions and Secure-cookie selection.
+function resolveForwardedUrl(request: Request): URL {
+  const url = new URL(request.url)
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+  if (forwardedProto)
+    url.protocol = forwardedProto
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    ?? request.headers.get('host')
+  if (forwardedHost)
+    url.host = forwardedHost
+  return url
 }
 
 function redirectToLogin(returnTo: string): Response {

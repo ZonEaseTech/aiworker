@@ -379,6 +379,119 @@ describe('host server', () => {
     expect(response.headers.get('set-cookie')).toContain('HttpOnly')
   })
 
+  it('treats X-Forwarded-Proto: https as the external scheme so /auth/login reaches Logto behind a TLS-terminating proxy', async () => {
+    let discoveryRequests = 0
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://127.0.0.1:9117',
+      hostControlBaseUrl: 'http://127.0.0.1:9117',
+      sessionAuth: sessionAuth({
+        fetch: async () => {
+          discoveryRequests += 1
+          return Response.json({
+            authorization_endpoint: 'https://auth.zonease.org/oidc/auth',
+            jwks_uri: 'https://auth.zonease.org/oidc/jwks',
+            token_endpoint: 'https://auth.zonease.org/oidc/token',
+          })
+        },
+        oidc: {
+          allowedEmailDomains: ['zonease.org'],
+          clientId: 'client-id',
+          clientSecret: 'client-secret',
+          endpoint: 'https://auth.zonease.org/',
+          issuer: 'https://auth.zonease.org/oidc',
+          redirectUri: 'https://aiworker.zonease.org/auth/callback',
+        },
+      }),
+    })
+
+    // Caddy reverse_proxy reaches the loopback Host over plaintext http, so request.url scheme is http;
+    // X-Forwarded-Proto carries the real external https scheme.
+    const response = await server.fetch(new Request('http://aiworker.zonease.org/auth/login?returnTo=/host', {
+      headers: { 'x-forwarded-proto': 'https' },
+    }))
+
+    expect(response.status).toBe(302)
+    const location = new URL(response.headers.get('location')!)
+    expect(location.origin + location.pathname).toBe('https://auth.zonease.org/oidc/auth')
+    expect(location.searchParams.get('client_id')).toBe('client-id')
+    expect(location.searchParams.get('redirect_uri')).toBe('https://aiworker.zonease.org/auth/callback')
+    expect(location.searchParams.get('state')).toBeTruthy()
+    expect(discoveryRequests).toBe(1)
+
+    const authTxnSetCookie = setCookieHeaders(response).find(cookie => cookie.startsWith('aiworker_auth_txn='))
+    expect(authTxnSetCookie).toBeTruthy()
+    expect(authTxnSetCookie).toContain('Secure')
+  })
+
+  it('still redirects a local http /auth/login with no forwarded headers to the canonical callback origin', async () => {
+    let discoveryRequests = 0
+    const server = await createHostServer({
+      dbPath: dbPath(),
+      hostBrowserBaseUrl: 'http://127.0.0.1:54145',
+      hostControlBaseUrl: 'http://127.0.0.1:54145',
+      sessionAuth: sessionAuth({
+        fetch: async () => {
+          discoveryRequests += 1
+          return Response.json({
+            authorization_endpoint: 'https://auth.zonease.org/oidc/auth',
+            jwks_uri: 'https://auth.zonease.org/oidc/jwks',
+            token_endpoint: 'https://auth.zonease.org/oidc/token',
+          })
+        },
+        oidc: {
+          allowedEmailDomains: ['zonease.org'],
+          clientId: 'client-id',
+          clientSecret: 'client-secret',
+          endpoint: 'https://auth.zonease.org/',
+          issuer: 'https://auth.zonease.org/oidc',
+          redirectUri: 'http://127.0.0.1:54145/auth/callback',
+        },
+      }),
+    })
+
+    const response = await server.fetch(new Request('http://localhost:54145/auth/login?returnTo=/host'))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('http://127.0.0.1:54145/auth/login?returnTo=%2Fhost')
+    expect(setCookieHeaders(response).some(cookie => cookie.startsWith('aiworker_auth_txn='))).toBe(false)
+    expect(discoveryRequests).toBe(0)
+  })
+
+  it('marks the session cookie Secure when the auth callback arrives over forwarded https', async () => {
+    const fixture = await createOidcFixture()
+    try {
+      const server = await createHostServer({
+        dbPath: dbPath(),
+        hostBrowserBaseUrl: 'http://127.0.0.1:9117',
+        hostControlBaseUrl: 'http://127.0.0.1:9117',
+        sessionAuth: sessionAuth({
+          fetch: fixture.fetch,
+          now: () => new Date('2026-06-06T04:00:00.000Z'),
+          oidc: fixture.config,
+        }),
+      })
+
+      const response = await server.fetch(new Request('http://aiworker.zonease.org/auth/callback?code=auth-code&state=state-123', {
+        headers: {
+          'cookie': `aiworker_auth_txn=${transactionCookie({ returnTo: '/workers/wkr_82' })}`,
+          'x-forwarded-proto': 'https',
+        },
+      }))
+
+      expect(response.status).toBe(302)
+      const cookies = setCookieHeaders(response)
+      const sessionSetCookie = cookies.find(cookie => cookie.startsWith('aiworker_session='))
+      expect(sessionSetCookie).toBeTruthy()
+      expect(sessionSetCookie).toContain('Secure')
+      const txnClearCookie = cookies.find(cookie => cookie.startsWith('aiworker_auth_txn=;'))
+      expect(txnClearCookie).toContain('Secure')
+    }
+    finally {
+      fixture.server.stop(true)
+    }
+  })
+
   it('returns 401 from /api/auth/me without a session', async () => {
     const server = await createHostServer({
       dbPath: dbPath(),
