@@ -473,6 +473,25 @@ describe('host control plane', () => {
     expect(logout.closest('form')?.getAttribute('method')).toBe('post')
   })
 
+  it('keeps the logout control reachable when the sidebar collapses to the icon rail', async () => {
+    // P2-1: when the sidebar collapses to the icon rail the footer must still
+    // expose the logout affordance. We avoid the canonical avatar DropdownMenu
+    // (radix popover) because it is fragile under happy-dom; instead the footer
+    // stacks the logout icon button below the avatar and keeps it visible. This
+    // test pins that the logout form is never hidden in icon-collapsed mode
+    // (happy-dom cannot compute Tailwind, so the visual proof is in tests/browser).
+    const api = createApi({
+      listAssignments: vi.fn().mockResolvedValue([]),
+    })
+
+    renderPlane(api)
+
+    const logout = await screen.findByRole('button', { name: '退出登录' })
+    const form = logout.closest('form')
+    expect(form).not.toBeNull()
+    expect(form?.className ?? '').not.toContain('group-data-[collapsible=icon]:hidden')
+  })
+
   it('switches to the Souls panel and lists real Soul releases', async () => {
     const api = createApi({
       listAssignments: vi.fn().mockResolvedValue([]),
