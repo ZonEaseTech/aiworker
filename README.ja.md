@@ -2,7 +2,7 @@
 
 # AIWorker
 
-**自律的でローカルファーストな AI worker を起動 —— Soul テンプレートをネイティブエンジンにバインドするだけで、自己ホスト型の Web Workbench を備えたランタイムが手に入ります。**
+**一人の専門家の能力を、チーム全体の生産性へ —— 一度 Soul にまとめれば、各従業員はすぐ使えるローカルファーストの専属 AI Worker を手にします。**
 
 [![npm version](https://img.shields.io/npm/v/@zonease/aiworker-cli?logo=npm&label=npm)](https://www.npmjs.com/package/@zonease/aiworker-cli)
 [![lint](https://github.com/ZonEaseTech/aiworker/actions/workflows/lint.yml/badge.svg)](https://github.com/ZonEaseTech/aiworker/actions/workflows/lint.yml)
@@ -18,16 +18,21 @@
 </div>
 
 > [!NOTE]
-> **ステータス:`0.x` プレビュー。** v1 は**スタンドアロン Worker** のみを提供します。Host コントロールプレーンは **Phase 2** であり、ランタイムのホットパス上には決して現れません。以下のアーキテクチャが正式な契約です —— [`docs/architecture.md`](./docs/architecture.md) を参照してください。
+> **ステータス:`1.0.0-rc` プレビュー。** v1 は**スタンドアロン Worker** のみを提供します。Host コントロールプレーンは **Phase 2** であり、ランタイムのホットパス上には決して現れません。以下のアーキテクチャが正式な契約です —— [`docs/architecture.md`](./docs/architecture.md) を参照してください。
 
-AIWorker は **worker 中心・ローカルファーストの AI ランタイム**です。**Worker** は自律的で CLI-first なプロセスであり、**ネイティブエンジン**(Codex / Claude Code)を通じて 1 つの **Soul** を実行し、エンジン起動権を所有し、自身の Web **Workbench** を提供します。クラウドバックエンドもコントロールサーバーも不要 —— 1 つのコマンドで、自己ホスト型の AI worker をあなたのマシン上に立ち上げられます。
+AIWorker は**一人の専門知識を、多くの従業員のアウトプットに変えます**。知見のある作者が専門能力を **Soul** としてパッケージ化して素早く反復し、組織はそれを、技術システムに一切触れない従業員へ低コストで複製します —— 各人がすぐ使える専属の **AI Worker** を手にします。
 
-- 🧍 **Worker 中心** —— 各 Worker は自律的な CLI-first ランタイムで、作成時に 1 つの Soul にバインドされ*生涯変わりません*。エンジン起動権を所有し、Host が不在でも完全にスタンドアロンで動作します。
-- 🧩 **Soul = テンプレート** —— descriptor-only のエンジンアセット束(workspace ファイル、skills、ネイティブ MCP ファイル、`AGENTS.md` / `CLAUDE.md` などの entry ファイル)。UI も、アプリ固有 API も、ロックインもありません。一度作成すれば、対応する任意のエンジンへ投影できます。
-- 🖥️ **自身の Workbench を所有** —— Worker は自身の Web UI(workspace、session、chat)を直接レンダリングします。mounted micro-app も Soul 提供の UI もありません。
-- 🔌 **ネイティブエンジンブリッジ** —— 構造化ブリッジを通じてエンジンを駆動します(プロセス管理、秘匿化、キャンセル、再アタッチ、リコンサイル)。モデル呼び出し、tool loop、承認、サンドボックス、認証はすべてエンジンが所有し続けます。
-- 🔒 **ローカルファーストかつ秘密情報セーフ** —— 単一のローカル daemon、SQLite メタデータ、そして厳格な秘匿化境界:秘密情報が descriptor・DB・ログ・receipt・UI に入ることは決してありません。
-- ⚡ **ゼロコンフィグ起動** —— `bunx @zonease/aiworker-cli start` が DB・内蔵 Freeform Soul・Worker の bootstrap を行い、Workbench を開きます。
+| | | |
+| --- | --- | --- |
+| 🧩 | **Soul** = 能力の担い手 | descriptor-only のエンジンアセット束(skills、ネイティブ MCP、entry ファイル)。一度作成すれば任意のエンジンへ投影。*担い手。* |
+| 🧍 | **Worker** = 従業員の端末 | 自律的で CLI-first なランタイム。1 つの Soul に生涯バインドされ、ネイティブエンジン(Codex / Claude Code)で実行、エンジン起動権を所有し、自身の Web Workbench を提供。*完全にスタンドアロン。* |
+| 🎚️ | **Host** = 複製レバー *(Phase 2)* | 従業員横断での発行・割り当て・ロールアウト・ガバナンス。*ランタイムのホットパス上には決して現れません。* |
+
+> **一人の能力 → チーム全体の生産能力。**
+
+- 🔒 **ローカルファーストかつ秘密情報セーフ** —— 単一のローカル daemon、SQLite メタデータ、厳格な秘匿化境界:秘密情報が descriptor・DB・ログ・receipt・UI に入ることは決してありません。
+- 🔌 **エンジン中立・ロックインなし** —— descriptor-only の Soul は対応する任意のネイティブエンジンへ投影。モデル呼び出し、tool loop、承認、サンドボックス、認証はエンジンが所有し続けます。
+- ⚡ **ゼロコンフィグ** —— `bunx @zonease/aiworker-cli start` が DB・内蔵 Freeform Soul・Worker を bootstrap し、Workbench を開きます。
 
 ---
 
@@ -35,6 +40,7 @@ AIWorker は **worker 中心・ローカルファーストの AI ランタイム
 
 - [AIWorker とは?](#aiworker-とは)
 - [対象ユーザー](#対象ユーザー)
+- [能力の複製(Phase 2)](#能力の複製phase-2)
 - [メンタルモデル](#メンタルモデル)
 - [アーキテクチャ](#アーキテクチャ)
 - [クイックスタート](#クイックスタート)
@@ -44,13 +50,14 @@ AIWorker は **worker 中心・ローカルファーストの AI ランタイム
 - [開発](#開発)
 - [テストとリリースゲート](#テストとリリースゲート)
 - [ロードマップ](#ロードマップ)
+- [非ゴール](#非ゴール)
 - [ドキュメントマップ](#ドキュメントマップ)
 - [コントリビュート](#コントリビュート)
 - [ライセンス](#ライセンス)
 
 ## AIWorker とは?
 
-ほとんどの AI ツールは、開発者向け IDE/agent か、レンタル型のクラウドプラットフォームのどちらかです。AIWorker はそのどちらでもありません。AIWorker は**ランタイム層**です ——*1 つのエンジン + 1 つのテンプレート*を、あなたが所有しローカルで動かす、独立した自己ホスト型の **AI worker** に変えます。
+ほとんどの AI ツールは、開発者向け IDE/agent か、レンタル型のクラウドプラットフォームのどちらかです。AIWorker はそのどちらでもありません。AIWorker は**ランタイム層**です ——*1 つのエンジン + 1 つのテンプレート*を、あなたが所有しローカルで動かす、独立した自己ホスト型の **AI worker** に変えます。そして Phase 2 の Host により、その worker をチーム全体へ複製するレバーになります。
 
 責務の分離は厳格であり、それこそが本質です:
 
@@ -65,17 +72,35 @@ Worker はランタイム時に Host に依存することは決してなく、`
 
 ## 対象ユーザー
 
-AIWorker は、**一人の専門家の能力をチーム全体に複製したい**組織のために作られています —— 知見のある作者が専門能力を Soul としてパッケージ化し、各従業員はすぐ使える専属の AI Worker を手にします。垂直的・組織的なワークフローのための**ローカルで自己完結する AI worker** であり、**また別の**開発者 IDE やレンタル型 agent プラットフォームではありません。
+**一人の専門家の働き方を全員の働き方にしたい**組織のために —— そしてそれを使う人は、背後の技術システムを理解する必要がありません。
 
-作者が任意の垂直職能向けに Soul を作成すれば、各従業員の Worker はそれをスタンドアロンで実行します:
+| 役割 | 誰 | 得られるもの |
+| --- | --- | --- |
+| **能力の作者** | 社内の専門家 —— シニア HR、サポートリード、PM、広告スペシャリスト | プレイブックを Soul にまとめて素早く反復します(**アプリやバックエンドにする必要はありません**) |
+| **管理者** *(Phase 2)* | 能力とアクセスを割り当てる人 | 公開済みの 1 つの Soul を多数の従業員へ複製。assignment、connector 認可、ロールアウト、ロールバックが可視 |
+| **従業員** | 非技術の実務担当者 | すぐ使える専属の AI Worker —— Soul・descriptor・MCP・エンジン・Host を学ぶ必要なし |
 
-- **PM** —— PRD、意思決定記録、roadmap スライス、ステータスレポート
-- **品質** —— テスト計画、回帰マトリクス、欠陥エビデンス、release gate
-- **People ops** —— 候補者スクリーニング、面接ブリーフ、役割ルーブリック、採用リスク
-- **DevOps** —— デプロイチェックリスト、インシデントレビュー、runbook 更新、キャパシティサマリ
-- **財務 / 法務 / 運用** —— 各領域のレビュー、テンプレート化された出力、エビデンスチェーン
+作者は任意の垂直職能向けに Soul を作成し、各従業員の Worker がそれをスタンドアロンで実行します。`souls/*` のサンプル Soul は飲食 POS SaaS チームを対象にしています:
 
-組織側の複製レバー —— 発行、割り当て、ロールアウト、ロールバック —— は Phase 2 の Host です。v1 は基盤としてスタンドアロンの Worker を提供します。v1 唯一の受け入れ用 Soul **`aiworker-freeform`** が完全なスタンドアロンループを証明します。HR と QA の Soul は、その後 descriptor-producing なテンプレートとして追加されます。
+- **HR マネージャー** —— バックエンド / Flutter / PM / サポート職を横断する構造化採用ワークフロー
+- **ソフトウェアサポート** —— チケットのトリアージ、POS トラブルシューティング、品質ゲートを通過するエスカレーション issue
+- **プロダクトマネージャー** —— 5 次元品質ゲートを通過する PRD と issue
+- **Google Ads** —— ローカル飲食店のキャンペーン運用(Performance Max、Google Business Profile、来店コンバージョン)
+
+v1 の強受け入れ Soul は **`aiworker-freeform`** で、完全なスタンドアロンループをエンドツーエンドで証明します。上記のドメイン Soul は descriptor-producing なテンプレートです。
+
+## 能力の複製(Phase 2)
+
+Phase 2 は組織側 —— 配布とガバナンスを追加しますが、ランタイムのホットパス上には決して現れません:
+
+```text
+作者が Soul バージョンを公開
+  → 管理者がそれを従業員またはグループへ割り当て(connector · 権限 · profile)
+    → 従業員の Worker がプロビジョニングされ、自身の Workbench を開いてすぐ作業開始
+  ↺ 作者が更新を出す → 管理者がロールアウト、またはロールバック
+```
+
+Phase 2.1 はマネージドリモートアクセスを追加します:従業員は Host のエンタープライズ URL、Logto 認証、Worker 発のトンネルを経由して自身の Worker に到達します。Host は URL と認可の境界にすぎません —— Workbench を mount・frame・render・proxy することは一切なく、Host やトンネルの障害がローカル Worker を止めることもありません。
 
 ## メンタルモデル
 
@@ -198,6 +223,7 @@ apps/
 
 souls/
   aiworker-freeform/   v1 強受け入れ descriptor Soul
+  hr-manager/ software-support/ product-manager/ google-ads/   ドメイン Soul テンプレート(サンプル)
 
 packages/
   worker-runtime/           Worker locator/runtime オーケストレーション + エンジン adapter
@@ -255,7 +281,7 @@ bun apps/worker-cli/src/aiworker.ts daemon foreground --port 9217
 bun run release:check
 ```
 
-これは順に実行します:`docs:check` → `test:contracts` → `test:protocol` → `test:cli` → `test:browser:freeform` → `typecheck` → `lint` → `build` → リリース smoke(`dist-release`、`standalone-release`、`standalone-runtime`、`npm-package`)→ `test` → `check`。v1 のブラウザ証明は Freeform のみ、かつスタンドアロンです。[`docs/testing.md`](./docs/testing.md) を参照してください。
+これは順に実行します:`docs:check` → `test:contracts` → `test:protocol` → `test:cli` → `test:browser:freeform` → `test:browser:phase2` → `typecheck` → `lint` → `build` → リリース smoke(`dist-release`、`host-dist-release`、`standalone-release`、`standalone-runtime`、`npm-package`)→ `test` → `check`。v1 のブラウザ証明は Freeform のみ、かつスタンドアロンです。[`docs/testing.md`](./docs/testing.md) を参照してください。
 
 ## ロードマップ
 
@@ -263,7 +289,16 @@ bun run release:check
 | --- | --- |
 | **v1 —— 現在** | スタンドアロン Worker · `aiworker-freeform` Soul · worker が Workbench を所有 · ネイティブエンジン bridge(Codex / Claude Code)· ゼロコンフィグ `aiworker start` · BYOK フォールバック |
 | **Phase 2 —— Host コントロールプレーン** | オプションの 配布 / 管理 / 権限割り当て / connector 認可 · Worker 発の check-in と Worker Access tunnel · トランスポート非依存の制御契約。ランタイムのホットパス上には決して現れません。 |
-| **その先** | HR、QA、およびさらなる垂直 Soul を descriptor-producing テンプレートとして再作成 |
+| **Phase 2.1 —— マネージドアクセス** | 従業員が Host エンタープライズ URL + Logto + Worker 発のトンネルでリモートアクセス;Host は Workbench を決してレンダリングしない |
+| **その先** | さらなるドメイン Soul を descriptor-producing テンプレートとして |
+
+## 非ゴール
+
+- v1 にクラウドバックエンドやコントロールサーバーはありません —— Host は Phase 2 であり、ランタイムのホットパス上には決して現れません。
+- どのフェーズでも micro-app、mounted workbench、iframe、Host がレンダリングする Worker UI はありません。
+- Soul は UI、アプリ固有 API、capability 層、ドメインバックエンドを提供しません。
+- Worker は 1 つの Soul に生涯バインドされます —— ランタイムでの Soul 切り替えはありません。
+- Host はドメインワークフロー層、プロダクトバックエンド、agent runtime、リポジトリダッシュボード、Soul 設定センターのいずれでもありません。
 
 ## ドキュメントマップ
 

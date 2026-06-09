@@ -2,7 +2,7 @@
 
 # AIWorker
 
-**Run an autonomous, local-first AI worker — bind one Soul template to a native engine and get a self-hosting runtime with its own web Workbench.**
+**Turn one expert's capability into a whole team's productivity — package it once as a Soul, and every employee gets an out-of-the-box, local-first AI Worker.**
 
 [![npm version](https://img.shields.io/npm/v/@zonease/aiworker-cli?logo=npm&label=npm)](https://www.npmjs.com/package/@zonease/aiworker-cli)
 [![lint](https://github.com/ZonEaseTech/aiworker/actions/workflows/lint.yml/badge.svg)](https://github.com/ZonEaseTech/aiworker/actions/workflows/lint.yml)
@@ -18,16 +18,21 @@
 </div>
 
 > [!NOTE]
-> **Status: `0.x` preview.** v1 ships the **standalone Worker** only. The Host control plane is **Phase 2** and is never on the runtime hot path. The architecture below is the canonical contract — see [`docs/architecture.md`](./docs/architecture.md).
+> **Status: `1.0.0-rc` preview.** v1 ships the **standalone Worker** only. The Host control plane is **Phase 2** and is never on the runtime hot path. The architecture below is the canonical contract — see [`docs/architecture.md`](./docs/architecture.md).
 
-AIWorker is a **worker-centric, local-first AI runtime**. A **Worker** is an autonomous, CLI-first process that runs one **Soul** through a **native engine** (Codex / Claude Code), owns engine launch, and serves its own web **Workbench**. No cloud backend, no control server required — one command brings up a self-hosting AI worker on your machine.
+AIWorker turns **one person's expertise into many employees' output**. A knowledgeable author packages a professional capability as a **Soul**, iterates it fast, and an organization copies it cheaply to employees who never touch the technical system — each gets an out-of-the-box, dedicated **AI Worker**.
 
-- 🧍 **Worker-centric** — each Worker is an autonomous, CLI-first runtime bound to one Soul *for life*. It owns engine launch and runs fully standalone, with Host absent.
-- 🧩 **Soul = template** — a descriptor-only bundle of engine assets (workspace files, skills, native MCP files, entry files like `AGENTS.md` / `CLAUDE.md`). No UI, no app-owned API, no lock-in. Author once, project to any supported engine.
-- 🖥️ **Owns its Workbench** — the Worker renders its own web UI (workspaces, sessions, chat). No mounted micro-app, no Soul-provided UI.
-- 🔌 **Native engine bridge** — drives the engine through a structured bridge (process management, redaction, cancel, reattach, reconcile). The engine keeps model calls, tool loops, approval, sandbox, and auth.
+| | | |
+| --- | --- | --- |
+| 🧩 | **Soul** = the capability | A descriptor-only bundle of engine assets (skills, native MCP, entry files). Author once, project to any engine. *The carrier.* |
+| 🧍 | **Worker** = the employee's terminal | An autonomous, CLI-first runtime bound to one Soul for life, running it through a native engine (Codex / Claude Code) and serving its own web Workbench. *Fully standalone.* |
+| 🎚️ | **Host** = the replication lever *(Phase 2)* | Publish, assign, roll out, and govern across employees. *Never on the runtime hot path.* |
+
+> **One expert's capability → a whole team's capacity.**
+
 - 🔒 **Local-first & secret-safe** — one local daemon, SQLite metadata, and a strict redaction boundary: secrets never land in descriptor, DB, logs, receipts, or UI.
-- ⚡ **Zero-config start** — `bunx @zonease/aiworker-cli start` bootstraps the DB, the bundled Freeform Soul, and the Worker, then opens the Workbench.
+- 🔌 **Engine-neutral, no lock-in** — descriptor-only Souls project to any supported native engine; the engine keeps model calls, tool loops, approval, sandbox, and auth.
+- ⚡ **Zero-config** — `bunx @zonease/aiworker-cli start` bootstraps the DB, the bundled Freeform Soul, and the Worker, then opens the Workbench.
 
 ---
 
@@ -35,6 +40,7 @@ AIWorker is a **worker-centric, local-first AI runtime**. A **Worker** is an aut
 
 - [What is AIWorker?](#what-is-aiworker)
 - [Who is it for?](#who-is-it-for)
+- [Capability replication (Phase 2)](#capability-replication-phase-2)
 - [Mental model](#mental-model)
 - [Architecture](#architecture)
 - [Quickstart](#quickstart)
@@ -44,13 +50,14 @@ AIWorker is a **worker-centric, local-first AI runtime**. A **Worker** is an aut
 - [Development](#development)
 - [Testing & release gates](#testing--release-gates)
 - [Roadmap](#roadmap)
+- [Non-goals](#non-goals)
 - [Documentation map](#documentation-map)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## What is AIWorker?
 
-Most AI tooling is either a developer IDE/agent or a cloud platform you rent. AIWorker is neither. It is the **runtime layer** that turns *one engine + one template* into a standalone, self-hosting **AI worker** you own and run locally.
+Most AI tooling is either a developer IDE/agent or a cloud platform you rent. AIWorker is neither. It is the **runtime layer** that turns *one engine + one template* into a standalone, self-hosting **AI worker** you own and run locally — and, with the Phase 2 Host, the lever that copies that worker to a whole team.
 
 The separation of concerns is strict and is the whole point:
 
@@ -65,17 +72,35 @@ A Worker never depends on Host to run, and `worker-*` packages never import `hos
 
 ## Who is it for?
 
-AIWorker is built for an organization that wants **one expert's capability copied to a whole team**: a knowledgeable author packages a professional capability as a Soul, and every employee gets an out-of-the-box, dedicated AI Worker. It is a **local, self-contained AI worker** for vertical and organizational workflows — **not** another developer IDE or rented agent platform.
+Organizations where **one expert's way of working should become everyone's** — and the people using it don't need to understand the technical system underneath.
 
-The author writes a Soul for any vertical; each employee's Worker runs it standalone:
+| Role | Who | What they get |
+| --- | --- | --- |
+| **Capability author** | the in-house expert — senior HR, support lead, PM, ads specialist | packages a playbook as a Soul and iterates it fast, without turning it into an app or a backend |
+| **Administrator** *(Phase 2)* | whoever allocates capability and access | copies one published Soul to many employees, with visible assignment, connector authorization, rollout, and rollback |
+| **Employee** | the non-technical doer | an out-of-the-box, dedicated AI Worker — nothing to learn about Souls, descriptors, MCP, engines, or Host |
 
-- **PM** — PRD, decision record, roadmap slice, status report
-- **Quality** — test plan, regression matrix, defect evidence, release gate
-- **People ops** — candidate screen, interview brief, role rubric, hiring risk
-- **DevOps** — deployment checklist, incident review, runbook update, capacity summary
-- **finance / legal / ops** — domain review, templated output, evidence chains
+The author writes a Soul for any vertical; each employee's Worker runs it standalone. The example Souls under `souls/*` target a restaurant-POS SaaS team:
 
-The organization-side replication lever — publish, assign, roll out, roll back — is the Phase 2 Host; v1 ships the standalone Worker as the substrate. v1's one acceptance Soul, **`aiworker-freeform`**, proves the full standalone loop. HR and QA Souls follow later as descriptor-producing templates.
+- **HR manager** — structured hiring workflows across backend / Flutter / PM / support roles
+- **Software support** — ticket triage, POS troubleshooting, escalation issues through a quality gate
+- **Product manager** — PRDs and issues that pass a five-dimension quality gate
+- **Google Ads** — local restaurant campaign operations (Performance Max, Google Business Profile, store-visit conversions)
+
+v1's strong-acceptance Soul is **`aiworker-freeform`**, which proves the full standalone loop end to end; the domain Souls above are descriptor-producing templates.
+
+## Capability replication (Phase 2)
+
+Phase 2 adds the organization side — distribution and governance, never the runtime hot path:
+
+```text
+author publishes a Soul version
+  → administrator assigns it to an employee or group (connectors · permissions · profile)
+    → the employee's Worker is provisioned and opens its own Workbench, ready to work
+  ↺ author ships an update → administrator rolls it out, or rolls it back
+```
+
+Phase 2.1 adds managed remote access: an employee reaches their Worker through the Host enterprise URL, Logto auth, and a Worker-initiated tunnel. The Host is only the URL and authorization boundary — it never mounts, frames, renders, or proxies the Workbench, and a Host or tunnel outage never stops the local Worker.
 
 ## Mental model
 
@@ -198,6 +223,7 @@ apps/
 
 souls/
   aiworker-freeform/   v1 strong-acceptance descriptor Soul
+  hr-manager/ software-support/ product-manager/ google-ads/   domain Soul templates (samples)
 
 packages/
   worker-runtime/           Worker locator/runtime orchestration + engine adapters
@@ -255,15 +281,24 @@ Contract tests are the primary guardrail — focused static, unit, package, CLI,
 bun run release:check
 ```
 
-which runs, in order: `docs:check` → `test:contracts` → `test:protocol` → `test:cli` → `test:browser:freeform` → `typecheck` → `lint` → `build` → the release smokes (`dist-release`, `standalone-release`, `standalone-runtime`, `npm-package`) → `test` → `check`. The v1 browser proof is Freeform-only and standalone. See [`docs/testing.md`](./docs/testing.md).
+which runs, in order: `docs:check` → `test:contracts` → `test:protocol` → `test:cli` → `test:browser:freeform` → `test:browser:phase2` → `typecheck` → `lint` → `build` → the release smokes (`dist-release`, `host-dist-release`, `standalone-release`, `standalone-runtime`, `npm-package`) → `test` → `check`. The v1 browser proof is Freeform-only and standalone. See [`docs/testing.md`](./docs/testing.md).
 
 ## Roadmap
 
 | Phase | Scope |
 | --- | --- |
 | **v1 — now** | Standalone Worker · `aiworker-freeform` Soul · worker-owns-Workbench · native engine bridge (Codex / Claude Code) · zero-config `aiworker start` · BYOK fallback |
-| **Phase 2 — Host control plane** | Optional distributor / manager / permission allocator / connector authorizer · Worker-initiated check-in and Worker Access tunnel · transport-agnostic control contract. Never on the runtime hot path. |
-| **Later** | HR, QA, and more vertical Souls re-authored as descriptor-producing templates |
+| **Phase 2 — Host control plane** | Optional distribution / management / permission allocation / connector authorization · Worker-initiated check-in and Worker Access tunnel · transport-agnostic control contract. Never on the runtime hot path. |
+| **Phase 2.1 — managed access** | Employee remote access via Host enterprise URL + Logto + Worker-initiated tunnel; Host never renders the Workbench |
+| **Later** | Further domain Souls as descriptor-producing templates |
+
+## Non-goals
+
+- No cloud backend or control server in v1 — the Host is Phase 2 and never on the runtime hot path.
+- No micro-app, mounted workbench, iframe, or Host-rendered Worker UI, in any phase.
+- A Soul provides no UI, app-owned API, capability layer, or domain backend.
+- A Worker is bound to one Soul for life — no runtime Soul-switching.
+- The Host is not a domain-workflow layer, product backend, agent runtime, repository dashboard, or Soul configuration center.
 
 ## Documentation map
 
