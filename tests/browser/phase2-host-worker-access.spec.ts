@@ -72,10 +72,12 @@ try {
   const hostStatus = await gotoDocument(page, hostUrl, '/host')
   await page.getByRole('heading', { name: 'AI Workers' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('navigation', { name: 'Host navigation' }).waitFor({ state: 'visible', timeout: 10000 })
-  await page.getByRole('complementary', { name: 'Worker assignment drawer' }).waitFor({ state: 'visible', timeout: 10000 })
+  // The provisioning drawer is on-demand now; the persistent shell affordance is
+  // the 开通 AI Worker header action.
+  await page.getByRole('button', { name: '开通 AI Worker' }).first().waitFor({ state: 'visible', timeout: 10000 })
   evidence.host = {
     ...await assertNoMountContainers(page, '/host'),
-    assignmentDrawerVisible: await page.getByRole('complementary', { name: 'Worker assignment drawer' }).isVisible(),
+    createActionVisible: await page.getByRole('button', { name: '开通 AI Worker' }).first().isVisible(),
     navigationVisible: await page.getByRole('navigation', { name: 'Host navigation' }).isVisible(),
     status: hostStatus,
   }

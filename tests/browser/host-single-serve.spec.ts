@@ -53,7 +53,10 @@ try {
   const status = await gotoDocument(page, hostUrl)
   await page.getByRole('heading', { name: 'AI Workers' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('navigation', { name: 'Host navigation' }).waitFor({ state: 'visible', timeout: 10000 })
-  await page.getByRole('complementary', { name: 'Worker assignment drawer' }).waitFor({ state: 'visible', timeout: 10000 })
+  // Provisioning is an on-demand right drawer (Sheet) now; open it before
+  // asserting the create form is reachable.
+  await page.getByRole('button', { name: '开通 AI Worker' }).first().click()
+  await page.getByRole('dialog', { name: '开通 AI Worker' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('button', { name: '创建开通' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByLabel('provisioning target').waitFor({ state: 'visible', timeout: 10000 })
   if (await page.getByLabel('aissh server').count() !== 0)
