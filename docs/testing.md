@@ -326,6 +326,32 @@ through Host API, real check-in moves it to `checked_in`, and Web refresh/reload
 shows `Worker 已报到`. It does not claim Worker Access `ready` or opening a
 Worker URL.
 
+## Phase DoD Forcing Functions
+
+The product baseline
+(`docs/superpowers/specs/2026-06-09-product-baseline-design.md`) locks one hard
+exit gate per phase — the forcing function that turns "the code exists" into
+"the phase is done". These are durable acceptance shapes; the point-in-time
+release status that satisfies them (specific release-candidate tags, host
+addresses, live-instance counts) is tracked in project memory, not here.
+
+- v1 standalone substrate: zero-config `aiworker start` on a single service
+  port, and a green `bun run release:check` that includes the standalone
+  Freeform browser proof.
+- Phase 2 distribution MVP: the first real employee is onboarded through the
+  managed enterprise-access boundary — a real Host URL, not a localhost or
+  dev-static shortcut — and completes a native-engine real round, with at least
+  two concurrent real employees on a working loop.
+- Phase 2.1 managed access: a real two-host interconnect runs live (Host
+  enterprise URL plus Logto plus a Worker-initiated tunnel reaching the
+  Worker-owned Workbench), and Host or tunnel outage does not break the local
+  Worker runtime.
+
+These forcing functions never weaken the standing invariants: the Worker never
+depends on Host, Host never enters the runtime hot path, Host never reads
+session, invocation, projection, engine, or secret data, and `worker-*` never
+imports `host-*`.
+
 ## Pending Implementation (Phase-B Teardown)
 
 Phase A flipped the canonical docs and doc gates to the worker-owns-workbench,
