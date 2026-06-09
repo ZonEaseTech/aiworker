@@ -9,6 +9,7 @@ import { devAdminHostEnv } from './host-serve-env'
 const repoRoot = join(import.meta.dir, '..', '..')
 const evidenceRoot = join(repoRoot, 'tmp', `host-single-serve-${new Date().toISOString().replace(/[:.]/g, '-')}`)
 const adminEmail = 'admin@zonease.org'
+const LOGOUT_PATH = '/auth/logout'
 const browserEvents: string[] = []
 const evidence: Record<string, unknown> = {}
 
@@ -53,6 +54,42 @@ try {
   const status = await gotoDocument(page, hostUrl)
   await page.getByRole('heading', { name: 'AI Workers' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('navigation', { name: 'Host navigation' }).waitFor({ state: 'visible', timeout: 10000 })
+
+  // P2-1 regression: the logout affordance must survive the sidebar collapsing
+  // to the icon rail. The happy-dom unit tests cannot see this (it is pure
+  // Tailwind CSS), so prove it in a real browser — collapse via the trigger,
+  // then assert the logout control is still visible, enabled, and posts to
+  // /auth/logout from inside the rail. We avoid the canonical avatar
+  // DropdownMenu (radix popover) on purpose; the footer just stacks the logout
+  // icon button under the avatar when collapsed.
+  const logoutButton = page.getByRole('button', { name: '退出登录' })
+  await logoutButton.waitFor({ state: 'visible', timeout: 10000 })
+  const toggleSidebar = page.getByRole('button', { name: 'Toggle Sidebar' }).first()
+  await toggleSidebar.click()
+  await page.locator('[data-slot="sidebar"][data-state="collapsed"][data-collapsible="icon"]')
+    .first()
+    .waitFor({ state: 'attached', timeout: 10000 })
+  const collapsedLogoutVisible = await logoutButton.isVisible()
+  const collapsedLogoutEnabled = await logoutButton.isEnabled()
+  const collapsedLogoutAction = await logoutButton.evaluate(node => node.closest('form')?.getAttribute('action') ?? null)
+  if (!collapsedLogoutVisible)
+    throw new Error('P2-1 regression: logout control was hidden once the sidebar collapsed to the icon rail')
+  if (!collapsedLogoutEnabled)
+    throw new Error('P2-1 regression: logout control was disabled once the sidebar collapsed to the icon rail')
+  if (collapsedLogoutAction !== LOGOUT_PATH)
+    throw new Error(`P2-1 regression: collapsed logout form action was ${String(collapsedLogoutAction)} (expected ${LOGOUT_PATH})`)
+  await page.screenshot({ path: join(evidenceRoot, 'collapsed-rail-logout.png') })
+  evidence.collapsedRailLogout = {
+    action: collapsedLogoutAction,
+    enabled: collapsedLogoutEnabled,
+    visible: collapsedLogoutVisible,
+  }
+  // Restore the expanded layout for the remaining provisioning assertions.
+  await toggleSidebar.click()
+  await page.locator('[data-slot="sidebar"][data-state="expanded"]')
+    .first()
+    .waitFor({ state: 'attached', timeout: 10000 })
+
   // Provisioning is an on-demand right drawer (Sheet) now; open it before
   // asserting the create form is reachable.
   await page.getByRole('button', { name: '开通 AI Worker' }).first().click()

@@ -878,7 +878,12 @@ function SidebarOperator({ operator, operatorLoaded }: { operator: HostOperator 
     const isAdmin = operator.roles.includes('host:admin')
     return (
       <div
-        className="flex items-center gap-2 rounded-md border border-border bg-background p-2 group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:p-0"
+        // Expanded: avatar · identity · logout in a row. Collapsed to the icon
+        // rail: switch to a centered vertical stack so the logout control stays
+        // reachable (P2-1) instead of being hidden. We deliberately avoid the
+        // canonical avatar DropdownMenu — its radix popover is fragile under the
+        // happy-dom unit tests — and just stack the icon button under the avatar.
+        className="flex items-center gap-2 rounded-md border border-border bg-background p-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1 group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:p-0"
         aria-label="Host operator identity"
       >
         <Avatar className="size-7 rounded-md">
@@ -888,7 +893,7 @@ function SidebarOperator({ operator, operatorLoaded }: { operator: HostOperator 
           <span className="truncate text-xs font-medium">{operator.email}</span>
           <span className="text-muted-foreground truncate text-xs">{isAdmin ? 'Host 管理员' : '非管理员'}</span>
         </div>
-        <form method="post" action={LOGOUT_URL} className="group-data-[collapsible=icon]:hidden">
+        <form method="post" action={LOGOUT_URL}>
           <Button type="submit" size="icon-sm" variant="ghost" aria-label="退出登录" title="退出登录">
             <HugeiconsIcon icon={Logout01Icon} strokeWidth={2} aria-hidden="true" />
           </Button>
