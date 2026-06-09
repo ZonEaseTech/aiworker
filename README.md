@@ -65,9 +65,9 @@ A Worker never depends on Host to run, and `worker-*` packages never import `hos
 
 ## Who is it for?
 
-AIWorker is built for people who want a **local, self-contained AI worker** for vertical and organizational workflows — **not** another developer IDE or rented agent platform.
+AIWorker is built for an organization that wants **one expert's capability copied to a whole team**: a knowledgeable author packages a professional capability as a Soul, and every employee gets an out-of-the-box, dedicated AI Worker. It is a **local, self-contained AI worker** for vertical and organizational workflows — **not** another developer IDE or rented agent platform.
 
-Author a Soul for any vertical and the Worker runs it standalone:
+The author writes a Soul for any vertical; each employee's Worker runs it standalone:
 
 - **PM** — PRD, decision record, roadmap slice, status report
 - **Quality** — test plan, regression matrix, defect evidence, release gate
@@ -75,7 +75,7 @@ Author a Soul for any vertical and the Worker runs it standalone:
 - **DevOps** — deployment checklist, incident review, runbook update, capacity summary
 - **finance / legal / ops** — domain review, templated output, evidence chains
 
-v1 ships one acceptance Soul, **`aiworker-freeform`**, that proves the full standalone loop. HR and QA Souls follow later as descriptor-producing templates.
+The organization-side replication lever — publish, assign, roll out, roll back — is the Phase 2 Host; v1 ships the standalone Worker as the substrate. v1's one acceptance Soul, **`aiworker-freeform`**, proves the full standalone loop. HR and QA Souls follow later as descriptor-producing templates.
 
 ## Mental model
 
@@ -115,7 +115,7 @@ flowchart LR
   class HOST p2;
 ```
 
-**Daemon topology is one daemon per Worker.** A Worker daemon hosts at most one active Worker and carries zero fleet/Host awareness — a passive local server that serves its own CLI, Workbench web, and configuration. In Phase 2 the Host frames the Worker's own Workbench as a sandboxed micro-app over HTTP and drives a transport-agnostic control contract; the Worker stays pure and behaves identically whether a Host is present or not.
+**Daemon topology is one daemon per Worker.** A Worker daemon hosts at most one active Worker and carries zero fleet/Host awareness — a passive local server that serves its own CLI, Workbench web, and configuration. In Phase 2 the Host drives a transport-agnostic control contract over the wire and can direct an employee to the Worker-owned Workbench URL, but it does not mount, frame, embed, render, or proxy the Workbench; the Worker stays pure and behaves identically whether a Host is present or not.
 
 ## Quickstart
 
@@ -262,7 +262,7 @@ which runs, in order: `docs:check` → `test:contracts` → `test:protocol` → 
 | Phase | Scope |
 | --- | --- |
 | **v1 — now** | Standalone Worker · `aiworker-freeform` Soul · worker-owns-Workbench · native engine bridge (Codex / Claude Code) · zero-config `aiworker start` · BYOK fallback |
-| **Phase 2 — Host control plane** | Optional distributor / manager / permission allocator / connector authorizer · micro-app framing over HTTP · transport-agnostic control contract. Never on the runtime hot path. |
+| **Phase 2 — Host control plane** | Optional distributor / manager / permission allocator / connector authorizer · Worker-initiated check-in and Worker Access tunnel · transport-agnostic control contract. Never on the runtime hot path. |
 | **Later** | HR, QA, and more vertical Souls re-authored as descriptor-producing templates |
 
 ## Documentation map

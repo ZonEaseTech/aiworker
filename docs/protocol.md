@@ -239,8 +239,9 @@ AIWORKER_HOST_URL
 AIWORKER_PROVISION_TOKEN
 ```
 
-Do not add AIWORKER_WORKER_ACCESS_LOCAL_URL. Fleet owns worker id, worker home,
-and daemon port; the Worker runtime resolves its own local handler.
+Do not add AIWORKER_WORKER_ACCESS_LOCAL_URL. The Worker mints its own worker id,
+and worker home and daemon port are fleet-allocated; the Worker runtime resolves
+its own local handler.
 
 Host URLs are environment-specific:
 

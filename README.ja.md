@@ -65,9 +65,9 @@ Worker はランタイム時に Host に依存することは決してなく、`
 
 ## 対象ユーザー
 
-AIWorker は、垂直的・組織的なワークフローのために**ローカルで自己完結する AI worker** を求める人のために作られています —— **また別の**開発者 IDE やレンタル型 agent プラットフォームではありません。
+AIWorker は、**一人の専門家の能力をチーム全体に複製したい**組織のために作られています —— 知見のある作者が専門能力を Soul としてパッケージ化し、各従業員はすぐ使える専属の AI Worker を手にします。垂直的・組織的なワークフローのための**ローカルで自己完結する AI worker** であり、**また別の**開発者 IDE やレンタル型 agent プラットフォームではありません。
 
-任意の垂直職能向けに Soul を作成すれば、Worker はそれをスタンドアロンで実行します:
+作者が任意の垂直職能向けに Soul を作成すれば、各従業員の Worker はそれをスタンドアロンで実行します:
 
 - **PM** —— PRD、意思決定記録、roadmap スライス、ステータスレポート
 - **品質** —— テスト計画、回帰マトリクス、欠陥エビデンス、release gate
@@ -75,7 +75,7 @@ AIWorker は、垂直的・組織的なワークフローのために**ローカ
 - **DevOps** —— デプロイチェックリスト、インシデントレビュー、runbook 更新、キャパシティサマリ
 - **財務 / 法務 / 運用** —— 各領域のレビュー、テンプレート化された出力、エビデンスチェーン
 
-v1 は 1 つの受け入れ用 Soul、**`aiworker-freeform`** のみを提供し、完全なスタンドアロンループを証明します。HR と QA の Soul は、その後 descriptor-producing なテンプレートとして追加されます。
+組織側の複製レバー —— 発行、割り当て、ロールアウト、ロールバック —— は Phase 2 の Host です。v1 は基盤としてスタンドアロンの Worker を提供します。v1 唯一の受け入れ用 Soul **`aiworker-freeform`** が完全なスタンドアロンループを証明します。HR と QA の Soul は、その後 descriptor-producing なテンプレートとして追加されます。
 
 ## メンタルモデル
 
@@ -115,7 +115,7 @@ flowchart LR
   class HOST p2;
 ```
 
-**daemon トポロジは Worker ごとに 1 つの daemon です。** Worker daemon は最大 1 つの active Worker をホストし、fleet/Host への認識をまったく持ちません —— 自身の CLI、Workbench web、設定だけを提供する受動的なローカルサーバーです。Phase 2 では、Host が Worker 自身の Workbench を HTTP 経由でサンドボックス化された micro-app として枠取りし、トランスポート非依存の制御契約を駆動します。Host の有無にかかわらず、Worker は純粋なまま、同一に振る舞います。
+**daemon トポロジは Worker ごとに 1 つの daemon です。** Worker daemon は最大 1 つの active Worker をホストし、fleet/Host への認識をまったく持ちません —— 自身の CLI、Workbench web、設定だけを提供する受動的なローカルサーバーです。Phase 2 では、Host はトランスポート非依存の制御契約を over-the-wire で駆動し、従業員を Worker 自身の Workbench URL へ誘導できますが、その Workbench を mount / frame / embed / render / proxy することは一切ありません。Host の有無にかかわらず、Worker は純粋なまま、同一に振る舞います。
 
 ## クイックスタート
 
@@ -262,7 +262,7 @@ bun run release:check
 | フェーズ | スコープ |
 | --- | --- |
 | **v1 —— 現在** | スタンドアロン Worker · `aiworker-freeform` Soul · worker が Workbench を所有 · ネイティブエンジン bridge(Codex / Claude Code)· ゼロコンフィグ `aiworker start` · BYOK フォールバック |
-| **Phase 2 —— Host コントロールプレーン** | オプションの 配布 / 管理 / 権限割り当て / connector 認可 · HTTP 経由の micro-app 枠取り · トランスポート非依存の制御契約。ランタイムのホットパス上には決して現れません。 |
+| **Phase 2 —— Host コントロールプレーン** | オプションの 配布 / 管理 / 権限割り当て / connector 認可 · Worker 発の check-in と Worker Access tunnel · トランスポート非依存の制御契約。ランタイムのホットパス上には決して現れません。 |
 | **その先** | HR、QA、およびさらなる垂直 Soul を descriptor-producing テンプレートとして再作成 |
 
 ## ドキュメントマップ
