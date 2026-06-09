@@ -20,7 +20,7 @@
     "dev:worker:status": "bun run dev:env:check && bash scripts/dev-status.sh",
     "dev:worker:stop": "bash scripts/dev-clean.sh stop",
     "dev:worker:clean": "bash scripts/dev-clean.sh clean",
-    "dev:host": "bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts start --dev",
+    "dev:host": "bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts start --dev --seed-souls-dir souls",
     "dev:host:status": "bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts status",
     "dev:host:stop": "bun apps/host-cli/src/aiworker-host.ts stop",
     "dev:host:clean": "bun apps/host-cli/src/aiworker-host.ts clean",

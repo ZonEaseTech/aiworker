@@ -219,6 +219,35 @@ GET    /api/provision/access
 GET    /workers/:workerId
 ```
 
+The Host control plane also exposes admin-authorized control-plane routes for the
+Soul release registry and distribution. These are Host API routes (`host:admin`
+gated), not Worker broker routes, and are never on the Worker runtime path:
+
+```text
+GET    /api/host/options
+GET    /api/host/assignments
+POST   /api/host/assignments
+GET    /api/host/soul-releases
+POST   /api/host/soul-releases
+```
+
+`POST /api/host/soul-releases` publishes a built Soul descriptor into the
+Host-owned registry. The request body is `{ descriptor, version? }`; Host
+validates the descriptor-only v1 shape, assigns the version when omitted (next
+integer per `soulId`), and stores the descriptor as an opaque release artifact.
+`GET /api/host/soul-releases` lists registry releases as metadata
+(`releaseRef`, `soulId`, `name`, `version`, `source`, `publishedAt`); the stored
+descriptor content is not returned by the list route. `/api/host/options`
+projects the same registry as the assignable Soul list. The matching host-cli
+commands are `aiworker-host soul publish <descriptor> [--version]` and
+`aiworker-host soul list`; `aiworker-host serve --seed-souls-dir <dir>` is a
+dev-only convenience that seeds the registry from built descriptors when empty.
+
+Delivering descriptor content from the Host registry to a provisioned Worker
+(resolving `soulReleaseRef` to descriptor content end-to-end) is a later
+distribution slice. v1 + this slice keep the assignment `soulReleaseRef` a
+distribution label; the Worker still installs its own bundled descriptor.
+
 Phase 2.1 Worker Access tunnel:
 
 ```text

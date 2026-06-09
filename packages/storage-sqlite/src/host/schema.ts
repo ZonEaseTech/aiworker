@@ -1,4 +1,4 @@
-import { index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 const nowIso = () => new Date().toISOString()
 
@@ -30,6 +30,20 @@ export const hostAssignments = sqliteTable('host_assignments', {
   assignedEmailIdx: index('host_assignments_assigned_email_idx').on(table.assignedEmail),
   statusUpdatedAtIdx: index('host_assignments_status_updated_at_idx').on(table.status, table.updatedAt),
   workerIdUniqueIdx: uniqueIndex('host_assignments_worker_id_unique_idx').on(table.workerId),
+}))
+
+export const hostSoulReleases = sqliteTable('host_soul_releases', {
+  releaseRef: text('release_ref').primaryKey(),
+  soulId: text('soul_id').notNull(),
+  name: text('name').notNull(),
+  version: integer('version').notNull(),
+  descriptorJson: text('descriptor_json').notNull(),
+  source: text('source', { enum: ['official', 'custom'] }).notNull().default('custom'),
+  publishedBy: text('published_by').notNull(),
+  publishedAt: text('published_at').notNull().$defaultFn(nowIso),
+}, table => ({
+  soulIdIdx: index('host_soul_releases_soul_id_idx').on(table.soulId),
+  soulIdVersionUniqueIdx: uniqueIndex('host_soul_releases_soul_id_version_unique_idx').on(table.soulId, table.version),
 }))
 
 export const hostUserAuthorizations = sqliteTable('host_user_authorizations', {

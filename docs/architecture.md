@@ -145,7 +145,15 @@ A Worker is a running instance bound to one Soul. A Worker owns its runtime stat
 
 Host (Phase 2) owns only control-plane metadata:
 
-- Soul release metadata: published versions, rollout state, and rollback records;
+- Soul release metadata: published versions, rollout state, and rollback records.
+  Host owns a persisted Soul release registry: an administrator publishes a built
+  Soul descriptor into the registry, where Host stores it as an opaque release
+  artifact (the descriptor JSON plus derived `soulId`, `name`, `version`,
+  `releaseRef`, and `source`). Host validates only the descriptor-only v1 shape on
+  publish and never interprets domain fields. The assignable Soul list comes from
+  this registry, not from a repo scan, so a published Host has a real catalog
+  independent of any source checkout. The version is assigned at publish time
+  (the descriptor itself carries no version), and `releaseRef` is `<soulId>@<version>`;
 - distribution metadata: which employees or groups receive which Soul version;
 - the worker registry: which employee Workers exist, identity, endpoint, health;
 - assignment metadata: assigned Soul version, connectors, engine/gateway profile, permissions;

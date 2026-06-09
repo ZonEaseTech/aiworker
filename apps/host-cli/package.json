@@ -1,7 +1,7 @@
 {
   "name": "@zonease/aiworker-host-cli",
   "type": "module",
-  "version": "1.0.0-rc.9",
+  "version": "1.0.0-rc.10",
   "description": "AIWorker Host control-plane CLI (aiworker-host)",
   "license": "MIT",
   "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
@@ -35,6 +35,7 @@
     "@types/bun": "^1.2.13",
     "@zonease/aiworker-cli-doctor": "workspace:*",
     "@zonease/aiworker-host-control": "workspace:*",
+    "@zonease/aiworker-soul-descriptor": "workspace:*",
     "@zonease/aiworker-storage-sqlite": "workspace:*",
     "@zonease/aiworker-worker-control-protocol": "workspace:*",
     "cac": "^6.7.14",

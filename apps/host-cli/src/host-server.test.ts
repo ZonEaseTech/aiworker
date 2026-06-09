@@ -1394,11 +1394,12 @@ describe('host server', () => {
           ref: 'srv-1',
         }],
         soulReleases: [{
-          descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
           id: 'aiworker-freeform',
           name: 'AIWorker Freeform',
-          releaseRef: 'aiworker-freeform@dev',
+          publishedAt: '2026-06-09T00:00:00.000Z',
+          releaseRef: 'aiworker-freeform@1',
           source: 'official',
+          version: 1,
         }],
       }),
       ...hostUrls(),
@@ -1409,9 +1410,110 @@ describe('host server', () => {
 
     expect(response.status).toBe(200)
     expect(body.provisioningTargets[0].id).toBe('aissh:srv-1')
-    expect(body.soulReleases[0].releaseRef).toBe('aiworker-freeform@dev')
+    expect(body.soulReleases[0].releaseRef).toBe('aiworker-freeform@1')
     expect(JSON.stringify(body)).not.toContain('token')
     expect(JSON.stringify(body)).not.toContain('secret')
+  })
+
+  function freeformDescriptor() {
+    return {
+      engine: { skills: { source: 'dist/engine-assets/skills' } },
+      identity: { id: 'aiworker-freeform', name: 'AIWorker Freeform' },
+      protocol: 'soul/v1',
+    }
+  }
+
+  it('lets an admin publish a Soul release into the Host registry and list it', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+
+    const published = await json(await server.fetch(new Request('http://host/api/host/soul-releases', {
+      body: JSON.stringify({ descriptor: freeformDescriptor() }),
+      method: 'POST',
+    })))
+
+    expect(published.release.releaseRef).toBe('aiworker-freeform@1')
+    expect(published.release.soulId).toBe('aiworker-freeform')
+    expect(published.release.version).toBe(1)
+    expect(JSON.stringify(published)).not.toContain('descriptor_json')
+    expect(JSON.stringify(published)).not.toContain('descriptorJson')
+
+    const listed = await json(await server.fetch(new Request('http://host/api/host/soul-releases')))
+    expect(listed.releases).toHaveLength(1)
+    expect(listed.releases[0].releaseRef).toBe('aiworker-freeform@1')
+  })
+
+  it('surfaces a published Soul release through /api/host/options from the registry', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+
+    await server.fetch(new Request('http://host/api/host/soul-releases', {
+      body: JSON.stringify({ descriptor: freeformDescriptor() }),
+      method: 'POST',
+    }))
+
+    const options = await json(await server.fetch(new Request('http://host/api/host/options')))
+    const release = options.soulReleases.find((soul: { releaseRef: string }) => soul.releaseRef === 'aiworker-freeform@1')
+    expect(release).toBeDefined()
+    expect(release.name).toBe('AIWorker Freeform')
+    expect(release.version).toBe(1)
+  })
+
+  it('rejects Soul release publishing for a non-admin user', async () => {
+    const server = await createHostServer({
+      authUser: bobUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+
+    const response = await server.fetch(new Request('http://host/api/host/soul-releases', {
+      body: JSON.stringify({ descriptor: freeformDescriptor() }),
+      method: 'POST',
+    }))
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: { code: 'FORBIDDEN' } })
+  })
+
+  it('rejects an invalid Soul descriptor on publish', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+
+    const response = await server.fetch(new Request('http://host/api/host/soul-releases', {
+      body: JSON.stringify({ descriptor: { protocol: 'not-soul', identity: {}, engine: {} } }),
+      method: 'POST',
+    }))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: { code: 'INVALID_SOUL_DESCRIPTOR' } })
+  })
+
+  it('rejects re-publishing the same Soul release version with 409', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+
+    const first = await server.fetch(new Request('http://host/api/host/soul-releases', {
+      body: JSON.stringify({ descriptor: freeformDescriptor(), version: 3 }),
+      method: 'POST',
+    }))
+    expect(first.status).toBe(201)
+
+    const second = await server.fetch(new Request('http://host/api/host/soul-releases', {
+      body: JSON.stringify({ descriptor: freeformDescriptor(), version: 3 }),
+      method: 'POST',
+    }))
+    expect(second.status).toBe(409)
+    expect(await second.json()).toEqual({ error: { code: 'SOUL_RELEASE_CONFLICT' } })
   })
 
   it('rejects assignment creation before storage when assignedEmail is not an email', async () => {

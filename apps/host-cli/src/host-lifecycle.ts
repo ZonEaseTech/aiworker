@@ -8,6 +8,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 import { createHostServer } from './host-server'
+import { seedSoulReleasesFromDir } from './host-soul-seed'
 
 export type HostLifecycleMode = 'dev' | 'prod'
 
@@ -38,6 +39,7 @@ export interface HostLifecycleStartInput {
   mode: HostLifecycleMode
   port: number
   publicBaseUrl?: string
+  seedSoulsDir?: string
   sessionAuth?: HostLifecycleSessionAuthOptions
   webPort?: number
   webStaticDir?: string
@@ -131,6 +133,7 @@ async function startHostDevLifecycle(input: HostLifecycleStartInput): Promise<Re
     ...(input.hostBrowserBaseUrl ? { AIWORKER_HOST_BROWSER_BASE_URL: input.hostBrowserBaseUrl } : {}),
     ...(input.hostControlBaseUrl ? { AIWORKER_HOST_CONTROL_BASE_URL: input.hostControlBaseUrl } : {}),
     ...(input.webPort ? { AIWORKER_HOST_WEB_PORT: String(input.webPort) } : {}),
+    ...(input.seedSoulsDir ? { AIWORKER_HOST_SEED_SOULS_DIR: input.seedSoulsDir } : {}),
     ...hostSessionAuthEnv(input.sessionAuth),
   }
   const result = runCommand('bash', ['scripts/dev-host.sh'], { cwd: repoRoot, env })
@@ -184,6 +187,7 @@ async function startHostProdLifecycle(input: HostLifecycleStartInput): Promise<R
     ...(input.hostBrowserBaseUrl ? ['--browser-base-url', input.hostBrowserBaseUrl] : []),
     ...(input.hostControlBaseUrl ? ['--control-base-url', input.hostControlBaseUrl] : []),
     ...(!input.sessionAuth && input.devAdminEmail ? ['--dev-admin-email', input.devAdminEmail] : []),
+    ...(input.seedSoulsDir ? ['--seed-souls-dir', input.seedSoulsDir] : []),
   ], {
     cwd: repoRoot,
     detached: true,
@@ -241,6 +245,8 @@ async function startHostProdForegroundLifecycle(input: HostLifecycleStartInput):
     ...(input.sessionAuth ? { sessionAuth: input.sessionAuth } : {}),
     webStaticDir,
   })
+  if (input.seedSoulsDir)
+    seedSoulReleasesFromDir(input.seedSoulsDir, message => process.stderr.write(`${message}\n`))
   const bunServer = Bun.serve({
     fetch: (request, bunServer) => server.fetch(request, bunServer),
     hostname: input.host,
@@ -298,6 +304,8 @@ async function startHostDevForegroundLifecycle(input: HostLifecycleStartInput): 
     ...(input.sessionAuth ? { sessionAuth: input.sessionAuth } : {}),
     webBaseUrl: webUrl,
   })
+  if (input.seedSoulsDir)
+    seedSoulReleasesFromDir(input.seedSoulsDir, message => process.stderr.write(`${message}\n`))
   const bunServer = Bun.serve({
     fetch: (request, bunServer) => server.fetch(request, bunServer),
     hostname: input.host,

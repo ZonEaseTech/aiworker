@@ -95,6 +95,20 @@ export function runHostMigrations() {
   `))
   getHostDb().run(sql.raw('CREATE UNIQUE INDEX IF NOT EXISTS host_user_authorizations_email_permission_unique_idx ON host_user_authorizations (email, permission)'))
   getHostDb().run(sql.raw('CREATE INDEX IF NOT EXISTS host_user_authorizations_permission_email_idx ON host_user_authorizations (permission, email)'))
+  getHostDb().run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS host_soul_releases (
+      release_ref TEXT PRIMARY KEY NOT NULL,
+      soul_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      descriptor_json TEXT NOT NULL,
+      source TEXT DEFAULT 'custom' NOT NULL,
+      published_by TEXT NOT NULL,
+      published_at TEXT NOT NULL
+    )
+  `))
+  getHostDb().run(sql.raw('CREATE INDEX IF NOT EXISTS host_soul_releases_soul_id_idx ON host_soul_releases (soul_id)'))
+  getHostDb().run(sql.raw('CREATE UNIQUE INDEX IF NOT EXISTS host_soul_releases_soul_id_version_unique_idx ON host_soul_releases (soul_id, version)'))
 }
 
 export type HostAssignmentStatus = typeof schema.hostAssignments.$inferSelect['status']
@@ -102,6 +116,18 @@ export type HostAssignmentRow = typeof schema.hostAssignments.$inferSelect
 export type HostUserAuthorizationRow = typeof schema.hostUserAuthorizations.$inferSelect
 export type HostUserPermission = HostUserAuthorizationRow['permission']
 export type HostUserAuthorizationSource = HostUserAuthorizationRow['source']
+export type HostSoulReleaseRow = typeof schema.hostSoulReleases.$inferSelect
+export type HostSoulReleaseSource = HostSoulReleaseRow['source']
+
+export interface PublishSoulReleaseInput {
+  soulId: string
+  name: string
+  descriptor: unknown
+  version?: number
+  source?: HostSoulReleaseSource
+  publishedBy?: string
+  now?: () => string
+}
 
 export interface CreateAssignmentInput {
   assignedEmail: string
@@ -452,6 +478,65 @@ export function revokeAssignment(assignmentId: string, revokedBy: string): HostA
     .where(eq(schema.hostAssignments.assignmentId, assignmentId))
     .run()
   return getAssignment(assignmentId)
+}
+
+export function publishSoulRelease(input: PublishSoulReleaseInput): HostSoulReleaseRow {
+  const at = readNow(input.now)
+  const soulId = input.soulId.trim()
+  const name = input.name.trim()
+  if (!soulId)
+    throw new Error('publishSoulRelease requires a soulId')
+  if (!name)
+    throw new Error('publishSoulRelease requires a name')
+
+  const version = input.version ?? nextSoulReleaseVersion(soulId)
+  if (!Number.isInteger(version) || version < 1)
+    throw new Error('publishSoulRelease requires a positive integer version')
+  const releaseRef = `${soulId}@${version}`
+
+  assertNoLiteralSecrets(soulId, 'host_soul_releases.soulId')
+  assertNoLiteralSecrets(name, 'host_soul_releases.name')
+  assertNoLiteralSecrets(input.descriptor, 'host_soul_releases.descriptor')
+
+  if (getSoulRelease(releaseRef))
+    throw new Error(`Soul release already exists: ${releaseRef}`)
+
+  getHostDb().insert(schema.hostSoulReleases).values({
+    releaseRef,
+    soulId,
+    name,
+    version,
+    descriptorJson: JSON.stringify(input.descriptor),
+    source: input.source ?? 'custom',
+    publishedBy: input.publishedBy ?? 'cli',
+    publishedAt: at,
+  }).run()
+
+  return getSoulRelease(releaseRef)!
+}
+
+export function getSoulRelease(releaseRef: string): HostSoulReleaseRow | null {
+  return getHostDb().select().from(schema.hostSoulReleases).where(eq(schema.hostSoulReleases.releaseRef, releaseRef)).get() ?? null
+}
+
+export function listSoulReleases(limit = 200): HostSoulReleaseRow[] {
+  return getHostDb()
+    .select()
+    .from(schema.hostSoulReleases)
+    .orderBy(schema.hostSoulReleases.soulId, desc(schema.hostSoulReleases.version))
+    .limit(limit)
+    .all()
+}
+
+function nextSoulReleaseVersion(soulId: string): number {
+  const latest = getHostDb()
+    .select({ version: schema.hostSoulReleases.version })
+    .from(schema.hostSoulReleases)
+    .where(eq(schema.hostSoulReleases.soulId, soulId))
+    .orderBy(desc(schema.hostSoulReleases.version))
+    .limit(1)
+    .get()
+  return (latest?.version ?? 0) + 1
 }
 
 function createAssignmentId(): string {

@@ -1,13 +1,21 @@
 import { Buffer } from 'node:buffer'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 
 import { createWorkerRegistry } from '@zonease/aiworker-host-control'
+import {
+  closeHostDb,
+  initHostDb,
+  listSoulReleases,
+  publishSoulRelease,
+  runHostMigrations,
+} from '@zonease/aiworker-storage-sqlite/host'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { runHostCli } from './aiworker-host'
+import { seedSoulReleasesFromDir } from './host-soul-seed'
 
 describe('aiworker-host control CLI', () => {
   const originalStderrWrite = process.stderr.write
@@ -839,6 +847,49 @@ describe('aiworker-host control CLI', () => {
     })
   })
 
+  it('threads --seed-souls-dir into the lifecycle start input so dev:host seeds the registry', async () => {
+    await withHostSessionEnv({}, async () => {
+      const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+      const hostLifecycle = {
+        async start(input: Record<string, unknown>) {
+          calls.push({ input, method: 'start' })
+          return { apiUrl: 'http://127.0.0.1:9117', mode: input.mode, webUrl: 'http://127.0.0.1:5050/host' }
+        },
+      }
+
+      const code = await runHostCli([
+        'start',
+        '--dev',
+        '--db',
+        '/tmp/host.db',
+        '--dev-admin-email',
+        'admin@zonease.org',
+        '--seed-souls-dir',
+        'souls',
+      ], { hostLifecycle } as any)
+
+      expect(code).toBe(0)
+      expect(calls[0]!.input.seedSoulsDir).toBe('souls')
+    })
+  })
+
+  it('omits seedSoulsDir from the lifecycle start input when --seed-souls-dir is not passed', async () => {
+    await withHostSessionEnv({}, async () => {
+      const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+      const hostLifecycle = {
+        async start(input: Record<string, unknown>) {
+          calls.push({ input, method: 'start' })
+          return { apiUrl: 'http://127.0.0.1:9117', mode: input.mode, webUrl: 'http://127.0.0.1:5050/host' }
+        },
+      }
+
+      const code = await runHostCli(['start', '--dev', '--db', '/tmp/host.db', '--dev-admin-email', 'admin@zonease.org'], { hostLifecycle } as any)
+
+      expect(code).toBe(0)
+      expect('seedSoulsDir' in calls[0]!.input).toBe(false)
+    })
+  })
+
   it('keeps lifecycle dev admin behavior when Logto env entries are blank placeholders', async () => {
     await withHostSessionEnv({
       AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS: '',
@@ -1186,9 +1237,13 @@ describe('aiworker-host control CLI', () => {
     },
   }
 
+  // Point doctor at a throwaway, never-created DB path so its Soul-registry read
+  // (existsSync-guarded, read-only) never touches the real ~/.aiworker-dev/host.db.
+  const doctorDbPath = join(tmpdir(), 'aiworker-host-doctor-test-no-db.db')
+
   it('doctor reports unhealthy (exit 1) under partial Logto config', async () => {
     const code = await withHostSessionEnv(partialLogtoEnv, () =>
-      runHostCli(['doctor'], { hostLifecycle: runningLifecycle } as any))
+      runHostCli(['doctor', '--db', doctorDbPath], { hostLifecycle: runningLifecycle } as any))
     expect(code).toBe(1)
     expect(output).toContain('AIWorker Host Doctor')
     expect(output).toContain('Logto')
@@ -1197,16 +1252,16 @@ describe('aiworker-host control CLI', () => {
 
   it('doctor exits 0 with all Logto cleared (dev-static warn), 1 under --strict', async () => {
     const ok = await withHostSessionEnv({}, () =>
-      runHostCli(['doctor'], { hostLifecycle: runningLifecycle } as any))
+      runHostCli(['doctor', '--db', doctorDbPath], { hostLifecycle: runningLifecycle } as any))
     expect(ok).toBe(0)
     const strict = await withHostSessionEnv({}, () =>
-      runHostCli(['doctor', '--strict'], { hostLifecycle: runningLifecycle } as any))
+      runHostCli(['doctor', '--strict', '--db', doctorDbPath], { hostLifecycle: runningLifecycle } as any))
     expect(strict).toBe(1)
   })
 
   it('doctor --json emits a DoctorReport with a context summary', async () => {
     const code = await withHostSessionEnv(completeLogtoEnv, () =>
-      runHostCli(['doctor', '--json'], { hostLifecycle: runningLifecycle } as any))
+      runHostCli(['doctor', '--json', '--db', doctorDbPath], { hostLifecycle: runningLifecycle } as any))
     const parsed = JSON.parse(output) as {
       context: { provisioningTargets: string[], soulReleases: number }
       exitCode: number
@@ -1731,11 +1786,12 @@ describe('aiworker-host control CLI', () => {
             ref: 'srv-1',
           }],
           soulReleases: [{
-            descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
             id: 'aiworker-freeform',
             name: 'AIWorker Freeform',
-            releaseRef: 'aiworker-freeform@dev',
+            publishedAt: '2026-06-09T00:00:00.000Z',
+            releaseRef: 'aiworker-freeform@1',
             source: 'official',
+            version: 1,
           }],
         }), { headers: { 'content-type': 'application/json' } })
       }),
@@ -1745,7 +1801,7 @@ describe('aiworker-host control CLI', () => {
     const parsed = JSON.parse(output)
     expect(parsed.provisioningTargets[0].id).toBe('aissh:srv-1')
     expect(parsed.provisioningTargetSourceError).toBe('no remote env')
-    expect(parsed.soulReleases[0].releaseRef).toBe('aiworker-freeform@dev')
+    expect(parsed.soulReleases[0].releaseRef).toBe('aiworker-freeform@1')
     expect(output).not.toContain('secret')
     expect('servers' in parsed).toBe(false)
   })
@@ -1761,11 +1817,12 @@ describe('aiworker-host control CLI', () => {
           auth: { mode: 'dev-static', status: 'deferred-logto' },
           servers: [{ id: 'srv-1', name: 'aiwork', notes: 'aiwork project', source: 'aissh', token: 'secret' }],
           soulReleases: [{
-            descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
             id: 'aiworker-freeform',
             name: 'AIWorker Freeform',
-            releaseRef: 'aiworker-freeform@dev',
+            publishedAt: '2026-06-09T00:00:00.000Z',
+            releaseRef: 'aiworker-freeform@1',
             source: 'official',
+            version: 1,
           }],
         }), { headers: { 'content-type': 'application/json' } })
       }),
@@ -1785,6 +1842,89 @@ describe('aiworker-host control CLI', () => {
     }])
     expect('servers' in parsed).toBe(false)
     expect(output).not.toContain('secret')
+  })
+
+  it('publishes a built Soul descriptor through the Host API', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'host-soul-publish-'))
+    const descriptorPath = join(tempDir, 'soul.descriptor.json')
+    writeFileSync(descriptorPath, JSON.stringify({
+      engine: { skills: { source: 'dist/engine-assets/skills' } },
+      identity: { id: 'aiworker-freeform', name: 'AIWorker Freeform' },
+      protocol: 'soul/v1',
+    }))
+
+    try {
+      const code = await runHostCli(['soul', 'publish', descriptorPath, '--version', '2', '--host', 'http://127.0.0.1:9117'], {
+        fetch: testFetch(async (input, init) => {
+          const request = new Request(input, init)
+          expect(request.method).toBe('POST')
+          expect(request.url).toBe('http://127.0.0.1:9117/api/host/soul-releases')
+          const body = await request.json() as { descriptor: { identity: { id: string } }, version?: number }
+          expect(body.version).toBe(2)
+          expect(body.descriptor.identity.id).toBe('aiworker-freeform')
+          return new Response(JSON.stringify({
+            release: {
+              descriptorJson: '{"should":"not leak"}',
+              name: 'AIWorker Freeform',
+              publishedAt: '2026-06-09T00:00:00.000Z',
+              publishedBy: 'web',
+              releaseRef: 'aiworker-freeform@2',
+              soulId: 'aiworker-freeform',
+              source: 'official',
+              version: 2,
+            },
+          }), { headers: { 'content-type': 'application/json' } })
+        }),
+      })
+
+      expect(code).toBe(0)
+      const parsed = JSON.parse(output)
+      expect(parsed.release.releaseRef).toBe('aiworker-freeform@2')
+      expect(parsed.release.version).toBe(2)
+      expect(output).not.toContain('descriptorJson')
+      expect(output).not.toContain('not leak')
+    }
+    finally {
+      rmSync(tempDir, { force: true, recursive: true })
+    }
+  })
+
+  it('fails soul publish when the descriptor file is missing', async () => {
+    const code = await runHostCli(['soul', 'publish', '/tmp/does-not-exist-soul.descriptor.json'], {
+      fetch: testFetch(async () => {
+        throw new Error('fetch must not be called when the descriptor file is missing')
+      }),
+    })
+    expect(code).not.toBe(0)
+    expect(errorOutput).toContain('Soul descriptor not found')
+  })
+
+  it('lists Soul releases through the Host API', async () => {
+    const code = await runHostCli(['soul', 'list', '--host', 'http://127.0.0.1:9117'], {
+      fetch: testFetch(async (input, init) => {
+        const request = new Request(input, init)
+        expect(request.method).toBe('GET')
+        expect(request.url).toBe('http://127.0.0.1:9117/api/host/soul-releases')
+        return new Response(JSON.stringify({
+          releases: [{
+            descriptorJson: '{"should":"not leak"}',
+            name: 'AIWorker Freeform',
+            publishedAt: '2026-06-09T00:00:00.000Z',
+            publishedBy: 'cli',
+            releaseRef: 'aiworker-freeform@1',
+            soulId: 'aiworker-freeform',
+            source: 'official',
+            version: 1,
+          }],
+        }), { headers: { 'content-type': 'application/json' } })
+      }),
+    })
+
+    expect(code).toBe(0)
+    const parsed = JSON.parse(output)
+    expect(parsed.releases[0].releaseRef).toBe('aiworker-freeform@1')
+    expect(output).not.toContain('descriptorJson')
+    expect(output).not.toContain('not leak')
   })
 
   it('lists assignments through the Host API without printing tokens', async () => {
@@ -1861,5 +2001,56 @@ describe('aiworker-host control CLI', () => {
 
     expect(code).toBe(1)
     expect(output).toBe('')
+  })
+})
+
+describe('aiworker-host soul registry seed', () => {
+  let dir = ''
+
+  function writeBuiltSoul(soulId: string, name: string) {
+    const distDir = join(dir, 'souls', soulId, 'dist')
+    mkdirSync(distDir, { recursive: true })
+    writeFileSync(join(distDir, 'soul.descriptor.json'), JSON.stringify({
+      engine: { skills: { source: 'dist/engine-assets/skills' } },
+      identity: { id: soulId, name },
+      protocol: 'soul/v1',
+    }))
+  }
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'host-soul-seed-'))
+    initHostDb(join(dir, 'host.db'))
+    runHostMigrations()
+  })
+
+  afterEach(() => {
+    closeHostDb()
+    if (dir)
+      rmSync(dir, { force: true, recursive: true })
+    dir = ''
+  })
+
+  it('publishes built descriptors found under <dir>/*/dist when the registry is empty', () => {
+    writeBuiltSoul('aiworker-freeform', 'AIWorker Freeform')
+    writeBuiltSoul('hr-manager', 'HR Manager')
+
+    seedSoulReleasesFromDir(join(dir, 'souls'))
+
+    const refs = listSoulReleases().map(row => row.releaseRef).sort()
+    expect(refs).toEqual(['aiworker-freeform@1', 'hr-manager@1'])
+    expect(listSoulReleases().every(row => row.source === 'official')).toBe(true)
+  })
+
+  it('is a no-op once anything has already been published', () => {
+    publishSoulRelease({
+      soulId: 'manual',
+      name: 'Manual',
+      descriptor: { engine: {}, identity: { id: 'manual', name: 'Manual' }, protocol: 'soul/v1' },
+    })
+    writeBuiltSoul('aiworker-freeform', 'AIWorker Freeform')
+
+    seedSoulReleasesFromDir(join(dir, 'souls'))
+
+    expect(listSoulReleases().map(row => row.releaseRef)).toEqual(['manual@1'])
   })
 })

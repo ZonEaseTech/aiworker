@@ -1,5 +1,5 @@
 import type { AuthenticatedHostUser, AuthProvider, WorkerAccessConnection, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
-import type { HostAssignmentRow } from '@zonease/aiworker-storage-sqlite/host'
+import type { HostAssignmentRow, HostSoulReleaseRow } from '@zonease/aiworker-storage-sqlite/host'
 import type { WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope } from '@zonease/aiworker-worker-control-protocol'
 import type { Buffer } from 'node:buffer'
 import type { OidcClientConfig, OidcFetch, OidcLoginTransaction } from './host-oidc-client'
@@ -20,6 +20,7 @@ import {
   userCanOpenWorker,
   userIsHostAdmin,
 } from '@zonease/aiworker-host-control'
+import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import {
   bootstrapHostAdminEmails,
   createAssignment,
@@ -27,9 +28,11 @@ import {
   initHostDb,
   issueAssignmentAccessToken,
   listAssignments,
+  listSoulReleases,
   markAssignmentAccessReady,
   markAssignmentCheckedIn,
   markAssignmentReady,
+  publishSoulRelease,
   runHostMigrations,
   userHasHostPermission,
   verifyAndConsumeProvisionToken,
@@ -306,6 +309,9 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
 
       if (request.method === 'GET' && url.pathname === '/api/host/options')
         return handleOptions(request, effectiveAuthProvider, options.optionsProvider ?? buildHostOptions)
+
+      if (url.pathname === '/api/host/soul-releases')
+        return handleSoulReleases(request, effectiveAuthProvider)
 
       if (request.method === 'POST' && url.pathname === '/api/provision/check-in')
         return handleCheckIn(request)
@@ -670,6 +676,78 @@ async function handleOptions(
   if (!user || !userIsHostAdmin(user))
     return json({ error: { code: 'FORBIDDEN' } }, { status: 403 })
   return json(await optionsProvider())
+}
+
+function toSoulReleaseView(row: HostSoulReleaseRow): Record<string, unknown> {
+  return {
+    name: row.name,
+    publishedAt: row.publishedAt,
+    publishedBy: row.publishedBy,
+    releaseRef: row.releaseRef,
+    soulId: row.soulId,
+    source: row.source,
+    version: row.version,
+  }
+}
+
+async function handleSoulReleases(request: Request, authProvider: AuthProvider): Promise<Response> {
+  const user = await authProvider.authenticateRequest({ headers: request.headers })
+  if (!user || !userIsHostAdmin(user))
+    return json({ error: { code: 'FORBIDDEN' } }, { status: 403 })
+
+  if (request.method === 'GET')
+    return json({ releases: listSoulReleases().map(toSoulReleaseView) })
+
+  if (request.method !== 'POST')
+    return json({ error: { code: 'METHOD_NOT_ALLOWED' } }, { status: 405 })
+
+  let body: { descriptor?: unknown, version?: unknown }
+  try {
+    body = await request.json() as { descriptor?: unknown, version?: unknown }
+  }
+  catch {
+    return json({ error: { code: 'INVALID_JSON' } }, { status: 400 })
+  }
+
+  // Host stores the descriptor as an opaque release artifact: it validates the
+  // descriptor-only v1 shape but never interprets domain fields.
+  let descriptor: ReturnType<typeof parseSoulDescriptorV1>
+  try {
+    descriptor = parseSoulDescriptorV1(body.descriptor)
+  }
+  catch {
+    return json({ error: { code: 'INVALID_SOUL_DESCRIPTOR' } }, { status: 400 })
+  }
+
+  const identity = descriptor.identity as Record<string, unknown>
+  const soulId = identity.id
+  const name = identity.name
+  if (typeof soulId !== 'string' || soulId.trim().length === 0 || typeof name !== 'string' || name.trim().length === 0)
+    return json({ error: { code: 'INVALID_SOUL_DESCRIPTOR' } }, { status: 400 })
+
+  let version: number | undefined
+  if (body.version !== undefined) {
+    if (typeof body.version !== 'number' || !Number.isInteger(body.version) || body.version < 1)
+      return json({ error: { code: 'INVALID_SOUL_RELEASE_VERSION' } }, { status: 400 })
+    version = body.version
+  }
+
+  try {
+    const release = publishSoulRelease({
+      soulId,
+      name,
+      descriptor,
+      ...(version !== undefined ? { version } : {}),
+      publishedBy: 'web',
+    })
+    return json({ release: toSoulReleaseView(release) }, { status: 201 })
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('already exists'))
+      return json({ error: { code: 'SOUL_RELEASE_CONFLICT' } }, { status: 409 })
+    return json({ error: { code: 'INVALID_SOUL_DESCRIPTOR' } }, { status: 400 })
+  }
 }
 
 async function handleCheckIn(request: Request): Promise<Response> {

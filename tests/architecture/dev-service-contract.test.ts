@@ -25,7 +25,7 @@ describe('dev service contract', () => {
     expect(pkg.scripts?.['dev:fleet:stop']).toBe('bun scripts/dev-fleet-web.ts stop')
     expect(pkg.scripts?.['dev:fleet:clean']).toBe('bun scripts/dev-fleet-web.ts clean')
 
-    expect(pkg.scripts?.['dev:host']).toBe('bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts start --dev')
+    expect(pkg.scripts?.['dev:host']).toBe('bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts start --dev --seed-souls-dir souls')
     expect(pkg.scripts?.['dev:host:status']).toBe('bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts status')
     expect(pkg.scripts?.['dev:host:stop']).toBe('bun apps/host-cli/src/aiworker-host.ts stop')
     expect(pkg.scripts?.['dev:host:clean']).toBe('bun apps/host-cli/src/aiworker-host.ts clean')

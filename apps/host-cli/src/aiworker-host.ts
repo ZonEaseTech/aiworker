@@ -1,20 +1,25 @@
 #!/usr/bin/env bun
 import type { WorkerRegistry } from '@zonease/aiworker-host-control'
 import type { HostLifecycle } from './host-lifecycle'
+import type { HostSoulReleaseOption } from './host-options'
+
 import type { createHostServer as createHostServerType } from './host-server'
 
+import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
 import { renderText, runChecks } from '@zonease/aiworker-cli-doctor'
 import { createWorkerRegistry } from '@zonease/aiworker-host-control'
+import { closeHostDb, initHostDb, listSoulReleases } from '@zonease/aiworker-storage-sqlite/host'
 import cac from 'cac'
 import { buildHostChecks } from './doctor-checks'
 import { createHostLifecycle } from './host-lifecycle'
-import { buildHostOptions } from './host-options'
+import { buildHostOptions, toSoulReleaseOption } from './host-options'
 import { createHostServer } from './host-server'
 import { assertHostSessionSecret } from './host-session-cookie'
+import { seedSoulReleasesFromDir } from './host-soul-seed'
 
 export interface HostCliDeps {
   bunServe?: typeof Bun.serve
@@ -112,6 +117,7 @@ interface HostLifecycleCommandOptions {
   manifest?: string
   port?: string | number
   publicBaseUrl?: string
+  seedSoulsDir?: string
   webPort?: string | number
   webStaticDir?: string
 }
@@ -126,6 +132,7 @@ function hostLifecycleInput(options: HostLifecycleCommandOptions): {
   mode: 'dev' | 'prod'
   port: number
   publicBaseUrl?: string
+  seedSoulsDir?: string
   sessionAuth?: ReturnType<typeof buildSessionAuthFromEnv>
   webPort?: number
   webStaticDir?: string
@@ -137,6 +144,10 @@ function hostLifecycleInput(options: HostLifecycleCommandOptions): {
   const hostControlBaseUrl = options.controlBaseUrl ?? readNonEmptyEnvValue(process.env, 'AIWORKER_HOST_CONTROL_BASE_URL')
   const publicBaseUrl = options.publicBaseUrl ?? readNonEmptyEnvValue(process.env, 'AIWORKER_HOST_API_URL')
   const sessionAuth = buildSessionAuthFromEnv(process.env, hostBrowserBaseUrl ?? publicBaseUrl ?? `http://${host}:${port}`)
+  // Seeding the Soul registry is always explicit (--seed-souls-dir): the `dev:host`
+  // npm script opts in with `souls`, while direct-lifecycle callers (e.g. browser
+  // proofs) stay unseeded so their empty-registry fallback path is preserved.
+  const seedSoulsDir = options.seedSoulsDir
   return {
     dbPath: options.db ?? `${process.env.HOME ?? '.'}/.aiworker-dev/host.db`,
     ...(!sessionAuth && options.devAdminEmail ? { devAdminEmail: options.devAdminEmail } : {}),
@@ -147,6 +158,7 @@ function hostLifecycleInput(options: HostLifecycleCommandOptions): {
     mode,
     port,
     ...(publicBaseUrl ? { publicBaseUrl } : {}),
+    ...(seedSoulsDir ? { seedSoulsDir } : {}),
     ...(sessionAuth ? { sessionAuth } : {}),
     ...(mode === 'dev' ? { webPort: parsePositiveInteger(options.webPort ?? '5050', '--web-port') } : {}),
     ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
@@ -164,6 +176,7 @@ function addHostLifecycleStartOptions(command: ReturnType<typeof cac>['commands'
     .option('--manifest <path>', 'Host lifecycle manifest path')
     .option('--port <port>', 'Host API or production serve port', { default: '9117' })
     .option('--public-base-url <url>', 'public Host base URL')
+    .option('--seed-souls-dir <dir>', 'seed the Soul registry from built descriptors under <dir>/*/dist when empty (dev defaults to ./souls)')
     .option('--web-port <port>', 'development Host Web port', { default: '5050' })
     .option('--web-static-dir <path>', 'Host Web static directory for production start')
 }
@@ -301,6 +314,29 @@ function projectAllowedFields(value: unknown, fields: string[]): Record<string, 
   return view
 }
 
+const SOUL_RELEASE_VIEW_FIELDS = ['name', 'publishedAt', 'publishedBy', 'releaseRef', 'soulId', 'source', 'version']
+
+function projectSoulReleaseResponse(value: unknown): Record<string, unknown> {
+  const record = requireRecord(value, 'soul release publish response')
+  return { release: projectAllowedFields(record.release, SOUL_RELEASE_VIEW_FIELDS) }
+}
+
+function projectSoulReleaseListResponse(value: unknown): Record<string, unknown> {
+  const record = requireRecord(value, 'soul release list response')
+  if (!Array.isArray(record.releases))
+    throw new Error('Invalid Host API response: releases must be an array')
+  return { releases: record.releases.map(release => projectAllowedFields(release, SOUL_RELEASE_VIEW_FIELDS)) }
+}
+
+function parseSoulReleaseVersionOption(value: string | undefined): number | undefined {
+  if (value === undefined)
+    return undefined
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 1)
+    throw new Error(`Invalid --version <n>: ${value}. Expected a positive integer.`)
+  return parsed
+}
+
 function mapLegacyServerToProvisioningTarget(server: unknown): Record<string, unknown> | undefined {
   const record = requireRecord(server, 'legacy host server')
   if (typeof record.id !== 'string' || record.id.trim().length === 0)
@@ -349,7 +385,7 @@ function projectHostOptions(value: unknown): Record<string, unknown> {
     auth: record.auth,
     provisioningTargets,
     soulReleases: Array.isArray(record.soulReleases)
-      ? record.soulReleases.map(soul => projectAllowedFields(soul, ['id', 'name', 'releaseRef', 'descriptorPath', 'source']))
+      ? record.soulReleases.map(soul => projectAllowedFields(soul, ['id', 'name', 'releaseRef', 'version', 'publishedAt', 'source']))
       : [],
     ...(record.soulSourceErrors ? { soulSourceErrors: record.soulSourceErrors } : {}),
   }
@@ -387,24 +423,38 @@ async function spawnSucceeds(command: string[]): Promise<{ detail?: string, ok: 
   }
 }
 
+function resolveHostDoctorDbPath(options: { db?: string }): string {
+  return options.db ?? path.join(os.homedir(), '.aiworker-dev', 'host.db')
+}
+
+function readSoulReleaseOptionsForDoctor(dbPath: string): HostSoulReleaseOption[] {
+  if (!existsSync(dbPath))
+    return []
+  try {
+    initHostDb(dbPath)
+    return listSoulReleases().map(toSoulReleaseOption)
+  }
+  catch {
+    return []
+  }
+  finally {
+    closeHostDb()
+  }
+}
+
 export async function runHostDoctor(
-  options: { json?: boolean, manifest?: string, probe?: boolean, strict?: boolean },
+  options: { db?: string, json?: boolean, manifest?: string, probe?: boolean, strict?: boolean },
   context: { hostLifecycle: HostLifecycle },
 ): Promise<number> {
   const probe = options.probe === true
   const strict = options.strict === true
   const manifestPath = hostLifecycleStatePath(options)
 
-  const soulReleaseCount = async (): Promise<number> => {
-    // Skip the aissh spawn here — soul count never needs it, keeping the
-    // default tier sub-second even when aissh is off-PATH on the box.
-    const view = await buildHostOptions({
-      aisshServerList: async () => {
-        throw new Error('skipped')
-      },
-    })
-    return view.soulReleases.length
-  }
+  // Read the Host-owned soul release registry directly (read-only). The daemon
+  // may hold the same DB; WAL allows a concurrent reader. Missing/legacy DB → [].
+  const soulReleaseOptions = readSoulReleaseOptionsForDoctor(resolveHostDoctorDbPath(options))
+
+  const soulReleaseCount = async (): Promise<number> => soulReleaseOptions.length
 
   const checks = buildHostChecks({
     aisshConnectivity: () => spawnSucceeds(['aissh', 'server', 'list']),
@@ -425,6 +475,7 @@ export async function runHostDoctor(
       aisshServerList: async () => {
         throw new Error('skipped')
       },
+      soulReleasesProvider: () => soulReleaseOptions,
     })
     printJson({
       ...report,
@@ -530,6 +581,38 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
       printJson(projectAssignmentListResponse(result))
     })
   cli
+    .command('soul publish <descriptorPath>', 'publish a built Soul descriptor into the Host release registry')
+    .option('--version <n>', 'explicit release version (defaults to the next version for this Soul)')
+    .option('--host <url>', 'Host API base URL', { default: 'http://127.0.0.1:9117' })
+    .action(async (descriptorPath: string, options: { host?: string, version?: string }) => {
+      const path = requireTrimmedOption(descriptorPath, '<descriptorPath>')
+      if (!existsSync(path))
+        throw new Error(`Soul descriptor not found: ${path}`)
+      let descriptor: unknown
+      try {
+        descriptor = JSON.parse(readFileSync(path, 'utf8'))
+      }
+      catch (error) {
+        throw new Error(`Failed to read Soul descriptor: ${error instanceof Error ? error.message : String(error)}`)
+      }
+      const version = parseSoulReleaseVersionOption(options.version)
+      const host = normalizeHostUrl(options.host)
+      const result = await requestHostJson(fetchImpl, `${host}/api/host/soul-releases`, {
+        body: JSON.stringify({ descriptor, ...(version !== undefined ? { version } : {}) }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      })
+      printJson(projectSoulReleaseResponse(result))
+    })
+  cli
+    .command('soul list', 'list Soul releases in the Host registry through the Host API')
+    .option('--host <url>', 'Host API base URL', { default: 'http://127.0.0.1:9117' })
+    .action(async (options: { host?: string }) => {
+      const host = normalizeHostUrl(options.host)
+      const result = await requestHostJson(fetchImpl, `${host}/api/host/soul-releases`)
+      printJson(projectSoulReleaseListResponse(result))
+    })
+  cli
     .command('start', 'start Host services with the same lifecycle shape as Worker')
   addHostLifecycleStartOptions(cli.commands.at(-1)!)
     .action(async (options: HostLifecycleCommandOptions) => {
@@ -629,6 +712,7 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     .option('--control-base-url <url>', 'Host control/API base URL for Worker check-in')
     .option('--port <port>', 'listen port', { default: '9310' })
     .option('--web-static-dir <path>', 'Host Web static directory to serve from this process')
+    .option('--seed-souls-dir <dir>', 'dev-only: seed the Soul registry from built descriptors under <dir>/*/dist when empty')
     .action(async (options: {
       browserBaseUrl?: string
       controlBaseUrl?: string
@@ -637,6 +721,7 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
       host: string
       port: string | number
       publicBaseUrl: string
+      seedSoulsDir?: string
       webStaticDir?: string
     }) => {
       const port = Number(options.port)
@@ -661,6 +746,8 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
         ...(sessionAuth ? { sessionAuth } : {}),
         ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
       })
+      if (options.seedSoulsDir)
+        seedSoulReleasesFromDir(options.seedSoulsDir, message => process.stderr.write(`${message}\n`))
       const bunServe = deps.bunServe ?? Bun.serve
       bunServe({
         fetch: (request, bunServer) => server.fetch(request, bunServer),
@@ -682,7 +769,8 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
     .option('--probe', 'run active connectivity probes (aissh/docker/Host API)')
     .option('--strict', 'treat warnings as failures (warn → exit 1)')
     .option('--manifest <path>', 'Host lifecycle manifest path')
-    .action(async (options: { json?: boolean, manifest?: string, probe?: boolean, strict?: boolean }) => {
+    .option('--db <path>', 'Host sqlite database path for the Soul release registry')
+    .action(async (options: { db?: string, json?: boolean, manifest?: string, probe?: boolean, strict?: boolean }) => {
       doctorExit = await runHostDoctor(options, { hostLifecycle })
     })
   cli.help()

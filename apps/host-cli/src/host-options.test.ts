@@ -1,9 +1,14 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, describe, expect, it } from 'bun:test'
+import {
+  closeHostDb,
+  initHostDb,
+  publishSoulRelease,
+  runHostMigrations,
+} from '@zonease/aiworker-storage-sqlite/host'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
   buildHostOptions,
@@ -11,14 +16,6 @@ import {
 } from './host-options'
 
 describe('host options provider', () => {
-  let tempDir = ''
-
-  afterEach(() => {
-    if (tempDir)
-      rmSync(tempDir, { force: true, recursive: true })
-    tempDir = ''
-  })
-
   it('parses aissh server list JSON into safe server options', () => {
     const parsed = parseAisshServerListOutput(JSON.stringify({
       limits: { download_max_mb: 200 },
@@ -48,44 +45,37 @@ describe('host options provider', () => {
     expect(() => parseAisshServerListOutput('not-json')).toThrow('Invalid aissh server list JSON')
   })
 
-  it('discovers official Soul descriptors from a repo root', async () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'host-options-'))
-    const soulDir = join(tempDir, 'souls', 'aiworker-freeform', 'dist')
-    await mkdir(soulDir, { recursive: true })
-    writeFileSync(join(soulDir, 'soul.descriptor.json'), JSON.stringify({
-      engine: {},
-      identity: {
-        description: 'Open-ended Soul for freeform local work.',
-        id: 'aiworker-freeform',
-        name: 'AIWorker Freeform',
-      },
-      protocol: 'soul/v1',
-    }))
-
+  it('projects soul releases from the injected registry provider', async () => {
     const options = await buildHostOptions({
       aisshServerList: async () => JSON.stringify({ servers: [] }),
-      repoRoot: tempDir,
+      soulReleasesProvider: () => [{
+        id: 'aiworker-freeform',
+        name: 'AIWorker Freeform',
+        publishedAt: '2026-06-09T00:00:00.000Z',
+        releaseRef: 'aiworker-freeform@1',
+        source: 'official',
+        version: 1,
+      }],
     })
 
     expect(options.soulReleases).toEqual([{
-      descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
       id: 'aiworker-freeform',
       name: 'AIWorker Freeform',
-      releaseRef: 'aiworker-freeform@dev',
+      publishedAt: '2026-06-09T00:00:00.000Z',
+      releaseRef: 'aiworker-freeform@1',
       source: 'official',
+      version: 1,
     }])
     expect(options.auth.status).toBe('deferred-logto')
     expect(options.access.status).toBe('deferred-worker-access-tunnel')
   })
 
   it('captures aissh failures without throwing from buildHostOptions', async () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'host-options-empty-'))
-
     const options = await buildHostOptions({
       aisshServerList: async () => {
         throw new Error('AISSH_DOWN')
       },
-      repoRoot: tempDir,
+      soulReleasesProvider: () => [],
     })
 
     expect(options.provisioningTargets.map(target => target.id)).toEqual([
@@ -96,12 +86,11 @@ describe('host options provider', () => {
   })
 
   it('maps aissh server list output into production provisioning targets', async () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'host-options-map-'))
     const options = await buildHostOptions({
       aisshServerList: async () => JSON.stringify({
         servers: [{ host: '172.105.219.50', id: 'srv-1', name: 'aiwork', notes: 'aiwork project' }],
       }),
-      repoRoot: tempDir,
+      soulReleasesProvider: () => [],
     })
 
     expect(options.provisioningTargets).toContainEqual({
@@ -118,15 +107,65 @@ describe('host options provider', () => {
   })
 
   it('includes docker preview and local dev targets for development proof', async () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'host-options-dev-targets-'))
     const options = await buildHostOptions({
       aisshServerList: async () => JSON.stringify({ servers: [] }),
-      repoRoot: tempDir,
+      soulReleasesProvider: () => [],
     })
 
     expect(options.provisioningTargets.map(target => target.id)).toEqual([
       'docker:local-default',
       'local:default',
     ])
+  })
+})
+
+describe('host options default soul release source (registry)', () => {
+  let dir = ''
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'host-options-registry-'))
+    initHostDb(join(dir, 'host.db'))
+    runHostMigrations()
+  })
+
+  afterEach(() => {
+    closeHostDb()
+    if (dir)
+      rmSync(dir, { force: true, recursive: true })
+    dir = ''
+  })
+
+  it('reads soul releases from the persisted Host registry by default', async () => {
+    publishSoulRelease({
+      soulId: 'aiworker-freeform',
+      name: 'AIWorker Freeform',
+      descriptor: {
+        protocol: 'soul/v1',
+        identity: { id: 'aiworker-freeform', name: 'AIWorker Freeform' },
+        engine: {},
+      },
+      source: 'official',
+      now: () => '2026-06-09T00:00:00.000Z',
+    })
+
+    const options = await buildHostOptions({
+      aisshServerList: async () => JSON.stringify({ servers: [] }),
+    })
+
+    expect(options.soulReleases).toEqual([{
+      id: 'aiworker-freeform',
+      name: 'AIWorker Freeform',
+      publishedAt: '2026-06-09T00:00:00.000Z',
+      releaseRef: 'aiworker-freeform@1',
+      source: 'official',
+      version: 1,
+    }])
+  })
+
+  it('returns an empty soul release list for a fresh Host with nothing published', async () => {
+    const options = await buildHostOptions({
+      aisshServerList: async () => JSON.stringify({ servers: [] }),
+    })
+    expect(options.soulReleases).toEqual([])
   })
 })
