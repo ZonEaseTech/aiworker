@@ -63,11 +63,12 @@ export interface HostProvisioningTargetOption {
 }
 
 export interface HostSoulReleaseOption {
-  descriptorPath: string
   id: string
   name: string
   releaseRef: string
-  source: 'official'
+  version: number
+  publishedAt: string
+  source: 'official' | 'custom'
 }
 
 export interface HostOptionsSummary {

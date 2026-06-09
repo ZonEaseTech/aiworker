@@ -1,6 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
-import process from 'node:process'
+import type { HostSoulReleaseRow } from '@zonease/aiworker-storage-sqlite/host'
+import { listSoulReleases } from '@zonease/aiworker-storage-sqlite/host'
 
 export type ProvisioningAdapterType = 'aissh' | 'docker' | 'local'
 export type ProvisioningTargetMaturity = 'production' | 'preview' | 'dev'
@@ -18,11 +17,12 @@ export interface HostProvisioningTargetOption {
 }
 
 export interface HostSoulReleaseOption {
-  descriptorPath: string
   id: string
   name: string
   releaseRef: string
-  source: 'official'
+  version: number
+  publishedAt: string
+  source: 'official' | 'custom'
 }
 
 export interface HostOptionsView {
@@ -42,16 +42,19 @@ export interface HostOptionsView {
 
 export interface BuildHostOptionsInput {
   aisshServerList?: () => Promise<string>
-  repoRoot?: string
+  soulReleasesProvider?: () => HostSoulReleaseOption[]
 }
 
-const OFFICIAL_SOUL_IDS = [
-  'aiworker-freeform',
-  'google-ads',
-  'hr-manager',
-  'product-manager',
-  'software-support',
-] as const
+export function toSoulReleaseOption(row: HostSoulReleaseRow): HostSoulReleaseOption {
+  return {
+    id: row.soulId,
+    name: row.name,
+    releaseRef: row.releaseRef,
+    version: row.version,
+    publishedAt: row.publishedAt,
+    source: row.source,
+  }
+}
 
 const DEV_TARGETS: HostProvisioningTargetOption[] = [
   {
@@ -75,8 +78,6 @@ const DEV_TARGETS: HostProvisioningTargetOption[] = [
 ]
 
 export async function buildHostOptions(input: BuildHostOptionsInput = {}): Promise<HostOptionsView> {
-  const repoRoot = input.repoRoot ?? process.cwd()
-  const soulSourceErrors: string[] = []
   let provisioningTargetSourceError: string | undefined
   let aisshTargets: HostProvisioningTargetOption[] = []
 
@@ -87,41 +88,16 @@ export async function buildHostOptions(input: BuildHostOptionsInput = {}): Promi
     provisioningTargetSourceError = error instanceof Error ? error.message : String(error)
   }
 
-  const soulReleases = OFFICIAL_SOUL_IDS.flatMap((id) => {
-    const descriptorAbsPath = join(repoRoot, 'souls', id, 'dist', 'soul.descriptor.json')
-    if (!existsSync(descriptorAbsPath))
-      return []
-
-    try {
-      const descriptor = JSON.parse(readFileSync(descriptorAbsPath, 'utf8')) as Record<string, unknown>
-      const identity = descriptor.identity
-      if (!identity || typeof identity !== 'object')
-        throw new Error(`Invalid Soul descriptor identity: ${id}`)
-
-      const identityRecord = identity as Record<string, unknown>
-      if (typeof identityRecord.id !== 'string' || typeof identityRecord.name !== 'string')
-        throw new Error(`Invalid Soul descriptor identity: ${id}`)
-
-      return [{
-        descriptorPath: relative(repoRoot, descriptorAbsPath),
-        id: identityRecord.id,
-        name: identityRecord.name,
-        releaseRef: `${identityRecord.id}@dev`,
-        source: 'official' as const,
-      }]
-    }
-    catch (error) {
-      soulSourceErrors.push(error instanceof Error ? error.message : String(error))
-      return []
-    }
-  })
+  // Soul releases come from the Host-owned persisted registry, not a repo scan.
+  // A daemon-mode caller has the Host DB initialized; the default provider reads it.
+  const provideSoulReleases = input.soulReleasesProvider ?? (() => listSoulReleases().map(toSoulReleaseOption))
+  const soulReleases = provideSoulReleases()
 
   return {
     access: { mode: 'not-ready', status: 'deferred-worker-access-tunnel' },
     auth: { mode: 'dev-static', status: 'deferred-logto' },
     ...(provisioningTargetSourceError ? { provisioningTargetSourceError } : {}),
     provisioningTargets: [...aisshTargets, ...DEV_TARGETS],
-    ...(soulSourceErrors.length > 0 ? { soulSourceErrors } : {}),
     soulReleases,
   }
 }

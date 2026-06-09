@@ -51,11 +51,12 @@ const hostOptions: HostOptionsSummary = {
     },
   ],
   soulReleases: [{
-    descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
     id: 'aiworker-freeform',
     name: 'AIWorker Freeform',
-    releaseRef: 'aiworker-freeform@dev',
+    publishedAt: '2026-06-09T00:00:00.000Z',
+    releaseRef: 'aiworker-freeform@1',
     source: 'official',
+    version: 1,
   }],
 }
 
@@ -230,7 +231,7 @@ describe('host control plane', () => {
           maturity: 'production',
           ref: 'srv-1',
         },
-        soulReleaseRef: 'aiworker-freeform@dev',
+        soulReleaseRef: 'aiworker-freeform@1',
       } satisfies CreateHostAssignmentInput)
     })
     expect(await screen.findByText('mei@example.com')).not.toBeNull()
@@ -292,7 +293,7 @@ describe('host control plane', () => {
           maturity: 'dev',
           ref: 'local://default',
         },
-        soulReleaseRef: 'aiworker-freeform@dev',
+        soulReleaseRef: 'aiworker-freeform@1',
       } satisfies CreateHostAssignmentInput)
     })
 
@@ -504,7 +505,8 @@ describe('host control plane', () => {
 
     expect(await screen.findByLabelText('Soul releases list')).not.toBeNull()
     expect(screen.getByText('AIWorker Freeform')).not.toBeNull()
-    expect(screen.getByText('aiworker-freeform@dev')).not.toBeNull()
+    expect(screen.getByText('aiworker-freeform@1')).not.toBeNull()
+    expect(screen.getByText('v1')).not.toBeNull()
     // The provisioning drawer belongs to AI Workers, not Souls, and its header
     // action is gone on this section.
     expect(screen.queryByRole('dialog')).toBeNull()

@@ -163,11 +163,12 @@ describe('createHostApiClient', () => {
         ref: 'srv-1',
       }],
       soulReleases: [{
-        descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
         id: 'aiworker-freeform',
         name: 'AIWorker Freeform',
-        releaseRef: 'aiworker-freeform@dev',
+        publishedAt: '2026-06-09T00:00:00.000Z',
+        releaseRef: 'aiworker-freeform@1',
         source: 'official',
+        version: 1,
       }],
     }))
     const client = createHostApiClient({ baseUrl: 'http://host.test', fetch: fetchImpl })
@@ -181,7 +182,7 @@ describe('createHostApiClient', () => {
       maturity: 'production',
       ref: 'srv-1',
     })
-    expect(options.soulReleases[0]?.releaseRef).toBe('aiworker-freeform@dev')
+    expect(options.soulReleases[0]?.releaseRef).toBe('aiworker-freeform@1')
   })
 
   it('returns the operator from /api/auth/me', async () => {

@@ -1026,7 +1026,7 @@ function SoulsPanel({ options, optionsError }: { options: HostOptionsSummary | n
   return (
     <div className="flex min-w-0 flex-col gap-5" aria-label="Souls panel">
       <p className="text-muted-foreground text-sm">
-        Host 可分发的官方 Soul release（descriptor-only）。
+        Host registry 里已发布、可分发的 Soul release（descriptor-only）。用 aiworker-host soul publish 发布。
       </p>
 
       {optionsError
@@ -1056,7 +1056,7 @@ function SoulsPanel({ options, optionsError }: { options: HostOptionsSummary | n
               <Empty className="p-8">
                 <EmptyHeader>
                   <EmptyTitle>暂无 Soul release</EmptyTitle>
-                  <EmptyDescription>构建官方 Soul 后，这里会显示可分发的 descriptor。</EmptyDescription>
+                  <EmptyDescription>用 aiworker-host soul publish 发布一个 Soul 后，这里会显示可分发的 release。</EmptyDescription>
                 </EmptyHeader>
               </Empty>
             )
@@ -1066,7 +1066,7 @@ function SoulsPanel({ options, optionsError }: { options: HostOptionsSummary | n
                   <TableRow>
                     <TableHead>名称</TableHead>
                     <TableHead>Release</TableHead>
-                    <TableHead>Descriptor</TableHead>
+                    <TableHead>版本</TableHead>
                     <TableHead>来源</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1075,8 +1075,9 @@ function SoulsPanel({ options, optionsError }: { options: HostOptionsSummary | n
                     <TableRow key={soul.releaseRef}>
                       <TableCell className="font-medium">{soul.name}</TableCell>
                       <TableCell>{soul.releaseRef}</TableCell>
-                      <TableCell className="text-muted-foreground max-w-[20rem] truncate font-mono text-xs" title={soul.descriptorPath}>
-                        {soul.descriptorPath}
+                      <TableCell className="text-muted-foreground font-mono text-xs">
+                        v
+                        {soul.version}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">
