@@ -129,7 +129,7 @@ describe('Host dev startup contract', () => {
   it('routes dev:host through the Host startup script instead of worker daemon foreground', () => {
     const pkg = JSON.parse(readRepoFile('package.json')) as PackageJson
 
-    expect(pkg.scripts?.['dev:host']).toBe('bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts start --dev')
+    expect(pkg.scripts?.['dev:host']).toBe('bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts start --dev --seed-souls-dir souls')
     expect(pkg.scripts?.['dev:host']).not.toContain('daemon foreground')
     expect(pkg.scripts?.['dev:host']).not.toContain('apps/worker-cli/src/aiworker.ts')
     expect(pkg.scripts?.['dev:host:status']).toBe('bun run dev:env:check && bun apps/host-cli/src/aiworker-host.ts status')

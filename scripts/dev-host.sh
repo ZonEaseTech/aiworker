@@ -98,6 +98,10 @@ stop_legacy_host_api_tmux() {
 start_host_daemon_background() {
   echo "[dev:host] starting Host daemon on ${AIWORKER_HOST_API_URL}"
   mkdir -p "$(dirname "$AIWORKER_HOST_DAEMON_LOG")"
+  local seed_args=()
+  if [[ -n "${AIWORKER_HOST_SEED_SOULS_DIR:-}" ]]; then
+    seed_args+=(--seed-souls-dir "$AIWORKER_HOST_SEED_SOULS_DIR")
+  fi
   (
     cd "$ROOT_DIR"
     exec bun apps/host-cli/src/aiworker-host.ts daemon foreground \
@@ -109,6 +113,7 @@ start_host_daemon_background() {
       --public-base-url "$AIWORKER_HOST_API_URL" \
       --port "$AIWORKER_HOST_API_PORT" \
       --web-port "$AIWORKER_HOST_WEB_PORT" \
+      "${seed_args[@]}" \
       >> "$AIWORKER_HOST_DAEMON_LOG" 2>&1
   ) &
   DAEMON_PID=$!

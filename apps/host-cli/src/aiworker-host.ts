@@ -5,21 +5,21 @@ import type { HostSoulReleaseOption } from './host-options'
 
 import type { createHostServer as createHostServerType } from './host-server'
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
 import { renderText, runChecks } from '@zonease/aiworker-cli-doctor'
 import { createWorkerRegistry } from '@zonease/aiworker-host-control'
-import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
-import { closeHostDb, initHostDb, listSoulReleases, publishSoulRelease } from '@zonease/aiworker-storage-sqlite/host'
+import { closeHostDb, initHostDb, listSoulReleases } from '@zonease/aiworker-storage-sqlite/host'
 import cac from 'cac'
 import { buildHostChecks } from './doctor-checks'
 import { createHostLifecycle } from './host-lifecycle'
 import { buildHostOptions, toSoulReleaseOption } from './host-options'
 import { createHostServer } from './host-server'
 import { assertHostSessionSecret } from './host-session-cookie'
+import { seedSoulReleasesFromDir } from './host-soul-seed'
 
 export interface HostCliDeps {
   bunServe?: typeof Bun.serve
@@ -117,6 +117,7 @@ interface HostLifecycleCommandOptions {
   manifest?: string
   port?: string | number
   publicBaseUrl?: string
+  seedSoulsDir?: string
   webPort?: string | number
   webStaticDir?: string
 }
@@ -131,6 +132,7 @@ function hostLifecycleInput(options: HostLifecycleCommandOptions): {
   mode: 'dev' | 'prod'
   port: number
   publicBaseUrl?: string
+  seedSoulsDir?: string
   sessionAuth?: ReturnType<typeof buildSessionAuthFromEnv>
   webPort?: number
   webStaticDir?: string
@@ -142,6 +144,10 @@ function hostLifecycleInput(options: HostLifecycleCommandOptions): {
   const hostControlBaseUrl = options.controlBaseUrl ?? readNonEmptyEnvValue(process.env, 'AIWORKER_HOST_CONTROL_BASE_URL')
   const publicBaseUrl = options.publicBaseUrl ?? readNonEmptyEnvValue(process.env, 'AIWORKER_HOST_API_URL')
   const sessionAuth = buildSessionAuthFromEnv(process.env, hostBrowserBaseUrl ?? publicBaseUrl ?? `http://${host}:${port}`)
+  // Seeding the Soul registry is always explicit (--seed-souls-dir): the `dev:host`
+  // npm script opts in with `souls`, while direct-lifecycle callers (e.g. browser
+  // proofs) stay unseeded so their empty-registry fallback path is preserved.
+  const seedSoulsDir = options.seedSoulsDir
   return {
     dbPath: options.db ?? `${process.env.HOME ?? '.'}/.aiworker-dev/host.db`,
     ...(!sessionAuth && options.devAdminEmail ? { devAdminEmail: options.devAdminEmail } : {}),
@@ -152,6 +158,7 @@ function hostLifecycleInput(options: HostLifecycleCommandOptions): {
     mode,
     port,
     ...(publicBaseUrl ? { publicBaseUrl } : {}),
+    ...(seedSoulsDir ? { seedSoulsDir } : {}),
     ...(sessionAuth ? { sessionAuth } : {}),
     ...(mode === 'dev' ? { webPort: parsePositiveInteger(options.webPort ?? '5050', '--web-port') } : {}),
     ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
@@ -169,6 +176,7 @@ function addHostLifecycleStartOptions(command: ReturnType<typeof cac>['commands'
     .option('--manifest <path>', 'Host lifecycle manifest path')
     .option('--port <port>', 'Host API or production serve port', { default: '9117' })
     .option('--public-base-url <url>', 'public Host base URL')
+    .option('--seed-souls-dir <dir>', 'seed the Soul registry from built descriptors under <dir>/*/dist when empty (dev defaults to ./souls)')
     .option('--web-port <port>', 'development Host Web port', { default: '5050' })
     .option('--web-static-dir <path>', 'Host Web static directory for production start')
 }
@@ -431,32 +439,6 @@ function readSoulReleaseOptionsForDoctor(dbPath: string): HostSoulReleaseOption[
   }
   finally {
     closeHostDb()
-  }
-}
-
-// Dev convenience: when a freshly-served Host registry is empty, seed it from
-// built Soul descriptors discovered under <dir>/*/dist/soul.descriptor.json.
-// Requires the Host DB to already be initialized (createHostServer does this).
-// No-op once anything is published, so manual `soul publish` is never overridden.
-export function seedSoulReleasesFromDir(dir: string): void {
-  if (!existsSync(dir) || listSoulReleases().length > 0)
-    return
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory())
-      continue
-    const descriptorPath = path.join(dir, entry.name, 'dist', 'soul.descriptor.json')
-    if (!existsSync(descriptorPath))
-      continue
-    try {
-      const descriptor = parseSoulDescriptorV1(JSON.parse(readFileSync(descriptorPath, 'utf8')))
-      const identity = descriptor.identity as Record<string, unknown>
-      if (typeof identity.id !== 'string' || typeof identity.name !== 'string')
-        continue
-      publishSoulRelease({ descriptor, name: identity.name, publishedBy: 'cli', soulId: identity.id, source: 'official' })
-    }
-    catch (error) {
-      process.stderr.write(`seed soul release skipped (${entry.name}): ${error instanceof Error ? error.message : String(error)}\n`)
-    }
   }
 }
 
@@ -765,7 +747,7 @@ export async function runHostCli(argv: string[], deps: HostCliDeps = {}): Promis
         ...(options.webStaticDir ? { webStaticDir: options.webStaticDir } : {}),
       })
       if (options.seedSoulsDir)
-        seedSoulReleasesFromDir(options.seedSoulsDir)
+        seedSoulReleasesFromDir(options.seedSoulsDir, message => process.stderr.write(`${message}\n`))
       const bunServe = deps.bunServe ?? Bun.serve
       bunServe({
         fetch: (request, bunServer) => server.fetch(request, bunServer),

@@ -14,7 +14,8 @@ import {
 } from '@zonease/aiworker-storage-sqlite/host'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { runHostCli, seedSoulReleasesFromDir } from './aiworker-host'
+import { runHostCli } from './aiworker-host'
+import { seedSoulReleasesFromDir } from './host-soul-seed'
 
 describe('aiworker-host control CLI', () => {
   const originalStderrWrite = process.stderr.write
@@ -846,6 +847,49 @@ describe('aiworker-host control CLI', () => {
     })
   })
 
+  it('threads --seed-souls-dir into the lifecycle start input so dev:host seeds the registry', async () => {
+    await withHostSessionEnv({}, async () => {
+      const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+      const hostLifecycle = {
+        async start(input: Record<string, unknown>) {
+          calls.push({ input, method: 'start' })
+          return { apiUrl: 'http://127.0.0.1:9117', mode: input.mode, webUrl: 'http://127.0.0.1:5050/host' }
+        },
+      }
+
+      const code = await runHostCli([
+        'start',
+        '--dev',
+        '--db',
+        '/tmp/host.db',
+        '--dev-admin-email',
+        'admin@zonease.org',
+        '--seed-souls-dir',
+        'souls',
+      ], { hostLifecycle } as any)
+
+      expect(code).toBe(0)
+      expect(calls[0]!.input.seedSoulsDir).toBe('souls')
+    })
+  })
+
+  it('omits seedSoulsDir from the lifecycle start input when --seed-souls-dir is not passed', async () => {
+    await withHostSessionEnv({}, async () => {
+      const calls: Array<{ input: Record<string, unknown>, method: string }> = []
+      const hostLifecycle = {
+        async start(input: Record<string, unknown>) {
+          calls.push({ input, method: 'start' })
+          return { apiUrl: 'http://127.0.0.1:9117', mode: input.mode, webUrl: 'http://127.0.0.1:5050/host' }
+        },
+      }
+
+      const code = await runHostCli(['start', '--dev', '--db', '/tmp/host.db', '--dev-admin-email', 'admin@zonease.org'], { hostLifecycle } as any)
+
+      expect(code).toBe(0)
+      expect('seedSoulsDir' in calls[0]!.input).toBe(false)
+    })
+  })
+
   it('keeps lifecycle dev admin behavior when Logto env entries are blank placeholders', async () => {
     await withHostSessionEnv({
       AIWORKER_HOST_ALLOWED_EMAIL_DOMAINS: '',
@@ -1193,9 +1237,13 @@ describe('aiworker-host control CLI', () => {
     },
   }
 
+  // Point doctor at a throwaway, never-created DB path so its Soul-registry read
+  // (existsSync-guarded, read-only) never touches the real ~/.aiworker-dev/host.db.
+  const doctorDbPath = join(tmpdir(), 'aiworker-host-doctor-test-no-db.db')
+
   it('doctor reports unhealthy (exit 1) under partial Logto config', async () => {
     const code = await withHostSessionEnv(partialLogtoEnv, () =>
-      runHostCli(['doctor'], { hostLifecycle: runningLifecycle } as any))
+      runHostCli(['doctor', '--db', doctorDbPath], { hostLifecycle: runningLifecycle } as any))
     expect(code).toBe(1)
     expect(output).toContain('AIWorker Host Doctor')
     expect(output).toContain('Logto')
@@ -1204,16 +1252,16 @@ describe('aiworker-host control CLI', () => {
 
   it('doctor exits 0 with all Logto cleared (dev-static warn), 1 under --strict', async () => {
     const ok = await withHostSessionEnv({}, () =>
-      runHostCli(['doctor'], { hostLifecycle: runningLifecycle } as any))
+      runHostCli(['doctor', '--db', doctorDbPath], { hostLifecycle: runningLifecycle } as any))
     expect(ok).toBe(0)
     const strict = await withHostSessionEnv({}, () =>
-      runHostCli(['doctor', '--strict'], { hostLifecycle: runningLifecycle } as any))
+      runHostCli(['doctor', '--strict', '--db', doctorDbPath], { hostLifecycle: runningLifecycle } as any))
     expect(strict).toBe(1)
   })
 
   it('doctor --json emits a DoctorReport with a context summary', async () => {
     const code = await withHostSessionEnv(completeLogtoEnv, () =>
-      runHostCli(['doctor', '--json'], { hostLifecycle: runningLifecycle } as any))
+      runHostCli(['doctor', '--json', '--db', doctorDbPath], { hostLifecycle: runningLifecycle } as any))
     const parsed = JSON.parse(output) as {
       context: { provisioningTargets: string[], soulReleases: number }
       exitCode: number
