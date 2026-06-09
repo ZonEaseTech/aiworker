@@ -237,6 +237,15 @@ async function assertComposerPinnedToMainBottom(page: Page, label: string): Prom
 async function addEntryFileOverlayFromUi(page: Page, workerId: string): Promise<void> {
   await page.getByRole('button', { name: 'Configure' }).click()
   const configDialog = page.getByRole('dialog', { name: 'Worker configuration' })
+  await configDialog.waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+  // Evidence: overlay groups carry an integrated "+" add action in the trigger and no count tag.
+  await page.screenshot({ fullPage: true, path: join(evidenceRoot, 'freeform-browser-worker-config-overlay.png') })
+  // Evidence: a selected asset's detail panel no longer surfaces a checksum block.
+  const firstAsset = configDialog.locator('[data-slot="sidebar-menu-button"]').first()
+  if (await firstAsset.count() > 0) {
+    await firstAsset.click()
+    await page.screenshot({ fullPage: true, path: join(evidenceRoot, 'freeform-browser-worker-config-asset-detail.png') })
+  }
   await configDialog.getByRole('button', { name: 'Add entry file' }).click()
 
   // The add panel renders inline inside the config dialog (not a nested dialog).
@@ -301,9 +310,8 @@ async function archiveWorkspaceLifecycleFromUi(
   const main = page.getByRole('region', { name: 'Soul workspaces and sessions' })
   await assertWorkerArchiveAbsentFromUi(page)
 
-  // 归档已收敛进 "More actions" overflow 菜单(worker-studio HeaderMoreActionsMenu);先开菜单再点条目。
-  await page.getByRole('button', { name: 'More actions for current session' }).click()
-  await page.getByRole('menuitem', { name: 'Archive' }).click()
+  // 单一归档动作直接出按钮(不再藏进 ••• overflow 菜单);一键打开确认弹窗。
+  await main.getByRole('button', { name: 'Archive session' }).click()
   await confirmArchiveDialog(page, 'Archive session?', 'Archive session')
   await page.waitForURL(new RegExp(`/workers/${escapeRegExp(routeIds.workerId)}/workspaces/${escapeRegExp(routeIds.workspaceId)}$`), {
     timeout: WORKBENCH_RENDER_TIMEOUT_MS,
@@ -319,8 +327,7 @@ async function archiveWorkspaceLifecycleFromUi(
     method: 'POST',
   })
 
-  await page.getByRole('button', { name: 'More actions for current workspace' }).click()
-  await page.getByRole('menuitem', { name: 'Archive' }).click()
+  await main.getByRole('button', { name: 'Archive workspace' }).click()
   await confirmArchiveDialog(page, 'Archive workspace?', 'Archive workspace')
   await page.waitForURL(new RegExp(`/workers/${escapeRegExp(routeIds.workerId)}$`), { timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   await main.getByText('No workspaces yet').waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })

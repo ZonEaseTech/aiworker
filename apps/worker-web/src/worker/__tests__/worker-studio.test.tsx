@@ -18,17 +18,8 @@ function selectSettingsTab(tab: HTMLElement) {
   fireEvent.mouseDown(tab, { button: 0, ctrlKey: false })
 }
 
-function openMenu(trigger: HTMLElement) {
-  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' })
-}
-
 function expectNoArchiveRequest(pathname: string) {
   expect(fetch).not.toHaveBeenCalledWith(pathname, expect.objectContaining({ method: 'POST' }))
-}
-
-function expectNeutralArchiveMenuItem(item: HTMLElement) {
-  expect(item.getAttribute('data-slot')).toBe('dropdown-menu-item')
-  expect(item.getAttribute('data-variant')).toBe('default')
 }
 
 const workspace = {
@@ -452,16 +443,14 @@ describe('worker studio', () => {
     expect(within(workspaceToggle).getByText('Demo Workspace').getAttribute('data-slot')).toBe('item-title')
     expect(workspaceToggle.querySelector('[data-slot="badge"]')).toBeNull()
     expect(within(tree).getByRole('button', { name: 'Open session Screen request' })).toBeTruthy()
-    expect(within(tree).queryByRole('button', { name: 'Archive workspace Demo Workspace' })).toBeNull()
-    const workspaceMoreAction = within(tree).getByRole('button', { name: 'More actions for workspace Demo Workspace' })
-    const sessionMoreAction = within(tree).getByRole('button', { name: 'More actions for session Screen request' })
-    expect(workspaceMoreAction).toBeTruthy()
-    expect(sessionMoreAction).toBeTruthy()
+    // A single archive action is surfaced directly on the row — not buried behind a ••• overflow menu.
+    expect(within(tree).getByRole('button', { name: 'Archive workspace Demo Workspace' })).toBeTruthy()
+    expect(within(tree).getByRole('button', { name: 'Archive session Screen request' })).toBeTruthy()
+    expect(within(tree).queryByRole('button', { name: 'More actions for workspace Demo Workspace' })).toBeNull()
+    expect(within(tree).queryByRole('button', { name: 'More actions for session Screen request' })).toBeNull()
     expect(within(tree).getByRole('button', { name: 'New workspace' })).toBeTruthy()
-    expect(within(tree).getAllByRole('button', { name: /New session/ }).length).toBeGreaterThan(0)
-
-    openMenu(sessionMoreAction)
-    expectNeutralArchiveMenuItem(await screen.findByRole('menuitem', { name: 'Archive' }))
+    // The primary "+ new session" action lives in the workspace trigger slot.
+    expect(within(tree).getByRole('button', { name: 'New session in Demo Workspace' })).toBeTruthy()
   })
 
   it('renders the selected session chat directly in the main area without a mounted micro-app', async () => {
@@ -691,7 +680,7 @@ describe('worker studio', () => {
     expect(empty?.className).toContain('text-center')
     expect(empty?.className).not.toContain('items-start')
     expect(within(main).getByRole('button', { name: 'New workspace' })).toBeTruthy()
-    expect(within(screen.getByTestId('workspace-tree')).getByRole('button', { name: 'More actions for workspace Demo Workspace' })).toBeTruthy()
+    expect(within(screen.getByTestId('workspace-tree')).getByRole('button', { name: 'Archive workspace Demo Workspace' })).toBeTruthy()
   })
 
   it('shows a create-first-workspace empty state when the worker has no workspaces', async () => {
@@ -780,14 +769,9 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     const main = await screen.findByLabelText('Soul workspaces and sessions')
-    expect(within(main).queryByRole('button', { name: 'Archive session' })).toBeNull()
-    openMenu(within(main).getByRole('button', { name: 'More actions for current session' }))
-    const archiveSessionMenuItem = await screen.findByRole('menuitem', { name: 'Archive' })
-    expectNeutralArchiveMenuItem(archiveSessionMenuItem)
-    expect(screen.queryByRole('menuitem', { name: 'Archive session' })).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: 'Archive workspace' })).toBeNull()
-    expect(screen.getAllByRole('menuitem')).toHaveLength(1)
-    fireEvent.click(archiveSessionMenuItem)
+    // Archive is a direct one-click action in the session header — no workspace archive offered here.
+    expect(within(main).queryByRole('button', { name: 'Archive workspace' })).toBeNull()
+    fireEvent.click(within(main).getByRole('button', { name: 'Archive session' }))
     expectNoArchiveRequest('/api/sessions/session-1/archive')
 
     const firstDialog = await screen.findByRole('dialog', { name: 'Archive session?' })
@@ -797,8 +781,7 @@ describe('worker studio', () => {
     })
     expectNoArchiveRequest('/api/sessions/session-1/archive')
 
-    openMenu(within(main).getByRole('button', { name: 'More actions for current session' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive' }))
+    fireEvent.click(within(main).getByRole('button', { name: 'Archive session' }))
     const dialog = await screen.findByRole('dialog', { name: 'Archive session?' })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Archive session' }))
 
@@ -818,12 +801,7 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     const main = await screen.findByLabelText('Soul workspaces and sessions')
-    expect(within(main).queryByRole('button', { name: 'Archive workspace' })).toBeNull()
-    openMenu(within(main).getByRole('button', { name: 'More actions for current workspace' }))
-    const archiveWorkspaceMenuItem = await screen.findByRole('menuitem', { name: 'Archive' })
-    expectNeutralArchiveMenuItem(archiveWorkspaceMenuItem)
-    expect(screen.queryByRole('menuitem', { name: 'Archive workspace' })).toBeNull()
-    fireEvent.click(archiveWorkspaceMenuItem)
+    fireEvent.click(within(main).getByRole('button', { name: 'Archive workspace' }))
     expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
 
     const dialog = await screen.findByRole('dialog', { name: 'Archive workspace?' })
@@ -843,11 +821,7 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     const tree = await screen.findByTestId('workspace-tree')
-    openMenu(within(tree).getByRole('button', { name: 'More actions for workspace Demo Workspace' }))
-    const archiveWorkspaceMenuItem = await screen.findByRole('menuitem', { name: 'Archive' })
-    expectNeutralArchiveMenuItem(archiveWorkspaceMenuItem)
-    expect(screen.queryByRole('menuitem', { name: 'Archive workspace' })).toBeNull()
-    fireEvent.click(archiveWorkspaceMenuItem)
+    fireEvent.click(within(tree).getByRole('button', { name: 'Archive workspace Demo Workspace' }))
     expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
 
     const dialog = await screen.findByRole('dialog', { name: 'Archive workspace?' })
@@ -861,18 +835,14 @@ describe('worker studio', () => {
     expect(screen.getByTestId('workspace-tree').textContent).not.toContain('Demo Workspace')
   })
 
-  it('does not offer workspace archive from a selected session header menu', async () => {
+  it('only offers session archive (never workspace archive) from a selected session header', async () => {
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1/sessions/session-1')
     render(<WorkerStudio />)
 
     const main = await screen.findByLabelText('Soul workspaces and sessions')
-    expect(within(main).queryByRole('button', { name: 'Archive session' })).toBeNull()
-    openMenu(within(main).getByRole('button', { name: 'More actions for current session' }))
-    const archiveMenuItem = await screen.findByRole('menuitem', { name: 'Archive' })
-    expect(screen.queryByRole('menuitem', { name: 'Archive workspace' })).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: 'Archive session' })).toBeNull()
-    expect(screen.getAllByRole('menuitem')).toHaveLength(1)
-    fireEvent.click(archiveMenuItem)
+    // The session header surfaces exactly one direct archive action — its own session, never the workspace.
+    expect(within(main).queryByRole('button', { name: 'Archive workspace' })).toBeNull()
+    fireEvent.click(within(main).getByRole('button', { name: 'Archive session' }))
     expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
     expectNoArchiveRequest('/api/sessions/session-1/archive')
 

@@ -1,7 +1,7 @@
 import type { LocalWorker, LocalWorkerOverlayAsset, LocalWorkerOverlayAssetKind } from '@zonease/aiworker-soul-descriptor'
 import type { StaticMessages } from '../features/i18n/types'
 
-import { Cancel01Icon, MoreHorizontalCircle01Icon, RefreshIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { Add01Icon, Cancel01Icon, MoreHorizontalCircle01Icon, RefreshIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
@@ -345,17 +345,18 @@ export function WorkerConfigurationDialog({
                       onToggle={() => setCollapsedGroups(prev => ({ ...prev, [cat.value]: !collapsed }))}
                       title={cat.label}
                       toggleAriaLabel={`Toggle ${cat.label}`}
-                      meta={catAssets.length > 0 ? <Badge variant="outline">{catAssets.length}</Badge> : null}
                       action={cat.value === 'skill' || cat.value === 'entry-file'
                         ? (
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon-sm"
+                              className="size-7"
                               aria-label={cat.value === 'skill' ? labels.addSkill : labels.addEntryFile}
+                              title={cat.value === 'skill' ? labels.addSkill : labels.addEntryFile}
                               onClick={() => startDraft(cat.value === 'skill' ? 'skill' : 'entry-file')}
                             >
-                              +
+                              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
                             </Button>
                           )
                         : null}
@@ -509,13 +510,7 @@ export function WorkerConfigurationDialog({
                                     ? <Badge variant="secondary" className="text-xs">baseline</Badge>
                                     : null}
                                 </div>
-                                <ItemDescription>
-                                  {selectedAsset.source}
-                                  {' '}
-                                  ·
-                                  {' '}
-                                  {selectedAsset.target}
-                                </ItemDescription>
+                                <ItemDescription>{selectedAsset.target}</ItemDescription>
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
                                 <Switch
@@ -526,16 +521,6 @@ export function WorkerConfigurationDialog({
                                 />
                               </div>
                             </div>
-                            {selectedAsset.checksum
-                              ? (
-                                  <Item variant="default">
-                                    <ItemContent className="grid min-w-0 gap-1">
-                                      <ItemTitle>Checksum</ItemTitle>
-                                      <ItemDescription className="line-clamp-none break-all">{selectedAsset.checksum}</ItemDescription>
-                                    </ItemContent>
-                                  </Item>
-                                )
-                              : null}
                             {autosave === 'failed' && autosaveErrorMessage
                               ? (
                                   <Alert variant="destructive">
