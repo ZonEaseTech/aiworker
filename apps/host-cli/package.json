@@ -1,7 +1,7 @@
 {
   "name": "@zonease/aiworker-host-cli",
   "type": "module",
-  "version": "1.0.0-rc.7",
+  "version": "1.0.0-rc.8",
   "description": "AIWorker Host control-plane CLI (aiworker-host)",
   "license": "MIT",
   "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
