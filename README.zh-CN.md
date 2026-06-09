@@ -2,7 +2,7 @@
 
 # AIWorker
 
-**运行一个自治的、本地优先的 AI worker —— 把一个 Soul 模板绑定到原生引擎,即可得到一个自托管、自带 Web Workbench 的运行体。**
+**把一个懂行的人的能力,变成一整支团队的产能 —— 做成一次 Soul,每个员工就拥有一个开箱即用、本地优先的专属 AI Worker。**
 
 [![npm version](https://img.shields.io/npm/v/@zonease/aiworker-cli?logo=npm&label=npm)](https://www.npmjs.com/package/@zonease/aiworker-cli)
 [![lint](https://github.com/ZonEaseTech/aiworker/actions/workflows/lint.yml/badge.svg)](https://github.com/ZonEaseTech/aiworker/actions/workflows/lint.yml)
@@ -18,16 +18,21 @@
 </div>
 
 > [!NOTE]
-> **状态:`0.x` 预览版。** v1 只发布**独立运行的 Worker**。Host 控制面属于 **Phase 2**,且永远不在运行热路径上。下文架构即权威合同 —— 见 [`docs/architecture.md`](./docs/architecture.md)。
+> **状态:`1.0.0-rc` 预览。** v1 只发布**独立运行的 Worker**。Host 控制面属于 **Phase 2**,且永远不在运行热路径上。下文架构即权威合同 —— 见 [`docs/architecture.md`](./docs/architecture.md)。
 
-AIWorker 是一个 **worker 为中心、本地优先的 AI 运行体**。一个 **Worker** 是自治的、CLI-first 的进程,它通过**原生引擎**(Codex / Claude Code)运行一个 **Soul**,拥有引擎启动权,并提供自己的 Web **Workbench**。无需云端后端,无需控制服务器 —— 一条命令即可在你的机器上拉起一个自托管的 AI worker。
+AIWorker 把**一个人的专业能力变成一群员工的产出**。一个懂行的作者把专业能力打包成 **Soul**、快速迭代,组织再低成本地复制给那些从不接触技术系统的员工 —— 每个人因此拥有一个开箱即用的专属 **AI Worker**。
 
-- 🧍 **Worker 为中心** —— 每个 Worker 都是自治的 CLI-first 运行体,创建时绑定一个 Soul 并*终生不变*。它拥有引擎启动权,可在 Host 缺席时完全独立运行。
-- 🧩 **Soul = 模板** —— 一个 descriptor-only 的引擎资产束(workspace 文件、skills、原生 MCP 文件、`AGENTS.md` / `CLAUDE.md` 等 entry 文件)。没有 UI、没有 app 私有 API、没有锁定。一次编写,投影到任意受支持的引擎。
-- 🖥️ **拥有自己的 Workbench** —— Worker 直接渲染自己的 Web UI(workspace、session、chat)。没有 mounted micro-app,没有 Soul 提供的 UI。
-- 🔌 **原生引擎桥接** —— 通过结构化 bridge 驱动引擎(进程管理、脱敏、取消、重连、对账)。模型调用、tool loop、审批、沙箱、鉴权都仍归引擎所有。
-- 🔒 **本地优先且密钥安全** —— 单个本地 daemon、SQLite 元数据,以及严格的脱敏边界:密钥绝不进入 descriptor、DB、日志、receipt 或 UI。
-- ⚡ **零配置启动** —— `bunx @zonease/aiworker-cli start` 完成 DB、内置 Freeform Soul 和 Worker 的 bootstrap,并打开 Workbench。
+| | | |
+| --- | --- | --- |
+| 🧩 | **Soul** = 能力载体 | descriptor-only 的引擎资产束(skills、原生 MCP、entry 文件)。一次编写,投影到任意引擎。*载体。* |
+| 🧍 | **Worker** = 员工的终端 | 自治、CLI-first 的运行体,创建时绑定一个 Soul 终生不变,通过原生引擎(Codex / Claude Code)运行它、拥有引擎启动权、提供自己的 Web Workbench。*完全独立运行。* |
+| 🎚️ | **Host** = 复制杠杆 *(Phase 2)* | 跨员工发布、分配、灰度、治理。*永不在运行热路径上。* |
+
+> **一个人的能力 → 全员的产能。**
+
+- 🔒 **本地优先且密钥安全** —— 单个本地 daemon、SQLite 元数据、严格脱敏边界:密钥绝不进入 descriptor、DB、日志、receipt 或 UI。
+- 🔌 **引擎中立、不锁定** —— descriptor-only 的 Soul 投影到任意受支持的原生引擎;模型调用、tool loop、审批、沙箱、鉴权都仍归引擎。
+- ⚡ **零配置** —— `bunx @zonease/aiworker-cli start` 完成 DB、内置 Freeform Soul 和 Worker 的 bootstrap,并打开 Workbench。
 
 ---
 
@@ -35,6 +40,7 @@ AIWorker 是一个 **worker 为中心、本地优先的 AI 运行体**。一个 
 
 - [什么是 AIWorker?](#什么是-aiworker)
 - [它为谁而建?](#它为谁而建)
+- [能力复制(Phase 2)](#能力复制phase-2)
 - [心智模型](#心智模型)
 - [架构](#架构)
 - [快速开始](#快速开始)
@@ -44,13 +50,14 @@ AIWorker 是一个 **worker 为中心、本地优先的 AI 运行体**。一个 
 - [开发](#开发)
 - [测试与发布门禁](#测试与发布门禁)
 - [路线图](#路线图)
+- [非目标](#非目标)
 - [文档地图](#文档地图)
 - [贡献](#贡献)
 - [许可证](#许可证)
 
 ## 什么是 AIWorker?
 
-大多数 AI 工具要么是开发者 IDE/agent,要么是租用的云平台。AIWorker 两者都不是。它是**运行时层**:把*一个引擎 + 一个模板*变成一个你自己拥有、本地运行的、独立自托管的 **AI worker**。
+大多数 AI 工具要么是开发者 IDE/agent,要么是租用的云平台。AIWorker 两者都不是。它是**运行时层**:把*一个引擎 + 一个模板*变成一个你自己拥有、本地运行的、独立自托管的 **AI worker**;再借助 Phase 2 的 Host,成为把这个 worker 复制给一整支团队的杠杆。
 
 职责分离是严格的,这正是它的全部意义所在:
 
@@ -65,17 +72,35 @@ Worker 运行时绝不依赖 Host,且 `worker-*` 包绝不 import `host-*` 包 �
 
 ## 它为谁而建?
 
-AIWorker 为这样的组织而建:想把**一个专家的能力复制给一整支团队** —— 一个懂行的作者把专业能力打包成 Soul,每个员工因此获得一个开箱即用的专属 AI Worker。它是一个面向垂直与组织化工作流的**本地、自包含 AI worker**,而**不是**又一个开发者 IDE 或租用的 agent 平台。
+为这样的组织而建:**想把一个专家的工作方式变成全员的工作方式**,而使用它的人无需理解底层的技术系统。
 
-作者为任意垂直职能编写一个 Soul,每个员工的 Worker 即可独立运行它:
+| 角色 | 是谁 | 得到什么 |
+| --- | --- | --- |
+| **能力作者** | 团队里那个"懂行的人" —— 资深 HR、客服主管、PM、投放专家 | 把打法打包成 Soul、快速迭代,**不必把它做成 app 或后端** |
+| **管理员** *(Phase 2)* | 分配能力与访问权的人 | 把一份已发布的 Soul 复制给一群员工,assignment、connector 授权、灰度、回滚都可见 |
+| **员工** | 不懂技术的执行者 | 一个开箱即用的专属 AI Worker —— 不必学 Soul、descriptor、MCP、引擎或 Host |
 
-- **PM** —— PRD、决策记录、roadmap 切片、状态报告
-- **质量** —— 测试计划、回归矩阵、缺陷证据、release gate
-- **People ops** —— 候选人初筛、面试 brief、岗位 rubric、招聘风险
-- **DevOps** —— 部署清单、事故复盘、runbook 更新、容量摘要
-- **财务 / 法务 / 运营** —— 各自领域的审查、模板化输出、证据链
+作者为任意垂直职能编写一个 Soul,每个员工的 Worker 独立运行它。`souls/*` 下的示例 Soul 面向一支餐饮 POS SaaS 团队:
 
-组织侧的复制杠杆 —— 发布、分配、灰度、回滚 —— 是 Phase 2 的 Host;v1 先发独立运行的 Worker 作为底座。v1 的唯一验收 Soul **`aiworker-freeform`** 证明完整的独立运行闭环。HR 与 QA Soul 随后以 descriptor-producing 模板的形式补齐。
+- **人事经理** —— 覆盖后端 / Flutter / PM / 客服岗位的结构化招聘工作流
+- **软件客服** —— 工单分诊、POS 故障排障、过质量门的升级 issue
+- **产品经理** —— 能过五维质量门的 PRD 与 issue
+- **谷歌推广** —— 本地餐饮投放代运营(Performance Max、Google Business Profile、到店转化)
+
+v1 的强验收 Soul 是 **`aiworker-freeform`**,它端到端证明完整的独立运行闭环;上面这些领域 Soul 是 descriptor-producing 模板。
+
+## 能力复制(Phase 2)
+
+Phase 2 补上组织侧 —— 分发与治理,永不在运行热路径上:
+
+```text
+作者发布一个 Soul 版本
+  → 管理员把它分配给员工或群组(connector · 权限 · profile)
+    → 员工的 Worker 被开通,并打开自己的 Workbench,即刻开工
+  ↺ 作者发布更新 → 管理员灰度推出,或回滚
+```
+
+Phase 2.1 补上受管远程访问:员工经 Host 企业 URL、Logto 鉴权与一条 Worker 发起的 tunnel 抵达自己的 Worker。Host 只是 URL 与授权边界 —— 它绝不 mount、frame、render 或 proxy 这个 Workbench,且 Host 或 tunnel 宕机绝不会停掉本地 Worker。
 
 ## 心智模型
 
@@ -198,6 +223,7 @@ apps/
 
 souls/
   aiworker-freeform/   v1 强验收 descriptor Soul
+  hr-manager/ software-support/ product-manager/ google-ads/   领域 Soul 模板(示例)
 
 packages/
   worker-runtime/           Worker locator/runtime 编排 + 引擎 adapter
@@ -255,7 +281,7 @@ bun apps/worker-cli/src/aiworker.ts daemon foreground --port 9217
 bun run release:check
 ```
 
-它依次运行:`docs:check` → `test:contracts` → `test:protocol` → `test:cli` → `test:browser:freeform` → `typecheck` → `lint` → `build` → 发布 smoke(`dist-release`、`standalone-release`、`standalone-runtime`、`npm-package`)→ `test` → `check`。v1 浏览器证明只针对 Freeform 且为独立运行。见 [`docs/testing.md`](./docs/testing.md)。
+它依次运行:`docs:check` → `test:contracts` → `test:protocol` → `test:cli` → `test:browser:freeform` → `test:browser:phase2` → `typecheck` → `lint` → `build` → 发布 smoke(`dist-release`、`host-dist-release`、`standalone-release`、`standalone-runtime`、`npm-package`)→ `test` → `check`。v1 浏览器证明只针对 Freeform 且为独立运行。见 [`docs/testing.md`](./docs/testing.md)。
 
 ## 路线图
 
@@ -263,7 +289,16 @@ bun run release:check
 | --- | --- |
 | **v1 —— 当前** | 独立 Worker · `aiworker-freeform` Soul · worker 拥有 Workbench · 原生引擎 bridge(Codex / Claude Code)· 零配置 `aiworker start` · BYOK 回退 |
 | **Phase 2 —— Host 控制面** | 可选的 分发 / 管理 / 权限分配 / connector 授权 · Worker 发起的 check-in 与 Worker Access tunnel · 传输无关的控制合同。永远不在运行热路径上。 |
-| **更远** | HR、QA 及更多垂直 Soul 以 descriptor-producing 模板形式重写 |
+| **Phase 2.1 —— 受管访问** | 员工经 Host 企业 URL + Logto + Worker 发起的 tunnel 远程访问;Host 绝不渲染 Workbench |
+| **更远** | 更多领域 Soul 以 descriptor-producing 模板形式补齐 |
+
+## 非目标
+
+- v1 不做云后端、不做控制服务器 —— Host 全在 Phase 2,且永不在运行热路径上。
+- 任何阶段都不做 micro-app、mounted workbench、iframe 或 Host 渲染的 Worker UI。
+- Soul 不提供 UI、app 私有 API、capability 层或领域后端。
+- 一个 Worker 终生绑定一个 Soul —— 不做运行期换 Soul。
+- Host 不是领域工作流层、产品后端、agent runtime、仓库看板,也不是 Soul 配置中心。
 
 ## 文档地图
 
