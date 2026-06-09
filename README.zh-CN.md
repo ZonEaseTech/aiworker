@@ -65,9 +65,9 @@ Worker 运行时绝不依赖 Host,且 `worker-*` 包绝不 import `host-*` 包 �
 
 ## 它为谁而建?
 
-AIWorker 为这样的人而建:他们想要一个**本地、自包含的 AI worker** 来服务垂直与组织化的工作流 —— 而**不是**又一个开发者 IDE 或租用的 agent 平台。
+AIWorker 为这样的组织而建:想把**一个专家的能力复制给一整支团队** —— 一个懂行的作者把专业能力打包成 Soul,每个员工因此获得一个开箱即用的专属 AI Worker。它是一个面向垂直与组织化工作流的**本地、自包含 AI worker**,而**不是**又一个开发者 IDE 或租用的 agent 平台。
 
-为任意垂直职能编写一个 Soul,Worker 即可独立运行它:
+作者为任意垂直职能编写一个 Soul,每个员工的 Worker 即可独立运行它:
 
 - **PM** —— PRD、决策记录、roadmap 切片、状态报告
 - **质量** —— 测试计划、回归矩阵、缺陷证据、release gate
@@ -75,7 +75,7 @@ AIWorker 为这样的人而建:他们想要一个**本地、自包含的 AI work
 - **DevOps** —— 部署清单、事故复盘、runbook 更新、容量摘要
 - **财务 / 法务 / 运营** —— 各自领域的审查、模板化输出、证据链
 
-v1 只发布一个验收 Soul —— **`aiworker-freeform`**,它证明完整的独立运行闭环。HR 与 QA Soul 随后以 descriptor-producing 模板的形式补齐。
+组织侧的复制杠杆 —— 发布、分配、灰度、回滚 —— 是 Phase 2 的 Host;v1 先发独立运行的 Worker 作为底座。v1 的唯一验收 Soul **`aiworker-freeform`** 证明完整的独立运行闭环。HR 与 QA Soul 随后以 descriptor-producing 模板的形式补齐。
 
 ## 心智模型
 
@@ -115,7 +115,7 @@ flowchart LR
   class HOST p2;
 ```
 
-**daemon 拓扑是每个 Worker 一个 daemon。** 一个 Worker daemon 最多承载一个 active Worker,且零 fleet/Host 感知 —— 它是一个被动的本地服务,只服务自己的 CLI、Workbench web 和配置。Phase 2 中,Host 通过 HTTP 把 Worker 自己的 Workbench 框成一个沙箱化 micro-app,并驱动一个传输无关的控制合同;无论 Host 是否存在,Worker 保持纯净、行为一致。
+**daemon 拓扑是每个 Worker 一个 daemon。** 一个 Worker daemon 最多承载一个 active Worker,且零 fleet/Host 感知 —— 它是一个被动的本地服务,只服务自己的 CLI、Workbench web 和配置。Phase 2 中,Host 通过 over-the-wire 的传输无关控制合同驱动,并可把员工引导到 Worker 自有的 Workbench URL,但绝不 mount / frame / embed / render / proxy 这个 Workbench;无论 Host 是否存在,Worker 保持纯净、行为一致。
 
 ## 快速开始
 
@@ -262,7 +262,7 @@ bun run release:check
 | 阶段 | 范围 |
 | --- | --- |
 | **v1 —— 当前** | 独立 Worker · `aiworker-freeform` Soul · worker 拥有 Workbench · 原生引擎 bridge(Codex / Claude Code)· 零配置 `aiworker start` · BYOK 回退 |
-| **Phase 2 —— Host 控制面** | 可选的 分发 / 管理 / 权限分配 / connector 授权 · 基于 HTTP 的 micro-app 框定 · 传输无关的控制合同。永远不在运行热路径上。 |
+| **Phase 2 —— Host 控制面** | 可选的 分发 / 管理 / 权限分配 / connector 授权 · Worker 发起的 check-in 与 Worker Access tunnel · 传输无关的控制合同。永远不在运行热路径上。 |
 | **更远** | HR、QA 及更多垂直 Soul 以 descriptor-producing 模板形式重写 |
 
 ## 文档地图

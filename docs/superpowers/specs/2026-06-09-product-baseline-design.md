@@ -98,15 +98,17 @@ Host 只做企业 URL + 鉴权边界，**绝不 mount / iframe / render** Workbe
 
 ## 7. canon docs update（本轮配套）
 
-基线本身大部分是 canon 已有内容的再表述，故 canon 更新是外科手术式的，只促进"被裁决但尚未进 canon"的项：
+基线本身大部分是 canon 已有内容的再表述，故 canon 更新是外科手术式的：促进"被裁决但尚未进 canon"的项，并废弃/更新与 canon 冲突的残留：
 
 1. **`docs/testing.md` 新增 "Phase DoD Forcing Functions" 段**：把分阶段 DoD 的 **forcing functions**（v1 = 零配置 `aiworker start` + `release:check` 全绿；Phase 2 = 第一个真员工经**受管企业访问边界**开通 + native engine 真回合 + ≥2 并发真员工；Phase 2.1 = 真实双机互联活跑）从记忆裁决 promote 进 canon。**只留持久验收形态**，point-in-time 状态（rc tag、机器地址、活跑机器数）仍归记忆、不进合同。testing.md 是 canon 钦定的 "Phase 2 MVP experience acceptance" 归属（见 architecture.md Decision Coverage Index）。
 2. **`docs/architecture.md` Position 不动**：复核后认定其首段已无歧义地表述了"组织复制是北极星 / standalone 是底座"；那类误读只发生在 README、不在 architecture.md。重写已正确的最权威段落 = 引入漂移，故跳过。
 3. **`AGENTS.md` 不动**：`test:contracts` 校验 "AGENTS.md is a short bootstrap"，不往里塞基线框架。
-4. **README 漂移**：README 非 canon，本轮**只标记不修**；定稿后单独回收（个人 power-user 口径 + 中文版 line 118 micro-app 残留）。
+4. **`docs/protocol.md:242` Fleet 行修正（canon，已做）**：原文 "Fleet owns worker id, worker home, and daemon port" 与 `architecture.md:183`「workerId 是 Worker 自己 mint 的身份、not a fleet-imposed handle」矛盾。代码核实：`mintWorkerId()` 证 Worker 自 mint id；`fleet.ts` / `fleet.json` / `smoke:fleet` 证 fleet 真实分配 per-worker home/port。故**只窄修 id 这一项** → "The Worker mints its own worker id, and worker home and daemon port are fleet-allocated"，不动 home/port（避免反过来与 dev-fleet 模型冲突）。
+5. **三语 README 对账（非 canon，已做）**：① 废弃正向 micro-app 框定（`README.*` line 118 / 265 「Host frames Workbench as a sandboxed micro-app」违 `protocol.md:193` no-mount → 改为 over-the-wire 控制合同 + Host 可引导员工到 Workbench URL 但绝不 mount/frame/embed/render/proxy）；② 「它为谁而建 / Who is it for / 対象ユーザー」段轻度 reframe——以「一个专家能力复制给一整支团队」的组织北极星起头，把个人作者口径**从属化**（不删 persona 列表，它是作者画像、合法）。line 27 的负向「no mounted micro-app」是合法禁令、保留。
 
 ## 8. 验收
 
 - 基线五节（定位 / 面向群体 / 价值 / 旅程 / 目标）与 canon 不冲突。
 - §7 的 canon 更新落地后 `bun run docs:check` 与 `bun run test:contracts` 仍绿。
-- README 漂移作为独立 follow-up 记录在案。
+- 三语 README 的 micro-app 正向残留已废弃、受众段已按北极星 reframe（§7.5）；canon 内只剩负向禁令与历史 teardown 记录。
+- 借界项（`appId` 路由 / `--app` flag 命名）仅记录，不在本轮动——碰它=改路由/CLI 契约（非纯 docs）。
