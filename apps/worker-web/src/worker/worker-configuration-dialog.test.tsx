@@ -128,13 +128,16 @@ function selectAssetRow(assetId: string) {
 }
 
 describe('worker configuration overlay content editor', () => {
-  it('keeps overlay category count meta visible by default', () => {
+  it('drops the noisy category count tag and keeps the add action as an integrated trigger slot', () => {
     renderDialog([skillBaseline, skillOverlay, entryFileOverlay])
 
     const skillsToggle = screen.getByRole('button', { name: 'Toggle Skills' })
     expect(within(skillsToggle).getByText('Skills').getAttribute('data-slot')).toBe('item-title')
-    expect(within(skillsToggle).getByText('2').closest('[data-slot="badge"]')).toBeTruthy()
+    // The count badge is visual clutter, not signal — the trigger carries no count tag.
+    expect(skillsToggle.querySelector('[data-slot="badge"]')).toBeNull()
     expect(skillsToggle.querySelector('[data-icon="inline-start"]')).toBeTruthy()
+    // The "add skill" action is surfaced directly in the group header (integrated slot, not a detached "+").
+    expect(screen.getByRole('button', { name: copy.workerConfig.addSkill })).toBeTruthy()
   })
 
   it('loads selected skill content inline without opening a nested editor dialog', async () => {

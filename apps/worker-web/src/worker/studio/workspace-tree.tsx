@@ -1,15 +1,9 @@
 import type { LocalSession, LocalWorkspace } from '@zonease/aiworker-soul-descriptor'
 
-import { Add01Icon, Archive01Icon, File02Icon, FolderLibraryIcon, MoreHorizontalCircle01Icon } from '@hugeicons/core-free-icons'
+import { Add01Icon, Archive01Icon, File02Icon, FolderLibraryIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { CollapsibleGroup } from '@zonease/aiworker-ui/components/collapsible-group'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@zonease/aiworker-ui/components/dropdown-menu'
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -29,6 +23,8 @@ import { useMemo, useState } from 'react'
  */
 export function WorkspaceTree({
   archiveLabel,
+  archiveSessionLabel,
+  archiveWorkspaceLabel,
   emptyWorkspacesLabel,
   newSessionLabel,
   newWorkspaceLabel,
@@ -45,6 +41,8 @@ export function WorkspaceTree({
   workspaces,
 }: {
   archiveLabel: string
+  archiveSessionLabel: string
+  archiveWorkspaceLabel: string
   emptyWorkspacesLabel: string
   newSessionLabel: string
   newWorkspaceLabel: string
@@ -107,42 +105,34 @@ export function WorkspaceTree({
                     title={workspace.name}
                     toggleAriaLabel={`${collapsed ? 'Expand' : 'Collapse'} ${workspace.name}`}
                     action={(
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`More actions for workspace ${workspace.name}`}
-                            title={`More actions for workspace ${workspace.name}`}
-                            className="size-7"
-                          >
-                            <HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} aria-hidden="true" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
-                          <DropdownMenuItem onSelect={() => onArchiveWorkspace(workspace)}>
-                            <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
-                            {archiveLabel}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`${newSessionLabel} in ${workspace.name}`}
+                          title={newSessionLabel}
+                          className="size-7"
+                          onClick={() => onCreateSession(workspace)}
+                        >
+                          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`${archiveWorkspaceLabel} ${workspace.name}`}
+                          title={archiveLabel}
+                          className="size-7 opacity-100 md:opacity-0 md:transition-opacity md:group-focus-within/collapsible-header:opacity-100 md:group-hover/collapsible-header:opacity-100"
+                          onClick={() => onArchiveWorkspace(workspace)}
+                        >
+                          <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
+                        </Button>
+                      </>
                     )}
                     onToggle={() => toggleWorkspace(workspace.id)}
                   >
                     <SidebarMenu aria-label={`${workspace.name} sessions`}>
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          type="button"
-                          size="sm"
-                          aria-label={`${newSessionLabel} in ${workspace.name}`}
-                          className="text-sidebar-foreground/70"
-                          onClick={() => onCreateSession(workspace)}
-                        >
-                          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
-                          <span className="truncate">{newSessionLabel}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
                       {sessions.length > 0
                         ? sessions.map(session => (
                             <SidebarMenuItem key={session.id}>
@@ -156,21 +146,15 @@ export function WorkspaceTree({
                                 <HugeiconsIcon icon={File02Icon} strokeWidth={2} aria-hidden="true" />
                                 <span className="truncate">{session.title}</span>
                               </SidebarMenuButton>
-                              <DropdownMenu>
-                                <SidebarMenuAction showOnHover asChild>
-                                  <DropdownMenuTrigger asChild>
-                                    <button type="button" aria-label={`More actions for session ${session.title}`} title={`More actions for session ${session.title}`}>
-                                      <HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} aria-hidden="true" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                </SidebarMenuAction>
-                                <DropdownMenuContent align="start">
-                                  <DropdownMenuItem onSelect={() => onArchiveSession(workspace, session)}>
-                                    <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
-                                    {archiveLabel}
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <SidebarMenuAction
+                                showOnHover
+                                type="button"
+                                aria-label={`${archiveSessionLabel} ${session.title}`}
+                                title={archiveLabel}
+                                onClick={() => onArchiveSession(workspace, session)}
+                              >
+                                <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
+                              </SidebarMenuAction>
                             </SidebarMenuItem>
                           ))
                         : (

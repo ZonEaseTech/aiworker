@@ -50,7 +50,7 @@ export function CollapsibleGroup({
       data-collapsed={collapsed ? 'true' : undefined}
       className={cn('flex min-w-0 flex-col gap-2', className)}
     >
-      <div className="group/collapsible-header flex min-w-0 items-center gap-1">
+      <div className="group/collapsible-header flex min-w-0 items-center gap-0.5">
         <CollapsibleTrigger asChild>
           <Button
             type="button"
@@ -69,7 +69,7 @@ export function CollapsibleGroup({
           ? (
               <div
                 data-slot="collapsible-group-action"
-                className="shrink-0 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/collapsible-header:opacity-100 md:focus-within:opacity-100"
+                className="flex shrink-0 items-center gap-0.5"
               >
                 {action}
               </div>

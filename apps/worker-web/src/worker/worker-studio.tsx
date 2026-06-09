@@ -5,7 +5,7 @@ import type { SettingsSection } from '../features/settings'
 import type { ChatComposerLabels } from './studio/chat/chat-composer'
 import type { WorkerStudioLocatorState } from './studio/locator'
 
-import { Add01Icon, Archive01Icon, FolderLibraryIcon, MoreHorizontalCircle01Icon } from '@hugeicons/core-free-icons'
+import { Add01Icon, Archive01Icon, FolderLibraryIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Button } from '@zonease/aiworker-ui/components/button'
@@ -19,12 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@zonease/aiworker-ui/components/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@zonease/aiworker-ui/components/dropdown-menu'
 import { ItemTitle } from '@zonease/aiworker-ui/components/item'
 import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/managed-session-composer'
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
@@ -101,38 +95,6 @@ function archiveActionLabel(copy: ReturnType<typeof messagesFor>, kind: PendingA
 
 function archiveConfirmationTitle(copy: ReturnType<typeof messagesFor>, kind: PendingArchiveAction['kind']): string {
   return copy.workspace.archiveConfirmation[kind].title
-}
-
-function HeaderMoreActionsMenu({
-  actions,
-  label,
-}: {
-  actions: { label: string, onSelect: () => void }[]
-  label: string
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          aria-label={label}
-          title={label}
-        >
-          <HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {actions.map(action => (
-          <DropdownMenuItem key={action.label} onSelect={action.onSelect}>
-            <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
-            {action.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
 }
 
 export function WorkerStudio() {
@@ -531,6 +493,8 @@ export function WorkerStudio() {
         sidebar={(
           <WorkspaceTree
             archiveLabel={copy.workspace.archive}
+            archiveSessionLabel={copy.workspace.archiveSession}
+            archiveWorkspaceLabel={copy.workspace.archiveWorkspace}
             emptyWorkspacesLabel={copy.projects.empty.title}
             newSessionLabel={copy.workspace.newSession}
             newWorkspaceLabel={copy.workspace.newWorkspace}
@@ -637,12 +601,16 @@ function WorkbenchMain({
       <>
         <StudioChromeHeader
           actions={(
-            <HeaderMoreActionsMenu
-              label="More actions for current session"
-              actions={[
-                { label: copy.workspace.archive, onSelect: onArchiveSession },
-              ]}
-            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={copy.workspace.archiveSession}
+              onClick={onArchiveSession}
+            >
+              <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
+              {copy.workspace.archive}
+            </Button>
           )}
         >
           <StudioTitleBlock kicker={copy.workspace.currentSession} title={selectedSession.title} />
@@ -666,12 +634,16 @@ function WorkbenchMain({
       <>
         <StudioChromeHeader
           actions={(
-            <HeaderMoreActionsMenu
-              label="More actions for current workspace"
-              actions={[
-                { label: copy.workspace.archive, onSelect: onArchiveWorkspace },
-              ]}
-            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={copy.workspace.archiveWorkspace}
+              onClick={onArchiveWorkspace}
+            >
+              <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} aria-hidden="true" />
+              {copy.workspace.archive}
+            </Button>
           )}
         >
           <StudioTitleBlock kicker={copy.workspace.currentWorkspace} title={selectedWorkspace.name} />
