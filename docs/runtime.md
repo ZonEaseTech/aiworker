@@ -52,7 +52,9 @@ convenience lives in the CLI service-start commands. At the package layer, the d
 auto-creates a Worker. `packages/worker-daemon` does not create Workers for
 programmatic daemon bootstrap. To run a different Soul, install it and create the
 Worker explicitly (`aiworker app install` then `aiworker worker create --app
-<appId>`) before the service-start command reuses it.
+<appId>`) before the service-start command reuses it. Public `worker create` lists
+every first-party Soul plus installed apps; with no `--app` it opens an interactive
+selector, while `--app <appId>` stays non-interactive for scripts and CI.
 
 The Workbench web is the single active Worker's surface: it shows the bound Soul,
 has no create-Worker or Soul-catalog UI, and its empty states are the first-run

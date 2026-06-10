@@ -14,6 +14,7 @@ import { mkdir, readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import { renderText, runChecks } from '@zonease/aiworker-cli-doctor'
 import { redactEngineBridgeValue } from '@zonease/aiworker-engine-bridge'
@@ -51,14 +52,21 @@ import {
   upsertWorker,
   upsertWorkerConfigValue,
 } from '@zonease/aiworker-storage-sqlite/worker'
+// Worker-scoped engine/execution-mode settings live in the daemon local-settings store.
+// Importing the settings helpers (not the daemon app entry) keeps the secret-ref guard in
+// `saveLocalSettings` as the single writer — the CLI never reimplements the secret check.
+import { loadLocalSettings, readLocalEngineSettings, saveLocalSettings } from '@zonease/aiworker-worker-daemon/settings'
 import {
   createWorkerOrchestrator,
   getWorkerEnv,
+  inspectLocalEngineCredential,
+  LOCAL_ENGINE_DEFINITIONS,
   readFrozenSessionEngine,
   resolveLocalCliEngine,
   scanLocalEngines,
 } from '@zonease/aiworker-worker-runtime'
 import {
+  ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS,
   DEV_SAMPLING_OFFICIAL_SOUL_APPS,
   OFFICIAL_SOUL_APPS,
   SHIPPED_OFFICIAL_SOUL_APPS,
@@ -219,6 +227,12 @@ let daemonStarterForTest: DaemonStarter | null = null
 let officialSoulDistBuilderForTest: (() => Promise<void>) | null = null
 let officialSoulDescriptorsReadyForTest: (() => boolean) | null = null
 let daemonForegroundForTest: DaemonForegroundRunner | null = null
+let workerCreateSelectorForTest: ((candidates: readonly WorkerCreateCandidate[]) => Promise<string>) | null = null
+
+export interface WorkerCreateCandidate {
+  id: string
+  name?: string
+}
 
 export function __setDaemonStarterForTest(starter: DaemonStarter | null): void {
   daemonStarterForTest = starter
@@ -234,6 +248,81 @@ export function __setOfficialSoulDescriptorsReadyForTest(check: (() => boolean) 
 
 export function __setDaemonForegroundForTest(runner: DaemonForegroundRunner | null): void {
   daemonForegroundForTest = runner
+}
+
+export function __setWorkerCreateSelectorForTest(
+  selector: ((candidates: readonly WorkerCreateCandidate[]) => Promise<string>) | null,
+): void {
+  workerCreateSelectorForTest = selector
+}
+
+// Pure dedup merge of the official catalog candidates with installed app candidates.
+// Official first, installed (not already official) after; dedup by id. Kept pure so the
+// union contract is unit-testable without TTY/DB, and so a future slice can feed real
+// installed expert Souls in without changing the merge.
+export function workerCreateCandidates(
+  official: readonly { id: string }[],
+  installed: readonly WorkerCreateCandidate[],
+): WorkerCreateCandidate[] {
+  const seen = new Set<string>()
+  const candidates: WorkerCreateCandidate[] = []
+  for (const definition of official) {
+    if (seen.has(definition.id))
+      continue
+    seen.add(definition.id)
+    candidates.push({ id: definition.id })
+  }
+  for (const app of installed) {
+    if (seen.has(app.id))
+      continue
+    seen.add(app.id)
+    candidates.push({ id: app.id, name: app.name })
+  }
+  return candidates
+}
+
+async function resolveWorkerCreateApp(optApp?: string): Promise<string> {
+  const provided = optApp?.trim()
+  if (provided)
+    return provided
+
+  // Live candidates = the official first-party Souls that `worker create` bootstraps into
+  // the new worker home. Cross-home installed expert Souls in the selector require the
+  // distribution-slice index linkage (see open questions); the merge stays generic so they
+  // flow in later without changing this resolver.
+  const candidates = workerCreateCandidates(ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS, [])
+
+  if (workerCreateSelectorForTest)
+    return workerCreateSelectorForTest(candidates)
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(
+      `worker create needs a Soul but no interactive terminal was detected. Pass --app <id>. Available Souls: ${candidates.map(candidate => candidate.id).join(', ')}.`,
+    )
+  }
+
+  return promptWorkerCreateApp(candidates)
+}
+
+async function promptWorkerCreateApp(candidates: readonly WorkerCreateCandidate[]): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    process.stdout.write('Select a Soul for the new Worker:\n')
+    candidates.forEach((candidate, index) => {
+      const label = candidate.name ? `${candidate.id} (${candidate.name})` : candidate.id
+      process.stdout.write(`  ${index + 1}. ${label}\n`)
+    })
+    for (;;) {
+      const answer = (await rl.question(`Enter 1-${candidates.length}: `)).trim()
+      const choice = Number.parseInt(answer, 10)
+      if (Number.isInteger(choice) && choice >= 1 && choice <= candidates.length)
+        return candidates[choice - 1]!.id
+      process.stdout.write(`Invalid choice: ${answer || '<empty>'}\n`)
+    }
+  }
+  finally {
+    rl.close()
+  }
 }
 
 export function buildProvisionEnv(input: ProvisionCommandInput): {
@@ -373,18 +462,38 @@ async function ensureSourceOfficialSoulDists(
     await officialSoulDistBuilderForTest()
     return
   }
-  await runOfficialSoulDistBuildCommand(catalogView)
+  await runOfficialSoulDistBuildCommand(definitions)
 }
 
-async function runOfficialSoulDistBuildCommand(catalogView: OfficialSoulCatalogView = 'shipped'): Promise<void> {
-  const proc = Bun.spawn(['bun', 'scripts/official-soul-dist.ts', '--catalog-view', catalogView], {
-    cwd: sourceRepoRoot(),
-    stderr: 'inherit',
-    stdout: 'inherit',
-  })
-  const exitCode = await proc.exited
-  if (exitCode !== 0)
-    throw new Error(`failed to build official Soul dist: bun scripts/official-soul-dist.ts --catalog-view ${catalogView} exited ${exitCode}`)
+// Build the explicitly-requested Soul dists from source by their own package build
+// scripts. Driven by `definitions` (not the internal `dev-sampling` catalog-view name),
+// so the public worker-create path can build any first-party Soul without leaking the
+// internal sampling view into the public surface (plan Low-3).
+async function runOfficialSoulDistBuildCommand(
+  definitions: readonly OfficialSoulAppDefinition[],
+): Promise<void> {
+  const repoRoot = sourceRepoRoot()
+  for (const definition of definitions) {
+    const packageName = readSourceSoulPackageName(path.resolve(repoRoot, 'souls', definition.id))
+    const proc = Bun.spawn(['bun', 'run', '--filter', packageName, 'build'], {
+      cwd: repoRoot,
+      stderr: 'inherit',
+      stdout: 'inherit',
+    })
+    const exitCode = await proc.exited
+    if (exitCode !== 0) {
+      throw new Error(
+        `failed to build official Soul dist for ${definition.id}: bun run --filter ${packageName} build exited ${exitCode}`,
+      )
+    }
+  }
+}
+
+function readSourceSoulPackageName(soulRoot: string): string {
+  const parsed = JSON.parse(readFileSync(path.resolve(soulRoot, 'package.json'), 'utf8')) as { name?: unknown }
+  if (typeof parsed.name !== 'string' || parsed.name.length === 0)
+    throw new Error(`official Soul package is missing a package name: ${soulRoot}`)
+  return parsed.name
 }
 
 export function resolveCliWorkerWebStaticDir(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string | undefined {
@@ -780,6 +889,7 @@ async function runDoctor(opts: DoctorCliOptions = {}): Promise<void> {
       migrationsReady: () => installation.resources.migrationsReady,
       migrationsFolder: () => installation.resources.migrationsFolder,
       scanEngines: () => scanLocalEngines(),
+      inspectEngineCredential: inspectLocalEngineCredential,
     }),
     { probe: opts.probe, strict: opts.strict },
   )
@@ -1651,7 +1761,9 @@ function ensureFleetSeeded(root: string): FleetIndex {
 }
 
 async function createWorkerCommand(opts: { id?: string, name?: string, app?: string, port?: number }): Promise<void> {
-  const app = requireText(opts.app, 'app')
+  // `--app <id>` stays non-interactive (scripts/CI). With no `--app`, an interactive
+  // terminal opens a Soul selector; a non-interactive caller gets an actionable error.
+  const app = await resolveWorkerCreateApp(opts.app)
   const catalogView = resolveInternalOfficialSoulCatalogView()
   const root = fleetRootDir()
   const index = readFleet(root)
@@ -1672,9 +1784,14 @@ async function createWorkerCommand(opts: { id?: string, name?: string, app?: str
     const host = createHost(paths, {
       officialAppsRoot: catalogView === 'dev-sampling' ? sourceOfficialAppsRoot() : undefined,
     })
+    // Med-1: public `worker create` candidates = every first-party Soul (not the
+    // shipped/freeform-only default). ALL_FIRST_PARTY === DEV_SAMPLING by value, so the
+    // internal dev-sampling path is unchanged; only the public (shipped) path widens.
+    // `officialSoulDefinitionsForView` stays untouched so zero-config `aiworker start`
+    // bootstrap keeps installing only Freeform.
     const bootstrap = await bootstrapOfficialSoulApps(host, {
       catalogView,
-      definitions: officialSoulDefinitionsForView(catalogView),
+      definitions: ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS,
     })
     if (bootstrap.status === 'fail')
       throw new Error('failed to install the bundled official Soul Apps for the new worker home')
@@ -2455,6 +2572,91 @@ function ensureScaffoldSdkLink(targetDir: string): void {
   symlinkSync(SOURCE_SOUL_APP_SDK_ROOT, linkPath, 'dir')
 }
 
+// `aiworker config` is the Worker-level engine/execution-mode config (daemon local-settings).
+// It is distinct from `worker config` (the worker-scoped Host config envelope command tree).
+function requireExecutionMode(value: unknown): 'byok' | 'local-cli' {
+  const mode = requireText(value, 'mode')
+  if (mode === 'local-cli' || mode === 'byok')
+    return mode
+  throw new Error(`unsupported execution mode: ${mode} (expected local-cli or byok)`)
+}
+
+// Always print the redacted readiness view (byok.apiKeyRefPresent boolean), never the raw
+// local-settings (which carries the literal byok.apiKeyRef reference). No ref ever printed.
+function printLocalEngineConfigView(): void {
+  const settings = readLocalEngineSettings()
+  printJson({
+    config: {
+      byok: {
+        apiKeyRefPresent: settings.byok.apiKeyRefPresent,
+        model: settings.byok.model,
+        provider: settings.byok.provider,
+      },
+      engineId: settings.engineId,
+      engines: settings.engines.map(engine => ({ id: engine.id, installed: engine.installed, name: engine.name })),
+      executionMode: settings.executionMode,
+    },
+  })
+}
+
+async function configShowCommand(): Promise<void> {
+  await ensureDb()
+  printLocalEngineConfigView()
+}
+
+async function configSetEngineCommand(engineId: string): Promise<void> {
+  const id = requireText(engineId, 'engine id')
+  // Validate against the known native engines before any write — an unknown id is an
+  // actionable error, never persisted to local-settings.
+  if (!LOCAL_ENGINE_DEFINITIONS.some(definition => definition.id === id)) {
+    throw new Error(
+      `unknown engine: ${id} (expected one of: ${LOCAL_ENGINE_DEFINITIONS.map(definition => definition.id).join(', ')})`,
+    )
+  }
+  await ensureDb()
+  const current = loadLocalSettings()
+  saveLocalSettings({
+    ...current,
+    engineId: id,
+    executionMode: 'local-cli',
+    updatedAt: new Date().toISOString(),
+  })
+  printLocalEngineConfigView()
+}
+
+async function configSetModeCommand(mode: string): Promise<void> {
+  const executionMode = requireExecutionMode(mode)
+  await ensureDb()
+  const current = loadLocalSettings()
+  saveLocalSettings({
+    ...current,
+    executionMode,
+    updatedAt: new Date().toISOString(),
+  })
+  printLocalEngineConfigView()
+}
+
+async function configSetByokCommand(opts: { keyRef?: string, baseUrl?: string, model?: string, provider?: string }): Promise<void> {
+  // Only a secret reference is accepted; saveLocalSettings' assertSafeSecretRefs rejects
+  // literal secrets (LOCAL_SETTINGS_SECRET). The CLI never inspects the value itself.
+  const apiKeyRef = requireText(opts.keyRef, 'key-ref')
+  await ensureDb()
+  const current = loadLocalSettings()
+  saveLocalSettings({
+    ...current,
+    byok: {
+      ...current.byok,
+      apiKeyRef,
+      ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
+      ...(opts.model !== undefined ? { model: opts.model } : {}),
+      ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
+    },
+    executionMode: 'byok',
+    updatedAt: new Date().toISOString(),
+  })
+  printLocalEngineConfigView()
+}
+
 function registerCommands(): void {
   cli.command('init', 'initialize host-local AIWorker home and Soul workers').action(runInit)
   cli.command('doctor', 'grade worker runtime/engine/service health and surface fixes')
@@ -2557,6 +2759,17 @@ function registerCommands(): void {
     .option('--disabled', 'store the config envelope as disabled')
     .action(setWorkerConfigCommand)
   cli.command('worker config archive <workerId> <configKey>', 'archive a worker-scoped Host config envelope').action(archiveWorkerConfigCommand)
+
+  // Worker engine/execution-mode config (daemon local-settings) — distinct from `worker config`.
+  cli.command('config show', 'show the Worker engine selection and execution mode').action(configShowCommand)
+  cli.command('config set-engine <engineId>', 'select the native engine and switch to local-cli mode').action(configSetEngineCommand)
+  cli.command('config set-mode <mode>', 'set execution mode: local-cli or byok').action(configSetModeCommand)
+  cli.command('config set-byok', 'configure BYOK execution (stores a secret reference, never a literal secret)')
+    .option('--key-ref <ref>', 'BYOK API key reference (env:NAME / $VAR / secretref:...); never a literal secret')
+    .option('--base-url <url>', 'BYOK API base URL')
+    .option('--model <id>', 'BYOK model id')
+    .option('--provider <name>', 'BYOK provider name')
+    .action(configSetByokCommand)
   cli.command('worker archive <id>', 'archive a local Soul worker').action(archiveWorkerCommand)
   cli.command('worker delete <id>', 'hard-delete local Soul worker metadata').action(deleteWorkerCommand)
 

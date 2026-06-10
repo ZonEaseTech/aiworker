@@ -107,11 +107,14 @@ describe('CLI publish manifest builder', () => {
     await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'engine-assets', 'workspace', 'AGENTS.md'))).resolves.toBeTruthy()
   })
 
-  it('copies only the shipped Freeform Soul by default', async () => {
+  // REVERSAL (Option B): the published CLI now ships every first-party Soul descriptor,
+  // not just the Freeform bootstrap default, so npm users can `worker create` any of them.
+  it('copies every first-party Soul descriptor by default', async () => {
     const soulsRoot = path.join(root, 'souls')
     const officialAppsRoot = path.join(root, 'dist', 'official-apps')
+    const firstPartyAppIds = ['aiworker-freeform', 'google-ads', 'hr-manager', 'product-manager', 'software-support']
 
-    for (const appId of ['aiworker-freeform', 'hr-manager']) {
+    for (const appId of firstPartyAppIds) {
       const appRoot = path.join(soulsRoot, appId)
       mkdirSync(path.join(appRoot, 'dist'), { recursive: true })
       await writeFile(path.join(appRoot, 'dist', 'soul.descriptor.json'), JSON.stringify({
@@ -127,7 +130,7 @@ describe('CLI publish manifest builder', () => {
       soulsRoot,
     })
 
-    await expect(stat(path.join(officialAppsRoot, 'aiworker-freeform', 'dist', 'soul.descriptor.json'))).resolves.toBeTruthy()
-    await expect(stat(path.join(officialAppsRoot, 'hr-manager', 'dist', 'soul.descriptor.json'))).rejects.toThrow()
+    for (const appId of firstPartyAppIds)
+      await expect(stat(path.join(officialAppsRoot, appId, 'dist', 'soul.descriptor.json'))).resolves.toBeTruthy()
   })
 })

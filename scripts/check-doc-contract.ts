@@ -103,6 +103,9 @@ requireIncludes('docs/architecture.md', [
   'A Worker is a running instance bound to one Soul.',
   '`souls/aiworker-freeform` is the only strong v1 acceptance Soul. It proves the\nstandalone framework loop with Host absent:',
   'HR and QA remain first-party Soul identities, but they migrate after Freeform as\ndescriptor-producing templates and do not block the v1 framework loop.',
+  // catalog policy: Freeform stays the zero-config bootstrap default, but public worker create is open to every first-party Soul
+  'public `worker create` may select',
+  'The `shipped` catalog view stays the zero-config',
   // monorepo shape (no soul-workbench/soul-app-runtime; host-* are Phase 2 control-plane surfaces off the v1 runtime hot path)
   'The v1 top-level shape is:',
   'cli-doctor/',
@@ -375,6 +378,7 @@ requireIncludes('docs/runtime.md', [
   'The command differences are process shape only:',
   'None of the service-start commands opens a browser or Workbench\nURL. Browser/Workbench launch belongs to `aiworker open`.',
   'the daemon stays passive and never\nauto-creates a Worker.',
+  'Public `worker create` lists\nevery first-party Soul plus installed apps',
   'Auto-bootstrap stops at the Worker; the first workspace is the employee\'s\nfirst action in the Workbench.',
   'In Phase 2, a Host-provisioned employee Worker keeps the same Workbench\nexperience. The first screen must read as "my AI worker is ready", not "Host\nmounted a remote surface".',
   'Host→Worker assignment and lifecycle signals are Phase 2 distribution inputs.',
@@ -530,6 +534,7 @@ requireIncludes('docs/testing.md', [
   'Soul authoring contract',
   'Worker metadata and forbidden domain schema',
   'Freeform v1 acceptance Soul',
+  'Public worker create catalog policy',
   'docs+tests',
   'docs-only',
   'tests-only',

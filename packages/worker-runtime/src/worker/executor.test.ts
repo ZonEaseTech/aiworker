@@ -139,6 +139,79 @@ exit 9
     expect(events.some(event => event.kind === 'log' && event.stream === 'stderr' && event.chunk.includes('fatal engine error'))).toBe(true)
   })
 
+  it('surfaces actionable login guidance when a codex turn fails unauthenticated', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+printf 'Error: Not logged in. Run \\\`codex login\\\` to authenticate.\\n' >&2
+exit 1
+`)
+    const events: LocalExecutorEvent[] = []
+
+    // 可操作引导必须超出「裸 stderr 回显」:断言独有短语 'aiworker config'(绝不出现在
+    // 原始 stderr 中),证明走的是 auth-failure 引导路径而非通用失败路径。
+    await expect(createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events)))
+      .rejects
+      .toThrow(/aiworker config/)
+    const guidance = events.find(event => event.kind === 'status' && event.label === 'engine-auth-required')
+    expect(guidance).toBeDefined()
+    expect(guidance && guidance.kind === 'status' ? guidance.detail : '').toContain('codex login')
+    expect(guidance && guidance.kind === 'status' ? guidance.detail : '').toContain('aiworker config')
+  })
+
+  it('surfaces actionable login guidance when a claude turn fails unauthenticated', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+printf 'Invalid API key - no credentials found. Not authenticated.\\n' >&2
+exit 1
+`)
+    const events: LocalExecutorEvent[] = []
+    const input = { ...baseInput(command, workspaceRoot, events), engineId: 'claude-code' }
+
+    await expect(createExternalEngineExecutor().invoke(input)).rejects.toThrow(/claude login/)
+    expect(events.some(event => event.kind === 'status' && event.label === 'engine-auth-required')).toBe(true)
+  })
+
+  it('leaves non-auth engine failures on the generic exit-code path', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+printf 'fatal engine error\\n' >&2
+exit 9
+`)
+    const events: LocalExecutorEvent[] = []
+
+    await expect(createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events)))
+      .rejects
+      .toThrow('exited with code 9')
+    // 通用失败不得被当作未登录吞掉:无 auth 引导事件、无 'aiworker config' 文案。
+    expect(events.some(event => event.kind === 'status' && event.label === 'engine-auth-required')).toBe(false)
+  })
+
+  it('keeps secrets out of unauthenticated-failure guidance', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+printf 'Codex auth failed: OPENAI_API_KEY rejected token=sk-should-not-leak. Run \\\`codex login\\\`.\\n' >&2
+exit 1
+`)
+    const events: LocalExecutorEvent[] = []
+
+    const failure = await createExternalEngineExecutor()
+      .invoke(baseInput(command, workspaceRoot, events))
+      .then(() => null, (error: Error) => error)
+    expect(failure).toBeInstanceOf(Error)
+    expect(failure?.message).toContain('aiworker config')
+    expect(failure?.message).not.toContain('sk-should-not-leak')
+    const guidance = events.find(event => event.kind === 'status' && event.label === 'engine-auth-required')
+    expect(guidance && guidance.kind === 'status' ? guidance.detail : '').not.toContain('sk-should-not-leak')
+  })
+
   it('redacts persisted native engine stdout and stderr logs', async () => {
     const workspaceRoot = path.join(makeRoot(), 'workspace')
     await mkdir(workspaceRoot, { recursive: true })

@@ -32,6 +32,7 @@ interface ScenarioInput {
   bunOnPath?: boolean
   homeBunPresent?: boolean
   engines?: LocalEngineStatus[]
+  inspectCredential?: (engineId: string) => boolean
   daemonRunning?: boolean
   migrationsReady?: boolean
   migrationsFolder?: null | string
@@ -43,6 +44,8 @@ async function severitiesFor(input: ScenarioInput): Promise<Record<string, strin
     exists: () => input.homeBunPresent ?? true,
     probe: { spawn: spawnWith(input.bunOnPath ?? true) },
     scanEngines: () => input.engines ?? [],
+    // default = "all installed engines are logged in" so unrelated scenarios stay ok
+    inspectEngineCredential: input.inspectCredential ?? (() => true),
     daemonRunning: () => input.daemonRunning ?? true,
     migrationsReady: () => input.migrationsReady ?? true,
     migrationsFolder: () => input.migrationsFolder ?? '/pkg/drizzle/worker',
@@ -69,11 +72,96 @@ describe('buildWorkerChecks', () => {
     expect(severities['worker.engine']).toBe('error')
   })
 
-  it('at least one engine installed → worker.engine ok', async () => {
+  it('at least one engine installed and logged in → worker.engine ok', async () => {
     const severities = await severitiesFor({
       engines: [engine('claude-code', 'Claude Code', true), engine('codex', 'Codex CLI', false)],
+      inspectCredential: () => true,
     })
     expect(severities['worker.engine']).toBe('ok')
+  })
+
+  it('engine installed but not logged in → worker.engine warn with a login fix', async () => {
+    const report = await runChecks(buildWorkerChecks({
+      homeBunPath: '/root/.bun/bin/bun',
+      exists: () => true,
+      probe: { spawn: spawnWith(true) },
+      inspectEngineCredential: () => false,
+      scanEngines: () => [engine('codex', 'Codex CLI', true)],
+      daemonRunning: () => true,
+      migrationsReady: () => true,
+      migrationsFolder: () => '/pkg/drizzle/worker',
+    }))
+    const engineResult = report.results.find(result => result.id === 'worker.engine')
+    expect(engineResult?.severity).toBe('warn')
+    expect(engineResult?.fix?.command).toContain('login')
+    expect(engineResult?.detail).toContain('none is logged in')
+  })
+
+  it('engine installed but not logged in keeps overall non-error (warn, exit 0 without --strict)', async () => {
+    const report = await runChecks(buildWorkerChecks({
+      homeBunPath: '/root/.bun/bin/bun',
+      exists: () => true,
+      probe: { spawn: spawnWith(true) },
+      inspectEngineCredential: () => false,
+      scanEngines: () => [engine('codex', 'Codex CLI', true)],
+      daemonRunning: () => true,
+      migrationsReady: () => true,
+      migrationsFolder: () => '/pkg/drizzle/worker',
+    }))
+    expect(report.overall).toBe('warn')
+    expect(report.exitCode).toBe(0)
+  })
+
+  it('one logged-in engine is enough for ok even when another installed engine is not', async () => {
+    const severities = await severitiesFor({
+      engines: [engine('claude-code', 'Claude Code', true), engine('codex', 'Codex CLI', true)],
+      inspectCredential: engineId => engineId === 'claude-code',
+    })
+    expect(severities['worker.engine']).toBe('ok')
+  })
+
+  // Honesty: only credential-probeable engines (codex / claude-code) can be downgraded to warn.
+  // Non-probeable engines (cursor / gemini / opencode / qwen) have no known credential location,
+  // so doctor must NOT false-warn nor emit an invalid `<engine> login` for them.
+  it('only a non-probeable engine installed → worker.engine ok with a can\'t-verify note, never a false warn', async () => {
+    const cursor: LocalEngineStatus = { command: 'cursor-agent', id: 'cursor', installed: true, name: 'Cursor Agent', path: '/usr/local/bin/cursor-agent', version: '1.0.0' }
+    const report = await runChecks(buildWorkerChecks({
+      homeBunPath: '/root/.bun/bin/bun',
+      exists: () => true,
+      probe: { spawn: spawnWith(true) },
+      inspectEngineCredential: () => false,
+      scanEngines: () => [cursor],
+      daemonRunning: () => true,
+      migrationsReady: () => true,
+      migrationsFolder: () => '/pkg/drizzle/worker',
+    }))
+    const engineResult = report.results.find(result => result.id === 'worker.engine')
+    expect(engineResult?.severity).toBe('ok')
+    expect(engineResult?.detail).toContain('Cursor Agent')
+    expect(engineResult?.detail?.toLowerCase()).toContain('cannot verify')
+    expect(engineResult?.fix).toBeUndefined()
+    // never an invalid login command for a non-probeable engine
+    expect(JSON.stringify(engineResult)).not.toContain('cursor-agent login')
+  })
+
+  it('probeable engine installed but not logged in → warn whose login fix points only at the probeable engine, never cursor', async () => {
+    const codex: LocalEngineStatus = { command: 'codex', id: 'codex', installed: true, name: 'Codex CLI', path: '/usr/local/bin/codex', version: '1.0.0' }
+    const cursor: LocalEngineStatus = { command: 'cursor-agent', id: 'cursor', installed: true, name: 'Cursor Agent', path: '/usr/local/bin/cursor-agent', version: '1.0.0' }
+    const report = await runChecks(buildWorkerChecks({
+      homeBunPath: '/root/.bun/bin/bun',
+      exists: () => true,
+      probe: { spawn: spawnWith(true) },
+      inspectEngineCredential: () => false,
+      // cursor listed FIRST: a naive `installed[0]` would emit the invalid `cursor-agent login`
+      scanEngines: () => [cursor, codex],
+      daemonRunning: () => true,
+      migrationsReady: () => true,
+      migrationsFolder: () => '/pkg/drizzle/worker',
+    }))
+    const engineResult = report.results.find(result => result.id === 'worker.engine')
+    expect(engineResult?.severity).toBe('warn')
+    expect(engineResult?.fix?.command).toBe('codex login')
+    expect(JSON.stringify(engineResult)).not.toContain('cursor-agent login')
   })
 
   it('worker.engine ok detail lists installed and missing engine names', async () => {
@@ -81,6 +169,7 @@ describe('buildWorkerChecks', () => {
       homeBunPath: '/root/.bun/bin/bun',
       exists: () => true,
       probe: { spawn: spawnWith(true) },
+      inspectEngineCredential: () => true,
       scanEngines: () => [engine('claude-code', 'Claude Code', true), engine('codex', 'Codex CLI', false)],
       daemonRunning: () => true,
       migrationsReady: () => true,
@@ -106,6 +195,7 @@ describe('buildWorkerChecks', () => {
       homeBunPath: '/root/.bun/bin/bun',
       exists: () => true,
       probe: { spawn: spawnWith(true) },
+      inspectEngineCredential: () => true,
       scanEngines: () => [engine('claude-code', 'Claude Code', true)],
       daemonRunning: () => true,
       migrationsReady: () => false,
@@ -121,6 +211,7 @@ describe('buildWorkerChecks', () => {
       homeBunPath: '/root/.bun/bin/bun',
       exists: () => true,
       probe: { spawn: spawnWith(true) },
+      inspectEngineCredential: () => true,
       scanEngines: () => [engine('claude-code', 'Claude Code', true)],
       daemonRunning: () => true,
       migrationsReady: () => true,
@@ -135,6 +226,7 @@ describe('buildWorkerChecks', () => {
       homeBunPath: '/root/.bun/bin/bun',
       exists: () => true,
       probe: { spawn: spawnWith(true) },
+      inspectEngineCredential: () => true,
       scanEngines: () => [engine('claude-code', 'Claude Code', false)],
       daemonRunning: () => true,
       migrationsReady: () => true,

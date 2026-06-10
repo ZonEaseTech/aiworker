@@ -1,3 +1,4 @@
+import type { LocalEngineStatus } from '@zonease/aiworker-soul-descriptor'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -5,7 +6,11 @@ import process from 'node:process'
 import { describe, expect, it } from 'bun:test'
 
 import {
+  CREDENTIAL_PROBEABLE_ENGINE_IDS,
+  inspectLocalEngineCredential,
+  LOCAL_ENGINE_DEFINITIONS,
   LocalEngineResolutionError,
+  resolveEngineAuthReadiness,
   resolveLocalCliEngine,
   scanLocalEngines,
   scanLocalEnginesFromCommands,
@@ -150,6 +155,145 @@ printf 'codex 1.0\\n'
       restoreEnv('ANTHROPIC_API_KEY', original.anthropicApiKey)
       rmSync(root, { force: true, recursive: true })
     }
+  })
+})
+
+describe('resolveEngineAuthReadiness', () => {
+  const codexInstalled: LocalEngineStatus = {
+    command: 'codex',
+    id: 'codex',
+    installed: true,
+    name: 'Codex CLI',
+    path: '/bin/codex',
+    version: 'codex 1.0',
+  }
+  const claudeInstalled: LocalEngineStatus = {
+    command: 'claude',
+    id: 'claude-code',
+    installed: true,
+    name: 'Claude Code',
+    path: '/bin/claude',
+    version: 'claude 1.0',
+  }
+
+  it('reports auth-ready when an installed engine has a valid credential', () => {
+    expect(resolveEngineAuthReadiness(codexInstalled, () => true)).toBe(true)
+  })
+
+  it('reports not auth-ready when an installed engine has no credential', () => {
+    expect(resolveEngineAuthReadiness(codexInstalled, () => false)).toBe(false)
+  })
+
+  it('treats uninstalled engines as not auth-ready without probing credentials', () => {
+    let probed = false
+    const status: LocalEngineStatus = { ...codexInstalled, installed: false, path: null, version: null }
+    expect(resolveEngineAuthReadiness(status, () => {
+      probed = true
+      return true
+    })).toBe(false)
+    expect(probed).toBe(false)
+  })
+
+  it('selects codex before claude-code on definition order when both are auth-ready', () => {
+    const ordered = LOCAL_ENGINE_DEFINITIONS.map((definition) => {
+      if (definition.id === 'codex')
+        return codexInstalled
+      if (definition.id === 'claude-code')
+        return claudeInstalled
+      return {
+        command: definition.command,
+        id: definition.id,
+        installed: false,
+        name: definition.name,
+        path: null,
+        version: null,
+      } satisfies LocalEngineStatus
+    })
+    const firstReady = ordered.find(engine => resolveEngineAuthReadiness(engine, () => true))
+    expect(firstReady?.id).toBe('codex')
+  })
+})
+
+describe('inspectLocalEngineCredential', () => {
+  function withHome(run: (home: string) => void): void {
+    const original = process.env.HOME
+    const home = mkdtempSync(path.join(tmpdir(), 'aiworker-creds-'))
+    try {
+      process.env.HOME = home
+      run(home)
+    }
+    finally {
+      restoreEnv('HOME', original)
+      rmSync(home, { force: true, recursive: true })
+    }
+  }
+
+  it('returns true when the codex auth file holds a non-empty JSON object', () => {
+    withHome((home) => {
+      mkdirSync(path.join(home, '.codex'), { recursive: true })
+      writeFileSync(path.join(home, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'redacted' }))
+      expect(inspectLocalEngineCredential('codex')).toBe(true)
+    })
+  })
+
+  it('returns true when the claude credentials file holds a non-empty JSON object', () => {
+    withHome((home) => {
+      mkdirSync(path.join(home, '.claude'), { recursive: true })
+      writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify({ claudeAiOauth: { accessToken: 'redacted' } }))
+      expect(inspectLocalEngineCredential('claude-code')).toBe(true)
+    })
+  })
+
+  it('returns false when the credential file is absent', () => {
+    withHome(() => {
+      expect(inspectLocalEngineCredential('codex')).toBe(false)
+      expect(inspectLocalEngineCredential('claude-code')).toBe(false)
+    })
+  })
+
+  it('returns false when the credential file is malformed JSON', () => {
+    withHome((home) => {
+      mkdirSync(path.join(home, '.codex'), { recursive: true })
+      writeFileSync(path.join(home, '.codex', 'auth.json'), 'not-json{')
+      expect(inspectLocalEngineCredential('codex')).toBe(false)
+    })
+  })
+
+  it('returns false for an empty credential file', () => {
+    withHome((home) => {
+      mkdirSync(path.join(home, '.codex'), { recursive: true })
+      writeFileSync(path.join(home, '.codex', 'auth.json'), '   ')
+      expect(inspectLocalEngineCredential('codex')).toBe(false)
+    })
+  })
+
+  it('returns false for engines without a known credential location', () => {
+    withHome(() => {
+      expect(inspectLocalEngineCredential('cursor')).toBe(false)
+      expect(inspectLocalEngineCredential('gemini')).toBe(false)
+    })
+  })
+})
+
+describe('CREDENTIAL_PROBEABLE_ENGINE_IDS', () => {
+  it('lists exactly the engines inspectLocalEngineCredential has a real probe for', () => {
+    expect([...CREDENTIAL_PROBEABLE_ENGINE_IDS].sort()).toEqual(['claude-code', 'codex'])
+  })
+
+  it('only names real local engine definitions (no phantom ids)', () => {
+    for (const engineId of CREDENTIAL_PROBEABLE_ENGINE_IDS)
+      expect(LOCAL_ENGINE_DEFINITIONS.some(definition => definition.id === engineId)).toBe(true)
+  })
+
+  it('keeps non-probeable engines unconditionally false so doctor never false-warns them', () => {
+    // 不在白名单内的引擎(cursor/gemini/opencode/qwen)没有真凭证探测分支 → inspect 恒
+    // false 且不触碰 FS;doctor 据此不再把「无法探测」误判为「未登录」。
+    const nonProbeable = LOCAL_ENGINE_DEFINITIONS
+      .map(definition => definition.id)
+      .filter(engineId => !CREDENTIAL_PROBEABLE_ENGINE_IDS.includes(engineId))
+    expect(nonProbeable.length).toBeGreaterThan(0)
+    for (const engineId of nonProbeable)
+      expect(inspectLocalEngineCredential(engineId)).toBe(false)
   })
 })
 

@@ -233,9 +233,10 @@ autonomous runtime; `host-*` owns the Phase 2 control plane; shared capability
 packages keep their names and are consumed by Workers. The descriptor-protocol
 package is `soul-descriptor` and the authoring SDK is `soul-sdk`; both drop the
 retired `soul-protocol` / `soul-app-sdk` "soul-as-app" names. `worker-*` packages must not
-import `host-*` packages. For v1 strong acceptance, Freeform is the only shipped
-Soul; retired HR/QA app-local source trees stay deleted until they are re-authored
-as descriptor-producing `souls/*` packages.
+import `host-*` packages. Freeform is the zero-config bootstrap default and the
+strong v1 acceptance Soul; the first-party domain Souls (`google-ads`,
+`hr-manager`, `product-manager`, `software-support`) ship as descriptor-producing
+`souls/*` templates alongside it and are selectable at `worker create`.
 
 The Workbench has no package of its own: it lives in `apps/worker-web`, composed
 from `packages/ui` primitives. The retired `soul-workbench` and `soul-app-runtime`
@@ -324,6 +325,13 @@ chat, and archive.
 
 HR and QA remain first-party Soul identities, but they migrate after Freeform as
 descriptor-producing templates and do not block the v1 framework loop.
+
+Selectability is broader than strong acceptance: public `worker create` may select
+any first-party Soul — Freeform plus the `google-ads`, `hr-manager`,
+`product-manager`, and `software-support` templates — and any expert-authored Soul
+installed through `app install`. The `shipped` catalog view stays the zero-config
+`aiworker start` bootstrap default; the `dev-sampling` view stays an internal
+sampling alias. All first-party descriptors ship in the published CLI package.
 
 ## Destructive Migration Rules
 

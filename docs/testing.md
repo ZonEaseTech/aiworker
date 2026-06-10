@@ -196,6 +196,7 @@ Coverage status values:
 | Soul authoring contract | `docs/soul-authoring.md` | SDK and Freeform contract tests | docs+tests |
 | Worker metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
 | Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
+| Public worker create catalog policy | `docs/architecture.md`, `docs/runtime.md` | `apps/worker-cli/src/aiworker.test.ts` public-create catalog test, `scripts/check-soul-app-boundaries.test.ts` reversal guard | docs+tests |
 | BYOK execution-mode deviation and secret boundary | `docs/runtime.md` | settings literal-secret rejection test, worker-daemon worker config tests, docs check | docs+tests |
 
 ## Worker Autonomy Inversion Guards

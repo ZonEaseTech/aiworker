@@ -68,12 +68,6 @@ const retiredHostWebSurfacePatterns: Array<{ message: string, pattern: RegExp }>
     pattern: /\bbuildSessionProgress\b/,
   },
 ]
-const firstPartyDevOnlySoulAppIds = [
-  'google-ads',
-  'hr-manager',
-  'product-manager',
-  'software-support',
-] as const
 export function discoverSoulApps(): SoulAppWorkspace[] {
   if (!existsSync(soulRoot))
     return []
@@ -222,56 +216,6 @@ function scanHostEmbeddedSoulRenderers(): BoundaryIssue[] {
       importPath: 'host-renderer',
       message: 'Worker Web must not add Soul-specific renderer directories; Soul provides descriptors and assets, not Workbench UI.',
     }))
-}
-
-function scanDevOnlyWorkerCreateCatalogSelectors(): BoundaryIssue[] {
-  const roots = [
-    path.join(repoRoot, 'scripts'),
-    path.join(repoRoot, 'apps/worker-cli/scripts'),
-  ].filter(existsSync)
-  const issues: BoundaryIssue[] = []
-  for (const root of roots) {
-    for (const file of listSourceFiles(root)) {
-      if (isTestSourceFile(file))
-        continue
-      const content = readFileSync(file, 'utf8')
-      if (!content.includes('worker') || !content.includes('create') || !content.includes('--app'))
-        continue
-      const mentionsDevOnlyApp = firstPartyDevOnlySoulAppIds.some(appId => content.includes(`'${appId}'`) || content.includes(`"${appId}"`))
-      if (!mentionsDevOnlyApp)
-        continue
-      const hasExplicitDevSamplingSelector = content.includes('withDevSamplingCatalogEnv')
-        || content.includes('DEV_SAMPLING_WORKER_CREATE_ENV')
-        || /AIWORKER_INTERNAL_OFFICIAL_SOUL_CATALOG_VIEW[\s\S]{0,120}dev-sampling/.test(content)
-      const hasDirectUnprotectedCreate = firstPartyDevOnlySoulAppIds.some((appId) => {
-        const literalPattern = new RegExp(`['"]${appId}['"]`, 'g')
-        while (true) {
-          const match = literalPattern.exec(content)
-          if (match === null)
-            break
-          const lineStart = content.lastIndexOf('\n', match.index) + 1
-          const nextLineBreak = content.indexOf('\n', match.index)
-          const lineEnd = nextLineBreak === -1 ? content.length : nextLineBreak
-          const snippet = content.slice(lineStart, lineEnd)
-          const isWorkerCreateSnippet = snippet.includes('worker') && snippet.includes('create') && snippet.includes('--app')
-          const snippetHasSelector = snippet.includes('withDevSamplingCatalogEnv')
-            || snippet.includes('DEV_SAMPLING_WORKER_CREATE_ENV')
-            || /AIWORKER_INTERNAL_OFFICIAL_SOUL_CATALOG_VIEW[\s\S]{0,120}dev-sampling/.test(snippet)
-          if (isWorkerCreateSnippet && !snippetHasSelector)
-            return true
-        }
-        return false
-      })
-      if (!hasExplicitDevSamplingSelector || hasDirectUnprotectedCreate) {
-        issues.push(issue(
-          file,
-          'worker create --app',
-          'First-party dev-only worker create paths must explicitly inject the internal dev-sampling catalog env; public CLI args stay shipped-only.',
-        ))
-      }
-    }
-  }
-  return issues
 }
 
 function scanHostWebPackageImports(): BoundaryIssue[] {
@@ -476,7 +420,6 @@ function runChecks(): void {
     ...scanHostEmbeddedSoulRenderers(),
     ...scanHostWebPackageImports(),
     ...scanHostWebRetiredProductSurfaces(),
-    ...scanDevOnlyWorkerCreateCatalogSelectors(),
   ]
 
   if (issues.length > 0) {

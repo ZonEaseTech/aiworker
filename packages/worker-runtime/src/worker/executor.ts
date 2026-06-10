@@ -267,7 +267,16 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
     const visible = filterVisibleEngineLog(execution.stderr || execution.stdout)
     if (visible.trim())
       emit(input, { chunk: truncate(visible, 8_000), kind: 'log', stream: execution.stderr ? 'stderr' : 'stdout' })
-    throw new LocalExecutorFailure(`${command} exited with code ${execution.code}: ${truncate(visible || execution.stderr || execution.stdout, 2_000)}`, {
+    // 优雅失败 backstop:auth-aware 默认引擎(1b-1)是主修;此处仅在保守锚点命中「未登录」
+    // 信号时,给一条可操作引导(指向 `codex login`/`claude login` 与 `aiworker config`)。
+    // 引导文案是固定字符串、不回显 stderr,故不泄露 secret;未命中则走原通用失败路径。
+    const authGuidance = detectEngineAuthFailureGuidance(input.engineId, execution.stderr, execution.stdout)
+    if (authGuidance)
+      emit(input, { kind: 'status', label: 'engine-auth-required', detail: authGuidance })
+    const failureMessage = authGuidance
+      ? `${authGuidance} (${command} exited with code ${execution.code}.)`
+      : `${command} exited with code ${execution.code}: ${truncate(visible || execution.stderr || execution.stdout, 2_000)}`
+    throw new LocalExecutorFailure(failureMessage, {
       metadata: {
         engineExitCode: execution.code,
         executionSource: 'local-cli',
@@ -278,7 +287,7 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
         stdoutLog: path.join(input.invocationRoot, 'stdout.log'),
       },
       externalSessionRef: encodeLocalExternalSessionRef(externalSessionRef),
-      summary: summary || `${engine.name} exited with code ${execution.code}.`,
+      summary: authGuidance ?? (summary || `${engine.name} exited with code ${execution.code}.`),
     })
   }
 
@@ -474,6 +483,27 @@ function filterVisibleEngineLog(value: string): string {
     return transcriptStart === -1 ? '' : value.slice(transcriptStart)
   }
   return value
+}
+
+// (N3)保守的「未登录」锚点白名单 + 固定可操作引导文案,按 engineId 划分。
+// 锚点随原生 CLI 版本可能漂移 → 只在命中这些锚点时判「未登录」,其余非 0 退出走通用路径。
+// guidance 是固定字符串,绝不回显 stderr/stdout,故引导本身不泄露 secret。
+const ENGINE_AUTH_FAILURE_PROFILES: Record<string, { anchor: RegExp, guidance: string }> = {
+  'claude-code': {
+    anchor: /not authenticated|credentials|claude login/i,
+    guidance: 'Claude Code is not signed in. Run `claude login` to authenticate, then retry — or run `aiworker config` to switch engine or BYOK mode.',
+  },
+  'codex': {
+    anchor: /OPENAI_API_KEY|not logged in|codex login|codex logout/i,
+    guidance: 'Codex CLI is not signed in. Run `codex login` to authenticate, then retry — or run `aiworker config` to switch engine or BYOK mode.',
+  },
+}
+
+function detectEngineAuthFailureGuidance(engineId: string, stderr: string, stdout: string): string | null {
+  const profile = ENGINE_AUTH_FAILURE_PROFILES[engineId]
+  if (!profile)
+    return null
+  return profile.anchor.test(`${stderr}\n${stdout}`) ? profile.guidance : null
 }
 
 function redactEngineLog(value: string): string {
