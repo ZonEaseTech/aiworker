@@ -1,1 +1,32 @@
-bun run commitlint --edit "$1"
+#!/usr/bin/env sh
+set -eu
+
+find_bun() {
+  if command -v bun >/dev/null 2>&1; then
+    command -v bun
+    return 0
+  fi
+
+  if [ -n "${BUN_INSTALL:-}" ] && [ -x "$BUN_INSTALL/bin/bun" ]; then
+    printf '%s\n' "$BUN_INSTALL/bin/bun"
+    return 0
+  fi
+
+  if [ -n "${HOME:-}" ] && [ -x "$HOME/.bun/bin/bun" ]; then
+    printf '%s\n' "$HOME/.bun/bin/bun"
+    return 0
+  fi
+
+  return 1
+}
+
+if ! bun_bin="$(find_bun)"; then
+  cat >&2 <<'EOF'
+commit-msg hook requires Bun, but "bun" was not found in PATH.
+Install Bun from https://bun.sh/docs/installation or expose it to Git hooks.
+If Bun is installed under ~/.bun, set BUN_INSTALL or add ~/.bun/bin to PATH.
+EOF
+  exit 127
+fi
+
+exec "$bun_bin" run commitlint --edit "$1"
