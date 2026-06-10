@@ -731,6 +731,61 @@ describe('LocalWorkerRuntime', () => {
     })
   })
 
+  it('keeps worker-overlay projection fresh across a daemon restart (PROJ-1 restart self-lock)', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-restart-overlay')
+    await writeProfileEngineAssets(appRoot)
+    await mkdir(join(appRoot, 'engine-assets', 'skills', 'config-overlay'), { recursive: true })
+    await writeFile(join(appRoot, 'engine-assets', 'skills', 'config-overlay', 'SKILL.md'), '# Config Overlay Skill\n')
+
+    // Boot 1: create a workspace, enable a worker overlay, and reproject so the on-disk
+    // receipt + projected files reflect the overlay (a customized worker).
+    const boot1 = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ran' }
+      },
+    })
+    await boot1.init()
+    const workspace = await boot1.createWorkspace({ name: 'Restart Overlay Workspace' })
+    upsertWorkerConfigValue({
+      workerId: boot1.workerId,
+      configKey: 'skill-overlay:freeform-context',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:config-overlay',
+        enabled: true,
+        kind: 'skill-overlay',
+        options: { replaces: 'descriptor://engine/skills/freeform-context' },
+        sourceRef: 'descriptor://engine/skills/config-overlay',
+        target: 'codex',
+      },
+    })
+    await boot1.reprojectWorkspaceAssets(workspace.id, { engineTarget: 'codex' })
+
+    // Boot 2: a fresh runtime over the same home/DB simulates a daemon restart, which runs
+    // repairWorkspaceLayouts. Before the fix, repair reprojected WITHOUT the overlay, desyncing
+    // the freshness marker, so the next invocation hard-failed PROJECTION_RECEIPT_STALE — the
+    // "restart self-lock" that only a manual refresh could clear on a customized worker.
+    const executorInputs: string[] = []
+    const boot2 = runtimeWithEngineAssets(appRoot, {
+      async invoke(input) {
+        executorInputs.push(input.invocationId)
+        return { summary: 'ran after restart' }
+      },
+    })
+    await boot2.init()
+    const session = await boot2.createSession({ title: 'Post-restart session', workspaceId: workspace.id })
+    const result = await boot2.startInvocation({
+      engineCommand: 'codex',
+      engineId: 'codex',
+      input: 'Run right after a daemon restart.',
+      sessionId: session.id,
+    })
+
+    expect(result.invocation.failureCode ?? null).toBeNull()
+    expect(result.invocation).toMatchObject({ status: 'succeeded' })
+    expect(executorInputs).toEqual([result.invocation.id])
+  })
+
   it('lets a reserved projection-overlay worker config make receipts stale but projects no file', async () => {
     const appRoot = join(dir, 'souls', 'demo-soul-app-reserved-projection-overlay')
     await writeProfileEngineAssets(appRoot)
@@ -2266,10 +2321,14 @@ describe('LocalWorkerRuntime', () => {
     })
     expect(JSON.stringify(getWorkerConfigValue(workerRuntime.workerId, 'skill-overlay:freeform-brief'))).not.toContain('Overlay Freeform Brief')
 
+    // A restart (re-init -> repairWorkspaceLayouts) now reconciles to the CURRENT worker config:
+    // an enabled overlay is reprojected with worker overlays so the projected files and the
+    // freshness marker stay consistent. Previously repair reprojected baseline-only, which both
+    // reverted customization and desynced the marker -> PROJECTION_RECEIPT_STALE self-lock (PROJ-1).
     await workerRuntime.init()
     await expect(readFile(join(existingWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-freeform-brief', 'SKILL.md'), 'utf8'))
       .resolves
-      .toContain('Baseline Freeform Brief')
+      .toContain('Overlay Freeform Brief')
 
     const reprojected = await workerRuntime.reprojectWorkspaceAssets(existingWorkspace.id)
     await expect(readFile(join(existingWorkspace.rootPath, '.agents', 'skills', 'demo-soul-app-freeform-brief', 'SKILL.md'), 'utf8'))

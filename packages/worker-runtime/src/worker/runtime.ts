@@ -1281,12 +1281,26 @@ export class LocalWorkerRuntime {
 
   private async repairWorkspaceLayouts(): Promise<void> {
     for (const workspace of listWorkspaces(this.workerId)) {
-      await this.prepareWorkspaceLayout({
-        name: workspace.name,
-        projectEngineAssets: true,
-        projectWorkerOverlayAssets: false,
-        rootPath: workspace.rootPath,
-      })
+      try {
+        // Reproject WITH worker overlays and preserving user-owned files, mirroring
+        // reprojectWorkspaceAssets. Repairing without overlays reverted overlaid entry files
+        // (AGENTS.md/CLAUDE.md) to baseline and desynced the freshness marker, self-locking a
+        // customized worker with PROJECTION_RECEIPT_STALE on its next invocation after restart.
+        await this.prepareWorkspaceLayout({
+          name: workspace.name,
+          preserveUnownedExistingTargets: true,
+          projectEngineAssets: true,
+          projectWorkerOverlayAssets: true,
+          rootPath: workspace.rootPath,
+        })
+      }
+      catch (error) {
+        // Best-effort boot repair: reprojecting now reads overlay/MCP source files, so a single
+        // unprojectable workspace must not abort the whole daemon boot. Surface it (redacted)
+        // and continue repairing the rest.
+        const redacted = readRecord(redactEngineBridgeValue({ message: error instanceof Error ? error.message : String(error) }))
+        console.warn(`[worker-runtime] workspace layout repair skipped for ${workspace.id}: ${readString(redacted.message, 'projection error')}`)
+      }
     }
   }
 
