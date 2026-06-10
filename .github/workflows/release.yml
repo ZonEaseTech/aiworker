@@ -9,7 +9,7 @@ permissions:
   id-token: write
 
 jobs:
-  release:
+  release-worker:
     runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: --max-old-space-size=1024
@@ -30,18 +30,17 @@ jobs:
       - name: Install Playwright browser
         run: bunx playwright install --with-deps chromium
 
-      - name: Assert git tag matches package versions
+      - name: Assert git tag matches worker-cli version
         run: |
           set -euo pipefail
           tag_version="${GITHUB_REF_NAME#v}"
           worker_version="$(node -p "require('./apps/worker-cli/package.json').version")"
-          host_version="$(node -p "require('./apps/host-cli/package.json').version")"
-          if [[ "$tag_version" != "$worker_version" || "$tag_version" != "$host_version" ]]; then
-            echo "git tag/package version mismatch — tag=$tag_version worker-cli=$worker_version host-cli=$host_version" >&2
-            echo "tag name and both publishable package.json versions must agree before publish" >&2
+          if [[ "$tag_version" != "$worker_version" ]]; then
+            echo "git tag/worker-cli version mismatch — tag=$tag_version worker-cli=$worker_version" >&2
+            echo "tag name and worker-cli package.json version must agree before publish" >&2
             exit 1
           fi
-          echo "git tag matches package versions: $tag_version"
+          echo "git tag matches worker-cli version: $tag_version"
 
       - name: Release check
         run: bun run release:check
@@ -83,12 +82,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public --tag "${{ steps.channel.outputs.channel }}"
 
-      - name: Publish Host CLI to npm
-        working-directory: apps/host-cli/dist
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public --tag "${{ steps.channel.outputs.channel }}"
-
       - name: Attach binaries to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -103,3 +96,62 @@ jobs:
             aiworker-linux-arm64.tar.gz.sha256
             aiworker-darwin-x64.tar.gz.sha256
             aiworker-darwin-arm64.tar.gz.sha256
+
+  release-host:
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=1024
+      HUSKY: 0
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
+
+      - name: Assert git tag matches host-cli version
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          host_version="$(node -p "require('./apps/host-cli/package.json').version")"
+          if [[ "$tag_version" != "$host_version" ]]; then
+            echo "git tag/host-cli version mismatch — tag=$tag_version host-cli=$host_version" >&2
+            echo "tag name and host-cli package.json version must agree before publish" >&2
+            exit 1
+          fi
+          echo "git tag matches host-cli version: $tag_version"
+
+      - name: Phase 2 release check
+        run: bun run release:check:phase2
+
+      - name: Derive npm dist-tag from git tag
+        id: channel
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$tag" == *-* ]]; then
+            channel="$(printf '%s' "$tag" | sed -E 's/^v[0-9]+\.[0-9]+\.[0-9]+-([A-Za-z]+).*/\1/')"
+          else
+            channel="latest"
+          fi
+          if [[ -z "$channel" ]]; then
+            echo "could not derive npm dist-tag from git tag: $tag" >&2
+            exit 1
+          fi
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "npm dist-tag for $tag => $channel"
+
+      - name: Publish Host CLI to npm
+        working-directory: apps/host-cli/dist
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public --tag "${{ steps.channel.outputs.channel }}"

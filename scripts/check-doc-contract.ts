@@ -791,6 +791,14 @@ if (
     message: 'tag release must run release:check, compile, package, smoke artifacts, publish, then attach release assets',
   })
 }
+if (!releaseWorkflow.includes('bun run release:check:phase2'))
+  issues.push({ file: '.github/workflows/release.yml', message: 'release must run release:check:phase2 in a host job' })
+if (!releaseWorkflow.includes('release-worker:') || !releaseWorkflow.includes('release-host:'))
+  issues.push({ file: '.github/workflows/release.yml', message: 'release must declare independent release-worker and release-host jobs' })
+if (releaseWorkflow.includes('needs:'))
+  issues.push({ file: '.github/workflows/release.yml', message: 'release-worker and release-host must be independent — no needs coupling so a host flake cannot block worker publish' })
+if ((releaseWorkflow.match(/npm publish --provenance --access public/g) ?? []).length < 2)
+  issues.push({ file: '.github/workflows/release.yml', message: 'release must publish both worker-cli and host-cli' })
 requireExactList(
   '.github/workflows/release.yml',
   extractMatches(releaseWorkflow, /--target=bun-([a-z0-9-]+)/g),
