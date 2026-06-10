@@ -218,7 +218,13 @@ promoted to real assertions when that plan lands.
 
 ## Current Release Gates
 
-Current release confidence is built from these gates:
+Release confidence is split into two independent gates so a Phase 2 (Host) flake
+cannot block a worker release. The split isolates host test flakiness only: the
+worker gate still runs repo-wide `typecheck`, `lint`, and `build`, so a
+deterministic host compile/type/lint error still blocks the worker gate by
+design — only host flaky tests move to the Phase 2 gate.
+
+Worker v1 release confidence is built from these gates:
 
 ```text
 bun run docs:check
@@ -226,25 +232,33 @@ bun run test:contracts
 bun run test:protocol
 bun run test:cli
 bun run test:browser:freeform
-bun run test:browser:phase2
 bun run typecheck
 bun run lint
 bun run build
 bun run smoke:dist-release
-bun run smoke:host-dist-release
 bun run smoke:standalone-release
 bun run smoke:standalone-runtime
 bun run smoke:npm-package
-bun run test
-bun run check
+bun run test:worker
 ```
 
-`bun run release:check` is the aggregator for this current release gate list.
-It must stay in sync with the commands above.
+Phase 2 (Host) release confidence is built from these gates:
+
+```text
+bun run build:host
+bun run test:browser:phase2
+bun run smoke:host-dist-release
+bun run test:host
+```
+
+`bun run release:check` is the aggregator for the worker gate list, and
+`bun run release:check:phase2` is the aggregator for the Phase 2 gate list. Each
+must stay in sync with the commands above.
 
 ## Release Exit Criteria
 
-`bun run release:check` must exactly aggregate the Current Release Gates.
+`bun run release:check` must exactly aggregate the worker gate list and
+`bun run release:check:phase2` must exactly aggregate the Phase 2 gate list.
 
 Tag release handoff must run post-compile artifact proof after `release:check`
 and before npm publish or GitHub release attachment. The post-compile artifact

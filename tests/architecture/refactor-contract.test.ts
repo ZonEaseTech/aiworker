@@ -1796,7 +1796,8 @@ describe('destructive refactor contract bootstrap', () => {
     const docCheck = readRepoFile('scripts/check-doc-contract.ts')
 
     expect(testing).toContain('## Release Exit Criteria')
-    expect(testing).toContain('`bun run release:check` must exactly aggregate the Current Release Gates')
+    expect(testing).toContain('`bun run release:check` must exactly aggregate the worker gate list and')
+    expect(testing).toContain('`bun run release:check:phase2` must exactly aggregate the Phase 2 gate list')
     expect(testing).toContain('Tag release handoff must run post-compile artifact proof after `release:check`')
     expect(testing).toContain('bun apps/worker-cli/scripts/package-release-bundles.ts')
     expect(testing).toContain('bun apps/worker-cli/scripts/smoke-release-artifacts.ts')
