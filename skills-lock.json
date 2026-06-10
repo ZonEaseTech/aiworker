@@ -5,7 +5,31 @@
       "source": "zzci/skills",
       "sourceType": "github",
       "skillPath": "skills/bkd/SKILL.md",
-      "computedHash": "b356966f4c1f993f3010f67c662e34dcfc6f6367baeb1fb867104c7994b1a49c"
+      "computedHash": "2a0b3e0e66f24f544d4dc313214be3d8ee35d67f83f5cd1e11dd964692a2507f"
+    },
+    "pma": {
+      "source": "zzci/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pma/SKILL.md",
+      "computedHash": "0196b63510c370d2377f84162f0241a18e275de06f0ceb8b11e430de05a6fe35"
+    },
+    "pma-bun": {
+      "source": "zzci/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pma-bun/SKILL.md",
+      "computedHash": "d9a8c7868fbf43230629d87d8670301ed21112d8b66ccbffaf8374cf9efa6df7"
+    },
+    "pma-cr": {
+      "source": "zzci/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pma-cr/SKILL.md",
+      "computedHash": "100d652dab0471227b4c3704ff8c953aa527b615fb4e38f1717138b3625d9bb5"
+    },
+    "pma-web": {
+      "source": "zzci/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pma-web/SKILL.md",
+      "computedHash": "5e601baf69d2ec16bdf07348db106dda1f703a76537290ccb8b4d75c5dafe75f"
     },
     "shadcn": {
       "source": "shadcn/ui",

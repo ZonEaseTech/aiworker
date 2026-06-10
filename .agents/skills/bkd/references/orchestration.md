@@ -47,6 +47,14 @@ curl -s "$BKD_URL/processes/capacity" | jq
 - `availableSlots` is 0: wait, do not force-create tasks
 - Re-check capacity before each new subtask
 
+> **Rule 10 — never inline prompts.** The `"prompt": "..."` blocks below are
+> shown inline for readability only. When actually sending them, write the prompt
+> to a temp file and POST via `jq`: `jq -n --rawfile prompt /tmp/bkd-prompt.txt
+> '{prompt:$prompt}' > /tmp/bkd-body.json` then `curl --data-binary
+> @/tmp/bkd-body.json`. Inlining free-form text into `-d '{...}'` corrupts quotes,
+> `$`, backticks, and newlines. Full pattern + templated-var handling:
+> `rest-api.md` → [Sending Request Bodies Safely](rest-api.md#sending-request-bodies-safely).
+
 ## 2. Create Coordinator Issue
 
 ```bash

@@ -153,7 +153,11 @@ Follow-up coordinator with report, escalate to human.
 git revert -m 1 HEAD --no-edit
 ```
 
-Follow-up the failing subtask with error details, move back to `working`:
+Follow-up the failing subtask with error details, move back to `working`
+(Rule 10 — send the prompt via a temp file, not inline: `jq -n --rawfile prompt
+/tmp/bkd-prompt.txt '{prompt:$prompt}' > /tmp/bkd-body.json`, then `curl
+--data-binary @/tmp/bkd-body.json`; see `rest-api.md` →
+[Sending Request Bodies Safely](rest-api.md#sending-request-bodies-safely)):
 
 ```bash
 curl -s -X POST "$BKD_URL/projects/{pid}/issues/$SUB_ID/follow-up" \
