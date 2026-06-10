@@ -14,10 +14,6 @@ export {
   soulAppProjectionReceiptSchema,
 } from './manifest'
 export type {
-  MountedMicroAppChildEvent,
-  MountedMicroAppHostData,
-} from './micro-app'
-export type {
   SoulAppEventProtocol,
   SoulAppLifecycleProtocol,
   SoulAppProtocolResult,

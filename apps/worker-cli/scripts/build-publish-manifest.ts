@@ -1,7 +1,7 @@
 import { access, chmod, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { OFFICIAL_SOUL_APPS } from '@zonease/aiworker-worker-runtime'
+import { SHIPPED_OFFICIAL_SOUL_APPS } from '@zonease/aiworker-worker-runtime/internal/official-soul-catalog'
 
 import { ensureOfficialSoulDists as ensureOfficialSoulDistsFromSource } from '../../../scripts/official-soul-dist'
 
@@ -11,7 +11,7 @@ const distDir = resolve(cliDir, 'dist')
 const binShimSrc = resolve(cliDir, 'scripts/aiworker-bin-shim.sh')
 const binShimDst = resolve(distDir, 'aiworker.js')
 
-const officialApps = OFFICIAL_SOUL_APPS.map(app => app.id)
+const officialApps = SHIPPED_OFFICIAL_SOUL_APPS.map(app => app.id)
 const officialAppsDst = resolve(distDir, 'official-apps')
 const publishedDescriptor = 'dist/soul.descriptor.json'
 

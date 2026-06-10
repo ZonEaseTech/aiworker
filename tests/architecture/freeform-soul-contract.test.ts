@@ -98,10 +98,12 @@ describe('Freeform Soul descriptor contract', () => {
 
     const descriptor = parseSoulDescriptorV1(readJson<unknown>(freeformDescriptorPath))
 
-    // Descriptor v1 identity collapsed to a single Soul `id` + display `name` (D6).
+    // Descriptor v1 identity collapsed to a single Soul `id` + display `name`
+    // plus optional display-only `description?` metadata (D6).
     // The old appId/soulId duality and `version` are gone; re-armed to the single-id model.
     expect(descriptor).toMatchObject({
       identity: {
+        description: 'Open-ended Soul for freeform local work.',
         id: 'aiworker-freeform',
         name: 'AIWorker Freeform',
       },

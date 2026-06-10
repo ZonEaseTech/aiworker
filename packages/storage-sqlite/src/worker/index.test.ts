@@ -40,6 +40,7 @@ import {
   setSetting,
   settings,
   soulApps,
+  updateSession,
   updateSoulAppLifecycle,
   upsertFile,
   upsertSoulApp,
@@ -831,6 +832,45 @@ describe('greenfield local worker session schema', () => {
         }),
       ).toThrow('Literal secrets are not allowed in Worker metadata: workers.metadataJson.diagnostic')
     })
+  })
+
+  it('rejects literal secrets in session titles on create and update', () => {
+    const worker = upsertWorker({
+      id: 'session-title-secret-worker',
+      appId: 'demo-soul-app',
+      name: 'Session title secret worker',
+    })
+    const workspace = createWorkspace({
+      id: 'session-title-secret-workspace',
+      workerId: worker.id,
+      name: 'Session title secret workspace',
+      rootPath: '/tmp/session-title-secret-workspace',
+    })
+
+    expect(() =>
+      createSession({
+        id: 'session-title-secret-create',
+        workerId: worker.id,
+        workspaceId: workspace.id,
+        title: 'Investigate token = "literal-secret-value"',
+      }),
+    ).toThrow('Literal secrets are not allowed in Worker metadata: sessions.title')
+    expect(getSession('session-title-secret-create')).toBeNull()
+
+    const session = createSession({
+      id: 'session-title-secret-safe',
+      workerId: worker.id,
+      workspaceId: workspace.id,
+      title: 'Safe investigation title',
+    })
+
+    expect(() =>
+      updateSession({
+        id: session.id,
+        title: 'Updated ghp_0123456789abcdefghijklmnopqrstuvwxyz',
+      }),
+    ).toThrow('Literal secrets are not allowed in Worker metadata: sessions.title')
+    expect(getSession(session.id)?.title).toBe('Safe investigation title')
   })
 
   it('rejects prefixed secret-key references that embed assignments or literal values', () => {

@@ -3,6 +3,7 @@ import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import type { SoulDiscovery, SoulValidationIssue } from '@zonease/aiworker-soul-sdk'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
+import type { OfficialSoulAppDefinition, OfficialSoulCatalogView } from '@zonease/aiworker-worker-runtime/internal/official-soul-catalog'
 import type { FleetIndex, FleetWorker } from './fleet'
 import type { UpdateCliOptions, UpdateCommandName } from './updater'
 import { Buffer } from 'node:buffer'
@@ -53,11 +54,15 @@ import {
 import {
   createWorkerOrchestrator,
   getWorkerEnv,
-  OFFICIAL_SOUL_APPS,
   readFrozenSessionEngine,
   resolveLocalCliEngine,
   scanLocalEngines,
 } from '@zonease/aiworker-worker-runtime'
+import {
+  DEV_SAMPLING_OFFICIAL_SOUL_APPS,
+  OFFICIAL_SOUL_APPS,
+  SHIPPED_OFFICIAL_SOUL_APPS,
+} from '@zonease/aiworker-worker-runtime/internal/official-soul-catalog'
 
 import cac from 'cac'
 import consola from 'consola'
@@ -208,6 +213,7 @@ interface DaemonRestartResult {
 const cli = cac('aiworker')
 const CLI_MODULE_DIR = path.dirname(fileURLToPath(import.meta.url))
 const OFFICIAL_APP_DESCRIPTOR_FILENAME = 'dist/soul.descriptor.json'
+const INTERNAL_OFFICIAL_SOUL_CATALOG_VIEW_ENV = 'AIWORKER_INTERNAL_OFFICIAL_SOUL_CATALOG_VIEW'
 
 let daemonStarterForTest: DaemonStarter | null = null
 let officialSoulDistBuilderForTest: (() => Promise<void>) | null = null
@@ -334,31 +340,51 @@ function sourceRepoRoot(moduleDir = CLI_MODULE_DIR): string {
   return path.resolve(moduleDir, '..', '..', '..')
 }
 
-function sourceOfficialSoulDescriptorsReady(moduleDir = CLI_MODULE_DIR): boolean {
+function sourceOfficialAppsRoot(moduleDir = CLI_MODULE_DIR): string {
+  return path.resolve(sourceRepoRoot(moduleDir), 'souls')
+}
+
+function sourceOfficialSoulBuildScript(moduleDir = CLI_MODULE_DIR): string {
+  return path.resolve(sourceRepoRoot(moduleDir), 'scripts/official-soul-dist.ts')
+}
+
+function sourceOfficialSoulDescriptorsReady(
+  moduleDir = CLI_MODULE_DIR,
+  definitions: readonly OfficialSoulAppDefinition[] = OFFICIAL_SOUL_APPS,
+): boolean {
   if (officialSoulDescriptorsReadyForTest)
     return officialSoulDescriptorsReadyForTest()
   const repoRoot = sourceRepoRoot(moduleDir)
-  return OFFICIAL_SOUL_APPS.every(definition => existsSync(path.resolve(repoRoot, definition.descriptorPath)))
+  return definitions.every(definition => existsSync(path.resolve(repoRoot, definition.descriptorPath)))
 }
 
-async function ensureSourceOfficialSoulDists(): Promise<void> {
-  if (resolveCliPackagedOfficialAppsRoot())
+async function ensureSourceOfficialSoulDists(
+  definitions: readonly OfficialSoulAppDefinition[] = OFFICIAL_SOUL_APPS,
+  catalogView: OfficialSoulCatalogView = 'shipped',
+): Promise<void> {
+  if (catalogView === 'shipped' && resolveCliPackagedOfficialAppsRoot())
     return
-  if (sourceOfficialSoulDescriptorsReady())
+  if (!existsSync(sourceOfficialSoulBuildScript())) {
+    throw new Error(`official Soul catalog view ${catalogView} requires a source checkout`)
+  }
+  if (sourceOfficialSoulDescriptorsReady(CLI_MODULE_DIR, definitions))
     return
-  const builder = officialSoulDistBuilderForTest ?? runOfficialSoulDistBuildCommand
-  await builder()
+  if (officialSoulDistBuilderForTest) {
+    await officialSoulDistBuilderForTest()
+    return
+  }
+  await runOfficialSoulDistBuildCommand(catalogView)
 }
 
-async function runOfficialSoulDistBuildCommand(): Promise<void> {
-  const proc = Bun.spawn(['bun', 'run', 'build:official-souls'], {
+async function runOfficialSoulDistBuildCommand(catalogView: OfficialSoulCatalogView = 'shipped'): Promise<void> {
+  const proc = Bun.spawn(['bun', 'scripts/official-soul-dist.ts', '--catalog-view', catalogView], {
     cwd: sourceRepoRoot(),
     stderr: 'inherit',
     stdout: 'inherit',
   })
   const exitCode = await proc.exited
   if (exitCode !== 0)
-    throw new Error(`failed to build official Soul dist: bun run build:official-souls exited ${exitCode}`)
+    throw new Error(`failed to build official Soul dist: bun scripts/official-soul-dist.ts --catalog-view ${catalogView} exited ${exitCode}`)
 }
 
 export function resolveCliWorkerWebStaticDir(moduleDir = CLI_MODULE_DIR, options: CliResourceResolutionOptions = {}): string | undefined {
@@ -559,9 +585,35 @@ function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, offi
   })
 }
 
-async function bootstrapOfficialSoulApps(host: WorkerOrchestrator): Promise<Awaited<ReturnType<WorkerOrchestrator['bootstrapOfficialSoulApps']>>> {
-  await ensureSourceOfficialSoulDists()
-  return host.bootstrapOfficialSoulApps()
+async function bootstrapOfficialSoulApps(
+  host: WorkerOrchestrator,
+  options: {
+    catalogView?: OfficialSoulCatalogView
+    definitions?: readonly OfficialSoulAppDefinition[]
+  } = {},
+): Promise<Awaited<ReturnType<WorkerOrchestrator['bootstrapOfficialSoulApps']>>> {
+  const catalogView = options.catalogView ?? 'shipped'
+  const definitions = options.definitions ?? officialSoulDefinitionsForView(catalogView)
+  await ensureSourceOfficialSoulDists(definitions, catalogView)
+  return host.bootstrapOfficialSoulApps({ definitions })
+}
+
+function officialSoulDefinitionsForView(view: OfficialSoulCatalogView): readonly OfficialSoulAppDefinition[] {
+  if (view === 'dev-sampling')
+    return DEV_SAMPLING_OFFICIAL_SOUL_APPS
+  return SHIPPED_OFFICIAL_SOUL_APPS
+}
+
+function resolveOfficialSoulCatalogView(input?: string): OfficialSoulCatalogView {
+  if (!input || input === 'shipped')
+    return 'shipped'
+  if (input === 'dev-sampling')
+    return 'dev-sampling'
+  throw new Error(`unsupported official Soul catalog view: ${input}`)
+}
+
+function resolveInternalOfficialSoulCatalogView(): OfficialSoulCatalogView {
+  return resolveOfficialSoulCatalogView(process.env[INTERNAL_OFFICIAL_SOUL_CATALOG_VIEW_ENV])
 }
 
 function resolveWorkerFromOpenDb(workerOpt?: string): { requestedId?: string, worker: WorkerRow | null } {
@@ -1600,6 +1652,7 @@ function ensureFleetSeeded(root: string): FleetIndex {
 
 async function createWorkerCommand(opts: { id?: string, name?: string, app?: string, port?: number }): Promise<void> {
   const app = requireText(opts.app, 'app')
+  const catalogView = resolveInternalOfficialSoulCatalogView()
   const root = fleetRootDir()
   const index = readFleet(root)
   let id = opts.id?.trim() || mintWorkerId()
@@ -1616,8 +1669,13 @@ async function createWorkerCommand(opts: { id?: string, name?: string, app?: str
   closeWorkerDb()
   await ensureDbAt(paths)
   try {
-    const host = createHost(paths)
-    const bootstrap = await bootstrapOfficialSoulApps(host)
+    const host = createHost(paths, {
+      officialAppsRoot: catalogView === 'dev-sampling' ? sourceOfficialAppsRoot() : undefined,
+    })
+    const bootstrap = await bootstrapOfficialSoulApps(host, {
+      catalogView,
+      definitions: officialSoulDefinitionsForView(catalogView),
+    })
     if (bootstrap.status === 'fail')
       throw new Error('failed to install the bundled official Soul Apps for the new worker home')
     const created = await host.createSoulWorker({
@@ -2542,7 +2600,7 @@ function registerCommands(): void {
     printJson({ setting: setSetting('engine.default', { engine }) })
   })
 
-  cli.command('open', 'open local daemon Web app').option('--port <n>', 'web port', { type: [Number] }).action((opts: { port?: number[] }) => {
+  cli.command('open', 'open local Worker Workbench URL').option('--port <n>', 'web port', { type: [Number] }).action((opts: { port?: number[] }) => {
     const port = optionalNumber(opts.port) ?? getWorkerEnv().PORT
     const url = `http://127.0.0.1:${port}`
     Bun.spawn(['open', url])
@@ -2682,8 +2740,8 @@ function isTopLevelHelpRequest(argv: string[]): boolean {
 
 // `aiworker` with no subcommand is the zero-config entry: it runs `start`. Help
 // and version short-circuit before this; only a bare invocation (no command
-// token, no help/version flag) is rewritten so flags like `--no-open`/`--port`
-// still flow to `start`.
+// token, no help/version flag) is rewritten so service flags like `--port` still
+// flow to `start`.
 export function defaultToStartCommand(argv: string[]): string[] {
   const args = argv.slice(2)
   const hasCommandToken = args.some(arg => !arg.startsWith('-'))

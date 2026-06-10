@@ -10,6 +10,7 @@ import process from 'node:process'
 
 import { spawn } from 'bun'
 import consola from 'consola'
+import { withDevSamplingCatalogEnv } from '../../../scripts/worker-create-catalog-view'
 
 const REPO_ROOT = resolve(import.meta.dir, '../../..')
 const CLI_ENTRY = resolve(REPO_ROOT, 'apps/worker-cli/src/aiworker.ts')
@@ -32,6 +33,10 @@ interface HealthBody {
   workers?: Array<{ appId?: string, id?: string, status?: string }>
 }
 
+export function smokeFleetWorkerCreateArgs(id: string, appId: string): string[] {
+  return ['worker', 'create', id, '--app', appId]
+}
+
 async function main(): Promise<number> {
   const root = await mkdtemp(resolve(tmpdir(), 'aiworker-smoke-fleet-'))
   const env: NodeJS.ProcessEnv = { ...process.env, AIWORKER_HOME: root }
@@ -41,8 +46,8 @@ async function main(): Promise<number> {
 
   try {
     // 1. create two domain workers, each in its own standalone home + port.
-    await runCli(['worker', 'create', 'w-freeform', '--app', 'aiworker-freeform'], env)
-    await runCli(['worker', 'create', 'w-hr', '--app', 'hr-manager'], env)
+    await runCli(smokeFleetWorkerCreateArgs('w-freeform', 'aiworker-freeform'), withDevSamplingCatalogEnv(env))
+    await runCli(smokeFleetWorkerCreateArgs('w-hr', 'hr-manager'), withDevSamplingCatalogEnv(env))
 
     // 2. fleet list: exactly two workers, distinct ports, distinct homes.
     const listed = parseFleetList(await runCli(['fleet', 'list'], env))

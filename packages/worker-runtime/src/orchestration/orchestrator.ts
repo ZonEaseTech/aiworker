@@ -1,6 +1,6 @@
 import type { HostedSoulApp } from '@zonease/aiworker-soul-descriptor'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
-import type { OfficialRetiredMetadataDiscardResult, OfficialSoulAppBootstrapResult } from '../soul-app/official'
+import type { OfficialRetiredMetadataDiscardResult, OfficialSoulAppBootstrapResult, OfficialSoulAppDefinition } from '../soul-app/official'
 import type { SoulAppRegistryContext, SoulCatalog, SoulDescriptorInstallInput } from '../soul-app/registry'
 import type { LocalExecutor } from '../worker/executor'
 import type { LocalWorkerRuntime, LocalWorkerRuntimeOptions, LocalWorkerSnapshot } from '../worker/runtime'
@@ -77,6 +77,10 @@ export interface CreateSoulWorkerResult {
   worker: WorkerRow
 }
 
+export interface BootstrapOfficialSoulAppsOptions {
+  definitions?: readonly OfficialSoulAppDefinition[]
+}
+
 export function createWorkerOrchestrator(options: WorkerOrchestratorOptions): WorkerOrchestrator {
   return new WorkerOrchestrator(options)
 }
@@ -122,9 +126,10 @@ export class WorkerOrchestrator {
     return runSoulAppHealthcheck(appId, this.registryContext())
   }
 
-  async bootstrapOfficialSoulApps(): Promise<OfficialSoulAppBootstrap> {
+  async bootstrapOfficialSoulApps(options: BootstrapOfficialSoulAppsOptions = {}): Promise<OfficialSoulAppBootstrap> {
     const results = await bootstrapOfficialSoulAppRegistry({
       ...this.registryContext(),
+      definitions: options.definitions,
       officialAppsRoot: this.options.officialAppsRoot,
     })
     const retiredMetadataDiscard = discardOfficialSoulAppRetiredMetadata(this.options.now?.())

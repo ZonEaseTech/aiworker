@@ -1111,6 +1111,47 @@ describe('destructive refactor contract bootstrap', () => {
     expect(findings, 'Host catalog should expose Soul App identity/description, not domain primitives').toEqual([])
   })
 
+  test('current Phase 2 governance fields stay deferred from Host DB/API and Worker runtime', () => {
+    const architecture = readRepoFile('docs/architecture.md')
+    const testing = readRepoFile('docs/testing.md')
+    expect(architecture).toContain('current Phase 2\nbootstrap slice keep connector authorization, permission allocation,\ngateway/profile sync, and rollout/rollback execution as deferred governance')
+    expect(testing).toContain('current-slice governance deferral')
+
+    const currentImplementationSurfaces = [
+      'packages/storage-sqlite/src/host/schema.ts',
+      'packages/storage-sqlite/src/host/index.ts',
+      'apps/host-cli/src/host-server.ts',
+      'apps/host-web/src/host-api.ts',
+      'packages/host-control/src/assignment.ts',
+      'packages/worker-daemon/src/modes/worker.ts',
+      ...listSourceFiles('packages/worker-runtime/src'),
+    ]
+
+    const forbiddenGovernancePayloadSnippets = [
+      'gatewayProfileRef',
+      'gateway_profile_ref',
+      'permissionSet',
+      'permission_set',
+      'connectorAuthorization',
+      'connector_authorization',
+      'authorizedConnectors',
+      'authorized_connectors',
+      'rolloutState',
+      'rollout_state',
+      'rollbackRef',
+      'rollback_ref',
+    ]
+
+    const findings = currentImplementationSurfaces.flatMap((path) => {
+      const source = readRepoFile(path)
+      return forbiddenGovernancePayloadSnippets
+        .filter(snippet => source.includes(snippet))
+        .map(snippet => `${path}: ${snippet}`)
+    })
+
+    expect(findings, 'current Host assignment DB/API and Worker runtime must not half-wire deferred governance payloads').toEqual([])
+  })
+
   test('Web local workspace model does not preserve removed protocol compat shims', () => {
     const compatPath = 'apps/worker-web/src/features/local-workspace/types.compat.ts'
     const activeWebSources = listSourceFiles('apps/worker-web/src')
@@ -1191,6 +1232,23 @@ describe('destructive refactor contract bootstrap', () => {
       .map(([path, token]) => `${path}: ${token}`)
 
     expect(findings, 'package entrypoints must expose session/invocation surfaces, not legacy turns').toEqual([])
+  })
+
+  test('worker-runtime root export keeps internal dev-sampling catalog controls private', () => {
+    const runtimeEntrypoint = readRepoFile('packages/worker-runtime/src/index.ts')
+    const packageManifest = readRepoFile('packages/worker-runtime/package.json')
+
+    for (const forbidden of [
+      'ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS',
+      'DEV_SAMPLING_OFFICIAL_SOUL_APPS',
+      'OFFICIAL_SOUL_CATALOG_VIEWS',
+      'OfficialSoulCatalogView',
+      'SHIPPED_OFFICIAL_SOUL_APPS',
+    ]) {
+      expect(runtimeEntrypoint).not.toContain(forbidden)
+    }
+
+    expect(packageManifest).toContain('./internal/official-soul-catalog')
   })
 
   test('local workspace protocol defines sessions and invocations without LocalTurn schemas', () => {
@@ -1997,6 +2055,10 @@ describe('destructive refactor contract bootstrap', () => {
     const descriptorSource = readRepoFile('packages/soul-descriptor/src/index.ts')
     expect(descriptorSource).not.toContain('workbenchSchema')
     expect(descriptorSource).not.toContain('\'workbench\',')
+    const soulAppPublicApi = readRepoFile('packages/soul-descriptor/src/soul-app/index.ts')
+    expect(soulAppPublicApi).not.toContain('MountedMicroApp')
+    expect(soulAppPublicApi).not.toContain('./micro-app')
+    expect(existsSync(join(repoRoot, 'packages/soul-descriptor/src/soul-app/micro-app.ts'))).toBe(false)
 
     // The daemon's mounted-workbench resolution tests are gone with the chain.
     const daemonTest = readRepoFile('packages/worker-daemon/src/modes/worker.local.test.ts')

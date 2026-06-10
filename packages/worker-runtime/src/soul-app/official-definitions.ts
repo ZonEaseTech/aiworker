@@ -3,7 +3,7 @@ export interface OfficialSoulAppDefinition {
   descriptorPath: string
 }
 
-export const OFFICIAL_SOUL_APPS = [
+export const ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS = [
   {
     descriptorPath: 'souls/aiworker-freeform/dist/soul.descriptor.json',
     id: 'aiworker-freeform',
@@ -25,3 +25,18 @@ export const OFFICIAL_SOUL_APPS = [
     id: 'software-support',
   },
 ] as const satisfies readonly OfficialSoulAppDefinition[]
+
+export const SHIPPED_OFFICIAL_SOUL_APPS = ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS
+  .filter(definition => definition.id === 'aiworker-freeform') satisfies readonly OfficialSoulAppDefinition[]
+
+export const DEV_SAMPLING_OFFICIAL_SOUL_APPS = ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS
+
+export const OFFICIAL_SOUL_CATALOG_VIEWS = {
+  'dev-sampling': DEV_SAMPLING_OFFICIAL_SOUL_APPS,
+  'shipped': SHIPPED_OFFICIAL_SOUL_APPS,
+} as const satisfies Record<string, readonly OfficialSoulAppDefinition[]>
+
+export type OfficialSoulCatalogView = keyof typeof OFFICIAL_SOUL_CATALOG_VIEWS
+
+// Backward-compatible public default: "official" means the v1 shipped surface.
+export const OFFICIAL_SOUL_APPS = SHIPPED_OFFICIAL_SOUL_APPS

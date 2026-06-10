@@ -164,8 +164,15 @@ Host (Phase 2) owns only control-plane metadata:
 
 Host must not own session, invocation, projection, engine processes, domain
 state, or secrets. A Worker must not depend on Host to run. Worker packages must
-not import Host packages — a runtime-direction rule retained even while the Host
-plane is dormant in v1.
+not import Host packages — a runtime-direction rule retained because the Host
+plane is a Phase 2 control plane and stays off the v1 Worker runtime hot path.
+
+Current implementation note: the v1 standalone Worker and current Phase 2
+bootstrap slice keep connector authorization, permission allocation,
+gateway/profile sync, and rollout/rollback execution as deferred governance
+work. The current Host assignment storage/API stores provisioning, readiness,
+access, lifecycle, and Soul release identity only; it must not half-wire
+governance payloads into the v1 Worker runtime or current assignment DB/API.
 
 ## Daemon Topology (daemon-per-worker)
 
@@ -199,8 +206,8 @@ The v1 top-level shape is:
 apps/
   worker-cli/
   worker-web/
-  host-cli/      (Phase 2, dormant stub)
-  host-web/      (Phase 2, dormant stub)
+  host-cli/      (Phase 2 control plane; off v1 Worker runtime hot path)
+  host-web/      (Phase 2 control plane; off v1 Worker runtime hot path)
 
 souls/
   aiworker-freeform/
@@ -208,10 +215,11 @@ souls/
 packages/
   worker-runtime/
   worker-daemon/
-  host-control/             (Phase 2, dormant stub)
-  worker-control-protocol/  (Phase 2, dormant stub)
+  host-control/             (Phase 2 control plane; off v1 Worker runtime hot path)
+  worker-control-protocol/  (Phase 2 control protocol; off v1 Worker runtime hot path)
   soul-descriptor/
   soul-sdk/
+  cli-doctor/
   engine-bridge/
   engine-projection/
   storage-sqlite/
@@ -247,8 +255,10 @@ The Host/Soul boundary is descriptor-only. A Worker installs and runs a Soul fro
 source, import Soul private modules, or interpret domain fields.
 
 Descriptor v1 is intentionally minimal: `protocol`, `identity`, `engine` asset
-refs and engine targets. It carries no workbench, no app-owned API, no
-capabilities, and no domain business concepts.
+refs and engine targets. `identity.description?` is optional display metadata,
+not a capability, permission, API, or business workflow contract. The descriptor
+carries no workbench, no app-owned API, no capabilities, and no domain business
+concepts.
 
 The Worker owns and renders its Workbench directly. v1 has no micro-app, no
 mounted-workbench resolution, and no Soul-provided UI. The session chat is

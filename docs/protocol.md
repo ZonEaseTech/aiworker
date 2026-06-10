@@ -27,7 +27,10 @@ engine
 ```
 
 - `protocol` is the descriptor format version (`soul/v1`).
-- `identity` is the Soul `id` and display `name`.
+- `identity` is the Soul `id`, display `name`, and optional `description?`
+  display metadata. Host and Workbench may show these fields, but must not
+  interpret `description` as a domain capability, API, permission, or business
+  workflow contract.
 - `engine` declares engine targets and the packaged asset refs: workspace files,
   skills, native MCP files, and entry files such as `AGENTS.md` and `CLAUDE.md`.
 
@@ -247,6 +250,10 @@ Delivering descriptor content from the Host registry to a provisioned Worker
 (resolving `soulReleaseRef` to descriptor content end-to-end) is a later
 distribution slice. v1 + this slice keep the assignment `soulReleaseRef` a
 distribution label; the Worker still installs its own bundled descriptor.
+Production governance wiring for connector authorization, permission sets,
+gateway/profile refs, and Soul release rollout/rollback controls remains the
+next Phase 2 governance slice. Do not add one-off v1 Worker runtime hooks,
+Worker broker routes, or partial propagation paths for those governance records.
 
 Phase 2.1 Worker Access tunnel:
 

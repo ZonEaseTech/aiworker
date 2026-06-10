@@ -79,7 +79,7 @@ requireIncludes('docs/architecture.md', [
   '- docs/soul-authoring.md owns SDK authoring, convention discovery, build output,\n  native MCP source layout, and Freeform source contract.',
   '- docs/testing.md owns the coverage ledger, guardrail mapping, Phase 2 MVP\n  experience acceptance, and historical implementation-teardown record.',
   'CLI-first',
-  // NEW MODEL: worker owns + directly renders its workbench, Soul = template, v1 standalone only, Host Phase 2 dormant
+  // NEW MODEL: worker owns + directly renders its workbench, Soul = template, v1 standalone only, Host Phase 2 off hot path
   'AIWorker turns one expert\'s professional capability into many employees\'\nproduction capacity.',
   'Soul is the capability carrier. Host is the iteration and replication lever.\nWorker is the employee-side ready-to-use terminal.',
   'AIWorker is therefore a worker-centric product. A Worker is an autonomous,\nCLI-first runtime that runs one Soul through a native engine and owns engine\nlaunch.',
@@ -103,21 +103,25 @@ requireIncludes('docs/architecture.md', [
   'A Worker is a running instance bound to one Soul.',
   '`souls/aiworker-freeform` is the only strong v1 acceptance Soul. It proves the\nstandalone framework loop with Host absent:',
   'HR and QA remain first-party Soul identities, but they migrate after Freeform as\ndescriptor-producing templates and do not block the v1 framework loop.',
-  // monorepo shape (no soul-workbench/soul-app-runtime; host-* are Phase 2 dormant stubs)
+  // monorepo shape (no soul-workbench/soul-app-runtime; host-* are Phase 2 control-plane surfaces off the v1 runtime hot path)
   'The v1 top-level shape is:',
+  'cli-doctor/',
   '`apps/*` are runnable product shells. `souls/*` are descriptor-producing Soul\ntemplate packages.',
   '`worker-*` packages must not\nimport `host-*` packages.',
   'The Workbench has no package of its own: it lives in `apps/worker-web`, composed\nfrom `packages/ui` primitives. The retired `soul-workbench` and `soul-app-runtime`\npackages are removed; v1 has no Soul-provided UI and no mounted-workbench\nmachinery.',
   'Do not create\n`core-v2`, `shared-v2`, or any replacement dumping ground.',
   '`apps/api` migrated into `packages/worker-daemon`.',
   // descriptor minimal
-  'Descriptor v1 is intentionally minimal: `protocol`, `identity`, `engine` asset\nrefs and engine targets. It carries no workbench, no app-owned API, no\ncapabilities, and no domain business concepts.',
+  'Descriptor v1 is intentionally minimal: `protocol`, `identity`, `engine` asset\nrefs and engine targets. `identity.description?` is optional display metadata,\nnot a capability, permission, API, or business workflow contract.',
+  'The descriptor\ncarries no workbench, no app-owned API, no capabilities, and no domain business\nconcepts.',
   'The Worker owns and renders its Workbench directly. v1 has no micro-app, no\nmounted-workbench resolution, and no Soul-provided UI.',
   // Phase 2 control plane
   'Phase 2 Host integration has two\ndistribution-plane directions:',
   'Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host',
   'Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.',
   'The control contract covers worker describe, health, instance lifecycle, and an\nassignment envelope. It must not carry session, invocation, projection, engine,\nor domain data. The assignment envelope is the distribution record that lets Host\ncopy a published Soul version plus authorized connectors, permissions, and\ngateway/profile refs to employee Workers.',
+  'Current implementation note: the v1 standalone Worker and current Phase 2\nbootstrap slice keep connector authorization, permission allocation,\ngateway/profile sync, and rollout/rollback execution as deferred governance\nwork.',
+  'The current Host assignment storage/API stores provisioning, readiness,\naccess, lifecycle, and Soul release identity only; it must not half-wire\ngovernance payloads into the v1 Worker runtime or current assignment DB/API.',
   // session = chat, no capability
   'A session is a Worker\nlocator for a workspace and its invocation references; it carries no capability.\nA session is, to the employee, a chat: a composer and a transcript over one\nworkspace.',
   'The Worker, not Host, prepares engine invocation context and observes\nnative engine output.',
@@ -211,9 +215,11 @@ requireIncludes('docs/protocol.md', [
   'The Worker validates and caches the descriptor, then routes local operations through\ngeneric broker APIs. The Workbench and Host do not read Soul source, import Soul\nprivate modules, or interpret domain semantics.',
   'Worker configuration is worker-scoped and SDK-standard; it is not a descriptor\nsection. Values use stable envelopes stored in Worker metadata',
   'Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.',
-  // descriptor minimal: only protocol/identity/engine
+  // descriptor minimal: only protocol/identity/engine; description is display metadata under identity
   'A Soul is a template — a descriptor-only bundle of engine assets. Descriptor v1\ncontains only these top-level sections:',
   'protocol\nidentity\nengine',
+  '- `identity` is the Soul `id`, display `name`, and optional `description?`\n  display metadata.',
+  'Host and Workbench may show these fields, but must not\n  interpret `description` as a domain capability, API, permission, or business\n  workflow contract.',
   'Descriptor v1 carries no workbench, no app-owned API, no capabilities, and no\nconfiguration, health, compatibility, extensions, or external sections.',
   'The Worker owns and renders its Workbench; the\nSoul provides no UI.',
   // broker route block (no /api/capabilities, /api/mount/workbench, /api/apps)
@@ -259,6 +265,8 @@ requireIncludes('docs/protocol.md', [
   'POST   /api/provision/check-in',
   'GET    /api/provision/access',
   'GET    /workers/:workerId',
+  'Production governance wiring for connector authorization, permission sets,\ngateway/profile refs, and Soul release rollout/rollback controls remains the\nnext Phase 2 governance slice.',
+  'Do not add one-off v1 Worker runtime hooks,\nWorker broker routes, or partial propagation paths for those governance records.',
   'Host owns the publish/assign/provision governance path. Worker owns the\nWorkbench, workspace, session, invocation, projection, engine bridge, runtime\nconfiguration overlays, and redaction.',
   // 钉死倒置后归属:workspace locator metadata 归 Worker（a6c75512,验收 #3 补 pin 防静默 revert）。
   'creates Worker workspace locator metadata plus projection-owned bootstrap\n  files.',
@@ -364,6 +372,8 @@ requireIncludes('docs/runtime.md', [
   // NEW MODEL: standalone zero-config entry (aiworker start); worker-web pure workbench, empty-state = first-run
   '## Standalone Entry',
   'The standalone entry is one zero-config command.',
+  'The command differences are process shape only:',
+  'None of the service-start commands opens a browser or Workbench\nURL. Browser/Workbench launch belongs to `aiworker open`.',
   'the daemon stays passive and never\nauto-creates a Worker.',
   'Auto-bootstrap stops at the Worker; the first workspace is the employee\'s\nfirst action in the Workbench.',
   'In Phase 2, a Host-provisioned employee Worker keeps the same Workbench\nexperience. The first screen must read as "my AI worker is ready", not "Host\nmounted a remote surface".',
@@ -421,6 +431,10 @@ requireIncludes('docs/soul-authoring.md', [
   'Build output is installed through descriptor references.',
   // dist tree: engine-assets only, no web/
   'dist/\n  soul.descriptor.json\n  engine-assets/\n    workspace/\n    skills/\n    mcp/\n      codex/config.toml\n      claude-code/.mcp.json',
+])
+forbidIncludes('docs/runtime.md', [
+  'browser convenience',
+  'may open the local Workbench\nURL by default',
 ])
 forbidIncludes('docs/soul-authoring.md', [
   'product/api/index.ts',
@@ -490,6 +504,10 @@ requireIncludes('docs/testing.md', [
   'The v1 browser proof is Freeform-only and standalone:',
   'Worker Workbench opens standalone with Host absent on worker/workspace/session locator\n-> renders the session chat directly in the worker Workbench without any micro-app\n-> verifies the first invocation and starts a session-level follow-up from browser context\n-> shows bridge event refs in the session chat\n-> cancels a queued invocation without changing session lifecycle\n-> reattaches and reconciles engine bridge events\n-> refreshes projection receipts from the Workbench\n-> applies worker config overlay and observes worker-overlay projection receipts\n-> archives the session and rejects follow-up\n-> archives workspace without exposing Worker archive from browser context',
   'Do not modify the new architecture to satisfy old E2E assumptions. Delete or\nrewrite tests that require Host to import Soul source, expect old daemon product\nbackend behavior, expect a Soul-provided mounted workbench, or encode\n`router-mode="pure"` as production behavior.',
+  'zero-config `aiworker start` starts the daemon/runtime\n  on a single service port without opening a browser; `aiworker open` owns\n  browser/Workbench URL launch',
+  '`aiworker start` zero-config entry (ensure a single active\n  Freeform-bound Worker and start the daemon/runtime without opening a browser;\n  `aiworker open` owns local Workbench URL launch)',
+  'current-slice governance deferral: until the dedicated Phase 2 governance\n  slice lands, connector authorization, permission allocation, gateway/profile\n  sync, and rollout/rollback execution remain target-contract metadata only',
+  'the\n  current Host assignment DB/API stores provisioning, readiness, access,\n  lifecycle, and Soul release identity, not those governance payloads',
   'tests/browser/freeform-cli-golden-path.spec.ts',
   // Phase-B teardown debt tracked in testing.md
   '## Pending Implementation (Phase-B Teardown)',
@@ -499,6 +517,8 @@ requireIncludes('docs/testing.md', [
   '| Decision area | Canonical home | Guardrail | Status |',
   'Worker autonomy / Host control plane',
   'Phase 2 Soul distribution MVP',
+  'Phase 2 governance propagation',
+  'deferred to next Phase 2 governance slice; no v1 Worker runtime hook, Worker broker route, or partial propagation path',
   'Descriptor-only Host/Soul boundary',
   'Worker-owned workbench',
   'Session lifecycle and invocation state split',
@@ -538,6 +558,9 @@ requireIncludes('docs/testing.md', [
   'It verifies that `/host` is the administrator control plane with `AI Workers`\nand `开通 AI Worker`, and that `/workers/:workerId` is not accepted as a\nHost-mounted Worker UI.',
   'The proof must not find `micro-app` or `iframe` on\neither `/host` or the Worker access path.',
   'Static preview/history fallback is not an end-to-end Worker Access Adapter proof.',
+])
+forbidIncludes('docs/testing.md', [
+  'start the daemon, open the local Workbench URL',
 ])
 for (const testPath of documentedTestingPaths()) {
   if (!existsSync(abs(testPath))) {

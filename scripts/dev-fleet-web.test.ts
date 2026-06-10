@@ -7,6 +7,7 @@ import {
   buildManifest,
   clean,
   DEV_FLEET_TOPOLOGY,
+  devFleetWorkerCreateArgs,
   fleetWorkerCommandArgs,
   formatPortStatus,
   parseFleetStatus,
@@ -119,6 +120,22 @@ describe('dev fleet web harness contracts', () => {
         },
       ],
     })
+  })
+
+  it('keeps dev-only worker creation args public while env injects the internal catalog selector', () => {
+    const googleAds = DEV_FLEET_TOPOLOGY.find(entry => entry.appId === 'google-ads')
+    expect(googleAds).toBeDefined()
+    expect(devFleetWorkerCreateArgs(googleAds!)).toEqual([
+      'worker',
+      'create',
+      'dev-google-ads',
+      '--app',
+      'google-ads',
+      '--name',
+      '谷歌推广',
+      '--port',
+      '9218',
+    ])
   })
 
   it('rejects an existing worker id bound to the wrong Soul app', () => {

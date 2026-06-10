@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { ensureOfficialSoulDists } from './official-soul-dist'
+import { definitionsForCatalogView, ensureOfficialSoulDists } from './official-soul-dist'
 
 describe('official Soul dist builder', () => {
   let root: string
@@ -52,6 +52,17 @@ describe('official Soul dist builder', () => {
       },
     ])
     expect(JSON.parse(await readFile(join(appRoot, 'dist', 'soul.descriptor.json'), 'utf8')).protocol).toBe('soul/v1')
+  })
+
+  it('defaults to the shipped official Soul view and exposes dev-sampling only explicitly', () => {
+    expect(definitionsForCatalogView('shipped').map(definition => definition.id)).toEqual(['aiworker-freeform'])
+    expect(definitionsForCatalogView('dev-sampling').map(definition => definition.id).sort()).toEqual([
+      'aiworker-freeform',
+      'google-ads',
+      'hr-manager',
+      'product-manager',
+      'software-support',
+    ])
   })
 
   it('fails when a Soul build does not produce its descriptor', async () => {

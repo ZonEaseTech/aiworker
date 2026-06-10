@@ -275,7 +275,7 @@ describe('local daemon API', () => {
     const appsBody = await (await target.request('/api/app-installation/apps')).json() as {
       apps: Array<{ appId: string, projectedSoul: { id: string, status: string }, status: string }>
     }
-    expect(appsBody.apps.map(installed => installed.appId).sort()).toEqual([FREEFORM_APP_ID, 'google-ads', 'hr-manager', 'product-manager', 'software-support'])
+    expect(appsBody.apps.map(installed => installed.appId).sort()).toEqual([FREEFORM_APP_ID])
     expect(appsBody.apps.every(installed => installed.status === 'enabled')).toBe(true)
     expect(appsBody.apps.find(installed => installed.appId === FREEFORM_APP_ID)!.projectedSoul).toMatchObject({ id: FREEFORM_APP_ID, status: 'available' })
     expect((await target.request('/api/local/apps')).status).toBe(404)
@@ -1660,6 +1660,37 @@ describe('local daemon API', () => {
         message: `Session ${session.id} is archived and cannot start new work.`,
       },
     })
+  })
+
+  it('rejects PATCH session status deleted while preserving archive and hard-delete producers', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'patch-deleted-session-worker')
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    const patchDeletedRes = await target.request(`/api/sessions/${session.id}`, {
+      body: JSON.stringify({ status: 'deleted' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+
+    expect(patchDeletedRes.status).toBe(400)
+    expect(await patchDeletedRes.json()).toMatchObject({
+      error: { code: 'PATCH_SESSION_INVALID' },
+    })
+    expect(await (await target.request(`/api/sessions/${session.id}`)).json()).toMatchObject({
+      session: { id: session.id, status: 'active' },
+    })
+
+    const archiveRes = await target.request(`/api/sessions/${session.id}/archive`, { method: 'POST' })
+    expect(archiveRes.status).toBe(200)
+    expect(await archiveRes.json()).toMatchObject({
+      session: { id: session.id, status: 'archived' },
+    })
+
+    const deleteRes = await target.request(`/api/sessions/${session.id}`, { method: 'DELETE' })
+    expect(deleteRes.status).toBe(200)
+    expect(await deleteRes.json()).toMatchObject({ deleted: true })
+    expect((await target.request(`/api/sessions/${session.id}`)).status).toBe(404)
   })
 
   it('does not expose legacy transient turn read feeds', async () => {

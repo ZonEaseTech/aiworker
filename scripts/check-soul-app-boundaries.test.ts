@@ -58,6 +58,103 @@ describe('check-soul-app-boundaries', () => {
     expect(discoveryTripwireError(0, 0)).toBeNull()
   })
 
+  test('requires internal dev-sampling catalog env for first-party dev-only worker create scripts', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
+    try {
+      const scriptsDir = join(tempRoot, 'scripts')
+      mkdirSync(scriptsDir, { recursive: true })
+      writeFileSync(join(scriptsDir, 'bad-dev-create.ts'), [
+        'export const args = ["worker", "create", "w-hr", "--app", "hr-manager"]',
+        '',
+      ].join('\n'))
+
+      const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
+        cwd: tempRoot,
+        encoding: 'utf8',
+      })
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('bad-dev-create.ts')
+      expect(result.stderr).toContain('internal dev-sampling catalog env')
+    }
+    finally {
+      rmSync(tempRoot, { force: true, recursive: true })
+    }
+  })
+
+  test('allows public Freeform worker create scripts without the dev-sampling selector', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
+    try {
+      const scriptsDir = join(tempRoot, 'scripts')
+      mkdirSync(scriptsDir, { recursive: true })
+      writeFileSync(join(scriptsDir, 'freeform-create.ts'), [
+        'export const args = ["worker", "create", "w-freeform", "--app", "aiworker-freeform"]',
+        '',
+      ].join('\n'))
+
+      const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
+        cwd: tempRoot,
+        encoding: 'utf8',
+      })
+
+      expect(result.status).toBe(0)
+      expect(result.stderr).not.toContain('worker create --app')
+    }
+    finally {
+      rmSync(tempRoot, { force: true, recursive: true })
+    }
+  })
+
+  test('allows first-party dev-only worker create scripts that inject the internal dev-sampling env', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
+    try {
+      const scriptsDir = join(tempRoot, 'scripts')
+      mkdirSync(scriptsDir, { recursive: true })
+      writeFileSync(join(scriptsDir, 'dev-create.ts'), [
+        'import { withDevSamplingCatalogEnv } from "./worker-create-catalog-view"',
+        'runCli(["worker", "create", "w-hr", "--app", "hr-manager"], withDevSamplingCatalogEnv())',
+        '',
+      ].join('\n'))
+
+      const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
+        cwd: tempRoot,
+        encoding: 'utf8',
+      })
+
+      expect(result.status).toBe(0)
+      expect(result.stderr).not.toContain('dev-create.ts')
+    }
+    finally {
+      rmSync(tempRoot, { force: true, recursive: true })
+    }
+  })
+
+  test('catches mixed protected and unprotected first-party dev-only worker create paths in one file', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
+    try {
+      const scriptsDir = join(tempRoot, 'scripts')
+      mkdirSync(scriptsDir, { recursive: true })
+      writeFileSync(join(scriptsDir, 'mixed-dev-create.ts'), [
+        'import { withDevSamplingCatalogEnv } from "./worker-create-catalog-view"',
+        'runCli(["worker", "create", "w-google", "--app", "google-ads"], withDevSamplingCatalogEnv())',
+        'runCli(["worker", "create", "w-hr", "--app", "hr-manager"])',
+        '',
+      ].join('\n'))
+
+      const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
+        cwd: tempRoot,
+        encoding: 'utf8',
+      })
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('mixed-dev-create.ts')
+      expect(result.stderr).toContain('internal dev-sampling catalog env')
+    }
+    finally {
+      rmSync(tempRoot, { force: true, recursive: true })
+    }
+  })
+
   test('catches a Soul App Host-private import located outside src/', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
     try {

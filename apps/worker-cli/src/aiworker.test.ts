@@ -545,6 +545,32 @@ describe('aiworker local CLI', () => {
     expect(created.worker.home).toBe(path.join(root, 'home', 'workers', created.worker.id))
   })
 
+  it('keeps public worker create on the shipped catalog and reserves dev-sampling for internal env', async () => {
+    expect(await runCli(argv('worker', 'create', '--help'))).toBe(0)
+    expect(output).not.toContain('--catalog-view')
+    output = ''
+    errorOutput = ''
+
+    expect(await runCli(argv('worker', 'create', 'google-default', '--app', 'google-ads'))).toBe(1)
+    expect(errorOutput).toContain('Available Soul not found: google-ads')
+    output = ''
+    errorOutput = ''
+
+    expect(await runCli(argv('worker', 'create', 'google-public-flag', '--app', 'google-ads', '--catalog-view', 'dev-sampling'))).toBe(1)
+    expect(errorOutput).toContain('Unknown option')
+    output = ''
+    errorOutput = ''
+
+    process.env.AIWORKER_INTERNAL_OFFICIAL_SOUL_CATALOG_VIEW = 'dev-sampling'
+    expect(await runCli(argv('worker', 'create', 'google-dev', '--app', 'google-ads'))).toBe(0)
+    const created = JSON.parse(output) as { worker: { app: string, catalogView?: string, id: string } }
+    expect(created.worker).toMatchObject({
+      app: 'google-ads',
+      id: 'google-dev',
+    })
+    expect(created.worker.catalogView).toBeUndefined()
+  })
+
   it('prefers a current-home worker over the fleet index so non-fleet/adopted homes are unaffected', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     output = ''
@@ -2097,7 +2123,7 @@ describe('aiworker local CLI', () => {
     expect(JSON.parse(output)).toEqual(JSON.parse(updateOutput))
   })
 
-  it('bootstraps official apps and rejects legacy built-in Soul ids', async () => {
+  it('bootstraps the shipped official Freeform app and rejects legacy built-in Soul ids', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     const body = JSON.parse(output) as {
       bootstrap: {
@@ -2109,10 +2135,6 @@ describe('aiworker local CLI', () => {
     expect(body.bootstrap.status).toBe('pass')
     expect(body.bootstrap.results.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'installed_enabled'],
-      ['google-ads', 'installed_enabled'],
-      ['hr-manager', 'installed_enabled'],
-      ['product-manager', 'installed_enabled'],
-      ['software-support', 'installed_enabled'],
     ])
     expect(body.catalog.souls).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: FREEFORM_APP_ID, status: 'available' }),
@@ -2121,7 +2143,7 @@ describe('aiworker local CLI', () => {
     output = ''
 
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
-    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed', 'refreshed', 'refreshed', 'refreshed', 'refreshed'])
+    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed'])
     output = ''
 
     await expect(__seedWorkerForTest({ app: 'hr', id: 'legacy-hr', name: 'Legacy HR' })).rejects.toThrow()

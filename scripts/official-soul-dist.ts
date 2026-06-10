@@ -1,7 +1,8 @@
+import type { OfficialSoulCatalogView } from '../packages/worker-runtime/src/soul-app/official-definitions'
 import { access, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { OFFICIAL_SOUL_APPS } from '../packages/worker-runtime/src/soul-app/official-definitions'
+import { OFFICIAL_SOUL_CATALOG_VIEWS } from '../packages/worker-runtime/src/soul-app/official-definitions'
 
 export interface OfficialSoulDistBuildDefinition {
   descriptorPath: string
@@ -26,6 +27,7 @@ export type OfficialSoulDistCommandRunner = (
 ) => Promise<void>
 
 export interface EnsureOfficialSoulDistsOptions {
+  catalogView?: OfficialSoulCatalogView
   definitions?: readonly OfficialSoulDistBuildDefinition[]
   repoRoot?: string
   runCommand?: OfficialSoulDistCommandRunner
@@ -37,7 +39,7 @@ export async function ensureOfficialSoulDists(
   options: EnsureOfficialSoulDistsOptions = {},
 ): Promise<OfficialSoulDistBuildResult[]> {
   const repoRoot = options.repoRoot ?? defaultRepoRoot
-  const definitions = options.definitions ?? OFFICIAL_SOUL_APPS
+  const definitions = options.definitions ?? definitionsForCatalogView(options.catalogView ?? 'shipped')
   const runCommand = options.runCommand ?? runCommandWithInheritedStdio
   const results: OfficialSoulDistBuildResult[] = []
 
@@ -68,6 +70,20 @@ export async function ensureOfficialSoulDists(
   return results
 }
 
+export function definitionsForCatalogView(view: OfficialSoulCatalogView): readonly OfficialSoulDistBuildDefinition[] {
+  return OFFICIAL_SOUL_CATALOG_VIEWS[view]
+}
+
+function parseCatalogViewArg(argv: readonly string[]): OfficialSoulCatalogView {
+  const index = argv.indexOf('--catalog-view')
+  if (index === -1)
+    return 'shipped'
+  const value = argv[index + 1]
+  if (value === 'dev-sampling' || value === 'shipped')
+    return value
+  throw new Error(`unsupported official Soul catalog view: ${value ?? '<missing>'}`)
+}
+
 async function readSoulPackageName(soulRoot: string): Promise<string> {
   const packagePath = resolve(soulRoot, 'package.json')
   const parsed = JSON.parse(await readFile(packagePath, 'utf8')) as { name?: unknown }
@@ -91,4 +107,4 @@ async function runCommandWithInheritedStdio(
 }
 
 if (import.meta.main)
-  await ensureOfficialSoulDists()
+  await ensureOfficialSoulDists({ catalogView: parseCatalogViewArg(Bun.argv.slice(2)) })
