@@ -171,6 +171,15 @@ target. Native resume uses the latest opaque external session ref when the
 adapter supports it. The bridge must not silently create a fresh native session
 when resume data is missing.
 
+Native resume is per-engine. `claude-code` (`--resume <session_id>`) and `codex`
+(`exec resume <thread_id>`) capture an opaque session ref on each invocation and
+reconnect the native session on follow-up, so `supportsNativeResume` is true for
+them and the missing-ref guard applies. Engines that do not capture a resumable
+ref (`cursor`, `gemini`, `opencode`, `qwen`) report `supportsNativeResume` false
+and are best-effort: their follow-ups run without native resume rather than
+erroring, so a later turn may not carry prior native-session context until a
+prompt-level history fallback is added.
+
 ## Engine Bridge
 
 AIWorker uses B+ structured native engine bridge.

@@ -1281,12 +1281,26 @@ export class LocalWorkerRuntime {
 
   private async repairWorkspaceLayouts(): Promise<void> {
     for (const workspace of listWorkspaces(this.workerId)) {
-      await this.prepareWorkspaceLayout({
-        name: workspace.name,
-        projectEngineAssets: true,
-        projectWorkerOverlayAssets: false,
-        rootPath: workspace.rootPath,
-      })
+      try {
+        // Reproject WITH worker overlays and preserving user-owned files, mirroring
+        // reprojectWorkspaceAssets. Repairing without overlays reverted overlaid entry files
+        // (AGENTS.md/CLAUDE.md) to baseline and desynced the freshness marker, self-locking a
+        // customized worker with PROJECTION_RECEIPT_STALE on its next invocation after restart.
+        await this.prepareWorkspaceLayout({
+          name: workspace.name,
+          preserveUnownedExistingTargets: true,
+          projectEngineAssets: true,
+          projectWorkerOverlayAssets: true,
+          rootPath: workspace.rootPath,
+        })
+      }
+      catch (error) {
+        // Best-effort boot repair: reprojecting now reads overlay/MCP source files, so a single
+        // unprojectable workspace must not abort the whole daemon boot. Surface it (redacted)
+        // and continue repairing the rest.
+        const redacted = readRecord(redactEngineBridgeValue({ message: error instanceof Error ? error.message : String(error) }))
+        console.warn(`[worker-runtime] workspace layout repair skipped for ${workspace.id}: ${readString(redacted.message, 'projection error')}`)
+      }
     }
   }
 
@@ -1758,7 +1772,10 @@ function createLocalExecutorBridgeAdapter(executor: LocalExecutor, target: strin
       return {
         callable: true,
         installed: true,
-        supportsNativeResume: false,
+        // Only engines that both capture a resumable session ref and accept a resume flag
+        // are resume-capable. Others stay false so a follow-up without a ref does not
+        // trip the bridge's ENGINE_SESSION_REF_MISSING guard (best-effort, no hard error).
+        supportsNativeResume: target === 'claude-code' || target === 'codex',
         supportsProtocolCancel: false,
         target,
       }
@@ -1785,6 +1802,10 @@ async function invokeLocalExecutorThroughBridge(
   const onProcessHandle = typeof request.onProcessHandle === 'function'
     ? request.onProcessHandle as (handle: unknown) => void
     : undefined
+  // The engine bridge resolves the latest prior session ref and spreads it onto the
+  // follow-up request as `externalSessionRef`; thread it into the executor so per-engine
+  // buildArgs can resume the native session (claude --resume / codex exec resume).
+  const resumeRecord = readRecord(request.externalSessionRef)
   const result = await executor.invoke({
     engineCommand: readNullableString(request.engineCommand),
     engineId: readString(request.engineTarget, fallbackTarget),
@@ -1793,6 +1814,7 @@ async function invokeLocalExecutorThroughBridge(
     onProcessHandle: onProcessHandle ? handle => onProcessHandle(handle) : undefined,
     onEvent: event => sink.event(bridgeEventFromLocalExecutorEvent(event, invocationId)),
     prompt: readString(request.prompt, ''),
+    resumeRef: Object.keys(resumeRecord).length > 0 ? resumeRecord : null,
     signal: request.signal instanceof AbortSignal ? request.signal : undefined,
     sessionId: readString(request.sessionId, ''),
     workspaceId: readString(request.workspaceId, ''),

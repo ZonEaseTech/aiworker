@@ -77,6 +77,68 @@ printf '%s\\n' '{"type":"turn.completed","usage":{"input_tokens":3,"output_token
     expect(events.some(event => event.kind === 'log' && event.stream === 'stderr')).toBe(false)
   })
 
+  it('codex resumes via `exec resume <id>` with a stdin prompt and drops --sandbox/-C', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const argsFile = path.join(makeRoot(), 'argv.txt')
+    const command = await makeScript(`
+cat >/dev/null
+printf '%s\\n' "$@" >> ${argsFile}
+printf '%s\\n' '{"type":"thread.started","thread_id":"codex-thread-9"}'
+printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}'
+`)
+    await createExternalEngineExecutor().invoke({
+      ...baseInput(command, workspaceRoot),
+      engineId: 'codex',
+      resumeRef: { id: 'codex-thread-prev', target: 'codex' },
+    })
+    const argv = (await readFile(argsFile, 'utf8')).split('\n').filter(Boolean)
+    expect(argv.slice(0, 3)).toEqual(['exec', 'resume', 'codex-thread-prev'])
+    expect(argv).toContain('sandbox_mode=workspace-write')
+    expect(argv[argv.length - 1]).toBe('-')
+    expect(argv).not.toContain('--sandbox')
+    expect(argv).not.toContain('-C')
+  })
+
+  it('codex stays on bare `exec` (fresh session) without a resume ref', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const argsFile = path.join(makeRoot(), 'argv.txt')
+    const command = await makeScript(`
+cat >/dev/null
+printf '%s\\n' "$@" >> ${argsFile}
+printf '%s\\n' '{"type":"thread.started","thread_id":"codex-thread-9"}'
+printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}'
+`)
+    await createExternalEngineExecutor().invoke({ ...baseInput(command, workspaceRoot), engineId: 'codex' })
+    const argv = (await readFile(argsFile, 'utf8')).split('\n').filter(Boolean)
+    expect(argv[0]).toBe('exec')
+    expect(argv[1]).not.toBe('resume')
+    expect(argv).toContain('--sandbox')
+    expect(argv).toContain('-C')
+    expect(argv[argv.length - 1]).not.toBe('-')
+  })
+
+  it('claude resumes via --resume <id>', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const argsFile = path.join(makeRoot(), 'argv.txt')
+    const command = await makeScript(`
+cat >/dev/null
+printf '%s\\n' "$@" >> ${argsFile}
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"claude-s-1"}'
+printf '%s\\n' '{"type":"result","result":"ok"}'
+`)
+    await createExternalEngineExecutor().invoke({
+      ...baseInput(command, workspaceRoot),
+      engineId: 'claude-code',
+      resumeRef: { id: 'claude-sess-prev', target: 'claude' },
+    })
+    const argv = (await readFile(argsFile, 'utf8')).split('\n').filter(Boolean)
+    expect(argv).toContain('--resume')
+    expect(argv).toContain('claude-sess-prev')
+  })
+
   it('allows text-only successful turns without inventing an artifact', async () => {
     const workspaceRoot = path.join(makeRoot(), 'workspace')
     await mkdir(workspaceRoot, { recursive: true })

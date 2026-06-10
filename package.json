@@ -59,6 +59,7 @@
     "test:cli": "bun run --filter '@zonease/aiworker-freeform' build && bun test apps/worker-cli/src/aiworker.test.ts apps/worker-cli/src/freeform-golden-path.test.ts --timeout=30000",
     "test:browser:chat-experience": "bun run --filter '@zonease/aiworker-freeform' build && bun run --filter '@zonease/aiworker-worker-web' build && bun tests/browser/freeform-chat-experience.spec.ts",
     "test:engine-real": "bun tests/engine-real/engine-management.acceptance.ts",
+    "test:engine-real:resume": "bun tests/engine-real/eb1-native-resume.acceptance.ts",
     "test:browser:host-dev": "bun run --filter '@zonease/aiworker-host-web' build && bun tests/browser/host-dev-loop.spec.ts",
     "test:browser:host-serve": "bun run --filter '@zonease/aiworker-host-web' build && bun tests/browser/host-single-serve.spec.ts",
     "test:browser:phase2": "bun run --filter '@zonease/aiworker-host-web' build && bun tests/browser/host-single-serve.spec.ts && bun tests/browser/phase2-host-worker-access.spec.ts && bun tests/browser/host-dev-loop.spec.ts",
