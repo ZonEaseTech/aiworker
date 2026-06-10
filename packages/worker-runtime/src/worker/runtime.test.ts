@@ -786,6 +786,50 @@ describe('LocalWorkerRuntime', () => {
     expect(executorInputs).toEqual([result.invocation.id])
   })
 
+  it('boots through an unprojectable workspace overlay instead of aborting the daemon (PROJ-4 resilience)', async () => {
+    const appRoot = join(dir, 'souls', 'demo-soul-app-repair-resilient')
+    await writeProfileEngineAssets(appRoot)
+    await mkdir(join(appRoot, 'engine-assets', 'skills', 'config-overlay'), { recursive: true })
+    const overlaySource = join(appRoot, 'engine-assets', 'skills', 'config-overlay', 'SKILL.md')
+    await writeFile(overlaySource, '# Config Overlay Skill\n')
+
+    const boot1 = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ran' }
+      },
+    })
+    await boot1.init()
+    const workspace = await boot1.createWorkspace({ name: 'Resilient Repair Workspace' })
+    upsertWorkerConfigValue({
+      workerId: boot1.workerId,
+      configKey: 'skill-overlay:freeform-context',
+      source: 'web',
+      configValueJson: {
+        checksum: 'sha256:config-overlay',
+        enabled: true,
+        kind: 'skill-overlay',
+        options: { replaces: 'descriptor://engine/skills/freeform-context' },
+        sourceRef: 'descriptor://engine/skills/config-overlay',
+        target: 'codex',
+      },
+    })
+    await boot1.reprojectWorkspaceAssets(workspace.id, { engineTarget: 'codex' })
+
+    // Make the enabled overlay's source unreadable, then restart. repairWorkspaceLayouts now reads
+    // overlay source files, so without the per-workspace try/catch this readFile would throw and
+    // abort the whole daemon boot. The catch must log (redacted) and let init() resolve.
+    await rm(overlaySource)
+    const boot2 = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ran' }
+      },
+    })
+    let booted = false
+    await boot2.init()
+    booted = true
+    expect(booted).toBe(true)
+  })
+
   it('lets a reserved projection-overlay worker config make receipts stale but projects no file', async () => {
     const appRoot = join(dir, 'souls', 'demo-soul-app-reserved-projection-overlay')
     await writeProfileEngineAssets(appRoot)
