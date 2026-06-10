@@ -74,6 +74,12 @@ async function runEngineResume(engine: EngineSpec, root: string): Promise<void> 
     turn2.invocation.summary.includes(MEMORY_NUMBER),
     `${engine.id} turn2 did NOT recall ${MEMORY_NUMBER} — multi-turn amnesia still present: "${turn2.invocation.summary}"`,
   )
+  // turn2 (the resumed run) must itself re-capture a ref, or turn-3 would resolve null
+  // and trip ENGINE_SESSION_REF_MISSING. Proves the chain self-heals turn-over-turn.
+  assert(
+    !!turn2.invocation.externalSessionRef,
+    `${engine.id} turn2 (resumed run) re-captured NO externalSessionRef — turn-3+ resume would break`,
+  )
 
   console.warn(`  ✓ ${engine.name}: turn1 captured ref, turn2 recalled ${MEMORY_NUMBER} via native resume`)
   console.warn(`    turn1 externalSessionRef: ${turn1.invocation.externalSessionRef}`)

@@ -118,7 +118,8 @@ const localEngineDefinitions: Record<string, LocalEngineDefinition> = {
       const resumeId = readResumeId(input.resumeRef)
       // `codex exec resume <id>` does not accept --sandbox/-C; sandbox is set via
       // `-c sandbox_mode=...` and the working dir comes from the process cwd (workspaceRoot).
-      // The trailing `-` makes resume read the follow-up prompt from stdin (matching `codex exec`).
+      // `codex exec resume` needs an explicit trailing `-` to read the prompt from stdin
+      // (unlike `codex exec`, which defaults to stdin when no positional prompt is given).
       const args = resumeId
         ? [
             'exec',
