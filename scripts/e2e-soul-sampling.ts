@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
+import { withDevSamplingCatalogEnv } from './worker-create-catalog-view'
 
 export type FindingKind = 'agents' | 'skill' | 'knowledge-template' | 'platform'
 
@@ -643,7 +644,7 @@ export async function runSamplingCaseWithCli(input: RunSamplingCaseWithCliInput)
   const workerCreateArgs = ['worker', 'create', input.scope.workerId, '--app', input.scope.appId]
 
   try {
-    await input.runCli(workerCreateArgs, input.env)
+    await input.runCli(workerCreateArgs, withDevSamplingCatalogEnv(input.env))
   }
   catch (error) {
     if (!isWorkerAlreadyExistsError(error))

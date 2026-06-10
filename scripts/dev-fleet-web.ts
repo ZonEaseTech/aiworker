@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
+import { withDevSamplingCatalogEnv } from './worker-create-catalog-view'
 
 export interface DevFleetEntry {
   apiPort: number
@@ -143,6 +144,20 @@ export function fleetWorkerCommandArgs(command: 'start' | 'stop'): string[][] {
   return DEV_FLEET_TOPOLOGY.map(entry => [command, entry.workerId])
 }
 
+export function devFleetWorkerCreateArgs(entry: DevFleetEntry): string[] {
+  return [
+    'worker',
+    'create',
+    entry.workerId,
+    '--app',
+    entry.appId,
+    '--name',
+    entry.soulName,
+    '--port',
+    String(entry.apiPort),
+  ]
+}
+
 export function validateWorkerApp(input: {
   expectedAppId: string
   row: {
@@ -194,13 +209,14 @@ function run(
   return { stderr, stdout, status }
 }
 
-function cli(args: string[], options: { allowFailure?: boolean } = {}): CommandResult {
+function cli(args: string[], options: { allowFailure?: boolean, env?: Record<string, string | undefined> } = {}): CommandResult {
   return run('bun', [`--env-file=${workerDaemonEnvFile()}`, 'apps/worker-cli/src/aiworker.ts', ...args], {
     allowFailure: options.allowFailure,
     cwd: repoRoot(),
     env: {
       AIWORKER_HOME: aiworkerHome(),
       WORKER_DB_PATH: undefined,
+      ...options.env,
     },
   })
 }
@@ -463,17 +479,7 @@ function ensureWorker(entry: DevFleetEntry): void {
   }
 
   console.log(`[dev:fleet-web] create worker ${entry.workerId} (${entry.appId})`)
-  cli([
-    'worker',
-    'create',
-    entry.workerId,
-    '--app',
-    entry.appId,
-    '--name',
-    entry.soulName,
-    '--port',
-    String(entry.apiPort),
-  ])
+  cli(devFleetWorkerCreateArgs(entry), { env: withDevSamplingCatalogEnv() })
 }
 
 function killHarnessTmuxSessions(): void {

@@ -142,7 +142,7 @@ export const reconcileEngineInvocationBodySchema = z.object({
 export const patchSessionBodySchema = z.object({
   context: z.never().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
-  status: z.enum(['active', 'archived', 'deleted']).optional(),
+  status: z.enum(['active', 'archived']).optional(),
   title: z.string().trim().min(1).optional(),
 })
 

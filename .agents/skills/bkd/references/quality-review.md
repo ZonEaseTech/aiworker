@@ -80,7 +80,10 @@ curl -s "$BKD_URL/projects/{pid}/issues/{iid}/logs/filter/types/user-message?lim
 
 **Green (pass):** Proceed directly to next phase (merge or done). Do not follow-up the coordinator issue — the coordinator is already running this assessment inline, so sending a follow-up to itself would cause self-activation loops.
 
-**Red (rework):**
+**Red (rework):** (Rule 10 — the prompt is shown inline for readability; send it
+via a temp file: `jq -n --rawfile prompt /tmp/bkd-prompt.txt '{prompt:$prompt}' >
+/tmp/bkd-body.json`, then `curl --data-binary @/tmp/bkd-body.json`. See
+`rest-api.md` → [Sending Request Bodies Safely](rest-api.md#sending-request-bodies-safely).)
 
 ```bash
 curl -s -X POST "$BKD_URL/projects/{pid}/issues/$SUB_ID/follow-up" \

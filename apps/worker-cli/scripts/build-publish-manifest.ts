@@ -1,7 +1,7 @@
 import { access, chmod, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { OFFICIAL_SOUL_APPS } from '@zonease/aiworker-worker-runtime'
+import { ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS } from '@zonease/aiworker-worker-runtime/internal/official-soul-catalog'
 
 import { ensureOfficialSoulDists as ensureOfficialSoulDistsFromSource } from '../../../scripts/official-soul-dist'
 
@@ -11,7 +11,9 @@ const distDir = resolve(cliDir, 'dist')
 const binShimSrc = resolve(cliDir, 'scripts/aiworker-bin-shim.sh')
 const binShimDst = resolve(distDir, 'aiworker.js')
 
-const officialApps = OFFICIAL_SOUL_APPS.map(app => app.id)
+// v1 catalog policy (Option B): every first-party Soul is public-selectable, so the
+// published CLI ships all first-party descriptors — not just the Freeform bootstrap default.
+const officialApps = ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS.map(app => app.id)
 const officialAppsDst = resolve(distDir, 'official-apps')
 const publishedDescriptor = 'dist/soul.descriptor.json'
 
@@ -80,7 +82,10 @@ export async function copyOfficialApps(options: CopyOfficialAppsOptions = {}): P
   const appIds = options.appIds ?? officialApps
   const destinationRoot = options.officialAppsRoot ?? officialAppsDst
 
-  await (options.ensureOfficialSoulDists ?? (() => ensureOfficialSoulDistsFromSource({ repoRoot })))()
+  await (options.ensureOfficialSoulDists ?? (() => ensureOfficialSoulDistsFromSource({
+    definitions: ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS,
+    repoRoot,
+  })))()
   await rm(destinationRoot, { recursive: true, force: true })
   for (const appId of appIds) {
     await copyOfficialApp(appId, {

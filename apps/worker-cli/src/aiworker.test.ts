@@ -32,6 +32,7 @@ import {
   __setDaemonStarterForTest,
   __setOfficialSoulDescriptorsReadyForTest,
   __setOfficialSoulDistBuilderForTest,
+  __setWorkerCreateSelectorForTest,
   downloadAndReplaceGitHubBundle,
   inspectCliOfficialAppsResource,
   prepareDaemonForeground,
@@ -42,6 +43,7 @@ import {
   resolveCliOfficialAppsRoot,
   resolveCliWorkerWebStaticDir,
   runCli,
+  workerCreateCandidates,
 } from './aiworker'
 
 describe('aiworker local CLI', () => {
@@ -76,6 +78,7 @@ describe('aiworker local CLI', () => {
     __setDaemonStarterForTest(null)
     __setOfficialSoulDescriptorsReadyForTest(null)
     __setOfficialSoulDistBuilderForTest(null)
+    __setWorkerCreateSelectorForTest(null)
     closeWorkerDb()
     process.exitCode = 0
     for (const key of Object.keys(process.env))
@@ -543,6 +546,141 @@ describe('aiworker local CLI', () => {
     expect(created.worker.id).toMatch(/^w_[0-9a-hjkmnp-tv-z]{12}$/)
     expect(created.worker.workerId).toBe(created.worker.id)
     expect(created.worker.home).toBe(path.join(root, 'home', 'workers', created.worker.id))
+  })
+
+  it('lets public worker create select any first-party Soul and keeps --catalog-view a non-public flag', async () => {
+    // REVERSAL (not regression protection): peer 77901dfe gated public `worker create`
+    // to the shipped (freeform-only) catalog. Option B opens public create to every
+    // first-party Soul, so `--app google-ads` with no dev-sampling env now succeeds.
+    expect(await runCli(argv('worker', 'create', '--help'))).toBe(0)
+    expect(output).not.toContain('--catalog-view')
+    output = ''
+    errorOutput = ''
+
+    expect(await runCli(argv('worker', 'create', 'google-default', '--app', 'google-ads'))).toBe(0)
+    const createdDefault = JSON.parse(output) as { worker: { app: string, id: string } }
+    expect(createdDefault.worker).toMatchObject({ app: 'google-ads', id: 'google-default' })
+    output = ''
+    errorOutput = ''
+
+    expect(await runCli(argv('worker', 'create', 'google-public-flag', '--app', 'google-ads', '--catalog-view', 'dev-sampling'))).toBe(1)
+    expect(errorOutput).toContain('Unknown option')
+    output = ''
+    errorOutput = ''
+
+    process.env.AIWORKER_INTERNAL_OFFICIAL_SOUL_CATALOG_VIEW = 'dev-sampling'
+    expect(await runCli(argv('worker', 'create', 'google-dev', '--app', 'google-ads'))).toBe(0)
+    const created = JSON.parse(output) as { worker: { app: string, catalogView?: string, id: string } }
+    expect(created.worker).toMatchObject({
+      app: 'google-ads',
+      id: 'google-dev',
+    })
+    expect(created.worker.catalogView).toBeUndefined()
+  })
+
+  it('worker create merges official catalog candidates with installed apps and dedups by id', () => {
+    const candidates = workerCreateCandidates(
+      [{ id: 'aiworker-freeform' }, { id: 'google-ads' }],
+      [{ id: 'google-ads', name: 'Google Ads (installed dup)' }, { id: 'acme-soul', name: 'Acme Soul' }],
+    )
+    expect(candidates.map(candidate => candidate.id)).toEqual(['aiworker-freeform', 'google-ads', 'acme-soul'])
+    // official wins the dedup: no installed name leaks onto an official id
+    expect(candidates.find(candidate => candidate.id === 'google-ads')?.name).toBeUndefined()
+    expect(candidates.find(candidate => candidate.id === 'acme-soul')?.name).toBe('Acme Soul')
+  })
+
+  it('worker create without --app on a non-interactive terminal fails with an actionable Soul list', async () => {
+    expect(await runCli(argv('worker', 'create', 'headless'))).toBe(1)
+    expect(errorOutput).toContain('Pass --app <id>')
+    expect(errorOutput).toContain('aiworker-freeform')
+    expect(errorOutput).toContain('google-ads')
+  })
+
+  it('worker create honors --app without invoking the interactive selector', async () => {
+    __setWorkerCreateSelectorForTest(async () => {
+      throw new Error('selector must not run when --app is provided')
+    })
+    expect(await runCli(argv('worker', 'create', 'flag-pick', '--app', FREEFORM_APP_ID))).toBe(0)
+    const created = JSON.parse(output) as { worker: { app: string, id: string } }
+    expect(created.worker).toMatchObject({ app: FREEFORM_APP_ID, id: 'flag-pick' })
+  })
+
+  it('worker create binds the Soul chosen by the interactive selector when --app is omitted', async () => {
+    __setWorkerCreateSelectorForTest(async (candidates) => {
+      // the selector is offered the official first-party catalog
+      expect(candidates.map(candidate => candidate.id)).toContain('google-ads')
+      return FREEFORM_APP_ID
+    })
+    expect(await runCli(argv('worker', 'create', 'picked'))).toBe(0)
+    const created = JSON.parse(output) as { worker: { app: string, id: string } }
+    expect(created.worker).toMatchObject({ app: FREEFORM_APP_ID, id: 'picked' })
+  })
+
+  it('config show reports the current engine selection and execution mode with a redacted byok view', async () => {
+    expect(await runCli(argv('config', 'show'))).toBe(0)
+    const body = JSON.parse(output) as { config: { byok: { apiKeyRefPresent: boolean }, engineId: string, executionMode: string } }
+    expect(typeof body.config.engineId).toBe('string')
+    expect(['byok', 'local-cli']).toContain(body.config.executionMode)
+    expect(typeof body.config.byok.apiKeyRefPresent).toBe('boolean')
+    // redacted: the show view must never carry a literal apiKeyRef field
+    expect(JSON.stringify(body.config)).not.toContain('"apiKeyRef"')
+  })
+
+  it('config set-engine selects the native engine and switches to local-cli mode', async () => {
+    expect(await runCli(argv('config', 'set-engine', 'claude-code'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('config', 'show'))).toBe(0)
+    const body = JSON.parse(output) as { config: { engineId: string, executionMode: string } }
+    expect(body.config.engineId).toBe('claude-code')
+    expect(body.config.executionMode).toBe('local-cli')
+  })
+
+  it('config set-engine rejects an unknown engine id without writing settings', async () => {
+    expect(await runCli(argv('config', 'set-engine', 'bogus-engine'))).toBe(1)
+    expect(errorOutput).toContain('unknown engine')
+    // the actionable error lists the valid engine ids
+    expect(errorOutput).toContain('codex')
+    output = ''
+    errorOutput = ''
+    // the bogus id was not persisted — show still reports a known default engine
+    expect(await runCli(argv('config', 'show'))).toBe(0)
+    expect((JSON.parse(output) as { config: { engineId: string } }).config.engineId).not.toBe('bogus-engine')
+  })
+
+  it('config set-mode switches the execution mode', async () => {
+    expect(await runCli(argv('config', 'set-mode', 'byok'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('config', 'show'))).toBe(0)
+    expect((JSON.parse(output) as { config: { executionMode: string } }).config.executionMode).toBe('byok')
+  })
+
+  it('config set-byok stores a secret reference and switches to byok mode', async () => {
+    expect(await runCli(argv('config', 'set-byok', '--key-ref', 'env:OPENAI_API_KEY', '--model', 'gpt-4o', '--base-url', 'https://api.openai.com/v1'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('config', 'show'))).toBe(0)
+    const body = JSON.parse(output) as { config: { byok: { apiKeyRefPresent: boolean, model: string }, executionMode: string } }
+    expect(body.config.executionMode).toBe('byok')
+    expect(body.config.byok.apiKeyRefPresent).toBe(true)
+    expect(body.config.byok.model).toBe('gpt-4o')
+  })
+
+  it('config set-byok rejects a literal secret via the LOCAL_SETTINGS_SECRET guard without leaking it', async () => {
+    const literal = 'sk-test0123456789abcdefghij'
+    expect(await runCli(argv('config', 'set-byok', '--key-ref', literal))).toBe(1)
+    expect(errorOutput).toContain('literal secrets')
+    expect(errorOutput).not.toContain(literal)
+    expect(output).not.toContain(literal)
+  })
+
+  it('config namespace is distinct from worker config', async () => {
+    // top-level `config` resolves to the engine/mode config, not the worker-scoped envelope
+    expect(await runCli(argv('config', 'show'))).toBe(0)
+    expect(JSON.parse(output)).toHaveProperty(['config', 'engineId'])
+    output = ''
+    errorOutput = ''
+    // `worker config list` still routes to its own worker-scoped envelope handler (not Unknown command)
+    await runCli(argv('worker', 'config', 'list', 'nonexistent-worker'))
+    expect(errorOutput).not.toContain('Unknown command')
   })
 
   it('prefers a current-home worker over the fleet index so non-fleet/adopted homes are unaffected', async () => {
@@ -2097,7 +2235,7 @@ describe('aiworker local CLI', () => {
     expect(JSON.parse(output)).toEqual(JSON.parse(updateOutput))
   })
 
-  it('bootstraps official apps and rejects legacy built-in Soul ids', async () => {
+  it('bootstraps the shipped official Freeform app and rejects legacy built-in Soul ids', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     const body = JSON.parse(output) as {
       bootstrap: {
@@ -2109,10 +2247,6 @@ describe('aiworker local CLI', () => {
     expect(body.bootstrap.status).toBe('pass')
     expect(body.bootstrap.results.map(result => [result.appId, result.action])).toEqual([
       [FREEFORM_APP_ID, 'installed_enabled'],
-      ['google-ads', 'installed_enabled'],
-      ['hr-manager', 'installed_enabled'],
-      ['product-manager', 'installed_enabled'],
-      ['software-support', 'installed_enabled'],
     ])
     expect(body.catalog.souls).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: FREEFORM_APP_ID, status: 'available' }),
@@ -2121,7 +2255,7 @@ describe('aiworker local CLI', () => {
     output = ''
 
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
-    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed', 'refreshed', 'refreshed', 'refreshed', 'refreshed'])
+    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed'])
     output = ''
 
     await expect(__seedWorkerForTest({ app: 'hr', id: 'legacy-hr', name: 'Legacy HR' })).rejects.toThrow()

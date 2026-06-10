@@ -27,7 +27,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { bootstrapWorkerApp, localApiExposureWarning, stripWorkerWebPrefix } from './worker'
-import { setEngineScanner } from './worker/settings'
+import { setEngineAuthProbe, setEngineScanner } from './worker/settings'
 
 const FREEFORM_APP_ID = 'aiworker-freeform'
 
@@ -105,6 +105,9 @@ describe('local daemon API', () => {
     originalPath = process.env.PATH
     dir = mkdtempSync(join(tmpdir(), 'aiworker-workspace-api-'))
     bootedDaemons = []
+    // 默认注入「无引擎已登录」的凭证探测,使 defaultLocalSettings 绝不真读 ~/.codex 等
+    // 凭证文件;具体的 authReady 行为由各测试用例显式覆盖。
+    setEngineAuthProbe(() => false)
   })
 
   afterEach(async () => {
@@ -115,6 +118,7 @@ describe('local daemon API', () => {
     // 无条件复位引擎扫描器到真实实现:即使某测试只 boot 了一个会 reject 的 daemon
     // (未进 bootedDaemons),也不让其注入的 fake 泄漏到下一个测试。
     setEngineScanner(null)
+    setEngineAuthProbe(null)
     closeWorkerDb()
     if (originalPath == null)
       delete process.env.PATH
@@ -275,7 +279,7 @@ describe('local daemon API', () => {
     const appsBody = await (await target.request('/api/app-installation/apps')).json() as {
       apps: Array<{ appId: string, projectedSoul: { id: string, status: string }, status: string }>
     }
-    expect(appsBody.apps.map(installed => installed.appId).sort()).toEqual([FREEFORM_APP_ID, 'google-ads', 'hr-manager', 'product-manager', 'software-support'])
+    expect(appsBody.apps.map(installed => installed.appId).sort()).toEqual([FREEFORM_APP_ID])
     expect(appsBody.apps.every(installed => installed.status === 'enabled')).toBe(true)
     expect(appsBody.apps.find(installed => installed.appId === FREEFORM_APP_ID)!.projectedSoul).toMatchObject({ id: FREEFORM_APP_ID, status: 'available' })
     expect((await target.request('/api/local/apps')).status).toBe(404)
@@ -1660,6 +1664,37 @@ describe('local daemon API', () => {
         message: `Session ${session.id} is archived and cannot start new work.`,
       },
     })
+  })
+
+  it('rejects PATCH session status deleted while preserving archive and hard-delete producers', async () => {
+    const target = await app()
+    const worker = await createFreeformWorker(target, 'patch-deleted-session-worker')
+    const { session } = await createWorkspaceAndSession(target, worker.id)
+
+    const patchDeletedRes = await target.request(`/api/sessions/${session.id}`, {
+      body: JSON.stringify({ status: 'deleted' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+
+    expect(patchDeletedRes.status).toBe(400)
+    expect(await patchDeletedRes.json()).toMatchObject({
+      error: { code: 'PATCH_SESSION_INVALID' },
+    })
+    expect(await (await target.request(`/api/sessions/${session.id}`)).json()).toMatchObject({
+      session: { id: session.id, status: 'active' },
+    })
+
+    const archiveRes = await target.request(`/api/sessions/${session.id}/archive`, { method: 'POST' })
+    expect(archiveRes.status).toBe(200)
+    expect(await archiveRes.json()).toMatchObject({
+      session: { id: session.id, status: 'archived' },
+    })
+
+    const deleteRes = await target.request(`/api/sessions/${session.id}`, { method: 'DELETE' })
+    expect(deleteRes.status).toBe(200)
+    expect(await deleteRes.json()).toMatchObject({ deleted: true })
+    expect((await target.request(`/api/sessions/${session.id}`)).status).toBe(404)
   })
 
   it('does not expose legacy transient turn read feeds', async () => {
@@ -3266,6 +3301,67 @@ describe('local daemon API', () => {
     const rescanBody = await rescan.json() as { engines: LocalEngineStatus[] }
     expect(scanCalls).toBe(2)
     expect(rescanBody.engines).toEqual(sentinelRows)
+  })
+
+  // 1b-1:auth-aware 默认引擎。defaultLocalSettings 不再「取第一个 installed」,而优先
+  // 选已登录(authReady)引擎;tiebreak 沿 LOCAL_ENGINE_DEFINITIONS 顺序(codex 先于
+  // claude-code);都未登录但有 installed 仍保持 local-cli(零配置不破),一个都没装才退
+  // byok 引导态。凭证探测经 setEngineAuthProbe 注入,绝不真读 ~/.codex 等凭证文件。
+  async function bootWithEngines(engines: LocalEngineStatus[]) {
+    const boot = await bootstrapWorkerApp({
+      dbPath: join(dir, 'worker.db'),
+      engineScanner: () => engines.map(row => ({ ...row })),
+      executor: {
+        async invoke(input) {
+          input.onEvent?.({ kind: 'text', text: 'done' })
+          return { artifacts: [], summary: 'done' }
+        },
+      },
+      runtimeVersion: 'test',
+      workersRoot: join(dir, 'workers'),
+    })
+    bootedDaemons.push(boot.state)
+    return boot.app
+  }
+
+  async function readDefaultSettings(target: Awaited<ReturnType<typeof bootWithEngines>>) {
+    const res = await target.request('/api/settings')
+    expect(res.status).toBe(200)
+    return (await res.json() as { settings: { engineId: string, executionMode: string } }).settings
+  }
+
+  const codexAndClaudeInstalled: LocalEngineStatus[] = [
+    { command: 'codex', id: 'codex', installed: true, name: 'Codex CLI', path: '/fake/bin/codex', version: 'codex 1.0' },
+    { command: 'claude', id: 'claude-code', installed: true, name: 'Claude Code', path: '/fake/bin/claude', version: 'claude 1.0' },
+  ]
+
+  it('defaults to the authenticated engine instead of the first installed one', async () => {
+    // codex 与 claude 都已安装;只有 claude 已登录 → 默认应选 claude(authReady),
+    // 而非定义顺序更靠前但未登录的 codex。
+    setEngineAuthProbe(engineId => engineId === 'claude-code')
+    const target = await bootWithEngines(codexAndClaudeInstalled)
+    expect(await readDefaultSettings(target)).toMatchObject({ engineId: 'claude-code', executionMode: 'local-cli' })
+  })
+
+  it('prefers codex over claude-code when both engines are authenticated (definition-order tiebreak)', async () => {
+    setEngineAuthProbe(() => true)
+    const target = await bootWithEngines(codexAndClaudeInstalled)
+    expect(await readDefaultSettings(target)).toMatchObject({ engineId: 'codex', executionMode: 'local-cli' })
+  })
+
+  it('keeps an installed-but-unauthenticated engine on local-cli rather than falling back to byok', async () => {
+    setEngineAuthProbe(() => false)
+    const target = await bootWithEngines(codexAndClaudeInstalled)
+    expect(await readDefaultSettings(target)).toMatchObject({ engineId: 'codex', executionMode: 'local-cli' })
+  })
+
+  it('falls back to the byok guided state when no engine is installed', async () => {
+    setEngineAuthProbe(() => false)
+    const target = await bootWithEngines([
+      { command: 'codex', id: 'codex', installed: false, name: 'Codex CLI', path: null, version: null },
+      { command: 'claude', id: 'claude-code', installed: false, name: 'Claude Code', path: null, version: null },
+    ])
+    expect(await readDefaultSettings(target)).toMatchObject({ engineId: 'codex', executionMode: 'byok' })
   })
 
   it('rejects literal BYOK API keys in local settings', async () => {

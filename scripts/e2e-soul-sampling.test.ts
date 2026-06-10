@@ -16,6 +16,7 @@ import {
   writeCaseEvents,
   writeScorecard,
 } from './e2e-soul-sampling'
+import { INTERNAL_OFFICIAL_SOUL_CATALOG_VIEW_ENV } from './worker-create-catalog-view'
 
 const expectedAppIds = [
   'aiworker-freeform',
@@ -246,9 +247,9 @@ describe('e2e soul sampling static contracts', () => {
   })
 
   it('runs one sampling case through the AIWorker CLI adapter', async () => {
-    const calls: string[][] = []
-    const runCli = async (args: string[]): Promise<string> => {
-      calls.push(args)
+    const calls: Array<{ args: string[], env?: Record<string, string | undefined> }> = []
+    const runCli = async (args: string[], env?: Record<string, string | undefined>): Promise<string> => {
+      calls.push({ args, env })
       if (args[0] === 'workspace' && args[1] === 'create')
         return '{"workspace":{"id":"workspace-1"}}'
       if (args[0] === 'session' && args[1] === 'start')
@@ -276,9 +277,12 @@ describe('e2e soul sampling static contracts', () => {
       scope: { appId: 'software-support', workerId: 'e2e-software-support' },
     })
 
-    expect(calls).toContainEqual(['worker', 'create', 'e2e-software-support', '--app', 'software-support'])
+    expect(calls).toContainEqual({
+      args: ['worker', 'create', 'e2e-software-support', '--app', 'software-support'],
+      env: expect.objectContaining({ [INTERNAL_OFFICIAL_SOUL_CATALOG_VIEW_ENV]: 'dev-sampling' }),
+    })
 
-    const sessionStart = calls.find(args => args[0] === 'session' && args[1] === 'start')
+    const sessionStart = calls.find(call => call.args[0] === 'session' && call.args[1] === 'start')?.args
     expect(sessionStart).toEqual(expect.arrayContaining([
       '--engine',
       'codex',
@@ -287,7 +291,7 @@ describe('e2e soul sampling static contracts', () => {
       '--input',
       '请自然处理这个请求。',
     ]))
-    expect(calls).toContainEqual(['session', 'events', 'invocation-1', '--worker', 'e2e-software-support'])
+    expect(calls.map(call => call.args)).toContainEqual(['session', 'events', 'invocation-1', '--worker', 'e2e-software-support'])
     expect(result).toEqual({
       assistantText: '请先补充商家原始描述、门店终端和涉资金状态。',
       events: [
@@ -335,9 +339,9 @@ describe('e2e soul sampling static contracts', () => {
   })
 
   it('continues when the CLI worker already exists in this sampling run', async () => {
-    const calls: string[][] = []
-    const runCli = async (args: string[]): Promise<string> => {
-      calls.push(args)
+    const calls: Array<{ args: string[], env?: Record<string, string | undefined> }> = []
+    const runCli = async (args: string[], env?: Record<string, string | undefined>): Promise<string> => {
+      calls.push({ args, env })
       if (args[0] === 'worker' && args[1] === 'create')
         throw new Error('fleet worker already exists: e2e-software-support')
       if (args[0] === 'workspace' && args[1] === 'create')
@@ -356,8 +360,11 @@ describe('e2e soul sampling static contracts', () => {
       scope: { appId: 'software-support', workerId: 'e2e-software-support' },
     })
 
-    expect(calls).toContainEqual(['worker', 'create', 'e2e-software-support', '--app', 'software-support'])
-    expect(calls).toContainEqual([
+    expect(calls).toContainEqual({
+      args: ['worker', 'create', 'e2e-software-support', '--app', 'software-support'],
+      env: expect.objectContaining({ [INTERNAL_OFFICIAL_SOUL_CATALOG_VIEW_ENV]: 'dev-sampling' }),
+    })
+    expect(calls.map(call => call.args)).toContainEqual([
       'workspace',
       'create',
       '--worker',

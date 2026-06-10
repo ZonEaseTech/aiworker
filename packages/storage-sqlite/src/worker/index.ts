@@ -711,6 +711,7 @@ export function listWorkspaces(workerId?: string, limit = 200): WorkspaceRow[] {
 
 export function createSession(input: CreateSessionInput): SessionRow {
   const now = input.at ?? new Date().toISOString()
+  assertNoLiteralSecrets(input.title, 'sessions.title')
   assertNoLiteralSecrets(input.metadataJson ?? {}, 'sessions.metadataJson')
   assertNoSoulOwnedPayloads(input.metadataJson ?? {}, 'sessions.metadataJson')
   getWorkerDb().insert(schema.sessions).values({
@@ -740,6 +741,8 @@ export function updateSession(input: UpdateSessionInput): SessionRow {
     assertNoLiteralSecrets(input.metadataJson, 'sessions.metadataJson')
     assertNoSoulOwnedPayloads(input.metadataJson, 'sessions.metadataJson')
   }
+  if (Object.hasOwn(input, 'title') && input.title !== undefined)
+    assertNoLiteralSecrets(input.title, 'sessions.title')
   const has = (key: keyof UpdateSessionInput) => Object.hasOwn(input, key)
   getWorkerDb().update(schema.sessions).set({
     endedAt: has('endedAt') ? input.endedAt ?? null : existing.endedAt,

@@ -82,10 +82,14 @@ export {
   LocalWorkspaceFiles,
 } from './worker/files'
 export {
+  CREDENTIAL_PROBEABLE_ENGINE_IDS,
+  type InspectEngineCredential,
+  inspectLocalEngineCredential,
   LOCAL_ENGINE_DEFINITIONS,
   type LocalEngineDefinition,
   LocalEngineResolutionError,
   type ResolvedLocalCliEngine,
+  resolveEngineAuthReadiness,
   resolveLocalCliEngine,
   scanLocalEngines,
   scanLocalEnginesFromCommands,

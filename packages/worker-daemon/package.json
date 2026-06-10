@@ -11,6 +11,10 @@
     "./bootstrap": {
       "types": "./src/modes/worker.ts",
       "import": "./src/modes/worker.ts"
+    },
+    "./settings": {
+      "types": "./src/modes/worker/settings.ts",
+      "import": "./src/modes/worker/settings.ts"
     }
   },
   "main": "./src/index.ts",

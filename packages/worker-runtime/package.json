@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./internal/official-soul-catalog": {
+      "types": "./src/soul-app/official-definitions.ts",
+      "import": "./src/soul-app/official-definitions.ts"
     }
   },
   "main": "./src/index.ts",

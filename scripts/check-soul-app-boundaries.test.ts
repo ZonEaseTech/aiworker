@@ -58,6 +58,36 @@ describe('check-soul-app-boundaries', () => {
     expect(discoveryTripwireError(0, 0)).toBeNull()
   })
 
+  // REVERSAL (not regression protection): peer 77901dfe gated public `worker create`
+  // to the shipped (freeform-only) catalog and required dev-sampling env for the four
+  // domain Souls. Option B makes every first-party Soul public-selectable, so the
+  // dev-only catalog gate is removed; this asserts the gate no longer fires.
+  test('does not flag public worker create scripts for any first-party Soul (catalog reversal)', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
+    try {
+      const scriptsDir = join(tempRoot, 'scripts')
+      mkdirSync(scriptsDir, { recursive: true })
+      writeFileSync(join(scriptsDir, 'public-create.ts'), [
+        'export const freeform = ["worker", "create", "w-freeform", "--app", "aiworker-freeform"]',
+        'export const google = ["worker", "create", "w-google", "--app", "google-ads"]',
+        'export const hr = ["worker", "create", "w-hr", "--app", "hr-manager"]',
+        '',
+      ].join('\n'))
+
+      const result = spawnSync('bun', [resolve(repoRoot, 'scripts/check-soul-app-boundaries.ts')], {
+        cwd: tempRoot,
+        encoding: 'utf8',
+      })
+
+      expect(result.status).toBe(0)
+      expect(result.stderr).not.toContain('worker create --app')
+      expect(result.stderr).not.toContain('dev-sampling')
+    }
+    finally {
+      rmSync(tempRoot, { force: true, recursive: true })
+    }
+  })
+
   test('catches a Soul App Host-private import located outside src/', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'aiworker-boundary-'))
     try {

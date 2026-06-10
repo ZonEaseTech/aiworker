@@ -164,8 +164,15 @@ Host (Phase 2) owns only control-plane metadata:
 
 Host must not own session, invocation, projection, engine processes, domain
 state, or secrets. A Worker must not depend on Host to run. Worker packages must
-not import Host packages — a runtime-direction rule retained even while the Host
-plane is dormant in v1.
+not import Host packages — a runtime-direction rule retained because the Host
+plane is a Phase 2 control plane and stays off the v1 Worker runtime hot path.
+
+Current implementation note: the v1 standalone Worker and current Phase 2
+bootstrap slice keep connector authorization, permission allocation,
+gateway/profile sync, and rollout/rollback execution as deferred governance
+work. The current Host assignment storage/API stores provisioning, readiness,
+access, lifecycle, and Soul release identity only; it must not half-wire
+governance payloads into the v1 Worker runtime or current assignment DB/API.
 
 ## Daemon Topology (daemon-per-worker)
 
@@ -199,8 +206,8 @@ The v1 top-level shape is:
 apps/
   worker-cli/
   worker-web/
-  host-cli/      (Phase 2, dormant stub)
-  host-web/      (Phase 2, dormant stub)
+  host-cli/      (Phase 2 control plane; off v1 Worker runtime hot path)
+  host-web/      (Phase 2 control plane; off v1 Worker runtime hot path)
 
 souls/
   aiworker-freeform/
@@ -208,10 +215,11 @@ souls/
 packages/
   worker-runtime/
   worker-daemon/
-  host-control/             (Phase 2, dormant stub)
-  worker-control-protocol/  (Phase 2, dormant stub)
+  host-control/             (Phase 2 control plane; off v1 Worker runtime hot path)
+  worker-control-protocol/  (Phase 2 control protocol; off v1 Worker runtime hot path)
   soul-descriptor/
   soul-sdk/
+  cli-doctor/
   engine-bridge/
   engine-projection/
   storage-sqlite/
@@ -225,9 +233,10 @@ autonomous runtime; `host-*` owns the Phase 2 control plane; shared capability
 packages keep their names and are consumed by Workers. The descriptor-protocol
 package is `soul-descriptor` and the authoring SDK is `soul-sdk`; both drop the
 retired `soul-protocol` / `soul-app-sdk` "soul-as-app" names. `worker-*` packages must not
-import `host-*` packages. For v1 strong acceptance, Freeform is the only shipped
-Soul; retired HR/QA app-local source trees stay deleted until they are re-authored
-as descriptor-producing `souls/*` packages.
+import `host-*` packages. Freeform is the zero-config bootstrap default and the
+strong v1 acceptance Soul; the first-party domain Souls (`google-ads`,
+`hr-manager`, `product-manager`, `software-support`) ship as descriptor-producing
+`souls/*` templates alongside it and are selectable at `worker create`.
 
 The Workbench has no package of its own: it lives in `apps/worker-web`, composed
 from `packages/ui` primitives. The retired `soul-workbench` and `soul-app-runtime`
@@ -247,8 +256,10 @@ The Host/Soul boundary is descriptor-only. A Worker installs and runs a Soul fro
 source, import Soul private modules, or interpret domain fields.
 
 Descriptor v1 is intentionally minimal: `protocol`, `identity`, `engine` asset
-refs and engine targets. It carries no workbench, no app-owned API, no
-capabilities, and no domain business concepts.
+refs and engine targets. `identity.description?` is optional display metadata,
+not a capability, permission, API, or business workflow contract. The descriptor
+carries no workbench, no app-owned API, no capabilities, and no domain business
+concepts.
 
 The Worker owns and renders its Workbench directly. v1 has no micro-app, no
 mounted-workbench resolution, and no Soul-provided UI. The session chat is
@@ -314,6 +325,13 @@ chat, and archive.
 
 HR and QA remain first-party Soul identities, but they migrate after Freeform as
 descriptor-producing templates and do not block the v1 framework loop.
+
+Selectability is broader than strong acceptance: public `worker create` may select
+any first-party Soul — Freeform plus the `google-ads`, `hr-manager`,
+`product-manager`, and `software-support` templates — and any expert-authored Soul
+installed through `app install`. The `shipped` catalog view stays the zero-config
+`aiworker start` bootstrap default; the `dev-sampling` view stays an internal
+sampling alias. All first-party descriptors ship in the published CLI package.
 
 ## Destructive Migration Rules
 

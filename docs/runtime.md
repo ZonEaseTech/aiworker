@@ -43,16 +43,18 @@ start the service. `aiworker start` (the default command),
 ensures a single active Worker bound to the bundled official Freeform Soul exists
 — installing the bundled descriptor and creating the Worker when none is present,
 reusing the existing Worker otherwise — before starting or restarting the service.
-The command differences are process shape and browser convenience only:
-`aiworker start` runs the daemon in background and may open the local Workbench
-URL by default, `aiworker daemon start` runs the same service in background
-without opening the browser, and `aiworker daemon foreground` runs it in the
-current process without opening the browser. The bootstrap convenience lives in
-the CLI service-start commands. At the package layer, the daemon stays passive and never
+The command differences are process shape only:
+`aiworker start` runs the daemon in background, `aiworker daemon start` runs the
+same service in background, and `aiworker daemon foreground` runs it in the
+current process. None of the service-start commands opens a browser or Workbench
+URL. Browser/Workbench launch belongs to `aiworker open`. The bootstrap
+convenience lives in the CLI service-start commands. At the package layer, the daemon stays passive and never
 auto-creates a Worker. `packages/worker-daemon` does not create Workers for
 programmatic daemon bootstrap. To run a different Soul, install it and create the
 Worker explicitly (`aiworker app install` then `aiworker worker create --app
-<appId>`) before the service-start command reuses it.
+<appId>`) before the service-start command reuses it. Public `worker create` lists
+every first-party Soul plus installed apps; with no `--app` it opens an interactive
+selector, while `--app <appId>` stays non-interactive for scripts and CI.
 
 The Workbench web is the single active Worker's surface: it shows the bound Soul,
 has no create-Worker or Soul-catalog UI, and its empty states are the first-run

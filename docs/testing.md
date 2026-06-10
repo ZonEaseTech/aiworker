@@ -184,6 +184,7 @@ Coverage status values:
 | Worker autonomy / Host control plane | `docs/architecture.md`, `AGENTS.md` | `bun run docs:check`, `bun run test:contracts` | docs+tests |
 | Phase 2 Soul distribution MVP | `docs/architecture.md`, `docs/protocol.md`, `docs/runtime.md` | docs check, host-control assignment tests, future Phase 2 journey proof | docs+tests |
 | Host Soul release registry (publish/list, registry-backed options) | `docs/architecture.md`, `docs/protocol.md` | `packages/storage-sqlite` `host/soul-releases.test.ts`, `apps/host-cli` `host-server.test.ts` (`/api/host/soul-releases` + options), `host-options.test.ts`, `aiworker-host.test.ts` (`soul publish`/`soul list`/seed), `apps/host-web` SoulsPanel test | docs+tests |
+| Phase 2 governance propagation | `docs/protocol.md`, `docs/architecture.md` | deferred to next Phase 2 governance slice; no v1 Worker runtime hook, Worker broker route, or partial propagation path | docs-only |
 | Phase 2.1 Worker Access Tunnel | `docs/architecture.md`, `docs/protocol.md`, `docs/runtime.md` | canonical wording + `inversion-guards` baseline; host/worker tunnel tests and browser proof added by later implementation tasks | docs+tests baseline |
 | Descriptor-only Host/Soul boundary | `docs/protocol.md`, `docs/soul-authoring.md` | `packages/soul-descriptor` tests, architecture tests | docs+tests |
 | Worker-owned workbench | `docs/architecture.md`, `docs/runtime.md` | browser Freeform proof, refactor-contract tests | docs+tests |
@@ -195,6 +196,7 @@ Coverage status values:
 | Soul authoring contract | `docs/soul-authoring.md` | SDK and Freeform contract tests | docs+tests |
 | Worker metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
 | Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
+| Public worker create catalog policy | `docs/architecture.md`, `docs/runtime.md` | `apps/worker-cli/src/aiworker.test.ts` public-create catalog test, `scripts/check-soul-app-boundaries.test.ts` reversal guard | docs+tests |
 | BYOK execution-mode deviation and secret boundary | `docs/runtime.md` | settings literal-secret rejection test, worker-daemon worker config tests, docs check | docs+tests |
 
 ## Worker Autonomy Inversion Guards
@@ -304,6 +306,11 @@ The product acceptance criteria are:
 - governance: assignment records carry only Soul version identity, connector
   authorization, permissions, gateway/profile refs, and lifecycle/provisioning
   metadata;
+- current-slice governance deferral: until the dedicated Phase 2 governance
+  slice lands, connector authorization, permission allocation, gateway/profile
+  sync, and rollout/rollback execution remain target-contract metadata only; the
+  current Host assignment DB/API stores provisioning, readiness, access,
+  lifecycle, and Soul release identity, not those governance payloads;
 - Phase 2 provisioning: aissh success is not ready until Worker check-in and access ready.
 - remote aissh target rejects loopback callback URLs.
 - Worker access: `/workers/:workerId` is employee navigation through Worker Access Adapter, not Host-rendered UI.
@@ -336,9 +343,10 @@ exit gate per phase — the forcing function that turns "the code exists" into
 release status that satisfies them (specific release-candidate tags, host
 addresses, live-instance counts) is tracked in project memory, not here.
 
-- v1 standalone substrate: zero-config `aiworker start` on a single service
-  port, and a green `bun run release:check` that includes the standalone
-  Freeform browser proof.
+- v1 standalone substrate: zero-config `aiworker start` starts the daemon/runtime
+  on a single service port without opening a browser; `aiworker open` owns
+  browser/Workbench URL launch; and a green `bun run release:check` includes the
+  standalone Freeform browser proof.
 - Phase 2 distribution MVP: the first real employee is onboarded through the
   managed enterprise-access boundary — a real Host URL, not a localhost or
   dev-static shortcut — and completes a native-engine real round, with at least
@@ -388,9 +396,10 @@ Landed teardown:
   list); render the workspace tree with nested sessions and the session chat
   directly in the worker Workbench;
 - implement the `aiworker start` zero-config entry (ensure a single active
-  Freeform-bound Worker, start the daemon, open the local Workbench URL) and make
-  the Workbench empty states the first-run experience (create-first-workspace,
-  start-first-session); remove `apps/worker-web/src/worker/studio/first-run-soul-app-home.tsx`;
+  Freeform-bound Worker and start the daemon/runtime without opening a browser;
+  `aiworker open` owns local Workbench URL launch) and make the Workbench empty
+  states the first-run experience (create-first-workspace, start-first-session);
+  remove `apps/worker-web/src/worker/studio/first-run-soul-app-home.tsx`;
 - derive workspace roots under the Worker home (`<worker-home>/workspaces/<id>`);
   remove the client-chosen `rootPath` parameter and the open-rootPath impl from
   workspace creation (AIWorker is not a developer tool pointed at arbitrary repos);
@@ -401,7 +410,8 @@ Landed teardown:
   wording with "Soul" across source and output;
 - add worker-config overlay content editing for skills, MCP, and entry files;
 - keep the Host plane (`host-cli`, `host-web`, `host-control`,
-  `worker-control-protocol`) as dormant Phase 2 stubs;
+  `worker-control-protocol`) as Phase 2 control-plane surfaces that stay off the
+  v1 Worker runtime hot path;
 - reshape the `descriptor-v1` parser tests and the `apps/worker-web` mounted-render
   guards to the worker-owned model;
 - add worker-owns-workbench and two-plane zero-intrusion architecture guards.
@@ -464,8 +474,8 @@ stated. All three were initially deferred, then resolved in the follow-up round
    `HostedSoulAppApi` type, the `apiForDescriptor`/`permissionsForDescriptor`
    helpers, and the settings-dialog block that rendered them (plus the now-orphaned
    `soulPacks` i18n copy) were removed. The Phase-2 `SoulAppPermission` type and the
-   `SoulAppScopedContext` control-protocol interfaces (consumed by the dormant Host
-   plane) are intentionally retained.
+   `SoulAppScopedContext` control-protocol interfaces (consumed by the Phase 2 Host
+   control plane) are intentionally retained.
 
 The 2026-06-03 audit also fixed a cosmetic nit outside these three: the CLI
 release smoke PASS messages used retired wording ("Soul Apps", "Host Web/API");

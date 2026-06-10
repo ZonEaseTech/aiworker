@@ -1,5 +1,5 @@
 import type { HostedSoulApp } from '@zonease/aiworker-soul-descriptor'
-import type { OfficialSoulAppDefinition } from './official-definitions'
+import type { OfficialSoulAppDefinition, OfficialSoulCatalogView } from './official-definitions'
 import type { SoulAppRegistryContext } from './registry'
 
 import path from 'node:path'
@@ -15,8 +15,14 @@ import {
   installSoulAppFromPath,
 } from './registry'
 
-export { OFFICIAL_SOUL_APPS }
-export type { OfficialSoulAppDefinition }
+export {
+  ALL_FIRST_PARTY_OFFICIAL_SOUL_APPS,
+  DEV_SAMPLING_OFFICIAL_SOUL_APPS,
+  OFFICIAL_SOUL_APPS,
+  OFFICIAL_SOUL_CATALOG_VIEWS,
+  SHIPPED_OFFICIAL_SOUL_APPS,
+} from './official-definitions'
+export type { OfficialSoulAppDefinition, OfficialSoulCatalogView }
 
 export interface OfficialSoulAppBootstrapOptions extends SoulAppRegistryContext {
   definitions?: readonly OfficialSoulAppDefinition[]

@@ -1,7 +1,8 @@
 import type { LocalEngineReadinessSettings, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-soul-descriptor'
+import type { InspectEngineCredential } from '@zonease/aiworker-worker-runtime'
 import { AppError, localSettingsConfigSchema } from '@zonease/aiworker-soul-descriptor'
 import { getSetting, listSettings, setSetting } from '@zonease/aiworker-storage-sqlite/worker'
-import { scanLocalEngines } from '@zonease/aiworker-worker-runtime'
+import { inspectLocalEngineCredential, resolveEngineAuthReadiness, scanLocalEngines } from '@zonease/aiworker-worker-runtime'
 
 export const LOCAL_SETTINGS_KEY = 'local-settings'
 
@@ -14,6 +15,16 @@ let activeEngineScanner: EngineScanner = scanLocalEngines
 
 export function setEngineScanner(scanner: EngineScanner | null): void {
   activeEngineScanner = scanner ?? scanLocalEngines
+}
+
+// 凭证探测的依赖注入缝:默认始终是真实的 inspectLocalEngineCredential(生产路径字节不变),
+// 测试通过 setEngineAuthProbe 注入 fake,避免在 defaultLocalSettings 的引擎选择点真读
+// ~/.codex/auth.json 等凭证文件。镜像 setEngineScanner 的模块级单例模式;daemon shutdown
+// 不持有它,由测试 afterEach 复位回真实探测以隔离测试。
+let activeEngineAuthProbe: InspectEngineCredential = inspectLocalEngineCredential
+
+export function setEngineAuthProbe(probe: InspectEngineCredential | null): void {
+  activeEngineAuthProbe = probe ?? inspectLocalEngineCredential
 }
 
 // daemon 路由与 defaultLocalSettings 共用的扫描入口,始终走当前激活的扫描器。
@@ -158,7 +169,12 @@ function normalizePendingMcpSettings(settings: LocalSettingsConfig): LocalSettin
 
 function defaultLocalSettings(): LocalSettingsConfig {
   const engines = activeEngineScanner()
-  const firstInstalled = engines.find(engine => engine.installed)
+  // auth-aware 默认:先选已登录(authReady)引擎,其次回退首个 installed(零配置不破),
+  // 一个都没装才退 byok 引导态。扫描器按 LOCAL_ENGINE_DEFINITIONS 顺序返回,故同为
+  // authReady 时 tiebreak 稳定(codex 先于 claude-code)。installed-but-unauthed 仍走
+  // local-cli,引导态(doctor warn / 首回合可操作引导)由 1b-2 / 1b-4 在下游交付。
+  const authReady = engines.find(engine => resolveEngineAuthReadiness(engine, activeEngineAuthProbe))
+  const selected = authReady ?? engines.find(engine => engine.installed)
   return {
     appearance: 'system',
     byok: {
@@ -168,9 +184,9 @@ function defaultLocalSettings(): LocalSettingsConfig {
       provider: 'openai-compatible',
     },
     connectors: defaultConnectors(),
-    engineId: firstInstalled?.id ?? 'codex',
+    engineId: selected?.id ?? 'codex',
     engines,
-    executionMode: firstInstalled ? 'local-cli' : 'byok',
+    executionMode: selected ? 'local-cli' : 'byok',
     externalMcpServers: [
       { command: '', enabled: false, id: 'team-context', name: 'Team context MCP' },
       { command: '', enabled: false, id: 'evidence-search', name: 'Evidence search MCP' },
