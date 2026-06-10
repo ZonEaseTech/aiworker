@@ -362,6 +362,9 @@ function createClaudeStreamHandler(onEvent: (event: ParsedEngineEvent) => void):
     if (!obj)
       return
     if (obj.type === 'system' && obj.subtype === 'init') {
+      const sessionId = readString(obj.session_id)
+      if (sessionId)
+        onEvent({ ref: { id: sessionId, target: 'claude' }, type: 'external_session_ref' })
       onEvent({
         detail: readString(obj.model) || undefined,
         label: 'initializing',

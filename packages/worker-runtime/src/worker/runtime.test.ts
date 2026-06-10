@@ -1123,7 +1123,13 @@ describe('LocalWorkerRuntime', () => {
           engineId: input.engineId,
           prompt: input.prompt ?? '',
         })
-        return { summary: `Finished ${input.invocationId}` }
+        // codex is resume-capable, so a continuation now requires a prior native session
+        // ref; return one (mirroring real codex thread capture) so the frozen-engine
+        // continuation resumes instead of tripping ENGINE_SESSION_REF_MISSING.
+        return {
+          summary: `Finished ${input.invocationId}`,
+          externalSessionRef: JSON.stringify({ id: `thread-${input.invocationId}`, target: 'codex' }),
+        }
       },
     })
     await workerRuntime.init()

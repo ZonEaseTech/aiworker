@@ -19,6 +19,8 @@ export interface LocalExecutorInput {
   onProcessHandle?: (handle: LocalExecutorProcessHandle) => void
   onEvent?: (event: LocalExecutorEvent) => void
   prompt: string
+  /** Opaque external session ref captured from a prior invocation, used to resume the native engine session. */
+  resumeRef?: Record<string, unknown> | null
   signal?: AbortSignal
   sessionId: string
   workspaceId: string
@@ -82,6 +84,11 @@ interface LocalEngineBuildArgsInput {
   reasoning: string
 }
 
+/** Extract the opaque native-session id from a captured resume ref, '' when absent. */
+function readResumeId(resumeRef: Record<string, unknown> | null | undefined): string {
+  return resumeRef ? readString(resumeRef.id, '') : ''
+}
+
 interface LocalEngineDefinition {
   buildArgs: (input: LocalEngineBuildArgsInput) => string[]
   env?: Record<string, string>
@@ -91,13 +98,16 @@ interface LocalEngineDefinition {
 
 const localEngineDefinitions: Record<string, LocalEngineDefinition> = {
   'claude-code': {
-    buildArgs({ command, model }) {
+    buildArgs({ command, input, model }) {
       const args = ['-p', '--output-format', 'stream-json', '--verbose']
       if (supportsHelpFlag(command, ['-p', '--help'], '--include-partial-messages'))
         args.push('--include-partial-messages')
       if (model && model !== 'default')
         args.push('--model', model)
       args.push('--permission-mode', 'bypassPermissions')
+      const resumeId = readResumeId(input.resumeRef)
+      if (resumeId)
+        args.push('--resume', resumeId)
       return args
     },
     name: 'Claude Code',
@@ -105,17 +115,33 @@ const localEngineDefinitions: Record<string, LocalEngineDefinition> = {
   },
   'codex': {
     buildArgs({ input, model, reasoning }) {
-      const args = [
-        'exec',
-        '--json',
-        '--skip-git-repo-check',
-        '--sandbox',
-        'workspace-write',
-        '-c',
-        'sandbox_workspace_write.network_access=true',
-        '-C',
-        input.workspaceRoot,
-      ]
+      const resumeId = readResumeId(input.resumeRef)
+      // `codex exec resume <id>` does not accept --sandbox/-C; sandbox is set via
+      // `-c sandbox_mode=...` and the working dir comes from the process cwd (workspaceRoot).
+      // The trailing `-` makes resume read the follow-up prompt from stdin (matching `codex exec`).
+      const args = resumeId
+        ? [
+            'exec',
+            'resume',
+            resumeId,
+            '--json',
+            '--skip-git-repo-check',
+            '-c',
+            'sandbox_mode=workspace-write',
+            '-c',
+            'sandbox_workspace_write.network_access=true',
+          ]
+        : [
+            'exec',
+            '--json',
+            '--skip-git-repo-check',
+            '--sandbox',
+            'workspace-write',
+            '-c',
+            'sandbox_workspace_write.network_access=true',
+            '-C',
+            input.workspaceRoot,
+          ]
       if (process.env.AIWORKER_CODEX_DISABLE_PLUGINS === '1' || process.env.OD_CODEX_DISABLE_PLUGINS === '1')
         args.push('--disable', 'plugins')
       if (process.env.AIWORKER_CODEX_IGNORE_USER_CONFIG === '1')
@@ -124,6 +150,8 @@ const localEngineDefinitions: Record<string, LocalEngineDefinition> = {
         args.push('--model', model)
       if (reasoning && reasoning !== 'default')
         args.push('-c', `model_reasoning_effort="${clampCodexReasoning(model, reasoning)}"`)
+      if (resumeId)
+        args.push('-')
       return args
     },
     name: 'Codex CLI',

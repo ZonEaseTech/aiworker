@@ -1758,7 +1758,10 @@ function createLocalExecutorBridgeAdapter(executor: LocalExecutor, target: strin
       return {
         callable: true,
         installed: true,
-        supportsNativeResume: false,
+        // Only engines that both capture a resumable session ref and accept a resume flag
+        // are resume-capable. Others stay false so a follow-up without a ref does not
+        // trip the bridge's ENGINE_SESSION_REF_MISSING guard (best-effort, no hard error).
+        supportsNativeResume: target === 'claude-code' || target === 'codex',
         supportsProtocolCancel: false,
         target,
       }
@@ -1785,6 +1788,10 @@ async function invokeLocalExecutorThroughBridge(
   const onProcessHandle = typeof request.onProcessHandle === 'function'
     ? request.onProcessHandle as (handle: unknown) => void
     : undefined
+  // The engine bridge resolves the latest prior session ref and spreads it onto the
+  // follow-up request as `externalSessionRef`; thread it into the executor so per-engine
+  // buildArgs can resume the native session (claude --resume / codex exec resume).
+  const resumeRecord = readRecord(request.externalSessionRef)
   const result = await executor.invoke({
     engineCommand: readNullableString(request.engineCommand),
     engineId: readString(request.engineTarget, fallbackTarget),
@@ -1793,6 +1800,7 @@ async function invokeLocalExecutorThroughBridge(
     onProcessHandle: onProcessHandle ? handle => onProcessHandle(handle) : undefined,
     onEvent: event => sink.event(bridgeEventFromLocalExecutorEvent(event, invocationId)),
     prompt: readString(request.prompt, ''),
+    resumeRef: Object.keys(resumeRecord).length > 0 ? resumeRecord : null,
     signal: request.signal instanceof AbortSignal ? request.signal : undefined,
     sessionId: readString(request.sessionId, ''),
     workspaceId: readString(request.workspaceId, ''),
