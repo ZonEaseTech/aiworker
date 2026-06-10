@@ -28,10 +28,10 @@ description: "Use inside an AIWorker checkout when a releasable change is ready 
 - **版本号 source of truth = 两个 `package.json`**：`apps/worker-cli/package.json` + `apps/host-cli/package.json` 的 `version` 字段。`dist/package.json` 由 `bun run build` 重生，不要手改。两处必须一致。
 - **发版唯一触发 = push `v*` tag**。`.github/workflows/release.yml` 只被 `tags: ['v*']` 驱动。合并到 `main` **不**发版（只跑 `lint.yml`）。没有 tag 就没有 npm 发布。
 - **渠道由 tag 名派生，不手改 workflow**：agent 选渠道 = 选 tag 名。见下表。`release.yml` 的「Derive npm dist-tag」步骤从 `GITHUB_REF_NAME` 解析，两处 `npm publish` 用派生出的 `--tag`。
-- **tag 名的版本号必须等于两个 `package.json` 的 `version`**（`v1.0.0-rc.5` ⇔ 两包都是 `1.0.0-rc.5`）。渠道从 **tag 名**派生、发布的版本号从 **package.json** 取，两者必须自洽，否则会把 rc 发进 `latest` 或把稳定版发进 `rc`。`release.yml` 在 `release:check` 前用「Assert git tag matches package versions」步骤 fail-fast 守这条：不一致秒级红、绝不发版。**bump（第 4 步）和打 tag（第 8 步）是两个独立动作，最易错位——务必让 tag 名 = 两包版本号。**
+- **tag 名的版本号必须等于两个 `package.json` 的 `version`**（`v1.0.0-rc.5` ⇔ 两包都是 `1.0.0-rc.5`）。渠道从 **tag 名**派生、发布的版本号从 **package.json** 取，两者必须自洽，否则会把 rc 发进 `latest` 或把稳定版发进 `rc`。`release.yml` 的两个 job(`release-worker`/`release-host`)各用「Assert git tag matches worker-cli/host-cli version」步骤 fail-fast 守这条：不一致秒级红、绝不发版。**bump（第 4 步）和打 tag（第 8 步）是两个独立动作，最易错位——务必让 tag 名 = 两包版本号。**
 - **npm 版本不可覆盖**：一旦某 `version` 发过，重发同版本必失败。改了就 bump，绝不复用版本号。
 - **带 rc tag 的发布分支若要合 main，必须 merge-commit 或 `--ff-only`，绝不 squash/rebase**（squash 会孤儿化已存在的 tag）。本闭环的常规姿势是「先合 main，再在 main 上打 tag」，分支本身不携带 tag，故常规 feature 分支用任意合并方式都可；只有当分支已被 rc tag 指向时才受此约束。
-- **`release:check` 是权威发版门**，由 CI 在 tag push 后跑（见 `release.yml`）。它必须精确等于 `docs/testing.md` 的 Current Release Gates 清单；改门要同步改 `docs/testing.md` + 根 `package.json`，否则 `docs:check` 红。
+- **发版门已拆成两道独立门**，由 CI 在 tag push 后并行跑（见 `release.yml`）：worker `release:check`（`release-worker` job）+ host `release:check:phase2`（`release-host` job）。两 job **无 `needs` 耦合**，host 门红只挡 host-cli 发布、不挡 worker-cli。`release:check` 须精确等于 `docs/testing.md` 的 worker gate 清单、`release:check:phase2` 须等于 Phase 2 gate 清单；改门要同步改 `docs/testing.md` + 根 `package.json`（+ `scripts/check-doc-contract.ts` 双门契约），否则 `docs:check`/`test:contracts` 红。注意：worker 门里的全仓 `build`/`typecheck`/`lint` 仍会因 host 的**编译/类型/lint**错误而红（有意为之，只隔离 host 的 **flaky 测试**）。
 - 改架构不为旧 E2E 妥协（见 `AGENTS.md`）。代码改动配聚焦契约测试，非 docs/instruction/纯格式的改动跑 code-review-graph。
 
 ## 渠道与版本号派生约定
@@ -114,8 +114,11 @@ git push origin <tag>         # 唯一发版触发
 ### 9. 监控 release.yml
 ```sh
 gh run watch                  # 跟最新 run
-# 顺序：install → playwright → assert tag==版本 → release:check → compile 4 binaries
-#       → package bundles → smoke artifacts → derive 渠道 → publish <pkg> → attach GH release
+# 两个并行 job(无 needs 耦合)：
+#   release-worker: install → playwright → assert tag==worker 版本 → release:check → compile 4 binaries
+#                   → package bundles → smoke artifacts → derive 渠道 → publish worker-cli → attach GH release
+#   release-host:   install → playwright → assert tag==host 版本 → release:check:phase2 → derive 渠道 → publish host-cli
+#   host 门红只挡 host-cli,不挡 worker-cli
 ```
 
 ### 10. 验证 npm 已发布（权威，轮询直到出现）
@@ -140,12 +143,12 @@ npm view @zonease/aiworker-cli dist-tags     # 确认进了预期渠道、latest
 - **`release:check` 绿但 `npm publish` 红**：常见 = 版本号已发过（不可覆盖，bump 后重来）/ `NPM_TOKEN`（GH secret）失效 / `--access public` 权限。查 run 日志对症。
 - **tag 已 push 但想改内容**：不要 force-move 已驱动过发布的 tag。bump 到下一个版本号重走。
 - **PR CI（lint.yml）红**：在分支上修，重 push，回第 6 步。
-- **`test` 门 flaky（并发负载偶发单测失败）**：`release:check` 的 `bun run --filter '*' test` 在并发/有遗留进程时会偶发单测失败（已知非确定性，非版本改动引入）。判别 = **隔离重跑该包**：`bun run --filter '<失败包>' test`；绿即 flake。flake 不是确定性失败，CI 干净 runner 更不易复现。`release:check` 失败发生在 publish **之前** = 零发布副作用，故 CI 上遇 flake 直接 `gh run rerun <run-id>` 重试**同一个 tag**（无需删 tag / bump）。只有确定性失败才走上面「删 tag、修、重打」。
+- **测试门 flaky（并发负载偶发失败）**：worker 门 `release:check` 的 `bun run test:worker`、host 门 `release:check:phase2` 的 `bun run test:host` + phase2 浏览器 spec（host-lifecycle tmux / phase2 三 spec）在并发/有遗留进程时会偶发失败（已知非确定性，非版本改动引入）。判别 = **隔离重跑该包**：`bun run --filter '<失败包>' test`；绿即 flake。flake 不是确定性失败，CI 干净 runner 更不易复现。门失败发生在 publish **之前** = 零发布副作用，故 CI 上遇 flake 直接 `gh run rerun <run-id>` 重试**同一个 tag**（无需删 tag / bump）。只有确定性失败才走上面「删 tag、修、重打」。host flake 现在只挡 `release-host` job、worker-cli 照常发。
 
 ## 关键文件锚点
 
-- `.github/workflows/release.yml` — tag 发版管线（assert tag==版本 → release:check → compile → package → smoke → derive 渠道 → publish → attach）。
-- `.github/workflows/lint.yml` — PR/push main 的 lint + web 门。
+- `.github/workflows/release.yml` — tag 发版管线，两个无 `needs` 耦合的并行 job：`release-worker`(release:check → compile → package → smoke → publish worker-cli → attach) + `release-host`(release:check:phase2 → publish host-cli)。
+- `.github/workflows/lint.yml` — PR/push main 的门：`lint` job(lint + web) + `checks` job(typecheck + test:contracts 确定性门)。
 - `apps/worker-cli/package.json` / `apps/host-cli/package.json` — 版本 source of truth。
-- 根 `package.json` `release:check` — 权威门聚合器，须等于 `docs/testing.md` Current Release Gates。
+- 根 `package.json` `release:check`(worker 门) + `release:check:phase2`(host 门) — 两个门聚合器，分别须等于 `docs/testing.md` 的 worker / Phase 2 gate 清单。
 - `docs/testing.md` — Current Release Gates + Release Exit Criteria（post-compile artifact proof）的 canonical 定义。
