@@ -219,7 +219,10 @@ promoted to real assertions when that plan lands.
 ## Current Release Gates
 
 Release confidence is split into two independent gates so a Phase 2 (Host) flake
-cannot block a worker release.
+cannot block a worker release. The split isolates host test flakiness only: the
+worker gate still runs repo-wide `typecheck`, `lint`, and `build`, so a
+deterministic host compile/type/lint error still blocks the worker gate by
+design — only host flaky tests move to the Phase 2 gate.
 
 Worker v1 release confidence is built from these gates:
 
