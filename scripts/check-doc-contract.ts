@@ -469,10 +469,12 @@ requireIncludes('docs/testing.md', [
   '## Release Exit Criteria',
   '## Browser Proof Scope',
   'bun run test:contracts',
-  'Current release confidence is built from these gates:',
-  'bun run docs:check\nbun run test:contracts\nbun run test:protocol\nbun run test:cli\nbun run test:browser:freeform\nbun run test:browser:phase2\nbun run typecheck\nbun run lint\nbun run build\nbun run smoke:dist-release\nbun run smoke:host-dist-release\nbun run smoke:standalone-release\nbun run smoke:standalone-runtime\nbun run smoke:npm-package\nbun run test\nbun run check',
-  '`bun run release:check` is the aggregator for this current release gate list.',
-  '`bun run release:check` must exactly aggregate the Current Release Gates.',
+  'Worker v1 release confidence is built from these gates:',
+  'bun run docs:check\nbun run test:contracts\nbun run test:protocol\nbun run test:cli\nbun run test:browser:freeform\nbun run typecheck\nbun run lint\nbun run build\nbun run smoke:dist-release\nbun run smoke:standalone-release\nbun run smoke:standalone-runtime\nbun run smoke:npm-package\nbun run test:worker',
+  'Phase 2 (Host) release confidence is built from these gates:',
+  'bun run build:host\nbun run test:browser:phase2\nbun run smoke:host-dist-release\nbun run test:host',
+  '`bun run release:check` is the aggregator for the worker gate list, and',
+  '`bun run release:check` must exactly aggregate the worker gate list and',
   'Tag release handoff must run post-compile artifact proof after `release:check`\nand before npm publish or GitHub release attachment.',
   'bun apps/worker-cli/scripts/package-release-bundles.ts\nbun apps/worker-cli/scripts/smoke-release-artifacts.ts',
   'The artifact smoke must verify checksums, required resources, descriptor references, executable mode, and current-platform `aiworker --version` startup.',
@@ -598,17 +600,14 @@ const expectedReleaseGateCommands = [
   'bun run test:protocol',
   'bun run test:cli',
   'bun run test:browser:freeform',
-  'bun run test:browser:phase2',
   'bun run typecheck',
   'bun run lint',
   'bun run build',
   'bun run smoke:dist-release',
-  'bun run smoke:host-dist-release',
   'bun run smoke:standalone-release',
   'bun run smoke:standalone-runtime',
   'bun run smoke:npm-package',
-  'bun run test',
-  'bun run check',
+  'bun run test:worker',
 ]
 const releaseGateCommands = documentedReleaseGateCommands()
 if (JSON.stringify(releaseGateCommands) !== JSON.stringify(expectedReleaseGateCommands)) {
@@ -633,6 +632,24 @@ if (JSON.stringify(releaseCheckCommands) !== JSON.stringify(releaseGateCommands)
     message: 'release:check must match Current Release Gates exactly',
   })
 }
+const expectedPhase2GateCommands = [
+  'bun run build:host',
+  'bun run test:browser:phase2',
+  'bun run smoke:host-dist-release',
+  'bun run test:host',
+]
+const phase2CheckCommands = packageJson.scripts?.['release:check:phase2']?.split(' && ') ?? []
+if (JSON.stringify(phase2CheckCommands) !== JSON.stringify(expectedPhase2GateCommands)) {
+  issues.push({
+    file: 'package.json',
+    message: `release:check:phase2 must list exactly: ${expectedPhase2GateCommands.join(', ')}`,
+  })
+}
+for (const command of expectedPhase2GateCommands) {
+  const scriptName = command.match(/^bun run ([\w:-]+)$/)?.[1]
+  if (scriptName && !packageJson.scripts?.[scriptName])
+    issues.push({ file: 'package.json', message: `Phase 2 release gate references missing root script: ${scriptName}` })
+}
 for (const testPath of documentedTestingPaths()) {
   for (const finding of documentedTestingCoverageFindings(testPath, packageJson)) {
     issues.push({
@@ -644,7 +661,7 @@ for (const testPath of documentedTestingPaths()) {
 const testingDoc = read('docs/testing.md')
 for (const requiredReleaseExitText of [
   '## Release Exit Criteria',
-  '`bun run release:check` must exactly aggregate the Current Release Gates',
+  '`bun run release:check` must exactly aggregate the worker gate list and',
   'Tag release handoff must run post-compile artifact proof after `release:check`',
   'bun apps/worker-cli/scripts/package-release-bundles.ts',
   'bun apps/worker-cli/scripts/smoke-release-artifacts.ts',
