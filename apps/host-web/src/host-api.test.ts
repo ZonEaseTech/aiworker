@@ -89,7 +89,7 @@ describe('createHostApiClient', () => {
         command: 'docker run aiworker-worker-asn_1 bun apps/worker-cli/src/aiworker.ts provision --token awp_[REDACTED]',
         targetRef: 'docker://local/default',
       },
-      deliveryStatus: 'delivered',
+      deliveryStatus: 'command_generated',
       provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --host http://host.test --token awp_[REDACTED]',
     }))
     const client = createHostApiClient({ baseUrl: '', fetch: fetchImpl })
@@ -111,7 +111,7 @@ describe('createHostApiClient', () => {
         command: 'docker run aiworker-worker-asn_1 bun apps/worker-cli/src/aiworker.ts provision --token awp_[REDACTED]',
         targetRef: 'docker://local/default',
       },
-      deliveryStatus: 'delivered',
+      deliveryStatus: 'command_generated',
       provisionCommand: 'bun apps/worker-cli/src/aiworker.ts provision --host http://host.test --token awp_[REDACTED]',
     })
 

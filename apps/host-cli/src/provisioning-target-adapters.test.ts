@@ -23,7 +23,9 @@ describe('provisioning target adapters', () => {
       targetRef: 'srv-1',
     })
 
-    expect(delivery.deliveryStatus).toBe('delivered')
+    // 诚实状态：Host 只生成了投递命令、尚未确认 Worker 落地，绝不谎报 'delivered'（false-green）。
+    // 真执行（executed/failed）随切片 2 Phase 2 的 first-provision 引导落地。
+    expect(delivery.deliveryStatus).toBe('command_generated')
     expect(delivery.deliveryReceipt.command).toContain('aissh exec srv-1')
     expect(delivery.deliveryReceipt.command).toContain('--reason=')
     expect(delivery.provisionCommand).toContain('--host https://dev-host.example.com')
