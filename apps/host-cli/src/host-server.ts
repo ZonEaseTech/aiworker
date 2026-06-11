@@ -1020,9 +1020,9 @@ function readAssignmentMetadata(value: unknown): {
 
 // Phase 3: which gateway profile to mint from for this assignment. Reads an
 // optional `profile` name from assignment metadata (no schema column / no
-// gatewayProfileRef envelope — that ref is on the worker-config line, not the
-// credential line). Returns undefined when absent so the broker falls back to
-// its OWN configured default profile (which need not be literally "default").
+// deferred worker-config profile-ref envelope — that ref lives on the
+// worker-config control line, not this credential line). Returns undefined when
+// absent so the broker falls back to its OWN configured default profile.
 function resolveAssignmentGatewayProfile(metadataJson: unknown): string | undefined {
   if (metadataJson && typeof metadataJson === 'object') {
     const value = (metadataJson as Record<string, unknown>).profile

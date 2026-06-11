@@ -54,8 +54,15 @@ export interface EngineCredentialSink {
  * Providers the worker eagerly asks the Host for on every (re)connect. The Host
  * only grants the ones it has a configured profile for; unconfigured providers
  * are harmlessly ignored. Sent only when a credential store is wired.
+ *
+ * org-key v1 = `anthropic` only. codex (the sole openai consumer) is
+ * documented-unsupported (see engine-credential-store), so eagerly pulling the
+ * org's OpenAI key to every worker — where it could never be injected — would
+ * expand the secret blast radius for zero benefit. The `openai` provider stays in
+ * the protocol enum + Host broker (slice-3 drop-in symmetry lives at the protocol
+ * layer); it is simply not eagerly acquired by the v1 worker runtime.
  */
-const EAGER_CREDENTIAL_PROVIDERS: readonly CredentialProviderKind[] = ['anthropic', 'openai']
+const EAGER_CREDENTIAL_PROVIDERS: readonly CredentialProviderKind[] = ['anthropic']
 
 /**
  * Refresh margin: renew this far before the credential's stated expiry.
@@ -184,7 +191,8 @@ export interface ConnectWorkerAccessTunnelInput {
   clearPersistedAccess?: (workerHome: string) => Promise<void>
   /**
    * Phase 3 LLM 凭证投递的写入端（= daemon 进程级 EngineCredentialStore）。提供时：hello 成功后
-   * 紧跟着对 anthropic + openai 各发一个 credential_acquire（Host 只回它配置过的 provider 的 grant）；
+   * 紧跟着对 EAGER_CREDENTIAL_PROVIDERS（org-key v1 = 仅 anthropic；codex/openai documented-unsupported，
+   * 见 engine-credential-store）各发一个 credential_acquire（Host 只回它配置过的 provider 的 grant）；
    * 收到 credential_grant 写入 store 并按 expiresAt 安排续期；4401 撤销时 clear()。不提供则整条
    * 凭证链路 no-op（向后兼容既有调用方）。
    */

@@ -396,6 +396,38 @@ printf '%s\\n' '{"type":"result","result":"ok"}'
     expect(env).toContain('ANTHROPIC_AUTH_TOKEN=org-key-anthropic')
   })
 
+  it('P3-T4: redacts an injected anthropic org key that the engine echoes to stdout.log', async () => {
+    // The real worker-side carrier path: a credential injected via credentialProvider
+    // (third env layer) is read by the native engine, which may echo it. The executor
+    // writes engine stdout to stdout.log AFTER redactEngineLog (shared engine-bridge
+    // SECRET_VALUE_RE). The org key v1 actually injects is sk-ant- shaped, which the
+    // `sk-` branch redacts. This is the meaningful sentinel: inject → engine echoes →
+    // disk → must be [REDACTED], never the raw token.
+    const sentinel = 'sk-ant-SENTINEL-org-key-do-not-leak-0123456789'
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+printf 'leaking ANTHROPIC_AUTH_TOKEN=%s into output\\n' "\${ANTHROPIC_AUTH_TOKEN:-}"
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"claude-s-1"}'
+printf '%s\\n' '{"type":"result","result":"ok"}'
+`)
+
+    const input = { ...baseInput(command, workspaceRoot), engineId: 'claude-code', engineCommand: command }
+    await createExternalEngineExecutor({
+      credentialProvider: {
+        envFor: (engineId): Record<string, string> => engineId === 'claude-code'
+          ? { ANTHROPIC_BASE_URL: 'https://gw.example/anthropic', ANTHROPIC_AUTH_TOKEN: sentinel }
+          : {},
+      },
+    }).invoke(input)
+
+    const stdoutLog = await readFile(path.join(input.invocationRoot, 'stdout.log'), 'utf8')
+    expect(stdoutLog).toContain('[REDACTED]')
+    expect(stdoutLog).not.toContain(sentinel)
+    expect(stdoutLog).not.toContain('SENTINEL-org-key-do-not-leak')
+  })
+
   it('does not inject credential env for cursor (engineId excluded by provider)', async () => {
     const workspaceRoot = path.join(makeRoot(), 'workspace')
     await mkdir(workspaceRoot, { recursive: true })

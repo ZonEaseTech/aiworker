@@ -1023,7 +1023,11 @@ describe('worker provision check-in client', () => {
     expect(calls).toBe(0)
   })
 
-  it('eagerly requests anthropic + openai credentials after hello on connect', async () => {
+  it('eagerly requests only the anthropic credential after hello on connect (codex/openai not injected in v1)', async () => {
+    // org-key v1 injects anthropic only: codex is documented-unsupported (see
+    // engine-credential-store), and codex is the sole openai consumer, so eagerly
+    // pulling the org's OpenAI key to every machine would expand the blast radius
+    // for zero benefit. Only anthropic is acquired.
     const sent: unknown[] = []
     const socket = fakeWebSocket(new URL('wss://host.example/api/provision/access'), sent)
     await connectWorkerAccessTunnel({
@@ -1039,7 +1043,6 @@ describe('worker provision check-in client', () => {
     const acquires = sent.filter(frame => (frame as { type: string }).type === 'credential_acquire')
     expect(acquires).toEqual([
       { type: 'credential_acquire', providerKind: 'anthropic' },
-      { type: 'credential_acquire', providerKind: 'openai' },
     ])
   })
 
@@ -1100,11 +1103,14 @@ describe('worker provision check-in client', () => {
     })
 
     // Expiry 10 minutes out → a refresh is scheduled (well under the sane cap).
+    // A short-TTL grant is the slice-3 / gateway-minted case (org-key uses a
+    // far-future placeholder); the refresh mechanism is provider-agnostic, exercised
+    // here with anthropic (the only v1-injected provider).
     await socket.dispatchMessage({
       type: 'credential_grant',
-      providerKind: 'openai',
-      gatewayUrl: 'https://gw.example/openai',
-      token: 'short-ttl-openai',
+      providerKind: 'anthropic',
+      gatewayUrl: 'https://gw.example/anthropic',
+      token: 'short-ttl-anthropic',
       expiresAt: new Date(now + 10 * 60_000).toISOString(),
     })
 
@@ -1112,7 +1118,7 @@ describe('worker provision check-in client', () => {
     expect(refresh.scheduled[0]!.delayMs).toBeGreaterThan(0)
     refresh.fire(0)
     expect(sent.filter(frame => (frame as { type: string }).type === 'credential_refresh')).toEqual([
-      { type: 'credential_refresh', providerKind: 'openai' },
+      { type: 'credential_refresh', providerKind: 'anthropic' },
     ])
   })
 
@@ -1169,17 +1175,16 @@ describe('worker provision check-in client', () => {
       startReconnectTimer: reconnect.startReconnectTimer,
     })
 
-    // First socket: hello + two acquires.
-    expect(socketSents[0]!.filter(f => (f as { type: string }).type === 'credential_acquire')).toHaveLength(2)
+    // First socket: hello + the single anthropic acquire (org-key v1 injects anthropic only).
+    expect(socketSents[0]!.filter(f => (f as { type: string }).type === 'credential_acquire')).toHaveLength(1)
 
-    // Transient close → reconnect opens a fresh socket which re-sends hello + acquires.
+    // Transient close → reconnect opens a fresh socket which re-sends hello + acquire.
     sockets[0]!.dispatchClose()
     reconnect.fire()
     expect(sockets).toHaveLength(2)
     expect(socketSents[1]![0]).toEqual({ type: 'hello', assignmentId: 'asn_1', token: 'awt_secret', workerId: 'wkr_82' })
     expect(socketSents[1]!.filter(f => (f as { type: string }).type === 'credential_acquire')).toEqual([
       { type: 'credential_acquire', providerKind: 'anthropic' },
-      { type: 'credential_acquire', providerKind: 'openai' },
     ])
   })
 

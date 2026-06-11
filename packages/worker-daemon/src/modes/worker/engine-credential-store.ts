@@ -15,13 +15,38 @@ export interface EngineCredential {
 /**
  * engineId → LLM provider mapping (org-key v1):
  * - claude-code → anthropic
- * - codex       → openai
+ * - codex       → none (documented-unsupported; see below)
  * - cursor      → none (deliberately excluded; its CLI does not route an externally supplied key)
  * - everything else (gemini/opencode/qwen/…) → none (not in the org-key v1 injection list)
+ *
+ * codex is deliberately UNMAPPED in org-key v1. The codex CLI resolves auth between
+ * a stored ChatGPT OAuth login (auth.json in CODEX_HOME) and an injected
+ * OPENAI_API_KEY in a way that is not reliably controllable headlessly — codex's own
+ * `doctor` flags the "ChatGPT tokens stored AND OPENAI_API_KEY present" combination as
+ * ambiguous, and there is no non-interactive way to force the env key (it requires an
+ * explicit `codex logout`). Injecting an org key we cannot guarantee codex honors risks
+ * silently bypassing the gateway and billing the wrong account — the plan's top secret
+ * risk. Under that asymmetric downside the conservative choice is to NOT inject codex:
+ * a worker running codex falls back to the user's own codex auth (degraded, honest),
+ * never to a silent wrong-account gateway bypass. The existing codex auth-failure
+ * guidance (executor.ts) already points an un-authed codex at `codex login` /
+ * `aiworker config`. See docs/runtime.md. Re-enabling codex injection is gated on a
+ * reliable headless force-API-key path (or the slice-3 gateway adapter).
  */
 const ENGINE_ID_TO_PROVIDER: Record<string, CredentialProviderKind> = {
   'claude-code': 'anthropic',
-  'codex': 'openai',
+}
+
+/**
+ * provider → env carrier variable names. Both providers' carriers are declared as
+ * data (the protocol/broker mint both kinds, and the slice-3 / codex-future path
+ * would use the openai carriers), but in org-key v1 only `anthropic` is reachable
+ * via `ENGINE_ID_TO_PROVIDER`, so the openai carriers are inert today. The
+ * ANTHROPIC_ / OPENAI_ prefixes are intentionally NOT stripped by `sanitizeEngineEnv`.
+ */
+const PROVIDER_ENV_CARRIERS: Record<CredentialProviderKind, { baseUrl: string, token: string }> = {
+  anthropic: { baseUrl: 'ANTHROPIC_BASE_URL', token: 'ANTHROPIC_AUTH_TOKEN' },
+  openai: { baseUrl: 'OPENAI_BASE_URL', token: 'OPENAI_API_KEY' },
 }
 
 /**
@@ -60,15 +85,10 @@ export class EngineCredentialStore {
     const credential = this.#credentials.get(provider)
     if (!credential)
       return {}
-    if (provider === 'anthropic') {
-      return {
-        ANTHROPIC_BASE_URL: credential.gatewayUrl,
-        ANTHROPIC_AUTH_TOKEN: credential.token,
-      }
-    }
+    const carriers = PROVIDER_ENV_CARRIERS[provider]
     return {
-      OPENAI_BASE_URL: credential.gatewayUrl,
-      OPENAI_API_KEY: credential.token,
+      [carriers.baseUrl]: credential.gatewayUrl,
+      [carriers.token]: credential.token,
     }
   }
 

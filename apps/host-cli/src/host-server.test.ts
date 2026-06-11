@@ -2767,10 +2767,17 @@ describe('host server', () => {
       logs.push(values.map(value => String(value)).join(' '))
     }
     try {
+      // The error message embeds BOTH a sk-ant- prefixed token (branch 1) AND a
+      // long opaque ≥32-char bare run (branch 2, the {32,} catch-all) so the mint
+      // redactor's two branches are both exercised on the live failure path. A real
+      // mint error carries env-var NAMES not values, but this hostile message proves
+      // safeCredentialMintMessage strips both shapes before the log line is emitted.
+      const skAntToken = 'sk-ant-SENTINEL-mint-error-token-do-not-leak'
+      const bareRun = 'BARE0123456789abcdefABCDEF0123456789xyz'
       const accessRegistry = createWorkerAccessRegistry()
       const throwingBroker = {
         mint() {
-          throw new Error('org-key environment variable is not set: ANTHROPIC_ORG_KEY.')
+          throw new Error(`org-key rejected ${skAntToken} and bare ${bareRun} value`)
         },
         revoke() { return { supported: false as const } },
       }
@@ -2795,10 +2802,14 @@ describe('host server', () => {
       expect(grants).toHaveLength(0)
       expect(ws.closed).toBe(false)
       expect(accessRegistry.has('wkr_82')).toBe(true)
-      // A failure line may be logged but must never carry a token value.
+      // A failure line may be logged but must never carry a token value — neither the
+      // sk-ant- prefixed shape (branch 1) nor the long bare run (branch 2).
       const failLogs = logs.filter(line => line.includes('worker_credential_mint_failed'))
       expect(failLogs.length).toBeGreaterThanOrEqual(1)
-      expect(failLogs.join('\n')).not.toContain('sk-ant-org-key-as-is')
+      const failLogText = failLogs.join('\n')
+      expect(failLogText).not.toContain(skAntToken)
+      expect(failLogText).not.toContain(bareRun)
+      expect(failLogText).toContain('[redacted]')
     }
     finally {
       console.warn = originalWarn

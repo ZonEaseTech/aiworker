@@ -287,16 +287,21 @@ tunnel (a `hello` frame authenticated by the Phase 2 access token) as three
 independent typed frames in `workerAccessFrameSchema`:
 
 ```text
-credential_acquire  { type, engineKind }                                worker -> host
-credential_refresh  { type, engineKind }                                worker -> host
-credential_grant    { type, engineKind, gatewayUrl, token, expiresAt }  host -> worker
+credential_acquire  { type, providerKind }                                worker -> host
+credential_refresh  { type, providerKind }                                worker -> host
+credential_grant    { type, providerKind, gatewayUrl, token, expiresAt }  host -> worker
 ```
 
-- `engineKind` is `'anthropic' | 'openai'`. `cursor` is excluded because its CLI
-  does not route an externally supplied key; other engines are not in the
-  org-key injection set.
+- `providerKind` is `'anthropic' | 'openai'`. The field is named `providerKind`
+  (the LLM provider), never `engineKind` — and the URL is `gatewayUrl`, never
+  `baseUrl`/`endpoint`. The control protocol is transport-agnostic and Host/Soul
+  carry no Worker engine vocabulary (G4/G10 inversion guards), so the frame names
+  the provider, not the Worker's engineId. The Worker maps its engineId to a
+  `providerKind` on its own plane. `cursor` is excluded because its CLI does not
+  route an externally supplied key; other engines are not in the org-key
+  injection set.
 - `credential_acquire` is the Worker asking the Host to mint/return a credential
-  for an engine kind; `credential_refresh` renews one approaching expiry. Both
+  for a provider kind; `credential_refresh` renews one approaching expiry. Both
   are Worker-initiated (the credential path is, like check-in and the tunnel
   itself, a Worker-initiated distribution signal, not Host runtime ownership).
 - `credential_grant` is the Host response and is a **distinct frame type**. It

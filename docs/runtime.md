@@ -363,6 +363,73 @@ The ownership-safe resolution is to re-home `byok` behind an engine-bridge
 adapter or to remove it. Neither is required for the current release. This
 deviation must not be cited to justify any Host-owned model call or any engine-secret persistence on either plane.
 
+## LLM Credential Injection (Phase 3)
+
+Phase 3 lets the Host hand a Worker an LLM credential that the Worker injects into
+the native engine's process environment as the executor's third env merge layer
+(after `sanitizeEngineEnv()` and the per-engine static `env`). The carrier
+variable names use the `ANTHROPIC_` / `OPENAI_` prefixes, which `sanitizeEngineEnv`
+deliberately does not strip, so the injection survives. The credential arrives over
+the already-authenticated Worker Access tunnel as the `credential_grant` typed
+frame (see protocol) and lives only in the Worker's in-memory
+`EngineCredentialStore` — never the descriptor, host.db, worker.db, the
+`access-token` file, any log, diagnostic, or receipt.
+
+Per-engine injection table (org-key v1):
+
+| engineId      | provider    | injected env                                 | notes |
+|---------------|-------------|----------------------------------------------|-------|
+| `claude-code` | `anthropic` | `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`| injected in v1 |
+| `codex`       | `openai`    | (none — documented-unsupported)              | see below |
+| `cursor`      | —           | (none)                                       | excluded: its CLI does not route an externally supplied key |
+| others (`gemini`/`opencode`/`qwen`/…) | — | (none) | not in the org-key v1 injection list |
+
+`codex` is documented-unsupported in org-key v1. The codex CLI resolves auth
+between a stored ChatGPT OAuth login (`auth.json` in `CODEX_HOME`) and an injected
+`OPENAI_API_KEY` in a way that is not reliably controllable headlessly — codex's
+own `doctor` flags the "stored ChatGPT tokens AND `OPENAI_API_KEY` present"
+combination as ambiguous, and there is no non-interactive way to force the env key
+(it requires an explicit `codex logout`). Injecting an org key codex might silently
+ignore in favor of its OAuth would bypass the gateway and bill the wrong account.
+Under that asymmetric downside the conservative, honest choice is to not inject
+codex: a Worker running codex falls back to the user's own codex auth (degraded,
+honest), never a silent wrong-account gateway bypass; the existing codex
+auth-failure guidance already points an un-authed codex at `codex login` /
+`aiworker config`. Re-enabling codex injection is gated on a reliable headless
+force-API-key path or the slice-3 gateway adapter. Because `codex` is the sole
+`openai` consumer, the v1 Worker eagerly acquires `anthropic` only; `openai`
+remains in the protocol enum and Host broker for slice-3 symmetry but is not
+pulled to Worker machines.
+
+Naming: the frame carries `providerKind` (the LLM provider) and `gatewayUrl`, never
+`engineKind`/`baseUrl` — the control protocol is transport-agnostic and Host/Soul
+hold no Worker engine vocabulary (G4/G10). The Worker maps its own engineId to a
+`providerKind` on its plane.
+
+org-key deviation (Phase 3 v1, the only mode shipped). The org-key adapter delivers
+the **org key as-is** — not a derived, per-worker, revocable, short-TTL key. The
+org key therefore leaves the Host and reaches every employee machine, and the
+native CLI persists it to its own credential store (e.g. `~/.claude/.credentials.json`,
+`0600`). Blast radius: any compromised Worker compromises the whole org key,
+affecting everyone, with no per-worker revocation — revocation means rotating the
+org key for everyone. The broker's `revoke()` returns not-supported (it never fakes
+success). This is a deliberate maturity boundary, not "derived"/"restricted"
+language: true per-worker derivation, restriction, real revocation, and short TTL
+are slice 3 (a self-issuing gateway adapter that plugs into the same broker
+interface with zero protocol change). `expiresAt` is a far-future placeholder in
+org-key mode, so liveness/revocation rides the 4401 access-token channel, not TTL
+expiry; the far-future placeholder must never become the only liveness check.
+
+The credential is in-memory only: `EngineCredentialStore.clear()` drops it on 4401
+revocation and on process exit, so it does not survive a daemon lifecycle. The
+store mint/grant path and the Host mint-error body never print the token; the
+shared engine-bridge secret alternation redacts the `sk-ant-` org-key shape if an
+engine echoes it to stdout/stderr. The Host plane cannot import the engine-bridge
+redaction module (G2/G4 forbid host-* depending on the engine-launch package), so
+the Host mint-error redactor is self-contained (mirroring the `soul-sdk` precedent)
+and strips prefixed tokens plus any long opaque run; in practice mint errors carry
+env-var names, not values.
+
 ## Projection
 
 Worker orchestrates projection; engine-projection executes projection; SDK and protocol define projection inputs.

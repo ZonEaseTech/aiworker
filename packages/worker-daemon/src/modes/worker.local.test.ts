@@ -1,6 +1,6 @@
 import type { LocalEngineStatus } from '@zonease/aiworker-soul-descriptor'
 import type { LocalExecutor, LocalWorkerRuntimeOptions } from '@zonease/aiworker-worker-runtime'
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -1320,6 +1320,103 @@ describe('local daemon API', () => {
       }
       boot.state.shutdown()
       expect(storeCleared).toBe(1)
+    }
+    finally {
+      if (originalHostUrl == null)
+        delete process.env.AIWORKER_HOST_URL
+      else
+        process.env.AIWORKER_HOST_URL = originalHostUrl
+      if (originalProvisionToken == null)
+        delete process.env.AIWORKER_PROVISION_TOKEN
+      else
+        process.env.AIWORKER_PROVISION_TOKEN = originalProvisionToken
+    }
+  })
+
+  it('P3-T4: a credential held in the in-memory store never lands in worker.db or any on-disk worker file (absence regression lock)', async () => {
+    // Regression lock for AC#3 on the worker plane. The credential lives ONLY in the
+    // in-memory EngineCredentialStore + the engine env at spawn time; it must never be
+    // persisted. We assert both shapes the plan calls out: a sk-ant- prefixed org key
+    // AND a bare ≥32-char run (the §2.3 "bare/embedded" residual). In v1 NOTHING writes
+    // a credential to disk, so this scan is trivially clean today — its value is locking
+    // that absence against a future regression, not catching a live leak.
+    const originalHostUrl = process.env.AIWORKER_HOST_URL
+    const originalProvisionToken = process.env.AIWORKER_PROVISION_TOKEN
+    const prefixedSentinel = 'sk-ant-SENTINEL-worker-store-must-not-persist'
+    const bareSentinel = 'BAREWORKER0123456789abcdefABCDEF0123456789'
+    const dbPath = join(dir, 'credential-no-persist.db')
+    const officialAppsRoot = join(dir, 'credential-no-persist-apps')
+    const workersRoot = join(dir, 'credential-no-persist-workers')
+    writePackagedFreeform(officialAppsRoot)
+    closeWorkerDb()
+    initWorkerDb(dbPath)
+    runWorkerMigrations()
+    upsertWorker({ id: 'wkr_82', appId: FREEFORM_APP_ID, name: 'Freeform', status: 'active' })
+    closeWorkerDb()
+
+    process.env.AIWORKER_HOST_URL = 'https://host.example'
+    process.env.AIWORKER_PROVISION_TOKEN = 'awp_secret'
+    try {
+      const boot = await bootstrapWorkerApp({
+        connectWorkerAccessTunnel: async () => ({ close() {} }),
+        dbPath,
+        engineScanner: () => fakeEngineRows(),
+        executor: {
+          async invoke(input) {
+            input.onEvent?.({ kind: 'text', text: 'done' })
+            return { artifacts: [], summary: 'done' }
+          },
+        },
+        officialAppsRoot,
+        provisionCheckIn: async () => ({
+          access: { mode: 'worker_access', token: 'awt_secret' },
+          assignment: {
+            assignedEmail: 'bob@example.com',
+            assignmentId: 'asn_1',
+            soulReleaseRef: 'soul_1',
+            workerId: 'wkr_82',
+          },
+        }),
+        runtimeVersion: 'test',
+        workersRoot,
+      })
+      bootedDaemons.push(boot.state)
+
+      // Drive both sentinel shapes into the in-memory store (the legitimate home).
+      boot.state.credentialStore.set('anthropic', {
+        gatewayUrl: `https://gw.example/${bareSentinel}`,
+        token: prefixedSentinel,
+        expiresAt: '2999-01-01T00:00:00.000Z',
+      })
+
+      // Scan every on-disk surface: the worker DB file + the whole workers root tree.
+      const scanned: string[] = []
+      const walk = (root: string): void => {
+        let entries: string[]
+        try {
+          entries = readdirSync(root)
+        }
+        catch {
+          return
+        }
+        for (const entry of entries) {
+          const full = join(root, entry)
+          if (statSync(full).isDirectory())
+            walk(full)
+          else
+            scanned.push(readFileSync(full, 'latin1'))
+        }
+      }
+      scanned.push(readFileSync(dbPath, 'latin1'))
+      walk(workersRoot)
+      const haystack = scanned.join('\n')
+      expect(haystack).not.toContain(prefixedSentinel)
+      expect(haystack).not.toContain(bareSentinel)
+
+      // Sanity: the store DOES hold it (proving the scan would catch a leak if one existed).
+      expect(boot.state.credentialStore.envFor('claude-code').ANTHROPIC_AUTH_TOKEN).toBe(prefixedSentinel)
+
+      boot.state.shutdown()
     }
     finally {
       if (originalHostUrl == null)
