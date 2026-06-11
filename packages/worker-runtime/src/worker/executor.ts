@@ -65,7 +65,19 @@ export const DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS = 300_000
 const DEFAULT_LOCAL_CLI_ENGINE_LOG_BUFFER_LIMIT_CHARS = 1_000_000
 const DEFAULT_LOCAL_CLI_ENGINE_SUMMARY_LIMIT_CHARS = 64_000
 
+/**
+ * Supplies per-engine LLM credential env (Phase 3). Implemented by the daemon's
+ * in-memory EngineCredentialStore; `envFor` returns the provider env carrier
+ * variables for a mapped engineId, or `{}` when no credential applies (graceful
+ * fallback). The carrier names use the ANTHROPIC_ / OPENAI_ prefixes, which
+ * survive `sanitizeEngineEnv`.
+ */
+export interface EngineCredentialProvider {
+  envFor: (engineId: string) => Record<string, string>
+}
+
 export interface ExternalEngineExecutorOptions {
+  credentialProvider?: EngineCredentialProvider
   maxBufferedLogChars?: number
   maxSummaryChars?: number
   processManager?: LocalEngineProcessManager
@@ -272,6 +284,10 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
     env: {
       ...sanitizeEngineEnv(),
       ...(engine.env ?? {}),
+      // Third merge layer: Phase 3 LLM credential injection. Carrier vars
+      // (ANTHROPIC_ / OPENAI_ prefixed) are not stripped by sanitizeEngineEnv;
+      // absent a provider or credential this is `{}` (graceful fallback, no override).
+      ...(options.credentialProvider?.envFor(input.engineId) ?? {}),
     },
     invocationId: input.invocationId,
     maxBufferedLogChars: options.maxBufferedLogChars ?? DEFAULT_LOCAL_CLI_ENGINE_LOG_BUFFER_LIMIT_CHARS,

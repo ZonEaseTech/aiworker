@@ -70,6 +70,7 @@ export {
 export {
   createExternalEngineExecutor,
   DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS,
+  type EngineCredentialProvider,
   type ExternalEngineExecutorOptions,
   type LocalExecutor,
   LocalExecutorFailure,

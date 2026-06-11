@@ -2,7 +2,7 @@ import type { HostedSoulApp } from '@zonease/aiworker-soul-descriptor'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { OfficialRetiredMetadataDiscardResult, OfficialSoulAppBootstrapResult, OfficialSoulAppDefinition } from '../soul-app/official'
 import type { SoulAppRegistryContext, SoulCatalog, SoulDescriptorInstallInput } from '../soul-app/registry'
-import type { LocalExecutor } from '../worker/executor'
+import type { EngineCredentialProvider, LocalExecutor } from '../worker/executor'
 import type { LocalWorkerRuntime, LocalWorkerRuntimeOptions, LocalWorkerSnapshot } from '../worker/runtime'
 
 import path from 'node:path'
@@ -44,6 +44,12 @@ interface VerticalSoul {
 }
 
 export interface WorkerOrchestratorOptions {
+  /**
+   * Phase 3 LLM credential provider, threaded down to the default executor at
+   * runtime construction so spawned engines get the third env merge layer. The
+   * daemon passes its shared EngineCredentialStore here (and to the tunnel).
+   */
+  credentialProvider?: EngineCredentialProvider
   engineBridge?: LocalWorkerRuntimeOptions['engineBridge']
   executor?: LocalExecutor
   now?: () => string
@@ -214,6 +220,7 @@ export class WorkerOrchestrator {
         metadata: worker.metadataJson,
       },
       executor: this.options.executor,
+      credentialProvider: this.options.credentialProvider,
       engineBridge: this.options.engineBridge,
       engineAssetSource: this.engineAssetSourceForWorker(worker),
       sessionAutoName: this.options.sessionAutoName ?? false,

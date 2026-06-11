@@ -117,6 +117,47 @@ export const workerAccessCloseFrameSchema = z.object({
   reason: z.string().min(1).optional(),
 }).strict()
 
+// Phase 3 LLM credential injection (typed frames, never bodyText).
+// providerKind identifies the LLM provider that accepts an injected org key +
+// gateway URL; cursor is intentionally excluded (its CLI does not route an
+// externally supplied key). These frames ride the already-authenticated Worker
+// Access tunnel (Phase 2 access token) but are independent typed frames: their
+// fields live in the frame body, never in `bodyText`, and they never enter the
+// Host pending request/response correlation map. They are therefore unaffected
+// by WAT-1 (which only corrupts `bodyText` HTTP forwarding) and not subject to
+// the 15s HTTP-forward timeout.
+const credentialProviderKindSchema = z.enum(['anthropic', 'openai'])
+
+// worker→host: ask the Host to mint/return a credential for this provider.
+export const workerAccessCredentialAcquireFrameSchema = z.object({
+  type: z.literal('credential_acquire'),
+  providerKind: credentialProviderKindSchema,
+}).strict()
+
+// worker→host: renew a credential approaching expiry for this provider.
+export const workerAccessCredentialRefreshFrameSchema = z.object({
+  type: z.literal('credential_refresh'),
+  providerKind: credentialProviderKindSchema,
+}).strict()
+
+// host→worker: deliver the credential. A distinct type — it must NEVER reuse
+// 'response' (which carries the Host's pending HTTP request/response
+// correlation semantics). `token` is a secret: it lives only in Worker memory
+// and is never written to descriptor, DB, the `access-token` file, or any log.
+// In the org-key mode (Phase 3 v1) `token` is the org key as-is and `expiresAt`
+// is a far-future placeholder (effectively no refresh); revocation rides the
+// 4401 Phase 2 channel, not TTL expiry.
+export const workerAccessCredentialGrantFrameSchema = z.object({
+  type: z.literal('credential_grant'),
+  providerKind: credentialProviderKindSchema,
+  // Semantic (not transport-shaped) name: the contract is transport-agnostic, so
+  // this mirrors the existing workbenchUrl convention rather than a transport
+  // token like baseUrl/endpoint (see G10 inversion guard).
+  gatewayUrl: z.string().min(1),
+  token: z.string().min(1),
+  expiresAt: z.string().min(1),
+}).strict()
+
 export const workerAccessFrameSchema = z.discriminatedUnion('type', [
   workerAccessHelloFrameSchema,
   workerAccessPingFrameSchema,
@@ -124,6 +165,9 @@ export const workerAccessFrameSchema = z.discriminatedUnion('type', [
   workerAccessRequestEnvelopeSchema,
   workerAccessResponseEnvelopeSchema,
   workerAccessCloseFrameSchema,
+  workerAccessCredentialAcquireFrameSchema,
+  workerAccessCredentialRefreshFrameSchema,
+  workerAccessCredentialGrantFrameSchema,
 ])
 
 export type WorkerHealth = z.infer<typeof workerHealthSchema>
@@ -138,6 +182,10 @@ export type WorkerAccessHelloFrame = z.infer<typeof workerAccessHelloFrameSchema
 export type WorkerAccessPingFrame = z.infer<typeof workerAccessPingFrameSchema>
 export type WorkerAccessPongFrame = z.infer<typeof workerAccessPongFrameSchema>
 export type WorkerAccessCloseFrame = z.infer<typeof workerAccessCloseFrameSchema>
+export type CredentialProviderKind = z.infer<typeof credentialProviderKindSchema>
+export type CredentialAcquireFrame = z.infer<typeof workerAccessCredentialAcquireFrameSchema>
+export type CredentialRefreshFrame = z.infer<typeof workerAccessCredentialRefreshFrameSchema>
+export type CredentialGrantFrame = z.infer<typeof workerAccessCredentialGrantFrameSchema>
 export type WorkerAccessFrame = z.infer<typeof workerAccessFrameSchema>
 export type WorkerAssignmentReceipt = z.infer<typeof workerAssignmentReceiptSchema>
 export type WorkerCheckInRequest = z.infer<typeof workerCheckInRequestSchema>

@@ -371,6 +371,105 @@ printf '%s\\n' '{"type":"item.completed","item":{"type":"assistant_message","tex
     }
   })
 
+  it('injects the credential provider env as the third merge layer for claude-code', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const envFile = path.join(makeRoot(), 'engine-env.txt')
+    const command = await makeScript(`
+cat >/dev/null
+printf 'ANTHROPIC_BASE_URL=%s\\n' "\${ANTHROPIC_BASE_URL:-}" >> ${envFile}
+printf 'ANTHROPIC_AUTH_TOKEN=%s\\n' "\${ANTHROPIC_AUTH_TOKEN:-}" >> ${envFile}
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"claude-s-1"}'
+printf '%s\\n' '{"type":"result","result":"ok"}'
+`)
+
+    await createExternalEngineExecutor({
+      credentialProvider: {
+        envFor: (engineId): Record<string, string> => engineId === 'claude-code'
+          ? { ANTHROPIC_BASE_URL: 'https://gw.example/anthropic', ANTHROPIC_AUTH_TOKEN: 'org-key-anthropic' }
+          : {},
+      },
+    }).invoke({ ...baseInput(command, workspaceRoot), engineId: 'claude-code' })
+
+    const env = await readFile(envFile, 'utf8')
+    expect(env).toContain('ANTHROPIC_BASE_URL=https://gw.example/anthropic')
+    expect(env).toContain('ANTHROPIC_AUTH_TOKEN=org-key-anthropic')
+  })
+
+  it('P3-T4: redacts an injected anthropic org key that the engine echoes to stdout.log', async () => {
+    // The real worker-side carrier path: a credential injected via credentialProvider
+    // (third env layer) is read by the native engine, which may echo it. The executor
+    // writes engine stdout to stdout.log AFTER redactEngineLog (shared engine-bridge
+    // SECRET_VALUE_RE). The org key v1 actually injects is sk-ant- shaped, which the
+    // `sk-` branch redacts. This is the meaningful sentinel: inject → engine echoes →
+    // disk → must be [REDACTED], never the raw token.
+    const sentinel = 'sk-ant-SENTINEL-org-key-do-not-leak-0123456789'
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+printf 'leaking ANTHROPIC_AUTH_TOKEN=%s into output\\n' "\${ANTHROPIC_AUTH_TOKEN:-}"
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"claude-s-1"}'
+printf '%s\\n' '{"type":"result","result":"ok"}'
+`)
+
+    const input = { ...baseInput(command, workspaceRoot), engineId: 'claude-code', engineCommand: command }
+    await createExternalEngineExecutor({
+      credentialProvider: {
+        envFor: (engineId): Record<string, string> => engineId === 'claude-code'
+          ? { ANTHROPIC_BASE_URL: 'https://gw.example/anthropic', ANTHROPIC_AUTH_TOKEN: sentinel }
+          : {},
+      },
+    }).invoke(input)
+
+    const stdoutLog = await readFile(path.join(input.invocationRoot, 'stdout.log'), 'utf8')
+    expect(stdoutLog).toContain('[REDACTED]')
+    expect(stdoutLog).not.toContain(sentinel)
+    expect(stdoutLog).not.toContain('SENTINEL-org-key-do-not-leak')
+  })
+
+  it('does not inject credential env for cursor (engineId excluded by provider)', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const envFile = path.join(makeRoot(), 'engine-env.txt')
+    const command = await makeScript(`
+cat >/dev/null
+printf 'ANTHROPIC_AUTH_TOKEN=%s\\n' "\${ANTHROPIC_AUTH_TOKEN:-}" >> ${envFile}
+printf '%s\\n' '{"type":"result","result":"ok"}'
+`)
+
+    // The provider is the arbiter of which engineId gets injected; a real store returns
+    // {} for cursor. Mirror that here so the executor passes through an empty injection.
+    // Assert on the injected sentinel only (independent of any host-set ANTHROPIC_*).
+    await createExternalEngineExecutor({
+      credentialProvider: {
+        envFor: (engineId): Record<string, string> => engineId === 'cursor' ? {} : { ANTHROPIC_AUTH_TOKEN: 'org-key-sentinel-anthropic' },
+      },
+    }).invoke({ ...baseInput(command, workspaceRoot), engineId: 'cursor', engineCommand: command })
+
+    const env = await readFile(envFile, 'utf8')
+    expect(env).not.toContain('org-key-sentinel-anthropic')
+  })
+
+  it('does not inject credential env when no provider is configured (graceful fallback)', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const envFile = path.join(makeRoot(), 'engine-env.txt')
+    const command = await makeScript(`
+cat >/dev/null
+printf 'OPENAI_API_KEY=%s\\n' "\${OPENAI_API_KEY:-}" >> ${envFile}
+printf '%s\\n' '{"type":"thread.started","thread_id":"codex-thread-1"}'
+printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}'
+`)
+
+    // No credentialProvider → executor must not add any injection layer. Assert the
+    // injected sentinel a provider would have added is absent (independent of host env).
+    await createExternalEngineExecutor().invoke({ ...baseInput(command, workspaceRoot), engineId: 'codex' })
+
+    const env = await readFile(envFile, 'utf8')
+    expect(env).not.toContain('org-key-sentinel-openai')
+  })
+
   it('interrupts local CLI engines when the invocation is aborted', async () => {
     const workspaceRoot = path.join(makeRoot(), 'workspace')
     await mkdir(workspaceRoot, { recursive: true })

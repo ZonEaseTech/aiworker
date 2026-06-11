@@ -106,6 +106,26 @@ token introduced for restart self-heal is a local `0600` capability token that
 authorizes tunnel reconnect only; it is not a provider secret and grants no LLM
 access.
 
+Phase 3 LLM credential injection pipeline. The Host runs a credential broker; on the
+authenticated Worker Access tunnel the Worker sends `credential_acquire`, the Host
+mints a credential and returns `credential_grant`, and the Worker injects it into the
+native engine's process env (third merge layer) from an in-memory store that is never
+persisted. Restart/reconnect re-acquires the credential, so no re-provision is needed.
+See runtime for the per-engine injection table and secret boundary.
+
+The slice 2 / slice 3 maturity boundary is explicit. Slice 2 (this Phase 3 work) ships
+the **org-key adapter only**: the Host delivers the org key **as-is** — not derived,
+not per-worker, not revocable, no short TTL — so the org key leaves the Host and
+reaches every employee machine, with blast radius = any compromised Worker compromises
+the whole org key and no per-worker revocation (revocation = rotate the org key for
+everyone). The broker's `revoke()` is honestly not-supported. Slice 3 replaces the
+adapter with a self-issuing gateway (real per-worker virtual keys, real revocation,
+quotas, short TTL) through the **same broker interface and the same credential frames**
+— a drop-in swap with zero protocol change. Only slice 3 makes "the master key never
+leaves the Host" true; org-key v1 deliberately does not, and the wording must stay
+honest — "derived"/"restricted"/"revocable" apply to slice 3 only, never to the org-key
+downfeed.
+
 Phase 2.1 managed employee access uses Host as the enterprise URL and
 authorization boundary for employees. Host-only applies only to managed employee remote access; it is not a Worker runtime dependency.
 

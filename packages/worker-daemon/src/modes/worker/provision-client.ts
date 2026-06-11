@@ -1,4 +1,4 @@
-import type { WorkerAccessHello, WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope, WorkerCheckInRequest, WorkerCheckInResponse } from '@zonease/aiworker-worker-control-protocol'
+import type { CredentialProviderKind, WorkerAccessHello, WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope, WorkerCheckInRequest, WorkerCheckInResponse } from '@zonease/aiworker-worker-control-protocol'
 import {
   parseWorkerAccessFrame,
   parseWorkerCheckInResponse,
@@ -38,6 +38,48 @@ export const ACCESS_REJECTED_CLOSE_CODE = 4401
 export interface WorkerAccessTunnelHandle {
   close: () => void
 }
+
+/**
+ * Structural write-side of the daemon's EngineCredentialStore the tunnel needs:
+ * grant frames `set` a provider credential, revocation `clear`s all. The tunnel
+ * stays decoupled from the concrete store (and is fakeable in tests). `token` is
+ * a secret — it lives only in the store's memory and is never logged here.
+ */
+export interface EngineCredentialSink {
+  set: (providerKind: CredentialProviderKind, credential: { gatewayUrl: string, token: string, expiresAt: string }) => void
+  clear: () => void
+}
+
+/**
+ * Providers the worker eagerly asks the Host for on every (re)connect. The Host
+ * only grants the ones it has a configured profile for; unconfigured providers
+ * are harmlessly ignored. Sent only when a credential store is wired.
+ *
+ * org-key v1 = `anthropic` only. codex (the sole openai consumer) is
+ * documented-unsupported (see engine-credential-store), so eagerly pulling the
+ * org's OpenAI key to every worker — where it could never be injected — would
+ * expand the secret blast radius for zero benefit. The `openai` provider stays in
+ * the protocol enum + Host broker (slice-3 drop-in symmetry lives at the protocol
+ * layer); it is simply not eagerly acquired by the v1 worker runtime.
+ */
+const EAGER_CREDENTIAL_PROVIDERS: readonly CredentialProviderKind[] = ['anthropic']
+
+/**
+ * Refresh margin: renew this far before the credential's stated expiry.
+ */
+const CREDENTIAL_REFRESH_MARGIN_MS = 60_000
+
+/**
+ * Upper bound on a scheduled refresh delay. setTimeout clamps any delay above
+ * ~2^31-1 ms (~24.8 days) down to 1ms, which would turn an org-key far-future
+ * `expiresAt` into a 1ms refresh storm. We schedule a refresh only when the
+ * computed delay is positive AND at or under this cap. For org-key v1 (the only
+ * mode shipping here) the far-future placeholder always exceeds the cap → no
+ * refresh (intended; revocation rides 4401, not TTL). Known limitation for a
+ * future slice: a short-TTL credential whose remaining life is ABOVE this cap
+ * would also no-op until it drops under the cap; slice-3 keys should sit under it.
+ */
+const CREDENTIAL_REFRESH_MAX_DELAY_MS = 7 * 24 * 60 * 60_000
 
 export interface BuildCheckInInput {
   id: string
@@ -147,6 +189,23 @@ export interface ConnectWorkerAccessTunnelInput {
    * 撤销时清除持久 token 的注入缝（默认 = access-token-store 的 clearPersistedWorkerAccess）。测试可注入捕获器。
    */
   clearPersistedAccess?: (workerHome: string) => Promise<void>
+  /**
+   * Phase 3 LLM 凭证投递的写入端（= daemon 进程级 EngineCredentialStore）。提供时：hello 成功后
+   * 紧跟着对 EAGER_CREDENTIAL_PROVIDERS（org-key v1 = 仅 anthropic；codex/openai documented-unsupported，
+   * 见 engine-credential-store）各发一个 credential_acquire（Host 只回它配置过的 provider 的 grant）；
+   * 收到 credential_grant 写入 store 并按 expiresAt 安排续期；4401 撤销时 clear()。不提供则整条
+   * 凭证链路 no-op（向后兼容既有调用方）。
+   */
+  credentialStore?: EngineCredentialSink
+  /**
+   * 安排一次凭证续期（延迟 delayMs 后调用 run）的注入缝（测试用可控时钟）。返回一个取消函数，
+   * socket 周期结束（断连/重连/主动 close）时调用以清除待发续期，避免 timer 泄漏。默认包装 setTimeout 且 unref。
+   */
+  startRefreshTimer?: (run: () => void, delayMs: number) => () => void
+  /**
+   * 当前时间（毫秒）注入缝，用于计算 expiresAt 相对续期延迟。默认 Date.now。
+   */
+  now?: () => number
 }
 
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 25_000
@@ -165,6 +224,29 @@ function defaultStartReconnectTimer(run: () => void, delayMs: number): () => voi
   const timer = setTimeout(run, delayMs)
   ;(timer as unknown as { unref?: () => void }).unref?.()
   return () => clearTimeout(timer)
+}
+
+function defaultStartRefreshTimer(run: () => void, delayMs: number): () => void {
+  const timer = setTimeout(run, delayMs)
+  ;(timer as unknown as { unref?: () => void }).unref?.()
+  return () => clearTimeout(timer)
+}
+
+/**
+ * Compute the refresh delay for a credential, or null when no refresh should be
+ * scheduled. Returns a positive delay only when `expiresAt` is parseable AND the
+ * margin-adjusted delay is in (0, CREDENTIAL_REFRESH_MAX_DELAY_MS]. Far-future
+ * org-key placeholders exceed the cap → null (no refresh, no 1ms storm). Already
+ * (near-)expired credentials → 0 so the refresh fires promptly.
+ */
+function computeRefreshDelayMs(expiresAt: string, nowMs: number): number | null {
+  const expiresMs = Date.parse(expiresAt)
+  if (!Number.isFinite(expiresMs))
+    return null
+  const delay = expiresMs - nowMs - CREDENTIAL_REFRESH_MARGIN_MS
+  if (delay > CREDENTIAL_REFRESH_MAX_DELAY_MS)
+    return null
+  return delay > 0 ? delay : 0
 }
 
 function resolvePositiveInt(value: number | undefined, fallback: number): number {
@@ -290,6 +372,9 @@ export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnel
   const random = input.random ?? Math.random
   const logger: TunnelLogger = input.logger ?? console
   const clearPersistedAccess = input.clearPersistedAccess ?? clearPersistedWorkerAccess
+  const credentialStore = input.credentialStore ?? null
+  const startRefreshTimer = input.startRefreshTimer ?? defaultStartRefreshTimer
+  const now = input.now ?? Date.now
 
   // 跨重连的持久状态（每个 socket 周期内的状态在 openConnection 里重置）。
   let intentionallyClosed = false
@@ -306,6 +391,9 @@ export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnel
     intentionallyClosed = true
     cancelReconnect?.()
     cancelReconnect = null
+    // 撤销即清空内存凭证:死 token 不该继续注入引擎子进程。仅在 4401 撤销时 clear,
+    // 瞬断/重连绝不 clear(重连会重新 grant,中途清空会无谓地破坏下一次 spawn)。
+    credentialStore?.clear()
     logger.warn('[worker-access] host rejected the worker access token (access revoked or denied); reconnect stopped — re-provision is required to restore the tunnel')
     if (input.workerHome) {
       clearPersistedAccess(input.workerHome).catch(() => {
@@ -349,12 +437,22 @@ export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnel
     let keepaliveStopped = false
     // keepalive 清理函数：keepalive 启动后赋值。提前声明以便 stopKeepalive 在词法上先于其定义引用。
     let stopTimer: (() => void) | null = null
+    // 本 socket 周期的续期定时器（按 provider）。在 stopKeepalive 统一清除——它是断连/重连/主动
+    // close 三条路径共同经过的唯一收口，确保续期 timer 不跨 socket 周期泄漏。
+    const refreshTimers = new Map<CredentialProviderKind, () => void>()
+
+    function clearRefreshTimers(): void {
+      for (const cancel of refreshTimers.values())
+        cancel()
+      refreshTimers.clear()
+    }
 
     function stopKeepalive(): void {
       if (keepaliveStopped)
         return
       keepaliveStopped = true
       stopTimer?.()
+      clearRefreshTimers()
     }
 
     // 幂等收口：socket onclose（host 重启/断开）与死连接 force-close 都走这里——清 keepalive 定时器，
@@ -415,7 +513,35 @@ export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnel
       if (frame.type === 'pong') {
         // host 应答了我们的 keepalive → 连接存活，清死连接计数。
         missedPongs = 0
+        return
       }
+
+      if (frame.type === 'credential_grant') {
+        // 写入内存 store(executor spawn 时按 engineId→provider 读注入)。绝不打印 token。
+        credentialStore?.set(frame.providerKind, {
+          gatewayUrl: frame.gatewayUrl,
+          token: frame.token,
+          expiresAt: frame.expiresAt,
+        })
+        scheduleCredentialRefresh(frame.providerKind, frame.expiresAt)
+      }
+    }
+
+    // 近 expiresAt 安排一次续期(发 credential_refresh)。org-key 远期占位 → computeRefreshDelayMs
+    // 返 null,不安排、不发帧(避免 setTimeout 把 >24.8 天的延迟钳成 1ms 形成续期风暴)。
+    function scheduleCredentialRefresh(providerKind: CredentialProviderKind, expiresAt: string): void {
+      refreshTimers.get(providerKind)?.()
+      refreshTimers.delete(providerKind)
+      const delayMs = computeRefreshDelayMs(expiresAt, now())
+      if (delayMs === null || connectionLost || keepaliveStopped)
+        return
+      const cancel = startRefreshTimer(() => {
+        refreshTimers.delete(providerKind)
+        if (connectionLost || keepaliveStopped)
+          return
+        socket.send(JSON.stringify({ type: 'credential_refresh', providerKind }))
+      }, delayMs)
+      refreshTimers.set(providerKind, cancel)
     }
 
     const sendHello = () => {
@@ -425,6 +551,12 @@ export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnel
         token: input.access.token,
         workerId: input.assignment.workerId,
       }))
+      // hello 后紧跟着 eager acquire(仅当凭证 store 已接线)。TCP 有序 → acquire 必在 hello 之后到达;
+      // openConnection 每次重连都重建这条路径 → 重连/重启自动重发 acquire = 凭证恢复,无需 re-provision。
+      if (credentialStore) {
+        for (const providerKind of EAGER_CREDENTIAL_PROVIDERS)
+          socket.send(JSON.stringify({ type: 'credential_acquire', providerKind }))
+      }
     }
     if (typeof socket.readyState === 'number' && socket.readyState !== 1)
       socket.onopen = sendHello

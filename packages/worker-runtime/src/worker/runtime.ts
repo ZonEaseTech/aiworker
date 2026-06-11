@@ -9,7 +9,7 @@ import type {
   WorkerRow,
   WorkspaceRow,
 } from '@zonease/aiworker-storage-sqlite/worker'
-import type { LocalExecutor, LocalExecutorEvent, LocalExecutorResult } from './executor'
+import type { EngineCredentialProvider, LocalExecutor, LocalExecutorEvent, LocalExecutorResult } from './executor'
 import type { LocalEngineInvocationRun } from './process-manager'
 import type { FrozenSessionEngine } from './session-engine'
 import { randomUUID } from 'node:crypto'
@@ -96,6 +96,14 @@ export interface LocalWorkerRuntimeOptions {
    */
   overlaysRoot?: string
   executor?: LocalExecutor
+  /**
+   * Phase 3 LLM credential injection. When `executor` is omitted, the default
+   * executor is built with this provider so spawned engines get the third env
+   * merge layer (claude-code→ANTHROPIC_*, codex→OPENAI_*). When `executor` is
+   * injected (tests), this is ignored — the injected executor is the credential
+   * arbiter. The daemon shares one EngineCredentialStore between this and the tunnel.
+   */
+  credentialProvider?: EngineCredentialProvider
   engineBridge?: LocalEngineBridgeOptions | null
   engineAssetSource?: EngineAssetSource | null
   /**
@@ -223,7 +231,7 @@ export class LocalWorkerRuntime {
     this.#sessionAutoName = options.sessionAutoName ?? false
     this.#now = options.now ?? (() => new Date().toISOString())
     this.#engineProcessManager = new LocalEngineProcessManager({ now: this.#now })
-    this.#executor = options.executor ?? createExternalEngineExecutor({ processManager: this.#engineProcessManager })
+    this.#executor = options.executor ?? createExternalEngineExecutor({ processManager: this.#engineProcessManager, credentialProvider: options.credentialProvider })
   }
 
   get workerId(): string {

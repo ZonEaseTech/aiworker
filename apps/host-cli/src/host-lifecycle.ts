@@ -1,12 +1,14 @@
 import type { Buffer } from 'node:buffer'
+import type { HostCredentialBroker } from './host-credential-broker'
 import type { OidcClientConfig, OidcFetch } from './host-oidc-client'
 import { spawn } from 'node:child_process'
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+
 import process from 'node:process'
 
 import { fileURLToPath } from 'node:url'
-
+import { createOrgKeyCredentialBroker, loadOrgKeyBrokerConfigFromEnv } from './host-credential-broker'
 import { createHostServer } from './host-server'
 import { seedSoulReleasesFromDir } from './host-soul-seed'
 
@@ -230,6 +232,7 @@ async function startHostProdForegroundLifecycle(input: HostLifecycleStartInput):
   const manifestPath = resolveManifestPath(input.manifestPath)
   const publicBaseUrl = normalizePublicBaseUrl(input.publicBaseUrl ?? `http://${input.host}:${input.port}`)
   mkdirSync(dirname(manifestPath), { recursive: true })
+  const credentialBroker = buildOrgKeyBrokerFromEnv()
   const server = await createHostServer({
     authUser: !input.sessionAuth && input.devAdminEmail
       ? {
@@ -238,6 +241,7 @@ async function startHostProdForegroundLifecycle(input: HostLifecycleStartInput):
           subject: 'dev-admin',
         }
       : null,
+    ...(credentialBroker ? { credentialBroker } : {}),
     dbPath: input.dbPath,
     ...(input.hostBrowserBaseUrl ? { hostBrowserBaseUrl: input.hostBrowserBaseUrl } : {}),
     ...(input.hostControlBaseUrl ? { hostControlBaseUrl: input.hostControlBaseUrl } : {}),
@@ -289,6 +293,7 @@ async function startHostDevForegroundLifecycle(input: HostLifecycleStartInput): 
   const publicBaseUrl = normalizePublicBaseUrl(input.publicBaseUrl ?? `http://${input.host}:${input.port}`)
   const webUrl = `http://${input.host}:${input.webPort ?? 5050}/host`
   mkdirSync(dirname(manifestPath), { recursive: true })
+  const credentialBroker = buildOrgKeyBrokerFromEnv()
   const server = await createHostServer({
     authUser: !input.sessionAuth && input.devAdminEmail
       ? {
@@ -297,6 +302,7 @@ async function startHostDevForegroundLifecycle(input: HostLifecycleStartInput): 
           subject: 'dev-admin',
         }
       : null,
+    ...(credentialBroker ? { credentialBroker } : {}),
     dbPath: input.dbPath,
     ...(input.hostBrowserBaseUrl ? { hostBrowserBaseUrl: input.hostBrowserBaseUrl } : {}),
     ...(input.hostControlBaseUrl ? { hostControlBaseUrl: input.hostControlBaseUrl } : {}),
@@ -466,6 +472,16 @@ function fallbackManifest(input: HostLifecycleStartInput, mode: HostLifecycleMod
     ],
     webUrl: mode === 'dev' ? `http://${input.host}:${input.webPort ?? 5050}/host` : `${apiUrl}/host`,
   }
+}
+
+// Phase 3: build the org-key credential broker from Host env. Returns undefined
+// when no gateway profile env is configured, so the credential frames stay a
+// no-op until an operator opts in (mirrors how sessionAuth is env-gated).
+function buildOrgKeyBrokerFromEnv(): HostCredentialBroker | undefined {
+  const config = loadOrgKeyBrokerConfigFromEnv(process.env)
+  if (!config)
+    return undefined
+  return createOrgKeyCredentialBroker(config)
 }
 
 function resolveManifestPath(manifestPath?: string): string {
