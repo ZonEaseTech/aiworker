@@ -61,6 +61,7 @@ import {
 import { streamSSE } from 'hono/streaming'
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
+import { EngineCredentialStore } from './worker/engine-credential-store'
 import { registerLocalOpenApiPaths } from './worker/openapi'
 import { connectWorkerAccessTunnel, maybeProvisionCheckIn } from './worker/provision-client'
 import {
@@ -107,6 +108,9 @@ export interface BootstrapWorkerAppOptions {
 
 export interface LocalDaemonState {
   authProvider: WorkerApiAuthProvider
+  // Phase 3 进程级凭证 store(顶部建,同挂 executor 第三层注入 + access tunnel grant 写入)。
+  // 仅内存,关停/4401 撤销时 clear()。
+  credentialStore: EngineCredentialStore
   host: WorkerOrchestrator
   startedAt: string
   runtimeVersion: string
@@ -137,10 +141,15 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const workersRoot = options.workersRoot ?? path.dirname(dbPath)
   const runtimes = new Map<string, LocalWorkerRuntime>()
   const workerAccessTunnels = new Set<WorkerAccessTunnelHandle>()
+  // §2.2 构造顺序:凭证 store 必须先于两个消费方存在。建于此顶部 → 注入下面 createWorkerOrchestrator
+  // 的 credentialProvider(executor 第三层注入读)→ 同一实例交 :761 connectWorkerAccessTunnel(grant 写)。
+  // 仅内存、进程级单例;撤销(4401)/关停时 clear(),绝不持久化、绝不 log token。
+  const credentialStore = new EngineCredentialStore()
   // 安装引擎扫描器(默认 = 真实 scanLocalEngines),必须早于任何 settings 加载
   // (bootstrapOfficialSoulApps / runtime.init / 后续请求路径)。
   setEngineScanner(options.engineScanner ?? null)
   const host = createWorkerOrchestrator({
+    credentialProvider: credentialStore,
     engineBridge: options.engineBridge,
     executor: options.executor,
     sessionAutoName: options.sessionAutoName ?? false,
@@ -158,6 +167,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   const state: LocalDaemonState = {
     authProvider: createLocalBearerAuthProvider({ token: options.token ?? workerEnv.AIWORKER_LOCAL_TOKEN }),
+    credentialStore,
     host,
     runtimes,
     startedAt: new Date().toISOString(),
@@ -168,6 +178,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       for (const tunnel of workerAccessTunnels)
         tunnel.close()
       workerAccessTunnels.clear()
+      // 关停清空内存凭证(不跨 daemon 生命周期泄漏)。
+      credentialStore.clear()
       for (const runtime of runtimes.values())
         runtime.dispose()
       runtimes.clear()
@@ -761,6 +773,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       const tunnel = await (options.connectWorkerAccessTunnel ?? connectWorkerAccessTunnel)({
         access: checkIn.access,
         assignment: checkIn.assignment,
+        // 同一 store 实例(顶部建)交 tunnel:hello 后发 acquire、收 grant 写入、4401 撤销 clear()。
+        credentialStore,
         env: process.env,
         localFetch: async request => app.fetch(request),
         // 撤销检测（onclose 4401）从这里清持久 token + 停重连循环。

@@ -1261,6 +1261,78 @@ describe('local daemon API', () => {
     }
   })
 
+  it('AC#3b: hands the SAME EngineCredentialStore instance to both the orchestrator and the access tunnel', async () => {
+    const originalHostUrl = process.env.AIWORKER_HOST_URL
+    const originalProvisionToken = process.env.AIWORKER_PROVISION_TOKEN
+    const dbPath = join(dir, 'credential-store-wiring.db')
+    const officialAppsRoot = join(dir, 'credential-store-wiring-apps')
+    writePackagedFreeform(officialAppsRoot)
+    closeWorkerDb()
+    initWorkerDb(dbPath)
+    runWorkerMigrations()
+    upsertWorker({ id: 'wkr_82', appId: FREEFORM_APP_ID, name: 'Freeform', status: 'active' })
+    closeWorkerDb()
+
+    let tunnelCredentialStore: unknown = 'not-passed'
+    let storeCleared = 0
+    process.env.AIWORKER_HOST_URL = 'https://host.example'
+    process.env.AIWORKER_PROVISION_TOKEN = 'awp_secret'
+    try {
+      const boot = await bootstrapWorkerApp({
+        connectWorkerAccessTunnel: async (input) => {
+          tunnelCredentialStore = input.credentialStore
+          return { close() {} }
+        },
+        dbPath,
+        engineScanner: () => fakeEngineRows(),
+        executor: {
+          async invoke(input) {
+            input.onEvent?.({ kind: 'text', text: 'done' })
+            return { artifacts: [], summary: 'done' }
+          },
+        },
+        officialAppsRoot,
+        provisionCheckIn: async () => ({
+          access: { mode: 'worker_access', token: 'awt_secret' },
+          assignment: {
+            assignedEmail: 'bob@example.com',
+            assignmentId: 'asn_1',
+            soulReleaseRef: 'soul_1',
+            workerId: 'wkr_82',
+          },
+        }),
+        runtimeVersion: 'test',
+        workersRoot: join(dir, 'credential-store-wiring-workers'),
+      })
+      bootedDaemons.push(boot.state)
+
+      // The tunnel must receive a real store (not undefined → §2.2 倒序 static no-op guard).
+      expect(tunnelCredentialStore).toBeDefined()
+      expect(tunnelCredentialStore).not.toBe('not-passed')
+      // Same instance shared between the executor's credentialProvider and the tunnel.
+      expect(tunnelCredentialStore).toBe(boot.state.credentialStore)
+
+      // Shutdown drops in-memory credentials (no leak across daemon lifecycle).
+      const realClear = boot.state.credentialStore.clear.bind(boot.state.credentialStore)
+      boot.state.credentialStore.clear = () => {
+        storeCleared += 1
+        realClear()
+      }
+      boot.state.shutdown()
+      expect(storeCleared).toBe(1)
+    }
+    finally {
+      if (originalHostUrl == null)
+        delete process.env.AIWORKER_HOST_URL
+      else
+        process.env.AIWORKER_HOST_URL = originalHostUrl
+      if (originalProvisionToken == null)
+        delete process.env.AIWORKER_PROVISION_TOKEN
+      else
+        process.env.AIWORKER_PROVISION_TOKEN = originalProvisionToken
+    }
+  })
+
   it('AC#4b: boots through a consumed-token check-in 401 instead of crashing the daemon (honest degradation, no tunnel)', async () => {
     const originalHostUrl = process.env.AIWORKER_HOST_URL
     const originalProvisionToken = process.env.AIWORKER_PROVISION_TOKEN

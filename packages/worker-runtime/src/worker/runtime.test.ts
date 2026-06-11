@@ -3,7 +3,7 @@ import type { SoulAppEngineAssets } from '@zonease/aiworker-soul-descriptor'
 
 import type { LocalExecutorInput } from './executor'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
@@ -281,6 +281,61 @@ describe('LocalWorkerRuntime', () => {
     }))
       .rejects
       .toThrow(`Session ${session.id} is archived and cannot start new work.`)
+  })
+
+  it('AC#3b: threads the credentialProvider into the default executor so engine env carries injected credentials', async () => {
+    // No executor injected → the runtime builds the default external executor, which must
+    // receive options.credentialProvider (runtime.ts ?? branch). Proven behaviorally: a real
+    // claude-code engine script echoes ANTHROPIC_AUTH_TOKEN; the provider injects a sentinel.
+    // The session freezes engineId 'claude-code' with no command, so the executor spawns
+    // `claude-code` from PATH — place a fake one there (mirrors worker.local.test.ts).
+    const binDir = join(dir, 'bin')
+    mkdirSync(binDir, { recursive: true })
+    const envFile = join(dir, 'engine-env.txt')
+    const claudeScript = join(binDir, 'claude-code')
+    writeFileSync(claudeScript, [
+      '#!/usr/bin/env bash',
+      'if [ "$1" = "--version" ] || [[ "$*" == *"--help"* ]]; then echo "claude-code test 1.0"; exit 0; fi',
+      'cat >/dev/null',
+      `printf 'ANTHROPIC_AUTH_TOKEN=%s\\n' "\${ANTHROPIC_AUTH_TOKEN:-}" > ${envFile}`,
+      'printf \'%s\\n\' \'{"type":"system","subtype":"init","session_id":"claude-s-1"}\'',
+      'printf \'%s\\n\' \'{"type":"result","result":"ok"}\'',
+      '',
+    ].join('\n'))
+    chmodSync(claudeScript, 0o755)
+    const previousPath = process.env.PATH
+    process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`
+
+    try {
+      const workerRuntime = new LocalWorkerRuntime({
+        worker: { id: 'worker-demo', appId: 'demo-soul', name: 'Demo', defaultEngineId: 'claude-code' },
+        workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
+        now,
+        // Deliberately NO executor: exercise the default `createExternalEngineExecutor({ credentialProvider })`.
+        credentialProvider: {
+          envFor: (engineId): Record<string, string> => engineId === 'claude-code'
+            ? { ANTHROPIC_BASE_URL: 'https://gw.example/anthropic', ANTHROPIC_AUTH_TOKEN: 'org-key-sentinel-anthropic' }
+            : {},
+        },
+      })
+      await workerRuntime.init()
+      const workspace = await workerRuntime.createWorkspace({ name: 'Credential Injection Workspace' })
+      const session = await workerRuntime.createSession({ workspaceId: workspace.id, title: 'Credential injection session' })
+
+      await workerRuntime.startInvocation({
+        sessionId: session.id,
+        input: 'Run with injected credentials.',
+        engineId: 'claude-code',
+      })
+
+      expect(await readFile(envFile, 'utf8')).toContain('ANTHROPIC_AUTH_TOKEN=org-key-sentinel-anthropic')
+    }
+    finally {
+      if (previousPath === undefined)
+        delete process.env.PATH
+      else
+        process.env.PATH = previousPath
+    }
   })
 
   it('runs the workspace session loop from invocation to completion', async () => {

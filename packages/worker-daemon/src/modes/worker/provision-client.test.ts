@@ -1022,6 +1022,200 @@ describe('worker provision check-in client', () => {
 
     expect(calls).toBe(0)
   })
+
+  it('eagerly requests anthropic + openai credentials after hello on connect', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('wss://host.example/api/provision/access'), sent)
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: () => socket,
+      credentialStore: fakeCredentialStore(),
+      env: { AIWORKER_HOST_URL: 'https://host.example' },
+      localFetch: async () => new Response('unused'),
+    })
+
+    expect(sent[0]).toEqual({ type: 'hello', assignmentId: 'asn_1', token: 'awt_secret', workerId: 'wkr_82' })
+    const acquires = sent.filter(frame => (frame as { type: string }).type === 'credential_acquire')
+    expect(acquires).toEqual([
+      { type: 'credential_acquire', providerKind: 'anthropic' },
+      { type: 'credential_acquire', providerKind: 'openai' },
+    ])
+  })
+
+  it('does not request credentials when no credential store is wired', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('wss://host.example/api/provision/access'), sent)
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'https://host.example' },
+      localFetch: async () => new Response('unused'),
+    })
+
+    expect(sent.filter(frame => (frame as { type: string }).type === 'credential_acquire')).toEqual([])
+  })
+
+  it('writes the granted credential into the store on credential_grant', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('wss://host.example/api/provision/access'), sent)
+    const store = fakeCredentialStore()
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: () => socket,
+      credentialStore: store,
+      env: { AIWORKER_HOST_URL: 'https://host.example' },
+      localFetch: async () => new Response('unused'),
+    })
+
+    await socket.dispatchMessage({
+      type: 'credential_grant',
+      providerKind: 'anthropic',
+      gatewayUrl: 'https://gw.example/anthropic',
+      token: 'org-key-anthropic',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    })
+
+    expect(store.sets).toEqual([
+      ['anthropic', { gatewayUrl: 'https://gw.example/anthropic', token: 'org-key-anthropic', expiresAt: '2099-01-01T00:00:00.000Z' }],
+    ])
+  })
+
+  it('schedules a refresh before a near-term expiry and emits credential_refresh', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('wss://host.example/api/provision/access'), sent)
+    const refresh = fakeRefreshScheduler()
+    const now = Date.parse('2026-06-11T00:00:00.000Z')
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: () => socket,
+      credentialStore: fakeCredentialStore(),
+      env: { AIWORKER_HOST_URL: 'https://host.example' },
+      localFetch: async () => new Response('unused'),
+      now: () => now,
+      startRefreshTimer: refresh.startRefreshTimer,
+    })
+
+    // Expiry 10 minutes out → a refresh is scheduled (well under the sane cap).
+    await socket.dispatchMessage({
+      type: 'credential_grant',
+      providerKind: 'openai',
+      gatewayUrl: 'https://gw.example/openai',
+      token: 'short-ttl-openai',
+      expiresAt: new Date(now + 10 * 60_000).toISOString(),
+    })
+
+    expect(refresh.scheduled).toHaveLength(1)
+    expect(refresh.scheduled[0]!.delayMs).toBeGreaterThan(0)
+    refresh.fire(0)
+    expect(sent.filter(frame => (frame as { type: string }).type === 'credential_refresh')).toEqual([
+      { type: 'credential_refresh', providerKind: 'openai' },
+    ])
+  })
+
+  it('never schedules a refresh for a far-future org-key expiry (no 1ms storm)', async () => {
+    const sent: unknown[] = []
+    const socket = fakeWebSocket(new URL('wss://host.example/api/provision/access'), sent)
+    const refresh = fakeRefreshScheduler()
+    const now = Date.parse('2026-06-11T00:00:00.000Z')
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: () => socket,
+      credentialStore: fakeCredentialStore(),
+      env: { AIWORKER_HOST_URL: 'https://host.example' },
+      localFetch: async () => new Response('unused'),
+      now: () => now,
+      startRefreshTimer: refresh.startRefreshTimer,
+    })
+
+    // org-key mode: far-future placeholder expiry → no refresh scheduled, no frame sent.
+    await socket.dispatchMessage({
+      type: 'credential_grant',
+      providerKind: 'anthropic',
+      gatewayUrl: 'https://gw.example/anthropic',
+      token: 'org-key-anthropic',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    })
+
+    expect(refresh.scheduled).toEqual([])
+    expect(sent.filter(frame => (frame as { type: string }).type === 'credential_refresh')).toEqual([])
+  })
+
+  it('re-sends acquire after a reconnect (credential recovery without re-provision)', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const socketSents: unknown[][] = []
+    const sockets: ReturnType<typeof fakeWebSocket>[] = []
+    const create = (url: URL) => {
+      const sent: unknown[] = []
+      socketSents.push(sent)
+      const socket = fakeWebSocket(url, sent)
+      sockets.push(socket)
+      return socket
+    }
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: create,
+      credentialStore: fakeCredentialStore(),
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+    })
+
+    // First socket: hello + two acquires.
+    expect(socketSents[0]!.filter(f => (f as { type: string }).type === 'credential_acquire')).toHaveLength(2)
+
+    // Transient close → reconnect opens a fresh socket which re-sends hello + acquires.
+    sockets[0]!.dispatchClose()
+    reconnect.fire()
+    expect(sockets).toHaveLength(2)
+    expect(socketSents[1]![0]).toEqual({ type: 'hello', assignmentId: 'asn_1', token: 'awt_secret', workerId: 'wkr_82' })
+    expect(socketSents[1]!.filter(f => (f as { type: string }).type === 'credential_acquire')).toEqual([
+      { type: 'credential_acquire', providerKind: 'anthropic' },
+      { type: 'credential_acquire', providerKind: 'openai' },
+    ])
+  })
+
+  it('clears the credential store on access revocation (4401) but not on transient disconnect', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const sockets: ReturnType<typeof fakeWebSocket>[] = []
+    const create = (url: URL) => {
+      const socket = fakeWebSocket(url, [])
+      sockets.push(socket)
+      return socket
+    }
+    const store = fakeCredentialStore()
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      createWebSocket: create,
+      credentialStore: store,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+      workerHome: '/tmp/does-not-matter',
+      clearPersistedAccess: async () => {},
+    })
+
+    // Transient disconnect must NOT clear credentials (reconnect re-grants).
+    sockets[0]!.dispatchClose()
+    expect(store.clears).toBe(0)
+
+    reconnect.fire()
+    // Revocation (4401) must clear credentials.
+    sockets[1]!.dispatchClose(4401)
+    expect(store.clears).toBe(1)
+  })
 })
 
 function fakeKeepaliveClock() {
@@ -1103,6 +1297,46 @@ function fakeLogger() {
     },
     get warns() {
       return warns
+    },
+  }
+}
+
+function fakeCredentialStore() {
+  const sets: Array<[string, unknown]> = []
+  let clears = 0
+  return {
+    get clears() {
+      return clears
+    },
+    set(providerKind: string, credential: unknown) {
+      sets.push([providerKind, credential])
+    },
+    get sets() {
+      return sets
+    },
+    clear() {
+      clears += 1
+    },
+  }
+}
+
+function fakeRefreshScheduler() {
+  const scheduled: Array<{ delayMs: number, run: () => void }> = []
+  return {
+    fire(index: number) {
+      scheduled[index]?.run()
+    },
+    get scheduled() {
+      return scheduled
+    },
+    startRefreshTimer(run: () => void, delayMs: number): () => void {
+      const entry = { delayMs, run }
+      scheduled.push(entry)
+      return () => {
+        const at = scheduled.indexOf(entry)
+        if (at >= 0)
+          scheduled.splice(at, 1)
+      }
     },
   }
 }
