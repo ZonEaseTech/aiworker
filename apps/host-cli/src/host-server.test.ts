@@ -2550,6 +2550,290 @@ describe('host server', () => {
       console.warn = originalInfo
     }
   })
+
+  // ── Phase 3 credential_acquire / credential_refresh ──────────────────────────
+  // A fake broker records its mint calls and returns a fixed grant so tests can
+  // assert profile/providerKind derivation and the grant frame shape — never a real
+  // network call or real provider quota.
+  function createFakeBroker(grantToken = 'sk-ant-org-key-as-is') {
+    const mintCalls: Array<{ profile: string | undefined, providerKind: string }> = []
+    const broker = {
+      mint(profile: string | undefined, providerKind: 'anthropic' | 'openai') {
+        mintCalls.push({ profile, providerKind })
+        return {
+          providerKind,
+          gatewayUrl: `https://gw.example.com/${providerKind}`,
+          token: grantToken,
+          expiresAt: '2999-01-01T00:00:00.000Z',
+        }
+      },
+      revoke() {
+        return { supported: false as const, reason: 'org-key mode has no per-worker revocation' }
+      },
+    }
+    return { broker, mintCalls }
+  }
+
+  async function readyAssignmentAndHello(
+    server: Awaited<ReturnType<typeof createHostServer>>,
+    accessRegistry: ReturnType<typeof createWorkerAccessRegistry>,
+    options: { workerId?: string, metadataJson?: Record<string, unknown> } = {},
+  ): Promise<{ assignmentId: string, ws: { data: Record<string, unknown>, sent: string[], closed: boolean } }> {
+    const workerId = options.workerId ?? 'wkr_82'
+    const release = publishTestRelease()
+    const created = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: release.releaseRef,
+      ...(options.metadataJson ? { metadataJson: options.metadataJson } : {}),
+    })
+    const checkInResponse = await json(await server.fetch(new Request('http://host/api/provision/check-in', {
+      body: JSON.stringify(checkInBody(created.provisionToken, workerId)),
+      method: 'POST',
+    })))
+    const ws = {
+      data: {} as Record<string, unknown>,
+      sent: [] as string[],
+      closed: false,
+      close() { this.closed = true },
+      send(message: string) {
+        this.sent.push(message)
+        return 1
+      },
+    }
+    await server.websocket.message?.(ws as never, JSON.stringify({
+      type: 'hello',
+      assignmentId: created.assignment.assignmentId,
+      token: checkInResponse.access.token,
+      workerId,
+    }))
+    return { assignmentId: created.assignment.assignmentId, ws }
+  }
+
+  it('mints a credential_grant on credential_acquire using the assignment derived from the authenticated connection', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const { broker, mintCalls } = createFakeBroker()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      credentialBroker: broker,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const { ws } = await readyAssignmentAndHello(server, accessRegistry)
+
+    await server.websocket.message?.(ws as never, JSON.stringify({
+      type: 'credential_acquire',
+      providerKind: 'anthropic',
+    }))
+
+    expect(mintCalls).toEqual([{ profile: undefined, providerKind: 'anthropic' }])
+    const grants = ws.sent.map(message => JSON.parse(message)).filter(frame => frame.type === 'credential_grant')
+    expect(grants).toHaveLength(1)
+    expect(grants[0]).toMatchObject({
+      type: 'credential_grant',
+      providerKind: 'anthropic',
+      gatewayUrl: 'https://gw.example.com/anthropic',
+      token: 'sk-ant-org-key-as-is',
+      expiresAt: '2999-01-01T00:00:00.000Z',
+    })
+    expect(ws.closed).toBe(false)
+  })
+
+  it('treats credential_refresh the same as credential_acquire', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const { broker, mintCalls } = createFakeBroker()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      credentialBroker: broker,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const { ws } = await readyAssignmentAndHello(server, accessRegistry)
+
+    await server.websocket.message?.(ws as never, JSON.stringify({
+      type: 'credential_refresh',
+      providerKind: 'openai',
+    }))
+
+    expect(mintCalls).toEqual([{ profile: undefined, providerKind: 'openai' }])
+    const grants = ws.sent.map(message => JSON.parse(message)).filter(frame => frame.type === 'credential_grant')
+    expect(grants).toHaveLength(1)
+    expect(grants[0].providerKind).toBe('openai')
+  })
+
+  it('passes the per-assignment metadata profile to the broker', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const { broker, mintCalls } = createFakeBroker()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      credentialBroker: broker,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const { ws } = await readyAssignmentAndHello(server, accessRegistry, {
+      metadataJson: { profile: 'acme' },
+    })
+
+    await server.websocket.message?.(ws as never, JSON.stringify({
+      type: 'credential_acquire',
+      providerKind: 'anthropic',
+    }))
+
+    expect(mintCalls).toEqual([{ profile: 'acme', providerKind: 'anthropic' }])
+  })
+
+  it('derives the assignment from each connection — a worker authenticated for A cannot mint for B', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const { broker, mintCalls } = createFakeBroker()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      credentialBroker: broker,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const a = await readyAssignmentAndHello(server, accessRegistry, { workerId: 'wkr_a', metadataJson: { profile: 'profile-a' } })
+    const b = await readyAssignmentAndHello(server, accessRegistry, { workerId: 'wkr_b', metadataJson: { profile: 'profile-b' } })
+
+    await server.websocket.message?.(a.ws as never, JSON.stringify({ type: 'credential_acquire', providerKind: 'anthropic' }))
+    await server.websocket.message?.(b.ws as never, JSON.stringify({ type: 'credential_acquire', providerKind: 'anthropic' }))
+
+    // Each connection minted with ITS OWN assignment's profile — derivation is
+    // per-connection ws.data, not anything the frame could carry.
+    expect(mintCalls).toEqual([
+      { profile: 'profile-a', providerKind: 'anthropic' },
+      { profile: 'profile-b', providerKind: 'anthropic' },
+    ])
+  })
+
+  it('does not mint for a credential_acquire that arrives without a prior authenticated hello', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const { broker, mintCalls } = createFakeBroker()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      credentialBroker: broker,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const ws = {
+      data: {} as Record<string, unknown>,
+      sent: [] as string[],
+      closed: false,
+      close() { this.closed = true },
+      send(message: string) {
+        this.sent.push(message)
+        return 1
+      },
+    }
+
+    await server.websocket.message?.(ws as never, JSON.stringify({
+      type: 'credential_acquire',
+      providerKind: 'anthropic',
+    }))
+
+    expect(mintCalls).toHaveLength(0)
+    expect(ws.sent).toHaveLength(0)
+    expect(ws.closed).toBe(false)
+  })
+
+  it('ignores credential frames when no broker is configured (no crash, no grant)', async () => {
+    const accessRegistry = createWorkerAccessRegistry()
+    const server = await createHostServer({
+      accessRegistry,
+      authUser: bobUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const { ws } = await readyAssignmentAndHello(server, accessRegistry)
+
+    await server.websocket.message?.(ws as never, JSON.stringify({
+      type: 'credential_acquire',
+      providerKind: 'anthropic',
+    }))
+
+    const grants = ws.sent.map(message => JSON.parse(message)).filter(frame => frame.type === 'credential_grant')
+    expect(grants).toHaveLength(0)
+    expect(ws.closed).toBe(false)
+  })
+
+  it('does not tear down the tunnel or leak the org key when mint throws', async () => {
+    const originalWarn = console.warn
+    const logs: string[] = []
+    console.warn = (...values: unknown[]) => {
+      logs.push(values.map(value => String(value)).join(' '))
+    }
+    try {
+      const accessRegistry = createWorkerAccessRegistry()
+      const throwingBroker = {
+        mint() {
+          throw new Error('org-key environment variable is not set: ANTHROPIC_ORG_KEY.')
+        },
+        revoke() { return { supported: false as const } },
+      }
+      const server = await createHostServer({
+        accessRegistry,
+        authUser: bobUser,
+        credentialBroker: throwingBroker,
+        dbPath: dbPath(),
+        ...hostUrls(),
+      })
+      const { ws } = await readyAssignmentAndHello(server, accessRegistry)
+
+      await server.websocket.message?.(ws as never, JSON.stringify({
+        type: 'credential_acquire',
+        providerKind: 'anthropic',
+      }))
+
+      // No grant emitted, tunnel stays up (catch swallows the mint error so the
+      // shared message() catch never fires ws.close()), and the worker still
+      // forwards HTTP — degrade gracefully, do not crash.
+      const grants = ws.sent.map(message => JSON.parse(message)).filter(frame => frame.type === 'credential_grant')
+      expect(grants).toHaveLength(0)
+      expect(ws.closed).toBe(false)
+      expect(accessRegistry.has('wkr_82')).toBe(true)
+      // A failure line may be logged but must never carry a token value.
+      const failLogs = logs.filter(line => line.includes('worker_credential_mint_failed'))
+      expect(failLogs.length).toBeGreaterThanOrEqual(1)
+      expect(failLogs.join('\n')).not.toContain('sk-ant-org-key-as-is')
+    }
+    finally {
+      console.warn = originalWarn
+    }
+  })
+
+  it('never logs the granted org key token on a successful credential_acquire', async () => {
+    const originalWarn = console.warn
+    const logs: string[] = []
+    console.warn = (...values: unknown[]) => {
+      logs.push(values.map(value => String(value)).join(' '))
+    }
+    try {
+      const accessRegistry = createWorkerAccessRegistry()
+      const { broker } = createFakeBroker('sk-ant-super-secret-org-key')
+      const server = await createHostServer({
+        accessRegistry,
+        authUser: bobUser,
+        credentialBroker: broker,
+        dbPath: dbPath(),
+        ...hostUrls(),
+      })
+      const { ws } = await readyAssignmentAndHello(server, accessRegistry)
+
+      await server.websocket.message?.(ws as never, JSON.stringify({
+        type: 'credential_acquire',
+        providerKind: 'anthropic',
+      }))
+
+      expect(logs.join('\n')).not.toContain('sk-ant-super-secret-org-key')
+    }
+    finally {
+      console.warn = originalWarn
+    }
+  })
 })
 
 interface OidcFixture {

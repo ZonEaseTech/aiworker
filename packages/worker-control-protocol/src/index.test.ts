@@ -342,59 +342,59 @@ describe('worker-control-protocol contract', () => {
     } as never)).toThrow()
   })
 
-  test('credential_acquire frame requests a credential for an engine kind (worker→host)', () => {
+  test('credential_acquire frame requests a credential for a provider kind (worker→host)', () => {
     expect(parseWorkerAccessFrame({
       type: 'credential_acquire',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
     })).toEqual({
       type: 'credential_acquire',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
     })
 
     expect(parseWorkerAccessFrame({
       type: 'credential_acquire',
-      engineKind: 'openai',
+      providerKind: 'openai',
     })).toEqual({
       type: 'credential_acquire',
-      engineKind: 'openai',
+      providerKind: 'openai',
     })
   })
 
-  test('credential_refresh frame renews a credential for an engine kind (worker→host)', () => {
+  test('credential_refresh frame renews a credential for a provider kind (worker→host)', () => {
     expect(parseWorkerAccessFrame({
       type: 'credential_refresh',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
     })).toEqual({
       type: 'credential_refresh',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
     })
   })
 
   test('credential_grant frame carries gatewayUrl token and expiresAt (host→worker)', () => {
     const grant = parseWorkerAccessFrame({
       type: 'credential_grant',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
       gatewayUrl: 'https://gateway.example.test',
       token: 'org-key-as-is',
       expiresAt: '2099-01-01T00:00:00.000Z',
     })
     expect(grant).toEqual({
       type: 'credential_grant',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
       gatewayUrl: 'https://gateway.example.test',
       token: 'org-key-as-is',
       expiresAt: '2099-01-01T00:00:00.000Z',
     })
   })
 
-  test('credential frames reject an unknown engineKind (cursor is not in the enum)', () => {
+  test('credential frames reject an unknown providerKind (cursor is not in the enum)', () => {
     expect(() => parseWorkerAccessFrame({
       type: 'credential_acquire',
-      engineKind: 'cursor',
+      providerKind: 'cursor',
     } as never)).toThrow()
     expect(() => parseWorkerAccessFrame({
       type: 'credential_grant',
-      engineKind: 'gemini',
+      providerKind: 'gemini',
       gatewayUrl: 'https://gateway.example.test',
       token: 't',
       expiresAt: '2099-01-01T00:00:00.000Z',
@@ -402,28 +402,28 @@ describe('worker-control-protocol contract', () => {
   })
 
   test('credential frames reject missing required fields and extra fields', () => {
-    // credential_acquire requires engineKind.
+    // credential_acquire requires providerKind.
     expect(() => parseWorkerAccessFrame({
       type: 'credential_acquire',
     } as never)).toThrow()
     // credential_grant requires gatewayUrl/token/expiresAt to be non-empty.
     expect(() => parseWorkerAccessFrame({
       type: 'credential_grant',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
       baseUrl: '',
       token: 't',
       expiresAt: '2099-01-01T00:00:00.000Z',
     } as never)).toThrow()
     expect(() => parseWorkerAccessFrame({
       type: 'credential_grant',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
       gatewayUrl: 'https://gateway.example.test',
       token: '',
       expiresAt: '2099-01-01T00:00:00.000Z',
     } as never)).toThrow()
     expect(() => parseWorkerAccessFrame({
       type: 'credential_grant',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
       gatewayUrl: 'https://gateway.example.test',
       token: 't',
       expiresAt: '',
@@ -431,7 +431,7 @@ describe('worker-control-protocol contract', () => {
     // strict: no extra carrier fields.
     expect(() => parseWorkerAccessFrame({
       type: 'credential_grant',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
       gatewayUrl: 'https://gateway.example.test',
       token: 't',
       expiresAt: '2099-01-01T00:00:00.000Z',
@@ -444,7 +444,7 @@ describe('worker-control-protocol contract', () => {
     // (host pending request/response map) must never be reused for credentials.
     expect(() => parseWorkerAccessResponseEnvelope({
       type: 'credential_grant',
-      engineKind: 'anthropic',
+      providerKind: 'anthropic',
       gatewayUrl: 'https://gateway.example.test',
       token: 't',
       expiresAt: '2099-01-01T00:00:00.000Z',
@@ -464,7 +464,7 @@ describe('worker-control-protocol contract', () => {
     // The grant decodes under its own discriminant via the union parser.
     const grant = parseWorkerAccessFrame({
       type: 'credential_grant',
-      engineKind: 'openai',
+      providerKind: 'openai',
       gatewayUrl: 'https://gateway.example.test',
       token: 't',
       expiresAt: '2099-01-01T00:00:00.000Z',

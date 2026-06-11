@@ -1,7 +1,8 @@
 import type { AuthenticatedHostUser, AuthProvider, WorkerAccessConnection, WorkerAccessRegistry } from '@zonease/aiworker-host-control'
 import type { HostAssignmentRow, HostSoulReleaseRow } from '@zonease/aiworker-storage-sqlite/host'
-import type { WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope } from '@zonease/aiworker-worker-control-protocol'
+import type { CredentialGrantFrame, WorkerAccessRequestEnvelope, WorkerAccessResponseEnvelope } from '@zonease/aiworker-worker-control-protocol'
 import type { Buffer } from 'node:buffer'
+import type { HostCredentialBroker } from './host-credential-broker'
 import type { OidcClientConfig, OidcFetch, OidcLoginTransaction } from './host-oidc-client'
 import type { HostOptionsView, ProvisioningAdapterType, ProvisioningTargetMaturity } from './host-options'
 import type { HostSessionPayload } from './host-session-cookie'
@@ -24,6 +25,7 @@ import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import {
   bootstrapHostAdminEmails,
   createAssignment,
+  getAssignment,
   getAssignmentByWorkerId,
   getSoulRelease,
   initHostDb,
@@ -72,6 +74,12 @@ interface HostServerBaseOptions {
   accessRegistry?: WorkerAccessRegistry
   authProvider?: AuthProvider
   authUser?: AuthenticatedHostUser | null
+  // Phase 3 LLM credential injection. When set, the Host answers a Worker's
+  // `credential_acquire`/`credential_refresh` frames by minting a provider
+  // credential. Injected so tests can supply a fake broker; the live org-key
+  // broker is built from env in host-lifecycle. When absent, credential frames
+  // are ignored (no-op).
+  credentialBroker?: HostCredentialBroker
   dbPath: string
   optionsProvider?: () => Promise<HostOptionsView>
   sessionAuth?: HostSessionAuthOptions
@@ -157,6 +165,7 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
     ? createCookieBackedAuthProvider(options.sessionAuth)
     : authProvider
   const accessRegistry = options.accessRegistry ?? createWorkerAccessRegistry()
+  const credentialBroker = options.credentialBroker ?? null
   const webStaticDir = options.webStaticDir ? normalizeStaticDir(options.webStaticDir) : null
   const pending = new Map<string, {
     reject: (error: Error) => void
@@ -262,6 +271,51 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
 
     if (frame.type === 'ping') {
       ws.send(JSON.stringify({ type: 'pong', id: frame.id }))
+      return
+    }
+
+    if (frame.type === 'credential_acquire' || frame.type === 'credential_refresh') {
+      // Authorization boundary: the assignment is derived from THIS authenticated
+      // connection (ws.data.accessConnection, set in the hello branch after the
+      // access token was verified) — never from the frame. The credential frame
+      // carries no assignmentId precisely so a worker authenticated for assignment
+      // A cannot mint for assignment B. An acquire that arrives before/without a
+      // valid hello has no accessConnection → we mint nothing and stay silent.
+      const assignmentId = ws.data.accessConnection?.assignmentId
+      if (!assignmentId || !credentialBroker)
+        return
+      const assignment = getAssignment(assignmentId)
+      if (!assignment)
+        return
+
+      const profile = resolveAssignmentGatewayProfile(assignment.metadataJson)
+      let grant: CredentialGrantFrame
+      try {
+        const minted = credentialBroker.mint(profile, frame.providerKind)
+        grant = {
+          type: 'credential_grant',
+          providerKind: minted.providerKind,
+          gatewayUrl: minted.gatewayUrl,
+          token: minted.token,
+          expiresAt: minted.expiresAt,
+        }
+      }
+      catch (error) {
+        // Never tear down the authenticated tunnel (which also carries HTTP
+        // forwarding) on a mint failure, and never log the token. The worker's
+        // acquire is fire-and-forget: an empty store degrades to the slice-1
+        // graceful auth-aware fallback, not a crash.
+        console.warn(JSON.stringify({
+          event: 'worker_credential_mint_failed',
+          workerId: ws.data.workerId,
+          providerKind: frame.providerKind,
+          reason: safeCredentialMintMessage(error),
+        }))
+        return
+      }
+      // The grant carries a secret token: send it straight down the TLS tunnel,
+      // never log the frame body.
+      ws.send(JSON.stringify(grant))
     }
   }
 
@@ -962,6 +1016,32 @@ function readAssignmentMetadata(value: unknown): {
       ? { provisioningTargetRef: record.provisioningTargetRef }
       : {}),
   }
+}
+
+// Phase 3: which gateway profile to mint from for this assignment. Reads an
+// optional `profile` name from assignment metadata (no schema column / no
+// gatewayProfileRef envelope — that ref is on the worker-config line, not the
+// credential line). Returns undefined when absent so the broker falls back to
+// its OWN configured default profile (which need not be literally "default").
+function resolveAssignmentGatewayProfile(metadataJson: unknown): string | undefined {
+  if (metadataJson && typeof metadataJson === 'object') {
+    const value = (metadataJson as Record<string, unknown>).profile
+    if (typeof value === 'string' && value.trim().length > 0)
+      return value.trim()
+  }
+  return undefined
+}
+
+// A credential mint error may name an env ref but must never carry a secret
+// value. Reuse the same defensive redaction shape as auth failures: strip
+// known token kinds and any long opaque run.
+function safeCredentialMintMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message
+    .replace(/\b(?:sk-ant-|sk-)[\w-]+/gi, '[redacted]')
+    .replace(/[\w.~+/-]{32,}/g, '[redacted]')
+    .trim()
+    .slice(0, 240)
 }
 
 function isProvisioningTargetUnreachable(error: unknown): boolean {

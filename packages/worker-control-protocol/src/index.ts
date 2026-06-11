@@ -118,26 +118,26 @@ export const workerAccessCloseFrameSchema = z.object({
 }).strict()
 
 // Phase 3 LLM credential injection (typed frames, never bodyText).
-// engineKind only covers the engines that accept an injected org key + gateway URL;
-// cursor is intentionally excluded (its CLI does not route an externally
-// supplied key). These frames ride the already-authenticated Worker Access
-// tunnel (Phase 2 access token) but are independent typed frames: their fields
-// live in the frame body, never in `bodyText`, and they never enter the Host
-// pending request/response correlation map. They are therefore unaffected by
-// WAT-1 (which only corrupts `bodyText` HTTP forwarding) and not subject to the
-// 15s HTTP-forward timeout.
-const engineKindSchema = z.enum(['anthropic', 'openai'])
+// providerKind identifies the LLM provider that accepts an injected org key +
+// gateway URL; cursor is intentionally excluded (its CLI does not route an
+// externally supplied key). These frames ride the already-authenticated Worker
+// Access tunnel (Phase 2 access token) but are independent typed frames: their
+// fields live in the frame body, never in `bodyText`, and they never enter the
+// Host pending request/response correlation map. They are therefore unaffected
+// by WAT-1 (which only corrupts `bodyText` HTTP forwarding) and not subject to
+// the 15s HTTP-forward timeout.
+const credentialProviderKindSchema = z.enum(['anthropic', 'openai'])
 
-// worker→host: ask the Host to mint/return a credential for this engine kind.
+// worker→host: ask the Host to mint/return a credential for this provider.
 export const workerAccessCredentialAcquireFrameSchema = z.object({
   type: z.literal('credential_acquire'),
-  engineKind: engineKindSchema,
+  providerKind: credentialProviderKindSchema,
 }).strict()
 
-// worker→host: renew a credential approaching expiry for this engine kind.
+// worker→host: renew a credential approaching expiry for this provider.
 export const workerAccessCredentialRefreshFrameSchema = z.object({
   type: z.literal('credential_refresh'),
-  engineKind: engineKindSchema,
+  providerKind: credentialProviderKindSchema,
 }).strict()
 
 // host→worker: deliver the credential. A distinct type — it must NEVER reuse
@@ -149,7 +149,7 @@ export const workerAccessCredentialRefreshFrameSchema = z.object({
 // 4401 Phase 2 channel, not TTL expiry.
 export const workerAccessCredentialGrantFrameSchema = z.object({
   type: z.literal('credential_grant'),
-  engineKind: engineKindSchema,
+  providerKind: credentialProviderKindSchema,
   // Semantic (not transport-shaped) name: the contract is transport-agnostic, so
   // this mirrors the existing workbenchUrl convention rather than a transport
   // token like baseUrl/endpoint (see G10 inversion guard).
@@ -182,7 +182,7 @@ export type WorkerAccessHelloFrame = z.infer<typeof workerAccessHelloFrameSchema
 export type WorkerAccessPingFrame = z.infer<typeof workerAccessPingFrameSchema>
 export type WorkerAccessPongFrame = z.infer<typeof workerAccessPongFrameSchema>
 export type WorkerAccessCloseFrame = z.infer<typeof workerAccessCloseFrameSchema>
-export type EngineKind = z.infer<typeof engineKindSchema>
+export type CredentialProviderKind = z.infer<typeof credentialProviderKindSchema>
 export type CredentialAcquireFrame = z.infer<typeof workerAccessCredentialAcquireFrameSchema>
 export type CredentialRefreshFrame = z.infer<typeof workerAccessCredentialRefreshFrameSchema>
 export type CredentialGrantFrame = z.infer<typeof workerAccessCredentialGrantFrameSchema>
