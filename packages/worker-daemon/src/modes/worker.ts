@@ -741,6 +741,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       checkIn: options.provisionCheckIn,
       env: process.env,
       runtimeVersion: state.runtimeVersion,
+      // D6:worker-home = daemon 启动的 DB 目录。持久 `<worker-home>/access-token` 在则读回重连、
+      // 跳过 check-in（first-provision 与重启都走这条，免对已消费 provision token 二次 check-in）。
+      workerHome: path.dirname(dbPath),
     })
     if (checkIn) {
       const tunnel = await (options.connectWorkerAccessTunnel ?? connectWorkerAccessTunnel)({

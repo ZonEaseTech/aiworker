@@ -1,5 +1,12 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { afterEach, describe, expect, it } from 'bun:test'
 
+import {
+  persistWorkerAccess,
+  readPersistedWorkerAccess,
+} from './access-token-store'
 import {
   buildAccessHello,
   buildCheckInBody,
@@ -214,6 +221,102 @@ describe('worker provision check-in client', () => {
 
     expect(receipt).toBeNull()
     expect(calls).toEqual([])
+  })
+
+  it('D6: reads back the persisted access and skips check-in when a token file exists', async () => {
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-d6-skip-'))
+    try {
+      await persistWorkerAccess(home, {
+        access: { mode: 'worker_access', token: 'awt_persisted' },
+        assignment: { assignmentId: 'asn_persisted', workerId: 'wkr_82' },
+      })
+      process.env.AIWORKER_HOST_URL = 'https://host.example'
+      process.env.AIWORKER_PROVISION_TOKEN = 'awp_secret'
+      const calls: unknown[] = []
+
+      const receipt = await maybeProvisionCheckIn({
+        activeResolution: { kind: 'single', worker: { appId: 'aiworker-freeform', id: 'wkr_82' } },
+        checkIn: async (input) => {
+          calls.push(input)
+          throw new Error('check-in must not be called when persisted token exists')
+        },
+        env: process.env,
+        runtimeVersion: '1.2.3',
+        workerHome: home,
+      })
+
+      // Reconstructs a tunnel-compatible receipt from the persisted reconnect triple.
+      expect(receipt?.access).toEqual({ mode: 'worker_access', token: 'awt_persisted' })
+      expect(receipt?.assignment.assignmentId).toBe('asn_persisted')
+      expect(receipt?.assignment.workerId).toBe('wkr_82')
+      expect(calls).toEqual([])
+    }
+    finally {
+      await rm(home, { force: true, recursive: true })
+    }
+  })
+
+  it('D6: check-in then persists the returned access when no token file exists yet', async () => {
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-d6-persist-'))
+    try {
+      process.env.AIWORKER_HOST_URL = 'https://host.example'
+      process.env.AIWORKER_PROVISION_TOKEN = 'awp_secret'
+      const calls: unknown[] = []
+
+      const receipt = await maybeProvisionCheckIn({
+        activeResolution: { kind: 'single', worker: { appId: 'aiworker-freeform', id: 'wkr_82' } },
+        checkIn: async (input) => {
+          calls.push(input)
+          return {
+            access: { mode: 'worker_access', token: 'awt_fresh' },
+            assignment: {
+              assignedEmail: 'alice@example.com',
+              assignmentId: 'asn_fresh',
+              soulReleaseRef: 'soul-release-1',
+              workerId: 'wkr_82',
+            },
+          }
+        },
+        env: process.env,
+        runtimeVersion: '1.2.3',
+        workerHome: home,
+      })
+
+      expect(calls).toHaveLength(1)
+      expect(receipt?.access.token).toBe('awt_fresh')
+      const persisted = await readPersistedWorkerAccess(home)
+      expect(persisted).toEqual({
+        access: { mode: 'worker_access', token: 'awt_fresh' },
+        assignment: { assignmentId: 'asn_fresh', workerId: 'wkr_82' },
+      })
+    }
+    finally {
+      await rm(home, { force: true, recursive: true })
+    }
+  })
+
+  it('D6/AC#4b: surfaces a consumed-token 401 instead of silently dying', async () => {
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-d6-401-'))
+    try {
+      process.env.AIWORKER_HOST_URL = 'https://host.example'
+      process.env.AIWORKER_PROVISION_TOKEN = 'awp_already_consumed'
+
+      await expect(maybeProvisionCheckIn({
+        activeResolution: { kind: 'single', worker: { appId: 'aiworker-freeform', id: 'wkr_82' } },
+        checkIn: async () => {
+          throw new Error('Worker check-in failed: 401')
+        },
+        env: process.env,
+        runtimeVersion: '1.2.3',
+        workerHome: home,
+      })).rejects.toThrow('Worker check-in failed: 401')
+
+      // The consumed-token failure must not leave a partial/stale token file behind.
+      expect(await readPersistedWorkerAccess(home)).toBeNull()
+    }
+    finally {
+      await rm(home, { force: true, recursive: true })
+    }
   })
 
   it('does not require or read a worker access local url env', async () => {

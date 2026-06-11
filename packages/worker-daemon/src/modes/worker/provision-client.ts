@@ -4,6 +4,18 @@ import {
   parseWorkerCheckInResponse,
 
 } from '@zonease/aiworker-worker-control-protocol'
+import { persistWorkerAccess, readPersistedWorkerAccess } from './access-token-store'
+
+export type { PersistedWorkerAccess } from './access-token-store'
+// Re-export the 0600 token-store surface here so consumers (e.g. the provision CLI doing
+// first-provision bootstrap) reach the whole provision/reconnect surface from one entrypoint.
+export {
+  clearPersistedWorkerAccess,
+  persistedWorkerAccessPath,
+  persistWorkerAccess,
+  readPersistedWorkerAccess,
+  redactWorkerAccessToken,
+} from './access-token-store'
 
 export type CheckInFetch = (url: URL, init: RequestInit) => Promise<Response>
 export type WorkerAccessLocalFetch = (request: Request) => Promise<Response>
@@ -46,6 +58,13 @@ export interface MaybeProvisionCheckInInput {
   checkIn?: (input: CheckInInput) => Promise<WorkerCheckInResponse>
   env: Record<string, string | undefined>
   runtimeVersion: string
+  /**
+   * worker-home（= daemon 实际启动的 DB 目录，`path.dirname(dbPath)`）。提供时启用 D6 持久 token 路径：
+   * 先读回 `<worker-home>/access-token`——存在则直接用它重连、跳过 check-in（provision token 单次消费，
+   * 重 check-in 必 401）；不存在且 env 有 host+token → check-in 并把返回的 access 持久化。未提供时退回
+   * 旧行为（纯 env 驱动 check-in、不落盘），保持已有调用方不变。
+   */
+  workerHome?: string
 }
 
 export interface HandleAccessRequestEnvelopeInput {
@@ -192,11 +211,31 @@ export async function checkInToHost(input: CheckInInput): Promise<WorkerCheckInR
 export async function maybeProvisionCheckIn(input: MaybeProvisionCheckInInput): Promise<WorkerCheckInResponse | null> {
   if (input.activeResolution.kind !== 'single' || !('worker' in input.activeResolution))
     return null
+
+  // D6:持久 token 优先。first-provision（CLI 引导）落盘后，daemon boot 与后续每次重启都走这条——
+  // 读回重连三元组、跳过 check-in，避免对已消费的 provision token 二次 check-in（必 401）。
+  if (input.workerHome) {
+    const persisted = await readPersistedWorkerAccess(input.workerHome)
+    if (persisted) {
+      return {
+        access: persisted.access,
+        // 重连只需 assignmentId + workerId（hello 帧三元组的剩余两项）；其余 receipt 字段在持久路径下
+        // 不参与重连，故合成最小占位（旧 host 字段，不发往 Host，仅喂本地 tunnel 构造）。
+        assignment: {
+          assignedEmail: 'persisted@local',
+          assignmentId: persisted.assignment.assignmentId,
+          soulReleaseRef: 'persisted',
+          workerId: persisted.assignment.workerId,
+        },
+      }
+    }
+  }
+
   const host = input.env.AIWORKER_HOST_URL
   const provisionToken = input.env.AIWORKER_PROVISION_TOKEN
   if (!host || !provisionToken)
     return null
-  return await (input.checkIn ?? checkInToHost)({
+  const receipt = await (input.checkIn ?? checkInToHost)({
     host,
     id: input.activeResolution.worker.appId,
     provisionToken,
@@ -204,6 +243,15 @@ export async function maybeProvisionCheckIn(input: MaybeProvisionCheckInInput): 
     workerId: input.activeResolution.worker.id,
     workbenchUrl: '/',
   })
+
+  // 兼容「daemon 首启直接带 env、worker 已建」路径：把 check-in 返回的 access 持久化，使下次重启免 check-in。
+  if (input.workerHome) {
+    await persistWorkerAccess(input.workerHome, {
+      access: { mode: receipt.access.mode, token: receipt.access.token },
+      assignment: { assignmentId: receipt.assignment.assignmentId, workerId: receipt.assignment.workerId },
+    })
+  }
+  return receipt
 }
 
 export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnelInput): Promise<WorkerAccessTunnelHandle | null> {

@@ -15,6 +15,10 @@
     "./settings": {
       "types": "./src/modes/worker/settings.ts",
       "import": "./src/modes/worker/settings.ts"
+    },
+    "./provision": {
+      "types": "./src/modes/worker/provision-client.ts",
+      "import": "./src/modes/worker/provision-client.ts"
     }
   },
   "main": "./src/index.ts",

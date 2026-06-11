@@ -2,6 +2,8 @@
 import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import type { SoulDiscovery, SoulValidationIssue } from '@zonease/aiworker-soul-sdk'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { WorkerCheckInResponse } from '@zonease/aiworker-worker-control-protocol'
+import type { CheckInInput } from '@zonease/aiworker-worker-daemon/provision'
 import type { LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext, WorkerOrchestrator } from '@zonease/aiworker-worker-runtime'
 import type { OfficialSoulAppDefinition, OfficialSoulCatalogView } from '@zonease/aiworker-worker-runtime/internal/official-soul-catalog'
 import type { FleetIndex, FleetWorker } from './fleet'
@@ -10,7 +12,7 @@ import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -52,6 +54,7 @@ import {
   upsertWorker,
   upsertWorkerConfigValue,
 } from '@zonease/aiworker-storage-sqlite/worker'
+import { checkInToHost, persistWorkerAccess } from '@zonease/aiworker-worker-daemon/provision'
 // Worker-scoped engine/execution-mode settings live in the daemon local-settings store.
 // Importing the settings helpers (not the daemon app entry) keeps the secret-ref guard in
 // `saveLocalSettings` as the single writer — the CLI never reimplements the secret check.
@@ -227,6 +230,7 @@ let daemonStarterForTest: DaemonStarter | null = null
 let officialSoulDistBuilderForTest: (() => Promise<void>) | null = null
 let officialSoulDescriptorsReadyForTest: (() => boolean) | null = null
 let daemonForegroundForTest: DaemonForegroundRunner | null = null
+let provisionCheckInForTest: ((input: CheckInInput) => Promise<WorkerCheckInResponse>) | null = null
 let workerCreateSelectorForTest: ((candidates: readonly WorkerCreateCandidate[]) => Promise<string>) | null = null
 
 export interface WorkerCreateCandidate {
@@ -248,6 +252,12 @@ export function __setOfficialSoulDescriptorsReadyForTest(check: (() => boolean) 
 
 export function __setDaemonForegroundForTest(runner: DaemonForegroundRunner | null): void {
   daemonForegroundForTest = runner
+}
+
+export function __setProvisionCheckInForTest(
+  checkIn: ((input: CheckInInput) => Promise<WorkerCheckInResponse>) | null,
+): void {
+  provisionCheckInForTest = checkIn
 }
 
 export function __setWorkerCreateSelectorForTest(
@@ -1660,9 +1670,94 @@ async function provisionCommand(input: Partial<ProvisionCommandInput>, argv: str
     throw new Error('provision requires --host')
   if (!input.token)
     throw new Error('provision requires --token')
-  Object.assign(process.env, buildProvisionEnv({ host: input.host, token: input.token }))
+  const host = input.host
+  const token = input.token
+  Object.assign(process.env, buildProvisionEnv({ host, token }))
   consola.info(`[aiworker-provision] ${redactProvisionCommandForLog(argv)}`)
+
+  // first-provision 引导(破 C2 循环依赖):裸机 daemon boot 的 gating 要求已存在 active worker
+  // 才 check-in/连 tunnel,而 worker 又要靠 check-in 拿来的 descriptor 才能建——因此先在 CLI 进程里
+  // 把 worker 引导出来,再起 daemon。daemon boot 读持久 token 连 tunnel、不重复 check-in。
+  await ensureDb()
+  if (resolveSingleActiveWorker().kind === 'single') {
+    // 幂等:worker 已存在 → 跳过引导(provision token 单次消费,重 check-in 必 401)。
+    // 直接起 daemon,让它走重启自愈读 <worker-home>/access-token。
+    closeWorkerDb()
+    await (daemonForegroundForTest ?? daemonForeground)({})
+    return
+  }
+  closeWorkerDb()
+
+  await firstProvisionBootstrap({ host, token })
   await (daemonForegroundForTest ?? daemonForeground)({})
+}
+
+// 引导一个全新 worker:check-in(worker.id 发占位)→ 落盘 descriptor → descriptor-path 安装 →
+// 解析真实 identity.id 作 appId → enable → createSoulWorker 绑定 → 持久化 access token。
+// 失败(check-in 非 2xx 等)向上抛 → runCli 顶层捕获并诚实非零退出,不静默起 daemon。
+async function firstProvisionBootstrap(opts: { host: string, token: string }): Promise<void> {
+  const paths = await ensureDb()
+  try {
+    // worker.id(appId)在 first-provision 时还不知道——真实 soul id 要等 descriptor。Host 的 handleCheckIn
+    // 不消费 worker.id(只用 workerId + version),故这里发占位(用 mint 的 workerId);建 worker 时才用
+    // descriptor 解析出的真 identity.id 作 appId。
+    const workerId = mintWorkerId()
+    const checkIn = await (provisionCheckInForTest ?? checkInToHost)({
+      host: opts.host,
+      id: workerId,
+      provisionToken: opts.token,
+      version: packageJson.version,
+      workerId,
+      workbenchUrl: '/',
+    })
+
+    const descriptorJson = checkIn.assignment.soulDescriptor
+    if (!descriptorJson)
+      throw new Error('Host check-in did not include a soul descriptor; cannot provision this worker')
+
+    // 落盘 descriptor 后走 descriptor-path 安装(inline 会丢 engine 资产,§0-D 关键 gap)。
+    const descriptorPath = path.join(paths.home, 'soul.descriptor.json')
+    await writeFile(descriptorPath, descriptorJson)
+
+    const host = createHost(paths)
+    await host.installAppFromPath(descriptorPath)
+    const identity = parseSoulDescriptorV1(JSON.parse(descriptorJson)).identity
+    const appId = String(identity.id)
+    const name = typeof identity.name === 'string' && identity.name.trim().length > 0 ? identity.name : appId
+    // catalog-availability 桥接:installAppFromPath 落 'installed',但 createSoulWorker 的
+    // requireAvailableSoul 要 'available'(投影自 'enabled'),且 engineAssetSourceForWorker 也要 'enabled'
+    // + descriptor-path。漏 enable → SOUL_NOT_AVAILABLE + 引擎资产返 null。
+    host.enableApp(appId)
+    await host.createSoulWorker({ appId, id: workerId, name })
+
+    // 持久化 access token(0600,全仓首个 secret 文件)→ daemon boot 读回连 tunnel、跳过 check-in。
+    await persistWorkerAccess(paths.home, {
+      access: { mode: checkIn.access.mode, token: checkIn.access.token },
+      assignment: { assignmentId: checkIn.assignment.assignmentId, workerId },
+    })
+
+    // fleet index 登记 + 端口,使 `aiworker list` 等 fleet 命令能看到这个引导出来的 worker。
+    registerProvisionedWorkerInFleet({ appId, id: workerId, home: paths.home })
+  }
+  finally {
+    closeWorkerDb()
+  }
+}
+
+// 把引导出来的 worker 登记进 fleet index(home '.'=默认 home 原地登记)。纯索引登记,不动 DB。
+function registerProvisionedWorkerInFleet(worker: { appId: string, home: string, id: string }): void {
+  const root = fleetRootDir()
+  const index = readFleet(root)
+  if (index.workers.some(existing => existing.id === worker.id))
+    return
+  const next = upsertFleetWorker(index, {
+    app: worker.appId,
+    createdAt: new Date().toISOString(),
+    home: path.relative(root, worker.home) || FLEET_ADOPTED_HOME,
+    id: worker.id,
+    port: allocatePort(index, FLEET_DEFAULT_BASE_PORT),
+  })
+  writeFleet(root, next)
 }
 
 async function daemonCheck(opts: { host?: string, port?: number } = {}): Promise<void> {
