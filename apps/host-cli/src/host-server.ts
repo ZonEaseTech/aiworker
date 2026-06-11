@@ -25,6 +25,7 @@ import {
   bootstrapHostAdminEmails,
   createAssignment,
   getAssignmentByWorkerId,
+  getSoulRelease,
   initHostDb,
   issueAssignmentAccessToken,
   listAssignments,
@@ -196,7 +197,10 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
         workerId: frame.workerId,
       })
       if (!assignment) {
-        ws.close()
+        // 撤销/拒绝 auth 失败用可区分的 application close code(4401 = access_rejected,在 RFC 6455
+        // 私有 4000–4999 段)。worker 据此区分「access 被撤销/拒绝、需 re-provision」与「瞬断需重连」:
+        // 4401 → 清持久 token + 停重连循环;其余裸 close → 走重连。绝不携带 token。
+        ws.close(4401, 'access_rejected')
         return
       }
 
@@ -763,6 +767,20 @@ async function handleCheckIn(request: Request): Promise<Response> {
   if (!assignment)
     return json({ error: { code: 'INVALID_PROVISION_TOKEN' } }, { status: 401 })
 
+  // D4 worker_id 守卫:worker_id 在 markAssignmentCheckedIn 的 UPDATE 首次写,且有 UNIQUE 索引。
+  // 若该 worker_id 已绑到「另一」assignment,UPDATE 会抛 UNIQUE 异常(≈500)。在 handler 预判
+  // 拦截,诚实 409,绝不让 UNIQUE 抛到响应。同一 assignment(幂等重放)放行往下。
+  const boundToWorkerId = getAssignmentByWorkerId(checkIn.worker.workerId)
+  if (boundToWorkerId && boundToWorkerId.assignmentId !== assignment.assignmentId)
+    return json({ error: { code: 'WORKER_ID_ALREADY_BOUND' } }, { status: 409 })
+
+  // release 解析在 markAssignmentCheckedIn 之前:缺 release 时 assignment 保持 provisioning
+  // 状态不被推进为 checked_in,实现诚实失败而非静默推进无 soul 的 worker。
+  // descriptor-only:Host 透传不透明 descriptorJson,不解析领域字段。
+  const release = getSoulRelease(assignment.soulReleaseRef)
+  if (!release)
+    return json({ error: { code: 'SOUL_RELEASE_NOT_FOUND' } }, { status: 404 })
+
   const checkedIn = markAssignmentCheckedIn(assignment.assignmentId, {
     workerId: checkIn.worker.workerId,
     workerVersion: checkIn.worker.version,
@@ -784,6 +802,7 @@ async function handleCheckIn(request: Request): Promise<Response> {
       assignmentId: checkedIn.assignmentId,
       soulReleaseRef: checkedIn.soulReleaseRef,
       workerId: checkIn.worker.workerId,
+      soulDescriptor: release.descriptorJson,
     },
   })
   return json(response)

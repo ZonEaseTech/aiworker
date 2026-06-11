@@ -246,10 +246,24 @@ commands are `aiworker-host soul publish <descriptor> [--version]` and
 `aiworker-host soul list`; `aiworker-host serve --seed-souls-dir <dir>` is a
 dev-only convenience that seeds the registry from built descriptors when empty.
 
-Delivering descriptor content from the Host registry to a provisioned Worker
-(resolving `soulReleaseRef` to descriptor content end-to-end) is a later
-distribution slice. v1 + this slice keep the assignment `soulReleaseRef` a
-distribution label; the Worker still installs its own bundled descriptor.
+`POST /api/provision/check-in` returns a `{ access, assignment }` receipt. The
+`assignment` receipt carries `assignedEmail`, `assignmentId`, `soulReleaseRef`,
+`workerId`, and an optional `soulDescriptor`. `soulDescriptor` is the opaque
+descriptor JSON string (the stored `descriptorJson` of the release resolved from
+`soulReleaseRef`). Host delivers it as an opaque distribution artifact: it does
+not parse, interpret, or rewrite the descriptor's domain fields. The descriptor
+contains no literal secret — `POST /api/host/soul-releases` already enforces this
+via `assertNoLiteralSecrets` at publish time. `soulDescriptor` is optional in the
+contract so an older Host that does not populate it still produces a parseable
+receipt; a Host that resolves `soulReleaseRef` to a missing release fails the
+check-in honestly (4xx `SOUL_RELEASE_NOT_FOUND`) rather than returning a receipt
+without descriptor content.
+
+Resolving `soulReleaseRef` to descriptor content and installing it on the Worker
+end-to-end (the Worker landing the delivered descriptor, binding its Soul, and
+serving its own Workbench) is the remainder of this distribution slice. Until the
+Worker consumes `soulDescriptor`, `soulReleaseRef` also remains a distribution
+label and the Worker installs its own bundled descriptor.
 Production governance wiring for connector authorization, permission sets,
 gateway/profile refs, and Soul release rollout/rollback controls remains the
 next Phase 2 governance slice. Do not add one-off v1 Worker runtime hooks,

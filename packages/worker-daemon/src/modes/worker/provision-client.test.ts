@@ -1,5 +1,12 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { afterEach, describe, expect, it } from 'bun:test'
 
+import {
+  persistWorkerAccess,
+  readPersistedWorkerAccess,
+} from './access-token-store'
 import {
   buildAccessHello,
   buildCheckInBody,
@@ -214,6 +221,102 @@ describe('worker provision check-in client', () => {
 
     expect(receipt).toBeNull()
     expect(calls).toEqual([])
+  })
+
+  it('D6: reads back the persisted access and skips check-in when a token file exists', async () => {
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-d6-skip-'))
+    try {
+      await persistWorkerAccess(home, {
+        access: { mode: 'worker_access', token: 'awt_persisted' },
+        assignment: { assignmentId: 'asn_persisted', workerId: 'wkr_82' },
+      })
+      process.env.AIWORKER_HOST_URL = 'https://host.example'
+      process.env.AIWORKER_PROVISION_TOKEN = 'awp_secret'
+      const calls: unknown[] = []
+
+      const receipt = await maybeProvisionCheckIn({
+        activeResolution: { kind: 'single', worker: { appId: 'aiworker-freeform', id: 'wkr_82' } },
+        checkIn: async (input) => {
+          calls.push(input)
+          throw new Error('check-in must not be called when persisted token exists')
+        },
+        env: process.env,
+        runtimeVersion: '1.2.3',
+        workerHome: home,
+      })
+
+      // Reconstructs a tunnel-compatible receipt from the persisted reconnect triple.
+      expect(receipt?.access).toEqual({ mode: 'worker_access', token: 'awt_persisted' })
+      expect(receipt?.assignment.assignmentId).toBe('asn_persisted')
+      expect(receipt?.assignment.workerId).toBe('wkr_82')
+      expect(calls).toEqual([])
+    }
+    finally {
+      await rm(home, { force: true, recursive: true })
+    }
+  })
+
+  it('D6: check-in then persists the returned access when no token file exists yet', async () => {
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-d6-persist-'))
+    try {
+      process.env.AIWORKER_HOST_URL = 'https://host.example'
+      process.env.AIWORKER_PROVISION_TOKEN = 'awp_secret'
+      const calls: unknown[] = []
+
+      const receipt = await maybeProvisionCheckIn({
+        activeResolution: { kind: 'single', worker: { appId: 'aiworker-freeform', id: 'wkr_82' } },
+        checkIn: async (input) => {
+          calls.push(input)
+          return {
+            access: { mode: 'worker_access', token: 'awt_fresh' },
+            assignment: {
+              assignedEmail: 'alice@example.com',
+              assignmentId: 'asn_fresh',
+              soulReleaseRef: 'soul-release-1',
+              workerId: 'wkr_82',
+            },
+          }
+        },
+        env: process.env,
+        runtimeVersion: '1.2.3',
+        workerHome: home,
+      })
+
+      expect(calls).toHaveLength(1)
+      expect(receipt?.access.token).toBe('awt_fresh')
+      const persisted = await readPersistedWorkerAccess(home)
+      expect(persisted).toEqual({
+        access: { mode: 'worker_access', token: 'awt_fresh' },
+        assignment: { assignmentId: 'asn_fresh', workerId: 'wkr_82' },
+      })
+    }
+    finally {
+      await rm(home, { force: true, recursive: true })
+    }
+  })
+
+  it('D6/AC#4b: surfaces a consumed-token 401 instead of silently dying', async () => {
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-d6-401-'))
+    try {
+      process.env.AIWORKER_HOST_URL = 'https://host.example'
+      process.env.AIWORKER_PROVISION_TOKEN = 'awp_already_consumed'
+
+      await expect(maybeProvisionCheckIn({
+        activeResolution: { kind: 'single', worker: { appId: 'aiworker-freeform', id: 'wkr_82' } },
+        checkIn: async () => {
+          throw new Error('Worker check-in failed: 401')
+        },
+        env: process.env,
+        runtimeVersion: '1.2.3',
+        workerHome: home,
+      })).rejects.toThrow('Worker check-in failed: 401')
+
+      // The consumed-token failure must not leave a partial/stale token file behind.
+      expect(await readPersistedWorkerAccess(home)).toBeNull()
+    }
+    finally {
+      await rm(home, { force: true, recursive: true })
+    }
   })
 
   it('does not require or read a worker access local url env', async () => {
@@ -763,6 +866,68 @@ describe('worker provision check-in client', () => {
     expect(logger.warns.some(message => /re-provision/i.test(message))).toBe(true)
   })
 
+  it('treats an access_rejected (4401) close as revocation: clears the persisted token and stops reconnecting', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const logger = fakeLogger()
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), [])
+    const cleared: string[] = []
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      clearPersistedAccess: async (home) => {
+        cleared.push(home)
+      },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      logger,
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+      workerHome: '/tmp/worker-home',
+    })
+
+    // Host rejects the hello (revoked/denied) with the application close code 4401.
+    socket.dispatchClose(4401)
+
+    // Revocation, not a blip: the persisted token is cleared and no reconnect is scheduled.
+    expect(cleared).toEqual(['/tmp/worker-home'])
+    expect(reconnect.lastDelayMs).toBeNull()
+    expect(clock.stopped).toBe(true)
+    expect(logger.warns.some(message => /revoked|re-provision/i.test(message))).toBe(true)
+    // The token is never echoed into any log line.
+    expect([...logger.infos, ...logger.warns].some(message => message.includes('awt_secret'))).toBe(false)
+  })
+
+  it('still reconnects on a non-4401 close code (transient blip, not revocation)', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), [])
+    const cleared: string[] = []
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      clearPersistedAccess: async (home) => {
+        cleared.push(home)
+      },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      logger: fakeLogger(),
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+      workerHome: '/tmp/worker-home',
+    })
+
+    // Caddy/proxy 1006-style abnormal close (not 4401) → transient: reconnect, keep the token.
+    socket.dispatchClose(1006)
+
+    expect(reconnect.lastDelayMs).toBeGreaterThan(0)
+    expect(cleared).toEqual([])
+  })
+
   it('forwards a worker access GET envelope to the local workbench and returns a response envelope', async () => {
     const calls: Array<{ body: unknown, headers: unknown, method: string, url: string }> = []
 
@@ -944,10 +1109,18 @@ function fakeLogger() {
 
 function fakeWebSocket(url: URL, sent: unknown[]) {
   let onmessage: ((event: { data: string }) => Promise<void> | void) | null = null
-  let onclose: (() => void) | null = null
+  let onclose: ((event?: { code?: number }) => void) | null = null
+  let closeCalls = 0
   return {
-    dispatchClose() {
-      onclose?.()
+    get closeCalls() {
+      return closeCalls
+    },
+    // 模拟真实 CloseEvent:可带 close code(撤销 = 4401),不带则模拟无 code 的瞬断。
+    dispatchClose(code?: number) {
+      onclose?.(code === undefined ? undefined : { code })
+    },
+    close() {
+      closeCalls += 1
     },
     async dispatchMessage(frame: unknown) {
       await onmessage?.({ data: JSON.stringify(frame) })

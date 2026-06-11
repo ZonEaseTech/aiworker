@@ -471,6 +471,12 @@ export function revokeAssignment(assignmentId: string, revokedBy: string): HostA
     .update(schema.hostAssignments)
     .set({
       status: 'revoked',
+      // 清空 worker_id 释放 UNIQUE 槽(SQLite UNIQUE 视 NULL 互异),使同机 re-provision 可恢复:
+      // 否则撤销行留着 worker_id=X,下次 check-in 的 worker_id 守卫 getAssignmentByWorkerId(X)
+      // 命中这条死行 → 永久 409 WORKER_ID_ALREADY_BOUND,4401 撤销后「需重新 provision」的恢复承诺
+      // 同机无法兑现(把 rc.11 的 worker_id 痛点从 500 挪成永久 409)。撤销行各处已被 status/revokedAt
+      // 过滤,getAssignmentByWorkerId 是唯一无过滤 reader,正需它对撤销行返 null。
+      workerId: null,
       revokedAt: at,
       revokedBy,
       updatedAt: at,

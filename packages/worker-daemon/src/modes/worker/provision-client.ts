@@ -4,16 +4,36 @@ import {
   parseWorkerCheckInResponse,
 
 } from '@zonease/aiworker-worker-control-protocol'
+import { clearPersistedWorkerAccess, persistWorkerAccess, readPersistedWorkerAccess } from './access-token-store'
+
+export type { PersistedWorkerAccess } from './access-token-store'
+// Re-export the 0600 token-store surface here so consumers (e.g. the provision CLI doing
+// first-provision bootstrap) reach the whole provision/reconnect surface from one entrypoint.
+export {
+  clearPersistedWorkerAccess,
+  persistedWorkerAccessPath,
+  persistWorkerAccess,
+  readPersistedWorkerAccess,
+  redactWorkerAccessToken,
+} from './access-token-store'
 
 export type CheckInFetch = (url: URL, init: RequestInit) => Promise<Response>
 export type WorkerAccessLocalFetch = (request: Request) => Promise<Response>
+/**
+ * onclose 携带可选的 `{ code }`(真实 WebSocket CloseEvent 的 close code,或注入 fake 的模拟值)。
+ * worker 据 code 区分撤销/拒绝(4401)与瞬断(其余/无 code)。死连接 force-close 走 handleConnectionLost()
+ * 无 code → 当作瞬断重连。
+ */
 export type WorkerAccessWebSocket = Pick<WebSocket, 'send'> & {
   close?: () => void
-  onclose?: (() => void) | null
+  onclose?: ((event?: { code?: number }) => void) | null
   onmessage: ((event: { data: string }) => Promise<void> | void) | null
   onopen?: (() => void) | null
   readyState?: number
 }
+
+/** Host 在 access auth 失败(撤销/拒绝)时用的 application close code(RFC 6455 私有段)。 */
+export const ACCESS_REJECTED_CLOSE_CODE = 4401
 
 export interface WorkerAccessTunnelHandle {
   close: () => void
@@ -46,6 +66,13 @@ export interface MaybeProvisionCheckInInput {
   checkIn?: (input: CheckInInput) => Promise<WorkerCheckInResponse>
   env: Record<string, string | undefined>
   runtimeVersion: string
+  /**
+   * worker-home（= daemon 实际启动的 DB 目录，`path.dirname(dbPath)`）。提供时启用 D6 持久 token 路径：
+   * 先读回 `<worker-home>/access-token`——存在则直接用它重连、跳过 check-in（provision token 单次消费，
+   * 重 check-in 必 401）；不存在且 env 有 host+token → check-in 并把返回的 access 持久化。未提供时退回
+   * 旧行为（纯 env 驱动 check-in、不落盘），保持已有调用方不变。
+   */
+  workerHome?: string
 }
 
 export interface HandleAccessRequestEnvelopeInput {
@@ -110,6 +137,16 @@ export interface ConnectWorkerAccessTunnelInput {
    * 主动 close() 时调用以撤销待发重连。默认包装 setTimeout 且 unref。
    */
   startReconnectTimer?: (run: () => void, delayMs: number) => () => void
+  /**
+   * worker-home（= daemon 的 DB 目录）。提供时启用撤销检测：onclose code === 4401（access_rejected）
+   * → 清 `<worker-home>/access-token`（死 token 不再被重启读回）+ 诚实告警 + 停止重连循环。未提供时
+   * 4401 仍停循环 + 告警，只是不清盘（无落点）。
+   */
+  workerHome?: string
+  /**
+   * 撤销时清除持久 token 的注入缝（默认 = access-token-store 的 clearPersistedWorkerAccess）。测试可注入捕获器。
+   */
+  clearPersistedAccess?: (workerHome: string) => Promise<void>
 }
 
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 25_000
@@ -192,11 +229,31 @@ export async function checkInToHost(input: CheckInInput): Promise<WorkerCheckInR
 export async function maybeProvisionCheckIn(input: MaybeProvisionCheckInInput): Promise<WorkerCheckInResponse | null> {
   if (input.activeResolution.kind !== 'single' || !('worker' in input.activeResolution))
     return null
+
+  // D6:持久 token 优先。first-provision（CLI 引导）落盘后，daemon boot 与后续每次重启都走这条——
+  // 读回重连三元组、跳过 check-in，避免对已消费的 provision token 二次 check-in（必 401）。
+  if (input.workerHome) {
+    const persisted = await readPersistedWorkerAccess(input.workerHome)
+    if (persisted) {
+      return {
+        access: persisted.access,
+        // 重连只需 assignmentId + workerId（hello 帧三元组的剩余两项）；其余 receipt 字段在持久路径下
+        // 不参与重连，故合成最小占位（旧 host 字段，不发往 Host，仅喂本地 tunnel 构造）。
+        assignment: {
+          assignedEmail: 'persisted@local',
+          assignmentId: persisted.assignment.assignmentId,
+          soulReleaseRef: 'persisted',
+          workerId: persisted.assignment.workerId,
+        },
+      }
+    }
+  }
+
   const host = input.env.AIWORKER_HOST_URL
   const provisionToken = input.env.AIWORKER_PROVISION_TOKEN
   if (!host || !provisionToken)
     return null
-  return await (input.checkIn ?? checkInToHost)({
+  const receipt = await (input.checkIn ?? checkInToHost)({
     host,
     id: input.activeResolution.worker.appId,
     provisionToken,
@@ -204,6 +261,15 @@ export async function maybeProvisionCheckIn(input: MaybeProvisionCheckInInput): 
     workerId: input.activeResolution.worker.id,
     workbenchUrl: '/',
   })
+
+  // 兼容「daemon 首启直接带 env、worker 已建」路径：把 check-in 返回的 access 持久化，使下次重启免 check-in。
+  if (input.workerHome) {
+    await persistWorkerAccess(input.workerHome, {
+      access: { mode: receipt.access.mode, token: receipt.access.token },
+      assignment: { assignmentId: receipt.assignment.assignmentId, workerId: receipt.assignment.workerId },
+    })
+  }
+  return receipt
 }
 
 export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnelInput): Promise<WorkerAccessTunnelHandle | null> {
@@ -223,6 +289,7 @@ export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnel
   const reprovisionHintAfter = resolvePositiveInt(input.reconnectReprovisionHintAfter, DEFAULT_RECONNECT_REPROVISION_HINT_AFTER)
   const random = input.random ?? Math.random
   const logger: TunnelLogger = input.logger ?? console
+  const clearPersistedAccess = input.clearPersistedAccess ?? clearPersistedWorkerAccess
 
   // 跨重连的持久状态（每个 socket 周期内的状态在 openConnection 里重置）。
   let intentionallyClosed = false
@@ -230,6 +297,23 @@ export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnel
   let cancelReconnect: (() => void) | null = null
   let currentSocket: WorkerAccessWebSocket | null = null
   let currentStopKeepalive: (() => void) | null = null
+
+  // 撤销/拒绝收口（onclose code === 4401）：停止重连循环（复用 intentionallyClosed 守卫），
+  // 清持久 token（死 token 不再被重启读回），诚实可操作告警。绝不打印 token。
+  function handleAccessRevoked(): void {
+    if (intentionallyClosed)
+      return
+    intentionallyClosed = true
+    cancelReconnect?.()
+    cancelReconnect = null
+    logger.warn('[worker-access] host rejected the worker access token (access revoked or denied); reconnect stopped — re-provision is required to restore the tunnel')
+    if (input.workerHome) {
+      clearPersistedAccess(input.workerHome).catch(() => {
+        // 清盘失败不致命：循环已停、告警已发；下次 boot 读回死 token 也只会再次被 4401 拒、再次走此路径。
+        logger.warn('[worker-access] failed to clear the persisted worker access token after revocation')
+      })
+    }
+  }
 
   function scheduleReconnect(): void {
     if (intentionallyClosed)
@@ -275,13 +359,19 @@ export async function connectWorkerAccessTunnel(input: ConnectWorkerAccessTunnel
 
     // 幂等收口：socket onclose（host 重启/断开）与死连接 force-close 都走这里——清 keepalive 定时器，
     // 若非主动 close 则按退避调度重连。connectionLost 守卫保证两条路径只处理一次。
-    const handleConnectionLost = (): void => {
+    // event.code === 4401（access_rejected）= Host 撤销/拒绝了本 worker 的 access → 这不是瞬断，
+    // 重连只会拿死 token 反复被拒。区分处理：停止重连循环 + 清持久 token + 诚实告警。
+    const handleConnectionLost = (event?: { code?: number }): void => {
       if (connectionLost)
         return
       connectionLost = true
       stopKeepalive()
       if (intentionallyClosed)
         return
+      if (event?.code === ACCESS_REJECTED_CLOSE_CODE) {
+        handleAccessRevoked()
+        return
+      }
       scheduleReconnect()
     }
 
