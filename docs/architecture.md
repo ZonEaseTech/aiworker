@@ -87,6 +87,25 @@ but it must not wrap, embed, render, or reinterpret the Workbench. The product
 value is capability replication, version rollout, permission governance, and
 low-friction employee onboarding.
 
+Phase 2 distribution downfeeds the real Soul descriptor to the employee Worker.
+The data flow is over-the-wire only, with no code intrusion in either direction:
+an administrator publishes a built Soul descriptor into the Host release registry;
+Host check-in returns that descriptor as an opaque distribution artifact embedded in
+the assignment record; the Worker writes it to its own home, installs it through the
+descriptor-path install, and creates the Worker bound to the descriptor's identity.
+Host stores and forwards the descriptor as an opaque release artifact and never
+interprets domain fields, consistent with the descriptor-only boundary. A check-in
+whose assignment references a missing Soul release fails honestly on the Host side;
+it never downfeeds a silent empty Soul.
+
+The Phase 2 maturity boundary is: Soul real downfeed, first-provision bootstrap of a
+bound Worker, and restart self-heal are Phase 2. LLM credential injection is Phase 3
+and reuses the Phase 2 persisted reconnect channel; the current Phase 2 bootstrap
+slice does not inject or persist any LLM/provider secret. The persisted Worker Access
+token introduced for restart self-heal is a local `0600` capability token that
+authorizes tunnel reconnect only; it is not a provider secret and grants no LLM
+access.
+
 Phase 2.1 managed employee access uses Host as the enterprise URL and
 authorization boundary for employees. Host-only applies only to managed employee remote access; it is not a Worker runtime dependency.
 

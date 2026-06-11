@@ -1,7 +1,7 @@
 import type { WorkerCheckInResponse } from '@zonease/aiworker-worker-control-protocol'
 
 import { Buffer } from 'node:buffer'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -159,6 +159,88 @@ describe('aiworker provision first-provision bootstrap', () => {
     // The provision token must not leak to stdout/stderr.
     expect(stdout).not.toContain('awp_secret')
     expect(stderr).not.toContain('awp_secret')
+  })
+
+  // AC#5 哨兵脱敏:用一个已知哨兵 access token 跑 first-provision 引导,然后扫
+  // <worker-home> 下除 `access-token` 外的所有文件(递归,按字节读以覆盖 SQLite worker.db)
+  // + 捕获的全部日志输出,断言哨兵子串零命中。坐实 token 真值不泄进 descriptor.json /
+  // worker.db / fleet index / 日志,token-file 自身仍 0600 单列。
+  it('AC#5: a sentinel access token never leaks outside the 0600 access-token file', async () => {
+    // access token 的哨兵,刻意区别于 provision token('awp_secret')——本测试坐实的是 access
+    // token(落盘到 access-token、走重连 hello 帧)不泄,而非 provision token。
+    const sentinelAccessToken = 'aiwsentinel_DEADBEEF_access_token'
+    const descriptorJson = freeformDescriptorJson()
+    __setProvisionCheckInForTest(async () => ({
+      access: { mode: 'worker_access', token: sentinelAccessToken },
+      assignment: {
+        assignedEmail: 'employee@example.com',
+        assignmentId: 'asn_sentinel',
+        soulDescriptor: descriptorJson,
+        soulReleaseRef: 'soul-release-1',
+        workerId: 'placeholder-host-worker-id',
+      },
+    }))
+    __setDaemonForegroundForTest(async () => {})
+
+    // 额外捕获 console.warn/error(撤销/消费-token 诚实降级走 console.warn,不走 consola 的 stderr stub)。
+    const consoleLog: string[] = []
+    const captured = ((...args: unknown[]) => {
+      consoleLog.push(args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '))
+    }) as typeof globalThis.console.warn
+    const originalWarn = globalThis.console.warn
+    const originalError = globalThis.console.error
+    globalThis.console.warn = captured
+    globalThis.console.error = captured
+
+    try {
+      const code = await runCli(argv('provision', '--host', 'https://host.example', '--token', 'awp_secret'))
+      expect(code).toBe(0)
+    }
+    finally {
+      globalThis.console.warn = originalWarn
+      globalThis.console.error = originalError
+    }
+
+    const paths = resolveCliLocalPaths()
+    closeWorkerDb()
+
+    // 先证「牙齿」:access-token 文件本身确实含哨兵(token 真落盘了),且 0600。
+    // 这同时证明:若递归扫描未排除 access-token,它本会命中哨兵——即扫描确实读了文件内容,
+    // 而非因走错目录/空目录而假绿。
+    const tokenFile = path.join(paths.home, 'access-token')
+    const tokenInfo = await stat(tokenFile)
+    expect(tokenInfo.mode & 0o777).toBe(0o600)
+    expect(readFileSync(tokenFile).includes(Buffer.from(sentinelAccessToken))).toBe(true)
+
+    // 递归扫 <worker-home> 下除 access-token 外的所有文件,按字节读(覆盖 SQLite worker.db)。
+    function walk(dir: string): string[] {
+      const out: string[] = []
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory())
+          out.push(...walk(full))
+        else if (entry.isFile())
+          out.push(full)
+      }
+      return out
+    }
+    const sentinelBytes = Buffer.from(sentinelAccessToken)
+    const scannedFiles = walk(paths.home).filter(file => path.resolve(file) !== path.resolve(tokenFile))
+
+    // worker.db 必须在被扫范围内,否则「token 不泄进 worker.db」未被实证(命中目标确认)。
+    expect(scannedFiles.some(file => statSync(file).isFile() && file.endsWith('aiworker.db'))).toBe(true)
+
+    const hits = scannedFiles.filter(file => readFileSync(file).includes(sentinelBytes))
+    // 任一命中 = 该路径(descriptor.json / worker.db / fleet index / …)泄了 access token 真值,
+    // 证 redactWorkerAccessToken 在该接线处未接 → 测试失败,附泄漏路径。
+    expect(hits).toEqual([])
+
+    // 捕获的全部日志(consola→stderr/stdout + console.*)零哨兵命中。
+    expect(stdout).not.toContain(sentinelAccessToken)
+    expect(stderr).not.toContain(sentinelAccessToken)
+    expect(consoleLog.join('\n')).not.toContain(sentinelAccessToken)
+
+    closeWorkerDb()
   })
 
   it('is idempotent: a re-run with a worker already present does not check-in again', async () => {

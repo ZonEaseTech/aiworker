@@ -89,6 +89,105 @@ authorized connector refs, permissions, and gateway/profile ref, but it must not
 inject Host navigation, Host state, or Host workflow into the Worker's chat
 surface.
 
+## First-Provision Bootstrap (Phase 2)
+
+Phase 2 distribution downfeeds the real Soul descriptor to the employee Worker and
+bootstraps a ready-to-use Worker on a bare box with zero employee interaction. This
+breaks the bootstrap circular dependency: the standalone daemon only checks in and
+connects the tunnel when an active Worker already exists, but the Worker can only be
+created from the Soul descriptor that the check-in itself returns. The provision CLI
+command resolves this by doing the bootstrap in its own process before it starts the
+daemon.
+
+`aiworker provision --host <url> --token <provision-token>` on a fresh box, with no
+pre-existing Worker, runs the first-provision bootstrap:
+
+1. mint a Worker id and check in to Host once, consuming the single-use provision
+   token;
+2. receive the check-in response, which carries the assigned Soul descriptor as an
+   opaque descriptor JSON, the access token, and assignment identity;
+3. write the descriptor to `<worker-home>/soul.descriptor.json` and install it
+   through the descriptor-path install (not inline), so the install carries engine
+   asset refs;
+4. enable the installed Soul so it is catalog-available, then create the Worker
+   bound to the descriptor's `identity.id` — the Worker's lifelong Soul binding;
+5. persist the access token to `<worker-home>/access-token` (mode `0600`);
+6. register the Worker in the local fleet index, then start the daemon.
+
+The daemon boot then resolves a single active Worker, reads the persisted access
+token instead of checking in again, and connects the Worker Access tunnel. The
+employee opens the Worker's own Workbench as a ready AI worker. Phase 2 downfeeds the
+Soul and bootstraps the binding; LLM credential injection is Phase 3.
+
+The Worker treats the descriptor as an opaque distribution artifact: it installs and
+binds it without interpreting domain fields, consistent with the descriptor-only
+Host/Soul boundary. The check-in returns the descriptor only when Host has a matching
+Soul release; a missing release is an honest failure on the Host side, not a silent
+empty Soul. A re-run of `provision` when a Worker already exists is idempotent: it
+skips the bootstrap (the provision token is single-use and a second check-in would
+fail) and starts the daemon, which self-heals from the persisted token.
+
+## Restart Self-Heal (Phase 2)
+
+A Phase 2 Worker reconnects its Worker Access tunnel across daemon restarts without
+re-provisioning. The reconnect state lives in `<worker-home>/access-token`. On boot,
+when a single active Worker and a persisted access token both exist, the daemon reads
+the persisted token and connects the tunnel directly, skipping check-in. This is the
+only restart-safe path because the provision token is single-use and a re-check-in
+would fail with `401`.
+
+The restart-state authority is local-first: the Worker DB is the only source of truth
+for whether an active Worker exists, the persisted token-file is only the reconnect
+credential, and the provision env is only the first-run signal. The Worker never
+depends on Host to start its own runtime.
+
+Two runtime failure branches degrade honestly rather than looping or crashing:
+
+- Revocation: if Host rejects the access token (assignment revoked or denied), the
+  tunnel closes with code `4401`. The Worker stops the reconnect loop, clears the
+  persisted token so a later boot does not replay a dead token, and emits an
+  actionable "re-provision is required" warning. It does not silently retry a dead
+  token forever; ordinary transient disconnects (any other close code) still
+  reconnect with exponential backoff.
+- Consumed-token degrade: if first-provision crashes after the check-in consumed the
+  token but before the Worker and token-file were committed, a later boot may carry an
+  already-consumed token. The check-in then fails with `401`. The daemon catches this,
+  keeps running in local mode, and emits an honest "provision may have been
+  interrupted; re-provision is required" warning. It does not die or hang.
+
+## Persistent Worker Access Token (Secret Boundary)
+
+`<worker-home>/access-token` is the first `0600` secret file in the repository. It
+holds the reconnect triple — the access token plus the assignment id and worker id
+required by the Worker Access hello frame — so both the first-provision CLI and the
+daemon boot read it back from the same worker-home path and skip a duplicate check-in.
+
+This is a distinct trust domain from the "no literal secrets in DB, descriptor,
+receipt, log, diagnostic, or UI" boundary. The persisted token is a local-only,
+file-system `0600` capability token, not a provider secret:
+
+- It is a capability token, not a provider/LLM secret. It authorizes this Worker to
+  reconnect its own tunnel; it does not grant LLM access. Its blast radius is
+  impersonating one already-provisioned Worker's reconnect, bounded by the access
+  token's Host-side TTL and revocability.
+- It is written with `writeFile(path, json, { mode: 0o600 })` plus a `chmod(0o600)`
+  fallback because some platforms and umasks make the write mode unreliable. Windows
+  `chmod` is a no-op; a headless Windows Worker is out of scope for v1 distribution
+  and is declared so explicitly.
+- The token has no provider-shaped prefix, so the engine-bridge shared secret
+  alternation does not match it. Redaction for this token is field-level: a
+  known-value `redactWorkerAccessToken` helper replaces the literal token before any
+  text that might contain it is logged. The boundary is held primarily by never
+  printing the token at all — the tunnel lifecycle, reconnect, and revocation logs
+  record connection state only and carry no token value.
+- The descriptor written next to it carries no secret; descriptor publish already
+  asserts no literal secrets. The `<worker-home>/access-token` path is the single
+  permitted at-rest location for the token; no other at-rest path (descriptor JSON,
+  Worker DB, fleet index, logs, diagnostics) may hold it.
+
+See the Phase 2 security boundary for the capability-token-versus-provider-secret
+distinction.
+
 ## Session And Invocation State
 
 session lifecycle: active | archived | deleted
