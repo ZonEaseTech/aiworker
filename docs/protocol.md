@@ -282,6 +282,43 @@ HTTP long-poll fallback. Host performs transport-level forwarding over the
 Worker-initiated tunnel; Host does not mount, iframe, proxy-render, own, or
 semantically interpret the Worker Workbench.
 
+Phase 3 LLM credential frames ride the same already-authenticated Worker Access
+tunnel (a `hello` frame authenticated by the Phase 2 access token) as three
+independent typed frames in `workerAccessFrameSchema`:
+
+```text
+credential_acquire  { type, engineKind }                                worker -> host
+credential_refresh  { type, engineKind }                                worker -> host
+credential_grant    { type, engineKind, gatewayUrl, token, expiresAt }  host -> worker
+```
+
+- `engineKind` is `'anthropic' | 'openai'`. `cursor` is excluded because its CLI
+  does not route an externally supplied key; other engines are not in the
+  org-key injection set.
+- `credential_acquire` is the Worker asking the Host to mint/return a credential
+  for an engine kind; `credential_refresh` renews one approaching expiry. Both
+  are Worker-initiated (the credential path is, like check-in and the tunnel
+  itself, a Worker-initiated distribution signal, not Host runtime ownership).
+- `credential_grant` is the Host response and is a **distinct frame type**. It
+  must never reuse the `response` type, which carries the Host's pending
+  HTTP request/response correlation semantics; mixing them would route a
+  credential into the HTTP-forward correlation map.
+
+WAT-1 boundary: these are typed frames, not `bodyText` HTTP forwarding. Their
+fields live directly in the frame body, never in `bodyText`, and they never
+enter the Host pending request/response correlation map. They are therefore
+unaffected by WAT-1 (which corrupts only `bodyText` HTTP forwarding) and are not
+subject to the 15s HTTP-forward timeout.
+
+Secret boundary: `credential_grant.token` is a provider credential. It lives only
+in Worker memory (and TLS in transit); it is never written to the descriptor,
+host.db, worker.db, the `access-token` file, any log, diagnostic output, or
+receipt. In the org-key mode (Phase 3 v1) the delivered `token` is the org key
+as-is — not a derived/per-worker/short-TTL key — and `expiresAt` is a far-future
+placeholder, so liveness/revocation rides the 4401 access-token channel, not TTL
+expiry. The native CLI persisting the credential to its own credential store is
+an engine concern outside this contract.
+
 Provisioning adapters must deliver only:
 
 ```text
