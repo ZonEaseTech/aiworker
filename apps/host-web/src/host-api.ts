@@ -40,7 +40,7 @@ export interface CreateHostAssignmentResult {
     command: string
     targetRef: string
   }
-  deliveryStatus?: 'delivered'
+  deliveryStatus?: 'command_generated' | 'executed' | 'failed'
   expectedCheckInDeadline?: string
   operatorHint?: string
   provisionCommand: string

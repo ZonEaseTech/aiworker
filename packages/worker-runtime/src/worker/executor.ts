@@ -540,13 +540,20 @@ function redactEngineLog(value: string): string {
   return typeof redacted === 'string' ? redacted : ''
 }
 
-function resolveApiKey(ref: string): string {
+// 与 BYOK 写守卫 isSafeSecretReference（worker-daemon settings.ts，前缀集 $/env:/secretref:）保持一致：
+// $NAME / env:NAME / 裸 NAME 均解析为 process.env[NAME]；secretref: 通过写守卫但 v1 无 secret manager
+// 后端，故诚实抛「暂不支持」而非旧的误导性 must-be-env 错误（消除 validator/resolver 发散）。
+export function resolveApiKey(ref: string): string {
   const normalized = ref.trim()
   if (!normalized)
     throw new Error('BYOK mode requires an API key reference such as env:OPENAI_API_KEY.')
-  const envName = normalized.startsWith('env:') ? normalized.slice(4) : normalized
+  if (normalized.startsWith('secretref:'))
+    throw new Error('BYOK secretref: resolution is not supported yet; use env:NAME or $NAME.')
+  const envName = normalized.startsWith('env:')
+    ? normalized.slice(4)
+    : normalized.startsWith('$') ? normalized.slice(1) : normalized
   if (!/^[A-Z_]\w*$/i.test(envName))
-    throw new Error('BYOK API key reference must be env:NAME or NAME.')
+    throw new Error('BYOK API key reference must be env:NAME, $NAME, or NAME.')
   const value = process.env[envName]
   if (!value)
     throw new Error(`BYOK API key environment variable is not set: ${envName}.`)

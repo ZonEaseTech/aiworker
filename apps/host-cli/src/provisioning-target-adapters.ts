@@ -24,7 +24,9 @@ export interface ProvisioningDeliveryResult {
     command: string
     targetRef: string
   }
-  deliveryStatus: 'delivered'
+  // 诚实投递状态（切片 2 Phase 1）：Host 当前只生成投递命令、不真执行，故恒为 'command_generated'，
+  // 不再硬报 'delivered'（false-green）。'executed'/'failed' 留待 Phase 2 first-provision 引导落地真执行后产出。
+  deliveryStatus: 'command_generated' | 'executed' | 'failed'
   expectedCheckInDeadline: string
   operatorHint: string
   provisionCommand: string
@@ -42,12 +44,12 @@ export function deliverProvisioningTarget(input: ProvisioningDeliveryInput): Pro
 
   if (input.adapterType === 'aissh') {
     assertRemoteAisshCallbackReachable({ adapterRuntimeControlBaseUrl, targetRef })
-    return result(input, buildAisshCommand(targetRef, assignedEmail, provisionCommand), provisionCommand, '等待远程 Worker 回连 Host。')
+    return result(input, buildAisshCommand(targetRef, assignedEmail, provisionCommand), provisionCommand, '在远程目标机执行投递命令分发 Worker，再等待其回连 Host。')
   }
   if (input.adapterType === 'docker') {
-    return result(input, buildDockerCommand(input.assignmentId, provisionCommand), provisionCommand, '等待 Docker container 内 Worker 回连 Host。')
+    return result(input, buildDockerCommand(input.assignmentId, provisionCommand), provisionCommand, '执行投递命令启动 Docker container 内 Worker，再等待其回连 Host。')
   }
-  return result(input, buildLocalCommand(input.assignmentId, provisionCommand), provisionCommand, '等待本机 Worker 回连 Host。')
+  return result(input, buildLocalCommand(input.assignmentId, provisionCommand), provisionCommand, '执行投递命令在本机启动 Worker，再等待其回连 Host。')
 }
 
 function result(
@@ -62,7 +64,7 @@ function result(
       command: scrubProvisionSecret(command, input.provisionToken),
       targetRef: scrubProvisionSecret(input.targetRef, input.provisionToken),
     },
-    deliveryStatus: 'delivered',
+    deliveryStatus: 'command_generated',
     expectedCheckInDeadline: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     operatorHint: scrubProvisionSecret(operatorHint, input.provisionToken),
     provisionCommand: scrubProvisionSecret(provisionCommand, input.provisionToken),

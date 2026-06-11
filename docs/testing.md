@@ -326,6 +326,7 @@ The product acceptance criteria are:
   current Host assignment DB/API stores provisioning, readiness, access,
   lifecycle, and Soul release identity, not those governance payloads;
 - Phase 2 provisioning: aissh success is not ready until Worker check-in and access ready.
+- honest delivery status (切片 2 Phase 1): `deliverProvisioningTarget` returns `deliveryStatus: 'command_generated'` while the Host only generates a provision command — it must never hard-report `'delivered'` (false-green). `'executed'`/`'failed'` are produced only once real execution actually yields a check-in-capable Worker (Phase 2 first-provision bootstrap), not before.
 - remote aissh target rejects loopback callback URLs.
 - Worker access: `/workers/:workerId` is employee navigation through Worker Access Adapter, not Host-rendered UI.
 - Auth: Logto proves identity; AIWorker assignment decides exact Worker access.
