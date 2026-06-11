@@ -10,6 +10,7 @@ import {
   markAssignmentAccessReady,
   markAssignmentCheckedIn,
   markAssignmentReady,
+  publishSoulRelease,
   verifyAndConsumeProvisionToken,
 } from '@zonease/aiworker-storage-sqlite/host'
 
@@ -87,6 +88,19 @@ describe('host server', () => {
         workbenchUrl: `http://127.0.0.1:9217/workers/${workerId}`,
       },
     }
+  }
+
+  function publishTestRelease(soulId = 'aiworker-freeform') {
+    return publishSoulRelease({
+      soulId,
+      name: 'AIWorker Freeform',
+      descriptor: {
+        protocol: 'soul/v1',
+        identity: { id: soulId, name: 'AIWorker Freeform' },
+        engine: {},
+      },
+      source: 'official',
+    })
   }
 
   function sessionAuth(input: {
@@ -1561,17 +1575,18 @@ describe('host server', () => {
     expect(created.deliveryReceipt.command).toContain('--reason=')
   })
 
-  it('consumes a provision token exactly once and returns a worker_access receipt', async () => {
+  it('consumes a provision token exactly once and returns a worker_access receipt with the resolved soul descriptor', async () => {
     const server = await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
       ...hostUrls(),
     })
+    const release = publishTestRelease()
     const created = await json(await server.fetch(new Request('http://host/api/host/assignments', {
       body: JSON.stringify({
         assignedEmail: 'bob@example.com',
         provisioningTarget: localProvisioningTarget(),
-        soulReleaseRef: 'soul_release_1',
+        soulReleaseRef: release.releaseRef,
       }),
       method: 'POST',
     })))
@@ -1589,8 +1604,9 @@ describe('host server', () => {
     expect(receipt.assignment).toEqual({
       assignedEmail: 'bob@example.com',
       assignmentId: created.assignment.assignmentId,
-      soulReleaseRef: 'soul_release_1',
+      soulReleaseRef: release.releaseRef,
       workerId: 'wkr_82',
+      soulDescriptor: release.descriptorJson,
     })
     const listed = await json(await server.fetch(new Request('http://host/api/host/assignments')))
     expect(JSON.stringify(listed)).not.toContain(receipt.access.token)
@@ -1602,17 +1618,83 @@ describe('host server', () => {
     expect(second.status).toBe(401)
   })
 
+  it('fails check-in honestly with 404 when soulReleaseRef resolves to no published release', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    // No publishTestRelease(): the ref points at a release that does not exist.
+    const created = await json(await server.fetch(new Request('http://host/api/host/assignments', {
+      body: JSON.stringify({
+        assignedEmail: 'bob@example.com',
+        provisioningTarget: localProvisioningTarget(),
+        soulReleaseRef: 'aiworker-freeform@404',
+      }),
+      method: 'POST',
+    })))
+
+    const response = await server.fetch(new Request('http://host/api/provision/check-in', {
+      body: JSON.stringify(checkInBody(created.provisionToken)),
+      method: 'POST',
+    }))
+
+    expect(response.status).toBe(404)
+    expect(await json(response)).toEqual({ error: { code: 'SOUL_RELEASE_NOT_FOUND' } })
+  })
+
+  it('rejects a second check-in that rebinds an already-bound worker_id to a different assignment with 409, never 500', async () => {
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const release = publishTestRelease()
+
+    // Assignment A: bind worker_id wkr_82 directly via storage (bypasses handleCheckIn so
+    // no release lookup is needed to seed the worker_id collision).
+    const first = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: release.releaseRef,
+    })
+    verifyAndConsumeProvisionToken(first.provisionToken)
+    markAssignmentCheckedIn(first.assignment.assignmentId, {
+      workerId: 'wkr_82',
+      workerVersion: '1.0.0',
+    })
+
+    // Assignment B: a fresh assignment whose check-in tries to claim the same worker_id.
+    const second = await json(await server.fetch(new Request('http://host/api/host/assignments', {
+      body: JSON.stringify({
+        assignedEmail: 'carol@example.com',
+        provisioningTarget: localProvisioningTarget(),
+        soulReleaseRef: release.releaseRef,
+      }),
+      method: 'POST',
+    })))
+
+    const response = await server.fetch(new Request('http://host/api/provision/check-in', {
+      body: JSON.stringify(checkInBody(second.provisionToken)),
+      method: 'POST',
+    }))
+
+    expect(response.status).toBe(409)
+    expect(await json(response)).toEqual({ error: { code: 'WORKER_ID_ALREADY_BOUND' } })
+  })
+
   it('leaves an assignment not ready after check-in until worker access is ready', async () => {
     const adminServer = await createHostServer({
       authUser: adminUser,
       dbPath: dbPath(),
       ...hostUrls(),
     })
+    const release = publishTestRelease()
     const created = await json(await adminServer.fetch(new Request('http://host/api/host/assignments', {
       body: JSON.stringify({
         assignedEmail: 'bob@example.com',
         provisioningTarget: localProvisioningTarget(),
-        soulReleaseRef: 'soul_release_1',
+        soulReleaseRef: release.releaseRef,
       }),
       method: 'POST',
     })))
@@ -1906,10 +1988,11 @@ describe('host server', () => {
       dbPath: dbPath(),
       ...hostUrls(),
     })
+    const release = publishTestRelease()
     const created = createAssignment({
       assignedEmail: 'bob@example.com',
       serverRef: 'host-main',
-      soulReleaseRef: 'soul_release_1',
+      soulReleaseRef: release.releaseRef,
     })
     const checkInResponse = await json(await server.fetch(new Request('http://host/api/provision/check-in', {
       body: JSON.stringify(checkInBody(created.provisionToken)),
@@ -1960,10 +2043,11 @@ describe('host server', () => {
       dbPath: dbPath(),
       ...hostUrls(),
     })
+    const release = publishTestRelease()
     const created = createAssignment({
       assignedEmail: 'bob@example.com',
       serverRef: 'host-main',
-      soulReleaseRef: 'soul_release_1',
+      soulReleaseRef: release.releaseRef,
     })
     const checkInResponse = await json(await server.fetch(new Request('http://host/api/provision/check-in', {
       body: JSON.stringify(checkInBody(created.provisionToken)),
@@ -2028,10 +2112,11 @@ describe('host server', () => {
       dbPath: dbPath(),
       ...hostUrls(),
     })
+    const release = publishTestRelease()
     const created = createAssignment({
       assignedEmail: 'bob@example.com',
       serverRef: 'host-main',
-      soulReleaseRef: 'soul_release_1',
+      soulReleaseRef: release.releaseRef,
     })
     const checkInResponse = await json(await server.fetch(new Request('http://host/api/provision/check-in', {
       body: JSON.stringify(checkInBody(created.provisionToken)),
@@ -2091,10 +2176,11 @@ describe('host server', () => {
       dbPath: dbPath(),
       ...hostUrls(),
     })
+    const release = publishTestRelease()
     const created = createAssignment({
       assignedEmail: 'bob@example.com',
       serverRef: 'host-main',
-      soulReleaseRef: 'soul_release_1',
+      soulReleaseRef: release.releaseRef,
     })
     // consume the token so an assignment exists in checked_in state
     const checkInResponse = await json(await server.fetch(new Request('http://host/api/provision/check-in', {

@@ -163,6 +163,54 @@ describe('worker-control-protocol contract', () => {
     } as never)).toThrow()
   })
 
+  test('assignment receipt carries an optional opaque soulDescriptor', () => {
+    const descriptorJson = JSON.stringify({
+      protocol: 'soul/v1',
+      identity: { id: 'aiworker-freeform', name: 'AIWorker Freeform' },
+      engine: {},
+    })
+    const withDescriptor = parseWorkerAssignmentReceipt({
+      assignedEmail: 'operator@example.com',
+      assignmentId: 'assignment-1',
+      soulReleaseRef: 'aiworker-freeform@1',
+      workerId: 'worker-1',
+      soulDescriptor: descriptorJson,
+    })
+    expect(withDescriptor.soulDescriptor).toBe(descriptorJson)
+
+    // Omitting soulDescriptor still parses (optional under .strict() for legacy Host compat).
+    const withoutDescriptor = parseWorkerAssignmentReceipt({
+      assignedEmail: 'operator@example.com',
+      assignmentId: 'assignment-1',
+      soulReleaseRef: 'aiworker-freeform@1',
+      workerId: 'worker-1',
+    })
+    expect(withoutDescriptor.soulDescriptor).toBeUndefined()
+  })
+
+  test('check-in response receipt carries an optional opaque soulDescriptor', () => {
+    const descriptorJson = JSON.stringify({
+      protocol: 'soul/v1',
+      identity: { id: 'aiworker-freeform', name: 'AIWorker Freeform' },
+      engine: {},
+    })
+    const res = parseWorkerCheckInResponse({
+      access: {
+        mode: 'worker_access',
+        token: 'awt_token',
+      },
+      assignment: {
+        assignedEmail: 'operator@example.com',
+        assignmentId: 'assignment-1',
+        soulReleaseRef: 'aiworker-freeform@1',
+        workerId: 'worker-1',
+        soulDescriptor: descriptorJson,
+      },
+    })
+
+    expect(res.assignment.soulDescriptor).toBe(descriptorJson)
+  })
+
   test('access receipt parser accepts worker access receipt', () => {
     const receipt = parseWorkerAccessReceipt({
       mode: 'worker_access',

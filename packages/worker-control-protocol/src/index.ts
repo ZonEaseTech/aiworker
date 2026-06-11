@@ -52,6 +52,11 @@ export const workerAssignmentReceiptSchema = z.object({
   assignmentId: z.string().min(1),
   soulReleaseRef: z.string().min(1),
   workerId: z.string().min(1),
+  // 不透明 descriptor JSON 字符串(= 由 soulReleaseRef 解析出的 release 的 descriptorJson)。
+  // Host 把它当不透明分发产物下发,不解析领域字段。optional 让旧 Host(不填该字段)产出的
+  // receipt 仍可解析,因此无需 bump WORKER_CONTROL_PROTOCOL_VERSION。descriptor 不含字面
+  // secret——publish 时 assertNoLiteralSecrets 已守。
+  soulDescriptor: z.string().min(1).optional(),
 }).strict()
 
 export const workerAccessReceiptSchema = z.object({
