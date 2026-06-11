@@ -11,6 +11,7 @@ import {
   markAssignmentCheckedIn,
   markAssignmentReady,
   publishSoulRelease,
+  revokeAssignment,
   verifyAndConsumeProvisionToken,
 } from '@zonease/aiworker-storage-sqlite/host'
 
@@ -1681,6 +1682,46 @@ describe('host server', () => {
 
     expect(response.status).toBe(409)
     expect(await json(response)).toEqual({ error: { code: 'WORKER_ID_ALREADY_BOUND' } })
+  })
+
+  it('lets a same-box re-provision recover after revocation (revoke frees the worker_id slot, no permanent 409)', async () => {
+    // 兑现 4401 撤销后「需重新 provision」的同机恢复承诺:撤销必须清 worker_id,否则死行的
+    // worker_id 让新 check-in 永久撞 WORKER_ID_ALREADY_BOUND。
+    const server = await createHostServer({
+      authUser: adminUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const release = publishTestRelease()
+
+    // Assignment A: 绑定 worker_id wkr_82 然后撤销。
+    const first = createAssignment({
+      assignedEmail: 'bob@example.com',
+      serverRef: 'host-main',
+      soulReleaseRef: release.releaseRef,
+    })
+    verifyAndConsumeProvisionToken(first.provisionToken)
+    markAssignmentCheckedIn(first.assignment.assignmentId, { workerId: 'wkr_82', workerVersion: '1.0.0' })
+    revokeAssignment(first.assignment.assignmentId, 'admin@example.com')
+
+    // Assignment B: 同机 re-provision,同 worker_id 重新 check-in —— 撤销已释放槽,应成功而非 409/500。
+    const second = await json(await server.fetch(new Request('http://host/api/host/assignments', {
+      body: JSON.stringify({
+        assignedEmail: 'bob@example.com',
+        provisioningTarget: localProvisioningTarget(),
+        soulReleaseRef: release.releaseRef,
+      }),
+      method: 'POST',
+    })))
+
+    const response = await server.fetch(new Request('http://host/api/provision/check-in', {
+      body: JSON.stringify(checkInBody(second.provisionToken)),
+      method: 'POST',
+    }))
+
+    expect(response.status).toBe(200)
+    const receipt = await json(response)
+    expect(receipt.assignment.workerId).toBe('wkr_82')
   })
 
   it('leaves an assignment not ready after check-in until worker access is ready', async () => {
