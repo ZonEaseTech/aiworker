@@ -401,6 +401,18 @@ force-API-key path or the slice-3 gateway adapter. Because `codex` is the sole
 remains in the protocol enum and Host broker for slice-3 symmetry but is not
 pulled to Worker machines.
 
+Injection precondition (delivery vs efficacy). The injection guarantees the engine
+env *contains* the gateway carrier, not that the engine *honors* it. If the Worker
+process env already carries a conflicting `ANTHROPIC_API_KEY` (which maps to the
+`x-api-key` header), the Claude SDK sends both that and the injected
+`ANTHROPIC_AUTH_TOKEN` (`Authorization: Bearer`) and the API rejects the request —
+the same silent-gateway-bypass failure mode codex was cut to avoid. org-key v1
+targets headless distributed Workers that have **no pre-existing provider key**, so
+this precondition holds for the intended deployment. Making injection robust against
+a pre-existing key (unset/empty the colliding `*_API_KEY` on inject) plus a
+real-engine gateway-routing smoke is a tracked follow-up before any org relies on
+gateway billing.
+
 Naming: the frame carries `providerKind` (the LLM provider) and `gatewayUrl`, never
 `engineKind`/`baseUrl` — the control protocol is transport-agnostic and Host/Soul
 hold no Worker engine vocabulary (G4/G10). The Worker maps its own engineId to a
