@@ -197,7 +197,10 @@ export async function createHostServer(options: HostServerOptions | LegacyHostSe
         workerId: frame.workerId,
       })
       if (!assignment) {
-        ws.close()
+        // 撤销/拒绝 auth 失败用可区分的 application close code(4401 = access_rejected,在 RFC 6455
+        // 私有 4000–4999 段)。worker 据此区分「access 被撤销/拒绝、需 re-provision」与「瞬断需重连」:
+        // 4401 → 清持久 token + 停重连循环;其余裸 close → 走重连。绝不携带 token。
+        ws.close(4401, 'access_rejected')
         return
       }
 

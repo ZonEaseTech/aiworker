@@ -1261,6 +1261,167 @@ describe('local daemon API', () => {
     }
   })
 
+  it('AC#4b: boots through a consumed-token check-in 401 instead of crashing the daemon (honest degradation, no tunnel)', async () => {
+    const originalHostUrl = process.env.AIWORKER_HOST_URL
+    const originalProvisionToken = process.env.AIWORKER_PROVISION_TOKEN
+    const dbPath = join(dir, 'consumed-token-degrade.db')
+    const officialAppsRoot = join(dir, 'consumed-token-degrade-apps')
+    writePackagedFreeform(officialAppsRoot)
+    closeWorkerDb()
+    initWorkerDb(dbPath)
+    runWorkerMigrations()
+    upsertWorker({ id: 'wkr_82', appId: FREEFORM_APP_ID, name: 'Freeform', status: 'active' })
+    closeWorkerDb()
+
+    // Capture daemon warnings so we can assert the honest, actionable message without a logger seam.
+    const warnings: string[] = []
+    const originalWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(' '))
+    }
+
+    process.env.AIWORKER_HOST_URL = 'https://host.example'
+    process.env.AIWORKER_PROVISION_TOKEN = 'awp_already_consumed'
+    let connectCalls = 0
+    try {
+      const boot = await bootstrapWorkerApp({
+        // provision token already consumed (first-provision crashed before persisting) → re-check-in 401.
+        connectWorkerAccessTunnel: async () => {
+          connectCalls += 1
+          return { close() {} }
+        },
+        dbPath,
+        engineScanner: () => fakeEngineRows(),
+        executor: {
+          async invoke(input) {
+            input.onEvent?.({ kind: 'text', text: 'done' })
+            return { artifacts: [], summary: 'done' }
+          },
+        },
+        officialAppsRoot,
+        provisionCheckIn: async () => {
+          throw new Error('Worker check-in failed: 401')
+        },
+        runtimeVersion: 'test',
+        workersRoot: join(dir, 'consumed-token-degrade-workers'),
+      })
+      bootedDaemons.push(boot.state)
+
+      // The daemon still booted (worker runs locally); no tunnel was attempted.
+      expect(connectCalls).toBe(0)
+      const infoRes = await boot.app.fetch(new Request('http://aiworker.local/api/info'))
+      expect(infoRes.status).toBe(200)
+      const infoBody = await infoRes.json() as { workers: Array<{ id: string }> }
+      expect(infoBody.workers.map(worker => worker.id)).toEqual(['wkr_82'])
+
+      // Honest, actionable degradation log (no exception body / token).
+      expect(warnings.some(message => /check-in/i.test(message) && /provision/i.test(message))).toBe(true)
+      expect(warnings.some(message => message.includes('awp_already_consumed'))).toBe(false)
+    }
+    finally {
+      console.warn = originalWarn
+      if (originalHostUrl == null)
+        delete process.env.AIWORKER_HOST_URL
+      else
+        process.env.AIWORKER_HOST_URL = originalHostUrl
+      if (originalProvisionToken == null)
+        delete process.env.AIWORKER_PROVISION_TOKEN
+      else
+        process.env.AIWORKER_PROVISION_TOKEN = originalProvisionToken
+    }
+  })
+
+  it('PROJ-1 regression: double init (first-provision createSoulWorker init + daemon-boot re-init) does not self-lock a customized worker', async () => {
+    // first-provision 在 CLI 进程通过 createSoulWorker 调一次 runtime.init()(→ repairWorkspaceLayouts),
+    // daemon boot 再 createRuntimeForWorker + init() 一次(双 init)。这正撞 fix/proj1-restart-lock 稳定的
+    // 重启面。本测试在 daemon 层用真实重启钉死:定制 worker(已建 workspace + 跑过一回合)经 daemon 重启后,
+    // 后续 invocation 不被 PROJECTION_RECEIPT_STALE 自锁。
+    const stableDbPath = join(dir, 'double-init-worker.db')
+    const stableWorkersRoot = join(dir, 'double-init-workers')
+
+    async function bootDaemon() {
+      const boot = await bootstrapWorkerApp({
+        dbPath: stableDbPath,
+        engineScanner: () => fakeEngineRows(),
+        executor: {
+          async invoke(input) {
+            input.onEvent?.({ kind: 'text', text: 'done' })
+            // codex 是 resume-capable:follow-up(turn 2)需 turn 1 的 native session ref,否则撞
+            // ENGINE_SESSION_REF_MISSING(EB-1 面,与 PROJ-1 无关)。返回 ref 镜像真实 codex thread 捕获,
+            // 使重启后的续轮走 resume,把测试焦点钉死在「双 init 不触 PROJECTION_RECEIPT_STALE」。
+            return {
+              artifacts: [{ content: `# ${input.prompt}\n`, path: `artifacts/${input.sessionId}/result.md`, title: 'Result' }],
+              externalSessionRef: JSON.stringify({ id: `thread-${input.invocationId}`, target: 'codex' }),
+              summary: 'done',
+            }
+          },
+        },
+        runtimeVersion: 'test',
+        workersRoot: stableWorkersRoot,
+      })
+      bootedDaemons.push(boot.state)
+      return boot
+    }
+
+    // Boot 1 = first-provision 的 CLI 进程面:createSoulWorker → runtime.init()(init #1)→ 建 workspace。
+    const boot1 = await bootDaemon()
+    const created = await boot1.state.host.createSoulWorker({ appId: FREEFORM_APP_ID, id: 'wkr_82', name: 'Freeform' })
+    boot1.state.runtimes.set(created.worker.id, created.runtime)
+    const workspaceRes = await boot1.app.fetch(new Request('http://aiworker.local/api/workspace-locators', {
+      body: JSON.stringify({ name: 'Double Init Workspace', type: 'workspace', workerId: created.worker.id }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }))
+    expect(workspaceRes.status).toBe(201)
+    const workspace = (await workspaceRes.json() as { workspace: { id: string, rootPath: string } }).workspace
+
+    // 关键:把 worker 变成「定制 worker」——启用一个 skill-overlay(写入覆盖内容 + enable + 重投影)。
+    // 这是 PROJ-1 触发的必要条件:有 enabled overlay 时,repair 若不带 overlay 重投影才会让 freshness marker
+    // 与 gate 的 expected 失配 → STALE 自锁。无 overlay 的裸 workspace 两侧都是「无 overlay」、永不失配(空测)。
+    const overlayContentRes = await boot1.app.fetch(new Request(`http://aiworker.local/api/workers/${created.worker.id}/config/skill-overlay%3Afreeform-session/content`, {
+      body: JSON.stringify({ content: '# Customized Freeform Session (overlay)\n' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    }))
+    expect(overlayContentRes.status).toBe(200)
+    const refreshRes = await boot1.app.fetch(new Request('http://aiworker.local/api/projections/codex/refresh', {
+      body: JSON.stringify({ workerId: created.worker.id, workspaceId: workspace.id }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }))
+    expect(refreshRes.status).toBe(200)
+    // 覆盖内容已投影进 workspace(定制态确立)。
+    await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'aiworker-freeform-freeform-session', 'SKILL.md'), 'utf8'))
+      .resolves
+      .toContain('Customized Freeform Session (overlay)')
+
+    boot1.state.shutdown()
+    closeWorkerDb()
+
+    // Boot 2 = daemon boot 面:同 dbPath/workersRoot 的全新 daemon → resolveSingleActiveWorker 命中
+    // 已建的 wkr_82 → createRuntimeForWorker + init()(init #2)→ repairWorkspaceLayouts 调和既有 workspace。
+    // 这是 PROJ-1 的触发点。修复前 repair 不带 overlay 重投影会 desync freshness marker → 下次硬抛 STALE。
+    const boot2 = await bootDaemon()
+    const sessionRes = await boot2.app.fetch(new Request('http://aiworker.local/api/sessions', {
+      body: JSON.stringify({ title: 'Post-restart session', workerId: created.worker.id, workspaceId: workspace.id }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }))
+    expect(sessionRes.status).toBe(201)
+    const session = (await sessionRes.json() as { session: { id: string } }).session
+    const followUpRes = await boot2.app.fetch(new Request(`http://aiworker.local/api/sessions/${session.id}/invocations`, {
+      body: JSON.stringify({ input: 'Run right after the daemon restart.' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }))
+
+    // 双 init 后定制 worker 不自锁:invocation 成功、无 PROJECTION_RECEIPT_STALE。
+    expect(followUpRes.status).toBe(201)
+    const followUpBody = await followUpRes.json() as { invocation: { failureCode?: string | null, status: string } }
+    expect(followUpBody.invocation.failureCode ?? null).toBeNull()
+    expect(followUpBody.invocation).toMatchObject({ status: 'succeeded' })
+  })
+
   it('defaults the Worker home to the daemon DB directory without worker-id nesting', async () => {
     const workerHome = join(dir, 'standalone-worker-home')
     const boot = await bootstrapWorkerApp({

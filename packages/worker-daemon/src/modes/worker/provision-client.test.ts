@@ -866,6 +866,68 @@ describe('worker provision check-in client', () => {
     expect(logger.warns.some(message => /re-provision/i.test(message))).toBe(true)
   })
 
+  it('treats an access_rejected (4401) close as revocation: clears the persisted token and stops reconnecting', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const logger = fakeLogger()
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), [])
+    const cleared: string[] = []
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      clearPersistedAccess: async (home) => {
+        cleared.push(home)
+      },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      logger,
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+      workerHome: '/tmp/worker-home',
+    })
+
+    // Host rejects the hello (revoked/denied) with the application close code 4401.
+    socket.dispatchClose(4401)
+
+    // Revocation, not a blip: the persisted token is cleared and no reconnect is scheduled.
+    expect(cleared).toEqual(['/tmp/worker-home'])
+    expect(reconnect.lastDelayMs).toBeNull()
+    expect(clock.stopped).toBe(true)
+    expect(logger.warns.some(message => /revoked|re-provision/i.test(message))).toBe(true)
+    // The token is never echoed into any log line.
+    expect([...logger.infos, ...logger.warns].some(message => message.includes('awt_secret'))).toBe(false)
+  })
+
+  it('still reconnects on a non-4401 close code (transient blip, not revocation)', async () => {
+    const clock = fakeKeepaliveClock()
+    const reconnect = fakeReconnectScheduler()
+    const socket = fakeWebSocket(new URL('ws://host.example/api/provision/access'), [])
+    const cleared: string[] = []
+
+    await connectWorkerAccessTunnel({
+      access: { mode: 'worker_access', token: 'awt_secret' },
+      assignment: { assignedEmail: 'b@example.com', assignmentId: 'asn_1', soulReleaseRef: 'soul_1', workerId: 'wkr_82' },
+      clearPersistedAccess: async (home) => {
+        cleared.push(home)
+      },
+      createWebSocket: () => socket,
+      env: { AIWORKER_HOST_URL: 'http://host.example' },
+      localFetch: async () => new Response('unused'),
+      logger: fakeLogger(),
+      startKeepalive: clock.startKeepalive,
+      startReconnectTimer: reconnect.startReconnectTimer,
+      workerHome: '/tmp/worker-home',
+    })
+
+    // Caddy/proxy 1006-style abnormal close (not 4401) → transient: reconnect, keep the token.
+    socket.dispatchClose(1006)
+
+    expect(reconnect.lastDelayMs).toBeGreaterThan(0)
+    expect(cleared).toEqual([])
+  })
+
   it('forwards a worker access GET envelope to the local workbench and returns a response envelope', async () => {
     const calls: Array<{ body: unknown, headers: unknown, method: string, url: string }> = []
 
@@ -1047,10 +1109,18 @@ function fakeLogger() {
 
 function fakeWebSocket(url: URL, sent: unknown[]) {
   let onmessage: ((event: { data: string }) => Promise<void> | void) | null = null
-  let onclose: (() => void) | null = null
+  let onclose: ((event?: { code?: number }) => void) | null = null
+  let closeCalls = 0
   return {
-    dispatchClose() {
-      onclose?.()
+    get closeCalls() {
+      return closeCalls
+    },
+    // 模拟真实 CloseEvent:可带 close code(撤销 = 4401),不带则模拟无 code 的瞬断。
+    dispatchClose(code?: number) {
+      onclose?.(code === undefined ? undefined : { code })
+    },
+    close() {
+      closeCalls += 1
     },
     async dispatchMessage(frame: unknown) {
       await onmessage?.({ data: JSON.stringify(frame) })

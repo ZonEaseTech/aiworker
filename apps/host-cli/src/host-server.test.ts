@@ -1980,6 +1980,36 @@ describe('host server', () => {
     expect(upgrades).toHaveLength(1)
   })
 
+  it('closes a hello with an invalid/revoked access token using the access_rejected (4401) close code', async () => {
+    const server = await createHostServer({
+      accessRegistry: createWorkerAccessRegistry(),
+      authUser: bobUser,
+      dbPath: dbPath(),
+      ...hostUrls(),
+    })
+    const closeCalls: Array<{ code?: number, reason?: string }> = []
+    const ws = {
+      data: {},
+      close(code?: number, reason?: string) {
+        closeCalls.push({ code, reason })
+      },
+      send() {
+        return 1
+      },
+    }
+
+    // No assignment exists for this token → verifyAssignmentAccessToken returns null (the
+    // revoked/denied branch). The worker reads 4401 to distinguish revocation from a transient blip.
+    await server.websocket.message?.(ws as unknown as Bun.ServerWebSocket<{ workerId?: string }>, JSON.stringify({
+      type: 'hello',
+      assignmentId: 'asn_does_not_exist',
+      token: 'awt_revoked_or_invalid',
+      workerId: 'wkr_82',
+    }))
+
+    expect(closeCalls).toEqual([{ code: 4401, reason: 'access_rejected' }])
+  })
+
   it('registers a websocket tunnel and forwards worker route requests through it', async () => {
     const accessRegistry = createWorkerAccessRegistry()
     const server = await createHostServer({

@@ -736,21 +736,35 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/engine-icons/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `engine-icons/${c.req.param('path')}`))
 
   if (activeResolution.kind === 'single') {
-    const checkIn = await maybeProvisionCheckIn({
-      activeResolution,
-      checkIn: options.provisionCheckIn,
-      env: process.env,
-      runtimeVersion: state.runtimeVersion,
-      // D6:worker-home = daemon 启动的 DB 目录。持久 `<worker-home>/access-token` 在则读回重连、
-      // 跳过 check-in（first-provision 与重启都走这条，免对已消费 provision token 二次 check-in）。
-      workerHome: path.dirname(dbPath),
-    })
+    // worker-home = daemon 启动的 DB 目录。持久 `<worker-home>/access-token` 在则读回重连、跳过
+    // check-in；撤销时（onclose 4401）从此处清盘。
+    const workerHome = path.dirname(dbPath)
+    // 诚实降级（AC#4b）：check-in 可能因 provision token 已被消费（first-provision 在落盘/建 worker 前
+    // 崩溃后重启的 row2/row4）回 401 而抛。绝不让它拖垮 daemon——worker 本地照常运行，只是 tunnel 暂不可用。
+    let checkIn: Awaited<ReturnType<typeof maybeProvisionCheckIn>> = null
+    try {
+      checkIn = await maybeProvisionCheckIn({
+        activeResolution,
+        checkIn: options.provisionCheckIn,
+        env: process.env,
+        runtimeVersion: state.runtimeVersion,
+        // D6:持久 `<worker-home>/access-token` 在则读回重连、跳过 check-in（first-provision 与重启都走这条，
+        // 免对已消费 provision token 二次 check-in）。
+        workerHome,
+      })
+    }
+    catch {
+      // 不打印异常体（可能含 host 回包/token 痕迹）。诚实可操作:tunnel 暂不可用 + provision 可能已中断。
+      console.warn('[aiworker-daemon] worker access check-in 失败:tunnel 暂不可用,worker 仍以本地模式运行;provision 可能已中断,需重新 provision。')
+    }
     if (checkIn) {
       const tunnel = await (options.connectWorkerAccessTunnel ?? connectWorkerAccessTunnel)({
         access: checkIn.access,
         assignment: checkIn.assignment,
         env: process.env,
         localFetch: async request => app.fetch(request),
+        // 撤销检测（onclose 4401）从这里清持久 token + 停重连循环。
+        workerHome,
       })
       if (tunnel)
         workerAccessTunnels.add(tunnel)
