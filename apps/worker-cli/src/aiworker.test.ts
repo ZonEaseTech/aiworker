@@ -41,6 +41,7 @@ import {
   inspectCliOfficialAppsResource,
   prepareDaemonForeground,
   preprocessArgv,
+  psReadCommandArgs,
   resolveCliDefaultHomeDir,
   resolveCliLocalPaths,
   resolveCliMigrationsFolder,
@@ -1126,6 +1127,15 @@ describe('aiworker local CLI', () => {
     __setReadProcessCommandForTest(null)
     await writeFile(paths.pidFile, String(2 ** 30))
     expect(() => acquireDaemonStartLock(paths)).not.toThrow()
+  })
+
+  it('reads process command with -ww so macOS ps does not truncate the daemon foreground token', () => {
+    // Regression guard: BSD/macOS ps truncates the command column without -ww, dropping the
+    // trailing `foreground` token from a long npm-install command path and making a real
+    // managed daemon read as foreign (→ double-spawn / failed stop). The flag is load-bearing.
+    const args = psReadCommandArgs(4242)
+    expect(args).toEqual(['ps', '-ww', '-p', '4242', '-o', 'command='])
+    expect(args).toContain('-ww')
   })
 
   it('background daemon start fails loudly and clears the lock when the daemon never becomes healthy', async () => {
