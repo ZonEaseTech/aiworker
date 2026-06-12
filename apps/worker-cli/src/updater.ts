@@ -1,5 +1,6 @@
 import type { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
+import path from 'node:path'
 import process from 'node:process'
 
 export type UpdateCommandName = 'update' | 'upgrade'
@@ -341,6 +342,37 @@ export function verifySha256Text(content: Buffer | Uint8Array | string, checksum
   return expected === actual
 }
 
+// Worker daemon bundle/binary basenames across every shipped install form:
+// - bare `aiworker` (npm sh-wrapper bin name on PATH)
+// - `aiworker-bun.js` (npm Bun bundle the wrapper execs)
+// - `aiworker-<linux|darwin>-<x64|arm64>` (the 4 compiled standalone release targets)
+// The pattern deliberately excludes the host daemon bundle `aiworker-host-bun.js`
+// (it carries `-host-`) and the dev/source entry `aiworker.ts` — neither basename
+// satisfies it. See apps/host-cli build:bundle + release.yml --compile outfiles.
+const MANAGED_WORKER_DAEMON_BASENAME = /^aiworker(?:-bun\.js|-(?:linux|darwin)-(?:x64|arm64))?$/
+
+// True only for a real managed worker daemon process command (`<worker-binary> daemon
+// foreground …`). Single writer for the cmdline-verify shared between the upgrade
+// restart path and the start/stop/status liveness checks — a stale or reused pid whose
+// command does not match is treated as not-a-managed-daemon (so it is never killed and
+// never counted as running). Dev/source checkouts and the host daemon are rejected.
+export function isManagedWorkerDaemonCommand(command: null | string | undefined): boolean {
+  if (!command)
+    return false
+  if (command.includes('apps/worker-cli/src/aiworker.ts'))
+    return false
+
+  const commandTokens = command.trim().split(/\s+/).filter(Boolean)
+  if (commandTokens.includes('dev'))
+    return false
+
+  const hasManagedBinary = commandTokens.some(token => MANAGED_WORKER_DAEMON_BASENAME.test(path.basename(token)))
+  const daemonIndex = commandTokens.findIndex(token => token === 'daemon')
+  const hasDaemonForeground = daemonIndex >= 0 && commandTokens[daemonIndex + 1] === 'foreground'
+
+  return hasManagedBinary && hasDaemonForeground
+}
+
 export function canRestartManagedDaemon(input: ManagedDaemonProbe): ManagedDaemonDecision {
   if (!input.running || !input.pid)
     return { allowed: false, reason: 'not-running' }
@@ -349,19 +381,8 @@ export function canRestartManagedDaemon(input: ManagedDaemonProbe): ManagedDaemo
   if (!input.command)
     return { allowed: false, reason: 'unknown-command' }
 
-  const commandTokens = input.command.trim().split(/\s+/).filter(Boolean)
-  const hasManagedBinary = commandTokens.some(token => token === 'aiworker' || token.endsWith('/aiworker'))
-  const daemonIndex = commandTokens.findIndex(token => token === 'daemon')
-  const hasDaemonForeground = daemonIndex >= 0 && commandTokens[daemonIndex + 1] === 'foreground'
-
-  if (
-    input.command.includes('apps/worker-cli/src/aiworker.ts')
-    || commandTokens.includes('dev')
-    || !hasManagedBinary
-    || !hasDaemonForeground
-  ) {
+  if (!isManagedWorkerDaemonCommand(input.command))
     return { allowed: false, reason: 'not-managed-daemon' }
-  }
 
   return { allowed: true, reason: 'managed-daemon' }
 }

@@ -115,6 +115,7 @@ import {
   canRestartManagedDaemon,
   detectInstallSource,
   executeUpgradePlan,
+  isManagedWorkerDaemonCommand,
   parseUpdateCommandOptions,
   readDailyUpdateNoticeState,
   resolveReleaseTarget,
@@ -232,6 +233,10 @@ let officialSoulDescriptorsReadyForTest: (() => boolean) | null = null
 let daemonForegroundForTest: DaemonForegroundRunner | null = null
 let provisionCheckInForTest: ((input: CheckInInput) => Promise<WorkerCheckInResponse>) | null = null
 let workerCreateSelectorForTest: ((candidates: readonly WorkerCreateCandidate[]) => Promise<string>) | null = null
+// Tests cannot make their own `bun` test-runner process answer `ps` with a managed-daemon
+// command, so the cmdline-verify in `daemonStatus` needs an injectable reader. Mirrors the
+// `daemonStarterForTest` precedent; reset in `afterEach`.
+let readProcessCommandForTest: ((pid: number) => null | string) | null = null
 
 export interface WorkerCreateCandidate {
   id: string
@@ -240,6 +245,10 @@ export interface WorkerCreateCandidate {
 
 export function __setDaemonStarterForTest(starter: DaemonStarter | null): void {
   daemonStarterForTest = starter
+}
+
+export function __setReadProcessCommandForTest(reader: ((pid: number) => null | string) | null): void {
+  readProcessCommandForTest = reader
 }
 
 export function __setOfficialSoulDistBuilderForTest(builder: (() => Promise<void>) | null): void {
@@ -1234,7 +1243,10 @@ function daemonStatus(paths = localPaths()): { logFile: string, pid: number | nu
   if (!existsSync(paths.pidFile))
     return { pid: null, running: false, logFile: paths.logFile }
   const pid = Number.parseInt(readFileSync(paths.pidFile, 'utf8'), 10)
-  return { pid: Number.isFinite(pid) ? pid : null, running: Number.isFinite(pid) && isProcessAlive(pid), logFile: paths.logFile }
+  // `running` is true only for a live, cmdline-verified managed worker daemon. A pidFile
+  // that points at a dead pid, a reused pid, or some other process reads as not-running so
+  // callers treat it as stale (clear the pidFile, never kill the foreign process).
+  return { pid: Number.isFinite(pid) ? pid : null, running: Number.isFinite(pid) && isManagedDaemonPid(pid), logFile: paths.logFile }
 }
 
 interface DaemonMetadata {
@@ -1283,34 +1295,66 @@ function removeDaemonMetadata(paths: LocalPaths): void {
   rmSync(paths.daemonMetaFile, { force: true })
 }
 
+// Atomically claim the pidFile as a start lock. O_EXCL (`wx`) makes the create-or-fail a
+// single syscall, so two concurrent `start`s cannot both pass the liveness check and both
+// spawn (the TOCTOU double-spawn). The pidFile *is* the lock — it composes with WDLM-1's
+// stale detection: a leftover pidFile from a crashed start whose pid is no longer a managed
+// daemon is reclaimed here, so a dead lock never wedges every future start.
+function acquireDaemonStartLock(paths: LocalPaths): void {
+  try {
+    closeSync(openSync(paths.pidFile, 'wx'))
+  }
+  catch (error) {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'EEXIST')
+      throw error
+    // The pidFile exists. If it points at a live managed daemon, this is a genuine
+    // already-running collision; otherwise it is stale (dead/reused pid or an in-flight
+    // crash) and we reclaim it. daemonStatus does the cmdline-verify.
+    const existing = daemonStatus(paths)
+    if (existing.running)
+      throw new Error(`daemon already running: pid=${existing.pid}`)
+    rmSync(paths.pidFile, { force: true })
+    closeSync(openSync(paths.pidFile, 'wx'))
+  }
+}
+
 async function startDaemonProcess(opts: { host?: string, port?: number } = {}, paths = localPaths()): Promise<DaemonStartedResult> {
   mkdirSync(paths.home, { recursive: true })
   const current = daemonStatus(paths)
   if (current.running)
     throw new Error(`daemon already running: pid=${current.pid}`)
-  writeFileSync(paths.logFile, '')
-  const logFd = openSync(paths.logFile, 'a')
-  const child = spawn(process.execPath, [
-    path.resolve(process.argv[1] ?? 'aiworker'),
-    'daemon',
-    'foreground',
-    ...(opts.host ? ['--host', opts.host] : []),
-    ...(opts.port ? ['--port', String(opts.port)] : []),
-  ], {
-    cwd: process.cwd(),
-    detached: true,
-    env: {
-      ...process.env,
-      AIWORKER_HOME: paths.home,
-      WORKER_DB_PATH: paths.dbPath,
-    },
-    stdio: ['ignore', logFd, logFd],
-  })
-  child.unref()
-  closeSync(logFd)
-  if (!child.pid)
-    throw new Error('daemon did not return a pid')
-  writeFileSync(paths.pidFile, String(child.pid))
+  acquireDaemonStartLock(paths)
+  let child
+  try {
+    writeFileSync(paths.logFile, '')
+    const logFd = openSync(paths.logFile, 'a')
+    child = spawn(process.execPath, [
+      path.resolve(process.argv[1] ?? 'aiworker'),
+      'daemon',
+      'foreground',
+      ...(opts.host ? ['--host', opts.host] : []),
+      ...(opts.port ? ['--port', String(opts.port)] : []),
+    ], {
+      cwd: process.cwd(),
+      detached: true,
+      env: {
+        ...process.env,
+        AIWORKER_HOME: paths.home,
+        WORKER_DB_PATH: paths.dbPath,
+      },
+      stdio: ['ignore', logFd, logFd],
+    })
+    child.unref()
+    closeSync(logFd)
+    if (!child.pid)
+      throw new Error('daemon did not return a pid')
+    writeFileSync(paths.pidFile, String(child.pid))
+  }
+  catch (error) {
+    // Spawn failed after we took the lock — release it so the next start is not wedged.
+    rmSync(paths.pidFile, { force: true })
+    throw error
+  }
   const env = getWorkerEnv()
   const host = opts.host ?? env.AIWORKER_WORKER_HOST
   const port = opts.port ?? env.PORT
@@ -1534,8 +1578,14 @@ async function stopDaemonProcess(paths = localPaths(), status = daemonStatus(pat
     process.kill(status.pid, 'SIGTERM')
   }
   catch (error) {
-    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ESRCH')
+    // ESRCH: the process is already gone (lost the TOCTOU race after the liveness check).
+    // EPERM: the pid was reused by a process we do not own — the cmdline-verify in
+    // daemonStatus already rejects most such pids as stale, but a process that flipped
+    // identity between check and kill lands here. Either way: clear the stale pidFile and
+    // do not crash stop. Any other error is a real failure and propagates.
+    if (!(error instanceof Error) || !('code' in error) || (error.code !== 'ESRCH' && error.code !== 'EPERM')) {
       throw error
+    }
   }
   await waitForProcessExit(status.pid)
   rmSync(paths.pidFile, { force: true })
@@ -1579,7 +1629,12 @@ async function restartManagedDaemonAfterCliUpgrade(): Promise<DaemonRestartResul
 
 async function waitForProcessExit(pid: number, timeoutMs = 5000): Promise<void> {
   const startedAt = Date.now()
-  while (isProcessAlive(pid)) {
+  // Wait for *our* managed daemon to be gone, not for raw pid liveness. If the kill was a
+  // no-op because the pid was reused by a foreign process (EPERM stale case), that pid is
+  // not a managed daemon and this returns at once instead of blocking on a process we do
+  // not control. A reused pid that flips into a managed-looking command is astronomically
+  // unlikely; the bounded timeout still backstops it.
+  while (isManagedDaemonPid(pid)) {
     if (Date.now() - startedAt > timeoutMs)
       throw new Error(`daemon did not stop before restart: pid=${pid}`)
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -1587,11 +1642,22 @@ async function waitForProcessExit(pid: number, timeoutMs = 5000): Promise<void> 
 }
 
 function readProcessCommand(pid: number): string | null {
+  if (readProcessCommandForTest)
+    return readProcessCommandForTest(pid)
   const result = Bun.spawnSync(['ps', '-p', String(pid), '-o', 'command='])
   if (result.exitCode !== 0)
     return null
   const output = Buffer.from(result.stdout).toString('utf8').trim()
   return output.length > 0 ? output : null
+}
+
+// A pid is a live managed worker daemon only when it is both alive AND its process
+// command is a real `<worker-binary> daemon foreground` form. A stale pidFile whose pid
+// was reused by an unrelated process therefore reads as not-running (so start/status/stop
+// treat it as stale: never a ghost-running report, never an accidental kill of another
+// process). The host daemon and dev/source checkouts are likewise rejected.
+function isManagedDaemonPid(pid: number): boolean {
+  return isProcessAlive(pid) && isManagedWorkerDaemonCommand(readProcessCommand(pid))
 }
 
 export interface DaemonForegroundPreparation {

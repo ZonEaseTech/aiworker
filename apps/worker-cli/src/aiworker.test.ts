@@ -32,6 +32,7 @@ import {
   __setDaemonStarterForTest,
   __setOfficialSoulDescriptorsReadyForTest,
   __setOfficialSoulDistBuilderForTest,
+  __setReadProcessCommandForTest,
   __setWorkerCreateSelectorForTest,
   downloadAndReplaceGitHubBundle,
   inspectCliOfficialAppsResource,
@@ -78,6 +79,7 @@ describe('aiworker local CLI', () => {
     __setDaemonStarterForTest(null)
     __setOfficialSoulDescriptorsReadyForTest(null)
     __setOfficialSoulDistBuilderForTest(null)
+    __setReadProcessCommandForTest(null)
     __setWorkerCreateSelectorForTest(null)
     closeWorkerDb()
     process.exitCode = 0
@@ -117,6 +119,17 @@ describe('aiworker local CLI', () => {
       return daemonStartedFixture(opts, paths, pid)
     })
     return started
+  }
+
+  // daemonStatus now cmdline-verifies the pidFile pid, but the bun test-runner process
+  // cannot make `ps` report a managed-daemon command for itself. Inject a reader that
+  // reports a real managed worker daemon command for `managedPids` so a pidFile written
+  // with `String(process.pid)` is treated as a genuinely-running managed daemon.
+  function installManagedProcessCommand(...managedPids: number[]): void {
+    const managed = new Set(managedPids)
+    __setReadProcessCommandForTest(pid =>
+      managed.has(pid) ? '/usr/local/bin/bun /usr/local/bin/aiworker daemon foreground' : null,
+    )
   }
 
   function freeformDescriptorPath(): string {
@@ -761,6 +774,7 @@ describe('aiworker local CLI', () => {
     // Second start: idempotent — reuses the running daemon and keeps the same
     // single fleet entry (no duplicate seed, no "daemon already running" throw).
     await writeFile(path.join(root, 'home', 'workers', workerId, 'aiworker-daemon.pid'), String(process.pid))
+    installManagedProcessCommand(process.pid)
     expect(await runCli(argv('start'))).toBe(0)
     const second = JSON.parse(output) as { started: Array<{ daemon: { started: boolean }, id: string }> }
     expect(second.started).toEqual([
@@ -869,6 +883,7 @@ describe('aiworker local CLI', () => {
     const home = path.join(root, 'home')
     mkdirSync(home, { recursive: true })
     await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    installManagedProcessCommand(process.pid)
     const started = installFakeDaemonStarter(1)
 
     expect(await runCli(argv('daemon', 'start'))).toBe(0)
@@ -893,6 +908,7 @@ describe('aiworker local CLI', () => {
     const home = path.join(root, 'home')
     mkdirSync(home, { recursive: true })
     await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    installManagedProcessCommand(process.pid)
     await writeFile(path.join(home, 'aiworker-daemon.json'), `${JSON.stringify({
       host: '127.0.0.1',
       pid: process.pid,
@@ -924,6 +940,7 @@ describe('aiworker local CLI', () => {
     const home = path.join(root, 'home')
     mkdirSync(home, { recursive: true })
     await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    installManagedProcessCommand(process.pid)
     await writeFile(path.join(home, 'aiworker-daemon.json'), `${JSON.stringify({
       host: '127.0.0.1',
       pid: process.pid + 1,
@@ -949,6 +966,59 @@ describe('aiworker local CLI', () => {
     expect(result.daemon.requested).toEqual({ host: '127.0.0.2', port: 49999 })
     expect(result.daemon.message).toContain('metadata pid mismatch')
     expect(result.daemon.message).toContain('actual URL unknown')
+  })
+
+  it('daemon status reports not-running for a stale pidFile whose pid is alive but not a managed daemon', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    // The pid is alive (this very test process) but its command is NOT a managed worker
+    // daemon — a classic stale/reused pidFile. It must never read as ghost-running.
+    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    __setReadProcessCommandForTest(() => '/usr/bin/some-other-process --serve')
+
+    expect(await runCli(argv('daemon', 'status'))).toBe(0)
+    const status = JSON.parse(output) as { pid: number | null, running: boolean }
+    expect(status.pid).toBe(process.pid)
+    expect(status.running).toBe(false)
+  })
+
+  it('daemon stop survives an EPERM kill on a foreign pid and clears the stale pidFile', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    const pidFile = path.join(home, 'aiworker-daemon.pid')
+    // The pidFile points at a live, managed-looking daemon (so stop attempts the kill),
+    // but the kill raises EPERM as if the pid belonged to another user's process. Stop must
+    // not crash; it must swallow EPERM, clear the stale pidFile, and report running:false.
+    await writeFile(pidFile, String(process.pid))
+    // The initial liveness check sees a managed daemon (running:true → kill attempted);
+    // after the failed kill the foreign pid is no longer managed, so waitForProcessExit
+    // returns at once instead of blocking on a process this CLI does not own.
+    let commandReads = 0
+    __setReadProcessCommandForTest(() => {
+      commandReads += 1
+      return commandReads === 1 ? '/usr/local/bin/bun /usr/local/bin/aiworker daemon foreground' : null
+    })
+    const originalKill = process.kill.bind(process)
+    process.kill = ((pid: number, signal?: NodeJS.Signals | number) => {
+      if (pid === process.pid && signal === 'SIGTERM') {
+        const error = new Error('operation not permitted') as Error & { code: string }
+        error.code = 'EPERM'
+        throw error
+      }
+      return originalKill(pid, signal)
+    }) as typeof process.kill
+
+    try {
+      expect(await runCli(argv('daemon', 'stop'))).toBe(0)
+    }
+    finally {
+      process.kill = originalKill
+    }
+
+    const stopped = JSON.parse(output) as { running: boolean, stopped: boolean }
+    expect(stopped.running).toBe(false)
+    expect(realpathSync(home)).toBeTruthy()
+    await expect(stat(pidFile)).rejects.toThrow()
   })
 
   it('daemon foreground prepare seam runs unified bootstrap without opening a browser or serving forever', async () => {
