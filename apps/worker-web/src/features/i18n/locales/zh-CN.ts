@@ -301,5 +301,8 @@ export const zhCN = {
     addContentPlaceholder: '内容',
     add: '添加',
     loadFailed: '加载内容失败。',
+    executionPanel: '执行设置',
+    executionPanelDetail: '引擎、模式、BYOK',
+    keyRefLiteralError: 'API key 字段必须填引用（如 env:NAME），不能填字面密钥。',
   },
 } satisfies StaticMessages

@@ -1,4 +1,4 @@
-import type { LocalWorker, LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-descriptor'
+import type { LocalSettingsConfig, LocalWorker, LocalWorkerOverlayAsset } from '@zonease/aiworker-soul-descriptor'
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -66,6 +66,27 @@ const mcpAsset: LocalWorkerOverlayAsset = {
   updatedAt: now,
 }
 
+const mockSettings = {
+  appearance: 'system',
+  byok: {
+    apiKeyRef: '',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o',
+    provider: 'openai-compatible',
+  },
+  connectors: [],
+  engineId: 'codex',
+  engines: [
+    { id: 'codex', installed: true },
+    { id: 'claude-code', installed: false },
+  ],
+  executionMode: 'byok',
+  externalMcpServers: [],
+  language: 'en',
+  localMcpServer: { enabled: false, url: 'http://127.0.0.1:4319/mcp' },
+  updatedAt: now,
+} as unknown as LocalSettingsConfig
+
 interface FetchResult { body: unknown, status?: number }
 let routes: Record<string, (init?: RequestInit) => FetchResult>
 let calls: { url: string, method: string, body: unknown }[]
@@ -107,6 +128,30 @@ function renderDialog(assets: LocalWorkerOverlayAsset[], onReload = vi.fn()) {
       onSaveAssets={vi.fn()}
     />,
   )
+}
+
+function renderDialogWithSettings(
+  settingsOverride: Partial<{ byok: Partial<LocalSettingsConfig['byok']> }> = {},
+  onSettingsSaved = vi.fn(),
+) {
+  const settings = {
+    ...mockSettings,
+    ...(settingsOverride.byok ? { byok: { ...(mockSettings as unknown as { byok: LocalSettingsConfig['byok'] }).byok, ...settingsOverride.byok } } : {}),
+  } as unknown as LocalSettingsConfig
+  render(
+    <WorkerConfigurationDialog
+      assets={[]}
+      copy={copy}
+      open
+      settings={settings}
+      worker={worker}
+      onOpenChange={vi.fn()}
+      onReload={vi.fn()}
+      onSaveAssets={vi.fn()}
+      onSettingsSaved={onSettingsSaved}
+    />,
+  )
+  return { settings }
 }
 
 function editorPanel() {
@@ -372,5 +417,99 @@ describe('worker configuration overlay content editor', () => {
 
     const error = await editorPanel().findByTestId('overlay-content-error')
     expect(error.textContent).toBe('literal secrets are not allowed in worker overlay content')
+  })
+})
+
+describe('execution config panel', () => {
+  function findExecutionPanelBtn() {
+    return screen.getAllByRole('button').find(
+      b => b.getAttribute('data-slot') === 'sidebar-menu-button' && b.textContent?.includes(copy.workerConfig.executionPanel),
+    )
+  }
+
+  function openExecutionPanel() {
+    const btn = findExecutionPanelBtn()
+    if (!btn)
+      throw new Error('Execution sidebar button not found')
+    fireEvent.click(btn)
+  }
+
+  it('shows Execution panel entry in sidebar when settings prop is provided', () => {
+    renderDialogWithSettings()
+    expect(findExecutionPanelBtn()).toBeTruthy()
+  })
+
+  it('does not show Execution panel entry when settings prop is omitted', () => {
+    renderDialog([])
+    expect(findExecutionPanelBtn()).toBeUndefined()
+  })
+
+  it('opens execution panel and shows BYOK API key ref input when clicked', async () => {
+    renderDialogWithSettings()
+    openExecutionPanel()
+    await waitFor(() => {
+      expect(screen.getByTestId('execution-config-panel')).toBeTruthy()
+      expect(screen.getByTestId('byok-api-key-ref-input')).toBeTruthy()
+    })
+  })
+
+  it('rejects literal secret in apiKeyRef field and blocks PATCH', async () => {
+    renderDialogWithSettings()
+    openExecutionPanel()
+    await waitFor(() => screen.getByTestId('byok-api-key-ref-input'))
+
+    fireEvent.change(screen.getByTestId('byok-api-key-ref-input'), {
+      target: { value: 'sk-abc1234567890abcdef' },
+    })
+    expect(screen.getByTestId('api-key-ref-error').textContent).toBe(copy.workerConfig.keyRefLiteralError)
+
+    // Save button must be disabled when there is a key error — no PATCH should fire
+    const saveBtn = screen.getAllByRole('button').find(b => b.textContent?.trim() === copy.workerConfig.save)
+    expect((saveBtn as HTMLButtonElement).disabled).toBe(true)
+    expect(calls.filter(c => c.method === 'PATCH').length).toBe(0)
+  })
+
+  it('accepts env:NAME ref and submits PATCH /api/settings', async () => {
+    routes['PATCH /api/settings'] = () => ({
+      body: {
+        settings: {
+          ...mockSettings,
+          byok: { ...(mockSettings as unknown as { byok: LocalSettingsConfig['byok'] }).byok, apiKeyRef: 'env:MY_KEY' },
+        },
+      },
+    })
+    const onSettingsSaved = vi.fn()
+    renderDialogWithSettings({}, onSettingsSaved)
+    openExecutionPanel()
+    await waitFor(() => screen.getByTestId('byok-api-key-ref-input'))
+
+    fireEvent.change(screen.getByTestId('byok-api-key-ref-input'), {
+      target: { value: 'env:MY_KEY' },
+    })
+    // No error should appear for a valid ref
+    expect(screen.queryByTestId('api-key-ref-error')).toBeNull()
+
+    const saveBtn = screen.getAllByRole('button').find(b => b.textContent?.trim() === copy.workerConfig.save)
+    fireEvent.click(saveBtn!)
+
+    await waitFor(() => {
+      const patchCall = calls.find(c => c.method === 'PATCH' && c.url === '/api/settings')
+      expect(patchCall).toBeDefined()
+      expect((patchCall!.body as Record<string, unknown>).byok).toMatchObject({ apiKeyRef: 'env:MY_KEY' })
+    })
+    expect(onSettingsSaved).toHaveBeenCalled()
+  })
+
+  it('stored apiKeyRef value is never rendered in the DOM', async () => {
+    const storedRef = 'env:STORED_SECRET_REF_VALUE'
+    renderDialogWithSettings({ byok: { apiKeyRef: storedRef } })
+    openExecutionPanel()
+    await waitFor(() => screen.getByTestId('byok-api-key-ref-input'))
+
+    // The stored ref string must NOT appear anywhere in the rendered DOM
+    expect(document.body.textContent).not.toContain(storedRef)
+    // The input must start empty (not pre-filled with the stored ref)
+    const input = screen.getByTestId('byok-api-key-ref-input') as HTMLInputElement
+    expect(input.value).toBe('')
   })
 })

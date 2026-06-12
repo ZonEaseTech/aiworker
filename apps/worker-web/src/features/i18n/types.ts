@@ -290,6 +290,9 @@ export interface StaticMessages {
     addContentPlaceholder: string
     add: string
     loadFailed: string
+    executionPanel: string
+    executionPanelDetail: string
+    keyRefLiteralError: string
   }
 }
 

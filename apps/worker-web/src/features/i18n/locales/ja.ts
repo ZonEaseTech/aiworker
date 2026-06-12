@@ -301,5 +301,8 @@ export const ja = {
     addContentPlaceholder: '内容',
     add: '追加',
     loadFailed: '内容の読み込みに失敗しました。',
+    executionPanel: '実行設定',
+    executionPanelDetail: 'エンジン・モード・BYOK',
+    keyRefLiteralError: 'env:NAME のような参照を使用してください。リテラルシークレットは使用できません。',
   },
 } satisfies StaticMessages

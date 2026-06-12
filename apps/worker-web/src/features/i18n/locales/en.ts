@@ -304,5 +304,8 @@ export const en = {
     addContentPlaceholder: 'Content',
     add: 'Add',
     loadFailed: 'Failed to load content.',
+    executionPanel: 'Execution',
+    executionPanelDetail: 'Engine, mode, BYOK',
+    keyRefLiteralError: 'Use a reference like env:NAME, not a literal secret.',
   },
 } satisfies StaticMessages

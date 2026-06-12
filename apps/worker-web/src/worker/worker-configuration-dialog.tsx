@@ -1,4 +1,4 @@
-import type { LocalWorker, LocalWorkerOverlayAsset, LocalWorkerOverlayAssetKind } from '@zonease/aiworker-soul-descriptor'
+import type { LocalSettingsConfig, LocalWorker, LocalWorkerOverlayAsset, LocalWorkerOverlayAssetKind } from '@zonease/aiworker-soul-descriptor'
 import type { StaticMessages } from '../features/i18n/types'
 
 import { Add01Icon, Cancel01Icon, MoreHorizontalCircle01Icon, RefreshIcon, Tick02Icon } from '@hugeicons/core-free-icons'
@@ -9,6 +9,7 @@ import { Button } from '@zonease/aiworker-ui/components/button'
 import { CollapsibleGroup } from '@zonease/aiworker-ui/components/collapsible-group'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@zonease/aiworker-ui/components/dropdown-menu'
+import { Field, FieldGroup, FieldLabel } from '@zonease/aiworker-ui/components/field'
 import { Input } from '@zonease/aiworker-ui/components/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
 import { Label } from '@zonease/aiworker-ui/components/label'
@@ -16,9 +17,10 @@ import { ScrollArea } from '@zonease/aiworker-ui/components/scroll-area'
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '@zonease/aiworker-ui/components/sidebar'
 import { Switch } from '@zonease/aiworker-ui/components/switch'
 import { Textarea } from '@zonease/aiworker-ui/components/textarea'
+import { ToggleGroup, ToggleGroupItem } from '@zonease/aiworker-ui/components/toggle-group'
 import { useEffect, useMemo, useState } from 'react'
 
-import { getOverlayContent, LocalApiError, putOverlayContent, resetOverlayContent } from '../features/local-workspace/api'
+import { getOverlayContent, LocalApiError, putOverlayContent, resetOverlayContent, saveSettings } from '../features/local-workspace/api'
 
 type OverlayCategory = LocalWorkerOverlayAssetKind
 
@@ -36,7 +38,9 @@ export function WorkerConfigurationDialog({
   onReload,
   onSaveAssets,
   onSelectWorkbenchTab,
+  onSettingsSaved,
   open,
+  settings,
   worker,
   workbenchTabs,
 }: {
@@ -47,7 +51,9 @@ export function WorkerConfigurationDialog({
   onReload?: () => Promise<void> | void
   onSaveAssets: (assets: LocalWorkerOverlayAsset[]) => Promise<void> | void
   onSelectWorkbenchTab?: (tab: { id: string, path: string }) => void
+  onSettingsSaved?: (settings: LocalSettingsConfig) => void
   open: boolean
+  settings?: LocalSettingsConfig | null
   worker: LocalWorker | null
   workbenchTabs?: { id: string, label: string, path: string }[]
 }) {
@@ -59,7 +65,7 @@ export function WorkerConfigurationDialog({
   const [contentDirty, setContentDirty] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
   const [saving, setSaving] = useState(false)
-  const [selectedPanel, setSelectedPanel] = useState<null | 'workbench'>(null)
+  const [selectedPanel, setSelectedPanel] = useState<null | 'workbench' | 'execution'>(null)
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
   const displayAssets = useMemo(() => {
     if (assets.length === 0)
@@ -93,8 +99,13 @@ export function WorkerConfigurationDialog({
     return map
   }, [assets])
   const canShowWorkbenchPanel = Boolean(workbenchTabs && workbenchTabs.length > 1)
-  const effectiveSelectedPanel = selectedPanel === 'workbench' && canShowWorkbenchPanel ? selectedPanel : null
-  const selectedAsset = effectiveSelectedPanel === 'workbench' || draftCategory ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
+  const canShowExecutionPanel = settings != null
+  const effectiveSelectedPanel = selectedPanel === 'workbench' && canShowWorkbenchPanel
+    ? 'workbench' as const
+    : selectedPanel === 'execution' && canShowExecutionPanel
+      ? 'execution' as const
+      : null
+  const selectedAsset = effectiveSelectedPanel === 'workbench' || effectiveSelectedPanel === 'execution' || draftCategory ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
 
   function targetsFor(nextAsset: LocalWorkerOverlayAsset): string[] {
     if (nextAsset.kind !== 'skill')
@@ -243,6 +254,14 @@ export function WorkerConfigurationDialog({
     runOrConfirmDiscard(() => {
       setDraftCategory(null)
       setSelectedPanel('workbench')
+      setSelectedAssetId(null)
+    })
+  }
+
+  function selectExecutionPanel() {
+    runOrConfirmDiscard(() => {
+      setDraftCategory(null)
+      setSelectedPanel('execution')
       setSelectedAssetId(null)
     })
   }
@@ -436,6 +455,27 @@ export function WorkerConfigurationDialog({
                       </SidebarMenu>
                     )
                   : null}
+                {canShowExecutionPanel
+                  ? (
+                      <SidebarMenu>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton
+                            isActive={effectiveSelectedPanel === 'execution'}
+                            size="lg"
+                            className="h-11 items-start py-1.5"
+                            onClick={selectExecutionPanel}
+                          >
+                            <span className="flex min-w-0 flex-col gap-0.5">
+                              <span className="truncate">{labels.executionPanel}</span>
+                              <span className="truncate font-normal text-sidebar-foreground/60">
+                                {labels.executionPanelDetail}
+                              </span>
+                            </span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      </SidebarMenu>
+                    )
+                  : null}
               </SidebarGroup>
             </ScrollArea>
             <div data-testid="worker-overlay-asset-list" data-orientation="vertical" className="hidden" />
@@ -458,95 +498,103 @@ export function WorkerConfigurationDialog({
                         onDirtyChange={setContentDirty}
                       />
                     )
-                  : effectiveSelectedPanel === 'workbench'
+                  : effectiveSelectedPanel === 'execution' && settings
                     ? (
-                        <ItemGroup className="gap-3">
-                          <Item variant="muted">
-                            <ItemContent className="grid min-w-0 gap-3">
-                              <ItemTitle>Workbench</ItemTitle>
-                              <ItemDescription>
-                                Choose the declared mounted route used by this Soul worker.
-                              </ItemDescription>
-                            </ItemContent>
-                          </Item>
-                          {workbenchTabs && workbenchTabs.length > 1
-                            ? (
-                                <Item variant="default">
-                                  <ItemContent className="grid min-w-0 gap-2">
-                                    <ItemTitle>Workbench route</ItemTitle>
-                                    <ItemDescription>This preference is stored for this worker only.</ItemDescription>
-                                    <ItemActions className="gap-0.5" role="tablist" aria-label="Workbench routes">
-                                      {workbenchTabs.map(tab => (
-                                        <button
-                                          key={tab.id}
-                                          type="button"
-                                          role="tab"
-                                          aria-selected={tab.id === activeWorkbenchTabId}
-                                          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                                            tab.id === activeWorkbenchTabId
-                                              ? 'bg-background text-foreground shadow-sm'
-                                              : 'text-muted-foreground hover:text-foreground'
-                                          }`}
-                                          onClick={() => onSelectWorkbenchTab?.(tab)}
-                                        >
-                                          {tab.label}
-                                        </button>
-                                      ))}
-                                    </ItemActions>
-                                  </ItemContent>
-                                </Item>
-                              )
-                            : null}
-                        </ItemGroup>
+                        <ExecutionConfigPanel
+                          copy={copy}
+                          settings={settings}
+                          onSaved={onSettingsSaved}
+                        />
                       )
-                    : selectedAsset
+                    : effectiveSelectedPanel === 'workbench'
                       ? (
                           <ItemGroup className="gap-3">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <ItemTitle>{selectedAsset.id}</ItemTitle>
-                                  {selectedAsset.source === 'baseline'
-                                    ? <Badge variant="secondary" className="text-xs">baseline</Badge>
-                                    : null}
-                                </div>
-                                <ItemDescription>{selectedAsset.target}</ItemDescription>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-2">
-                                <Switch
-                                  checked={selectedAsset.enabled}
-                                  disabled={saving}
-                                  aria-label={`Enable ${selectedAsset.id}`}
-                                  onCheckedChange={checked => void saveAsset({ ...selectedAsset, enabled: checked })}
-                                />
-                              </div>
-                            </div>
-                            {autosave === 'failed' && autosaveErrorMessage
+                            <Item variant="muted">
+                              <ItemContent className="grid min-w-0 gap-3">
+                                <ItemTitle>Workbench</ItemTitle>
+                                <ItemDescription>
+                                  Choose the declared mounted route used by this Soul worker.
+                                </ItemDescription>
+                              </ItemContent>
+                            </Item>
+                            {workbenchTabs && workbenchTabs.length > 1
                               ? (
-                                  <Alert variant="destructive">
-                                    <AlertDescription>{autosaveErrorMessage}</AlertDescription>
-                                  </Alert>
-                                )
-                              : null}
-                            {worker
-                              ? (
-                                  <OverlayContentEditorPanel
-                                    key={`${selectedAsset.kind}:${selectedAsset.id}:${selectedAsset.target}`}
-                                    asset={selectedAsset}
-                                    labels={labels}
-                                    workerId={worker.id}
-                                    onDirtyChange={setContentDirty}
-                                    onSaved={() => void onReload?.()}
-                                  />
+                                  <Item variant="default">
+                                    <ItemContent className="grid min-w-0 gap-2">
+                                      <ItemTitle>Workbench route</ItemTitle>
+                                      <ItemDescription>This preference is stored for this worker only.</ItemDescription>
+                                      <ItemActions className="gap-0.5" role="tablist" aria-label="Workbench routes">
+                                        {workbenchTabs.map(tab => (
+                                          <button
+                                            key={tab.id}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={tab.id === activeWorkbenchTabId}
+                                            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                                              tab.id === activeWorkbenchTabId
+                                                ? 'bg-background text-foreground shadow-sm'
+                                                : 'text-muted-foreground hover:text-foreground'
+                                            }`}
+                                            onClick={() => onSelectWorkbenchTab?.(tab)}
+                                          >
+                                            {tab.label}
+                                          </button>
+                                        ))}
+                                      </ItemActions>
+                                    </ItemContent>
+                                  </Item>
                                 )
                               : null}
                           </ItemGroup>
                         )
-                      : (
-                          <ItemDescription className="pt-8 text-center">
-                            Select an asset from the list.
-                          </ItemDescription>
-                        )}
+                      : selectedAsset
+                        ? (
+                            <ItemGroup className="gap-3">
+                              <div className="flex items-center justify-between">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <ItemTitle>{selectedAsset.id}</ItemTitle>
+                                    {selectedAsset.source === 'baseline'
+                                      ? <Badge variant="secondary" className="text-xs">baseline</Badge>
+                                      : null}
+                                  </div>
+                                  <ItemDescription>{selectedAsset.target}</ItemDescription>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <Switch
+                                    checked={selectedAsset.enabled}
+                                    disabled={saving}
+                                    aria-label={`Enable ${selectedAsset.id}`}
+                                    onCheckedChange={checked => void saveAsset({ ...selectedAsset, enabled: checked })}
+                                  />
+                                </div>
+                              </div>
+                              {autosave === 'failed' && autosaveErrorMessage
+                                ? (
+                                    <Alert variant="destructive">
+                                      <AlertDescription>{autosaveErrorMessage}</AlertDescription>
+                                    </Alert>
+                                  )
+                                : null}
+                              {worker
+                                ? (
+                                    <OverlayContentEditorPanel
+                                      key={`${selectedAsset.kind}:${selectedAsset.id}:${selectedAsset.target}`}
+                                      asset={selectedAsset}
+                                      labels={labels}
+                                      workerId={worker.id}
+                                      onDirtyChange={setContentDirty}
+                                      onSaved={() => void onReload?.()}
+                                    />
+                                  )
+                                : null}
+                            </ItemGroup>
+                          )
+                        : (
+                            <ItemDescription className="pt-8 text-center">
+                              Select an asset from the list.
+                            </ItemDescription>
+                          )}
               </div>
             </ScrollArea>
           </div>
@@ -793,6 +841,226 @@ function OverlayContentAddPanel({
           </ItemActions>
         </ItemContent>
       </Item>
+    </ItemGroup>
+  )
+}
+
+// 镜像 daemon 的 isSafeSecretReference 逻辑，保持客户端校验与服务端一致
+// packages/worker-daemon/src/modes/worker/settings.ts
+const _SECRET_REFERENCE_PREFIXES = ['$', 'env:', 'secretref:'] as const
+const _LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,}|eyJ[\w-]+\.[\w-]+\.[\w-]+|-----BEGIN[A-Z ]*PRIVATE KEY-----/
+
+function isLiteralSecret(value: string): boolean {
+  const trimmed = value.trim()
+  if (trimmed.length === 0 || trimmed === '[REDACTED]')
+    return false
+  const prefix = _SECRET_REFERENCE_PREFIXES.find(p => trimmed.startsWith(p))
+  if (!prefix)
+    return true
+  const body = trimmed.slice(prefix.length)
+  if (body.includes('='))
+    return true
+  return _LITERAL_SECRET_RE.test(body)
+}
+
+function ExecutionConfigPanel({
+  copy,
+  onSaved,
+  settings,
+}: {
+  copy: StaticMessages
+  onSaved?: (settings: LocalSettingsConfig) => void
+  settings: LocalSettingsConfig
+}) {
+  const labels = copy.workerConfig
+  const settingsCopy = copy.settings
+
+  const [mode, setMode] = useState<LocalSettingsConfig['executionMode']>(settings.executionMode)
+  const [engineId, setEngineId] = useState(settings.engineId)
+  const [provider, setProvider] = useState(settings.byok.provider)
+  const [baseUrl, setBaseUrl] = useState(settings.byok.baseUrl)
+  const [model, setModel] = useState(settings.byok.model)
+  // apiKeyRef 从不预填真实引用值 — 只用 apiKeyRefPresent 布尔显示已配置状态
+  const [apiKeyRef, setApiKeyRef] = useState('')
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  // 从 settings 派生是否已设置 key，绝不把真实引用值渲染到 DOM
+  const apiKeyRefPresent = Boolean(settings.byok.apiKeyRef.trim())
+
+  function handleApiKeyRefChange(value: string) {
+    setApiKeyRef(value)
+    setApiKeyError(value && isLiteralSecret(value) ? labels.keyRefLiteralError : null)
+  }
+
+  async function handleSave() {
+    if (apiKeyRef && isLiteralSecret(apiKeyRef)) {
+      setApiKeyError(labels.keyRefLiteralError)
+      return
+    }
+    setSaving(true)
+    setSaveError(null)
+    setSaved(false)
+    try {
+      const patch: Partial<LocalSettingsConfig> = {
+        executionMode: mode,
+        engineId,
+        byok: {
+          ...settings.byok,
+          provider,
+          baseUrl,
+          model,
+          ...(apiKeyRef ? { apiKeyRef } : {}),
+        },
+      }
+      const result = await saveSettings(patch)
+      onSaved?.(result.settings)
+      setApiKeyRef('')
+      setSaved(true)
+    }
+    catch (error) {
+      setSaveError(error instanceof Error ? error.message : labels.loadFailed)
+    }
+    finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <ItemGroup className="gap-4" data-testid="execution-config-panel">
+      <Item variant="muted">
+        <ItemContent className="grid min-w-0 gap-1">
+          <ItemTitle>{labels.executionPanel}</ItemTitle>
+          <ItemDescription>{settingsCopy.nav.executionDetail}</ItemDescription>
+        </ItemContent>
+      </Item>
+
+      <ToggleGroup
+        type="single"
+        aria-label={settingsCopy.nav.execution}
+        className="w-full"
+        value={mode}
+        onValueChange={(value) => {
+          if (value)
+            setMode(value as LocalSettingsConfig['executionMode'])
+        }}
+      >
+        <ToggleGroupItem value="local-cli" className="h-auto min-h-12 flex-1 justify-start px-3 py-2">
+          <span className="flex flex-col items-start gap-0.5 text-left">
+            <span className="font-medium">Local CLI</span>
+            <span className="text-xs font-normal opacity-70">
+              {settingsCopy.engine.availableCount(settings.engines.filter(e => e.installed).length)}
+            </span>
+          </span>
+        </ToggleGroupItem>
+        <ToggleGroupItem value="byok" className="h-auto min-h-12 flex-1 justify-start px-3 py-2">
+          <span className="flex flex-col items-start gap-0.5 text-left">
+            <span className="font-medium">BYOK</span>
+            <span className="text-xs font-normal opacity-70">{provider}</span>
+          </span>
+        </ToggleGroupItem>
+      </ToggleGroup>
+
+      {mode === 'local-cli'
+        ? (
+            <Item variant="default">
+              <ItemContent className="grid min-w-0 gap-2">
+                <ItemTitle>{settingsCopy.engine.title}</ItemTitle>
+                <ItemDescription>{settingsCopy.engine.hint}</ItemDescription>
+                <div className="grid grid-cols-1 gap-2 pt-1">
+                  {settings.engines.map(engine => (
+                    <button
+                      key={engine.id}
+                      type="button"
+                      aria-pressed={engineId === engine.id}
+                      className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-left transition-colors ${
+                        engineId === engine.id
+                          ? 'border-primary bg-primary/5 font-medium'
+                          : 'border-border hover:bg-muted'
+                      }`}
+                      onClick={() => setEngineId(engine.id)}
+                    >
+                      <span className="flex-1 truncate">{engine.id}</span>
+                      {engine.installed
+                        ? <Badge variant="outline" className="shrink-0 text-xs">installed</Badge>
+                        : <Badge variant="secondary" className="shrink-0 text-xs">{copy.common.notInstalled}</Badge>}
+                    </button>
+                  ))}
+                </div>
+              </ItemContent>
+            </Item>
+          )
+        : (
+            <Item variant="default">
+              <ItemContent className="grid min-w-0 gap-3">
+                <ItemTitle>{settingsCopy.byok.title}</ItemTitle>
+                <ItemDescription>{settingsCopy.byok.hint}</ItemDescription>
+                <FieldGroup className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="wcd-byok-provider">{settingsCopy.byok.provider}</FieldLabel>
+                    <Input id="wcd-byok-provider" value={provider} onChange={e => setProvider(e.target.value)} />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="wcd-byok-base-url">{settingsCopy.byok.baseUrl}</FieldLabel>
+                    <Input id="wcd-byok-base-url" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="wcd-byok-model">{settingsCopy.byok.model}</FieldLabel>
+                    <Input id="wcd-byok-model" value={model} onChange={e => setModel(e.target.value)} />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="wcd-byok-api-key-ref">{settingsCopy.byok.apiKeyRef}</FieldLabel>
+                    <Input
+                      id="wcd-byok-api-key-ref"
+                      aria-label={settingsCopy.byok.apiKeyRef}
+                      data-testid="byok-api-key-ref-input"
+                      placeholder="env:NAME"
+                      value={apiKeyRef}
+                      autoComplete="off"
+                      onChange={e => handleApiKeyRefChange(e.target.value)}
+                    />
+                    {apiKeyError
+                      ? (
+                          <p className="text-xs text-destructive" data-testid="api-key-ref-error">{apiKeyError}</p>
+                        )
+                      : apiKeyRefPresent
+                        ? (
+                            <p className="text-xs text-muted-foreground" data-testid="api-key-ref-present">
+                              {settingsCopy.byok.hint}
+                            </p>
+                          )
+                        : null}
+                  </Field>
+                </FieldGroup>
+              </ItemContent>
+            </Item>
+          )}
+
+      {saveError
+        ? (
+            <Alert variant="destructive">
+              <AlertDescription data-testid="execution-save-error">{saveError}</AlertDescription>
+            </Alert>
+          )
+        : null}
+      {saved
+        ? (
+            <Alert role="status">
+              <AlertDescription>{settingsCopy.autosave.saved}</AlertDescription>
+            </Alert>
+          )
+        : null}
+      <ItemActions className="justify-end">
+        <Button
+          type="button"
+          disabled={saving || Boolean(apiKeyRef && apiKeyError)}
+          onClick={() => void handleSave()}
+        >
+          {saving ? labels.saving : labels.save}
+        </Button>
+      </ItemActions>
     </ItemGroup>
   )
 }
