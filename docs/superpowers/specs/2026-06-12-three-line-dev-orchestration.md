@@ -57,11 +57,12 @@ EB-1 resume 与切片 2/3 LLM 注入都伸进**同一文件**。这是**共享�
 
 | # | 不变量 | 守卫 |
 |---|---|---|
-| 1 | `worker-*↛host-*`（worker 侧零 host import） | inversion-guards G2/G3 + grep，13/0 |
+| 1 | `worker-*↛host-*`（worker 侧零 host import） | inversion-guards G2/G3 + grep |
 | 2 | descriptor-only（Host 把 descriptorJson 当不透明串，只读 identity.id/name display，不解析领域字段） | inversion-guards G4 + `forbidden-host-domain-schema` |
 | 3 | 脏缝接口注入（worker-runtime 不引 host 概念，与 EB-1 正交共存） | code review + §3.2 touch-protocol |
 | 4 | 协议 additive 向后兼容 | `index.test.ts` 向后兼容用例 + 不 bump 版本 |
 | 5 | secret 不落盘（凭证仅内存，不进 DB/log/receipt/descriptor/access-token 文件/OpenAPI） | security review + redaction |
+| 6 | 三线拓扑：每包必显式归线 + 共享底座/wire leaf 绝不 depend up 进某条线 runtime/app（纵向分层不可反转 + 新包强制归线 review） | inversion-guards **G12**（与 G3/G5 的横向跨线守卫正交互补） |
 
 ## 5. 独立发版（解 worker 不能单独 GA 的机制卡点）
 
