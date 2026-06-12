@@ -117,25 +117,41 @@ try {
   seedInvocationsForBrowserEngineActions(sessionResult.session.id)
   seedWorkbenchFixtures(workspaceResult.workspace.id)
 
-  const port = reservePort()
-  daemon = Bun.spawn({
-    cmd: [
-      process.execPath,
-      'apps/worker-cli/src/aiworker.ts',
-      'daemon',
-      'foreground',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(port),
-    ],
-    cwd: repoRoot,
-    env: daemonEnv,
-    stderr: 'pipe',
-    stdout: 'pipe',
-  })
-  const baseUrl = `http://127.0.0.1:${port}`
-  const health = await waitForHealth(baseUrl)
+  // reservePort() frees the OS-assigned port before this child binds it, so under concurrent
+  // load another process can grab it first (EADDRINUSE -> daemon never becomes healthy ->
+  // "Unable to connect"). Retry the whole spawn on a fresh port to close that TOCTOU race.
+  let baseUrl = ''
+  let health: unknown = null
+  for (let attempt = 0; ; attempt += 1) {
+    const port = reservePort()
+    daemon = Bun.spawn({
+      cmd: [
+        process.execPath,
+        'apps/worker-cli/src/aiworker.ts',
+        'daemon',
+        'foreground',
+        '--host',
+        '127.0.0.1',
+        '--port',
+        String(port),
+      ],
+      cwd: repoRoot,
+      env: daemonEnv,
+      stderr: 'pipe',
+      stdout: 'pipe',
+    })
+    baseUrl = `http://127.0.0.1:${port}`
+    try {
+      health = await waitForHealth(baseUrl)
+      break
+    }
+    catch (error) {
+      daemon?.kill()
+      if (attempt >= 3)
+        throw error
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+  }
   // Populate engine targets: the daemon's rescan scans the fake codex on PATH so
   // the Workbench has a ready engine target for the live session chat.
   await fetch(`${baseUrl}/api/engine/targets/rescan`, { method: 'POST' })
