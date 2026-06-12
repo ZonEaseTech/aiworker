@@ -29,9 +29,10 @@
 
 1. **分支前缀按线**：`worker/<slug>`、`host/<slug>`、`integ/<slug>`、`shared/<slug>`、`docs/<slug>`。
 2. **CODEOWNERS 自动路由 review**（`.github/CODEOWNERS`）：改 worker-* 找 worker owner、改 host-* 找 host owner、改协议/共享底座找 tech-lead。一个 path 一个 owner，避免 review 疲劳。
-3. **CI 门已分线**：
-   - 每 PR 跑 `lint` + `checks`(typecheck + test:contracts)——确定性、全仓、抓共享底座破坏。
-   - tag 发版跑分线门：`release:check`(worker) 与 `release:check:phase2`(host) 是 release.yml 两个**无 `needs` 耦合**的 job，host flaky 卡不住 worker（#26）。
+3. **CI 门已分线（三层）**：
+   - **每 PR**：`lint` + `checks`(typecheck + test:contracts)——确定性、全仓、抓共享底座破坏。轻、快、可阻断合并。
+   - **每次合 main + 每晚 + 手动**：`main-gates.yml` 跑各线**完整门** `release:check`(worker) 与 `release:check:phase2`(host)，两个**无 `needs` 耦合**的 job。这是 post-merge 主干健康信号（不阻断合并、红了 fix-forward），**堵住「完整门只在 tag 跑、回归藏到发版才暴露」的洞**——EB-1 的回归正因如此在 main 上红着藏了几周（见 worker-v1 GA 复盘）。
+   - **tag 发版**：release.yml 同样两个无 `needs` 耦合的 job 跑分线门后才 publish，host flaky 卡不住 worker（#26）。
 4. **inversion guard 是自动安全网**：`tests/architecture/inversion-guards.test.ts` 强制 `worker-*↛host-*` 等，每 PR 经 `test:contracts` 跑——并行 agent 误耦合当场红，不靠人审。
 5. **并行 agent/worktree**：worker 线与 host 线文件互斥，可并行隔离 worktree 跑；联调线碰共享缝，串行或显式协调（见 §3）。
 
