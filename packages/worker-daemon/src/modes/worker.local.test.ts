@@ -361,7 +361,46 @@ describe('local daemon API', () => {
   })
 
   it('serves the workspace/session loop and session-level follow-up invocations', async () => {
-    const target = await app()
+    // codex is resume-capable (EB-1), so the seq-2 broker + seq-3 invocations resume the
+    // seq-1 native session. A resume-capable bridge adapter that captures a session ref on
+    // start and re-captures on follow-up mirrors real codex (which emits thread.started); the
+    // default stub executor captures no ref, which would wedge the follow-ups with
+    // ENGINE_SESSION_REF_MISSING once codex became resume-capable.
+    const target = await app(undefined, undefined, undefined, {
+      adapters: [{
+        target: 'codex',
+        async cancel() {
+          return {}
+        },
+        async discover() {
+          return { callable: true, installed: true, supportsNativeResume: true, target: 'codex' }
+        },
+        async followUp(request: { invocationId?: unknown }, sink: { event: (event: unknown) => void }) {
+          sink.event({ data: { text: 'Bridge follow-up output.' }, invocationId: request.invocationId, type: 'invocation.output.delta' })
+          return {
+            externalSessionRef: { id: 'native-thread-1', target: 'codex' },
+            metadata: { executionSource: 'engine-bridge' },
+            processHandle: { invocationId: request.invocationId, pid: 4302 },
+            summary: 'Daemon session-loop follow-up summary.',
+          }
+        },
+        normalize() {
+          return []
+        },
+        async start(request: { invocationId?: unknown }, sink: { event: (event: unknown) => void }) {
+          sink.event({ data: { text: 'Bridge start output.' }, invocationId: request.invocationId, type: 'invocation.output.delta' })
+          return {
+            externalSessionRef: { id: 'native-thread-1', target: 'codex' },
+            metadata: { executionSource: 'engine-bridge' },
+            processHandle: { invocationId: request.invocationId, pid: 4301 },
+            summary: 'Daemon session-loop start summary.',
+          }
+        },
+      }],
+      projectionReceipts: {
+        async assertUsable() {},
+      },
+    })
     const worker = await createFreeformWorker(target)
     const { session, workspace } = await createWorkspaceAndSession(target, worker.id)
 
