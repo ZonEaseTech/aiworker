@@ -1,0 +1,48 @@
+name: npm dist-tag
+
+# Manually move/correct an npm dist-tag for an already-published @zonease package, using the
+# same NPM_TOKEN that release.yml publishes with. Tag-driven publishes only ever set their own
+# derived channel (rc versions -> `rc`, clean versions -> `latest`), so a stale tag — e.g.
+# host-cli `latest` still pointing at an old rc — cannot be corrected by re-tagging; this
+# dispatch does it directly. A clean GA tag (host-v1.0.0) would set `latest` on its own.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: npm package (e.g. @zonease/aiworker-host-cli)
+        required: true
+      version:
+        description: already-published version to point the dist-tag at (e.g. 1.0.0-rc.11)
+        required: true
+      dist_tag:
+        description: dist-tag to move
+        required: true
+        default: latest
+
+jobs:
+  dist-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+
+      - name: Move dist-tag
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          pkg='${{ inputs.package }}'
+          version='${{ inputs.version }}'
+          tag='${{ inputs.dist_tag }}'
+          case "$pkg" in
+            @zonease/*) ;;
+            *) echo "refusing non-@zonease package: $pkg" >&2; exit 1 ;;
+          esac
+          echo "before:"; npm dist-tag ls "$pkg"
+          # fails if $pkg@$version was never published — guards against pointing a tag at nothing
+          npm view "$pkg@$version" version
+          npm dist-tag add "$pkg@$version" "$tag"
+          echo "after:"; npm dist-tag ls "$pkg"
