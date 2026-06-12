@@ -554,12 +554,18 @@ export function WorkerStudio() {
         assets={workerOverlayAssets}
         copy={copy}
         open={workerConfigurationOpen}
+        settings={data.settings}
         worker={selectedWorker}
         workbenchTabs={[]}
         onOpenChange={setWorkerConfigurationOpen}
         onReload={reloadWorkerOverlayAssets}
         onSaveAssets={saveWorkerOverlayAssets}
         onSelectWorkbenchTab={() => {}}
+        onSettingsSaved={(settings) => {
+          setState(current => current.data
+            ? { ...current, data: { ...current.data, settings }, loading: false }
+            : current)
+        }}
       />
     </>
   )

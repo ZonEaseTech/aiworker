@@ -391,7 +391,7 @@ async function runByokExecutor(input: LocalExecutorInput): Promise<LocalExecutor
   const model = readString(byok.model, 'gpt-4o')
   emit(input, { kind: 'status', label: 'requesting', detail: model })
   const content = await requestOpenAICompatibleContent({ apiKey, baseUrl, input, model })
-  emit(input, { kind: 'text', text: 'Generated response with BYOK provider.' })
+  emit(input, { kind: 'text', text: content })
   emit(input, { kind: 'status', label: 'completed', detail: 'byok response' })
   return {
     metadata: { executionSource: 'byok', model },

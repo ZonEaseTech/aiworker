@@ -43,6 +43,7 @@ export const de = {
     available: 'verfügbar',
     comingSoon: 'bald verfügbar',
     interface: 'Oberfläche',
+    installed: 'installiert',
     notInstalled: 'nicht installiert',
     workspace: 'Workspace',
   },
@@ -301,5 +302,8 @@ export const de = {
     addContentPlaceholder: 'Inhalt',
     add: 'Hinzufügen',
     loadFailed: 'Inhalt konnte nicht geladen werden.',
+    executionPanel: 'Ausführung',
+    executionPanelDetail: 'Engine, Modus, BYOK',
+    keyRefLiteralError: 'Verwende eine Referenz wie env:NAME, keinen Klartext-Schlüssel.',
   },
 } satisfies StaticMessages

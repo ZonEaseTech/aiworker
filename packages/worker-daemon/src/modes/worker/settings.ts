@@ -41,6 +41,24 @@ const DEFAULT_CONNECTORS: LocalSettingsConfig['connectors'] = [
   { enabled: false, id: 'crm', name: 'CRM', status: 'not_configured' },
 ]
 
+/**
+ * BYOK 执行元数据的唯一 builder。CLI 和 daemon 均通过 ./settings 子路径导入此函数，
+ * 确保两个 surface 的 BYOK 调用元数据来源相同（Principle #2, T2.1 single source of truth）。
+ * 纯函数，不读 DB、不扫引擎 — 仅从 LocalSettingsConfig 派生，保持 daemon/CLI 共用安全。
+ *
+ * 输出 shape 与 worker.ts resolvedExecutionMetadata BYOK 分支完全一致：
+ *   { byok, engineCommand: null, engineId: byok.provider, engineName: null, executionMode: 'byok' }
+ */
+export function deriveByokExecutionMetadata(settings: LocalSettingsConfig): Record<string, unknown> {
+  return {
+    byok: settings.byok,
+    engineCommand: null,
+    engineId: settings.byok.provider,
+    engineName: null,
+    executionMode: 'byok',
+  }
+}
+
 export function loadLocalSettings(): LocalSettingsConfig {
   const row = listSettings().find(setting => setting.key === LOCAL_SETTINGS_KEY)
   const parsed = row ? localSettingsConfigSchema.safeParse(row.valueJson) : null

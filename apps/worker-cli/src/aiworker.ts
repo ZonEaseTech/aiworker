@@ -58,7 +58,7 @@ import { checkInToHost, persistWorkerAccess } from '@zonease/aiworker-worker-dae
 // Worker-scoped engine/execution-mode settings live in the daemon local-settings store.
 // Importing the settings helpers (not the daemon app entry) keeps the secret-ref guard in
 // `saveLocalSettings` as the single writer — the CLI never reimplements the secret check.
-import { loadLocalSettings, readLocalEngineSettings, saveLocalSettings } from '@zonease/aiworker-worker-daemon/settings'
+import { deriveByokExecutionMetadata, loadLocalSettings, readLocalEngineSettings, saveLocalSettings } from '@zonease/aiworker-worker-daemon/settings'
 import {
   createWorkerOrchestrator,
   getWorkerEnv,
@@ -170,7 +170,7 @@ export interface ProvisionCommandInput {
 }
 
 interface SessionContinuationContext {
-  engineCommand: string
+  engineCommand: string | null
   engineId: string
   input: string
   metadata: Record<string, unknown>
@@ -629,20 +629,42 @@ function resolveCliEngineMetadata(engineId: string): { engineCommand: string, en
   })
 }
 
-function resolveInvocationEngineMetadata(sessionMetadata: Record<string, unknown> | null | undefined): { engineCommand: string, engineId: string, executionMode: 'local-cli' } {
+function resolveInvocationEngineMetadata(sessionMetadata: Record<string, unknown> | null | undefined): { engineCommand: string | null, engineId: string } {
   const frozen = readFrozenSessionEngine(sessionMetadata)
+  // BYOK sessions stay BYOK on follow-ups: no native engine command, the provider is
+  // the engine id. v1.0.1 BYOK is single-turn (T2.3), so deriving from current settings
+  // is sufficient; the frozen byok block already rides the session metadata forward.
+  if (frozen?.executionMode === 'byok') {
+    const settings = loadLocalSettings()
+    const engineId = settings.executionMode === 'byok' ? String(deriveByokExecutionMetadata(settings).engineId) : frozen.engineId
+    return { engineCommand: null, engineId }
+  }
   if (frozen?.executionMode === 'local-cli') {
     if (frozen.engineCommand) {
       return {
         engineCommand: frozen.engineCommand,
         engineId: frozen.engineId,
-        executionMode: 'local-cli',
       }
     }
     return resolveCliEngineMetadata(frozen.engineId)
   }
   const selectedEngineId = selectedCliEngineId()
   return resolveCliEngineMetadata(selectedEngineId)
+}
+
+// CLI counterpart to the daemon's `resolvedExecutionMetadata` for a NEW session: the
+// BYOK branch uses the SHARED `deriveByokExecutionMetadata` (single source of truth with
+// the daemon); the local-cli branch stays a CLI-specific adapter (scans local engines on
+// PATH vs the daemon's `settings.engines`). Read from the worker home that `ensureRuntime`
+// already opened, so it sees the same settings the runtime persisted.
+function resolveCliExecutionMetadata(opts: { engine?: string, model?: string, reasoning?: string }): Record<string, unknown> {
+  const settings = loadLocalSettings()
+  if (settings.executionMode !== 'local-cli')
+    return deriveByokExecutionMetadata(settings)
+  return {
+    ...resolveCliEngineMetadata(opts.engine?.trim() || selectedCliEngineId()),
+    ...cliEngineOverrideMetadata(opts),
+  }
 }
 
 function cliProjectionEngineTarget(engineId: string): CliProjectionEngineTarget | null {
@@ -814,14 +836,84 @@ async function resolveWorkerTarget(workerOpt?: string): Promise<{ paths: LocalPa
   throw new Error('no active worker; run `aiworker worker create` or pass --worker')
 }
 
-async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerRuntime> {
-  const { paths, worker } = await resolveWorkerTarget(options.worker)
+// Build a runtime against an ALREADY-resolved home/worker. Split out of
+// `ensureRuntime` so the session-/invocation-keyed commands (Bug-1) can build their
+// runtime from the home that `resolveSessionHome`/`resolveInvocationHome` left open,
+// without re-running `resolveWorkerTarget`/`ensureDefaultDb` (which would reopen the
+// root/default home and reintroduce the wrong-home bug). Operates purely on the
+// global SQLite singleton the caller left open — it never reopens a different home.
+async function buildRuntimeFromPaths(paths: LocalPaths, worker: WorkerRow, options: { requireEnabledApp?: boolean } = {}): Promise<LocalWorkerRuntime> {
   const host = createHost(paths)
   if (options.requireEnabledApp)
     host.requireEnabledAppForWorker(worker.id)
   const runtime = host.createRuntimeForWorker(worker)
   await runtime.init()
   return runtime
+}
+
+async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerRuntime> {
+  const { paths, worker } = await resolveWorkerTarget(options.worker)
+  return buildRuntimeFromPaths(paths, worker, { requireEnabledApp: options.requireEnabledApp })
+}
+
+// Resolve the per-worker home that owns a session- or invocation-keyed row. Mirrors
+// `resolveWorkerTarget`'s reopen-by-home pattern but keys by the row id instead of a
+// worker id: `worker create` builds each worker in its own fleet home, so a session
+// or invocation lives in that home's DB — not the root/default home `ensureDefaultDb`
+// opens. Session/invocation ids are `randomUUID()` (globally unique), so scanning
+// every fleet home can never resolve the wrong worker's row.
+//
+// DB-handle hazard (M2): `ensureDbAt` reopens the global SQLite singleton
+// (`initWorkerDb` force-closes the prior handle). The scan therefore STOPS on the hit
+// home and leaves THAT home's DB open, so the caller's ensuing `getSession`/runtime
+// read runs against the correct, open handle — never a later-scanned or closed one.
+// Callers MUST build the runtime from the returned `paths` (via `buildRuntimeFromPaths`),
+// never re-`ensureDefaultDb`/`resolveWorkerTarget`.
+async function scanHomesForRow<TRow>(
+  id: string,
+  workerOpt: string | undefined,
+  lookup: () => TRow | null | undefined,
+  label: 'invocation' | 'session',
+): Promise<{ paths: LocalPaths, row: TRow }> {
+  // Explicit `--worker`: open that worker's home directly and look up there.
+  if (workerOpt) {
+    const { paths } = await resolveWorkerTarget(workerOpt)
+    const row = lookup()
+    if (row)
+      return { paths, row }
+    throw new Error(`${label} not found: ${id}`)
+  }
+
+  // Standalone: probe the current/default home first.
+  const currentPaths = await ensureDefaultDb()
+  const currentRow = lookup()
+  if (currentRow)
+    return { paths: currentPaths, row: currentRow }
+
+  // Fleet scan: walk every registered home; stop on the hit and leave its DB open.
+  const root = fleetRootDir()
+  const index = readFleet(root)
+  for (const worker of index.workers) {
+    const fleetPaths = fleetWorkerPaths(root, worker)
+    if (path.resolve(fleetPaths.dbPath) === path.resolve(currentPaths.dbPath))
+      continue
+    await ensureDbAt(fleetPaths)
+    const row = lookup()
+    if (row)
+      return { paths: fleetPaths, row }
+  }
+
+  throw new Error(`${label} not found: ${id}`)
+}
+
+async function resolveSessionHome(sessionId: string, workerOpt?: string): Promise<{ paths: LocalPaths, session: NonNullable<ReturnType<typeof getSession>> }> {
+  const { paths, row } = await scanHomesForRow(sessionId, workerOpt, () => getSession(sessionId), 'session')
+  return { paths, session: row }
+}
+
+async function resolveInvocationHome(invocationId: string, workerOpt?: string): Promise<{ invocation: NonNullable<ReturnType<typeof getEngineInvocation>>, paths: LocalPaths }> {
+  const { paths, row } = await scanHomesForRow(invocationId, workerOpt, () => getEngineInvocation(invocationId), 'invocation')
+  return { invocation: row, paths }
 }
 
 async function ensureAllWorkers(): Promise<WorkerRow[]> {
@@ -1291,6 +1383,25 @@ function daemonStatus(paths = localPaths()): { logFile: string, pid: number | nu
   // that points at a dead pid, a reused pid, or some other process reads as not-running so
   // callers treat it as stale (clear the pidFile, never kill the foreign process).
   return { pid: Number.isFinite(pid) ? pid : null, running: Number.isFinite(pid) && isManagedDaemonPid(pid), logFile: paths.logFile }
+}
+
+// Resolve the home whose daemon `daemon status` reports. A per-worker daemon writes
+// its pidFile into its own fleet home, so a bare `daemon status` must read the fleet
+// default's per-worker home — not the root home — or it mis-reports `running:false`.
+// `--worker`/`[id]` targets a specific fleet worker. Adopted-in-place ('.') homes and
+// non-fleet single-home setups resolve back to the root home, so they behave as before.
+function resolveDaemonStatusPaths(workerOpt?: string): LocalPaths {
+  const base = localPaths()
+  const root = fleetRootDir()
+  const index = readFleet(root)
+  if (workerOpt) {
+    const entry = index.workers.find(worker => worker.id === workerOpt)
+    if (!entry)
+      throw new Error(`fleet worker not found: ${workerOpt}`)
+    return fleetWorkerPaths(root, entry)
+  }
+  const target = resolveDefault(index)
+  return target ? fleetWorkerPaths(root, target) : base
 }
 
 interface DaemonMetadata {
@@ -2333,22 +2444,21 @@ async function startSessionCommand(opts: { engine?: string, input?: string, mode
   const workspace = getWorkspace(workspaceId)
   if (!workspace || workspace.workerId !== runtime.workerId)
     throw new Error(`workspace not found for ${runtime.workerId}: ${workspaceId}`)
-  const selectedEngineId = opts.engine?.trim() || selectedCliEngineId()
-  const engineMetadata = {
-    ...resolveCliEngineMetadata(selectedEngineId),
-    ...cliEngineOverrideMetadata(opts),
-  }
+  // Derived AFTER ensureRuntime opened the worker home, so `loadLocalSettings()` inside
+  // `resolveCliExecutionMetadata` reads the same home the runtime persisted to — the
+  // round-trip that makes `config set-byok` actually fire on this worker.
+  const engineMetadata = resolveCliExecutionMetadata(opts)
+  const input = requireText(opts.input, 'input')
   const session = await runtime.createSession({
     workspaceId,
-    title: requireText(opts.title, 'title'),
+    title: opts.title?.trim() || defaultSessionTitleFromInput(input),
     metadata: engineMetadata,
   })
-  const input = requireText(opts.input, 'input')
   printJson(await runtime.startInvocation({
     sessionId: session.id,
     input,
-    engineId: engineMetadata.engineId,
-    engineCommand: engineMetadata.engineCommand,
+    engineId: String(engineMetadata.engineId),
+    engineCommand: typeof engineMetadata.engineCommand === 'string' ? engineMetadata.engineCommand : null,
     metadata: {
       ...(session.metadataJson ?? engineMetadata),
       ...cliEngineOverrideMetadata(opts),
@@ -2357,12 +2467,9 @@ async function startSessionCommand(opts: { engine?: string, input?: string, mode
 }
 
 async function resolveSessionContinuationContext(opts: SessionContinuationCommandOptions): Promise<SessionContinuationContext> {
-  await ensureDefaultDb()
   const sessionId = requireText(opts.session, 'session')
-  const session = getSession(sessionId)
-  if (!session)
-    throw new Error(`session not found: ${sessionId}`)
-  const runtime = await ensureRuntime({ requireEnabledApp: true, worker: opts.worker ?? session.workerId })
+  const { paths, session } = await resolveSessionHome(sessionId, opts.worker)
+  const runtime = await buildRuntimeFromPaths(paths, requireWorkerRow(session.workerId), { requireEnabledApp: true })
   const engineMetadata = resolveInvocationEngineMetadata(session.metadataJson)
   const frozen = readFrozenSessionEngine(session.metadataJson)
   const needsLegacyEngineRepair = frozen?.executionMode === 'local-cli' && frozen.engineCommand !== engineMetadata.engineCommand
@@ -2412,27 +2519,64 @@ function cliEngineOverrideMetadata(opts: { model?: string, reasoning?: string })
   }
 }
 
-async function listSessionCommand(opts: { workspace?: string }): Promise<void> {
-  await ensureAllWorkers()
+// Default a session title from the first non-empty line of --input when --title is
+// omitted, mirroring the daemon's input-derived auto-naming placeholder so a bare
+// `session start --input ...` is usable. `--title` still overrides. (The CLI runtime
+// keeps auto-naming disabled, so this stays the visible title.)
+function defaultSessionTitleFromInput(input: string): string {
+  const firstLine = input.split('\n').map(line => line.trim()).find(line => line.length > 0) ?? ''
+  const clamped = Array.from(firstLine.replace(/\s+/g, ' ')).slice(0, 60).join('').trim()
+  return clamped.length > 0 ? clamped : 'New session'
+}
+
+// Open the home a read/settings command targets: the explicit `--worker`'s per-worker
+// home (via `resolveWorkerTarget`), else the current/default home. Shared by the
+// runtime-reading commands that gained `--worker` parity (`session list`,
+// `settings list`, `files list`, `engine select`).
+async function openCommandHome(workerOpt?: string): Promise<LocalPaths> {
+  if (workerOpt) {
+    const { paths } = await resolveWorkerTarget(workerOpt)
+    return paths
+  }
+  return ensureDefaultDb()
+}
+
+// Open the home for engine/execution-mode settings (`config *`, `engine select`,
+// `settings list`). These must land in the SAME home `session start`/`ensureRuntime`
+// reads (`resolveWorkerTarget`), or CLI `config set-byok`/`set-engine` writes a home the
+// runtime never reads — BYOK/engine selection would silently not fire on a fleet worker.
+// Before any worker exists (fresh home), fall back to the default/root home so
+// `config show` still reports defaults.
+async function openSettingsHome(workerOpt?: string): Promise<LocalPaths> {
+  if (workerOpt) {
+    const { paths } = await resolveWorkerTarget(workerOpt)
+    return paths
+  }
+  try {
+    const { paths } = await resolveWorkerTarget()
+    return paths
+  }
+  catch {
+    // No active worker yet (or DB not reachable): settings live in the default/root home.
+    return ensureDefaultDb()
+  }
+}
+
+async function listSessionCommand(opts: { worker?: string, workspace?: string }): Promise<void> {
+  await openCommandHome(opts.worker)
   printJson({ sessions: listSessions(opts.workspace) })
 }
 
-async function showSession(id: string): Promise<void> {
-  await ensureAllWorkers()
+async function showSession(id: string, opts: { worker?: string } = {}): Promise<void> {
+  const { session } = await resolveSessionHome(id, opts.worker)
   printJson({
     invocations: listEngineInvocations(id).sort((left, right) => left.seq - right.seq),
-    session: getSession(id),
+    session,
   })
 }
 
 async function showInvocationEventsCommand(invocationId: string, opts: { after?: number[], limit?: number[], worker?: string }): Promise<void> {
-  if (opts.worker)
-    await resolveWorkerTarget(opts.worker)
-  else
-    await ensureAllWorkers()
-  const invocation = getEngineInvocation(invocationId)
-  if (!invocation)
-    throw new Error(`invocation not found: ${invocationId}`)
+  const { invocation } = await resolveInvocationHome(invocationId, opts.worker)
   const after = optionalNumber(opts.after)
   const limit = optionalNumber(opts.limit)
   const events = listSessionEvents(invocation.sessionId, {
@@ -2451,14 +2595,11 @@ async function showInvocationEventsCommand(invocationId: string, opts: { after?:
 }
 
 async function cancelInvocationCommand(invocationId: string, opts: { reason?: string, worker?: string }): Promise<void> {
-  await ensureAllWorkers()
-  const invocation = getEngineInvocation(invocationId)
-  if (!invocation)
-    throw new Error(`invocation not found: ${invocationId}`)
+  const { paths, invocation } = await resolveInvocationHome(invocationId, opts.worker)
   const session = getSession(invocation.sessionId)
   if (!session)
     throw new Error(`session not found: ${invocation.sessionId}`)
-  const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
+  const runtime = await buildRuntimeFromPaths(paths, requireWorkerRow(session.workerId))
   const result = await runtime.cancelEngineInvocation(invocation.id, opts.reason ? { reason: opts.reason } : {})
   printJson({
     invocation: result.invocation,
@@ -2467,14 +2608,11 @@ async function cancelInvocationCommand(invocationId: string, opts: { reason?: st
 }
 
 async function reconcileInvocationCommand(invocationId: string, opts: { diagnostic?: string, state?: string, worker?: string }): Promise<void> {
-  await ensureAllWorkers()
-  const invocation = getEngineInvocation(invocationId)
-  if (!invocation)
-    throw new Error(`invocation not found: ${invocationId}`)
+  const { paths, invocation } = await resolveInvocationHome(invocationId, opts.worker)
   const session = getSession(invocation.sessionId)
   if (!session)
     throw new Error(`session not found: ${invocation.sessionId}`)
-  const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
+  const runtime = await buildRuntimeFromPaths(paths, requireWorkerRow(session.workerId))
   const result = await runtime.reconcileEngineInvocation(invocation.id, {
     ...(opts.state ? { state: opts.state as 'exited' | 'killed' | 'lost' | 'not_spawned' | 'spawned' } : {}),
     ...(opts.diagnostic ? { diagnostic: opts.diagnostic } : {}),
@@ -2485,25 +2623,19 @@ async function reconcileInvocationCommand(invocationId: string, opts: { diagnost
   })
 }
 
-async function archiveSessionCommand(id: string): Promise<void> {
-  await ensureDefaultDb()
-  const session = getSession(id)
-  if (!session)
-    throw new Error(`session not found: ${id}`)
+async function archiveSessionCommand(id: string, opts: { worker?: string } = {}): Promise<void> {
+  const { session } = await resolveSessionHome(id, opts.worker)
   printJson({ session: updateSession({ id: session.id, status: 'archived' }) })
 }
 
-async function deleteSessionCommand(id: string): Promise<void> {
-  await ensureDefaultDb()
-  const session = getSession(id)
-  if (!session)
-    throw new Error(`session not found: ${id}`)
+async function deleteSessionCommand(id: string, opts: { worker?: string } = {}): Promise<void> {
+  const { session } = await resolveSessionHome(id, opts.worker)
   deleteSession(session.id)
   printJson({ deleted: true, session })
 }
 
-async function listWorkspaceFiles(opts: { workspace?: string }): Promise<void> {
-  await ensureAllWorkers()
+async function listWorkspaceFiles(opts: { worker?: string, workspace?: string }): Promise<void> {
+  await openCommandHome(opts.worker)
   printJson({ files: listFiles(opts.workspace) })
 }
 
@@ -2524,7 +2656,10 @@ function redactCliInspectOutput(value: string): string {
 
 async function listAppsCommand(): Promise<void> {
   const paths = await ensureDefaultDb()
-  printJson({ apps: createHost(paths).listApps() })
+  const host = createHost(paths)
+  // Installed apps PLUS the available Soul catalog (bundled-but-not-installed Souls
+  // are otherwise invisible). Mirrors `enableApp`'s `catalog`; install view unchanged.
+  printJson({ apps: host.listApps(), catalog: host.listCatalog() })
 }
 
 async function showAppCommand(id: string): Promise<void> {
@@ -2926,12 +3061,12 @@ function printLocalEngineConfigView(): void {
   })
 }
 
-async function configShowCommand(): Promise<void> {
-  await ensureDb()
+async function configShowCommand(opts: { worker?: string } = {}): Promise<void> {
+  await openSettingsHome(opts.worker)
   printLocalEngineConfigView()
 }
 
-async function configSetEngineCommand(engineId: string): Promise<void> {
+async function configSetEngineCommand(engineId: string, opts: { worker?: string } = {}): Promise<void> {
   const id = requireText(engineId, 'engine id')
   // Validate against the known native engines before any write — an unknown id is an
   // actionable error, never persisted to local-settings.
@@ -2940,7 +3075,7 @@ async function configSetEngineCommand(engineId: string): Promise<void> {
       `unknown engine: ${id} (expected one of: ${LOCAL_ENGINE_DEFINITIONS.map(definition => definition.id).join(', ')})`,
     )
   }
-  await ensureDb()
+  await openSettingsHome(opts.worker)
   const current = loadLocalSettings()
   saveLocalSettings({
     ...current,
@@ -2951,9 +3086,9 @@ async function configSetEngineCommand(engineId: string): Promise<void> {
   printLocalEngineConfigView()
 }
 
-async function configSetModeCommand(mode: string): Promise<void> {
+async function configSetModeCommand(mode: string, opts: { worker?: string } = {}): Promise<void> {
   const executionMode = requireExecutionMode(mode)
-  await ensureDb()
+  await openSettingsHome(opts.worker)
   const current = loadLocalSettings()
   saveLocalSettings({
     ...current,
@@ -2963,11 +3098,11 @@ async function configSetModeCommand(mode: string): Promise<void> {
   printLocalEngineConfigView()
 }
 
-async function configSetByokCommand(opts: { keyRef?: string, baseUrl?: string, model?: string, provider?: string }): Promise<void> {
+async function configSetByokCommand(opts: { keyRef?: string, baseUrl?: string, model?: string, provider?: string, worker?: string }): Promise<void> {
   // Only a secret reference is accepted; saveLocalSettings' assertSafeSecretRefs rejects
   // literal secrets (LOCAL_SETTINGS_SECRET). The CLI never inspects the value itself.
   const apiKeyRef = requireText(opts.keyRef, 'key-ref')
-  await ensureDb()
+  await openSettingsHome(opts.worker)
   const current = loadLocalSettings()
   saveLocalSettings({
     ...current,
@@ -3020,7 +3155,7 @@ function registerCommands(): void {
   cli.command('fleet status', 'list fleet workers and probe each /health').action(runFleetStatus)
   cli.command('daemon start', 'ensure the bundled Freeform Worker and start the service in background without opening Workbench').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon foreground', 'ensure the bundled Freeform Worker and run the service in foreground without opening Workbench').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
-  cli.command('daemon status', 'show local daemon status').action(() => printJson(daemonStatus()))
+  cli.command('daemon status [id]', 'show local daemon status').option('--worker <id>', 'worker id').action((id: string | undefined, opts: { worker?: string }) => printJson(daemonStatus(resolveDaemonStatusPaths(id ?? opts.worker))))
   cli.command('daemon stop', 'stop local daemon').action(stopDaemon)
   cli.command('daemon restart', 'ensure the bundled Freeform Worker and restart the local service').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => restartDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon logs', 'show local daemon logs').option('--tail <n>', 'line count', { type: [Number] }).action((opts: { tail?: number[] }) => showLogs({ tail: optionalNumber(opts.tail) }))
@@ -3088,14 +3223,17 @@ function registerCommands(): void {
   cli.command('worker config archive <workerId> <configKey>', 'archive a worker-scoped Host config envelope').action(archiveWorkerConfigCommand)
 
   // Worker engine/execution-mode config (daemon local-settings) — distinct from `worker config`.
-  cli.command('config show', 'show the Worker engine selection and execution mode').action(configShowCommand)
-  cli.command('config set-engine <engineId>', 'select the native engine and switch to local-cli mode').action(configSetEngineCommand)
-  cli.command('config set-mode <mode>', 'set execution mode: local-cli or byok').action(configSetModeCommand)
+  // `--worker` targets a specific worker home; bare commands resolve the standalone/default
+  // worker so the settings land in the home `session start` reads (CLI BYOK round-trip).
+  cli.command('config show', 'show the Worker engine selection and execution mode').option('--worker <id>', 'worker id').action(configShowCommand)
+  cli.command('config set-engine <engineId>', 'select the native engine and switch to local-cli mode').option('--worker <id>', 'worker id').action(configSetEngineCommand)
+  cli.command('config set-mode <mode>', 'set execution mode: local-cli or byok').option('--worker <id>', 'worker id').action(configSetModeCommand)
   cli.command('config set-byok', 'configure BYOK execution (stores a secret reference, never a literal secret)')
     .option('--key-ref <ref>', 'BYOK API key reference (env:NAME / $VAR / secretref:...); never a literal secret')
     .option('--base-url <url>', 'BYOK API base URL')
     .option('--model <id>', 'BYOK model id')
     .option('--provider <name>', 'BYOK provider name')
+    .option('--worker <id>', 'worker id')
     .action(configSetByokCommand)
   cli.command('worker archive <id>', 'archive a local Soul worker').action(archiveWorkerCommand)
   cli.command('worker delete <id>', 'hard-delete local Soul worker metadata').action(deleteWorkerCommand)
@@ -3119,8 +3257,8 @@ function registerCommands(): void {
     .option('--reasoning <effort>', 'Codex reasoning effort override')
     .option('--worker <id>', 'worker id')
     .action(startSessionCommand)
-  cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').action(listSessionCommand)
-  cli.command('session show <id>', 'show one session').action(showSession)
+  cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(listSessionCommand)
+  cli.command('session show <id>', 'show one session').option('--worker <id>', 'worker id').action(showSession)
   cli.command('session invoke', 'create a session-level engine invocation').option('--session <id>', 'session id').option('--input <text>', 'invocation input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(invokeSessionCommand)
   cli.command('session events <invocationId>', 'list normalized bridge events for an engine invocation').option('--after <seq>', 'return only events after this seq', { type: [Number] }).option('--limit <n>', 'maximum events to return', { type: [Number] }).option('--worker <id>', 'worker id').action(showInvocationEventsCommand)
   cli.command('session reconcile <invocationId>', 'reconcile native engine process state for an engine invocation').option('--worker <id>', 'worker id').option('--state <processState>', 'observed process state: not_spawned/spawned/exited/killed/lost').option('--diagnostic <text>', 'reconcile diagnostic (redacted before persistence)').action(reconcileInvocationCommand)
@@ -3128,15 +3266,15 @@ function registerCommands(): void {
   cli.command('session archive <id>', 'archive an AIWorker session').action(archiveSessionCommand)
   cli.command('session delete <id>', 'hard-delete AIWorker session metadata').action(deleteSessionCommand)
 
-  cli.command('files list', 'list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
+  cli.command('files list', 'list workspace files').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(listWorkspaceFiles)
   cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)
 
-  cli.command('settings list', 'list host daemon settings').action(async () => {
-    await ensureDefaultDb()
+  cli.command('settings list', 'list host daemon settings').option('--worker <id>', 'worker id').action(async (opts: { worker?: string }) => {
+    await openSettingsHome(opts.worker)
     printJson({ settings: listSettings() })
   })
-  cli.command('engine select <engine>', 'set engine hint').action(async (engine: string) => {
-    await ensureDefaultDb()
+  cli.command('engine select <engine>', 'set engine hint').option('--worker <id>', 'worker id').action(async (engine: string, opts: { worker?: string }) => {
+    await openSettingsHome(opts.worker)
     printJson({ setting: setSetting('engine.default', { engine }) })
   })
 

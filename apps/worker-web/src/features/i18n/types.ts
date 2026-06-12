@@ -46,6 +46,7 @@ export interface StaticMessages {
     available: string
     comingSoon: string
     interface: string
+    installed: string
     notInstalled: string
     workspace: string
   }
@@ -290,6 +291,9 @@ export interface StaticMessages {
     addContentPlaceholder: string
     add: string
     loadFailed: string
+    executionPanel: string
+    executionPanelDetail: string
+    keyRefLiteralError: string
   }
 }
 

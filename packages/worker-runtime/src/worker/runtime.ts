@@ -977,9 +977,16 @@ export class LocalWorkerRuntime {
     const recordTranscript = input.recordTranscript ?? true
     const bridgeOptions = this.#engineBridgeOptions && this.#engineBridgeOptions.adapters.length > 0
       ? this.#engineBridgeOptions
-      : createLocalExecutorBridgeOptions(this.#executor, input.sessionEngine.engineId, {
-          assertUsable: request => this.assertWorkspaceProjectionReceipt(input.workspace, request),
-        }, this.#engineProcessManager)
+      : createLocalExecutorBridgeOptions(
+          this.#executor,
+          input.sessionEngine.engineId,
+          // BYOK 调用不投影工作区资产（不启动本地 CLI，不需要收据）；
+          // 跳过收据守卫，避免跨引擎目标的 freshness marker 不匹配导致虚假 STALE 错误。
+          input.sessionEngine.executionMode !== 'byok'
+            ? { assertUsable: request => this.assertWorkspaceProjectionReceipt(input.workspace, request) }
+            : undefined,
+          this.#engineProcessManager,
+        )
 
     const previousInvocation = allowResume
       ? latestPriorEngineInvocation(input.session.id, input.invocation.seq, input.sessionEngine.engineId)

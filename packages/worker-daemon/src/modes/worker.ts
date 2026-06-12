@@ -80,7 +80,7 @@ import {
   workerConfigContentBodySchema,
   workerConfigValueBodySchema,
 } from './worker/schemas'
-import { loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings, saveLocalSettings, scanEnginesForDaemon, setEngineScanner } from './worker/settings'
+import { deriveByokExecutionMetadata, loadLocalSettings, readLocalConnectorSettings, readLocalEngineSettings, saveLocalSettings, scanEnginesForDaemon, setEngineScanner } from './worker/settings'
 import { serveWorkerWeb, serveWorkerWebAsset } from './worker/web-static'
 
 const DEFAULT_RUNTIME_VERSION = 'dev'
@@ -1510,15 +1510,8 @@ function unavailableSoulAppResponse(c: Context, state: LocalDaemonState, workerI
 }
 
 function resolvedExecutionMetadata(settings: LocalSettingsConfig, engineIdOverride?: string | null): Record<string, unknown> {
-  if (settings.executionMode !== 'local-cli') {
-    return {
-      byok: settings.byok,
-      engineCommand: null,
-      engineId: settings.byok.provider,
-      engineName: null,
-      executionMode: 'byok',
-    }
-  }
+  if (settings.executionMode !== 'local-cli')
+    return deriveByokExecutionMetadata(settings)
   return resolvedLocalCliExecutionMetadata(settings, engineIdOverride?.trim() || settings.engineId)
 }
 

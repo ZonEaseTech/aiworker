@@ -5,7 +5,7 @@ import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { afterEach, describe, expect, it } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 
 import { createExternalEngineExecutor, DEFAULT_LOCAL_CLI_ENGINE_TIMEOUT_MS } from './executor'
 
@@ -572,5 +572,89 @@ while true; do sleep 1; done
     await expect(
       readFile(path.join(workspaceRoot, '.aiworker', 'sessions', 'session-1', 'invocations', '0001', 'stderr.log'), 'utf8'),
     ).resolves.toContain('Process interrupted by AIWorker Stop.')
+  })
+})
+
+// P0-T0.1: BYOK 可见文本回归守卫
+// executor.ts:394 原先发出硬编码占位符而非 provider 实际内容；以下测试通过 stub fetch 证明
+// 修复后可见文本事件等于 provider 返回的字符串，而非 'Generated response with BYOK provider.'。
+describe('runByokExecutor — 可见文本守卫', () => {
+  const BYOK_TEST_KEY_ENV = 'AIWORKER_TEST_BYOK_KEY'
+  let originalFetch: typeof globalThis.fetch
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch
+    process.env[BYOK_TEST_KEY_ENV] = 'sk-test-fake-key'
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    delete process.env[BYOK_TEST_KEY_ENV]
+  })
+
+  function makeByokInput(events: LocalExecutorEvent[] = []) {
+    return {
+      engineCommand: null as string | null,
+      engineId: 'openai-compatible',
+      invocationId: 'byok-inv-1',
+      invocationRoot: '/tmp/fake-byok-root',
+      onEvent: (event: LocalExecutorEvent) => events.push(event),
+      prompt: 'What is 2+2?',
+      sessionId: 'byok-session-1',
+      workspaceId: 'byok-workspace-1',
+      workspaceRoot: '/tmp/fake-byok-workspace',
+      metadata: {
+        executionMode: 'byok',
+        byok: {
+          apiKeyRef: `env:${BYOK_TEST_KEY_ENV}`,
+          baseUrl: 'https://fake-llm.example.com/v1',
+          model: 'fake-model-v1',
+          provider: 'openai-compatible',
+        },
+      },
+    }
+  }
+
+  it('P0-T0.1 RED: 可见文本事件包含 provider 实际内容，不得是占位符', async () => {
+    const providerContent = 'The answer is 4. Real AI response, not a placeholder.'
+    // cast via unknown: mock() 不含 preconnect 等 fetch 原生方法，双重 cast 绕过类型检查
+    globalThis.fetch = mock(async (_url: string | URL | Request, _init?: RequestInit) => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: providerContent } }],
+      }),
+    })) as unknown as typeof fetch
+
+    const events: LocalExecutorEvent[] = []
+    const result = await createExternalEngineExecutor().invoke(makeByokInput(events))
+
+    // 只应有一个 text 事件
+    const textEvents = events.filter(e => e.kind === 'text')
+    expect(textEvents).toHaveLength(1)
+    const textEvent = textEvents[0]
+    if (!textEvent || textEvent.kind !== 'text')
+      throw new Error('Expected a text event')
+    // 可见文本必须等于 provider 的真实答案
+    expect(textEvent.text).toBe(providerContent)
+    // 不能是旧的硬编码占位符
+    expect(textEvent.text).not.toBe('Generated response with BYOK provider.')
+    // summary 也应等于真实内容
+    expect(result.summary).toBe(providerContent)
+  })
+
+  it('P0-T0.1: provider 内容不含 API key（secret 不泄露进可见文本）', async () => {
+    const fakeKey = 'sk-test-fake-key'
+    globalThis.fetch = mock(async (_url: string | URL | Request, _init?: RequestInit) => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'Safe response without key.' } }],
+      }),
+    })) as unknown as typeof fetch
+
+    const events: LocalExecutorEvent[] = []
+    await createExternalEngineExecutor().invoke(makeByokInput(events))
+
+    const allText = events.filter(e => e.kind === 'text').map(e => e.kind === 'text' ? e.text : '').join(' ')
+    expect(allText).not.toContain(fakeKey)
   })
 })
