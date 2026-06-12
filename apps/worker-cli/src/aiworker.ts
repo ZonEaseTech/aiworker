@@ -58,7 +58,7 @@ import { checkInToHost, persistWorkerAccess } from '@zonease/aiworker-worker-dae
 // Worker-scoped engine/execution-mode settings live in the daemon local-settings store.
 // Importing the settings helpers (not the daemon app entry) keeps the secret-ref guard in
 // `saveLocalSettings` as the single writer — the CLI never reimplements the secret check.
-import { loadLocalSettings, readLocalEngineSettings, saveLocalSettings } from '@zonease/aiworker-worker-daemon/settings'
+import { deriveByokExecutionMetadata, loadLocalSettings, readLocalEngineSettings, saveLocalSettings } from '@zonease/aiworker-worker-daemon/settings'
 import {
   createWorkerOrchestrator,
   getWorkerEnv,
@@ -170,7 +170,7 @@ export interface ProvisionCommandInput {
 }
 
 interface SessionContinuationContext {
-  engineCommand: string
+  engineCommand: string | null
   engineId: string
   input: string
   metadata: Record<string, unknown>
@@ -629,20 +629,42 @@ function resolveCliEngineMetadata(engineId: string): { engineCommand: string, en
   })
 }
 
-function resolveInvocationEngineMetadata(sessionMetadata: Record<string, unknown> | null | undefined): { engineCommand: string, engineId: string, executionMode: 'local-cli' } {
+function resolveInvocationEngineMetadata(sessionMetadata: Record<string, unknown> | null | undefined): { engineCommand: string | null, engineId: string } {
   const frozen = readFrozenSessionEngine(sessionMetadata)
+  // BYOK sessions stay BYOK on follow-ups: no native engine command, the provider is
+  // the engine id. v1.0.1 BYOK is single-turn (T2.3), so deriving from current settings
+  // is sufficient; the frozen byok block already rides the session metadata forward.
+  if (frozen?.executionMode === 'byok') {
+    const settings = loadLocalSettings()
+    const engineId = settings.executionMode === 'byok' ? String(deriveByokExecutionMetadata(settings).engineId) : frozen.engineId
+    return { engineCommand: null, engineId }
+  }
   if (frozen?.executionMode === 'local-cli') {
     if (frozen.engineCommand) {
       return {
         engineCommand: frozen.engineCommand,
         engineId: frozen.engineId,
-        executionMode: 'local-cli',
       }
     }
     return resolveCliEngineMetadata(frozen.engineId)
   }
   const selectedEngineId = selectedCliEngineId()
   return resolveCliEngineMetadata(selectedEngineId)
+}
+
+// CLI counterpart to the daemon's `resolvedExecutionMetadata` for a NEW session: the
+// BYOK branch uses the SHARED `deriveByokExecutionMetadata` (single source of truth with
+// the daemon); the local-cli branch stays a CLI-specific adapter (scans local engines on
+// PATH vs the daemon's `settings.engines`). Read from the worker home that `ensureRuntime`
+// already opened, so it sees the same settings the runtime persisted.
+function resolveCliExecutionMetadata(opts: { engine?: string, model?: string, reasoning?: string }): Record<string, unknown> {
+  const settings = loadLocalSettings()
+  if (settings.executionMode !== 'local-cli')
+    return deriveByokExecutionMetadata(settings)
+  return {
+    ...resolveCliEngineMetadata(opts.engine?.trim() || selectedCliEngineId()),
+    ...cliEngineOverrideMetadata(opts),
+  }
 }
 
 function cliProjectionEngineTarget(engineId: string): CliProjectionEngineTarget | null {
@@ -2422,11 +2444,10 @@ async function startSessionCommand(opts: { engine?: string, input?: string, mode
   const workspace = getWorkspace(workspaceId)
   if (!workspace || workspace.workerId !== runtime.workerId)
     throw new Error(`workspace not found for ${runtime.workerId}: ${workspaceId}`)
-  const selectedEngineId = opts.engine?.trim() || selectedCliEngineId()
-  const engineMetadata = {
-    ...resolveCliEngineMetadata(selectedEngineId),
-    ...cliEngineOverrideMetadata(opts),
-  }
+  // Derived AFTER ensureRuntime opened the worker home, so `loadLocalSettings()` inside
+  // `resolveCliExecutionMetadata` reads the same home the runtime persisted to — the
+  // round-trip that makes `config set-byok` actually fire on this worker.
+  const engineMetadata = resolveCliExecutionMetadata(opts)
   const input = requireText(opts.input, 'input')
   const session = await runtime.createSession({
     workspaceId,
@@ -2436,8 +2457,8 @@ async function startSessionCommand(opts: { engine?: string, input?: string, mode
   printJson(await runtime.startInvocation({
     sessionId: session.id,
     input,
-    engineId: engineMetadata.engineId,
-    engineCommand: engineMetadata.engineCommand,
+    engineId: String(engineMetadata.engineId),
+    engineCommand: typeof engineMetadata.engineCommand === 'string' ? engineMetadata.engineCommand : null,
     metadata: {
       ...(session.metadataJson ?? engineMetadata),
       ...cliEngineOverrideMetadata(opts),
@@ -2518,6 +2539,27 @@ async function openCommandHome(workerOpt?: string): Promise<LocalPaths> {
     return paths
   }
   return ensureDefaultDb()
+}
+
+// Open the home for engine/execution-mode settings (`config *`, `engine select`,
+// `settings list`). These must land in the SAME home `session start`/`ensureRuntime`
+// reads (`resolveWorkerTarget`), or CLI `config set-byok`/`set-engine` writes a home the
+// runtime never reads — BYOK/engine selection would silently not fire on a fleet worker.
+// Before any worker exists (fresh home), fall back to the default/root home so
+// `config show` still reports defaults.
+async function openSettingsHome(workerOpt?: string): Promise<LocalPaths> {
+  if (workerOpt) {
+    const { paths } = await resolveWorkerTarget(workerOpt)
+    return paths
+  }
+  try {
+    const { paths } = await resolveWorkerTarget()
+    return paths
+  }
+  catch {
+    // No active worker yet (or DB not reachable): settings live in the default/root home.
+    return ensureDefaultDb()
+  }
 }
 
 async function listSessionCommand(opts: { worker?: string, workspace?: string }): Promise<void> {
@@ -3019,12 +3061,12 @@ function printLocalEngineConfigView(): void {
   })
 }
 
-async function configShowCommand(): Promise<void> {
-  await ensureDb()
+async function configShowCommand(opts: { worker?: string } = {}): Promise<void> {
+  await openSettingsHome(opts.worker)
   printLocalEngineConfigView()
 }
 
-async function configSetEngineCommand(engineId: string): Promise<void> {
+async function configSetEngineCommand(engineId: string, opts: { worker?: string } = {}): Promise<void> {
   const id = requireText(engineId, 'engine id')
   // Validate against the known native engines before any write — an unknown id is an
   // actionable error, never persisted to local-settings.
@@ -3033,7 +3075,7 @@ async function configSetEngineCommand(engineId: string): Promise<void> {
       `unknown engine: ${id} (expected one of: ${LOCAL_ENGINE_DEFINITIONS.map(definition => definition.id).join(', ')})`,
     )
   }
-  await ensureDb()
+  await openSettingsHome(opts.worker)
   const current = loadLocalSettings()
   saveLocalSettings({
     ...current,
@@ -3044,9 +3086,9 @@ async function configSetEngineCommand(engineId: string): Promise<void> {
   printLocalEngineConfigView()
 }
 
-async function configSetModeCommand(mode: string): Promise<void> {
+async function configSetModeCommand(mode: string, opts: { worker?: string } = {}): Promise<void> {
   const executionMode = requireExecutionMode(mode)
-  await ensureDb()
+  await openSettingsHome(opts.worker)
   const current = loadLocalSettings()
   saveLocalSettings({
     ...current,
@@ -3056,11 +3098,11 @@ async function configSetModeCommand(mode: string): Promise<void> {
   printLocalEngineConfigView()
 }
 
-async function configSetByokCommand(opts: { keyRef?: string, baseUrl?: string, model?: string, provider?: string }): Promise<void> {
+async function configSetByokCommand(opts: { keyRef?: string, baseUrl?: string, model?: string, provider?: string, worker?: string }): Promise<void> {
   // Only a secret reference is accepted; saveLocalSettings' assertSafeSecretRefs rejects
   // literal secrets (LOCAL_SETTINGS_SECRET). The CLI never inspects the value itself.
   const apiKeyRef = requireText(opts.keyRef, 'key-ref')
-  await ensureDb()
+  await openSettingsHome(opts.worker)
   const current = loadLocalSettings()
   saveLocalSettings({
     ...current,
@@ -3181,14 +3223,17 @@ function registerCommands(): void {
   cli.command('worker config archive <workerId> <configKey>', 'archive a worker-scoped Host config envelope').action(archiveWorkerConfigCommand)
 
   // Worker engine/execution-mode config (daemon local-settings) — distinct from `worker config`.
-  cli.command('config show', 'show the Worker engine selection and execution mode').action(configShowCommand)
-  cli.command('config set-engine <engineId>', 'select the native engine and switch to local-cli mode').action(configSetEngineCommand)
-  cli.command('config set-mode <mode>', 'set execution mode: local-cli or byok').action(configSetModeCommand)
+  // `--worker` targets a specific worker home; bare commands resolve the standalone/default
+  // worker so the settings land in the home `session start` reads (CLI BYOK round-trip).
+  cli.command('config show', 'show the Worker engine selection and execution mode').option('--worker <id>', 'worker id').action(configShowCommand)
+  cli.command('config set-engine <engineId>', 'select the native engine and switch to local-cli mode').option('--worker <id>', 'worker id').action(configSetEngineCommand)
+  cli.command('config set-mode <mode>', 'set execution mode: local-cli or byok').option('--worker <id>', 'worker id').action(configSetModeCommand)
   cli.command('config set-byok', 'configure BYOK execution (stores a secret reference, never a literal secret)')
     .option('--key-ref <ref>', 'BYOK API key reference (env:NAME / $VAR / secretref:...); never a literal secret')
     .option('--base-url <url>', 'BYOK API base URL')
     .option('--model <id>', 'BYOK model id')
     .option('--provider <name>', 'BYOK provider name')
+    .option('--worker <id>', 'worker id')
     .action(configSetByokCommand)
   cli.command('worker archive <id>', 'archive a local Soul worker').action(archiveWorkerCommand)
   cli.command('worker delete <id>', 'hard-delete local Soul worker metadata').action(deleteWorkerCommand)
@@ -3225,11 +3270,11 @@ function registerCommands(): void {
   cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)
 
   cli.command('settings list', 'list host daemon settings').option('--worker <id>', 'worker id').action(async (opts: { worker?: string }) => {
-    await openCommandHome(opts.worker)
+    await openSettingsHome(opts.worker)
     printJson({ settings: listSettings() })
   })
   cli.command('engine select <engine>', 'set engine hint').option('--worker <id>', 'worker id').action(async (engine: string, opts: { worker?: string }) => {
-    await openCommandHome(opts.worker)
+    await openSettingsHome(opts.worker)
     printJson({ setting: setSetting('engine.default', { engine }) })
   })
 

@@ -764,6 +764,88 @@ describe('aiworker local CLI', () => {
     expect(body.apps).toEqual(expect.arrayContaining([expect.objectContaining({ appId: FREEFORM_APP_ID })]))
   })
 
+  it('T2.1: `session start` derives BYOK invocation metadata from the shared builder on its own worker home', async () => {
+    // Fleet worker: `config set-*` must write the worker's own home so `session start`
+    // (which reads that home via ensureRuntime) actually fires BYOK — the CLI↔runtime
+    // round-trip. The BYOK branch comes from the SHARED deriveByokExecutionMetadata.
+    expect(await runCli(argv('worker', 'create', 'byok-w', '--name', 'BYOK Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('config', 'set-mode', 'byok', '--worker', 'byok-w'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('config', 'set-byok', '--worker', 'byok-w', '--key-ref', 'env:FAKE_BYOK_KEY', '--base-url', 'https://api.example.com', '--model', 'demo-model', '--provider', 'openai-compatible'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'WS', '--type', 'freeform', '--worker', 'byok-w'))).toBe(0)
+    const workspaceId = (JSON.parse(output) as { workspace: { id: string } }).workspace.id
+    output = ''
+
+    expect(await runCli(argv('session', 'start', '--worker', 'byok-w', '--workspace', workspaceId, '--input', 'hello byok'))).toBe(0)
+    const started = JSON.parse(output) as {
+      invocation: { engineId: string, metadataJson: { byok?: { provider?: string }, executionMode?: string } }
+      session: { metadataJson: { byok?: { baseUrl?: string, model?: string, provider?: string }, executionMode?: string } }
+    }
+    // session frozen as byok with the byok block intact (not just executionMode)
+    expect(started.session.metadataJson.executionMode).toBe('byok')
+    expect(started.session.metadataJson.byok).toMatchObject({ baseUrl: 'https://api.example.com', model: 'demo-model', provider: 'openai-compatible' })
+    // invocation metadata derives from the SAME shared deriveByokExecutionMetadata
+    expect(started.invocation.metadataJson.executionMode).toBe('byok')
+    expect(started.invocation.metadataJson.byok?.provider).toBe('openai-compatible')
+    expect(started.invocation.engineId).toBe('openai-compatible')
+    // secret boundary: the resolved key value never leaks (only the env: reference rides metadata)
+    expect(output).not.toContain('sk-')
+  })
+
+  it('T2.1: local-cli session start is unaffected by the shared BYOK builder', async () => {
+    await writeFakeCodexCommand()
+    expect(await runCli(argv('worker', 'create', 'cli-w', '--name', 'CLI Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'WS', '--type', 'freeform', '--worker', 'cli-w'))).toBe(0)
+    const workspaceId = (JSON.parse(output) as { workspace: { id: string } }).workspace.id
+    output = ''
+    // default mode is local-cli; session metadata must stay local-cli with a native engine command.
+    expect(await runCli(argv('session', 'start', '--worker', 'cli-w', '--workspace', workspaceId, '--input', 'hi'))).toBe(0)
+    const started = JSON.parse(output) as { session: { metadataJson: { engineCommand?: string, executionMode?: string } } }
+    expect(started.session.metadataJson.executionMode).toBe('local-cli')
+    expect(String(started.session.metadataJson.engineCommand)).toMatch(/codex$/)
+  })
+
+  it('T1.6: full standalone session lifecycle resolves the per-worker home end to end', async () => {
+    await writeFakeCodexCommand()
+    // Single standalone worker in its own fleet home; bare commands (no --worker) must
+    // resolve it throughout (root db is never created, so ensureDefaultDb → fleet default).
+    expect(await runCli(argv('worker', 'create', 'life-w', '--name', 'Life Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'WS', '--type', 'freeform', '--worker', 'life-w'))).toBe(0)
+    const workspaceId = (JSON.parse(output) as { workspace: { id: string } }).workspace.id
+    output = ''
+    // start with a default title (no --title)
+    expect(await runCli(argv('session', 'start', '--worker', 'life-w', '--workspace', workspaceId, '--input', 'first turn'))).toBe(0)
+    const sessionId = (JSON.parse(output) as { session: { id: string } }).session.id
+    output = ''
+    // bare list → standalone worker home
+    expect(await runCli(argv('session', 'list'))).toBe(0)
+    expect((JSON.parse(output) as { sessions: Array<{ id: string }> }).sessions.map(session => session.id)).toContain(sessionId)
+    output = ''
+    // bare show (session-keyed)
+    expect(await runCli(argv('session', 'show', sessionId))).toBe(0)
+    const shown = JSON.parse(output) as { invocations: Array<{ id: string }>, session: { id: string } }
+    expect(shown.session.id).toBe(sessionId)
+    const firstInvocationId = shown.invocations[0]!.id
+    output = ''
+    // bare events (invocation-keyed)
+    expect(await runCli(argv('session', 'events', firstInvocationId))).toBe(0)
+    expect((JSON.parse(output) as { invocation: { id: string } }).invocation.id).toBe(firstInvocationId)
+    output = ''
+    // bare follow-up invoke (session-keyed home resolution)
+    expect(await runCli(argv('session', 'invoke', '--session', sessionId, '--input', 'second turn'))).toBe(0)
+    output = ''
+    // bare archive + delete (session-keyed)
+    expect(await runCli(argv('session', 'archive', sessionId))).toBe(0)
+    expect((JSON.parse(output) as { session: { status: string } }).session.status).toBe('archived')
+    output = ''
+    expect(await runCli(argv('session', 'delete', sessionId))).toBe(0)
+    expect((JSON.parse(output) as { deleted: boolean }).deleted).toBe(true)
+  })
+
   it('generates a worker id when creating a fleet worker from a Soul app', async () => {
     expect(await runCli(argv('worker', 'create', '--name', 'Generated Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     const created = JSON.parse(output) as { worker: { home: string, id: string, workerId: string } }
