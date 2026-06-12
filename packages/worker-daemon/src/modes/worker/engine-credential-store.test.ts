@@ -82,4 +82,29 @@ describe('EngineCredentialStore', () => {
       ANTHROPIC_AUTH_TOKEN: 'token-v2',
     })
   })
+
+  // Phase 3 review follow-up: injecting ANTHROPIC_AUTH_TOKEN (Bearer) while an inherited
+  // ANTHROPIC_API_KEY (x-api-key) survives makes the Claude SDK send both → API 401.
+  it('reports ANTHROPIC_API_KEY as a conflicting key to strip when injecting anthropic for claude-code', () => {
+    const store = new EngineCredentialStore()
+    store.set('anthropic', { gatewayUrl: 'https://gw.example/anthropic', token: 'gw-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+
+    expect(store.conflictingEnvKeys('claude-code')).toEqual(['ANTHROPIC_API_KEY'])
+  })
+
+  it('reports NO conflicting keys when no credential is injected (never over-strips the user key)', () => {
+    const store = new EngineCredentialStore()
+    // no credential set → graceful fallback, envFor is {} → must not strip an inherited key
+    expect(store.conflictingEnvKeys('claude-code')).toEqual([])
+  })
+
+  it('reports NO conflicting keys for unmapped/excluded engines (codex/cursor/gemini)', () => {
+    const store = new EngineCredentialStore()
+    store.set('anthropic', { gatewayUrl: 'https://gw.example/anthropic', token: 'gw-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    store.set('openai', { gatewayUrl: 'https://gw.example/openai', token: 'gw-token-openai', expiresAt: '2099-01-01T00:00:00.000Z' })
+
+    expect(store.conflictingEnvKeys('codex')).toEqual([])
+    expect(store.conflictingEnvKeys('cursor')).toEqual([])
+    expect(store.conflictingEnvKeys('gemini')).toEqual([])
+  })
 })

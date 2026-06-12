@@ -74,6 +74,10 @@ const DEFAULT_LOCAL_CLI_ENGINE_SUMMARY_LIMIT_CHARS = 64_000
  */
 export interface EngineCredentialProvider {
   envFor: (engineId: string) => Record<string, string>
+  // Env keys to delete from the spawned engine env when injecting for this engineId,
+  // so the injected gateway token wins over an inherited conflicting key (e.g.
+  // ANTHROPIC_API_KEY vs ANTHROPIC_AUTH_TOKEN). Optional; absent → nothing stripped.
+  conflictingEnvKeys?: (engineId: string) => string[]
 }
 
 export interface ExternalEngineExecutorOptions {
@@ -279,16 +283,25 @@ async function runLocalCliExecutor(input: LocalExecutorInput, options: ExternalE
       })
     : null
 
+  const engineEnv: Record<string, string | undefined> = {
+    ...sanitizeEngineEnv(),
+    ...(engine.env ?? {}),
+    // Third merge layer: Phase 3 LLM credential injection. Carrier vars
+    // (ANTHROPIC_ / OPENAI_ prefixed) are not stripped by sanitizeEngineEnv;
+    // absent a provider or credential this is `{}` (graceful fallback, no override).
+    ...(options.credentialProvider?.envFor(input.engineId) ?? {}),
+  }
+  // When a gateway credential is injected, strip the conflicting inherited provider key
+  // (e.g. ANTHROPIC_API_KEY vs the injected ANTHROPIC_AUTH_TOKEN) so the injected token
+  // wins unambiguously — otherwise the SDK sends both headers and the API 401s. The
+  // env REPLACES process.env at spawn (process-manager.ts), so deleting the key here
+  // makes it genuinely absent in the child. Only fires when a credential is injected.
+  for (const key of options.credentialProvider?.conflictingEnvKeys?.(input.engineId) ?? [])
+    delete engineEnv[key]
+
   const execution = await options.processManager.runProcess(command, args, enginePrompt, timeoutMs, {
     cwd: input.workspaceRoot,
-    env: {
-      ...sanitizeEngineEnv(),
-      ...(engine.env ?? {}),
-      // Third merge layer: Phase 3 LLM credential injection. Carrier vars
-      // (ANTHROPIC_ / OPENAI_ prefixed) are not stripped by sanitizeEngineEnv;
-      // absent a provider or credential this is `{}` (graceful fallback, no override).
-      ...(options.credentialProvider?.envFor(input.engineId) ?? {}),
-    },
+    env: engineEnv,
     invocationId: input.invocationId,
     maxBufferedLogChars: options.maxBufferedLogChars ?? DEFAULT_LOCAL_CLI_ENGINE_LOG_BUFFER_LIMIT_CHARS,
     onProcessHandle: input.onProcessHandle,
