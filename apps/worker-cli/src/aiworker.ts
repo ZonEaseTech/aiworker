@@ -1793,10 +1793,18 @@ async function waitForProcessExit(pid: number, timeoutMs = 5000): Promise<void> 
   }
 }
 
+// `-ww` disables ps column truncation. Without it, BSD/macOS ps truncates the command
+// column to the terminal/default width, which can drop the trailing `foreground` token and
+// make a real managed daemon read as foreign (→ double-spawn / failed stop on macOS). Both
+// Linux procps and BSD ps honor `-ww`; the extracted argv keeps the flag under regression test.
+export function psReadCommandArgs(pid: number): string[] {
+  return ['ps', '-ww', '-p', String(pid), '-o', 'command=']
+}
+
 function readProcessCommand(pid: number): string | null {
   if (readProcessCommandForTest)
     return readProcessCommandForTest(pid)
-  const result = Bun.spawnSync(['ps', '-p', String(pid), '-o', 'command='])
+  const result = Bun.spawnSync(psReadCommandArgs(pid))
   if (result.exitCode !== 0)
     return null
   const output = Buffer.from(result.stdout).toString('utf8').trim()
