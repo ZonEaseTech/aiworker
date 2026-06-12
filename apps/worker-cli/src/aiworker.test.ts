@@ -35,6 +35,7 @@ import {
   __setOfficialSoulDistBuilderForTest,
   __setReadProcessCommandForTest,
   __setWorkerCreateSelectorForTest,
+  buildDaemonRespawnArgs,
   downloadAndReplaceGitHubBundle,
   inspectCliOfficialAppsResource,
   prepareDaemonForeground,
@@ -1056,6 +1057,41 @@ describe('aiworker local CLI', () => {
 
     expect(result.healthy).toBe(false)
     expect(attempts).toBeGreaterThan(0)
+  })
+
+  it('builds daemon respawn args without a script path for a compiled standalone binary', () => {
+    // Compiled binary: process.execPath IS the runnable; argv[1] is the first user arg
+    // ('start'), not a script. Respawn must be `<binary> daemon foreground` with NO script
+    // path, otherwise the child reinterprets the script path as a subcommand and breaks.
+    expect(buildDaemonRespawnArgs({ compiled: true, scriptPath: '/should/not/be/used' })).toEqual([
+      'daemon',
+      'foreground',
+    ])
+    expect(buildDaemonRespawnArgs({ compiled: true, scriptPath: '/x', host: '127.0.0.1', port: 9217 })).toEqual([
+      'daemon',
+      'foreground',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      '9217',
+    ])
+  })
+
+  it('builds daemon respawn args with the script path for npm and source installs', () => {
+    // npm bin / source checkout: process.execPath is the Bun runtime and argv[1] is the
+    // real script the runtime must load before the subcommand.
+    expect(buildDaemonRespawnArgs({ compiled: false, scriptPath: '/usr/local/bin/aiworker-bun.js' })).toEqual([
+      '/usr/local/bin/aiworker-bun.js',
+      'daemon',
+      'foreground',
+    ])
+    expect(buildDaemonRespawnArgs({ compiled: false, scriptPath: '/repo/aiworker.ts', port: 43210 })).toEqual([
+      '/repo/aiworker.ts',
+      'daemon',
+      'foreground',
+      '--port',
+      '43210',
+    ])
   })
 
   it('background daemon start fails loudly and clears the lock when the daemon never becomes healthy', async () => {

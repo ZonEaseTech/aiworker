@@ -1361,6 +1361,34 @@ function acquireDaemonStartLock(paths: LocalPaths): void {
   }
 }
 
+// A `bun build --compile` standalone binary embeds its module graph under `/$bunfs/`, so
+// import.meta.url (hence CLI_MODULE_DIR) carries that marker — the same intrinsic signal the
+// resource resolver already uses (see currentInstallSource). It does not depend on user
+// args, unlike inspecting argv[1].
+function isCompiledBinary(): boolean {
+  return CLI_MODULE_DIR.includes('/$bunfs/')
+}
+
+// Build the args for respawning the daemon as a detached `<runnable> daemon foreground`.
+// For a compiled binary process.execPath IS the runnable and argv[1] is the first user arg
+// ('start'), so passing a script path would make the child reinterpret it as a subcommand
+// and the respawn breaks. For npm/source process.execPath is the Bun runtime and the script
+// path (argv[1]) must lead so Bun loads it before the subcommand.
+export function buildDaemonRespawnArgs(input: {
+  compiled: boolean
+  host?: string
+  port?: number
+  scriptPath: string
+}): string[] {
+  return [
+    ...(input.compiled ? [] : [input.scriptPath]),
+    'daemon',
+    'foreground',
+    ...(input.host ? ['--host', input.host] : []),
+    ...(input.port ? ['--port', String(input.port)] : []),
+  ]
+}
+
 async function startDaemonProcess(opts: { host?: string, port?: number } = {}, paths = localPaths()): Promise<DaemonStartedResult> {
   mkdirSync(paths.home, { recursive: true })
   const current = daemonStatus(paths)
@@ -1371,13 +1399,12 @@ async function startDaemonProcess(opts: { host?: string, port?: number } = {}, p
   try {
     writeFileSync(paths.logFile, '')
     const logFd = openSync(paths.logFile, 'a')
-    child = spawn(process.execPath, [
-      path.resolve(process.argv[1] ?? 'aiworker'),
-      'daemon',
-      'foreground',
-      ...(opts.host ? ['--host', opts.host] : []),
-      ...(opts.port ? ['--port', String(opts.port)] : []),
-    ], {
+    child = spawn(process.execPath, buildDaemonRespawnArgs({
+      compiled: isCompiledBinary(),
+      host: opts.host,
+      port: opts.port,
+      scriptPath: path.resolve(process.argv[1] ?? 'aiworker'),
+    }), {
       cwd: process.cwd(),
       detached: true,
       env: {
@@ -1760,6 +1787,12 @@ async function runDaemonForegroundServer(prepared: DaemonForegroundPreparation):
   }
   const { bootstrapWorkerApp, localApiExposureWarning } = await import('@zonease/aiworker-worker-daemon/bootstrap')
   const { app, port, state } = await bootstrapWorkerApp({
+    // Mirror ensureDbAt: prefer the CLI-resolved packaged migrations sidecar. In a compiled
+    // standalone binary the daemon's own workerEnv default resolves to the bunfs-shallow
+    // `/drizzle/worker` that does not exist, so without this the background daemon crashes
+    // with "Can't find meta/_journal.json file". The CLI resolver finds the packaged folder
+    // next to the binary; env is only the source-checkout fallback.
+    migrationsFolder: resolveCliMigrationsFolder() ?? getWorkerEnv().WORKER_MIGRATIONS_FOLDER,
     officialAppsRoot: resolveCliOfficialAppsRoot(),
     runtimeVersion: packageJson.version,
     sessionAutoName: true,
