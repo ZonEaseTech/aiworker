@@ -401,17 +401,20 @@ force-API-key path or the slice-3 gateway adapter. Because `codex` is the sole
 remains in the protocol enum and Host broker for slice-3 symmetry but is not
 pulled to Worker machines.
 
-Injection precondition (delivery vs efficacy). The injection guarantees the engine
-env *contains* the gateway carrier, not that the engine *honors* it. If the Worker
-process env already carries a conflicting `ANTHROPIC_API_KEY` (which maps to the
-`x-api-key` header), the Claude SDK sends both that and the injected
-`ANTHROPIC_AUTH_TOKEN` (`Authorization: Bearer`) and the API rejects the request —
-the same silent-gateway-bypass failure mode codex was cut to avoid. org-key v1
-targets headless distributed Workers that have **no pre-existing provider key**, so
-this precondition holds for the intended deployment. Making injection robust against
-a pre-existing key (unset/empty the colliding `*_API_KEY` on inject) plus a
-real-engine gateway-routing smoke is a tracked follow-up before any org relies on
-gateway billing.
+Injection efficacy (delivery vs honor). The injection guarantees the engine env
+*contains* the gateway carrier; conflicting-key stripping closes the gap to the
+engine *honoring* it. When injecting `anthropic`, the executor deletes a conflicting
+inherited `ANTHROPIC_API_KEY` (which maps to `x-api-key`) from the spawned child env
+(`EngineCredentialStore.conflictingEnvKeys` → executor `delete`), so the injected
+`ANTHROPIC_AUTH_TOKEN` (`Authorization: Bearer`) wins unambiguously — otherwise the
+Claude SDK sends both headers and the API 401s (the same silent-gateway-bypass codex
+was cut to avoid). The env REPLACES `process.env` at spawn (process-manager), so the
+deleted key is genuinely absent in the child. Stripping fires ONLY when a credential
+is actually injected, never over-stripping the user's own key in the no-credential
+fallback. `openai`'s token carrier IS `OPENAI_API_KEY`, so injection overwrites it —
+no separate conflict. Remaining follow-up: an end-to-end real-engine gateway-routing
+smoke (proving the engine actually *uses* the injected token against a live proxy) is
+covered by the slice-3 Step0 experiment + e2e.
 
 Naming: the frame carries `providerKind` (the LLM provider) and `gatewayUrl`, never
 `engineKind`/`baseUrl` — the control protocol is transport-agnostic and Host/Soul

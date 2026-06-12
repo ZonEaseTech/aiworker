@@ -396,6 +396,78 @@ printf '%s\\n' '{"type":"result","result":"ok"}'
     expect(env).toContain('ANTHROPIC_AUTH_TOKEN=org-key-anthropic')
   })
 
+  // Phase 3 review follow-up: an inherited ANTHROPIC_API_KEY (x-api-key) coexisting with
+  // the injected ANTHROPIC_AUTH_TOKEN (Bearer) makes the Claude SDK send both → API 401.
+  // The conflicting key must be genuinely absent in the spawned child env.
+  it('strips a conflicting inherited ANTHROPIC_API_KEY when injecting the anthropic credential', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const envFile = path.join(makeRoot(), 'engine-env.txt')
+    const command = await makeScript(`
+cat >/dev/null
+printf 'ANTHROPIC_API_KEY=%s\\n' "\${ANTHROPIC_API_KEY:-<unset>}" >> ${envFile}
+printf 'ANTHROPIC_AUTH_TOKEN=%s\\n' "\${ANTHROPIC_AUTH_TOKEN:-<unset>}" >> ${envFile}
+printf '%s\\n' '{"type":"result","result":"ok"}'
+`)
+
+    const previous = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-inherited-conflicting-key'
+    try {
+      await createExternalEngineExecutor({
+        credentialProvider: {
+          envFor: (engineId): Record<string, string> => engineId === 'claude-code'
+            ? { ANTHROPIC_BASE_URL: 'https://gw.example/anthropic', ANTHROPIC_AUTH_TOKEN: 'gw-bearer-token' }
+            : {},
+          conflictingEnvKeys: (engineId): string[] => engineId === 'claude-code' ? ['ANTHROPIC_API_KEY'] : [],
+        },
+      }).invoke({ ...baseInput(command, workspaceRoot), engineId: 'claude-code', engineCommand: command })
+
+      const env = await readFile(envFile, 'utf8')
+      // The conflicting inherited key is genuinely absent in the child (env replaces process.env at spawn).
+      expect(env).toContain('ANTHROPIC_API_KEY=<unset>')
+      expect(env).not.toContain('sk-ant-inherited-conflicting-key')
+      expect(env).toContain('ANTHROPIC_AUTH_TOKEN=gw-bearer-token')
+    }
+    finally {
+      if (previous === undefined)
+        delete process.env.ANTHROPIC_API_KEY
+      else
+        process.env.ANTHROPIC_API_KEY = previous
+    }
+  })
+
+  it('does NOT strip an inherited ANTHROPIC_API_KEY when no credential is injected (no over-strip)', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const envFile = path.join(makeRoot(), 'engine-env.txt')
+    const command = await makeScript(`
+cat >/dev/null
+printf 'ANTHROPIC_API_KEY=%s\\n' "\${ANTHROPIC_API_KEY:-<unset>}" >> ${envFile}
+printf '%s\\n' '{"type":"result","result":"ok"}'
+`)
+
+    const previous = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-user-own-key'
+    try {
+      await createExternalEngineExecutor({
+        credentialProvider: {
+          // No credential injected → envFor {} and conflictingEnvKeys [] → user's own key survives.
+          envFor: (): Record<string, string> => ({}),
+          conflictingEnvKeys: (): string[] => [],
+        },
+      }).invoke({ ...baseInput(command, workspaceRoot), engineId: 'claude-code', engineCommand: command })
+
+      const env = await readFile(envFile, 'utf8')
+      expect(env).toContain('ANTHROPIC_API_KEY=sk-ant-user-own-key')
+    }
+    finally {
+      if (previous === undefined)
+        delete process.env.ANTHROPIC_API_KEY
+      else
+        process.env.ANTHROPIC_API_KEY = previous
+    }
+  })
+
   it('P3-T4: redacts an injected anthropic org key that the engine echoes to stdout.log', async () => {
     // The real worker-side carrier path: a credential injected via credentialProvider
     // (third env layer) is read by the native engine, which may echo it. The executor

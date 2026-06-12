@@ -50,6 +50,21 @@ const PROVIDER_ENV_CARRIERS: Record<CredentialProviderKind, { baseUrl: string, t
 }
 
 /**
+ * provider → env keys that must be stripped from the engine env when injecting that
+ * provider's gateway credential, so the injected token wins unambiguously (delivery vs
+ * efficacy, Phase 3 review follow-up). For `anthropic`, an inherited `ANTHROPIC_API_KEY`
+ * (x-api-key header) coexisting with the injected `ANTHROPIC_AUTH_TOKEN` (Bearer) makes
+ * the Claude SDK send both headers → API 401 (the same silent-gateway-bypass codex was
+ * cut to avoid). For `openai`, the token carrier IS `OPENAI_API_KEY`, so injection
+ * overwrites it — no separate conflicting key. Only stripped when a credential is
+ * actually injected (never over-strips the user's own key in the no-credential fallback).
+ */
+const PROVIDER_CONFLICTING_ENV_KEYS: Record<CredentialProviderKind, readonly string[]> = {
+  anthropic: ['ANTHROPIC_API_KEY'],
+  openai: [],
+}
+
+/**
  * Process-level in-memory credential store. The daemon constructs exactly one and
  * shares the same instance with both the executor (read path, `envFor`) and the
  * Worker Access tunnel (write path, `set`/`clear`). Credentials are kept only in
@@ -90,6 +105,22 @@ export class EngineCredentialStore {
       [carriers.baseUrl]: credential.gatewayUrl,
       [carriers.token]: credential.token,
     }
+  }
+
+  /**
+   * Env keys to delete from the engine env when injecting for this engineId, so the
+   * injected gateway token wins unambiguously over an inherited conflicting key (see
+   * PROVIDER_CONFLICTING_ENV_KEYS). Returns `[]` when no provider maps or no credential
+   * is stored — i.e. only strips when `envFor` actually injects, never over-strips the
+   * user's own key in the graceful no-credential fallback.
+   */
+  conflictingEnvKeys(engineId: string): string[] {
+    const provider = EngineCredentialStore.providerForEngine(engineId)
+    if (!provider)
+      return []
+    if (!this.#credentials.has(provider))
+      return []
+    return [...PROVIDER_CONFLICTING_ENV_KEYS[provider]]
   }
 
   /** Drop all credentials (revocation / shutdown). */
