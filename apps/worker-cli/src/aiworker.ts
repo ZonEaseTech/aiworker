@@ -237,6 +237,9 @@ let workerCreateSelectorForTest: ((candidates: readonly WorkerCreateCandidate[])
 // command, so the cmdline-verify in `daemonStatus` needs an injectable reader. Mirrors the
 // `daemonStarterForTest` precedent; reset in `afterEach`.
 let readProcessCommandForTest: ((pid: number) => null | string) | null = null
+// The real startDaemonProcess polls a freshly-spawned daemon's /health; tests that drive
+// the real spawn body (vs. the daemonStarter fake) inject the readiness result here.
+let daemonHealthWaiterForTest: ((url: string) => Promise<{ healthy: boolean }>) | null = null
 
 export interface WorkerCreateCandidate {
   id: string
@@ -249,6 +252,10 @@ export function __setDaemonStarterForTest(starter: DaemonStarter | null): void {
 
 export function __setReadProcessCommandForTest(reader: ((pid: number) => null | string) | null): void {
   readProcessCommandForTest = reader
+}
+
+export function __setDaemonHealthWaiterForTest(waiter: ((url: string) => Promise<{ healthy: boolean }>) | null): void {
+  daemonHealthWaiterForTest = waiter
 }
 
 export function __setOfficialSoulDistBuilderForTest(builder: (() => Promise<void>) | null): void {
@@ -1227,6 +1234,42 @@ async function fetchWithShortTimeout(url: string): Promise<Response> {
   }
 }
 
+export interface WaitForDaemonHealthOptions {
+  deadlineMs?: number
+  fetchImpl?: (url: string) => Promise<Response>
+  intervalMs?: number
+}
+
+// Poll the background daemon's GET /health until it answers ok or the deadline elapses.
+// The daemon binds Bun.serve and writes its real URL only after DB migration + boot, so a
+// freshly-spawned `start` must wait for readiness before reporting a URL — otherwise the
+// printed URL races into connection-refused / 404. Returns healthy:false on timeout so the
+// caller fails loudly with the log tail (never a silent predicted-URL success).
+export async function waitForDaemonHealth(
+  url: string,
+  options: WaitForDaemonHealthOptions = {},
+): Promise<{ healthy: boolean }> {
+  const deadlineMs = options.deadlineMs ?? 15_000
+  const intervalMs = options.intervalMs ?? 150
+  const fetchImpl = options.fetchImpl ?? fetchWithShortTimeout
+  const healthUrl = `${url.replace(/\/+$/, '')}/health`
+  const startedAt = Date.now()
+  do {
+    try {
+      const res = await fetchImpl(healthUrl)
+      if (res.ok)
+        return { healthy: true }
+    }
+    catch {
+      // Not bound yet (connection refused / aborted) — keep polling until the deadline.
+    }
+    if (Date.now() - startedAt >= deadlineMs)
+      return { healthy: false }
+    await new Promise(resolve => setTimeout(resolve, intervalMs))
+  } while (Date.now() - startedAt < deadlineMs)
+  return { healthy: false }
+}
+
 function compareVersionStrings(left: string, right: string): number {
   const a = left.split(/[.-]/).map(part => Number.parseInt(part, 10) || 0)
   const b = right.split(/[.-]/).map(part => Number.parseInt(part, 10) || 0)
@@ -1358,7 +1401,40 @@ async function startDaemonProcess(opts: { host?: string, port?: number } = {}, p
   const env = getWorkerEnv()
   const host = opts.host ?? env.AIWORKER_WORKER_HOST
   const port = opts.port ?? env.PORT
-  return { started: true, pid: child.pid, logFile: paths.logFile, host, port, url: daemonUrl(host, port) }
+  const predictedUrl = daemonUrl(host, port)
+
+  // WDLM-3: wait for the child to actually bind before reporting a URL. The child writes
+  // its real bound URL into aiworker-daemon.json only after Bun.serve is up, so we poll
+  // /health on the predicted URL, then read the metadata for the authoritative URL.
+  const health = await (daemonHealthWaiterForTest ?? waitForDaemonHealth)(predictedUrl)
+  if (!health.healthy) {
+    // Fail loudly: stop the half-booted child, release the lock, and surface the log tail
+    // instead of silently handing back a URL that connection-refuses.
+    try {
+      process.kill(child.pid, 'SIGTERM')
+    }
+    catch {
+      // Already gone — nothing to stop.
+    }
+    rmSync(paths.pidFile, { force: true })
+    removeDaemonMetadata(paths)
+    throw new Error(`daemon did not become healthy at ${predictedUrl}/health within the startup deadline; last logs:\n${readDaemonLogTail(paths)}`)
+  }
+
+  const metadata = readDaemonMetadata(paths)
+  const url = metadata?.pid === child.pid ? metadata.url : predictedUrl
+  const actualHost = metadata?.pid === child.pid ? metadata.host : host
+  const actualPort = metadata?.pid === child.pid ? metadata.port : port
+  return { started: true, pid: child.pid, logFile: paths.logFile, host: actualHost, port: actualPort, url }
+}
+
+function readDaemonLogTail(paths: LocalPaths, lines = 20): string {
+  try {
+    return readFileSync(paths.logFile, 'utf8').split(/\r?\n/).slice(-lines).join('\n')
+  }
+  catch {
+    return '<no daemon log available>'
+  }
 }
 
 async function startOrReuseDaemon(

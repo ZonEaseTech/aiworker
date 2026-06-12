@@ -29,6 +29,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
   __seedWorkerForTest,
+  __setDaemonHealthWaiterForTest,
   __setDaemonStarterForTest,
   __setOfficialSoulDescriptorsReadyForTest,
   __setOfficialSoulDistBuilderForTest,
@@ -44,6 +45,7 @@ import {
   resolveCliOfficialAppsRoot,
   resolveCliWorkerWebStaticDir,
   runCli,
+  waitForDaemonHealth,
   workerCreateCandidates,
 } from './aiworker'
 
@@ -77,6 +79,7 @@ describe('aiworker local CLI', () => {
 
   afterEach(async () => {
     __setDaemonStarterForTest(null)
+    __setDaemonHealthWaiterForTest(null)
     __setOfficialSoulDescriptorsReadyForTest(null)
     __setOfficialSoulDistBuilderForTest(null)
     __setReadProcessCommandForTest(null)
@@ -1018,6 +1021,60 @@ describe('aiworker local CLI', () => {
     const stopped = JSON.parse(output) as { running: boolean, stopped: boolean }
     expect(stopped.running).toBe(false)
     expect(realpathSync(home)).toBeTruthy()
+    await expect(stat(pidFile)).rejects.toThrow()
+  })
+
+  it('waitForDaemonHealth polls GET /health until the daemon binds and reports ok', async () => {
+    const calls: string[] = []
+    const result = await waitForDaemonHealth('http://127.0.0.1:9217', {
+      deadlineMs: 2000,
+      intervalMs: 5,
+      fetchImpl: async (url) => {
+        calls.push(url)
+        // The daemon binds only after a few connection-refused attempts.
+        if (calls.length < 3)
+          throw new Error('connection refused')
+        return new Response('{"ok":true}', { status: 200 })
+      },
+    })
+
+    expect(result.healthy).toBe(true)
+    expect(calls.every(url => url === 'http://127.0.0.1:9217/health')).toBe(true)
+    expect(calls.length).toBeGreaterThan(1)
+  })
+
+  it('waitForDaemonHealth gives up at the deadline instead of polling forever', async () => {
+    let attempts = 0
+    const result = await waitForDaemonHealth('http://127.0.0.1:9217', {
+      deadlineMs: 40,
+      intervalMs: 5,
+      fetchImpl: async () => {
+        attempts += 1
+        throw new Error('connection refused')
+      },
+    })
+
+    expect(result.healthy).toBe(false)
+    expect(attempts).toBeGreaterThan(0)
+  })
+
+  it('background daemon start fails loudly and clears the lock when the daemon never becomes healthy', async () => {
+    // Drive the REAL startDaemonProcess body (no fake starter). The spawned child points at
+    // a non-existent script path under /repo, so it exits at once and never binds; the
+    // injected health waiter reports it never became healthy. Start must surface the failure
+    // and release the pidFile lock instead of returning a dead predicted URL.
+    __setDaemonHealthWaiterForTest(async () => ({ healthy: false }))
+
+    expect(await runCli(argv('daemon', 'start', '--host', '127.0.0.1', '--port', '43321'))).toBe(1)
+    expect(errorOutput).toContain('did not become healthy')
+
+    const pidFile = path.join(root, 'home', 'aiworker-daemon.pid')
+    await expect(stat(pidFile)).rejects.toThrow()
+
+    // The released lock must not wedge the next start: a second attempt re-acquires it.
+    errorOutput = ''
+    expect(await runCli(argv('daemon', 'start', '--host', '127.0.0.1', '--port', '43321'))).toBe(1)
+    expect(errorOutput).toContain('did not become healthy')
     await expect(stat(pidFile)).rejects.toThrow()
   })
 
