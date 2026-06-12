@@ -29,10 +29,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
   __seedWorkerForTest,
+  __setDaemonHealthWaiterForTest,
   __setDaemonStarterForTest,
   __setOfficialSoulDescriptorsReadyForTest,
   __setOfficialSoulDistBuilderForTest,
+  __setReadProcessCommandForTest,
   __setWorkerCreateSelectorForTest,
+  acquireDaemonStartLock,
+  buildDaemonRespawnArgs,
   downloadAndReplaceGitHubBundle,
   inspectCliOfficialAppsResource,
   prepareDaemonForeground,
@@ -43,6 +47,7 @@ import {
   resolveCliOfficialAppsRoot,
   resolveCliWorkerWebStaticDir,
   runCli,
+  waitForDaemonHealth,
   workerCreateCandidates,
 } from './aiworker'
 
@@ -76,8 +81,10 @@ describe('aiworker local CLI', () => {
 
   afterEach(async () => {
     __setDaemonStarterForTest(null)
+    __setDaemonHealthWaiterForTest(null)
     __setOfficialSoulDescriptorsReadyForTest(null)
     __setOfficialSoulDistBuilderForTest(null)
+    __setReadProcessCommandForTest(null)
     __setWorkerCreateSelectorForTest(null)
     closeWorkerDb()
     process.exitCode = 0
@@ -117,6 +124,17 @@ describe('aiworker local CLI', () => {
       return daemonStartedFixture(opts, paths, pid)
     })
     return started
+  }
+
+  // daemonStatus now cmdline-verifies the pidFile pid, but the bun test-runner process
+  // cannot make `ps` report a managed-daemon command for itself. Inject a reader that
+  // reports a real managed worker daemon command for `managedPids` so a pidFile written
+  // with `String(process.pid)` is treated as a genuinely-running managed daemon.
+  function installManagedProcessCommand(...managedPids: number[]): void {
+    const managed = new Set(managedPids)
+    __setReadProcessCommandForTest(pid =>
+      managed.has(pid) ? '/usr/local/bin/bun /usr/local/bin/aiworker daemon foreground' : null,
+    )
   }
 
   function freeformDescriptorPath(): string {
@@ -761,6 +779,7 @@ describe('aiworker local CLI', () => {
     // Second start: idempotent — reuses the running daemon and keeps the same
     // single fleet entry (no duplicate seed, no "daemon already running" throw).
     await writeFile(path.join(root, 'home', 'workers', workerId, 'aiworker-daemon.pid'), String(process.pid))
+    installManagedProcessCommand(process.pid)
     expect(await runCli(argv('start'))).toBe(0)
     const second = JSON.parse(output) as { started: Array<{ daemon: { started: boolean }, id: string }> }
     expect(second.started).toEqual([
@@ -869,6 +888,7 @@ describe('aiworker local CLI', () => {
     const home = path.join(root, 'home')
     mkdirSync(home, { recursive: true })
     await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    installManagedProcessCommand(process.pid)
     const started = installFakeDaemonStarter(1)
 
     expect(await runCli(argv('daemon', 'start'))).toBe(0)
@@ -893,6 +913,7 @@ describe('aiworker local CLI', () => {
     const home = path.join(root, 'home')
     mkdirSync(home, { recursive: true })
     await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    installManagedProcessCommand(process.pid)
     await writeFile(path.join(home, 'aiworker-daemon.json'), `${JSON.stringify({
       host: '127.0.0.1',
       pid: process.pid,
@@ -924,6 +945,7 @@ describe('aiworker local CLI', () => {
     const home = path.join(root, 'home')
     mkdirSync(home, { recursive: true })
     await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    installManagedProcessCommand(process.pid)
     await writeFile(path.join(home, 'aiworker-daemon.json'), `${JSON.stringify({
       host: '127.0.0.1',
       pid: process.pid + 1,
@@ -949,6 +971,181 @@ describe('aiworker local CLI', () => {
     expect(result.daemon.requested).toEqual({ host: '127.0.0.2', port: 49999 })
     expect(result.daemon.message).toContain('metadata pid mismatch')
     expect(result.daemon.message).toContain('actual URL unknown')
+  })
+
+  it('daemon status reports not-running for a stale pidFile whose pid is alive but not a managed daemon', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    // The pid is alive (this very test process) but its command is NOT a managed worker
+    // daemon — a classic stale/reused pidFile. It must never read as ghost-running.
+    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    __setReadProcessCommandForTest(() => '/usr/bin/some-other-process --serve')
+
+    expect(await runCli(argv('daemon', 'status'))).toBe(0)
+    const status = JSON.parse(output) as { pid: number | null, running: boolean }
+    expect(status.pid).toBe(process.pid)
+    expect(status.running).toBe(false)
+  })
+
+  it('daemon stop survives an EPERM kill on a foreign pid and clears the stale pidFile', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    const pidFile = path.join(home, 'aiworker-daemon.pid')
+    // The pidFile points at a live, managed-looking daemon (so stop attempts the kill),
+    // but the kill raises EPERM as if the pid belonged to another user's process. Stop must
+    // not crash; it must swallow EPERM, clear the stale pidFile, and report running:false.
+    await writeFile(pidFile, String(process.pid))
+    // The initial liveness check sees a managed daemon (running:true → kill attempted);
+    // after the failed kill the foreign pid is no longer managed, so waitForProcessExit
+    // returns at once instead of blocking on a process this CLI does not own.
+    let commandReads = 0
+    __setReadProcessCommandForTest(() => {
+      commandReads += 1
+      return commandReads === 1 ? '/usr/local/bin/bun /usr/local/bin/aiworker daemon foreground' : null
+    })
+    const originalKill = process.kill.bind(process)
+    process.kill = ((pid: number, signal?: NodeJS.Signals | number) => {
+      if (pid === process.pid && signal === 'SIGTERM') {
+        const error = new Error('operation not permitted') as Error & { code: string }
+        error.code = 'EPERM'
+        throw error
+      }
+      return originalKill(pid, signal)
+    }) as typeof process.kill
+
+    try {
+      expect(await runCli(argv('daemon', 'stop'))).toBe(0)
+    }
+    finally {
+      process.kill = originalKill
+    }
+
+    const stopped = JSON.parse(output) as { running: boolean, stopped: boolean }
+    expect(stopped.running).toBe(false)
+    expect(realpathSync(home)).toBeTruthy()
+    await expect(stat(pidFile)).rejects.toThrow()
+  })
+
+  it('waitForDaemonHealth polls GET /health until the daemon binds and reports ok', async () => {
+    const calls: string[] = []
+    const result = await waitForDaemonHealth('http://127.0.0.1:9217', {
+      deadlineMs: 2000,
+      intervalMs: 5,
+      fetchImpl: async (url) => {
+        calls.push(url)
+        // The daemon binds only after a few connection-refused attempts.
+        if (calls.length < 3)
+          throw new Error('connection refused')
+        return new Response('{"ok":true}', { status: 200 })
+      },
+    })
+
+    expect(result.healthy).toBe(true)
+    expect(calls.every(url => url === 'http://127.0.0.1:9217/health')).toBe(true)
+    expect(calls.length).toBeGreaterThan(1)
+  })
+
+  it('waitForDaemonHealth gives up at the deadline instead of polling forever', async () => {
+    let attempts = 0
+    const result = await waitForDaemonHealth('http://127.0.0.1:9217', {
+      deadlineMs: 40,
+      intervalMs: 5,
+      fetchImpl: async () => {
+        attempts += 1
+        throw new Error('connection refused')
+      },
+    })
+
+    expect(result.healthy).toBe(false)
+    expect(attempts).toBeGreaterThan(0)
+  })
+
+  it('builds daemon respawn args without a script path for a compiled standalone binary', () => {
+    // Compiled binary: process.execPath IS the runnable; argv[1] is the first user arg
+    // ('start'), not a script. Respawn must be `<binary> daemon foreground` with NO script
+    // path, otherwise the child reinterprets the script path as a subcommand and breaks.
+    expect(buildDaemonRespawnArgs({ compiled: true, scriptPath: '/should/not/be/used' })).toEqual([
+      'daemon',
+      'foreground',
+    ])
+    expect(buildDaemonRespawnArgs({ compiled: true, scriptPath: '/x', host: '127.0.0.1', port: 9217 })).toEqual([
+      'daemon',
+      'foreground',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      '9217',
+    ])
+  })
+
+  it('builds daemon respawn args with the script path for npm and source installs', () => {
+    // npm bin / source checkout: process.execPath is the Bun runtime and argv[1] is the
+    // real script the runtime must load before the subcommand.
+    expect(buildDaemonRespawnArgs({ compiled: false, scriptPath: '/usr/local/bin/aiworker-bun.js' })).toEqual([
+      '/usr/local/bin/aiworker-bun.js',
+      'daemon',
+      'foreground',
+    ])
+    expect(buildDaemonRespawnArgs({ compiled: false, scriptPath: '/repo/aiworker.ts', port: 43210 })).toEqual([
+      '/repo/aiworker.ts',
+      'daemon',
+      'foreground',
+      '--port',
+      '43210',
+    ])
+  })
+
+  it('the start lock rejects a second concurrent start and only reclaims a dead-pid lock', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    const paths = {
+      home,
+      dbPath: path.join(home, 'aiworker.db'),
+      workersRoot: path.join(home, 'workers'),
+      pidFile: path.join(home, 'aiworker-daemon.pid'),
+      daemonMetaFile: path.join(home, 'aiworker-daemon.json'),
+      logFile: path.join(home, 'aiworker-daemon.log'),
+    }
+
+    // First acquisition records this live CLI pid as the lock holder.
+    acquireDaemonStartLock(paths)
+    expect(realpathSync(paths.pidFile)).toBeTruthy()
+
+    // A second start finds the lock pid is a LIVE worker CLI starter (`aiworker … start`,
+    // no daemon foreground yet). It must back off, not reclaim and double-spawn.
+    __setReadProcessCommandForTest(() => '/usr/local/bin/bun /usr/local/bin/aiworker-bun.js start --port 9217')
+    expect(() => acquireDaemonStartLock(paths)).toThrow(/start (already )?in progress|already running/i)
+
+    // Reused-pid stale lock: the recorded pid is alive but belongs to an UNRELATED process
+    // (the daemon died without `aiworker stop`, pid recycled). It must be reclaimed, never
+    // wedge future starts.
+    __setReadProcessCommandForTest(() => '/usr/bin/node /home/me/foo.js')
+    expect(() => acquireDaemonStartLock(paths)).not.toThrow()
+
+    // Truly dead pid is likewise reclaimable.
+    __setReadProcessCommandForTest(null)
+    await writeFile(paths.pidFile, String(2 ** 30))
+    expect(() => acquireDaemonStartLock(paths)).not.toThrow()
+  })
+
+  it('background daemon start fails loudly and clears the lock when the daemon never becomes healthy', async () => {
+    // Drive the REAL startDaemonProcess body (no fake starter). The spawned child points at
+    // a non-existent script path under /repo, so it exits at once and never binds; the
+    // injected health waiter reports it never became healthy. Start must surface the failure
+    // and release the pidFile lock instead of returning a dead predicted URL.
+    __setDaemonHealthWaiterForTest(async () => ({ healthy: false }))
+
+    expect(await runCli(argv('daemon', 'start', '--host', '127.0.0.1', '--port', '43321'))).toBe(1)
+    expect(errorOutput).toContain('did not become healthy')
+
+    const pidFile = path.join(root, 'home', 'aiworker-daemon.pid')
+    await expect(stat(pidFile)).rejects.toThrow()
+
+    // The released lock must not wedge the next start: a second attempt re-acquires it.
+    errorOutput = ''
+    expect(await runCli(argv('daemon', 'start', '--host', '127.0.0.1', '--port', '43321'))).toBe(1)
+    expect(errorOutput).toContain('did not become healthy')
+    await expect(stat(pidFile)).rejects.toThrow()
   })
 
   it('daemon foreground prepare seam runs unified bootstrap without opening a browser or serving forever', async () => {

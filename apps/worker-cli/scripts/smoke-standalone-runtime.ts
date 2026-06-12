@@ -74,7 +74,12 @@ async function main(): Promise<number> {
     await assertPackagedFreeform(list.stdout, officialAppsRoot)
     await assertStandaloneOfficialFreeformDescriptor(officialAppsRoot)
 
-    consola.success('[smoke-standalone-runtime] PASS: unpacked standalone binary boots with packaged migrations and the official Soul descriptor refs')
+    // WDLM-4: the background start spawns the daemon by respawning the SAME compiled binary
+    // (`<binary> daemon foreground`). This exercises the compiled-binary respawn branch and
+    // the WDLM-3 /health readiness wait end-to-end on a real --compile product.
+    await assertStandaloneBackgroundStart(binary, env)
+
+    consola.success('[smoke-standalone-runtime] PASS: unpacked standalone binary boots, background-starts a healthy daemon, and stops cleanly')
     return 0
   }
   finally {
@@ -122,6 +127,70 @@ function assertStandaloneDoctor(stdout: string): void {
     throw new Error(`standalone doctor must report packaged Worker Web ready: ${stdout}`)
   if (installation.resources?.migrationsReady !== true)
     throw new Error(`standalone doctor must report packaged migrations ready: ${stdout}`)
+}
+
+interface FleetStartOutput {
+  started?: Array<{ id?: string, url?: string }>
+}
+
+interface DaemonStatusOutput {
+  pid?: number | null
+  running?: boolean
+}
+
+// Real background lifecycle on the compiled standalone binary: start → poll /health → stop.
+// The compiled binary respawns ITSELF as the daemon, so a broken respawn (e.g. passing the
+// script-path arg) or a missing readiness wait fails here, not just in unit tests.
+async function assertStandaloneBackgroundStart(binary: string, env: NodeJS.ProcessEnv): Promise<void> {
+  const port = 47219
+  let url: string | undefined
+  try {
+    const start = await run([binary, 'start', '--port', String(port)], { env })
+    const startBody = JSON.parse(start.stdout) as FleetStartOutput
+    url = startBody.started?.[0]?.url
+    if (!url)
+      throw new Error(`standalone background start did not report a started worker url: ${start.stdout}`)
+
+    if (!await pollHealth(url))
+      throw new Error(`standalone background start daemon never became healthy at ${url}/health`)
+
+    const status = await run([binary, 'fleet', 'status'], { env, allowFailure: true })
+    const statusBody = JSON.parse(stripToFirstJsonObject(status.stdout)) as { workers?: DaemonStatusOutput[] }
+    if (statusBody.workers?.some(worker => worker.running) !== true)
+      throw new Error(`standalone background start fleet status did not report a running daemon: ${status.stdout}`)
+  }
+  finally {
+    // Always stop so a half-started daemon never leaks past the smoke.
+    await run([binary, 'stop'], { env, allowFailure: true })
+  }
+
+  // After stop the daemon must be gone: /health no longer answers ok.
+  if (url && await pollHealth(url, { attempts: 5, intervalMs: 100 }))
+    throw new Error(`standalone background stop left the daemon answering at ${url}/health`)
+}
+
+async function pollHealth(url: string, options: { attempts?: number, intervalMs?: number } = {}): Promise<boolean> {
+  const attempts = options.attempts ?? 60
+  const intervalMs = options.intervalMs ?? 250
+  const healthUrl = `${url.replace(/\/+$/, '')}/health`
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(healthUrl)
+      if (res.ok)
+        return true
+    }
+    catch {
+      // Not bound yet / already stopped.
+    }
+    await new Promise(resolve => setTimeout(resolve, intervalMs))
+  }
+  return false
+}
+
+// `status` prints a single JSON document, but tolerate any leading consola lines.
+function stripToFirstJsonObject(stdout: string): string {
+  const start = stdout.indexOf('{')
+  return start >= 0 ? stdout.slice(start) : stdout
 }
 
 async function assertPackagedFreeform(stdout: string, expectedOfficialAppsRoot: string): Promise<void> {

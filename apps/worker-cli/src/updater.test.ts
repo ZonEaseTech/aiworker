@@ -10,6 +10,8 @@ import {
   detectInstallSource,
   executeUpgradePlan,
   formatUpgradeReport,
+  isManagedWorkerCliCommand,
+  isManagedWorkerDaemonCommand,
   parseUpdateCommandOptions,
   readDailyUpdateNoticeState,
   resolveReleaseTarget,
@@ -711,6 +713,46 @@ describe('CLI updater safety helpers', () => {
       ...baseProbe,
       command: '/usr/local/bin/aiworker foreground daemon --port 9217',
     })).toMatchObject({ allowed: false, reason: 'not-managed-daemon' })
+  })
+
+  it('recognizes every shipped managed worker daemon command form', () => {
+    // npm bin: sh wrapper exec bun <bundle> daemon foreground
+    expect(isManagedWorkerDaemonCommand('bun /usr/local/lib/node_modules/@zonease/aiworker-cli/dist/aiworker-bun.js daemon foreground --host 127.0.0.1 --port 9217')).toBe(true)
+    // legacy bare-aiworker bin form (kept compatible)
+    expect(isManagedWorkerDaemonCommand('/usr/local/bin/bun /usr/local/bin/aiworker daemon foreground')).toBe(true)
+    // compiled standalone binaries (4 release targets)
+    expect(isManagedWorkerDaemonCommand('/opt/aiworker/aiworker-linux-x64 daemon foreground')).toBe(true)
+    expect(isManagedWorkerDaemonCommand('/opt/aiworker/aiworker-linux-arm64 daemon foreground')).toBe(true)
+    expect(isManagedWorkerDaemonCommand('/opt/aiworker/aiworker-darwin-x64 daemon foreground')).toBe(true)
+    expect(isManagedWorkerDaemonCommand('/opt/aiworker/aiworker-darwin-arm64 daemon foreground')).toBe(true)
+  })
+
+  it('recognizes any managed worker CLI command regardless of subcommand', () => {
+    // The start-lock back-off must recognize a concurrent *starter* (`aiworker … start`),
+    // which has no `daemon foreground`. Basename match only, same shipped forms.
+    expect(isManagedWorkerCliCommand('bun /usr/local/lib/node_modules/@zonease/aiworker-cli/dist/aiworker-bun.js start --port 9217')).toBe(true)
+    expect(isManagedWorkerCliCommand('/opt/aiworker/aiworker-linux-x64 start')).toBe(true)
+    expect(isManagedWorkerCliCommand('/usr/local/bin/bun /usr/local/bin/aiworker daemon foreground')).toBe(true)
+    // Reused pid landing on an unrelated process must NOT count as a worker CLI → reclaimable.
+    expect(isManagedWorkerCliCommand('node /home/me/foo.js')).toBe(false)
+    expect(isManagedWorkerCliCommand('/usr/bin/some-editor')).toBe(false)
+    // Host CLI and dev/source are still excluded.
+    expect(isManagedWorkerCliCommand('bun /x/aiworker-host-bun.js daemon foreground')).toBe(false)
+    expect(isManagedWorkerCliCommand('bun apps/worker-cli/src/aiworker.ts start')).toBe(false)
+    expect(isManagedWorkerCliCommand(null)).toBe(false)
+  })
+
+  it('never mistakes the host daemon or dev-source for a managed worker daemon', () => {
+    // Host daemon bundle: identical shape, different bundle — must NOT match.
+    expect(isManagedWorkerDaemonCommand('bun /usr/local/lib/node_modules/@zonease/aiworker-host-cli/dist/aiworker-host-bun.js daemon foreground')).toBe(false)
+    // dev/source checkout is never a managed daemon.
+    expect(isManagedWorkerDaemonCommand('bun apps/worker-cli/src/aiworker.ts daemon foreground --port 9217')).toBe(false)
+    expect(isManagedWorkerDaemonCommand('bun apps/worker-cli/src/aiworker.ts dev --port 9217')).toBe(false)
+    // wrong subcommand order or missing foreground.
+    expect(isManagedWorkerDaemonCommand('/opt/aiworker/aiworker-linux-x64 foreground daemon')).toBe(false)
+    expect(isManagedWorkerDaemonCommand('/usr/local/bin/aiworker dev')).toBe(false)
+    expect(isManagedWorkerDaemonCommand(null)).toBe(false)
+    expect(isManagedWorkerDaemonCommand('')).toBe(false)
   })
 
   it('reads absent daily notice state as ready for a check', () => {
