@@ -1190,6 +1190,103 @@ describe('LocalWorkerRuntime', () => {
     })
   })
 
+  it('resumes from the latest prior invocation that has a session ref, skipping ref-less invocations', async () => {
+    // Regression: a ref-less prior invocation (failed/cancelled before capturing a native
+    // thread, or still running) must NOT shadow the latest captured session ref. Resolving
+    // the resume ref by latest-by-seq and accepting its null ref wedges every subsequent
+    // turn (ENGINE_SESSION_REF_MISSING) — each failed turn then persists ref-less too, so the
+    // next turn picks IT and also throws. The resolution walks back to the latest prior
+    // invocation that actually has a ref. This is the mechanism behind EB-1's turn-N self-heal.
+    const callOrder: string[] = []
+    const workerRuntime = new LocalWorkerRuntime({
+      worker: { id: 'worker-demo', appId: 'demo-soul', name: 'Demo', defaultEngineId: 'codex' },
+      workspacesRoot: join(dir, 'workers', 'worker-demo', 'workspaces'),
+      now,
+      executor: {
+        async invoke() {
+          throw new Error('executor fallback should not run when engine bridge is configured')
+        },
+      },
+      engineBridge: {
+        adapters: [{
+          target: 'codex',
+          async cancel() {
+            return {}
+          },
+          async discover() {
+            return { callable: true, installed: true, supportsNativeResume: true, target: 'codex' }
+          },
+          async followUp(request: Record<string, unknown>) {
+            callOrder.push('adapter.followUp')
+            // Walk-back skips the ref-less seq-2 and resolves the seq-1 captured ref.
+            expect(request.externalSessionRef).toEqual({ id: 'native-thread-1', target: 'codex' })
+            return {
+              externalSessionRef: { id: 'native-thread-3', target: 'codex' },
+              metadata: { executionSource: 'engine-bridge' },
+              processHandle: { invocationId: request.invocationId, pid: 303 },
+              summary: 'Bridge follow-up after a ref-less invocation.',
+            }
+          },
+          normalize() {
+            return []
+          },
+          async start() {
+            throw new Error('follow-up should not start a fresh native session')
+          },
+        }],
+        projectionReceipts: {
+          async assertUsable() {},
+        },
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Ref Walkback Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      title: 'Ref walkback session',
+    })
+    // seq 1: a succeeded codex invocation that captured native-thread-1.
+    createEngineInvocation({
+      id: 'walkback-succeeded-1',
+      sessionId: session.id,
+      seq: 1,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/walkback-succeeded-1/input`,
+      metadataJson: {
+        externalSessionRef: { id: 'native-thread-1', target: 'codex' },
+      },
+      processState: 'exited',
+      status: 'succeeded',
+    })
+    // seq 2: a higher-seq codex invocation that failed before capturing a ref. It must not
+    // shadow native-thread-1 when the next follow-up resolves its resume ref.
+    createEngineInvocation({
+      id: 'walkback-failed-2',
+      sessionId: session.id,
+      seq: 2,
+      engineId: 'codex',
+      engineCommand: 'codex',
+      inputRef: `aiworker://sessions/${session.id}/invocations/walkback-failed-2/input`,
+      processState: 'not_spawned',
+      status: 'failed',
+    })
+
+    const result = await workerRuntime.startInvocation({
+      sessionId: session.id,
+      input: 'Continue after a ref-less invocation.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(callOrder).toContain('adapter.followUp')
+    expect(result.invocation.seq).toBe(3)
+    expect(result.invocation).toMatchObject({
+      externalSessionRef: expect.stringContaining('native-thread-3'),
+      status: 'succeeded',
+    })
+  })
+
   it('records missing native session refs as not-spawned bridge failures', async () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({

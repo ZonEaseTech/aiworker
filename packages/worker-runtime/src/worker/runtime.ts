@@ -994,7 +994,7 @@ export class LocalWorkerRuntime {
       },
       projectionReceipts: bridgeOptions.projectionReceipts,
       rawChunkStore: bridgeOptions.rawChunkStore,
-      resolveLatestExternalSessionRef: async () => (allowResume ? latestExternalSessionRef(previousInvocation) : null),
+      resolveLatestExternalSessionRef: async () => (allowResume ? latestPriorExternalSessionRef(input.session.id, input.invocation.seq, input.sessionEngine.engineId) : null),
     })
     const request = {
       cwd: input.workspace.rootPath,
@@ -1755,6 +1755,26 @@ function parseExternalSessionRef(value: string | null): unknown {
   catch {
     return value
   }
+}
+
+// Resume resolves the latest prior invocation that actually captured a session ref, walking
+// back past ref-less invocations (failed/cancelled before `thread.started`, or still running).
+// Taking the latest-by-seq prior and accepting its null ref would wedge every subsequent turn
+// for native-resume engines: a failed turn persists ref-less, the next turn picks IT and also
+// throws ENGINE_SESSION_REF_MISSING, cascading forever. The walk-back is the mechanism behind
+// the turn-N self-heal. NOTE (scoped out): when NO prior has a ref at all, a native-resume
+// engine still hits followUp+null at the bridge guard; that start-fresh fallback is a separate
+// engine-bridge change, not this resolution.
+function latestPriorExternalSessionRef(sessionId: string, beforeSeq: number, engineId: string): unknown {
+  const priors = listEngineInvocations(sessionId)
+    .filter(invocation => invocation.seq < beforeSeq && invocation.engineId === engineId && !isInternalEngineInvocation(invocation))
+    .sort((left, right) => right.seq - left.seq)
+  for (const invocation of priors) {
+    const ref = latestExternalSessionRef(invocation)
+    if (ref)
+      return ref
+  }
+  return null
 }
 
 function createLocalExecutorBridgeOptions(
