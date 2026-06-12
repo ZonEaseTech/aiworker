@@ -43,6 +43,7 @@ export const de = {
     available: 'verfügbar',
     comingSoon: 'bald verfügbar',
     interface: 'Oberfläche',
+    installed: 'installiert',
     notInstalled: 'nicht installiert',
     workspace: 'Workspace',
   },

@@ -43,6 +43,7 @@ export const zhCN = {
     available: '可用',
     comingSoon: '即将推出',
     interface: '界面',
+    installed: '已安装',
     notInstalled: '未安装',
     workspace: '工作区',
   },

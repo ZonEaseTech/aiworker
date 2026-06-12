@@ -43,6 +43,7 @@ export const ja = {
     available: '利用可能',
     comingSoon: '近日対応',
     interface: 'インターフェース',
+    installed: 'インストール済み',
     notInstalled: '未インストール',
     workspace: 'ワークスペース',
   },

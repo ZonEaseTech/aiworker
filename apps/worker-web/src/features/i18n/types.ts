@@ -46,6 +46,7 @@ export interface StaticMessages {
     available: string
     comingSoon: string
     interface: string
+    installed: string
     notInstalled: string
     workspace: string
   }

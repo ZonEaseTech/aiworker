@@ -41,6 +41,7 @@ export const en = {
     available: 'available',
     comingSoon: 'coming soon',
     interface: 'Interface',
+    installed: 'installed',
     notInstalled: 'not installed',
     workspace: 'Workspace',
   },

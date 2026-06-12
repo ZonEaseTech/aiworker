@@ -984,7 +984,7 @@ function ExecutionConfigPanel({
                     >
                       <span className="flex-1 truncate">{engine.id}</span>
                       {engine.installed
-                        ? <Badge variant="outline" className="shrink-0 text-xs">installed</Badge>
+                        ? <Badge variant="outline" className="shrink-0 text-xs">{copy.common.installed}</Badge>
                         : <Badge variant="secondary" className="shrink-0 text-xs">{copy.common.notInstalled}</Badge>}
                     </button>
                   ))}
