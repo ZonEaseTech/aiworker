@@ -558,6 +558,152 @@ describe('aiworker local CLI', () => {
       .toMatchObject({ type: 'freeform', workerId: 'fleet-fallback-worker' })
   })
 
+  // --- Bug-1: per-worker home resolution for session-/invocation-keyed commands ---
+  // Make the root home DB exist (mirrors a prior root-home op / zero-config
+  // `aiworker start`). With it present, `ensureDefaultDb` opens the root home — not
+  // the fleet default — so a row that lives in a per-worker fleet home is invisible
+  // to the old root-home lookup. This is the precise Bug-1 reproduction.
+  function seedEmptyRootHomeDb(): void {
+    closeWorkerDb()
+    mkdirSync(path.dirname(process.env.WORKER_DB_PATH!), { recursive: true })
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    runWorkerMigrations()
+    closeWorkerDb()
+  }
+
+  // Register one or more workers in fleet.json so the home scan can walk them.
+  function writeFleetIndex(workerIds: string[], defaultId = workerIds[0]): void {
+    writeFileSync(path.join(process.env.AIWORKER_HOME!, 'fleet.json'), `${JSON.stringify({
+      default: defaultId ?? null,
+      version: 1,
+      workers: workerIds.map((id, index) => ({
+        app: FREEFORM_APP_ID,
+        createdAt: '2026-06-12T00:00:00.000Z',
+        home: path.join('workers', id),
+        id,
+        port: 9217 + index,
+      })),
+    }, null, 2)}\n`)
+  }
+
+  // Hand-seed a worker + workspace + session (+ optional running invocation) directly
+  // into a per-worker fleet home DB — engine-free; `runtime.init()` tolerates a null
+  // engine-asset source, so cancel/reconcile work without an enabled app.
+  function seedFleetHomeSession(opts: { workerId: string, sessionId: string, workspaceId?: string, invocationId?: string }): { workspaceId: string } {
+    const workspaceId = opts.workspaceId ?? `${opts.workerId}-ws`
+    const home = path.join(process.env.AIWORKER_HOME!, 'workers', opts.workerId)
+    closeWorkerDb()
+    mkdirSync(home, { recursive: true })
+    initWorkerDb(path.join(home, 'aiworker.db'))
+    runWorkerMigrations()
+    upsertWorker({ id: opts.workerId, appId: FREEFORM_APP_ID, name: opts.workerId, status: 'active' })
+    createWorkspace({
+      id: workspaceId,
+      workerId: opts.workerId,
+      name: workspaceId,
+      rootPath: path.join(home, 'workspaces', workspaceId),
+      at: '2026-06-12T00:00:00.000Z',
+    })
+    createSession({
+      id: opts.sessionId,
+      workerId: opts.workerId,
+      workspaceId,
+      title: 'Seeded session',
+      metadataJson: {},
+      at: '2026-06-12T00:00:01.000Z',
+    })
+    if (opts.invocationId) {
+      createEngineInvocation({
+        engineCommand: 'codex',
+        engineId: 'codex',
+        id: opts.invocationId,
+        inputRef: `aiworker://sessions/${opts.sessionId}/invocations/${opts.invocationId}/input`,
+        processState: 'spawned',
+        seq: 1,
+        sessionId: opts.sessionId,
+        status: 'running',
+      })
+    }
+    closeWorkerDb()
+    return { workspaceId }
+  }
+
+  it('Bug-1: resolves a per-worker fleet-home session for `session invoke` without --worker', async () => {
+    await writeFakeCodexCommand()
+    seedEmptyRootHomeDb()
+    expect(await runCli(argv('worker', 'create', 'invoke-fleet', '--name', 'Invoke Fleet', '--app', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'WS', '--type', 'freeform', '--worker', 'invoke-fleet'))).toBe(0)
+    const workspaceId = (JSON.parse(output) as { workspace: { id: string } }).workspace.id
+    output = ''
+    expect(await runCli(argv('session', 'start', '--worker', 'invoke-fleet', '--workspace', workspaceId, '--title', 'Turn one', '--input', 'hello'))).toBe(0)
+    const sessionId = (JSON.parse(output) as { session: { id: string } }).session.id
+    output = ''
+
+    // No --worker: the session lives in invoke-fleet's per-worker home. The old
+    // root-home lookup returned `session not found`; resolveSessionHome must find it.
+    expect(await runCli(argv('session', 'invoke', '--session', sessionId, '--input', 'again'))).toBe(0)
+    expect((JSON.parse(output) as { invocation: { sessionId: string } }).invocation.sessionId).toBe(sessionId)
+  })
+
+  it('Bug-1: resolves session-keyed `show`/`archive`/`delete` in a fleet home without --worker', async () => {
+    seedEmptyRootHomeDb()
+    writeFleetIndex(['solo-w'])
+    seedFleetHomeSession({ workerId: 'solo-w', sessionId: 'solo-session' })
+
+    expect(await runCli(argv('session', 'show', 'solo-session'))).toBe(0)
+    expect((JSON.parse(output) as { session: { id: string } }).session.id).toBe('solo-session')
+    output = ''
+    expect(await runCli(argv('session', 'archive', 'solo-session'))).toBe(0)
+    expect((JSON.parse(output) as { session: { status: string } }).session.status).toBe('archived')
+    output = ''
+    expect(await runCli(argv('session', 'delete', 'solo-session'))).toBe(0)
+    expect((JSON.parse(output) as { deleted: boolean }).deleted).toBe(true)
+  })
+
+  it('Bug-1 (C2): resolves invocation-keyed `events`/`cancel` in a fleet home without --worker', async () => {
+    seedEmptyRootHomeDb()
+    writeFleetIndex(['inv-w'])
+    seedFleetHomeSession({ workerId: 'inv-w', sessionId: 'inv-session', invocationId: 'inv-1' })
+
+    expect(await runCli(argv('session', 'events', 'inv-1'))).toBe(0)
+    expect((JSON.parse(output) as { invocation: { id: string } }).invocation.id).toBe('inv-1')
+    output = ''
+    expect(await runCli(argv('session', 'cancel', 'inv-1', '--reason', 'operator cancel'))).toBe(0)
+    expect((JSON.parse(output) as { invocation: { id: string } }).invocation.id).toBe('inv-1')
+  })
+
+  it('Bug-1 (M2): scans past the default home and keeps the hit home open for the ensuing runtime read', async () => {
+    // Two fleet homes; root db present so the scan starts at root. The target
+    // invocation lives in the EARLIER fleet home, with a LATER fleet home that a
+    // buggy "scan-all-then-return" would leave open instead. `session reconcile`
+    // does a second DB read (getSession) AND builds a runtime AFTER resolution —
+    // both must run against the hit home, so success proves the handle was not
+    // clobbered by continuing the scan.
+    seedEmptyRootHomeDb()
+    writeFleetIndex(['target-early', 'other-late'])
+    seedFleetHomeSession({ workerId: 'target-early', sessionId: 'm2-session', invocationId: 'm2-inv' })
+    // a registered later home that exists but holds none of the target rows
+    seedFleetHomeSession({ workerId: 'other-late', sessionId: 'decoy-session' })
+
+    expect(await runCli(argv('session', 'reconcile', 'm2-inv', '--state', 'lost'))).toBe(0)
+    const reconciled = JSON.parse(output) as { invocation: { id: string }, session: { id: string } }
+    expect(reconciled.invocation.id).toBe('m2-inv')
+    expect(reconciled.session.id).toBe('m2-session')
+  })
+
+  it('Bug-1: session-/invocation-keyed commands error clearly when the id is absent from every home', async () => {
+    seedEmptyRootHomeDb()
+    writeFleetIndex(['only-w'])
+    seedFleetHomeSession({ workerId: 'only-w', sessionId: 'present-session', invocationId: 'present-inv' })
+
+    expect(await runCli(argv('session', 'invoke', '--session', 'no-such-session', '--input', 'x'))).toBe(1)
+    expect(errorOutput).toContain('session not found')
+    errorOutput = ''
+    expect(await runCli(argv('session', 'events', 'no-such-invocation'))).toBe(1)
+    expect(errorOutput).toContain('invocation not found')
+  })
+
   it('generates a worker id when creating a fleet worker from a Soul app', async () => {
     expect(await runCli(argv('worker', 'create', '--name', 'Generated Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     const created = JSON.parse(output) as { worker: { home: string, id: string, workerId: string } }

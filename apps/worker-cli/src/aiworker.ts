@@ -814,14 +814,84 @@ async function resolveWorkerTarget(workerOpt?: string): Promise<{ paths: LocalPa
   throw new Error('no active worker; run `aiworker worker create` or pass --worker')
 }
 
-async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerRuntime> {
-  const { paths, worker } = await resolveWorkerTarget(options.worker)
+// Build a runtime against an ALREADY-resolved home/worker. Split out of
+// `ensureRuntime` so the session-/invocation-keyed commands (Bug-1) can build their
+// runtime from the home that `resolveSessionHome`/`resolveInvocationHome` left open,
+// without re-running `resolveWorkerTarget`/`ensureDefaultDb` (which would reopen the
+// root/default home and reintroduce the wrong-home bug). Operates purely on the
+// global SQLite singleton the caller left open — it never reopens a different home.
+async function buildRuntimeFromPaths(paths: LocalPaths, worker: WorkerRow, options: { requireEnabledApp?: boolean } = {}): Promise<LocalWorkerRuntime> {
   const host = createHost(paths)
   if (options.requireEnabledApp)
     host.requireEnabledAppForWorker(worker.id)
   const runtime = host.createRuntimeForWorker(worker)
   await runtime.init()
   return runtime
+}
+
+async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerRuntime> {
+  const { paths, worker } = await resolveWorkerTarget(options.worker)
+  return buildRuntimeFromPaths(paths, worker, { requireEnabledApp: options.requireEnabledApp })
+}
+
+// Resolve the per-worker home that owns a session- or invocation-keyed row. Mirrors
+// `resolveWorkerTarget`'s reopen-by-home pattern but keys by the row id instead of a
+// worker id: `worker create` builds each worker in its own fleet home, so a session
+// or invocation lives in that home's DB — not the root/default home `ensureDefaultDb`
+// opens. Session/invocation ids are `randomUUID()` (globally unique), so scanning
+// every fleet home can never resolve the wrong worker's row.
+//
+// DB-handle hazard (M2): `ensureDbAt` reopens the global SQLite singleton
+// (`initWorkerDb` force-closes the prior handle). The scan therefore STOPS on the hit
+// home and leaves THAT home's DB open, so the caller's ensuing `getSession`/runtime
+// read runs against the correct, open handle — never a later-scanned or closed one.
+// Callers MUST build the runtime from the returned `paths` (via `buildRuntimeFromPaths`),
+// never re-`ensureDefaultDb`/`resolveWorkerTarget`.
+async function scanHomesForRow<TRow>(
+  id: string,
+  workerOpt: string | undefined,
+  lookup: () => TRow | null | undefined,
+  label: 'invocation' | 'session',
+): Promise<{ paths: LocalPaths, row: TRow }> {
+  // Explicit `--worker`: open that worker's home directly and look up there.
+  if (workerOpt) {
+    const { paths } = await resolveWorkerTarget(workerOpt)
+    const row = lookup()
+    if (row)
+      return { paths, row }
+    throw new Error(`${label} not found: ${id}`)
+  }
+
+  // Standalone: probe the current/default home first.
+  const currentPaths = await ensureDefaultDb()
+  const currentRow = lookup()
+  if (currentRow)
+    return { paths: currentPaths, row: currentRow }
+
+  // Fleet scan: walk every registered home; stop on the hit and leave its DB open.
+  const root = fleetRootDir()
+  const index = readFleet(root)
+  for (const worker of index.workers) {
+    const fleetPaths = fleetWorkerPaths(root, worker)
+    if (path.resolve(fleetPaths.dbPath) === path.resolve(currentPaths.dbPath))
+      continue
+    await ensureDbAt(fleetPaths)
+    const row = lookup()
+    if (row)
+      return { paths: fleetPaths, row }
+  }
+
+  throw new Error(`${label} not found: ${id}`)
+}
+
+async function resolveSessionHome(sessionId: string, workerOpt?: string): Promise<{ paths: LocalPaths, session: NonNullable<ReturnType<typeof getSession>> }> {
+  const { paths, row } = await scanHomesForRow(sessionId, workerOpt, () => getSession(sessionId), 'session')
+  return { paths, session: row }
+}
+
+async function resolveInvocationHome(invocationId: string, workerOpt?: string): Promise<{ invocation: NonNullable<ReturnType<typeof getEngineInvocation>>, paths: LocalPaths }> {
+  const { paths, row } = await scanHomesForRow(invocationId, workerOpt, () => getEngineInvocation(invocationId), 'invocation')
+  return { invocation: row, paths }
 }
 
 async function ensureAllWorkers(): Promise<WorkerRow[]> {
@@ -2357,12 +2427,9 @@ async function startSessionCommand(opts: { engine?: string, input?: string, mode
 }
 
 async function resolveSessionContinuationContext(opts: SessionContinuationCommandOptions): Promise<SessionContinuationContext> {
-  await ensureDefaultDb()
   const sessionId = requireText(opts.session, 'session')
-  const session = getSession(sessionId)
-  if (!session)
-    throw new Error(`session not found: ${sessionId}`)
-  const runtime = await ensureRuntime({ requireEnabledApp: true, worker: opts.worker ?? session.workerId })
+  const { paths, session } = await resolveSessionHome(sessionId, opts.worker)
+  const runtime = await buildRuntimeFromPaths(paths, requireWorkerRow(session.workerId), { requireEnabledApp: true })
   const engineMetadata = resolveInvocationEngineMetadata(session.metadataJson)
   const frozen = readFrozenSessionEngine(session.metadataJson)
   const needsLegacyEngineRepair = frozen?.executionMode === 'local-cli' && frozen.engineCommand !== engineMetadata.engineCommand
@@ -2417,22 +2484,16 @@ async function listSessionCommand(opts: { workspace?: string }): Promise<void> {
   printJson({ sessions: listSessions(opts.workspace) })
 }
 
-async function showSession(id: string): Promise<void> {
-  await ensureAllWorkers()
+async function showSession(id: string, opts: { worker?: string } = {}): Promise<void> {
+  const { session } = await resolveSessionHome(id, opts.worker)
   printJson({
     invocations: listEngineInvocations(id).sort((left, right) => left.seq - right.seq),
-    session: getSession(id),
+    session,
   })
 }
 
 async function showInvocationEventsCommand(invocationId: string, opts: { after?: number[], limit?: number[], worker?: string }): Promise<void> {
-  if (opts.worker)
-    await resolveWorkerTarget(opts.worker)
-  else
-    await ensureAllWorkers()
-  const invocation = getEngineInvocation(invocationId)
-  if (!invocation)
-    throw new Error(`invocation not found: ${invocationId}`)
+  const { invocation } = await resolveInvocationHome(invocationId, opts.worker)
   const after = optionalNumber(opts.after)
   const limit = optionalNumber(opts.limit)
   const events = listSessionEvents(invocation.sessionId, {
@@ -2451,14 +2512,11 @@ async function showInvocationEventsCommand(invocationId: string, opts: { after?:
 }
 
 async function cancelInvocationCommand(invocationId: string, opts: { reason?: string, worker?: string }): Promise<void> {
-  await ensureAllWorkers()
-  const invocation = getEngineInvocation(invocationId)
-  if (!invocation)
-    throw new Error(`invocation not found: ${invocationId}`)
+  const { paths, invocation } = await resolveInvocationHome(invocationId, opts.worker)
   const session = getSession(invocation.sessionId)
   if (!session)
     throw new Error(`session not found: ${invocation.sessionId}`)
-  const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
+  const runtime = await buildRuntimeFromPaths(paths, requireWorkerRow(session.workerId))
   const result = await runtime.cancelEngineInvocation(invocation.id, opts.reason ? { reason: opts.reason } : {})
   printJson({
     invocation: result.invocation,
@@ -2467,14 +2525,11 @@ async function cancelInvocationCommand(invocationId: string, opts: { reason?: st
 }
 
 async function reconcileInvocationCommand(invocationId: string, opts: { diagnostic?: string, state?: string, worker?: string }): Promise<void> {
-  await ensureAllWorkers()
-  const invocation = getEngineInvocation(invocationId)
-  if (!invocation)
-    throw new Error(`invocation not found: ${invocationId}`)
+  const { paths, invocation } = await resolveInvocationHome(invocationId, opts.worker)
   const session = getSession(invocation.sessionId)
   if (!session)
     throw new Error(`session not found: ${invocation.sessionId}`)
-  const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
+  const runtime = await buildRuntimeFromPaths(paths, requireWorkerRow(session.workerId))
   const result = await runtime.reconcileEngineInvocation(invocation.id, {
     ...(opts.state ? { state: opts.state as 'exited' | 'killed' | 'lost' | 'not_spawned' | 'spawned' } : {}),
     ...(opts.diagnostic ? { diagnostic: opts.diagnostic } : {}),
@@ -2485,19 +2540,13 @@ async function reconcileInvocationCommand(invocationId: string, opts: { diagnost
   })
 }
 
-async function archiveSessionCommand(id: string): Promise<void> {
-  await ensureDefaultDb()
-  const session = getSession(id)
-  if (!session)
-    throw new Error(`session not found: ${id}`)
+async function archiveSessionCommand(id: string, opts: { worker?: string } = {}): Promise<void> {
+  const { session } = await resolveSessionHome(id, opts.worker)
   printJson({ session: updateSession({ id: session.id, status: 'archived' }) })
 }
 
-async function deleteSessionCommand(id: string): Promise<void> {
-  await ensureDefaultDb()
-  const session = getSession(id)
-  if (!session)
-    throw new Error(`session not found: ${id}`)
+async function deleteSessionCommand(id: string, opts: { worker?: string } = {}): Promise<void> {
+  const { session } = await resolveSessionHome(id, opts.worker)
   deleteSession(session.id)
   printJson({ deleted: true, session })
 }
