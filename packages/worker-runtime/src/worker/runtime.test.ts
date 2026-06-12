@@ -1009,6 +1009,44 @@ describe('LocalWorkerRuntime', () => {
     })
   })
 
+  it('allows byok invocations even when workspace projection receipt freshness marker would be stale for native engine targets', async () => {
+    // BYOK 不依赖工作区投影（不启动本地 CLI），不应被收据守卫拦截。
+    // 即便工作区收据的 freshness marker 是为 codex/claude-code 计算的，
+    // byok 模式也应跳过检查、直接成功。
+    const appRoot = join(dir, 'souls', 'demo-soul-app-byok-receipt-skip')
+    await writeProfileEngineAssets(appRoot)
+    const executorInputs: string[] = []
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke(input) {
+        executorInputs.push(input.invocationId)
+        return { summary: 'byok ran' }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'BYOK Receipt Skip Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      title: 'BYOK receipt skip session',
+    })
+
+    // 使用 byok executionMode：receipt 守卫应被跳过，执行器直接运行。
+    const result = await workerRuntime.startInvocation({
+      sessionId: session.id,
+      input: 'Run via BYOK regardless of projection receipt state.',
+      engineId: 'openai-compatible',
+      metadata: { executionMode: 'byok', byok: { apiKeyRef: 'env:DUMMY_KEY', baseUrl: 'http://127.0.0.1:0', model: 'stub-001', provider: 'openai-compatible' } },
+    })
+
+    expect(executorInputs).toEqual([result.invocation.id])
+    expect(result.invocation).toMatchObject({
+      processState: 'exited',
+      status: 'succeeded',
+      summary: 'byok ran',
+    })
+    // 确认没有收据类错误
+    expect(result.invocation.failureCode).toBeNull()
+  })
+
   it('starts first session-level engine invocations through the engine bridge when adapters are configured', async () => {
     const callOrder: string[] = []
     const workerRuntime = new LocalWorkerRuntime({
