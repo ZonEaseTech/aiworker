@@ -1,8 +1,15 @@
 name: release
 
+# Tag schemes (independent per-line release + legacy combined):
+#   worker-v<version>  -> publish @zonease/aiworker-cli only (release-worker job)
+#   host-v<version>    -> publish @zonease/aiworker-host-cli only (release-host job)
+#   v<version>         -> legacy combined: publish both (backward compatible)
+# npm dist-tag is derived from <version>: a SemVer prerelease (-rc.N/-beta.N) -> that
+# channel; a clean version -> latest. So worker GA = push `worker-v1.0.0` (moves only
+# worker-cli's latest), host stays on its own `host-v*` cadence.
 on:
   push:
-    tags: ['v*']
+    tags: ['v*', 'worker-v*', 'host-v*']
 
 permissions:
   contents: write
@@ -10,6 +17,7 @@ permissions:
 
 jobs:
   release-worker:
+    if: ${{ startsWith(github.ref_name, 'worker-v') || startsWith(github.ref_name, 'v') }}
     runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: --max-old-space-size=1024
@@ -33,14 +41,14 @@ jobs:
       - name: Assert git tag matches worker-cli version
         run: |
           set -euo pipefail
-          tag_version="${GITHUB_REF_NAME#v}"
+          version="${GITHUB_REF_NAME#worker-v}"; version="${version#host-v}"; version="${version#v}"
           worker_version="$(node -p "require('./apps/worker-cli/package.json').version")"
-          if [[ "$tag_version" != "$worker_version" ]]; then
-            echo "git tag/worker-cli version mismatch — tag=$tag_version worker-cli=$worker_version" >&2
+          if [[ "$version" != "$worker_version" ]]; then
+            echo "git tag/worker-cli version mismatch — tag=$version worker-cli=$worker_version" >&2
             echo "tag name and worker-cli package.json version must agree before publish" >&2
             exit 1
           fi
-          echo "git tag matches worker-cli version: $tag_version"
+          echo "git tag matches worker-cli version: $version"
 
       - name: Release check
         run: bun run release:check
@@ -63,18 +71,19 @@ jobs:
         id: channel
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
-          if [[ "$tag" == *-* ]]; then
-            channel="$(printf '%s' "$tag" | sed -E 's/^v[0-9]+\.[0-9]+\.[0-9]+-([A-Za-z]+).*/\1/')"
+          version="${GITHUB_REF_NAME#worker-v}"; version="${version#host-v}"; version="${version#v}"
+          if [[ "$version" == *-* ]]; then
+            channel="${version#*-}"; channel="${channel%%.*}"; prerelease=true
           else
-            channel="latest"
+            channel="latest"; prerelease=false
           fi
           if [[ -z "$channel" ]]; then
-            echo "could not derive npm dist-tag from git tag: $tag" >&2
+            echo "could not derive npm dist-tag from git tag: $GITHUB_REF_NAME" >&2
             exit 1
           fi
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "npm dist-tag for $tag => $channel"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "npm dist-tag for $GITHUB_REF_NAME => $channel (prerelease=$prerelease)"
 
       - name: Publish to npm
         working-directory: apps/worker-cli/dist
@@ -86,7 +95,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           fail_on_unmatched_files: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ steps.channel.outputs.prerelease }}
           files: |
             aiworker-linux-x64.tar.gz
             aiworker-linux-arm64.tar.gz
@@ -98,6 +107,7 @@ jobs:
             aiworker-darwin-arm64.tar.gz.sha256
 
   release-host:
+    if: ${{ startsWith(github.ref_name, 'host-v') || startsWith(github.ref_name, 'v') }}
     runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: --max-old-space-size=1024
@@ -121,14 +131,14 @@ jobs:
       - name: Assert git tag matches host-cli version
         run: |
           set -euo pipefail
-          tag_version="${GITHUB_REF_NAME#v}"
+          version="${GITHUB_REF_NAME#worker-v}"; version="${version#host-v}"; version="${version#v}"
           host_version="$(node -p "require('./apps/host-cli/package.json').version")"
-          if [[ "$tag_version" != "$host_version" ]]; then
-            echo "git tag/host-cli version mismatch — tag=$tag_version host-cli=$host_version" >&2
+          if [[ "$version" != "$host_version" ]]; then
+            echo "git tag/host-cli version mismatch — tag=$version host-cli=$host_version" >&2
             echo "tag name and host-cli package.json version must agree before publish" >&2
             exit 1
           fi
-          echo "git tag matches host-cli version: $tag_version"
+          echo "git tag matches host-cli version: $version"
 
       - name: Phase 2 release check
         run: bun run release:check:phase2
@@ -137,18 +147,18 @@ jobs:
         id: channel
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
-          if [[ "$tag" == *-* ]]; then
-            channel="$(printf '%s' "$tag" | sed -E 's/^v[0-9]+\.[0-9]+\.[0-9]+-([A-Za-z]+).*/\1/')"
+          version="${GITHUB_REF_NAME#worker-v}"; version="${version#host-v}"; version="${version#v}"
+          if [[ "$version" == *-* ]]; then
+            channel="${version#*-}"; channel="${channel%%.*}"
           else
             channel="latest"
           fi
           if [[ -z "$channel" ]]; then
-            echo "could not derive npm dist-tag from git tag: $tag" >&2
+            echo "could not derive npm dist-tag from git tag: $GITHUB_REF_NAME" >&2
             exit 1
           fi
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "npm dist-tag for $tag => $channel"
+          echo "npm dist-tag for $GITHUB_REF_NAME => $channel"
 
       - name: Publish Host CLI to npm
         working-directory: apps/host-cli/dist

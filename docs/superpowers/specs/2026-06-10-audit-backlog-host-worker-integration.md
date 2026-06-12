@@ -45,6 +45,31 @@
 - **建议**:维持 low,作已记录的 Layer-2 项跟踪。实现时优先 (a) refresh handshake(持有效 access token 的 Worker 在过期前 mint 后继)或 (b) 更长/rolling access-token TTL 与 provision-token TTL 解耦 —— **不要**延长 single-use provision-token TTL 来掩盖。修正跟踪笔记引用两个独立常量(DEFAULT_TOKEN_TTL_MS for provision、DEFAULT_ACCESS_TOKEN_TTL_MS for access)。
 - **状态**:⬜ 待办(已记于项目记忆 tunnel-restart-resilience 作 deferred Layer-2;Phase 2.1 已在生产故悬崖可达)。
 
+## 2026-06-12 再审计新增(切片 2 Host 真分发 #29-#35 落地后,边界双审 APPROVE,新增 3 项)
+
+> 切片 2 边界 HOLD(详见 `docs/superpowers/specs/2026-06-12-three-line-dev-orchestration.md` §4)。以下非边界侵蚀,是分发凭证流转引入的新待办。
+
+### SLICE2-SEC-1 · org-key 模式把 org key 原样发给每个 worker,无 per-worker 撤销 `[high(Phase-2激活)/N/A(standalone)][insecure-design][⬜ gate 在切片 3]`
+
+- **现状/问题**:切片 2 只发 org-key 适配器(per-worker virtual key 推迟切片 3)。org-key 模式下 worker 拿到的是 **org key 本身**(非派生/限域/短 TTL token);一台 worker 被攻破 = 整个 org key 沦陷,只能全员轮换。**已诚实声明**(broker 注释 + `revoke()` 返回 `supported:false`)、secret 仅内存不落盘(边界 HOLD),破的是 blast radius。
+- **证据**:`apps/host-cli/src/host-credential-broker.ts:110-117`(verbatim mint)、`:119-128`(revoke unsupported);注入 `packages/worker-daemon/src/modes/worker/engine-credential-store.ts:96-108`。
+- **建议/部署门**:**别把 Phase-2 分发放给真实「不可信」员工,直到切片 3(LiteLLM per-worker key:真签发/真撤销/短 TTL/限额)落地**(计划 `#34`,接口 drop-in 可换、无需改协议)。可信/自己范围内跑无妨;一旦发给真员工,这是 HIGH,gate 在切片 3。
+- **状态**:⬜ gate 在切片 3。standalone v1 无此暴露(broker env-gated 关着)。
+
+### SLICE2-SEC-2 · redactor 对「裸 token 值、无关键字/无 sk- 形态」的日志行不脱敏 `[medium潜伏][logging][⬜ 切片3前]`
+
+- **现状/问题**:`SECRET_VALUE_RE` 对带载体名(`ANTHROPIC_AUTH_TOKEN=…`)或 `sk-` 形态的能脱敏;但引擎(claude `--permission-mode bypassPermissions`)若把**裸 token 值**单独 echo 进持久 stdout.log、无邻近关键字/已知形态,则不脱敏。org-key v1 token 是 `sk-ant-…`(被认出)故**今天不可达**;切片 3 的非-sk opaque gateway token 上线时变 live。
+- **证据**:redaction `packages/engine-bridge/src/index.ts:54-55`;持久 `packages/worker-runtime/src/worker/executor.ts:322-323`。
+- **建议**:切片 3(或任何 opaque-token 适配器)上线时,把 gateway-token 格式加进 `SECRET_FORMAT_ALTERNATION` 单一真源,或让 store 用字段级 redactor 注册 live token 值(同 `redactWorkerAccessToken` 对无前缀 access token 的做法)。
+- **状态**:⬜ 切片 3 前必清(今天不可达)。
+
+### PROTO-1 · `soulDescriptor` 的 `.strict()` 反向不兼容靠 provision-only/single-shot check-in 才不可达,是隐式不变量 `[low][doc][⬜ 待办]`
+
+- **现状/问题**:协议 `soulDescriptor` 是 `.strict()` 下的 optional 字段;旧-Worker→新-Host 方向理论上会因 unknown key 抛——但当前 check-in 是 provision-only、single-shot(provision token 单次消费,重启走持久 access token 跳过 check-in),只有 first-provision 解析 receipt、按构造是当前版 worker,故**不可达**。这是隐式不变量:未来把 check-in 改成 reconnect 可重跑会悄悄把它变 MEDIUM break。
+- **证据**:`packages/worker-control-protocol/src/index.ts:56-59`;reachability 见 `host-server.ts:820`(token 单次消费)+ `provision-client.ts:316-332`(重启跳 check-in)。
+- **建议**:在协议注释里写明此 reachability 论证(把隐式不变量显式化),防未来重构踩坑。
+- **状态**:⬜ 待办(low,文档项)。
+
 ## 附录:已驳回(本线相关)
 
 本线无被 verify 驳回的 finding。

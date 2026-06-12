@@ -24,25 +24,29 @@ description: "Use inside an AIWorker checkout when a releasable change is ready 
 
 ## 不变量（违反即停，先回到这里对照）
 
-- **可发布包只有两个，永远同版本号同步发**：`@zonease/aiworker-cli`（`apps/worker-cli`）、`@zonease/aiworker-host-cli`（`apps/host-cli`）。其余 `souls/*`、`packages/*`、`apps/*-web` 全是 `private: true`，不发 npm。
-- **版本号 source of truth = 两个 `package.json`**：`apps/worker-cli/package.json` + `apps/host-cli/package.json` 的 `version` 字段。`dist/package.json` 由 `bun run build` 重生，不要手改。两处必须一致。
-- **发版唯一触发 = push `v*` tag**。`.github/workflows/release.yml` 只被 `tags: ['v*']` 驱动。合并到 `main` **不**发版（只跑 `lint.yml`）。没有 tag 就没有 npm 发布。
-- **渠道由 tag 名派生，不手改 workflow**：agent 选渠道 = 选 tag 名。见下表。`release.yml` 的「Derive npm dist-tag」步骤从 `GITHUB_REF_NAME` 解析，两处 `npm publish` 用派生出的 `--tag`。
-- **tag 名的版本号必须等于两个 `package.json` 的 `version`**（`v1.0.0-rc.5` ⇔ 两包都是 `1.0.0-rc.5`）。渠道从 **tag 名**派生、发布的版本号从 **package.json** 取，两者必须自洽，否则会把 rc 发进 `latest` 或把稳定版发进 `rc`。`release.yml` 的两个 job(`release-worker`/`release-host`)各用「Assert git tag matches worker-cli/host-cli version」步骤 fail-fast 守这条：不一致秒级红、绝不发版。**bump（第 4 步）和打 tag（第 8 步）是两个独立动作，最易错位——务必让 tag 名 = 两包版本号。**
+- **可发布包只有两个，是两个独立产品，支持独立版本**：`@zonease/aiworker-cli`（`apps/worker-cli`，worker 线）、`@zonease/aiworker-host-cli`（`apps/host-cli`，host 线）。其余 `souls/*`、`packages/*`、`apps/*-web` 全是 `private: true`，不发 npm。两包**可独立版本独立发**（per-line tag），也可组合同版本同发（`v*` tag）——见下「tag 方案」。
+- **版本号 source of truth = 两个 `package.json`**：`apps/worker-cli/package.json` + `apps/host-cli/package.json` 的 `version` 字段。`dist/package.json` 由 `bun run build` 重生，不要手改。独立发版时各包版本可不同；组合 `v*` 发版时两包须同版本。
+- **发版触发 = push tag，三种方案**（`.github/workflows/release.yml` 被 `tags: ['v*','worker-v*','host-v*']` 驱动；合并 main 不发版，只跑 `lint.yml`）：
+  - `worker-v<version>` → **只发 worker-cli**（release-worker job；host job 被 `if` 跳过）。**worker GA = 打 `worker-v1.0.0`**，只把 worker-cli 的 `latest` 切到 v1、host 不动。
+  - `host-v<version>` → **只发 host-cli**（release-host job）。
+  - `v<version>` → 旧组合，**同发两包同版本**（向后兼容）。
+- **渠道由 version 派生，不手改 workflow**：剥掉 tag 前缀（`worker-v`/`host-v`/`v`）得 version；version 含 `-`（SemVer prerelease）→ 取 `-` 后首段（`rc.4`→`rc`），不含 `-` → `latest`。两处 `npm publish` 用派生的 `--tag`。
+- **tag 的版本号必须等于对应 `package.json` 的 `version`**：per-line tag 只校验对应包（`worker-v1.0.0` ⇔ worker-cli=`1.0.0`），`v*` 组合校验两包。不一致 → release.yml 的 version-assert 步骤 fail-fast 秒级红、绝不发版。**bump 和打 tag 是两个独立动作，最易错位。**
 - **npm 版本不可覆盖**：一旦某 `version` 发过，重发同版本必失败。改了就 bump，绝不复用版本号。
 - **带 rc tag 的发布分支若要合 main，必须 merge-commit 或 `--ff-only`，绝不 squash/rebase**（squash 会孤儿化已存在的 tag）。本闭环的常规姿势是「先合 main，再在 main 上打 tag」，分支本身不携带 tag，故常规 feature 分支用任意合并方式都可；只有当分支已被 rc tag 指向时才受此约束。
 - **发版门已拆成两道独立门**，由 CI 在 tag push 后并行跑（见 `release.yml`）：worker `release:check`（`release-worker` job）+ host `release:check:phase2`（`release-host` job）。两 job **无 `needs` 耦合**，host 门红只挡 host-cli 发布、不挡 worker-cli。`release:check` 须精确等于 `docs/testing.md` 的 worker gate 清单、`release:check:phase2` 须等于 Phase 2 gate 清单；改门要同步改 `docs/testing.md` + 根 `package.json`（+ `scripts/check-doc-contract.ts` 双门契约），否则 `docs:check`/`test:contracts` 红。注意：worker 门里的全仓 `build`/`typecheck`/`lint` 仍会因 host 的**编译/类型/lint**错误而红（有意为之，只隔离 host 的 **flaky 测试**）。
 - 改架构不为旧 E2E 妥协（见 `AGENTS.md`）。代码改动配聚焦契约测试，非 docs/instruction/纯格式的改动跑 code-review-graph。
 
-## 渠道与版本号派生约定
+## tag 方案与渠道派生约定
 
-| tag 名示例 | 解析出的 npm dist-tag | 含义 / `npm i` 默认行为 |
-| --- | --- | --- |
-| `v1.0.0-rc.4` | `rc` | 预发布，进 `rc` 渠道；`npm i @zonease/aiworker-cli` **不**装它 |
-| `v1.0.0-beta.1` | `beta` | 预发布，进 `beta` 渠道（预留，解析取 `-` 后首个字母标识） |
-| `v1.0.0` | `latest` | 正式 GA，成为 `npm i` 默认安装版，覆盖旧 `latest` |
+| tag 示例 | 发哪个包 | npm dist-tag | 含义 / `npm i` 默认行为 |
+| --- | --- | --- | --- |
+| `worker-v1.0.0-rc.12` | 只 worker-cli | `rc` | worker 预发布，进 `rc`；`npm i @zonease/aiworker-cli` **不**装 |
+| `worker-v1.0.0` | 只 worker-cli | `latest` | **worker GA**，worker-cli 默认安装版切到 v1（host 不动） |
+| `host-v1.0.0-rc.12` | 只 host-cli | `rc` | host 预发布，独立节奏 |
+| `v1.0.0-rc.11` | 两包同发 | `rc` | 旧组合，两包同版本同渠道（向后兼容） |
 
-派生规则（`release.yml` 内实现）：tag 含 `-`（SemVer prerelease）→ 取 `-` 后的字母标识（`rc.4`→`rc`）；不含 `-` → `latest`。**所以要发哪个渠道，只改你打的 tag 名，不碰 workflow。**
+派生规则（`release.yml` 内）：剥 tag 前缀得 version → 含 `-` 取 `-` 后字母标识、不含 `-` → `latest`。**要发哪条线哪个渠道，只选 tag 名，不碰 workflow。** 完整三线编排见 `docs/superpowers/specs/2026-06-12-three-line-dev-orchestration.md`。
 
 > GitHub Release 的 prerelease 标志同样从 tag 名派生：`prerelease: ${{ contains(github.ref_name, '-') }}`（含 `-` 即 prerelease）。**触发条件 = 首个干净 GA tag（`vX.Y.Z`）落地前必须确认它已生效**：在没有任何稳定版时，rc 占着 GitHub「Latest release」徽章无害；一旦切了第一个 GA，未标 prerelease 的 rc 会抢走 GA 的 `/releases/latest` 二进制。
 
@@ -107,8 +111,12 @@ gh pr merge --squash --delete-branch   # 常规 feature 分支
 ### 8. 打 tag + 推 CI 发版
 ```sh
 git checkout main && git pull --ff-only
-git tag <tag>                 # 例: v1.0.0-rc.6（tag 名即决定渠道）
-git push origin <tag>         # 唯一发版触发
+git tag <tag>                 # 选哪条线+哪个渠道 = 选 tag 名(见「tag 方案」):
+                              #   worker-v1.0.0-rc.6 → 只发 worker-cli@rc
+                              #   worker-v1.0.0      → worker GA(只切 worker-cli latest)
+                              #   host-v1.0.0-rc.6   → 只发 host-cli@rc
+                              #   v1.0.0-rc.6        → 旧组合,同发两包
+git push origin <tag>         # 发版触发
 ```
 
 ### 9. 监控 release.yml
