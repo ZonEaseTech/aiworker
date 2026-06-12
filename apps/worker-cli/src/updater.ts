@@ -357,20 +357,28 @@ const MANAGED_WORKER_DAEMON_BASENAME = /^aiworker(?:-bun\.js|-(?:linux|darwin)-(
 // command does not match is treated as not-a-managed-daemon (so it is never killed and
 // never counted as running). Dev/source checkouts and the host daemon are rejected.
 export function isManagedWorkerDaemonCommand(command: null | string | undefined): boolean {
+  if (!isManagedWorkerCliCommand(command))
+    return false
+
+  const commandTokens = command!.trim().split(/\s+/).filter(Boolean)
+  const daemonIndex = commandTokens.findIndex(token => token === 'daemon')
+  return daemonIndex >= 0 && commandTokens[daemonIndex + 1] === 'foreground'
+}
+
+// True when the command runs a managed worker CLI binary in ANY mode (start, daemon
+// foreground, …) — basename match only, no subcommand requirement. Used by the start-lock
+// to recognize a live concurrent *starter* (`aiworker … start`, which has no `daemon
+// foreground`) and to reject a reused pid that landed on an unrelated process (so a stale
+// lock self-heals instead of wedging). Excludes the host CLI and dev/source like the daemon
+// predicate.
+export function isManagedWorkerCliCommand(command: null | string | undefined): boolean {
   if (!command)
     return false
   if (command.includes('apps/worker-cli/src/aiworker.ts'))
     return false
 
   const commandTokens = command.trim().split(/\s+/).filter(Boolean)
-  if (commandTokens.includes('dev'))
-    return false
-
-  const hasManagedBinary = commandTokens.some(token => MANAGED_WORKER_DAEMON_BASENAME.test(path.basename(token)))
-  const daemonIndex = commandTokens.findIndex(token => token === 'daemon')
-  const hasDaemonForeground = daemonIndex >= 0 && commandTokens[daemonIndex + 1] === 'foreground'
-
-  return hasManagedBinary && hasDaemonForeground
+  return commandTokens.some(token => MANAGED_WORKER_DAEMON_BASENAME.test(path.basename(token)))
 }
 
 export function canRestartManagedDaemon(input: ManagedDaemonProbe): ManagedDaemonDecision {

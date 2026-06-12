@@ -10,6 +10,7 @@ import {
   detectInstallSource,
   executeUpgradePlan,
   formatUpgradeReport,
+  isManagedWorkerCliCommand,
   isManagedWorkerDaemonCommand,
   parseUpdateCommandOptions,
   readDailyUpdateNoticeState,
@@ -724,6 +725,21 @@ describe('CLI updater safety helpers', () => {
     expect(isManagedWorkerDaemonCommand('/opt/aiworker/aiworker-linux-arm64 daemon foreground')).toBe(true)
     expect(isManagedWorkerDaemonCommand('/opt/aiworker/aiworker-darwin-x64 daemon foreground')).toBe(true)
     expect(isManagedWorkerDaemonCommand('/opt/aiworker/aiworker-darwin-arm64 daemon foreground')).toBe(true)
+  })
+
+  it('recognizes any managed worker CLI command regardless of subcommand', () => {
+    // The start-lock back-off must recognize a concurrent *starter* (`aiworker … start`),
+    // which has no `daemon foreground`. Basename match only, same shipped forms.
+    expect(isManagedWorkerCliCommand('bun /usr/local/lib/node_modules/@zonease/aiworker-cli/dist/aiworker-bun.js start --port 9217')).toBe(true)
+    expect(isManagedWorkerCliCommand('/opt/aiworker/aiworker-linux-x64 start')).toBe(true)
+    expect(isManagedWorkerCliCommand('/usr/local/bin/bun /usr/local/bin/aiworker daemon foreground')).toBe(true)
+    // Reused pid landing on an unrelated process must NOT count as a worker CLI → reclaimable.
+    expect(isManagedWorkerCliCommand('node /home/me/foo.js')).toBe(false)
+    expect(isManagedWorkerCliCommand('/usr/bin/some-editor')).toBe(false)
+    // Host CLI and dev/source are still excluded.
+    expect(isManagedWorkerCliCommand('bun /x/aiworker-host-bun.js daemon foreground')).toBe(false)
+    expect(isManagedWorkerCliCommand('bun apps/worker-cli/src/aiworker.ts start')).toBe(false)
+    expect(isManagedWorkerCliCommand(null)).toBe(false)
   })
 
   it('never mistakes the host daemon or dev-source for a managed worker daemon', () => {

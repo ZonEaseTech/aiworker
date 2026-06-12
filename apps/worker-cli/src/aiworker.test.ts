@@ -35,6 +35,7 @@ import {
   __setOfficialSoulDistBuilderForTest,
   __setReadProcessCommandForTest,
   __setWorkerCreateSelectorForTest,
+  acquireDaemonStartLock,
   buildDaemonRespawnArgs,
   downloadAndReplaceGitHubBundle,
   inspectCliOfficialAppsResource,
@@ -1092,6 +1093,39 @@ describe('aiworker local CLI', () => {
       '--port',
       '43210',
     ])
+  })
+
+  it('the start lock rejects a second concurrent start and only reclaims a dead-pid lock', async () => {
+    const home = path.join(root, 'home')
+    mkdirSync(home, { recursive: true })
+    const paths = {
+      home,
+      dbPath: path.join(home, 'aiworker.db'),
+      workersRoot: path.join(home, 'workers'),
+      pidFile: path.join(home, 'aiworker-daemon.pid'),
+      daemonMetaFile: path.join(home, 'aiworker-daemon.json'),
+      logFile: path.join(home, 'aiworker-daemon.log'),
+    }
+
+    // First acquisition records this live CLI pid as the lock holder.
+    acquireDaemonStartLock(paths)
+    expect(realpathSync(paths.pidFile)).toBeTruthy()
+
+    // A second start finds the lock pid is a LIVE worker CLI starter (`aiworker … start`,
+    // no daemon foreground yet). It must back off, not reclaim and double-spawn.
+    __setReadProcessCommandForTest(() => '/usr/local/bin/bun /usr/local/bin/aiworker-bun.js start --port 9217')
+    expect(() => acquireDaemonStartLock(paths)).toThrow(/start (already )?in progress|already running/i)
+
+    // Reused-pid stale lock: the recorded pid is alive but belongs to an UNRELATED process
+    // (the daemon died without `aiworker stop`, pid recycled). It must be reclaimed, never
+    // wedge future starts.
+    __setReadProcessCommandForTest(() => '/usr/bin/node /home/me/foo.js')
+    expect(() => acquireDaemonStartLock(paths)).not.toThrow()
+
+    // Truly dead pid is likewise reclaimable.
+    __setReadProcessCommandForTest(null)
+    await writeFile(paths.pidFile, String(2 ** 30))
+    expect(() => acquireDaemonStartLock(paths)).not.toThrow()
   })
 
   it('background daemon start fails loudly and clears the lock when the daemon never becomes healthy', async () => {

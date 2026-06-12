@@ -115,6 +115,7 @@ import {
   canRestartManagedDaemon,
   detectInstallSource,
   executeUpgradePlan,
+  isManagedWorkerCliCommand,
   isManagedWorkerDaemonCommand,
   parseUpdateCommandOptions,
   readDailyUpdateNoticeState,
@@ -1340,24 +1341,48 @@ function removeDaemonMetadata(paths: LocalPaths): void {
 
 // Atomically claim the pidFile as a start lock. O_EXCL (`wx`) makes the create-or-fail a
 // single syscall, so two concurrent `start`s cannot both pass the liveness check and both
-// spawn (the TOCTOU double-spawn). The pidFile *is* the lock — it composes with WDLM-1's
-// stale detection: a leftover pidFile from a crashed start whose pid is no longer a managed
-// daemon is reclaimed here, so a dead lock never wedges every future start.
-function acquireDaemonStartLock(paths: LocalPaths): void {
+// spawn (the TOCTOU double-spawn). The lock records THIS CLI's pid, so a concurrent start
+// can tell a live in-flight holder (back off) from a crashed one (reclaim). It composes with
+// WDLM-1's stale detection: a leftover lock from a crashed start never wedges future starts.
+export function acquireDaemonStartLock(paths: LocalPaths): void {
   try {
-    closeSync(openSync(paths.pidFile, 'wx'))
+    writeLockHolderPid(paths.pidFile)
+    return
   }
   catch (error) {
     if (!(error instanceof Error) || !('code' in error) || error.code !== 'EEXIST')
       throw error
-    // The pidFile exists. If it points at a live managed daemon, this is a genuine
-    // already-running collision; otherwise it is stale (dead/reused pid or an in-flight
-    // crash) and we reclaim it. daemonStatus does the cmdline-verify.
-    const existing = daemonStatus(paths)
-    if (existing.running)
-      throw new Error(`daemon already running: pid=${existing.pid}`)
-    rmSync(paths.pidFile, { force: true })
-    closeSync(openSync(paths.pidFile, 'wx'))
+  }
+  // The pidFile already exists. Three cases, in order:
+  //   1. it points at a live managed daemon → genuine already-running collision.
+  //   2. it records another live CLI pid mid-start → a concurrent start is in progress; back
+  //      off so two same-home starts never both spawn (the TOCTOU double-spawn).
+  //   3. it is stale — a dead/reused pid or a crashed in-flight start → reclaim it.
+  const existing = daemonStatus(paths)
+  if (existing.running)
+    throw new Error(`daemon already running: pid=${existing.pid}`)
+  // Back off only when the recorded pid is a LIVE worker CLI process — another start is
+  // mid-flight (its command is `aiworker … start`, no `daemon foreground` yet). Verify the
+  // command, not just liveness: a stale lock from a daemon that died without `aiworker stop`
+  // (reboot / kill -9; the SIGTERM handler removes metadata but not the pidFile) can have its
+  // pid reused by an unrelated same-user process — that must be reclaimed, not wedge starts.
+  const lockPid = Number.parseInt(readFileSync(paths.pidFile, 'utf8'), 10)
+  if (Number.isFinite(lockPid) && isProcessAlive(lockPid) && isManagedWorkerCliCommand(readProcessCommand(lockPid)))
+    throw new Error(`daemon start already in progress: pid=${lockPid}`)
+  rmSync(paths.pidFile, { force: true })
+  writeLockHolderPid(paths.pidFile)
+}
+
+// Atomically create the pidFile recording this CLI's pid as the start-lock holder. O_EXCL
+// (`wx`) makes the create-or-fail a single syscall; recording the pid lets a concurrent
+// start distinguish a live in-flight holder (back off) from a crashed one (reclaim).
+function writeLockHolderPid(pidFile: string): void {
+  const fd = openSync(pidFile, 'wx')
+  try {
+    writeFileSync(fd, String(process.pid))
+  }
+  finally {
+    closeSync(fd)
   }
 }
 
