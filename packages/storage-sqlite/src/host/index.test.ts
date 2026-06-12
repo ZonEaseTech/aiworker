@@ -289,7 +289,10 @@ describe('host sqlite assignment storage', () => {
     })
     revokeAssignment(created.assignment.assignmentId, 'admin@zonease.org')
 
-    const row = getAssignmentByWorkerId('wkr_82')
+    // revoke deliberately clears worker_id to free the UNIQUE slot for same-machine
+    // re-provision recovery, so the worker-id reader no longer resolves the revoked row.
+    expect(getAssignmentByWorkerId('wkr_82')).toBeNull()
+    const row = listAssignments()[0]
     expect(row?.status).toBe('revoked')
     expect(row?.workbenchUrl).toBe('https://aiworker.zonease.org/workers/wkr_82')
     expect(JSON.stringify(row)).not.toMatch(/sk-|Bearer |Logto|password|secret/i)
