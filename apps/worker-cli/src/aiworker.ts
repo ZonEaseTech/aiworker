@@ -1363,6 +1363,25 @@ function daemonStatus(paths = localPaths()): { logFile: string, pid: number | nu
   return { pid: Number.isFinite(pid) ? pid : null, running: Number.isFinite(pid) && isManagedDaemonPid(pid), logFile: paths.logFile }
 }
 
+// Resolve the home whose daemon `daemon status` reports. A per-worker daemon writes
+// its pidFile into its own fleet home, so a bare `daemon status` must read the fleet
+// default's per-worker home — not the root home — or it mis-reports `running:false`.
+// `--worker`/`[id]` targets a specific fleet worker. Adopted-in-place ('.') homes and
+// non-fleet single-home setups resolve back to the root home, so they behave as before.
+function resolveDaemonStatusPaths(workerOpt?: string): LocalPaths {
+  const base = localPaths()
+  const root = fleetRootDir()
+  const index = readFleet(root)
+  if (workerOpt) {
+    const entry = index.workers.find(worker => worker.id === workerOpt)
+    if (!entry)
+      throw new Error(`fleet worker not found: ${workerOpt}`)
+    return fleetWorkerPaths(root, entry)
+  }
+  const target = resolveDefault(index)
+  return target ? fleetWorkerPaths(root, target) : base
+}
+
 interface DaemonMetadata {
   host: string
   pid: number
@@ -2408,12 +2427,12 @@ async function startSessionCommand(opts: { engine?: string, input?: string, mode
     ...resolveCliEngineMetadata(selectedEngineId),
     ...cliEngineOverrideMetadata(opts),
   }
+  const input = requireText(opts.input, 'input')
   const session = await runtime.createSession({
     workspaceId,
-    title: requireText(opts.title, 'title'),
+    title: opts.title?.trim() || defaultSessionTitleFromInput(input),
     metadata: engineMetadata,
   })
-  const input = requireText(opts.input, 'input')
   printJson(await runtime.startInvocation({
     sessionId: session.id,
     input,
@@ -2479,8 +2498,30 @@ function cliEngineOverrideMetadata(opts: { model?: string, reasoning?: string })
   }
 }
 
-async function listSessionCommand(opts: { workspace?: string }): Promise<void> {
-  await ensureAllWorkers()
+// Default a session title from the first non-empty line of --input when --title is
+// omitted, mirroring the daemon's input-derived auto-naming placeholder so a bare
+// `session start --input ...` is usable. `--title` still overrides. (The CLI runtime
+// keeps auto-naming disabled, so this stays the visible title.)
+function defaultSessionTitleFromInput(input: string): string {
+  const firstLine = input.split('\n').map(line => line.trim()).find(line => line.length > 0) ?? ''
+  const clamped = Array.from(firstLine.replace(/\s+/g, ' ')).slice(0, 60).join('').trim()
+  return clamped.length > 0 ? clamped : 'New session'
+}
+
+// Open the home a read/settings command targets: the explicit `--worker`'s per-worker
+// home (via `resolveWorkerTarget`), else the current/default home. Shared by the
+// runtime-reading commands that gained `--worker` parity (`session list`,
+// `settings list`, `files list`, `engine select`).
+async function openCommandHome(workerOpt?: string): Promise<LocalPaths> {
+  if (workerOpt) {
+    const { paths } = await resolveWorkerTarget(workerOpt)
+    return paths
+  }
+  return ensureDefaultDb()
+}
+
+async function listSessionCommand(opts: { worker?: string, workspace?: string }): Promise<void> {
+  await openCommandHome(opts.worker)
   printJson({ sessions: listSessions(opts.workspace) })
 }
 
@@ -2551,8 +2592,8 @@ async function deleteSessionCommand(id: string, opts: { worker?: string } = {}):
   printJson({ deleted: true, session })
 }
 
-async function listWorkspaceFiles(opts: { workspace?: string }): Promise<void> {
-  await ensureAllWorkers()
+async function listWorkspaceFiles(opts: { worker?: string, workspace?: string }): Promise<void> {
+  await openCommandHome(opts.worker)
   printJson({ files: listFiles(opts.workspace) })
 }
 
@@ -2573,7 +2614,10 @@ function redactCliInspectOutput(value: string): string {
 
 async function listAppsCommand(): Promise<void> {
   const paths = await ensureDefaultDb()
-  printJson({ apps: createHost(paths).listApps() })
+  const host = createHost(paths)
+  // Installed apps PLUS the available Soul catalog (bundled-but-not-installed Souls
+  // are otherwise invisible). Mirrors `enableApp`'s `catalog`; install view unchanged.
+  printJson({ apps: host.listApps(), catalog: host.listCatalog() })
 }
 
 async function showAppCommand(id: string): Promise<void> {
@@ -3069,7 +3113,7 @@ function registerCommands(): void {
   cli.command('fleet status', 'list fleet workers and probe each /health').action(runFleetStatus)
   cli.command('daemon start', 'ensure the bundled Freeform Worker and start the service in background without opening Workbench').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon foreground', 'ensure the bundled Freeform Worker and run the service in foreground without opening Workbench').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
-  cli.command('daemon status', 'show local daemon status').action(() => printJson(daemonStatus()))
+  cli.command('daemon status [id]', 'show local daemon status').option('--worker <id>', 'worker id').action((id: string | undefined, opts: { worker?: string }) => printJson(daemonStatus(resolveDaemonStatusPaths(id ?? opts.worker))))
   cli.command('daemon stop', 'stop local daemon').action(stopDaemon)
   cli.command('daemon restart', 'ensure the bundled Freeform Worker and restart the local service').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => restartDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon logs', 'show local daemon logs').option('--tail <n>', 'line count', { type: [Number] }).action((opts: { tail?: number[] }) => showLogs({ tail: optionalNumber(opts.tail) }))
@@ -3168,8 +3212,8 @@ function registerCommands(): void {
     .option('--reasoning <effort>', 'Codex reasoning effort override')
     .option('--worker <id>', 'worker id')
     .action(startSessionCommand)
-  cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').action(listSessionCommand)
-  cli.command('session show <id>', 'show one session').action(showSession)
+  cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(listSessionCommand)
+  cli.command('session show <id>', 'show one session').option('--worker <id>', 'worker id').action(showSession)
   cli.command('session invoke', 'create a session-level engine invocation').option('--session <id>', 'session id').option('--input <text>', 'invocation input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(invokeSessionCommand)
   cli.command('session events <invocationId>', 'list normalized bridge events for an engine invocation').option('--after <seq>', 'return only events after this seq', { type: [Number] }).option('--limit <n>', 'maximum events to return', { type: [Number] }).option('--worker <id>', 'worker id').action(showInvocationEventsCommand)
   cli.command('session reconcile <invocationId>', 'reconcile native engine process state for an engine invocation').option('--worker <id>', 'worker id').option('--state <processState>', 'observed process state: not_spawned/spawned/exited/killed/lost').option('--diagnostic <text>', 'reconcile diagnostic (redacted before persistence)').action(reconcileInvocationCommand)
@@ -3177,15 +3221,15 @@ function registerCommands(): void {
   cli.command('session archive <id>', 'archive an AIWorker session').action(archiveSessionCommand)
   cli.command('session delete <id>', 'hard-delete AIWorker session metadata').action(deleteSessionCommand)
 
-  cli.command('files list', 'list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
+  cli.command('files list', 'list workspace files').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(listWorkspaceFiles)
   cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)
 
-  cli.command('settings list', 'list host daemon settings').action(async () => {
-    await ensureDefaultDb()
+  cli.command('settings list', 'list host daemon settings').option('--worker <id>', 'worker id').action(async (opts: { worker?: string }) => {
+    await openCommandHome(opts.worker)
     printJson({ settings: listSettings() })
   })
-  cli.command('engine select <engine>', 'set engine hint').action(async (engine: string) => {
-    await ensureDefaultDb()
+  cli.command('engine select <engine>', 'set engine hint').option('--worker <id>', 'worker id').action(async (engine: string, opts: { worker?: string }) => {
+    await openCommandHome(opts.worker)
     printJson({ setting: setSetting('engine.default', { engine }) })
   })
 

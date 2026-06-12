@@ -704,6 +704,66 @@ describe('aiworker local CLI', () => {
     expect(errorOutput).toContain('invocation not found')
   })
 
+  it('Bug-2: `session start` defaults the title from --input when --title is omitted', async () => {
+    await writeFakeCodexCommand()
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+    await __seedWorkerForTest({ app: FREEFORM_APP_ID, id: 'title-worker', name: 'Title Worker' })
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'WS', '--type', 'freeform', '--worker', 'title-worker'))).toBe(0)
+    const workspaceId = (JSON.parse(output) as { workspace: { id: string } }).workspace.id
+    output = ''
+
+    // No --title: previously errored `title is required`; now defaults from --input.
+    expect(await runCli(argv('session', 'start', '--worker', 'title-worker', '--workspace', workspaceId, '--input', 'Summarize the Q3 revenue report'))).toBe(0)
+    const started = JSON.parse(output) as { session: { title: string } }
+    expect(started.session.title.trim().length).toBeGreaterThan(0)
+    expect(started.session.title).toContain('Summarize')
+  })
+
+  it('Bug-3: `session list` and `settings list` honor --worker instead of `Unknown option`', async () => {
+    seedEmptyRootHomeDb()
+    writeFleetIndex(['list-w'])
+    seedFleetHomeSession({ workerId: 'list-w', sessionId: 'list-session' })
+
+    // Bare list targets the (empty) root/default home.
+    expect(await runCli(argv('session', 'list'))).toBe(0)
+    expect((JSON.parse(output) as { sessions: unknown[] }).sessions).toHaveLength(0)
+    output = ''
+    // --worker targets the fleet worker's own home (previously `Unknown option`).
+    expect(await runCli(argv('session', 'list', '--worker', 'list-w'))).toBe(0)
+    expect((JSON.parse(output) as { sessions: Array<{ id: string }> }).sessions.map(session => session.id)).toContain('list-session')
+    output = ''
+    expect(await runCli(argv('settings', 'list', '--worker', 'list-w'))).toBe(0)
+    expect(JSON.parse(output)).toHaveProperty('settings')
+  })
+
+  it('Bug-4: `daemon status` reports the per-worker fleet-home daemon liveness', async () => {
+    const home = path.join(process.env.AIWORKER_HOME!, 'workers', 'daemon-w')
+    mkdirSync(home, { recursive: true })
+    writeFleetIndex(['daemon-w'])
+    // The daemon writes its pidFile into its OWN per-worker home, not the root home.
+    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    installManagedProcessCommand(process.pid)
+
+    expect(await runCli(argv('daemon', 'status'))).toBe(0)
+    const status = JSON.parse(output) as { pid: number | null, running: boolean }
+    expect(status.pid).toBe(process.pid)
+    expect(status.running).toBe(true)
+  })
+
+  it('Bug-5: `app list` exposes the available Soul catalog alongside installed apps', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('app', 'list'))).toBe(0)
+    const body = JSON.parse(output) as { apps: Array<{ appId: string }>, catalog: { souls: Array<{ id: string }> } }
+    expect(body).toHaveProperty('catalog')
+    expect(body.catalog.souls.map(soul => soul.id)).toContain(FREEFORM_APP_ID)
+    // Installed view unchanged.
+    expect(body.apps).toEqual(expect.arrayContaining([expect.objectContaining({ appId: FREEFORM_APP_ID })]))
+  })
+
   it('generates a worker id when creating a fleet worker from a Soul app', async () => {
     expect(await runCli(argv('worker', 'create', '--name', 'Generated Worker', '--app', FREEFORM_APP_ID))).toBe(0)
     const created = JSON.parse(output) as { worker: { home: string, id: string, workerId: string } }
