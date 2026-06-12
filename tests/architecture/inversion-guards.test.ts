@@ -176,6 +176,52 @@ test('G3: worker-* packages and souls never depend on host-* packages', () => {
   }
 })
 
+// G12 ↔ 三线拓扑（docs/superpowers/specs/2026-06-12-three-line-dev-orchestration.md §1）：把「每个包
+// 属于哪条线」与「共享底座 / wire leaf 绝不反向 depend up 进某条线的 runtime/app」升级成机器强制契约，
+// 补齐 G2–G5（针对*已知*包/符号的具体规则）之外两个洞：
+//   ① 新包没被任何线认领——塞个新包连错边，具体守卫未必抓得到；G12 强制一次「这包归哪条线」的 review。
+//   ② 共享底座 / leaf depend up——让底座绑死一条线、无法被另一条线复用，违背「Worker 必须能脱离 Host」。
+// 与 G3（worker↛host）/ G5（host→worker 仅 worker-control-protocol）正交互补：G3/G5 管*横向*跨线耦合，
+// G12 管*纵向*分层 + 拓扑完整性。worker-control-protocol 名为 worker- 但是两 plane 共享的 wire 契约
+// leaf（G5），归共享底座类。
+test('G12: every package is line-assigned and shared base / wire leaf never depends up into a line', () => {
+  const WORKER_LINE = ['packages/worker-runtime', 'packages/worker-daemon', 'apps/worker-cli', 'apps/worker-web']
+  const HOST_LINE = ['packages/host-control', 'apps/host-cli', 'apps/host-web']
+  const SHARED_BASE = [
+    'packages/cli-doctor',
+    'packages/engine-bridge',
+    'packages/engine-projection',
+    'packages/fs-layout',
+    'packages/soul-descriptor',
+    'packages/soul-sdk',
+    'packages/storage-sqlite',
+    'packages/ui',
+    'packages/worker-control-protocol',
+  ]
+
+  const packageName = (dir: string): string => (JSON.parse(read(`${dir}/package.json`)) as { name: string }).name
+
+  // ① 未认领网：packages/* 与 apps/* 下每个含 package.json 的包都必须显式归线（新增未列入 → 红，
+  // 强制显式归线 review，而不是悄悄塞进来连错边）。
+  const classified = new Set([...WORKER_LINE, ...HOST_LINE, ...SHARED_BASE])
+  const allPackageDirs: string[] = []
+  for (const base of ['packages', 'apps']) {
+    for (const entry of readdirSync(join(repoRoot, base))) {
+      if (existsSync(join(repoRoot, base, entry, 'package.json')))
+        allPackageDirs.push(`${base}/${entry}`)
+    }
+  }
+  const unclassified = allPackageDirs.filter(dir => !classified.has(dir))
+  expect(unclassified, 'every packages/* and apps/* package must be line-assigned in G12 (worker / host / shared base)').toEqual([])
+
+  // ② 共享底座 / wire leaf / souls 绝不 depend up 进任何一条线的 runtime/app 包（纵向分层不可反转）。
+  const lineRuntimeNames = new Set([...WORKER_LINE, ...HOST_LINE].map(packageName))
+  for (const dir of [...SHARED_BASE, ...soulPackageDirs()]) {
+    const dependsUp = zonaseDependencyNames(dir).filter(name => lineRuntimeNames.has(name))
+    expect(dependsUp, `${dir} (shared base / wire leaf / soul) must not depend up into a worker/host line package`).toEqual([])
+  }
+})
+
 // G4 ↔ C3：host-control 仅控制面——deps 不含 engine/worker 运行时包；且所有 host-* 控制面源
 // （host-control + 壳 host-cli/host-web）剥注释后不携带 **Worker 的** session/invocation/
 // projection/engine/native-secret/domain-业务态归属。Host **自身**的 Logto 登录 session /
