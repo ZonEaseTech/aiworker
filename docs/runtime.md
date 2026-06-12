@@ -359,6 +359,20 @@ The secret boundary is preserved. `byok` stores only an `apiKeyRef` such as
 resolved key is read from the environment at call time and is never persisted to
 DB, projection receipts, logs, diagnostics, OpenAPI examples, or UI.
 
+**CLI and daemon parity (v1.0.1).** Both the CLI (`apps/worker-cli`) and the
+daemon (`packages/worker-daemon`) derive BYOK invocation metadata from the single
+shared `deriveByokExecutionMetadata` function exported from
+`@zonease/aiworker-worker-daemon/settings`. When `executionMode` is `'byok'` the
+CLI constructs the same `{ byok, engineCommand: null, engineId, engineName: null,
+executionMode: 'byok' }` block as the daemon. The `local-cli` branch is not shared
+(each surface owns its own engine-scan / engine-resolver logic).
+
+**Single-turn limitation (v1.0.1).** BYOK invocations are stateless single-turn:
+`requestOpenAICompatibleContent` sends only `[system, {role:'user', content: prompt}]`
+with no prior-turn history. There is no BYOK native session and no turn-replay
+accumulation. Multi-turn memory is verified on `local-cli` only (EB-1 native
+resume). BYOK history-replay is a named v1.0.2 follow-up.
+
 The ownership-safe resolution is to re-home `byok` behind an engine-bridge
 adapter or to remove it. Neither is required for the current release. This
 deviation must not be cited to justify any Host-owned model call or any engine-secret persistence on either plane.

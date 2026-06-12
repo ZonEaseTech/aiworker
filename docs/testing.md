@@ -197,7 +197,9 @@ Coverage status values:
 | Worker metadata and forbidden domain schema | `docs/architecture.md`, `docs/runtime.md` | `forbidden-host-domain-schema.test.ts` | docs+tests |
 | Freeform v1 acceptance Soul | `docs/architecture.md`, `docs/soul-authoring.md` | CLI and browser Freeform gates | docs+tests |
 | Public worker create catalog policy | `docs/architecture.md`, `docs/runtime.md` | `apps/worker-cli/src/aiworker.test.ts` public-create catalog test, `scripts/check-soul-app-boundaries.test.ts` reversal guard | docs+tests |
-| BYOK execution-mode deviation and secret boundary | `docs/runtime.md` | settings literal-secret rejection test, worker-daemon worker config tests, docs check | docs+tests |
+| BYOK execution-mode deviation and secret boundary | `docs/runtime.md` | settings literal-secret rejection test, worker-daemon worker config tests, `deriveByokExecutionMetadata` shape test (`packages/worker-daemon/src/modes/worker/settings.test.ts`), BYOK visible-text regression guard (`packages/worker-runtime/src/worker/executor.test.ts` — `runByokExecutor — 可见文本守卫`), docs check | docs+tests |
+| BYOK CLI parity — CLI and daemon use shared builder | `docs/runtime.md` (CLI and daemon parity section) | `deriveByokExecutionMetadata` unit test; CLI BYOK metadata test in `apps/worker-cli/src/aiworker.test.ts` (T2.1-CLI) | docs+tests |
+| Multi-turn memory scoped to local-cli; BYOK is single-turn in v1.0.1 | `docs/runtime.md` (single-turn limitation section) | multi-turn acceptance criteria in existing resume tests are tagged local-cli only; no cross-turn recall asserted on BYOK paths | docs+tests |
 
 ## Worker Autonomy Inversion Guards
 
