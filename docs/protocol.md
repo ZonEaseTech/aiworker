@@ -259,11 +259,26 @@ receipt; a Host that resolves `soulReleaseRef` to a missing release fails the
 check-in honestly (4xx `SOUL_RELEASE_NOT_FOUND`) rather than returning a receipt
 without descriptor content.
 
+Descriptor consumption at the Worker end differs by path:
+
+- **Standalone path** (`aiworker start` / `aiworker daemon start`): the Worker
+  installs its own bundled descriptor. `soulDescriptor` from the check-in receipt
+  is not consumed; `soulReleaseRef` remains a distribution label only.
+- **First-provision path** (`aiworker provision --host … --token …`): the Worker
+  receives the assigned Soul descriptor in the check-in response and installs it
+  directly (see runtime.md "First-Provision Bootstrap"). `identity.name` and other
+  descriptor fields are consumed at this point. The Worker's lifelong Soul binding
+  is set from the descriptor's `identity.id`.
+
 Resolving `soulReleaseRef` to descriptor content and installing it on the Worker
 end-to-end (the Worker landing the delivered descriptor, binding its Soul, and
-serving its own Workbench) is the remainder of this distribution slice. Until the
-Worker consumes `soulDescriptor`, `soulReleaseRef` also remains a distribution
-label and the Worker installs its own bundled descriptor.
+serving its own Workbench) is otherwise complete for first-provision. The remainder
+of this distribution slice is production governance wiring.
+
+Soul version updates for already-deployed Workers (re-delivering a new Soul release
+to a Worker after first-provision) are **Phase-2 distribution slice — deferred**.
+v1 preserves the single-Soul-lifelong-binding invariant (see architecture.md:25–27);
+no Worker Access hot-path re-assignment is added in v1.
 Production governance wiring for connector authorization, permission sets,
 gateway/profile refs, and Soul release rollout/rollback controls remains the
 next Phase 2 governance slice. Do not add one-off v1 Worker runtime hooks,
