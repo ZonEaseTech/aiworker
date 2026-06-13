@@ -2,7 +2,7 @@ import type { DaemonStartedResult, LocalPaths } from './aiworker'
 
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { mkdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { chmod, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -37,17 +37,20 @@ import {
   __setUrlOpenerForTest,
   __setWorkerCreateSelectorForTest,
   acquireDaemonStartLock,
+  browserOpenCommand,
   buildDaemonRespawnArgs,
   downloadAndReplaceGitHubBundle,
   inspectCliOfficialAppsResource,
   prepareDaemonForeground,
   preprocessArgv,
   psReadCommandArgs,
+  remediationForError,
   resolveCliDefaultHomeDir,
   resolveCliLocalPaths,
   resolveCliMigrationsFolder,
   resolveCliOfficialAppsRoot,
   resolveCliWorkerWebStaticDir,
+  resolveOpenUrl,
   runCli,
   waitForDaemonHealth,
   workerCreateCandidates,
@@ -88,6 +91,7 @@ describe('aiworker local CLI', () => {
     __setOfficialSoulDistBuilderForTest(null)
     __setReadProcessCommandForTest(null)
     __setWorkerCreateSelectorForTest(null)
+    __setUrlOpenerForTest(null)
     closeWorkerDb()
     process.exitCode = 0
     for (const key of Object.keys(process.env))
@@ -3105,6 +3109,132 @@ describe('aiworker local CLI', () => {
         path: 'engine/mcp/claude-code/.mcp.json',
       }),
     ])
+  })
+
+  // --- A2: cross-platform browser open ---
+  it('A2: browserOpenCommand dispatches by platform (open/xdg-open/cmd start)', () => {
+    const url = 'http://127.0.0.1:9217'
+    expect(browserOpenCommand(url, 'darwin')).toEqual({ args: [url], command: 'open' })
+    expect(browserOpenCommand(url, 'linux')).toEqual({ args: [url], command: 'xdg-open' })
+    expect(browserOpenCommand(url, 'win32')).toEqual({ args: ['/c', 'start', '', url], command: 'cmd' })
+  })
+
+  // Write the running-daemon metadata sidecar into the base home. With no fleet,
+  // resolveDaemonStatusPaths() reads the base home, so the sidecar lands at
+  // <home>/aiworker-daemon.json — readDaemonMetadata reads it fresh (no env caching).
+  function writeBaseDaemonMetadata(port: number): string {
+    const metaFile = path.join(process.env.AIWORKER_HOME!, 'aiworker-daemon.json')
+    mkdirSync(path.dirname(metaFile), { recursive: true })
+    writeFileSync(metaFile, `${JSON.stringify({
+      host: '127.0.0.1',
+      pid: 4242,
+      port,
+      startedAt: '2026-06-13T00:00:00.000Z',
+      url: `http://127.0.0.1:${port}`,
+    })}\n`)
+    return `http://127.0.0.1:${port}`
+  }
+
+  it('A2: resolveOpenUrl prefers --port, then daemon metadata, then the PORT env fallback', () => {
+    // The running daemon's authoritative url (per-home aiworker-daemon.json) is the source
+    // of truth over the env PORT fallback.
+    const metadataUrl = writeBaseDaemonMetadata(9911)
+    expect(resolveOpenUrl({})).toBe(metadataUrl)
+
+    // Explicit --port wins even when daemon metadata exists (highest priority).
+    expect(resolveOpenUrl({ port: 4321 })).toBe('http://127.0.0.1:4321')
+
+    // With neither --port nor daemon metadata, resolveOpenUrl falls back to the worker
+    // env PORT. (getWorkerEnv() caches process.env, so assert against the resolved value
+    // rather than re-setting PORT, which the warm cache would ignore.)
+    rmSync(path.join(process.env.AIWORKER_HOME!, 'aiworker-daemon.json'), { force: true })
+    const fallback = resolveOpenUrl({})
+    expect(fallback).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
+    // The fallback is the env path, distinct from the metadata/--port branches above.
+    expect(fallback).not.toBe(metadataUrl)
+    expect(fallback).not.toBe('http://127.0.0.1:4321')
+  })
+
+  it('A2: `open` falls back to printing the URL when the browser opener cannot launch', async () => {
+    const url = writeBaseDaemonMetadata(7654)
+    __setUrlOpenerForTest(() => false)
+
+    expect(await runCli(argv('open'))).toBe(0)
+    expect(errorOutput).toContain('could not launch a browser')
+    expect(errorOutput).toContain(url)
+    expect(JSON.parse(output)).toEqual({ opened: null, url })
+  })
+
+  it('A2: `open` reports the opened URL on the success path', async () => {
+    const url = writeBaseDaemonMetadata(7655)
+    const launched: Array<{ args: readonly string[], command: string }> = []
+    __setUrlOpenerForTest((command, args) => {
+      launched.push({ args, command })
+      return true
+    })
+
+    expect(await runCli(argv('open'))).toBe(0)
+    expect(launched).toHaveLength(1)
+    expect(JSON.parse(output)).toEqual({ opened: url, url })
+    expect(errorOutput).not.toContain('could not launch a browser')
+  })
+
+  // --- A3: doctor reads the per-worker fleet home for daemon liveness ---
+  it('A3: doctor grades the per-worker fleet-home daemon as ok (worker.service.daemon)', async () => {
+    // `worker create` builds a fleet worker in its own per-worker home and makes it the
+    // fleet default. The daemon writes its pidFile into THAT home — not the root home — so
+    // doctor must read resolveDaemonStatusPaths() (the fleet default), exactly like
+    // `daemon status`. A bare daemonStatus() would read the empty root home and mis-grade
+    // the running daemon as `not running`, so this guards the A3 fix.
+    expect(await runCli(argv('worker', 'create', 'doctor-w', '--name', 'Doctor Worker', '--app', FREEFORM_APP_ID))).toBe(0)
+    output = ''
+    const home = path.join(process.env.AIWORKER_HOME!, 'workers', 'doctor-w')
+    await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
+    installManagedProcessCommand(process.pid)
+
+    expect(await runCli(argv('doctor', '--json'))).toBe(0)
+    const report = JSON.parse(output) as { results: Array<{ id: string, severity: string }> }
+    const daemonCheck = report.results.find(result => result.id === 'worker.service.daemon')
+    expect(daemonCheck?.severity).toBe('ok')
+  })
+
+  // --- name-policy: default display name derives from the Soul, not the raw worker id ---
+  it('name-policy: `worker create` without --name defaults the display name from the Soul identity.name', async () => {
+    expect(await runCli(argv('worker', 'create', '--app', FREEFORM_APP_ID))).toBe(0)
+    const created = JSON.parse(output) as { worker: { id: string, name: string } }
+    // The minted worker id is the w_ identity; the display name must NOT be that raw id.
+    expect(created.worker.id).toMatch(/^w_/)
+    expect(created.worker.name).not.toMatch(/^w_/)
+    // It derives from host.getApp(app).name === the freeform descriptor's identity.name.
+    expect(created.worker.name).toBe('AIWorker Freeform')
+  })
+
+  it('name-policy: `worker create --name X` keeps the explicit name', async () => {
+    expect(await runCli(argv('worker', 'create', 'named-w', '--name', 'Recruiting Bot', '--app', FREEFORM_APP_ID))).toBe(0)
+    const created = JSON.parse(output) as { worker: { id: string, name: string } }
+    expect(created.worker.id).toBe('named-w')
+    expect(created.worker.name).toBe('Recruiting Bot')
+  })
+
+  // --- remediation: machine error codes map to human-readable guidance ---
+  it('remediation: remediationForError maps known update/staging codes and returns null otherwise', () => {
+    expect(remediationForError('checksum_mismatch')).toContain('校验')
+    expect(remediationForError('update_not_actionable')).toContain('最新版本')
+    expect(remediationForError('update_not_supported: npm install path')).toContain('手动升级')
+    expect(remediationForError('staging_failed: truncated archive')).toContain('暂存')
+    // An unknown error has no canned remediation.
+    expect(remediationForError('some_unmapped_error')).toBeNull()
+  })
+
+  it('remediation: the --verbose nudge is appended on a failed doctor but not on other commands', async () => {
+    // `doctor` is the only command that accepts --verbose, so the nudge is appended on a
+    // failed `doctor` (here an unknown option makes it throw) but never elsewhere.
+    expect(await runCli(argv('doctor', '--bogus-flag'))).toBe(1)
+    expect(errorOutput).toContain('run with --verbose for details')
+    errorOutput = ''
+    // A non-doctor failure must NOT suggest --verbose (it would point at a rejected flag).
+    expect(await runCli(argv('unknown-command-token'))).toBe(1)
+    expect(errorOutput).not.toContain('run with --verbose for details')
   })
 })
 

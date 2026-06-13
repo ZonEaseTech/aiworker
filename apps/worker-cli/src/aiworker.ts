@@ -1474,7 +1474,7 @@ function removeDaemonMetadata(paths: LocalPaths): void {
 // internally, minus that fragility. Returns false when the opener cannot be launched so
 // the caller can fall back to printing the URL (the headless/no-browser path, e.g.
 // vm-node02 deployment targets where xdg-open and a browser are absent).
-function browserOpenCommand(url: string, platform: NodeJS.Platform): { args: string[], command: string } {
+export function browserOpenCommand(url: string, platform: NodeJS.Platform): { args: string[], command: string } {
   if (platform === 'darwin')
     return { args: [url], command: 'open' }
   if (platform === 'win32')
@@ -1502,7 +1502,7 @@ function openUrlInBrowser(url: string): boolean {
 // into per-worker `aiworker-daemon.json` (ports get bumped on bind conflicts), so the
 // daemon metadata is the source of truth. An explicit `--port` override wins; the env
 // PORT is only a last-resort fallback when no daemon metadata exists yet.
-function resolveOpenUrl(opts: { port?: number, worker?: string }): string {
+export function resolveOpenUrl(opts: { port?: number, worker?: string }): string {
   if (opts.port !== undefined)
     return `http://127.0.0.1:${opts.port}`
   const paths = resolveDaemonStatusPaths(opts.worker)
@@ -3457,7 +3457,7 @@ export function preprocessArgv(argv: string[], commandNames = cli.commands.map(c
 // unit tests assert on, so the thrown messages stay unchanged) to actionable human-read
 // remediation at the surface. The raw token stays the first line so scripts/--json paths
 // still see the code; the remediation is appended for the operator.
-function remediationForError(message: string): string | null {
+export function remediationForError(message: string): string | null {
   if (message === 'checksum_mismatch')
     return '下载校验失败，可能是网络或镜像问题，请重试 `aiworker update`；持续失败请更换下载渠道。'
   if (message === 'update_not_actionable')
