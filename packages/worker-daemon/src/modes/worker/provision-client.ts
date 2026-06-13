@@ -232,6 +232,9 @@ function defaultStartRefreshTimer(run: () => void, delayMs: number): () => void 
   return () => clearTimeout(timer)
 }
 
+// org-key 模式 refresh inert by design（远期 expiresAt 恒超 7 天 cap → 恒不触发；
+// slice-3 短 TTL key 到来时 expiresAt 落入 cap 区间，自动激活此路径，无需改代码）。
+
 /**
  * Compute the refresh delay for a credential, or null when no refresh should be
  * scheduled. Returns a positive delay only when `expiresAt` is parseable AND the
