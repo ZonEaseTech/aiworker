@@ -123,6 +123,9 @@ describe('aiworker provision first-provision bootstrap', () => {
     expect(workers).toHaveLength(1)
     expect(workers[0]!.appId).toBe('aiworker-freeform')
     expect(workers[0]!.id).toBe(checkInCalls[0]!.workerId)
+    // name-policy: the first-provision path derives the display name from the descriptor's
+    // identity.name (not the minted w_ workerId), matching `worker create`'s default.
+    expect(workers[0]!.name).toBe('AIWorker Freeform')
 
     // The resolver the daemon actually uses (resolveSingleActiveWorker) sees kind === 'single'.
     const resolution = resolveSingleActiveWorker()

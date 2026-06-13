@@ -241,6 +241,11 @@ let readProcessCommandForTest: ((pid: number) => null | string) | null = null
 // The real startDaemonProcess polls a freshly-spawned daemon's /health; tests that drive
 // the real spawn body (vs. the daemonStarter fake) inject the readiness result here.
 let daemonHealthWaiterForTest: ((url: string) => Promise<{ healthy: boolean }>) | null = null
+// `aiworker open` shells out to the platform browser opener (open/xdg-open/start). Tests
+// inject the platform + a spawn recorder here to assert dispatch + the print fallback
+// without launching a real browser. The result reports whether the spawn "succeeded".
+let urlOpenerForTest: ((command: string, args: readonly string[]) => boolean) | null = null
+let openPlatformForTest: NodeJS.Platform | null = null
 
 export interface WorkerCreateCandidate {
   id: string
@@ -281,6 +286,14 @@ export function __setWorkerCreateSelectorForTest(
   selector: ((candidates: readonly WorkerCreateCandidate[]) => Promise<string>) | null,
 ): void {
   workerCreateSelectorForTest = selector
+}
+
+export function __setUrlOpenerForTest(
+  opener: ((command: string, args: readonly string[]) => boolean) | null,
+  platform: NodeJS.Platform | null = null,
+): void {
+  urlOpenerForTest = opener
+  openPlatformForTest = platform
 }
 
 // Pure dedup merge of the official catalog candidates with installed app candidates.
@@ -995,7 +1008,10 @@ async function runDoctor(opts: DoctorCliOptions = {}): Promise<void> {
     apps: createHost(paths).listApps(),
     workers: listWorkers(),
     workspaces: listWorkspaces(),
-    daemon: daemonStatus(),
+    // A per-worker daemon writes its pidFile into its own fleet home, so doctor must read
+    // the fleet default's per-worker home (like `daemon status`/`fleet status`) — a bare
+    // `daemonStatus()` reads the root home and mis-reports a healthy daemon as not running.
+    daemon: daemonStatus(resolveDaemonStatusPaths()),
     installation,
     settings: listSettings(),
     updateNotice,
@@ -1004,7 +1020,7 @@ async function runDoctor(opts: DoctorCliOptions = {}): Promise<void> {
   const report = await runChecks(
     buildWorkerChecks({
       homeBunPath: path.join(os.homedir(), '.bun/bin/bun'),
-      daemonRunning: () => daemonStatus().running,
+      daemonRunning: () => daemonStatus(resolveDaemonStatusPaths()).running,
       migrationsReady: () => installation.resources.migrationsReady,
       migrationsFolder: () => installation.resources.migrationsFolder,
       scanEngines: () => scanLocalEngines(),
@@ -1448,6 +1464,52 @@ function writeDaemonMetadata(paths: LocalPaths, metadata: DaemonMetadata): void 
 
 function removeDaemonMetadata(paths: LocalPaths): void {
   rmSync(paths.daemonMetaFile, { force: true })
+}
+
+// Cross-platform browser opener. macOS=open / Linux=xdg-open / Windows=cmd /c start.
+// We dispatch on `process.platform` rather than pulling in `sindresorhus/open` because
+// the CLI ships as a single `bun build --minify` bundle: that package resolves its
+// bundled `xdg-open`/Windows helper scripts relative to its own node_modules dir, which
+// the minified bundle does not preserve. Platform dispatch is exactly what `open` does
+// internally, minus that fragility. Returns false when the opener cannot be launched so
+// the caller can fall back to printing the URL (the headless/no-browser path, e.g.
+// vm-node02 deployment targets where xdg-open and a browser are absent).
+export function browserOpenCommand(url: string, platform: NodeJS.Platform): { args: string[], command: string } {
+  if (platform === 'darwin')
+    return { args: [url], command: 'open' }
+  if (platform === 'win32')
+    return { args: ['/c', 'start', '', url], command: 'cmd' }
+  return { args: [url], command: 'xdg-open' }
+}
+
+function openUrlInBrowser(url: string): boolean {
+  const platform = openPlatformForTest ?? process.platform
+  const { args, command } = browserOpenCommand(url, platform)
+  if (urlOpenerForTest)
+    return urlOpenerForTest(command, args)
+  try {
+    const proc = Bun.spawn([command, ...args], { stderr: 'ignore', stdin: 'ignore', stdout: 'ignore' })
+    // `unref` lets the CLI exit without waiting on the detached browser process.
+    proc.unref()
+    return true
+  }
+  catch {
+    return false
+  }
+}
+
+// Resolve the authoritative Workbench URL: the running daemon writes its bound url/port
+// into per-worker `aiworker-daemon.json` (ports get bumped on bind conflicts), so the
+// daemon metadata is the source of truth. An explicit `--port` override wins; the env
+// PORT is only a last-resort fallback when no daemon metadata exists yet.
+export function resolveOpenUrl(opts: { port?: number, worker?: string }): string {
+  if (opts.port !== undefined)
+    return `http://127.0.0.1:${opts.port}`
+  const paths = resolveDaemonStatusPaths(opts.worker)
+  const metadata = readDaemonMetadata(paths)
+  if (metadata)
+    return metadata.url
+  return `http://127.0.0.1:${getWorkerEnv().PORT}`
 }
 
 // Atomically claim the pidFile as a start lock. O_EXCL (`wx`) makes the create-or-fail a
@@ -2233,10 +2295,16 @@ async function createWorkerCommand(opts: { id?: string, name?: string, app?: str
     })
     if (bootstrap.status === 'fail')
       throw new Error('failed to install the bundled official Soul Apps for the new worker home')
+    // Default the employee-visible display name to the Soul's friendly display name
+    // (descriptor `identity.name`, e.g. 「人事经理」/「AIWorker Freeform」) instead of the
+    // raw minted `w_…` worker id. `host.getApp(app)` is populated by the bootstrap above;
+    // `id` stays the final fallback so the name is never empty. The internal `workerId`
+    // identity is unchanged — only the default display name策略.
+    const soulDisplayName = host.getApp(app)?.name?.trim()
     const created = await host.createSoulWorker({
       appId: app,
       id,
-      name: opts.name?.trim() || id,
+      name: opts.name?.trim() || soulDisplayName || id,
     })
     const port = opts.port ?? allocatePort(index, FLEET_DEFAULT_BASE_PORT)
     const next = upsertFleetWorker(index, {
@@ -2253,6 +2321,7 @@ async function createWorkerCommand(opts: { id?: string, name?: string, app?: str
         app,
         home: homeDir,
         id,
+        name: created.worker.name,
         port,
         workerId: created.snapshot.worker.id,
       },
@@ -3278,11 +3347,12 @@ function registerCommands(): void {
     printJson({ setting: setSetting('engine.default', { engine }) })
   })
 
-  cli.command('open', 'open local Worker Workbench URL').option('--port <n>', 'web port', { type: [Number] }).action((opts: { port?: number[] }) => {
-    const port = optionalNumber(opts.port) ?? getWorkerEnv().PORT
-    const url = `http://127.0.0.1:${port}`
-    Bun.spawn(['open', url])
-    printJson({ opened: url })
+  cli.command('open', 'open local Worker Workbench URL').option('--port <n>', 'web port', { type: [Number] }).option('--worker <id>', 'worker id').action((opts: { port?: number[], worker?: string }) => {
+    const url = resolveOpenUrl({ port: optionalNumber(opts.port), worker: opts.worker })
+    const opened = openUrlInBrowser(url)
+    if (!opened)
+      process.stderr.write(`could not launch a browser; open the Workbench manually at ${url}\n`)
+    printJson({ opened: opened ? url : null, url })
   })
   cli.command('commands', 'show command index').option('--all', 'show advanced and diagnostics commands').action((opts: { all?: boolean }) => {
     process.stdout.write(`${commandIndex({ all: opts.all === true })}\n`)
@@ -3383,6 +3453,22 @@ export function preprocessArgv(argv: string[], commandNames = cli.commands.map(c
   return argv
 }
 
+// Map internal machine-code error tokens (update/staging throw bare enum strings that
+// unit tests assert on, so the thrown messages stay unchanged) to actionable human-read
+// remediation at the surface. The raw token stays the first line so scripts/--json paths
+// still see the code; the remediation is appended for the operator.
+export function remediationForError(message: string): string | null {
+  if (message === 'checksum_mismatch')
+    return '下载校验失败，可能是网络或镜像问题，请重试 `aiworker update`；持续失败请更换下载渠道。'
+  if (message === 'update_not_actionable')
+    return '当前没有可应用的更新；已是最新版本或该来源无需更新。'
+  if (message.startsWith('update_not_supported'))
+    return '当前安装来源不支持自动更新，请按安装方式手动升级（如 npm/包管理器或重新下载发行包）。'
+  if (message.startsWith('staging_failed'))
+    return '更新包暂存或校验失败，下载的发行包可能不完整或损坏，请重试 `aiworker update`；持续失败请更换下载渠道。'
+  return null
+}
+
 export async function runCli(argv: string[] = process.argv): Promise<number> {
   try {
     process.exitCode = 0
@@ -3402,7 +3488,15 @@ export async function runCli(argv: string[] = process.argv): Promise<number> {
     return code
   }
   catch (error) {
-    process.stderr.write(`${redactCliInspectOutput(error instanceof Error ? error.message : String(error))}\n`)
+    const message = error instanceof Error ? error.message : String(error)
+    process.stderr.write(`${redactCliInspectOutput(message)}\n`)
+    const remediation = remediationForError(message)
+    if (remediation)
+      process.stderr.write(`${redactCliInspectOutput(remediation)}\n`)
+    // Only nudge toward `--verbose` when the command actually accepts it (doctor today),
+    // so the hint never points at a flag the failed command would reject.
+    if (!argv.includes('--verbose') && argv.includes('doctor'))
+      process.stderr.write('run with --verbose for details\n')
     process.exitCode = 0
     return 1
   }
