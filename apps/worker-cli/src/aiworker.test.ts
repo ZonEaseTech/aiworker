@@ -3192,7 +3192,12 @@ describe('aiworker local CLI', () => {
     await writeFile(path.join(home, 'aiworker-daemon.pid'), String(process.pid))
     installManagedProcessCommand(process.pid)
 
-    expect(await runCli(argv('doctor', '--json'))).toBe(0)
+    // doctor's process exit code reflects ALL checks — in a hermetic test home the native
+    // engine / migrations checks can be warn/error and flip doctor to a non-zero exit, which
+    // is unrelated to the A3 fix and made this assertion flaky on CI. This test only guards
+    // that the daemon check reads the per-worker fleet home, so parse the report regardless
+    // of the global exit code.
+    await runCli(argv('doctor', '--json'))
     const report = JSON.parse(output) as { results: Array<{ id: string, severity: string }> }
     const daemonCheck = report.results.find(result => result.id === 'worker.service.daemon')
     expect(daemonCheck?.severity).toBe('ok')
