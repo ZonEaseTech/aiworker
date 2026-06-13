@@ -3,12 +3,12 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 
 import { fileURLToPath } from 'node:url'
+import { SECRET_FORMAT_ALTERNATION } from '@zonease/aiworker-engine-bridge'
 import {
 
   localWorkerConfigValueInputSchema,
   localWorkerConfigValueSchema,
 } from '@zonease/aiworker-soul-descriptor'
-import { SECRET_FORMAT_ALTERNATION } from '@zonease/aiworker-engine-bridge'
 import { Database } from 'bun:sqlite'
 import { and, desc, eq, gt, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'

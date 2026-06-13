@@ -2,8 +2,8 @@ import type { SoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import { SECRET_FORMAT_ALTERNATION } from '@zonease/aiworker-engine-bridge'
+import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 
 const SECRET_ASSIGNMENT_RE = /(["']?[\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*["']?\s*[:=]\s*["']?)([^"'\s]+)/gi
 // Value-format alternation (PEM/JWT/ghp_/gho_/github_pat_/AKIA/AIza) sourced from

@@ -1,7 +1,7 @@
 import type { LocalEngineReadinessSettings, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-soul-descriptor'
 import type { InspectEngineCredential } from '@zonease/aiworker-worker-runtime'
-import { AppError, localSettingsConfigSchema } from '@zonease/aiworker-soul-descriptor'
 import { SECRET_FORMAT_ALTERNATION } from '@zonease/aiworker-engine-bridge'
+import { AppError, localSettingsConfigSchema } from '@zonease/aiworker-soul-descriptor'
 import { getSetting, listSettings, setSetting } from '@zonease/aiworker-storage-sqlite/worker'
 import { inspectLocalEngineCredential, resolveEngineAuthReadiness, scanLocalEngines } from '@zonease/aiworker-worker-runtime'
 
