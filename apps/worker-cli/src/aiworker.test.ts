@@ -34,6 +34,7 @@ import {
   __setOfficialSoulDescriptorsReadyForTest,
   __setOfficialSoulDistBuilderForTest,
   __setReadProcessCommandForTest,
+  __setUrlOpenerForTest,
   __setWorkerCreateSelectorForTest,
   acquireDaemonStartLock,
   buildDaemonRespawnArgs,
