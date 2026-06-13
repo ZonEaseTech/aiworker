@@ -384,6 +384,67 @@ describe('workspace engine asset projection', () => {
     })).rejects.toThrow('MCP client config must not contain literal secrets')
   })
 
+  // value-format 分支必须 load-bearing。上面的 `api_key = "<token>"` 用例同时被
+  // MCP_SECRET_ASSIGNMENT_RE(赋值路径)兜住，故无法证明 engine-projection 的
+  // MCP_SECRET_VALUE_RE 格式扩展(ghp_/AKIA/AIza/JWT/PEM)真在拦截。这里用「裸 token」
+  // (不是 secret-named key = "value" 赋值形式)的 MCP 内容驱动：赋值正则的 key 是
+  // command/description/note/comment(不含 api-key/token 等词根)→ 赋值分支不命中，
+  // 只有 value 分支能拦。若有人把 MCP_SECRET_VALUE_RE 退回旧 Bearer|sk- 弱覆盖，本组必红。
+  it.each([
+    ['github-pat inside a command string', 'command = "gh auth login --with-token ghp_0123456789abcdefghijklmnop"\n'],
+    ['bare aws-access-key in a note', 'description = "rotate AKIAIOSFODNN7EXAMPLE before the next deploy"\n'],
+    ['bare google-api-key in a note', 'note = "leaked key AIzaSyA1234567890abcdefghijklmnopqrstuvw must be revoked"\n'],
+    ['bare jwt in a comment', 'comment = "stale eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.abcDEF lingers here"\n'],
+  ])('rejects %s in worker overlay MCP via the value-format branch (not the assignment branch)', async (_label, secretContent) => {
+    const sourceRoot = tempRoot(`value-source-${_label.replace(/\s/g, '-')}`)
+    const workspaceRoot = tempRoot(`value-workspace-${_label.replace(/\s/g, '-')}`)
+    await writeEngineAssetSource(sourceRoot, 'command = "baseline-mcp"\n')
+
+    await expect(projectEngineAssetsToWorkspace({
+      appId: 'demo-soul-app',
+      engineAssets: mcpEngineAssets(['codex']),
+      engineTarget: 'codex',
+      now: '2026-05-16T00:00:00.000Z',
+      sourceRoot,
+      variables: {},
+      workerOverlayAssets: [{
+        content: secretContent,
+        enabled: true,
+        id: 'codex-ats',
+        kind: 'mcp-client',
+        target: 'codex',
+      }],
+      workspaceRoot,
+    })).rejects.toThrow('MCP client config must not contain literal secrets')
+  })
+
+  it('does not reject an author-owned native MCP source that contains a literal secret (overlay-only guard)', async () => {
+    // Boundary: assertNoLiteralMcpSecrets is applied ONLY to worker-overlay MCP content.
+    // Author-owned native MCP files (the Soul-shipped engine-assets source) are allowed to
+    // hold literal secrets per the AIWorker boundary, so projecting them with NO overlay
+    // must succeed even when the author source embeds a bare token. This pins that the
+    // value-format guard never widens to scan author-owned source.
+    const sourceRoot = tempRoot('author-secret-source')
+    const workspaceRoot = tempRoot('author-secret-workspace')
+    await writeEngineAssetSource(sourceRoot, 'command = "gh auth login --with-token ghp_0123456789abcdefghijklmnop"\n')
+
+    const receipt = await projectEngineAssetsToWorkspace({
+      appId: 'demo-soul-app',
+      engineAssets: mcpEngineAssets(['codex']),
+      engineTarget: 'codex',
+      now: '2026-05-16T00:00:00.000Z',
+      sourceRoot,
+      variables: {},
+      workspaceRoot,
+    })
+
+    // The author-owned MCP projected through unscanned; the gate did not fire.
+    expect(receipt.projections).toContainEqual(expect.objectContaining({
+      kind: 'mcp-client',
+      target: '.codex/config.toml',
+    }))
+  })
+
   it('records freshness markers without copying overlay content into receipts', async () => {
     const sourceRoot = tempRoot('freshness-source')
     const workspaceRoot = tempRoot('freshness-workspace')
