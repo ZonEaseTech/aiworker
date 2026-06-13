@@ -14,6 +14,8 @@ const labels = {
     preview: (name: string) => `Preview ${name}`,
     remove: (name: string) => `Remove ${name}`,
   },
+  stop: 'Stop',
+  stopAriaLabel: 'Stop generating',
   submitAriaLabel: 'Send message',
 }
 
@@ -26,17 +28,17 @@ describe('session composer dock', () => {
 
     const textbox = screen.getByRole('textbox', { name: 'Message composer' }) as HTMLTextAreaElement
     expect(textbox.disabled).toBe(false)
-    expect(screen.getByRole('button', { name: 'Stop invocation' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Stop generating' })).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Send message' }) as HTMLButtonElement).disabled).toBe(true)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Stop invocation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop generating' }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
   it('keeps running state quiet without explanatory console copy', () => {
     render(<SessionComposerDock labels={labels} onCancel={vi.fn()} onSubmitDraft={vi.fn()} status="running" />)
 
-    expect(screen.getByRole('button', { name: 'Stop invocation' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Stop generating' })).toBeTruthy()
     expect(document.body.textContent).not.toContain('Invocation is running')
     expect(document.body.textContent).not.toContain('You can prepare the next message')
   })

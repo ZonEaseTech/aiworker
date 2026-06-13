@@ -7,6 +7,7 @@ export interface SessionTimelineProps {
   ariaLabel: string
   emptyState?: ReactNode
   loading?: boolean
+  preparingResponseLabel?: string
   turns: TranscriptTurnModel[]
 }
 
@@ -19,11 +20,12 @@ export function SessionTimeline({
   ariaLabel,
   emptyState,
   loading = false,
+  preparingResponseLabel,
   turns,
 }: SessionTimelineProps) {
   return (
     <div data-session-timeline="true" className="min-w-0">
-      <ChatThread ariaLabel={ariaLabel} emptyState={emptyState} loading={loading} turns={turns} />
+      <ChatThread ariaLabel={ariaLabel} emptyState={emptyState} loading={loading} preparingResponseLabel={preparingResponseLabel} turns={turns} />
     </div>
   )
 }

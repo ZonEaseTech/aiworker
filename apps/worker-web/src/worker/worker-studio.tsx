@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from 'react'
 import type { LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
 import type { ChatComposerLabels } from './studio/chat/chat-composer'
-import type { TranscriptTurnActionLabels } from './studio/chat/chat-transcript'
+import type { ChatTranscriptLabels, TranscriptTurnActionLabels } from './studio/chat/chat-transcript'
 import type { ComposerReadiness } from './studio/chat/composer-readiness'
 import type { WorkerStudioLocatorState } from './studio/locator'
 
@@ -26,9 +26,9 @@ import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/managed-
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { navigateWorkerRoute, useWorkerRoute } from '../app/router/worker-route'
 import {
+  detectInitialLocale,
   displaySoul,
   messagesFor,
-  normalizeLocale,
 } from '../features/i18n'
 import {
   archiveSession,
@@ -133,7 +133,8 @@ export function WorkerStudio() {
   }, [refresh])
 
   const data = state.data
-  const activeLocale = normalizeLocale(data?.settings.language)
+  // C2: saved worker language wins; otherwise detect from navigator (zh-first fallback).
+  const activeLocale = detectInitialLocale(data?.settings.language)
   const copy = messagesFor(activeLocale)
   const locatorState = useMemo(
     () => data
@@ -156,6 +157,12 @@ export function WorkerStudio() {
     [data, selectedWorker],
   )
   const selectedWorkerOverlayId = selectedWorker?.id ?? null
+  // Inject the active worker name as the document title (employee semantics) instead
+  // of a static "Soul Workspace" boot title baked into index.html.
+  useEffect(() => {
+    const workerName = selectedWorker?.name?.trim()
+    document.title = workerName ? `${workerName} · ${copy.app.brand}` : copy.app.brand
+  }, [copy.app.brand, selectedWorker?.name])
   const sessionsForWorkspace = useCallback(
     (workspace: LocalWorkspace) => allSessions
       .filter(session => session.workspaceId === workspace.id && session.status === 'active')
@@ -384,12 +391,21 @@ export function WorkerStudio() {
       remove: copy.workspace.removeSourceMaterial,
     },
     placeholder: copy.workspace.createSessionPlaceholder,
+    stop: copy.workspace.stopGenerating,
+    stopAriaLabel: copy.workspace.stopGeneratingAriaLabel,
     submitAriaLabel: copy.workspace.sendInvocation,
   }), [copy])
 
   const turnActionLabels: TranscriptTurnActionLabels = useMemo(() => ({
     copyAsMarkdown: copy.workspace.copyAsMarkdown,
     retry: copy.workspace.retryMessage,
+  }), [copy])
+
+  const chatLabels: ChatTranscriptLabels = useMemo(() => ({
+    preparingResponse: copy.chat.preparingResponse,
+    startingInvocation: copy.chat.startingInvocation,
+    timeline: copy.chat.timeline,
+    waitingForEngine: copy.chat.waitingForEngine,
   }), [copy])
 
   const settings = data?.settings
@@ -543,6 +559,7 @@ export function WorkerStudio() {
         )}
         main={(
           <WorkbenchMain
+            chatLabels={chatLabels}
             composerReadiness={composerReadiness}
             copy={copy}
             composerLabels={composerLabels}
@@ -568,17 +585,14 @@ export function WorkerStudio() {
         )}
       />
       <WorkerConfigurationDialog
-        activeWorkbenchTabId={null}
         assets={workerOverlayAssets}
         copy={copy}
         open={workerConfigurationOpen}
         settings={data.settings}
         worker={selectedWorker}
-        workbenchTabs={[]}
         onOpenChange={setWorkerConfigurationOpen}
         onReload={reloadWorkerOverlayAssets}
         onSaveAssets={saveWorkerOverlayAssets}
-        onSelectWorkbenchTab={() => {}}
         onSettingsSaved={(settings) => {
           setState(current => current.data
             ? { ...current, data: { ...current.data, settings }, loading: false }
@@ -590,6 +604,7 @@ export function WorkerStudio() {
 }
 
 function WorkbenchMain({
+  chatLabels,
   composerLabels,
   composerReadiness,
   copy,
@@ -608,6 +623,7 @@ function WorkbenchMain({
   selectedWorkspace,
   turnActionLabels,
 }: {
+  chatLabels: ChatTranscriptLabels
   composerLabels: ChatComposerLabels
   composerReadiness: ComposerReadiness
   copy: ReturnType<typeof messagesFor>
@@ -652,6 +668,7 @@ function WorkbenchMain({
         <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-7 py-4 max-md:px-4">
           <ChatSurface
             key={selectedSession.id}
+            chatLabels={chatLabels}
             composerDisabled={!composerReadiness.ready}
             composerDisabledReason={readinessNotice}
             composerLabels={composerLabels}

@@ -10,6 +10,41 @@ type TranscriptActivityGroupItem = Extract<TranscriptItemModel, { kind: 'activit
 type TranscriptAssistantMarkdownItem = Extract<TranscriptItemModel, { kind: 'assistant-markdown' }>
 type TranscriptResourceCardItem = Extract<TranscriptItemModel, { kind: 'resource-card' }>
 
+/**
+ * Display strings for the timeline/lifecycle steps the mapper produces. Injected
+ * by the caller (worker-studio threads the active locale catalog) so this pure
+ * mapper carries no locale dependency. Terminality is keyed off the semantic
+ * bridge event, not these display strings, so localizing them never changes the
+ * mapping logic.
+ */
+export interface BridgeTimelineLabels {
+  invocationStarted: string
+  working: string
+  invocationWarning: string
+  engineWarning: string
+  invocationCompleted: string
+  invocationCancelled: string
+  invocationFailed: string
+  processStarted: string
+  processExited: string
+  processLost: string
+  engineError: string
+}
+
+export const DEFAULT_TIMELINE_LABELS: BridgeTimelineLabels = {
+  invocationStarted: 'Invocation started',
+  working: 'Working',
+  invocationWarning: 'Invocation warning',
+  engineWarning: 'Engine warning',
+  invocationCompleted: 'Invocation completed',
+  invocationCancelled: 'Invocation cancelled',
+  invocationFailed: 'Invocation failed',
+  processStarted: 'Process started',
+  processExited: 'Process exited',
+  processLost: 'Process lost',
+  engineError: 'Engine error',
+}
+
 interface ToolActivitySlot {
   group: TranscriptActivityGroupItem
   index: number
@@ -46,7 +81,10 @@ function readString(value: unknown): string {
  * The user message and session artifacts are rendered by the chat surface from
  * the composer submission and the invocation `files`, not from this event stream.
  */
-export function buildInvocationTurns(events: LocalSessionEvent[]): TranscriptTurnModel[] {
+export function buildInvocationTurns(
+  events: LocalSessionEvent[],
+  labels: BridgeTimelineLabels = DEFAULT_TIMELINE_LABELS,
+): TranscriptTurnModel[] {
   const order: string[] = []
   const byInvocation = new Map<string, LocalSessionEvent[]>()
   for (const event of events) {
@@ -71,9 +109,9 @@ export function buildInvocationTurns(events: LocalSessionEvent[]): TranscriptTur
     const toolActivitySlots = new Map<string, ToolActivitySlot>()
 
     for (const event of invocationEvents) {
-      const timelineStep = timelineStepForEvent(event)
+      const timelineStep = timelineStepForEvent(event, labels)
       if (timelineStep)
-        upsertTimelineStep(items, itemSlots, timelineStep)
+        upsertTimelineStep(items, itemSlots, timelineStep, labels)
 
       if (event.type === 'assistant_delta') {
         const delta = readString(readRecord(readRecord(event.payloadJson).data).text)
@@ -128,7 +166,7 @@ export function buildInvocationTurns(events: LocalSessionEvent[]): TranscriptTur
         assistantItem = null
         toolGroupItem = null
         items.push({
-          body: readString(readRecord(event.payloadJson).error) || 'Engine error',
+          body: readString(readRecord(event.payloadJson).error) || labels.engineError,
           id: `${invocationId}:error:${event.seq}`,
           kind: 'status',
           tone: 'danger',
@@ -163,6 +201,7 @@ function upsertTimelineStep(
   items: TranscriptItemModel[],
   itemSlots: Map<string, number>,
   step: TranscriptTimelineStepItem,
+  labels: BridgeTimelineLabels,
 ): void {
   const slot = step.category ?? step.id
   const existingIndex = itemSlots.get(slot)
@@ -181,7 +220,7 @@ function upsertTimelineStep(
   items[existingIndex] = {
     ...existing,
     ...step,
-    body: timelineStepBodyForReplacement(existing, step),
+    body: timelineStepBodyForReplacement(existing, step, labels),
     id: existing.id,
   }
 }
@@ -189,18 +228,19 @@ function upsertTimelineStep(
 function timelineStepBodyForReplacement(
   existing: TranscriptTimelineStepItem,
   step: TranscriptTimelineStepItem,
+  labels: BridgeTimelineLabels,
 ): TranscriptTimelineStepItem['body'] {
   if (step.body !== undefined)
     return step.body
   if (step.category === 'progress')
     return existing.body
-  if (step.category === 'lifecycle' && isInvocationTerminalTitle(step.title))
+  if (step.category === 'lifecycle' && isInvocationTerminalTitle(step.title, labels))
     return existing.body ?? timelineTitleDetail(existing, step)
   return undefined
 }
 
-function isInvocationTerminalTitle(title: TranscriptTimelineStepItem['title']): boolean {
-  return title === 'Invocation completed' || title === 'Invocation cancelled'
+function isInvocationTerminalTitle(title: TranscriptTimelineStepItem['title'], labels: BridgeTimelineLabels): boolean {
+  return title === labels.invocationCompleted || title === labels.invocationCancelled
 }
 
 function timelineTitleDetail(
@@ -302,7 +342,7 @@ function readReactText(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
-function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepItem | null {
+function timelineStepForEvent(event: LocalSessionEvent, labels: BridgeTimelineLabels): TranscriptTimelineStepItem | null {
   const payload = readRecord(event.payloadJson)
   const bridgeEvent = readString(payload.bridgeEvent)
 
@@ -313,7 +353,7 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'running',
-      title: 'Invocation started',
+      title: labels.invocationStarted,
     }
   }
 
@@ -325,19 +365,19 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'running',
-      title: message || 'Working',
+      title: message || labels.working,
     }
   }
 
   if (bridgeEvent === 'invocation.warning') {
     return {
-      body: readProgressMessage(payload) || 'Engine warning',
+      body: readProgressMessage(payload) || labels.engineWarning,
       category: 'progress',
       id: `${event.invocationId}:timeline:${event.seq}`,
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'waiting',
-      title: 'Invocation warning',
+      title: labels.invocationWarning,
     }
   }
 
@@ -348,7 +388,7 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'succeeded',
-      title: 'Invocation completed',
+      title: labels.invocationCompleted,
     }
   }
 
@@ -359,7 +399,7 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'failed',
-      title: 'Invocation cancelled',
+      title: labels.invocationCancelled,
     }
   }
 
@@ -370,7 +410,7 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'running',
-      title: 'Process started',
+      title: labels.processStarted,
     }
   }
 
@@ -381,7 +421,7 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'succeeded',
-      title: 'Process exited',
+      title: labels.processExited,
     }
   }
 
@@ -392,7 +432,7 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'failed',
-      title: 'Process lost',
+      title: labels.processLost,
     }
   }
 
@@ -404,7 +444,7 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'running',
-      title: 'Invocation started',
+      title: labels.invocationStarted,
     }
   }
 
@@ -415,7 +455,7 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'succeeded',
-      title: 'Invocation completed',
+      title: labels.invocationCompleted,
     }
   }
 
@@ -426,7 +466,7 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'failed',
-      title: 'Invocation cancelled',
+      title: labels.invocationCancelled,
     }
   }
 
@@ -437,7 +477,7 @@ function timelineStepForEvent(event: LocalSessionEvent): TranscriptTimelineStepI
       kind: 'timeline-step',
       provenance: 'engine',
       status: 'failed',
-      title: status === 'lost' ? 'Process lost' : 'Invocation failed',
+      title: status === 'lost' ? labels.processLost : labels.invocationFailed,
     }
   }
 

@@ -1,12 +1,37 @@
 import type { LocalEngineInvocation, LocalSessionEvent } from '@zonease/aiworker-soul-descriptor'
 import type { TranscriptItemModel, TranscriptTurnActionModel, TranscriptTurnModel } from '@zonease/aiworker-ui/components/transcript-types'
 import type { ReactNode } from 'react'
+import type { BridgeTimelineLabels } from './bridge-event-mapper'
 
 import { useEffect, useMemo } from 'react'
 
+import { en } from '../../../features/i18n/locales'
 import { buildInvocationTurns } from './bridge-event-mapper'
 import { SessionTimeline } from './session-timeline'
 import { useInvocationEvents } from './use-invocation-events'
+
+const DEFAULT_TIMELINE_LABELS: BridgeTimelineLabels = {
+  invocationStarted: 'Invocation started',
+  working: 'Working',
+  invocationWarning: 'Invocation warning',
+  engineWarning: 'Engine warning',
+  invocationCompleted: 'Invocation completed',
+  invocationCancelled: 'Invocation cancelled',
+  invocationFailed: 'Invocation failed',
+  processStarted: 'Process started',
+  processExited: 'Process exited',
+  processLost: 'Process lost',
+  engineError: 'Engine error',
+}
+
+// Production always threads localized labels from worker-studio; this fallback only guards
+// stray callers, so it sources copy from the en catalog rather than hard-coding strings.
+const DEFAULT_CHAT_LABELS: ChatTranscriptLabels = {
+  preparingResponse: en.chat.preparingResponse,
+  startingInvocation: en.chat.startingInvocation,
+  timeline: DEFAULT_TIMELINE_LABELS,
+  waitingForEngine: en.chat.waitingForEngine,
+}
 
 const EMPTY_SESSION_EVENTS: LocalSessionEvent[] = []
 const EMPTY_SESSION_INVOCATIONS: TranscriptInvocation[] = []
@@ -20,8 +45,16 @@ export interface TranscriptTurnActionLabels {
   retry: string
 }
 
+export interface ChatTranscriptLabels {
+  preparingResponse: string
+  startingInvocation: string
+  timeline: BridgeTimelineLabels
+  waitingForEngine: string
+}
+
 export interface ChatTranscriptProps {
   ariaLabel: string
+  chatLabels?: ChatTranscriptLabels
   emptyState?: ReactNode
   initialInvocation?: (Pick<LocalEngineInvocation, 'id' | 'status'> & Partial<LocalEngineInvocation>) | null
   invocationId: string | null
@@ -52,6 +85,7 @@ export interface ChatTranscriptProps {
  */
 export function ChatTranscript({
   ariaLabel,
+  chatLabels = DEFAULT_CHAT_LABELS,
   emptyState,
   initialInvocation = null,
   intervalMs,
@@ -91,10 +125,10 @@ export function ChatTranscript({
   }, [effectiveInvocationId, effectiveInvocationStatus, onInvocationStatusChange])
   const engineTurns = useMemo(
     () => dropStaleProgressOnlyTurns(
-      applyActiveStreamingState(buildInvocationTurns(transcriptEvents), invocationId, effectiveInvocation),
+      applyActiveStreamingState(buildInvocationTurns(transcriptEvents, chatLabels.timeline), invocationId, effectiveInvocation, chatLabels),
       invocationId,
     ),
-    [effectiveInvocation, invocationId, transcriptEvents],
+    [chatLabels, effectiveInvocation, invocationId, transcriptEvents],
   )
   const stitchedTurns = useMemo(
     () => insertUserMessageTurns(engineTurns, sessionInvocations, userMessage),
@@ -110,7 +144,7 @@ export function ChatTranscript({
     }),
     [effectiveInvocation, onRetry, sessionInvocations, stitchedTurns, turnActionLabels, userMessage],
   )
-  return <SessionTimeline ariaLabel={ariaLabel} emptyState={emptyState} loading={loading && turns.length === 0} turns={turns} />
+  return <SessionTimeline ariaLabel={ariaLabel} emptyState={emptyState} loading={loading && turns.length === 0} preparingResponseLabel={chatLabels.preparingResponse} turns={turns} />
 }
 
 function mergeSessionEvents(events: LocalSessionEvent[]): LocalSessionEvent[] {
@@ -361,6 +395,7 @@ function applyActiveStreamingState(
   turns: TranscriptTurnModel[],
   invocationId: string | null,
   invocation: (Pick<LocalEngineInvocation, 'id' | 'status'> & Partial<LocalEngineInvocation>) | null,
+  chatLabels: ChatTranscriptLabels,
 ): TranscriptTurnModel[] {
   if (!invocationId || !invocation || invocation.id !== invocationId)
     return turns
@@ -370,7 +405,7 @@ function applyActiveStreamingState(
 
   const existingIndex = turns.findIndex(turn => turn.id === invocationId)
   if (existingIndex === -1)
-    return [...turns, streamingAssistantTurn(invocationId)]
+    return [...turns, streamingAssistantTurn(invocationId, chatLabels)]
 
   return turns.map((turn, index) => index === existingIndex ? markTurnAssistantStreaming(turn) : turn)
 }
@@ -400,10 +435,10 @@ function turnHasAssistantText(turn: TranscriptTurnModel): boolean {
   return turn.items.some(item => item.kind === 'assistant-markdown' && item.markdown.trim().length > 0)
 }
 
-function streamingAssistantTurn(invocationId: string): TranscriptTurnModel {
+function streamingAssistantTurn(invocationId: string, chatLabels: ChatTranscriptLabels): TranscriptTurnModel {
   return {
     id: invocationId,
-    items: [optimisticTimelineStepItem(invocationId), streamingAssistantItem(invocationId)],
+    items: [optimisticTimelineStepItem(invocationId, chatLabels), streamingAssistantItem(invocationId)],
   }
 }
 
@@ -427,14 +462,14 @@ function findLastAssistantMarkdownIndex(turn: TranscriptTurnModel): number {
   return -1
 }
 
-function optimisticTimelineStepItem(invocationId: string): TranscriptTurnModel['items'][number] {
+function optimisticTimelineStepItem(invocationId: string, chatLabels: ChatTranscriptLabels): TranscriptTurnModel['items'][number] {
   return {
-    body: 'Waiting for the native engine to emit its first event.',
+    body: chatLabels.waitingForEngine,
     id: `${invocationId}:timeline:optimistic-start`,
     kind: 'timeline-step',
     provenance: 'optimistic',
     status: 'waiting',
-    title: 'Starting invocation',
+    title: chatLabels.startingInvocation,
   }
 }
 

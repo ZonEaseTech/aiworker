@@ -82,9 +82,9 @@ describe('local shell copy', () => {
     }
   })
 
-  it('describes the default path as Soul workspace sessions', () => {
-    expect(messagesFor('en').app.subtitle).toBe('Souls, workspaces, sessions')
-    expect(messagesFor('zh-CN').app.subtitle).toBe('Soul、工作区、会话')
+  it('describes the default path as employee workspace sessions without Soul jargon', () => {
+    expect(messagesFor('en').app.subtitle).toBe('Workspaces and sessions')
+    expect(messagesFor('zh-CN').app.subtitle).toBe('工作区与会话')
     expect(messagesFor('en').projects.empty.title).toBe('No workspaces yet')
     expect(messagesFor('zh-CN').projects.empty.title).toBe('还没有工作区')
     expect(messagesFor('en').projects.searchPlaceholder).toBe('Search workspaces...')

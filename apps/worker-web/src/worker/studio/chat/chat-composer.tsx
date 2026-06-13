@@ -10,6 +10,8 @@ import { sessionDraftToDisplayText, sessionDraftToInvocationInput } from './sess
 export interface ChatComposerLabels {
   ariaLabel: string
   attachment: ManagedSessionComposerAttachmentLabels
+  stop: string
+  stopAriaLabel: string
   submitAriaLabel: string
   placeholder?: string
 }

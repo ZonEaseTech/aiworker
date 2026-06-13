@@ -11,7 +11,7 @@ const now = '2026-05-10T00:00:00.000Z'
 const PRIMARY_SOUL_ID = 'aiworker-demo-primary'
 
 function openHostSettings() {
-  fireEvent.click(screen.getByRole('button', { name: /^Open local Host settings/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Open local settings/ }))
 }
 
 function selectSettingsTab(tab: HTMLElement) {
@@ -461,7 +461,7 @@ describe('worker studio', () => {
     // The shell renders the chat surface (transcript + composer) itself.
     expect(await screen.findByRole('log', { name: 'Session events' })).toBeTruthy()
     expect(screen.getByRole('textbox')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Send invocation' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
     // No mounted micro-app machinery anywhere.
     expect(document.querySelector('micro-app')).toBeNull()
     expect(document.querySelector('[data-slot="soul-app-mounted-micro-app"]')).toBeNull()
@@ -481,7 +481,7 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'continue please' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Send invocation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/sessions/session-1/invocations', expect.objectContaining({ method: 'POST' }))
@@ -535,9 +535,9 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     fireEvent.change(await within(main).findByRole('textbox'), { target: { value: 'Check MCP tools now' } })
-    fireEvent.click(within(main).getByRole('button', { name: 'Send invocation' }))
+    fireEvent.click(within(main).getByRole('button', { name: 'Send' }))
 
     await waitFor(() => {
       expect(within(main).getByText('Check MC')).toBeTruthy()
@@ -589,7 +589,7 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
 
     await waitFor(() => {
       expect(within(main).getByText('Investigate build pipeline')).toBeTruthy()
@@ -622,7 +622,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/')
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     expect(within(main).queryByRole('button', { name: 'Create worker' })).toBeNull()
     expect(screen.queryByRole('dialog', { name: 'Create worker' })).toBeNull()
     expect(fetch).not.toHaveBeenCalledWith('/api/workers', expect.objectContaining({ method: 'POST' }))
@@ -640,7 +640,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/')
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     fireEvent.click(within(main).getByRole('button', { name: 'Create workspace' }))
 
     const dialog = await screen.findByRole('dialog')
@@ -673,7 +673,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/primary-worker')
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     const title = within(main).getByText('No workspace selected')
     const empty = title.closest('[data-slot="empty"]')
     expect(empty?.className).toContain('items-center')
@@ -689,7 +689,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/primary-worker')
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     expect(within(main).getByText('No workspaces yet')).toBeTruthy()
     expect(within(main).getByText('Create a Demo Primary workspace to start work.')).toBeTruthy()
     expect(within(main).getByRole('button', { name: 'Create workspace' })).toBeTruthy()
@@ -705,7 +705,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     const title = within(main).getByText('No sessions in this workspace yet.')
     const empty = title.closest('[data-slot="empty"]')
     expect(empty?.className).toContain('items-center')
@@ -713,7 +713,7 @@ describe('worker studio', () => {
     expect(empty?.className).not.toContain('items-start')
 
     fireEvent.change(within(main).getByRole('textbox'), { target: { value: 'Start from the empty workspace composer.' } })
-    fireEvent.click(within(main).getByRole('button', { name: 'Send invocation' }))
+    fireEvent.click(within(main).getByRole('button', { name: 'Send' }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/sessions', expect.objectContaining({ method: 'POST' }))
@@ -732,7 +732,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     // The column is the bounded vertical flex parent that fills the main area so
     // the composer pins to the bottom — mirroring the session ChatSurface layout.
     const column = main.querySelector('[data-workspace-empty-chat-column="true"]')
@@ -768,7 +768,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1/sessions/session-1')
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     // Archive is a direct one-click action in the session header — no workspace archive offered here.
     expect(within(main).queryByRole('button', { name: 'Archive workspace' })).toBeNull()
     fireEvent.click(within(main).getByRole('button', { name: 'Archive session' }))
@@ -800,7 +800,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     fireEvent.click(within(main).getByRole('button', { name: 'Archive workspace' }))
     expectNoArchiveRequest('/api/workspace-locators/workspace-1/archive')
 
@@ -839,7 +839,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1/sessions/session-1')
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     // The session header surfaces exactly one direct archive action — its own session, never the workspace.
     expect(within(main).queryByRole('button', { name: 'Archive workspace' })).toBeNull()
     fireEvent.click(within(main).getByRole('button', { name: 'Archive session' }))
@@ -867,7 +867,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/primary-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const main = await screen.findByLabelText('Soul workspaces and sessions')
+    const main = await screen.findByLabelText('Workspaces and sessions')
     // Workspace route with existing sessions resolves to the latest session chat,
     // not a "no sessions" empty state that would contradict the populated tree.
     expect(within(main).getByRole('log', { name: 'Session events' })).toBeTruthy()
@@ -938,7 +938,7 @@ describe('worker studio', () => {
     await screen.findByLabelText('Worker Workbench')
     const topBarButtons = [
       screen.getByRole('button', { name: 'Hide sidebar' }),
-      screen.getByRole('button', { name: /^Open local Host settings/ }),
+      screen.getByRole('button', { name: /^Open local settings/ }),
     ]
 
     for (const button of topBarButtons) {
@@ -981,11 +981,11 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByLabelText('Worker Workbench')
-    expect(screen.queryByRole('dialog', { name: 'Local Host Settings' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Local settings' })).toBeNull()
 
     openHostSettings()
 
-    const settingsDialog = screen.getByRole('dialog', { name: 'Local Host Settings' })
+    const settingsDialog = screen.getByRole('dialog', { name: 'Local settings' })
     expect(settingsDialog).toBeTruthy()
     expect(settingsDialog.getAttribute('data-slot')).toBe('dialog-content')
     const testButton = screen.getByRole('button', { name: 'Test' })
@@ -1049,7 +1049,7 @@ describe('worker studio', () => {
 
     await screen.findByTestId('worker-studio-shell')
     openHostSettings()
-    const settingsDialog = screen.getByRole('dialog', { name: 'Local Host Settings' })
+    const settingsDialog = screen.getByRole('dialog', { name: 'Local settings' })
     selectSettingsTab(within(settingsDialog).getByRole('tab', { name: /Appearance/ }))
     const appearanceGroup = await screen.findByRole('group', { name: 'Appearance' })
     fireEvent.click(within(appearanceGroup).getByRole('radio', { name: /Dark Workspace/ }))

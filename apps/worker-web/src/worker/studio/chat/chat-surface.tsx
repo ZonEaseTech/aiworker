@@ -1,7 +1,7 @@
 import type { LocalEngineInvocation, LocalSession, LocalSessionEvent } from '@zonease/aiworker-soul-descriptor'
 import type { ReactNode } from 'react'
 import type { ChatComposerLabels } from './chat-composer'
-import type { TranscriptTurnActionLabels } from './chat-transcript'
+import type { ChatTranscriptLabels, TranscriptTurnActionLabels } from './chat-transcript'
 
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
@@ -10,6 +10,7 @@ import { ChatComposer } from './chat-composer'
 import { ChatTranscript } from './chat-transcript'
 
 export interface ChatSurfaceProps {
+  chatLabels?: ChatTranscriptLabels
   composerDisabled?: boolean
   composerDisabledReason?: ReactNode
   composerLabels: ChatComposerLabels
@@ -64,7 +65,7 @@ type SessionTranscriptSnapshotAction
  * this surface on the session route (the Soul provides no UI; there is no
  * mounted workbench). This is the live employee chat, not a reusable stub.
  */
-export function ChatSurface({ composerDisabled = false, composerDisabledReason, composerLabels, initialActive = null, onSessionUpdated, sessionId, transcriptAriaLabel, turnActionLabels }: ChatSurfaceProps) {
+export function ChatSurface({ chatLabels, composerDisabled = false, composerDisabledReason, composerLabels, initialActive = null, onSessionUpdated, sessionId, transcriptAriaLabel, turnActionLabels }: ChatSurfaceProps) {
   const [active, setActive] = useState<ActiveInvocationFollow | null>(
     initialActive ? { ...initialActive, status: 'running' } : null,
   )
@@ -217,6 +218,7 @@ export function ChatSurface({ composerDisabled = false, composerDisabledReason, 
   const transcript = (
     <ChatTranscript
       ariaLabel={transcriptAriaLabel}
+      chatLabels={chatLabels}
       emptyState={snapshot.status === 'error' ? <TranscriptRestoreErrorState /> : undefined}
       initialInvocation={activeInitialInvocation}
       invocationId={activeInvocationId}
