@@ -98,6 +98,8 @@ printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"
     expect(argv[argv.length - 1]).toBe('-')
     expect(argv).not.toContain('--sandbox')
     expect(argv).not.toContain('-C')
+    // Network OFF by default — no opt-in env set.
+    expect(argv).not.toContain('sandbox_workspace_write.network_access=true')
   })
 
   it('codex stays on bare `exec` (fresh session) without a resume ref', async () => {
@@ -117,6 +119,64 @@ printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"
     expect(argv).toContain('--sandbox')
     expect(argv).toContain('-C')
     expect(argv[argv.length - 1]).not.toBe('-')
+    // Network OFF by default — no opt-in env set.
+    expect(argv).not.toContain('sandbox_workspace_write.network_access=true')
+  })
+
+  it('codex opens network only when AIWORKER_CODEX_NETWORK_ACCESS=1 (fresh session)', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const argsFile = path.join(makeRoot(), 'argv.txt')
+    const command = await makeScript(`
+cat >/dev/null
+printf '%s\\n' "$@" >> ${argsFile}
+printf '%s\\n' '{"type":"thread.started","thread_id":"codex-thread-9"}'
+printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}'
+`)
+    const original = process.env.AIWORKER_CODEX_NETWORK_ACCESS
+    process.env.AIWORKER_CODEX_NETWORK_ACCESS = '1'
+    try {
+      await createExternalEngineExecutor().invoke({ ...baseInput(command, workspaceRoot), engineId: 'codex' })
+    }
+    finally {
+      if (original === undefined)
+        delete process.env.AIWORKER_CODEX_NETWORK_ACCESS
+      else
+        process.env.AIWORKER_CODEX_NETWORK_ACCESS = original
+    }
+    const argv = (await readFile(argsFile, 'utf8')).split('\n').filter(Boolean)
+    expect(argv).toContain('sandbox_workspace_write.network_access=true')
+  })
+
+  it('codex opens network only when AIWORKER_CODEX_NETWORK_ACCESS=1 (resume session)', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const argsFile = path.join(makeRoot(), 'argv.txt')
+    const command = await makeScript(`
+cat >/dev/null
+printf '%s\\n' "$@" >> ${argsFile}
+printf '%s\\n' '{"type":"thread.started","thread_id":"codex-thread-9"}'
+printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}'
+`)
+    const original = process.env.AIWORKER_CODEX_NETWORK_ACCESS
+    process.env.AIWORKER_CODEX_NETWORK_ACCESS = '1'
+    try {
+      await createExternalEngineExecutor().invoke({
+        ...baseInput(command, workspaceRoot),
+        engineId: 'codex',
+        resumeRef: { id: 'codex-thread-prev', target: 'codex' },
+      })
+    }
+    finally {
+      if (original === undefined)
+        delete process.env.AIWORKER_CODEX_NETWORK_ACCESS
+      else
+        process.env.AIWORKER_CODEX_NETWORK_ACCESS = original
+    }
+    const argv = (await readFile(argsFile, 'utf8')).split('\n').filter(Boolean)
+    expect(argv).toContain('sandbox_workspace_write.network_access=true')
+    // Opt-in network arg must not displace the trailing stdin sentinel.
+    expect(argv[argv.length - 1]).toBe('-')
   })
 
   it('claude resumes via --resume <id>', async () => {

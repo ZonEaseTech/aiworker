@@ -145,8 +145,6 @@ const localEngineDefinitions: Record<string, LocalEngineDefinition> = {
             '--skip-git-repo-check',
             '-c',
             'sandbox_mode=workspace-write',
-            '-c',
-            'sandbox_workspace_write.network_access=true',
           ]
         : [
             'exec',
@@ -154,11 +152,15 @@ const localEngineDefinitions: Record<string, LocalEngineDefinition> = {
             '--skip-git-repo-check',
             '--sandbox',
             'workspace-write',
-            '-c',
-            'sandbox_workspace_write.network_access=true',
             '-C',
             input.workspaceRoot,
           ]
+      // Codex workspace-write keeps network OFF by default (community-aligned:
+      // Codex docs flag opening the network as "not recommended"). Out-bound
+      // network is an explicit, documented opt-in via env only — never derived
+      // from descriptor/DB/log/receipt, only read from process env here.
+      if (process.env.AIWORKER_CODEX_NETWORK_ACCESS === '1')
+        args.push('-c', 'sandbox_workspace_write.network_access=true')
       if (process.env.AIWORKER_CODEX_DISABLE_PLUGINS === '1' || process.env.OD_CODEX_DISABLE_PLUGINS === '1')
         args.push('--disable', 'plugins')
       if (process.env.AIWORKER_CODEX_IGNORE_USER_CONFIG === '1')
