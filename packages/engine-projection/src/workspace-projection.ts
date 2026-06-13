@@ -10,6 +10,8 @@ import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
+import { SECRET_FORMAT_ALTERNATION } from '@zonease/aiworker-engine-bridge'
+
 const SKILL_ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const SKILL_FILE = 'SKILL.md'
 const DEFAULT_SKILL_ASSET_SOURCE = 'engine-assets/skills'
@@ -17,7 +19,11 @@ const DEFAULT_WORKSPACE_ASSET_SOURCE = 'engine-assets/workspace'
 const PROJECTION_RECEIPT = path.posix.join('.aiworker', 'projections.json')
 const PRESERVE_EXISTING_WORKSPACE_TARGETS = new Set(['README.md'])
 const MCP_SECRET_ASSIGNMENT_RE = /["']?([\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*)["']?\s*[:=]\s*["']([^"'\n]+)["']/gi
-const MCP_SECRET_VALUE_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}/i
+// Value-format alternation (PEM/JWT/ghp_/gho_/github_pat_/AKIA/AIza) sourced from the
+// shared engine-bridge constant so MCP projection gate covers all formats that storage
+// write-rejects. Bearer/sk- appended. No 'g' flag: used only in .test() to avoid
+// stateful lastIndex; 'i' preserved for case-insensitive Bearer/sk- matching.
+const MCP_SECRET_VALUE_RE = new RegExp(`${SECRET_FORMAT_ALTERNATION}|Bearer\\s+[\\w.~+/-]{12,}|sk-[\\w-]{8,}`, 'i')
 
 export interface EngineAssetSource {
   appId: string
@@ -541,7 +547,16 @@ function hasLiteralSecretAssignment(content: string): boolean {
 }
 
 function isSecretReferenceValue(value: string): boolean {
-  return value.startsWith('$') || value.startsWith('env:') || value.startsWith('secretref:')
+  const prefix = ['$', 'env:', 'secretref:'].find(p => value.startsWith(p))
+  if (!prefix)
+    return false
+  // Guard against prefix disguise, e.g. 'env:KEY=sk-...' or '$X=literal':
+  // the reference body must name a lookup target, not embed an assignment or
+  // a literal secret value. Mirrors the storage and daemon settings guards.
+  const body = value.slice(prefix.length)
+  if (body.includes('='))
+    return false
+  return !MCP_SECRET_VALUE_RE.test(body)
 }
 
 function receiptEntry(

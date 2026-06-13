@@ -16,6 +16,7 @@
     "test": "bun test --timeout=15000"
   },
   "dependencies": {
+    "@zonease/aiworker-engine-bridge": "workspace:*",
     "@zonease/aiworker-soul-descriptor": "workspace:*"
   },
   "devDependencies": {

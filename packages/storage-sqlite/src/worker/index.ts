@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 
 import { fileURLToPath } from 'node:url'
+import { SECRET_FORMAT_ALTERNATION } from '@zonease/aiworker-engine-bridge'
 import {
 
   localWorkerConfigValueInputSchema,
@@ -36,7 +37,10 @@ export const defaultWorkerMigrationsFolder: string = resolveMigrationsFolder('wo
 
 let db: ReturnType<typeof createDb> | null = null
 let sqliteHandle: Database | null = null
-const LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,}|eyJ[\w-]+\.[\w-]+\.[\w-]+|-----BEGIN[A-Z ]*PRIVATE KEY-----|token=[^\s"']+|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["'][^"'\n]+["']/gi
+// Value-format alternation (PEM/JWT/ghp_/gho_/github_pat_/AKIA/AIza) sourced from
+// the shared engine-bridge constant so all detection sites share one true source and
+// cannot drift apart. Local branches (Bearer/sk-/token=/assignment) are appended.
+const LITERAL_SECRET_RE = new RegExp(`${SECRET_FORMAT_ALTERNATION}|Bearer\\s+[\\w.~+/-]{12,}|sk-[\\w-]{8,}|token=[^\\s"']+|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\\s*[:=]\\s*["'][^"'\\n]+["']`, 'gi')
 const REDACTED_LITERAL_SECRET_RE = /Bearer\s+\[REDACTED\]|sk-\[REDACTED\]|token=\[REDACTED\]|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["']\[REDACTED\]["']/i
 const NATIVE_MCP_FILE_RE = /(?:^|\n)\s*\[mcp_servers(?:\.|\])|["']mcpServers["']\s*:/i
 const SOUL_OWNED_PAYLOAD_KEY_RE = /^(?:artifact|artifactBody|artifactContent|artifactJson|artifactPayload|artifactRecord|businessActionState|candidate|candidateBody|candidateContent|candidateId|candidateJson|candidatePayload|candidateRecord|confirmationState|content|contentBody|contentJson|contentPayload|entryFileBody|entryFileContent|history|historyEntries|historyJson|profile|profileBody|profileContent|profileId|profileJson|profilePayload|profileRecord|prompt|promptBody|promptContent|promptText|review|reviewBody|reviewContent|reviewId|reviewJson|reviewPayload|reviewRecord|skillBody|skillMarkdown)$/i

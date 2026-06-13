@@ -27,6 +27,7 @@
     "db:generate": "bun run db:generate:worker"
   },
   "dependencies": {
+    "@zonease/aiworker-engine-bridge": "workspace:*",
     "@zonease/aiworker-soul-descriptor": "workspace:*",
     "drizzle-orm": "^0.44.1"
   },
