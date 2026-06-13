@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 
+import { SECRET_FORMAT_ALTERNATION } from '@zonease/aiworker-engine-bridge'
 import { Database } from 'bun:sqlite'
 import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -16,7 +17,10 @@ const SCRYPT_KEY_LENGTH = 64
 const DEFAULT_TOKEN_TTL_MS = 24 * 60 * 60 * 1000
 const DEFAULT_ACCESS_TOKEN_TTL_MS = 24 * 60 * 60 * 1000
 
-const LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,}|eyJ[\w-]+\.[\w-]+\.[\w-]+|-----BEGIN[A-Z ]*PRIVATE KEY-----|token=[^\s"']+|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["'][^"'\n]+["']/gi
+// Value-format alternation (PEM/JWT/ghp_/gho_/github_pat_/AKIA/AIza) sourced from
+// the shared engine-bridge constant so all detection sites share one true source and
+// cannot drift apart. Local branches (Bearer/sk-/token=/assignment) are appended.
+const LITERAL_SECRET_RE = new RegExp(`${SECRET_FORMAT_ALTERNATION}|Bearer\\s+[\\w.~+/-]{12,}|sk-[\\w-]{8,}|token=[^\\s"']+|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\\s*[:=]\\s*["'][^"'\\n]+["']`, 'gi')
 const REDACTED_LITERAL_SECRET_RE = /Bearer\s+\[REDACTED\]|sk-\[REDACTED\]|token=\[REDACTED\]|["']?(?:api[_-]?key|authorization|password|secret|token)["']?\s*[:=]\s*["']\[REDACTED\]["']/i
 const SECRET_REFERENCE_PREFIXES = ['$', 'env:', 'secretref:'] as const
 

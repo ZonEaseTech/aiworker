@@ -2260,4 +2260,50 @@ describe('destructive refactor contract bootstrap', () => {
     expect(daemon).not.toContain('listWorkers()[0]')
     expect(orchestrator).toContain('WORKER_ALREADY_ACTIVE')
   })
+
+  // SL-5 / B6：字面 secret 检测正则跨包收敛契约。
+  // 所有检测站点必须从 engine-bridge 的单一真源 SECRET_FORMAT_ALTERNATION 派生；
+  // 发散的字面拷贝（独立枚举 ghp_/AKIA/AIza/JWT/PEM）必须消失。
+  // 断言：源文件不再含字面 alternation 拷贝，且均引用共享常量名或 engine-bridge 包。
+  test('secret format alternation is sourced from engine-bridge single true source at all detection sites', () => {
+    const storageWorker = readRepoFile('packages/storage-sqlite/src/worker/index.ts')
+    const storageHost = readRepoFile('packages/storage-sqlite/src/host/index.ts')
+    const settings = readRepoFile('packages/worker-daemon/src/modes/worker/settings.ts')
+    const soulSdk = readRepoFile('packages/soul-sdk/src/index.ts')
+    const projection = readRepoFile('packages/engine-projection/src/workspace-projection.ts')
+    const errorHandler = readRepoFile('packages/worker-daemon/src/shared/middleware/error-handler.ts')
+
+    // 所有站点必须 import engine-bridge——不再独立重定义 ghp_/AKIA/AIza 的正则 alternation。
+    // 发散的字面拷贝特征：regex 源中同时出现 ghp_\w 与 AKIA 与 AIza 的 alternation 枚举。
+    // 用剥注释后的代码检测，避免注释中的格式说明误报。
+    function stripCodeComments(src: string): string {
+      return src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
+    }
+    // 只检测正则上下文中的发散：`ghp_\w` 是正则 alternation 分支特征（注释里只写 ghp_ 无 \w）
+    const DIVERGENT_REGEX_PATTERN = /ghp_\\w.*AKIA.*AIza|AKIA.*AIza.*ghp_\\w|AIza.*ghp_\\w.*AKIA/s
+    expect(DIVERGENT_REGEX_PATTERN.test(stripCodeComments(storageWorker)), 'storage-sqlite/worker must not contain divergent literal alternation copy').toBe(false)
+    expect(DIVERGENT_REGEX_PATTERN.test(stripCodeComments(storageHost)), 'storage-sqlite/host must not contain divergent literal alternation copy').toBe(false)
+    expect(DIVERGENT_REGEX_PATTERN.test(stripCodeComments(settings)), 'worker-daemon/settings must not contain divergent literal alternation copy').toBe(false)
+    expect(DIVERGENT_REGEX_PATTERN.test(stripCodeComments(soulSdk)), 'soul-sdk must not contain divergent literal alternation copy').toBe(false)
+    expect(DIVERGENT_REGEX_PATTERN.test(stripCodeComments(projection)), 'engine-projection must not contain divergent literal alternation copy').toBe(false)
+
+    // 所有站点必须引用共享常量名 SECRET_FORMAT_ALTERNATION。
+    for (const [label, src] of [
+      ['storage-sqlite/worker', storageWorker],
+      ['storage-sqlite/host', storageHost],
+      ['worker-daemon/settings', settings],
+      ['soul-sdk', soulSdk],
+      ['engine-projection', projection],
+      ['worker-daemon/error-handler', errorHandler],
+    ] as const) {
+      expect(src, `${label} must reference SECRET_FORMAT_ALTERNATION`).toContain('SECRET_FORMAT_ALTERNATION')
+    }
+
+    // engine-bridge 保有真源导出（删除即变红）。
+    const engineBridge = readRepoFile('packages/engine-bridge/src/index.ts')
+    expect(engineBridge).toContain('export const SECRET_FORMAT_ALTERNATION')
+
+    // engine-projection 的 isSecretReferenceValue 必须包含 prefix-disguise guard（=检测）。
+    expect(projection, 'engine-projection isSecretReferenceValue must include prefix-disguise guard').toContain('body.includes(\'=\')')
+  })
 })

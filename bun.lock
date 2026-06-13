@@ -62,7 +62,7 @@
     },
     "apps/worker-cli": {
       "name": "@zonease/aiworker-cli",
-      "version": "1.0.0-rc.11",
+      "version": "1.0.1",
       "bin": {
         "aiworker": "./dist/aiworker.js",
       },
@@ -127,6 +127,7 @@
     "packages/engine-projection": {
       "name": "@zonease/aiworker-engine-projection",
       "dependencies": {
+        "@zonease/aiworker-engine-bridge": "workspace:*",
         "@zonease/aiworker-soul-descriptor": "workspace:*",
       },
       "devDependencies": {
@@ -164,6 +165,7 @@
     "packages/soul-sdk": {
       "name": "@zonease/aiworker-soul-sdk",
       "dependencies": {
+        "@zonease/aiworker-engine-bridge": "workspace:*",
         "@zonease/aiworker-soul-descriptor": "workspace:*",
       },
       "devDependencies": {
@@ -174,6 +176,7 @@
     "packages/storage-sqlite": {
       "name": "@zonease/aiworker-storage-sqlite",
       "dependencies": {
+        "@zonease/aiworker-engine-bridge": "workspace:*",
         "@zonease/aiworker-soul-descriptor": "workspace:*",
         "drizzle-orm": "^0.44.1",
       },

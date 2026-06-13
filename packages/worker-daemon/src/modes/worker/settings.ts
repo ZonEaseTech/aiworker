@@ -1,6 +1,7 @@
 import type { LocalEngineReadinessSettings, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-soul-descriptor'
 import type { InspectEngineCredential } from '@zonease/aiworker-worker-runtime'
 import { AppError, localSettingsConfigSchema } from '@zonease/aiworker-soul-descriptor'
+import { SECRET_FORMAT_ALTERNATION } from '@zonease/aiworker-engine-bridge'
 import { getSetting, listSettings, setSetting } from '@zonease/aiworker-storage-sqlite/worker'
 import { inspectLocalEngineCredential, resolveEngineAuthReadiness, scanLocalEngines } from '@zonease/aiworker-worker-runtime'
 
@@ -130,7 +131,10 @@ function assertSafeSecretRefs(settings: LocalSettingsConfig): void {
 }
 
 const SECRET_REFERENCE_PREFIXES = ['$', 'env:', 'secretref:'] as const
-const LITERAL_SECRET_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,}|eyJ[\w-]+\.[\w-]+\.[\w-]+|-----BEGIN[A-Z ]*PRIVATE KEY-----/
+// Value-format alternation (PEM/JWT/ghp_/gho_/github_pat_/AKIA/AIza) sourced from the
+// shared engine-bridge constant. Bearer/sk- appended for BYOK ref-body detection.
+// No flags: used only in .test() — adding 'g' would make .test() stateful via lastIndex.
+const LITERAL_SECRET_RE = new RegExp(`${SECRET_FORMAT_ALTERNATION}|Bearer\\s+[\\w.~+/-]{12,}|sk-[\\w-]{8,}`)
 
 function isSafeSecretReference(value: string): boolean {
   const trimmed = value.trim()

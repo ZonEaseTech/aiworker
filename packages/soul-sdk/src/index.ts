@@ -3,9 +3,13 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, write
 import { basename, join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
+import { SECRET_FORMAT_ALTERNATION } from '@zonease/aiworker-engine-bridge'
 
 const SECRET_ASSIGNMENT_RE = /(["']?[\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*["']?\s*[:=]\s*["']?)([^"'\s]+)/gi
-const SECRET_VALUE_RE = /-----BEGIN[A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----)?|\beyJ[\w-]+\.[\w-]+\.[\w-]+|\b(?:Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}|ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{35,})\b/gi
+// Value-format alternation (PEM/JWT/ghp_/gho_/github_pat_/AKIA/AIza) sourced from
+// the shared engine-bridge constant. Bearer/sk- bare tokens appended for diagnostic
+// redaction coverage. Used with .replace() so 'gi' flags are correct.
+const SECRET_VALUE_RE = new RegExp(`${SECRET_FORMAT_ALTERNATION}|\\b(?:Bearer\\s+[\\w.~+/-]{12,}|sk-[\\w-]{8,})\\b`, 'gi')
 
 export type SoulBuildStatus = 'built' | 'failed'
 export type SoulValidationStatus = 'invalid' | 'valid'

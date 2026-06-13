@@ -328,6 +328,62 @@ describe('workspace engine asset projection', () => {
     expect(JSON.stringify(receipt)).not.toContain('secretref:codex/default-profile')
   })
 
+  // 收敛契约：MCP 投影门必须与 storage write-reject 覆盖相同的格式集合。
+  // 每条格式（ghp_/AKIA/AIza/JWT/PEM）直接通过公共 API 驱动，不依赖私有 const。
+  it.each([
+    ['github-pat bare token', 'api_key = "ghp_0123456789abcdefghijklmnopqrstuvwxyz"\n'],
+    ['aws-access-key bare token', 'api_key = "AKIAIOSFODNN7EXAMPLE"\n'],
+    ['google-api-key bare token', 'api_key = "AIzaSyA1234567890abcdefghijklmnopqrstuvw"\n'],
+    ['jwt bare token', 'api_key = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.abc"\n'],
+    ['pem header', '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA\n-----END RSA PRIVATE KEY-----\n'],
+  ])('rejects %s in worker overlay MCP client config (format convergence)', async (_label, secretContent) => {
+    const sourceRoot = tempRoot(`converge-source-${_label.replace(/\s/g, '-')}`)
+    const workspaceRoot = tempRoot(`converge-workspace-${_label.replace(/\s/g, '-')}`)
+    await writeEngineAssetSource(sourceRoot, 'command = "baseline-mcp"\n')
+
+    await expect(projectEngineAssetsToWorkspace({
+      appId: 'demo-soul-app',
+      engineAssets: mcpEngineAssets(['codex']),
+      engineTarget: 'codex',
+      now: '2026-05-16T00:00:00.000Z',
+      sourceRoot,
+      variables: {},
+      workerOverlayAssets: [{
+        content: secretContent,
+        enabled: true,
+        id: 'codex-ats',
+        kind: 'mcp-client',
+        target: 'codex',
+      }],
+      workspaceRoot,
+    })).rejects.toThrow('MCP client config must not contain literal secrets')
+  })
+
+  it('rejects prefix-disguised literal secret in worker overlay MCP client config (env:KEY=literal)', async () => {
+    // Validates the isSecretReferenceValue prefix-disguise guard: a value starting
+    // with 'env:' but containing '=' must be rejected even though it looks like a ref.
+    const sourceRoot = tempRoot('disguise-source')
+    const workspaceRoot = tempRoot('disguise-workspace')
+    await writeEngineAssetSource(sourceRoot, 'command = "baseline-mcp"\n')
+
+    await expect(projectEngineAssetsToWorkspace({
+      appId: 'demo-soul-app',
+      engineAssets: mcpEngineAssets(['codex']),
+      engineTarget: 'codex',
+      now: '2026-05-16T00:00:00.000Z',
+      sourceRoot,
+      variables: {},
+      workerOverlayAssets: [{
+        content: 'api_key = "env:OPENAI_API_KEY=sk-literal-secret-value"\n',
+        enabled: true,
+        id: 'codex-ats',
+        kind: 'mcp-client',
+        target: 'codex',
+      }],
+      workspaceRoot,
+    })).rejects.toThrow('MCP client config must not contain literal secrets')
+  })
+
   it('records freshness markers without copying overlay content into receipts', async () => {
     const sourceRoot = tempRoot('freshness-source')
     const workspaceRoot = tempRoot('freshness-workspace')
