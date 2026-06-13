@@ -11,6 +11,7 @@ import { WORKBENCH_RENDER_TIMEOUT_MS } from './workbench-render-wait'
 const repoRoot = join(import.meta.dir, '..', '..')
 const appId = 'aiworker-freeform'
 const workerId = 'freeform-browser-user-worker'
+const FAILURE_SENTINEL = 'FORCE_ENGINE_FAILURE'
 const descriptorPath = join(repoRoot, 'souls/aiworker-freeform/dist/soul.descriptor.json')
 const evidenceRoot = join(repoRoot, 'tmp', `freeform-browser-user-flow-${new Date().toISOString().replace(/[:.]/g, '-')}`)
 const desktopViewport = { height: 920, width: 1440 }
@@ -115,12 +116,20 @@ try {
 
   const sessionProof = await waitForSessionProof(page, routeIds, 2)
 
+  // B1: a completed assistant turn exposes a "copy as Markdown" turn action.
+  await assertCopyMarkdownActionPresent(page)
+  // B2: an invocation that ends in a failed/lost terminal state exposes Retry.
+  await assertFailedInvocationRetryAction(page, chatSurface)
+
   await addEntryFileOverlayFromUi(page, routeIds.workerId)
   const entryFileProof = await readLocalApi(page, `/api/workers/${routeIds.workerId}/config/entry-file-overlay%3AUSER_FLOW.md/content`)
   assertEntryFileProof(entryFileProof)
 
   await assertSecretOverlayRejectionFromUi(page)
   await assertSettingsUserFlow(page)
+  // A1/A4: an execution mode with no usable engine disables the composer and
+  // surfaces the readiness guidance, posture disclosure, and open-settings action.
+  await assertComposerReadinessGate(page)
 
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator('[data-chat-surface="true"]').waitFor({ state: 'attached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
@@ -193,6 +202,30 @@ async function createWorkspaceAndSessionFromUi(page: Page): Promise<void> {
   await page.waitForURL(/\/workers\/[^/]+\/workspaces\/[^/]+\/sessions\/[^/]+$/, { timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   await page.getByText(firstMessage).waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   await page.getByText('Done.').waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+}
+
+async function assertCopyMarkdownActionPresent(page: Page): Promise<void> {
+  const rail = page.locator('[data-transcript-slot="turn-action-rail"]')
+  await rail.first().waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+  const copyAction = page.getByRole('button', { name: 'Copy as Markdown' })
+  if (await copyAction.count() === 0)
+    throw new Error('Completed assistant turn did not expose a copy-as-Markdown action.')
+}
+
+async function assertFailedInvocationRetryAction(page: Page, chatSurface: ReturnType<Page['locator']>): Promise<void> {
+  const eventStart = browserEvents.length
+  const failureMessage = `Trigger a failed invocation. ${FAILURE_SENTINEL}`
+  await chatSurface.locator('textarea').fill(failureMessage)
+  await chatSurface.locator('button[type="submit"]').click()
+  await page.getByText(failureMessage).waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+
+  const retryAction = page.getByRole('button', { name: 'Retry' })
+  await retryAction.first().waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+
+  // The failed invocation poll surfaces a redacted danger status; swallow the
+  // expected aborted event-stream noise the failed run leaves behind.
+  const failureEvents = browserEvents.splice(eventStart)
+  browserEvents.push(...failureEvents.filter(event => isExpectedBrowserEvent(event)))
 }
 
 interface ComposerLayoutMetrics {
@@ -318,6 +351,47 @@ async function assertSettingsUserFlow(page: Page): Promise<void> {
   await settingsDialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 }
 
+async function assertComposerReadinessGate(page: Page): Promise<void> {
+  // Switch to BYOK without an API key reference → readiness derives "not ready"
+  // purely from local settings, so the employee is guided instead of submitting.
+  await page.getByRole('button', { name: /^Open local Host settings/ }).click()
+  const settingsDialog = page.getByRole('dialog', { name: 'Local Host Settings' })
+  await settingsDialog.getByRole('radio', { name: 'BYOK' }).click()
+  await settingsDialog.getByRole('button', { name: 'Close local Host settings' }).click()
+  await settingsDialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+
+  const readinessNotice = page.locator('[data-chat-slot="composer-readiness"]')
+  await readinessNotice.first().waitFor({ state: 'visible', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+
+  const gate = await page.evaluate(() => {
+    const notice = document.querySelector('[data-chat-slot="composer-readiness"]')
+    const action = document.querySelector('[data-chat-slot="composer-readiness-action"]')
+    const composerInput = document.querySelector<HTMLTextAreaElement>('[data-chat-surface="true"] [data-session-slot="composer-input"]')
+    const submitButton = document.querySelector<HTMLButtonElement>('[data-chat-surface="true"] button[type="submit"]')
+    return {
+      actionPresent: action !== null,
+      composerDisabled: composerInput?.disabled ?? false,
+      noticeText: notice?.textContent ?? '',
+      submitDisabled: submitButton?.disabled ?? false,
+    }
+  })
+
+  if (!gate.composerDisabled || !gate.submitDisabled)
+    throw new Error(`Composer was not disabled when no engine/BYOK is ready: ${JSON.stringify(gate)}`)
+  if (!gate.actionPresent)
+    throw new Error(`Readiness notice did not surface a one-click settings action: ${JSON.stringify(gate)}`)
+  if (!gate.noticeText.includes('BYOK') || !/elevated access/i.test(gate.noticeText))
+    throw new Error(`Readiness notice missing guidance or engine posture disclosure: ${JSON.stringify(gate)}`)
+
+  // Restore Local CLI so the rest of the flow runs with a ready composer.
+  await page.getByRole('button', { name: /^Open local Host settings/ }).click()
+  const restoreDialog = page.getByRole('dialog', { name: 'Local Host Settings' })
+  await restoreDialog.getByRole('radio', { name: 'Local CLI' }).click()
+  await restoreDialog.getByRole('button', { name: 'Close local Host settings' }).click()
+  await restoreDialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+  await page.locator('[data-chat-slot="composer-readiness"]').waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
+}
+
 async function archiveWorkspaceLifecycleFromUi(
   page: Page,
   routeIds: { sessionId: string, workerId: string, workspaceId: string },
@@ -414,15 +488,19 @@ async function writeFakeCodexCommand(): Promise<void> {
   const shFirstArg = '$' + '{1:-}'
   const shCounter = '$' + '{counter}'
   const shThreadSeq = '$' + '{thread_seq}'
+  const shPrompt = '$' + '{prompt}'
   await writeFile(commandPath, [
     '#!/usr/bin/env bash',
     'set -euo pipefail',
-    'cat >/dev/null',
+    'prompt=$(cat)',
     `counter=${counterPath}`,
     'thread_seq=1',
     `if [ -f "${shCounter}" ]; then thread_seq=$(( $(cat "${shCounter}") + 1 )); fi`,
     `printf '%s' "${shThreadSeq}" > "${shCounter}"`,
     `if [ "${shFirstArg}" = "--version" ]; then printf 'codex-browser-user-flow\\n'; exit 0; fi`,
+    // A sentinel input drives a non-zero exit so the failed/lost retry path is
+    // exercised deterministically (the engine never reaches its agent message).
+    `case "${shPrompt}" in *${FAILURE_SENTINEL}*) printf 'simulated engine failure\\n' >&2; exit 7;; esac`,
     `printf '%s\\n' "{\\"type\\":\\"thread.started\\",\\"thread_id\\":\\"native-thread-${shThreadSeq}\\"}"`,
     'printf \'%s\\n\' \'{"type":"turn.started"}\'',
     'printf \'%s\\n\' \'{"type":"item.started","item":{"type":"command_execution","id":"tool-1","command":"printf bridge"}}\'',

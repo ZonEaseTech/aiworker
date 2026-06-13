@@ -1,8 +1,10 @@
 import type { LocalSession, LocalWorkerOverlayAsset, LocalWorkspace } from '@zonease/aiworker-soul-descriptor'
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import type { LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
 import type { ChatComposerLabels } from './studio/chat/chat-composer'
+import type { TranscriptTurnActionLabels } from './studio/chat/chat-transcript'
+import type { ComposerReadiness } from './studio/chat/composer-readiness'
 import type { WorkerStudioLocatorState } from './studio/locator'
 
 import { Add01Icon, Archive01Icon, FolderLibraryIcon } from '@hugeicons/core-free-icons'
@@ -44,6 +46,8 @@ import { SettingsDialog } from '../features/settings'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
 import { StudioChromeHeader, StudioEmptyState, StudioMainFrame, StudioTitleBlock, WorkerStudioLayout } from './components/studio-shell'
 import { ChatSurface } from './studio/chat/chat-surface'
+import { deriveComposerReadiness } from './studio/chat/composer-readiness'
+import { ComposerReadinessNotice } from './studio/chat/composer-readiness-notice'
 import { sessionDraftToInvocationInput } from './studio/chat/session-draft-input'
 import { WorkerStudioTopBar } from './studio/host-chrome'
 import { deriveWorkerStudioLocatorState } from './studio/locator'
@@ -383,6 +387,17 @@ export function WorkerStudio() {
     submitAriaLabel: copy.workspace.sendInvocation,
   }), [copy])
 
+  const turnActionLabels: TranscriptTurnActionLabels = useMemo(() => ({
+    copyAsMarkdown: copy.workspace.copyAsMarkdown,
+    retry: copy.workspace.retryMessage,
+  }), [copy])
+
+  const settings = data?.settings
+  const composerReadiness = useMemo<ComposerReadiness>(
+    () => settings ? deriveComposerReadiness(settings) : { ready: true, reason: null },
+    [settings],
+  )
+
   if (state.loading && !data) {
     return (
       <main className="grid min-h-screen place-items-center" data-slot="app-shell" data-appearance={appearance} data-theme={resolvedTheme}>
@@ -528,6 +543,7 @@ export function WorkerStudio() {
         )}
         main={(
           <WorkbenchMain
+            composerReadiness={composerReadiness}
             copy={copy}
             composerLabels={composerLabels}
             hasWorker={Boolean(selectedWorker)}
@@ -536,9 +552,11 @@ export function WorkerStudio() {
             initialSessionSubmission={initialSessionSubmission}
             onArchiveSession={requestArchiveSelectedSession}
             onArchiveWorkspace={requestArchiveSelectedWorkspace}
+            onOpenSettings={() => openSettings('execution')}
             selectedSession={displayedSession}
             selectedSoulName={selectedSoulCopy?.name ?? selectedSoul?.id ?? copy.app.brand}
             selectedWorkspace={selectedWorkspace}
+            turnActionLabels={turnActionLabels}
             onCreateWorkspace={openWorkspaceCreation}
             onSessionUpdated={syncSessionDetail}
             onStartSessionWithInput={(input) => {
@@ -573,6 +591,7 @@ export function WorkerStudio() {
 
 function WorkbenchMain({
   composerLabels,
+  composerReadiness,
   copy,
   hasWorker,
   hasWorkspaces,
@@ -581,13 +600,16 @@ function WorkbenchMain({
   onArchiveSession,
   onArchiveWorkspace,
   onCreateWorkspace,
+  onOpenSettings,
   onSessionUpdated,
   onStartSessionWithInput,
   selectedSession,
   selectedSoulName,
   selectedWorkspace,
+  turnActionLabels,
 }: {
   composerLabels: ChatComposerLabels
+  composerReadiness: ComposerReadiness
   copy: ReturnType<typeof messagesFor>
   hasWorker: boolean
   hasWorkspaces: boolean
@@ -596,12 +618,18 @@ function WorkbenchMain({
   onArchiveSession: () => void
   onArchiveWorkspace: () => void
   onCreateWorkspace: () => void
+  onOpenSettings: () => void
   onSessionUpdated: (session: LocalSession) => void
   onStartSessionWithInput: (input: string) => Promise<void> | void
   selectedSession: LocalSession | null
   selectedSoulName: string
   selectedWorkspace: LocalWorkspace | null
+  turnActionLabels: TranscriptTurnActionLabels
 }) {
+  const readinessNotice: ReactNode = composerReadiness.ready
+    ? undefined
+    : <ComposerReadinessNotice copy={copy} readiness={composerReadiness} onOpenSettings={onOpenSettings} />
+
   if (isWorkspaceContextRoute && selectedSession) {
     return (
       <>
@@ -624,11 +652,14 @@ function WorkbenchMain({
         <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-7 py-4 max-md:px-4">
           <ChatSurface
             key={selectedSession.id}
+            composerDisabled={!composerReadiness.ready}
+            composerDisabledReason={readinessNotice}
             composerLabels={composerLabels}
             initialActive={initialSessionSubmission?.sessionId === selectedSession.id ? initialSessionSubmission : null}
             onSessionUpdated={onSessionUpdated}
             sessionId={selectedSession.id}
             transcriptAriaLabel={copy.workspace.eventStream}
+            turnActionLabels={turnActionLabels}
           />
         </CardContent>
       </>
@@ -670,7 +701,12 @@ function WorkbenchMain({
                 detail={copy.workspace.createSessionPrompt(selectedWorkspace.name)}
               />
             </div>
-            <InitialWorkspaceComposer labels={composerLabels} onSubmit={onStartSessionWithInput} />
+            <InitialWorkspaceComposer
+              disabled={!composerReadiness.ready}
+              disabledReason={readinessNotice}
+              labels={composerLabels}
+              onSubmit={onStartSessionWithInput}
+            />
           </div>
         </CardContent>
       </>
@@ -700,9 +736,13 @@ function WorkbenchMain({
 }
 
 function InitialWorkspaceComposer({
+  disabled = false,
+  disabledReason,
   labels,
   onSubmit,
 }: {
+  disabled?: boolean
+  disabledReason?: ReactNode
   labels: ChatComposerLabels
   onSubmit: (input: string) => Promise<void> | void
 }) {
@@ -710,8 +750,11 @@ function InitialWorkspaceComposer({
     <ManagedSessionComposer
       ariaLabel={labels.ariaLabel}
       attachmentLabels={labels.attachment}
+      disabled={disabled}
+      disabledReason={disabledReason}
       placeholder={labels.placeholder}
       submitAriaLabel={labels.submitAriaLabel}
+      submitDisabled={disabled}
       onSubmitDraft={async (draft) => {
         const input = sessionDraftToInvocationInput(draft)
         if (input.length === 0)

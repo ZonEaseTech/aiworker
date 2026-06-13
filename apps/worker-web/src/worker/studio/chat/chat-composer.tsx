@@ -1,5 +1,6 @@
 import type { LocalEngineInvocation, LocalSession } from '@zonease/aiworker-soul-descriptor'
 import type { ManagedSessionComposerAttachmentLabels } from '@zonease/aiworker-ui/components/managed-session-composer'
+import type { ReactNode } from 'react'
 import type { SessionComposerDockStatus } from './session-composer-dock'
 
 import { submitSessionInvocation } from '../../../features/local-workspace/api/session-invocations'
@@ -14,6 +15,8 @@ export interface ChatComposerLabels {
 }
 
 export interface ChatComposerProps {
+  disabled?: boolean
+  disabledReason?: ReactNode
   focusRequestToken?: number
   labels: ChatComposerLabels
   onCancel?: () => Promise<void> | void
@@ -32,6 +35,8 @@ export interface ChatComposerProps {
  * worker-studio on the session route. The Soul provides no UI.
  */
 export function ChatComposer({
+  disabled = false,
+  disabledReason,
   focusRequestToken,
   labels,
   onCancel,
@@ -41,6 +46,8 @@ export function ChatComposer({
 }: ChatComposerProps) {
   return (
     <SessionComposerDock
+      disabled={disabled}
+      disabledReason={disabledReason}
       focusRequestToken={focusRequestToken}
       labels={labels}
       onCancel={onCancel}
