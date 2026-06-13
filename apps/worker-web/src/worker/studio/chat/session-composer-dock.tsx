@@ -2,6 +2,7 @@ import type {
   ManagedSessionComposerAttachmentLabels,
   ManagedSessionComposerDraft,
 } from '@zonease/aiworker-ui/components/managed-session-composer'
+import type { ReactNode } from 'react'
 import { Cancel01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ManagedSessionComposer } from '@zonease/aiworker-ui/components/managed-session-composer'
@@ -17,6 +18,8 @@ export interface SessionComposerDockLabels {
 
 export interface SessionComposerDockProps {
   className?: string
+  disabled?: boolean
+  disabledReason?: ReactNode
   focusRequestToken?: number
   labels: SessionComposerDockLabels
   onCancel?: () => Promise<void> | void
@@ -26,6 +29,8 @@ export interface SessionComposerDockProps {
 
 export function SessionComposerDock({
   className,
+  disabled = false,
+  disabledReason,
   focusRequestToken,
   labels,
   onCancel,
@@ -39,6 +44,8 @@ export function SessionComposerDock({
       <ManagedSessionComposer
         ariaLabel={labels.ariaLabel}
         attachmentLabels={labels.attachment}
+        disabled={disabled}
+        disabledReason={disabledReason}
         focusRequestToken={focusRequestToken}
         placeholder={labels.placeholder}
         statusAction={running
@@ -54,7 +61,7 @@ export function SessionComposerDock({
             }
           : undefined}
         submitAriaLabel={labels.submitAriaLabel}
-        submitDisabled={running}
+        submitDisabled={running || disabled}
         submitting={status === 'submitting'}
         onSubmitDraft={onSubmitDraft}
       />

@@ -155,6 +155,7 @@ interface ComposerLayoutMetrics {
 }
 
 interface ChatRhythmMetrics {
+  actionRailButtonLabels: string[]
   actionRailCount: number
   activeElementSlot: string | null
   completedChromeVisible: boolean
@@ -348,6 +349,7 @@ async function assertSessionChatRhythm(
     const activeElementSlot = activeElement?.getAttribute('data-session-slot') ?? activeElement?.getAttribute('data-slot') ?? null
     if (!scroller) {
       return {
+        actionRailButtonLabels: [],
         actionRailCount: 0,
         activeElementSlot,
         completedChromeVisible: false,
@@ -389,8 +391,13 @@ async function assertSessionChatRhythm(
     const bodyText = document.body.textContent ?? ''
     const scrollerText = scroller.textContent ?? ''
 
+    const actionRailButtonLabels = Array.from(
+      document.querySelectorAll('[data-transcript-slot="turn-action-rail"] button'),
+    ).map(button => button.textContent?.trim() ?? '')
+
     return {
       actionRailCount: document.querySelectorAll('[data-transcript-slot="turn-action-rail"]').length,
+      actionRailButtonLabels,
       activeElementSlot,
       completedChromeVisible: bodyText.includes('Invocation completed'),
       feedbackVisible: bodyText.includes('Feedback'),
@@ -422,7 +429,13 @@ async function assertSessionChatRhythm(
     throw new Error(`Submitted user message is not visible in the transcript viewport: ${JSON.stringify(metrics)}`)
   if (!metrics.latestVisible)
     throw new Error(`Latest transcript turn is not visible after submit/refresh: ${JSON.stringify(metrics)}`)
-  if (metrics.actionRailCount !== 0 || metrics.feedbackVisible || metrics.quoteVisible || metrics.sourceVisible || metrics.completedChromeVisible || metrics.startedChromeVisible)
+  // The only turn-action rail an employee should see is the copy/retry rail
+  // (B1/B2). Any other rail label is the generic chrome this proof still forbids.
+  // The positive "copy rail present" assertion lives in the gated
+  // freeform-browser-user-flow proof; here we only guard against generic chrome.
+  const allowedActionRailLabels = new Set(['Copy as Markdown', 'Retry'])
+  const unexpectedActionRailLabels = metrics.actionRailButtonLabels.filter(label => !allowedActionRailLabels.has(label))
+  if (unexpectedActionRailLabels.length > 0 || metrics.feedbackVisible || metrics.quoteVisible || metrics.sourceVisible || metrics.completedChromeVisible || metrics.startedChromeVisible)
     throw new Error(`Session transcript exposed non-Codex-like generic chrome: ${JSON.stringify(metrics)}`)
   if (metrics.genericProgressVisible || metrics.genericToolSummaryVisible || metrics.workingChromeVisible || !metrics.readableToolSummaryVisible)
     throw new Error(`Session transcript did not expose readable tool activity: ${JSON.stringify(metrics)}`)

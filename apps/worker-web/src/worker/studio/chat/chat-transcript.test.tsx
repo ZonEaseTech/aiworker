@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ChatTranscript } from './chat-transcript'
+
+const turnActionLabels = { copyAsMarkdown: 'Copy as Markdown', retry: 'Retry' }
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -382,5 +384,99 @@ describe('chat transcript view', () => {
     await waitFor(() => {
       expect(onInvocationStatusChange).toHaveBeenCalledWith(expect.objectContaining({ id: 'inv-terminal-status', status: 'succeeded' }))
     })
+  })
+
+  it('offers a copy-as-Markdown action that copies the raw assistant source on a succeeded turn', async () => {
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    vi.stubGlobal('fetch', vi.fn(async () => new Promise<Response>(() => {})))
+
+    render(
+      <ChatTranscript
+        ariaLabel="Session transcript"
+        initialInvocation={{ id: 'inv-copy', status: 'succeeded' }}
+        invocationId="inv-copy"
+        sessionEvents={[{
+          createdAt: '2026-06-01T00:00:00.000Z',
+          id: 1,
+          invocationId: 'inv-copy',
+          payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: '# Heading\n\n- item' } },
+          seq: 1,
+          sessionId: 's1',
+          type: 'assistant_delta',
+        }]}
+        sessionId="s1"
+        sessionInvocations={[{ id: 'inv-copy', metadataJson: {}, seq: 1, status: 'succeeded' }]}
+        turnActionLabels={turnActionLabels}
+      />,
+    )
+
+    const copyButton = await screen.findByRole('button', { name: 'Copy as Markdown' })
+    fireEvent.click(copyButton)
+    expect(writeText).toHaveBeenCalledWith('# Heading\n\n- item')
+  })
+
+  it('does not offer copy or retry actions while an invocation is still running', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Promise<Response>(() => {})))
+
+    render(
+      <ChatTranscript
+        ariaLabel="Session transcript"
+        initialInvocation={{ id: 'inv-running', status: 'running' }}
+        invocationId="inv-running"
+        sessionEvents={[{
+          createdAt: '2026-06-01T00:00:00.000Z',
+          id: 1,
+          invocationId: 'inv-running',
+          payloadJson: { bridgeEvent: 'invocation.output.delta', data: { text: 'partial' } },
+          seq: 1,
+          sessionId: 's1',
+          type: 'assistant_delta',
+        }]}
+        sessionId="s1"
+        sessionInvocations={[{ id: 'inv-running', metadataJson: {}, seq: 1, status: 'running' }]}
+        turnActionLabels={turnActionLabels}
+      />,
+    )
+
+    await screen.findByText('partial')
+    expect(screen.queryByRole('button', { name: 'Copy as Markdown' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  it('offers a retry action that re-sends the same input on a failed turn', async () => {
+    const onRetry = vi.fn()
+    vi.stubGlobal('fetch', vi.fn(async () => new Promise<Response>(() => {})))
+
+    render(
+      <ChatTranscript
+        ariaLabel="Session transcript"
+        initialInvocation={{ id: 'inv-failed', status: 'failed' }}
+        invocationId="inv-failed"
+        onRetry={onRetry}
+        sessionEvents={[{
+          createdAt: '2026-06-01T00:00:00.000Z',
+          id: 1,
+          invocationId: 'inv-failed',
+          payloadJson: { error: 'engine crashed' },
+          seq: 1,
+          sessionId: 's1',
+          type: 'error',
+        }]}
+        sessionId="s1"
+        sessionInvocations={[{
+          id: 'inv-failed',
+          metadataJson: { uiUserDisplayText: 'draft the report' },
+          seq: 1,
+          status: 'failed',
+        }]}
+        turnActionLabels={turnActionLabels}
+        userMessage={{ invocationId: 'inv-failed', text: 'draft the report' }}
+      />,
+    )
+
+    const retryButton = await screen.findByRole('button', { name: 'Retry' })
+    fireEvent.click(retryButton)
+    expect(onRetry).toHaveBeenCalledWith('draft the report')
   })
 })

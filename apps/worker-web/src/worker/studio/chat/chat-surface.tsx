@@ -1,18 +1,23 @@
 import type { LocalEngineInvocation, LocalSession, LocalSessionEvent } from '@zonease/aiworker-soul-descriptor'
+import type { ReactNode } from 'react'
 import type { ChatComposerLabels } from './chat-composer'
+import type { TranscriptTurnActionLabels } from './chat-transcript'
 
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { cancelEngineInvocation, fetchSessionDetail } from '../../../features/local-workspace/api/session-invocations'
+import { cancelEngineInvocation, fetchSessionDetail, submitSessionInvocation } from '../../../features/local-workspace/api/session-invocations'
 import { ChatComposer } from './chat-composer'
 import { ChatTranscript } from './chat-transcript'
 
 export interface ChatSurfaceProps {
+  composerDisabled?: boolean
+  composerDisabledReason?: ReactNode
   composerLabels: ChatComposerLabels
   initialActive?: { invocationId: string, text: string } | null
   onSessionUpdated?: (session: LocalSession) => void
   sessionId: string
   transcriptAriaLabel: string
+  turnActionLabels?: TranscriptTurnActionLabels
 }
 
 interface SessionTranscriptSnapshot {
@@ -59,7 +64,7 @@ type SessionTranscriptSnapshotAction
  * this surface on the session route (the Soul provides no UI; there is no
  * mounted workbench). This is the live employee chat, not a reusable stub.
  */
-export function ChatSurface({ composerLabels, initialActive = null, onSessionUpdated, sessionId, transcriptAriaLabel }: ChatSurfaceProps) {
+export function ChatSurface({ composerDisabled = false, composerDisabledReason, composerLabels, initialActive = null, onSessionUpdated, sessionId, transcriptAriaLabel, turnActionLabels }: ChatSurfaceProps) {
   const [active, setActive] = useState<ActiveInvocationFollow | null>(
     initialActive ? { ...initialActive, status: 'running' } : null,
   )
@@ -129,6 +134,17 @@ export function ChatSurface({ composerLabels, initialActive = null, onSessionUpd
       })
       .catch(() => undefined)
   }, [active?.invocationId, onSessionUpdated, sessionId])
+
+  const handleRetry = useCallback(async (text: string) => {
+    const trimmed = text.trim()
+    if (trimmed.length === 0)
+      return
+    const result = await submitSessionInvocation(sessionId, { input: trimmed, waitForCompletion: false })
+    onSessionUpdated?.(result.session)
+    setActive({ invocationId: result.invocation.id, status: result.invocation.status, text: trimmed })
+    dispatchObservedInvocation({ invocation: { id: result.invocation.id, status: result.invocation.status }, type: 'set' })
+    setComposerFocusRequestToken(token => (token ?? 0) + 1)
+  }, [onSessionUpdated, sessionId])
 
   useLayoutEffect(() => {
     if (!hasConversation || snapshot.status === 'loading')
@@ -206,14 +222,18 @@ export function ChatSurface({ composerLabels, initialActive = null, onSessionUpd
       invocationId={activeInvocationId}
       loading={snapshot.status === 'loading'}
       onInvocationStatusChange={handleInvocationStatusChange}
+      onRetry={handleRetry}
       sessionEvents={snapshot.events}
       sessionInvocations={snapshot.invocations}
       sessionId={sessionId}
+      turnActionLabels={turnActionLabels}
       userMessage={active}
     />
   )
   const composer = (
     <ChatComposer
+      disabled={composerDisabled}
+      disabledReason={composerDisabledReason}
       focusRequestToken={composerFocusRequestToken}
       labels={composerLabels}
       onCancel={async () => {

@@ -1,5 +1,5 @@
 import type { LocalEngineInvocation, LocalSessionEvent } from '@zonease/aiworker-soul-descriptor'
-import type { TranscriptTurnModel } from '@zonease/aiworker-ui/components/transcript-types'
+import type { TranscriptItemModel, TranscriptTurnActionModel, TranscriptTurnModel } from '@zonease/aiworker-ui/components/transcript-types'
 import type { ReactNode } from 'react'
 
 import { useEffect, useMemo } from 'react'
@@ -11,8 +11,14 @@ import { useInvocationEvents } from './use-invocation-events'
 const EMPTY_SESSION_EVENTS: LocalSessionEvent[] = []
 const EMPTY_SESSION_INVOCATIONS: TranscriptInvocation[] = []
 const TERMINAL_INVOCATION_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'lost'])
+const FAILED_INVOCATION_STATUSES = new Set(['failed', 'lost'])
 
 type TranscriptInvocation = Pick<LocalEngineInvocation, 'id' | 'metadataJson' | 'seq'> & Partial<LocalEngineInvocation>
+
+export interface TranscriptTurnActionLabels {
+  copyAsMarkdown: string
+  retry: string
+}
 
 export interface ChatTranscriptProps {
   ariaLabel: string
@@ -22,9 +28,11 @@ export interface ChatTranscriptProps {
   intervalMs?: number
   loading?: boolean
   onInvocationStatusChange?: (invocation: Pick<LocalEngineInvocation, 'id' | 'status'> & Partial<LocalEngineInvocation>) => void
+  onRetry?: (text: string) => Promise<void> | void
   sessionEvents?: LocalSessionEvent[]
   sessionInvocations?: TranscriptInvocation[]
   sessionId: string
+  turnActionLabels?: TranscriptTurnActionLabels
   userMessage?: { invocationId: string, text: string } | null
 }
 
@@ -50,9 +58,11 @@ export function ChatTranscript({
   invocationId,
   loading = false,
   onInvocationStatusChange,
+  onRetry,
   sessionEvents = EMPTY_SESSION_EVENTS,
   sessionInvocations = EMPTY_SESSION_INVOCATIONS,
   sessionId,
+  turnActionLabels,
   userMessage,
 }: ChatTranscriptProps) {
   const activeInitialEvents = useMemo(
@@ -86,9 +96,19 @@ export function ChatTranscript({
     ),
     [effectiveInvocation, invocationId, transcriptEvents],
   )
-  const turns = useMemo(
+  const stitchedTurns = useMemo(
     () => insertUserMessageTurns(engineTurns, sessionInvocations, userMessage),
     [engineTurns, sessionInvocations, userMessage],
+  )
+  const turns = useMemo(
+    () => appendTurnActionRails(stitchedTurns, {
+      effectiveInvocation,
+      labels: turnActionLabels,
+      onRetry,
+      sessionInvocations,
+      userMessage,
+    }),
+    [effectiveInvocation, onRetry, sessionInvocations, stitchedTurns, turnActionLabels, userMessage],
   )
   return <SessionTimeline ariaLabel={ariaLabel} emptyState={emptyState} loading={loading && turns.length === 0} turns={turns} />
 }
@@ -154,6 +174,114 @@ function readBridgeEvent(event: LocalSessionEvent): string {
     return ''
   const bridgeEvent = (payload as Record<string, unknown>).bridgeEvent
   return typeof bridgeEvent === 'string' ? bridgeEvent : ''
+}
+
+interface TurnActionRailContext {
+  effectiveInvocation: (Pick<LocalEngineInvocation, 'id' | 'status'> & Partial<LocalEngineInvocation>) | null
+  labels: TranscriptTurnActionLabels | undefined
+  onRetry: ((text: string) => Promise<void> | void) | undefined
+  sessionInvocations: TranscriptInvocation[]
+  userMessage: { invocationId: string, text: string } | null | undefined
+}
+
+/**
+ * Append a turn-action rail to each terminal engine turn:
+ * - a succeeded turn gets "copy as Markdown" (the raw assistant source),
+ * - a failed/lost turn gets "retry" that re-sends the same input.
+ *
+ * Rails are derived in this view layer (not in the pure `buildInvocationTurns`)
+ * so terminal status comes from the same reconciled `effectiveInvocation` /
+ * `sessionInvocations` source the rest of the transcript already trusts, and the
+ * retry callback can close over the session submit path the surface owns.
+ */
+function appendTurnActionRails(
+  turns: TranscriptTurnModel[],
+  context: TurnActionRailContext,
+): TranscriptTurnModel[] {
+  const { labels } = context
+  if (!labels)
+    return turns
+
+  return turns.map((turn) => {
+    if (turn.id.endsWith(':user'))
+      return turn
+    const status = terminalStatusForTurn(turn.id, context)
+    if (!status)
+      return turn
+    const action = turnActionForStatus(turn, status, context)
+    if (!action)
+      return turn
+    return {
+      ...turn,
+      items: [...turn.items, { actions: [action], id: `${turn.id}:turn-actions`, kind: 'turn-action-rail' }],
+    }
+  })
+}
+
+function terminalStatusForTurn(
+  invocationId: string,
+  context: TurnActionRailContext,
+): LocalEngineInvocation['status'] | null {
+  if (context.effectiveInvocation?.id === invocationId && TERMINAL_INVOCATION_STATUSES.has(context.effectiveInvocation.status))
+    return context.effectiveInvocation.status
+  const invocation = context.sessionInvocations.find(candidate => candidate.id === invocationId)
+  if (invocation?.status && TERMINAL_INVOCATION_STATUSES.has(invocation.status))
+    return invocation.status
+  return null
+}
+
+function turnActionForStatus(
+  turn: TranscriptTurnModel,
+  status: LocalEngineInvocation['status'],
+  context: TurnActionRailContext,
+): TranscriptTurnActionModel | null {
+  const { labels } = context
+  if (status === 'succeeded') {
+    const markdown = assistantMarkdownForTurn(turn)
+    if (!markdown)
+      return null
+    return {
+      id: `${turn.id}:copy-markdown`,
+      label: labels!.copyAsMarkdown,
+      onClick: () => {
+        void copyTextToClipboard(markdown)
+      },
+    }
+  }
+  if (FAILED_INVOCATION_STATUSES.has(status) && context.onRetry) {
+    const text = retryTextForTurn(turn.id, context)
+    if (!text)
+      return null
+    return {
+      id: `${turn.id}:retry`,
+      label: labels!.retry,
+      onClick: () => {
+        void context.onRetry?.(text)
+      },
+    }
+  }
+  return null
+}
+
+function assistantMarkdownForTurn(turn: TranscriptTurnModel): string {
+  return turn.items
+    .filter((item): item is Extract<TranscriptItemModel, { kind: 'assistant-markdown' }> => item.kind === 'assistant-markdown')
+    .map(item => item.markdown)
+    .join('')
+    .trim()
+}
+
+function retryTextForTurn(invocationId: string, context: TurnActionRailContext): string {
+  if (context.userMessage?.invocationId === invocationId && context.userMessage.text.trim().length > 0)
+    return context.userMessage.text
+  const invocation = context.sessionInvocations.find(candidate => candidate.id === invocationId)
+  return invocation ? uiUserDisplayText(invocation) ?? '' : ''
+}
+
+function copyTextToClipboard(text: string): Promise<void> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText)
+    return navigator.clipboard.writeText(text)
+  return Promise.resolve()
 }
 
 function insertUserMessageTurns(
