@@ -62,7 +62,7 @@
     },
     "apps/worker-cli": {
       "name": "@zonease/aiworker-cli",
-      "version": "1.0.0-rc.11",
+      "version": "1.0.1",
       "bin": {
         "aiworker": "./dist/aiworker.js",
       },
@@ -93,8 +93,6 @@
         "@zonease/aiworker-ui": "workspace:*",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
-        "react-markdown": "^10.1.0",
-        "remark-gfm": "^4.0.1",
         "tailwindcss": "^4.2.2",
       },
       "devDependencies": {
@@ -200,8 +198,10 @@
         "radix-ui": "^1.4.3",
         "react": "^19.1.0",
         "react-day-picker": "^10.0.1",
+        "react-markdown": "^10.1.0",
         "react-resizable-panels": "^4.11.1",
         "recharts": "3.8.0",
+        "remark-gfm": "^4.0.1",
         "shadcn": "^4.7.0",
         "sonner": "^2.0.7",
         "tailwind-merge": "^3.6.0",
@@ -212,6 +212,8 @@
       "devDependencies": {
         "@testing-library/dom": "10",
         "@testing-library/react": "16",
+        "@types/hast": "^3.0.4",
+        "@types/mdast": "^4.0.4",
         "@types/react": "^19.1.2",
         "@types/react-dom": "^19.1.2",
         "happy-dom": "20",

@@ -1,6 +1,11 @@
-import type { ReactNode } from 'react'
+import type { Element as HastElement } from 'hast'
+import type { Parent as MdastParent, Root as MdastRoot, PhrasingContent } from 'mdast'
+import type { ComponentPropsWithoutRef } from 'react'
+import type { Components } from 'react-markdown'
 
 import { cn } from '#lib/utils'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 export interface AssistantMarkdownProps {
   className?: string
@@ -8,26 +13,42 @@ export interface AssistantMarkdownProps {
   streaming?: boolean
 }
 
-type MarkdownBlock
-  = | { code: string, kind: 'code', language?: string }
-    | { depth: number, kind: 'heading', text: string }
-    | { items: MarkdownListItem[], kind: 'unordered-list' }
-    | { items: MarkdownListItem[], kind: 'ordered-list', start: number }
-    | { kind: 'paragraph', text: string }
-    | { kind: 'quote', text: string }
-    | { headers: string[], kind: 'table', rows: string[][] }
-
-interface MarkdownListItem {
-  checked?: boolean
-  depth: number
-  id: string
-  task?: boolean
-  text: string
+// react-markdown component overrides — preserve AIWorker transcript chrome
+// (code/table scroll affordances, typed links, accessible task checkboxes,
+// nested-list depth hints) that the focused renderer tests assert. Component
+// functions referenced here are hoisted declarations defined below.
+const ASSISTANT_MARKDOWN_COMPONENTS: Components = {
+  h1: ({ node: _node, ...props }) => <h1 {...props} className={headingClassName(1)} />,
+  h2: ({ node: _node, ...props }) => <h2 {...props} className={headingClassName(2)} />,
+  h3: ({ node: _node, ...props }) => <h3 {...props} className={headingClassName(3)} />,
+  h4: ({ node: _node, ...props }) => <h4 {...props} className={headingClassName(4)} />,
+  h5: ({ node: _node, ...props }) => <h5 {...props} className={headingClassName(5)} />,
+  h6: ({ node: _node, ...props }) => <h6 {...props} className={headingClassName(6)} />,
+  p: ({ node: _node, ...props }) => <p {...props} className="whitespace-pre-wrap" />,
+  ul: ({ node: _node, className: _className, ...props }) => <ul {...props} className="list-disc space-y-1 pl-5" />,
+  ol: ({ node: _node, className: _className, start, ...props }) => (
+    <ol {...props} start={start === 1 || start == null ? undefined : start} className="list-decimal space-y-1 pl-5" />
+  ),
+  li: AssistantListItem,
+  blockquote: ({ node: _node, ...props }) => (
+    <blockquote {...props} className="border-l-2 border-border pl-3 text-muted-foreground" />
+  ),
+  strong: ({ node: _node, ...props }) => <strong {...props} className="font-semibold" />,
+  a: AssistantLink,
+  code: AssistantInlineCode,
+  pre: AssistantPre,
+  table: AssistantTable,
+  thead: ({ node: _node, ...props }) => <thead {...props} className="bg-muted/40" />,
+  th: ({ node: _node, ...props }) => <th {...props} className="border-b border-border px-3 py-2 text-left font-medium" />,
+  td: ({ node: _node, ...props }) => <td {...props} className="px-3 py-2 align-top" />,
+  tr: ({ node: _node, ...props }) => <tr {...props} className="border-t border-border/60 first:border-t-0" />,
+  input: AssistantTaskCheckbox,
+  // AIWorker inline path/branch semantic tokens, emitted by the rehype plugin.
+  span: AssistantSemanticSpan,
 }
 
 export function AssistantMarkdown({ className, markdown, streaming = false }: AssistantMarkdownProps) {
-  const repaired = repairStreamingMarkdown(markdown, streaming)
-  const blocks = parseMarkdownBlocks(repaired)
+  const repaired = protectGlobstars(repairStreamingMarkdown(markdown, streaming))
 
   return (
     <div
@@ -39,10 +60,22 @@ export function AssistantMarkdown({ className, markdown, streaming = false }: As
         className,
       )}
     >
-      {blocks.map((block, index) => renderBlock(block, index))}
+      <Markdown
+        remarkPlugins={[remarkGfm, remarkAiworkerInlineTokens]}
+        rehypePlugins={[rehypeAssistantTaskLabels]}
+        urlTransform={transformAssistantHref}
+        components={ASSISTANT_MARKDOWN_COMPONENTS}
+        skipHtml
+      >
+        {repaired}
+      </Markdown>
     </div>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Streaming repair (AIWorker-specific pre-process; runs before react-markdown).
+// ---------------------------------------------------------------------------
 
 // eslint-disable-next-line react-refresh/only-export-components -- exported for focused parser tests.
 export function repairStreamingMarkdown(markdown: string, streaming: boolean): string {
@@ -68,247 +101,313 @@ export function repairStreamingMarkdown(markdown: string, streaming: boolean): s
   return repaired
 }
 
-function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n')
-  const blocks: MarkdownBlock[] = []
+// ---------------------------------------------------------------------------
+// Globstar protection (AIWorker-specific pre-process). CommonMark treats `**`
+// adjacent to `/` as a strong-emphasis run, so glob patterns like `**/*.ts`,
+// `src/**`, and `**/dist/**` would render as broken bold. The hand-rolled
+// renderer rejected `**` openers followed by punctuation; we reproduce that by
+// backslash-escaping globstar `**` outside fenced/inline code so react-markdown
+// renders them literally while real `**bold**` keeps working.
+// ---------------------------------------------------------------------------
+
+function protectGlobstars(markdown: string): string {
+  // Split into code and non-code segments so we never touch fenced or inline
+  // code where literal `**/` must be preserved verbatim.
+  const segments = markdown.split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+  return segments
+    .map((segment, index) => (index % 2 === 1 ? segment : escapeGlobstarRuns(segment)))
+    .join('')
+}
+
+function escapeGlobstarRuns(text: string): string {
+  // Escape a `**` run only when it is glob-like: immediately followed by `/`
+  // (e.g. `**/`) or immediately preceded by `/` (e.g. `dist/**`). `**bold**`
+  // is never adjacent to `/`, so it is left intact.
+  return text.replace(/\*\*/g, (match, offset: number, full: string) => {
+    const before = full[offset - 1]
+    const after = full[offset + 2]
+    if (after === '/' || before === '/')
+      return '\\*\\*'
+    return match
+  })
+}
+
+// ---------------------------------------------------------------------------
+// react-markdown component override implementations (referenced by
+// ASSISTANT_MARKDOWN_COMPONENTS above).
+// ---------------------------------------------------------------------------
+
+function AssistantListItem({ node, className, children, ...props }: ComponentPropsWithoutRef<'li'> & { node?: HastElement }) {
+  const classes = toClassList(node?.properties?.className)
+  const isTask = classes.includes('task-list-item')
+  const depth = listDepthForNode(node)
+
+  return (
+    <li
+      {...props}
+      data-list-depth={depth}
+      className={cn(isTask && 'list-none', depth > 0 && 'ms-4', className)}
+    >
+      {children}
+    </li>
+  )
+}
+
+function AssistantLink({ node: _node, href, children, ...props }: ComponentPropsWithoutRef<'a'> & { node?: HastElement }) {
+  const safe = typeof href === 'string' ? href : ''
+  return (
+    <a
+      {...props}
+      href={safe}
+      target="_blank"
+      rel="noreferrer"
+      data-link-kind={linkKindForHref(safe)}
+      className="inline-flex items-center rounded-sm px-0.5 underline underline-offset-4 hover:bg-muted/60 hover:text-primary"
+    >
+      {children}
+    </a>
+  )
+}
+
+function AssistantInlineCode({ node: _node, className: _className, children, ...props }: ComponentPropsWithoutRef<'code'> & { node?: HastElement }) {
+  return (
+    <code {...props} className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">
+      {children}
+    </code>
+  )
+}
+
+function AssistantPre({ node, children, ...props }: ComponentPropsWithoutRef<'pre'> & { node?: HastElement }) {
+  const language = languageFromPreNode(node)
+  return (
+    <figure
+      data-transcript-slot="assistant-code-block"
+      data-testid="assistant-code-block"
+      className="overflow-hidden rounded-md border border-border bg-muted/40"
+    >
+      {language
+        ? <figcaption className="border-b border-border px-3 py-1.5 text-xs text-muted-foreground">{language}</figcaption>
+        : null}
+      <pre {...props} className="no-scrollbar overflow-x-auto p-3 text-xs/relaxed" dir="ltr">{children}</pre>
+    </figure>
+  )
+}
+
+function AssistantTable({ node: _node, className: _className, ...props }: ComponentPropsWithoutRef<'table'> & { node?: HastElement }) {
+  return (
+    <div className="no-scrollbar min-w-0 overflow-x-auto rounded-md border border-border">
+      <table {...props} className="w-full border-collapse text-left text-xs/relaxed" />
+    </div>
+  )
+}
+
+function AssistantTaskCheckbox({ node: _node, ...props }: ComponentPropsWithoutRef<'input'> & { node?: HastElement }) {
+  if (props.type !== 'checkbox')
+    return <input {...props} />
+
+  // `aria-label` is stamped onto the hast node by rehypeAssistantTaskLabels and
+  // arrives here as a normal prop, so the checkbox has an accessible name.
+  return (
+    <input
+      {...props}
+      readOnly
+      className="mt-1 size-3 accent-primary"
+    />
+  )
+}
+
+function AssistantSemanticSpan({ node, children, ...props }: ComponentPropsWithoutRef<'span'> & { node?: HastElement }) {
+  const inlineKind = node?.properties?.dataInlineKind
+  if (inlineKind === 'path' || inlineKind === 'branch') {
+    return (
+      <code
+        data-inline-kind={inlineKind}
+        className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs text-foreground"
+      >
+        {children}
+      </code>
+    )
+  }
+  return <span {...props}>{children}</span>
+}
+
+// ---------------------------------------------------------------------------
+// AIWorker-specific inline tokens (no native remark-gfm equivalent), injected
+// as mdast nodes so they survive react-markdown's standard pipeline:
+//   - bare `localhost:PORT` / `127.0.0.1:PORT` autolinks (scheme-less)
+//   - inline path/branch semantic tokens (`docs/runtime.md`, `codex/refactor`)
+// ---------------------------------------------------------------------------
+
+// Self-contained remark transform (no unist-util-visit dependency): walk every
+// phrasing-bearing parent and split its text children into the AIWorker inline
+// tokens. Path/branch tokens carry `data.hName`/`hProperties`, which
+// mdast-util-to-hast (react-markdown's remark→rehype bridge) renders as a real
+// `<span data-inline-kind>` element — no rehype-raw / no skipHtml bypass needed.
+function remarkAiworkerInlineTokens() {
+  return (tree: MdastRoot) => {
+    transformPhrasingParents(tree)
+  }
+}
+
+function transformPhrasingParents(node: MdastParent): void {
+  const children = node.children as PhrasingContent[]
+  for (let index = children.length - 1; index >= 0; index -= 1) {
+    const child = children[index]
+    if (!child)
+      continue
+    // Never re-tokenize inside links or code spans.
+    if (child.type === 'link' || child.type === 'inlineCode')
+      continue
+    if (child.type === 'text') {
+      const replacement = tokenizeInlineText(child.value)
+      if (replacement !== null)
+        children.splice(index, 1, ...replacement)
+      continue
+    }
+    if ('children' in child && Array.isArray((child as MdastParent).children))
+      transformPhrasingParents(child as MdastParent)
+  }
+}
+
+function tokenizeInlineText(value: string): PhrasingContent[] | null {
+  const nodes: PhrasingContent[] = []
+  let buffer = ''
   let index = 0
+  let produced = false
 
-  while (index < lines.length) {
-    const line = lines[index] ?? ''
-    if (!line.trim()) {
-      index += 1
-      continue
+  const flush = () => {
+    if (buffer) {
+      nodes.push({ type: 'text', value: buffer })
+      buffer = ''
     }
-
-    if (line.startsWith('```')) {
-      const language = line.slice(3).trim() || undefined
-      const codeLines: string[] = []
-      index += 1
-      while (index < lines.length && !(lines[index] ?? '').startsWith('```')) {
-        codeLines.push(lines[index] ?? '')
-        index += 1
-      }
-      if (index < lines.length)
-        index += 1
-      blocks.push({ code: codeLines.join('\n'), kind: 'code', language })
-      continue
-    }
-
-    const heading = matchHeadingLine(line)
-    if (heading) {
-      blocks.push({ depth: heading.depth, kind: 'heading', text: heading.text })
-      index += 1
-      continue
-    }
-
-    if (line.startsWith('>')) {
-      const quoteLines: string[] = []
-      while (index < lines.length && (lines[index] ?? '').startsWith('>')) {
-        quoteLines.push((lines[index] ?? '').replace(/^>\s?/, ''))
-        index += 1
-      }
-      blocks.push({ kind: 'quote', text: quoteLines.join('\n') })
-      continue
-    }
-
-    if (isTableStart(lines, index)) {
-      const headers = splitTableRow(lines[index] ?? '')
-      const rows: string[][] = []
-      index += 2
-      while (index < lines.length && isTableDataLine(lines[index] ?? '')) {
-        rows.push(splitTableRow(lines[index] ?? ''))
-        index += 1
-      }
-      blocks.push({ headers, kind: 'table', rows })
-      continue
-    }
-
-    if (isUnorderedListLine(line)) {
-      const items: MarkdownListItem[] = []
-      while (index < lines.length && isUnorderedListLine(lines[index] ?? '')) {
-        const listLine = lines[index] ?? ''
-        const content = readUnorderedListContent(listLine)
-        const task = parseTaskListContent(content)
-        items.push({
-          checked: task?.checked,
-          depth: listDepthForLine(listLine),
-          id: `ul-line-${index}`,
-          task: Boolean(task),
-          text: task?.text ?? content,
-        })
-        index += 1
-      }
-      blocks.push({ items, kind: 'unordered-list' })
-      continue
-    }
-
-    if (isOrderedListLine(line)) {
-      const start = readOrderedListStart(line)
-      const items: MarkdownListItem[] = []
-      while (index < lines.length && isOrderedListLine(lines[index] ?? '')) {
-        const listLine = lines[index] ?? ''
-        items.push({
-          depth: listDepthForLine(listLine),
-          id: `ol-line-${index}`,
-          text: readOrderedListContent(listLine),
-        })
-        index += 1
-      }
-      blocks.push({ items, kind: 'ordered-list', start })
-      continue
-    }
-
-    const paragraphLines: string[] = []
-    while (
-      index < lines.length
-      && (lines[index] ?? '').trim()
-      && !(lines[index] ?? '').startsWith('```')
-      && !(lines[index] ?? '').startsWith('>')
-      && !matchHeadingLine(lines[index] ?? '')
-      && !isTableStart(lines, index)
-      && !isUnorderedListLine(lines[index] ?? '')
-      && !isOrderedListLine(lines[index] ?? '')
-    ) {
-      paragraphLines.push(lines[index] ?? '')
-      index += 1
-    }
-    blocks.push({ kind: 'paragraph', text: paragraphLines.join('\n') })
   }
 
-  return blocks
-}
-
-function matchHeadingLine(line: string): { depth: number, text: string } | null {
-  let depth = 0
-  while (depth < line.length && line[depth] === '#')
-    depth += 1
-  if (depth < 1 || depth > 6 || !isWhitespace(line[depth] ?? ''))
-    return null
-  const text = line.slice(depth).trim()
-  return text ? { depth, text } : null
-}
-
-function isTableStart(lines: string[], index: number): boolean {
-  const current = lines[index] ?? ''
-  const next = lines[index + 1] ?? ''
-  return isTableDataLine(current) && isTableSeparatorLine(next)
-}
-
-function isTableDataLine(line: string): boolean {
-  const value = line.trim()
-  return value.startsWith('|') && value.endsWith('|') && value.length > 2
-}
-
-function isTableSeparatorLine(line: string): boolean {
-  if (!isTableDataLine(line))
-    return false
-  const cells = splitTableRow(line)
-  return cells.length > 1 && cells.every(isTableSeparatorCell)
-}
-
-function isTableSeparatorCell(cell: string): boolean {
-  const value = cell.trim()
-  let hyphenCount = 0
-  for (const char of value) {
-    if (char === '-') {
-      hyphenCount += 1
+  while (index < value.length) {
+    const bareLink = matchBareLinkAt(value, index)
+    if (bareLink) {
+      flush()
+      nodes.push({
+        type: 'link',
+        url: bareLink.href,
+        children: [{ type: 'text', value: bareLink.label }],
+      })
+      if (bareLink.trailing)
+        nodes.push({ type: 'text', value: bareLink.trailing })
+      index = bareLink.end
+      produced = true
       continue
     }
-    if (char !== ':')
-      return false
+
+    const semantic = matchInlineSemanticAt(value, index)
+    if (semantic) {
+      flush()
+      // An emphasis node with a `data.hName` override renders as a custom span;
+      // mdast-util-to-hast honours hName/hProperties for any node.
+      nodes.push({
+        type: 'emphasis',
+        children: [{ type: 'text', value: semantic.label }],
+        data: {
+          hName: 'span',
+          hProperties: { dataInlineKind: semantic.kind },
+        },
+      })
+      if (semantic.trailing)
+        nodes.push({ type: 'text', value: semantic.trailing })
+      index = index + semantic.label.length + (semantic.trailing?.length ?? 0)
+      produced = true
+      continue
+    }
+
+    buffer += value[index]
+    index += 1
   }
-  return hyphenCount >= 3
-}
 
-function splitTableRow(line: string): string[] {
-  let value = line.trim()
-  if (value.startsWith('|'))
-    value = value.slice(1)
-  if (value.endsWith('|'))
-    value = value.slice(0, -1)
-  return value.split('|').map(cell => cell.trim())
-}
-
-function isUnorderedListLine(line: string): boolean {
-  const markerIndex = firstNonWhitespaceIndex(line)
-  const marker = line[markerIndex]
-  return (marker === '-' || marker === '*') && isWhitespace(line[markerIndex + 1] ?? '')
-}
-
-function readUnorderedListContent(line: string): string {
-  return readListContentAfter(line, firstNonWhitespaceIndex(line) + 1)
-}
-
-function isOrderedListLine(line: string): boolean {
-  const start = firstNonWhitespaceIndex(line)
-  let index = start
-  while (isDigit(line[index] ?? ''))
-    index += 1
-  return index > start && line[index] === '.' && isWhitespace(line[index + 1] ?? '')
-}
-
-function readOrderedListContent(line: string): string {
-  const start = firstNonWhitespaceIndex(line)
-  let index = start
-  while (isDigit(line[index] ?? ''))
-    index += 1
-  return readListContentAfter(line, index + 1)
-}
-
-function readOrderedListStart(line: string): number {
-  const start = firstNonWhitespaceIndex(line)
-  let index = start
-  while (isDigit(line[index] ?? ''))
-    index += 1
-  return Number.parseInt(line.slice(start, index), 10)
-}
-
-function readListContentAfter(line: string, markerEndIndex: number): string {
-  let index = markerEndIndex
-  while (isWhitespace(line[index] ?? ''))
-    index += 1
-  return line.slice(index)
-}
-
-function parseTaskListContent(content: string): { checked: boolean, text: string } | null {
-  if (content[0] !== '[' || content[2] !== ']' || !isWhitespace(content[3] ?? ''))
+  if (!produced)
     return null
-  const marker = content[1]?.toLowerCase()
-  if (marker !== 'x' && marker !== ' ')
-    return null
-  return { checked: marker === 'x', text: content.slice(4).trimStart() }
+
+  flush()
+  return nodes
 }
 
-function listDepthForLine(line: string): number {
-  let indent = 0
-  for (const char of line) {
-    if (char === ' ') {
-      indent += 1
-      continue
-    }
-    if (char === '\t') {
-      indent += 2
-      continue
-    }
-    break
+// ---------------------------------------------------------------------------
+// hast/mdast node helpers
+// ---------------------------------------------------------------------------
+
+function toClassList(value: unknown): string[] {
+  if (Array.isArray(value))
+    return value.map(item => String(item))
+  if (typeof value === 'string')
+    return value.split(/\s+/)
+  return []
+}
+
+function listDepthForNode(node: HastElement | undefined): number {
+  const column = node?.position?.start.column ?? 1
+  // Markdown list nesting indents by ~2 columns per level; mirror legacy depth.
+  return Math.max(0, Math.floor((column - 1) / 2))
+}
+
+function languageFromPreNode(node: HastElement | undefined): string | undefined {
+  const codeChild = node?.children?.find(
+    (child): child is HastElement => child.type === 'element' && child.tagName === 'code',
+  )
+  const classes = toClassList(codeChild?.properties?.className)
+  const languageClass = classes.find(name => name.startsWith('language-'))
+  if (!languageClass)
+    return undefined
+  const language = languageClass.slice('language-'.length).trim()
+  return language || undefined
+}
+
+// Give GFM task-list checkboxes an accessible name. mdast-util-to-hast emits
+// `<li class="task-list-item"><input type="checkbox" ...>label</li>` with no
+// label association, so an unlabelled checkbox has an empty accessible name.
+// This minimal self-contained rehype pass (no unist-util-visit dependency)
+// stamps `aria-label` onto each task checkbox from its list-item text.
+function rehypeAssistantTaskLabels() {
+  return (tree: HastElement) => {
+    walkHast(tree, (node) => {
+      if (node.tagName !== 'li')
+        return
+      if (!toClassList(node.properties?.className).includes('task-list-item'))
+        return
+      const checkbox = node.children.find(
+        (child): child is HastElement =>
+          child.type === 'element'
+          && child.tagName === 'input'
+          && child.properties?.type === 'checkbox',
+      )
+      if (!checkbox)
+        return
+      const label = collectText(node).trim()
+      if (label)
+        checkbox.properties = { ...checkbox.properties, ariaLabel: label }
+    })
   }
-  return Math.floor(indent / 2)
 }
 
-function firstNonWhitespaceIndex(line: string): number {
-  let index = 0
-  while (index < line.length && isWhitespace(line[index] ?? ''))
-    index += 1
-  return index
+function walkHast(node: HastElement, visit: (node: HastElement) => void): void {
+  visit(node)
+  for (const child of node.children ?? []) {
+    if (child.type === 'element')
+      walkHast(child, visit)
+  }
 }
 
-function isWhitespace(value: string): boolean {
-  return value === ' ' || value === '\t'
+function collectText(node: HastElement): string {
+  let text = ''
+  for (const child of node.children ?? []) {
+    if (child.type === 'text')
+      text += child.value
+    else if (child.type === 'element')
+      text += collectText(child)
+  }
+  return text
 }
 
-function isDigit(value: string): boolean {
-  return value >= '0' && value <= '9'
-}
+// ---------------------------------------------------------------------------
+// Heading styling (unchanged from the hand-rolled renderer).
+// ---------------------------------------------------------------------------
 
 function headingClassName(depth: number): string {
   if (depth === 1)
@@ -318,266 +417,12 @@ function headingClassName(depth: number): string {
   return 'text-sm/relaxed font-medium tracking-tight'
 }
 
-function renderBlock(block: MarkdownBlock, index: number): ReactNode {
-  if (block.kind === 'heading') {
-    const Heading = `h${block.depth}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
-    return (
-      <Heading key={`h-${index}`} className={headingClassName(block.depth)}>
-        {renderInlineMarkdown(block.text, `h-${index}`)}
-      </Heading>
-    )
-  }
+// ---------------------------------------------------------------------------
+// Bare-link + inline-semantic tokenizers (ported verbatim from the hand-rolled
+// renderer; these have no native remark-gfm equivalent).
+// ---------------------------------------------------------------------------
 
-  if (block.kind === 'code') {
-    return (
-      <figure
-        key={`code-${index}`}
-        data-transcript-slot="assistant-code-block"
-        data-testid="assistant-code-block"
-        className="overflow-hidden rounded-md border border-border bg-muted/40"
-      >
-        {block.language
-          ? <figcaption className="border-b border-border px-3 py-1.5 text-xs text-muted-foreground">{block.language}</figcaption>
-          : null}
-        <pre className="no-scrollbar overflow-x-auto p-3 text-xs/relaxed" dir="ltr"><code>{block.code}</code></pre>
-      </figure>
-    )
-  }
-
-  if (block.kind === 'quote') {
-    return (
-      <blockquote key={`quote-${index}`} className="border-l-2 border-border pl-3 text-muted-foreground">
-        {renderInlineMarkdown(block.text, `quote-${index}`)}
-      </blockquote>
-    )
-  }
-
-  if (block.kind === 'ordered-list') {
-    return (
-      <ol key={`ol-${index}`} start={block.start === 1 ? undefined : block.start} className="list-decimal space-y-1 pl-5">
-        {block.items.map(item => renderListItem(item))}
-      </ol>
-    )
-  }
-
-  if (block.kind === 'unordered-list') {
-    return (
-      <ul key={`ul-${index}`} className="list-disc space-y-1 pl-5">
-        {block.items.map(item => renderListItem(item))}
-      </ul>
-    )
-  }
-
-  if (block.kind === 'table') {
-    return (
-      <div key={`table-${index}`} className="no-scrollbar min-w-0 overflow-x-auto rounded-md border border-border">
-        <table className="w-full border-collapse text-left text-xs/relaxed">
-          <thead className="bg-muted/40">
-            <tr>
-              {block.headers.map(header => (
-                <th key={`header-${header}`} className="border-b border-border px-3 py-2 font-medium">
-                  {renderInlineMarkdown(header, `table-${index}-header-${header}`)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {block.rows.map((row) => {
-              const rowKey = row.join('|')
-              return (
-                <tr key={`row-${rowKey}`} className="border-t border-border/60 first:border-t-0">
-                  {block.headers.map((header, cellIndex) => {
-                    const cell = row[cellIndex] ?? ''
-                    return (
-                      <td key={`cell-${rowKey}-${header}-${cell}`} className="px-3 py-2 align-top">
-                        {renderInlineMarkdown(cell, `table-${index}-row-${rowKey}-${header}`)}
-                      </td>
-                    )
-                  })}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
-  if (block.kind === 'paragraph')
-    return <p key={`p-${index}`} className="whitespace-pre-wrap">{renderInlineMarkdown(block.text, `p-${index}`)}</p>
-
-  return null
-}
-
-function renderListItem(item: MarkdownListItem): ReactNode {
-  return (
-    <li
-      key={item.id}
-      data-list-depth={item.depth}
-      className={cn(item.depth > 0 && 'ms-4')}
-    >
-      {item.task
-        ? (
-            <label className="inline-flex items-start gap-2">
-              <input
-                type="checkbox"
-                checked={item.checked}
-                readOnly
-                aria-label={item.text}
-                className="mt-1 size-3 accent-primary"
-              />
-              <span>{renderInlineMarkdown(item.text, item.id)}</span>
-            </label>
-          )
-        : renderInlineMarkdown(item.text, item.id)}
-    </li>
-  )
-}
-
-function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
-  const nodes: ReactNode[] = []
-  let buffer = ''
-  let index = 0
-
-  function flushText() {
-    if (!buffer)
-      return
-    nodes.push(buffer)
-    buffer = ''
-  }
-
-  while (index < text.length) {
-    const link = matchLinkAt(text, index)
-    if (link) {
-      flushText()
-      nodes.push(
-        <a
-          key={`${keyPrefix}-link-${index}`}
-          href={link.href}
-          target="_blank"
-          rel="noreferrer"
-          data-link-kind={link.kind}
-          className="inline-flex items-center rounded-sm px-0.5 underline underline-offset-4 hover:bg-muted/60 hover:text-primary"
-        >
-          {link.label}
-        </a>,
-      )
-      index = link.end
-      continue
-    }
-
-    if (text[index] === '`') {
-      const closeIndex = text.indexOf('`', index + 1)
-      if (closeIndex > index + 1) {
-        flushText()
-        nodes.push(<code key={`${keyPrefix}-code-${index}`} className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">{text.slice(index + 1, closeIndex)}</code>)
-        index = closeIndex + 1
-        continue
-      }
-    }
-
-    const bareLink = matchBareLinkAt(text, index)
-    if (bareLink) {
-      flushText()
-      nodes.push(
-        <a
-          key={`${keyPrefix}-bare-link-${index}`}
-          href={bareLink.href}
-          target="_blank"
-          rel="noreferrer"
-          data-link-kind={bareLink.kind}
-          className="inline-flex items-center rounded-sm px-0.5 underline underline-offset-4 hover:bg-muted/60 hover:text-primary"
-        >
-          {bareLink.label}
-        </a>,
-      )
-      if (bareLink.trailing)
-        nodes.push(bareLink.trailing)
-      index = bareLink.end
-      continue
-    }
-
-    const semantic = matchInlineSemanticAt(text, index)
-    if (semantic) {
-      flushText()
-      nodes.push(
-        <code
-          key={`${keyPrefix}-semantic-${index}`}
-          data-inline-kind={semantic.kind}
-          className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs text-foreground"
-        >
-          {semantic.label}
-        </code>,
-      )
-      if (semantic.trailing)
-        nodes.push(semantic.trailing)
-      index = semantic.end
-      continue
-    }
-
-    if (isStrongOpener(text, index)) {
-      const closeIndex = findStrongCloser(text, index + 2)
-      if (closeIndex !== -1) {
-        flushText()
-        nodes.push(
-          <strong key={`${keyPrefix}-strong-${index}`} className="font-semibold">
-            {renderInlineMarkdown(text.slice(index + 2, closeIndex), `${keyPrefix}-strong-${index}`)}
-          </strong>,
-        )
-        index = closeIndex + 2
-        continue
-      }
-    }
-
-    if (isItalicOpener(text, index)) {
-      const closeIndex = findItalicCloser(text, index + 1)
-      if (closeIndex !== -1) {
-        flushText()
-        nodes.push(
-          <em key={`${keyPrefix}-em-${index}`}>
-            {renderInlineMarkdown(text.slice(index + 1, closeIndex), `${keyPrefix}-em-${index}`)}
-          </em>,
-        )
-        index = closeIndex + 1
-        continue
-      }
-    }
-
-    buffer += text[index]
-    index += 1
-  }
-
-  flushText()
-
-  return nodes
-}
-
-function matchLinkAt(text: string, index: number): { end: number, href: string, kind: string, label: string } | null {
-  if (text[index] !== '[')
-    return null
-
-  const labelEnd = text.indexOf(']', index + 1)
-  if (labelEnd <= index + 1 || text[labelEnd + 1] !== '(')
-    return null
-
-  const hrefEnd = text.indexOf(')', labelEnd + 2)
-  if (hrefEnd === -1)
-    return null
-
-  const href = text.slice(labelEnd + 2, hrefEnd)
-  const safe = normalizeAssistantHref(href)
-  if (!safe)
-    return null
-
-  return {
-    end: hrefEnd + 1,
-    href: safe,
-    label: text.slice(index + 1, labelEnd),
-    kind: linkKindForHref(safe),
-  }
-}
-
-function matchBareLinkAt(text: string, index: number): { end: number, href: string, kind: string, label: string, trailing?: string } | null {
+function matchBareLinkAt(text: string, index: number): { end: number, href: string, label: string, trailing?: string } | null {
   const previous = text[index - 1]
   if (previous && !isInlineBoundary(previous))
     return null
@@ -587,20 +432,24 @@ function matchBareLinkAt(text: string, index: number): { end: number, href: stri
     return null
 
   const { label, trailing } = splitTrailingPunctuation(raw)
-  const href = normalizeAssistantHref(label.startsWith('http') ? label : `http://${label}`)
+  // remark-gfm already autolinks http(s):// and www. URLs; we only claim the
+  // scheme-less loopback host:port forms it would otherwise leave as plain text.
+  if (label.startsWith('http://') || label.startsWith('https://'))
+    return null
+
+  const href = normalizeAssistantHref(`http://${label}`)
   if (!href)
     return null
 
   return {
     end: index + label.length + trailing.length,
     href,
-    kind: linkKindForHref(href),
     label,
     trailing,
   }
 }
 
-function matchInlineSemanticAt(text: string, index: number): { end: number, kind: 'branch' | 'path', label: string, trailing?: string } | null {
+function matchInlineSemanticAt(text: string, index: number): { kind: 'branch' | 'path', label: string, trailing?: string } | null {
   const previous = text[index - 1]
   if (previous && isSemanticCandidateChar(previous))
     return null
@@ -619,7 +468,7 @@ function matchInlineSemanticAt(text: string, index: number): { end: number, kind
   if (!kind)
     return null
 
-  return { end: index + candidate.length, kind, label, trailing }
+  return { kind, label, trailing }
 }
 
 function isInlineBoundary(value: string): boolean {
@@ -682,6 +531,15 @@ function hasPathFileExtension(value: string): boolean {
   return slashIndex !== -1 && dotIndex > slashIndex + 1 && dotIndex < value.length - 1
 }
 
+// ---------------------------------------------------------------------------
+// href safety whitelist (AIWorker-specific; tighter than react-markdown's
+// default urlTransform which also permits mailto:/tel:).
+// ---------------------------------------------------------------------------
+
+function transformAssistantHref(href: string): string {
+  return normalizeAssistantHref(href) ?? ''
+}
+
 function normalizeAssistantHref(href: string): string | null {
   const value = href.trim()
   if (!value || hasControlCharacter(value))
@@ -733,31 +591,10 @@ function isTrailingPunctuation(value: string): boolean {
   return value === '.' || value === ',' || value === ';' || value === ':' || value === '!' || value === '?'
 }
 
-function findStrongCloser(text: string, fromIndex: number): number {
-  for (let index = fromIndex; index < text.length - 1; index += 1) {
-    if (text[index] !== '*' || text[index + 1] !== '*')
-      continue
-
-    const previous = text[index - 1]
-    if (previous && previous !== '*' && !/\s/.test(previous) && text[index + 2] !== '*')
-      return index
-  }
-
-  return -1
-}
-
-function findItalicCloser(text: string, fromIndex: number): number {
-  for (let index = fromIndex; index < text.length; index += 1) {
-    if (text[index] !== '*')
-      continue
-
-    const previous = text[index - 1]
-    if (previous && previous !== '*' && !/\s/.test(previous) && text[index + 1] !== '*')
-      return index
-  }
-
-  return -1
-}
+// ---------------------------------------------------------------------------
+// Streaming-repair emphasis heuristics (unchanged from the hand-rolled
+// renderer; only used by repairStreamingMarkdown).
+// ---------------------------------------------------------------------------
 
 function hasUnclosedItalicOpener(text: string): boolean {
   for (let index = 0; index < text.length; index += 1) {
@@ -834,4 +671,12 @@ function isEmphasisOpeningBoundary(value: string | undefined): boolean {
 
 function isUnicodePunctuation(value: string): boolean {
   return /\p{P}/u.test(value)
+}
+
+function isWhitespace(value: string): boolean {
+  return value === ' ' || value === '\t'
+}
+
+function isDigit(value: string): boolean {
+  return value >= '0' && value <= '9'
 }
