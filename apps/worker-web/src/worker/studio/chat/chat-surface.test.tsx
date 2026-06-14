@@ -14,6 +14,8 @@ const composerLabels = {
     preview: (name: string) => `Preview ${name}`,
     remove: (name: string) => `Remove ${name}`,
   },
+  stop: 'Stop',
+  stopAriaLabel: 'Stop generating',
   submitAriaLabel: 'Send message',
 }
 
@@ -474,7 +476,7 @@ describe('chat surface', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
 
     await waitFor(() => {
-      expect(screen.getByText('Starting invocation')).toBeTruthy()
+      expect(screen.getAllByText('Starting').length).toBeGreaterThan(0)
       expect(document.querySelector('[data-timeline-step-provenance="optimistic"]')).toBeTruthy()
     })
   })
@@ -506,9 +508,9 @@ describe('chat surface', () => {
     render(<ChatSurface composerLabels={composerLabels} sessionId="session-1" transcriptAriaLabel="Session transcript" />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Stop invocation' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Stop generating' })).toBeTruthy()
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Stop invocation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop generating' }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith('/api/engine/invocations/inv-running/cancel', expect.objectContaining({ method: 'POST' }))

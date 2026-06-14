@@ -149,7 +149,7 @@ describe('chat transcript view', () => {
     )
 
     expect(screen.getByText(/show a timeline/)).toBeTruthy()
-    expect(await screen.findByText('Starting invocation')).toBeTruthy()
+    expect((await screen.findAllByText('Starting')).length).toBeGreaterThan(0)
     expect(document.querySelector('[data-transcript-slot="timeline-step"][data-timeline-step-provenance="optimistic"]')).toBeTruthy()
     expect(document.querySelector('[data-transcript-slot="timeline-step"][data-timeline-step-provenance="engine"]')).toBeNull()
   })

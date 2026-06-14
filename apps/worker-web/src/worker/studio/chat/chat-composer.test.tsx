@@ -14,6 +14,8 @@ const labels = {
     preview: (name: string) => `Preview ${name}`,
     remove: (name: string) => `Remove ${name}`,
   },
+  stop: 'Stop',
+  stopAriaLabel: 'Stop generating',
   submitAriaLabel: 'Send message',
 }
 
@@ -65,9 +67,9 @@ describe('chat composer', () => {
 
     render(<ChatComposer labels={labels} onCancel={onCancel} sessionId="session-1" status="running" />)
 
-    expect(screen.getByRole('button', { name: 'Stop invocation' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Stop generating' })).toBeTruthy()
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'queued follow-up' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Stop invocation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop generating' }))
     expect(onCancel).toHaveBeenCalledTimes(1)
     expect(fetchMock).not.toHaveBeenCalled()
   })

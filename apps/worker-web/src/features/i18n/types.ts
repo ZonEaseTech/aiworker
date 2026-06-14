@@ -136,9 +136,10 @@ export interface StaticMessages {
     noSelectionDetail: string
     noSelectionTitle: string
     noInvocations: string
-    operatorRole: string
     sendInvocation: string
     sendingInvocation: string
+    stopGenerating: string
+    stopGeneratingAriaLabel: string
     backToWorker: string
     backToWorkspace: string
     currentSession: string
@@ -170,6 +171,24 @@ export interface StaticMessages {
     workerListHint: string
     workerSoul: string
     workerStatus: string
+  }
+  chat: {
+    preparingResponse: string
+    startingInvocation: string
+    waitingForEngine: string
+    timeline: {
+      invocationStarted: string
+      working: string
+      invocationWarning: string
+      engineWarning: string
+      invocationCompleted: string
+      invocationCancelled: string
+      invocationFailed: string
+      processStarted: string
+      processExited: string
+      processLost: string
+      engineError: string
+    }
   }
   relativeTime: {
     daysAgo: (days: number) => string
@@ -275,6 +294,7 @@ export interface StaticMessages {
   }
   statuses: Record<StatusKey, string>
   workerConfig: {
+    overlayCategories: Record<'entry-file' | 'mcp-client' | 'skill', string>
     viewEdit: string
     view: string
     addSkill: string

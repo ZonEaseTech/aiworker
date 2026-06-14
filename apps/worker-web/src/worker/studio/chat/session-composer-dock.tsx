@@ -13,6 +13,8 @@ export interface SessionComposerDockLabels {
   ariaLabel: string
   attachment: ManagedSessionComposerAttachmentLabels
   placeholder?: string
+  stop: string
+  stopAriaLabel: string
   submitAriaLabel: string
 }
 
@@ -50,14 +52,14 @@ export function SessionComposerDock({
         placeholder={labels.placeholder}
         statusAction={running
           ? {
-              ariaLabel: 'Stop invocation',
+              ariaLabel: labels.stopAriaLabel,
               icon: <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} aria-hidden="true" />,
               id: 'stop-invocation',
-              label: 'Stop',
+              label: labels.stop,
               onClick: () => {
                 void onCancel?.()
               },
-              title: 'Stop invocation',
+              title: labels.stopAriaLabel,
             }
           : undefined}
         submitAriaLabel={labels.submitAriaLabel}

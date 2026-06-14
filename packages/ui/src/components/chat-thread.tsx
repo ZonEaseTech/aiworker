@@ -23,6 +23,7 @@ export interface ChatThreadProps {
   loading?: boolean
   loadingLabel?: ReactNode
   onTurnCollapsedChange?: (turnId: string, collapsed: boolean) => void
+  preparingResponseLabel?: string
   turns: TranscriptTurnModel[]
 }
 
@@ -33,6 +34,7 @@ export function ChatThread({
   loading = false,
   loadingLabel = 'Loading transcript',
   onTurnCollapsedChange,
+  preparingResponseLabel = 'Preparing response',
   turns,
 }: ChatThreadProps) {
   const showCompanion = turns.length === 0
@@ -50,7 +52,7 @@ export function ChatThread({
         className="w-full min-w-0 gap-4"
       >
         {turns.map(turn => (
-          <TranscriptTurn key={turn.id} onCollapsedChange={onTurnCollapsedChange} turn={turn} />
+          <TranscriptTurn key={turn.id} onCollapsedChange={onTurnCollapsedChange} preparingResponseLabel={preparingResponseLabel} turn={turn} />
         ))}
       </ItemGroup>
       {showCompanion
@@ -68,10 +70,11 @@ export function ChatThread({
 
 export interface TranscriptTurnProps {
   onCollapsedChange?: (turnId: string, collapsed: boolean) => void
+  preparingResponseLabel?: string
   turn: TranscriptTurnModel
 }
 
-export function TranscriptTurn({ onCollapsedChange, turn }: TranscriptTurnProps) {
+export function TranscriptTurn({ onCollapsedChange, preparingResponseLabel = 'Preparing response', turn }: TranscriptTurnProps) {
   const summary = turn.summary ?? createDefaultTurnSummary(turn)
   const title = turn.title
   const turnKind = resolveTranscriptTurnKind(turn)
@@ -131,7 +134,7 @@ export function TranscriptTurn({ onCollapsedChange, turn }: TranscriptTurnProps)
                   turnKind === 'user' && 'justify-items-end',
                 )}
               >
-                {turn.items.map(item => <TranscriptItem key={item.id} item={item} />)}
+                {turn.items.map(item => <TranscriptItem key={item.id} item={item} preparingResponseLabel={preparingResponseLabel} />)}
               </div>
             )}
       </div>
@@ -139,7 +142,7 @@ export function TranscriptTurn({ onCollapsedChange, turn }: TranscriptTurnProps)
   )
 }
 
-function TranscriptItem({ item }: { item: TranscriptItemModel }) {
+function TranscriptItem({ item, preparingResponseLabel = 'Preparing response' }: { item: TranscriptItemModel, preparingResponseLabel?: string }) {
   if (item.kind === 'user-message') {
     return (
       <Item data-transcript-slot="user-message" variant="muted" className="min-w-0 rounded-lg bg-muted/70">
@@ -152,7 +155,7 @@ function TranscriptItem({ item }: { item: TranscriptItemModel }) {
 
   if (item.kind === 'assistant-markdown') {
     return item.streaming && !item.markdown.trim()
-      ? <StreamingPlaceholder label="Preparing response" />
+      ? <StreamingPlaceholder label={preparingResponseLabel} />
       : <AssistantMarkdown markdown={item.markdown} streaming={item.streaming} />
   }
 

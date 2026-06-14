@@ -18,6 +18,28 @@ export function normalizeLocale(language: string | null | undefined): SupportedL
   return supportedLocales.includes(language as SupportedLocale) ? language as SupportedLocale : 'en'
 }
 
+// C2: pick the employee's initial locale. A saved worker setting always wins. Otherwise
+// detect from the browser's ordered `navigator.languages` (BCP-47) — exact match (zh-CN)
+// first, then base-language match (en-US → en, zh-Hans → zh-CN). When nothing matches, fall
+// back to zh-CN rather than en: this is a zh-first product (AGENTS.md 默认中文), so an
+// unrecognized browser locale should not silently land an employee on an English chrome.
+export function detectInitialLocale(
+  savedLanguage: string | null | undefined,
+  navigatorLanguages: readonly string[] = typeof navigator === 'undefined' ? [] : navigator.languages ?? [],
+): SupportedLocale {
+  if (savedLanguage && supportedLocales.includes(savedLanguage as SupportedLocale))
+    return savedLanguage as SupportedLocale
+  for (const lang of navigatorLanguages) {
+    if (supportedLocales.includes(lang as SupportedLocale))
+      return lang as SupportedLocale
+    const base = lang.split('-')[0]?.toLowerCase()
+    const match = supportedLocales.find(locale => locale.toLowerCase().split('-')[0] === base)
+    if (match)
+      return match
+  }
+  return 'zh-CN'
+}
+
 export function messagesFor(language: string | null | undefined): StaticMessages {
   return messagesByLocale[normalizeLocale(language)]
 }
