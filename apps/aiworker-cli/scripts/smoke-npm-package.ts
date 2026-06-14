@@ -43,6 +43,30 @@ for (const required of ['package.json', 'README.md', 'aiworker.js']) {
   if (!paths.includes(required))
     throw new Error(`npm package missing ${required}; files=${paths.join(', ')}`)
 }
+const readme = readFileSync(path.join(distDir, 'README.md'), 'utf8')
+for (const required of ['aiworker plan --help', 'aiworker apply --help', 'aiworker doctor --help']) {
+  if (!readme.includes(required))
+    throw new Error(`dist README missing CLI command ${required}`)
+}
+for (const forbidden of ['aiworker describe', 'plan-provision', 'provision --dry-run']) {
+  if (readme.includes(forbidden))
+    throw new Error(`dist README still documents retired CLI command ${forbidden}`)
+}
+const help = Bun.spawnSync(['bun', path.join(distDir, 'aiworker.js'), '--help'], {
+  stderr: 'pipe',
+  stdout: 'pipe',
+})
+if (help.exitCode !== 0)
+  throw new Error(`dist aiworker --help failed: ${help.stderr.toString()}`)
+const helpText = help.stdout.toString()
+for (const required of ['plan', 'apply', 'doctor']) {
+  if (!helpText.includes(required))
+    throw new Error(`dist aiworker --help missing command ${required}`)
+}
+for (const forbidden of ['describe', 'plan-provision']) {
+  if (helpText.includes(forbidden))
+    throw new Error(`dist aiworker --help still exposes retired command ${forbidden}`)
+}
 for (const forbidden of [/^web\//, /worker-(?:cli|web|daemon|runtime)/i, /workbench/i, /engine-bridge/i, /engine-projection/i, /storage-sqlite/i]) {
   const offender = paths.find(file => forbidden.test(file))
   if (offender)

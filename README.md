@@ -55,7 +55,7 @@ dist/workspace-template/**
 ## Current packages
 
 ```text
-apps/aiworker-cli/          the only product CLI: describe and plan AIWorker provisioning
+apps/aiworker-cli/          the only product CLI: plan/apply/doctor for AIWorker provisioning
 packages/aiworker-control/  assignment, aissh provisioning plan, handoff, projection guardrails
 packages/soul-descriptor/   descriptor schema for workspace templates
 packages/soul-sdk/          Soul authoring/build helpers
@@ -74,11 +74,18 @@ bun run lint
 bun run build
 ```
 
-Plan a provisioning command from a built Soul descriptor:
+Check local CLI prerequisites without contacting a target:
+
+```bash
+bun apps/aiworker-cli/src/aiworker.ts doctor \
+  --soul souls/aiworker-freeform/dist/soul.descriptor.json
+```
+
+Preview a provisioning plan from a built Soul descriptor:
 
 ```bash
 bun run build:official-souls
-bun apps/aiworker-cli/src/aiworker.ts plan-provision \
+bun apps/aiworker-cli/src/aiworker.ts plan \
   --user alice@example.com \
   --target aissh:server-1 \
   --environment env_alice_server1 \
@@ -90,12 +97,17 @@ bun apps/aiworker-cli/src/aiworker.ts plan-provision \
   --workspace /home/alice/workspaces/freeform
 ```
 
-Execute the same provisioning explicitly through aissh:
+Use `--json` when another program needs the full structured plan, and `--show-script`
+only when you need to inspect the generated remote shell script.
+
+Execute the same provisioning explicitly through aissh. In an interactive terminal,
+`apply` shows the same human summary and asks you to type `yes`; automation should
+pass `--yes` or `--auto-approve`.
 
 ```bash
 export AISSH_TOKEN=...             # real secret lives in env or your secret manager, never in Soul files
 export AISSH_SERVER=https://...    # optional, depending on your aissh control plane
-bun apps/aiworker-cli/src/aiworker.ts provision \
+bun apps/aiworker-cli/src/aiworker.ts apply --yes \
   --user alice@example.com \
   --target aissh:server-1 \
   --environment env_alice_server1 \
@@ -107,7 +119,12 @@ bun apps/aiworker-cli/src/aiworker.ts provision \
   --workspace /home/alice/workspaces/freeform
 ```
 
-`aiworker provision` resolves aissh as `--aissh-bin` / `AISSH_BIN` → bundled optional `aissh-cli` launcher → `PATH`. It runs aissh from a neutral temporary directory so local `.aissh.yaml` files cannot override env credentials.
+`aiworker apply` resolves aissh as `--aissh-bin` / `AISSH_BIN` → bundled optional
+`aissh-cli` launcher → `PATH`. It runs aissh from a neutral temporary directory so
+local `.aissh.yaml` files cannot override env credentials. Non-interactive runs require
+`--yes` / `--auto-approve` because they write the target workspace and may start a
+Paseo daemon. Failure output omits the generated remote script; inspect that script
+locally with `aiworker plan ... --show-script`.
 
 ## Non-goals
 
