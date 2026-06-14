@@ -177,7 +177,7 @@ finally {
 }
 
 async function createWorkspaceAndSessionFromUi(page: Page): Promise<void> {
-  const main = page.getByRole('region', { name: 'Soul workspaces and sessions' })
+  const main = page.getByRole('region', { name: 'Workspaces and sessions' })
   // The Worker already exists (ensured via CLI). The Workbench creates workspaces
   // and sessions — never workers — so the flow opens the create-workspace dialog
   // directly from the worker's empty-state.
@@ -336,8 +336,8 @@ async function assertSecretOverlayRejectionFromUi(page: Page): Promise<void> {
 }
 
 async function assertSettingsUserFlow(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /^Open local Host settings/ }).click()
-  const settingsDialog = page.getByRole('dialog', { name: 'Local Host Settings' })
+  await page.getByRole('button', { name: /^Open local settings/ }).click()
+  const settingsDialog = page.getByRole('dialog', { name: 'Local settings' })
 
   await settingsDialog.getByRole('button', { name: 'Rescan' }).click()
   await settingsDialog.getByRole('button', { name: 'Test' }).click()
@@ -347,17 +347,17 @@ async function assertSettingsUserFlow(page: Page): Promise<void> {
   await settingsDialog.getByRole('group', { name: 'Appearance' }).getByRole('radio', { name: /Dark/ }).click()
   await page.waitForFunction(() => document.documentElement.classList.contains('dark'), null, { timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 
-  await settingsDialog.getByRole('button', { name: 'Close local Host settings' }).click()
+  await settingsDialog.getByRole('button', { name: 'Close local settings' }).click()
   await settingsDialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 }
 
 async function assertComposerReadinessGate(page: Page): Promise<void> {
   // Switch to BYOK without an API key reference → readiness derives "not ready"
   // purely from local settings, so the employee is guided instead of submitting.
-  await page.getByRole('button', { name: /^Open local Host settings/ }).click()
-  const settingsDialog = page.getByRole('dialog', { name: 'Local Host Settings' })
+  await page.getByRole('button', { name: /^Open local settings/ }).click()
+  const settingsDialog = page.getByRole('dialog', { name: 'Local settings' })
   await settingsDialog.getByRole('radio', { name: 'BYOK' }).click()
-  await settingsDialog.getByRole('button', { name: 'Close local Host settings' }).click()
+  await settingsDialog.getByRole('button', { name: 'Close local settings' }).click()
   await settingsDialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 
   const readinessNotice = page.locator('[data-chat-slot="composer-readiness"]')
@@ -384,10 +384,10 @@ async function assertComposerReadinessGate(page: Page): Promise<void> {
     throw new Error(`Readiness notice missing guidance or engine posture disclosure: ${JSON.stringify(gate)}`)
 
   // Restore Local CLI so the rest of the flow runs with a ready composer.
-  await page.getByRole('button', { name: /^Open local Host settings/ }).click()
-  const restoreDialog = page.getByRole('dialog', { name: 'Local Host Settings' })
+  await page.getByRole('button', { name: /^Open local settings/ }).click()
+  const restoreDialog = page.getByRole('dialog', { name: 'Local settings' })
   await restoreDialog.getByRole('radio', { name: 'Local CLI' }).click()
-  await restoreDialog.getByRole('button', { name: 'Close local Host settings' }).click()
+  await restoreDialog.getByRole('button', { name: 'Close local settings' }).click()
   await restoreDialog.waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
   await page.locator('[data-chat-slot="composer-readiness"]').waitFor({ state: 'detached', timeout: WORKBENCH_RENDER_TIMEOUT_MS })
 }
@@ -397,7 +397,7 @@ async function archiveWorkspaceLifecycleFromUi(
   routeIds: { sessionId: string, workerId: string, workspaceId: string },
 ): Promise<Record<string, unknown>> {
   const eventStart = browserEvents.length
-  const main = page.getByRole('region', { name: 'Soul workspaces and sessions' })
+  const main = page.getByRole('region', { name: 'Workspaces and sessions' })
   await assertWorkerArchiveAbsentFromUi(page)
 
   // 单一归档动作直接出按钮(不再藏进 ••• overflow 菜单);一键打开确认弹窗。
