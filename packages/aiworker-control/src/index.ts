@@ -61,6 +61,21 @@ export interface PaseoHandoff {
   instructions: string
 }
 
+export interface AisshProvisionInvocation {
+  adapterType: 'aissh'
+  args: string[]
+  command: string
+  credentials: {
+    optionalEnv: ('AISSH_BIN' | 'AISSH_SERVER')[]
+    source: 'env'
+    requiredEnv: 'AISSH_TOKEN'[]
+  }
+  cwdPolicy: 'neutral-tempdir'
+  reason: string
+  script: string
+  serverRef: string
+}
+
 export interface ProvisionPlanInput {
   assignment: WorkspaceAssignment
   environment: PaseoEnvironment
@@ -69,6 +84,7 @@ export interface ProvisionPlanInput {
 }
 
 export interface ProvisionPlan {
+  aissh: AisshProvisionInvocation
   assignment: WorkspaceAssignment
   command: string
   receipt: {
@@ -79,6 +95,7 @@ export interface ProvisionPlan {
     soulReleaseRef: string
     providerProfileId: string
     command: string
+    aisshArgs: string[]
   }
 }
 
@@ -136,6 +153,13 @@ export function createHandoff(environment: PaseoEnvironment, workspaceRef: strin
   }
 }
 
+export function normalizeAisshServerRef(targetRef: string): string {
+  const trimmed = targetRef.trim()
+  if (!trimmed)
+    throw new Error('aissh target ref is required')
+  return trimmed.startsWith('aissh:') ? trimmed.slice('aissh:'.length) : trimmed
+}
+
 export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
   assertProviderProfileReady(input)
   assertNoLiteralSecret(input.providerProfile.secretRef ?? '', 'providerProfile.secretRef')
@@ -152,11 +176,29 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
     `mkdir -p ${shellQuote(input.assignment.workspaceRef)}`,
     `paseo --host ${shellQuote(input.environment.daemonEndpoint)} daemon status >/dev/null || paseo daemon start --home ${shellQuote(input.environment.paseoHome)} >/dev/null`,
     ...projectionCommands,
-    `printf '%s\\n' ${shellQuote(`AIWorker projected ${input.soul.id}@${input.soul.version}: ${projectedFiles}`)} > ${shellQuote(path.posix.join(input.assignment.workspaceRef, '.aiworker-projection'))}`,
+    `printf '%s\n' ${shellQuote(`AIWorker projected ${input.soul.id}@${input.soul.version}: ${projectedFiles}`)} > ${shellQuote(path.posix.join(input.assignment.workspaceRef, '.aiworker-projection'))}`,
   ].join(' && ')
-  const command = `aissh exec ${shellQuote(input.environment.targetRef)} ${shellQuote(script)} --reason=${shellQuote(`Provision AIWorker Paseo workspace for ${input.assignment.assignedEmail}`)}`
+  const serverRef = normalizeAisshServerRef(input.environment.targetRef)
+  const reason = `Provision AIWorker Paseo workspace for ${input.assignment.assignedEmail}`
+  const args = ['exec', serverRef, script, `--reason=${reason}`]
+  const command = `aissh ${args.map(shellQuote).join(' ')}`
   const redactedCommand = redactSecretLike(command)
+  const redactedArgs = args.map(redactSecretLike)
   return {
+    aissh: {
+      adapterType: 'aissh',
+      args: redactedArgs,
+      command: redactedCommand,
+      credentials: {
+        optionalEnv: ['AISSH_BIN', 'AISSH_SERVER'],
+        requiredEnv: ['AISSH_TOKEN'],
+        source: 'env',
+      },
+      cwdPolicy: 'neutral-tempdir',
+      reason,
+      script: redactSecretLike(script),
+      serverRef: redactSecretLike(serverRef),
+    },
     assignment: {
       ...input.assignment,
       handoff: createHandoff(input.environment, input.assignment.workspaceRef),
@@ -165,6 +207,7 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
     command: redactedCommand,
     receipt: {
       adapterType: 'aissh',
+      aisshArgs: redactedArgs,
       command: redactedCommand,
       environmentId: input.environment.environmentId,
       providerProfileId: input.providerProfile.id,

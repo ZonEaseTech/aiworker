@@ -8,6 +8,7 @@ interface SourcePackageJson {
   homepage?: string
   license?: string
   name: string
+  optionalDependencies?: Record<string, string>
   publishConfig?: Record<string, unknown>
   repository?: unknown
   version: string
@@ -32,6 +33,7 @@ writeFileSync(path.join(distDir, 'package.json'), `${JSON.stringify({
   homepage: sourcePackage.homepage,
   license: sourcePackage.license ?? 'MIT',
   name: sourcePackage.name,
+  optionalDependencies: sourcePackage.optionalDependencies,
   publishConfig: sourcePackage.publishConfig,
   repository: sourcePackage.repository,
   type: 'module',

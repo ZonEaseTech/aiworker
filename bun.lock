@@ -30,6 +30,9 @@
         "@types/bun": "^1.2.13",
         "typescript": "^5.8.3",
       },
+      "optionalDependencies": {
+        "aissh-cli": "github:tubnt/aissh-cli#v0.8.0",
+      },
     },
     "packages/aiworker-control": {
       "name": "@zonease/aiworker-control",
@@ -437,6 +440,8 @@
     "acorn": ["acorn@8.16.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw=="],
 
     "acorn-jsx": ["acorn-jsx@5.3.2", "", { "peerDependencies": { "acorn": "^6.0.0 || ^7.0.0 || ^8.0.0" } }, "sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ=="],
+
+    "aissh-cli": ["aissh-cli@github:tubnt/aissh-cli#e5842ed", { "bin": { "aissh": "bin/aissh.js" } }, "tubnt-aissh-cli-e5842ed", "sha512-LUoNJBFM0JUOpZ9xyCkQucacahmdA/6kP7co4cPE8yGlOwmYl7P05bMzk38CbN9zM2gw5nWc8eAybMH22nAMRQ=="],
 
     "ajv": ["ajv@6.14.0", "", { "dependencies": { "fast-deep-equal": "^3.1.1", "fast-json-stable-stringify": "^2.0.0", "json-schema-traverse": "^0.4.1", "uri-js": "^4.2.2" } }, "sha512-IWrosm/yrn43eiKqkfkHis7QioDleaXQHdDVPKg0FSwwd/DuvyX79TZnFOnYpB7dcsFAMmtFztZuXPDvSePkFw=="],
 

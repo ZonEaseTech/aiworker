@@ -7,6 +7,7 @@ import {
   createAssignment,
   createHandoff,
   createProvisionPlan,
+  normalizeAisshServerRef,
   userCanOpenWorkspace,
   validateProjectedFilePath,
   writeProjectedFiles,
@@ -74,14 +75,46 @@ describe('Paseo thin-layer aiworker-control contract', () => {
     })
     const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
 
-    expect(plan.command).toContain('aissh exec aissh:server-1')
+    expect(plan.command).toContain('aissh exec server-1')
     expect(plan.command).toContain('PASEO_HOME=/home/alice/.paseo')
+    expect(plan.aissh.serverRef).toBe('server-1')
+    expect(plan.aissh.args[0]).toBe('exec')
+    expect(plan.aissh.args[1]).toBe('server-1')
+    expect(plan.aissh.cwdPolicy).toBe('neutral-tempdir')
+    expect(plan.aissh.credentials).toEqual({ optionalEnv: ['AISSH_BIN', 'AISSH_SERVER'], requiredEnv: ['AISSH_TOKEN'], source: 'env' })
     expect(plan.command).toContain('paseo --host unix:/run/paseo/alice.sock daemon status')
     expect(plan.command).toContain('base64 -d')
     expect(plan.receipt.soulReleaseRef).toBe('hr-recruiter@1.2.0')
+    expect(plan.receipt.aisshArgs).toEqual(plan.aissh.args)
     expect(plan.assignment.handoff?.kind).toBe('paseo-daemon')
     expect(plan.command).toContain('command -v claude')
     expect(plan.command).not.toContain('secret://org/claude-work')
+  })
+
+  test('normalizes aissh target refs without binding AIWorker to local .aissh.yaml files', () => {
+    expect(normalizeAisshServerRef('aissh:server-1')).toBe('server-1')
+    expect(normalizeAisshServerRef('server-2')).toBe('server-2')
+    expect(() => normalizeAisshServerRef('   ')).toThrow('aissh target ref is required')
+  })
+
+  test('redacts secret-like values from structured aissh plan surfaces', () => {
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+    })
+    const plan = createProvisionPlan({
+      assignment,
+      environment: { ...environment, targetRef: 'aissh:server-sk-abc123456789' },
+      providerProfile,
+      soul,
+    })
+
+    expect(plan.command).toContain('[REDACTED]')
+    expect(plan.aissh.args.join(' ')).not.toContain('sk-abc123456789')
+    expect(plan.receipt.command).not.toContain('sk-abc123456789')
   })
 
   test('rejects provider profiles that are not attached to the Paseo environment', () => {

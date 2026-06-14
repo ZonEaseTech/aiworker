@@ -13,7 +13,7 @@ interface PackResult {
 
 const distDir = path.resolve('dist')
 const sourcePackage = JSON.parse(readFileSync('package.json', 'utf8')) as { name: string, version: string }
-const distPackage = JSON.parse(readFileSync(path.join(distDir, 'package.json'), 'utf8')) as { files?: string[], name: string, version: string }
+const distPackage = JSON.parse(readFileSync(path.join(distDir, 'package.json'), 'utf8')) as { files?: string[], name: string, optionalDependencies?: Record<string, string>, version: string }
 
 if (!existsSync(path.join(distDir, 'aiworker.js')))
   throw new Error('dist/aiworker.js missing; run build first')
@@ -21,6 +21,8 @@ if (distPackage.name !== sourcePackage.name || distPackage.version !== sourcePac
   throw new Error(`dist package identity drift: source=${sourcePackage.name}@${sourcePackage.version} dist=${distPackage.name}@${distPackage.version}`)
 if (JSON.stringify(distPackage.files) !== JSON.stringify(['aiworker.js', 'README.md']))
   throw new Error(`dist package files must stay whitelisted; got ${JSON.stringify(distPackage.files)}`)
+if (distPackage.optionalDependencies?.['aissh-cli'] !== 'github:tubnt/aissh-cli#v0.8.0')
+  throw new Error(`dist package must keep pinned optional aissh-cli; got ${JSON.stringify(distPackage.optionalDependencies)}`)
 
 const pack = Bun.spawnSync(['npm', 'pack', '--dry-run', '--json'], {
   cwd: distDir,

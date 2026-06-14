@@ -36,6 +36,9 @@
     "@zonease/aiworker-soul-descriptor": "workspace:*",
     "cac": "^6.7.14"
   },
+  "optionalDependencies": {
+    "aissh-cli": "github:tubnt/aissh-cli#v0.8.0"
+  },
   "devDependencies": {
     "@types/bun": "^1.2.13",
     "typescript": "^5.8.3"

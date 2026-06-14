@@ -15,6 +15,9 @@ const required = [
   /Soul is now a versioned Paseo workspace template/i,
   /AIWorker no longer has an employee-side runtime/i,
   /daemonEndpoint/i,
+  /aissh MVP integration/i,
+  /AISSH_BIN/i,
+  /neutral temporary directory/i,
   /must not.*provider API keys/i,
 ]
 const forbidden = [

@@ -90,6 +90,25 @@ bun apps/aiworker-cli/src/aiworker.ts plan-provision \
   --workspace /home/alice/workspaces/freeform
 ```
 
+Execute the same provisioning explicitly through aissh:
+
+```bash
+export AISSH_TOKEN=...             # real secret lives in env or your secret manager, never in Soul files
+export AISSH_SERVER=https://...    # optional, depending on your aissh control plane
+bun apps/aiworker-cli/src/aiworker.ts provision \
+  --user alice@example.com \
+  --target aissh:server-1 \
+  --environment env_alice_server1 \
+  --paseo-home /home/alice/.paseo \
+  --paseo-endpoint 127.0.0.1:6767 \
+  --provider codex-default \
+  --provider-kind codex \
+  --soul souls/aiworker-freeform/dist/soul.descriptor.json \
+  --workspace /home/alice/workspaces/freeform
+```
+
+`aiworker provision` resolves aissh as `--aissh-bin` / `AISSH_BIN` → bundled optional `aissh-cli` launcher → `PATH`. It runs aissh from a neutral temporary directory so local `.aissh.yaml` files cannot override env credentials.
+
 ## Non-goals
 
 AIWorker must not reintroduce a Worker daemon, Workbench, session/invocation protocol, engine bridge, runtime event projection, local broker API, or Paseo fork/vendor/embed. Employee work happens in Paseo.

@@ -18,7 +18,8 @@ bun run build
 - Canonical docs must say AIWorker is assignment ledger + aissh provisioner + Soul filesystem projector.
 - Canonical docs must say Paseo owns workspace/runtime/UI/session/provider orchestration.
 - Package ownership tests must reject deleted legacy Worker packages/apps.
-- AIWorker-control tests must cover assignment lifecycle, user authorization, handoff metadata, aissh provisioning command redaction, and Soul file projection.
+- AIWorker-control tests must cover assignment lifecycle, user authorization, handoff metadata, structured aissh provisioning args, command redaction, and Soul file projection.
+- AIWorker CLI tests must cover `plan-provision`, explicit `provision --dry-run`, aissh invocation resolution, neutral cwd execution, and mocked provision execution without contacting a real target.
 - Soul descriptor/SDK tests must prove Souls build into workspace templates only.
 
 ## Explicitly retired gates

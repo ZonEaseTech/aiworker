@@ -30,6 +30,17 @@ describe('Paseo thin-layer package ownership', () => {
       expect(root).not.toContain(forbidden)
   })
 
+  test('aiworker CLI remains the only publishable package and carries pinned optional aissh-cli', () => {
+    const aiworkerCli = JSON.parse(readFileSync('apps/aiworker-cli/package.json', 'utf8')) as {
+      name: string
+      optionalDependencies?: Record<string, string>
+      private?: boolean
+    }
+    expect(aiworkerCli.name).toBe('@zonease/aiworker-cli')
+    expect(aiworkerCli.private).toBeUndefined()
+    expect(aiworkerCli.optionalDependencies?.['aissh-cli']).toBe('github:tubnt/aissh-cli#v0.8.0')
+  })
+
   test('project workflow instructions do not revive retired dual-CLI or sampling surfaces', () => {
     const releaseLoop = readFileSync('.agents/skills/release-loop/SKILL.md', 'utf8')
     const forbiddenPatterns = [
