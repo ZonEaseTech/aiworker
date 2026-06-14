@@ -1,0 +1,43 @@
+{
+  "name": "@zonease/aiworker-cli",
+  "type": "module",
+  "version": "1.0.0-rc.12",
+  "description": "AIWorker CLI — thin Paseo workspace distribution layer",
+  "license": "MIT",
+  "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZonEaseTech/aiworker.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "aiworker": "./dist/aiworker.js"
+  },
+  "files": [
+    "README.md",
+    "dist/"
+  ],
+  "engines": {
+    "bun": ">=1.1",
+    "node": ">=20.19.0 <21 || >=22.12.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --timeout=15000",
+    "build": "bun run build:bundle",
+    "build:bundle": "rm -rf dist && bun build --target=bun --minify --outfile=dist/aiworker-bun.js src/aiworker.ts && bun scripts/build-publish-manifest.ts",
+    "prepublishOnly": "bun run build",
+    "smoke:dist-release": "bun scripts/smoke-npm-package.ts"
+  },
+  "dependencies": {
+    "@zonease/aiworker-control": "workspace:*",
+    "@zonease/aiworker-soul-descriptor": "workspace:*",
+    "cac": "^6.7.14"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.13",
+    "typescript": "^5.8.3"
+  }
+}

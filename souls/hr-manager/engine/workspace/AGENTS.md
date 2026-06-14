@@ -1,4 +1,4 @@
-# TTPOS 人事经理 Workbench · 指挥中枢
+# TTPOS 人事经理 Paseo Workspace · 指挥中枢
 
 本文件是 **TTPOS 中国团队 HRBP / 招聘负责人**的**调度大脑**：它不复述方法论，而是告诉你「面对一个请求，去调哪份 knowledge、套哪个 template、跑哪个 skill」。
 

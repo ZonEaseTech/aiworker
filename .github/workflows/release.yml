@@ -1,167 +1,55 @@
 name: release
 
-# Tag schemes (independent per-line release + legacy combined):
-#   worker-v<version>  -> publish @zonease/aiworker-cli only (release-worker job)
-#   host-v<version>    -> publish @zonease/aiworker-host-cli only (release-host job)
-#   v<version>         -> legacy combined: publish both (backward compatible)
-# npm dist-tag is derived from <version>: a SemVer prerelease (-rc.N/-beta.N) -> that
-# channel; a clean version -> latest. So worker GA = push `worker-v1.0.0` (moves only
-# worker-cli's latest), host stays on its own `host-v*` cadence.
+# Tag scheme:
+#   aiworker-v<version> -> publish @zonease/aiworker-cli
+#   v<version>          -> same AIWorker CLI publish path for single-package releases
 on:
   push:
-    tags: ['v*', 'worker-v*', 'host-v*']
+    tags: ['v*', 'aiworker-v*']
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
-  release-worker:
-    if: ${{ startsWith(github.ref_name, 'worker-v') || startsWith(github.ref_name, 'v') }}
+  release-aiworker:
     runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: --max-old-space-size=1024
       HUSKY: 0
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
           registry-url: https://registry.npmjs.org
-
       - uses: oven-sh/setup-bun@v2
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      - name: Install Playwright browser
-        run: bunx playwright install --with-deps chromium
-
-      - name: Assert git tag matches worker-cli version
+      - name: Assert git tag matches aiworker-cli version
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#worker-v}"; version="${version#host-v}"; version="${version#v}"
-          worker_version="$(node -p "require('./apps/worker-cli/package.json').version")"
-          if [[ "$version" != "$worker_version" ]]; then
-            echo "git tag/worker-cli version mismatch — tag=$version worker-cli=$worker_version" >&2
-            echo "tag name and worker-cli package.json version must agree before publish" >&2
+          version="${GITHUB_REF_NAME#aiworker-v}"; version="${version#v}"
+          aiworker_version="$(node -p "require('./apps/aiworker-cli/package.json').version")"
+          if [[ "$version" != "$aiworker_version" ]]; then
+            echo "git tag/aiworker-cli version mismatch — tag=$version aiworker-cli=$aiworker_version" >&2
             exit 1
           fi
-          echo "git tag matches worker-cli version: $version"
-
       - name: Release check
         run: bun run release:check
-
-      - name: Compile single-file binaries
-        run: |
-          set -euo pipefail
-          bun build --compile --target=bun-linux-x64    --outfile=aiworker-linux-x64    apps/worker-cli/src/aiworker.ts
-          bun build --compile --target=bun-linux-arm64  --outfile=aiworker-linux-arm64  apps/worker-cli/src/aiworker.ts
-          bun build --compile --target=bun-darwin-x64   --outfile=aiworker-darwin-x64   apps/worker-cli/src/aiworker.ts
-          bun build --compile --target=bun-darwin-arm64 --outfile=aiworker-darwin-arm64 apps/worker-cli/src/aiworker.ts
-
-      - name: Package binary release bundles
-        run: bun apps/worker-cli/scripts/package-release-bundles.ts
-
-      - name: Smoke release artifacts
-        run: bun apps/worker-cli/scripts/smoke-release-artifacts.ts
-
       - name: Derive npm dist-tag from git tag
         id: channel
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#worker-v}"; version="${version#host-v}"; version="${version#v}"
-          if [[ "$version" == *-* ]]; then
-            channel="${version#*-}"; channel="${channel%%.*}"; prerelease=true
-          else
-            channel="latest"; prerelease=false
-          fi
-          if [[ -z "$channel" ]]; then
-            echo "could not derive npm dist-tag from git tag: $GITHUB_REF_NAME" >&2
-            exit 1
-          fi
-          echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
-          echo "npm dist-tag for $GITHUB_REF_NAME => $channel (prerelease=$prerelease)"
-
-      - name: Publish to npm
-        working-directory: apps/worker-cli/dist
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public --tag "${{ steps.channel.outputs.channel }}"
-
-      - name: Attach binaries to GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          fail_on_unmatched_files: true
-          prerelease: ${{ steps.channel.outputs.prerelease }}
-          files: |
-            aiworker-linux-x64.tar.gz
-            aiworker-linux-arm64.tar.gz
-            aiworker-darwin-x64.tar.gz
-            aiworker-darwin-arm64.tar.gz
-            aiworker-linux-x64.tar.gz.sha256
-            aiworker-linux-arm64.tar.gz.sha256
-            aiworker-darwin-x64.tar.gz.sha256
-            aiworker-darwin-arm64.tar.gz.sha256
-
-  release-host:
-    if: ${{ startsWith(github.ref_name, 'host-v') || startsWith(github.ref_name, 'v') }}
-    runs-on: ubuntu-latest
-    env:
-      NODE_OPTIONS: --max-old-space-size=1024
-      HUSKY: 0
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24'
-          registry-url: https://registry.npmjs.org
-
-      - uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Install Playwright browser
-        run: bunx playwright install --with-deps chromium
-
-      - name: Assert git tag matches host-cli version
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#worker-v}"; version="${version#host-v}"; version="${version#v}"
-          host_version="$(node -p "require('./apps/host-cli/package.json').version")"
-          if [[ "$version" != "$host_version" ]]; then
-            echo "git tag/host-cli version mismatch — tag=$version host-cli=$host_version" >&2
-            echo "tag name and host-cli package.json version must agree before publish" >&2
-            exit 1
-          fi
-          echo "git tag matches host-cli version: $version"
-
-      - name: Phase 2 release check
-        run: bun run release:check:phase2
-
-      - name: Derive npm dist-tag from git tag
-        id: channel
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#worker-v}"; version="${version#host-v}"; version="${version#v}"
+          version="${GITHUB_REF_NAME#aiworker-v}"; version="${version#v}"
           if [[ "$version" == *-* ]]; then
             channel="${version#*-}"; channel="${channel%%.*}"
           else
             channel="latest"
           fi
-          if [[ -z "$channel" ]]; then
-            echo "could not derive npm dist-tag from git tag: $GITHUB_REF_NAME" >&2
-            exit 1
-          fi
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "npm dist-tag for $GITHUB_REF_NAME => $channel"
-
-      - name: Publish Host CLI to npm
-        working-directory: apps/host-cli/dist
+      - name: Publish AIWorker CLI to npm
+        working-directory: apps/aiworker-cli/dist
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public --tag "${{ steps.channel.outputs.channel }}"

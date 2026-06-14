@@ -1,5 +1,5 @@
 {
-  "name": "@zonease/aiworker-soul-sdk",
+  "name": "@zonease/aiworker-control",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -13,10 +13,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test --timeout=30000"
-  },
-  "dependencies": {
-    "@zonease/aiworker-soul-descriptor": "workspace:*"
+    "test": "bun test --timeout=15000"
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",

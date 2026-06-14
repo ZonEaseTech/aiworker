@@ -1,6 +1,6 @@
 # TTPOS 工作流与工具集成（integrations）— 现状 + Phase 2 蓝图
 
-> **现有协作工作流（飞书 Lark + GitHub Issues + ttpos-bot）是 TTPOS 的真实流程**；本 soul v1 产出**可直接贴入这些系统的文本成品**，但 v1（standalone Worker）**不接任何真实 API**、不执行 live 调用。
+> **现有协作工作流（飞书 Lark + GitHub Issues + ttpos-bot）是 TTPOS 的真实流程**；本 soul v1 产出**可直接贴入这些系统的文本成品**，但当前 Soul 模板**不接任何真实 API**、不执行 live 调用；真实调用应由 Paseo/provider CLI/MCP 在员工环境中配置。
 > 「Phase 2 蓝图」描述未来若以 MCP 接入会长什么样，供方法论引用，**不在 v1 运行热路径上**。
 
 ---
@@ -9,7 +9,7 @@
 
 - **商户数据与密钥绝不进入** descriptor、DB、receipt、日志、诊断输出、OpenAPI 示例或 UI。
 - 真实工单内容、商户 PII（店名/老板手机/账号/会员信息）、支付商户号 / 支付密钥 / EDC 密钥 / shop 库连接串 / Lark/GitHub token **不得**写入本 soul 的任何资产、范例或 KB。本 soul 所有范例均**脱敏**（用 `company_uuid=<REDACTED>`、`txn=[REDACTED]`、`tok_REDACTED` 等占位）。
-- 作者自管的原生 MCP 文件**可**含真实密钥，但 AIWorker **不得**把密钥复制进 descriptor/DB/receipt/log/诊断/OpenAPI 示例/UI。
+- 员工环境中的 MCP/provider 配置**可**引用真实密钥，但 AIWorker **不得**把密钥复制进 descriptor/DB/receipt/log/诊断/OpenAPI 示例/UI。
 - 监控/状态信号只读公开聚合，不回传任何商户明文数据。
 
 ---

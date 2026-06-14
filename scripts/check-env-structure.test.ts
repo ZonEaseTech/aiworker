@@ -97,10 +97,9 @@ describe('env structure checker', () => {
     expect(result.stderr).toBe('')
   })
 
-  it('defaults project checks to root and Worker daemon env files', () => {
+  it('defaults project checks to the root AIWorker/Paseo env file only', () => {
     expect(defaultEnvStructurePairs()).toEqual([
       { actualPath: '.env', expectedPath: '.env.example' },
-      { actualPath: 'packages/worker-daemon/.env', expectedPath: 'packages/worker-daemon/.env.example' },
     ])
   })
 
@@ -148,18 +147,14 @@ describe('env structure checker', () => {
     expect(await readFile(join(root, '.env'), 'utf8')).toBe('# A\nA=default\n')
   })
 
-  it('checks the root and Worker daemon env pairs for project development', async () => {
-    await mkdir(join(root, 'packages/worker-daemon'), { recursive: true })
+  it('checks only the root AIWorker/Paseo env pair for project development', async () => {
     await writeFile(join(root, '.env.example'), '# Root\nROOT=\n')
     await writeFile(join(root, '.env'), '# Root\nROOT=local\n')
-    await writeFile(join(root, 'packages/worker-daemon/.env.example'), '# Worker\nWORKER=\n')
-    await writeFile(join(root, 'packages/worker-daemon/.env'), '# Worker\nWORKER=local\n')
 
     const result = runEnvStructureChecks({ cwd: root })
 
     expect(result.status).toBe(0)
     expect(result.stdout).toContain(`${join(root, '.env.example')} <-> ${join(root, '.env')}`)
-    expect(result.stdout).toContain(`${join(root, 'packages/worker-daemon/.env.example')} <-> ${join(root, 'packages/worker-daemon/.env')}`)
   })
 
   it('supports explicit example and env paths through the CLI', async () => {
@@ -178,52 +173,29 @@ describe('env structure checker', () => {
     expect(Buffer.from(result.stdout).toString('utf8')).toContain(`${expectedPath} <-> ${actualPath}`)
   })
 
-  it('registers the checker for development commands without wiring it into build checks', async () => {
+  it('keeps env structure checks as explicit dev utilities only', async () => {
     const pkg = JSON.parse(await readFile(join(import.meta.dirname, '..', 'package.json'), 'utf8')) as {
       scripts: Record<string, string>
     }
 
     expect(pkg.scripts['dev:env:check']).toBe('bun scripts/check-env-structure.ts')
     expect(pkg.scripts['dev:env:sync']).toBe('bun scripts/check-env-structure.ts --write')
-    for (const scriptName of [
-      'dev:worker',
-      'dev:worker:status',
-      'dev:host',
-      'dev:host:status',
-      'dev:worker-daemon',
-      'dev:web',
-      'dev:apps',
-      'dev:status',
-      'dev:fleet',
-      'dev:fleet:status',
-      'dev:fleet-web',
-      'dev:fleet-web:status',
-    ]) {
-      expect(pkg.scripts[scriptName]).toStartWith('bun run dev:env:check && ')
-    }
 
-    for (const scriptName of ['build', 'check', 'lint', 'release:check', 'typecheck']) {
+    for (const scriptName of ['build', 'check', 'lint', 'release:check', 'typecheck'])
       expect(pkg.scripts[scriptName]).not.toContain('dev:env:check')
-    }
   })
 
-  it('keeps Worker-owned process env out of the root dev env example', async () => {
+  it('keeps provider API keys out of the root dev env example', async () => {
     const rootExample = await readFile(join(import.meta.dirname, '..', '.env.example'), 'utf8')
-    const workerDaemonExample = await readFile(join(import.meta.dirname, '..', 'packages/worker-daemon/.env.example'), 'utf8')
-    const workerOwnedKeys = [
-      'AIWORKER_HOST_URL',
-      'AIWORKER_PROVISION_TOKEN',
-      'AIWORKER_CODEX_DISABLE_PLUGINS',
-      'AIWORKER_CODEX_IGNORE_USER_CONFIG',
-      'AIWORKER_LOCAL_CLI_ENGINE_TIMEOUT_MS',
-      'OD_CODEX_DISABLE_PLUGINS',
+    const forbiddenLiteralKeys = [
       'OPENAI_API_KEY',
       'ANTHROPIC_API_KEY',
+      'ANTHROPIC_AUTH_TOKEN',
+      'AIWORKER_PROVISION_TOKEN',
     ]
 
-    for (const key of workerOwnedKeys) {
+    expect(rootExample).toContain('AIWORKER_DEFAULT_PROVIDER_SECRET_REF=')
+    for (const key of forbiddenLiteralKeys)
       expect(rootExample).not.toContain(`${key}=`)
-      expect(workerDaemonExample).toContain(`${key}=`)
-    }
   })
 })

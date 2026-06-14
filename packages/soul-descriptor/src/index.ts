@@ -3,253 +3,38 @@ import { z } from 'zod'
 export const SOUL_DESCRIPTOR_V1_PROTOCOL = 'soul/v1'
 export const SOUL_DESCRIPTOR_OUTPUT_PATH = 'dist/soul.descriptor.json'
 
-const jsonObjectSchema = z.record(z.string(), z.unknown())
-
-const forbiddenProtocolConceptKeys = new Set([
-  'agentgovernance',
-  'agentruntime',
-  'enginememory',
-  'governance',
-  'lesson',
-  'memory',
-  'runtimegovernance',
-])
-
-const forbiddenDescriptorSecretKeys = new Set([
-  'apikey',
-  'authorization',
-  'bearer',
-  'password',
-  'secret',
-  'token',
-])
-
-function normalizeDescriptorKey(key: string): string {
-  return key.replace(/[^a-z0-9]/gi, '').toLowerCase()
-}
-
-function findForbiddenDescriptorKey(
-  value: unknown,
-  forbiddenKeys: ReadonlySet<string>,
-  path: Array<number | string> = [],
-): Array<number | string> | undefined {
-  if (Array.isArray(value)) {
-    for (const [index, item] of value.entries()) {
-      const nestedPath = findForbiddenDescriptorKey(item, forbiddenKeys, [...path, index])
-      if (nestedPath)
-        return nestedPath
-    }
-
-    return undefined
-  }
-
-  if (!value || typeof value !== 'object')
-    return undefined
-
-  for (const [key, item] of Object.entries(value)) {
-    const keyPath = [...path, key]
-
-    if (forbiddenKeys.has(normalizeDescriptorKey(key)))
-      return keyPath
-
-    const nestedPath = findForbiddenDescriptorKey(item, forbiddenKeys, keyPath)
-    if (nestedPath)
-      return nestedPath
-  }
-
-  return undefined
-}
-
-function rejectForbiddenProtocolConcepts(value: unknown, ctx: z.RefinementCtx): void {
-  const forbiddenPath = findForbiddenDescriptorKey(value, forbiddenProtocolConceptKeys)
-  if (!forbiddenPath)
-    return
-
-  ctx.addIssue({
-    code: z.ZodIssueCode.custom,
-    message: 'descriptor v1 must not include memory, lesson, or governance concepts',
-    path: forbiddenPath,
-  })
-}
-
-function rejectForbiddenDescriptorSecrets(value: unknown, ctx: z.RefinementCtx): void {
-  const forbiddenPath = findForbiddenDescriptorKey(value, forbiddenDescriptorSecretKeys)
-  if (!forbiddenPath)
-    return
-
-  ctx.addIssue({
-    code: z.ZodIssueCode.custom,
-    message: 'descriptor v1 must not include literal secret fields',
-    path: forbiddenPath,
-  })
-}
-
-function rejectForbiddenHostInterpretedFields(value: unknown, ctx: z.RefinementCtx): void {
-  rejectForbiddenProtocolConcepts(value, ctx)
-  rejectForbiddenDescriptorSecrets(value, ctx)
-}
-
-function isSafeBuiltDistPath(
-  value: string,
-  options: { extension?: '.html' | '.js' | '.json' | '.toml', prefix: string },
-): boolean {
-  if (!value.startsWith(options.prefix))
-    return false
-  if (options.extension && !value.endsWith(options.extension))
+const safeDistPath = z.string().refine((value) => {
+  if (value !== 'dist/workspace-template' && !value.startsWith('dist/workspace-template/'))
     return false
   if (value.includes('\\') || value.includes('\0') || value.includes('?') || value.includes('#'))
     return false
+  return value.split('/').every(segment => segment !== '' && segment !== '.' && segment !== '..')
+}, 'path must stay under dist/workspace-template')
 
-  const segments = value.split('/')
-  if (segments[0] !== 'dist')
-    return false
-
-  return segments.slice(1).every((segment) => {
-    if (!segment || segment === '.' || segment === '..')
-      return false
-    return segment !== 'host-adapter'
-  })
-}
-
-const hostInterpretedObjectSchema = jsonObjectSchema.superRefine(rejectForbiddenHostInterpretedFields)
-
-const engineAssetDirectorySchema = z.string().refine(
-  value => isSafeBuiltDistPath(value, { prefix: 'dist/engine-assets/' }),
-  'engine asset source must point to a built engine asset directory under dist/engine-assets/',
-)
-
-const engineMcpFileSchema = z.string().refine(
-  value =>
-    isSafeBuiltDistPath(value, { extension: '.toml', prefix: 'dist/engine-assets/mcp/' })
-    || isSafeBuiltDistPath(value, { extension: '.json', prefix: 'dist/engine-assets/mcp/' }),
-  'native MCP descriptor file must point to a built .toml or .json file under dist/engine-assets/mcp/',
-)
-
-const engineAssetSourceSchema = z
-  .object({
-    source: engineAssetDirectorySchema,
-  })
-  .strict()
-
-const engineMcpTargetSchema = z
-  .object({
-    file: engineMcpFileSchema,
-  })
-  .strict()
-
-const engineMcpSchema = z
-  .object({
-    targets: z.record(z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/), engineMcpTargetSchema),
-  })
-  .strict()
-
-const engineSchema = z
-  .object({
-    workspaceAssets: engineAssetSourceSchema.optional(),
-    skills: engineAssetSourceSchema.optional(),
-    mcp: engineMcpSchema.optional(),
-  })
-  .strict()
-  .superRefine(rejectForbiddenHostInterpretedFields)
-
-export const soulDescriptorV1Schema = z
-  .object({
-    protocol: z.literal(SOUL_DESCRIPTOR_V1_PROTOCOL),
-    identity: hostInterpretedObjectSchema,
-    engine: engineSchema,
-  })
-  .strict()
+export const soulDescriptorV1Schema = z.object({
+  protocol: z.literal(SOUL_DESCRIPTOR_V1_PROTOCOL),
+  identity: z.object({
+    description: z.string().optional(),
+    id: z.string().regex(/^[a-z][a-z0-9-]*$/),
+    name: z.string().min(1),
+    version: z.string().default('0.0.0'),
+  }).strict(),
+  workspaceTemplate: z.object({
+    root: safeDistPath,
+    entryFiles: z.array(z.string()).default([]),
+    mcpFiles: z.array(z.string()).default([]),
+    skillDirs: z.array(z.string()).default([]),
+  }).strict(),
+}).strict()
 
 export type SoulDescriptorV1 = z.infer<typeof soulDescriptorV1Schema>
 
-export function parseSoulDescriptorV1(descriptor: unknown): SoulDescriptorV1 {
-  return soulDescriptorV1Schema.parse(descriptor)
+export function parseSoulDescriptorV1(input: unknown): SoulDescriptorV1 {
+  return soulDescriptorV1Schema.parse(input)
 }
 
 export const soulProtocolPackage = {
-  name: '@zonease/aiworker-soul-descriptor',
   descriptor: SOUL_DESCRIPTOR_OUTPUT_PATH,
-  sections: [
-    'protocol',
-    'identity',
-    'engine',
-  ],
+  name: '@zonease/aiworker-soul-descriptor',
+  sections: ['protocol', 'identity', 'workspaceTemplate'],
 } as const
-
-export { AppError } from './errors'
-export { mintWorkerId, slugify, WORKER_ID_ALPHABET, WORKER_ID_PATTERN } from './lib/ids'
-export {
-  isWorkerOverlaySourceRef,
-  localWorkerOverlaySourceRefKindSchema,
-  parseWorkerOverlaySourceRef,
-  WORKER_OVERLAY_SOURCE_REF_SCHEME,
-} from './local-workspace'
-export type {
-  LocalWorkerOverlaySourceRefKind,
-  ParsedWorkerOverlaySourceRef,
-} from './local-workspace'
-export {
-  localAppearanceSchema,
-  localComposerMentionSchema,
-  localEngineInvocationSchema,
-  localEngineInvocationStatusSchema,
-  localEngineReadinessSettingsSchema,
-  localEngineStatusSchema,
-  localExecutionModeSchema,
-  localFileKindSchema,
-  localFileSchema,
-  localFileSourceSchema,
-  localJsonObjectSchema,
-  localSessionEventSchema,
-  localSessionEventTypeSchema,
-  localSessionSchema,
-  localSessionStatusSchema,
-  localSettingSchema,
-  localSettingsConfigSchema,
-  localWorkerConfigKindSchema,
-  localWorkerConfigTargetSchema,
-  localWorkerConfigUpdatedBySchema,
-  localWorkerConfigValueInputSchema,
-  localWorkerConfigValueSchema,
-  localWorkerOverlayAssetKindSchema,
-  localWorkerOverlayAssetSchema,
-  localWorkerOverlayAssetSourceSchema,
-  localWorkerOverlaySchema,
-  localWorkerSchema,
-  localWorkerStatusSchema,
-  localWorkspaceSchema,
-  localWorkspaceStatusSchema,
-} from './local-workspace'
-export type {
-  LocalAppearance,
-  LocalComposerMention,
-  LocalEngineInvocation,
-  LocalEngineInvocationStatus,
-  LocalEngineReadinessSettings,
-  LocalEngineStatus,
-  LocalExecutionMode,
-  LocalFile,
-  LocalFileKind,
-  LocalFileSource,
-  LocalJsonObject,
-  LocalSession,
-  LocalSessionEvent,
-  LocalSessionEventType,
-  LocalSessionStatus,
-  LocalSetting,
-  LocalSettingsConfig,
-  LocalWorker,
-  LocalWorkerConfigKind,
-  LocalWorkerConfigTarget,
-  LocalWorkerConfigUpdatedBy,
-  LocalWorkerConfigValue,
-  LocalWorkerConfigValueInput,
-  LocalWorkerOverlay,
-  LocalWorkerOverlayAsset,
-  LocalWorkerOverlayAssetKind,
-  LocalWorkerOverlayAssetSource,
-  LocalWorkerStatus,
-  LocalWorkspace,
-  LocalWorkspaceStatus,
-} from './local-workspace'
-export * from './soul-app'

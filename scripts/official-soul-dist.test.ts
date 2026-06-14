@@ -54,15 +54,16 @@ describe('official Soul dist builder', () => {
     expect(JSON.parse(await readFile(join(appRoot, 'dist', 'soul.descriptor.json'), 'utf8')).protocol).toBe('soul/v1')
   })
 
-  it('defaults to the shipped official Soul view and exposes dev-sampling only explicitly', () => {
-    expect(definitionsForCatalogView('shipped').map(definition => definition.id)).toEqual(['aiworker-freeform'])
-    expect(definitionsForCatalogView('dev-sampling').map(definition => definition.id).sort()).toEqual([
+  it('defaults to shipping every official Soul template', () => {
+    const expected = [
       'aiworker-freeform',
       'google-ads',
       'hr-manager',
       'product-manager',
       'software-support',
-    ])
+    ]
+    expect(definitionsForCatalogView('shipped').map(definition => definition.id).sort()).toEqual(expected)
+    expect(definitionsForCatalogView('dev-sampling').map(definition => definition.id).sort()).toEqual(expected)
   })
 
   it('fails when a Soul build does not produce its descriptor', async () => {
@@ -77,10 +78,10 @@ describe('official Soul dist builder', () => {
     })).rejects.toThrow('Official Soul build did not create descriptor for aiworker-demo')
   })
 
-  it('imports official Soul definitions without loading runtime registry dependencies', async () => {
+  it('keeps official Soul definitions inside the thin AIWorker script without runtime imports', async () => {
     const source = await readFile(join(import.meta.dirname, 'official-soul-dist.ts'), 'utf8')
 
-    expect(source).not.toMatch(/worker-runtime\/src\/soul-app\/official['"]/)
-    expect(source).toContain('worker-runtime/src/soul-app/official-definitions')
+    expect(source).not.toContain('worker-runtime')
+    expect(source).toContain('OFFICIAL_SOUL_CATALOG_VIEWS')
   })
 })
