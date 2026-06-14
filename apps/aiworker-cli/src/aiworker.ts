@@ -2,6 +2,7 @@
 import type { ProjectedFile, ProvisionPlan } from '@zonease/aiworker-control'
 import { execFile as execFileCallback } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { chmod, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -11,7 +12,7 @@ import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import cac from 'cac'
 
 const execFileAsync = promisify(execFileCallback)
-export const AISSH_EXEC_CWD = tmpdir()
+export const AISSH_EXEC_CWD_PREFIX = path.join(tmpdir(), 'aiworker-aissh-')
 
 interface AisshInvocation {
   file: string
@@ -99,6 +100,12 @@ export function buildCli() {
   return cli
 }
 
+export async function runCli(argv: string[] = process.argv): Promise<void> {
+  const cli = buildCli()
+  cli.parse(argv, { run: false })
+  await cli.runMatchedCommand()
+}
+
 function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan {
   const soulPath = requireOption(options.soul, '--soul')
   const descriptor = parseSoulDescriptorV1(JSON.parse(readFileSync(soulPath, 'utf8')))
@@ -149,21 +156,30 @@ export async function executeProvisionPlan(plan: ProvisionPlan, options: Provisi
   const invocation = resolveAisshInvocation(options.aisshBin)
   const args = [...invocation.prefix, ...plan.aissh.args]
   const executor = options.executor ?? createDefaultAisshExecutor()
-  const result = await executor.execFile(invocation.file, args, {
-    cwd: AISSH_EXEC_CWD,
-    maxBuffer: options.maxBuffer ?? 1024 * 1024 * 8,
-  })
-  return {
-    aissh: {
-      args: plan.aissh.args,
-      cwd: AISSH_EXEC_CWD,
-      file: invocation.source === 'path' ? 'aissh' : invocation.file,
-      source: invocation.source,
-    },
-    plan,
-    status: 'executed',
-    stderr: redactSecretLike(result.stderr ?? ''),
-    stdout: redactSecretLike(result.stdout),
+  const execCwd = await createNeutralAisshCwd()
+  try {
+    const result = await executor.execFile(invocation.file, args, {
+      cwd: execCwd,
+      maxBuffer: options.maxBuffer ?? 1024 * 1024 * 8,
+    })
+    return {
+      aissh: {
+        args: plan.aissh.args,
+        cwd: execCwd,
+        file: invocation.source === 'path' ? 'aissh' : invocation.file,
+        source: invocation.source,
+      },
+      plan,
+      status: 'executed',
+      stderr: redactSecretLike(result.stderr ?? ''),
+      stdout: redactSecretLike(result.stdout),
+    }
+  }
+  catch (error) {
+    throw createRedactedAisshError(error, invocation.file)
+  }
+  finally {
+    await rm(execCwd, { force: true, recursive: true })
   }
 }
 
@@ -177,33 +193,52 @@ export function resolveAisshInvocation(explicit?: string, resolveLauncher: () =>
   return { file: 'aissh', prefix: [], source: 'path' }
 }
 
-function resolveBundledAisshLauncher(): string | null {
-  let dir = process.cwd()
-  for (;;) {
+export function resolveBundledAisshLauncher(baseDir: string = import.meta.dirname): string | null {
+  for (const dir of packageAnchorDirs(baseDir)) {
     const candidate = path.join(dir, 'node_modules', 'aissh-cli', 'bin', 'aissh.js')
     if (existsSync(candidate))
       return candidate
-    const parent = path.dirname(dir)
-    if (parent === dir)
-      return null
-    dir = parent
   }
+  return null
+}
+
+function packageAnchorDirs(baseDir: string): string[] {
+  return Array.from(new Set([
+    baseDir,
+    path.dirname(baseDir),
+    path.dirname(path.dirname(baseDir)),
+  ]))
 }
 
 function createDefaultAisshExecutor(): AisshExecutor {
   return {
     async execFile(file, args, options) {
-      try {
-        const { stderr, stdout } = await execFileAsync(file, args, options)
-        return { stderr, stdout }
-      }
-      catch (error) {
-        if ((error as { code?: string }).code === 'ENOENT')
-          throw new Error(`aissh CLI unavailable (${file}). Run bun install to install optional aissh-cli, or set AISSH_BIN to an existing aissh executable.`)
-        throw error
-      }
+      const { stderr, stdout } = await execFileAsync(file, args, { ...options, encoding: 'utf8' })
+      return { stderr, stdout }
     },
   }
+}
+
+async function createNeutralAisshCwd(): Promise<string> {
+  const cwd = await mkdtemp(AISSH_EXEC_CWD_PREFIX)
+  await chmod(cwd, 0o700)
+  return cwd
+}
+
+function createRedactedAisshError(error: unknown, file: string): Error {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code) : ''
+  if (code === 'ENOENT') {
+    return new Error(redactSecretLike(`aissh CLI unavailable (${file}). Run bun install to install optional aissh-cli, or set AISSH_BIN to an existing aissh executable.`))
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  const stdout = typeof (error as { stdout?: unknown })?.stdout === 'string' ? (error as { stdout: string }).stdout : ''
+  const stderr = typeof (error as { stderr?: unknown })?.stderr === 'string' ? (error as { stderr: string }).stderr : ''
+  const detail = [
+    code ? `aissh execution failed (${code}): ${message}` : `aissh execution failed: ${message}`,
+    stdout ? `stdout: ${stdout}` : '',
+    stderr ? `stderr: ${stderr}` : '',
+  ].filter(Boolean).join('\n')
+  return new Error(redactSecretLike(detail))
 }
 
 function readAiworkerPackageManifest(): { version: string } {
@@ -247,10 +282,10 @@ function readWorkspaceTemplateFiles(root: string): ProjectedFile[] {
 
 if (import.meta.main) {
   try {
-    buildCli().parse(process.argv)
+    await runCli(process.argv)
   }
   catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    process.stderr.write(`${redactSecretLike(error instanceof Error ? error.message : String(error))}\n`)
     process.exitCode = 1
   }
 }

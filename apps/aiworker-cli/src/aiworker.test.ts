@@ -1,18 +1,21 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { $ } from 'bun'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { AISSH_EXEC_CWD, executeProvisionPlan, resolveAisshInvocation } from './aiworker'
+import { AISSH_EXEC_CWD_PREFIX, executeProvisionPlan, resolveAisshInvocation } from './aiworker'
 
 const cliPath = path.resolve(import.meta.dirname, 'aiworker.ts')
 const savedAisshBin = process.env.AISSH_BIN
+const savedCwd = process.cwd()
 
 afterEach(() => {
   if (savedAisshBin === undefined)
     delete process.env.AISSH_BIN
   else
     process.env.AISSH_BIN = savedAisshBin
+  process.chdir(savedCwd)
 })
 
 async function createDescriptor() {
@@ -100,23 +103,98 @@ describe('aiworker thin CLI', () => {
     expect(resolveAisshInvocation(undefined, () => null)).toEqual({ file: 'aissh', prefix: [], source: 'path' })
   })
 
-  test('executeProvisionPlan uses mock executor, neutral cwd, and redacts output', async () => {
+  test('resolveAisshInvocation anchors bundled launcher to the installed CLI package, not cwd', async () => {
+    delete process.env.AISSH_BIN
+    const hostileRoot = await mkdtemp(path.join(tmpdir(), 'aiworker-hostile-cwd-'))
+    await mkdir(path.join(hostileRoot, 'node_modules/aissh-cli/bin'), { recursive: true })
+    await writeFile(path.join(hostileRoot, 'node_modules/aissh-cli/bin/aissh.js'), 'throw new Error("hostile")\n')
+    process.chdir(hostileRoot)
+
+    const invocation = resolveAisshInvocation()
+
+    expect(invocation.source).toBe('bundled')
+    expect(invocation.prefix[0]).toContain('apps/aiworker-cli/node_modules/aissh-cli/bin/aissh.js')
+    expect(invocation.prefix[0]).not.toContain(hostileRoot)
+  })
+
+  test('executeProvisionPlan uses mock executor, fresh neutral cwd, cleanup, and redacts output', async () => {
     const descriptorPath = await createDescriptor()
     const plan = await $`bun ${cliPath} plan-provision ${planArgs(descriptorPath)}`.json()
-    const calls: unknown[] = []
+    const calls: { args: string[], file: string, options: { cwd: string, maxBuffer: number } }[] = []
+    const cwdExistsDuringExecution: boolean[] = []
     const result = await executeProvisionPlan(plan, {
       aisshBin: '/mock/aissh',
       executor: {
         async execFile(file, args, options) {
           calls.push({ args, file, options })
+          cwdExistsDuringExecution.push(existsSync(options.cwd))
           return { stderr: 'warn sk-testsecret123456', stdout: 'ok sk-testsecret123456' }
         },
       },
     })
 
-    expect(calls).toEqual([{ args: plan.aissh.args, file: '/mock/aissh', options: { cwd: AISSH_EXEC_CWD, maxBuffer: 1024 * 1024 * 8 } }])
+    expect(calls).toHaveLength(1)
+    const call = calls[0]!
+    expect(call.args).toEqual(plan.aissh.args)
+    expect(call.file).toBe('/mock/aissh')
+    expect(call.options.cwd).toStartWith(AISSH_EXEC_CWD_PREFIX)
+    expect(call.options.cwd).not.toBe(tmpdir())
+    expect(call.options.maxBuffer).toBe(1024 * 1024 * 8)
+    expect(cwdExistsDuringExecution).toEqual([true])
+    expect(existsSync(call.options.cwd)).toBe(false)
     expect(result.stdout).toBe('ok [REDACTED]')
     expect(result.stderr).toBe('warn [REDACTED]')
-    expect(result.aissh.cwd).toBe(tmpdir())
+    expect(result.aissh.cwd).toBe(call.options.cwd)
+  })
+
+  test('executeProvisionPlan redacts failed aissh stdout, stderr, and messages', async () => {
+    const descriptorPath = await createDescriptor()
+    const plan = await $`bun ${cliPath} plan-provision ${planArgs(descriptorPath)}`.json()
+
+    await expect(executeProvisionPlan(plan, {
+      aisshBin: '/mock/aissh',
+      executor: {
+        async execFile() {
+          throw Object.assign(new Error('boom sk-testsecret123456'), {
+            stderr: 'stderr sk-testsecret123456',
+            stdout: 'stdout sk-testsecret123456',
+          })
+        },
+      },
+    })).rejects.toThrow('aissh execution failed')
+
+    try {
+      await executeProvisionPlan(plan, {
+        aisshBin: '/mock/aissh',
+        executor: {
+          async execFile() {
+            throw Object.assign(new Error('boom sk-testsecret123456'), {
+              stderr: 'stderr sk-testsecret123456',
+              stdout: 'stdout sk-testsecret123456',
+            })
+          },
+        },
+      })
+    }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('[REDACTED]')
+      expect(message).not.toContain('sk-testsecret123456')
+    }
+  })
+
+  test('CLI provision failure prints sanitized error output', async () => {
+    const descriptorPath = await createDescriptor()
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-failing-aissh-'))
+    const fakeAissh = path.join(root, 'aissh')
+    await writeFile(fakeAissh, '#!/bin/sh\necho "stderr sk-testsecret123456" >&2\necho "stdout sk-testsecret123456"\nexit 42\n')
+    await chmod(fakeAissh, 0o755)
+
+    const result = await $`bun ${cliPath} provision ${planArgs(descriptorPath)} --aissh-bin ${fakeAissh}`.nothrow()
+    const stderr = result.stderr.toString()
+
+    expect(result.exitCode).toBe(1)
+    expect(stderr).toContain('[REDACTED]')
+    expect(stderr).not.toContain('sk-testsecret123456')
   })
 })

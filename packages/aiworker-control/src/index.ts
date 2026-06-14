@@ -171,10 +171,10 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
   const script = [
     'set -euo pipefail',
     `export PASEO_HOME=${shellQuote(input.environment.paseoHome)}`,
-    'command -v paseo >/dev/null || npm install -g @getpaseo/cli',
-    providerCliCheckCommand(input.providerProfile),
+    '(command -v paseo >/dev/null || npm install -g @getpaseo/cli)',
+    `(${providerCliCheckCommand(input.providerProfile)})`,
     `mkdir -p ${shellQuote(input.assignment.workspaceRef)}`,
-    `paseo --host ${shellQuote(input.environment.daemonEndpoint)} daemon status >/dev/null || paseo daemon start --home ${shellQuote(input.environment.paseoHome)} >/dev/null`,
+    `(paseo --host ${shellQuote(input.environment.daemonEndpoint)} daemon status >/dev/null || paseo daemon start --home ${shellQuote(input.environment.paseoHome)} >/dev/null)`,
     ...projectionCommands,
     `printf '%s\n' ${shellQuote(`AIWorker projected ${input.soul.id}@${input.soul.version}: ${projectedFiles}`)} > ${shellQuote(path.posix.join(input.assignment.workspaceRef, '.aiworker-projection'))}`,
   ].join(' && ')
