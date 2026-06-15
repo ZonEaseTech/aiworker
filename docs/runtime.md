@@ -4,9 +4,9 @@ AIWorker no longer has an employee-side runtime. Paseo is the runtime.
 
 ## Runtime responsibility split
 
-AIWorker CLI/control responsibilities:
+AIWorker CLI/Web/control responsibilities:
 
-- run AIWorker CLI/API actions;
+- run AIWorker CLI/Web/API control-plane actions;
 - call `aissh exec`/file transfer for provisioning;
 - render/copy Soul release files into a target workspace directory;
 - record assignment, status, receipt, and handoff metadata;
@@ -42,6 +42,8 @@ A workspace can contain multiple Paseo sessions. AIWorker does not persist or in
 ## aissh MVP integration
 
 AIWorker invokes `aissh` only as a thin provisioning transport. It does not own the remote runtime after the workspace files are projected.
+
+AIWorker Web may present the same provisioning inputs, plan previews, redacted receipts, and handoff metadata as the CLI. It must not observe or store Paseo runtime state after handoff.
 
 Adopted from the `aiworker-next` aissh integration audit:
 

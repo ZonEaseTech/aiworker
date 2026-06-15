@@ -1,8 +1,8 @@
 # AIWorker
 
-AIWorker CLI is the core of this project: a thin enterprise distribution layer for [Paseo](https://paseo.sh/docs) workspaces.
+AIWorker CLI and AIWorker Web are thin enterprise distribution surfaces for [Paseo](https://paseo.sh/docs) workspaces.
 
-The product no longer builds an employee-side Worker daemon, Workbench, chat UI, session runtime, or native-engine bridge. Paseo already owns the daemon, clients, workspaces, sessions, provider orchestration, permissions, logs, relay/direct connections, and CLI automation. AIWorker keeps only the enterprise layer required to turn expert-authored capability into assigned Paseo workspaces.
+The product no longer builds an employee-side Worker daemon, Workbench, chat UI, session runtime, or native-engine bridge. Paseo already owns the daemon, clients, workspaces, sessions, provider orchestration, permissions, logs, relay/direct connections, and CLI automation. AIWorker keeps only the enterprise layer required to turn expert-authored capability into assigned Paseo workspaces. AIWorker Web is an admin/control console for AIWorker-owned assignment, provisioning, receipt, audit, and handoff metadata; it is not a Paseo workspace UI.
 
 ## What AIWorker owns
 
@@ -26,7 +26,7 @@ The product no longer builds an employee-side Worker daemon, Workbench, chat UI,
 
 ```text
 Admin/manager
-  -> AIWorker CLI assigns user + target + Soul + provider profile
+  -> AIWorker CLI/Web assigns user + target + Soul + provider profile
   -> AIWorker uses aissh to verify/install Paseo and provider CLIs
   -> AIWorker projects Soul files into a workspace directory
   -> Employee opens Paseo and works in that workspace
@@ -55,7 +55,8 @@ dist/workspace-template/**
 ## Current packages
 
 ```text
-apps/aiworker-cli/          the only product CLI: plan/apply/doctor for AIWorker provisioning
+apps/aiworker-cli/          product CLI: plan/apply/doctor for AIWorker provisioning
+apps/aiworker-web/          admin/control console for AIWorker-owned metadata
 packages/aiworker-control/  assignment, aissh provisioning plan, handoff, projection guardrails
 packages/soul-descriptor/   descriptor schema for workspace templates
 packages/soul-sdk/          Soul authoring/build helpers

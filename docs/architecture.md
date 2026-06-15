@@ -1,13 +1,13 @@
 # AIWorker Architecture
 
-AIWorker CLI is now the product core: a thin enterprise distribution layer for Paseo workspaces.
+AIWorker CLI and AIWorker Web are thin enterprise distribution surfaces for Paseo workspaces.
 
 ## Product position
 
-AIWorker turns an expert-authored capability package into ordinary Paseo workspace files, assigns that workspace to an employee, and provisions the target machine through `aissh`. Paseo owns the employee work surface and the runtime. Paseo owns workspace/runtime/UI/session/provider orchestration; AIWorker owns only distribution metadata and file projection.
+AIWorker turns an expert-authored capability package into ordinary Paseo workspace files, assigns that workspace to an employee, and provisions the target machine through `aissh`. The CLI is the automation-first surface; AIWorker Web is an optional manager/admin console for the same assignment, provisioning, receipt, audit, and handoff records. Paseo owns the employee work surface and the runtime. Paseo owns workspace/runtime/UI/session/provider orchestration; AIWorker owns only distribution metadata and file projection.
 
 ```text
-Admin -> AIWorker CLI -> aissh target -> Paseo environment -> Paseo workspace -> agent sessions
+Admin -> AIWorker CLI/Web -> aissh target -> Paseo environment -> Paseo workspace -> agent sessions
 ```
 
 ## Ownership boundary
@@ -15,6 +15,7 @@ Admin -> AIWorker CLI -> aissh target -> Paseo environment -> Paseo workspace ->
 AIWorker owns only:
 
 - organization/user authentication and assignment records;
+- manager/admin web views over AIWorker-owned metadata;
 - target machine registry (`aissh`, local dev, or rootless container targets);
 - Paseo environment metadata (`PASEO_HOME`, daemon endpoint/socket/offer, isolation kind);
 - provider profile metadata and secret references, not literal provider keys;
@@ -100,6 +101,8 @@ Provider secrets do not belong in the Soul or descriptor. Provider credentials a
 ```
 
 The employee work journey happens in Paseo. AIWorker may expose an optional launcher or catalog, but it is not a workbench and must not render the workspace.
+
+AIWorker Web is allowed only as a management plane for AIWorker-owned metadata: assignments, provisioning plans and status, redacted receipts, audit events, handoff references, Soul releases, Paseo environment metadata, and provider-profile secret references. It must not proxy Paseo UI or session traffic.
 
 ## License/commercial boundary
 

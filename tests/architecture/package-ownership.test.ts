@@ -26,8 +26,25 @@ describe('Paseo thin-layer package ownership', () => {
 
   test('root scripts do not build or test deleted Worker runtime surfaces', () => {
     const root = readFileSync('package.json', 'utf8')
-    for (const forbidden of ['worker-web', 'worker-daemon', 'worker-runtime', 'engine-bridge', 'engine-projection', 'host-web', 'host-cli', 'host-control', 'aiworker-host', '@zonease/aiworker-host', 'storage-sqlite', 'packages/ui', 'test:browser:freeform', 'test:engine-real'])
-      expect(root).not.toContain(forbidden)
+    const forbiddenPatterns = [
+      /(?<!ai)worker-web/,
+      /worker-daemon/,
+      /worker-runtime/,
+      /engine-bridge/,
+      /engine-projection/,
+      /host-web/,
+      /host-cli/,
+      /host-control/,
+      /aiworker-host/,
+      /@zonease\/aiworker-host/,
+      /storage-sqlite/,
+      /packages\/ui/,
+      /test:browser:freeform/,
+      /test:engine-real/,
+    ]
+
+    for (const pattern of forbiddenPatterns)
+      expect(root).not.toMatch(pattern)
   })
 
   test('aiworker CLI remains the only publishable package and carries pinned optional aissh-cli', () => {
@@ -39,6 +56,18 @@ describe('Paseo thin-layer package ownership', () => {
     expect(aiworkerCli.name).toBe('@zonease/aiworker-cli')
     expect(aiworkerCli.private).toBeUndefined()
     expect(aiworkerCli.optionalDependencies?.['aissh-cli']).toBe('github:tubnt/aissh-cli#v0.8.0')
+  })
+
+  test('aiworker-web is a private admin app, not a publishable runtime package', () => {
+    const aiworkerWeb = JSON.parse(readFileSync('apps/aiworker-web/package.json', 'utf8')) as {
+      name: string
+      private?: boolean
+      scripts?: Record<string, string>
+    }
+
+    expect(aiworkerWeb.name).toBe('@zonease/aiworker-web')
+    expect(aiworkerWeb.private).toBe(true)
+    expect(aiworkerWeb.scripts?.['build:server']).toContain('bun build --compile')
   })
 
   test('project workflow instructions do not revive retired dual-CLI or sampling surfaces', () => {

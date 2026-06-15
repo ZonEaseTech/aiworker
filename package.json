@@ -20,13 +20,13 @@
     "typecheck": "bun run --filter '*' typecheck && bun run typecheck:scripts",
     "test": "bun run --filter '*' test && bun run test:contracts",
     "test:aiworker": "bun run --filter '@zonease/aiworker-cli' test && bun run --filter '@zonease/aiworker-control' test",
-    "build": "bun run --filter '@zonease/aiworker-cli' build && bun run build:official-souls",
+    "build": "bun run --filter '@zonease/aiworker-cli' build && bun run build:aiworker-web && bun run build:official-souls",
     "build:aiworker": "bun run --filter '@zonease/aiworker-cli' build",
     "build:official-souls": "bun scripts/official-soul-dist.ts",
     "smoke:dist-release": "bun run --filter '@zonease/aiworker-cli' smoke:dist-release",
     "test:contracts": "bun test tests/architecture scripts/*.test.ts",
     "test:protocol": "bun run --filter '@zonease/aiworker-soul-descriptor' test",
-    "ui:check": "echo 'ui retired: Paseo owns employee workspace UI'",
+    "ui:check": "bun run test:aiworker-web",
     "docs:check": "bun scripts/check-doc-contract.ts",
     "check": "bun run typecheck && bun run lint",
     "release:check": "bun run docs:check && bun run typecheck && bun run lint && bun run build && bun run smoke:dist-release && bun run test",
@@ -39,7 +39,10 @@
     "crg:watch": "uvx code-review-graph watch --repo .",
     "prepare": "husky",
     "commitlint": "commitlint",
-    "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit"
+    "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
+    "dev:aiworker-web": "bun run --filter '@zonease/aiworker-web' dev",
+    "test:aiworker-web": "bun run --filter '@zonease/aiworker-web' test",
+    "build:aiworker-web": "bun run --filter '@zonease/aiworker-web' build:release"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^4.13.2",
