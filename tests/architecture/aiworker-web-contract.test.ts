@@ -130,13 +130,34 @@ describe('AIWorker Web admin surface contract', () => {
   test('admin data enters the UI through a redacted data source boundary', () => {
     const data = read(`${appRoot}/src/lib/admin-data.ts`)
     const app = read(`${appRoot}/src/App.tsx`)
+    const assignmentsPage = read(`${appRoot}/src/pages/assignments-page.tsx`)
 
     expect(data).toContain('export interface AdminDataSource')
     expect(data).toContain('export interface AdminConsoleData')
     expect(data).toMatch(/export type SecretReference = `secret:\/\/\$\{string\}`/)
     expect(data).toContain('export const fixtureAdminDataSource')
+    expect(data).toContain('export function assertRedactedAdminConsoleData')
     expect(data).toContain('export function loadAdminConsoleData')
-    expect(app).toContain('adminConsoleData')
+    expect(data).toContain('return assertRedactedAdminConsoleData(source.loadAdminConsoleData())')
+    expect(app).not.toContain('adminConsoleData')
+    expect(assignmentsPage).toContain('adminConsoleData')
     expect(app).not.toMatch(/import\s+\{[^}]*\bassignments\b[^}]*\}\s+from ['"]@\/lib\/admin-data['"]/)
+  })
+
+  test('route shell stays thin and page modules own screen composition', () => {
+    const app = read(`${appRoot}/src/App.tsx`)
+
+    expect(app.split('\n').length).toBeLessThanOrEqual(50)
+    for (const page of [
+      'assignments-page',
+      'audit-page',
+      'dashboard-page',
+      'environments-page',
+      'provisioning-page',
+      'souls-page',
+    ]) {
+      expect(read(`${appRoot}/src/pages/${page}.tsx`)).toContain('export function')
+      expect(app).toContain(`@/pages/${page}`)
+    }
   })
 })

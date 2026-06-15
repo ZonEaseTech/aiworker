@@ -113,6 +113,51 @@ export interface AdminDataSource {
   loadAdminConsoleData: () => AdminConsoleData
 }
 
+const SECRET_REFERENCE_PREFIX = 'secret://'
+const forbiddenRuntimeDataFragments = [
+  '/api/sessions/',
+  'engine_invocation',
+  'transcript',
+  'token=',
+] as const
+
+function assertNoRuntimeData(label: string, value: string) {
+  const normalized = value.toLowerCase()
+  const forbidden = forbiddenRuntimeDataFragments.find(fragment => normalized.includes(fragment))
+
+  if (forbidden) {
+    throw new Error(`admin console data must stay redacted: ${label} contains ${forbidden}`)
+  }
+}
+
+export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminConsoleData {
+  for (const profile of data.providerProfiles) {
+    if (!profile.secretRef.startsWith(SECRET_REFERENCE_PREFIX)) {
+      throw new Error(`provider profile ${profile.id} must use a secret reference`)
+    }
+
+    assertNoRuntimeData(`provider:${profile.id}:secretRef`, profile.secretRef)
+  }
+
+  for (const environment of data.environments) {
+    assertNoRuntimeData(`environment:${environment.id}:daemonEndpoint`, environment.daemonEndpoint)
+    assertNoRuntimeData(`environment:${environment.id}:targetRef`, environment.targetRef)
+  }
+
+  for (const assignment of data.assignments) {
+    assertNoRuntimeData(`assignment:${assignment.id}:workspaceRef`, assignment.workspaceRef)
+    assertNoRuntimeData(`assignment:${assignment.id}:handoffLabel`, assignment.handoffLabel)
+    assertNoRuntimeData(`assignment:${assignment.id}:nextStep`, assignment.nextStep)
+
+    for (const event of assignment.audit) {
+      assertNoRuntimeData(`assignment:${assignment.id}:audit:${event.id}:target`, event.target)
+      assertNoRuntimeData(`assignment:${assignment.id}:audit:${event.id}:action`, event.action)
+    }
+  }
+
+  return data
+}
+
 export const statusMeta: Record<AssignmentStatus, { label: string, tone: Tone }> = {
   draft: { label: '草稿', tone: 'secondary' },
   provisioning: { label: '配置中', tone: 'info' },
@@ -386,7 +431,7 @@ export const fixtureAdminDataSource: AdminDataSource = {
 export function loadAdminConsoleData(
   source: AdminDataSource = fixtureAdminDataSource,
 ): AdminConsoleData {
-  return source.loadAdminConsoleData()
+  return assertRedactedAdminConsoleData(source.loadAdminConsoleData())
 }
 
 export const adminConsoleData = loadAdminConsoleData()

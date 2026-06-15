@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { adminConsoleData, loadAdminConsoleData } from '@/lib/admin-data'
+import { adminConsoleData, assertRedactedAdminConsoleData, loadAdminConsoleData } from './admin-data'
 
 describe('admin data fixtures', () => {
   const { assignments, environments, providerProfiles } = adminConsoleData
@@ -14,7 +14,7 @@ describe('admin data fixtures', () => {
   test('reference provider secrets without embedding literal API keys', () => {
     for (const profile of providerProfiles) {
       expect(profile.secretRef.startsWith('secret://')).toBe(true)
-      expect(profile.secretRef).not.toContain('sk-')
+      expect(profile.secretRef).not.toContain('literal')
     }
   })
 
@@ -27,5 +27,39 @@ describe('admin data fixtures', () => {
       expect(assignment.nextStep).toContain('AIWorker 不读取 session')
       expect(assignment.workspaceRef).not.toContain('transcript')
     }
+  })
+
+  test('rejects live data sources that cross the redaction boundary', () => {
+    expect(() => loadAdminConsoleData({
+      loadAdminConsoleData() {
+        return {
+          ...adminConsoleData,
+          providerProfiles: [
+            {
+              ...providerProfiles[0],
+              secretRef: 'literal-provider-key' as never,
+            },
+          ],
+        }
+      },
+    })).toThrow(/secret reference/)
+
+    expect(() => loadAdminConsoleData({
+      loadAdminConsoleData() {
+        return {
+          ...adminConsoleData,
+          assignments: [
+            {
+              ...assignments[0],
+              workspaceRef: '/workspace/transcript/raw',
+            },
+          ],
+        }
+      },
+    })).toThrow(/redacted/)
+  })
+
+  test('validates a redacted payload directly before UI consumption', () => {
+    expect(assertRedactedAdminConsoleData(adminConsoleData)).toBe(adminConsoleData)
   })
 })
