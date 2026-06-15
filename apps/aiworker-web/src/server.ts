@@ -3,7 +3,7 @@ import { join, normalize } from 'node:path'
 import process from 'node:process'
 
 const root = process.env.AIWORKER_WEB_DIST ?? join(process.cwd(), 'dist')
-const port = Number(process.env.PORT ?? 5273)
+const port = Number(process.env.PORT ?? 20831)
 
 const contentTypes: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',

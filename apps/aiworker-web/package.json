@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5273 --strictPort",
+    "dev": "vite --host 127.0.0.1 --port 20831 --strictPort",
     "build": "tsc -b && vite build",
     "build:server": "bun build --compile src/server.ts --outfile dist/aiworker-web",
     "build:release": "bun run build && bun run build:server",
@@ -13,7 +13,7 @@
     "lint": "eslint . --config ../../eslint.config.ts",
     "typecheck": "tsc -b --noEmit",
     "test": "bun test",
-    "preview": "vite preview --host 127.0.0.1 --port 5273 --strictPort"
+    "preview": "vite preview --host 127.0.0.1 --port 20831 --strictPort"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.2.8",

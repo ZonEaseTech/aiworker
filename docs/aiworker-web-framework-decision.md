@@ -37,9 +37,9 @@ Local proof in `tmp/framework-proof` verified the intended deployment shape:
 cd tmp/framework-proof
 bun run build
 bun run compile
-PORT=41740 ./proof-server
-curl -fsS http://127.0.0.1:41740/
-curl -fsS http://127.0.0.1:41740/admin/assignments
+PORT=20831 ./proof-server
+curl -fsS http://127.0.0.1:20831/
+curl -fsS http://127.0.0.1:20831/admin/assignments
 ```
 
 Result: Vite emitted static assets under `dist/`; Bun compiled the static server; the compiled server served both `/` and deep-link fallback routes. The first proof attempt also exposed an important Bun compile constraint: `import.meta.dir` inside a compiled executable points into Bun's embedded filesystem (`/$bunfs/...`), so the production server must resolve static assets from `process.cwd()` or an explicit `AIWORKER_WEB_DIST` instead of assuming source-relative files.
