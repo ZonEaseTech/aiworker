@@ -1,12 +1,18 @@
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import {
   canAdvanceAssignment,
+  CONTROL_PLANE_SCHEMA_VERSION,
   createAssignment,
+  createAuditEvent,
+  createEmptyControlPlaneSnapshot,
   createHandoff,
   createProvisionPlan,
+  createProvisionReceipt,
+  createWorkspaceProjectionManifest,
+  LocalFileControlPlaneStore,
   normalizeAisshServerRef,
   userCanOpenWorkspace,
   validateProjectedFilePath,
@@ -191,5 +197,176 @@ describe('Paseo thin-layer aiworker-control contract', () => {
     const handoff = createHandoff({ ...environment, daemonEndpoint: 'https://app.paseo.sh/#offer=abc', endpointKind: 'relay-offer' }, '/w/hr')
     expect(handoff.kind).toBe('pairing-offer')
     expect(handoff.instructions).toContain('/w/hr')
+  })
+
+  test('persists a versioned control-plane snapshot and append-only receipts/audit/projection logs', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-control-store-'))
+    const store = new LocalFileControlPlaneStore(root)
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+    })
+    const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
+    const receipt = createProvisionReceipt(plan, { at: '2026-06-15T18:00:00.000Z', id: 'rcpt-1', status: 'applied' })
+    const auditEvent = createAuditEvent({
+      action: 'assignment.apply',
+      actor: 'ops@example.com',
+      at: '2026-06-15T18:00:01.000Z',
+      id: 'audit-1',
+      target: assignment.assignmentId,
+    })
+    const projectionManifest = createWorkspaceProjectionManifest({
+      at: '2026-06-15T18:00:02.000Z',
+      files: soul.files,
+      id: 'proj-1',
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: assignment.workspaceRef,
+    })
+
+    await store.saveSnapshot({
+      ...createEmptyControlPlaneSnapshot(),
+      assignments: [assignment],
+      environments: [environment],
+      providerProfiles: [providerProfile],
+      soulReleases: [soul],
+    })
+    await store.appendReceipt(receipt)
+    await store.appendAuditEvent(auditEvent)
+    await store.appendProjectionManifest(projectionManifest)
+
+    const loaded = await store.loadSnapshot()
+
+    expect(loaded.schemaVersion).toBe(CONTROL_PLANE_SCHEMA_VERSION)
+    expect(loaded.assignments).toHaveLength(1)
+    expect(loaded.receipts).toEqual([receipt])
+    expect(loaded.auditEvents).toEqual([auditEvent])
+    expect(loaded.projectionManifests[0]?.files.map(file => file.relativePath)).toEqual(['.mcp.json', 'AGENTS.md', 'CLAUDE.md'])
+    expect(loaded.projectionManifests[0]?.files[0]?.sha256).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  test('rejects unsupported control-plane schema versions and literal secrets in persisted records', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-control-store-'))
+    const store = new LocalFileControlPlaneStore(root)
+    const unsafeSnapshot = {
+      ...createEmptyControlPlaneSnapshot(),
+      schemaVersion: 99 as typeof CONTROL_PLANE_SCHEMA_VERSION,
+    }
+
+    await expect(store.saveSnapshot(unsafeSnapshot)).rejects.toThrow('unsupported schemaVersion 99')
+
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+    })
+    const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
+    const unsafeReceipt = {
+      ...createProvisionReceipt(plan, { id: 'rcpt-secret' }),
+      command: 'aissh exec server --token sk-abc123456789',
+    }
+
+    await expect(store.appendReceipt(unsafeReceipt)).rejects.toThrow('must use a secret reference')
+    expect(() => createWorkspaceProjectionManifest({
+      files: [{ relativePath: '../AGENTS.md', content: '# nope\n' }],
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: assignment.workspaceRef,
+    })).toThrow('escapes workspace')
+  })
+
+  test('rejects unsafe persisted snapshot and JSONL records during load/save', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-control-store-'))
+    const store = new LocalFileControlPlaneStore(root)
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+    })
+
+    await expect(store.saveSnapshot({
+      ...createEmptyControlPlaneSnapshot(),
+      soulReleases: [{
+        ...soul,
+        files: [{ relativePath: 'AGENTS.md', content: 'provider sk-abc123456789' }],
+      }],
+    })).rejects.toThrow('literal provider secrets')
+
+    await expect(store.saveSnapshot({
+      ...createEmptyControlPlaneSnapshot(),
+      providerProfiles: [{
+        ...providerProfile,
+        label: 'leaked sk-abc123456789',
+      }],
+    })).rejects.toThrow('control-plane snapshot.providerProfiles[0].label')
+
+    await expect(store.saveSnapshot({
+      ...createEmptyControlPlaneSnapshot(),
+      assignments: [{
+        ...assignment,
+        handoff: {
+          daemonEndpoint: environment.daemonEndpoint,
+          instructions: 'open with sk-abc123456789',
+          kind: 'paseo-daemon',
+          workspaceRef: assignment.workspaceRef,
+        },
+      }],
+    })).rejects.toThrow('assignment')
+
+    await writeFile(path.join(root, 'snapshot.json'), JSON.stringify({
+      ...createEmptyControlPlaneSnapshot(),
+      assignments: [{
+        ...assignment,
+        handoff: {
+          daemonEndpoint: 'unix:/run/paseo/sk-abc123456789.sock',
+          instructions: 'open workspace',
+          kind: 'paseo-daemon',
+          workspaceRef: assignment.workspaceRef,
+        },
+      }],
+    }))
+
+    await expect(store.loadSnapshot()).rejects.toThrow('handoff:daemonEndpoint')
+    await writeFile(path.join(root, 'snapshot.json'), JSON.stringify(createEmptyControlPlaneSnapshot()))
+
+    await writeFile(path.join(root, 'audit-events.jsonl'), `${JSON.stringify({
+      schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
+      id: 'audit-secret',
+      kind: 'audit-event',
+      at: '2026-06-15T19:00:00.000Z',
+      actor: 'admin@example.com',
+      action: 'leaked sk-abc123456789',
+      target: 'asn-secret',
+    })}\n`)
+
+    await expect(store.loadSnapshot()).rejects.toThrow('must use a secret reference')
+  })
+
+  test('keeps append-only records idempotent across load and save cycles', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-control-store-'))
+    const store = new LocalFileControlPlaneStore(root)
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+    })
+    const receipt = createProvisionReceipt(createProvisionPlan({ assignment, environment, providerProfile, soul }), {
+      at: '2026-06-15T19:01:00.000Z',
+      id: 'rcpt-idempotent',
+    })
+
+    await store.saveSnapshot(createEmptyControlPlaneSnapshot())
+    await store.appendReceipt(receipt)
+    const loaded = await store.loadSnapshot()
+    await store.saveSnapshot(loaded)
+
+    expect((await store.loadSnapshot()).receipts).toEqual([receipt])
   })
 })

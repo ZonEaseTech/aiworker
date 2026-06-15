@@ -131,17 +131,44 @@ describe('AIWorker Web admin surface contract', () => {
     const data = read(`${appRoot}/src/lib/admin-data.ts`)
     const app = read(`${appRoot}/src/App.tsx`)
     const assignmentsPage = read(`${appRoot}/src/pages/assignments-page.tsx`)
+    const webSource = sourceFiles(`${appRoot}/src`)
+      .map(path => read(path))
+      .join('\n')
 
     expect(data).toContain('export interface AdminDataSource')
     expect(data).toContain('export interface AdminConsoleData')
     expect(data).toMatch(/export type SecretReference = `secret:\/\/\$\{string\}`/)
+    expect(data).toContain('@zonease/aiworker-control/control-plane')
+    expect(data).not.toContain('LocalFileControlPlaneStore')
+    expect(webSource).not.toMatch(/from ['"]@zonease\/aiworker-control['"]/)
+    expect(webSource).not.toMatch(/import\(['"]@zonease\/aiworker-control['"]\)/)
+    expect(data).toContain('export function mapControlPlaneSnapshotToAdminConsoleData')
+    expect(data).toContain('export function createAdminDataSourceFromControlPlaneSnapshot')
     expect(data).toContain('export const fixtureAdminDataSource')
     expect(data).toContain('export function assertRedactedAdminConsoleData')
     expect(data).toContain('export function loadAdminConsoleData')
     expect(data).toContain('return assertRedactedAdminConsoleData(source.loadAdminConsoleData())')
+    expect(data).not.toContain('saveAdminConsoleData')
+    expect(data).not.toContain('appendReceipt(')
+    expect(data).not.toContain('appendAuditEvent(')
     expect(app).not.toContain('adminConsoleData')
     expect(assignmentsPage).toContain('adminConsoleData')
     expect(app).not.toMatch(/import\s+\{[^}]*\bassignments\b[^}]*\}\s+from ['"]@\/lib\/admin-data['"]/)
+  })
+
+  test('aiworker-control exposes a browser-safe control-plane contract for Web', () => {
+    const pkg = readJson<{
+      exports: Record<string, { import: string, types: string }>
+    }>('packages/aiworker-control/package.json')
+    const controlPlaneTypes = read('packages/aiworker-control/src/control-plane.ts')
+
+    expect(pkg.exports['./control-plane']?.types).toBe('./src/control-plane.ts')
+    expect(controlPlaneTypes).toContain('export interface ControlPlaneSnapshot')
+    expect(controlPlaneTypes).toContain('export interface ProvisionReceipt')
+    expect(controlPlaneTypes).toContain('export interface WorkspaceProjectionManifest')
+    expect(controlPlaneTypes).not.toContain('node:fs')
+    expect(controlPlaneTypes).not.toContain('node:crypto')
+    expect(controlPlaneTypes).not.toContain('LocalFileControlPlaneStore')
   })
 
   test('route shell stays thin and page modules own screen composition', () => {

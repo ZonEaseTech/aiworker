@@ -1,4 +1,16 @@
 import type { Icon } from '@phosphor-icons/react'
+import type {
+  AssignmentStatus,
+  AuditEvent,
+  ControlPlaneSnapshot,
+  PaseoEndpointKind,
+  PaseoHandoff,
+  ProjectedFile,
+  ProviderProfile,
+  ProvisionReceipt,
+  SoulRelease,
+  WorkspaceAssignment,
+} from '@zonease/aiworker-control/control-plane'
 import {
   ArchiveIcon,
   CheckCircleIcon,
@@ -9,18 +21,11 @@ import {
   ShieldCheckIcon,
   WarningCircleIcon,
 } from '@phosphor-icons/react'
+import { assertNoLiteralProviderSecret, CONTROL_PLANE_SCHEMA_VERSION } from '@zonease/aiworker-control/control-plane'
 
-export type AssignmentStatus
-  = | 'draft'
-    | 'provisioning'
-    | 'workspace_projected'
-    | 'handoff_ready'
-    | 'ready'
-    | 'needs_attention'
-    | 'revoked'
-    | 'archived'
+export type { AssignmentStatus }
 
-export type ProviderKind = 'codex' | 'claude' | 'opencode' | 'acp'
+export type ProviderKind = 'codex' | 'claude' | 'opencode' | 'acp' | (string & {})
 
 export type HandoffKind = 'paseo-daemon' | 'pairing-offer' | 'manual-path'
 
@@ -48,8 +53,8 @@ export interface PaseoEnvironmentSummary {
   targetRef: string
   paseoHome: string
   daemonEndpoint: RedactedEndpointReference
-  endpointKind: 'tcp' | 'unix' | 'windows-pipe' | 'relay-offer'
-  isolation: 'os-user' | 'rootless-container' | 'vm'
+  endpointKind: PaseoEndpointKind
+  isolation: 'os-user' | 'rootless-container' | 'container' | 'vm' | 'single-user-dev'
   providerProfileIds: string[]
   status: 'ready' | 'needs_attention' | 'provisioning'
 }
@@ -117,6 +122,7 @@ const SECRET_REFERENCE_PREFIX = 'secret://'
 const forbiddenRuntimeDataFragments = [
   '/api/sessions/',
   'engine_invocation',
+  'provider process',
   'transcript',
   'token=',
 ] as const
@@ -130,30 +136,36 @@ function assertNoRuntimeData(label: string, value: string) {
   }
 }
 
+function assertNoSensitiveAdminString(label: string, value: string) {
+  assertNoRuntimeData(label, value)
+  assertNoLiteralProviderSecret(value, label)
+}
+
+function assertNoSensitiveAdminValue(label: string, value: unknown): void {
+  if (typeof value === 'string') {
+    assertNoSensitiveAdminString(label, value)
+    return
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoSensitiveAdminValue(`${label}[${index}]`, item))
+    return
+  }
+
+  if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value))
+      assertNoSensitiveAdminValue(`${label}.${key}`, child)
+  }
+}
+
 export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminConsoleData {
   for (const profile of data.providerProfiles) {
     if (!profile.secretRef.startsWith(SECRET_REFERENCE_PREFIX)) {
       throw new Error(`provider profile ${profile.id} must use a secret reference`)
     }
-
-    assertNoRuntimeData(`provider:${profile.id}:secretRef`, profile.secretRef)
   }
 
-  for (const environment of data.environments) {
-    assertNoRuntimeData(`environment:${environment.id}:daemonEndpoint`, environment.daemonEndpoint)
-    assertNoRuntimeData(`environment:${environment.id}:targetRef`, environment.targetRef)
-  }
-
-  for (const assignment of data.assignments) {
-    assertNoRuntimeData(`assignment:${assignment.id}:workspaceRef`, assignment.workspaceRef)
-    assertNoRuntimeData(`assignment:${assignment.id}:handoffLabel`, assignment.handoffLabel)
-    assertNoRuntimeData(`assignment:${assignment.id}:nextStep`, assignment.nextStep)
-
-    for (const event of assignment.audit) {
-      assertNoRuntimeData(`assignment:${assignment.id}:audit:${event.id}:target`, event.target)
-      assertNoRuntimeData(`assignment:${assignment.id}:audit:${event.id}:action`, event.action)
-    }
-  }
+  assertNoSensitiveAdminValue('adminConsoleData', data)
 
   return data
 }
@@ -185,6 +197,48 @@ export const releaseStatusMeta: Record<SoulReleaseSummary['status'], { label: st
   published: { label: '已发布', tone: 'success' },
   draft: { label: '草稿', tone: 'warning' },
   retired: { label: '已退役', tone: 'secondary' },
+}
+
+export function mapControlPlaneSnapshotToAdminConsoleData(snapshot: ControlPlaneSnapshot): AdminConsoleData {
+  const providerProfiles = snapshot.providerProfiles.map(mapProviderProfile)
+  const environments = snapshot.environments.map(environment => ({
+    id: environment.environmentId,
+    ownerEmail: environment.ownerEmail,
+    targetRef: environment.targetRef,
+    paseoHome: environment.paseoHome,
+    daemonEndpoint: redactRelayOffer(environment.daemonEndpoint),
+    endpointKind: environment.endpointKind,
+    isolation: environment.isolation,
+    providerProfileIds: environment.providerProfileIds,
+    status: 'ready' as const,
+  }))
+  const soulReleases = snapshot.soulReleases.map(mapSoulRelease)
+  const auditEvents = snapshot.auditEvents.map(event => ({
+    id: event.id,
+    action: event.action,
+    actor: event.actor,
+    at: formatAdminTimestamp(event.at),
+    target: event.target,
+    tone: toneForAuditAction(event.action),
+  }))
+  const assignments = snapshot.assignments.map(assignment => mapAssignment(assignment, snapshot.receipts, auditEvents))
+
+  return assertRedactedAdminConsoleData({
+    assignments,
+    environments,
+    metrics: buildMetrics({ assignments, providerProfiles, soulReleases }),
+    providerProfiles,
+    recentAuditEvents: auditEvents,
+    soulReleases,
+  })
+}
+
+export function createAdminDataSourceFromControlPlaneSnapshot(snapshot: ControlPlaneSnapshot): AdminDataSource {
+  return {
+    loadAdminConsoleData() {
+      return mapControlPlaneSnapshotToAdminConsoleData(snapshot)
+    },
+  }
 }
 
 const fixtureProviderProfiles: ProviderProfileSummary[] = [
@@ -372,6 +426,109 @@ const fixtureAssignments: AssignmentSummary[] = [
   },
 ]
 
+function buildFixtureControlPlaneSnapshot(): ControlPlaneSnapshot {
+  return {
+    schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
+    assignments: fixtureAssignments.map(mapFixtureAssignment),
+    auditEvents: fixtureAssignments.flatMap(assignment => assignment.audit.map(mapFixtureAuditEvent)),
+    environments: fixtureEnvironments.map(environment => ({
+      environmentId: environment.id,
+      daemonEndpoint: environment.daemonEndpoint,
+      endpointKind: environment.endpointKind,
+      isolation: environment.isolation === 'rootless-container' ? 'container' : environment.isolation,
+      ownerEmail: environment.ownerEmail,
+      paseoHome: environment.paseoHome,
+      providerProfileIds: environment.providerProfileIds,
+      targetRef: environment.targetRef,
+    })),
+    projectionManifests: [],
+    providerProfiles: fixtureProviderProfiles.map(profile => ({
+      id: profile.id,
+      cliCommand: profile.cliCommand,
+      label: profile.label,
+      paseoProviderId: profile.paseoProviderId,
+      provider: profile.provider,
+      secretRef: profile.secretRef,
+    })),
+    receipts: fixtureAssignments.map(mapFixtureReceipt),
+    soulReleases: fixtureSoulReleases.map(mapFixtureSoulRelease),
+  }
+}
+
+function mapFixtureAssignment(assignment: AssignmentSummary): WorkspaceAssignment {
+  return {
+    assignmentId: assignment.id,
+    assignedEmail: assignment.assignedEmail,
+    environmentId: assignment.environmentId,
+    handoff: mapFixtureHandoff(assignment),
+    providerProfileId: assignment.providerProfileId,
+    soulReleaseRef: fixtureSoulReleaseRef(assignment.soulReleaseId),
+    status: assignment.status,
+    workspaceRef: assignment.workspaceRef,
+  }
+}
+
+function mapFixtureHandoff(assignment: AssignmentSummary): PaseoHandoff {
+  const endpoint = fixtureEnvironments.find(environment => environment.id === assignment.environmentId)?.daemonEndpoint ?? 'manual'
+  return {
+    kind: assignment.handoffKind,
+    daemonEndpoint: endpoint,
+    workspaceRef: assignment.workspaceRef,
+    instructions: assignment.handoffLabel,
+  }
+}
+
+function mapFixtureAuditEvent(event: AuditEventSummary): AuditEvent {
+  return {
+    schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
+    id: event.id,
+    kind: 'audit-event',
+    at: event.at,
+    actor: event.actor,
+    action: event.action,
+    target: event.target,
+  }
+}
+
+function mapFixtureReceipt(assignment: AssignmentSummary): ProvisionReceipt {
+  return {
+    schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
+    id: assignment.receiptId,
+    kind: 'provision-receipt',
+    adapterType: assignment.environmentId.includes('container') ? 'rootless-container' : 'aissh',
+    aisshArgs: ['exec', assignment.environmentId, '[redacted]'],
+    at: assignment.updatedAt,
+    command: 'aissh exec [redacted]',
+    environmentId: assignment.environmentId,
+    providerProfileId: assignment.providerProfileId,
+    soulReleaseRef: fixtureSoulReleaseRef(assignment.soulReleaseId),
+    status: assignment.status === 'needs_attention' ? 'failed' : 'applied',
+    targetRef: assignment.environmentId,
+    workspaceRef: assignment.workspaceRef,
+  }
+}
+
+function fixtureSoulReleaseRef(id: string): string {
+  const release = fixtureSoulReleases.find(item => item.id === id)
+  return release ? `${release.id}@${release.version}` : id
+}
+
+function mapFixtureSoulRelease(release: SoulReleaseSummary): SoulRelease {
+  return {
+    id: release.id,
+    displayName: release.displayName,
+    files: fixtureProjectedFiles(release.fileCount),
+    version: release.version,
+  }
+}
+
+function fixtureProjectedFiles(fileCount: number): ProjectedFile[] {
+  return Array.from({ length: fileCount }, (_, index) => ({
+    relativePath: `fixture-file-${index + 1}.md`,
+    content: `# Fixture file ${index + 1}\n`,
+  }))
+}
+
 function buildMetrics(data: {
   assignments: AssignmentSummary[]
   providerProfiles: ProviderProfileSummary[]
@@ -409,22 +566,112 @@ function buildMetrics(data: {
   ]
 }
 
+function mapProviderProfile(profile: ProviderProfile): ProviderProfileSummary {
+  if (profile.secretRef && !profile.secretRef.startsWith('secret://'))
+    throw new Error(`provider profile ${profile.id} must use a secret reference`)
+
+  return {
+    id: profile.id,
+    label: profile.label,
+    provider: profile.provider,
+    secretRef: (profile.secretRef ?? `secret://providers/${profile.provider}/${profile.id}`) as SecretReference,
+    paseoProviderId: profile.paseoProviderId,
+    cliCommand: profile.cliCommand,
+    status: profile.paseoProviderId ? 'reference_only' : 'ready',
+  }
+}
+
+function mapSoulRelease(release: SoulRelease): SoulReleaseSummary {
+  return {
+    id: `${release.id}@${release.version}`,
+    displayName: release.displayName,
+    version: release.version,
+    descriptorRef: `${release.id}@${release.version}`,
+    workspaceTemplateRoot: `workspace-template:${release.id}@${release.version}`,
+    fileCount: release.files.length,
+    updatedAt: 'from control-plane snapshot',
+    status: 'published',
+    summary: `${release.displayName} workspace template projected by AIWorker.`,
+  }
+}
+
+function mapAssignment(
+  assignment: WorkspaceAssignment,
+  receipts: ProvisionReceipt[],
+  auditEvents: AuditEventSummary[],
+): AssignmentSummary {
+  const matchingReceipt = receipts.find(receipt =>
+    receipt.workspaceRef === assignment.workspaceRef
+    && receipt.environmentId === assignment.environmentId
+    && receipt.providerProfileId === assignment.providerProfileId,
+  )
+  const assignmentAudit = auditEvents.filter(event => event.target === assignment.assignmentId || event.target === assignment.workspaceRef)
+  const handoffKind = assignment.handoff?.kind ?? 'manual-path'
+
+  return {
+    id: assignment.assignmentId,
+    assignedEmail: assignment.assignedEmail,
+    team: teamLabelFromEmail(assignment.assignedEmail),
+    status: assignment.status,
+    environmentId: assignment.environmentId,
+    soulReleaseId: assignment.soulReleaseRef,
+    providerProfileId: assignment.providerProfileId,
+    workspaceRef: assignment.workspaceRef,
+    receiptId: matchingReceipt?.id ?? 'pending-receipt',
+    handoffKind,
+    handoffLabel: assignment.handoff ? handoffLabel(assignment.handoff.kind, assignment.handoff.daemonEndpoint, assignment.workspaceRef) : 'manual workspace path pending',
+    updatedAt: formatAdminTimestamp(matchingReceipt?.at),
+    nextStep: nextStepForAssignment(assignment.status),
+    audit: assignmentAudit,
+  }
+}
+
+function handoffLabel(kind: HandoffKind, endpoint: string, workspaceRef: string): RedactedHandoffReference {
+  if (kind === 'pairing-offer')
+    return `pairing offer redacted for ${workspaceRef}`
+  if (kind === 'manual-path')
+    return `open workspace path ${workspaceRef}`
+  return `paseo --host ${redactRelayOffer(endpoint)} open ${workspaceRef}`
+}
+
+function nextStepForAssignment(status: AssignmentStatus): string {
+  if (status === 'ready')
+    return '员工可在 Paseo 客户端打开 workspace；AIWorker 不读取 session。'
+  if (status === 'handoff_ready')
+    return '交接 Paseo-native handoff；AIWorker 不代理 runtime。'
+  if (status === 'workspace_projected')
+    return '确认 handoff metadata；AIWorker 不读取 session。'
+  if (status === 'needs_attention')
+    return '处理 AIWorker provisioning metadata；AIWorker 不读取 session，也不要采集 Paseo runtime log。'
+  return '等待下一步 AIWorker control-plane 操作；不触碰 Paseo session。'
+}
+
+function redactRelayOffer(endpoint: string): string {
+  return endpoint.replace(/([?#&]offer=)[^&#]+/i, '$1redacted')
+}
+
+function formatAdminTimestamp(value?: string): string {
+  if (!value)
+    return 'pending'
+  return value.replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC')
+}
+
+function teamLabelFromEmail(email: string): string {
+  return email.split('@')[1] ?? 'unassigned'
+}
+
+function toneForAuditAction(action: string): Tone {
+  const normalized = action.toLowerCase()
+  if (normalized.includes('fail') || normalized.includes('error') || normalized.includes('expired'))
+    return 'destructive'
+  if (normalized.includes('ready') || normalized.includes('applied'))
+    return 'success'
+  return 'info'
+}
+
 export const fixtureAdminDataSource: AdminDataSource = {
   loadAdminConsoleData() {
-    const recentAuditEvents = fixtureAssignments.flatMap(assignment => assignment.audit)
-
-    return {
-      assignments: fixtureAssignments,
-      environments: fixtureEnvironments,
-      metrics: buildMetrics({
-        assignments: fixtureAssignments,
-        providerProfiles: fixtureProviderProfiles,
-        soulReleases: fixtureSoulReleases,
-      }),
-      providerProfiles: fixtureProviderProfiles,
-      recentAuditEvents,
-      soulReleases: fixtureSoulReleases,
-    }
+    return mapControlPlaneSnapshotToAdminConsoleData(buildFixtureControlPlaneSnapshot())
   },
 }
 

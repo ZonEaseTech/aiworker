@@ -1,103 +1,52 @@
+import type {
+  AssignmentStatus,
+  AuditEvent,
+  ControlPlaneSnapshot,
+  ControlPlaneStore,
+  PaseoEnvironment,
+  PaseoHandoff,
+  ProjectedFile,
+  ProviderProfile,
+  ProvisionPlan,
+  ProvisionPlanInput,
+  ProvisionReceipt,
+  ProvisionReceiptStatus,
+  VersionedControlPlaneRecord,
+  WorkspaceAssignment,
+  WorkspaceProjectionManifest,
+} from './control-plane'
 import { Buffer } from 'node:buffer'
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
-export type AssignmentStatus = 'draft' | 'provisioning' | 'workspace_projected' | 'handoff_ready' | 'ready' | 'needs_attention' | 'revoked' | 'archived'
-export type ProvisioningAdapterType = 'aissh' | 'local' | 'rootless-container'
-export type PaseoEndpointKind = 'tcp' | 'unix' | 'windows-pipe' | 'relay-offer'
+import process from 'node:process'
+import { assertNoLiteralProviderSecret, containsLiteralProviderSecret, CONTROL_PLANE_SCHEMA_VERSION, redactLiteralProviderSecret } from './control-plane'
 
-export interface PaseoEnvironment {
-  environmentId: string
-  ownerEmail: string
-  targetRef: string
-  paseoHome: string
-  daemonEndpoint: string
-  endpointKind: PaseoEndpointKind
-  isolation: 'os-user' | 'container' | 'vm' | 'single-user-dev'
-  providerProfileIds: string[]
-}
-
-export interface ProviderProfile {
-  id: string
-  provider: 'claude' | 'codex' | 'opencode' | 'acp' | string
-  label: string
-  baseUrl?: string
-  cliCommand?: string
-  model?: string
-  secretRef?: string
-  paseoProviderId?: string
-}
-
-export interface SoulRelease {
-  id: string
-  version: string
-  displayName: string
-  files: ProjectedFile[]
-}
-
-export interface ProjectedFile {
-  relativePath: string
-  content: string
-  mode?: 0o600 | 0o644 | 0o755
-}
-
-export interface WorkspaceAssignment {
-  assignmentId: string
-  assignedEmail: string
-  environmentId: string
-  providerProfileId: string
-  soulReleaseRef: string
-  status: AssignmentStatus
-  workspaceRef: string
-  handoff?: PaseoHandoff
-  revokedAt?: string | null
-}
-
-export interface PaseoHandoff {
-  kind: 'paseo-daemon' | 'pairing-offer' | 'manual-path'
-  daemonEndpoint: string
-  workspaceRef: string
-  instructions: string
-}
-
-export interface AisshProvisionInvocation {
-  adapterType: 'aissh'
-  args: string[]
-  command: string
-  credentials: {
-    optionalEnv: ('AISSH_BIN' | 'AISSH_SERVER')[]
-    source: 'env'
-    requiredEnv: 'AISSH_TOKEN'[]
-  }
-  cwdPolicy: 'neutral-tempdir'
-  reason: string
-  script: string
-  serverRef: string
-}
-
-export interface ProvisionPlanInput {
-  assignment: WorkspaceAssignment
-  environment: PaseoEnvironment
-  providerProfile: ProviderProfile
-  soul: SoulRelease
-}
-
-export interface ProvisionPlan {
-  aissh: AisshProvisionInvocation
-  assignment: WorkspaceAssignment
-  command: string
-  receipt: {
-    adapterType: ProvisioningAdapterType
-    targetRef: string
-    environmentId: string
-    workspaceRef: string
-    soulReleaseRef: string
-    providerProfileId: string
-    command: string
-    aisshArgs: string[]
-  }
-}
+export { CONTROL_PLANE_SCHEMA_VERSION } from './control-plane'
+export { containsLiteralProviderSecret, redactLiteralProviderSecret } from './control-plane'
+export type {
+  AisshProvisionInvocation,
+  AssignmentStatus,
+  AuditEvent,
+  ControlPlaneSnapshot,
+  ControlPlaneStore,
+  PaseoEndpointKind,
+  PaseoEnvironment,
+  PaseoHandoff,
+  ProjectedFile,
+  ProviderProfile,
+  ProvisioningAdapterType,
+  ProvisionPlan,
+  ProvisionPlanInput,
+  ProvisionReceipt,
+  ProvisionReceiptStatus,
+  SoulRelease,
+  VersionedControlPlaneRecord,
+  WorkspaceAssignment,
+  WorkspaceProjectionManifest,
+  WorkspaceProjectionManifestFile,
+} from './control-plane'
 
 const ASSIGNMENT_TRANSITIONS: Record<AssignmentStatus, AssignmentStatus[]> = {
   archived: [],
@@ -109,9 +58,6 @@ const ASSIGNMENT_TRANSITIONS: Record<AssignmentStatus, AssignmentStatus[]> = {
   revoked: ['archived'],
   workspace_projected: ['handoff_ready', 'ready', 'needs_attention', 'revoked', 'archived'],
 }
-
-const SECRET_VALUE_RE = /\b(?:sk-[\w-]{8,}|Bearer\s+[\w.~+/-]{12,}|gh[pousr]_[\w-]{20,}|github_pat_[\w-]{20,}|AKIA[0-9A-Z]{16}|AIza[\w-]{20,})\b/g
-const SECRET_KEY_RE = /api[_-]?key|authorization|password|secret|token/i
 
 export function normalizeAssignedEmail(email: string): string {
   return email.trim().toLowerCase()
@@ -218,6 +164,142 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
   }
 }
 
+export function createEmptyControlPlaneSnapshot(): ControlPlaneSnapshot {
+  return {
+    schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
+    assignments: [],
+    auditEvents: [],
+    environments: [],
+    projectionManifests: [],
+    providerProfiles: [],
+    receipts: [],
+    soulReleases: [],
+  }
+}
+
+export function createProvisionReceipt(plan: ProvisionPlan, input: { at?: string, id?: string, status?: ProvisionReceiptStatus } = {}): ProvisionReceipt {
+  const receipt: ProvisionReceipt = {
+    schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
+    id: input.id ?? createStableId('rcpt', `${plan.receipt.environmentId}:${plan.receipt.workspaceRef}:${plan.receipt.soulReleaseRef}:${input.at ?? ''}`),
+    kind: 'provision-receipt',
+    at: input.at ?? new Date().toISOString(),
+    status: input.status ?? 'planned',
+    ...plan.receipt,
+  }
+  assertControlPlaneRecordSafe(receipt, `receipt:${receipt.id}`)
+  return receipt
+}
+
+export function createAuditEvent(input: Omit<AuditEvent, 'schemaVersion' | 'kind' | 'id' | 'at'> & { at?: string, id?: string }): AuditEvent {
+  const event: AuditEvent = {
+    schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
+    id: input.id ?? createStableId('audit', `${input.actor}:${input.action}:${input.target}:${input.at ?? ''}`),
+    kind: 'audit-event',
+    at: input.at ?? new Date().toISOString(),
+    actor: input.actor,
+    action: input.action,
+    target: input.target,
+    details: input.details,
+  }
+  assertControlPlaneRecordSafe(event, `audit:${event.id}`)
+  return event
+}
+
+export function createWorkspaceProjectionManifest(input: {
+  at?: string
+  files: ProjectedFile[]
+  id?: string
+  soulReleaseRef: string
+  workspaceRef: string
+}): WorkspaceProjectionManifest {
+  const files = input.files.map((file) => {
+    const relativePath = validateProjectedFilePath(file.relativePath)
+    assertNoLiteralSecretInProjectedFile(file.content, relativePath)
+    return {
+      relativePath,
+      sha256: createHash('sha256').update(file.content).digest('hex'),
+      mode: file.mode,
+    }
+  }).sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+  const manifest: WorkspaceProjectionManifest = {
+    schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
+    id: input.id ?? createStableId('proj', `${input.workspaceRef}:${input.soulReleaseRef}:${files.map(file => file.sha256).join(':')}`),
+    kind: 'workspace-projection-manifest',
+    at: input.at ?? new Date().toISOString(),
+    workspaceRef: input.workspaceRef,
+    soulReleaseRef: input.soulReleaseRef,
+    files,
+  }
+  assertControlPlaneRecordSafe(manifest, `projection:${manifest.id}`)
+  return manifest
+}
+
+export class LocalFileControlPlaneStore implements ControlPlaneStore {
+  private readonly root: string
+
+  constructor(root: string) {
+    this.root = root
+  }
+
+  async appendAuditEvent(event: AuditEvent): Promise<void> {
+    assertControlPlaneRecordSafe(event, `audit:${event.id}`)
+    await appendJsonl(this.auditEventsPath, event)
+  }
+
+  async appendProjectionManifest(manifest: WorkspaceProjectionManifest): Promise<void> {
+    assertControlPlaneRecordSafe(manifest, `projection:${manifest.id}`)
+    await appendJsonl(this.projectionManifestsPath, manifest)
+  }
+
+  async appendReceipt(receipt: ProvisionReceipt): Promise<void> {
+    assertControlPlaneRecordSafe(receipt, `receipt:${receipt.id}`)
+    await appendJsonl(this.receiptsPath, receipt)
+  }
+
+  async loadSnapshot(): Promise<ControlPlaneSnapshot> {
+    const snapshot = await readJsonFile<ControlPlaneSnapshot>(this.snapshotPath) ?? createEmptyControlPlaneSnapshot()
+    assertControlPlaneSnapshotSafe(snapshot)
+    const merged = {
+      ...snapshot,
+      auditEvents: mergeUniqueById([
+        ...snapshot.auditEvents,
+        ...await readJsonl<AuditEvent>(this.auditEventsPath, 'audit-events'),
+      ]),
+      projectionManifests: mergeUniqueById([
+        ...snapshot.projectionManifests,
+        ...await readJsonl<WorkspaceProjectionManifest>(this.projectionManifestsPath, 'projection-manifests'),
+      ]),
+      receipts: mergeUniqueById([
+        ...snapshot.receipts,
+        ...await readJsonl<ProvisionReceipt>(this.receiptsPath, 'receipts'),
+      ]),
+    }
+    assertControlPlaneSnapshotSafe(merged)
+    return merged
+  }
+
+  async saveSnapshot(snapshot: ControlPlaneSnapshot): Promise<void> {
+    assertControlPlaneSnapshotSafe(snapshot)
+    await writeJsonFile(this.snapshotPath, snapshot)
+  }
+
+  private get auditEventsPath(): string {
+    return path.join(this.root, 'audit-events.jsonl')
+  }
+
+  private get projectionManifestsPath(): string {
+    return path.join(this.root, 'projection-manifests.jsonl')
+  }
+
+  private get receiptsPath(): string {
+    return path.join(this.root, 'receipts.jsonl')
+  }
+
+  private get snapshotPath(): string {
+    return path.join(this.root, 'snapshot.json')
+  }
+}
+
 export function validateProjectedFilePath(relativePath: string): string {
   if (!relativePath || relativePath.startsWith('/') || relativePath.includes('\\') || relativePath.includes('\0'))
     throw new Error(`invalid projected file path: ${relativePath}`)
@@ -241,15 +323,64 @@ export async function writeProjectedFiles(workspaceRoot: string, files: Projecte
 }
 
 export function assertNoLiteralSecret(value: string, field: string): void {
-  if (SECRET_VALUE_RE.test(value) || (SECRET_KEY_RE.test(field) && SECRET_VALUE_RE.test(value))) {
-    SECRET_VALUE_RE.lastIndex = 0
-    throw new Error(`${field} must use a secret reference, not a literal secret`)
-  }
-  SECRET_VALUE_RE.lastIndex = 0
+  assertNoLiteralProviderSecret(value, field)
 }
 
 export function redactSecretLike(value: string): string {
-  return value.replace(SECRET_VALUE_RE, '[REDACTED]')
+  return redactLiteralProviderSecret(value)
+}
+
+export function assertControlPlaneSnapshotSafe(snapshot: ControlPlaneSnapshot): void {
+  assertSupportedSchemaVersion(snapshot, 'control-plane snapshot')
+  for (const environment of snapshot.environments) {
+    assertNoLiteralSecret(environment.daemonEndpoint, `environment:${environment.environmentId}:daemonEndpoint`)
+    assertNoLiteralSecret(environment.targetRef, `environment:${environment.environmentId}:targetRef`)
+  }
+  for (const providerProfile of snapshot.providerProfiles) {
+    if (providerProfile.secretRef) {
+      if (!providerProfile.secretRef.startsWith('secret://'))
+        throw new Error(`provider profile ${providerProfile.id} must use a secret reference`)
+      assertNoLiteralSecret(providerProfile.secretRef, `provider:${providerProfile.id}:secretRef`)
+    }
+  }
+  for (const assignment of snapshot.assignments) {
+    assertNoLiteralSecret(assignment.workspaceRef, `assignment:${assignment.assignmentId}:workspaceRef`)
+    if (assignment.handoff) {
+      assertNoLiteralSecret(assignment.handoff.daemonEndpoint, `assignment:${assignment.assignmentId}:handoff:daemonEndpoint`)
+      assertNoLiteralSecret(assignment.handoff.workspaceRef, `assignment:${assignment.assignmentId}:handoff:workspaceRef`)
+      assertNoLiteralSecret(assignment.handoff.instructions, `assignment:${assignment.assignmentId}:handoff:instructions`)
+    }
+  }
+  for (const release of snapshot.soulReleases) {
+    for (const file of release.files) {
+      const rel = validateProjectedFilePath(file.relativePath)
+      assertNoLiteralSecretInProjectedFile(file.content, rel)
+    }
+  }
+  for (const receipt of snapshot.receipts)
+    assertControlPlaneRecordSafe(receipt, `receipt:${receipt.id}`)
+  for (const event of snapshot.auditEvents)
+    assertControlPlaneRecordSafe(event, `audit:${event.id}`)
+  for (const manifest of snapshot.projectionManifests)
+    assertControlPlaneRecordSafe(manifest, `projection:${manifest.id}`)
+  assertNoLiteralSecretsInValue('control-plane snapshot', snapshot)
+}
+
+function assertNoLiteralSecretsInValue(label: string, value: unknown): void {
+  if (typeof value === 'string') {
+    assertNoLiteralSecret(value, label)
+    return
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoLiteralSecretsInValue(`${label}[${index}]`, item))
+    return
+  }
+
+  if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value))
+      assertNoLiteralSecretsInValue(`${label}.${key}`, child)
+  }
 }
 
 function providerCliCheckCommand(profile: ProviderProfile): string {
@@ -291,11 +422,38 @@ function projectionScriptCommands(workspaceRef: string, files: ProjectedFile[]):
 }
 
 function assertNoLiteralSecretInProjectedFile(content: string, rel: string): void {
-  if (SECRET_VALUE_RE.test(content)) {
-    SECRET_VALUE_RE.lastIndex = 0
+  if (containsLiteralProviderSecret(content))
     throw new Error(`projected workspace file must not contain literal provider secrets: ${rel}`)
+}
+
+function assertControlPlaneRecordSafe(record: ProvisionReceipt | AuditEvent | WorkspaceProjectionManifest, label: string): void {
+  assertSupportedSchemaVersion(record, label)
+  if (record.kind === 'provision-receipt') {
+    assertNoLiteralSecret(record.command, `${label}:command`)
+    assertNoLiteralSecret(record.targetRef, `${label}:targetRef`)
+    assertNoLiteralSecret(record.workspaceRef, `${label}:workspaceRef`)
+    for (const arg of record.aisshArgs)
+      assertNoLiteralSecret(arg, `${label}:aisshArg`)
   }
-  SECRET_VALUE_RE.lastIndex = 0
+  if (record.kind === 'audit-event') {
+    assertNoLiteralSecret(record.actor, `${label}:actor`)
+    assertNoLiteralSecret(record.action, `${label}:action`)
+    assertNoLiteralSecret(record.target, `${label}:target`)
+    if (record.details)
+      assertNoLiteralSecret(record.details, `${label}:details`)
+  }
+  if (record.kind === 'workspace-projection-manifest') {
+    assertNoLiteralSecret(record.workspaceRef, `${label}:workspaceRef`)
+    for (const file of record.files) {
+      validateProjectedFilePath(file.relativePath)
+      assertNoLiteralSecret(file.sha256, `${label}:${file.relativePath}:sha256`)
+    }
+  }
+}
+
+function assertSupportedSchemaVersion(record: VersionedControlPlaneRecord, label: string): void {
+  if (record.schemaVersion !== CONTROL_PLANE_SCHEMA_VERSION)
+    throw new Error(`${label} uses unsupported schemaVersion ${String(record.schemaVersion)}`)
 }
 
 function createStableId(prefix: string, seed: string): string {
@@ -308,4 +466,55 @@ function shellQuote(value: string): string {
   if (/^[\w/:=.,@%+-]+$/.test(value))
     return value
   return `'${value.replaceAll('\'', String.raw`'\''`)}'`
+}
+
+async function appendJsonl(filePath: string, record: VersionedControlPlaneRecord): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true })
+  await appendFile(filePath, `${JSON.stringify(record)}\n`, 'utf8')
+}
+
+async function readJsonFile<T extends VersionedControlPlaneRecord>(filePath: string): Promise<T | null> {
+  try {
+    return JSON.parse(await readFile(filePath, 'utf8')) as T
+  }
+  catch (error) {
+    if (isNotFound(error))
+      return null
+    throw error
+  }
+}
+
+async function readJsonl<T extends VersionedControlPlaneRecord>(filePath: string, label: string): Promise<T[]> {
+  let raw = ''
+  try {
+    raw = await readFile(filePath, 'utf8')
+  }
+  catch (error) {
+    if (isNotFound(error))
+      return []
+    throw error
+  }
+  return raw.split('\n').filter(Boolean).map((line, index) => {
+    const record = JSON.parse(line) as T
+    assertSupportedSchemaVersion(record, `${label}:${index + 1}`)
+    return record
+  })
+}
+
+async function writeJsonFile(filePath: string, value: VersionedControlPlaneRecord): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true })
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
+  await writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+  await rename(tempPath, filePath)
+}
+
+function isNotFound(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+}
+
+function mergeUniqueById<T extends { id: string }>(records: T[]): T[] {
+  const byId = new Map<string, T>()
+  for (const record of records)
+    byId.set(record.id, record)
+  return Array.from(byId.values())
 }
