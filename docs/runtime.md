@@ -43,7 +43,7 @@ A workspace can contain multiple Paseo sessions. AIWorker does not persist or in
 
 AIWorker invokes `aissh` only as a thin provisioning transport. It does not own the remote runtime after the workspace files are projected.
 
-AIWorker Web may present the same provisioning inputs, plan previews, redacted receipts, and handoff metadata as the CLI. It must not observe or store Paseo runtime state after handoff.
+AIWorker Web may present the same provisioning inputs, plan previews, redacted receipts, and handoff metadata as the CLI. `aiworker apply --control-plane-dir <dir>` writes the local management-plane snapshot plus append-only receipt/audit/projection JSONL records that Web may read. Those records omit the generated provisioning script body, raw provider JSON/model payloads, stdout/stderr transcripts, pairing URLs, and QR payloads. Web must not observe or store Paseo runtime state after handoff.
 
 Provisioning scripts must discover and validate the remote execution identity before touching Paseo:
 

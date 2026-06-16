@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import type { ProjectedFile, ProvisionPlan } from '@zonease/aiworker-control'
+import type { ControlPlaneSnapshot, ProjectedFile, ProvisionPlan } from '@zonease/aiworker-control'
 import type { Command } from 'cac'
 import { execFile as execFileCallback } from 'node:child_process'
 import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -9,7 +9,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { promisify } from 'node:util'
-import { createAssignment, createProvisionPlan, isPaseoPairingOffer, redactSecretLike } from '@zonease/aiworker-control'
+import { createAssignment, createAuditEvent, createProvisionPlan, createProvisionReceipt, createWorkspaceProjectionManifest, isPaseoPairingOffer, LocalFileControlPlaneStore, redactSecretLike } from '@zonease/aiworker-control'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import cac from 'cac'
 
@@ -105,17 +105,25 @@ export function buildCli() {
     .option('--aissh-bin <path>', 'override aissh executable; defaults to AISSH_BIN, bundled aissh-cli launcher, then PATH')
     .option('--yes', 'approve execution without an interactive prompt')
     .option('--auto-approve', 'alias for --yes in automation')
+    .option('--control-plane-dir <path>', 'write redacted AIWorker receipt, audit, and projection records to this local directory')
     .option('--json', 'print the full machine-readable execution result')
     .example(APPLY_EXAMPLE)
     .action(async (options) => {
       const plan = createPlanFromOptions(options)
       assertJsonApplyApproved(options)
       await confirmApplyApproval(plan, options)
-      const result = await executeProvisionPlan(plan, { aisshBin: typeof options.aisshBin === 'string' ? options.aisshBin : undefined })
-      if (options.json)
-        printJson(result)
-      else
-        printText(formatProvisionExecutionSummary(result))
+      try {
+        const result = await executeProvisionPlan(plan, { aisshBin: typeof options.aisshBin === 'string' ? options.aisshBin : undefined })
+        await persistExecutionIfRequested(plan, result, options)
+        if (options.json)
+          printJson(result)
+        else
+          printText(formatProvisionExecutionSummary(result))
+      }
+      catch (error) {
+        await persistFailureIfRequested(plan, error, options)
+        throw error
+      }
     })
 
   cli.command('doctor', 'Run local AIWorker CLI diagnostics without contacting a target')
@@ -345,6 +353,151 @@ function formatProvisionExecutionSummary(result: Awaited<ReturnType<typeof execu
     result.stdout ? `stdout: ${result.stdout.trim()}` : '',
     result.stderr ? `stderr: ${result.stderr.trim()}` : '',
   ].filter(Boolean).join('\n')
+}
+
+async function persistExecutionIfRequested(plan: ProvisionPlan, result: Awaited<ReturnType<typeof executeProvisionPlan>>, options: Record<string, unknown>): Promise<void> {
+  const root = controlPlaneDirFromOptions(options)
+  if (!root)
+    return
+
+  const at = new Date().toISOString()
+  const providerWarning = extractProviderWarning(result.stdout, result.stderr)
+  const store = new LocalFileControlPlaneStore(root)
+  await savePlanMetadataSnapshot(store, plan, options, providerWarning ? 'needs_attention' : 'handoff_ready')
+  await store.appendReceipt(createProvisionReceipt(plan, {
+    at,
+    providerWarning,
+    status: 'applied',
+  }))
+  await store.appendProjectionManifest(createWorkspaceProjectionManifest({
+    at,
+    files: readSoulReleaseFromOptions(options).files,
+    soulReleaseRef: plan.receipt.soulReleaseRef,
+    workspaceRef: plan.receipt.workspaceRef,
+  }))
+  await store.appendAuditEvent(createAuditEvent({
+    actor: 'aiworker-cli',
+    action: providerWarning ? 'provision.applied.needs_provider_attention' : 'provision.applied',
+    at,
+    details: controlPlaneAuditDetails([
+      `target=${plan.receipt.targetRef}`,
+      `workspace=${plan.receipt.workspaceRef}`,
+      `paseoHome=${plan.receipt.paseoHome}`,
+      `handoff=${plan.receipt.handoffKind}:${plan.receipt.handoffState}`,
+      providerWarning ? `providerWarning=${providerWarning}` : 'providerWarning=none',
+    ]),
+    target: plan.assignment.assignmentId,
+  }))
+}
+
+async function persistFailureIfRequested(plan: ProvisionPlan, error: unknown, options: Record<string, unknown>): Promise<void> {
+  const root = controlPlaneDirFromOptions(options)
+  if (!root)
+    return
+
+  const at = new Date().toISOString()
+  const failureSummary = redactedFailureSummary(error)
+  const providerWarning = extractProviderWarning(failureSummary)
+  const store = new LocalFileControlPlaneStore(root)
+  await savePlanMetadataSnapshot(store, plan, options, 'needs_attention')
+  await store.appendReceipt(createProvisionReceipt(plan, {
+    at,
+    providerWarning,
+    status: 'failed',
+  }))
+  await store.appendAuditEvent(createAuditEvent({
+    actor: 'aiworker-cli',
+    action: 'provision.failed',
+    at,
+    details: controlPlaneAuditDetails([
+      `target=${plan.receipt.targetRef}`,
+      `workspace=${plan.receipt.workspaceRef}`,
+      `paseoHome=${plan.receipt.paseoHome}`,
+      `failure=${failureSummary}`,
+    ]),
+    target: plan.assignment.assignmentId,
+  }))
+}
+
+async function savePlanMetadataSnapshot(
+  store: LocalFileControlPlaneStore,
+  plan: ProvisionPlan,
+  options: Record<string, unknown>,
+  assignmentStatus: ProvisionPlan['assignment']['status'],
+): Promise<void> {
+  const soulRelease = readSoulReleaseFromOptions(options)
+  const existing = await store.loadSnapshot()
+  const snapshot: ControlPlaneSnapshot = {
+    ...existing,
+    assignments: upsertById(existing.assignments, {
+      ...plan.assignment,
+      status: assignmentStatus,
+    }, 'assignmentId'),
+    environments: upsertById(existing.environments, {
+      daemonEndpoint: plan.assignment.handoff?.daemonEndpoint ?? 'paseo-daemon:remote-home',
+      endpointKind: plan.receipt.endpointKind,
+      environmentId: plan.receipt.environmentId,
+      isolation: 'os-user',
+      ownerEmail: plan.assignment.assignedEmail,
+      paseoHome: plan.receipt.paseoHome,
+      providerProfileIds: [plan.receipt.providerProfileId],
+      targetRef: plan.receipt.targetRef,
+    }, 'environmentId'),
+    providerProfiles: upsertById(existing.providerProfiles, {
+      id: plan.receipt.providerProfileId,
+      label: plan.receipt.providerProfileId,
+      provider: typeof options.providerKind === 'string' ? options.providerKind : 'claude',
+      secretRef: typeof options.providerSecretRef === 'string' ? options.providerSecretRef : `secret://provider/${plan.receipt.providerProfileId}`,
+      ...(typeof options.paseoProviderId === 'string' ? { paseoProviderId: options.paseoProviderId } : {}),
+      ...(typeof options.providerCli === 'string' ? { cliCommand: options.providerCli } : {}),
+      ...(typeof options.providerBaseUrl === 'string' ? { baseUrl: options.providerBaseUrl } : {}),
+      ...(typeof options.providerModel === 'string' ? { model: options.providerModel } : {}),
+    }, 'id'),
+    soulReleases: upsertById(existing.soulReleases, soulRelease, 'id'),
+  }
+  await store.saveSnapshot(snapshot)
+}
+
+function controlPlaneDirFromOptions(options: Record<string, unknown>): string | null {
+  return typeof options.controlPlaneDir === 'string' && options.controlPlaneDir.trim() !== ''
+    ? path.resolve(options.controlPlaneDir)
+    : null
+}
+
+function readSoulReleaseFromOptions(options: Record<string, unknown>) {
+  const soulPath = requireOption(options.soul, '--soul')
+  const descriptor = readSoulDescriptor(soulPath)
+  const templateRoot = path.resolve(path.dirname(soulPath), '..', descriptor.workspaceTemplate.root)
+  return {
+    displayName: descriptor.identity.name,
+    files: readWorkspaceTemplateFiles(templateRoot),
+    id: `${descriptor.identity.id}@${descriptor.identity.version}`,
+    version: descriptor.identity.version,
+  }
+}
+
+function extractProviderWarning(...values: string[]): string | undefined {
+  for (const value of values) {
+    const line = value.split(/\r?\n/).find(candidate => candidate.includes('AIWORKER_PROVIDER_WARNING:'))
+    if (line)
+      return redactSecretLike(line.trim())
+  }
+  return undefined
+}
+
+function redactedFailureSummary(error: unknown): string {
+  const message = redactSecretLike(error instanceof Error ? error.message : String(error))
+  const firstLine = message.split(/\r?\n/).find(line => line.trim() !== '') ?? 'provision failed'
+  return firstLine.length > 240 ? `${firstLine.slice(0, 240)}...` : firstLine
+}
+
+function controlPlaneAuditDetails(parts: string[]): string {
+  return redactSecretLike(parts.join('; '))
+}
+
+function upsertById<T extends Record<K, string>, K extends keyof T>(items: T[], next: T, key: K): T[] {
+  const filtered = items.filter(item => item[key] !== next[key])
+  return [...filtered, next]
 }
 
 function createDoctorReport(options: Record<string, unknown>): DoctorReport {

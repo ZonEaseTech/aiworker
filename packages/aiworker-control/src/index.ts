@@ -185,7 +185,11 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
       endpointBinding: endpointBinding.bindingKind,
       endpointKind: endpointBinding.endpointKind,
       environmentId: input.environment.environmentId,
+      handoffKind: createHandoff({ ...input.environment, paseoHome }, workspaceRef).kind,
+      handoffState: 'instruction-only',
+      paseoHome,
       providerProfileId: input.providerProfile.id,
+      providerReadinessEffect: providerReadiness.effect,
       providerReadinessPolicy: providerReadiness.kind,
       soulReleaseRef: `${input.soul.id}@${input.soul.version}`,
       targetRef: redactSecretLike(input.environment.targetRef),
@@ -221,7 +225,8 @@ export function createEmptyControlPlaneSnapshot(): ControlPlaneSnapshot {
   }
 }
 
-export function createProvisionReceipt(plan: ProvisionPlan, input: { at?: string, id?: string, status?: ProvisionReceiptStatus } = {}): ProvisionReceipt {
+export function createProvisionReceipt(plan: ProvisionPlan, input: { at?: string, id?: string, providerWarning?: string, status?: ProvisionReceiptStatus } = {}): ProvisionReceipt {
+  const aisshArgs = redactReceiptAisshArgs(plan)
   const receipt: ProvisionReceipt = {
     schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
     id: input.id ?? createStableId('rcpt', `${plan.receipt.environmentId}:${plan.receipt.workspaceRef}:${plan.receipt.soulReleaseRef}:${input.at ?? ''}`),
@@ -229,9 +234,20 @@ export function createProvisionReceipt(plan: ProvisionPlan, input: { at?: string
     at: input.at ?? new Date().toISOString(),
     status: input.status ?? 'planned',
     ...plan.receipt,
+    aisshArgs,
+    command: `aissh ${aisshArgs.map(shellQuote).join(' ')}`,
+    ...(input.providerWarning ? { providerWarning: redactSecretLike(input.providerWarning) } : {}),
   }
   assertControlPlaneRecordSafe(receipt, `receipt:${receipt.id}`)
   return receipt
+}
+
+function redactReceiptAisshArgs(plan: ProvisionPlan): string[] {
+  return plan.receipt.aisshArgs.map(arg =>
+    arg === plan.aissh.script || arg.includes('set -euo pipefail') || arg.includes('base64 -d')
+      ? '[omitted: generated provisioning script]'
+      : arg,
+  )
 }
 
 export function createAuditEvent(input: Omit<AuditEvent, 'schemaVersion' | 'kind' | 'id' | 'at'> & { at?: string, id?: string }): AuditEvent {
@@ -621,6 +637,7 @@ function assertControlPlaneRecordSafe(record: ProvisionReceipt | AuditEvent | Wo
       assertNoLiteralSecret(file.sha256, `${label}:${file.relativePath}:sha256`)
     }
   }
+  assertNoLiteralSecretsInValue(label, record)
 }
 
 function assertSupportedSchemaVersion(record: VersionedControlPlaneRecord, label: string): void {

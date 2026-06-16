@@ -332,6 +332,8 @@ describe('Paseo thin-layer aiworker-control contract', () => {
     expect(loaded.schemaVersion).toBe(CONTROL_PLANE_SCHEMA_VERSION)
     expect(loaded.assignments).toHaveLength(1)
     expect(loaded.receipts).toEqual([receipt])
+    expect(loaded.receipts[0]?.aisshArgs).toContain('[omitted: generated provisioning script]')
+    expect(loaded.receipts[0]?.command).not.toContain('base64 -d')
     expect(loaded.auditEvents).toEqual([auditEvent])
     expect(loaded.projectionManifests[0]?.files.map(file => file.relativePath)).toEqual(['.mcp.json', 'AGENTS.md', 'CLAUDE.md'])
     expect(loaded.projectionManifests[0]?.files[0]?.sha256).toMatch(/^[a-f0-9]{64}$/)

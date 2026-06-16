@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { $ } from 'bun'
@@ -436,6 +436,62 @@ describe('aiworker thin CLI', () => {
     expect(output).toContain('[REDACTED_PAIRING_URL]')
     expect(output).toContain('[omitted: raw Paseo provider payload]')
     expect(output).not.toContain('aW50ZXJuYWwgYnVzaW5lc3MgY29udGV4dAo=')
+  })
+
+  test('apply can persist redacted control-plane receipt, audit, and projection records', async () => {
+    const descriptorPath = await createDescriptor('internal business context\n')
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-control-plane-'))
+    const fakeAissh = path.join(root, 'aissh')
+    const controlPlaneDir = path.join(root, 'control-plane')
+    await writeFile(fakeAissh, '#!/bin/sh\necho "AIWorker target identity discovered: user=root uid=0 home=/root pwd=/root"\necho "{\\"provider\\":\\"claude\\",\\"status\\":\\"available\\"}"\necho "https://relay.paseo.example/#offer=real-token"\necho "AIWORKER_PROVIDER_WARNING: Paseo provider claude is not available/enabled for this aissh user; workspace projection will continue."\necho "AIWORKER_HANDOFF_READY: run paseo daemon pair --home \\"$PASEO_HOME\\" from \\"$AIWORKER_WORKSPACE_REF\\" and open the printed link in the Paseo frontend."\n')
+    await chmod(fakeAissh, 0o755)
+
+    await $`bun ${cliPath} apply ${planArgs(descriptorPath)} --yes --aissh-bin ${fakeAissh} --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    const snapshot = JSON.parse(await readFile(path.join(controlPlaneDir, 'snapshot.json'), 'utf8'))
+    const receipts = (await readFile(path.join(controlPlaneDir, 'receipts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    const audits = (await readFile(path.join(controlPlaneDir, 'audit-events.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    const projections = (await readFile(path.join(controlPlaneDir, 'projection-manifests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    const persisted = JSON.stringify({ audits, projections, receipts, snapshot })
+
+    expect(snapshot.assignments[0].status).toBe('needs_attention')
+    expect(snapshot.assignments[0].handoff.instructions).toContain('paseo daemon pair --home "$PASEO_HOME"')
+    expect(receipts[0].status).toBe('applied')
+    expect(receipts[0].paseoHome).toBe('$HOME/.paseo')
+    expect(receipts[0].handoffState).toBe('instruction-only')
+    expect(receipts[0].providerReadinessEffect).toBe('non-blocking-warning')
+    expect(receipts[0].providerWarning).toContain('AIWORKER_PROVIDER_WARNING')
+    expect(audits[0].action).toBe('provision.applied.needs_provider_attention')
+    expect(audits[0].details).toContain('providerWarning=AIWORKER_PROVIDER_WARNING')
+    expect(projections[0].files.map((file: { relativePath: string }) => file.relativePath)).toEqual(['AGENTS.md'])
+    expect(persisted).not.toContain('real-token')
+    expect(persisted).not.toContain('relay.paseo.example')
+    expect(persisted).not.toContain('"status":"available"')
+    expect(persisted).not.toContain('sk-testsecret123456')
+  })
+
+  test('failed apply persists only redacted failure metadata in the control plane', async () => {
+    const descriptorPath = await createDescriptor()
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-control-plane-failed-'))
+    const fakeAissh = path.join(root, 'aissh')
+    const controlPlaneDir = path.join(root, 'control-plane')
+    await writeFile(fakeAissh, '#!/bin/sh\necho "stdout sk-testsecret123456"\necho "https://relay.paseo.example/#offer=real-token"\necho "{\\"provider\\":\\"claude\\",\\"status\\":\\"available\\"}"\necho "stderr sk-testsecret123456" >&2\nexit 42\n')
+    await chmod(fakeAissh, 0o755)
+
+    const result = await $`bun ${cliPath} apply ${planArgs(descriptorPath)} --yes --aissh-bin ${fakeAissh} --control-plane-dir ${controlPlaneDir} --json`.nothrow()
+
+    const receipts = (await readFile(path.join(controlPlaneDir, 'receipts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    const audits = (await readFile(path.join(controlPlaneDir, 'audit-events.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    const persisted = JSON.stringify({ audits, receipts })
+
+    expect(result.exitCode).toBe(1)
+    expect(receipts[0].status).toBe('failed')
+    expect(audits[0].action).toBe('provision.failed')
+    expect(audits[0].details).toContain('failure=aissh execution failed')
+    expect(existsSync(path.join(controlPlaneDir, 'projection-manifests.jsonl'))).toBe(false)
+    expect(persisted).not.toContain('sk-testsecret123456')
+    expect(persisted).not.toContain('real-token')
+    expect(persisted).not.toContain('"status":"available"')
   })
 
   test('executeProvisionPlan redacts standalone base64 payload echoes from projected files', async () => {

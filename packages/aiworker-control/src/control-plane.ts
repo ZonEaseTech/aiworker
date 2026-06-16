@@ -141,10 +141,15 @@ export interface ProvisionPlan {
     environmentId: string
     endpointBinding: EndpointBindingKind
     endpointKind: PaseoEndpointKind
+    handoffKind: PaseoHandoff['kind']
+    handoffState: 'instruction-only'
+    paseoHome: WorkspacePathPolicy['paseoHome']
     workspaceRef: string
     workspaceName: string
     workspacePathPolicy: WorkspacePathPolicyKind
+    providerReadinessEffect: ProviderReadinessPolicy['effect']
     providerReadinessPolicy: ProviderReadinessPolicyKind
+    providerWarning?: string
     soulReleaseRef: string
     providerProfileId: string
     command: string
@@ -165,10 +170,15 @@ export interface ProvisionReceipt extends VersionedControlPlaneRecord {
   environmentId: string
   endpointBinding: EndpointBindingKind
   endpointKind: PaseoEndpointKind
+  handoffKind: PaseoHandoff['kind']
+  handoffState: 'instruction-only'
+  paseoHome: WorkspacePathPolicy['paseoHome']
   workspaceRef: string
   workspaceName: string
   workspacePathPolicy: WorkspacePathPolicyKind
+  providerReadinessEffect: ProviderReadinessPolicy['effect']
   providerReadinessPolicy: ProviderReadinessPolicyKind
+  providerWarning?: string
   soulReleaseRef: string
   providerProfileId: string
   command: string

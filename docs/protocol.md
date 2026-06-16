@@ -60,6 +60,19 @@ Assignment
   workspaceRef
   status
   handoff?
+
+ProvisionReceipt
+  status=planned | applied | failed
+  assignment tuple
+  paseoHome
+  handoffKind
+  handoffState=instruction-only
+  workspacePathPolicy
+  endpointBinding
+  providerReadinessPolicy
+  providerReadinessEffect=non-blocking-warning
+  providerWarning?
+  redacted aissh invocation with generated script body omitted in persisted records
 ```
 
 `workspaceRef` remains a user-facing derived intent (`$HOME/...`) until the target shell resolves its canonical HOME. Consumers must not treat it as a caller-controlled absolute path. `daemonEndpoint=paseo-daemon:remote-home` is likewise a local-home binding marker, not a connectable network endpoint.
