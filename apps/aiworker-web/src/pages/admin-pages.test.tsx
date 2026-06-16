@@ -48,6 +48,7 @@ describe('admin console page composition', () => {
     expect(provisioning).toContain('approvals.jsonl')
     expect(provisioning).toContain('预览批准')
     expect(provisioning).toContain('预览退回修改')
+    expect(provisioning).toContain('执行已审批交付')
     expect(provisioning).toContain('不会持久化')
     expect(provisioning).toContain('aiworker plan')
     expect(provisioning).not.toContain('apply --yes')

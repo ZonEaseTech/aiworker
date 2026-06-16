@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises'
+import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
@@ -53,6 +53,7 @@ describe('Bun static server helpers', () => {
 
   test('serves real control-plane data and persists approval decisions through thin API', async () => {
     const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const previousCli = process.env.AIWORKER_CLI_BIN
     const root = await mkdtemp(path.join(tmpdir(), 'aiworker-web-control-plane-'))
     process.env.AIWORKER_CONTROL_PLANE_DIR = root
     const environment = {
@@ -114,6 +115,25 @@ describe('Bun static server helpers', () => {
       expect(approvalPayload.approval.status).toBe('approved')
       expect(approvalPayload.approval.assignmentId).toBe(assignment.assignmentId)
       expect(JSON.stringify(approvalPayload)).not.toContain('offer=')
+
+      const fakeCli = path.join(root, 'fake-aiworker-cli')
+      await writeFile(fakeCli, [
+        '#!/bin/sh',
+        'printf \'%s\\n\' \'{"status":"executed","stdout":"Local Daemon      running\\nConnected Daemon  reachable\\nAIWORKER_PROVIDER_WARNING: provider needs login\\nAIWORKER_HANDOFF_READY: run paseo daemon pair --home \\\\\\"$PASEO_HOME\\\\\\"","stderr":""}\'',
+      ].join('\n'))
+      await chmod(fakeCli, 0o755)
+      process.env.AIWORKER_CLI_BIN = fakeCli
+
+      const applyResponse = await fetch(`http://127.0.0.1:${server.port}/api/assignments/${assignment.assignmentId}/apply`, { method: 'POST' })
+      const applyPayload = await applyResponse.json()
+      const applySerialized = JSON.stringify(applyPayload)
+
+      expect(applyResponse.status).toBe(200)
+      expect(applyPayload.job.status).toBe('completed')
+      expect(applyPayload.job.steps.map((step: { status: string }) => step.status)).toContain('needs_attention')
+      expect(applySerialized).not.toContain('AIWORKER_HANDOFF_READY')
+      expect(applySerialized).not.toContain('Local Daemon')
+      expect(applySerialized).not.toContain('offer=')
     }
     finally {
       server.stop(true)
@@ -121,6 +141,10 @@ describe('Bun static server helpers', () => {
         delete process.env.AIWORKER_CONTROL_PLANE_DIR
       else
         process.env.AIWORKER_CONTROL_PLANE_DIR = previousDir
+      if (previousCli === undefined)
+        delete process.env.AIWORKER_CLI_BIN
+      else
+        process.env.AIWORKER_CLI_BIN = previousCli
     }
   })
 })

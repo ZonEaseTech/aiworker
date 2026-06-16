@@ -26,6 +26,12 @@ import {
 } from '@/lib/admin-data'
 import { useAdminData } from '@/lib/admin-data-context'
 
+interface ApplyJobStep {
+  id: string
+  label: string
+  status: 'done' | 'needs_attention' | 'failed'
+}
+
 export function ProvisioningPage() {
   const { data: adminData, decideApproval, isLive } = useAdminData()
   const [selectedSoul, setSelectedSoul] = useState(adminData.soulReleases[0]?.id ?? '')
@@ -34,6 +40,8 @@ export function ProvisioningPage() {
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(adminData.assignments[0]?.id ?? '')
   const [previewDecisionByAssignment, setPreviewDecisionByAssignment] = useState<Record<string, ApprovalStatus>>({})
   const [approvalError, setApprovalError] = useState<string | null>(null)
+  const [applyError, setApplyError] = useState<string | null>(null)
+  const [applyStepsByAssignment, setApplyStepsByAssignment] = useState<Record<string, ApplyJobStep[]>>({})
   const selectedAssignment = adminData.assignments.find(item => item.id === selectedAssignmentId)
   const tupleAssignment = getAssignmentForPlan(selectedEnvironment, selectedSoul, selectedProvider, adminData)
   const assignment = tupleAssignment?.id === selectedAssignment?.id ? selectedAssignment : tupleAssignment
@@ -45,6 +53,7 @@ export function ProvisioningPage() {
   const effectiveApprovalStatus = assignment
     ? resolvePreviewApprovalStatus(assignment.id, previewDecisionByAssignment, approval?.status)
     : approval?.status
+  const applySteps = assignment ? applyStepsByAssignment[assignment.id] : undefined
 
   useEffect(() => {
     if (!adminData.assignments.some(item => item.id === selectedAssignmentId))
@@ -77,6 +86,26 @@ export function ProvisioningPage() {
       catch (error) {
         setApprovalError(error instanceof Error ? error.message : String(error))
       }
+    }
+  }
+
+  async function runApplyJob() {
+    if (!assignment)
+      return
+
+    setApplyError(null)
+    try {
+      const response = await fetch(`/api/assignments/${encodeURIComponent(assignment.id)}/apply`, { method: 'POST' })
+      if (!response.ok)
+        throw new Error(`apply job failed: ${response.status}`)
+      const payload = await response.json() as { job: { steps: ApplyJobStep[] } }
+      setApplyStepsByAssignment(current => ({
+        ...current,
+        [assignment.id]: payload.job.steps,
+      }))
+    }
+    catch (error) {
+      setApplyError(error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -309,7 +338,31 @@ export function ProvisioningPage() {
                         <WarningCircleIcon data-icon="inline-start" weight="duotone" />
                         {isLive ? '退回并记录' : '预览退回修改'}
                       </Button>
+                      <Button disabled={!isLive || effectiveApprovalStatus !== 'approved'} size="sm" onClick={runApplyJob}>
+                        <PlayCircleIcon data-icon="inline-start" weight="duotone" />
+                        执行已审批交付
+                      </Button>
                     </div>
+                    {applyError ? <p className="text-xs text-destructive">{applyError}</p> : null}
+                    {applySteps
+                      ? (
+                          <div className="rounded-md border bg-muted/20 p-3">
+                            <p className="mb-2 text-xs font-medium">交付进度</p>
+                            <FieldGroup>
+                              {applySteps.map(step => (
+                                <Field key={step.id} orientation="horizontal">
+                                  <FieldContent>
+                                    <FieldTitle>{step.label}</FieldTitle>
+                                  </FieldContent>
+                                  <StatusBadge tone={step.status === 'done' ? 'success' : step.status === 'needs_attention' ? 'warning' : 'destructive'}>
+                                    {step.status === 'done' ? '完成' : step.status === 'needs_attention' ? '需处理' : '失败'}
+                                  </StatusBadge>
+                                </Field>
+                              ))}
+                            </FieldGroup>
+                          </div>
+                        )
+                      : null}
                     <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs/relaxed">{approval.previewCommand}</pre>
                   </>
                 )
