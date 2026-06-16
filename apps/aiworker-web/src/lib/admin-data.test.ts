@@ -139,7 +139,10 @@ describe('admin data fixtures', () => {
 
     expect(Object.keys(source)).toEqual(['loadAdminConsoleData'])
     expect(data.assignments[0]?.receiptId).toBe('rcpt-1')
-    expect(data.assignments[0]?.handoffLabel).toContain('paseo --host unix:/run/paseo/alice.sock')
+    expect(data.assignments[0]?.handoffLabel).toContain('paseo daemon pair')
+    expect(data.assignments[0]?.handoffLabel).toContain('--home /home/alice/.paseo')
+    expect(data.assignments[0]?.handoffLabel).toContain('Paseo frontend')
+    expect(data.assignments[0]?.handoffLabel).not.toContain('paseo --host')
     expect(data.assignments[0]?.nextStep).toContain('AIWorker 不读取 session')
     expect(data.providerProfiles[0]?.secretRef).toBe('secret://providers/codex/default')
     expect(data.soulReleases[0]?.fileCount).toBe(1)

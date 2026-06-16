@@ -11,4 +11,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    allowedHosts: ['20831--main--ben--ben.coder.tbc.5ok.co'],
+  },
 })

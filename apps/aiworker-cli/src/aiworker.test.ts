@@ -335,6 +335,8 @@ describe('aiworker thin CLI', () => {
     expect(output).not.toContain('set -euo pipefail')
     expect(output).not.toContain('export PASEO_HOME=')
     expect(output).not.toContain('npm install -g @getpaseo/cli')
+    expect(output).not.toContain('paseo daemon status')
+    expect(output).not.toContain('paseo daemon pair')
     expect(output).not.toContain('aW50ZXJuYWwgYnVzaW5lc3MgY29udGV4dAo=')
   })
 
@@ -392,6 +394,8 @@ describe('aiworker thin CLI', () => {
     expect(stderr).not.toContain('set -euo pipefail')
     expect(stderr).not.toContain('export PASEO_HOME=')
     expect(stderr).not.toContain('npm install -g @getpaseo/cli')
+    expect(stderr).not.toContain('paseo daemon status')
+    expect(stderr).not.toContain('paseo daemon pair')
     expect(stderr).not.toContain('aW50ZXJuYWwgYnVzaW5lc3MgY29udGV4dAo=')
     expect(stderr).toContain('[omitted: output echoed the generated provisioning command]')
     expect(stderr).toContain('aiworker plan ... --show-script')

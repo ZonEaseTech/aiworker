@@ -95,7 +95,7 @@ export function createHandoff(environment: PaseoEnvironment, workspaceRef: strin
     kind: 'paseo-daemon',
     daemonEndpoint: environment.daemonEndpoint,
     workspaceRef,
-    instructions: `cd ${shellQuote(workspaceRef)} && paseo --host ${shellQuote(environment.daemonEndpoint)} run <task>, or open ${workspaceRef} in a Paseo client connected to this daemon.`,
+    instructions: `cd ${shellQuote(workspaceRef)}, run paseo daemon status --home ${shellQuote(environment.paseoHome)} to confirm the home/status, start it with paseo daemon start --home ${shellQuote(environment.paseoHome)} only if needed, then run paseo daemon pair --home ${shellQuote(environment.paseoHome)} and open the printed pairing link in the Paseo frontend.`,
   }
 }
 
@@ -117,12 +117,15 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
   const script = [
     'set -euo pipefail',
     `export PASEO_HOME=${shellQuote(input.environment.paseoHome)}`,
+    `mkdir -p ${shellQuote(input.assignment.workspaceRef)}`,
+    `cd ${shellQuote(input.assignment.workspaceRef)}`,
     '(command -v paseo >/dev/null || npm install -g @getpaseo/cli)',
     `(${providerCliCheckCommand(input.providerProfile)})`,
-    `mkdir -p ${shellQuote(input.assignment.workspaceRef)}`,
-    `(paseo --host ${shellQuote(input.environment.daemonEndpoint)} daemon status >/dev/null || paseo daemon start --home ${shellQuote(input.environment.paseoHome)} >/dev/null)`,
+    `(paseo daemon status --home ${shellQuote(input.environment.paseoHome)} || true)`,
+    `(paseo daemon status --home ${shellQuote(input.environment.paseoHome)} >/dev/null 2>&1 || paseo daemon start --home ${shellQuote(input.environment.paseoHome)})`,
     ...projectionCommands,
     `printf '%s\n' ${shellQuote(`AIWorker projected ${input.soul.id}@${input.soul.version}: ${projectedFiles}`)} > ${shellQuote(path.posix.join(input.assignment.workspaceRef, '.aiworker-projection'))}`,
+    `paseo daemon pair --home ${shellQuote(input.environment.paseoHome)}`,
   ].join(' && ')
   const serverRef = normalizeAisshServerRef(input.environment.targetRef)
   const reason = `Provision AIWorker Paseo workspace for ${input.assignment.assignedEmail}`

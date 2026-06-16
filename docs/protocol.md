@@ -56,8 +56,8 @@ draft -> provisioning -> workspace_projected -> handoff_ready -> ready
 
 Handoff is intentionally opaque and Paseo-native:
 
-- `paseo-daemon`: CLI/app connects to a daemon endpoint and opens the workspace path. When AIWorker generates Paseo CLI commands, `--host` is Paseo’s external flag name for that endpoint.
-- `pairing-offer`: employee connects to a daemon through Paseo relay offer and opens the workspace path.
+- `paseo-daemon`: AIWorker prepares the workspace, then the target-side handoff follows Paseo’s native CLI flow from the workspace directory: install or verify `@getpaseo/cli`, run `paseo daemon status --home <paseo-home>` to confirm the effective Paseo home/status (default is `~/.paseo`), run `paseo daemon start --home <paseo-home>` when needed, then run `paseo daemon pair --home <paseo-home>` and open the printed pairing link in the Paseo frontend.
+- `pairing-offer`: employee connects to a daemon through the real Paseo pairing link and opens the workspace path.
 - `manual-path`: fallback instructions when a stable deep link is unavailable.
 
 AIWorker may store the handoff reference and workspace path, but must not proxy workspace UI or session traffic.

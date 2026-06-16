@@ -665,7 +665,9 @@ function isGeneratedProvisioningEcho(line: string, unsafeNeedles: string[]): boo
     || line.includes('set -euo pipefail')
     || line.includes('export PASEO_HOME=')
     || line.includes('npm install -g @getpaseo/cli')
+    || line.includes('paseo daemon status')
     || line.includes('paseo daemon start')
+    || line.includes('paseo daemon pair')
     || line.includes('.aiworker-projection')
     || unsafeNeedles.some(needle => line.includes(needle))
 }

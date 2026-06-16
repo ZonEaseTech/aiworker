@@ -4,6 +4,7 @@ import type {
   AuditEvent,
   ControlPlaneSnapshot,
   PaseoEndpointKind,
+  PaseoEnvironment,
   PaseoHandoff,
   ProjectedFile,
   ProviderProfile,
@@ -158,6 +159,23 @@ function assertNoSensitiveAdminValue(label: string, value: unknown): void {
   }
 }
 
+function assertNoSnapshotLiteralSecrets(label: string, value: unknown): void {
+  if (typeof value === 'string') {
+    assertNoLiteralProviderSecret(value, label)
+    return
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoSnapshotLiteralSecrets(`${label}[${index}]`, item))
+    return
+  }
+
+  if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value))
+      assertNoSnapshotLiteralSecrets(`${label}.${key}`, child)
+  }
+}
+
 export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminConsoleData {
   for (const profile of data.providerProfiles) {
     if (!profile.secretRef.startsWith(SECRET_REFERENCE_PREFIX)) {
@@ -200,6 +218,8 @@ export const releaseStatusMeta: Record<SoulReleaseSummary['status'], { label: st
 }
 
 export function mapControlPlaneSnapshotToAdminConsoleData(snapshot: ControlPlaneSnapshot): AdminConsoleData {
+  assertNoSnapshotLiteralSecrets('controlPlaneSnapshot', snapshot)
+
   const providerProfiles = snapshot.providerProfiles.map(mapProviderProfile)
   const environments = snapshot.environments.map(environment => ({
     id: environment.environmentId,
@@ -221,7 +241,9 @@ export function mapControlPlaneSnapshotToAdminConsoleData(snapshot: ControlPlane
     target: event.target,
     tone: toneForAuditAction(event.action),
   }))
-  const assignments = snapshot.assignments.map(assignment => mapAssignment(assignment, snapshot.receipts, auditEvents))
+  const assignments = snapshot.assignments.map(assignment =>
+    mapAssignment(assignment, snapshot.receipts, auditEvents, snapshot.environments),
+  )
 
   return assertRedactedAdminConsoleData({
     assignments,
@@ -352,7 +374,7 @@ const fixtureAssignments: AssignmentSummary[] = [
     workspaceRef: '/home/alice/workspaces/freeform',
     receiptId: 'rcpt-20260614-001',
     handoffKind: 'paseo-daemon',
-    handoffLabel: 'paseo --host unix:/run/paseo/alice.sock open /home/alice/workspaces/freeform',
+    handoffLabel: 'paseo daemon pair --home /home/alice/.paseo link for /home/alice/workspaces/freeform',
     updatedAt: '2026-06-14 07:34 UTC',
     nextStep: '员工可在 Paseo 客户端打开 workspace；AIWorker 不读取 session。',
     audit: [
@@ -599,12 +621,14 @@ function mapAssignment(
   assignment: WorkspaceAssignment,
   receipts: ProvisionReceipt[],
   auditEvents: AuditEventSummary[],
+  environments: PaseoEnvironment[],
 ): AssignmentSummary {
   const matchingReceipt = receipts.find(receipt =>
     receipt.workspaceRef === assignment.workspaceRef
     && receipt.environmentId === assignment.environmentId
     && receipt.providerProfileId === assignment.providerProfileId,
   )
+  const environment = environments.find(candidate => candidate.environmentId === assignment.environmentId)
   const assignmentAudit = auditEvents.filter(event => event.target === assignment.assignmentId || event.target === assignment.workspaceRef)
   const handoffKind = assignment.handoff?.kind ?? 'manual-path'
 
@@ -619,19 +643,21 @@ function mapAssignment(
     workspaceRef: assignment.workspaceRef,
     receiptId: matchingReceipt?.id ?? 'pending-receipt',
     handoffKind,
-    handoffLabel: assignment.handoff ? handoffLabel(assignment.handoff.kind, assignment.handoff.daemonEndpoint, assignment.workspaceRef) : 'manual workspace path pending',
+    handoffLabel: assignment.handoff
+      ? handoffLabel(assignment.handoff.kind, assignment.handoff.daemonEndpoint, assignment.workspaceRef, environment?.paseoHome)
+      : 'manual workspace path pending',
     updatedAt: formatAdminTimestamp(matchingReceipt?.at),
     nextStep: nextStepForAssignment(assignment.status),
     audit: assignmentAudit,
   }
 }
 
-function handoffLabel(kind: HandoffKind, endpoint: string, workspaceRef: string): RedactedHandoffReference {
+function handoffLabel(kind: HandoffKind, _endpoint: string, workspaceRef: string, paseoHome?: string): RedactedHandoffReference {
   if (kind === 'pairing-offer')
     return `pairing offer redacted for ${workspaceRef}`
   if (kind === 'manual-path')
     return `open workspace path ${workspaceRef}`
-  return `paseo --host ${redactRelayOffer(endpoint)} open ${workspaceRef}`
+  return `run paseo daemon pair --home ${paseoHome ?? '<paseo-home>'} from ${workspaceRef}; open the printed link in the Paseo frontend`
 }
 
 function nextStepForAssignment(status: AssignmentStatus): string {
