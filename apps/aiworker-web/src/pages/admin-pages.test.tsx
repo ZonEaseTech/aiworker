@@ -44,8 +44,8 @@ describe('admin console page composition', () => {
     expect(provisioning).toContain('Assignment identity')
     expect(provisioning).toContain('Preview trace timeline')
     expect(provisioning).toContain('assignment snapshot')
-    expect(provisioning).toContain('不是持久化 control ledger')
-    expect(provisioning).toContain('Control API not implemented')
+    expect(provisioning).toContain('Fixture preview mode')
+    expect(provisioning).toContain('approvals.jsonl')
     expect(provisioning).toContain('预览批准')
     expect(provisioning).toContain('预览退回修改')
     expect(provisioning).toContain('不会持久化')
@@ -60,7 +60,7 @@ describe('admin console page composition', () => {
   test('provisioning approval controls stay preview-only and redacted', () => {
     const markup = renderToStaticMarkup(<ProvisioningPage />)
 
-    expect(markup).toContain('只更新本页预览状态')
+    expect(markup).toContain('未配置 AIWORKER_CONTROL_PLANE_DIR')
     expect(markup).toContain('不会触发 aissh 或 Paseo')
     expect(markup).not.toContain('/api/sessions/')
     expect(markup).not.toContain('engine_invocation')

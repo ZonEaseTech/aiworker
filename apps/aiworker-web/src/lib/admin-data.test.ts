@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   adminConsoleData,
+  applyApprovalDecisionRecords,
   assertRedactedAdminConsoleData,
   createAdminDataSourceFromControlPlaneSnapshot,
   getApprovalForAssignment,
@@ -62,6 +63,42 @@ describe('admin data fixtures', () => {
       expect(profile.secretRef.startsWith('secret://')).toBe(true)
       expect(profile.secretRef).not.toContain('literal')
     }
+  })
+
+  test('overlays persisted approval decisions without leaking runtime data', () => {
+    const assignment = adminConsoleData.assignments[0]
+    const updated = applyApprovalDecisionRecords(adminConsoleData, [{
+      schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
+      id: 'appr-decision-1',
+      kind: 'approval-decision',
+      at: '2026-06-16T16:00:00.000Z',
+      assignmentId: assignment.id,
+      note: '可以交付；provider 后续在 Paseo 内处理。',
+      reviewer: 'ops@example.com',
+      status: 'approved',
+    }])
+    const approval = getApprovalForAssignment(assignment.id, updated)!
+
+    expect(approval.status).toBe('approved')
+    expect(approval.controlApiState).toBe('persisted')
+    expect(approval.reviewer).toBe('ops@example.com')
+    expect(approval.riskSummary).toContain('审批备注')
+    expect(updated.traceEvents.some(event => event.evidenceRef === `approval:${approval.id}`)).toBe(true)
+  })
+
+  test('rejects unsafe persisted approval decisions', () => {
+    const assignment = adminConsoleData.assignments[0]
+
+    expect(() => applyApprovalDecisionRecords(adminConsoleData, [{
+      schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
+      id: 'appr-bad',
+      kind: 'approval-decision',
+      at: '2026-06-16T16:00:00.000Z',
+      assignmentId: assignment.id,
+      note: 'raw offer=https://paseo.example/pair?offer=abc',
+      reviewer: 'ops@example.com',
+      status: 'approved',
+    }])).toThrow(/redacted/)
   })
 
   test('model AIWorker-owned handoff metadata without runtime transcripts', () => {
@@ -167,7 +204,7 @@ describe('admin data fixtures', () => {
         ...approval,
         controlApiState: 'implemented' as never,
       }],
-    })).toThrow(/control API as not implemented/)
+    })).toThrow(/unsupported control API state/)
 
     expect(() => assertRedactedAdminConsoleData({
       ...adminConsoleData,

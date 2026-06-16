@@ -26,5 +26,5 @@
     "skipLibCheck": true
   },
   "include": ["src"],
-  "exclude": ["src/server.ts", "src/**/*.test.ts", "src/**/*.test.tsx"]
+  "exclude": ["src/admin-api.ts", "src/server.ts", "src/**/*.test.ts", "src/**/*.test.tsx"]
 }

@@ -1,4 +1,4 @@
-import type { ApprovalStatus } from '@/lib/admin-data'
+import type { AdminConsoleData, ApprovalStatus } from '@/lib/admin-data'
 import { CheckCircleIcon, PlayCircleIcon, WarningCircleIcon } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
@@ -24,41 +24,64 @@ import {
   providerStatusMeta,
   releaseStatusMeta,
 } from '@/lib/admin-data'
+import { useAdminData } from '@/lib/admin-data-context'
 
 export function ProvisioningPage() {
-  const [selectedSoul, setSelectedSoul] = useState(adminConsoleData.soulReleases[0].id)
-  const [selectedEnvironment, setSelectedEnvironment] = useState(adminConsoleData.environments[0].id)
-  const [selectedProvider, setSelectedProvider] = useState(adminConsoleData.providerProfiles[0].id)
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState(adminConsoleData.assignments[0]?.id ?? '')
+  const { data: adminData, decideApproval, isLive } = useAdminData()
+  const [selectedSoul, setSelectedSoul] = useState(adminData.soulReleases[0]?.id ?? '')
+  const [selectedEnvironment, setSelectedEnvironment] = useState(adminData.environments[0]?.id ?? '')
+  const [selectedProvider, setSelectedProvider] = useState(adminData.providerProfiles[0]?.id ?? '')
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState(adminData.assignments[0]?.id ?? '')
   const [previewDecisionByAssignment, setPreviewDecisionByAssignment] = useState<Record<string, ApprovalStatus>>({})
-  const selectedAssignment = adminConsoleData.assignments.find(item => item.id === selectedAssignmentId)
-  const tupleAssignment = getAssignmentForPlan(selectedEnvironment, selectedSoul, selectedProvider)
+  const [approvalError, setApprovalError] = useState<string | null>(null)
+  const selectedAssignment = adminData.assignments.find(item => item.id === selectedAssignmentId)
+  const tupleAssignment = getAssignmentForPlan(selectedEnvironment, selectedSoul, selectedProvider, adminData)
   const assignment = tupleAssignment?.id === selectedAssignment?.id ? selectedAssignment : tupleAssignment
-  const environment = getEnvironment(assignment?.environmentId ?? selectedEnvironment)
-  const provider = getProviderProfile(assignment?.providerProfileId ?? selectedProvider)
-  const soul = getSoulRelease(assignment?.soulReleaseId ?? selectedSoul)
-  const approval = assignment ? getApprovalForAssignment(assignment.id) : undefined
-  const traceEvents = assignment ? getTraceEventsForAssignment(assignment.id) : []
+  const environment = getEnvironment(assignment?.environmentId ?? selectedEnvironment, adminData)
+  const provider = getProviderProfile(assignment?.providerProfileId ?? selectedProvider, adminData)
+  const soul = getSoulRelease(assignment?.soulReleaseId ?? selectedSoul, adminData)
+  const approval = assignment ? getApprovalForAssignment(assignment.id, adminData) : undefined
+  const traceEvents = assignment ? getTraceEventsForAssignment(assignment.id, adminData) : []
   const effectiveApprovalStatus = assignment
     ? resolvePreviewApprovalStatus(assignment.id, previewDecisionByAssignment, approval?.status)
     : approval?.status
 
   useEffect(() => {
-    setSelectedAssignmentId(resolveAssignmentIdentityForTuple(selectedEnvironment, selectedSoul, selectedProvider))
-  }, [selectedEnvironment, selectedProvider, selectedSoul])
+    if (!adminData.assignments.some(item => item.id === selectedAssignmentId))
+      setSelectedAssignmentId(adminData.assignments[0]?.id ?? '')
+    if (!adminData.environments.some(item => item.id === selectedEnvironment))
+      setSelectedEnvironment(adminData.environments[0]?.id ?? '')
+    if (!adminData.soulReleases.some(item => item.id === selectedSoul))
+      setSelectedSoul(adminData.soulReleases[0]?.id ?? '')
+    if (!adminData.providerProfiles.some(item => item.id === selectedProvider))
+      setSelectedProvider(adminData.providerProfiles[0]?.id ?? '')
+  }, [adminData, selectedAssignmentId, selectedEnvironment, selectedProvider, selectedSoul])
 
-  function previewDecision(status: ApprovalStatus) {
+  useEffect(() => {
+    setSelectedAssignmentId(resolveAssignmentIdentityForTuple(selectedEnvironment, selectedSoul, selectedProvider, adminData))
+  }, [adminData, selectedEnvironment, selectedProvider, selectedSoul])
+
+  async function previewDecision(status: ApprovalStatus) {
     if (!assignment)
       return
 
+    setApprovalError(null)
     setPreviewDecisionByAssignment(current => ({
       ...current,
       [assignment.id]: status,
     }))
+    if (isLive) {
+      try {
+        await decideApproval(assignment.id, status)
+      }
+      catch (error) {
+        setApprovalError(error instanceof Error ? error.message : String(error))
+      }
+    }
   }
 
   function selectAssignment(id: string) {
-    const selected = resolveAssignmentSelectionState(id)
+    const selected = resolveAssignmentSelectionState(id, adminData)
     if (!selected)
       return
 
@@ -97,7 +120,7 @@ export function ProvisioningPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {adminConsoleData.assignments.map(item => (
+                      {adminData.assignments.map(item => (
                         <SelectItem key={item.id} value={item.id}>
                           {item.assignedEmail}
                           {' '}
@@ -117,7 +140,7 @@ export function ProvisioningPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {adminConsoleData.environments.map(item => (
+                      {adminData.environments.map(item => (
                         <SelectItem key={item.id} value={item.id}>
                           {item.ownerEmail}
                           {' '}
@@ -137,7 +160,7 @@ export function ProvisioningPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {adminConsoleData.soulReleases.map(item => (
+                      {adminData.soulReleases.map(item => (
                         <SelectItem key={item.id} value={item.id}>
                           {item.displayName}
                           {' '}
@@ -157,7 +180,7 @@ export function ProvisioningPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {adminConsoleData.providerProfiles.map(item => (
+                      {adminData.providerProfiles.map(item => (
                         <SelectItem key={item.id} value={item.id}>
                           {item.label}
                           {' '}
@@ -230,14 +253,19 @@ export function ProvisioningPage() {
         <Card>
           <CardHeader>
             <CardTitle>Approval gate</CardTitle>
-            <CardDescription>管理员审批 AIWorker plan/projection/handoff 元数据；当前为 assignment snapshot 派生的本地预览。</CardDescription>
+            <CardDescription>管理员审批 AIWorker plan/projection/handoff 元数据；连接 control-plane 后会写入 approvals.jsonl。</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Alert>
               <WarningCircleIcon weight="duotone" />
-              <AlertTitle>Control API not implemented</AlertTitle>
-              <AlertDescription>批准/退回修改只更新本页预览状态，不会持久化，也不会触发 aissh 或 Paseo。</AlertDescription>
+              <AlertTitle>{isLive ? 'Control API connected' : 'Fixture preview mode'}</AlertTitle>
+              <AlertDescription>
+                {isLive
+                  ? '批准/退回会持久化到 AIWorker approvals.jsonl；不会触发 aissh，也不会连接 Paseo runtime。'
+                  : '未配置 AIWORKER_CONTROL_PLANE_DIR 时只更新本页预览状态；不会持久化，也不会触发 aissh 或 Paseo。'}
+              </AlertDescription>
             </Alert>
+            {approvalError ? <p className="text-xs text-destructive">{approvalError}</p> : null}
             {approval && effectiveApprovalStatus
               ? (
                   <>
@@ -275,11 +303,11 @@ export function ProvisioningPage() {
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="secondary" onClick={() => previewDecision('approved')}>
                         <CheckCircleIcon data-icon="inline-start" weight="duotone" />
-                        预览批准
+                        {isLive ? '批准并记录' : '预览批准'}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => previewDecision('changes_requested')}>
                         <WarningCircleIcon data-icon="inline-start" weight="duotone" />
-                        预览退回修改
+                        {isLive ? '退回并记录' : '预览退回修改'}
                       </Button>
                     </div>
                     <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs/relaxed">{approval.previewCommand}</pre>
@@ -293,7 +321,7 @@ export function ProvisioningPage() {
         <Card>
           <CardHeader>
             <CardTitle>Preview trace timeline</CardTitle>
-            <CardDescription>从 assignment snapshot 派生 request → approval → receipt → handoff 预览链，不是持久化 control ledger，也不展示 Paseo session 或运行时日志。</CardDescription>
+            <CardDescription>{isLive ? '从 control-plane snapshot 与 approvals.jsonl 派生 request → approval → receipt → handoff 链，不展示 Paseo session 或运行时日志。' : '从 fixture assignment snapshot 派生 request → approval → receipt → handoff 预览链，不展示 Paseo session 或运行时日志。'}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {traceEvents.map(event => (
@@ -322,13 +350,13 @@ export function resolvePreviewApprovalStatus(
   return previewDecisionByAssignment[assignmentId] ?? persistedStatus
 }
 
-export function resolveAssignmentSelectionState(id: string): {
+export function resolveAssignmentSelectionState(id: string, data: AdminConsoleData = adminConsoleData): {
   assignmentId: string
   environmentId: string
   providerProfileId: string
   soulReleaseId: string
 } | undefined {
-  const selected = adminConsoleData.assignments.find(item => item.id === id)
+  const selected = data.assignments.find(item => item.id === id)
   if (!selected)
     return undefined
 
@@ -344,6 +372,7 @@ export function resolveAssignmentIdentityForTuple(
   environmentId: string,
   soulReleaseId: string,
   providerProfileId: string,
+  data: AdminConsoleData = adminConsoleData,
 ): string {
-  return getAssignmentForPlan(environmentId, soulReleaseId, providerProfileId)?.id ?? ''
+  return getAssignmentForPlan(environmentId, soulReleaseId, providerProfileId, data)?.id ?? ''
 }

@@ -1,3 +1,14 @@
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import {
+  createAssignment,
+  createEmptyControlPlaneSnapshot,
+  createHandoff,
+  createProvisionPlan,
+  createProvisionReceipt,
+  LocalFileControlPlaneStore,
+} from '@zonease/aiworker-control'
 import { describe, expect, test } from 'bun:test'
 
 import { contentType, createServer, resolveStaticPath, staticRoot } from '@/server'
@@ -38,5 +49,78 @@ describe('Bun static server helpers', () => {
     expect(contentType('index.html')).toBe('text/html; charset=utf-8')
     expect(contentType('assets/app.css')).toBe('text/css; charset=utf-8')
     expect(contentType('assets/app.woff2')).toBe('font/woff2')
+  })
+
+  test('serves real control-plane data and persists approval decisions through thin API', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-web-control-plane-'))
+    process.env.AIWORKER_CONTROL_PLANE_DIR = root
+    const environment = {
+      daemonEndpoint: 'paseo-daemon:remote-home',
+      endpointKind: 'local-home' as const,
+      environmentId: 'env-api',
+      isolation: 'os-user' as const,
+      ownerEmail: 'alice@example.com',
+      paseoHome: '$HOME/.paseo',
+      providerProfileIds: ['codex-default'],
+      targetRef: 'aissh:server-1',
+    }
+    const providerProfile = {
+      id: 'codex-default',
+      label: 'Codex Default',
+      provider: 'codex',
+      secretRef: 'secret://providers/codex/default',
+    }
+    const soul = {
+      displayName: 'AIWorker Freeform',
+      files: [{ content: '# Freeform\n', relativePath: 'AGENTS.md' }],
+      id: 'aiworker-freeform',
+      version: '1.0.0',
+    }
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: `${soul.id}@${soul.version}`,
+      workspaceRef: '$HOME/aiworker-workspaces/aiworker-freeform',
+    })
+    const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
+    const store = new LocalFileControlPlaneStore(root)
+    await store.saveSnapshot({
+      ...createEmptyControlPlaneSnapshot(),
+      assignments: [{ ...plan.assignment, handoff: createHandoff(environment, plan.assignment.workspaceRef) }],
+      environments: [environment],
+      providerProfiles: [providerProfile],
+      receipts: [createProvisionReceipt(plan, { status: 'applied' })],
+      soulReleases: [soul],
+    })
+    const server = createServer({ port: 0 })
+
+    try {
+      const dataResponse = await fetch(`http://127.0.0.1:${server.port}/api/admin-data`)
+      const payload = await dataResponse.json()
+
+      expect(dataResponse.status).toBe(200)
+      expect(payload.source).toBe('control-plane')
+      expect(payload.snapshot.assignments[0].assignmentId).toBe(assignment.assignmentId)
+
+      const approvalResponse = await fetch(`http://127.0.0.1:${server.port}/api/approvals/${assignment.assignmentId}`, {
+        body: JSON.stringify({ note: '可以交付', reviewer: 'ops@example.com', status: 'approved' }),
+        method: 'POST',
+      })
+      const approvalPayload = await approvalResponse.json()
+
+      expect(approvalResponse.status).toBe(200)
+      expect(approvalPayload.approval.status).toBe('approved')
+      expect(approvalPayload.approval.assignmentId).toBe(assignment.assignmentId)
+      expect(JSON.stringify(approvalPayload)).not.toContain('offer=')
+    }
+    finally {
+      server.stop(true)
+      if (previousDir === undefined)
+        delete process.env.AIWORKER_CONTROL_PLANE_DIR
+      else
+        process.env.AIWORKER_CONTROL_PLANE_DIR = previousDir
+    }
   })
 })

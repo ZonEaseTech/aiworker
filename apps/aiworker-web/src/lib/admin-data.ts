@@ -103,8 +103,19 @@ export interface ProvisioningApprovalSummary {
   decidedAt?: string
   riskSummary: string
   previewCommand: string
-  controlApiState: 'not_implemented'
+  controlApiState: 'not_implemented' | 'persisted'
   checks: ProvisioningApprovalCheckSummary[]
+}
+
+export interface ApprovalDecisionRecord {
+  schemaVersion: typeof CONTROL_PLANE_SCHEMA_VERSION
+  id: string
+  kind: 'approval-decision'
+  at: string
+  assignmentId: string
+  status: ApprovalStatus
+  reviewer: string
+  note?: string
 }
 
 export interface ProvisioningTraceEventSummary {
@@ -289,8 +300,8 @@ export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminCon
       throw new Error(`approval ${approval.id} has unsupported status ${approval.status}`)
     }
 
-    if (approval.controlApiState !== 'not_implemented') {
-      throw new Error(`approval ${approval.id} must declare the control API as not implemented`)
+    if (approval.controlApiState !== 'not_implemented' && approval.controlApiState !== 'persisted') {
+      throw new Error(`approval ${approval.id} has unsupported control API state`)
     }
 
     if (!approval.previewCommand.startsWith('aiworker plan ')) {
@@ -423,6 +434,60 @@ export function createAdminDataSourceFromControlPlaneSnapshot(snapshot: ControlP
       return mapControlPlaneSnapshotToAdminConsoleData(snapshot)
     },
   }
+}
+
+export function applyApprovalDecisionRecords(data: AdminConsoleData, records: ApprovalDecisionRecord[]): AdminConsoleData {
+  const assignmentIds = new Set(data.assignments.map(assignment => assignment.id))
+  const latestByAssignment = new Map<string, ApprovalDecisionRecord>()
+
+  for (const record of records) {
+    assertApprovalDecisionRecordSafe(record, assignmentIds)
+    const previous = latestByAssignment.get(record.assignmentId)
+    if (!previous || previous.at <= record.at)
+      latestByAssignment.set(record.assignmentId, record)
+  }
+
+  if (latestByAssignment.size === 0)
+    return data
+
+  const approvals = data.approvals.map((approval) => {
+    const decision = latestByAssignment.get(approval.assignmentId)
+    if (!decision)
+      return approval
+
+    return {
+      ...approval,
+      controlApiState: 'persisted' as const,
+      decidedAt: decision.status === 'pending' ? undefined : formatAdminTimestamp(decision.at),
+      reviewer: decision.reviewer,
+      riskSummary: decision.note ? `${approval.riskSummary} 审批备注：${decision.note}` : approval.riskSummary,
+      status: decision.status,
+    }
+  })
+
+  return assertRedactedAdminConsoleData({
+    ...data,
+    approvals,
+    metrics: buildMetrics({
+      approvals,
+      assignments: data.assignments,
+      providerProfiles: data.providerProfiles,
+      soulReleases: data.soulReleases,
+    }),
+    traceEvents: buildProvisioningTraceEvents(data.assignments, approvals),
+  })
+}
+
+function assertApprovalDecisionRecordSafe(record: ApprovalDecisionRecord, assignmentIds: ReadonlySet<string>): void {
+  if (record.schemaVersion !== CONTROL_PLANE_SCHEMA_VERSION)
+    throw new Error(`approval decision ${record.id} uses unsupported schemaVersion`)
+  if (record.kind !== 'approval-decision')
+    throw new Error(`approval decision ${record.id} has unsupported kind`)
+  if (!assignmentIds.has(record.assignmentId))
+    throw new Error(`approval decision ${record.id} must reference a known assignment`)
+  if (!approvalStatuses.includes(record.status))
+    throw new Error(`approval decision ${record.id} has unsupported status ${record.status}`)
+  assertNoSensitiveAdminValue(`approvalDecision:${record.id}`, record)
 }
 
 const fixtureProviderProfiles: ProviderProfileSummary[] = [
@@ -1104,20 +1169,21 @@ export const navigationItems = [
   { title: 'Audit / Handoff', path: '/audit', icon: FileTextIcon },
 ] as const
 
-export function getApprovalForAssignment(id: string): ProvisioningApprovalSummary | undefined {
-  return adminConsoleData.approvals.find(item => item.assignmentId === id)
+export function getApprovalForAssignment(id: string, data: AdminConsoleData = adminConsoleData): ProvisioningApprovalSummary | undefined {
+  return data.approvals.find(item => item.assignmentId === id)
 }
 
-export function getTraceEventsForAssignment(id: string): ProvisioningTraceEventSummary[] {
-  return adminConsoleData.traceEvents.filter(item => item.assignmentId === id)
+export function getTraceEventsForAssignment(id: string, data: AdminConsoleData = adminConsoleData): ProvisioningTraceEventSummary[] {
+  return data.traceEvents.filter(item => item.assignmentId === id)
 }
 
 export function getAssignmentForPlan(
   environmentId: string,
   soulReleaseId: string,
   providerProfileId: string,
+  data: AdminConsoleData = adminConsoleData,
 ): AssignmentSummary | undefined {
-  const matches = adminConsoleData.assignments.filter(assignment =>
+  const matches = data.assignments.filter(assignment =>
     assignment.environmentId === environmentId
     && assignment.soulReleaseId === soulReleaseId
     && assignment.providerProfileId === providerProfileId,
@@ -1130,8 +1196,8 @@ export function getAssignmentForPlan(
   return matches[0]
 }
 
-export function getProviderProfile(id: string): ProviderProfileSummary {
-  const profile = adminConsoleData.providerProfiles.find(item => item.id === id)
+export function getProviderProfile(id: string, data: AdminConsoleData = adminConsoleData): ProviderProfileSummary {
+  const profile = data.providerProfiles.find(item => item.id === id)
   if (!profile) {
     throw new Error(`unknown provider profile ${id}`)
   }
@@ -1139,8 +1205,8 @@ export function getProviderProfile(id: string): ProviderProfileSummary {
   return profile
 }
 
-export function getEnvironment(id: string): PaseoEnvironmentSummary {
-  const environment = adminConsoleData.environments.find(item => item.id === id)
+export function getEnvironment(id: string, data: AdminConsoleData = adminConsoleData): PaseoEnvironmentSummary {
+  const environment = data.environments.find(item => item.id === id)
   if (!environment) {
     throw new Error(`unknown Paseo environment ${id}`)
   }
@@ -1148,8 +1214,8 @@ export function getEnvironment(id: string): PaseoEnvironmentSummary {
   return environment
 }
 
-export function getSoulRelease(id: string): SoulReleaseSummary {
-  const release = adminConsoleData.soulReleases.find(item => item.id === id)
+export function getSoulRelease(id: string, data: AdminConsoleData = adminConsoleData): SoulReleaseSummary {
+  const release = data.soulReleases.find(item => item.id === id)
   if (!release) {
     throw new Error(`unknown Soul release ${id}`)
   }

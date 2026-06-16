@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join, normalize } from 'node:path'
 import process from 'node:process'
+import { appendApprovalDecision, controlPlaneDirFromEnv, loadAdminDataApiPayload } from './admin-api'
 
 const root = process.env.AIWORKER_WEB_DIST ?? join(process.cwd(), 'dist')
 const port = Number(process.env.PORT ?? 20831)
@@ -45,17 +46,38 @@ export function resolveStaticPath(urlPathname: string) {
 export function createServer(options: { port?: number } = {}) {
   return Bun.serve({
     port: options.port ?? port,
-    fetch(request: Request) {
+    async fetch(request: Request) {
       const url = new URL(request.url)
 
+      if (url.pathname === '/api/admin-data') {
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+          return methodNotAllowed('GET, HEAD')
+        }
+
+        return Response.json(await loadAdminDataApiPayload())
+      }
+
+      const approvalMatch = url.pathname.match(/^\/api\/approvals\/([^/]+)$/)
+      if (approvalMatch) {
+        if (request.method !== 'POST') {
+          return methodNotAllowed('POST')
+        }
+
+        const root = controlPlaneDirFromEnv()
+        if (!root) {
+          return Response.json({ error: 'control_plane_dir_required' }, {
+            status: 409,
+            headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
+          })
+        }
+
+        const input = await request.json().catch(() => ({})) as Parameters<typeof appendApprovalDecision>[2]
+        const record = await appendApprovalDecision(root, decodeURIComponent(approvalMatch[1]!), input)
+        return Response.json({ approval: record })
+      }
+
       if (request.method !== 'GET' && request.method !== 'HEAD') {
-        return new Response('Method Not Allowed', {
-          status: 405,
-          headers: {
-            'allow': 'GET, HEAD',
-            'x-aiworker-boundary': 'admin-control-plane-only',
-          },
-        })
+        return methodNotAllowed('GET, HEAD')
       }
 
       if (url.pathname === '/healthz') {
@@ -82,6 +104,16 @@ export function createServer(options: { port?: number } = {}) {
           'x-aiworker-boundary': 'admin-control-plane-only',
         },
       })
+    },
+  })
+}
+
+function methodNotAllowed(allow: string): Response {
+  return new Response('Method Not Allowed', {
+    status: 405,
+    headers: {
+      allow,
+      'x-aiworker-boundary': 'admin-control-plane-only',
     },
   })
 }
