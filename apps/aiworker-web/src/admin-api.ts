@@ -24,6 +24,8 @@ export interface ApplyJobResult {
 
 export interface PairJobResult {
   assignmentId: string
+  stderr: string
+  stdout: string
   pairingOutput: string
   status: 'paired'
 }
@@ -117,8 +119,11 @@ export async function runApprovedAssignmentApplyJob(root: string, assignmentId: 
     provider.provider,
     ...(provider.paseoProviderId ? ['--paseo-provider-id', provider.paseoProviderId] : []),
     ...(provider.cliCommand ? ['--provider-cli', provider.cliCommand] : []),
+    ...(provider.secretRef ? ['--provider-secret-ref', provider.secretRef] : []),
+    ...(provider.baseUrl ? ['--provider-base-url', provider.baseUrl] : []),
+    ...(provider.model ? ['--provider-model', provider.model] : []),
     '--soul',
-    resolveSoulDescriptorPath(soul.id),
+    resolveSoulDescriptorPath(soul),
   ])
   return summarizeApplyJobResult(assignmentId, result.exitCode, result.stdout, result.stderr)
 }
@@ -133,6 +138,8 @@ export async function runAssignmentPairJob(root: string, assignmentId: string): 
   const approval = latestApprovalForAssignment(payload.approvals, assignmentId)
   if (approval?.status !== 'approved')
     throw new Error(`assignment ${assignmentId} must be approved before pairing`)
+  if (!isAssignmentReadyForPairing(payload.snapshot, assignment))
+    throw new Error(`assignment ${assignmentId} must be applied and handoff-ready before pairing`)
   const environment = payload.snapshot.environments.find(item => item.environmentId === assignment.environmentId)
   const soul = payload.snapshot.soulReleases.find(item => `${item.id}@${item.version}` === assignment.soulReleaseRef || item.id === assignment.soulReleaseRef)
   if (!environment || !soul)
@@ -144,14 +151,18 @@ export async function runAssignmentPairJob(root: string, assignmentId: string): 
     '--target',
     environment.targetRef,
     '--soul',
-    resolveSoulDescriptorPath(soul.id),
+    resolveSoulDescriptorPath(soul),
   ])
   if (result.exitCode !== 0)
     throw new Error('pair command failed; run apply first and verify Paseo daemon status')
-  const parsed = JSON.parse(result.stdout) as { stdout?: unknown }
+  const parsed = JSON.parse(result.stdout) as { stderr?: unknown, stdout?: unknown }
+  const stdout = typeof parsed.stdout === 'string' ? parsed.stdout : ''
+  const stderr = typeof parsed.stderr === 'string' ? parsed.stderr : ''
   return {
     assignmentId,
-    pairingOutput: typeof parsed.stdout === 'string' ? parsed.stdout : '',
+    pairingOutput: transientPairingOutput(stdout, stderr),
+    stderr,
+    stdout,
     status: 'paired',
   }
 }
@@ -191,9 +202,27 @@ function latestApprovalForAssignment(records: ApprovalDecisionRecord[], assignme
     .at(-1)
 }
 
-function resolveSoulDescriptorPath(soulId: string): string {
-  const packageId = soulId.includes('@') ? soulId.slice(0, soulId.indexOf('@')) : soulId
+function resolveSoulDescriptorPath(soul: ControlPlaneSnapshot['soulReleases'][number]): string {
+  if (soul.descriptorRef)
+    return resolve(soul.descriptorRef)
+  const packageId = soul.id.includes('@') ? soul.id.slice(0, soul.id.indexOf('@')) : soul.id
   return join(process.cwd(), 'souls', packageId, 'dist', 'soul.descriptor.json')
+}
+
+function isAssignmentReadyForPairing(snapshot: ControlPlaneSnapshot, assignment: ControlPlaneSnapshot['assignments'][number]): boolean {
+  if (!['handoff_ready', 'needs_attention', 'ready'].includes(assignment.status))
+    return false
+  return snapshot.receipts.some(receipt =>
+    receipt.status === 'applied'
+    && receipt.environmentId === assignment.environmentId
+    && receipt.providerProfileId === assignment.providerProfileId
+    && receipt.soulReleaseRef === assignment.soulReleaseRef
+    && receipt.workspaceRef === assignment.workspaceRef,
+  )
+}
+
+function transientPairingOutput(stdout: string, stderr: string): string {
+  return [stdout.trim(), stderr.trim()].filter(Boolean).join('\n')
 }
 
 async function runAiworkerCli(args: string[]): Promise<{ exitCode: number, stderr: string, stdout: string }> {

@@ -1017,7 +1017,7 @@ function mapSoulRelease(release: SoulRelease): SoulReleaseSummary {
     id: `${release.id}@${release.version}`,
     displayName: release.displayName,
     version: release.version,
-    descriptorRef: `${release.id}@${release.version}`,
+    descriptorRef: release.descriptorRef ?? `${release.id}@${release.version}`,
     workspaceTemplateRoot: `workspace-template:${release.id}@${release.version}`,
     fileCount: release.files.length,
     updatedAt: 'from control-plane snapshot',

@@ -11,11 +11,18 @@ import {
 } from '@zonease/aiworker-control'
 import { describe, expect, test } from 'bun:test'
 
-import { contentType, createServer, resolveStaticPath, staticRoot } from '@/server'
+import { assertServerHostAllowed, contentType, createServer, resolveStaticPath, serverHostname, staticRoot } from '@/server'
 
 describe('Bun static server helpers', () => {
   test('serves from the Vite dist directory by default', () => {
     expect(staticRoot()).toEndWith('/dist')
+  })
+
+  test('binds the release server to loopback unless remote access is explicit', () => {
+    expect(serverHostname({})).toBe('127.0.0.1')
+    expect(serverHostname({ AIWORKER_WEB_HOST: 'localhost' })).toBe('localhost')
+    expect(() => assertServerHostAllowed('0.0.0.0', {})).toThrow('AIWORKER_WEB_ALLOW_REMOTE=1')
+    expect(() => assertServerHostAllowed('0.0.0.0', { AIWORKER_WEB_ALLOW_REMOTE: '1' })).not.toThrow()
   })
 
   test('keeps SPA fallback paths inside the static root', () => {
@@ -67,12 +74,15 @@ describe('Bun static server helpers', () => {
       targetRef: 'aissh:server-1',
     }
     const providerProfile = {
+      baseUrl: 'https://provider.example.local',
       id: 'codex-default',
       label: 'Codex Default',
+      model: 'gpt-test',
       provider: 'codex',
       secretRef: 'secret://providers/codex/default',
     }
     const soul = {
+      descriptorRef: path.join(root, 'custom-soul.descriptor.json'),
       displayName: 'AIWorker Freeform',
       files: [{ content: '# Freeform\n', relativePath: 'AGENTS.md' }],
       id: 'aiworker-freeform',
@@ -89,7 +99,7 @@ describe('Bun static server helpers', () => {
     const store = new LocalFileControlPlaneStore(root)
     await store.saveSnapshot({
       ...createEmptyControlPlaneSnapshot(),
-      assignments: [{ ...plan.assignment, handoff: createHandoff(environment, plan.assignment.workspaceRef) }],
+      assignments: [{ ...plan.assignment, handoff: createHandoff(environment, plan.assignment.workspaceRef), status: 'draft' }],
       environments: [environment],
       providerProfiles: [providerProfile],
       receipts: [createProvisionReceipt(plan, { status: 'applied' })],
@@ -109,22 +119,38 @@ describe('Bun static server helpers', () => {
         body: JSON.stringify({ note: '可以交付', reviewer: 'ops@example.com', status: 'approved' }),
         method: 'POST',
       })
-      const approvalPayload = await approvalResponse.json()
+      expect(approvalResponse.status).toBe(403)
 
-      expect(approvalResponse.status).toBe(200)
+      const crossOriginApprovalResponse = await fetch(`http://127.0.0.1:${server.port}/api/approvals/${assignment.assignmentId}`, {
+        body: JSON.stringify({ note: '可以交付', reviewer: 'ops@example.com', status: 'approved' }),
+        headers: { 'origin': 'https://evil.example', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      expect(crossOriginApprovalResponse.status).toBe(403)
+
+      const guardedApprovalResponse = await fetch(`http://127.0.0.1:${server.port}/api/approvals/${assignment.assignmentId}`, {
+        body: JSON.stringify({ note: '可以交付', reviewer: 'ops@example.com', status: 'approved' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const approvalPayload = await guardedApprovalResponse.json()
+
+      expect(guardedApprovalResponse.status).toBe(200)
       expect(approvalPayload.approval.status).toBe('approved')
       expect(approvalPayload.approval.assignmentId).toBe(assignment.assignmentId)
       expect(JSON.stringify(approvalPayload)).not.toContain('offer=')
 
       const fakeCli = path.join(root, 'fake-aiworker-cli')
+      const fakeArgs = path.join(root, 'fake-aiworker-cli.args')
       await writeFile(fakeCli, [
         '#!/bin/sh',
+        `printf '%s\\n' "$*" >> ${fakeArgs}`,
         'case "$1" in',
         '  apply)',
         '    printf \'%s\\n\' \'{"status":"executed","stdout":"Local Daemon      running\\nConnected Daemon  reachable\\nAIWORKER_PROVIDER_WARNING: provider needs login\\nAIWORKER_HANDOFF_READY: run paseo daemon pair --home \\\\\\"$PASEO_HOME\\\\\\"","stderr":""}\'',
         '    ;;',
         '  pair)',
-        '    printf \'%s\\n\' \'{"status":"paired","stdout":"Paseo pairing response\\nhttps://relay.paseo.example/#offer=real-token","stderr":""}\'',
+        '    printf \'%s\\n\' \'{"status":"paired","stdout":"Paseo pairing response\\nhttps://relay.paseo.example/#offer=real-token","stderr":"stderr pairing note"}\'',
         '    ;;',
         '  *)',
         '    exit 64',
@@ -134,7 +160,10 @@ describe('Bun static server helpers', () => {
       await chmod(fakeCli, 0o755)
       process.env.AIWORKER_CLI_BIN = fakeCli
 
-      const applyResponse = await fetch(`http://127.0.0.1:${server.port}/api/assignments/${assignment.assignmentId}/apply`, { method: 'POST' })
+      const applyResponse = await fetch(`http://127.0.0.1:${server.port}/api/assignments/${assignment.assignmentId}/apply`, {
+        headers: { 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
       const applyPayload = await applyResponse.json()
       const applySerialized = JSON.stringify(applyPayload)
 
@@ -144,14 +173,39 @@ describe('Bun static server helpers', () => {
       expect(applySerialized).not.toContain('AIWORKER_HANDOFF_READY')
       expect(applySerialized).not.toContain('Local Daemon')
       expect(applySerialized).not.toContain('offer=')
+      const applyArgs = await readFile(fakeArgs, 'utf8')
+      expect(applyArgs).toContain('--provider-secret-ref secret://providers/codex/default')
+      expect(applyArgs).toContain('--provider-base-url https://provider.example.local')
+      expect(applyArgs).toContain('--provider-model gpt-test')
+      expect(applyArgs).toContain(`--soul ${soul.descriptorRef}`)
+      expect(applyArgs).not.toContain('souls/aiworker-freeform')
 
-      const pairResponse = await fetch(`http://127.0.0.1:${server.port}/api/assignments/${assignment.assignmentId}/pair`, { method: 'POST' })
+      const prematurePairResponse = await fetch(`http://127.0.0.1:${server.port}/api/assignments/${assignment.assignmentId}/pair`, {
+        headers: { 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      expect(prematurePairResponse.status).toBe(409)
+      expect(await prematurePairResponse.text()).toContain('handoff-ready')
+
+      await store.saveSnapshot({
+        ...await store.loadSnapshot(),
+        assignments: [{ ...assignment, handoff: createHandoff(environment, assignment.workspaceRef), status: 'handoff_ready' }],
+      })
+
+      const pairResponse = await fetch(`http://127.0.0.1:${server.port}/api/assignments/${assignment.assignmentId}/pair`, {
+        headers: {
+          'origin': `https://127.0.0.1:${server.port}`,
+          'x-aiworker-admin-action': '1',
+        },
+        method: 'POST',
+      })
       const pairPayload = await pairResponse.json()
       const pairSerialized = JSON.stringify(pairPayload)
 
       expect(pairResponse.status).toBe(200)
       expect(pairPayload.pair.status).toBe('paired')
       expect(pairPayload.pair.pairingOutput).toContain('https://relay.paseo.example/#offer=real-token')
+      expect(pairPayload.pair.pairingOutput).toContain('stderr pairing note')
       expect(pairSerialized).toContain('#offer=real-token')
       expect(pairSerialized).not.toContain('set -euo')
       expect(await readFile(path.join(root, 'approvals.jsonl'), 'utf8')).not.toContain('offer=')

@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from '@/components/ui/field'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { adminMutationHeaders } from '@/lib/admin-api-client'
 import {
   adminConsoleData,
   approvalCheckStatusMeta,
@@ -99,7 +100,10 @@ export function ProvisioningPage() {
 
     setApplyError(null)
     try {
-      const response = await fetch(`/api/assignments/${encodeURIComponent(assignment.id)}/apply`, { method: 'POST' })
+      const response = await fetch(`/api/assignments/${encodeURIComponent(assignment.id)}/apply`, {
+        headers: adminMutationHeaders(),
+        method: 'POST',
+      })
       if (!response.ok)
         throw new Error(`apply job failed: ${response.status}`)
       const payload = await response.json() as { job: { steps: ApplyJobStep[] } }
@@ -120,7 +124,10 @@ export function ProvisioningPage() {
     setPairError(null)
     setPairingAssignmentId(assignment.id)
     try {
-      const response = await fetch(`/api/assignments/${encodeURIComponent(assignment.id)}/pair`, { method: 'POST' })
+      const response = await fetch(`/api/assignments/${encodeURIComponent(assignment.id)}/pair`, {
+        headers: adminMutationHeaders(),
+        method: 'POST',
+      })
       if (!response.ok)
         throw new Error(`pairing request failed: ${response.status}`)
       const payload = await response.json() as { pair: { pairingOutput: string } }

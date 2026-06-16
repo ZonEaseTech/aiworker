@@ -618,6 +618,7 @@ function readSoulReleaseFromOptions(options: Record<string, unknown>) {
   const descriptor = readSoulDescriptor(soulPath)
   const templateRoot = path.resolve(path.dirname(soulPath), '..', descriptor.workspaceTemplate.root)
   return {
+    descriptorRef: path.resolve(soulPath),
     displayName: descriptor.identity.name,
     files: readWorkspaceTemplateFiles(templateRoot),
     id: `${descriptor.identity.id}@${descriptor.identity.version}`,

@@ -85,6 +85,7 @@ export interface SoulRelease {
   id: string
   version: string
   displayName: string
+  descriptorRef?: string
   files: ProjectedFile[]
 }
 

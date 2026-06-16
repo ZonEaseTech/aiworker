@@ -1,6 +1,7 @@
 import type { ControlPlaneSnapshot } from '@zonease/aiworker-control/control-plane'
 import type { AdminConsoleData, ApprovalDecisionRecord, ApprovalStatus } from '@/lib/admin-data'
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { adminMutationHeaders } from '@/lib/admin-api-client'
 import {
   adminConsoleData,
   applyApprovalDecisionRecords,
@@ -36,7 +37,10 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
   async function decideApproval(assignmentId: string, status: ApprovalStatus) {
     const response = await fetch(`/api/approvals/${encodeURIComponent(assignmentId)}`, {
       body: JSON.stringify({ status }),
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        ...adminMutationHeaders(),
+        'content-type': 'application/json',
+      },
       method: 'POST',
     })
     if (!response.ok)
