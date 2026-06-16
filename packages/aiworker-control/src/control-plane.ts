@@ -55,12 +55,13 @@ export interface PaseoEndpointBinding {
 }
 
 export interface ProviderReadinessPolicy {
-  commands: ['paseo provider ls --json', 'paseo provider models <provider> --json']
+  commands: ['paseo provider ls --json']
+  effect: 'non-blocking-warning'
   kind: ProviderReadinessPolicyKind
-  modelListPredicate: 'non-empty array'
+  modelListPolicy: 'not-collected-by-aiworker'
   providerId: string
-  providerListPredicate: 'provider == providerId && status == "available" && enabled == "Enabled"'
-  rawOutputPolicy: 'redacted-pass-fail-only'
+  providerListPredicate: 'warn if provider != providerId || status != "available" || enabled != "Enabled"'
+  rawOutputPolicy: 'redacted-warning-only'
 }
 
 export interface ProviderProfile {

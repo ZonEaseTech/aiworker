@@ -126,13 +126,16 @@ describe('aiworker thin CLI', () => {
     expect(output.workspacePolicy.kind).toBe('home-derived')
     expect(output.endpointBinding.bindingKind).toBe('home-derived-local-daemon')
     expect(output.providerReadiness.kind).toBe('paseo-provider-json-v1')
-    expect(output.providerReadiness.providerListPredicate).toContain('status == "available"')
+    expect(output.providerReadiness.effect).toBe('non-blocking-warning')
+    expect(output.providerReadiness.modelListPolicy).toBe('not-collected-by-aiworker')
+    expect(output.providerReadiness.providerListPredicate).toContain('warn if provider')
     expect(output.command).toContain('aissh exec server-1')
     expect(output.command).toContain('base64 -d')
     expect(output.command).toContain('unset PASEO_HOST')
     expect(output.command).toContain('PASEO_HOME="$AIWORKER_REMOTE_HOME/.paseo"')
     expect(output.command).toContain('paseo provider ls --json')
-    expect(output.command).toContain('paseo provider models')
+    expect(output.command).not.toContain('paseo provider models')
+    expect(output.command).toContain('AIWORKER_PROVIDER_WARNING')
     expect(output.command).not.toContain('/home/alice/workspaces')
     expect(output.command).not.toContain('PASEO_HOME=/home/alice/.paseo')
     expect(output.aissh.cwdPolicy).toBe('neutral-tempdir')
@@ -407,13 +410,14 @@ describe('aiworker thin CLI', () => {
     const descriptorPath = await createDescriptor('internal business context\n')
     const root = await mkdtemp(path.join(tmpdir(), 'aiworker-echoing-aissh-'))
     const fakeAissh = path.join(root, 'aissh')
-    await writeFile(fakeAissh, '#!/bin/sh\necho "stdout sk-testsecret123456"\necho "https://relay.paseo.example/#offer=real-token"\necho "{\\"provider\\":\\"claude\\",\\"status\\":\\"available\\"}"\necho "[\\"gpt-5\\",\\"claude-opus\\"]"\necho "████████"\necho "argv $*"\necho "stderr sk-testsecret123456" >&2\necho "{\\"model\\":\\"claude-opus\\",\\"thinkingOptionIds\\":[\\"high\\"]}" >&2\necho "argv $*" >&2\n')
+    await writeFile(fakeAissh, '#!/bin/sh\necho "stdout sk-testsecret123456"\necho "https://relay.paseo.example/#offer=real-token"\necho "{\\"provider\\":\\"claude\\",\\"status\\":\\"available\\"}"\necho "[\\"gpt-5\\",\\"claude-opus\\"]"\necho "████████"\necho "AIWORKER_HANDOFF_READY: run paseo daemon pair --home \\"$PASEO_HOME\\" from \\"$AIWORKER_WORKSPACE_REF\\" and open the printed link in the Paseo frontend."\necho "argv $*"\necho "stderr sk-testsecret123456" >&2\necho "{\\"model\\":\\"claude-opus\\",\\"thinkingOptionIds\\":[\\"high\\"]}" >&2\necho "argv $*" >&2\n')
     await chmod(fakeAissh, 0o755)
 
     const output = await $`bun ${cliPath} apply ${planArgs(descriptorPath)} --yes --aissh-bin ${fakeAissh}`.text()
 
     expect(output).toContain('AIWorker provisioning executed')
     expect(output).toContain('Handoff: AIWorker derives PASEO_HOME')
+    expect(output).toContain('AIWORKER_HANDOFF_READY')
     expect(output).toContain('[REDACTED]')
     expect(output).toContain('[omitted: output echoed the generated provisioning command]')
     expect(output).not.toContain('sk-testsecret123456')
@@ -505,13 +509,13 @@ describe('aiworker thin CLI', () => {
               output: [
                 'AIWorker target identity discovered: user=root uid=0 home=/root pwd=/root',
                 '{\"provider\":\"codex\",\"status\":\"available\",\"modes\":[\"auto\"]}',
-                'Paseo provider readiness failed at model-list stage for codex. Run provider install/login under this aissh user, then retry.',
+                'AIWORKER_PROVIDER_WARNING: Paseo provider codex is not available/enabled for this aissh user; workspace projection will continue.',
               ].join('\n'),
             }),
           })
         },
       },
-    })).rejects.toThrow('Paseo provider readiness failed at model-list stage')
+    })).rejects.toThrow('AIWORKER_PROVIDER_WARNING')
 
     try {
       await executeProvisionPlan(plan, {
@@ -525,7 +529,7 @@ describe('aiworker thin CLI', () => {
                 output: [
                   'AIWorker target identity discovered: user=root uid=0 home=/root pwd=/root',
                   '{\"provider\":\"codex\",\"status\":\"available\",\"modes\":[\"auto\"]}',
-                  'Paseo provider readiness failed at model-list stage for codex. Run provider install/login under this aissh user, then retry.',
+                  'AIWORKER_PROVIDER_WARNING: Paseo provider codex is not available/enabled for this aissh user; workspace projection will continue.',
                 ].join('\n'),
               }),
             })
@@ -535,7 +539,7 @@ describe('aiworker thin CLI', () => {
     }
     catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      expect(message).toContain('Paseo provider readiness failed at model-list stage')
+      expect(message).toContain('AIWORKER_PROVIDER_WARNING')
       expect(message).toContain('[omitted: raw Paseo provider payload]')
       expect(message).not.toContain('"provider":"codex"')
       expect(message).not.toContain('"modes"')

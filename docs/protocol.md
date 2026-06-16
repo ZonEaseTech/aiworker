@@ -30,9 +30,10 @@ EndpointBinding
 ProviderReadinessPolicy
   kind=paseo-provider-json-v1
   providerId
-  providerListPredicate=provider == providerId && status == "available" && enabled == "Enabled"
-  modelListPredicate=non-empty array
-  rawOutputPolicy=redacted-pass-fail-only
+  effect=non-blocking-warning
+  providerListPredicate=warn if provider != providerId || status != "available" || enabled != "Enabled"
+  modelListPolicy=not-collected-by-aiworker
+  rawOutputPolicy=redacted-warning-only
 
 ProviderProfile
   id
@@ -85,4 +86,4 @@ AIWorker may store the redacted handoff reference and HOME-derived workspace int
 
 ## Secret boundary
 
-AIWorker records secret references only. It must not write provider API keys into descriptors, assignment receipts, logs, diagnostics, OpenAPI examples, UI, or projected workspace files. Paseo/provider CLIs own provider authentication. Provider readiness checks use the `paseo-provider-json-v1` contract: `paseo provider ls --json` returns an array containing the selected provider with `status: "available"` and `enabled: "Enabled"`, and `paseo provider models <provider> --json` returns a non-empty array. Raw provider JSON, model lists, stderr, transcripts, pairing URLs, and QR codes must not be stored or shown.
+AIWorker records secret references only. It must not write provider API keys into descriptors, assignment receipts, logs, diagnostics, OpenAPI examples, UI, or projected workspace files. Paseo/provider CLIs own provider authentication. Provider readiness checks use the `paseo-provider-json-v1` contract as warning-only metadata: `paseo provider ls --json` may report whether the selected provider is available/enabled, but provider absence or login gaps do not block workspace projection. AIWorker does not call `paseo provider models` as a provisioning gate. Raw provider JSON, model lists, stderr, transcripts, pairing URLs, and QR codes must not be stored or shown.

@@ -101,11 +101,13 @@ describe('Paseo thin-layer aiworker-control contract', () => {
     expect(plan.aissh.script).toContain('(command -v paseo >/dev/null || npm install -g @getpaseo/cli)')
     expect(plan.aissh.script).toContain('command -v claude')
     expect(plan.aissh.script).toContain('Missing provider CLI: claude')
+    expect(plan.aissh.script).toContain('Workspace projection will continue')
     expect(plan.aissh.script).toContain('AIWORKER_PASEO_STATUS="$(paseo daemon status --home "$PASEO_HOME" 2>&1 || true)"')
     expect(plan.aissh.script).toContain('grep -Eq \'Local Daemon[[:space:]]+running|Connected Daemon[[:space:]]+reachable\' || paseo daemon start --home "$PASEO_HOME"')
     expect(plan.aissh.script).toContain('Paseo daemon readiness failed after start')
     expect(plan.aissh.script).toContain('paseo provider ls --json >"$AIWORKER_PROVIDER_LS_JSON"')
-    expect(plan.aissh.script).toContain('paseo provider models "$AIWORKER_PASEO_PROVIDER_ID" --json >"$AIWORKER_PROVIDER_MODELS_JSON"')
+    expect(plan.aissh.script).toContain('AIWORKER_PROVIDER_WARNING')
+    expect(plan.aissh.script).not.toContain('paseo provider models')
     expect(plan.aissh.script).toContain('AIWORKER_HANDOFF_READY: run paseo daemon pair --home')
     expect(plan.aissh.script).not.toContain('&& paseo daemon pair')
     expect(plan.aissh.script).not.toContain('--host')
@@ -127,12 +129,13 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       ref: 'unix:/run/paseo/alice.sock',
     })
     expect(plan.providerReadiness).toEqual({
-      commands: ['paseo provider ls --json', 'paseo provider models <provider> --json'],
+      commands: ['paseo provider ls --json'],
+      effect: 'non-blocking-warning',
       kind: 'paseo-provider-json-v1',
-      modelListPredicate: 'non-empty array',
+      modelListPolicy: 'not-collected-by-aiworker',
       providerId: 'claude',
-      providerListPredicate: 'provider == providerId && status == "available" && enabled == "Enabled"',
-      rawOutputPolicy: 'redacted-pass-fail-only',
+      providerListPredicate: 'warn if provider != providerId || status != "available" || enabled != "Enabled"',
+      rawOutputPolicy: 'redacted-warning-only',
     })
     expect(plan.receipt.workspacePathPolicy).toBe('home-derived')
     expect(plan.receipt.endpointBinding).toBe('external-endpoint')

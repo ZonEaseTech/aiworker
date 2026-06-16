@@ -767,6 +767,9 @@ function generatedProvisioningNeedles(plan: ProvisionPlan): string[] {
 }
 
 function isGeneratedProvisioningEcho(line: string, unsafeNeedles: string[]): boolean {
+  if (line.trimStart().startsWith('AIWORKER_HANDOFF_READY'))
+    return false
+
   return line.includes('base64 -d')
     || line.includes('printf \'%s\'')
     || line.includes('set -euo pipefail')
@@ -780,7 +783,8 @@ function isGeneratedProvisioningEcho(line: string, unsafeNeedles: string[]): boo
     || line.includes('paseo daemon pair')
     || line.includes('paseo provider ls')
     || line.includes('paseo provider models')
-    || line.includes('AIWORKER_PROVIDER_')
+    || line.includes('AIWORKER_PROVIDER_LS_JSON')
+    || line.includes('AIWORKER_PASEO_PROVIDER_ID=')
     || line.includes('AIWORKER_PASEO_STATUS')
     || line.includes('.aiworker-projection')
     || unsafeNeedles.some(needle => line.includes(needle))

@@ -493,12 +493,13 @@ function handoffWorkspacePath(workspaceRef: string): string {
 
 function createProviderReadinessPolicy(profile: ProviderProfile): ProviderReadinessPolicy {
   return {
-    commands: ['paseo provider ls --json', 'paseo provider models <provider> --json'],
+    commands: ['paseo provider ls --json'],
+    effect: 'non-blocking-warning',
     kind: PASEO_PROVIDER_READINESS_POLICY_KIND,
-    modelListPredicate: 'non-empty array',
+    modelListPolicy: 'not-collected-by-aiworker',
     providerId: profile.paseoProviderId ?? profile.provider,
-    providerListPredicate: 'provider == providerId && status == "available" && enabled == "Enabled"',
-    rawOutputPolicy: 'redacted-pass-fail-only',
+    providerListPredicate: 'warn if provider != providerId || status != "available" || enabled != "Enabled"',
+    rawOutputPolicy: 'redacted-warning-only',
   }
 }
 
@@ -540,7 +541,7 @@ function remoteIdentityPreludeCommands(workspaceName: string): string[] {
 
 function providerCliBinaryCheckCommand(profile: ProviderProfile): string {
   if (profile.cliCommand)
-    return `command -v ${shellQuote(profile.cliCommand)} >/dev/null || { printf '%s\\n' ${shellQuote(`Missing provider CLI: ${profile.cliCommand}. Install/authenticate it before using this workspace in Paseo.`)} >&2; exit 127; }`
+    return `command -v ${shellQuote(profile.cliCommand)} >/dev/null || printf '%s\\n' ${shellQuote(`AIWORKER_PROVIDER_WARNING: Missing provider CLI: ${profile.cliCommand}. Workspace projection will continue; install/authenticate it before using this workspace in Paseo.`)}`
 
   const commandByProvider: Record<string, string> = {
     claude: 'claude',
@@ -552,22 +553,17 @@ function providerCliBinaryCheckCommand(profile: ProviderProfile): string {
     return `printf '%s\\n' ${shellQuote(`AIWorker will use Paseo provider profile ${profile.paseoProviderId ?? profile.id} for ${profile.provider}.`)}`
   if (!command)
     throw new Error(`provider ${profile.provider} must declare cliCommand or paseoProviderId`)
-  return `command -v ${shellQuote(command)} >/dev/null || { printf '%s\\n' ${shellQuote(`Missing provider CLI: ${command}. Install/authenticate it before using this workspace in Paseo.`)} >&2; exit 127; }`
+  return `command -v ${shellQuote(command)} >/dev/null || printf '%s\\n' ${shellQuote(`AIWORKER_PROVIDER_WARNING: Missing provider CLI: ${command}. Workspace projection will continue; install/authenticate it before using this workspace in Paseo.`)}`
 }
 
 function providerReadinessCommands(profile: ProviderProfile): string[] {
   const providerId = profile.paseoProviderId ?? profile.provider
-  const providerLsCheck = 'const fs=require("node:fs");const providerId=process.argv[1];const file=process.argv[2];let parsed;try{parsed=JSON.parse(fs.readFileSync(file,"utf8"))}catch{process.exit(2)}const providers=Array.isArray(parsed)?parsed:[];const provider=providers.find(item=>item&&item.provider===providerId);if(!provider||provider.status!=="available"||provider.enabled!=="Enabled")process.exit(1)'
-  const providerModelsCheck = 'const fs=require("node:fs");const file=process.argv[2];let parsed;try{parsed=JSON.parse(fs.readFileSync(file,"utf8"))}catch{process.exit(2)}if(!Array.isArray(parsed)||parsed.length===0)process.exit(1)'
+  const providerLsCheck = 'const fs=require("node:fs");const providerId=process.argv[1];const file=process.argv[2];let parsed;try{parsed=JSON.parse(fs.readFileSync(file,"utf8"))}catch{console.log("AIWORKER_PROVIDER_WARNING: Paseo provider list output was not readable for "+providerId+"; workspace projection will continue.");process.exit(0)}const providers=Array.isArray(parsed)?parsed:[];const provider=providers.find(item=>item&&item.provider===providerId);if(!provider||provider.status!=="available"||provider.enabled!=="Enabled"){console.log("AIWORKER_PROVIDER_WARNING: Paseo provider "+providerId+" is not available/enabled for this aissh user; workspace projection will continue, complete provider install/login in Paseo before use.")}'
   return [
     `AIWORKER_PASEO_PROVIDER_ID=${shellQuote(providerId)}`,
     'AIWORKER_PROVIDER_LS_JSON="$(mktemp)"',
-    'AIWORKER_PROVIDER_MODELS_JSON="$(mktemp)"',
-    'trap \'rm -f "$AIWORKER_PROVIDER_LS_JSON" "$AIWORKER_PROVIDER_MODELS_JSON"\' EXIT',
-    'paseo provider ls --json >"$AIWORKER_PROVIDER_LS_JSON" 2>/dev/null || { printf \'%s\\n\' "Paseo provider readiness failed at provider-list stage for $AIWORKER_PASEO_PROVIDER_ID. Run provider install/login under this aissh user, then retry." >&2; exit 127; }',
-    `node -e ${shellQuote(providerLsCheck)} "$AIWORKER_PASEO_PROVIDER_ID" "$AIWORKER_PROVIDER_LS_JSON" 2>/dev/null || { printf '%s\\n' "Paseo provider readiness failed at provider-available stage for $AIWORKER_PASEO_PROVIDER_ID. Run provider install/login under this aissh user, then retry." >&2; exit 127; }`,
-    'paseo provider models "$AIWORKER_PASEO_PROVIDER_ID" --json >"$AIWORKER_PROVIDER_MODELS_JSON" 2>/dev/null || { printf \'%s\\n\' "Paseo provider readiness failed at model-list stage for $AIWORKER_PASEO_PROVIDER_ID. Run provider install/login under this aissh user, then retry." >&2; exit 127; }',
-    `node -e ${shellQuote(providerModelsCheck)} "$AIWORKER_PASEO_PROVIDER_ID" "$AIWORKER_PROVIDER_MODELS_JSON" 2>/dev/null || { printf '%s\\n' "Paseo provider readiness failed at models-available stage for $AIWORKER_PASEO_PROVIDER_ID. Run provider install/login under this aissh user, then retry." >&2; exit 127; }`,
+    'trap \'rm -f "$AIWORKER_PROVIDER_LS_JSON"\' EXIT',
+    `if paseo provider ls --json >"$AIWORKER_PROVIDER_LS_JSON" 2>/dev/null; then node -e ${shellQuote(providerLsCheck)} "$AIWORKER_PASEO_PROVIDER_ID" "$AIWORKER_PROVIDER_LS_JSON"; else printf '%s\\n' "AIWORKER_PROVIDER_WARNING: Paseo provider list failed for $AIWORKER_PASEO_PROVIDER_ID; workspace projection will continue, complete provider install/login in Paseo before use."; fi`,
   ]
 }
 

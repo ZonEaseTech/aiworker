@@ -54,7 +54,7 @@ PASEO_HOME = "$HOME/.paseo"
 workspace = "$HOME/aiworker-workspaces/<safe-name>"
 ```
 
-Before any `paseo daemon` or `paseo provider` command, scripts unset inherited `PASEO_HOST` so readiness checks cannot be redirected to another daemon. Provider readiness is checked under the same identity with the `paseo-provider-json-v1` contract: `paseo provider ls --json` must return an array where the selected provider has `status: "available"` and `enabled: "Enabled"`, then `paseo provider models <provider> --json` must return a non-empty array. AIWorker records only the policy name plus pass/fail/remediation summary, not raw provider JSON, model lists, provider stderr, transcripts, pairing URLs, or QR codes.
+Before any `paseo daemon` or `paseo provider` command, scripts unset inherited `PASEO_HOST` so readiness checks cannot be redirected to another daemon. Provider readiness is checked under the same identity with the `paseo-provider-json-v1` contract: `paseo provider ls --json` is a warning-only diagnostic. If the selected provider is missing, disabled, or unreadable, AIWorker continues workspace projection and records remediation guidance. AIWorker does not call `paseo provider models` as a provisioning gate and must not store raw provider JSON, model lists, provider stderr, transcripts, pairing URLs, or QR codes.
 
 The default provisioning script does not execute `paseo daemon pair`, because that command prints real pairing material. Handoff is instruction-only: after provisioning, the operator/employee runs `paseo daemon pair --home "$PASEO_HOME"` from the prepared workspace and opens the printed link in Paseo.
 
