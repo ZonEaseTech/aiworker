@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { $ } from 'bun'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, executeProvisionPlan, resolveAisshInvocation } from './aiworker'
+import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, executeProvisionPlan, resolveAisshCredentials, resolveAisshInvocation } from './aiworker'
 
 const cliPath = path.resolve(import.meta.dirname, 'aiworker.ts')
 const savedAisshBin = process.env.AISSH_BIN
+const savedAisshToken = process.env.AISSH_TOKEN
 const savedCwd = process.cwd()
 
 afterEach(() => {
@@ -15,6 +16,10 @@ afterEach(() => {
     delete process.env.AISSH_BIN
   else
     process.env.AISSH_BIN = savedAisshBin
+  if (savedAisshToken === undefined)
+    delete process.env.AISSH_TOKEN
+  else
+    process.env.AISSH_TOKEN = savedAisshToken
   process.chdir(savedCwd)
 })
 
@@ -239,6 +244,28 @@ describe('aiworker thin CLI', () => {
     expect(output.checks.map((check: { name: string }) => check.name)).toContain('soul-descriptor')
   })
 
+  test('doctor accepts a local .aissh.yaml token without exposing it', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-aissh-yaml-'))
+    const token = 'test-aissh-token-from-yaml-123456789'
+    await writeFile(path.join(root, '.aissh.yaml'), `token: ${token}\n`)
+    const env = { ...process.env }
+    delete env.AISSH_TOKEN
+
+    const result = Bun.spawnSync([process.execPath, cliPath, 'doctor', '--json'], {
+      cwd: root,
+      env,
+      stderr: 'pipe',
+      stdout: 'pipe',
+    })
+    const output = JSON.parse(result.stdout.toString())
+    const tokenCheck = output.checks.find((check: { name: string }) => check.name === 'aissh-token')
+
+    expect(result.exitCode).toBe(0)
+    expect(tokenCheck.status).toBe('pass')
+    expect(tokenCheck.message).toContain('.aissh.yaml token is available')
+    expect(result.stdout.toString()).not.toContain(token)
+  })
+
   test('doctor redacts secret-like configured executable values in human and JSON output', async () => {
     const jsonResult = Bun.spawnSync([process.execPath, cliPath, 'doctor', '--aissh-bin', 'sk-testsecret123456', '--json'], {
       stderr: 'pipe',
@@ -309,10 +336,20 @@ describe('aiworker thin CLI', () => {
     expect(invocation.prefix[0]).not.toContain(hostileRoot)
   })
 
+  test('resolveAisshCredentials loads .aissh.yaml token for neutral-cwd aissh execution', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-aissh-credentials-'))
+    const token = 'test-aissh-yaml-token-987654321'
+    await writeFile(path.join(root, '.aissh.yaml'), `token: '${token}'\n`)
+
+    expect(resolveAisshCredentials(root, {}).source).toBe('aissh-yaml')
+    expect(resolveAisshCredentials(root, {}).env.AISSH_TOKEN).toBe(token)
+    expect(resolveAisshCredentials(root, { AISSH_TOKEN: 'env-token' }).env.AISSH_TOKEN).toBe('env-token')
+  })
+
   test('executeProvisionPlan uses mock executor, fresh neutral cwd, cleanup, and redacts output', async () => {
     const descriptorPath = await createDescriptor()
     const plan = await $`bun ${cliPath} plan ${planArgs(descriptorPath)} --json`.json()
-    const calls: { args: string[], file: string, options: { cwd: string, maxBuffer: number } }[] = []
+    const calls: { args: string[], file: string, options: { cwd: string, env: NodeJS.ProcessEnv, maxBuffer: number } }[] = []
     const cwdExistsDuringExecution: boolean[] = []
     const result = await executeProvisionPlan(plan, {
       aisshBin: '/mock/aissh',
@@ -337,6 +374,33 @@ describe('aiworker thin CLI', () => {
     expect(result.stdout).toBe('ok [REDACTED]')
     expect(result.stderr).toBe('warn [REDACTED]')
     expect(result.aissh.cwd).toBe(call.options.cwd)
+  })
+
+  test('executeProvisionPlan passes .aissh.yaml token through env while using a neutral cwd', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-aissh-exec-token-'))
+    const token = 'test-aissh-token-from-local-yaml-987654321'
+    await writeFile(path.join(root, '.aissh.yaml'), `token: \"${token}\"\n`)
+    process.chdir(root)
+    delete process.env.AISSH_TOKEN
+    const descriptorPath = await createDescriptor()
+    const plan = await $`bun ${cliPath} plan ${planArgs(descriptorPath)} --json`.json()
+    const calls: { args: string[], file: string, options: { cwd: string, env: NodeJS.ProcessEnv, maxBuffer: number } }[] = []
+
+    await executeProvisionPlan(plan, {
+      aisshBin: '/mock/aissh',
+      executor: {
+        async execFile(file, args, options) {
+          calls.push({ args, file, options })
+          return { stderr: '', stdout: 'ok' }
+        },
+      },
+    })
+
+    const call = calls[0]!
+    expect(call.options.cwd).toStartWith(AISSH_EXEC_CWD_PREFIX)
+    expect(call.options.cwd).not.toBe(root)
+    expect(call.options.env.AISSH_TOKEN).toBe(token)
+    expect(call.args.join(' ')).not.toContain(token)
   })
 
   test('successful apply output omits generated script echoed by aissh wrappers', async () => {
@@ -423,6 +487,58 @@ describe('aiworker thin CLI', () => {
       const message = error instanceof Error ? error.message : String(error)
       expect(message).toContain('[REDACTED]')
       expect(message).not.toContain('sk-testsecret123456')
+    }
+  })
+
+  test('executeProvisionPlan preserves safe aissh envelope diagnostics while omitting raw provider payloads', async () => {
+    const descriptorPath = await createDescriptor()
+    const plan = await $`bun ${cliPath} plan ${planArgs(descriptorPath)} --json`.json()
+
+    await expect(executeProvisionPlan(plan, {
+      aisshBin: '/mock/aissh',
+      executor: {
+        async execFile() {
+          throw Object.assign(new Error('remote failed'), {
+            stdout: JSON.stringify({
+              error: '',
+              exit_code: 1,
+              output: [
+                'AIWorker target identity discovered: user=root uid=0 home=/root pwd=/root',
+                '{\"provider\":\"codex\",\"status\":\"available\",\"modes\":[\"auto\"]}',
+                'Paseo provider readiness failed at model-list stage for codex. Run provider install/login under this aissh user, then retry.',
+              ].join('\n'),
+            }),
+          })
+        },
+      },
+    })).rejects.toThrow('Paseo provider readiness failed at model-list stage')
+
+    try {
+      await executeProvisionPlan(plan, {
+        aisshBin: '/mock/aissh',
+        executor: {
+          async execFile() {
+            throw Object.assign(new Error('remote failed'), {
+              stdout: JSON.stringify({
+                error: '',
+                exit_code: 1,
+                output: [
+                  'AIWorker target identity discovered: user=root uid=0 home=/root pwd=/root',
+                  '{\"provider\":\"codex\",\"status\":\"available\",\"modes\":[\"auto\"]}',
+                  'Paseo provider readiness failed at model-list stage for codex. Run provider install/login under this aissh user, then retry.',
+                ].join('\n'),
+              }),
+            })
+          },
+        },
+      })
+    }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('Paseo provider readiness failed at model-list stage')
+      expect(message).toContain('[omitted: raw Paseo provider payload]')
+      expect(message).not.toContain('"provider":"codex"')
+      expect(message).not.toContain('"modes"')
     }
   })
 

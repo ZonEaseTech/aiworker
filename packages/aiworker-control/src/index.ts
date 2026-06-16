@@ -140,8 +140,7 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
     ...remoteIdentityPreludeCommands(workspaceName),
     '(command -v paseo >/dev/null || npm install -g @getpaseo/cli)',
     `(${providerCliBinaryCheckCommand(input.providerProfile)})`,
-    '(paseo daemon status --home "$PASEO_HOME" || true)',
-    '(paseo daemon status --home "$PASEO_HOME" >/dev/null 2>&1 || paseo daemon start --home "$PASEO_HOME")',
+    ...paseoDaemonReadinessCommands(),
     ...providerReadinessCommands(input.providerProfile),
     'mkdir -p "$AIWORKER_WORKSPACE_REF"',
     'cd "$AIWORKER_WORKSPACE_REF"',
@@ -196,6 +195,17 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
     },
     workspacePolicy,
   }
+}
+
+function paseoDaemonReadinessCommands(): string[] {
+  const runningPattern = 'Local Daemon[[:space:]]+running|Connected Daemon[[:space:]]+reachable'
+  return [
+    'AIWORKER_PASEO_STATUS="$(paseo daemon status --home "$PASEO_HOME" 2>&1 || true)"',
+    'printf \'%s\\n\' "$AIWORKER_PASEO_STATUS"',
+    `printf '%s\\n' "$AIWORKER_PASEO_STATUS" | grep -Eq ${shellQuote(runningPattern)} || paseo daemon start --home "$PASEO_HOME"`,
+    'AIWORKER_PASEO_STATUS="$(paseo daemon status --home "$PASEO_HOME" 2>&1 || true)"',
+    `printf '%s\\n' "$AIWORKER_PASEO_STATUS" | grep -Eq ${shellQuote(runningPattern)} || { printf '%s\\n' "Paseo daemon readiness failed after start for $PASEO_HOME. Run paseo daemon status/start under this aissh user, then retry." >&2; exit 127; }`,
+  ]
 }
 
 export function createEmptyControlPlaneSnapshot(): ControlPlaneSnapshot {

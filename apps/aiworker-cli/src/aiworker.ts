@@ -26,7 +26,7 @@ interface AisshInvocation {
 }
 
 export interface AisshExecutor {
-  execFile: (file: string, args: string[], options: { cwd: string, maxBuffer: number }) => Promise<{ stderr?: string, stdout: string }>
+  execFile: (file: string, args: string[], options: { cwd: string, env: NodeJS.ProcessEnv, maxBuffer: number }) => Promise<{ stderr?: string, stdout: string }>
 }
 
 interface ProvisionExecutionOptions {
@@ -52,6 +52,11 @@ interface DoctorCheck {
 interface DoctorReport {
   checks: DoctorCheck[]
   status: DoctorStatus
+}
+
+interface AisshCredentialResolution {
+  env: NodeJS.ProcessEnv
+  source: 'aissh-yaml' | 'env' | 'missing'
 }
 
 function printJson(value: unknown): void {
@@ -394,9 +399,12 @@ function checkAisshResolution(aisshBin?: string): DoctorCheck {
 }
 
 function checkAisshToken(): DoctorCheck {
-  return process.env.AISSH_TOKEN
-    ? { message: 'AISSH_TOKEN is set (value hidden)', name: 'aissh-token', status: 'pass' }
-    : { message: 'AISSH_TOKEN is not set; plan works, apply needs aissh credentials', name: 'aissh-token', status: 'warn' }
+  const credentials = resolveAisshCredentials(process.cwd(), process.env)
+  if (credentials.source === 'env')
+    return { message: 'AISSH_TOKEN is set (value hidden)', name: 'aissh-token', status: 'pass' }
+  if (credentials.source === 'aissh-yaml')
+    return { message: '.aissh.yaml token is available (value hidden); apply will pass it through AISSH_TOKEN from a neutral cwd', name: 'aissh-token', status: 'pass' }
+  return { message: 'AISSH_TOKEN is not set and .aissh.yaml token was not found; plan works, apply needs aissh credentials', name: 'aissh-token', status: 'warn' }
 }
 
 function checkRedaction(): DoctorCheck {
@@ -528,10 +536,12 @@ export async function executeProvisionPlan(plan: ProvisionPlan, options: Provisi
   const invocation = resolveAisshInvocation(options.aisshBin)
   const args = [...invocation.prefix, ...plan.aissh.args]
   const executor = options.executor ?? createDefaultAisshExecutor()
+  const credentials = resolveAisshCredentials(process.cwd(), process.env)
   const execCwd = await createNeutralAisshCwd()
   try {
     const result = await executor.execFile(invocation.file, args, {
       cwd: execCwd,
+      env: credentials.env,
       maxBuffer: options.maxBuffer ?? 1024 * 1024 * 8,
     })
     return {
@@ -572,6 +582,42 @@ export function resolveBundledAisshLauncher(baseDir: string = import.meta.dirnam
       return candidate
   }
   return null
+}
+
+export function resolveAisshCredentials(baseDir: string = process.cwd(), env: NodeJS.ProcessEnv = process.env): AisshCredentialResolution {
+  if (env.AISSH_TOKEN)
+    return { env, source: 'env' }
+
+  const token = readAisshYamlToken(baseDir)
+  if (!token)
+    return { env, source: 'missing' }
+
+  return {
+    env: {
+      ...env,
+      AISSH_TOKEN: token,
+    },
+    source: 'aissh-yaml',
+  }
+}
+
+function readAisshYamlToken(baseDir: string): string | null {
+  const configPath = path.resolve(baseDir, '.aissh.yaml')
+  if (!existsSync(configPath))
+    return null
+
+  try {
+    return parseAisshYamlToken(readFileSync(configPath, 'utf8'))
+  }
+  catch {
+    return null
+  }
+}
+
+function parseAisshYamlToken(value: string): string | null {
+  const match = value.match(/^\s*token\s*:\s*(?:"([^"\n#]+)"|'([^'\n#]+)'|([^#\n]+))/im)
+  const token = (match?.[1] ?? match?.[2] ?? match?.[3] ?? '').trim()
+  return token === '' ? null : token
 }
 
 function packageAnchorDirs(baseDir: string): string[] {
@@ -628,7 +674,22 @@ function formatErrorStream(value: string, plan: ProvisionPlan): string {
 }
 
 function sanitizeAisshStream(value: string, plan: ProvisionPlan): string {
-  return scrubGeneratedProvisioningEcho(redactSensitiveAisshOutput(redactSecretLike(value.trim())), plan)
+  return scrubGeneratedProvisioningEcho(redactSensitiveAisshOutput(redactSecretLike(unwrapAisshExecutionEnvelope(value.trim()))), plan)
+}
+
+function unwrapAisshExecutionEnvelope(value: string): string {
+  try {
+    const parsed = JSON.parse(value) as { error?: unknown, exit_code?: unknown, message?: unknown, output?: unknown }
+    const output = typeof parsed.output === 'string' ? parsed.output.trim() : ''
+    const message = typeof parsed.message === 'string' && parsed.message.trim() !== '' ? `aissh message: ${parsed.message.trim()}` : ''
+    const error = typeof parsed.error === 'string' && parsed.error.trim() !== '' ? `aissh error: ${parsed.error.trim()}` : ''
+    const exitCode = typeof parsed.exit_code === 'number' ? `aissh exit_code: ${parsed.exit_code}` : ''
+    const unwrapped = [output, message, error, exitCode].filter(Boolean).join('\n')
+    return unwrapped || value
+  }
+  catch {
+    return value
+  }
 }
 
 function redactSensitiveAisshOutput(value: string): string {
@@ -720,6 +781,7 @@ function isGeneratedProvisioningEcho(line: string, unsafeNeedles: string[]): boo
     || line.includes('paseo provider ls')
     || line.includes('paseo provider models')
     || line.includes('AIWORKER_PROVIDER_')
+    || line.includes('AIWORKER_PASEO_STATUS')
     || line.includes('.aiworker-projection')
     || unsafeNeedles.some(needle => line.includes(needle))
 }
