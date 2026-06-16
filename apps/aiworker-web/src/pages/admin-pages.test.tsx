@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 
+import { AssignmentDetailContent } from '@/components/assignment-detail-sheet'
 import { AssignmentTableCard } from '@/components/assignments/assignment-table-card'
 import { AuditCard } from '@/components/audit/audit-card'
 import { BoundaryAlert } from '@/components/boundary-alert'
@@ -10,7 +11,12 @@ import { AssignmentsPage } from './assignments-page'
 import { AuditPage } from './audit-page'
 import { DashboardPage } from './dashboard-page'
 import { EnvironmentsPage } from './environments-page'
-import { ProvisioningPage } from './provisioning-page'
+import {
+  ProvisioningPage,
+  resolveAssignmentIdentityForTuple,
+  resolveAssignmentSelectionState,
+  resolvePreviewApprovalStatus,
+} from './provisioning-page'
 import { SoulsPage } from './souls-page'
 
 describe('admin console page composition', () => {
@@ -29,7 +35,81 @@ describe('admin console page composition', () => {
       expect(markup, name).toContain(heading)
     }
 
-    expect(renderToStaticMarkup(<DashboardPage />)).toContain('AIWorker 分发控制台')
+    const dashboard = renderToStaticMarkup(<DashboardPage />)
+    expect(dashboard).toContain('AIWorker 分发控制台')
+    expect(dashboard).toContain('待审批')
+
+    const provisioning = renderToStaticMarkup(<ProvisioningPage />)
+    expect(provisioning).toContain('Approval gate')
+    expect(provisioning).toContain('Assignment identity')
+    expect(provisioning).toContain('Preview trace timeline')
+    expect(provisioning).toContain('assignment snapshot')
+    expect(provisioning).toContain('不是持久化 control ledger')
+    expect(provisioning).toContain('Control API not implemented')
+    expect(provisioning).toContain('预览批准')
+    expect(provisioning).toContain('预览退回修改')
+    expect(provisioning).toContain('不会持久化')
+    expect(provisioning).toContain('aiworker plan')
+    expect(provisioning).not.toContain('apply --yes')
+
+    const audit = renderToStaticMarkup(<AuditPage />)
+    expect(audit).toContain('Trace events:')
+    expect(audit).toContain('receipt')
+  })
+
+  test('provisioning approval controls stay preview-only and redacted', () => {
+    const markup = renderToStaticMarkup(<ProvisioningPage />)
+
+    expect(markup).toContain('只更新本页预览状态')
+    expect(markup).toContain('不会触发 aissh 或 Paseo')
+    expect(markup).not.toContain('/api/sessions/')
+    expect(markup).not.toContain('engine_invocation')
+    expect(markup).not.toContain('offer=')
+    expect(markup).not.toContain('sk-')
+  })
+
+  test('approval preview decisions are scoped by assignment id', () => {
+    expect(resolvePreviewApprovalStatus('asn-1', { 'asn-1': 'approved', 'asn-2': 'changes_requested' }, 'pending')).toBe('approved')
+    expect(resolvePreviewApprovalStatus('asn-2', { 'asn-1': 'approved', 'asn-2': 'changes_requested' }, 'pending')).toBe('changes_requested')
+    expect(resolvePreviewApprovalStatus('asn-3', { 'asn-1': 'approved', 'asn-2': 'changes_requested' }, 'pending')).toBe('pending')
+  })
+
+  test('assignment identity selection is the source of truth for provisioning tuple selectors', () => {
+    for (const assignment of adminConsoleData.assignments) {
+      expect(resolveAssignmentSelectionState(assignment.id)).toEqual({
+        assignmentId: assignment.id,
+        environmentId: assignment.environmentId,
+        providerProfileId: assignment.providerProfileId,
+        soulReleaseId: assignment.soulReleaseId,
+      })
+    }
+
+    const aliceAssignment = adminConsoleData.assignments.find(assignment => assignment.id === 'asn-alice-freeform')!
+
+    expect(resolveAssignmentSelectionState('missing-assignment')).toBeUndefined()
+    expect(resolveAssignmentIdentityForTuple(
+      aliceAssignment.environmentId,
+      aliceAssignment.soulReleaseId,
+      aliceAssignment.providerProfileId,
+    )).toBe(aliceAssignment.id)
+    expect(resolveAssignmentIdentityForTuple(
+      aliceAssignment.environmentId,
+      aliceAssignment.soulReleaseId,
+      'claude-ops',
+    )).toBe('')
+  })
+
+  test('assignment detail sheet exposes approval and trace evidence without runtime data', () => {
+    const markup = renderToStaticMarkup(
+      <AssignmentDetailContent assignment={adminConsoleData.assignments[0]} />,
+    )
+
+    expect(markup).toContain('Approval')
+    expect(markup).toContain('Preview trace timeline')
+    expect(markup).toContain('Control API not implemented')
+    expect(markup).toContain(`receipt:${adminConsoleData.assignments[0].receiptId}`)
+    expect(markup).not.toContain('/api/sessions/')
+    expect(markup).not.toContain('engine_invocation')
   })
 
   test('shared cards preserve the runtime boundary and assignment detail affordance', () => {

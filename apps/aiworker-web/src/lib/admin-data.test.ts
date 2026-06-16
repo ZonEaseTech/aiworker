@@ -10,7 +10,15 @@ import {
 import { CONTROL_PLANE_SCHEMA_VERSION } from '@zonease/aiworker-control/control-plane'
 import { describe, expect, test } from 'bun:test'
 
-import { adminConsoleData, assertRedactedAdminConsoleData, createAdminDataSourceFromControlPlaneSnapshot, loadAdminConsoleData, mapControlPlaneSnapshotToAdminConsoleData } from './admin-data'
+import {
+  adminConsoleData,
+  assertRedactedAdminConsoleData,
+  createAdminDataSourceFromControlPlaneSnapshot,
+  getApprovalForAssignment,
+  getTraceEventsForAssignment,
+  loadAdminConsoleData,
+  mapControlPlaneSnapshotToAdminConsoleData,
+} from './admin-data'
 
 describe('admin data fixtures', () => {
   const { assignments, environments, providerProfiles } = adminConsoleData
@@ -19,6 +27,34 @@ describe('admin data fixtures', () => {
     expect(loadAdminConsoleData()).toEqual(adminConsoleData)
     expect(adminConsoleData.metrics.length).toBeGreaterThan(0)
     expect(adminConsoleData.recentAuditEvents.length).toBeGreaterThan(0)
+  })
+
+  test('exposes approval queue and trace events tied to known assignments', () => {
+    const assignmentIds = new Set(assignments.map(assignment => assignment.id))
+    const assignmentTuples = new Set(assignments.map(assignment =>
+      `${assignment.environmentId}/${assignment.soulReleaseId}/${assignment.providerProfileId}`,
+    ))
+
+    expect(adminConsoleData.approvals.length).toBe(assignments.length)
+    expect(assignmentTuples.size).toBe(assignments.length)
+    expect(adminConsoleData.traceEvents.length).toBeGreaterThan(assignments.length)
+    expect(adminConsoleData.metrics.some(metric => metric.label === '待审批')).toBe(true)
+    expect(adminConsoleData.approvals.some(approval => approval.status === 'pending')).toBe(true)
+
+    for (const approval of adminConsoleData.approvals) {
+      expect(assignmentIds.has(approval.assignmentId), approval.id).toBe(true)
+      expect(approval.controlApiState).toBe('not_implemented')
+      expect(approval.previewCommand).toContain('aiworker plan')
+      expect(approval.previewCommand).not.toContain('apply --yes')
+      expect(getApprovalForAssignment(approval.assignmentId)?.id).toBe(approval.id)
+    }
+
+    for (const traceEvent of adminConsoleData.traceEvents) {
+      expect(assignmentIds.has(traceEvent.assignmentId), traceEvent.id).toBe(true)
+      expect(traceEvent.evidenceRef).toMatch(/^(assignment|approval|receipt|audit|handoff):/)
+    }
+
+    expect(getTraceEventsForAssignment(assignments[0].id).map(event => event.evidenceRef)).toContain(`receipt:${assignments[0].receiptId}`)
   })
 
   test('reference provider secrets without embedding literal API keys', () => {
@@ -56,14 +92,15 @@ describe('admin data fixtures', () => {
 
     expect(() => loadAdminConsoleData({
       loadAdminConsoleData() {
+        const assignment = {
+          ...assignments[0],
+          workspaceRef: '/workspace/transcript/raw',
+        }
         return {
           ...adminConsoleData,
-          assignments: [
-            {
-              ...assignments[0],
-              workspaceRef: '/workspace/transcript/raw',
-            },
-          ],
+          assignments: [assignment],
+          approvals: adminConsoleData.approvals.filter(approval => approval.assignmentId === assignment.id),
+          traceEvents: adminConsoleData.traceEvents.filter(traceEvent => traceEvent.assignmentId === assignment.id),
         }
       },
     })).toThrow(/redacted/)
@@ -73,11 +110,124 @@ describe('admin data fixtures', () => {
     expect(assertRedactedAdminConsoleData(adminConsoleData)).toBe(adminConsoleData)
   })
 
+  test('rejects approvals and trace events that point outside known assignments', () => {
+    expect(() => assertRedactedAdminConsoleData({
+      ...adminConsoleData,
+      approvals: [{
+        ...adminConsoleData.approvals[0],
+        assignmentId: 'missing-assignment',
+      }],
+    })).toThrow(/known assignment/)
+
+    expect(() => assertRedactedAdminConsoleData({
+      ...adminConsoleData,
+      traceEvents: [{
+        ...adminConsoleData.traceEvents[0],
+        assignmentId: 'missing-assignment',
+      }],
+    })).toThrow(/known assignment/)
+  })
+
+  test('rejects ambiguous assignment tuples and schema-invalid approval or trace references', () => {
+    const assignment = assignments[0]
+    const approval = adminConsoleData.approvals.find(item => item.assignmentId === assignment.id)!
+    const traceEvent = adminConsoleData.traceEvents.find(item => item.assignmentId === assignment.id && item.evidenceRef.startsWith('receipt:'))!
+
+    expect(() => assertRedactedAdminConsoleData({
+      ...adminConsoleData,
+      assignments: [
+        assignment,
+        {
+          ...assignment,
+          id: `${assignment.id}-duplicate`,
+          assignedEmail: 'duplicate@example.com',
+        },
+      ],
+    })).toThrow(/assignment tuple must be unique/)
+
+    expect(() => assertRedactedAdminConsoleData({
+      ...adminConsoleData,
+      environments: [{
+        ...adminConsoleData.environments.find(environment => environment.endpointKind === 'relay-offer')!,
+        daemonEndpoint: 'https://paseo.example/pair/raw-code',
+      }],
+    })).toThrow(/relay endpoint must be a redacted pairing reference/)
+
+    expect(() => assertRedactedAdminConsoleData({
+      ...adminConsoleData,
+      approvals: [{
+        ...approval,
+        previewCommand: approval.previewCommand.replace(`--provider ${assignment.providerProfileId}`, '--provider wrong-provider'),
+      }],
+    })).toThrow(/preview command must stay scoped/)
+
+    expect(() => assertRedactedAdminConsoleData({
+      ...adminConsoleData,
+      approvals: [{
+        ...approval,
+        controlApiState: 'implemented' as never,
+      }],
+    })).toThrow(/control API as not implemented/)
+
+    expect(() => assertRedactedAdminConsoleData({
+      ...adminConsoleData,
+      traceEvents: [{
+        ...traceEvent,
+        evidenceRef: 'receipt:other-receipt',
+      }],
+    })).toThrow(/trace evidence .* receipt/)
+  })
+
+  test('rejects approval and trace fields that leak runtime, provider payloads, pairing offers, or secrets', () => {
+    const approval = adminConsoleData.approvals[0]
+    const check = approval.checks[0]
+    const traceEvent = adminConsoleData.traceEvents[0]
+    const withApproval = (updatedApproval: typeof approval) => ({
+      ...adminConsoleData,
+      approvals: adminConsoleData.approvals.map(item => item.id === updatedApproval.id ? updatedApproval : item),
+    })
+    const withTraceEvent = (updatedTraceEvent: typeof traceEvent) => ({
+      ...adminConsoleData,
+      traceEvents: adminConsoleData.traceEvents.map(item => item.id === updatedTraceEvent.id ? updatedTraceEvent : item),
+    })
+
+    const cases = [
+      {
+        label: 'approval riskSummary raw pairing',
+        data: withApproval({ ...approval, riskSummary: 'raw pairing offer=https://paseo.example/pair?token=abc' }),
+      },
+      {
+        label: 'approval check provider models payload',
+        data: withApproval({ ...approval, checks: [{ ...check, detail: 'provider models payload: gpt-secret' }] }),
+      },
+      {
+        label: 'approval preview command shell script body',
+        data: withApproval({ ...approval, previewCommand: 'shell script body: export OPENAI_API_KEY=sk-abc123456789' }),
+      },
+      {
+        label: 'trace title engine invocation',
+        data: withTraceEvent({ ...traceEvent, title: 'engine_invocation started' }),
+      },
+      {
+        label: 'trace detail session transcript',
+        data: withTraceEvent({ ...traceEvent, detail: 'captured transcript from /api/sessions/sess-1' }),
+      },
+      {
+        label: 'trace evidence raw QR',
+        data: withTraceEvent({ ...traceEvent, evidenceRef: 'qr:base64:abc123' }),
+      },
+    ]
+
+    for (const { label, data } of cases) {
+      expect(() => assertRedactedAdminConsoleData(data), label).toThrow(/redacted|literal secret|preview command|trace evidence/)
+    }
+  })
+
   test('maps a control-plane snapshot through a read-only admin data source', () => {
     const environment = {
       environmentId: 'env-alice',
-      daemonEndpoint: 'unix:/run/paseo/alice.sock',
-      endpointKind: 'unix' as const,
+      daemonEndpoint: 'https://paseo.example/pair/code/abc123?code=raw',
+      endpointKind: 'relay-offer' as const,
       isolation: 'os-user' as const,
       ownerEmail: 'alice@example.com',
       paseoHome: '/home/alice/.paseo',
@@ -143,9 +293,13 @@ describe('admin data fixtures', () => {
     expect(data.assignments[0]?.handoffLabel).toContain('--home "$PASEO_HOME"')
     expect(data.assignments[0]?.handoffLabel).toContain('Paseo frontend')
     expect(data.assignments[0]?.handoffLabel).not.toContain('paseo --host')
+    expect(data.environments[0]?.daemonEndpoint).toBe('[REDACTED_PAIRING_URL]')
+    expect(data.environments[0]?.daemonEndpoint).not.toContain('abc123')
     expect(data.assignments[0]?.nextStep).toContain('AIWorker 不读取 session')
     expect(data.providerProfiles[0]?.secretRef).toBe('secret://providers/codex/default')
     expect(data.soulReleases[0]?.fileCount).toBe(1)
+    expect(data.approvals[0]?.assignmentId).toBe(data.assignments[0]?.id)
+    expect(data.traceEvents.some(event => event.evidenceRef === 'receipt:rcpt-1')).toBe(true)
     expect(data.recentAuditEvents[0]?.tone).toBe('success')
   })
 

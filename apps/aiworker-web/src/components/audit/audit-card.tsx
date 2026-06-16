@@ -7,7 +7,7 @@ export function AuditCard() {
     <Card>
       <CardHeader>
         <CardTitle>Recent audit events</CardTitle>
-        <CardDescription>所有事件都是 AIWorker 元数据事件，不含 Paseo transcript。</CardDescription>
+        <CardDescription>所有事件都是 AIWorker 元数据事件，不含 Paseo 会话内容。</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {adminConsoleData.recentAuditEvents.map(event => (

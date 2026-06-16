@@ -81,6 +81,43 @@ export interface AuditEventSummary {
   tone: Tone
 }
 
+export type ApprovalStatus = 'pending' | 'approved' | 'changes_requested'
+
+export type ApprovalCheckStatus = 'pass' | 'warning' | 'blocked'
+
+export interface ProvisioningApprovalCheckSummary {
+  id: string
+  label: string
+  status: ApprovalCheckStatus
+  detail: string
+}
+
+export interface ProvisioningApprovalSummary {
+  id: string
+  assignmentId: string
+  title: string
+  status: ApprovalStatus
+  requestedBy: string
+  reviewer: string
+  submittedAt: string
+  decidedAt?: string
+  riskSummary: string
+  previewCommand: string
+  controlApiState: 'not_implemented'
+  checks: ProvisioningApprovalCheckSummary[]
+}
+
+export interface ProvisioningTraceEventSummary {
+  id: string
+  assignmentId: string
+  at: string
+  actor: string
+  title: string
+  detail: string
+  evidenceRef: string
+  tone: Tone
+}
+
 export interface AssignmentSummary {
   id: string
   assignedEmail: string
@@ -108,11 +145,13 @@ export interface MetricSummary {
 
 export interface AdminConsoleData {
   assignments: AssignmentSummary[]
+  approvals: ProvisioningApprovalSummary[]
   environments: PaseoEnvironmentSummary[]
   metrics: MetricSummary[]
   providerProfiles: ProviderProfileSummary[]
   recentAuditEvents: AuditEventSummary[]
   soulReleases: SoulReleaseSummary[]
+  traceEvents: ProvisioningTraceEventSummary[]
 }
 
 export interface AdminDataSource {
@@ -120,10 +159,28 @@ export interface AdminDataSource {
 }
 
 const SECRET_REFERENCE_PREFIX = 'secret://'
+const REDACTED_PAIRING_ENDPOINT = '[REDACTED_PAIRING_URL]'
+
+const approvalStatuses: readonly ApprovalStatus[] = ['pending', 'approved', 'changes_requested'] as const
+const approvalCheckStatuses: readonly ApprovalCheckStatus[] = ['pass', 'warning', 'blocked'] as const
+const traceEvidencePrefixes = ['assignment', 'approval', 'receipt', 'audit', 'handoff'] as const
+
 const forbiddenRuntimeDataFragments = [
   '/api/sessions/',
   'engine_invocation',
+  'engine invocation',
   'provider process',
+  'provider json',
+  'provider models',
+  'raw pairing',
+  'paseo://pair',
+  'offer=',
+  'qr:',
+  'base64:',
+  'data:image',
+  'shell script body',
+  'runtime log',
+  'runtime event',
   'transcript',
   'token=',
 ] as const
@@ -177,10 +234,99 @@ function assertNoSnapshotLiteralSecrets(label: string, value: unknown): void {
 }
 
 export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminConsoleData {
+  const assignmentsById = new Map<string, AssignmentSummary>()
+  const assignmentTupleOwners = new Map<string, string>()
+  for (const assignment of data.assignments) {
+    if (assignmentsById.has(assignment.id)) {
+      throw new Error(`assignment ${assignment.id} must be unique`)
+    }
+
+    const tupleKey = assignmentTupleKey(assignment.environmentId, assignment.soulReleaseId, assignment.providerProfileId)
+    const existingAssignmentId = assignmentTupleOwners.get(tupleKey)
+    if (existingAssignmentId) {
+      throw new Error(`assignment tuple must be unique: ${assignment.environmentId}/${assignment.soulReleaseId}/${assignment.providerProfileId} is shared by ${existingAssignmentId} and ${assignment.id}`)
+    }
+
+    assignmentsById.set(assignment.id, assignment)
+    assignmentTupleOwners.set(tupleKey, assignment.id)
+  }
+
   for (const profile of data.providerProfiles) {
     if (!profile.secretRef.startsWith(SECRET_REFERENCE_PREFIX)) {
       throw new Error(`provider profile ${profile.id} must use a secret reference`)
     }
+  }
+
+  for (const environment of data.environments) {
+    if (environment.endpointKind === 'relay-offer' && environment.daemonEndpoint !== REDACTED_PAIRING_ENDPOINT) {
+      throw new Error(`environment ${environment.id} relay endpoint must be a redacted pairing reference`)
+    }
+  }
+
+  const assignmentIds = new Set(assignmentsById.keys())
+  const approvalsById = new Map<string, ProvisioningApprovalSummary>()
+  const approvalByAssignment = new Map<string, string>()
+  for (const approval of data.approvals) {
+    if (!assignmentIds.has(approval.assignmentId)) {
+      throw new Error(`approval ${approval.id} must reference a known assignment`)
+    }
+
+    const assignment = assignmentsById.get(approval.assignmentId)
+    if (!assignment) {
+      throw new Error(`approval ${approval.id} must reference a known assignment`)
+    }
+
+    if (approvalsById.has(approval.id)) {
+      throw new Error(`approval ${approval.id} must be unique`)
+    }
+
+    const existingApprovalId = approvalByAssignment.get(approval.assignmentId)
+    if (existingApprovalId) {
+      throw new Error(`assignment ${approval.assignmentId} must have a single approval preview, found ${existingApprovalId} and ${approval.id}`)
+    }
+
+    if (!approvalStatuses.includes(approval.status)) {
+      throw new Error(`approval ${approval.id} has unsupported status ${approval.status}`)
+    }
+
+    if (approval.controlApiState !== 'not_implemented') {
+      throw new Error(`approval ${approval.id} must declare the control API as not implemented`)
+    }
+
+    if (!approval.previewCommand.startsWith('aiworker plan ')) {
+      throw new Error(`approval ${approval.id} preview command must use aiworker plan`)
+    }
+
+    if (
+      !approval.previewCommand.includes(`--user ${assignment.assignedEmail}`)
+      || !approval.previewCommand.includes(`--environment ${assignment.environmentId}`)
+      || !approval.previewCommand.includes(`--provider ${assignment.providerProfileId}`)
+      || !approval.previewCommand.includes(`--soul ${assignment.soulReleaseId}`)
+    ) {
+      throw new Error(`approval ${approval.id} preview command must stay scoped to its assignment`)
+    }
+
+    for (const check of approval.checks) {
+      if (!approvalCheckStatuses.includes(check.status)) {
+        throw new Error(`approval check ${check.id} has unsupported status ${check.status}`)
+      }
+    }
+
+    approvalsById.set(approval.id, approval)
+    approvalByAssignment.set(approval.assignmentId, approval.id)
+  }
+
+  for (const traceEvent of data.traceEvents) {
+    if (!assignmentIds.has(traceEvent.assignmentId)) {
+      throw new Error(`trace event ${traceEvent.id} must reference a known assignment`)
+    }
+
+    const assignment = assignmentsById.get(traceEvent.assignmentId)
+    if (!assignment) {
+      throw new Error(`trace event ${traceEvent.id} must reference a known assignment`)
+    }
+
+    assertTraceEvidenceRef(traceEvent, assignment, approvalsById)
   }
 
   assertNoSensitiveAdminValue('adminConsoleData', data)
@@ -197,6 +343,18 @@ export const statusMeta: Record<AssignmentStatus, { label: string, tone: Tone }>
   needs_attention: { label: '需处理', tone: 'destructive' },
   revoked: { label: '已撤销', tone: 'outline' },
   archived: { label: '已归档', tone: 'secondary' },
+}
+
+export const approvalStatusMeta: Record<ApprovalStatus, { label: string, tone: Tone }> = {
+  pending: { label: '待审批', tone: 'warning' },
+  approved: { label: '已批准', tone: 'success' },
+  changes_requested: { label: '退回修改', tone: 'destructive' },
+}
+
+export const approvalCheckStatusMeta: Record<ApprovalCheckStatus, { label: string, tone: Tone }> = {
+  pass: { label: '通过', tone: 'success' },
+  warning: { label: '需确认', tone: 'warning' },
+  blocked: { label: '阻塞', tone: 'destructive' },
 }
 
 export const providerStatusMeta: Record<ProviderProfileSummary['status'], { label: string, tone: Tone }> = {
@@ -226,7 +384,7 @@ export function mapControlPlaneSnapshotToAdminConsoleData(snapshot: ControlPlane
     ownerEmail: environment.ownerEmail,
     targetRef: environment.targetRef,
     paseoHome: environment.paseoHome,
-    daemonEndpoint: redactRelayOffer(environment.daemonEndpoint),
+    daemonEndpoint: redactedEndpointReference(environment.daemonEndpoint, environment.endpointKind),
     endpointKind: environment.endpointKind,
     isolation: environment.isolation,
     providerProfileIds: environment.providerProfileIds,
@@ -244,14 +402,18 @@ export function mapControlPlaneSnapshotToAdminConsoleData(snapshot: ControlPlane
   const assignments = snapshot.assignments.map(assignment =>
     mapAssignment(assignment, snapshot.receipts, auditEvents, snapshot.environments),
   )
+  const approvals = buildProvisioningApprovals(assignments, environments, providerProfiles, soulReleases)
+  const traceEvents = buildProvisioningTraceEvents(assignments, approvals)
 
   return assertRedactedAdminConsoleData({
     assignments,
+    approvals,
     environments,
-    metrics: buildMetrics({ assignments, providerProfiles, soulReleases }),
+    metrics: buildMetrics({ assignments, approvals, providerProfiles, soulReleases }),
     providerProfiles,
     recentAuditEvents: auditEvents,
     soulReleases,
+    traceEvents,
   })
 }
 
@@ -564,6 +726,7 @@ function fixtureProjectedFiles(fileCount: number): ProjectedFile[] {
 
 function buildMetrics(data: {
   assignments: AssignmentSummary[]
+  approvals: ProvisioningApprovalSummary[]
   providerProfiles: ProviderProfileSummary[]
   soulReleases: SoulReleaseSummary[]
 }): MetricSummary[] {
@@ -583,6 +746,13 @@ function buildMetrics(data: {
       icon: WarningCircleIcon,
     },
     {
+      label: '待审批',
+      value: String(data.approvals.filter(approval => approval.status === 'pending').length),
+      helper: '审批仅覆盖 AIWorker provisioning/receipt/handoff 元数据。',
+      tone: 'warning',
+      icon: ClockClockwiseIcon,
+    },
+    {
       label: 'Soul releases',
       value: String(data.soulReleases.filter(release => release.status === 'published').length),
       helper: '已发布的 Paseo workspace templates。',
@@ -597,6 +767,164 @@ function buildMetrics(data: {
       icon: ShieldCheckIcon,
     },
   ]
+}
+
+function buildProvisioningApprovals(
+  assignments: AssignmentSummary[],
+  environments: PaseoEnvironmentSummary[],
+  providerProfiles: ProviderProfileSummary[],
+  soulReleases: SoulReleaseSummary[],
+): ProvisioningApprovalSummary[] {
+  return assignments.map((assignment) => {
+    const environment = environments.find(item => item.id === assignment.environmentId)
+    const provider = providerProfiles.find(item => item.id === assignment.providerProfileId)
+    const soul = soulReleases.find(item => item.id === assignment.soulReleaseId)
+    const status = approvalStatusForAssignment(assignment)
+
+    return {
+      id: `appr-${assignment.id}`,
+      assignmentId: assignment.id,
+      title: `${assignment.assignedEmail} · ${soul?.displayName ?? assignment.soulReleaseId}`,
+      status,
+      requestedBy: 'admin@example.com',
+      reviewer: reviewerForApprovalStatus(status),
+      submittedAt: assignment.updatedAt,
+      ...(status !== 'pending' ? { decidedAt: assignment.updatedAt } : {}),
+      riskSummary: approvalRiskSummary(assignment, environment, provider),
+      previewCommand: buildPlanPreviewCommand(assignment, environment, provider, soul),
+      controlApiState: 'not_implemented',
+      checks: [
+        {
+          id: `${assignment.id}-scope`,
+          label: 'Workspace scope',
+          status: assignment.status === 'needs_attention' ? 'warning' : 'pass',
+          detail: `仅审批 ${assignment.workspaceRef} 的 Soul projection、receipt 与 handoff 元数据。`,
+        },
+        {
+          id: `${assignment.id}-provider`,
+          label: 'Provider reference',
+          status: provider?.status === 'needs_auth' ? 'blocked' : provider?.status === 'reference_only' ? 'warning' : 'pass',
+          detail: provider ? `${provider.label} 使用 ${provider.secretRef}，不展示 literal secret。` : 'provider profile 待补齐。',
+        },
+        {
+          id: `${assignment.id}-handoff`,
+          label: 'Handoff boundary',
+          status: assignment.handoffKind === 'pairing-offer' && assignment.status === 'needs_attention' ? 'warning' : 'pass',
+          detail: 'Handoff 只展示 redacted instruction；真实 pairing link 由 Paseo CLI 输出后交给前端配对。',
+        },
+      ],
+    }
+  })
+}
+
+function buildProvisioningTraceEvents(
+  assignments: AssignmentSummary[],
+  approvals: ProvisioningApprovalSummary[],
+): ProvisioningTraceEventSummary[] {
+  return assignments.flatMap((assignment) => {
+    const approval = approvals.find(item => item.assignmentId === assignment.id)
+    const events: ProvisioningTraceEventSummary[] = [
+      {
+        id: `trace-${assignment.id}-request`,
+        assignmentId: assignment.id,
+        at: assignment.updatedAt,
+        actor: approval?.requestedBy ?? 'admin@example.com',
+        title: 'Assignment request captured',
+        detail: `管理员为 ${assignment.assignedEmail} 准备 ${assignment.workspaceRef} 的 provisioning metadata。`,
+        evidenceRef: `assignment:${assignment.id}`,
+        tone: 'info',
+      },
+    ]
+
+    if (approval) {
+      events.push({
+        id: `trace-${assignment.id}-approval`,
+        assignmentId: assignment.id,
+        at: approval.decidedAt ?? approval.submittedAt,
+        actor: approval.reviewer,
+        title: `Approval ${approval.status}`,
+        detail: '审批范围限定为 AIWorker plan、Soul projection、receipt 与 handoff metadata。',
+        evidenceRef: `approval:${approval.id}`,
+        tone: approvalStatusMeta[approval.status].tone,
+      })
+    }
+
+    events.push({
+      id: `trace-${assignment.id}-receipt`,
+      assignmentId: assignment.id,
+      at: assignment.updatedAt,
+      actor: 'aiworker control',
+      title: 'Receipt linked',
+      detail: `Redacted receipt ${assignment.receiptId} 记录 assignment 状态与 workspace path policy。`,
+      evidenceRef: `receipt:${assignment.receiptId}`,
+      tone: assignment.status === 'needs_attention' ? 'warning' : 'success',
+    })
+
+    for (const auditEvent of assignment.audit) {
+      events.push({
+        id: `trace-${assignment.id}-${auditEvent.id}`,
+        assignmentId: assignment.id,
+        at: auditEvent.at,
+        actor: auditEvent.actor,
+        title: auditEvent.action,
+        detail: `审计目标 ${auditEvent.target}，只保留 AIWorker control-plane metadata。`,
+        evidenceRef: `audit:${auditEvent.id}`,
+        tone: auditEvent.tone,
+      })
+    }
+
+    events.push({
+      id: `trace-${assignment.id}-handoff`,
+      assignmentId: assignment.id,
+      at: assignment.updatedAt,
+      actor: 'aiworker handoff',
+      title: `${assignment.handoffKind} handoff`,
+      detail: assignment.nextStep,
+      evidenceRef: `handoff:${assignment.handoffKind}`,
+      tone: statusMeta[assignment.status].tone,
+    })
+
+    return events
+  })
+}
+
+function approvalStatusForAssignment(assignment: AssignmentSummary): ApprovalStatus {
+  if (assignment.status === 'ready')
+    return 'approved'
+  if (assignment.status === 'needs_attention')
+    return 'changes_requested'
+  return 'pending'
+}
+
+function reviewerForApprovalStatus(status: ApprovalStatus): string {
+  if (status === 'pending')
+    return 'security-review@example.com'
+  if (status === 'changes_requested')
+    return 'ops-review@example.com'
+  return 'approver@example.com'
+}
+
+function approvalRiskSummary(
+  assignment: AssignmentSummary,
+  environment?: PaseoEnvironmentSummary,
+  provider?: ProviderProfileSummary,
+): string {
+  const providerLabel = provider ? `${provider.provider} provider reference` : 'missing provider reference'
+  const target = environment?.targetRef ?? assignment.environmentId
+  if (assignment.status === 'needs_attention')
+    return `${target} 需要重新确认 handoff metadata；${providerLabel} 不包含 literal secret。`
+  if (assignment.status === 'ready')
+    return `${target} 已完成审批与 handoff；${providerLabel} 仅作为 secret reference 展示。`
+  return `${target} 等待管理员批准后才能执行 apply；${providerLabel} 仅用于 readiness check。`
+}
+
+function buildPlanPreviewCommand(
+  assignment: AssignmentSummary,
+  environment?: PaseoEnvironmentSummary,
+  provider?: ProviderProfileSummary,
+  soul?: SoulReleaseSummary,
+): string {
+  return `aiworker plan \\\n  --user ${assignment.assignedEmail} \\\n  --target ${environment?.targetRef ?? assignment.environmentId} \\\n  --environment ${assignment.environmentId} \\\n  --provider ${provider?.id ?? assignment.providerProfileId} \\\n  --soul ${soul?.descriptorRef ?? assignment.soulReleaseId}`
 }
 
 function mapProviderProfile(profile: ProviderProfile): ProviderProfileSummary {
@@ -679,12 +1007,54 @@ function nextStepForAssignment(status: AssignmentStatus): string {
   if (status === 'workspace_projected')
     return '确认 handoff metadata；AIWorker 不读取 session。'
   if (status === 'needs_attention')
-    return '处理 AIWorker provisioning metadata；AIWorker 不读取 session，也不要采集 Paseo runtime log。'
+    return '处理 AIWorker provisioning metadata；AIWorker 不读取 session，也不要采集 Paseo 运行时日志。'
   return '等待下一步 AIWorker control-plane 操作；不触碰 Paseo session。'
 }
 
-function redactRelayOffer(endpoint: string): string {
+function redactedEndpointReference(endpoint: string, endpointKind: PaseoEndpointKind): string {
+  if (endpointKind === 'relay-offer')
+    return REDACTED_PAIRING_ENDPOINT
+
   return endpoint.replace(/([?#&]offer=)[^&#]+/i, '$1redacted')
+}
+
+function assignmentTupleKey(environmentId: string, soulReleaseId: string, providerProfileId: string): string {
+  return `${environmentId}\u0000${soulReleaseId}\u0000${providerProfileId}`
+}
+
+function assertTraceEvidenceRef(
+  traceEvent: ProvisioningTraceEventSummary,
+  assignment: AssignmentSummary,
+  approvalsById: ReadonlyMap<string, ProvisioningApprovalSummary>,
+) {
+  const [prefix, value] = traceEvent.evidenceRef.split(':', 2)
+
+  if (!prefix || !value || !traceEvidencePrefixes.includes(prefix as (typeof traceEvidencePrefixes)[number])) {
+    throw new Error(`trace evidence ${traceEvent.id} must use an allowed control-plane evidence prefix`)
+  }
+
+  if (prefix === 'assignment' && value !== assignment.id) {
+    throw new Error(`trace evidence ${traceEvent.id} must reference its assignment`)
+  }
+
+  if (prefix === 'approval') {
+    const approval = approvalsById.get(value)
+    if (!approval || approval.assignmentId !== assignment.id) {
+      throw new Error(`trace evidence ${traceEvent.id} must reference an approval for its assignment`)
+    }
+  }
+
+  if (prefix === 'receipt' && value !== assignment.receiptId) {
+    throw new Error(`trace evidence ${traceEvent.id} must reference its assignment receipt`)
+  }
+
+  if (prefix === 'audit' && !assignment.audit.some(event => event.id === value)) {
+    throw new Error(`trace evidence ${traceEvent.id} must reference an audit event attached to its assignment`)
+  }
+
+  if (prefix === 'handoff' && value !== assignment.handoffKind) {
+    throw new Error(`trace evidence ${traceEvent.id} must reference its assignment handoff kind`)
+  }
 }
 
 function formatAdminTimestamp(value?: string): string {
@@ -728,6 +1098,32 @@ export const navigationItems = [
   { title: 'Environments', path: '/environments', icon: ShieldCheckIcon },
   { title: 'Audit / Handoff', path: '/audit', icon: FileTextIcon },
 ] as const
+
+export function getApprovalForAssignment(id: string): ProvisioningApprovalSummary | undefined {
+  return adminConsoleData.approvals.find(item => item.assignmentId === id)
+}
+
+export function getTraceEventsForAssignment(id: string): ProvisioningTraceEventSummary[] {
+  return adminConsoleData.traceEvents.filter(item => item.assignmentId === id)
+}
+
+export function getAssignmentForPlan(
+  environmentId: string,
+  soulReleaseId: string,
+  providerProfileId: string,
+): AssignmentSummary | undefined {
+  const matches = adminConsoleData.assignments.filter(assignment =>
+    assignment.environmentId === environmentId
+    && assignment.soulReleaseId === soulReleaseId
+    && assignment.providerProfileId === providerProfileId,
+  )
+
+  if (matches.length > 1) {
+    throw new Error(`assignment tuple must be unique: ${environmentId}/${soulReleaseId}/${providerProfileId}`)
+  }
+
+  return matches[0]
+}
 
 export function getProviderProfile(id: string): ProviderProfileSummary {
   const profile = adminConsoleData.providerProfiles.find(item => item.id === id)

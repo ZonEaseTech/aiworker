@@ -2,7 +2,7 @@ import { AuditCard } from '@/components/audit/audit-card'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { adminConsoleData, statusMeta } from '@/lib/admin-data'
+import { adminConsoleData, approvalStatusMeta, getApprovalForAssignment, getTraceEventsForAssignment, statusMeta } from '@/lib/admin-data'
 
 export function AuditPage() {
   return (
@@ -24,9 +24,27 @@ export function AuditPage() {
               <div key={assignment.id} className="rounded-md border p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm font-medium">{assignment.assignedEmail}</span>
-                  <StatusBadge tone={statusMeta[assignment.status].tone}>{statusMeta[assignment.status].label}</StatusBadge>
+                  <div className="flex flex-wrap gap-2">
+                    <StatusBadge tone={statusMeta[assignment.status].tone}>{statusMeta[assignment.status].label}</StatusBadge>
+                    {getApprovalForAssignment(assignment.id)
+                      ? (
+                          <StatusBadge tone={approvalStatusMeta[getApprovalForAssignment(assignment.id)!.status].tone}>
+                            {approvalStatusMeta[getApprovalForAssignment(assignment.id)!.status].label}
+                          </StatusBadge>
+                        )
+                      : null}
+                  </div>
                 </div>
                 <p className="mt-2 font-mono text-xs/relaxed text-muted-foreground">{assignment.handoffLabel}</p>
+                <p className="mt-2 text-[0.625rem] text-muted-foreground">
+                  Trace events:
+                  {' '}
+                  {getTraceEventsForAssignment(assignment.id).length}
+                  {' '}
+                  · receipt
+                  {' '}
+                  {assignment.receiptId}
+                </p>
               </div>
             ))}
           </CardContent>

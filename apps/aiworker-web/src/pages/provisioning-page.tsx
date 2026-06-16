@@ -1,8 +1,10 @@
-import { PlayCircleIcon } from '@phosphor-icons/react'
-import { useState } from 'react'
+import type { ApprovalStatus } from '@/lib/admin-data'
+import { CheckCircleIcon, PlayCircleIcon, WarningCircleIcon } from '@phosphor-icons/react'
+import { useEffect, useState } from 'react'
 
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from '@/components/ui/field'
@@ -10,10 +12,15 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Separator } from '@/components/ui/separator'
 import {
   adminConsoleData,
+  approvalCheckStatusMeta,
+  approvalStatusMeta,
   environmentStatusMeta,
+  getApprovalForAssignment,
+  getAssignmentForPlan,
   getEnvironment,
   getProviderProfile,
   getSoulRelease,
+  getTraceEventsForAssignment,
   providerStatusMeta,
   releaseStatusMeta,
 } from '@/lib/admin-data'
@@ -22,9 +29,44 @@ export function ProvisioningPage() {
   const [selectedSoul, setSelectedSoul] = useState(adminConsoleData.soulReleases[0].id)
   const [selectedEnvironment, setSelectedEnvironment] = useState(adminConsoleData.environments[0].id)
   const [selectedProvider, setSelectedProvider] = useState(adminConsoleData.providerProfiles[0].id)
-  const environment = getEnvironment(selectedEnvironment)
-  const provider = getProviderProfile(selectedProvider)
-  const soul = getSoulRelease(selectedSoul)
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState(adminConsoleData.assignments[0]?.id ?? '')
+  const [previewDecisionByAssignment, setPreviewDecisionByAssignment] = useState<Record<string, ApprovalStatus>>({})
+  const selectedAssignment = adminConsoleData.assignments.find(item => item.id === selectedAssignmentId)
+  const tupleAssignment = getAssignmentForPlan(selectedEnvironment, selectedSoul, selectedProvider)
+  const assignment = tupleAssignment?.id === selectedAssignment?.id ? selectedAssignment : tupleAssignment
+  const environment = getEnvironment(assignment?.environmentId ?? selectedEnvironment)
+  const provider = getProviderProfile(assignment?.providerProfileId ?? selectedProvider)
+  const soul = getSoulRelease(assignment?.soulReleaseId ?? selectedSoul)
+  const approval = assignment ? getApprovalForAssignment(assignment.id) : undefined
+  const traceEvents = assignment ? getTraceEventsForAssignment(assignment.id) : []
+  const effectiveApprovalStatus = assignment
+    ? resolvePreviewApprovalStatus(assignment.id, previewDecisionByAssignment, approval?.status)
+    : approval?.status
+
+  useEffect(() => {
+    setSelectedAssignmentId(resolveAssignmentIdentityForTuple(selectedEnvironment, selectedSoul, selectedProvider))
+  }, [selectedEnvironment, selectedProvider, selectedSoul])
+
+  function previewDecision(status: ApprovalStatus) {
+    if (!assignment)
+      return
+
+    setPreviewDecisionByAssignment(current => ({
+      ...current,
+      [assignment.id]: status,
+    }))
+  }
+
+  function selectAssignment(id: string) {
+    const selected = resolveAssignmentSelectionState(id)
+    if (!selected)
+      return
+
+    setSelectedAssignmentId(selected.assignmentId)
+    setSelectedEnvironment(selected.environmentId)
+    setSelectedSoul(selected.soulReleaseId)
+    setSelectedProvider(selected.providerProfileId)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -35,7 +77,7 @@ export function ProvisioningPage() {
         actions={(
           <Button size="sm">
             <PlayCircleIcon data-icon="inline-start" weight="duotone" />
-            预览计划
+            预览审批计划
           </Button>
         )}
       />
@@ -47,6 +89,26 @@ export function ProvisioningPage() {
           </CardHeader>
           <CardContent>
             <FieldGroup>
+              <Field>
+                <FieldLabel>Assignment identity</FieldLabel>
+                <Select value={assignment?.id ?? selectedAssignmentId} onValueChange={selectAssignment}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {adminConsoleData.assignments.map(item => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.assignedEmail}
+                          {' '}
+                          ·
+                          {item.workspaceRef}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field>
                 <FieldLabel>Paseo environment</FieldLabel>
                 <Select value={selectedEnvironment} onValueChange={setSelectedEnvironment}>
@@ -154,8 +216,8 @@ export function ProvisioningPage() {
             </FieldGroup>
             <Separator />
             <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs/relaxed">
-              {`aiworker apply --yes \\
-  --user ${environment.ownerEmail} \\
+              {`aiworker plan \\
+  --user ${assignment?.assignedEmail ?? environment.ownerEmail} \\
   --target ${environment.targetRef} \\
   --environment ${environment.id} \\
   --provider ${provider.id} \\
@@ -164,6 +226,124 @@ export function ProvisioningPage() {
           </CardContent>
         </Card>
       </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Approval gate</CardTitle>
+            <CardDescription>管理员审批 AIWorker plan/projection/handoff 元数据；当前为 assignment snapshot 派生的本地预览。</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Alert>
+              <WarningCircleIcon weight="duotone" />
+              <AlertTitle>Control API not implemented</AlertTitle>
+              <AlertDescription>批准/退回修改只更新本页预览状态，不会持久化，也不会触发 aissh 或 Paseo。</AlertDescription>
+            </Alert>
+            {approval && effectiveApprovalStatus
+              ? (
+                  <>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{approval.title}</p>
+                        <p className="mt-1 text-xs/relaxed text-muted-foreground">
+                          reviewer:
+                          {' '}
+                          {approval.reviewer}
+                          {' '}
+                          · submitted:
+                          {' '}
+                          {approval.submittedAt}
+                        </p>
+                      </div>
+                      <StatusBadge tone={approvalStatusMeta[effectiveApprovalStatus].tone}>
+                        {approvalStatusMeta[effectiveApprovalStatus].label}
+                      </StatusBadge>
+                    </div>
+                    <p className="rounded-md border bg-muted/30 p-3 text-xs/relaxed text-muted-foreground">{approval.riskSummary}</p>
+                    <FieldGroup>
+                      {approval.checks.map(check => (
+                        <Field key={check.id} orientation="horizontal">
+                          <FieldContent>
+                            <FieldTitle>{check.label}</FieldTitle>
+                            <FieldDescription>{check.detail}</FieldDescription>
+                          </FieldContent>
+                          <StatusBadge tone={approvalCheckStatusMeta[check.status].tone}>
+                            {approvalCheckStatusMeta[check.status].label}
+                          </StatusBadge>
+                        </Field>
+                      ))}
+                    </FieldGroup>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => previewDecision('approved')}>
+                        <CheckCircleIcon data-icon="inline-start" weight="duotone" />
+                        预览批准
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => previewDecision('changes_requested')}>
+                        <WarningCircleIcon data-icon="inline-start" weight="duotone" />
+                        预览退回修改
+                      </Button>
+                    </div>
+                    <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs/relaxed">{approval.previewCommand}</pre>
+                  </>
+                )
+              : (
+                  <p className="text-xs/relaxed text-muted-foreground">当前选择还没有对应 assignment；先保存 plan 后再进入审批队列。</p>
+                )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Preview trace timeline</CardTitle>
+            <CardDescription>从 assignment snapshot 派生 request → approval → receipt → handoff 预览链，不是持久化 control ledger，也不展示 Paseo session 或运行时日志。</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {traceEvents.map(event => (
+              <div key={event.id} className="rounded-md border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <StatusBadge tone={event.tone}>{event.at}</StatusBadge>
+                  <span className="text-xs text-muted-foreground">{event.actor}</span>
+                </div>
+                <p className="mt-2 text-xs font-medium text-foreground">{event.title}</p>
+                <p className="mt-1 text-xs/relaxed text-muted-foreground">{event.detail}</p>
+                <p className="mt-2 font-mono text-[0.625rem] text-muted-foreground">{event.evidenceRef}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
+}
+
+export function resolvePreviewApprovalStatus(
+  assignmentId: string,
+  previewDecisionByAssignment: Partial<Record<string, ApprovalStatus>>,
+  persistedStatus?: ApprovalStatus,
+): ApprovalStatus | undefined {
+  return previewDecisionByAssignment[assignmentId] ?? persistedStatus
+}
+
+export function resolveAssignmentSelectionState(id: string): {
+  assignmentId: string
+  environmentId: string
+  providerProfileId: string
+  soulReleaseId: string
+} | undefined {
+  const selected = adminConsoleData.assignments.find(item => item.id === id)
+  if (!selected)
+    return undefined
+
+  return {
+    assignmentId: selected.id,
+    environmentId: selected.environmentId,
+    providerProfileId: selected.providerProfileId,
+    soulReleaseId: selected.soulReleaseId,
+  }
+}
+
+export function resolveAssignmentIdentityForTuple(
+  environmentId: string,
+  soulReleaseId: string,
+  providerProfileId: string,
+): string {
+  return getAssignmentForPlan(environmentId, soulReleaseId, providerProfileId)?.id ?? ''
 }
