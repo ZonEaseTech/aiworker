@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join, normalize } from 'node:path'
 import process from 'node:process'
-import { appendApprovalDecision, controlPlaneDirFromEnv, loadAdminDataApiPayload, runApprovedAssignmentApplyJob } from './admin-api'
+import { appendApprovalDecision, controlPlaneDirFromEnv, loadAdminDataApiPayload, runApprovedAssignmentApplyJob, runAssignmentPairJob } from './admin-api'
 
 const root = process.env.AIWORKER_WEB_DIST ?? join(process.cwd(), 'dist')
 const port = Number(process.env.PORT ?? 20831)
@@ -92,6 +92,24 @@ export function createServer(options: { port?: number } = {}) {
 
         const result = await runApprovedAssignmentApplyJob(root, decodeURIComponent(applyMatch[1]!))
         return Response.json({ job: result })
+      }
+
+      const pairMatch = url.pathname.match(/^\/api\/assignments\/([^/]+)\/pair$/)
+      if (pairMatch) {
+        if (request.method !== 'POST') {
+          return methodNotAllowed('POST')
+        }
+
+        const root = controlPlaneDirFromEnv()
+        if (!root) {
+          return Response.json({ error: 'control_plane_dir_required' }, {
+            status: 409,
+            headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
+          })
+        }
+
+        const result = await runAssignmentPairJob(root, decodeURIComponent(pairMatch[1]!))
+        return Response.json({ pair: result })
       }
 
       if (request.method !== 'GET' && request.method !== 'HEAD') {

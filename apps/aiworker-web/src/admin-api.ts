@@ -22,6 +22,12 @@ export interface ApplyJobResult {
   }>
 }
 
+export interface PairJobResult {
+  assignmentId: string
+  pairingOutput: string
+  status: 'paired'
+}
+
 export interface ApprovalDecisionInput {
   note?: string
   reviewer?: string
@@ -115,6 +121,39 @@ export async function runApprovedAssignmentApplyJob(root: string, assignmentId: 
     resolveSoulDescriptorPath(soul.id),
   ])
   return summarizeApplyJobResult(assignmentId, result.exitCode, result.stdout, result.stderr)
+}
+
+export async function runAssignmentPairJob(root: string, assignmentId: string): Promise<PairJobResult> {
+  const payload = await loadAdminDataApiPayload(root)
+  if (!payload.snapshot)
+    throw new Error('control plane snapshot is required')
+  const assignment = payload.snapshot.assignments.find(item => item.assignmentId === assignmentId)
+  if (!assignment)
+    throw new Error(`unknown assignment ${assignmentId}`)
+  const approval = latestApprovalForAssignment(payload.approvals, assignmentId)
+  if (approval?.status !== 'approved')
+    throw new Error(`assignment ${assignmentId} must be approved before pairing`)
+  const environment = payload.snapshot.environments.find(item => item.environmentId === assignment.environmentId)
+  const soul = payload.snapshot.soulReleases.find(item => `${item.id}@${item.version}` === assignment.soulReleaseRef || item.id === assignment.soulReleaseRef)
+  if (!environment || !soul)
+    throw new Error(`assignment ${assignmentId} is missing environment or soul metadata`)
+
+  const result = await runAiworkerCli([
+    'pair',
+    '--json',
+    '--target',
+    environment.targetRef,
+    '--soul',
+    resolveSoulDescriptorPath(soul.id),
+  ])
+  if (result.exitCode !== 0)
+    throw new Error('pair command failed; run apply first and verify Paseo daemon status')
+  const parsed = JSON.parse(result.stdout) as { stdout?: unknown }
+  return {
+    assignmentId,
+    pairingOutput: typeof parsed.stdout === 'string' ? parsed.stdout : '',
+    status: 'paired',
+  }
 }
 
 async function readApprovalDecisionRecords(root: string): Promise<ApprovalDecisionRecord[]> {

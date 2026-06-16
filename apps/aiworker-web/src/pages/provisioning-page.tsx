@@ -42,6 +42,9 @@ export function ProvisioningPage() {
   const [approvalError, setApprovalError] = useState<string | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [applyStepsByAssignment, setApplyStepsByAssignment] = useState<Record<string, ApplyJobStep[]>>({})
+  const [pairError, setPairError] = useState<string | null>(null)
+  const [pairingAssignmentId, setPairingAssignmentId] = useState<string | null>(null)
+  const [pairingOutputByAssignment, setPairingOutputByAssignment] = useState<Record<string, string>>({})
   const selectedAssignment = adminData.assignments.find(item => item.id === selectedAssignmentId)
   const tupleAssignment = getAssignmentForPlan(selectedEnvironment, selectedSoul, selectedProvider, adminData)
   const assignment = tupleAssignment?.id === selectedAssignment?.id ? selectedAssignment : tupleAssignment
@@ -54,6 +57,7 @@ export function ProvisioningPage() {
     ? resolvePreviewApprovalStatus(assignment.id, previewDecisionByAssignment, approval?.status)
     : approval?.status
   const applySteps = assignment ? applyStepsByAssignment[assignment.id] : undefined
+  const pairingOutput = assignment ? pairingOutputByAssignment[assignment.id] : undefined
 
   useEffect(() => {
     if (!adminData.assignments.some(item => item.id === selectedAssignmentId))
@@ -106,6 +110,30 @@ export function ProvisioningPage() {
     }
     catch (error) {
       setApplyError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  async function runPairJob() {
+    if (!assignment)
+      return
+
+    setPairError(null)
+    setPairingAssignmentId(assignment.id)
+    try {
+      const response = await fetch(`/api/assignments/${encodeURIComponent(assignment.id)}/pair`, { method: 'POST' })
+      if (!response.ok)
+        throw new Error(`pairing request failed: ${response.status}`)
+      const payload = await response.json() as { pair: { pairingOutput: string } }
+      setPairingOutputByAssignment(current => ({
+        ...current,
+        [assignment.id]: payload.pair.pairingOutput,
+      }))
+    }
+    catch (error) {
+      setPairError(error instanceof Error ? error.message : String(error))
+    }
+    finally {
+      setPairingAssignmentId(current => current === assignment.id ? null : current)
     }
   }
 
@@ -342,6 +370,10 @@ export function ProvisioningPage() {
                         <PlayCircleIcon data-icon="inline-start" weight="duotone" />
                         执行已审批交付
                       </Button>
+                      <Button disabled={!isLive || effectiveApprovalStatus !== 'approved' || pairingAssignmentId === assignment?.id} size="sm" variant="outline" onClick={runPairJob}>
+                        <PlayCircleIcon data-icon="inline-start" weight="duotone" />
+                        生成配对链接
+                      </Button>
                     </div>
                     {applyError ? <p className="text-xs text-destructive">{applyError}</p> : null}
                     {applySteps
@@ -363,6 +395,20 @@ export function ProvisioningPage() {
                           </div>
                         )
                       : null}
+                    <div className="rounded-md border bg-muted/20 p-3 text-xs/relaxed text-muted-foreground">
+                      <p className="font-medium text-foreground">配对设备</p>
+                      <p className="mt-1">
+                        交付完成后点“生成配对链接”：Web 只让 AIWorker CLI 通过 aissh 瞬时调用 Paseo pair，结果只在当前页面显示，不写入 AIWorker 记录。
+                      </p>
+                      {pairError ? <p className="mt-2 text-destructive">{pairError}</p> : null}
+                      {pairingOutput
+                        ? (
+                            <pre className="mt-3 overflow-x-auto rounded-md border bg-background p-3 text-xs/relaxed text-foreground">
+                              {pairingOutput}
+                            </pre>
+                          )
+                        : null}
+                    </div>
                     <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs/relaxed">{approval.previewCommand}</pre>
                   </>
                 )

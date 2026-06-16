@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
@@ -119,7 +119,17 @@ describe('Bun static server helpers', () => {
       const fakeCli = path.join(root, 'fake-aiworker-cli')
       await writeFile(fakeCli, [
         '#!/bin/sh',
-        'printf \'%s\\n\' \'{"status":"executed","stdout":"Local Daemon      running\\nConnected Daemon  reachable\\nAIWORKER_PROVIDER_WARNING: provider needs login\\nAIWORKER_HANDOFF_READY: run paseo daemon pair --home \\\\\\"$PASEO_HOME\\\\\\"","stderr":""}\'',
+        'case "$1" in',
+        '  apply)',
+        '    printf \'%s\\n\' \'{"status":"executed","stdout":"Local Daemon      running\\nConnected Daemon  reachable\\nAIWORKER_PROVIDER_WARNING: provider needs login\\nAIWORKER_HANDOFF_READY: run paseo daemon pair --home \\\\\\"$PASEO_HOME\\\\\\"","stderr":""}\'',
+        '    ;;',
+        '  pair)',
+        '    printf \'%s\\n\' \'{"status":"paired","stdout":"Paseo pairing response\\nhttps://relay.paseo.example/#offer=real-token","stderr":""}\'',
+        '    ;;',
+        '  *)',
+        '    exit 64',
+        '    ;;',
+        'esac',
       ].join('\n'))
       await chmod(fakeCli, 0o755)
       process.env.AIWORKER_CLI_BIN = fakeCli
@@ -134,6 +144,18 @@ describe('Bun static server helpers', () => {
       expect(applySerialized).not.toContain('AIWORKER_HANDOFF_READY')
       expect(applySerialized).not.toContain('Local Daemon')
       expect(applySerialized).not.toContain('offer=')
+
+      const pairResponse = await fetch(`http://127.0.0.1:${server.port}/api/assignments/${assignment.assignmentId}/pair`, { method: 'POST' })
+      const pairPayload = await pairResponse.json()
+      const pairSerialized = JSON.stringify(pairPayload)
+
+      expect(pairResponse.status).toBe(200)
+      expect(pairPayload.pair.status).toBe('paired')
+      expect(pairPayload.pair.pairingOutput).toContain('https://relay.paseo.example/#offer=real-token')
+      expect(pairSerialized).toContain('#offer=real-token')
+      expect(pairSerialized).not.toContain('set -euo')
+      expect(await readFile(path.join(root, 'approvals.jsonl'), 'utf8')).not.toContain('offer=')
+      expect(JSON.stringify(await store.loadSnapshot())).not.toContain('offer=')
     }
     finally {
       server.stop(true)
