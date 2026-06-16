@@ -92,6 +92,7 @@ draft -> provisioning -> workspace_projected -> handoff_ready -> ready
 Handoff is intentionally opaque and Paseo-native:
 
 - `paseo-daemon`: AIWorker prepares the workspace under the actual `aissh` execution identity. The operational `PASEO_HOME` is derived on target from canonical `$HOME/.paseo`, and the workspace path is derived from `$HOME/aiworker-workspaces/<workspace>`. The generated script starts/checks the HOME-bound daemon and provider readiness, but does not run `paseo daemon pair`; the handoff is an instruction to run `paseo daemon pair --home "$PASEO_HOME"` from the prepared workspace and open the printed link in Paseo.
+- `transient-pair`: `aiworker pair` may call `paseo daemon pair --home "$PASEO_HOME"` through `aissh` after a workspace is prepared. Raw pairing output is allowed only in that immediate command response and must not be written to receipt, audit, snapshot, projection, diagnostics, or UI storage.
 - `pairing-offer`: employee connects to a daemon through a real Paseo pairing link. AIWorker treats any such link as opaque pairing material and must not persist or render the raw URL or QR.
 - `manual-path`: fallback instructions when a stable deep link is unavailable.
 

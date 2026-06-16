@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { $ } from 'bun'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, executeProvisionPlan, resolveAisshCredentials, resolveAisshInvocation } from './aiworker'
+import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, executePaseoPair, executeProvisionPlan, resolveAisshCredentials, resolveAisshInvocation } from './aiworker'
 
 const cliPath = path.resolve(import.meta.dirname, 'aiworker.ts')
 const savedAisshBin = process.env.AISSH_BIN
@@ -58,9 +58,11 @@ describe('aiworker thin CLI', () => {
     expect(output).toContain('Thin enterprise distribution CLI for Paseo workspaces')
     expect(output).toContain('$ aiworker plan')
     expect(output).toContain('$ aiworker apply')
+    expect(output).toContain('$ aiworker pair')
     expect(output).toContain('doctor')
     expect(output).toContain('plan')
     expect(output).toContain('apply')
+    expect(output).toContain('pair')
     expect(output).not.toContain('describe')
     expect(output).not.toContain('plan-provision')
     expect(output).not.toContain('--paseo-home')
@@ -492,6 +494,54 @@ describe('aiworker thin CLI', () => {
     expect(persisted).not.toContain('sk-testsecret123456')
     expect(persisted).not.toContain('real-token')
     expect(persisted).not.toContain('"status":"available"')
+  })
+
+  test('pair emits transient Paseo pairing material without exposing generated script echoes', async () => {
+    const descriptorPath = await createDescriptor()
+    const result = await executePaseoPair({
+      aisshBin: '/mock/aissh',
+      executor: {
+        async execFile(_file, args) {
+          return {
+            stderr: '',
+            stdout: [
+              'AIWorker target identity discovered: user=root uid=0 home=/root pwd=/root',
+              `argv ${args.join(' ')}`,
+              'https://relay.paseo.example/#offer=real-token',
+            ].join('\n'),
+          }
+        },
+      },
+      soulPath: descriptorPath,
+      targetRef: 'aissh:server-1',
+    })
+
+    expect(result.status).toBe('paired')
+    expect(result.workspaceRef).toBe('$HOME/aiworker-workspaces/hr-manager')
+    expect(result.stdout).toContain('https://relay.paseo.example/#offer=real-token')
+    expect(result.stdout).toContain('AIWorker target identity discovered')
+    expect(result.stdout).toContain('[omitted: output echoed the generated provisioning command]')
+    expect(result.stdout).not.toContain('set -euo pipefail')
+    expect(result.stdout).not.toContain('paseo daemon pair --home "$PASEO_HOME"')
+  })
+
+  test('pair command keeps pairing output transient and redacts pairing material on failure', async () => {
+    const descriptorPath = await createDescriptor()
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-pair-failure-'))
+    const fakeAissh = path.join(root, 'aissh')
+    await writeFile(fakeAissh, '#!/bin/sh\necho "https://relay.paseo.example/#offer=real-token"\necho "argv $*"\nexit 42\n')
+    await chmod(fakeAissh, 0o755)
+
+    const result = await $`bun ${cliPath} pair --target aissh:server-1 --soul ${descriptorPath} --aissh-bin ${fakeAissh} --json`.nothrow()
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr.toString()).toContain('[REDACTED_PAIRING_URL]')
+    expect(result.stderr.toString()).toContain('[omitted: output echoed the generated provisioning command]')
+    expect(result.stderr.toString()).not.toContain('real-token')
+    expect(result.stderr.toString()).not.toContain('set -euo pipefail')
+    expect(result.stderr.toString()).not.toContain('$AIWORKER_REMOTE_USER')
+    expect(result.stderr.toString()).not.toContain('AIWORKER_PAIR_WORKSPACE_MISSING')
+    expect(existsSync(path.join(root, 'control-plane'))).toBe(false)
   })
 
   test('executeProvisionPlan redacts standalone base64 payload echoes from projected files', async () => {

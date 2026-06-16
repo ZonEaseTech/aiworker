@@ -9,7 +9,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { promisify } from 'node:util'
-import { createAssignment, createAuditEvent, createProvisionPlan, createProvisionReceipt, createWorkspaceProjectionManifest, isPaseoPairingOffer, LocalFileControlPlaneStore, redactSecretLike } from '@zonease/aiworker-control'
+import { createAssignment, createAuditEvent, createProvisionPlan, createProvisionReceipt, createWorkspaceProjectionManifest, isPaseoPairingOffer, LocalFileControlPlaneStore, normalizeAisshServerRef, redactLiteralProviderSecret, redactSecretLike } from '@zonease/aiworker-control'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import cac from 'cac'
 
@@ -18,6 +18,7 @@ export const AISSH_EXEC_CWD_PREFIX = path.join(tmpdir(), 'aiworker-aissh-')
 const MAX_ERROR_STREAM_CHARS = 2000
 const PLAN_EXAMPLE = '$ aiworker plan --user alice@example.com --target aissh:server-1 --environment env-alice --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json'
 const APPLY_EXAMPLE = '$ aiworker apply --yes --user alice@example.com --target aissh:server-1 --environment env-alice --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json'
+const PAIR_EXAMPLE = '$ aiworker pair --target aissh:server-1 --soul souls/aiworker-freeform/dist/soul.descriptor.json'
 
 interface AisshInvocation {
   file: string
@@ -33,6 +34,11 @@ interface ProvisionExecutionOptions {
   aisshBin?: string
   executor?: AisshExecutor
   maxBuffer?: number
+}
+
+interface PairExecutionOptions extends ProvisionExecutionOptions {
+  soulPath: string
+  targetRef: string
 }
 
 interface ApplyApprovalIO {
@@ -83,6 +89,7 @@ export function buildCli() {
   cli.usage('<command> [options]')
   cli.example(PLAN_EXAMPLE)
   cli.example(APPLY_EXAMPLE)
+  cli.example(PAIR_EXAMPLE)
 
   addProvisionOptions(cli.command('plan', 'Preview a Paseo workspace provisioning plan without changing the target')
     .usage('plan [options]'),
@@ -124,6 +131,25 @@ export function buildCli() {
         await persistFailureIfRequested(plan, error, options)
         throw error
       }
+    })
+
+  cli.command('pair', 'Generate a transient Paseo pairing offer through aissh without storing it')
+    .usage('pair [options]')
+    .option('--target <ref>', 'aissh target ref, e.g. aissh:server-1')
+    .option('--soul <path>', 'built dist/soul.descriptor.json used to derive the prepared workspace name')
+    .option('--aissh-bin <path>', 'override aissh executable; defaults to AISSH_BIN, bundled aissh-cli launcher, then PATH')
+    .option('--json', 'print the transient pairing response as machine-readable data')
+    .example(PAIR_EXAMPLE)
+    .action(async (options) => {
+      const result = await executePaseoPair({
+        aisshBin: typeof options.aisshBin === 'string' ? options.aisshBin : undefined,
+        soulPath: requireOption(options.soul, '--soul'),
+        targetRef: requireOption(options.target, '--target'),
+      })
+      if (options.json)
+        printJson(result)
+      else
+        printText(formatPairExecutionSummary(result))
     })
 
   cli.command('doctor', 'Run local AIWorker CLI diagnostics without contacting a target')
@@ -353,6 +379,129 @@ function formatProvisionExecutionSummary(result: Awaited<ReturnType<typeof execu
     result.stdout ? `stdout: ${result.stdout.trim()}` : '',
     result.stderr ? `stderr: ${result.stderr.trim()}` : '',
   ].filter(Boolean).join('\n')
+}
+
+function formatPairExecutionSummary(result: Awaited<ReturnType<typeof executePaseoPair>>): string {
+  return [
+    'Paseo pairing response',
+    '',
+    `Target: ${result.targetRef}`,
+    `Workspace: ${result.workspaceRef}`,
+    `aissh source: ${result.aissh.source}`,
+    'Pairing material below is transient. AIWorker did not persist it.',
+    result.stdout ? `stdout:\n${result.stdout.trim()}` : '',
+    result.stderr ? `stderr:\n${result.stderr.trim()}` : '',
+  ].filter(Boolean).join('\n')
+}
+
+export async function executePaseoPair(options: PairExecutionOptions) {
+  const descriptor = readSoulDescriptor(options.soulPath)
+  const workspaceName = descriptor.identity.id
+  const script = createPaseoPairScript(workspaceName)
+  const serverRef = normalizeAisshServerRef(options.targetRef)
+  const reason = `Generate transient Paseo pairing offer for ${workspaceName}`
+  const args = ['exec', serverRef, script, `--reason=${reason}`]
+  const invocation = resolveAisshInvocation(options.aisshBin)
+  const executor = options.executor ?? createDefaultAisshExecutor()
+  const credentials = resolveAisshCredentials(process.cwd(), process.env)
+  const execCwd = await createNeutralAisshCwd()
+  try {
+    const result = await executor.execFile(invocation.file, [...invocation.prefix, ...args], {
+      cwd: execCwd,
+      env: credentials.env,
+      maxBuffer: options.maxBuffer ?? 1024 * 1024 * 8,
+    })
+    return {
+      aissh: {
+        args,
+        cwd: execCwd,
+        file: invocation.source === 'path' ? 'aissh' : invocation.file,
+        source: invocation.source,
+      },
+      status: 'paired',
+      stderr: sanitizePairingSuccessStream(result.stderr ?? '', script, args),
+      stdout: sanitizePairingSuccessStream(result.stdout, script, args),
+      targetRef: redactSecretLike(options.targetRef),
+      workspaceRef: `$HOME/aiworker-workspaces/${workspaceName}`,
+    }
+  }
+  catch (error) {
+    throw createRedactedPairingError(error, invocation.file, script, args)
+  }
+  finally {
+    await rm(execCwd, { force: true, recursive: true })
+  }
+}
+
+function createPaseoPairScript(workspaceName: string): string {
+  const safeWorkspaceName = validatePairWorkspaceName(workspaceName)
+  return [
+    'set -euo pipefail',
+    ...pairRemoteIdentityPreludeCommands(safeWorkspaceName),
+    'test -d "$AIWORKER_WORKSPACE_REF" || { printf \'%s\\n\' "AIWORKER_PAIR_WORKSPACE_MISSING: run aiworker apply for $AIWORKER_WORKSPACE_REF before requesting a pairing link." >&2; exit 66; }',
+    'cd "$AIWORKER_WORKSPACE_REF"',
+    'paseo daemon pair --home "$PASEO_HOME"',
+  ].join(' && ')
+}
+
+function pairRemoteIdentityPreludeCommands(workspaceName: string): string[] {
+  return [
+    'unset PASEO_HOST',
+    'AIWORKER_REMOTE_USER="$(whoami)"',
+    'AIWORKER_REMOTE_UID="$(id -u)"',
+    'AIWORKER_REMOTE_PWD="$(pwd -P)"',
+    ': "$' + '{HOME:?AIWorker requires HOME for aissh execution identity}"',
+    'case "$HOME" in /*) ;; *) printf \'%s\\n\' "AIWorker requires absolute HOME for aissh execution identity." >&2; exit 64 ;; esac',
+    'AIWORKER_REMOTE_HOME="$(cd "$HOME" && pwd -P)" || { printf \'%s\\n\' "AIWorker could not canonicalize HOME for aissh execution identity." >&2; exit 64; }',
+    'PASEO_HOME="$AIWORKER_REMOTE_HOME/.paseo"',
+    'export PASEO_HOME',
+    `AIWORKER_WORKSPACE_NAME=${shellQuoteForScript(workspaceName)}`,
+    'AIWORKER_WORKSPACE_ROOT="$AIWORKER_REMOTE_HOME/aiworker-workspaces"',
+    'AIWORKER_WORKSPACE_REF="$AIWORKER_WORKSPACE_ROOT/$AIWORKER_WORKSPACE_NAME"',
+    'printf \'%s\\n\' "AIWorker target identity discovered: user=$AIWORKER_REMOTE_USER uid=$AIWORKER_REMOTE_UID home=$AIWORKER_REMOTE_HOME pwd=$AIWORKER_REMOTE_PWD"',
+  ]
+}
+
+function validatePairWorkspaceName(value: string): string {
+  const workspaceName = value.trim()
+  if (!workspaceName || workspaceName === '.' || workspaceName === '..' || workspaceName.includes('/') || workspaceName.includes('\\') || workspaceName.includes('..') || !/^[\w.-]+$/.test(workspaceName))
+    throw new Error('workspace name must be a safe relative segment')
+  return workspaceName
+}
+
+function shellQuoteForScript(value: string): string {
+  if (/^[\w/:=.,@%+-]+$/.test(value))
+    return value
+  return `'${value.replaceAll('\'', String.raw`'\''`)}'`
+}
+
+function sanitizePairingSuccessStream(value: string, script: string, args: string[]): string {
+  return scrubGeneratedCommandEcho(redactLiteralProviderSecret(unwrapAisshExecutionEnvelope(value.trim())), generatedCommandNeedles(script, args))
+}
+
+function createRedactedPairingError(error: unknown, file: string, script: string, args: string[]): Error {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code) : ''
+  if (code === 'ENOENT') {
+    return new Error(redactSecretLike(`aissh CLI unavailable (${file}). Run bun install to install optional aissh-cli, or set AISSH_BIN to an existing aissh executable.`))
+  }
+  const stdout = typeof (error as { stdout?: unknown })?.stdout === 'string' ? (error as { stdout: string }).stdout : ''
+  const stderr = typeof (error as { stderr?: unknown })?.stderr === 'string' ? (error as { stderr: string }).stderr : ''
+  const summary = code && code !== 'undefined' ? `aissh pairing failed (code ${code})` : 'aissh pairing failed'
+  const detail = [
+    summary,
+    'Pairing output is transient; AIWorker does not persist raw pairing links or QR codes.',
+    stdout ? `stdout: ${formatPairingErrorStream(stdout, script, args)}` : '',
+    stderr ? `stderr: ${formatPairingErrorStream(stderr, script, args)}` : '',
+    'Next step: run `aiworker apply ... --yes` first, verify Paseo daemon status on the target, then retry `aiworker pair ...`.',
+  ].filter(Boolean).join('\n')
+  return new Error(redactSecretLike(detail))
+}
+
+function formatPairingErrorStream(value: string, script: string, args: string[]): string {
+  const sanitized = scrubGeneratedCommandEcho(redactSensitiveAisshOutput(redactSecretLike(unwrapAisshExecutionEnvelope(value.trim()))), generatedCommandNeedles(script, args))
+  if (sanitized.length <= MAX_ERROR_STREAM_CHARS)
+    return sanitized
+  return `${sanitized.slice(0, MAX_ERROR_STREAM_CHARS)}\n... output truncated ...`
 }
 
 async function persistExecutionIfRequested(plan: ProvisionPlan, result: Awaited<ReturnType<typeof executeProvisionPlan>>, options: Record<string, unknown>): Promise<void> {
@@ -889,7 +1038,10 @@ function updateJsonPayloadDepth(previousDepth: number, trimmed: string): number 
 }
 
 function scrubGeneratedProvisioningEcho(value: string, plan: ProvisionPlan): string {
-  const unsafeNeedles = generatedProvisioningNeedles(plan)
+  return scrubGeneratedCommandEcho(value, generatedProvisioningNeedles(plan))
+}
+
+function scrubGeneratedCommandEcho(value: string, unsafeNeedles: string[]): string {
   const lines = value.split(/\r?\n/)
   const safeLines: string[] = []
   let omittedPreviousLine = false
@@ -909,12 +1061,14 @@ function scrubGeneratedProvisioningEcho(value: string, plan: ProvisionPlan): str
 }
 
 function generatedProvisioningNeedles(plan: ProvisionPlan): string[] {
-  const script = plan.aissh.script
+  return generatedCommandNeedles(plan.aissh.script, [plan.command, ...plan.aissh.args])
+}
+
+function generatedCommandNeedles(script: string, args: string[]): string[] {
   const base64Payloads = Array.from(script.matchAll(/printf '%s' (?:(['"])([A-Za-z0-9+/=]{16,})\1|([A-Za-z0-9+/=]{16,})) \| base64 -d/g), match => match[2] ?? match[3] ?? '')
   return [
     script,
-    plan.command,
-    ...plan.aissh.args,
+    ...args,
     ...base64Payloads,
   ].filter(needle => needle.length >= 16)
 }
@@ -927,8 +1081,15 @@ function isGeneratedProvisioningEcho(line: string, unsafeNeedles: string[]): boo
     || line.includes('printf \'%s\'')
     || line.includes('set -euo pipefail')
     || line.includes('unset PASEO_HOST')
+    || line.includes('AIWORKER_REMOTE_USER=')
+    || line.includes('AIWORKER_REMOTE_UID=')
+    || line.includes('AIWORKER_REMOTE_PWD=')
     || line.includes('AIWORKER_REMOTE_HOME=')
     || line.includes('AIWORKER_WORKSPACE_REF=')
+    || line.includes('AIWORKER_PAIR_WORKSPACE_MISSING')
+    || line.includes('test -d "$AIWORKER_WORKSPACE_REF"')
+    || line.includes('cd "$AIWORKER_WORKSPACE_REF"')
+    || line.includes('AIWorker target identity discovered: user=$AIWORKER_REMOTE_USER')
     || line.includes('export PASEO_HOME')
     || line.includes('npm install -g @getpaseo/cli')
     || line.includes('paseo daemon status')
