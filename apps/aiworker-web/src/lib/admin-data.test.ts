@@ -103,7 +103,7 @@ describe('admin data fixtures', () => {
       providerProfileId: providerProfile.id,
       soulReleaseRef: `${soul.id}@${soul.version}`,
       status: 'ready',
-      workspaceRef: '/home/alice/workspaces/freeform',
+      workspaceRef: '$HOME/aiworker-workspaces/freeform',
     })
     const handoffReadyAssignment = {
       ...assignment,
@@ -140,7 +140,7 @@ describe('admin data fixtures', () => {
     expect(Object.keys(source)).toEqual(['loadAdminConsoleData'])
     expect(data.assignments[0]?.receiptId).toBe('rcpt-1')
     expect(data.assignments[0]?.handoffLabel).toContain('paseo daemon pair')
-    expect(data.assignments[0]?.handoffLabel).toContain('--home /home/alice/.paseo')
+    expect(data.assignments[0]?.handoffLabel).toContain('--home "$PASEO_HOME"')
     expect(data.assignments[0]?.handoffLabel).toContain('Paseo frontend')
     expect(data.assignments[0]?.handoffLabel).not.toContain('paseo --host')
     expect(data.assignments[0]?.nextStep).toContain('AIWorker 不读取 session')
@@ -190,7 +190,7 @@ describe('admin data fixtures', () => {
       providerProfileId: 'codex-default',
       soulReleaseRef: 'aiworker-freeform@2026.06.15',
       status: 'ready',
-      workspaceRef: '/home/alice/workspaces/freeform',
+      workspaceRef: '$HOME/aiworker-workspaces/freeform',
     })
     expect(() => mapControlPlaneSnapshotToAdminConsoleData({
       ...createEmptyControlPlaneSnapshot(),

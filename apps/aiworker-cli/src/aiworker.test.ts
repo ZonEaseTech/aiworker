@@ -18,14 +18,14 @@ afterEach(() => {
   process.chdir(savedCwd)
 })
 
-async function createDescriptor(content = '# HR Manager\n') {
+async function createDescriptor(content = '# HR Manager\n', id = 'hr-manager') {
   const root = await mkdtemp(path.join(tmpdir(), 'aiworker-cli-'))
   const descriptorPath = path.join(root, 'dist/soul.descriptor.json')
   await mkdir(path.join(root, 'dist/workspace-template'), { recursive: true })
   await writeFile(path.join(root, 'dist/workspace-template/AGENTS.md'), content)
   await writeFile(descriptorPath, JSON.stringify({
     protocol: 'soul/v1',
-    identity: { id: 'hr-manager', name: 'HR Manager', version: '1.0.0' },
+    identity: { id, name: 'HR Manager', version: '1.0.0' },
     workspaceTemplate: { root: 'dist/workspace-template', entryFiles: ['AGENTS.md'], mcpFiles: [], skillDirs: [] },
   }))
   return descriptorPath
@@ -39,16 +39,10 @@ function planArgs(descriptorPath: string) {
     'aissh:server-1',
     '--environment',
     'env-alice',
-    '--paseo-home',
-    '/home/alice/.paseo',
-    '--paseo-endpoint',
-    'unix:/run/paseo/alice.sock',
     '--provider',
     'claude-work',
     '--soul',
     descriptorPath,
-    '--workspace',
-    '/home/alice/workspaces/hr',
   ]
 }
 
@@ -64,6 +58,8 @@ describe('aiworker thin CLI', () => {
     expect(output).toContain('apply')
     expect(output).not.toContain('describe')
     expect(output).not.toContain('plan-provision')
+    expect(output).not.toContain('--paseo-home')
+    expect(output).not.toContain('--workspace <path>')
   })
 
   test('bare aiworker prints concise help instead of silently exiting', async () => {
@@ -92,7 +88,7 @@ describe('aiworker thin CLI', () => {
     const output = await $`bun ${cliPath} plan ${planArgs(descriptorPath)}`.text()
     expect(output).toContain('AIWorker provisioning plan')
     expect(output).toContain('Assigned user: alice@example.com')
-    expect(output).toContain('Workspace: /home/alice/workspaces/hr')
+    expect(output).toContain('Workspace: $HOME/aiworker-workspaces/hr-manager')
     expect(output).toContain('Next step: aiworker apply')
     expect(output).not.toContain('base64 -d')
     expect(output.trim()).not.toStartWith('{')
@@ -120,8 +116,20 @@ describe('aiworker thin CLI', () => {
     const output = await $`bun ${cliPath} plan ${planArgs(descriptorPath)} --json`.json()
     expect(output.assignment.assignedEmail).toBe('alice@example.com')
     expect(output.receipt.soulReleaseRef).toBe('hr-manager@1.0.0')
+    expect(output.receipt.workspaceRef).toBe('$HOME/aiworker-workspaces/hr-manager')
+    expect(output.workspacePolicy.workspaceName).toBe('hr-manager')
+    expect(output.workspacePolicy.kind).toBe('home-derived')
+    expect(output.endpointBinding.bindingKind).toBe('home-derived-local-daemon')
+    expect(output.providerReadiness.kind).toBe('paseo-provider-json-v1')
+    expect(output.providerReadiness.providerListPredicate).toContain('status == "available"')
     expect(output.command).toContain('aissh exec server-1')
     expect(output.command).toContain('base64 -d')
+    expect(output.command).toContain('unset PASEO_HOST')
+    expect(output.command).toContain('PASEO_HOME="$AIWORKER_REMOTE_HOME/.paseo"')
+    expect(output.command).toContain('paseo provider ls --json')
+    expect(output.command).toContain('paseo provider models')
+    expect(output.command).not.toContain('/home/alice/workspaces')
+    expect(output.command).not.toContain('PASEO_HOME=/home/alice/.paseo')
     expect(output.aissh.cwdPolicy).toBe('neutral-tempdir')
     expect(output.aissh.credentials.source).toBe('env')
   })
@@ -129,10 +137,24 @@ describe('aiworker thin CLI', () => {
   test('plans ACP provider profiles with explicit Paseo provider ids', async () => {
     const descriptorPath = await createDescriptor()
 
-    const output = await $`bun ${cliPath} plan --user Alice@Example.com --target aissh:server-1 --environment env-alice --paseo-home /home/alice/.paseo --paseo-endpoint unix:/run/paseo/alice.sock --provider acp-team --provider-kind acp --paseo-provider-id paseo-acp-team --soul ${descriptorPath} --workspace /home/alice/workspaces/hr --json`.json()
+    const output = await $`bun ${cliPath} plan --user Alice@Example.com --target aissh:server-1 --environment env-alice --provider acp-team --provider-kind acp --paseo-provider-id paseo-acp-team --soul ${descriptorPath} --json`.json()
 
-    expect(output.command).toContain('Paseo provider profile paseo-acp-team')
+    expect(output.command).toContain('AIWORKER_PASEO_PROVIDER_ID=paseo-acp-team')
+    expect(output.command).toContain('paseo provider ls --json')
     expect(output.command).not.toContain('custom')
+  })
+
+  test('malicious Soul ids fail before script generation without echoing attacker text', async () => {
+    const descriptorPath = await createDescriptor('hostile context\n', '../evil; echo SHOULD_NOT_RUN')
+
+    const result = await $`bun ${cliPath} plan ${planArgs(descriptorPath)} --json`.nothrow()
+    const stderr = result.stderr.toString()
+
+    expect(result.exitCode).toBe(1)
+    expect(stderr).toContain('Invalid Soul descriptor')
+    expect(stderr).not.toContain('SHOULD_NOT_RUN')
+    expect(stderr).not.toContain('../evil')
+    expect(stderr).not.toContain('base64 -d')
   })
 
   test('apply refuses execution unless explicitly approved', async () => {
@@ -321,12 +343,13 @@ describe('aiworker thin CLI', () => {
     const descriptorPath = await createDescriptor('internal business context\n')
     const root = await mkdtemp(path.join(tmpdir(), 'aiworker-echoing-aissh-'))
     const fakeAissh = path.join(root, 'aissh')
-    await writeFile(fakeAissh, '#!/bin/sh\necho "stdout sk-testsecret123456"\necho "argv $*"\necho "stderr sk-testsecret123456" >&2\necho "argv $*" >&2\n')
+    await writeFile(fakeAissh, '#!/bin/sh\necho "stdout sk-testsecret123456"\necho "https://relay.paseo.example/#offer=real-token"\necho "{\\"provider\\":\\"claude\\",\\"status\\":\\"available\\"}"\necho "[\\"gpt-5\\",\\"claude-opus\\"]"\necho "████████"\necho "argv $*"\necho "stderr sk-testsecret123456" >&2\necho "{\\"model\\":\\"claude-opus\\",\\"thinkingOptionIds\\":[\\"high\\"]}" >&2\necho "argv $*" >&2\n')
     await chmod(fakeAissh, 0o755)
 
     const output = await $`bun ${cliPath} apply ${planArgs(descriptorPath)} --yes --aissh-bin ${fakeAissh}`.text()
 
     expect(output).toContain('AIWorker provisioning executed')
+    expect(output).toContain('Handoff: AIWorker derives PASEO_HOME')
     expect(output).toContain('[REDACTED]')
     expect(output).toContain('[omitted: output echoed the generated provisioning command]')
     expect(output).not.toContain('sk-testsecret123456')
@@ -336,8 +359,35 @@ describe('aiworker thin CLI', () => {
     expect(output).not.toContain('export PASEO_HOME=')
     expect(output).not.toContain('npm install -g @getpaseo/cli')
     expect(output).not.toContain('paseo daemon status')
-    expect(output).not.toContain('paseo daemon pair')
+    expect(output).not.toContain('real-token')
+    expect(output).not.toContain('"provider"')
+    expect(output).not.toContain('"model"')
+    expect(output).not.toContain('gpt-5')
+    expect(output).not.toContain('claude-opus')
+    expect(output).not.toContain('████')
+    expect(output).toContain('[REDACTED_PAIRING_URL]')
+    expect(output).toContain('[omitted: raw Paseo provider payload]')
     expect(output).not.toContain('aW50ZXJuYWwgYnVzaW5lc3MgY29udGV4dAo=')
+  })
+
+  test('executeProvisionPlan redacts standalone base64 payload echoes from projected files', async () => {
+    const descriptorPath = await createDescriptor('standalone business context\n')
+    const plan = await $`bun ${cliPath} plan ${planArgs(descriptorPath)} --json`.json()
+    const base64Payload = Array.from(String(plan.aissh.script).matchAll(/printf '%s' (?:(['"])([A-Za-z0-9+/=]{16,})\1|([A-Za-z0-9+/=]{16,})) \| base64 -d/g), match => match[2] ?? match[3] ?? '').find(Boolean)
+
+    expect(base64Payload).toBeTruthy()
+
+    const result = await executeProvisionPlan(plan, {
+      aisshBin: '/mock/aissh',
+      executor: {
+        async execFile() {
+          return { stderr: '', stdout: `${base64Payload}\n` }
+        },
+      },
+    })
+
+    expect(result.stdout).toContain('[omitted: output echoed the generated provisioning command]')
+    expect(result.stdout).not.toContain(base64Payload!)
   })
 
   test('executeProvisionPlan redacts failed aissh stdout, stderr, and messages', async () => {
@@ -380,7 +430,7 @@ describe('aiworker thin CLI', () => {
     const descriptorPath = await createDescriptor('internal business context\n')
     const root = await mkdtemp(path.join(tmpdir(), 'aiworker-failing-aissh-'))
     const fakeAissh = path.join(root, 'aissh')
-    await writeFile(fakeAissh, '#!/bin/sh\necho "stderr sk-testsecret123456" >&2\necho "argv $*" >&2\necho "stdout sk-testsecret123456"\necho "argv $*"\nexit 42\n')
+    await writeFile(fakeAissh, '#!/bin/sh\necho "stderr sk-testsecret123456" >&2\necho "https://relay.paseo.example/?offer=stderr-token" >&2\necho "{\\"provider\\":\\"claude\\",\\"status\\":\\"available\\"}" >&2\necho "argv $*" >&2\necho "stdout sk-testsecret123456"\necho "████████"\nprintf "%s\\n" "[" "  {" "    \\"id\\": \\"gpt-5.5\\"" "  }" "]"\necho "argv $*"\nexit 42\n')
     await chmod(fakeAissh, 0o755)
 
     const result = await $`bun ${cliPath} apply ${planArgs(descriptorPath)} --yes --aissh-bin ${fakeAissh}`.nothrow()
@@ -396,6 +446,13 @@ describe('aiworker thin CLI', () => {
     expect(stderr).not.toContain('npm install -g @getpaseo/cli')
     expect(stderr).not.toContain('paseo daemon status')
     expect(stderr).not.toContain('paseo daemon pair')
+    expect(stderr).not.toContain('stderr-token')
+    expect(stderr).not.toContain('"provider"')
+    expect(stderr).not.toContain('"id"')
+    expect(stderr).not.toContain('gpt-5.5')
+    expect(stderr).not.toContain('████')
+    expect(stderr).toContain('[REDACTED_PAIRING_URL]')
+    expect(stderr).toContain('[omitted: raw Paseo provider payload]')
     expect(stderr).not.toContain('aW50ZXJuYWwgYnVzaW5lc3MgY29udGV4dAo=')
     expect(stderr).toContain('[omitted: output echoed the generated provisioning command]')
     expect(stderr).toContain('aiworker plan ... --show-script')

@@ -17,7 +17,7 @@ AIWorker owns only:
 - organization/user authentication and assignment records;
 - manager/admin web views over AIWorker-owned metadata;
 - target machine registry (`aissh`, local dev, or rootless container targets);
-- Paseo environment metadata (`PASEO_HOME`, daemon endpoint/socket/offer, isolation kind);
+- Paseo environment metadata (`PASEO_HOME` intent, daemon endpoint/socket/redacted offer or `local-home` binding, isolation kind);
 - provider profile metadata and secret references, not literal provider keys;
 - Soul release registry;
 - Soul filesystem projection into a workspace directory;
@@ -61,15 +61,16 @@ Default isolation is one employee environment per OS user, rootless container, o
 
 ```text
 alice@server-1
-  PASEO_HOME=/home/alice/.paseo
-  daemon endpoint=unix:/run/paseo/alice.sock
-  workspaces/
+  remote HOME=/home/alice
+  PASEO_HOME=$HOME/.paseo
+  daemon endpoint=local daemon for that HOME
+  aiworker-workspaces/
     hr-recruiter/
     software-support/
     product-manager/
 ```
 
-Multiple employees may share the same physical machine only when each has a separate OS user/container/VM, separate `PASEO_HOME`, separate daemon endpoint, and separate provider credentials.
+Multiple employees may share the same physical machine only when each has a separate OS user/container/VM, separate remote `HOME`, separate `PASEO_HOME`, separate daemon state, and separate provider credentials. AIWorker must not combine an `aissh` login for one HOME with paths or provider credentials from another HOME.
 
 ## Soul projection
 
@@ -92,11 +93,11 @@ Provider secrets do not belong in the Soul or descriptor. Provider credentials a
 ```text
 1. Admin selects user + target + provider profile + Soul release.
 2. AIWorker creates an Assignment.
-3. AIWorker uses aissh to install/verify Paseo and provider CLIs.
-4. AIWorker configures the employee Paseo environment metadata/profile.
-5. AIWorker creates or selects a workspace directory.
+3. AIWorker uses aissh to discover the target execution identity and canonical remote HOME.
+4. AIWorker derives `PASEO_HOME=$HOME/.paseo` and `$HOME/aiworker-workspaces/<workspace>` under that identity; caller-provided absolute paths are not path authority.
+5. AIWorker installs/verifies Paseo, starts/checks the HOME-bound daemon, and gates provider readiness through the explicit `paseo-provider-json-v1` policy (`provider ls/models`) under the same identity.
 6. AIWorker writes the Soul workspace files.
-7. AIWorker records a redacted receipt and handoff.
+7. AIWorker records a redacted receipt and instruction-only handoff; it does not store real pairing URLs or QR codes.
 8. Employee opens Paseo and works inside that workspace.
 ```
 

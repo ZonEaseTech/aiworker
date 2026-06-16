@@ -295,7 +295,7 @@ const fixtureEnvironments: PaseoEnvironmentSummary[] = [
     id: 'env-alice-prod-1',
     ownerEmail: 'alice@example.com',
     targetRef: 'aissh:prod-ops-1',
-    paseoHome: '/home/alice/.paseo',
+    paseoHome: '$HOME/.paseo',
     daemonEndpoint: 'unix:/run/paseo/alice.sock',
     endpointKind: 'unix',
     isolation: 'os-user',
@@ -317,8 +317,8 @@ const fixtureEnvironments: PaseoEnvironmentSummary[] = [
     id: 'env-cara-relay',
     ownerEmail: 'cara@example.com',
     targetRef: 'aissh:remote-sales-7',
-    paseoHome: '/home/cara/.paseo',
-    daemonEndpoint: 'https://relay.paseo.example/#offer=redacted',
+    paseoHome: '$HOME/.paseo',
+    daemonEndpoint: '[REDACTED_PAIRING_URL]',
     endpointKind: 'relay-offer',
     isolation: 'vm',
     providerProfileIds: ['acp-secure'],
@@ -371,10 +371,10 @@ const fixtureAssignments: AssignmentSummary[] = [
     environmentId: 'env-alice-prod-1',
     soulReleaseId: 'soul-freeform-2026-06-14',
     providerProfileId: 'codex-default',
-    workspaceRef: '/home/alice/workspaces/freeform',
+    workspaceRef: '$HOME/aiworker-workspaces/freeform',
     receiptId: 'rcpt-20260614-001',
     handoffKind: 'paseo-daemon',
-    handoffLabel: 'paseo daemon pair --home /home/alice/.paseo link for /home/alice/workspaces/freeform',
+    handoffLabel: 'run paseo daemon pair --home "$PASEO_HOME" from $HOME/aiworker-workspaces/freeform; open the printed link in the Paseo frontend',
     updatedAt: '2026-06-14 07:34 UTC',
     nextStep: '员工可在 Paseo 客户端打开 workspace；AIWorker 不读取 session。',
     audit: [
@@ -391,7 +391,7 @@ const fixtureAssignments: AssignmentSummary[] = [
         at: '07:31',
         actor: 'aiworker apply',
         action: 'projected workspace files',
-        target: '/home/alice/workspaces/freeform',
+        target: '$HOME/aiworker-workspaces/freeform',
         tone: 'info',
       },
     ],
@@ -429,7 +429,7 @@ const fixtureAssignments: AssignmentSummary[] = [
     environmentId: 'env-cara-relay',
     soulReleaseId: 'soul-freeform-2026-06-14',
     providerProfileId: 'acp-secure',
-    workspaceRef: '/home/cara/workspaces/sales-enable',
+    workspaceRef: '$HOME/aiworker-workspaces/sales-enable',
     receiptId: 'rcpt-20260613-014',
     handoffKind: 'pairing-offer',
     handoffLabel: 'relay offer 已脱敏，等待员工重新配对',
@@ -513,6 +513,8 @@ function mapFixtureAuditEvent(event: AuditEventSummary): AuditEvent {
 }
 
 function mapFixtureReceipt(assignment: AssignmentSummary): ProvisionReceipt {
+  const environment = fixtureEnvironments.find(item => item.id === assignment.environmentId)
+  const workspaceName = assignment.workspaceRef.split('/').filter(Boolean).at(-1) ?? assignment.workspaceRef
   return {
     schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
     id: assignment.receiptId,
@@ -521,11 +523,20 @@ function mapFixtureReceipt(assignment: AssignmentSummary): ProvisionReceipt {
     aisshArgs: ['exec', assignment.environmentId, '[redacted]'],
     at: assignment.updatedAt,
     command: 'aissh exec [redacted]',
+    endpointBinding: environment?.endpointKind === 'relay-offer'
+      ? 'opaque-pairing-offer'
+      : environment?.endpointKind === 'local-home'
+        ? 'home-derived-local-daemon'
+        : 'external-endpoint',
+    endpointKind: environment?.endpointKind ?? 'local-home',
     environmentId: assignment.environmentId,
     providerProfileId: assignment.providerProfileId,
+    providerReadinessPolicy: 'paseo-provider-json-v1',
     soulReleaseRef: fixtureSoulReleaseRef(assignment.soulReleaseId),
     status: assignment.status === 'needs_attention' ? 'failed' : 'applied',
     targetRef: assignment.environmentId,
+    workspaceName,
+    workspacePathPolicy: 'home-derived',
     workspaceRef: assignment.workspaceRef,
   }
 }
@@ -652,12 +663,12 @@ function mapAssignment(
   }
 }
 
-function handoffLabel(kind: HandoffKind, _endpoint: string, workspaceRef: string, paseoHome?: string): RedactedHandoffReference {
+function handoffLabel(kind: HandoffKind, _endpoint: string, workspaceRef: string, _paseoHome?: string): RedactedHandoffReference {
   if (kind === 'pairing-offer')
     return `pairing offer redacted for ${workspaceRef}`
   if (kind === 'manual-path')
     return `open workspace path ${workspaceRef}`
-  return `run paseo daemon pair --home ${paseoHome ?? '<paseo-home>'} from ${workspaceRef}; open the printed link in the Paseo frontend`
+  return `run paseo daemon pair --home "$PASEO_HOME" from ${workspaceRef}; open the printed link in the Paseo frontend`
 }
 
 function nextStepForAssignment(status: AssignmentStatus): string {

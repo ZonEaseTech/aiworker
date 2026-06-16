@@ -3,16 +3,20 @@ import type {
   AuditEvent,
   ControlPlaneSnapshot,
   ControlPlaneStore,
+  EndpointBindingKind,
+  PaseoEndpointBinding,
   PaseoEnvironment,
   PaseoHandoff,
   ProjectedFile,
   ProviderProfile,
+  ProviderReadinessPolicy,
   ProvisionPlan,
   ProvisionPlanInput,
   ProvisionReceipt,
   ProvisionReceiptStatus,
   VersionedControlPlaneRecord,
   WorkspaceAssignment,
+  WorkspacePathPolicy,
   WorkspaceProjectionManifest,
 } from './control-plane'
 import { Buffer } from 'node:buffer'
@@ -31,11 +35,15 @@ export type {
   AuditEvent,
   ControlPlaneSnapshot,
   ControlPlaneStore,
+  EndpointBindingKind,
+  PaseoEndpointBinding,
   PaseoEndpointKind,
   PaseoEnvironment,
   PaseoHandoff,
   ProjectedFile,
   ProviderProfile,
+  ProviderReadinessPolicy,
+  ProviderReadinessPolicyKind,
   ProvisioningAdapterType,
   ProvisionPlan,
   ProvisionPlanInput,
@@ -44,6 +52,8 @@ export type {
   SoulRelease,
   VersionedControlPlaneRecord,
   WorkspaceAssignment,
+  WorkspacePathPolicy,
+  WorkspacePathPolicyKind,
   WorkspaceProjectionManifest,
   WorkspaceProjectionManifestFile,
 } from './control-plane'
@@ -58,6 +68,11 @@ const ASSIGNMENT_TRANSITIONS: Record<AssignmentStatus, AssignmentStatus[]> = {
   revoked: ['archived'],
   workspace_projected: ['handoff_ready', 'ready', 'needs_attention', 'revoked', 'archived'],
 }
+const URL_PATTERN = /\bhttps?:\/\/[^\s"'<>`]+/g
+const HOME_DERIVED_PASEO_HOME = '$HOME/.paseo' as const
+const HOME_DERIVED_WORKSPACE_ROOT = '$HOME/aiworker-workspaces' as const
+const HOME_DERIVED_DAEMON_ENDPOINT = 'paseo-daemon:remote-home'
+const PASEO_PROVIDER_READINESS_POLICY_KIND = 'paseo-provider-json-v1' as const
 
 export function normalizeAssignedEmail(email: string): string {
   return email.trim().toLowerCase()
@@ -83,19 +98,19 @@ export function createAssignment(input: Omit<WorkspaceAssignment, 'assignedEmail
 }
 
 export function createHandoff(environment: PaseoEnvironment, workspaceRef: string): PaseoHandoff {
-  if (environment.daemonEndpoint.startsWith('https://app.paseo.sh/#offer=')) {
+  if (isPaseoPairingOffer(environment.daemonEndpoint)) {
     return {
       kind: 'pairing-offer',
-      daemonEndpoint: environment.daemonEndpoint,
+      daemonEndpoint: redactPaseoPairingMaterial(environment.daemonEndpoint),
       workspaceRef,
-      instructions: `Open Paseo with the pairing offer, then open workspace ${workspaceRef}.`,
+      instructions: `Open Paseo with the pairing offer provided out-of-band, then open workspace ${workspaceRef}. AIWorker does not store the raw pairing URL or QR.`,
     }
   }
   return {
     kind: 'paseo-daemon',
     daemonEndpoint: environment.daemonEndpoint,
     workspaceRef,
-    instructions: `cd ${shellQuote(workspaceRef)}, run paseo daemon status --home ${shellQuote(environment.paseoHome)} to confirm the home/status, start it with paseo daemon start --home ${shellQuote(environment.paseoHome)} only if needed, then run paseo daemon pair --home ${shellQuote(environment.paseoHome)} and open the printed pairing link in the Paseo frontend.`,
+    instructions: `AIWorker derives PASEO_HOME from the aissh user's HOME. After apply succeeds, cd ${handoffWorkspacePath(workspaceRef)} on that target, run paseo daemon pair --home "$PASEO_HOME", and open the printed pairing link in the Paseo frontend. AIWorker does not store the pairing URL or QR.`,
   }
 }
 
@@ -112,20 +127,27 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
   assertNoLiteralSecret(input.environment.daemonEndpoint, 'environment.daemonEndpoint')
   assertNoLiteralSecret(input.assignment.workspaceRef, 'assignment.workspaceRef')
 
-  const projectionCommands = projectionScriptCommands(input.assignment.workspaceRef, input.soul.files)
+  const workspaceName = deriveWorkspaceName(input.assignment.workspaceRef, input.soul.id)
+  const workspacePolicy = createWorkspacePathPolicy(workspaceName)
+  const workspaceRef = workspacePolicy.workspaceRef
+  const paseoHome = workspacePolicy.paseoHome
+  const endpointBinding = createEndpointBinding(input.environment)
+  const providerReadiness = createProviderReadinessPolicy(input.providerProfile)
+  const projectionCommands = projectionScriptCommands(input.soul.files)
   const projectedFiles = input.soul.files.map(file => validateProjectedFilePath(file.relativePath)).sort().join(' ')
   const script = [
     'set -euo pipefail',
-    `export PASEO_HOME=${shellQuote(input.environment.paseoHome)}`,
-    `mkdir -p ${shellQuote(input.assignment.workspaceRef)}`,
-    `cd ${shellQuote(input.assignment.workspaceRef)}`,
+    ...remoteIdentityPreludeCommands(workspaceName),
     '(command -v paseo >/dev/null || npm install -g @getpaseo/cli)',
-    `(${providerCliCheckCommand(input.providerProfile)})`,
-    `(paseo daemon status --home ${shellQuote(input.environment.paseoHome)} || true)`,
-    `(paseo daemon status --home ${shellQuote(input.environment.paseoHome)} >/dev/null 2>&1 || paseo daemon start --home ${shellQuote(input.environment.paseoHome)})`,
+    `(${providerCliBinaryCheckCommand(input.providerProfile)})`,
+    '(paseo daemon status --home "$PASEO_HOME" || true)',
+    '(paseo daemon status --home "$PASEO_HOME" >/dev/null 2>&1 || paseo daemon start --home "$PASEO_HOME")',
+    ...providerReadinessCommands(input.providerProfile),
+    'mkdir -p "$AIWORKER_WORKSPACE_REF"',
+    'cd "$AIWORKER_WORKSPACE_REF"',
     ...projectionCommands,
-    `printf '%s\n' ${shellQuote(`AIWorker projected ${input.soul.id}@${input.soul.version}: ${projectedFiles}`)} > ${shellQuote(path.posix.join(input.assignment.workspaceRef, '.aiworker-projection'))}`,
-    `paseo daemon pair --home ${shellQuote(input.environment.paseoHome)}`,
+    `printf '%s\n' ${shellQuote(`AIWorker projected ${input.soul.id}@${input.soul.version}: ${projectedFiles}`)} > ${workspaceShellPath('.aiworker-projection')}`,
+    'printf \'%s\\n\' "AIWORKER_HANDOFF_READY: run paseo daemon pair --home \\"$PASEO_HOME\\" from \\"$AIWORKER_WORKSPACE_REF\\" and open the printed link in the Paseo frontend."',
   ].join(' && ')
   const serverRef = normalizeAisshServerRef(input.environment.targetRef)
   const reason = `Provision AIWorker Paseo workspace for ${input.assignment.assignedEmail}`
@@ -150,20 +172,29 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
     },
     assignment: {
       ...input.assignment,
-      handoff: createHandoff(input.environment, input.assignment.workspaceRef),
+      handoff: createHandoff({ ...input.environment, paseoHome }, workspaceRef),
       status: 'handoff_ready',
+      workspaceRef,
     },
     command: redactedCommand,
+    endpointBinding,
+    providerReadiness,
     receipt: {
       adapterType: 'aissh',
       aisshArgs: redactedArgs,
       command: redactedCommand,
+      endpointBinding: endpointBinding.bindingKind,
+      endpointKind: endpointBinding.endpointKind,
       environmentId: input.environment.environmentId,
       providerProfileId: input.providerProfile.id,
+      providerReadinessPolicy: providerReadiness.kind,
       soulReleaseRef: `${input.soul.id}@${input.soul.version}`,
       targetRef: redactSecretLike(input.environment.targetRef),
-      workspaceRef: input.assignment.workspaceRef,
+      workspaceRef,
+      workspaceName: workspacePolicy.workspaceName,
+      workspacePathPolicy: workspacePolicy.kind,
     },
+    workspacePolicy,
   }
 }
 
@@ -327,10 +358,30 @@ export async function writeProjectedFiles(workspaceRoot: string, files: Projecte
 
 export function assertNoLiteralSecret(value: string, field: string): void {
   assertNoLiteralProviderSecret(value, field)
+  if (isPaseoPairingOffer(value))
+    throw new Error(`${field} must not contain raw Paseo pairing material`)
 }
 
 export function redactSecretLike(value: string): string {
-  return redactLiteralProviderSecret(value)
+  return redactPaseoPairingMaterial(redactLiteralProviderSecret(value))
+}
+
+export function isPaseoPairingOffer(value: string): boolean {
+  return Array.from(value.matchAll(URL_PATTERN)).some(match => isPaseoPairingOfferUrl(match[0]))
+}
+
+export function redactPaseoPairingMaterial(value: string): string {
+  return value.replace(URL_PATTERN, url => isPaseoPairingOfferUrl(url) ? '[REDACTED_PAIRING_URL]' : url)
+}
+
+function isPaseoPairingOfferUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.searchParams.has('offer') || /(?:^|[?#&])(?:[^#?&]*&)*offer=/.test(url.hash) || /(?:^|[?#&])(?:[^#?&]*&)*offer=/.test(url.search)
+  }
+  catch {
+    return /[#?&]offer=/.test(value)
+  }
 }
 
 export function assertControlPlaneSnapshotSafe(snapshot: ControlPlaneSnapshot): void {
@@ -386,7 +437,98 @@ function assertNoLiteralSecretsInValue(label: string, value: unknown): void {
   }
 }
 
-function providerCliCheckCommand(profile: ProviderProfile): string {
+function deriveWorkspaceName(workspaceRef: string, fallback: string): string {
+  const symbolicPrefix = `${HOME_DERIVED_WORKSPACE_ROOT}/`
+  const candidate = workspaceRef.startsWith(symbolicPrefix) ? workspaceRef.slice(symbolicPrefix.length) : workspaceRef || fallback
+  return validateSafeWorkspaceName(candidate, fallback)
+}
+
+function createWorkspacePathPolicy(workspaceName: string): WorkspacePathPolicy {
+  return {
+    authority: 'aissh-execution-home',
+    kind: 'home-derived',
+    paseoHome: HOME_DERIVED_PASEO_HOME,
+    workspaceName,
+    workspaceRef: `${HOME_DERIVED_WORKSPACE_ROOT}/${workspaceName}`,
+    workspaceRoot: HOME_DERIVED_WORKSPACE_ROOT,
+  }
+}
+
+function createEndpointBinding(environment: PaseoEnvironment): PaseoEndpointBinding {
+  return {
+    bindingKind: endpointBindingKind(environment),
+    endpointKind: environment.endpointKind,
+    ref: isPaseoPairingOffer(environment.daemonEndpoint)
+      ? redactPaseoPairingMaterial(environment.daemonEndpoint)
+      : redactSecretLike(environment.daemonEndpoint),
+  }
+}
+
+function endpointBindingKind(environment: PaseoEnvironment): EndpointBindingKind {
+  if (environment.endpointKind === 'local-home' || environment.daemonEndpoint === HOME_DERIVED_DAEMON_ENDPOINT)
+    return 'home-derived-local-daemon'
+  if (environment.endpointKind === 'relay-offer' || isPaseoPairingOffer(environment.daemonEndpoint))
+    return 'opaque-pairing-offer'
+  return 'external-endpoint'
+}
+
+function handoffWorkspacePath(workspaceRef: string): string {
+  const homePrefix = `${HOME_DERIVED_WORKSPACE_ROOT}/`
+  if (workspaceRef.startsWith(homePrefix)) {
+    const workspaceName = validateSafeWorkspaceName(workspaceRef.slice(homePrefix.length), workspaceRef)
+    return `"$HOME/aiworker-workspaces/${workspaceName}"`
+  }
+  return shellQuote(workspaceRef)
+}
+
+function createProviderReadinessPolicy(profile: ProviderProfile): ProviderReadinessPolicy {
+  return {
+    commands: ['paseo provider ls --json', 'paseo provider models <provider> --json'],
+    kind: PASEO_PROVIDER_READINESS_POLICY_KIND,
+    modelListPredicate: 'non-empty array',
+    providerId: profile.paseoProviderId ?? profile.provider,
+    providerListPredicate: 'provider == providerId && status == "available" && enabled == "Enabled"',
+    rawOutputPolicy: 'redacted-pass-fail-only',
+  }
+}
+
+function validateSafeWorkspaceName(candidate: string, fallback: string): string {
+  const value = (candidate || fallback).trim()
+  if (!value || value === '.' || value === '..' || value.includes('/') || value.includes('\\') || value.includes('..') || hasControlCharacter(value))
+    throw new Error('workspace name must be a safe relative segment')
+  if (!/^[\w.-]+$/.test(value))
+    throw new Error('workspace name must contain only letters, numbers, dot, underscore, or dash')
+  return value
+}
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((char) => {
+    const code = char.charCodeAt(0)
+    return code <= 31 || code === 127
+  })
+}
+
+function remoteIdentityPreludeCommands(workspaceName: string): string[] {
+  return [
+    'unset PASEO_HOST',
+    'AIWORKER_REMOTE_USER="$(whoami)"',
+    'AIWORKER_REMOTE_UID="$(id -u)"',
+    'AIWORKER_REMOTE_PWD="$(pwd -P)"',
+    'AIWORKER_REMOTE_PATH="$PATH"',
+    ': "$' + '{HOME:?AIWorker requires HOME for aissh execution identity}"',
+    'case "$HOME" in /*) ;; *) printf \'%s\\n\' "AIWorker requires absolute HOME for aissh execution identity." >&2; exit 64 ;; esac',
+    'AIWORKER_REMOTE_HOME="$(cd "$HOME" && pwd -P)" || { printf \'%s\\n\' "AIWorker could not canonicalize HOME for aissh execution identity." >&2; exit 64; }',
+    'PASEO_HOME="$AIWORKER_REMOTE_HOME/.paseo"',
+    'export PASEO_HOME',
+    `AIWORKER_WORKSPACE_NAME=${shellQuote(workspaceName)}`,
+    'case "$AIWORKER_WORKSPACE_NAME" in ""|.|..|*/*|*\\\\*|*".."*) printf \'%s\\n\' "AIWorker workspace name is not a safe HOME-relative segment." >&2; exit 64 ;; esac',
+    'AIWORKER_WORKSPACE_ROOT="$AIWORKER_REMOTE_HOME/aiworker-workspaces"',
+    'AIWORKER_WORKSPACE_REF="$AIWORKER_WORKSPACE_ROOT/$AIWORKER_WORKSPACE_NAME"',
+    'printf \'%s\\n\' "AIWorker target identity discovered: user=$AIWORKER_REMOTE_USER uid=$AIWORKER_REMOTE_UID home=$AIWORKER_REMOTE_HOME pwd=$AIWORKER_REMOTE_PWD"',
+  ]
+}
+
+function providerCliBinaryCheckCommand(profile: ProviderProfile): string {
   if (profile.cliCommand)
     return `command -v ${shellQuote(profile.cliCommand)} >/dev/null || { printf '%s\\n' ${shellQuote(`Missing provider CLI: ${profile.cliCommand}. Install/authenticate it before using this workspace in Paseo.`)} >&2; exit 127; }`
 
@@ -403,6 +545,22 @@ function providerCliCheckCommand(profile: ProviderProfile): string {
   return `command -v ${shellQuote(command)} >/dev/null || { printf '%s\\n' ${shellQuote(`Missing provider CLI: ${command}. Install/authenticate it before using this workspace in Paseo.`)} >&2; exit 127; }`
 }
 
+function providerReadinessCommands(profile: ProviderProfile): string[] {
+  const providerId = profile.paseoProviderId ?? profile.provider
+  const providerLsCheck = 'const fs=require("node:fs");const providerId=process.argv[1];const file=process.argv[2];let parsed;try{parsed=JSON.parse(fs.readFileSync(file,"utf8"))}catch{process.exit(2)}const providers=Array.isArray(parsed)?parsed:[];const provider=providers.find(item=>item&&item.provider===providerId);if(!provider||provider.status!=="available"||provider.enabled!=="Enabled")process.exit(1)'
+  const providerModelsCheck = 'const fs=require("node:fs");const file=process.argv[2];let parsed;try{parsed=JSON.parse(fs.readFileSync(file,"utf8"))}catch{process.exit(2)}if(!Array.isArray(parsed)||parsed.length===0)process.exit(1)'
+  return [
+    `AIWORKER_PASEO_PROVIDER_ID=${shellQuote(providerId)}`,
+    'AIWORKER_PROVIDER_LS_JSON="$(mktemp)"',
+    'AIWORKER_PROVIDER_MODELS_JSON="$(mktemp)"',
+    'trap \'rm -f "$AIWORKER_PROVIDER_LS_JSON" "$AIWORKER_PROVIDER_MODELS_JSON"\' EXIT',
+    'paseo provider ls --json >"$AIWORKER_PROVIDER_LS_JSON" 2>/dev/null || { printf \'%s\\n\' "Paseo provider readiness failed at provider-list stage for $AIWORKER_PASEO_PROVIDER_ID. Run provider install/login under this aissh user, then retry." >&2; exit 127; }',
+    `node -e ${shellQuote(providerLsCheck)} "$AIWORKER_PASEO_PROVIDER_ID" "$AIWORKER_PROVIDER_LS_JSON" 2>/dev/null || { printf '%s\\n' "Paseo provider readiness failed at provider-available stage for $AIWORKER_PASEO_PROVIDER_ID. Run provider install/login under this aissh user, then retry." >&2; exit 127; }`,
+    'paseo provider models "$AIWORKER_PASEO_PROVIDER_ID" --json >"$AIWORKER_PROVIDER_MODELS_JSON" 2>/dev/null || { printf \'%s\\n\' "Paseo provider readiness failed at model-list stage for $AIWORKER_PASEO_PROVIDER_ID. Run provider install/login under this aissh user, then retry." >&2; exit 127; }',
+    `node -e ${shellQuote(providerModelsCheck)} "$AIWORKER_PASEO_PROVIDER_ID" "$AIWORKER_PROVIDER_MODELS_JSON" 2>/dev/null || { printf '%s\\n' "Paseo provider readiness failed at models-available stage for $AIWORKER_PASEO_PROVIDER_ID. Run provider install/login under this aissh user, then retry." >&2; exit 127; }`,
+  ]
+}
+
 function assertProviderProfileReady(input: ProvisionPlanInput): void {
   if (input.assignment.providerProfileId !== input.providerProfile.id)
     throw new Error(`assignment provider ${input.assignment.providerProfileId} does not match profile ${input.providerProfile.id}`)
@@ -412,16 +570,21 @@ function assertProviderProfileReady(input: ProvisionPlanInput): void {
     throw new Error(`ACP provider profile ${input.providerProfile.id} must declare paseoProviderId or cliCommand`)
 }
 
-function projectionScriptCommands(workspaceRef: string, files: ProjectedFile[]): string[] {
+function projectionScriptCommands(files: ProjectedFile[]): string[] {
   return files.map((file) => {
     const rel = validateProjectedFilePath(file.relativePath)
     assertNoLiteralSecretInProjectedFile(file.content, rel)
-    const dest = path.posix.join(workspaceRef, rel)
-    const dir = path.posix.dirname(dest)
+    const dest = workspaceShellPath(rel)
+    const dir = workspaceShellPath(path.posix.dirname(rel))
     const encoded = Buffer.from(file.content, 'utf8').toString('base64')
-    const chmod = file.mode ? ` && chmod ${file.mode.toString(8)} ${shellQuote(dest)}` : ''
-    return `mkdir -p ${shellQuote(dir)} && printf '%s' ${shellQuote(encoded)} | base64 -d > ${shellQuote(dest)}${chmod}`
+    const chmod = file.mode ? ` && chmod ${file.mode.toString(8)} ${dest}` : ''
+    return `mkdir -p ${dir} && printf '%s' ${shellQuote(encoded)} | base64 -d > ${dest}${chmod}`
   })
+}
+
+function workspaceShellPath(relativePath: string): string {
+  const rel = relativePath === '.' ? '' : validateProjectedFilePath(relativePath)
+  return rel ? `"$AIWORKER_WORKSPACE_REF"/${shellQuote(rel)}` : '"$AIWORKER_WORKSPACE_REF"'
 }
 
 function assertNoLiteralSecretInProjectedFile(content: string, rel: string): void {

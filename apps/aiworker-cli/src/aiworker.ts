@@ -9,15 +9,15 @@ import path from 'node:path'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { promisify } from 'node:util'
-import { createAssignment, createProvisionPlan, redactSecretLike } from '@zonease/aiworker-control'
+import { createAssignment, createProvisionPlan, isPaseoPairingOffer, redactSecretLike } from '@zonease/aiworker-control'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import cac from 'cac'
 
 const execFileAsync = promisify(execFileCallback)
 export const AISSH_EXEC_CWD_PREFIX = path.join(tmpdir(), 'aiworker-aissh-')
 const MAX_ERROR_STREAM_CHARS = 2000
-const PLAN_EXAMPLE = '$ aiworker plan --user alice@example.com --target aissh:server-1 --environment env-alice --paseo-home /home/alice/.paseo --paseo-endpoint unix:/run/paseo/alice.sock --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json --workspace /home/alice/workspaces/freeform'
-const APPLY_EXAMPLE = '$ aiworker apply --yes --user alice@example.com --target aissh:server-1 --environment env-alice --paseo-home /home/alice/.paseo --paseo-endpoint unix:/run/paseo/alice.sock --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json --workspace /home/alice/workspaces/freeform'
+const PLAN_EXAMPLE = '$ aiworker plan --user alice@example.com --target aissh:server-1 --environment env-alice --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json'
+const APPLY_EXAMPLE = '$ aiworker apply --yes --user alice@example.com --target aissh:server-1 --environment env-alice --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json'
 
 interface AisshInvocation {
   file: string
@@ -140,8 +140,7 @@ function addProvisionOptions(command: Command): Command {
     .option('--user <email>', 'assigned employee email')
     .option('--target <ref>', 'aissh target ref, e.g. aissh:server-1')
     .option('--environment <id>', 'Paseo environment id')
-    .option('--paseo-home <path>', 'PASEO_HOME for the target employee environment')
-    .option('--paseo-endpoint <endpoint>', 'Paseo daemon endpoint: unix socket, TCP endpoint, or relay pairing offer')
+    .option('--paseo-endpoint <endpoint>', 'optional existing Paseo endpoint metadata; defaults to remote HOME-derived local daemon')
     .option('--provider <id>', 'Paseo provider profile id')
     .option('--provider-kind <kind>', 'provider kind', { default: 'claude' })
     .option('--provider-base-url <url>', 'provider base URL metadata; no provider key')
@@ -150,7 +149,6 @@ function addProvisionOptions(command: Command): Command {
     .option('--provider-secret-ref <ref>', 'secret reference for provider credentials', { default: undefined })
     .option('--paseo-provider-id <id>', 'Paseo-native provider profile id, required for ACP without --provider-cli')
     .option('--soul <path>', 'built dist/soul.descriptor.json')
-    .option('--workspace <path>', 'workspace directory to create/project')
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
@@ -175,7 +173,8 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
   const user = requireOption(options.user, '--user')
   const environmentId = requireOption(options.environment, '--environment')
   const providerProfileId = requireOption(options.provider, '--provider')
-  const workspaceRef = requireOption(options.workspace, '--workspace')
+  const workspaceRef = `$HOME/aiworker-workspaces/${descriptor.identity.id}`
+  const paseoEndpoint = typeof options.paseoEndpoint === 'string' ? options.paseoEndpoint : 'paseo-daemon:remote-home'
   const assignment = createAssignment({
     assignedEmail: user,
     environmentId,
@@ -187,11 +186,11 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
     assignment,
     environment: {
       environmentId,
-      daemonEndpoint: requireOption(options.paseoEndpoint, '--paseo-endpoint'),
+      daemonEndpoint: paseoEndpoint,
       isolation: 'os-user',
-      endpointKind: String(options.paseoEndpoint).startsWith('unix:') ? 'unix' : String(options.paseoEndpoint).startsWith('https://app.paseo.sh/#offer=') ? 'relay-offer' : 'tcp',
+      endpointKind: paseoEndpoint === 'paseo-daemon:remote-home' ? 'local-home' : paseoEndpoint.startsWith('unix:') ? 'unix' : isPaseoPairingOffer(paseoEndpoint) ? 'relay-offer' : 'tcp',
       ownerEmail: user,
-      paseoHome: requireOption(options.paseoHome, '--paseo-home'),
+      paseoHome: '$HOME/.paseo',
       providerProfileIds: [providerProfileId],
       targetRef: requireOption(options.target, '--target'),
     },
@@ -224,8 +223,11 @@ function readSoulDescriptor(soulPath: string) {
   try {
     return parseSoulDescriptorV1(JSON.parse(readFileSync(soulPath, 'utf8')))
   }
-  catch (error) {
-    throw new Error(`Invalid Soul descriptor: ${soulPath}\n${error instanceof Error ? error.message : String(error)}`)
+  catch {
+    throw new Error([
+      'Invalid Soul descriptor at the provided path.',
+      'Rebuild the Soul and verify identity fields, workspaceTemplate entries, and descriptor protocol.',
+    ].join('\n'))
   }
 }
 
@@ -333,6 +335,7 @@ function formatProvisionExecutionSummary(result: Awaited<ReturnType<typeof execu
     `Workspace: ${result.plan.receipt.workspaceRef}`,
     `Soul release: ${result.plan.receipt.soulReleaseRef}`,
     `Provider profile: ${result.plan.receipt.providerProfileId}`,
+    result.plan.assignment.handoff ? `Handoff: ${result.plan.assignment.handoff.instructions}` : '',
     `aissh source: ${result.aissh.source}`,
     result.stdout ? `stdout: ${result.stdout.trim()}` : '',
     result.stderr ? `stderr: ${result.stderr.trim()}` : '',
@@ -431,15 +434,15 @@ function checkSoulDescriptor(soulPath: string): DoctorCheck {
         environmentId: 'doctor-env',
         providerProfileId: 'doctor-provider',
         soulReleaseRef: `${descriptor.identity.id}@${descriptor.identity.version}`,
-        workspaceRef: '/tmp/aiworker-doctor-workspace',
+        workspaceRef: '$HOME/aiworker-workspaces/doctor',
       }),
       environment: {
-        daemonEndpoint: 'unix:/tmp/aiworker-doctor.sock',
-        endpointKind: 'unix',
+        daemonEndpoint: 'paseo-daemon:remote-home',
+        endpointKind: 'local-home',
         environmentId: 'doctor-env',
         isolation: 'single-user-dev',
         ownerEmail: 'doctor@example.invalid',
-        paseoHome: '/tmp/aiworker-doctor-home',
+        paseoHome: '$HOME/.paseo',
         providerProfileIds: ['doctor-provider'],
         targetRef: 'aissh:doctor-target',
       },
@@ -625,7 +628,50 @@ function formatErrorStream(value: string, plan: ProvisionPlan): string {
 }
 
 function sanitizeAisshStream(value: string, plan: ProvisionPlan): string {
-  return scrubGeneratedProvisioningEcho(redactSecretLike(value.trim()), plan)
+  return scrubGeneratedProvisioningEcho(redactSensitiveAisshOutput(redactSecretLike(value.trim())), plan)
+}
+
+function redactSensitiveAisshOutput(value: string): string {
+  const redacted = value.replace(/[█▀▄▌▐■□▪▫]{4,}/g, '[REDACTED_QR]')
+
+  const safeLines: string[] = []
+  let omittedProviderPayload = false
+  let jsonPayloadDepth = 0
+  for (const line of redacted.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    const nextJsonDepth = updateJsonPayloadDepth(jsonPayloadDepth, trimmed)
+    if (jsonPayloadDepth > 0 || looksLikeRawProviderPayload(trimmed) || looksLikeJsonPayloadStart(trimmed)) {
+      if (!omittedProviderPayload)
+        safeLines.push('[omitted: raw Paseo provider payload]')
+      omittedProviderPayload = true
+      jsonPayloadDepth = nextJsonDepth
+      continue
+    }
+    safeLines.push(line)
+    omittedProviderPayload = false
+    jsonPayloadDepth = 0
+  }
+  return safeLines.join('\n')
+}
+
+function looksLikeRawProviderPayload(line: string): boolean {
+  return /"provider"\s*:|"model"\s*:|"id"\s*:|"thinkingOptionIds"\s*:|"defaultThinkingOptionId"\s*:|"modes"\s*:|"thinkingOptions"\s*:/.test(line)
+}
+
+function looksLikeJsonPayloadStart(trimmed: string): boolean {
+  return trimmed.startsWith('{')
+    || trimmed === '['
+    || trimmed === '[]'
+    || trimmed.startsWith('["')
+    || trimmed.startsWith('[{')
+}
+
+function updateJsonPayloadDepth(previousDepth: number, trimmed: string): number {
+  if (!looksLikeJsonPayloadStart(trimmed) && previousDepth === 0)
+    return 0
+  const opens = Array.from(trimmed).filter(char => char === '{' || char === '[').length
+  const closes = Array.from(trimmed).filter(char => char === '}' || char === ']').length
+  return Math.max(0, previousDepth + opens - closes)
 }
 
 function scrubGeneratedProvisioningEcho(value: string, plan: ProvisionPlan): string {
@@ -650,7 +696,7 @@ function scrubGeneratedProvisioningEcho(value: string, plan: ProvisionPlan): str
 
 function generatedProvisioningNeedles(plan: ProvisionPlan): string[] {
   const script = plan.aissh.script
-  const base64Payloads = Array.from(script.matchAll(/printf '%s' ([A-Za-z0-9+/=]{16,}) \| base64 -d/g), match => match[1] ?? '')
+  const base64Payloads = Array.from(script.matchAll(/printf '%s' (?:(['"])([A-Za-z0-9+/=]{16,})\1|([A-Za-z0-9+/=]{16,})) \| base64 -d/g), match => match[2] ?? match[3] ?? '')
   return [
     script,
     plan.command,
@@ -663,11 +709,17 @@ function isGeneratedProvisioningEcho(line: string, unsafeNeedles: string[]): boo
   return line.includes('base64 -d')
     || line.includes('printf \'%s\'')
     || line.includes('set -euo pipefail')
-    || line.includes('export PASEO_HOME=')
+    || line.includes('unset PASEO_HOST')
+    || line.includes('AIWORKER_REMOTE_HOME=')
+    || line.includes('AIWORKER_WORKSPACE_REF=')
+    || line.includes('export PASEO_HOME')
     || line.includes('npm install -g @getpaseo/cli')
     || line.includes('paseo daemon status')
     || line.includes('paseo daemon start')
     || line.includes('paseo daemon pair')
+    || line.includes('paseo provider ls')
+    || line.includes('paseo provider models')
+    || line.includes('AIWORKER_PROVIDER_')
     || line.includes('.aiworker-projection')
     || unsafeNeedles.some(needle => line.includes(needle))
 }

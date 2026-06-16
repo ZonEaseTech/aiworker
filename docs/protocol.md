@@ -9,11 +9,30 @@ PaseoEnvironment
   environmentId
   ownerEmail
   targetRef
-  paseoHome
-  daemonEndpoint
-  endpointKind
+  paseoHome              # metadata; default intent is $HOME/.paseo
+  daemonEndpoint         # real endpoint or redacted/derived endpoint reference
+  endpointKind           # local-home means HOME-derived local daemon, not a network URL
   isolation
   providerProfileIds[]
+
+WorkspacePathPolicy
+  kind=home-derived
+  authority=aissh-execution-home
+  workspaceName
+  workspaceRoot=$HOME/aiworker-workspaces
+  workspaceRef=$HOME/aiworker-workspaces/<workspaceName>
+
+EndpointBinding
+  bindingKind=home-derived-local-daemon | external-endpoint | opaque-pairing-offer
+  endpointKind
+  ref
+
+ProviderReadinessPolicy
+  kind=paseo-provider-json-v1
+  providerId
+  providerListPredicate=provider == providerId && status == "available" && enabled == "Enabled"
+  modelListPredicate=non-empty array
+  rawOutputPolicy=redacted-pass-fail-only
 
 ProviderProfile
   id
@@ -42,6 +61,8 @@ Assignment
   handoff?
 ```
 
+`workspaceRef` remains a user-facing derived intent (`$HOME/...`) until the target shell resolves its canonical HOME. Consumers must not treat it as a caller-controlled absolute path. `daemonEndpoint=paseo-daemon:remote-home` is likewise a local-home binding marker, not a connectable network endpoint.
+
 ## Assignment lifecycle
 
 ```text
@@ -56,12 +77,12 @@ draft -> provisioning -> workspace_projected -> handoff_ready -> ready
 
 Handoff is intentionally opaque and Paseo-native:
 
-- `paseo-daemon`: AIWorker prepares the workspace, then the target-side handoff follows Paseo’s native CLI flow from the workspace directory: install or verify `@getpaseo/cli`, run `paseo daemon status --home <paseo-home>` to confirm the effective Paseo home/status (default is `~/.paseo`), run `paseo daemon start --home <paseo-home>` when needed, then run `paseo daemon pair --home <paseo-home>` and open the printed pairing link in the Paseo frontend.
-- `pairing-offer`: employee connects to a daemon through the real Paseo pairing link and opens the workspace path.
+- `paseo-daemon`: AIWorker prepares the workspace under the actual `aissh` execution identity. The operational `PASEO_HOME` is derived on target from canonical `$HOME/.paseo`, and the workspace path is derived from `$HOME/aiworker-workspaces/<workspace>`. The generated script starts/checks the HOME-bound daemon and provider readiness, but does not run `paseo daemon pair`; the handoff is an instruction to run `paseo daemon pair --home "$PASEO_HOME"` from the prepared workspace and open the printed link in Paseo.
+- `pairing-offer`: employee connects to a daemon through a real Paseo pairing link. AIWorker treats any such link as opaque pairing material and must not persist or render the raw URL or QR.
 - `manual-path`: fallback instructions when a stable deep link is unavailable.
 
-AIWorker may store the handoff reference and workspace path, but must not proxy workspace UI or session traffic.
+AIWorker may store the redacted handoff reference and HOME-derived workspace intent, but must not proxy workspace UI or session traffic.
 
 ## Secret boundary
 
-AIWorker records secret references only. It must not write provider API keys into descriptors, assignment receipts, logs, diagnostics, OpenAPI examples, UI, or projected workspace files. Paseo/provider CLIs own provider authentication.
+AIWorker records secret references only. It must not write provider API keys into descriptors, assignment receipts, logs, diagnostics, OpenAPI examples, UI, or projected workspace files. Paseo/provider CLIs own provider authentication. Provider readiness checks use the `paseo-provider-json-v1` contract: `paseo provider ls --json` returns an array containing the selected provider with `status: "available"` and `enabled: "Enabled"`, and `paseo provider models <provider> --json` returns a non-empty array. Raw provider JSON, model lists, stderr, transcripts, pairing URLs, and QR codes must not be stored or shown.

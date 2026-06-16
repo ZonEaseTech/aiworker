@@ -19,7 +19,10 @@ export function redactLiteralProviderSecret(value: string): string {
 
 export type AssignmentStatus = 'draft' | 'provisioning' | 'workspace_projected' | 'handoff_ready' | 'ready' | 'needs_attention' | 'revoked' | 'archived'
 export type ProvisioningAdapterType = 'aissh' | 'local' | 'rootless-container'
-export type PaseoEndpointKind = 'tcp' | 'unix' | 'windows-pipe' | 'relay-offer'
+export type PaseoEndpointKind = 'tcp' | 'unix' | 'windows-pipe' | 'relay-offer' | 'local-home'
+export type WorkspacePathPolicyKind = 'home-derived'
+export type EndpointBindingKind = 'home-derived-local-daemon' | 'external-endpoint' | 'opaque-pairing-offer'
+export type ProviderReadinessPolicyKind = 'paseo-provider-json-v1'
 
 export interface VersionedControlPlaneRecord {
   schemaVersion: typeof CONTROL_PLANE_SCHEMA_VERSION
@@ -34,6 +37,30 @@ export interface PaseoEnvironment {
   endpointKind: PaseoEndpointKind
   isolation: 'os-user' | 'container' | 'vm' | 'single-user-dev'
   providerProfileIds: string[]
+}
+
+export interface WorkspacePathPolicy {
+  authority: 'aissh-execution-home'
+  kind: WorkspacePathPolicyKind
+  paseoHome: '$HOME/.paseo'
+  workspaceName: string
+  workspaceRef: `$HOME/aiworker-workspaces/${string}`
+  workspaceRoot: '$HOME/aiworker-workspaces'
+}
+
+export interface PaseoEndpointBinding {
+  endpointKind: PaseoEndpointKind
+  bindingKind: EndpointBindingKind
+  ref: string
+}
+
+export interface ProviderReadinessPolicy {
+  commands: ['paseo provider ls --json', 'paseo provider models <provider> --json']
+  kind: ProviderReadinessPolicyKind
+  modelListPredicate: 'non-empty array'
+  providerId: string
+  providerListPredicate: 'provider == providerId && status == "available" && enabled == "Enabled"'
+  rawOutputPolicy: 'redacted-pass-fail-only'
 }
 
 export interface ProviderProfile {
@@ -105,16 +132,24 @@ export interface ProvisionPlan {
   aissh: AisshProvisionInvocation
   assignment: WorkspaceAssignment
   command: string
+  endpointBinding: PaseoEndpointBinding
+  providerReadiness: ProviderReadinessPolicy
   receipt: {
     adapterType: ProvisioningAdapterType
     targetRef: string
     environmentId: string
+    endpointBinding: EndpointBindingKind
+    endpointKind: PaseoEndpointKind
     workspaceRef: string
+    workspaceName: string
+    workspacePathPolicy: WorkspacePathPolicyKind
+    providerReadinessPolicy: ProviderReadinessPolicyKind
     soulReleaseRef: string
     providerProfileId: string
     command: string
     aisshArgs: string[]
   }
+  workspacePolicy: WorkspacePathPolicy
 }
 
 export type ProvisionReceiptStatus = 'planned' | 'applied' | 'failed'
@@ -127,7 +162,12 @@ export interface ProvisionReceipt extends VersionedControlPlaneRecord {
   adapterType: ProvisioningAdapterType
   targetRef: string
   environmentId: string
+  endpointBinding: EndpointBindingKind
+  endpointKind: PaseoEndpointKind
   workspaceRef: string
+  workspaceName: string
+  workspacePathPolicy: WorkspacePathPolicyKind
+  providerReadinessPolicy: ProviderReadinessPolicyKind
   soulReleaseRef: string
   providerProfileId: string
   command: string

@@ -158,11 +158,8 @@ export function ProvisioningPage() {
   --user ${environment.ownerEmail} \\
   --target ${environment.targetRef} \\
   --environment ${environment.id} \\
-  --paseo-home ${environment.paseoHome} \\
-  --paseo-endpoint ${environment.daemonEndpoint} \\
   --provider ${provider.id} \\
-  --soul ${soul.descriptorRef} \\
-  --workspace <workspace-ref>`}
+  --soul ${soul.descriptorRef}`}
             </pre>
           </CardContent>
         </Card>

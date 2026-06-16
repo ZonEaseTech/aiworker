@@ -55,7 +55,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
     })
 
     expect(assignment.assignedEmail).toBe('alice@example.com')
@@ -77,31 +77,97 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
     })
     const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
 
     expect(plan.command).toContain('aissh exec server-1')
-    expect(plan.command).toContain('PASEO_HOME=/home/alice/.paseo')
+    expect(plan.command).not.toContain('PASEO_HOME=/home/alice/.paseo')
     expect(plan.aissh.serverRef).toBe('server-1')
     expect(plan.aissh.args[0]).toBe('exec')
     expect(plan.aissh.args[1]).toBe('server-1')
     expect(plan.aissh.cwdPolicy).toBe('neutral-tempdir')
     expect(plan.aissh.credentials).toEqual({ optionalEnv: ['AISSH_BIN', 'AISSH_SERVER'], requiredEnv: ['AISSH_TOKEN'], source: 'env' })
-    expect(plan.aissh.script).toContain('mkdir -p /home/alice/workspaces/hr-recruiter && cd /home/alice/workspaces/hr-recruiter')
+    expect(plan.aissh.script).toContain('unset PASEO_HOST')
+    expect(plan.aissh.script).toContain('AIWORKER_REMOTE_USER="$(whoami)"')
+    expect(plan.aissh.script).toContain('AIWORKER_REMOTE_UID="$(id -u)"')
+    expect(plan.aissh.script).toContain('AIWORKER_REMOTE_PWD="$(pwd -P)"')
+    expect(plan.aissh.script).toContain('AIWORKER_REMOTE_PATH="$PATH"')
+    expect(plan.aissh.script).toContain('AIWORKER_REMOTE_HOME="$(cd "$HOME" && pwd -P)"')
+    expect(plan.aissh.script).toContain('PASEO_HOME="$AIWORKER_REMOTE_HOME/.paseo"')
+    expect(plan.aissh.script).toContain('AIWORKER_WORKSPACE_ROOT="$AIWORKER_REMOTE_HOME/aiworker-workspaces"')
+    expect(plan.aissh.script).toContain('AIWORKER_WORKSPACE_REF="$AIWORKER_WORKSPACE_ROOT/$AIWORKER_WORKSPACE_NAME"')
+    expect(plan.aissh.script).toContain('mkdir -p "$AIWORKER_WORKSPACE_REF" && cd "$AIWORKER_WORKSPACE_REF"')
     expect(plan.aissh.script).toContain('(command -v paseo >/dev/null || npm install -g @getpaseo/cli)')
-    expect(plan.aissh.script).toContain('(command -v claude >/dev/null || { printf \'%s\\n\' \'Missing provider CLI: claude. Install/authenticate it before using this workspace in Paseo.\' >&2; exit 127; })')
-    expect(plan.aissh.script).toContain('(paseo daemon status --home /home/alice/.paseo || true)')
-    expect(plan.aissh.script).toContain('(paseo daemon status --home /home/alice/.paseo >/dev/null 2>&1 || paseo daemon start --home /home/alice/.paseo)')
-    expect(plan.aissh.script).toContain('paseo daemon pair --home /home/alice/.paseo')
+    expect(plan.aissh.script).toContain('command -v claude')
+    expect(plan.aissh.script).toContain('Missing provider CLI: claude')
+    expect(plan.aissh.script).toContain('(paseo daemon status --home "$PASEO_HOME" || true)')
+    expect(plan.aissh.script).toContain('(paseo daemon status --home "$PASEO_HOME" >/dev/null 2>&1 || paseo daemon start --home "$PASEO_HOME")')
+    expect(plan.aissh.script).toContain('paseo provider ls --json >"$AIWORKER_PROVIDER_LS_JSON"')
+    expect(plan.aissh.script).toContain('paseo provider models "$AIWORKER_PASEO_PROVIDER_ID" --json >"$AIWORKER_PROVIDER_MODELS_JSON"')
+    expect(plan.aissh.script).toContain('AIWORKER_HANDOFF_READY: run paseo daemon pair --home')
+    expect(plan.aissh.script).not.toContain('&& paseo daemon pair')
+    expect(plan.aissh.script).not.toContain('--host')
     expect(plan.command).not.toContain('paseo --host unix:/run/paseo/alice.sock daemon status')
     expect(plan.command).toContain('base64 -d')
     expect(plan.receipt.soulReleaseRef).toBe('hr-recruiter@1.2.0')
+    expect(plan.receipt.workspaceRef).toBe('$HOME/aiworker-workspaces/hr-recruiter')
+    expect(plan.workspacePolicy).toEqual({
+      authority: 'aissh-execution-home',
+      kind: 'home-derived',
+      paseoHome: '$HOME/.paseo',
+      workspaceName: 'hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRoot: '$HOME/aiworker-workspaces',
+    })
+    expect(plan.endpointBinding).toEqual({
+      bindingKind: 'external-endpoint',
+      endpointKind: 'unix',
+      ref: 'unix:/run/paseo/alice.sock',
+    })
+    expect(plan.providerReadiness).toEqual({
+      commands: ['paseo provider ls --json', 'paseo provider models <provider> --json'],
+      kind: 'paseo-provider-json-v1',
+      modelListPredicate: 'non-empty array',
+      providerId: 'claude',
+      providerListPredicate: 'provider == providerId && status == "available" && enabled == "Enabled"',
+      rawOutputPolicy: 'redacted-pass-fail-only',
+    })
+    expect(plan.receipt.workspacePathPolicy).toBe('home-derived')
+    expect(plan.receipt.endpointBinding).toBe('external-endpoint')
+    expect(plan.receipt.providerReadinessPolicy).toBe('paseo-provider-json-v1')
     expect(plan.receipt.aisshArgs).toEqual(plan.aissh.args)
     expect(plan.assignment.handoff?.kind).toBe('paseo-daemon')
-    expect(plan.assignment.handoff?.instructions).toContain('paseo daemon pair --home /home/alice/.paseo')
+    expect(plan.assignment.handoff?.instructions).toContain('AIWorker derives PASEO_HOME')
+    expect(plan.assignment.handoff?.instructions).toContain('cd "$HOME/aiworker-workspaces/hr-recruiter"')
+    expect(plan.assignment.handoff?.instructions).not.toContain('cd \'$HOME/aiworker-workspaces/hr-recruiter\'')
+    expect(plan.assignment.handoff?.instructions).toContain('paseo daemon pair --home "$PASEO_HOME"')
     expect(plan.command).toContain('command -v claude')
     expect(plan.command).not.toContain('secret://org/claude-work')
+  })
+
+  test('rejects workspace refs that are not HOME-derived safe segments', () => {
+    const unsafeAssignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+    })
+
+    expect(() => createProvisionPlan({ assignment: unsafeAssignment, environment, providerProfile, soul })).toThrow('workspace name must')
+    expect(() => createProvisionPlan({
+      assignment: { ...unsafeAssignment, workspaceRef: '../evil; echo SHOULD_NOT_RUN' },
+      environment,
+      providerProfile,
+      soul,
+    })).toThrow('workspace name must be a safe relative segment')
+    expect(() => createProvisionPlan({
+      assignment: { ...unsafeAssignment, workspaceRef: '../evil; echo SHOULD_NOT_RUN' },
+      environment,
+      providerProfile,
+      soul,
+    })).not.toThrow('SHOULD_NOT_RUN')
   })
 
   test('normalizes aissh target refs without binding AIWorker to local .aissh.yaml files', () => {
@@ -116,7 +182,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
     })
     const plan = createProvisionPlan({
       assignment,
@@ -136,7 +202,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: 'codex-personal',
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
     })
 
     expect(() => createProvisionPlan({
@@ -153,7 +219,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: 'acp-team',
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
     })
     const plan = createProvisionPlan({
       assignment,
@@ -172,7 +238,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: 'acp-team',
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
     })
 
     expect(() => createProvisionPlan({
@@ -198,9 +264,25 @@ describe('Paseo thin-layer aiworker-control contract', () => {
   })
 
   test('handoff can target relay offers without making AIWorker a workspace UI', () => {
-    const handoff = createHandoff({ ...environment, daemonEndpoint: 'https://app.paseo.sh/#offer=abc', endpointKind: 'relay-offer' }, '/w/hr')
+    const handoff = createHandoff({ ...environment, daemonEndpoint: 'https://relay.paseo.example/#offer=abc', endpointKind: 'relay-offer' }, '/w/hr')
     expect(handoff.kind).toBe('pairing-offer')
+    expect(handoff.daemonEndpoint).toBe('[REDACTED_PAIRING_URL]')
     expect(handoff.instructions).toContain('/w/hr')
+    expect(handoff.instructions).not.toContain('https://relay.paseo.example/#offer=abc')
+    expect(handoff.instructions).toContain('out-of-band')
+  })
+
+  test('rejects raw Paseo pairing material in provision plans and snapshots', () => {
+    const pairingEnvironment = { ...environment, daemonEndpoint: 'https://relay.paseo.example/?offer=abc', endpointKind: 'relay-offer' as const }
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: pairingEnvironment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+    })
+
+    expect(() => createProvisionPlan({ assignment, environment: pairingEnvironment, providerProfile, soul })).toThrow('raw Paseo pairing material')
   })
 
   test('persists a versioned control-plane snapshot and append-only receipts/audit/projection logs', async () => {
@@ -211,7 +293,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
     })
     const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
     const receipt = createProvisionReceipt(plan, { at: '2026-06-15T18:00:00.000Z', id: 'rcpt-1', status: 'applied' })
@@ -266,7 +348,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
     })
     const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
     const unsafeReceipt = {
@@ -290,7 +372,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
     })
 
     await expect(store.saveSnapshot({
@@ -359,7 +441,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '/home/alice/workspaces/hr-recruiter',
+      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
     })
     const receipt = createProvisionReceipt(createProvisionPlan({ assignment, environment, providerProfile, soul }), {
       at: '2026-06-15T19:01:00.000Z',

@@ -23,19 +23,19 @@ Paseo runtime responsibilities:
 
 ## Daemon model
 
-AIWorker does not run a Worker daemon. It may start or verify a Paseo daemon on a target machine with a chosen `PASEO_HOME` and daemon endpoint.
+AIWorker does not run a Worker daemon. It may start or verify a Paseo daemon on a target machine under the actual `aissh` execution identity. That identity's canonical remote `HOME` is the path authority.
 
 Default production isolation:
 
 ```text
-one employee -> one OS user/rootless container/VM -> one PASEO_HOME -> one Paseo daemon -> many Soul workspaces
+one employee -> one OS user/rootless container/VM -> one HOME -> one PASEO_HOME -> one Paseo daemon -> many Soul workspaces
 ```
 
-Multiple daemon instances on one device are allowed only with separate homes and endpoints.
+Multiple daemon instances on one device are allowed only with separate execution identities or explicitly separated HOME-bound daemon state. AIWorker must not point an `aissh` login at another user's `PASEO_HOME`, workspace directory, or provider credential home.
 
 ## Workspace model
 
-AIWorker creates normal directories that Paseo can use as workspaces. Soul projection is file copying, not an AIWorker runtime service.
+AIWorker creates normal directories that Paseo can use as workspaces. The default workspace root is derived on the target as `$HOME/aiworker-workspaces/<workspace>`. Soul projection is file copying, not an AIWorker runtime service.
 
 A workspace can contain multiple Paseo sessions. AIWorker does not persist or inspect those sessions.
 
@@ -44,6 +44,19 @@ A workspace can contain multiple Paseo sessions. AIWorker does not persist or in
 AIWorker invokes `aissh` only as a thin provisioning transport. It does not own the remote runtime after the workspace files are projected.
 
 AIWorker Web may present the same provisioning inputs, plan previews, redacted receipts, and handoff metadata as the CLI. It must not observe or store Paseo runtime state after handoff.
+
+Provisioning scripts must discover and validate the remote execution identity before touching Paseo:
+
+```text
+whoami / id -u / pwd -P / PATH
+canonical HOME = cd "$HOME" && pwd -P
+PASEO_HOME = "$HOME/.paseo"
+workspace = "$HOME/aiworker-workspaces/<safe-name>"
+```
+
+Before any `paseo daemon` or `paseo provider` command, scripts unset inherited `PASEO_HOST` so readiness checks cannot be redirected to another daemon. Provider readiness is checked under the same identity with the `paseo-provider-json-v1` contract: `paseo provider ls --json` must return an array where the selected provider has `status: "available"` and `enabled: "Enabled"`, then `paseo provider models <provider> --json` must return a non-empty array. AIWorker records only the policy name plus pass/fail/remediation summary, not raw provider JSON, model lists, provider stderr, transcripts, pairing URLs, or QR codes.
+
+The default provisioning script does not execute `paseo daemon pair`, because that command prints real pairing material. Handoff is instruction-only: after provisioning, the operator/employee runs `paseo daemon pair --home "$PASEO_HOME"` from the prepared workspace and opens the printed link in Paseo.
 
 Adopted from the `aiworker-next` aissh integration audit:
 
