@@ -17,7 +17,7 @@
     },
     "apps/aiworker-cli": {
       "name": "@zonease/aiworker-cli",
-      "version": "1.0.0-rc.12",
+      "version": "2.0.0",
       "bin": {
         "aiworker": "./dist/aiworker.js",
       },

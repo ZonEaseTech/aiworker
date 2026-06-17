@@ -1,6 +1,6 @@
 # AIWorker Soul Authoring
 
-A Soul is now a versioned Paseo workspace template.
+A Soul is now a versioned Paseo Project workdir template.
 
 ## Minimal layout
 

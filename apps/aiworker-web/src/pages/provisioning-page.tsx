@@ -1,8 +1,10 @@
 import type { AdminConsoleData, ApprovalStatus } from '@/lib/admin-data'
+import type { AdminRemediation } from '@/lib/admin-remediation'
 import { CheckCircleIcon, PlayCircleIcon, WarningCircleIcon } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { PageHeader } from '@/components/page-header'
+import { RemediationAlert } from '@/components/remediation-alert'
 import { StatusBadge } from '@/components/status-badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -10,14 +12,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from '@/components/ui/field'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { adminMutationHeaders } from '@/lib/admin-api-client'
+import { AdminApiError, adminMutationHeaders, readAdminApiError } from '@/lib/admin-api-client'
 import {
   adminConsoleData,
   approvalCheckStatusMeta,
   approvalStatusMeta,
   environmentStatusMeta,
   getApprovalForAssignment,
-  getAssignmentForPlan,
   getEnvironment,
   getProviderProfile,
   getSoulRelease,
@@ -26,11 +27,19 @@ import {
   releaseStatusMeta,
 } from '@/lib/admin-data'
 import { useAdminData } from '@/lib/admin-data-context'
+import { adminRemediation } from '@/lib/admin-remediation'
 
 interface ApplyJobStep {
   id: string
   label: string
   status: 'done' | 'needs_attention' | 'failed'
+}
+
+interface ApplyJobPayload {
+  job: {
+    remediation?: AdminRemediation
+    steps: ApplyJobStep[]
+  }
 }
 
 export function ProvisioningPage() {
@@ -40,15 +49,15 @@ export function ProvisioningPage() {
   const [selectedProvider, setSelectedProvider] = useState(adminData.providerProfiles[0]?.id ?? '')
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(adminData.assignments[0]?.id ?? '')
   const [previewDecisionByAssignment, setPreviewDecisionByAssignment] = useState<Record<string, ApprovalStatus>>({})
-  const [approvalError, setApprovalError] = useState<string | null>(null)
-  const [applyError, setApplyError] = useState<string | null>(null)
+  const [approvalError, setApprovalError] = useState<AdminRemediation | null>(null)
+  const [applyError, setApplyError] = useState<AdminRemediation | null>(null)
   const [applyStepsByAssignment, setApplyStepsByAssignment] = useState<Record<string, ApplyJobStep[]>>({})
-  const [pairError, setPairError] = useState<string | null>(null)
+  const [applyRemediationByAssignment, setApplyRemediationByAssignment] = useState<Record<string, AdminRemediation>>({})
+  const [pairError, setPairError] = useState<AdminRemediation | null>(null)
   const [pairingAssignmentId, setPairingAssignmentId] = useState<string | null>(null)
   const [pairingOutputByAssignment, setPairingOutputByAssignment] = useState<Record<string, string>>({})
   const selectedAssignment = adminData.assignments.find(item => item.id === selectedAssignmentId)
-  const tupleAssignment = getAssignmentForPlan(selectedEnvironment, selectedSoul, selectedProvider, adminData)
-  const assignment = tupleAssignment?.id === selectedAssignment?.id ? selectedAssignment : tupleAssignment
+  const assignment = selectedAssignment
   const environment = getEnvironment(assignment?.environmentId ?? selectedEnvironment, adminData)
   const provider = getProviderProfile(assignment?.providerProfileId ?? selectedProvider, adminData)
   const soul = getSoulRelease(assignment?.soulReleaseId ?? selectedSoul, adminData)
@@ -58,7 +67,15 @@ export function ProvisioningPage() {
     ? resolvePreviewApprovalStatus(assignment.id, previewDecisionByAssignment, approval?.status)
     : approval?.status
   const applySteps = assignment ? applyStepsByAssignment[assignment.id] : undefined
+  const applyRemediation = assignment ? applyRemediationByAssignment[assignment.id] : undefined
   const pairingOutput = assignment ? pairingOutputByAssignment[assignment.id] : undefined
+  const pairingPreconditionReady = Boolean(
+    assignment
+    && (
+      ['handoff_ready', 'ready', 'needs_attention'].includes(assignment.status)
+      || applySteps?.some(step => step.id === 'handoff' && step.status === 'done')
+    ),
+  )
 
   useEffect(() => {
     if (!adminData.assignments.some(item => item.id === selectedAssignmentId))
@@ -89,7 +106,7 @@ export function ProvisioningPage() {
         await decideApproval(assignment.id, status)
       }
       catch (error) {
-        setApprovalError(error instanceof Error ? error.message : String(error))
+        setApprovalError(remediationFromCaughtError(error))
       }
     }
   }
@@ -105,15 +122,23 @@ export function ProvisioningPage() {
         method: 'POST',
       })
       if (!response.ok)
-        throw new Error(`apply job failed: ${response.status}`)
-      const payload = await response.json() as { job: { steps: ApplyJobStep[] } }
+        throw await readAdminApiError(response)
+      const payload = await response.json() as ApplyJobPayload
       setApplyStepsByAssignment(current => ({
         ...current,
         [assignment.id]: payload.job.steps,
       }))
+      setApplyRemediationByAssignment((current) => {
+        const next = { ...current }
+        if (payload.job.remediation)
+          next[assignment.id] = payload.job.remediation
+        else
+          delete next[assignment.id]
+        return next
+      })
     }
     catch (error) {
-      setApplyError(error instanceof Error ? error.message : String(error))
+      setApplyError(remediationFromCaughtError(error))
     }
   }
 
@@ -129,7 +154,7 @@ export function ProvisioningPage() {
         method: 'POST',
       })
       if (!response.ok)
-        throw new Error(`pairing request failed: ${response.status}`)
+        throw await readAdminApiError(response)
       const payload = await response.json() as { pair: { pairingOutput: string } }
       setPairingOutputByAssignment(current => ({
         ...current,
@@ -137,7 +162,7 @@ export function ProvisioningPage() {
       }))
     }
     catch (error) {
-      setPairError(error instanceof Error ? error.message : String(error))
+      setPairError(remediationFromCaughtError(error))
     }
     finally {
       setPairingAssignmentId(current => current === assignment.id ? null : current)
@@ -306,6 +331,7 @@ export function ProvisioningPage() {
               {`aiworker plan \\
   --user ${assignment?.assignedEmail ?? environment.ownerEmail} \\
   --target ${environment.targetRef} \\
+  --target-owner ${environment.ownerEmail}${environment.dedication ? ' \\\n  --dedicated-target-user' : ''} \\
   --environment ${environment.id} \\
   --provider ${provider.id} \\
   --soul ${soul.descriptorRef}`}
@@ -329,7 +355,23 @@ export function ProvisioningPage() {
                   : '未配置 AIWORKER_CONTROL_PLANE_DIR 时只更新本页预览状态；不会持久化，也不会触发 aissh 或 Paseo。'}
               </AlertDescription>
             </Alert>
-            {approvalError ? <p className="text-xs text-destructive">{approvalError}</p> : null}
+            <FieldGroup>
+              <Field orientation="horizontal">
+                <FieldContent>
+                  <FieldTitle>Approval is required first</FieldTitle>
+                  <FieldDescription>批准只记录 AIWorker plan/projection/handoff metadata；不会自动触发 aissh。</FieldDescription>
+                </FieldContent>
+                <StatusBadge tone="info">Step 1</StatusBadge>
+              </Field>
+              <Field orientation="horizontal">
+                <FieldContent>
+                  <FieldTitle>Apply must complete before pairing</FieldTitle>
+                  <FieldDescription>Pair 需要同一 assignment tuple 的 applied receipt 与 handoff-ready metadata。</FieldDescription>
+                </FieldContent>
+                <StatusBadge tone="info">Step 2</StatusBadge>
+              </Field>
+            </FieldGroup>
+            {approvalError ? <RemediationAlert remediation={approvalError} /> : null}
             {approval && effectiveApprovalStatus
               ? (
                   <>
@@ -382,7 +424,10 @@ export function ProvisioningPage() {
                         生成配对链接
                       </Button>
                     </div>
-                    {applyError ? <p className="text-xs text-destructive">{applyError}</p> : null}
+                    {effectiveApprovalStatus !== 'approved' ? <RemediationAlert remediation={adminRemediation('approval_required')} /> : null}
+                    {provider.status !== 'ready' ? <RemediationAlert remediation={adminRemediation('provider_auth_required')} /> : null}
+                    {applyError ? <RemediationAlert remediation={applyError} /> : null}
+                    {applyRemediation ? <RemediationAlert remediation={applyRemediation} /> : null}
                     {applySteps
                       ? (
                           <div className="rounded-md border bg-muted/20 p-3">
@@ -407,7 +452,8 @@ export function ProvisioningPage() {
                       <p className="mt-1">
                         交付完成后点“生成配对链接”：Web 只让 AIWorker CLI 通过 aissh 瞬时调用 Paseo pair，结果只在当前页面显示，不写入 AIWorker 记录。
                       </p>
-                      {pairError ? <p className="mt-2 text-destructive">{pairError}</p> : null}
+                      {!pairingPreconditionReady && !pairingOutput ? <div className="mt-3"><RemediationAlert remediation={adminRemediation('handoff_not_ready')} /></div> : null}
+                      {pairError ? <div className="mt-3"><RemediationAlert remediation={pairError} /></div> : null}
                       {pairingOutput
                         ? (
                             <pre className="mt-3 overflow-x-auto rounded-md border bg-background p-3 text-xs/relaxed text-foreground">
@@ -480,5 +526,20 @@ export function resolveAssignmentIdentityForTuple(
   providerProfileId: string,
   data: AdminConsoleData = adminConsoleData,
 ): string {
-  return getAssignmentForPlan(environmentId, soulReleaseId, providerProfileId, data)?.id ?? ''
+  try {
+    return data.assignments.find(assignment =>
+      assignment.environmentId === environmentId
+      && assignment.soulReleaseId === soulReleaseId
+      && assignment.providerProfileId === providerProfileId,
+    )?.id ?? ''
+  }
+  catch {
+    return ''
+  }
+}
+
+function remediationFromCaughtError(error: unknown): AdminRemediation {
+  if (error instanceof AdminApiError)
+    return error.remediation
+  return adminRemediation('unknown_admin_error')
 }

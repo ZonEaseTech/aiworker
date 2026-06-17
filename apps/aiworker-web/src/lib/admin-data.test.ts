@@ -16,6 +16,7 @@ import {
   assertRedactedAdminConsoleData,
   createAdminDataSourceFromControlPlaneSnapshot,
   getApprovalForAssignment,
+  getAssignmentForPlan,
   getTraceEventsForAssignment,
   loadAdminConsoleData,
   mapControlPlaneSnapshotToAdminConsoleData,
@@ -46,6 +47,9 @@ describe('admin data fixtures', () => {
       expect(assignmentIds.has(approval.assignmentId), approval.id).toBe(true)
       expect(approval.controlApiState).toBe('not_implemented')
       expect(approval.previewCommand).toContain('aiworker plan')
+      expect(approval.previewCommand).toContain(`--target-owner ${environments.find(environment => environment.id === assignments.find(assignment => assignment.id === approval.assignmentId)?.environmentId)?.ownerEmail}`)
+      if (environments.find(environment => environment.id === assignments.find(assignment => assignment.id === approval.assignmentId)?.environmentId)?.dedication)
+        expect(approval.previewCommand).toContain('--dedicated-target-user')
       expect(approval.previewCommand).not.toContain('apply --yes')
       expect(getApprovalForAssignment(approval.assignmentId)?.id).toBe(approval.id)
     }
@@ -106,7 +110,7 @@ describe('admin data fixtures', () => {
     expect(environments.length).toBeGreaterThan(0)
 
     for (const assignment of assignments) {
-      expect(assignment.handoffLabel).toMatch(/paseo|workspace|relay/i)
+      expect(assignment.handoffLabel).toMatch(/paseo|workspace|project|workdir|relay/i)
       expect(assignment.nextStep).toContain('AIWorker 不读取 session')
       expect(assignment.workspaceRef).not.toContain('transcript')
     }
@@ -165,22 +169,28 @@ describe('admin data fixtures', () => {
     })).toThrow(/known assignment/)
   })
 
-  test('rejects ambiguous assignment tuples and schema-invalid approval or trace references', () => {
+  test('reports ambiguous assignment tuples and rejects schema-invalid approval or trace references', () => {
     const assignment = assignments[0]
     const approval = adminConsoleData.approvals.find(item => item.assignmentId === assignment.id)!
     const traceEvent = adminConsoleData.traceEvents.find(item => item.assignmentId === assignment.id && item.evidenceRef.startsWith('receipt:'))!
 
-    expect(() => assertRedactedAdminConsoleData({
+    const ambiguousData = assertRedactedAdminConsoleData({
       ...adminConsoleData,
       assignments: [
-        assignment,
+        ...adminConsoleData.assignments,
         {
           ...assignment,
           id: `${assignment.id}-duplicate`,
           assignedEmail: 'duplicate@example.com',
         },
       ],
-    })).toThrow(/assignment tuple must be unique/)
+    })
+    expect(() => getAssignmentForPlan(
+      assignment.environmentId,
+      assignment.soulReleaseId,
+      assignment.providerProfileId,
+      ambiguousData,
+    )).toThrow(/requires assignmentId/)
 
     expect(() => assertRedactedAdminConsoleData({
       ...adminConsoleData,
@@ -263,13 +273,16 @@ describe('admin data fixtures', () => {
   test('maps a control-plane snapshot through a read-only admin data source', () => {
     const environment = {
       environmentId: 'env-alice',
-      daemonEndpoint: 'https://paseo.example/pair/code/abc123?code=raw',
-      endpointKind: 'relay-offer' as const,
+      daemonEndpoint: '127.0.0.1:42057',
+      daemonHostRef: '127.0.0.1:42057',
+      daemonListenRef: '127.0.0.1:42057',
+      endpointKind: 'tcp' as const,
       isolation: 'os-user' as const,
-      ownerEmail: 'alice@example.com',
-      paseoHome: '/home/alice/.paseo',
+      ownerEmail: 'ops-admin@example.com',
+      paseoHome: '$HOME/.aiworker/alice-example.com/.paseo',
       providerProfileIds: ['codex-default'],
       targetRef: 'aissh:server-1',
+      topologyKind: 'owner-scoped-paseo-home-v1' as const,
     }
     const providerProfile = {
       id: 'codex-default',
@@ -290,7 +303,7 @@ describe('admin data fixtures', () => {
       providerProfileId: providerProfile.id,
       soulReleaseRef: `${soul.id}@${soul.version}`,
       status: 'ready',
-      workspaceRef: '$HOME/aiworker-workspaces/freeform',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/freeform',
     })
     const handoffReadyAssignment = {
       ...assignment,
@@ -328,10 +341,11 @@ describe('admin data fixtures', () => {
     expect(data.assignments[0]?.receiptId).toBe('rcpt-1')
     expect(data.assignments[0]?.handoffLabel).toContain('paseo daemon pair')
     expect(data.assignments[0]?.handoffLabel).toContain('--home "$PASEO_HOME"')
-    expect(data.assignments[0]?.handoffLabel).toContain('Paseo frontend')
-    expect(data.assignments[0]?.handoffLabel).not.toContain('paseo --host')
-    expect(data.environments[0]?.daemonEndpoint).toBe('[REDACTED_PAIRING_URL]')
-    expect(data.environments[0]?.daemonEndpoint).not.toContain('abc123')
+    expect(data.assignments[0]?.handoffLabel).toContain('Project workdir')
+    expect(data.assignments[0]?.projectRef).toBe('$HOME/.aiworker/alice-example.com/projects/freeform')
+    expect(data.assignments[0]?.handoffLabel).toContain('paseo --host')
+    expect(data.environments[0]?.daemonEndpoint).toBe('127.0.0.1:42057')
+    expect(data.approvals[0]?.checks.some(check => check.id.endsWith('-owner-scope') && check.status === 'warning')).toBe(true)
     expect(data.assignments[0]?.nextStep).toContain('AIWorker 不读取 session')
     expect(data.providerProfiles[0]?.secretRef).toBe('secret://providers/codex/default')
     expect(data.soulReleases[0]?.fileCount).toBe(1)
@@ -381,7 +395,7 @@ describe('admin data fixtures', () => {
       providerProfileId: 'codex-default',
       soulReleaseRef: 'aiworker-freeform@2026.06.15',
       status: 'ready',
-      workspaceRef: '$HOME/aiworker-workspaces/freeform',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/freeform',
     })
     expect(() => mapControlPlaneSnapshotToAdminConsoleData({
       ...createEmptyControlPlaneSnapshot(),

@@ -1,13 +1,13 @@
 # AIWorker Architecture
 
-AIWorker CLI and AIWorker Web are thin enterprise distribution surfaces for Paseo workspaces.
+AIWorker CLI and AIWorker Web are thin enterprise distribution surfaces for Paseo Project workdirs.
 
 ## Product position
 
-AIWorker turns an expert-authored capability package into ordinary Paseo workspace files, assigns that workspace to an employee, and provisions the target machine through `aissh`. The CLI is the automation-first surface; AIWorker Web is an optional manager/admin console for the same assignment, provisioning, receipt, audit, and handoff records. Paseo owns the employee work surface and the runtime. Paseo owns workspace/runtime/UI/session/provider orchestration; AIWorker owns only distribution metadata and file projection.
+AIWorker turns an expert-authored capability package into ordinary files in a Paseo Project workdir, assigns that Project to an employee, and provisions the target machine through `aissh`. The CLI is the automation-first surface; AIWorker Web is an optional manager/admin console for the same assignment, provisioning, receipt, audit, and handoff records. Paseo owns the employee work surface and the runtime. Paseo owns Project/workspace/runtime/UI/session/provider orchestration; AIWorker owns only distribution metadata and file projection.
 
 ```text
-Admin -> AIWorker CLI/Web -> aissh target -> Paseo environment -> Paseo workspace -> agent sessions
+Admin -> AIWorker CLI/Web -> aissh target -> Paseo environment -> Project workdir -> Paseo project/workspace -> agent sessions
 ```
 
 ## Ownership boundary
@@ -20,14 +20,14 @@ AIWorker owns only:
 - Paseo environment metadata (`PASEO_HOME` intent, daemon endpoint/socket/redacted offer or `local-home` binding, isolation kind);
 - provider profile metadata and secret references, not literal provider keys;
 - Soul release registry;
-- Soul filesystem projection into a workspace directory;
+- Soul filesystem projection into a Project workdir;
 - provisioning receipts, status, audit, and handoff metadata.
 
 Paseo owns:
 
 - daemon/client connection, relay/direct/socket access, and pairing;
 - workspace UI, mobile/desktop/web/CLI clients;
-- workspace creation/opening, sessions, terminal, browser, diff, logs, permission prompts;
+- Project/workspace creation/opening, optional worktrees, sessions, terminal, browser, diff, logs, permission prompts;
 - provider orchestration for Claude Code, Codex, OpenCode, ACP agents, and other installed CLIs;
 - agent process lifecycle and provider-native authentication context.
 
@@ -49,32 +49,41 @@ PaseoEnvironment
   has many Workspaces
 
 SoulRelease
-  projects into many Workspaces
+  projects into many Paseo Projects/workspaces
 
 Assignment
-  = User + PaseoEnvironment + SoulRelease + ProviderProfile + WorkspaceRef
+  = User + PaseoEnvironment + SoulRelease + ProviderProfile + ProjectRef
 ```
 
-A Paseo daemon is not a Soul container. A Paseo workspace directory is the Soul projection container.
+A Paseo daemon is not a Soul container. AIWorker materializes the Soul into a normal Project workdir; Paseo then opens or runs against that directory through the selected daemon endpoint (`paseo --host <owner-loopback-host> <dir>` / `paseo run --host <owner-loopback-host> --cwd <dir>`). Paseo worktrees are optional git isolation under a Project and are not the default Soul projection target.
 
-Default isolation is one employee environment per OS user, rootless container, or VM:
+Default isolation is owner-scoped under the actual `aissh` execution HOME:
 
 ```text
-alice@server-1
-  remote HOME=/home/alice
-  PASEO_HOME=$HOME/.paseo
-  daemon endpoint=local daemon for that HOME
-  aiworker-workspaces/
-    hr-recruiter/
-    software-support/
-    product-manager/
+target aissh HOME=/home/shared-ops
+  .aiworker/
+    alice-example.com/
+      .paseo/
+      run/
+      daemon 127.0.0.1:<stable-alice-port>
+      projects/
+        hr-recruiter/
+        software-support/
+    bob-example.com/
+      .paseo/
+      run/
+      daemon 127.0.0.1:<stable-bob-port>
+      projects/
+        product-manager/
 ```
 
-Multiple employees may share the same physical machine only when each has a separate OS user/container/VM, separate remote `HOME`, separate `PASEO_HOME`, separate daemon state, and separate provider credentials. AIWorker must not combine an `aissh` login for one HOME with paths or provider credentials from another HOME.
+Multiple employees may share the same target HOME only through separate AIWorker owner scopes: independent `$HOME/.aiworker/<userSlug>/.paseo`, stable loopback daemon endpoint derived from `userSlug`, and Project root. A separate OS user/container/VM remains the stronger deployment option when provider CLI credential isolation must be guaranteed. AIWorker surfaces that provider credential risk as a non-blocking admin warning because provider CLIs may still read credentials elsewhere under the shared HOME.
+
+`PaseoEnvironment.ownerEmail` is the logical owner/admin of the target execution identity. It may differ from `WorkspaceAssignment.assignedEmail`; the assignment owner is represented by `assignedEmail`, `userSlug`, and the owner-scoped `$HOME/.aiworker/<userSlug>` tree. `--dedicated-target-user` remains a stronger assertion that the target execution identity is dedicated to the assigned user, but new writes still use the owner-scoped layout for consistency.
 
 ## Soul projection
 
-A Soul is a versioned workspace file template. It can contain:
+A Soul is a versioned Project workdir template. It can contain:
 
 ```text
 AGENTS.md
@@ -91,17 +100,17 @@ Provider secrets do not belong in the Soul or descriptor. Provider credentials a
 ## Provisioning flow
 
 ```text
-1. Admin selects user + target + provider profile + Soul release.
+1. Admin selects user + target + provider profile + Soul release and records an explicit target-owner assertion.
 2. AIWorker creates an Assignment.
 3. AIWorker uses aissh to discover the target execution identity and canonical remote HOME.
-4. AIWorker derives `PASEO_HOME=$HOME/.paseo` and `$HOME/aiworker-workspaces/<workspace>` under that identity; caller-provided absolute paths are not path authority.
-5. AIWorker installs/verifies Paseo, starts/checks the HOME-bound daemon, and gates provider readiness through the explicit `paseo-provider-json-v1` policy (`provider ls/models`) under the same identity.
-6. AIWorker writes the Soul workspace files.
+4. AIWorker derives `PASEO_HOME=$HOME/.aiworker/<userSlug>/.paseo`, `PASEO_LISTEN=127.0.0.1:<stable-user-port>`, and `$HOME/.aiworker/<userSlug>/projects/<project>` under that identity; caller-provided absolute paths are not path authority.
+5. AIWorker installs/verifies Paseo, starts/checks the owner-scoped daemon, and gates provider readiness through the explicit `paseo-provider-json-v1` policy (`paseo provider ls --host "$AIWORKER_PASEO_HOST" --json`) under the same identity.
+6. AIWorker writes the Soul Project workdir files.
 7. AIWorker records a redacted receipt and instruction-only handoff; it does not store real pairing URLs or QR codes.
-8. Employee opens Paseo and works inside that workspace.
+8. Employee opens Paseo with that Project workdir and works inside the Paseo-owned project/workspace.
 ```
 
-The employee work journey happens in Paseo. AIWorker may expose an optional launcher or catalog, but it is not a workbench and must not render the workspace.
+The employee work journey happens in Paseo. AIWorker may expose an optional launcher or catalog, but it is not a workbench and must not render the Paseo project/workspace.
 
 AIWorker Web is allowed only as a management plane for AIWorker-owned metadata: assignments, provisioning plans and status, redacted receipts, audit events, handoff references, Soul releases, Paseo environment metadata, and provider-profile secret references. It must not proxy Paseo UI or session traffic.
 

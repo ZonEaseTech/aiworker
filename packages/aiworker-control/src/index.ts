@@ -6,7 +6,10 @@ import type {
   EndpointBindingKind,
   PaseoEndpointBinding,
   PaseoEnvironment,
+  PaseoEnvironmentDedication,
+  PaseoEnvironmentTopologyKind,
   PaseoHandoff,
+  PaseoOwnershipAssertion,
   ProjectedFile,
   ProviderProfile,
   ProviderReadinessPolicy,
@@ -39,7 +42,10 @@ export type {
   PaseoEndpointBinding,
   PaseoEndpointKind,
   PaseoEnvironment,
+  PaseoEnvironmentDedication,
+  PaseoEnvironmentTopologyKind,
   PaseoHandoff,
+  PaseoOwnershipAssertion,
   ProjectedFile,
   ProviderProfile,
   ProviderReadinessPolicy,
@@ -70,12 +76,41 @@ const ASSIGNMENT_TRANSITIONS: Record<AssignmentStatus, AssignmentStatus[]> = {
 }
 const URL_PATTERN = /\bhttps?:\/\/[^\s"'<>`]+/g
 const HOME_DERIVED_PASEO_HOME = '$HOME/.paseo' as const
-const HOME_DERIVED_WORKSPACE_ROOT = '$HOME/aiworker-workspaces' as const
+const HOME_DERIVED_AIWORKER_ROOT = '$HOME/.aiworker' as const
+const LEGACY_PROJECT_ROOT = '$HOME/aiworker-projects'
+const LEGACY_WORKSPACE_ROOT = '$HOME/aiworker-workspaces'
 const HOME_DERIVED_DAEMON_ENDPOINT = 'paseo-daemon:remote-home'
 const PASEO_PROVIDER_READINESS_POLICY_KIND = 'paseo-provider-json-v1' as const
+const OWNER_SCOPED_TOPOLOGY_KIND = 'owner-scoped-paseo-home-v1' as const
 
 export function normalizeAssignedEmail(email: string): string {
   return email.trim().toLowerCase()
+}
+
+export function deriveAssignedUserSlug(email: string): string {
+  const normalized = normalizeAssignedEmail(email)
+  const slug = normalized
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 96)
+  const fallback = `user-${createHash('sha256').update(normalized).digest('hex').slice(0, 12)}`
+  return validateSafeProjectSegment(slug || fallback, 'assigned user')
+}
+
+export function deriveOwnerScopedPaseoPort(userSlug: string): number {
+  const safeSlug = validateSafeProjectSegment(userSlug, 'assigned user')
+  const bucket = createHash('sha256').update(safeSlug).digest().readUInt16BE(0) % 2000
+  return 41000 + bucket
+}
+
+export function createDefaultPaseoDaemonEndpointRef(userSlug: string): string {
+  return `127.0.0.1:${deriveOwnerScopedPaseoPort(userSlug)}`
+}
+
+export function createDefaultProjectRef(assignedEmail: string, projectName: string): WorkspacePathPolicy['projectRef'] {
+  const userSlug = deriveAssignedUserSlug(assignedEmail)
+  const safeProjectName = validateSafeProjectName(projectName, projectName)
+  return `${HOME_DERIVED_AIWORKER_ROOT}/${userSlug}/projects/${safeProjectName}`
 }
 
 export function canAdvanceAssignment(from: AssignmentStatus, to: AssignmentStatus): boolean {
@@ -89,10 +124,11 @@ export function userCanOpenWorkspace(user: { email: string }, assignment: Worksp
 }
 
 export function createAssignment(input: Omit<WorkspaceAssignment, 'assignedEmail' | 'assignmentId' | 'status'> & { assignedEmail: string, assignmentId?: string, status?: AssignmentStatus }): WorkspaceAssignment {
+  const assignedEmail = normalizeAssignedEmail(input.assignedEmail)
   return {
     ...input,
-    assignedEmail: normalizeAssignedEmail(input.assignedEmail),
-    assignmentId: input.assignmentId ?? createStableId('asn', `${input.assignedEmail}:${input.environmentId}:${input.soulReleaseRef}:${input.workspaceRef}`),
+    assignedEmail,
+    assignmentId: input.assignmentId ?? createStableId('asn', `${assignedEmail}:${input.environmentId}:${input.soulReleaseRef}:${input.workspaceRef}`),
     status: input.status ?? 'draft',
   }
 }
@@ -103,14 +139,14 @@ export function createHandoff(environment: PaseoEnvironment, workspaceRef: strin
       kind: 'pairing-offer',
       daemonEndpoint: redactPaseoPairingMaterial(environment.daemonEndpoint),
       workspaceRef,
-      instructions: `Open Paseo with the pairing offer provided out-of-band, then open workspace ${workspaceRef}. AIWorker does not store the raw pairing URL or QR.`,
+      instructions: `Open Paseo with the pairing offer provided out-of-band, then open project workdir ${workspaceRef}. AIWorker does not store the raw pairing URL or QR.`,
     }
   }
   return {
     kind: 'paseo-daemon',
     daemonEndpoint: environment.daemonEndpoint,
     workspaceRef,
-    instructions: `AIWorker derives PASEO_HOME from the aissh user's HOME. After apply succeeds, cd ${handoffWorkspacePath(workspaceRef)} on that target, run paseo daemon pair --home "$PASEO_HOME", and open the printed pairing link in the Paseo frontend. AIWorker does not store the pairing URL or QR.`,
+    instructions: `AIWorker derives owner-scoped PASEO_HOME and the Project workdir from the aissh user's HOME. After apply succeeds, run paseo daemon pair --home "$PASEO_HOME", then open the Project with paseo --host ${shellQuote(environment.daemonEndpoint)} ${handoffWorkspacePath(workspaceRef)} or start an agent with paseo run --host ${shellQuote(environment.daemonEndpoint)} --cwd ${handoffWorkspacePath(workspaceRef)}. AIWorker does not store the pairing URL or QR.`,
   }
 }
 
@@ -123,21 +159,34 @@ export function normalizeAisshServerRef(targetRef: string): string {
 
 export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
   assertProviderProfileReady(input)
+  const ownership = createPaseoOwnershipAssertion(input.assignment, input.environment)
   assertNoLiteralSecret(input.providerProfile.secretRef ?? '', 'providerProfile.secretRef')
   assertNoLiteralSecret(input.environment.daemonEndpoint, 'environment.daemonEndpoint')
+  assertNoLiteralSecret(input.environment.daemonListenRef ?? '', 'environment.daemonListenRef')
+  assertNoLiteralSecret(input.environment.daemonHostRef ?? '', 'environment.daemonHostRef')
+  assertNoLiteralSecret(input.assignment.projectRef ?? '', 'assignment.projectRef')
   assertNoLiteralSecret(input.assignment.workspaceRef, 'assignment.workspaceRef')
 
-  const workspaceName = deriveWorkspaceName(input.assignment.workspaceRef, input.soul.id)
-  const workspacePolicy = createWorkspacePathPolicy(workspaceName)
+  const userSlug = deriveAssignedUserSlug(input.assignment.assignedEmail)
+  const projectName = deriveProjectName(input.assignment.projectRef ?? input.assignment.workspaceRef, input.soul.id)
+  const workspacePolicy = createWorkspacePathPolicy({
+    assignedEmail: ownership.assignedEmail,
+    ownerEmail: ownership.environmentOwnerEmail,
+    projectName,
+    topologyKind: ownership.topologyKind,
+    userSlug,
+  })
+  assertWorkspaceRefMatchesTopology(input.assignment.projectRef ?? input.assignment.workspaceRef, workspacePolicy.topologyKind)
   const workspaceRef = workspacePolicy.workspaceRef
   const paseoHome = workspacePolicy.paseoHome
-  const endpointBinding = createEndpointBinding(input.environment)
+  const normalizedEnvironment = normalizeEnvironmentForWorkspace(input.environment, workspacePolicy)
+  const endpointBinding = createEndpointBinding(normalizedEnvironment, workspacePolicy)
   const providerReadiness = createProviderReadinessPolicy(input.providerProfile)
   const projectionCommands = projectionScriptCommands(input.soul.files)
   const projectedFiles = input.soul.files.map(file => validateProjectedFilePath(file.relativePath)).sort().join(' ')
   const script = [
     'set -euo pipefail',
-    ...remoteIdentityPreludeCommands(workspaceName),
+    ...remoteIdentityPreludeCommands(workspacePolicy, normalizedEnvironment),
     '(command -v paseo >/dev/null || npm install -g @getpaseo/cli)',
     `(${providerCliBinaryCheckCommand(input.providerProfile)})`,
     ...paseoDaemonReadinessCommands(),
@@ -145,11 +194,11 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
     'mkdir -p "$AIWORKER_WORKSPACE_REF"',
     'cd "$AIWORKER_WORKSPACE_REF"',
     ...projectionCommands,
-    `printf '%s\n' ${shellQuote(`AIWorker projected ${input.soul.id}@${input.soul.version}: ${projectedFiles}`)} > ${workspaceShellPath('.aiworker-projection')}`,
-    'printf \'%s\\n\' "AIWORKER_HANDOFF_READY: run paseo daemon pair --home \\"$PASEO_HOME\\" from \\"$AIWORKER_WORKSPACE_REF\\" and open the printed link in the Paseo frontend."',
+    `printf '%s\n' ${shellQuote(`AIWorker projected ${input.soul.id}@${input.soul.version} into Project workdir: ${projectedFiles}`)} > ${workspaceShellPath('.aiworker-projection')}`,
+    'printf \'%s\\n\' "AIWORKER_HANDOFF_READY: run paseo daemon pair --home \\"$PASEO_HOME\\", then open Project workdir with paseo --host \\"$AIWORKER_PASEO_HOST\\" \\"$AIWORKER_WORKSPACE_REF\\" or run paseo run --host \\"$AIWORKER_PASEO_HOST\\" --cwd \\"$AIWORKER_WORKSPACE_REF\\"."',
   ].join(' && ')
   const serverRef = normalizeAisshServerRef(input.environment.targetRef)
-  const reason = `Provision AIWorker Paseo workspace for ${input.assignment.assignedEmail}`
+  const reason = `Provision AIWorker Project workdir for ${input.assignment.assignedEmail}`
   const args = ['exec', serverRef, script, `--reason=${reason}`]
   const command = `aissh ${args.map(shellQuote).join(' ')}`
   const redactedCommand = redactSecretLike(command)
@@ -171,12 +220,20 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
     },
     assignment: {
       ...input.assignment,
-      handoff: createHandoff({ ...input.environment, paseoHome }, workspaceRef),
+      handoff: createHandoff({ ...normalizedEnvironment, paseoHome }, workspaceRef),
+      projectRef: workspacePolicy.projectRef,
       status: 'handoff_ready',
       workspaceRef,
     },
     command: redactedCommand,
     endpointBinding,
+    environment: {
+      ...normalizedEnvironment,
+      daemonEndpoint: endpointBinding.ref,
+      ownerEmail: ownership.environmentOwnerEmail,
+      targetRef: redactSecretLike(input.environment.targetRef),
+    },
+    ownership,
     providerReadiness,
     receipt: {
       adapterType: 'aissh',
@@ -185,14 +242,27 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
       endpointBinding: endpointBinding.bindingKind,
       endpointKind: endpointBinding.endpointKind,
       environmentId: input.environment.environmentId,
-      handoffKind: createHandoff({ ...input.environment, paseoHome }, workspaceRef).kind,
+      environmentOwnerEmail: ownership.environmentOwnerEmail,
+      topologyKind: workspacePolicy.topologyKind,
+      targetOwnerEmail: ownership.environmentOwnerEmail,
+      assignedEmail: ownership.assignedEmail,
+      handoffKind: createHandoff({ ...normalizedEnvironment, paseoHome }, workspaceRef).kind,
       handoffState: 'instruction-only',
+      ownershipKind: ownership.kind,
       paseoHome,
+      ownerRoot: workspacePolicy.ownerRoot,
+      runDir: workspacePolicy.runDir,
+      projectRoot: workspacePolicy.projectRoot,
+      daemonListenRef: endpointBinding.listenRef ?? workspacePolicy.daemonListenRef,
+      daemonHostRef: endpointBinding.hostRef ?? workspacePolicy.daemonHostRef,
+      projectRef: workspacePolicy.projectRef,
       providerProfileId: input.providerProfile.id,
       providerReadinessEffect: providerReadiness.effect,
       providerReadinessPolicy: providerReadiness.kind,
       soulReleaseRef: `${input.soul.id}@${input.soul.version}`,
       targetRef: redactSecretLike(input.environment.targetRef),
+      dedicatedTarget: ownership.dedicatedTarget,
+      userSlug: ownership.userSlug,
       workspaceRef,
       workspaceName: workspacePolicy.workspaceName,
       workspacePathPolicy: workspacePolicy.kind,
@@ -201,14 +271,55 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
   }
 }
 
+export function createPaseoOwnershipAssertion(
+  assignment: Pick<WorkspaceAssignment, 'assignedEmail'>,
+  environment: Pick<PaseoEnvironment, 'ownerEmail' | 'dedication' | 'topologyKind'>,
+): PaseoOwnershipAssertion {
+  const assignedEmail = normalizeAssignedEmail(assignment.assignedEmail)
+  const environmentOwnerEmail = normalizeAssignedEmail(environment.ownerEmail)
+  const topologyKind = environment.topologyKind ?? OWNER_SCOPED_TOPOLOGY_KIND
+  const dedication = environment.dedication ? normalizeEnvironmentDedication(environment.dedication) : undefined
+  if (dedication && dedication.assignedEmail !== assignedEmail) {
+    throw new Error(`Paseo environment dedication ${dedication.assignedEmail} must match assigned user ${assignedEmail}`)
+  }
+  if (environmentOwnerEmail !== assignedEmail && topologyKind !== OWNER_SCOPED_TOPOLOGY_KIND)
+    throw new Error(`Paseo environment owner ${environmentOwnerEmail} can differ from assigned user ${assignedEmail} only with owner-scoped topology`)
+
+  return {
+    assignedEmail,
+    dedicatedTarget: Boolean(dedication),
+    environmentOwnerEmail,
+    kind: dedication
+      ? 'dedicated-target-asserted'
+      : environmentOwnerEmail === assignedEmail
+        ? 'target-owner-matches-assigned-user'
+        : 'owner-scoped-shared-home',
+    topologyKind,
+    userSlug: deriveAssignedUserSlug(assignedEmail),
+  }
+}
+
+function normalizeEnvironmentDedication(dedication: PaseoEnvironmentDedication): PaseoEnvironmentDedication {
+  if (dedication.kind !== 'assigned-user-dedicated')
+    throw new Error(`Paseo environment dedication kind ${String(dedication.kind)} is not supported`)
+  const assignedEmail = normalizeAssignedEmail(dedication.assignedEmail)
+  if (!assignedEmail)
+    throw new Error('Paseo environment dedication assignedEmail is required')
+  return {
+    ...dedication,
+    assignedEmail,
+  }
+}
+
 function paseoDaemonReadinessCommands(): string[] {
   const runningPattern = 'Local Daemon[[:space:]]+running|Connected Daemon[[:space:]]+reachable'
   return [
     'AIWORKER_PASEO_STATUS="$(paseo daemon status --home "$PASEO_HOME" 2>&1 || true)"',
     'printf \'%s\\n\' "$AIWORKER_PASEO_STATUS"',
-    `printf '%s\\n' "$AIWORKER_PASEO_STATUS" | grep -Eq ${shellQuote(runningPattern)} || paseo daemon start --home "$PASEO_HOME"`,
+    'case "$AIWORKER_PASEO_LISTEN" in */*) test -S "$AIWORKER_PASEO_LISTEN" || paseo daemon start --home "$PASEO_HOME" --listen "$AIWORKER_PASEO_LISTEN" ;; *) printf \'%s\\n\' "$AIWORKER_PASEO_STATUS" | grep -F "$AIWORKER_PASEO_LISTEN" >/dev/null || paseo daemon restart --home "$PASEO_HOME" --listen "$AIWORKER_PASEO_LISTEN" --force || paseo daemon start --home "$PASEO_HOME" --listen "$AIWORKER_PASEO_LISTEN" ;; esac',
+    'case "$AIWORKER_PASEO_LISTEN" in */*) AIWORKER_PASEO_SOCKET_READY=0; for AIWORKER_PASEO_SOCKET_ATTEMPT in 1 2 3 4 5 6 7 8 9 10; do test -S "$AIWORKER_PASEO_LISTEN" && { AIWORKER_PASEO_SOCKET_READY=1; break; }; sleep 0.5; done; test "$AIWORKER_PASEO_SOCKET_READY" = 1 || { printf \'%s\\n\' "Paseo owner-scoped daemon socket was not created at $AIWORKER_PASEO_LISTEN. Run paseo daemon start --home \\"$PASEO_HOME\\" --listen \\"$AIWORKER_PASEO_LISTEN\\" under this aissh user, then retry." >&2; exit 127; } ;; esac',
     'AIWORKER_PASEO_STATUS="$(paseo daemon status --home "$PASEO_HOME" 2>&1 || true)"',
-    `printf '%s\\n' "$AIWORKER_PASEO_STATUS" | grep -Eq ${shellQuote(runningPattern)} || { printf '%s\\n' "Paseo daemon readiness failed after start for $PASEO_HOME. Run paseo daemon status/start under this aissh user, then retry." >&2; exit 127; }`,
+    `case "$AIWORKER_PASEO_LISTEN" in */*) test -S "$AIWORKER_PASEO_LISTEN" ;; *) printf '%s\\n' "$AIWORKER_PASEO_STATUS" | grep -F "$AIWORKER_PASEO_LISTEN" >/dev/null && printf '%s\\n' "$AIWORKER_PASEO_STATUS" | grep -Eq ${shellQuote(runningPattern)} ;; esac || { printf '%s\\n' "Paseo daemon readiness failed after start for $PASEO_HOME. Run paseo daemon status/start under this aissh user, then retry." >&2; exit 127; }`,
   ]
 }
 
@@ -463,34 +574,148 @@ function assertNoLiteralSecretsInValue(label: string, value: unknown): void {
   }
 }
 
-function deriveWorkspaceName(workspaceRef: string, fallback: string): string {
-  const symbolicPrefix = `${HOME_DERIVED_WORKSPACE_ROOT}/`
-  const candidate = workspaceRef.startsWith(symbolicPrefix) ? workspaceRef.slice(symbolicPrefix.length) : workspaceRef || fallback
-  return validateSafeWorkspaceName(candidate, fallback)
+function deriveProjectName(projectRef: string, fallback: string): string {
+  const projectPrefix = `${HOME_DERIVED_AIWORKER_ROOT}/`
+  const legacyProjectPrefix = `${LEGACY_PROJECT_ROOT}/`
+  const legacyWorkspacePrefix = `${LEGACY_WORKSPACE_ROOT}/`
+  const candidate = projectRef.startsWith(projectPrefix)
+    ? parseAiworkerProjectRef(projectRef).projectName
+    : projectRef.startsWith(legacyProjectPrefix)
+      ? projectRef.slice(legacyProjectPrefix.length)
+      : projectRef.startsWith(legacyWorkspacePrefix)
+        ? projectRef.slice(legacyWorkspacePrefix.length)
+        : projectRef || fallback
+  return validateSafeProjectName(candidate, fallback)
 }
 
-function createWorkspacePathPolicy(workspaceName: string): WorkspacePathPolicy {
+function parseAiworkerProjectRef(projectRef: string): { projectName: string, userSlug: string } {
+  const prefix = `${HOME_DERIVED_AIWORKER_ROOT}/`
+  const rest = projectRef.slice(prefix.length)
+  const parts = rest.split('/')
+  if (parts.length === 3 && parts[1] === 'projects') {
+    return {
+      projectName: validateSafeProjectName(parts[2] ?? '', ''),
+      userSlug: validateSafeProjectSegment(parts[0] ?? '', 'project user'),
+    }
+  }
+  if (parts.length !== 2)
+    throw new Error('project ref must be $HOME/.aiworker/<user>/projects/<project> or legacy $HOME/.aiworker/<user>/<project>')
+  return {
+    projectName: validateSafeProjectName(parts[1] ?? '', ''),
+    userSlug: validateSafeProjectSegment(parts[0] ?? '', 'project user'),
+  }
+}
+
+function assertWorkspaceRefMatchesTopology(projectRef: string, topologyKind: PaseoEnvironmentTopologyKind): void {
+  const prefix = `${HOME_DERIVED_AIWORKER_ROOT}/`
+  if (topologyKind !== OWNER_SCOPED_TOPOLOGY_KIND || !projectRef.startsWith(prefix))
+    return
+  const rest = projectRef.slice(prefix.length)
+  const parts = rest.split('/')
+  if (!(parts.length === 3 && parts[1] === 'projects'))
+    throw new Error('owner-scoped Project refs must use $HOME/.aiworker/<user>/projects/<project>; legacy two-segment refs are display-only')
+}
+
+function createWorkspacePathPolicy(input: {
+  assignedEmail: string
+  ownerEmail: string
+  projectName: string
+  topologyKind: PaseoEnvironmentTopologyKind
+  userSlug: string
+}): WorkspacePathPolicy {
+  const ownerRoot = `${HOME_DERIVED_AIWORKER_ROOT}/${input.userSlug}` as const
+  const runDir = `${ownerRoot}/run` as const
+  const projectRoot = input.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
+    ? `${ownerRoot}/projects` as const
+    : ownerRoot
+  const paseoHome = input.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
+    ? `${ownerRoot}/.paseo` as const
+    : HOME_DERIVED_PASEO_HOME
+  const projectRef = `${projectRoot}/${input.projectName}` as WorkspacePathPolicy['projectRef']
+  const daemonRef = input.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
+    ? createDefaultPaseoDaemonEndpointRef(input.userSlug)
+    : HOME_DERIVED_DAEMON_ENDPOINT
   return {
     authority: 'aissh-execution-home',
-    kind: 'home-derived',
-    paseoHome: HOME_DERIVED_PASEO_HOME,
-    workspaceName,
-    workspaceRef: `${HOME_DERIVED_WORKSPACE_ROOT}/${workspaceName}`,
-    workspaceRoot: HOME_DERIVED_WORKSPACE_ROOT,
+    assignedEmail: input.assignedEmail,
+    daemonEndpointRef: daemonRef,
+    daemonHostRef: daemonRef,
+    daemonListenRef: daemonRef,
+    kind: 'project-workdir',
+    ownerEmail: input.ownerEmail,
+    ownerRoot,
+    paseoHome,
+    projectName: input.projectName,
+    projectRef,
+    projectRoot,
+    runDir,
+    topologyKind: input.topologyKind,
+    userSlug: input.userSlug,
+    workspaceName: input.projectName,
+    workspaceRef: projectRef,
+    workspaceRoot: HOME_DERIVED_AIWORKER_ROOT,
   }
 }
 
-function createEndpointBinding(environment: PaseoEnvironment): PaseoEndpointBinding {
+function normalizeEnvironmentForWorkspace(environment: PaseoEnvironment, policy: WorkspacePathPolicy): PaseoEnvironment {
+  if (policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND && environment.paseoHome === HOME_DERIVED_PASEO_HOME)
+    throw new Error('owner-scoped topology must not use legacy $HOME/.paseo')
+
+  if (environment.endpointKind === 'tcp' && Boolean(environment.daemonListenRef) !== Boolean(environment.daemonHostRef))
+    throw new Error('explicit TCP Paseo endpoint requires both daemonListenRef and daemonHostRef')
+
+  const normalized: PaseoEnvironment = {
+    ...environment,
+    ...(environment.dedication ? { dedication: normalizeEnvironmentDedication(environment.dedication) } : {}),
+    endpointKind: policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND && environment.endpointKind !== 'relay-offer'
+      ? 'tcp'
+      : environment.endpointKind,
+    topologyKind: policy.topologyKind,
+    paseoHome: policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND ? policy.paseoHome : environment.paseoHome,
+    daemonEndpoint: environment.endpointKind === 'tcp'
+      ? environment.daemonHostRef ?? environment.daemonEndpoint
+      : policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND && (environment.endpointKind === 'unix' || environment.daemonEndpoint === HOME_DERIVED_DAEMON_ENDPOINT)
+        ? policy.daemonEndpointRef
+        : environment.daemonEndpoint,
+    daemonListenRef: environment.endpointKind === 'tcp'
+      ? environment.daemonListenRef
+      : policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
+        ? policy.daemonListenRef
+        : environment.daemonListenRef,
+    daemonHostRef: environment.endpointKind === 'tcp'
+      ? environment.daemonHostRef
+      : policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
+        ? policy.daemonHostRef
+        : environment.daemonHostRef,
+  }
+
+  if (normalized.endpointKind === 'tcp' && (!normalized.daemonListenRef || !normalized.daemonHostRef))
+    throw new Error('explicit TCP Paseo endpoint requires both daemonListenRef and daemonHostRef')
+  return normalized
+}
+
+function createEndpointBinding(environment: PaseoEnvironment, policy: WorkspacePathPolicy): PaseoEndpointBinding {
+  const ref = isPaseoPairingOffer(environment.daemonEndpoint)
+    ? redactPaseoPairingMaterial(environment.daemonEndpoint)
+    : redactSecretLike(environment.daemonEndpoint)
   return {
-    bindingKind: endpointBindingKind(environment),
+    bindingKind: endpointBindingKind(environment, policy),
     endpointKind: environment.endpointKind,
-    ref: isPaseoPairingOffer(environment.daemonEndpoint)
-      ? redactPaseoPairingMaterial(environment.daemonEndpoint)
-      : redactSecretLike(environment.daemonEndpoint),
+    ref,
+    ...(environment.daemonHostRef ? { hostRef: redactSecretLike(environment.daemonHostRef) } : {}),
+    ...(environment.daemonListenRef ? { listenRef: redactSecretLike(environment.daemonListenRef) } : {}),
+    ...(policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND ? { ownerRoot: policy.ownerRoot, topologyKind: policy.topologyKind } : {}),
   }
 }
 
-function endpointBindingKind(environment: PaseoEnvironment): EndpointBindingKind {
+function endpointBindingKind(environment: PaseoEnvironment, policy: WorkspacePathPolicy): EndpointBindingKind {
+  if (
+    policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
+    && environment.endpointKind === 'tcp'
+    && environment.daemonEndpoint === policy.daemonEndpointRef
+  ) {
+    return 'owner-scoped-local-daemon'
+  }
   if (environment.endpointKind === 'local-home' || environment.daemonEndpoint === HOME_DERIVED_DAEMON_ENDPOINT)
     return 'home-derived-local-daemon'
   if (environment.endpointKind === 'relay-offer' || isPaseoPairingOffer(environment.daemonEndpoint))
@@ -499,17 +724,17 @@ function endpointBindingKind(environment: PaseoEnvironment): EndpointBindingKind
 }
 
 function handoffWorkspacePath(workspaceRef: string): string {
-  const homePrefix = `${HOME_DERIVED_WORKSPACE_ROOT}/`
+  const homePrefix = `${HOME_DERIVED_AIWORKER_ROOT}/`
   if (workspaceRef.startsWith(homePrefix)) {
-    const workspaceName = validateSafeWorkspaceName(workspaceRef.slice(homePrefix.length), workspaceRef)
-    return `"$HOME/aiworker-workspaces/${workspaceName}"`
+    const parsed = parseAiworkerProjectRef(workspaceRef)
+    return `"$HOME/.aiworker/${parsed.userSlug}/projects/${parsed.projectName}"`
   }
   return shellQuote(workspaceRef)
 }
 
 function createProviderReadinessPolicy(profile: ProviderProfile): ProviderReadinessPolicy {
   return {
-    commands: ['paseo provider ls --json'],
+    commands: ['paseo provider ls --host "$AIWORKER_PASEO_HOST" --json'],
     effect: 'non-blocking-warning',
     kind: PASEO_PROVIDER_READINESS_POLICY_KIND,
     modelListPolicy: 'not-collected-by-aiworker',
@@ -519,12 +744,16 @@ function createProviderReadinessPolicy(profile: ProviderProfile): ProviderReadin
   }
 }
 
-function validateSafeWorkspaceName(candidate: string, fallback: string): string {
-  const value = (candidate || fallback).trim()
+function validateSafeProjectName(candidate: string, fallback: string): string {
+  return validateSafeProjectSegment(candidate || fallback, 'project')
+}
+
+function validateSafeProjectSegment(candidate: string, label: string): string {
+  const value = candidate.trim()
   if (!value || value === '.' || value === '..' || value.includes('/') || value.includes('\\') || value.includes('..') || hasControlCharacter(value))
-    throw new Error('workspace name must be a safe relative segment')
+    throw new Error(`${label} name must be a safe relative segment`)
   if (!/^[\w.-]+$/.test(value))
-    throw new Error('workspace name must contain only letters, numbers, dot, underscore, or dash')
+    throw new Error(`${label} name must contain only letters, numbers, dot, underscore, or dash`)
   return value
 }
 
@@ -535,7 +764,12 @@ function hasControlCharacter(value: string): boolean {
   })
 }
 
-function remoteIdentityPreludeCommands(workspaceName: string): string[] {
+function remoteIdentityPreludeCommands(policy: WorkspacePathPolicy, environment: PaseoEnvironment): string[] {
+  const listenRef = environment.daemonListenRef ?? policy.daemonListenRef
+  const hostRef = environment.daemonHostRef ?? environment.daemonEndpoint
+  const defaultEndpointExpression = policy.daemonListenRef.includes('/')
+    ? '"$AIWORKER_PASEO_RUN_DIR/paseo.sock"'
+    : shellQuote(policy.daemonListenRef)
   return [
     'unset PASEO_HOST',
     'AIWORKER_REMOTE_USER="$(whoami)"',
@@ -545,19 +779,38 @@ function remoteIdentityPreludeCommands(workspaceName: string): string[] {
     ': "$' + '{HOME:?AIWorker requires HOME for aissh execution identity}"',
     'case "$HOME" in /*) ;; *) printf \'%s\\n\' "AIWorker requires absolute HOME for aissh execution identity." >&2; exit 64 ;; esac',
     'AIWORKER_REMOTE_HOME="$(cd "$HOME" && pwd -P)" || { printf \'%s\\n\' "AIWorker could not canonicalize HOME for aissh execution identity." >&2; exit 64; }',
-    'PASEO_HOME="$AIWORKER_REMOTE_HOME/.paseo"',
-    'export PASEO_HOME',
-    `AIWORKER_WORKSPACE_NAME=${shellQuote(workspaceName)}`,
-    'case "$AIWORKER_WORKSPACE_NAME" in ""|.|..|*/*|*\\\\*|*".."*) printf \'%s\\n\' "AIWorker workspace name is not a safe HOME-relative segment." >&2; exit 64 ;; esac',
-    'AIWORKER_WORKSPACE_ROOT="$AIWORKER_REMOTE_HOME/aiworker-workspaces"',
-    'AIWORKER_WORKSPACE_REF="$AIWORKER_WORKSPACE_ROOT/$AIWORKER_WORKSPACE_NAME"',
+    `AIWORKER_USER_SLUG=${shellQuote(policy.userSlug)}`,
+    `AIWORKER_PROJECT_NAME=${shellQuote(policy.projectName)}`,
+    'case "$AIWORKER_USER_SLUG" in ""|.|..|*/*|*\\\\*|*".."*) printf \'%s\\n\' "AIWorker assigned user slug is not a safe HOME-relative segment." >&2; exit 64 ;; esac',
+    'case "$AIWORKER_PROJECT_NAME" in ""|.|..|*/*|*\\\\*|*".."*) printf \'%s\\n\' "AIWorker Project name is not a safe HOME-relative segment." >&2; exit 64 ;; esac',
+    'AIWORKER_ROOT="$AIWORKER_REMOTE_HOME/.aiworker"',
+    'AIWORKER_OWNER_ROOT="$AIWORKER_ROOT/$AIWORKER_USER_SLUG"',
+    'AIWORKER_PASEO_HOME="$AIWORKER_OWNER_ROOT/.paseo"',
+    'AIWORKER_PASEO_RUN_DIR="$AIWORKER_OWNER_ROOT/run"',
+    remoteRefAssignment('AIWORKER_PASEO_LISTEN', listenRef, policy.daemonListenRef, defaultEndpointExpression),
+    remoteRefAssignment('AIWORKER_PASEO_HOST', hostRef, policy.daemonHostRef, defaultEndpointExpression),
+    'PASEO_HOME="$AIWORKER_PASEO_HOME"',
+    'PASEO_LISTEN="$AIWORKER_PASEO_LISTEN"',
+    'export PASEO_HOME PASEO_LISTEN',
+    'mkdir -p "$AIWORKER_PASEO_RUN_DIR"',
+    'AIWORKER_PROJECT_ROOT="$AIWORKER_OWNER_ROOT/projects"',
+    'AIWORKER_PROJECT_REF="$AIWORKER_PROJECT_ROOT/$AIWORKER_PROJECT_NAME"',
+    'AIWORKER_WORKSPACE_REF="$AIWORKER_PROJECT_REF"',
     'printf \'%s\\n\' "AIWorker target identity discovered: user=$AIWORKER_REMOTE_USER uid=$AIWORKER_REMOTE_UID home=$AIWORKER_REMOTE_HOME pwd=$AIWORKER_REMOTE_PWD"',
   ]
 }
 
+function remoteRefAssignment(name: string, ref: string, defaultRef: string, defaultExpression: string): string {
+  if (ref === defaultRef)
+    return `${name}=${defaultExpression}`
+  if (ref.startsWith('$HOME/'))
+    return `${name}="$AIWORKER_REMOTE_HOME/${ref.slice('$HOME/'.length)}"`
+  return `${name}=${shellQuote(ref)}`
+}
+
 function providerCliBinaryCheckCommand(profile: ProviderProfile): string {
   if (profile.cliCommand)
-    return `command -v ${shellQuote(profile.cliCommand)} >/dev/null || printf '%s\\n' ${shellQuote(`AIWORKER_PROVIDER_WARNING: Missing provider CLI: ${profile.cliCommand}. Workspace projection will continue; install/authenticate it before using this workspace in Paseo.`)}`
+    return `command -v ${shellQuote(profile.cliCommand)} >/dev/null || printf '%s\\n' ${shellQuote(`AIWORKER_PROVIDER_NOTE: Provider CLI ${profile.cliCommand} was not found in the non-interactive shell PATH; Paseo provider readiness is checked through the owner-scoped daemon.`)}`
 
   const commandByProvider: Record<string, string> = {
     claude: 'claude',
@@ -569,7 +822,7 @@ function providerCliBinaryCheckCommand(profile: ProviderProfile): string {
     return `printf '%s\\n' ${shellQuote(`AIWorker will use Paseo provider profile ${profile.paseoProviderId ?? profile.id} for ${profile.provider}.`)}`
   if (!command)
     throw new Error(`provider ${profile.provider} must declare cliCommand or paseoProviderId`)
-  return `command -v ${shellQuote(command)} >/dev/null || printf '%s\\n' ${shellQuote(`AIWORKER_PROVIDER_WARNING: Missing provider CLI: ${command}. Workspace projection will continue; install/authenticate it before using this workspace in Paseo.`)}`
+  return `command -v ${shellQuote(command)} >/dev/null || printf '%s\\n' ${shellQuote(`AIWORKER_PROVIDER_NOTE: Provider CLI ${command} was not found in the non-interactive shell PATH; Paseo provider readiness is checked through the owner-scoped daemon.`)}`
 }
 
 function providerReadinessCommands(profile: ProviderProfile): string[] {
@@ -579,7 +832,7 @@ function providerReadinessCommands(profile: ProviderProfile): string[] {
     `AIWORKER_PASEO_PROVIDER_ID=${shellQuote(providerId)}`,
     'AIWORKER_PROVIDER_LS_JSON="$(mktemp)"',
     'trap \'rm -f "$AIWORKER_PROVIDER_LS_JSON"\' EXIT',
-    `if paseo provider ls --json >"$AIWORKER_PROVIDER_LS_JSON" 2>/dev/null; then node -e ${shellQuote(providerLsCheck)} "$AIWORKER_PASEO_PROVIDER_ID" "$AIWORKER_PROVIDER_LS_JSON"; else printf '%s\\n' "AIWORKER_PROVIDER_WARNING: Paseo provider list failed for $AIWORKER_PASEO_PROVIDER_ID; workspace projection will continue, complete provider install/login in Paseo before use."; fi`,
+    `if paseo provider ls --host "$AIWORKER_PASEO_HOST" --json >"$AIWORKER_PROVIDER_LS_JSON" 2>/dev/null; then node -e ${shellQuote(providerLsCheck)} "$AIWORKER_PASEO_PROVIDER_ID" "$AIWORKER_PROVIDER_LS_JSON"; else printf '%s\\n' "AIWORKER_PROVIDER_WARNING: Paseo provider list failed for $AIWORKER_PASEO_PROVIDER_ID; workspace projection will continue, complete provider install/login in Paseo before use."; fi`,
   ]
 }
 

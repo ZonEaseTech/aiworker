@@ -49,16 +49,26 @@ const soul = {
 }
 
 describe('Paseo thin-layer aiworker-control contract', () => {
-  test('assignment is user + environment + soul + provider + workspace, not one daemon per soul', () => {
+  test('assignment is user + environment + soul + provider + Project workdir, not one daemon per soul', () => {
     const assignment = createAssignment({
       assignedEmail: ' Alice@Example.COM ',
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      projectRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+    })
+    const lowerCaseAssignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      projectRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
 
     expect(assignment.assignedEmail).toBe('alice@example.com')
+    expect(assignment.assignmentId.slice(0, 16)).toBe(lowerCaseAssignment.assignmentId.slice(0, 16))
     expect(userCanOpenWorkspace({ email: 'alice@example.com' }, { ...assignment, status: 'ready' })).toBe(true)
     expect(userCanOpenWorkspace({ email: 'bob@example.com' }, { ...assignment, status: 'ready' })).toBe(false)
   })
@@ -77,7 +87,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
     const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
 
@@ -94,42 +104,80 @@ describe('Paseo thin-layer aiworker-control contract', () => {
     expect(plan.aissh.script).toContain('AIWORKER_REMOTE_PWD="$(pwd -P)"')
     expect(plan.aissh.script).toContain('AIWORKER_REMOTE_PATH="$PATH"')
     expect(plan.aissh.script).toContain('AIWORKER_REMOTE_HOME="$(cd "$HOME" && pwd -P)"')
-    expect(plan.aissh.script).toContain('PASEO_HOME="$AIWORKER_REMOTE_HOME/.paseo"')
-    expect(plan.aissh.script).toContain('AIWORKER_WORKSPACE_ROOT="$AIWORKER_REMOTE_HOME/aiworker-workspaces"')
-    expect(plan.aissh.script).toContain('AIWORKER_WORKSPACE_REF="$AIWORKER_WORKSPACE_ROOT/$AIWORKER_WORKSPACE_NAME"')
+    expect(plan.aissh.script).toContain('AIWORKER_OWNER_ROOT="$AIWORKER_ROOT/$AIWORKER_USER_SLUG"')
+    expect(plan.aissh.script).toContain('AIWORKER_PASEO_HOME="$AIWORKER_OWNER_ROOT/.paseo"')
+    expect(plan.aissh.script).toContain('AIWORKER_PASEO_LISTEN=127.0.0.1:42057')
+    expect(plan.aissh.script).toContain('AIWORKER_PASEO_HOST=127.0.0.1:42057')
+    expect(plan.aissh.script).toContain('PASEO_HOME="$AIWORKER_PASEO_HOME"')
+    expect(plan.aissh.script).toContain('PASEO_LISTEN="$AIWORKER_PASEO_LISTEN"')
+    expect(plan.aissh.script).toContain('AIWORKER_USER_SLUG=alice-example.com')
+    expect(plan.aissh.script).toContain('AIWORKER_ROOT="$AIWORKER_REMOTE_HOME/.aiworker"')
+    expect(plan.aissh.script).toContain('AIWORKER_PROJECT_ROOT="$AIWORKER_OWNER_ROOT/projects"')
+    expect(plan.aissh.script).toContain('AIWORKER_PROJECT_REF="$AIWORKER_PROJECT_ROOT/$AIWORKER_PROJECT_NAME"')
+    expect(plan.aissh.script).toContain('AIWORKER_WORKSPACE_REF="$AIWORKER_PROJECT_REF"')
     expect(plan.aissh.script).toContain('mkdir -p "$AIWORKER_WORKSPACE_REF" && cd "$AIWORKER_WORKSPACE_REF"')
     expect(plan.aissh.script).toContain('(command -v paseo >/dev/null || npm install -g @getpaseo/cli)')
     expect(plan.aissh.script).toContain('command -v claude')
-    expect(plan.aissh.script).toContain('Missing provider CLI: claude')
-    expect(plan.aissh.script).toContain('Workspace projection will continue')
+    expect(plan.aissh.script).toContain('AIWORKER_PROVIDER_NOTE: Provider CLI claude was not found')
+    expect(plan.aissh.script).toContain('Paseo provider readiness is checked through the owner-scoped daemon')
     expect(plan.aissh.script).toContain('AIWORKER_PASEO_STATUS="$(paseo daemon status --home "$PASEO_HOME" 2>&1 || true)"')
-    expect(plan.aissh.script).toContain('grep -Eq \'Local Daemon[[:space:]]+running|Connected Daemon[[:space:]]+reachable\' || paseo daemon start --home "$PASEO_HOME"')
+    expect(plan.aissh.script).toContain('paseo daemon restart --home "$PASEO_HOME" --listen "$AIWORKER_PASEO_LISTEN" --force')
+    expect(plan.aissh.script).toContain('paseo daemon start --home "$PASEO_HOME" --listen "$AIWORKER_PASEO_LISTEN"')
     expect(plan.aissh.script).toContain('Paseo daemon readiness failed after start')
-    expect(plan.aissh.script).toContain('paseo provider ls --json >"$AIWORKER_PROVIDER_LS_JSON"')
+    expect(plan.aissh.script).toContain('paseo provider ls --host "$AIWORKER_PASEO_HOST" --json >"$AIWORKER_PROVIDER_LS_JSON"')
     expect(plan.aissh.script).toContain('AIWORKER_PROVIDER_WARNING')
     expect(plan.aissh.script).not.toContain('paseo provider models')
     expect(plan.aissh.script).toContain('AIWORKER_HANDOFF_READY: run paseo daemon pair --home')
     expect(plan.aissh.script).not.toContain('&& paseo daemon pair')
-    expect(plan.aissh.script).not.toContain('--host')
+    expect(plan.aissh.script).toContain('paseo run --host \\"$AIWORKER_PASEO_HOST\\" --cwd \\"$AIWORKER_WORKSPACE_REF\\"')
     expect(plan.command).not.toContain('paseo --host unix:/run/paseo/alice.sock daemon status')
     expect(plan.command).toContain('base64 -d')
     expect(plan.receipt.soulReleaseRef).toBe('hr-recruiter@1.2.0')
-    expect(plan.receipt.workspaceRef).toBe('$HOME/aiworker-workspaces/hr-recruiter')
+    expect(plan.receipt.projectRef).toBe('$HOME/.aiworker/alice-example.com/projects/hr-recruiter')
+    expect(plan.receipt.workspaceRef).toBe('$HOME/.aiworker/alice-example.com/projects/hr-recruiter')
+    expect(plan.environment.ownerEmail).toBe('alice@example.com')
+    expect(plan.environment.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
+    expect(plan.environment.endpointKind).toBe('tcp')
+    expect(plan.environment.daemonEndpoint).toBe('127.0.0.1:42057')
+    expect(plan.ownership).toEqual({
+      assignedEmail: 'alice@example.com',
+      dedicatedTarget: false,
+      environmentOwnerEmail: 'alice@example.com',
+      kind: 'target-owner-matches-assigned-user',
+      topologyKind: 'owner-scoped-paseo-home-v1',
+      userSlug: 'alice-example.com',
+    })
     expect(plan.workspacePolicy).toEqual({
       authority: 'aissh-execution-home',
-      kind: 'home-derived',
-      paseoHome: '$HOME/.paseo',
+      assignedEmail: 'alice@example.com',
+      daemonEndpointRef: '127.0.0.1:42057',
+      daemonHostRef: '127.0.0.1:42057',
+      daemonListenRef: '127.0.0.1:42057',
+      kind: 'project-workdir',
+      ownerEmail: 'alice@example.com',
+      ownerRoot: '$HOME/.aiworker/alice-example.com',
+      paseoHome: '$HOME/.aiworker/alice-example.com/.paseo',
+      projectName: 'hr-recruiter',
+      projectRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+      projectRoot: '$HOME/.aiworker/alice-example.com/projects',
+      runDir: '$HOME/.aiworker/alice-example.com/run',
+      topologyKind: 'owner-scoped-paseo-home-v1',
+      userSlug: 'alice-example.com',
       workspaceName: 'hr-recruiter',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
-      workspaceRoot: '$HOME/aiworker-workspaces',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+      workspaceRoot: '$HOME/.aiworker',
     })
     expect(plan.endpointBinding).toEqual({
-      bindingKind: 'external-endpoint',
-      endpointKind: 'unix',
-      ref: 'unix:/run/paseo/alice.sock',
+      bindingKind: 'owner-scoped-local-daemon',
+      endpointKind: 'tcp',
+      hostRef: '127.0.0.1:42057',
+      listenRef: '127.0.0.1:42057',
+      ownerRoot: '$HOME/.aiworker/alice-example.com',
+      ref: '127.0.0.1:42057',
+      topologyKind: 'owner-scoped-paseo-home-v1',
     })
     expect(plan.providerReadiness).toEqual({
-      commands: ['paseo provider ls --json'],
+      commands: ['paseo provider ls --host "$AIWORKER_PASEO_HOST" --json'],
       effect: 'non-blocking-warning',
       kind: 'paseo-provider-json-v1',
       modelListPolicy: 'not-collected-by-aiworker',
@@ -137,20 +185,116 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       providerListPredicate: 'warn if provider != providerId || status != "available" || enabled != "Enabled"',
       rawOutputPolicy: 'redacted-warning-only',
     })
-    expect(plan.receipt.workspacePathPolicy).toBe('home-derived')
-    expect(plan.receipt.endpointBinding).toBe('external-endpoint')
+    expect(plan.receipt.workspacePathPolicy).toBe('project-workdir')
+    expect(plan.receipt.endpointBinding).toBe('owner-scoped-local-daemon')
+    expect(plan.receipt.environmentOwnerEmail).toBe('alice@example.com')
+    expect(plan.receipt.topologyKind).toBe('owner-scoped-paseo-home-v1')
+    expect(plan.receipt.ownerRoot).toBe('$HOME/.aiworker/alice-example.com')
+    expect(plan.receipt.runDir).toBe('$HOME/.aiworker/alice-example.com/run')
+    expect(plan.receipt.projectRoot).toBe('$HOME/.aiworker/alice-example.com/projects')
+    expect(plan.receipt.daemonListenRef).toBe('127.0.0.1:42057')
+    expect(plan.receipt.daemonHostRef).toBe('127.0.0.1:42057')
+    expect(plan.receipt.ownershipKind).toBe('target-owner-matches-assigned-user')
+    expect(plan.receipt.dedicatedTarget).toBe(false)
+    expect(plan.receipt.userSlug).toBe('alice-example.com')
     expect(plan.receipt.providerReadinessPolicy).toBe('paseo-provider-json-v1')
     expect(plan.receipt.aisshArgs).toEqual(plan.aissh.args)
     expect(plan.assignment.handoff?.kind).toBe('paseo-daemon')
-    expect(plan.assignment.handoff?.instructions).toContain('AIWorker derives PASEO_HOME')
-    expect(plan.assignment.handoff?.instructions).toContain('cd "$HOME/aiworker-workspaces/hr-recruiter"')
-    expect(plan.assignment.handoff?.instructions).not.toContain('cd \'$HOME/aiworker-workspaces/hr-recruiter\'')
+    expect(plan.assignment.handoff?.instructions).toContain('AIWorker derives owner-scoped PASEO_HOME')
+    expect(plan.assignment.handoff?.instructions).toContain('paseo --host')
+    expect(plan.assignment.handoff?.instructions).toContain('paseo run --host')
+    expect(plan.assignment.handoff?.instructions).toContain('"$HOME/.aiworker/alice-example.com/projects/hr-recruiter"')
     expect(plan.assignment.handoff?.instructions).toContain('paseo daemon pair --home "$PASEO_HOME"')
     expect(plan.command).toContain('command -v claude')
     expect(plan.command).not.toContain('secret://org/claude-work')
   })
 
-  test('rejects workspace refs that are not HOME-derived safe segments', () => {
+  test('records explicit dedicated target ownership while keeping owner-scoped PASEO_HOME', () => {
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+    })
+    const plan = createProvisionPlan({
+      assignment,
+      environment: {
+        ...environment,
+        dedication: {
+          kind: 'assigned-user-dedicated',
+          assignedEmail: 'Alice@Example.COM',
+          assertedBy: 'aiworker-cli',
+          reason: '--dedicated-target-user',
+        },
+      },
+      providerProfile,
+      soul,
+    })
+
+    expect(plan.environment.dedication).toEqual({
+      kind: 'assigned-user-dedicated',
+      assignedEmail: 'alice@example.com',
+      assertedBy: 'aiworker-cli',
+      reason: '--dedicated-target-user',
+    })
+    expect(plan.ownership.kind).toBe('dedicated-target-asserted')
+    expect(plan.ownership.dedicatedTarget).toBe(true)
+    expect(plan.workspacePolicy.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
+    expect(plan.workspacePolicy.workspaceRef).toBe('$HOME/.aiworker/alice-example.com/projects/hr-recruiter')
+    expect(plan.aissh.script).toContain('AIWORKER_PASEO_HOME="$AIWORKER_OWNER_ROOT/.paseo"')
+    expect(plan.receipt.ownershipKind).toBe('dedicated-target-asserted')
+    expect(plan.receipt.dedicatedTarget).toBe(true)
+  })
+
+  test('allows shared target owner with owner-scoped assignment roots and rejects legacy shared HOME', () => {
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+    })
+
+    const sharedHomePlan = createProvisionPlan({
+      assignment,
+      environment: { ...environment, ownerEmail: 'bob@example.com' },
+      providerProfile,
+      soul,
+    })
+
+    expect(sharedHomePlan.ownership.kind).toBe('owner-scoped-shared-home')
+    expect(sharedHomePlan.environment.ownerEmail).toBe('bob@example.com')
+    expect(sharedHomePlan.workspacePolicy.ownerEmail).toBe('bob@example.com')
+    expect(sharedHomePlan.workspacePolicy.userSlug).toBe('alice-example.com')
+    expect(sharedHomePlan.workspacePolicy.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
+
+    expect(() => createProvisionPlan({
+      assignment,
+      environment: {
+        ...environment,
+        ownerEmail: 'bob@example.com',
+        topologyKind: 'legacy-home-derived-paseo-home-v1',
+      },
+      providerProfile,
+      soul,
+    })).toThrow('only with owner-scoped topology')
+
+    expect(() => createProvisionPlan({
+      assignment,
+      environment: {
+        ...environment,
+        dedication: {
+          kind: 'assigned-user-dedicated',
+          assignedEmail: 'bob@example.com',
+        },
+      },
+      providerProfile,
+      soul,
+    })).toThrow('dedication bob@example.com must match assigned user')
+  })
+
+  test('rejects Project workdir refs that are not HOME-derived safe segments', () => {
     const unsafeAssignment = createAssignment({
       assignedEmail: 'alice@example.com',
       environmentId: environment.environmentId,
@@ -159,13 +303,13 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       workspaceRef: '/home/alice/workspaces/hr-recruiter',
     })
 
-    expect(() => createProvisionPlan({ assignment: unsafeAssignment, environment, providerProfile, soul })).toThrow('workspace name must')
+    expect(() => createProvisionPlan({ assignment: unsafeAssignment, environment, providerProfile, soul })).toThrow('project name must')
     expect(() => createProvisionPlan({
       assignment: { ...unsafeAssignment, workspaceRef: '../evil; echo SHOULD_NOT_RUN' },
       environment,
       providerProfile,
       soul,
-    })).toThrow('workspace name must be a safe relative segment')
+    })).toThrow('project name must be a safe relative segment')
     expect(() => createProvisionPlan({
       assignment: { ...unsafeAssignment, workspaceRef: '../evil; echo SHOULD_NOT_RUN' },
       environment,
@@ -186,7 +330,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
     const plan = createProvisionPlan({
       assignment,
@@ -206,7 +350,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: 'codex-personal',
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
 
     expect(() => createProvisionPlan({
@@ -223,7 +367,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: 'acp-team',
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
     const plan = createProvisionPlan({
       assignment,
@@ -242,7 +386,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: 'acp-team',
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
 
     expect(() => createProvisionPlan({
@@ -283,7 +427,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: pairingEnvironment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
 
     expect(() => createProvisionPlan({ assignment, environment: pairingEnvironment, providerProfile, soul })).toThrow('raw Paseo pairing material')
@@ -297,7 +441,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
     const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
     const receipt = createProvisionReceipt(plan, { at: '2026-06-15T18:00:00.000Z', id: 'rcpt-1', status: 'applied' })
@@ -339,6 +483,43 @@ describe('Paseo thin-layer aiworker-control contract', () => {
     expect(loaded.projectionManifests[0]?.files[0]?.sha256).toMatch(/^[a-f0-9]{64}$/)
   })
 
+  test('loads legacy v1 receipts that predate explicit ownership fields', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-control-store-'))
+    const store = new LocalFileControlPlaneStore(root)
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+    })
+    const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
+    const legacyReceipt = createProvisionReceipt(plan, {
+      at: '2026-06-15T18:00:00.000Z',
+      id: 'rcpt-legacy',
+      status: 'applied',
+    })
+    delete legacyReceipt.dedicatedTarget
+    delete legacyReceipt.environmentOwnerEmail
+    delete legacyReceipt.ownershipKind
+    delete legacyReceipt.userSlug
+
+    await store.saveSnapshot({
+      ...createEmptyControlPlaneSnapshot(),
+      assignments: [assignment],
+      environments: [environment],
+      providerProfiles: [providerProfile],
+      receipts: [legacyReceipt],
+      soulReleases: [soul],
+    })
+
+    const loaded = await store.loadSnapshot()
+
+    expect(loaded.receipts[0]).toEqual(legacyReceipt)
+    expect(loaded.receipts[0]?.environmentOwnerEmail).toBeUndefined()
+    expect(loaded.environments[0]?.dedication).toBeUndefined()
+  })
+
   test('rejects unsupported control-plane schema versions and literal secrets in persisted records', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'aiworker-control-store-'))
     const store = new LocalFileControlPlaneStore(root)
@@ -354,7 +535,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
     const plan = createProvisionPlan({ assignment, environment, providerProfile, soul })
     const unsafeReceipt = {
@@ -378,7 +559,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
 
     await expect(store.saveSnapshot({
@@ -447,7 +628,7 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       environmentId: environment.environmentId,
       providerProfileId: providerProfile.id,
       soulReleaseRef: 'hr-recruiter@1.2.0',
-      workspaceRef: '$HOME/aiworker-workspaces/hr-recruiter',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
     })
     const receipt = createProvisionReceipt(createProvisionPlan({ assignment, environment, providerProfile, soul }), {
       at: '2026-06-15T19:01:00.000Z',

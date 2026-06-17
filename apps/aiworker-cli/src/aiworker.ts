@@ -9,16 +9,16 @@ import path from 'node:path'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { promisify } from 'node:util'
-import { createAssignment, createAuditEvent, createProvisionPlan, createProvisionReceipt, createWorkspaceProjectionManifest, isPaseoPairingOffer, LocalFileControlPlaneStore, normalizeAisshServerRef, redactLiteralProviderSecret, redactSecretLike } from '@zonease/aiworker-control'
+import { createAssignment, createAuditEvent, createDefaultPaseoDaemonEndpointRef, createDefaultProjectRef, createPaseoOwnershipAssertion, createProvisionPlan, createProvisionReceipt, createWorkspaceProjectionManifest, deriveAssignedUserSlug, isPaseoPairingOffer, LocalFileControlPlaneStore, normalizeAisshServerRef, redactLiteralProviderSecret, redactSecretLike } from '@zonease/aiworker-control'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import cac from 'cac'
 
 const execFileAsync = promisify(execFileCallback)
 export const AISSH_EXEC_CWD_PREFIX = path.join(tmpdir(), 'aiworker-aissh-')
 const MAX_ERROR_STREAM_CHARS = 2000
-const PLAN_EXAMPLE = '$ aiworker plan --user alice@example.com --target aissh:server-1 --environment env-alice --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json'
-const APPLY_EXAMPLE = '$ aiworker apply --yes --user alice@example.com --target aissh:server-1 --environment env-alice --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json'
-const PAIR_EXAMPLE = '$ aiworker pair --target aissh:server-1 --soul souls/aiworker-freeform/dist/soul.descriptor.json'
+const PLAN_EXAMPLE = '$ aiworker plan --user alice@example.com --dedicated-target-user --target aissh:server-1 --environment env-alice --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json'
+const APPLY_EXAMPLE = '$ aiworker apply --yes --user alice@example.com --dedicated-target-user --target aissh:server-1 --environment env-alice --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json'
+const PAIR_EXAMPLE = '$ aiworker pair --user alice@example.com --dedicated-target-user --target aissh:server-1 --soul souls/aiworker-freeform/dist/soul.descriptor.json'
 
 interface AisshInvocation {
   file: string
@@ -37,7 +37,10 @@ interface ProvisionExecutionOptions {
 }
 
 interface PairExecutionOptions extends ProvisionExecutionOptions {
+  assignedEmail: string
+  dedicatedTarget?: boolean
   soulPath: string
+  targetOwnerEmail: string
   targetRef: string
 }
 
@@ -135,15 +138,21 @@ export function buildCli() {
 
   cli.command('pair', 'Generate a transient Paseo pairing offer through aissh without storing it')
     .usage('pair [options]')
+    .option('--user <email>', 'assigned employee email used to derive the prepared Project workdir')
+    .option('--target-owner <email>', 'logical owner/admin of the target aissh execution identity')
+    .option('--dedicated-target-user', 'assert the target execution identity is dedicated to --user')
     .option('--target <ref>', 'aissh target ref, e.g. aissh:server-1')
-    .option('--soul <path>', 'built dist/soul.descriptor.json used to derive the prepared workspace name')
+    .option('--soul <path>', 'built dist/soul.descriptor.json used to derive the prepared Project workdir name')
     .option('--aissh-bin <path>', 'override aissh executable; defaults to AISSH_BIN, bundled aissh-cli launcher, then PATH')
     .option('--json', 'print the transient pairing response as machine-readable data')
     .example(PAIR_EXAMPLE)
     .action(async (options) => {
       const result = await executePaseoPair({
+        assignedEmail: requireOption(options.user, '--user'),
         aisshBin: typeof options.aisshBin === 'string' ? options.aisshBin : undefined,
+        dedicatedTarget: Boolean(options.dedicatedTargetUser),
         soulPath: requireOption(options.soul, '--soul'),
+        targetOwnerEmail: resolveTargetOwnerEmail(options, requireOption(options.user, '--user')),
         targetRef: requireOption(options.target, '--target'),
       })
       if (options.json)
@@ -177,9 +186,14 @@ export function buildCli() {
 function addProvisionOptions(command: Command): Command {
   return command
     .option('--user <email>', 'assigned employee email')
+    .option('--assignment-id <id>', 'existing AIWorker assignment id for control-plane persistence')
     .option('--target <ref>', 'aissh target ref, e.g. aissh:server-1')
+    .option('--target-owner <email>', 'logical owner/admin of the target aissh execution identity')
+    .option('--dedicated-target-user', 'assert the target execution identity is dedicated to --user')
     .option('--environment <id>', 'Paseo environment id')
-    .option('--paseo-endpoint <endpoint>', 'optional existing Paseo endpoint metadata; defaults to remote HOME-derived local daemon')
+    .option('--paseo-endpoint <endpoint>', 'optional explicit Paseo endpoint metadata, e.g. relay offer, Unix socket, or legacy endpoint')
+    .option('--paseo-listen <listen>', 'explicit Paseo daemon listen ref for TCP fallback; requires --paseo-host')
+    .option('--paseo-host <host>', 'explicit Paseo daemon host ref for TCP fallback; requires --paseo-listen')
     .option('--provider <id>', 'Paseo provider profile id')
     .option('--provider-kind <kind>', 'provider kind', { default: 'claude' })
     .option('--provider-base-url <url>', 'provider base URL metadata; no provider key')
@@ -210,12 +224,15 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
   const descriptor = readSoulDescriptor(soulPath)
   const templateRoot = path.resolve(path.dirname(soulPath), '..', descriptor.workspaceTemplate.root)
   const user = requireOption(options.user, '--user')
+  const ownerEmail = resolveTargetOwnerEmail(options, user)
   const environmentId = requireOption(options.environment, '--environment')
   const providerProfileId = requireOption(options.provider, '--provider')
-  const workspaceRef = `$HOME/aiworker-workspaces/${descriptor.identity.id}`
-  const paseoEndpoint = typeof options.paseoEndpoint === 'string' ? options.paseoEndpoint : 'paseo-daemon:remote-home'
+  const userSlug = deriveAssignedUserSlug(user)
+  const workspaceRef = createDefaultProjectRef(user, descriptor.identity.id)
+  const endpoint = resolvePaseoEndpointOptions(options, userSlug)
   const assignment = createAssignment({
     assignedEmail: user,
+    ...(typeof options.assignmentId === 'string' ? { assignmentId: requireSafeAssignmentId(options.assignmentId) } : {}),
     environmentId,
     providerProfileId,
     soulReleaseRef: `${descriptor.identity.id}@${descriptor.identity.version}`,
@@ -225,13 +242,26 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
     assignment,
     environment: {
       environmentId,
-      daemonEndpoint: paseoEndpoint,
+      daemonEndpoint: endpoint.daemonEndpoint,
+      ...(endpoint.daemonListenRef ? { daemonListenRef: endpoint.daemonListenRef } : {}),
+      ...(endpoint.daemonHostRef ? { daemonHostRef: endpoint.daemonHostRef } : {}),
       isolation: 'os-user',
-      endpointKind: paseoEndpoint === 'paseo-daemon:remote-home' ? 'local-home' : paseoEndpoint.startsWith('unix:') ? 'unix' : isPaseoPairingOffer(paseoEndpoint) ? 'relay-offer' : 'tcp',
-      ownerEmail: user,
-      paseoHome: '$HOME/.paseo',
+      endpointKind: endpoint.endpointKind,
+      ...(options.dedicatedTargetUser
+        ? {
+            dedication: {
+              kind: 'assigned-user-dedicated' as const,
+              assignedEmail: user,
+              assertedBy: 'aiworker-cli',
+              reason: '--dedicated-target-user',
+            },
+          }
+        : {}),
+      ownerEmail,
+      paseoHome: `$HOME/.aiworker/${userSlug}/.paseo`,
       providerProfileIds: [providerProfileId],
       targetRef: requireOption(options.target, '--target'),
+      topologyKind: 'owner-scoped-paseo-home-v1',
     },
     providerProfile: {
       ...(typeof options.providerBaseUrl === 'string' ? { baseUrl: options.providerBaseUrl } : {}),
@@ -250,6 +280,65 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
       version: descriptor.identity.version,
     },
   })
+}
+
+function resolvePaseoEndpointOptions(options: Record<string, unknown>, userSlug: string): {
+  daemonEndpoint: string
+  daemonHostRef?: string
+  daemonListenRef?: string
+  endpointKind: 'tcp' | 'unix' | 'windows-pipe' | 'relay-offer' | 'local-home'
+} {
+  const explicitListen = typeof options.paseoListen === 'string' ? options.paseoListen.trim() : ''
+  const explicitHost = typeof options.paseoHost === 'string' ? options.paseoHost.trim() : ''
+  if (Boolean(explicitListen) !== Boolean(explicitHost))
+    throw new Error('Explicit TCP Paseo fallback requires both --paseo-listen and --paseo-host.')
+  if (explicitListen && explicitHost) {
+    return {
+      daemonEndpoint: explicitHost,
+      daemonHostRef: explicitHost,
+      daemonListenRef: explicitListen,
+      endpointKind: 'tcp',
+    }
+  }
+
+  if (typeof options.paseoEndpoint === 'string') {
+    const endpoint = options.paseoEndpoint.trim()
+    if (isPaseoPairingOffer(endpoint))
+      return { daemonEndpoint: endpoint, endpointKind: 'relay-offer' }
+    if (endpoint === 'paseo-daemon:remote-home')
+      return { daemonEndpoint: endpoint, endpointKind: 'local-home' }
+    if (endpoint.startsWith('unix:') || endpoint.includes('/'))
+      return { daemonEndpoint: endpoint, endpointKind: 'unix' }
+    throw new Error('Explicit TCP Paseo fallback requires both --paseo-listen and --paseo-host; --paseo-endpoint is only for relay offers, Unix sockets, or legacy metadata.')
+  }
+
+  const endpoint = createDefaultPaseoDaemonEndpointRef(userSlug)
+  return {
+    daemonEndpoint: endpoint,
+    daemonHostRef: endpoint,
+    daemonListenRef: endpoint,
+    endpointKind: 'tcp',
+  }
+}
+
+function resolveTargetOwnerEmail(options: Record<string, unknown>, assignedEmail: string): string {
+  const targetOwner = typeof options.targetOwner === 'string' ? options.targetOwner.trim() : ''
+  const dedicatedTarget = Boolean(options.dedicatedTargetUser)
+  if (!targetOwner && !dedicatedTarget) {
+    throw new Error([
+      'Missing required ownership assertion: pass --target-owner <email> or --dedicated-target-user.',
+      '--target-owner records the target aissh execution identity owner/admin; --user owns the derived AIWorker/Paseo scope.',
+      '--dedicated-target-user asserts the aissh execution identity is dedicated to --user.',
+    ].join('\n'))
+  }
+  return targetOwner || assignedEmail
+}
+
+function requireSafeAssignmentId(value: string): string {
+  const id = value.trim()
+  if (!/^[\w.-]+$/.test(id))
+    throw new Error('assignment id must be a safe id segment')
+  return id
 }
 
 function readSoulDescriptor(soulPath: string) {
@@ -294,7 +383,7 @@ function formatProvisionPlanSummary(plan: ProvisionPlan, options: { showScript?:
     `Soul release: ${plan.receipt.soulReleaseRef}`,
     `Target: ${plan.receipt.targetRef}`,
     `Environment: ${plan.receipt.environmentId}`,
-    `Workspace: ${plan.receipt.workspaceRef}`,
+    `Project workdir: ${plan.receipt.workspaceRef}`,
     `Provider profile: ${plan.receipt.providerProfileId}`,
     `Handoff: ${plan.assignment.handoff?.kind ?? 'pending'}${plan.assignment.handoff ? ` (${plan.assignment.handoff.daemonEndpoint})` : ''}`,
     `Required env: ${plan.aissh.credentials.requiredEnv.join(', ')}`,
@@ -371,7 +460,7 @@ function formatProvisionExecutionSummary(result: Awaited<ReturnType<typeof execu
     'AIWorker provisioning executed',
     '',
     `Target: ${result.plan.receipt.targetRef}`,
-    `Workspace: ${result.plan.receipt.workspaceRef}`,
+    `Project workdir: ${result.plan.receipt.workspaceRef}`,
     `Soul release: ${result.plan.receipt.soulReleaseRef}`,
     `Provider profile: ${result.plan.receipt.providerProfileId}`,
     result.plan.assignment.handoff ? `Handoff: ${result.plan.assignment.handoff.instructions}` : '',
@@ -386,7 +475,7 @@ function formatPairExecutionSummary(result: Awaited<ReturnType<typeof executePas
     'Paseo pairing response',
     '',
     `Target: ${result.targetRef}`,
-    `Workspace: ${result.workspaceRef}`,
+    `Project workdir: ${result.workspaceRef}`,
     `aissh source: ${result.aissh.source}`,
     'Pairing material below is transient. AIWorker did not persist it.',
     result.stdout ? `stdout:\n${result.stdout.trim()}` : '',
@@ -397,7 +486,25 @@ function formatPairExecutionSummary(result: Awaited<ReturnType<typeof executePas
 export async function executePaseoPair(options: PairExecutionOptions) {
   const descriptor = readSoulDescriptor(options.soulPath)
   const workspaceName = descriptor.identity.id
-  const script = createPaseoPairScript(workspaceName)
+  const userSlug = deriveAssignedUserSlug(options.assignedEmail)
+  const daemonEndpoint = createDefaultPaseoDaemonEndpointRef(userSlug)
+  const ownership = createPaseoOwnershipAssertion(
+    { assignedEmail: options.assignedEmail },
+    {
+      ownerEmail: options.targetOwnerEmail,
+      ...(options.dedicatedTarget
+        ? {
+            dedication: {
+              kind: 'assigned-user-dedicated' as const,
+              assignedEmail: options.assignedEmail,
+              assertedBy: 'aiworker-cli',
+              reason: '--dedicated-target-user',
+            },
+          }
+        : {}),
+    },
+  )
+  const script = createPaseoPairScript(options.assignedEmail, workspaceName, daemonEndpoint)
   const serverRef = normalizeAisshServerRef(options.targetRef)
   const reason = `Generate transient Paseo pairing offer for ${workspaceName}`
   const args = ['exec', serverRef, script, `--reason=${reason}`]
@@ -422,7 +529,8 @@ export async function executePaseoPair(options: PairExecutionOptions) {
       stderr: sanitizePairingSuccessStream(result.stderr ?? '', script, args),
       stdout: sanitizePairingSuccessStream(result.stdout, script, args),
       targetRef: redactSecretLike(options.targetRef),
-      workspaceRef: `$HOME/aiworker-workspaces/${workspaceName}`,
+      ownership,
+      workspaceRef: createDefaultProjectRef(options.assignedEmail, workspaceName),
     }
   }
   catch (error) {
@@ -433,18 +541,21 @@ export async function executePaseoPair(options: PairExecutionOptions) {
   }
 }
 
-function createPaseoPairScript(workspaceName: string): string {
+function createPaseoPairScript(assignedEmail: string, workspaceName: string, daemonEndpoint: string): string {
+  const userSlug = deriveAssignedUserSlug(assignedEmail)
   const safeWorkspaceName = validatePairWorkspaceName(workspaceName)
   return [
     'set -euo pipefail',
-    ...pairRemoteIdentityPreludeCommands(safeWorkspaceName),
-    'test -d "$AIWORKER_WORKSPACE_REF" || { printf \'%s\\n\' "AIWORKER_PAIR_WORKSPACE_MISSING: run aiworker apply for $AIWORKER_WORKSPACE_REF before requesting a pairing link." >&2; exit 66; }',
+    ...pairRemoteIdentityPreludeCommands(userSlug, safeWorkspaceName, daemonEndpoint),
+    'test -d "$AIWORKER_WORKSPACE_REF" || { printf \'%s\\n\' "AIWORKER_PAIR_PROJECT_MISSING: run aiworker apply for Project workdir $AIWORKER_WORKSPACE_REF before requesting a pairing link." >&2; exit 66; }',
+    'AIWORKER_PASEO_STATUS="$(paseo daemon status --home "$PASEO_HOME" 2>&1 || true)"',
+    'case "$AIWORKER_PASEO_HOST" in /*) test -S "$AIWORKER_PASEO_HOST" ;; *) printf \'%s\\n\' "$AIWORKER_PASEO_STATUS" | grep -F "$AIWORKER_PASEO_HOST" >/dev/null ;; esac || { printf \'%s\\n\' "AIWORKER_PAIR_DAEMON_UNAVAILABLE: run aiworker apply to start owner-scoped Paseo daemon at $AIWORKER_PASEO_HOST before requesting a pairing link." >&2; exit 67; }',
     'cd "$AIWORKER_WORKSPACE_REF"',
     'paseo daemon pair --home "$PASEO_HOME"',
   ].join(' && ')
 }
 
-function pairRemoteIdentityPreludeCommands(workspaceName: string): string[] {
+function pairRemoteIdentityPreludeCommands(userSlug: string, projectName: string, daemonEndpoint: string): string[] {
   return [
     'unset PASEO_HOST',
     'AIWORKER_REMOTE_USER="$(whoami)"',
@@ -453,11 +564,22 @@ function pairRemoteIdentityPreludeCommands(workspaceName: string): string[] {
     ': "$' + '{HOME:?AIWorker requires HOME for aissh execution identity}"',
     'case "$HOME" in /*) ;; *) printf \'%s\\n\' "AIWorker requires absolute HOME for aissh execution identity." >&2; exit 64 ;; esac',
     'AIWORKER_REMOTE_HOME="$(cd "$HOME" && pwd -P)" || { printf \'%s\\n\' "AIWorker could not canonicalize HOME for aissh execution identity." >&2; exit 64; }',
-    'PASEO_HOME="$AIWORKER_REMOTE_HOME/.paseo"',
-    'export PASEO_HOME',
-    `AIWORKER_WORKSPACE_NAME=${shellQuoteForScript(workspaceName)}`,
-    'AIWORKER_WORKSPACE_ROOT="$AIWORKER_REMOTE_HOME/aiworker-workspaces"',
-    'AIWORKER_WORKSPACE_REF="$AIWORKER_WORKSPACE_ROOT/$AIWORKER_WORKSPACE_NAME"',
+    `AIWORKER_USER_SLUG=${shellQuoteForScript(userSlug)}`,
+    `AIWORKER_PROJECT_NAME=${shellQuoteForScript(projectName)}`,
+    'case "$AIWORKER_USER_SLUG" in ""|.|..|*/*|*\\\\*|*".."*) printf \'%s\\n\' "AIWorker assigned user slug is not a safe HOME-relative segment." >&2; exit 64 ;; esac',
+    'case "$AIWORKER_PROJECT_NAME" in ""|.|..|*/*|*\\\\*|*".."*) printf \'%s\\n\' "AIWorker Project name is not a safe HOME-relative segment." >&2; exit 64 ;; esac',
+    'AIWORKER_ROOT="$AIWORKER_REMOTE_HOME/.aiworker"',
+    'AIWORKER_OWNER_ROOT="$AIWORKER_ROOT/$AIWORKER_USER_SLUG"',
+    'AIWORKER_PASEO_HOME="$AIWORKER_OWNER_ROOT/.paseo"',
+    'AIWORKER_PASEO_RUN_DIR="$AIWORKER_OWNER_ROOT/run"',
+    `AIWORKER_PASEO_LISTEN=${shellQuoteForScript(daemonEndpoint)}`,
+    'AIWORKER_PASEO_HOST="$AIWORKER_PASEO_LISTEN"',
+    'PASEO_HOME="$AIWORKER_PASEO_HOME"',
+    'PASEO_LISTEN="$AIWORKER_PASEO_LISTEN"',
+    'export PASEO_HOME PASEO_LISTEN',
+    'AIWORKER_PROJECT_ROOT="$AIWORKER_OWNER_ROOT/projects"',
+    'AIWORKER_PROJECT_REF="$AIWORKER_PROJECT_ROOT/$AIWORKER_PROJECT_NAME"',
+    'AIWORKER_WORKSPACE_REF="$AIWORKER_PROJECT_REF"',
     'printf \'%s\\n\' "AIWorker target identity discovered: user=$AIWORKER_REMOTE_USER uid=$AIWORKER_REMOTE_UID home=$AIWORKER_REMOTE_HOME pwd=$AIWORKER_REMOTE_PWD"',
   ]
 }
@@ -465,7 +587,7 @@ function pairRemoteIdentityPreludeCommands(workspaceName: string): string[] {
 function validatePairWorkspaceName(value: string): string {
   const workspaceName = value.trim()
   if (!workspaceName || workspaceName === '.' || workspaceName === '..' || workspaceName.includes('/') || workspaceName.includes('\\') || workspaceName.includes('..') || !/^[\w.-]+$/.test(workspaceName))
-    throw new Error('workspace name must be a safe relative segment')
+    throw new Error('project workdir name must be a safe relative segment')
   return workspaceName
 }
 
@@ -582,16 +704,7 @@ async function savePlanMetadataSnapshot(
       ...plan.assignment,
       status: assignmentStatus,
     }, 'assignmentId'),
-    environments: upsertById(existing.environments, {
-      daemonEndpoint: plan.assignment.handoff?.daemonEndpoint ?? 'paseo-daemon:remote-home',
-      endpointKind: plan.receipt.endpointKind,
-      environmentId: plan.receipt.environmentId,
-      isolation: 'os-user',
-      ownerEmail: plan.assignment.assignedEmail,
-      paseoHome: plan.receipt.paseoHome,
-      providerProfileIds: [plan.receipt.providerProfileId],
-      targetRef: plan.receipt.targetRef,
-    }, 'environmentId'),
+    environments: upsertById(existing.environments, plan.environment, 'environmentId'),
     providerProfiles: upsertById(existing.providerProfiles, {
       id: plan.receipt.providerProfileId,
       label: plan.receipt.providerProfileId,
@@ -745,17 +858,20 @@ function checkSoulDescriptor(soulPath: string): DoctorCheck {
         environmentId: 'doctor-env',
         providerProfileId: 'doctor-provider',
         soulReleaseRef: `${descriptor.identity.id}@${descriptor.identity.version}`,
-        workspaceRef: '$HOME/aiworker-workspaces/doctor',
+        workspaceRef: '$HOME/.aiworker/doctor-example.invalid/projects/doctor',
       }),
       environment: {
-        daemonEndpoint: 'paseo-daemon:remote-home',
-        endpointKind: 'local-home',
+        daemonEndpoint: createDefaultPaseoDaemonEndpointRef('doctor-example.invalid'),
+        daemonHostRef: createDefaultPaseoDaemonEndpointRef('doctor-example.invalid'),
+        daemonListenRef: createDefaultPaseoDaemonEndpointRef('doctor-example.invalid'),
+        endpointKind: 'tcp',
         environmentId: 'doctor-env',
         isolation: 'single-user-dev',
         ownerEmail: 'doctor@example.invalid',
-        paseoHome: '$HOME/.paseo',
+        paseoHome: '$HOME/.aiworker/doctor-example.invalid/.paseo',
         providerProfileIds: ['doctor-provider'],
         targetRef: 'aissh:doctor-target',
+        topologyKind: 'owner-scoped-paseo-home-v1',
       },
       providerProfile: {
         id: 'doctor-provider',
@@ -1086,8 +1202,15 @@ function isGeneratedProvisioningEcho(line: string, unsafeNeedles: string[]): boo
     || line.includes('AIWORKER_REMOTE_UID=')
     || line.includes('AIWORKER_REMOTE_PWD=')
     || line.includes('AIWORKER_REMOTE_HOME=')
+    || line.includes('AIWORKER_USER_SLUG=')
+    || line.includes('AIWORKER_ROOT=')
+    || line.includes('AIWORKER_PROJECT_NAME=')
+    || line.includes('AIWORKER_PROJECT_ROOT=')
+    || line.includes('AIWORKER_PROJECT_REF=')
     || line.includes('AIWORKER_WORKSPACE_REF=')
-    || line.includes('AIWORKER_PAIR_WORKSPACE_MISSING')
+    || line.includes('AIWORKER_PAIR_PROJECT_MISSING')
+    || line.includes('AIWorker assigned user slug is not a safe HOME-relative segment.')
+    || line.includes('AIWorker Project name is not a safe HOME-relative segment.')
     || line.includes('test -d "$AIWORKER_WORKSPACE_REF"')
     || line.includes('cd "$AIWORKER_WORKSPACE_REF"')
     || line.includes('AIWorker target identity discovered: user=$AIWORKER_REMOTE_USER')

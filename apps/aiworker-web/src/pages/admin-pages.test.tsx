@@ -37,6 +37,12 @@ describe('admin console page composition', () => {
 
     const dashboard = renderToStaticMarkup(<DashboardPage />)
     expect(dashboard).toContain('AIWorker 分发控制台')
+    expect(dashboard).toContain('Admin bootstrap')
+    expect(dashboard).toContain('AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane')
+    expect(dashboard).toContain('Use for session')
+    expect(dashboard).toContain('Remember on this device')
+    expect(dashboard).toContain('admin-data reads and state-changing Web API calls')
+    expect(dashboard).toContain('Control-plane directory is not bound')
     expect(dashboard).toContain('待审批')
 
     const provisioning = renderToStaticMarkup(<ProvisioningPage />)
@@ -50,6 +56,9 @@ describe('admin console page composition', () => {
     expect(provisioning).toContain('预览退回修改')
     expect(provisioning).toContain('执行已审批交付')
     expect(provisioning).toContain('生成配对链接')
+    expect(provisioning).toContain('Approval is required first')
+    expect(provisioning).toContain('Provider needs target-side setup')
+    expect(provisioning).toContain('Apply must complete before pairing')
     expect(provisioning).toContain('只在当前页面显示')
     expect(provisioning).toContain('不会持久化')
     expect(provisioning).toContain('aiworker plan')

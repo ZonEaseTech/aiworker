@@ -5,6 +5,7 @@ import type {
   ControlPlaneSnapshot,
   PaseoEndpointKind,
   PaseoEnvironment,
+  PaseoEnvironmentTopologyKind,
   PaseoHandoff,
   ProjectedFile,
   ProviderProfile,
@@ -51,9 +52,18 @@ export interface ProviderProfileSummary {
 export interface PaseoEnvironmentSummary {
   id: string
   ownerEmail: string
+  topologyKind?: PaseoEnvironmentTopologyKind
+  dedication?: {
+    kind: 'assigned-user-dedicated'
+    assignedEmail: string
+    assertedBy?: string
+    reason?: string
+  }
   targetRef: string
   paseoHome: string
   daemonEndpoint: RedactedEndpointReference
+  daemonHostRef?: RedactedEndpointReference
+  daemonListenRef?: RedactedEndpointReference
   endpointKind: PaseoEndpointKind
   isolation: 'os-user' | 'rootless-container' | 'container' | 'vm' | 'single-user-dev'
   providerProfileIds: string[]
@@ -137,6 +147,7 @@ export interface AssignmentSummary {
   environmentId: string
   soulReleaseId: string
   providerProfileId: string
+  projectRef?: string
   workspaceRef: string
   receiptId: string
   handoffKind: HandoffKind
@@ -246,20 +257,12 @@ function assertNoSnapshotLiteralSecrets(label: string, value: unknown): void {
 
 export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminConsoleData {
   const assignmentsById = new Map<string, AssignmentSummary>()
-  const assignmentTupleOwners = new Map<string, string>()
   for (const assignment of data.assignments) {
     if (assignmentsById.has(assignment.id)) {
       throw new Error(`assignment ${assignment.id} must be unique`)
     }
 
-    const tupleKey = assignmentTupleKey(assignment.environmentId, assignment.soulReleaseId, assignment.providerProfileId)
-    const existingAssignmentId = assignmentTupleOwners.get(tupleKey)
-    if (existingAssignmentId) {
-      throw new Error(`assignment tuple must be unique: ${assignment.environmentId}/${assignment.soulReleaseId}/${assignment.providerProfileId} is shared by ${existingAssignmentId} and ${assignment.id}`)
-    }
-
     assignmentsById.set(assignment.id, assignment)
-    assignmentTupleOwners.set(tupleKey, assignment.id)
   }
 
   for (const profile of data.providerProfiles) {
@@ -275,6 +278,7 @@ export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminCon
   }
 
   const assignmentIds = new Set(assignmentsById.keys())
+  const environmentsById = new Map(data.environments.map(environment => [environment.id, environment]))
   const approvalsById = new Map<string, ProvisioningApprovalSummary>()
   const approvalByAssignment = new Map<string, string>()
   for (const approval of data.approvals) {
@@ -310,12 +314,16 @@ export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminCon
 
     if (
       !approval.previewCommand.includes(`--user ${assignment.assignedEmail}`)
+      || !approval.previewCommand.includes(`--target-owner ${environmentsById.get(assignment.environmentId)?.ownerEmail ?? assignment.assignedEmail}`)
       || !approval.previewCommand.includes(`--environment ${assignment.environmentId}`)
       || !approval.previewCommand.includes(`--provider ${assignment.providerProfileId}`)
       || !approval.previewCommand.includes(`--soul ${assignment.soulReleaseId}`)
     ) {
       throw new Error(`approval ${approval.id} preview command must stay scoped to its assignment`)
     }
+    const environment = environmentsById.get(assignment.environmentId)
+    if (environment?.dedication && !approval.previewCommand.includes('--dedicated-target-user'))
+      throw new Error(`approval ${approval.id} preview command must include dedicated target assertion`)
 
     for (const check of approval.checks) {
       if (!approvalCheckStatuses.includes(check.status)) {
@@ -392,14 +400,18 @@ export function mapControlPlaneSnapshotToAdminConsoleData(snapshot: ControlPlane
   const providerProfiles = snapshot.providerProfiles.map(mapProviderProfile)
   const environments = snapshot.environments.map(environment => ({
     id: environment.environmentId,
+    ...(environment.dedication ? { dedication: environment.dedication } : {}),
     ownerEmail: environment.ownerEmail,
     targetRef: environment.targetRef,
     paseoHome: environment.paseoHome,
     daemonEndpoint: redactedEndpointReference(environment.daemonEndpoint, environment.endpointKind),
+    ...(environment.daemonHostRef ? { daemonHostRef: redactedEndpointReference(environment.daemonHostRef, environment.endpointKind) } : {}),
+    ...(environment.daemonListenRef ? { daemonListenRef: redactedEndpointReference(environment.daemonListenRef, environment.endpointKind) } : {}),
     endpointKind: environment.endpointKind,
     isolation: environment.isolation,
     providerProfileIds: environment.providerProfileIds,
     status: 'ready' as const,
+    ...(environment.topologyKind ? { topologyKind: environment.topologyKind } : {}),
   }))
   const soulReleases = snapshot.soulReleases.map(mapSoulRelease)
   const auditEvents = snapshot.auditEvents.map(event => ({
@@ -520,11 +532,14 @@ const fixtureProviderProfiles: ProviderProfileSummary[] = [
 const fixtureEnvironments: PaseoEnvironmentSummary[] = [
   {
     id: 'env-alice-prod-1',
-    ownerEmail: 'alice@example.com',
+    ownerEmail: 'ops-admin@example.com',
+    topologyKind: 'owner-scoped-paseo-home-v1',
     targetRef: 'aissh:prod-ops-1',
-    paseoHome: '$HOME/.paseo',
-    daemonEndpoint: 'unix:/run/paseo/alice.sock',
-    endpointKind: 'unix',
+    paseoHome: '$HOME/.aiworker/alice-example.com/.paseo',
+    daemonEndpoint: '127.0.0.1:42057',
+    daemonHostRef: '127.0.0.1:42057',
+    daemonListenRef: '127.0.0.1:42057',
+    endpointKind: 'tcp',
     isolation: 'os-user',
     providerProfileIds: ['codex-default', 'claude-ops'],
     status: 'ready',
@@ -535,6 +550,8 @@ const fixtureEnvironments: PaseoEnvironmentSummary[] = [
     targetRef: 'container:finance-bob',
     paseoHome: '/workspace/.paseo',
     daemonEndpoint: '127.0.0.1:6767',
+    daemonHostRef: '127.0.0.1:6767',
+    daemonListenRef: '127.0.0.1:6767',
     endpointKind: 'tcp',
     isolation: 'rootless-container',
     providerProfileIds: ['codex-default'],
@@ -543,8 +560,9 @@ const fixtureEnvironments: PaseoEnvironmentSummary[] = [
   {
     id: 'env-cara-relay',
     ownerEmail: 'cara@example.com',
+    topologyKind: 'owner-scoped-paseo-home-v1',
     targetRef: 'aissh:remote-sales-7',
-    paseoHome: '$HOME/.paseo',
+    paseoHome: '$HOME/.aiworker/cara-example.com/.paseo',
     daemonEndpoint: '[REDACTED_PAIRING_URL]',
     endpointKind: 'relay-offer',
     isolation: 'vm',
@@ -598,12 +616,13 @@ const fixtureAssignments: AssignmentSummary[] = [
     environmentId: 'env-alice-prod-1',
     soulReleaseId: 'soul-freeform-2026-06-14',
     providerProfileId: 'codex-default',
-    workspaceRef: '$HOME/aiworker-workspaces/freeform',
+    projectRef: '$HOME/.aiworker/alice-example.com/projects/freeform',
+    workspaceRef: '$HOME/.aiworker/alice-example.com/projects/freeform',
     receiptId: 'rcpt-20260614-001',
     handoffKind: 'paseo-daemon',
-    handoffLabel: 'run paseo daemon pair --home "$PASEO_HOME" from $HOME/aiworker-workspaces/freeform; open the printed link in the Paseo frontend',
+    handoffLabel: 'run paseo daemon pair --home "$PASEO_HOME"; open Project workdir with paseo --host 127.0.0.1:42057 "$HOME/.aiworker/alice-example.com/projects/freeform"',
     updatedAt: '2026-06-14 07:34 UTC',
-    nextStep: '员工可在 Paseo 客户端打开 workspace；AIWorker 不读取 session。',
+    nextStep: '员工可在 Paseo 客户端打开 Project workdir；AIWorker 不读取 session。',
     audit: [
       {
         id: 'evt-001',
@@ -617,8 +636,8 @@ const fixtureAssignments: AssignmentSummary[] = [
         id: 'evt-002',
         at: '07:31',
         actor: 'aiworker apply',
-        action: 'projected workspace files',
-        target: '$HOME/aiworker-workspaces/freeform',
+        action: 'projected Project workdir files',
+        target: '$HOME/.aiworker/alice-example.com/projects/freeform',
         tone: 'info',
       },
     ],
@@ -631,6 +650,7 @@ const fixtureAssignments: AssignmentSummary[] = [
     environmentId: 'env-bob-container-2',
     soulReleaseId: 'soul-support-2026-06-12',
     providerProfileId: 'codex-default',
+    projectRef: '/workspace/paseo/workspaces/support',
     workspaceRef: '/workspace/paseo/workspaces/support',
     receiptId: 'rcpt-20260614-002',
     handoffKind: 'manual-path',
@@ -656,7 +676,8 @@ const fixtureAssignments: AssignmentSummary[] = [
     environmentId: 'env-cara-relay',
     soulReleaseId: 'soul-freeform-2026-06-14',
     providerProfileId: 'acp-secure',
-    workspaceRef: '$HOME/aiworker-workspaces/sales-enable',
+    projectRef: '$HOME/.aiworker/cara-example.com/projects/sales-enable',
+    workspaceRef: '$HOME/.aiworker/cara-example.com/projects/sales-enable',
     receiptId: 'rcpt-20260613-014',
     handoffKind: 'pairing-offer',
     handoffLabel: 'relay offer 已脱敏，等待员工重新配对',
@@ -683,12 +704,16 @@ function buildFixtureControlPlaneSnapshot(): ControlPlaneSnapshot {
     environments: fixtureEnvironments.map(environment => ({
       environmentId: environment.id,
       daemonEndpoint: environment.daemonEndpoint,
+      ...(environment.daemonHostRef ? { daemonHostRef: environment.daemonHostRef } : {}),
+      ...(environment.daemonListenRef ? { daemonListenRef: environment.daemonListenRef } : {}),
       endpointKind: environment.endpointKind,
       isolation: environment.isolation === 'rootless-container' ? 'container' : environment.isolation,
+      ...(environment.dedication ? { dedication: environment.dedication } : {}),
       ownerEmail: environment.ownerEmail,
       paseoHome: environment.paseoHome,
       providerProfileIds: environment.providerProfileIds,
       targetRef: environment.targetRef,
+      ...(environment.topologyKind ? { topologyKind: environment.topologyKind } : {}),
     })),
     projectionManifests: [],
     providerProfiles: fixtureProviderProfiles.map(profile => ({
@@ -711,6 +736,7 @@ function mapFixtureAssignment(assignment: AssignmentSummary): WorkspaceAssignmen
     environmentId: assignment.environmentId,
     handoff: mapFixtureHandoff(assignment),
     providerProfileId: assignment.providerProfileId,
+    ...(assignment.projectRef ? { projectRef: assignment.projectRef } : {}),
     soulReleaseRef: fixtureSoulReleaseRef(assignment.soulReleaseId),
     status: assignment.status,
     workspaceRef: assignment.workspaceRef,
@@ -742,6 +768,11 @@ function mapFixtureAuditEvent(event: AuditEventSummary): AuditEvent {
 function mapFixtureReceipt(assignment: AssignmentSummary): ProvisionReceipt {
   const environment = fixtureEnvironments.find(item => item.id === assignment.environmentId)
   const workspaceName = assignment.workspaceRef.split('/').filter(Boolean).at(-1) ?? assignment.workspaceRef
+  const projectRef = assignment.projectRef ?? assignment.workspaceRef
+  const userSlug = fixtureUserSlug(assignment.assignedEmail)
+  const ownerRoot = `$HOME/.aiworker/${userSlug}` as const
+  const runDir = `${ownerRoot}/run` as const
+  const projectRoot = projectRef.startsWith(`${ownerRoot}/projects/`) ? `${ownerRoot}/projects` as const : ownerRoot
   return {
     schemaVersion: CONTROL_PLANE_SCHEMA_VERSION,
     id: assignment.receiptId,
@@ -752,14 +783,30 @@ function mapFixtureReceipt(assignment: AssignmentSummary): ProvisionReceipt {
     command: 'aissh exec [redacted]',
     endpointBinding: environment?.endpointKind === 'relay-offer'
       ? 'opaque-pairing-offer'
-      : environment?.endpointKind === 'local-home'
-        ? 'home-derived-local-daemon'
-        : 'external-endpoint',
+      : environment?.topologyKind === 'owner-scoped-paseo-home-v1' && environment.endpointKind === 'unix'
+        ? 'owner-scoped-local-daemon'
+        : environment?.endpointKind === 'local-home'
+          ? 'home-derived-local-daemon'
+          : 'external-endpoint',
     endpointKind: environment?.endpointKind ?? 'local-home',
     environmentId: assignment.environmentId,
+    ...(environment?.ownerEmail ? { environmentOwnerEmail: environment.ownerEmail, targetOwnerEmail: environment.ownerEmail } : {}),
+    ...(environment?.topologyKind ? { topologyKind: environment.topologyKind } : {}),
+    assignedEmail: assignment.assignedEmail,
     handoffKind: assignment.handoffKind,
     handoffState: 'instruction-only',
-    paseoHome: '$HOME/.paseo',
+    ownershipKind: environment?.ownerEmail && environment.ownerEmail !== assignment.assignedEmail
+      ? 'owner-scoped-shared-home'
+      : environment?.dedication
+        ? 'dedicated-target-asserted'
+        : 'target-owner-matches-assigned-user',
+    paseoHome: environment?.paseoHome ?? `${ownerRoot}/.paseo`,
+    ownerRoot,
+    runDir,
+    projectRoot,
+    ...(environment?.daemonListenRef ? { daemonListenRef: environment.daemonListenRef } : {}),
+    ...(environment?.daemonHostRef ? { daemonHostRef: environment.daemonHostRef } : {}),
+    projectRef,
     providerProfileId: assignment.providerProfileId,
     providerReadinessEffect: 'non-blocking-warning',
     providerReadinessPolicy: 'paseo-provider-json-v1',
@@ -768,9 +815,13 @@ function mapFixtureReceipt(assignment: AssignmentSummary): ProvisionReceipt {
     status: assignment.status === 'needs_attention' ? 'failed' : 'applied',
     targetRef: assignment.environmentId,
     workspaceName,
-    workspacePathPolicy: 'home-derived',
+    workspacePathPolicy: 'project-workdir',
     workspaceRef: assignment.workspaceRef,
   }
+}
+
+function fixtureUserSlug(email: string): string {
+  return email.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
 function fixtureSoulReleaseRef(id: string): string {
@@ -804,7 +855,7 @@ function buildMetrics(data: {
     {
       label: '就绪 assignments',
       value: String(data.assignments.filter(assignment => assignment.status === 'ready').length),
-      helper: '只表示 workspace + handoff 已准备，不代表可观察 Paseo session。',
+      helper: '只表示 Project workdir + handoff 已准备，不代表可观察 Paseo session。',
       tone: 'success',
       icon: CheckCircleIcon,
     },
@@ -877,6 +928,14 @@ function buildProvisioningApprovals(
           detail: provider ? `${provider.label} 使用 ${provider.secretRef}，不展示 literal secret。` : 'provider profile 待补齐。',
         },
         {
+          id: `${assignment.id}-owner-scope`,
+          label: 'Target owner scope',
+          status: environment && environment.ownerEmail !== assignment.assignedEmail ? 'warning' : 'pass',
+          detail: environment && environment.ownerEmail !== assignment.assignedEmail
+            ? `target owner/admin 是 ${environment.ownerEmail}；assigned user ${assignment.assignedEmail} 使用 ${environment.paseoHome}。Provider CLI credential 可能仍在共享 HOME 下，需管理员确认。`
+            : `target owner 与 ${assignment.assignedEmail} 一致或已声明 dedicated target。`,
+        },
+        {
           id: `${assignment.id}-handoff`,
           label: 'Handoff boundary',
           status: assignment.handoffKind === 'pairing-offer' && assignment.status === 'needs_attention' ? 'warning' : 'pass',
@@ -925,7 +984,7 @@ function buildProvisioningTraceEvents(
       at: assignment.updatedAt,
       actor: 'aiworker control',
       title: 'Receipt linked',
-      detail: `Redacted receipt ${assignment.receiptId} 记录 assignment 状态与 workspace path policy。`,
+      detail: `Redacted receipt ${assignment.receiptId} 记录 assignment 状态与 Project workdir policy。`,
       evidenceRef: `receipt:${assignment.receiptId}`,
       tone: assignment.status === 'needs_attention' ? 'warning' : 'success',
     })
@@ -981,11 +1040,14 @@ function approvalRiskSummary(
 ): string {
   const providerLabel = provider ? `${provider.provider} provider reference` : 'missing provider reference'
   const target = environment?.targetRef ?? assignment.environmentId
+  const ownerScope = environment && environment.ownerEmail !== assignment.assignedEmail
+    ? `target owner ${environment.ownerEmail} 与 assigned user ${assignment.assignedEmail} 分离；AIWorker 使用 owner-scoped PASEO_HOME，但 provider CLI credential 仍需管理员确认。`
+    : 'target owner 与 assigned user 一致或已声明 dedicated target。'
   if (assignment.status === 'needs_attention')
-    return `${target} 需要重新确认 handoff metadata；${providerLabel} 不包含 literal secret。`
+    return `${target} 需要重新确认 handoff metadata；${providerLabel} 不包含 literal secret。${ownerScope}`
   if (assignment.status === 'ready')
-    return `${target} 已完成审批与 handoff；${providerLabel} 仅作为 secret reference 展示。`
-  return `${target} 等待管理员批准后才能执行 apply；${providerLabel} 仅用于 readiness check。`
+    return `${target} 已完成审批与 handoff；${providerLabel} 仅作为 secret reference 展示。${ownerScope}`
+  return `${target} 等待管理员批准后才能执行 apply；${providerLabel} 仅用于 readiness check。${ownerScope}`
 }
 
 function buildPlanPreviewCommand(
@@ -994,7 +1056,11 @@ function buildPlanPreviewCommand(
   provider?: ProviderProfileSummary,
   soul?: SoulReleaseSummary,
 ): string {
-  return `aiworker plan \\\n  --user ${assignment.assignedEmail} \\\n  --target ${environment?.targetRef ?? assignment.environmentId} \\\n  --environment ${assignment.environmentId} \\\n  --provider ${provider?.id ?? assignment.providerProfileId} \\\n  --soul ${soul?.descriptorRef ?? assignment.soulReleaseId}`
+  const dedicatedFlag = environment?.dedication ? ' \\\n  --dedicated-target-user' : ''
+  const tcpFlags = environment?.endpointKind === 'tcp' && environment.daemonListenRef && environment.daemonHostRef
+    ? ` \\\n  --paseo-listen ${environment.daemonListenRef} \\\n  --paseo-host ${environment.daemonHostRef}`
+    : ''
+  return `aiworker plan \\\n  --user ${assignment.assignedEmail} \\\n  --target ${environment?.targetRef ?? assignment.environmentId} \\\n  --target-owner ${environment?.ownerEmail ?? assignment.assignedEmail}${dedicatedFlag}${tcpFlags} \\\n  --environment ${assignment.environmentId} \\\n  --provider ${provider?.id ?? assignment.providerProfileId} \\\n  --soul ${soul?.descriptorRef ?? assignment.soulReleaseId}`
 }
 
 function mapProviderProfile(profile: ProviderProfile): ProviderProfileSummary {
@@ -1022,7 +1088,7 @@ function mapSoulRelease(release: SoulRelease): SoulReleaseSummary {
     fileCount: release.files.length,
     updatedAt: 'from control-plane snapshot',
     status: 'published',
-    summary: `${release.displayName} workspace template projected by AIWorker.`,
+    summary: `${release.displayName} Project workdir template projected by AIWorker.`,
   }
 }
 
@@ -1049,29 +1115,30 @@ function mapAssignment(
     environmentId: assignment.environmentId,
     soulReleaseId: assignment.soulReleaseRef,
     providerProfileId: assignment.providerProfileId,
+    projectRef: assignment.projectRef ?? matchingReceipt?.projectRef ?? assignment.workspaceRef,
     workspaceRef: assignment.workspaceRef,
     receiptId: matchingReceipt?.id ?? 'pending-receipt',
     handoffKind,
     handoffLabel: assignment.handoff
       ? handoffLabel(assignment.handoff.kind, assignment.handoff.daemonEndpoint, assignment.workspaceRef, environment?.paseoHome)
-      : 'manual workspace path pending',
+      : 'manual Project workdir pending',
     updatedAt: formatAdminTimestamp(matchingReceipt?.at),
     nextStep: nextStepForAssignment(assignment.status),
     audit: assignmentAudit,
   }
 }
 
-function handoffLabel(kind: HandoffKind, _endpoint: string, workspaceRef: string, _paseoHome?: string): RedactedHandoffReference {
+function handoffLabel(kind: HandoffKind, endpoint: string, workspaceRef: string, _paseoHome?: string): RedactedHandoffReference {
   if (kind === 'pairing-offer')
-    return `pairing offer redacted for ${workspaceRef}`
+    return `pairing offer redacted for Project workdir ${workspaceRef}`
   if (kind === 'manual-path')
-    return `open workspace path ${workspaceRef}`
-  return `run paseo daemon pair --home "$PASEO_HOME" from ${workspaceRef}; open the printed link in the Paseo frontend`
+    return `open Project workdir ${workspaceRef}`
+  return `run paseo daemon pair --home "$PASEO_HOME"; open Project workdir with paseo --host ${endpoint} ${workspaceRef}`
 }
 
 function nextStepForAssignment(status: AssignmentStatus): string {
   if (status === 'ready')
-    return '员工可在 Paseo 客户端打开 workspace；AIWorker 不读取 session。'
+    return '员工可在 Paseo 客户端打开 Project workdir；AIWorker 不读取 session。'
   if (status === 'handoff_ready')
     return '交接 Paseo-native handoff；AIWorker 不代理 runtime。'
   if (status === 'workspace_projected')
@@ -1088,8 +1155,17 @@ function redactedEndpointReference(endpoint: string, endpointKind: PaseoEndpoint
   return endpoint.replace(/([?#&]offer=)[^&#]+/i, '$1redacted')
 }
 
-function assignmentTupleKey(environmentId: string, soulReleaseId: string, providerProfileId: string): string {
-  return `${environmentId}\u0000${soulReleaseId}\u0000${providerProfileId}`
+function assignmentOwnershipFingerprint(assignment: AssignmentSummary, environment?: PaseoEnvironmentSummary): string {
+  return [
+    assignment.id,
+    assignment.assignedEmail,
+    assignment.environmentId,
+    assignment.soulReleaseId,
+    assignment.providerProfileId,
+    environment?.ownerEmail ?? '',
+    environment?.dedication?.kind ?? '',
+    environment?.dedication?.assignedEmail ?? '',
+  ].join('\u0000')
 }
 
 function assertTraceEvidenceRef(
@@ -1190,7 +1266,11 @@ export function getAssignmentForPlan(
   )
 
   if (matches.length > 1) {
-    throw new Error(`assignment tuple must be unique: ${environmentId}/${soulReleaseId}/${providerProfileId}`)
+    const fingerprints = new Set(matches.map(assignment =>
+      assignmentOwnershipFingerprint(assignment, data.environments.find(environment => environment.id === assignment.environmentId)),
+    ))
+    if (fingerprints.size > 1)
+      throw new Error(`assignment tuple is ambiguous and requires assignmentId: ${environmentId}/${soulReleaseId}/${providerProfileId}`)
   }
 
   return matches[0]

@@ -1,7 +1,7 @@
 {
   "name": "@zonease/aiworker-cli",
   "type": "module",
-  "version": "1.0.0-rc.12",
+  "version": "2.0.0",
   "description": "AIWorker CLI — thin Paseo workspace distribution layer",
   "license": "MIT",
   "homepage": "https://github.com/ZonEaseTech/aiworker#readme",

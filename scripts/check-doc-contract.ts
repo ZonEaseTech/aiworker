@@ -10,10 +10,10 @@ const canonical = [
 
 const joined = canonical.map(path => readFileSync(path, 'utf8')).join('\n')
 const required = [
-  /AIWorker CLI and AIWorker Web are thin enterprise distribution surfaces for Paseo workspaces/i,
+  /AIWorker CLI and AIWorker Web are thin enterprise distribution surfaces for Paseo Project workdirs/i,
   /AIWorker Web is allowed only as a management plane for AIWorker-owned metadata/i,
-  /Paseo owns.*workspace\/runtime\/UI\/session\/provider/i,
-  /Soul is now a versioned Paseo workspace template/i,
+  /Paseo owns.*Project\/workspace\/runtime\/UI\/session\/provider/i,
+  /Soul is now a versioned Paseo Project workdir template/i,
   /AIWorker no longer has an employee-side runtime/i,
   /daemonEndpoint/i,
   /aissh MVP integration/i,

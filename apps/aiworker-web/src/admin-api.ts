@@ -1,19 +1,25 @@
 import type { ControlPlaneSnapshot } from '@zonease/aiworker-control/control-plane'
 import type { ApprovalDecisionRecord, ApprovalStatus } from '@/lib/admin-data'
+import type { AdminBootstrapStatus, AdminRemediation } from '@/lib/admin-remediation'
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { CONTROL_PLANE_SCHEMA_VERSION, LocalFileControlPlaneStore, redactSecretLike } from '@zonease/aiworker-control'
+import { adminAuthBootstrapStatus } from '@/lib/admin-auth'
+import { adminRemediation, classifyApplyOutput } from '@/lib/admin-remediation'
 
 export interface AdminDataApiPayload {
   approvals: ApprovalDecisionRecord[]
+  bootstrap: AdminBootstrapStatus
   snapshot: ControlPlaneSnapshot | null
   source: 'control-plane' | 'fixture'
 }
 
 export interface ApplyJobResult {
   assignmentId: string
+  remediation?: AdminRemediation
   status: 'completed' | 'failed'
   steps: Array<{
     id: 'approval' | 'target' | 'paseo' | 'workspace' | 'provider' | 'handoff'
@@ -24,8 +30,6 @@ export interface ApplyJobResult {
 
 export interface PairJobResult {
   assignmentId: string
-  stderr: string
-  stdout: string
   pairingOutput: string
   status: 'paired'
 }
@@ -43,18 +47,32 @@ export function controlPlaneDirFromEnv(env: NodeJS.ProcessEnv = process.env): st
   return value && value.trim() !== '' ? resolve(value) : null
 }
 
-export async function loadAdminDataApiPayload(root: string | null = controlPlaneDirFromEnv()): Promise<AdminDataApiPayload> {
-  if (!root) {
+export function adminBootstrapStatus(source: AdminDataApiPayload['source'], env: NodeJS.ProcessEnv = process.env, request: Request | null = null): AdminBootstrapStatus {
+  return {
+    adminTokenRequired: Boolean(env.AIWORKER_WEB_ADMIN_TOKEN?.trim()),
+    auth: adminAuthBootstrapStatus(request, env),
+    controlPlaneDirConfigured: Boolean(controlPlaneDirFromEnv(env)),
+    host: env.AIWORKER_WEB_HOST?.trim() || '127.0.0.1',
+    remoteAccessEnabled: env.AIWORKER_WEB_ALLOW_REMOTE === '1',
+    source,
+  }
+}
+
+export async function loadAdminDataApiPayload(root: string | null | undefined = undefined, request: Request | null = null, env: NodeJS.ProcessEnv = process.env): Promise<AdminDataApiPayload> {
+  const resolvedRoot = root ?? controlPlaneDirFromEnv(env)
+  if (!resolvedRoot) {
     return {
       approvals: [],
+      bootstrap: adminBootstrapStatus('fixture', env, request),
       snapshot: null,
       source: 'fixture',
     }
   }
 
-  const store = new LocalFileControlPlaneStore(root)
+  const store = new LocalFileControlPlaneStore(resolvedRoot)
   return {
-    approvals: await readApprovalDecisionRecords(root),
+    approvals: await readApprovalDecisionRecords(resolvedRoot),
+    bootstrap: adminBootstrapStatus('control-plane', env, request),
     snapshot: await store.loadSnapshot(),
     source: 'control-plane',
   }
@@ -100,19 +118,28 @@ export async function runApprovedAssignmentApplyJob(root: string, assignmentId: 
   const soul = payload.snapshot.soulReleases.find(item => `${item.id}@${item.version}` === assignment.soulReleaseRef || item.id === assignment.soulReleaseRef)
   if (!environment || !provider || !soul)
     throw new Error(`assignment ${assignmentId} is missing environment, provider, or soul metadata`)
+  const soulDescriptorPath = resolveSoulDescriptorPath(soul)
+  if (!existsSync(soulDescriptorPath))
+    throw new Error(`soul descriptor is missing: ${soulDescriptorPath}`)
 
   const result = await runAiworkerCli([
     'apply',
     '--yes',
     '--json',
+    '--assignment-id',
+    assignment.assignmentId,
     '--control-plane-dir',
     root,
     '--user',
     assignment.assignedEmail,
     '--target',
     environment.targetRef,
+    '--target-owner',
+    environment.ownerEmail,
+    ...(environment.dedication ? ['--dedicated-target-user'] : []),
     '--environment',
     environment.environmentId,
+    ...paseoEndpointCliArgs(environment),
     '--provider',
     provider.id,
     '--provider-kind',
@@ -123,9 +150,19 @@ export async function runApprovedAssignmentApplyJob(root: string, assignmentId: 
     ...(provider.baseUrl ? ['--provider-base-url', provider.baseUrl] : []),
     ...(provider.model ? ['--provider-model', provider.model] : []),
     '--soul',
-    resolveSoulDescriptorPath(soul),
+    soulDescriptorPath,
   ])
   return summarizeApplyJobResult(assignmentId, result.exitCode, result.stdout, result.stderr)
+}
+
+function paseoEndpointCliArgs(environment: ControlPlaneSnapshot['environments'][number]): string[] {
+  if (environment.endpointKind === 'tcp' && environment.daemonListenRef && environment.daemonHostRef)
+    return ['--paseo-listen', environment.daemonListenRef, '--paseo-host', environment.daemonHostRef]
+  if (environment.endpointKind === 'relay-offer' || environment.endpointKind === 'local-home')
+    return ['--paseo-endpoint', environment.daemonEndpoint]
+  if (environment.endpointKind === 'unix' && environment.daemonEndpoint !== environment.daemonHostRef)
+    return ['--paseo-endpoint', environment.daemonEndpoint]
+  return []
 }
 
 export async function runAssignmentPairJob(root: string, assignmentId: string): Promise<PairJobResult> {
@@ -148,8 +185,13 @@ export async function runAssignmentPairJob(root: string, assignmentId: string): 
   const result = await runAiworkerCli([
     'pair',
     '--json',
+    '--user',
+    assignment.assignedEmail,
     '--target',
     environment.targetRef,
+    '--target-owner',
+    environment.ownerEmail,
+    ...(environment.dedication ? ['--dedicated-target-user'] : []),
     '--soul',
     resolveSoulDescriptorPath(soul),
   ])
@@ -161,8 +203,6 @@ export async function runAssignmentPairJob(root: string, assignmentId: string): 
   return {
     assignmentId,
     pairingOutput: transientPairingOutput(stdout, stderr),
-    stderr,
-    stdout,
     status: 'paired',
   }
 }
@@ -212,6 +252,10 @@ function resolveSoulDescriptorPath(soul: ControlPlaneSnapshot['soulReleases'][nu
 function isAssignmentReadyForPairing(snapshot: ControlPlaneSnapshot, assignment: ControlPlaneSnapshot['assignments'][number]): boolean {
   if (!['handoff_ready', 'needs_attention', 'ready'].includes(assignment.status))
     return false
+  if (!assignment.handoff || assignment.handoff.workspaceRef !== assignment.workspaceRef)
+    return false
+  if (!['paseo-daemon', 'pairing-offer', 'manual-path'].includes(assignment.handoff.kind))
+    return false
   return snapshot.receipts.some(receipt =>
     receipt.status === 'applied'
     && receipt.environmentId === assignment.environmentId
@@ -226,10 +270,9 @@ function transientPairingOutput(stdout: string, stderr: string): string {
 }
 
 async function runAiworkerCli(args: string[]): Promise<{ exitCode: number, stderr: string, stdout: string }> {
-  const configured = process.env.AIWORKER_CLI_BIN
-  const command = configured ? [configured, ...args] : ['bun', 'apps/aiworker-cli/src/aiworker.ts', ...args]
-  const proc = Bun.spawn(command, {
-    cwd: process.cwd(),
+  const invocation = resolveAiworkerCliCommand(args)
+  const proc = Bun.spawn(invocation.command, {
+    cwd: invocation.cwd,
     env: process.env,
     stderr: 'pipe',
     stdout: 'pipe',
@@ -242,14 +285,27 @@ async function runAiworkerCli(args: string[]): Promise<{ exitCode: number, stder
   return { exitCode, stderr, stdout }
 }
 
-function summarizeApplyJobResult(assignmentId: string, exitCode: number, stdout: string, stderr: string): ApplyJobResult {
-  const combined = `${stdout}\n${stderr}`
-  const providerWarning = combined.includes('AIWORKER_PROVIDER_WARNING')
-  const handoffReady = combined.includes('AIWORKER_HANDOFF_READY')
-  const paseoReady = /Local Daemon\s+running|Connected Daemon\s+reachable/.test(combined)
+export function resolveAiworkerCliCommand(args: string[], env: NodeJS.ProcessEnv = process.env): { command: string[], cwd: string } {
+  const repoRoot = resolve(import.meta.dirname, '..', '..', '..')
+  const configured = env.AIWORKER_CLI_BIN?.trim()
+  return {
+    command: configured ? [configured, ...args] : ['bun', join(repoRoot, 'apps/aiworker-cli/src/aiworker.ts'), ...args],
+    cwd: repoRoot,
+  }
+}
+
+export function summarizeApplyJobResult(assignmentId: string, exitCode: number, stdout: string, stderr: string): ApplyJobResult {
+  const combined = applyExecutionOutput(exitCode, stdout, stderr)
   const completed = exitCode === 0
+  const providerWarning = completed && combined.includes('AIWORKER_PROVIDER_WARNING')
+  const handoffReady = completed && combined.includes('AIWORKER_HANDOFF_READY')
+  const paseoReady = completed && /Local Daemon\s+running|Connected Daemon\s+reachable/.test(combined)
+  const remediationCode = completed
+    ? classifyApplyOutput(exitCode, combined, '')
+    : classifyApplyOutput(exitCode, stdout, stderr)
   return {
     assignmentId,
+    ...(remediationCode ? { remediation: adminRemediation(remediationCode) } : {}),
     status: completed ? 'completed' : 'failed',
     steps: [
       { id: 'approval', label: '审批已通过', status: 'done' },
@@ -259,5 +315,21 @@ function summarizeApplyJobResult(assignmentId: string, exitCode: number, stdout:
       { id: 'provider', label: providerWarning ? 'Provider 需要登录/安装后再使用' : 'Provider 未阻塞投影', status: providerWarning ? 'needs_attention' : completed ? 'done' : 'failed' },
       { id: 'handoff', label: 'Handoff 已准备，可请求配对', status: handoffReady ? 'done' : completed ? 'needs_attention' : 'failed' },
     ],
+  }
+}
+
+function applyExecutionOutput(exitCode: number, stdout: string, stderr: string): string {
+  if (exitCode !== 0)
+    return `${stdout}\n${stderr}`
+  try {
+    const parsed = JSON.parse(stdout) as { stderr?: unknown, stdout?: unknown }
+    return [
+      typeof parsed.stdout === 'string' ? parsed.stdout : '',
+      typeof parsed.stderr === 'string' ? parsed.stderr : '',
+      stderr,
+    ].filter(Boolean).join('\n')
+  }
+  catch {
+    return `${stdout}\n${stderr}`
   }
 }

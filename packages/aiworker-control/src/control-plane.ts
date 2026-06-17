@@ -20,8 +20,9 @@ export function redactLiteralProviderSecret(value: string): string {
 export type AssignmentStatus = 'draft' | 'provisioning' | 'workspace_projected' | 'handoff_ready' | 'ready' | 'needs_attention' | 'revoked' | 'archived'
 export type ProvisioningAdapterType = 'aissh' | 'local' | 'rootless-container'
 export type PaseoEndpointKind = 'tcp' | 'unix' | 'windows-pipe' | 'relay-offer' | 'local-home'
-export type WorkspacePathPolicyKind = 'home-derived'
-export type EndpointBindingKind = 'home-derived-local-daemon' | 'external-endpoint' | 'opaque-pairing-offer'
+export type WorkspacePathPolicyKind = 'project-workdir'
+export type PaseoEnvironmentTopologyKind = 'owner-scoped-paseo-home-v1' | 'legacy-home-derived-paseo-home-v1'
+export type EndpointBindingKind = 'owner-scoped-local-daemon' | 'home-derived-local-daemon' | 'external-endpoint' | 'opaque-pairing-offer'
 export type ProviderReadinessPolicyKind = 'paseo-provider-json-v1'
 
 export interface VersionedControlPlaneRecord {
@@ -31,31 +32,67 @@ export interface VersionedControlPlaneRecord {
 export interface PaseoEnvironment {
   environmentId: string
   ownerEmail: string
+  dedication?: PaseoEnvironmentDedication
+  topologyKind?: PaseoEnvironmentTopologyKind
   targetRef: string
   paseoHome: string
   daemonEndpoint: string
+  daemonListenRef?: string
+  daemonHostRef?: string
   endpointKind: PaseoEndpointKind
   isolation: 'os-user' | 'container' | 'vm' | 'single-user-dev'
   providerProfileIds: string[]
 }
 
+export interface PaseoEnvironmentDedication {
+  kind: 'assigned-user-dedicated'
+  assignedEmail: string
+  assertedBy?: string
+  reason?: string
+}
+
+export interface PaseoOwnershipAssertion {
+  kind: 'target-owner-matches-assigned-user' | 'dedicated-target-asserted' | 'owner-scoped-shared-home'
+  assignedEmail: string
+  environmentOwnerEmail: string
+  topologyKind: PaseoEnvironmentTopologyKind
+  userSlug: string
+  dedicatedTarget: boolean
+}
+
 export interface WorkspacePathPolicy {
   authority: 'aissh-execution-home'
   kind: WorkspacePathPolicyKind
-  paseoHome: '$HOME/.paseo'
+  topologyKind: PaseoEnvironmentTopologyKind
+  assignedEmail: string
+  ownerEmail: string
+  ownerRoot: `$HOME/.aiworker/${string}`
+  paseoHome: '$HOME/.paseo' | `$HOME/.aiworker/${string}/.paseo`
+  runDir: `$HOME/.aiworker/${string}/run`
+  daemonEndpointRef: string
+  daemonHostRef: string
+  daemonListenRef: string
+  projectName: string
+  projectRef: `$HOME/.aiworker/${string}/projects/${string}` | `$HOME/.aiworker/${string}/${string}`
+  projectRoot: `$HOME/.aiworker/${string}/projects` | `$HOME/.aiworker/${string}`
+  userSlug: string
   workspaceName: string
-  workspaceRef: `$HOME/aiworker-workspaces/${string}`
-  workspaceRoot: '$HOME/aiworker-workspaces'
+  workspaceRef: `$HOME/.aiworker/${string}/projects/${string}` | `$HOME/.aiworker/${string}/${string}`
+  workspaceRoot: '$HOME/.aiworker'
 }
 
 export interface PaseoEndpointBinding {
   endpointKind: PaseoEndpointKind
   bindingKind: EndpointBindingKind
   ref: string
+  hostRef?: string
+  listenRef?: string
+  ownerRoot?: string
+  topologyKind?: PaseoEnvironmentTopologyKind
 }
 
 export interface ProviderReadinessPolicy {
-  commands: ['paseo provider ls --json']
+  commands: ['paseo provider ls --host "$AIWORKER_PASEO_HOST" --json']
   effect: 'non-blocking-warning'
   kind: ProviderReadinessPolicyKind
   modelListPolicy: 'not-collected-by-aiworker'
@@ -100,6 +137,7 @@ export interface WorkspaceAssignment {
   assignmentId: string
   assignedEmail: string
   environmentId: string
+  projectRef?: string
   providerProfileId: string
   soulReleaseRef: string
   status: AssignmentStatus
@@ -135,6 +173,8 @@ export interface ProvisionPlan {
   assignment: WorkspaceAssignment
   command: string
   endpointBinding: PaseoEndpointBinding
+  environment: PaseoEnvironment
+  ownership: PaseoOwnershipAssertion
   providerReadiness: ProviderReadinessPolicy
   receipt: {
     adapterType: ProvisioningAdapterType
@@ -142,9 +182,20 @@ export interface ProvisionPlan {
     environmentId: string
     endpointBinding: EndpointBindingKind
     endpointKind: PaseoEndpointKind
+    environmentOwnerEmail: string
+    topologyKind: PaseoEnvironmentTopologyKind
+    targetOwnerEmail: string
+    assignedEmail: string
     handoffKind: PaseoHandoff['kind']
     handoffState: 'instruction-only'
+    ownershipKind: PaseoOwnershipAssertion['kind']
     paseoHome: WorkspacePathPolicy['paseoHome']
+    ownerRoot: WorkspacePathPolicy['ownerRoot']
+    runDir: WorkspacePathPolicy['runDir']
+    projectRoot: WorkspacePathPolicy['projectRoot']
+    daemonListenRef: string
+    daemonHostRef: string
+    projectRef: string
     workspaceRef: string
     workspaceName: string
     workspacePathPolicy: WorkspacePathPolicyKind
@@ -153,6 +204,8 @@ export interface ProvisionPlan {
     providerWarning?: string
     soulReleaseRef: string
     providerProfileId: string
+    dedicatedTarget: boolean
+    userSlug: string
     command: string
     aisshArgs: string[]
   }
@@ -171,9 +224,20 @@ export interface ProvisionReceipt extends VersionedControlPlaneRecord {
   environmentId: string
   endpointBinding: EndpointBindingKind
   endpointKind: PaseoEndpointKind
+  environmentOwnerEmail?: string
+  topologyKind?: PaseoEnvironmentTopologyKind
+  targetOwnerEmail?: string
+  assignedEmail?: string
   handoffKind: PaseoHandoff['kind']
   handoffState: 'instruction-only'
-  paseoHome: WorkspacePathPolicy['paseoHome']
+  ownershipKind?: PaseoOwnershipAssertion['kind']
+  paseoHome: string
+  ownerRoot?: WorkspacePathPolicy['ownerRoot']
+  runDir?: WorkspacePathPolicy['runDir']
+  projectRoot?: WorkspacePathPolicy['projectRoot']
+  daemonListenRef?: string
+  daemonHostRef?: string
+  projectRef: string
   workspaceRef: string
   workspaceName: string
   workspacePathPolicy: WorkspacePathPolicyKind
@@ -182,6 +246,8 @@ export interface ProvisionReceipt extends VersionedControlPlaneRecord {
   providerWarning?: string
   soulReleaseRef: string
   providerProfileId: string
+  dedicatedTarget?: boolean
+  userSlug?: string
   command: string
   aisshArgs: string[]
 }

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, executePaseoPair, executeProvisionPlan, resolveAisshCredentials, resolveAisshInvocation } from './aiworker'
 
 const cliPath = path.resolve(import.meta.dirname, 'aiworker.ts')
+const packageJsonPath = path.resolve(import.meta.dirname, '../package.json')
 const savedAisshBin = process.env.AISSH_BIN
 const savedAisshToken = process.env.AISSH_TOKEN
 const savedCwd = process.cwd()
@@ -36,12 +37,18 @@ async function createDescriptor(content = '# HR Manager\n', id = 'hr-manager') {
   return descriptorPath
 }
 
+async function readCliPackageVersion() {
+  const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8')) as { version: string }
+  return packageJson.version
+}
+
 function planArgs(descriptorPath: string) {
   return [
     '--user',
     'Alice@Example.com',
     '--target',
     'aissh:server-1',
+    '--dedicated-target-user',
     '--environment',
     'env-alice',
     '--provider',
@@ -86,7 +93,7 @@ describe('aiworker thin CLI', () => {
 
   test('reads CLI version from package metadata', async () => {
     const output = await $`bun ${cliPath} --version`.text()
-    expect(output.trim()).toContain('1.0.0-rc.12')
+    expect(output.trim()).toContain(await readCliPackageVersion())
   })
 
   test('plan defaults to a concise human preview without dumping the full script', async () => {
@@ -95,7 +102,7 @@ describe('aiworker thin CLI', () => {
     const output = await $`bun ${cliPath} plan ${planArgs(descriptorPath)}`.text()
     expect(output).toContain('AIWorker provisioning plan')
     expect(output).toContain('Assigned user: alice@example.com')
-    expect(output).toContain('Workspace: $HOME/aiworker-workspaces/hr-manager')
+    expect(output).toContain('Project workdir: $HOME/.aiworker/alice-example.com/projects/hr-manager')
     expect(output).toContain('Next step: aiworker apply')
     expect(output).not.toContain('base64 -d')
     expect(output.trim()).not.toStartWith('{')
@@ -107,6 +114,44 @@ describe('aiworker thin CLI', () => {
     expect(result.exitCode).toBe(1)
     expect(result.stderr.toString()).toContain('Missing required option: --soul')
     expect(result.stderr.toString()).toContain('aiworker plan --help')
+  })
+
+  test('plan requires an explicit target ownership assertion', async () => {
+    const descriptorPath = await createDescriptor()
+    const result = await $`bun ${cliPath} plan --user alice@example.com --target aissh:server-1 --environment env-alice --provider claude-work --soul ${descriptorPath}`.nothrow()
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr.toString()).toContain('Missing required ownership assertion')
+    expect(result.stderr.toString()).toContain('--target-owner')
+    expect(result.stderr.toString()).toContain('--dedicated-target-user')
+  })
+
+  test('plan accepts shared target owner by deriving an owner-scoped Paseo home', async () => {
+    const descriptorPath = await createDescriptor()
+    const output = await $`bun ${cliPath} plan --user alice@example.com --target-owner bob@example.com --target aissh:server-1 --environment env-alice --provider claude-work --soul ${descriptorPath} --json`.json()
+
+    expect(output.environment.ownerEmail).toBe('bob@example.com')
+    expect(output.ownership.kind).toBe('owner-scoped-shared-home')
+    expect(output.workspacePolicy.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
+    expect(output.workspacePolicy.workspaceRef).toBe('$HOME/.aiworker/alice-example.com/projects/hr-manager')
+  })
+
+  test('plan requires explicit listen and host refs for TCP Paseo fallback', async () => {
+    const descriptorPath = await createDescriptor()
+
+    const missingHost = await $`bun ${cliPath} plan --user alice@example.com --target-owner bob@example.com --target aissh:server-1 --environment env-alice --provider claude-work --soul ${descriptorPath} --paseo-listen 127.0.0.1:6767 --json`.nothrow()
+    expect(missingHost.exitCode).toBe(1)
+    expect(missingHost.stderr.toString()).toContain('requires both --paseo-listen and --paseo-host')
+
+    const legacyEndpoint = await $`bun ${cliPath} plan --user alice@example.com --target-owner bob@example.com --target aissh:server-1 --environment env-alice --provider claude-work --soul ${descriptorPath} --paseo-endpoint 127.0.0.1:6767 --json`.nothrow()
+    expect(legacyEndpoint.exitCode).toBe(1)
+    expect(legacyEndpoint.stderr.toString()).toContain('--paseo-endpoint is only for relay offers, Unix sockets, or legacy metadata')
+
+    const output = await $`bun ${cliPath} plan --user alice@example.com --target-owner bob@example.com --target aissh:server-1 --environment env-alice --provider claude-work --soul ${descriptorPath} --paseo-listen 127.0.0.1:6767 --paseo-host 127.0.0.1:6767 --json`.json()
+    expect(output.environment.endpointKind).toBe('tcp')
+    expect(output.environment.daemonListenRef).toBe('127.0.0.1:6767')
+    expect(output.environment.daemonHostRef).toBe('127.0.0.1:6767')
+    expect(output.endpointBinding.bindingKind).toBe('external-endpoint')
   })
 
   test('missing Soul descriptor has an actionable error', async () => {
@@ -122,11 +167,29 @@ describe('aiworker thin CLI', () => {
 
     const output = await $`bun ${cliPath} plan ${planArgs(descriptorPath)} --json`.json()
     expect(output.assignment.assignedEmail).toBe('alice@example.com')
+    expect(output.environment.ownerEmail).toBe('alice@example.com')
+    expect(output.environment.dedication).toEqual({
+      kind: 'assigned-user-dedicated',
+      assignedEmail: 'alice@example.com',
+      assertedBy: 'aiworker-cli',
+      reason: '--dedicated-target-user',
+    })
+    expect(output.ownership.kind).toBe('dedicated-target-asserted')
+    expect(output.ownership.dedicatedTarget).toBe(true)
     expect(output.receipt.soulReleaseRef).toBe('hr-manager@1.0.0')
-    expect(output.receipt.workspaceRef).toBe('$HOME/aiworker-workspaces/hr-manager')
+    expect(output.receipt.projectRef).toBe('$HOME/.aiworker/alice-example.com/projects/hr-manager')
+    expect(output.receipt.workspaceRef).toBe('$HOME/.aiworker/alice-example.com/projects/hr-manager')
+    expect(output.workspacePolicy.projectName).toBe('hr-manager')
+    expect(output.workspacePolicy.projectRef).toBe('$HOME/.aiworker/alice-example.com/projects/hr-manager')
+    expect(output.workspacePolicy.projectRoot).toBe('$HOME/.aiworker/alice-example.com/projects')
+    expect(output.workspacePolicy.ownerRoot).toBe('$HOME/.aiworker/alice-example.com')
+    expect(output.workspacePolicy.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
+    expect(output.workspacePolicy.daemonListenRef).toBe('127.0.0.1:42057')
+    expect(output.workspacePolicy.userSlug).toBe('alice-example.com')
     expect(output.workspacePolicy.workspaceName).toBe('hr-manager')
-    expect(output.workspacePolicy.kind).toBe('home-derived')
-    expect(output.endpointBinding.bindingKind).toBe('home-derived-local-daemon')
+    expect(output.workspacePolicy.kind).toBe('project-workdir')
+    expect(output.endpointBinding.bindingKind).toBe('owner-scoped-local-daemon')
+    expect(output.endpointBinding.ref).toBe('127.0.0.1:42057')
     expect(output.providerReadiness.kind).toBe('paseo-provider-json-v1')
     expect(output.providerReadiness.effect).toBe('non-blocking-warning')
     expect(output.providerReadiness.modelListPolicy).toBe('not-collected-by-aiworker')
@@ -134,8 +197,9 @@ describe('aiworker thin CLI', () => {
     expect(output.command).toContain('aissh exec server-1')
     expect(output.command).toContain('base64 -d')
     expect(output.command).toContain('unset PASEO_HOST')
-    expect(output.command).toContain('PASEO_HOME="$AIWORKER_REMOTE_HOME/.paseo"')
-    expect(output.command).toContain('paseo provider ls --json')
+    expect(output.command).toContain('AIWORKER_PASEO_HOME="$AIWORKER_OWNER_ROOT/.paseo"')
+    expect(output.command).toContain('PASEO_LISTEN="$AIWORKER_PASEO_LISTEN"')
+    expect(output.command).toContain('paseo provider ls --host "$AIWORKER_PASEO_HOST" --json')
     expect(output.command).not.toContain('paseo provider models')
     expect(output.command).toContain('AIWORKER_PROVIDER_WARNING')
     expect(output.command).not.toContain('/home/alice/workspaces')
@@ -144,13 +208,21 @@ describe('aiworker thin CLI', () => {
     expect(output.aissh.credentials.source).toBe('env')
   })
 
+  test('plan can preserve an existing control-plane assignment id', async () => {
+    const descriptorPath = await createDescriptor()
+
+    const output = await $`bun ${cliPath} plan ${planArgs(descriptorPath)} --assignment-id asn-existing-web --json`.json()
+
+    expect(output.assignment.assignmentId).toBe('asn-existing-web')
+  })
+
   test('plans ACP provider profiles with explicit Paseo provider ids', async () => {
     const descriptorPath = await createDescriptor()
 
-    const output = await $`bun ${cliPath} plan --user Alice@Example.com --target aissh:server-1 --environment env-alice --provider acp-team --provider-kind acp --paseo-provider-id paseo-acp-team --soul ${descriptorPath} --json`.json()
+    const output = await $`bun ${cliPath} plan --user Alice@Example.com --dedicated-target-user --target aissh:server-1 --environment env-alice --provider acp-team --provider-kind acp --paseo-provider-id paseo-acp-team --soul ${descriptorPath} --json`.json()
 
     expect(output.command).toContain('AIWORKER_PASEO_PROVIDER_ID=paseo-acp-team')
-    expect(output.command).toContain('paseo provider ls --json')
+    expect(output.command).toContain('paseo provider ls --host "$AIWORKER_PASEO_HOST" --json')
     expect(output.command).not.toContain('custom')
   })
 
@@ -418,7 +490,7 @@ describe('aiworker thin CLI', () => {
     const output = await $`bun ${cliPath} apply ${planArgs(descriptorPath)} --yes --aissh-bin ${fakeAissh}`.text()
 
     expect(output).toContain('AIWorker provisioning executed')
-    expect(output).toContain('Handoff: AIWorker derives PASEO_HOME')
+    expect(output).toContain('Handoff: AIWorker derives owner-scoped PASEO_HOME')
     expect(output).toContain('AIWORKER_HANDOFF_READY')
     expect(output).toContain('[REDACTED]')
     expect(output).toContain('[omitted: output echoed the generated provisioning command]')
@@ -459,7 +531,21 @@ describe('aiworker thin CLI', () => {
     expect(snapshot.assignments[0].status).toBe('needs_attention')
     expect(snapshot.assignments[0].handoff.instructions).toContain('paseo daemon pair --home "$PASEO_HOME"')
     expect(receipts[0].status).toBe('applied')
-    expect(receipts[0].paseoHome).toBe('$HOME/.paseo')
+    expect(receipts[0].paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
+    expect(receipts[0].topologyKind).toBe('owner-scoped-paseo-home-v1')
+    expect(receipts[0].ownerRoot).toBe('$HOME/.aiworker/alice-example.com')
+    expect(receipts[0].projectRoot).toBe('$HOME/.aiworker/alice-example.com/projects')
+    expect(receipts[0].environmentOwnerEmail).toBe('alice@example.com')
+    expect(receipts[0].ownershipKind).toBe('dedicated-target-asserted')
+    expect(receipts[0].dedicatedTarget).toBe(true)
+    expect(receipts[0].userSlug).toBe('alice-example.com')
+    expect(snapshot.environments[0].ownerEmail).toBe('alice@example.com')
+    expect(snapshot.environments[0].dedication).toEqual({
+      kind: 'assigned-user-dedicated',
+      assignedEmail: 'alice@example.com',
+      assertedBy: 'aiworker-cli',
+      reason: '--dedicated-target-user',
+    })
     expect(receipts[0].handoffState).toBe('instruction-only')
     expect(receipts[0].providerReadinessEffect).toBe('non-blocking-warning')
     expect(receipts[0].providerWarning).toContain('AIWORKER_PROVIDER_WARNING')
@@ -499,6 +585,7 @@ describe('aiworker thin CLI', () => {
   test('pair emits transient Paseo pairing material without exposing generated script echoes', async () => {
     const descriptorPath = await createDescriptor()
     const result = await executePaseoPair({
+      assignedEmail: 'alice@example.com',
       aisshBin: '/mock/aissh',
       executor: {
         async execFile(_file, args) {
@@ -513,11 +600,13 @@ describe('aiworker thin CLI', () => {
         },
       },
       soulPath: descriptorPath,
+      targetOwnerEmail: 'alice@example.com',
+      dedicatedTarget: true,
       targetRef: 'aissh:server-1',
     })
 
     expect(result.status).toBe('paired')
-    expect(result.workspaceRef).toBe('$HOME/aiworker-workspaces/hr-manager')
+    expect(result.workspaceRef).toBe('$HOME/.aiworker/alice-example.com/projects/hr-manager')
     expect(result.stdout).toContain('https://relay.paseo.example/#offer=real-token')
     expect(result.stdout).toContain('AIWorker target identity discovered')
     expect(result.stdout).toContain('[omitted: output echoed the generated provisioning command]')
@@ -532,7 +621,7 @@ describe('aiworker thin CLI', () => {
     await writeFile(fakeAissh, '#!/bin/sh\necho "https://relay.paseo.example/#offer=real-token"\necho "argv $*"\nexit 42\n')
     await chmod(fakeAissh, 0o755)
 
-    const result = await $`bun ${cliPath} pair --target aissh:server-1 --soul ${descriptorPath} --aissh-bin ${fakeAissh} --json`.nothrow()
+    const result = await $`bun ${cliPath} pair --user alice@example.com --dedicated-target-user --target aissh:server-1 --soul ${descriptorPath} --aissh-bin ${fakeAissh} --json`.nothrow()
 
     expect(result.exitCode).toBe(1)
     expect(result.stderr.toString()).toContain('[REDACTED_PAIRING_URL]')
@@ -540,8 +629,32 @@ describe('aiworker thin CLI', () => {
     expect(result.stderr.toString()).not.toContain('real-token')
     expect(result.stderr.toString()).not.toContain('set -euo pipefail')
     expect(result.stderr.toString()).not.toContain('$AIWORKER_REMOTE_USER')
-    expect(result.stderr.toString()).not.toContain('AIWORKER_PAIR_WORKSPACE_MISSING')
+    expect(result.stderr.toString()).not.toContain('AIWORKER_PAIR_PROJECT_MISSING')
+    expect(result.stderr.toString()).not.toContain('safe HOME-relative segment')
     expect(existsSync(path.join(root, 'control-plane'))).toBe(false)
+  })
+
+  test('pair accepts shared target ownership and invokes aissh against the assigned user scope', async () => {
+    const descriptorPath = await createDescriptor()
+    const calls: string[][] = []
+
+    const result = await executePaseoPair({
+      assignedEmail: 'alice@example.com',
+      aisshBin: '/mock/aissh',
+      executor: {
+        async execFile(_file, args) {
+          calls.push(args)
+          return { stderr: '', stdout: 'paired' }
+        },
+      },
+      soulPath: descriptorPath,
+      targetOwnerEmail: 'bob@example.com',
+      targetRef: 'aissh:server-1',
+    })
+
+    expect(result.ownership.kind).toBe('owner-scoped-shared-home')
+    expect(result.workspaceRef).toBe('$HOME/.aiworker/alice-example.com/projects/hr-manager')
+    expect(calls[0]?.join(' ')).toContain('AIWORKER_OWNER_ROOT="$AIWORKER_ROOT/$AIWORKER_USER_SLUG"')
   })
 
   test('executeProvisionPlan redacts standalone base64 payload echoes from projected files', async () => {
@@ -669,6 +782,7 @@ describe('aiworker thin CLI', () => {
     expect(stderr).not.toContain('printf \'%s\'')
     expect(stderr).not.toContain('set -euo pipefail')
     expect(stderr).not.toContain('export PASEO_HOME=')
+    expect(stderr).not.toContain('safe HOME-relative segment')
     expect(stderr).not.toContain('npm install -g @getpaseo/cli')
     expect(stderr).not.toContain('paseo daemon status')
     expect(stderr).not.toContain('paseo daemon pair')
