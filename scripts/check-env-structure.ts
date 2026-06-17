@@ -27,7 +27,6 @@ export interface EnvStructureCheckResult {
 export function defaultEnvStructurePairs(): EnvStructurePair[] {
   return [
     { actualPath: '.env', expectedPath: '.env.example' },
-    { actualPath: 'packages/worker-daemon/.env', expectedPath: 'packages/worker-daemon/.env.example' },
   ]
 }
 
@@ -90,7 +89,7 @@ function assignmentValue(raw: string): { key: string, value: string } | null {
     return null
 
   return {
-    key: assignment[1],
+    key: assignment[1]!,
     value: raw.slice(assignment[0].length),
   }
 }

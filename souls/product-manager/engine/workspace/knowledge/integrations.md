@@ -8,7 +8,7 @@
 ## 安全边界（强约束，任何阶段都成立）
 - **密钥绝不进 descriptor、DB、receipt、日志、诊断输出、OpenAPI 示例或 UI。**
 - 支付商户号、EDC 密钥、shop 库连接串、Lark/GitHub token、商户 PII（店名/手机/会员信息）**绝不写入任何资产、范例或 issue**。
-- Phase 2 工具集成走原生引擎自管的 MCP（author-owned native MCP 文件），密钥只存在于作者自管的本地配置中，AIWorker 不复制、不投影、不落库。
+- 工具集成走 Paseo 环境/provider CLI 自管的 MCP，密钥只存在于目标环境配置或 secret manager 中，AIWorker 不复制、不投影、不落库。
 - v1 的 `mcp/` 目录仅为占位，不含任何真实凭证。
 
 ---

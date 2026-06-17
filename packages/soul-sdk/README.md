@@ -1,20 +1,29 @@
 # AIWorker Soul SDK
 
-`@zonease/aiworker-soul-sdk` is the descriptor authoring and build surface for
-Souls under `souls/*`. A Soul is a descriptor-only template of engine assets;
-the SDK no longer authors a workbench.
+`@zonease/aiworker-soul-sdk` is the authoring/build helper for AIWorker Souls.
+A Soul is now a versioned Paseo workspace template: files that AIWorker can
+project into a normal Paseo workspace directory.
 
-The default authoring shape is:
+Authoring shape:
 
 ```text
 souls/my-soul/
   soul.config.ts
-  engine/workspace/
-  engine/skills/
+  engine/workspace/AGENTS.md
+  engine/workspace/CLAUDE.md
+  engine/workspace/business-context/**
+  engine/skills/**/SKILL.md
   engine/mcp/codex/config.toml
   engine/mcp/claude-code/.mcp.json
 ```
 
-`buildSoul(rootDir)` generates `dist/soul.descriptor.json` and packaged assets.
-The descriptor carries only `protocol`, `identity`, and `engine`. Worker runtime
-consumes the built descriptor and refs only; it does not import Soul source.
+`buildSoul(rootDir)` generates:
+
+```text
+dist/soul.descriptor.json
+dist/workspace-template/**
+```
+
+The descriptor carries only `protocol`, `identity`, and `workspaceTemplate`.
+It must not contain UI, API, runtime, provider credentials, or Paseo-specific
+process state.

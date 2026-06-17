@@ -1,364 +1,147 @@
 # AIWorker Protocol
 
-This document defines the canonical Soul descriptor contract, the local broker
-routes, and the Phase 2 Host-to-Worker distribution control contract.
+AIWorker protocol is now a thin distribution protocol around Paseo Project workdir provisioning. There is no Worker runtime protocol, no session invocation protocol, and no AIWorker-rendered Workbench protocol.
 
-## Descriptor-Only Install And Runtime
-
-Souls are installed through:
+## Stable records
 
 ```text
-dist/soul.descriptor.json
+PaseoEnvironment
+  environmentId
+  ownerEmail              # logical owner/admin of target aissh execution identity
+  topologyKind            # owner-scoped-paseo-home-v1 | legacy-home-derived-paseo-home-v1
+  dedication?             # assigned-user-dedicated assertion for stronger isolation
+  targetRef
+  paseoHome              # default intent is $HOME/.aiworker/<userSlug>/.paseo
+  daemonEndpoint         # real endpoint or redacted/derived endpoint reference
+  daemonListenRef        # default 127.0.0.1:<stable-user-port>
+  daemonHostRef          # default 127.0.0.1:<stable-user-port>
+  endpointKind           # unix by default; tcp requires explicit listen+host refs
+  isolation
+  providerProfileIds[]
+
+WorkspacePathPolicy
+  kind=project-workdir
+  authority=aissh-execution-home
+  topologyKind=owner-scoped-paseo-home-v1
+  ownerEmail             # target owner/admin
+  assignedEmail
+  ownerRoot=$HOME/.aiworker/<userSlug>
+  paseoHome=$HOME/.aiworker/<userSlug>/.paseo
+  runDir=$HOME/.aiworker/<userSlug>/run
+  daemonListenRef=127.0.0.1:<stable-user-port>
+  daemonHostRef=127.0.0.1:<stable-user-port>
+  projectName
+  projectRef=$HOME/.aiworker/<userSlug>/projects/<projectName>
+  projectRoot=$HOME/.aiworker/<userSlug>/projects
+  userSlug
+  workspaceName
+  workspaceRoot=$HOME/.aiworker
+  workspaceRef=$HOME/.aiworker/<userSlug>/projects/<workspaceName>
+
+EndpointBinding
+  bindingKind=owner-scoped-local-daemon | home-derived-local-daemon | external-endpoint | opaque-pairing-offer
+  endpointKind
+  ref
+  listenRef?
+  hostRef?
+  ownerRoot?
+
+ProviderReadinessPolicy
+  kind=paseo-provider-json-v1
+  providerId
+  effect=non-blocking-warning
+  providerListPredicate=warn if provider != providerId || status != "available" || enabled != "Enabled"
+  modelListPolicy=not-collected-by-aiworker
+  rawOutputPolicy=redacted-warning-only
+
+ProviderProfile
+  id
+  provider
+  label
+  baseUrl?
+  model?
+  secretRef?
+  paseoProviderId?
+
+SoulRelease
+  id
+  version
+  displayName
+  descriptorRef
+  workspaceTemplateRoot
+
+Assignment
+  assignmentId
+  assignedEmail
+  environmentId
+  soulReleaseRef
+  providerProfileId
+  projectRef
+  workspaceRef
+  status
+  handoff?
+
+PaseoOwnershipAssertion
+  kind=target-owner-matches-assigned-user | dedicated-target-asserted | owner-scoped-shared-home
+  assignedEmail
+  environmentOwnerEmail
+  topologyKind
+  userSlug
+  dedicatedTarget
+
+ProvisionReceipt
+  status=planned | applied | failed
+  assignment tuple
+  topologyKind
+  targetOwnerEmail
+  assignedEmail
+  paseoHome
+  ownerRoot
+  runDir
+  projectRoot
+  daemonListenRef
+  daemonHostRef
+  projectRef
+  workspaceRef
+  handoffKind
+  handoffState=instruction-only
+  workspacePathPolicy
+  endpointBinding
+  environmentOwnerEmail?
+  ownershipKind?
+  dedicatedTarget?
+  userSlug?
+  providerReadinessPolicy
+  providerReadinessEffect=non-blocking-warning
+  providerWarning?
+  redacted aissh invocation with generated script body omitted in persisted records
 ```
 
-The Worker validates and caches the descriptor, then routes local operations through
-generic broker APIs. The Workbench and Host do not read Soul source, import Soul
-private modules, or interpret domain semantics.
+`projectRef` is the primary user-facing derived intent (`$HOME/...`) until the target shell resolves its canonical HOME. `workspaceRef` remains as a compatibility alias for the same Project workdir. Consumers must not treat either value as a caller-controlled absolute path. New writes use the owner-scoped Project path. Legacy `$HOME/.paseo`, `daemonEndpoint=paseo-daemon:remote-home`, and `$HOME/.aiworker/<userSlug>/<project>` records may load for display, but must not be automatically migrated or used as the new default.
 
-## Descriptor V1 Shape
+`assignedEmail` owns the derived `$HOME/.aiworker/<userSlug>` scope. `PaseoEnvironment.ownerEmail` owns/administers the target execution identity and may differ from `assignedEmail` under `owner-scoped-shared-home`. `--dedicated-target-user` records `dedication.kind=assigned-user-dedicated` when the target execution identity is explicitly dedicated to the assigned user. Legacy v1 records may omit ownership receipt fields and still load, but live apply/pair paths must receive an explicit `--target-owner` or `--dedicated-target-user` assertion before invoking `aissh`.
 
-A Soul is a template — a descriptor-only bundle of engine assets. Descriptor v1
-contains only these top-level sections:
+## Assignment lifecycle
 
 ```text
-protocol
-identity
-engine
+draft -> provisioning -> workspace_projected -> handoff_ready -> ready
+   \         \                    \                  \        \
+    -> archived -> needs_attention -> revoked --------> archived
 ```
 
-- `protocol` is the descriptor format version (`soul/v1`).
-- `identity` is the Soul `id`, display `name`, and optional `description?`
-  display metadata. Host and Workbench may show these fields, but must not
-  interpret `description` as a domain capability, API, permission, or business
-  workflow contract.
-- `engine` declares engine targets and the packaged asset refs: workspace files,
-  skills, native MCP files, and entry files such as `AGENTS.md` and `CLAUDE.md`.
+`ready` means AIWorker has prepared a Paseo Project workdir and handoff. It does not mean AIWorker can read sessions, logs, terminal output, or agent events.
 
-Descriptor v1 carries no workbench, no app-owned API, no capabilities, and no
-configuration, health, compatibility, extensions, or external sections. It must
-not introduce memory, lesson, governance, repository workflow, or domain business
-concepts as platform primitives. The Worker owns and renders its Workbench; the
-Soul provides no UI.
+## Handoff
 
-## Configuration
+Handoff is intentionally opaque and Paseo-native:
 
-Worker configuration is worker-scoped and SDK-standard; it is not a descriptor
-section. Values use stable envelopes stored in Worker metadata, and may contain
-non-secret operational options, source refs, checksums, caller class, and
-projection-affecting state.
+- `paseo-daemon`: AIWorker prepares the Project workdir under the actual `aissh` execution identity. The operational `PASEO_HOME` is derived on target from canonical `$HOME/.aiworker/<userSlug>/.paseo`, the daemon listen/host ref is a stable loopback TCP endpoint derived from `userSlug`, and the Project path is `$HOME/.aiworker/<userSlug>/projects/<project>`. The generated script starts/checks the owner-scoped daemon and provider readiness, but does not run `paseo daemon pair`; the handoff is an instruction to run `paseo daemon pair --home "$PASEO_HOME"`, then open the Project with `paseo --host <owner-loopback-host> <dir>` or start an agent with `paseo run --host <owner-loopback-host> --cwd <dir>`.
+- `transient-pair`: `aiworker pair` may call `paseo daemon pair --home "$PASEO_HOME"` through `aissh` after a Project workdir is prepared and ownership is validated. Raw pairing output is allowed only in that immediate command response and must not be written to receipt, audit, snapshot, projection, diagnostics, or UI storage. Pairing the daemon is not Project registration/open evidence.
+- `pairing-offer`: employee connects to a daemon through a real Paseo pairing link. AIWorker treats any such link as opaque pairing material and must not persist or render the raw URL or QR.
+- `manual-path`: fallback instructions when a stable deep link is unavailable.
 
-Worker configuration values use a `configValueJson envelope` with the standard
-fields `kind, target, enabled, sourceRef, checksum, options, updatedAt, updatedBy`.
-`kind` is one of `engine-selection`, `projection-overlay`, `skill-overlay`,
-`mcp-overlay`, `entry-file-overlay`, or `workbench-preference`. `target` is an
-engine target, `all`, or `none`. `options` is a non-secret operational object.
-`updatedBy` records caller class such as `cli` or `web`, not user identity.
+AIWorker may store the redacted handoff reference and HOME-derived Project workdir intent, but must not proxy Paseo project/workspace UI or session traffic.
 
-`projection-overlay` is reserved in descriptor v1. It is a valid stored
-configuration kind and participates in the projection freshness marker, but
-engine projection applies no projected-file change for it. Per-asset projection
-overlays use `entry-file-overlay`, `skill-overlay`, and `mcp-overlay`.
+## Secret boundary
 
-Overlay `sourceRef` values are scheme-qualified references, never content.
-`descriptor://…` resolves baseline assets from the Soul descriptor source.
-`worker-overlay://<kind>/<path>` (with `kind` one of `skills`, `mcp`, or
-`entry-files`) resolves worker-owned edited content from the worker overlay
-store at `<worker-home>/overlays/<kind>/<path>`, the sibling of `workspaces/`.
-Engine projection materializes the referenced file by scheme; the envelope still
-carries only `kind, target, enabled, sourceRef, checksum`.
-
-Config values must not contain literal secrets, full native MCP files, full skill bodies, full entry-file contents, Soul domain records, business action state, or artifact content.
-
-Overlay asset content is read and written through dedicated content routes, never
-through the envelope. `GET /api/workers/:workerId/config/:configKey/content`
-returns the effective `{ content, source, checksum, editable }`: the worker
-overlay file when an enabled `worker-overlay://` overlay exists, otherwise the
-baseline Soul-dist asset. `skill-overlay` and `entry-file-overlay` content is
-editable; `mcp-overlay` content is view-only and redacted on display.
-`PUT /api/workers/:workerId/config/:configKey/content` writes editable content to
-the worker overlay file and upserts the envelope `sourceRef`/`checksum`; the
-content reaches only the file, never the stored envelope. MCP content is not
-editable and the PUT is rejected. A PUT to a not-yet-existing overlay `configKey`
-adds an additive overlay plus its content file.
-
-## Engine And Projection References
-
-Descriptor engine sections describe packaged asset refs and target engines.
-Runtime projection materializes workspace files, skills, native MCP files, and
-entry files for the selected engine target.
-
-Descriptors may include lightweight summaries and refs. They must not copy
-secret-like values from native files.
-
-## Broker Routes
-
-The local daemon broker exposes platform routes, including:
-
-```text
-POST   /api/app-installation/install
-GET    /api/app-installation/apps
-GET    /api/app-installation/apps/:appId
-POST   /api/app-installation/apps/:appId/enable
-POST   /api/app-installation/apps/:appId/archive
-DELETE /api/app-installation/apps/:appId
-
-GET    /api/info
-GET    /api/settings
-PATCH  /api/settings
-
-POST   /api/workers
-GET    /api/workers
-GET    /api/workers/:workerId
-PATCH  /api/workers/:workerId
-POST   /api/workers/:workerId/archive
-DELETE /api/workers/:workerId
-
-GET    /api/workers/:workerId/config
-PUT    /api/workers/:workerId/config/:configKey
-PATCH  /api/workers/:workerId/config/:configKey
-POST   /api/workers/:workerId/config/:configKey/archive
-
-POST   /api/workspace-locators
-GET    /api/workspace-locators
-GET    /api/workspace-locators/:workspaceId
-PATCH  /api/workspace-locators/:workspaceId
-POST   /api/workspace-locators/:workspaceId/archive
-DELETE /api/workspace-locators/:workspaceId
-
-POST   /api/sessions
-GET    /api/sessions
-GET    /api/sessions/:sessionId
-PATCH  /api/sessions/:sessionId
-POST   /api/sessions/:sessionId/archive
-DELETE /api/sessions/:sessionId
-POST   /api/sessions/:sessionId/invocations
-
-GET    /api/engine/targets
-GET    /api/engine/targets/:target/readiness
-POST   /api/engine/targets/rescan
-POST   /api/engine/targets/:target/test
-POST   /api/engine/invocations
-GET    /api/engine/invocations/:invocationId
-GET    /api/engine/invocations/:invocationId/events
-POST   /api/engine/invocations/:invocationId/cancel
-POST   /api/engine/invocations/:invocationId/reconcile
-
-POST   /api/projections/:target/refresh
-GET    /api/projections/receipts/:receiptId
-POST   /api/projections/receipts/:receiptId/cleanup
-```
-
-These are broker routes, not business product APIs. Route methods make the local
-broker deterministic. They do not turn the daemon into a product backend.
-
-- `enable` creates a worker from an installed descriptor, bound to that one Soul.
-- `POST /api/workers` rejects creation when the daemon already hosts an active
-  Worker (409); a daemon hosts at most one active Worker. archive-then-recreate
-  is permitted (archived rows do not count).
-- Routes that take a `workerId` for new work resolve it to the daemon's single
-  active Worker: a present `workerId` that does not name the active Worker is
-  rejected. List and filter routes instead treat `workerId` as an existence
-  filter — present scopes the result to that Worker, omitted returns the unscoped
-  list, which on a single-active daemon is that active Worker's. The standalone
-  CLI or Workbench web therefore never depends on Host or fleet context.
-- `GET /api/workspace-locators` may receive `workerId` to filter locators.
-- `POST /api/workspace-locators` receives `workerId` and a workspace name, and
-  creates Worker workspace locator metadata plus projection-owned bootstrap
-  files. Workspace roots are derived under the Worker home directory
-  (`<worker-home>/workspaces/<workspaceId>`), not client-chosen: AIWorker is not
-  a developer tool pointed at arbitrary repositories, so there is no custom
-  `rootPath`.
-- `GET /api/sessions` may receive `workerId` and `workspaceId` to filter session
-  lists.
-- `POST /api/sessions` receives `workerId` and `workspaceId` as locator context.
-- session follow-up always uses `POST /api/sessions/:sessionId/invocations`.
-- engine target discovery and test actions live under `/api/engine/targets`. The
-  engine target defaults to the Worker default and may be overridden per session.
-- engine cancel, event stream, and reconciler target an invocation id.
-- `GET /api/workers/:workerId/config/:configKey/content` and
-  `PUT /api/workers/:workerId/config/:configKey/content` read and write overlay
-  asset content (skills and entry-files editable, MCP view-only and redacted);
-  content lives in the worker overlay file, never the config envelope.
-
-## Host-to-Worker Control Contract
-
-The Host control plane is Phase 2 and is not on the v1 runtime path.
-`packages/worker-control-protocol` defines a transport-agnostic control contract.
-It covers worker.describe, worker.health, worker.lifecycle, and a worker.assignment
-envelope. Phase 2 Host integration has two distribution-plane directions:
-
-- Host initiates provisioning through aissh and owns assignment/readiness records.
-- Worker may initiate Phase 2 check-in and Worker Access tunnel connections to Host.
-
-These Worker-initiated signals are not runtime hot-path ownership. Host must not read Worker chat, session, invocation, projection, workspace, artifact, or native engine secret data. Host must not mount, iframe, proxy-render, or inject chrome into the Worker Workbench.
-
-Phase 2 Host-to-Worker integration is over-the-wire only, with zero code
-intrusion in either direction. Host does not mount, frame, embed, render, or proxy
-the Worker's Workbench. Host may direct an employee to a Worker-owned Workbench
-URL, but that URL is an employee destination, not a Host-rendered surface.
-
-The control contract must not carry session, invocation, projection, engine, or
-domain data. The assignment envelope is a distribution record: it carries the
-assigned Soul identity/version, authorized connectors, permissions, and an
-engine/gateway profile ref by shape and version only. Connector behavior,
-employee work, domain state, and native engine execution are out of contract
-scope.
-
-`worker.describe` may include the Worker-owned `workbenchUrl` so Host can direct
-an employee to their Worker. It must not expose a mount entry, micro-app entry,
-router mode, app-owned route, or Host-rendered surface.
-
-The Phase 2 MVP contract is therefore:
-
-```text
-publish Soul version -> assign to employee/group -> provision employee Worker -> employee opens Worker Workbench
-```
-
-Phase 2 route block:
-
-```text
-POST   /api/provision/check-in
-GET    /api/provision/access
-GET    /workers/:workerId
-```
-
-The Host control plane also exposes admin-authorized control-plane routes for the
-Soul release registry and distribution. These are Host API routes (`host:admin`
-gated), not Worker broker routes, and are never on the Worker runtime path:
-
-```text
-GET    /api/host/options
-GET    /api/host/assignments
-POST   /api/host/assignments
-GET    /api/host/soul-releases
-POST   /api/host/soul-releases
-```
-
-`POST /api/host/soul-releases` publishes a built Soul descriptor into the
-Host-owned registry. The request body is `{ descriptor, version? }`; Host
-validates the descriptor-only v1 shape, assigns the version when omitted (next
-integer per `soulId`), and stores the descriptor as an opaque release artifact.
-`GET /api/host/soul-releases` lists registry releases as metadata
-(`releaseRef`, `soulId`, `name`, `version`, `source`, `publishedAt`); the stored
-descriptor content is not returned by the list route. `/api/host/options`
-projects the same registry as the assignable Soul list. The matching host-cli
-commands are `aiworker-host soul publish <descriptor> [--version]` and
-`aiworker-host soul list`; `aiworker-host serve --seed-souls-dir <dir>` is a
-dev-only convenience that seeds the registry from built descriptors when empty.
-
-`POST /api/provision/check-in` returns a `{ access, assignment }` receipt. The
-`assignment` receipt carries `assignedEmail`, `assignmentId`, `soulReleaseRef`,
-`workerId`, and an optional `soulDescriptor`. `soulDescriptor` is the opaque
-descriptor JSON string (the stored `descriptorJson` of the release resolved from
-`soulReleaseRef`). Host delivers it as an opaque distribution artifact: it does
-not parse, interpret, or rewrite the descriptor's domain fields. The descriptor
-contains no literal secret — `POST /api/host/soul-releases` already enforces this
-via `assertNoLiteralSecrets` at publish time. `soulDescriptor` is optional in the
-contract so an older Host that does not populate it still produces a parseable
-receipt; a Host that resolves `soulReleaseRef` to a missing release fails the
-check-in honestly (4xx `SOUL_RELEASE_NOT_FOUND`) rather than returning a receipt
-without descriptor content.
-
-Descriptor consumption at the Worker end differs by path:
-
-- **Standalone path** (`aiworker start` / `aiworker daemon start`): the Worker
-  installs its own bundled descriptor. `soulDescriptor` from the check-in receipt
-  is not consumed; `soulReleaseRef` remains a distribution label only.
-- **First-provision path** (`aiworker provision --host … --token …`): the Worker
-  receives the assigned Soul descriptor in the check-in response and installs it
-  directly (see runtime.md "First-Provision Bootstrap"). `identity.name` and other
-  descriptor fields are consumed at this point. The Worker's lifelong Soul binding
-  is set from the descriptor's `identity.id`.
-
-Resolving `soulReleaseRef` to descriptor content and installing it on the Worker
-end-to-end (the Worker landing the delivered descriptor, binding its Soul, and
-serving its own Workbench) is otherwise complete for first-provision. The remainder
-of this distribution slice is production governance wiring.
-
-Soul version updates for already-deployed Workers (re-delivering a new Soul release
-to a Worker after first-provision) are **Phase-2 distribution slice — deferred**.
-v1 preserves the single-Soul-lifelong-binding invariant (see architecture.md:25–27);
-no Worker Access hot-path re-assignment is added in v1.
-Production governance wiring for connector authorization, permission sets,
-gateway/profile refs, and Soul release rollout/rollback controls remains the
-next Phase 2 governance slice. Do not add one-off v1 Worker runtime hooks,
-Worker broker routes, or partial propagation paths for those governance records.
-
-Phase 2.1 Worker Access tunnel:
-
-```text
-GET /api/provision/access
-Upgrade: websocket
-Authorization: Bearer <worker-access-token>
-```
-
-WebSocket is the only Worker Access tunnel transport in Phase 2.1. There is no
-HTTP long-poll fallback. Host performs transport-level forwarding over the
-Worker-initiated tunnel; Host does not mount, iframe, proxy-render, own, or
-semantically interpret the Worker Workbench.
-
-Phase 3 LLM credential frames ride the same already-authenticated Worker Access
-tunnel (a `hello` frame authenticated by the Phase 2 access token) as three
-independent typed frames in `workerAccessFrameSchema`:
-
-```text
-credential_acquire  { type, providerKind }                                worker -> host
-credential_refresh  { type, providerKind }                                worker -> host
-credential_grant    { type, providerKind, gatewayUrl, token, expiresAt }  host -> worker
-```
-
-- `providerKind` is `'anthropic' | 'openai'`. The field is named `providerKind`
-  (the LLM provider), never `engineKind` — and the URL is `gatewayUrl`, never
-  `baseUrl`/`endpoint`. The control protocol is transport-agnostic and Host/Soul
-  carry no Worker engine vocabulary (G4/G10 inversion guards), so the frame names
-  the provider, not the Worker's engineId. The Worker maps its engineId to a
-  `providerKind` on its own plane. `cursor` is excluded because its CLI does not
-  route an externally supplied key; other engines are not in the org-key
-  injection set.
-- `credential_acquire` is the Worker asking the Host to mint/return a credential
-  for a provider kind; `credential_refresh` renews one approaching expiry. Both
-  are Worker-initiated (the credential path is, like check-in and the tunnel
-  itself, a Worker-initiated distribution signal, not Host runtime ownership).
-- `credential_grant` is the Host response and is a **distinct frame type**. It
-  must never reuse the `response` type, which carries the Host's pending
-  HTTP request/response correlation semantics; mixing them would route a
-  credential into the HTTP-forward correlation map.
-
-WAT-1 boundary: these are typed frames, not `bodyText` HTTP forwarding. Their
-fields live directly in the frame body, never in `bodyText`, and they never
-enter the Host pending request/response correlation map. They are therefore
-unaffected by WAT-1 (which corrupts only `bodyText` HTTP forwarding) and are not
-subject to the 15s HTTP-forward timeout.
-
-Secret boundary: `credential_grant.token` is a provider credential. It lives only
-in Worker memory (and TLS in transit); it is never written to the descriptor,
-host.db, worker.db, the `access-token` file, any log, diagnostic output, or
-receipt. In the org-key mode (Phase 3 v1) the delivered `token` is the org key
-as-is — not a derived/per-worker/short-TTL key — and `expiresAt` is a far-future
-placeholder, so liveness/revocation rides the 4401 access-token channel, not TTL
-expiry. The native CLI persisting the credential to its own credential store is
-an engine concern outside this contract.
-
-Provisioning adapters must deliver only:
-
-```text
-AIWORKER_HOST_URL
-AIWORKER_PROVISION_TOKEN
-```
-
-Do not add AIWORKER_WORKER_ACCESS_LOCAL_URL. The Worker mints its own worker id,
-and worker home and daemon port are fleet-allocated; the Worker runtime resolves
-its own local handler.
-
-Host URLs are environment-specific:
-
-- `hostBrowserBaseUrl` generates `/host` and `/workers/:workerId`.
-- `hostControlBaseUrl` is the Host API URL.
-- `adapterRuntimeControlBaseUrl` is the URL reachable from the Worker runtime environment.
-
-A remote aissh target must not use localhost, 127.0.0.1, or ::1 as its adapter runtime callback URL.
-
-Host owns the publish/assign/provision governance path. Worker owns the
-Workbench, workspace, session, invocation, projection, engine bridge, runtime
-configuration overlays, and redaction. This split is what makes Soul replication
-cheap without turning Host into a runtime backend or UI container.
+AIWorker records secret references only. It must not write provider API keys into descriptors, assignment receipts, logs, diagnostics, OpenAPI examples, UI, or projected Project workdir files. Paseo/provider CLIs own provider authentication. Provider readiness checks use the `paseo-provider-json-v1` contract as warning-only metadata against the selected owner-scoped daemon endpoint: `paseo provider ls --host "$AIWORKER_PASEO_HOST" --json` may report whether the selected provider is available/enabled, but provider absence or login gaps do not block Project workdir projection. AIWorker does not call `paseo provider models` as a provisioning gate. Raw provider JSON, model lists, stderr, and transcripts must not be stored or shown. Pairing URLs and QR codes may appear only in the immediate `aiworker pair` response or the Web action that calls that same CLI path; they must not be stored in descriptors, receipts, audit records, snapshots, logs, diagnostics, or projected Project workdir files.

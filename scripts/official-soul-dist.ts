@@ -1,8 +1,7 @@
-import type { OfficialSoulCatalogView } from '../packages/worker-runtime/src/soul-app/official-definitions'
 import { access, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { OFFICIAL_SOUL_CATALOG_VIEWS } from '../packages/worker-runtime/src/soul-app/official-definitions'
+export type OfficialSoulCatalogView = 'dev-sampling' | 'shipped'
 
 export interface OfficialSoulDistBuildDefinition {
   descriptorPath: string
@@ -34,6 +33,19 @@ export interface EnsureOfficialSoulDistsOptions {
 }
 
 const defaultRepoRoot = resolve(import.meta.dirname, '..')
+
+const allOfficialSouls = [
+  officialSoul('aiworker-freeform'),
+  officialSoul('google-ads'),
+  officialSoul('hr-manager'),
+  officialSoul('product-manager'),
+  officialSoul('software-support'),
+] as const
+
+export const OFFICIAL_SOUL_CATALOG_VIEWS: Record<OfficialSoulCatalogView, readonly OfficialSoulDistBuildDefinition[]> = {
+  'dev-sampling': allOfficialSouls,
+  'shipped': allOfficialSouls,
+}
 
 export async function ensureOfficialSoulDists(
   options: EnsureOfficialSoulDistsOptions = {},
@@ -72,6 +84,13 @@ export async function ensureOfficialSoulDists(
 
 export function definitionsForCatalogView(view: OfficialSoulCatalogView): readonly OfficialSoulDistBuildDefinition[] {
   return OFFICIAL_SOUL_CATALOG_VIEWS[view]
+}
+
+function officialSoul(id: string): OfficialSoulDistBuildDefinition {
+  return {
+    descriptorPath: `souls/${id}/dist/soul.descriptor.json`,
+    id,
+  }
 }
 
 function parseCatalogViewArg(argv: readonly string[]): OfficialSoulCatalogView {

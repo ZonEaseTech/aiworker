@@ -23,7 +23,7 @@
 ## 数据与安全边界（v1 即生效，Phase 2 强约束）
 
 - **个人信息不进 descriptor / DB / 日志**：候选人 / 员工的姓名、联系方式、身份证、简历、具体薪资等**个人信息**绝不写入 soul descriptor、AIWorker 数据库、收据、日志、诊断输出、OpenAPI 示例或 UI。本仓库所有范例一律脱敏（候选人 A、[手机号]、[期望薪资] 等占位）。
-- **密钥不进 descriptor / DB / 日志**：MCP 凭据 / api key / token / 飞书 app secret / GitHub token 等**密钥**只存在于 author 本地 MCP 文件；AIWorker 不把密钥复制进 descriptor、数据库、日志或 UI。
+- **密钥不进 descriptor / DB / 日志**：MCP 凭据 / api key / token / 飞书 app secret / GitHub token 等**密钥**只存在于目标员工环境或 secret manager；AIWorker 不把密钥复制进 descriptor、数据库、日志或 UI。
 - **不碰 TTPOS 业务数据**：接 GitHub / ttpos-bot 仅为研发 OKR 取证（聚合 / 只读），绝不读取或落地 TTPOS 多租户业务库里的商家 / 门店 / 顾客 / 交易等数据；招聘只处理候选人脱敏信息。
 - **PIPL 最小必要**：未来接 ATS / HRIS / 飞书人事时，只拉完成当前任务所必需的个人信息字段，明示目的、不超范围留存，离职后按规定删除 / 匿名化。
 - **跨境用工另算**：TTPOS 是多市场（含泰国）公司，若涉境外员工 / 数据出境，须按当地法 + 数据出境合规单独送审，不在本 soul 范围。

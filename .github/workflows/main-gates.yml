@@ -1,25 +1,18 @@
 name: main gates
 
-# Run each line's FULL release gate continuously — on every push to main, nightly, and on
-# demand — not only at release-tag time. The heavy gates (release:check / release:check:phase2)
-# otherwise run solely on `*-v*` tags, so a line's real correctness can hide until release:
-# the EB-1 regression sat red on main, undetected, for weeks because the first full
-# release:check after it only ran when worker GA was cut. Two jobs with no `needs` coupling
-# mirror release.yml: a host-gate failure never reds the worker line, and vice versa.
-#
-# This is a post-merge main-health signal (it cannot block a merge — the code is already on
-# main); a red here means fix-forward. Per-PR gates stay lean (lint.yml: lint + checks).
-
 on:
   push:
     branches: [main]
   schedule:
-    - cron: '0 16 * * *' # nightly ~01:00 JST
+    - cron: '0 16 * * *'
   workflow_dispatch:
 
 jobs:
-  worker-gate:
+  release-check:
     runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=1024
+      HUSKY: 0
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -28,22 +21,5 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: Install Playwright browser
-        run: bunx playwright install --with-deps chromium
-      - name: Worker release gate
+      - name: Thin-layer release check
         run: bun run release:check
-
-  host-gate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24'
-      - uses: oven-sh/setup-bun@v2
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-      - name: Install Playwright browser
-        run: bunx playwright install --with-deps chromium
-      - name: Host release gate
-        run: bun run release:check:phase2

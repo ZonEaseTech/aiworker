@@ -1,41 +1,15 @@
-# CODEOWNERS — 三线开发归属
-# 模型见 docs/superpowers/specs/2026-06-12-three-line-dev-orchestration.md
-# 规则:一个 path 一个 owner(避免 review 疲劳);团队成形时把 @BenDaye 换成对应
-# @ZonEaseTech/<team>(worker / host / platform)。全局兜底必须是第一条。
+# CODEOWNERS — AIWorker thin Paseo distribution layer
 
-# 全局兜底
 *                                    @BenDaye
 
-# ── worker 独立线 → @zonease/aiworker-cli ──
-/apps/worker-cli/                    @BenDaye
-/apps/worker-web/                    @BenDaye
-/packages/worker-runtime/            @BenDaye
-/packages/worker-daemon/             @BenDaye
-
-# ── host 独立线 → @zonease/aiworker-host-cli ──
-/apps/host-cli/                      @BenDaye
-/apps/host-web/                      @BenDaye
-/packages/host-control/              @BenDaye
-
-# ── host-worker 联调线:wire 契约 + 跨 plane 缝(改动需双线视角) ──
-/packages/worker-control-protocol/   @BenDaye
-
-# ── 共享底座:改动涟漪多线,平台/tech-lead review ──
+/apps/aiworker-cli/                      @BenDaye
+/packages/aiworker-control/              @BenDaye
 /packages/soul-descriptor/           @BenDaye
 /packages/soul-sdk/                  @BenDaye
-/packages/engine-bridge/             @BenDaye
-/packages/engine-projection/         @BenDaye
-/packages/storage-sqlite/            @BenDaye
-/packages/fs-layout/                 @BenDaye
-/packages/ui/                        @BenDaye
-/packages/cli-doctor/                @BenDaye
 /souls/                              @BenDaye
 
-# ── 发版/CI/契约基础设施:改动影响全仓发版 ──
 /.github/                            @BenDaye
-/scripts/check-doc-contract.ts       @BenDaye
+/scripts/                            @BenDaye
 /package.json                        @BenDaye
-/docs/architecture.md                @BenDaye
-/docs/protocol.md                    @BenDaye
-/docs/runtime.md                     @BenDaye
-/docs/testing.md                     @BenDaye
+/AGENTS.md                           @BenDaye
+/docs/                               @BenDaye
