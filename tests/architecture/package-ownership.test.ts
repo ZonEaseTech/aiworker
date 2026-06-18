@@ -47,6 +47,33 @@ describe('Paseo thin-layer package ownership', () => {
       expect(root).not.toMatch(pattern)
   })
 
+  test('root scripts keep the default workflow action-oriented', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      scripts: Record<string, string>
+    }
+    const names = Object.keys(pkg.scripts)
+
+    expect(names.slice(0, 9)).toEqual([
+      'dev',
+      'dev:aiworker-web',
+      'dev:cli',
+      'check',
+      'test',
+      'typecheck',
+      'lint',
+      'build',
+      'release:check',
+    ])
+    expect(pkg.scripts.dev).toBe('bun run dev:aiworker-web')
+    expect(pkg.scripts['dev:cli']).toBe('bun apps/aiworker-cli/src/aiworker.ts --help')
+    expect(pkg.scripts['dev:aiworker']).toBeUndefined()
+    expect(pkg.scripts['ui:check']).toBeUndefined()
+    for (const name of names) {
+      expect(name.startsWith('crg:')).toBe(false)
+      expect(name.startsWith('serena:')).toBe(false)
+    }
+  })
+
   test('aiworker CLI remains the only publishable package and carries pinned optional aissh-cli', () => {
     const aiworkerCli = JSON.parse(readFileSync('apps/aiworker-cli/package.json', 'utf8')) as {
       name: string

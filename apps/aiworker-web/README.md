@@ -7,7 +7,7 @@ AIWorker Web 是面向管理员的薄控制台，只管理 AIWorker-owned metada
 ## 开发命令
 
 ```bash
-bun run dev:aiworker-web
+bun run dev
 bun run test:aiworker-web
 bun run build:aiworker-web
 ```
@@ -33,7 +33,7 @@ bun run setup:logto
 ```bash
 AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane \
 AIWORKER_WEB_ADMIN_TOKEN=<admin-token> \
-bun run dev:aiworker-web
+bun run dev
 ```
 
 发布构建使用 Vite 静态资产和 portable Bun server bundle；CLI release 会把

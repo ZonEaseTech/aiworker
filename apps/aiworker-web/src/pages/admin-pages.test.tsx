@@ -39,6 +39,8 @@ describe('admin console page composition', () => {
     expect(dashboard).toContain('AIWorker 分发控制台')
     expect(dashboard).toContain('Admin bootstrap')
     expect(dashboard).toContain('AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane')
+    expect(dashboard).toContain('bun run dev')
+    expect(dashboard).not.toContain('bun run dev:aiworker-web')
     expect(dashboard).toContain('Use for session')
     expect(dashboard).toContain('Remember on this device')
     expect(dashboard).toContain('admin-data reads and state-changing Web API calls')

@@ -159,7 +159,7 @@ export function DashboardPage() {
             <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs/relaxed">
               {`AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane \\
 AIWORKER_WEB_ADMIN_TOKEN=<secret> \\
-bun run dev:aiworker-web`}
+bun run dev`}
             </pre>
           </FieldGroup>
         </CardContent>
