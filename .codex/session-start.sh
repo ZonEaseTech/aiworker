@@ -17,5 +17,5 @@ When answering questions about this codebase, prefer using the code-review-graph
 This saves significant tokens by avoiding full codebase scans.
 INSTRUCTIONS
 else
-    echo "[code-review-graph] No knowledge graph found. Run bun run crg:build to parse this codebase and enable graph-powered queries."
+    echo "[code-review-graph] No knowledge graph found. Run uvx code-review-graph build --repo . to parse this codebase and enable graph-powered queries."
 fi

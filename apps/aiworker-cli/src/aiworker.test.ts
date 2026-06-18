@@ -438,6 +438,24 @@ describe('aiworker thin CLI', () => {
     expect(output.checks.map((check: { name: string }) => check.name)).toContain('soul-descriptor')
   })
 
+  test('doctor points source env structure repair at the root env sync script', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-env-doctor-'))
+    await writeFile(path.join(root, '.env.example'), 'AIWORKER_CONTROL_PLANE_DIR=\n')
+    await writeFile(path.join(root, '.env'), 'AIWORKER_CONTROL_PLANE_DIR=/tmp/control\nEXTRA=1\n')
+
+    const result = Bun.spawnSync([process.execPath, cliPath, 'doctor', '--json'], {
+      cwd: root,
+      stderr: 'pipe',
+      stdout: 'pipe',
+    })
+    const output = JSON.parse(result.stdout.toString())
+    const envCheck = output.checks.find((check: { name: string }) => check.name === 'env-structure')
+
+    expect(envCheck.status).toBe('fail')
+    expect(envCheck.message).toContain('bun run env:sync')
+    expect(envCheck.message).not.toContain('dev:env:sync')
+  })
+
   test('doctor accepts a local .aissh.yaml token without exposing it', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'aiworker-aissh-yaml-'))
     const token = 'test-aissh-token-from-yaml-123456789'

@@ -1084,7 +1084,7 @@ function checkSourceEnvStructure(): DoctorCheck[] {
   const expected = envStructureSignature(readFileSync(examplePath, 'utf8'))
   const actual = envStructureSignature(readFileSync(envPath, 'utf8'))
   if (JSON.stringify(expected) !== JSON.stringify(actual))
-    return [{ message: '.env structure differs from .env.example; run `bun run dev:env:sync` in the source checkout', name: 'env-structure', status: 'fail' }]
+    return [{ message: '.env structure differs from .env.example; run `bun run env:sync` in the source checkout', name: 'env-structure', status: 'fail' }]
   return [{ message: '.env structure matches .env.example', name: 'env-structure', status: 'pass' }]
 }
 

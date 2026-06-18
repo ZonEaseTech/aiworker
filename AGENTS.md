@@ -67,10 +67,11 @@ AIWorker 不启动/观察 native engine，不保存 transcript，不实现 follo
 
 ## Dev Services
 
-当前薄层没有自研 Worker/AIWorker Web dev service，也不再保留固定 Vite/daemon 端口合同。默认开发入口：
+当前薄层没有自研 Worker daemon。AIWorker Web 是管理员薄控制台，默认只监听本机 Vite 端口 `20831`。默认开发入口：
 
 ```bash
-bun run dev:aiworker              # aiworker-cli help
+bun run dev                       # aiworker-web on 127.0.0.1:20831
+bun run dev:cli                   # aiworker-cli help
 bun run docs:check
 bun run test:contracts
 bun run test

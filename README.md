@@ -65,6 +65,18 @@ souls/*                     official workspace templates
 
 ## Development
 
+Daily entry points:
+
+```bash
+bun run dev           # AIWorker Web on 127.0.0.1:20831
+bun run dev:cli       # AIWorker CLI help
+bun run check         # typecheck + lint/docs contract
+bun run test
+bun run build
+```
+
+Release and contract gates:
+
 ```bash
 bun install
 bun run docs:check

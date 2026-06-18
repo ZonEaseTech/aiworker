@@ -173,16 +173,18 @@ describe('env structure checker', () => {
     expect(Buffer.from(result.stdout).toString('utf8')).toContain(`${expectedPath} <-> ${actualPath}`)
   })
 
-  it('keeps env structure checks as explicit dev utilities only', async () => {
+  it('keeps env structure checks as explicit utilities only', async () => {
     const pkg = JSON.parse(await readFile(join(import.meta.dirname, '..', 'package.json'), 'utf8')) as {
       scripts: Record<string, string>
     }
 
-    expect(pkg.scripts['dev:env:check']).toBe('bun scripts/check-env-structure.ts')
-    expect(pkg.scripts['dev:env:sync']).toBe('bun scripts/check-env-structure.ts --write')
+    expect(pkg.scripts['env:check']).toBe('bun scripts/check-env-structure.ts')
+    expect(pkg.scripts['env:sync']).toBe('bun scripts/check-env-structure.ts --write')
+    expect(pkg.scripts['dev:env:check']).toBeUndefined()
+    expect(pkg.scripts['dev:env:sync']).toBeUndefined()
 
     for (const scriptName of ['build', 'check', 'lint', 'release:check', 'typecheck'])
-      expect(pkg.scripts[scriptName]).not.toContain('dev:env:check')
+      expect(pkg.scripts[scriptName]).not.toContain('env:check')
   })
 
   it('keeps provider API keys out of the root dev env example', async () => {
