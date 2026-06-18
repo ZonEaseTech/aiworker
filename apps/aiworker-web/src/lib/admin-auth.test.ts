@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { emailAllowed, logtoRuntimeState, safeReturnTo } from '@/lib/admin-auth'
+import { emailAllowed, loginResponse, logtoRuntimeState, safeReturnTo } from '@/lib/admin-auth'
 
 describe('admin auth runtime config', () => {
   test('ignores generic session secret when Logto is otherwise absent', () => {
@@ -38,6 +38,21 @@ describe('admin auth runtime config', () => {
       expect(state.config.redirectUri).toBe('http://127.0.0.1:20831/callback')
       expect(state.config.allowedEmailDomains).toEqual(['zonease.org', 'jbcnet.co.jp'])
     }
+  })
+
+  test('canonicalizes Logto browser login to the configured external base URL', async () => {
+    const response = await loginResponse(new Request('http://127.0.0.1:20831/login?returnTo=/provisioning'), {
+      AIWORKER_SESSION_SECRET: 'cookie-secret',
+      LOGTO_ALLOWED_EMAIL_DOMAINS: 'zonease.org',
+      LOGTO_BASE_URL: 'https://20831--main--ben--ben.coder.tbc.5ok.co',
+      LOGTO_CLIENT_ID: 'app-id',
+      LOGTO_CLIENT_SECRET: 'app-secret',
+      LOGTO_ENDPOINT: 'https://auth.example.com/',
+    } as NodeJS.ProcessEnv)
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('https://20831--main--ben--ben.coder.tbc.5ok.co/login?returnTo=/provisioning')
+    expect(response.headers.get('set-cookie')).toBeNull()
   })
 })
 

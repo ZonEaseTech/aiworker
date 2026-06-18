@@ -564,6 +564,56 @@ describe('Bun static server helpers', () => {
       logto.server.stop(true)
     }
   })
+
+  test('keeps Logto state and callback on the configured external origin', async () => {
+    const logto = startFakeLogto()
+    const server = createServer({ port: 0 })
+    const publicBaseUrl = 'https://20831--main--ben--ben.coder.tbc.5ok.co'
+    const publicHost = new URL(publicBaseUrl).host
+    process.env.LOGTO_ENDPOINT = logto.baseUrl
+    process.env.LOGTO_CLIENT_ID = 'aiworker-web'
+    process.env.LOGTO_CLIENT_SECRET = 'client-secret'
+    process.env.LOGTO_COOKIE_SECRET = 'cookie-secret-cookie-secret'
+    process.env.LOGTO_BASE_URL = publicBaseUrl
+    process.env.LOGTO_ALLOWED_EMAIL_DOMAINS = 'zonease.org'
+
+    try {
+      const loopbackLogin = await fetch(`http://127.0.0.1:${server.port}/login?returnTo=/provisioning`, {
+        redirect: 'manual',
+      })
+      expect(loopbackLogin.status).toBe(302)
+      expect(loopbackLogin.headers.get('location')).toBe(`${publicBaseUrl}/login?returnTo=/provisioning`)
+      expect(loopbackLogin.headers.get('set-cookie')).toBeNull()
+
+      const proxiedLogin = await fetch(`http://127.0.0.1:${server.port}/login?returnTo=/provisioning`, {
+        headers: {
+          'x-forwarded-host': publicHost,
+          'x-forwarded-proto': 'https',
+        },
+        redirect: 'manual',
+      })
+      expect(proxiedLogin.status).toBe(302)
+      const proxiedStateCookie = proxiedLogin.headers.get('set-cookie')
+      expect(cookiePair(proxiedStateCookie, 'aiworker_logto_state')).toStartWith('aiworker_logto_state=')
+      expect(proxiedStateCookie).toContain('Secure')
+      expect(proxiedStateCookie).toContain('SameSite=Lax')
+      const authUrl = new URL(proxiedLogin.headers.get('location')!)
+      expect(authUrl.origin).toBe(logto.baseUrl)
+      expect(authUrl.searchParams.get('redirect_uri')).toBe(`${publicBaseUrl}/callback`)
+
+      const hostOnlyLogin = await fetch(`http://127.0.0.1:${server.port}/login?returnTo=/provisioning`, {
+        headers: { host: publicHost },
+        redirect: 'manual',
+      })
+      expect(hostOnlyLogin.status).toBe(302)
+      expect(hostOnlyLogin.headers.get('location')).toStartWith(`${logto.baseUrl}/oidc/auth?`)
+      expect(cookiePair(hostOnlyLogin.headers.get('set-cookie'), 'aiworker_logto_state')).toStartWith('aiworker_logto_state=')
+    }
+    finally {
+      server.stop(true)
+      logto.server.stop(true)
+    }
+  })
 })
 
 function startFakeLogto(): { baseUrl: string, server: ReturnType<typeof Bun.serve> } {

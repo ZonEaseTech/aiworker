@@ -28,7 +28,14 @@ bun run setup:logto
 `LOGTO_CLIENT_SECRET`、`LOGTO_COOKIE_SECRET`、`LOGTO_BASE_URL`、
 `LOGTO_ALLOWED_EMAIL_DOMAINS` 写入根目录 ignored `.env`。运行时也接受
 `LOGTO_APP_ID` / `LOGTO_APP_SECRET` 作为兼容别名，但本仓库写 canonical
-`LOGTO_CLIENT_*`。
+`LOGTO_CLIENT_*`。`LOGTO_BASE_URL` 与 sibling next 一样表示对外可达的
+console URL，默认使用 Coder HTTPS 域名
+`https://20831--main--ben--ben.coder.tbc.5ok.co`，因此 Logto redirect URI 会注册为
+`https://20831--main--ben--ben.coder.tbc.5ok.co/callback`。如果 ignored `.env`
+里只保存了旧默认 `http://127.0.0.1:20831`，重跑脚本会迁移到这个 Coder HTTPS
+默认值；显式传入的 `LOGTO_BASE_URL` 和自定义 `.env` 值仍然优先。
+本地 token-only/fixture preview 可以继续从 loopback 访问；浏览器 SSO 入口会
+canonical 到 `LOGTO_BASE_URL`，确保登录 state cookie 和 `/callback` 在同一 origin。
 
 ```bash
 AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane \
