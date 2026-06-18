@@ -4,13 +4,14 @@ import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SIBLING_NEXT = resolve(ROOT, '..', 'aiworker-next')
 const ROOT_ENV = resolve(ROOT, '.env')
 const APP_NAME = 'AIWorker Web Admin'
-const DEFAULT_BASE_URL = 'http://127.0.0.1:20831'
+const DEFAULT_BASE_URL = 'https://20831--main--ben--ben.coder.tbc.5ok.co'
+const LEGACY_DEFAULT_BASE_URL = 'http://127.0.0.1:20831'
 const DEFAULT_EMAIL_DOMAINS = 'zonease.org,jbcnet.co.jp,ttpos.org'
 
 function parseEnvFile(path) {
@@ -146,6 +147,16 @@ function existingRuntimeApp(rootEnv) {
   return id && secret ? { id, secret } : null
 }
 
+export function logtoBaseUrl(rootEnv, env = process.env) {
+  const explicit = env.LOGTO_BASE_URL?.trim()
+  if (explicit)
+    return explicit
+  const persisted = rootEnv.get('LOGTO_BASE_URL')?.trim()
+  if (persisted && persisted !== LEGACY_DEFAULT_BASE_URL)
+    return persisted
+  return DEFAULT_BASE_URL
+}
+
 async function readSecret(endpoint, token, id) {
   const res = await fetch(new URL(`/api/applications/${encodeURIComponent(id)}/secrets`, endpoint), {
     headers: { authorization: `Bearer ${token}` },
@@ -215,7 +226,7 @@ async function main() {
   const rootEnv = parseEnvFile(ROOT_ENV)
   const endpoint = `https://${m2m.tenantId}.logto.app/`
   const apiIndicator = `https://${m2m.tenantId}.logto.app/api`
-  const baseUrl = (process.env.LOGTO_BASE_URL || rootEnv.get('LOGTO_BASE_URL') || DEFAULT_BASE_URL).replace(/\/+$/, '')
+  const baseUrl = logtoBaseUrl(rootEnv).replace(/\/+$/, '')
   const allowedEmailDomains = process.env.LOGTO_ALLOWED_EMAIL_DOMAINS || rootEnv.get('LOGTO_ALLOWED_EMAIL_DOMAINS') || rootEnv.get('AIWORKER_ALLOWED_EMAIL_DOMAINS') || DEFAULT_EMAIL_DOMAINS
 
   console.log(`Using Logto M2M source: ${m2m.source}`)
@@ -263,4 +274,5 @@ async function main() {
   console.log(`Wrote Logto runtime configuration to ${ROOT_ENV}. Restart aiworker-web to load it.`)
 }
 
-main().catch(error => die(error instanceof Error ? error.message : String(error)))
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  main().catch(error => die(error instanceof Error ? error.message : String(error)))

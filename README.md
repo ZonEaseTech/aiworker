@@ -99,7 +99,12 @@ bun apps/aiworker-cli/src/aiworker.ts web
 
 `bun run setup:logto` uses Logto M2M credentials from the current checkout or
 `../aiworker-next`, creates/updates an `AIWorker Web Admin` Traditional app, and
-writes the runtime `LOGTO_CLIENT_*` values into ignored `.env`. The Web app
+writes the runtime `LOGTO_CLIENT_*` values into ignored `.env`. Its default
+`LOGTO_BASE_URL` is the externally reachable Coder URL
+`https://20831--main--ben--ben.coder.tbc.5ok.co`, so the registered callback is
+`https://20831--main--ben--ben.coder.tbc.5ok.co/callback`. Token-only local
+runs may still use loopback; browser SSO is canonicalized to `LOGTO_BASE_URL`
+so the login state cookie and callback stay on the same origin. The Web app
 accepts Logto sessions for browser administration and keeps
 `AIWORKER_WEB_ADMIN_TOKEN` for automation/local bootstrap API calls.
 
@@ -112,7 +117,10 @@ bun apps/aiworker-cli/src/aiworker.ts web
 ```
 
 The published `aiworker web` starts the bundled private Web admin console on
-loopback `http://127.0.0.1:20831` and opens the browser by default. From a
+loopback `http://127.0.0.1:20831` and opens the browser by default. With Logto
+configured to the Coder HTTPS `LOGTO_BASE_URL`, browser login redirects onto
+that external URL before going to Logto; keep `--browser none` for token-only
+local/API workflows that should not launch SSO. From a
 source checkout, the same CLI surface falls back to the Vite dev server. Pass
 `--browser none` for terminal-only runs, `--port <port>` to change the port, or
 use `bun run dev:aiworker-web` only when working directly on the Web package.

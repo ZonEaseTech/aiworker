@@ -246,6 +246,10 @@ export async function loginResponse(request: Request, env: NodeJS.ProcessEnv = p
   if (runtime.kind !== 'configured')
     return authSetupPageResponse(runtime.kind === 'misconfigured' ? 'misconfigured' : authRequiredWithoutLogto(env) ? 'locked' : 'local', env)
 
+  const canonicalRedirect = canonicalLoginRedirect(request, runtime.config)
+  if (canonicalRedirect)
+    return canonicalRedirect
+
   const metadata = await fetchOidcMetadata(runtime.config)
   const authorizationEndpoint = requireMetadataUrl(metadata.authorization_endpoint, 'authorization_endpoint')
   const state = randomToken()
@@ -271,6 +275,31 @@ export async function loginResponse(request: Request, env: NodeJS.ProcessEnv = p
   return redirectResponse(redirect.href, [
     signedCookie(loginStateCookieName, loginState, runtime.config.cookieSecret, runtime.config, loginStateMaxAgeSeconds),
   ])
+}
+
+function canonicalLoginRedirect(request: Request, config: Pick<LogtoRuntimeConfig, 'baseUrl'>): Response | null {
+  try {
+    const requestUrl = new URL(request.url)
+    const baseUrl = new URL(config.baseUrl)
+    if (requestMatchesConfiguredBase(request, requestUrl, baseUrl))
+      return null
+    const redirect = new URL(`${requestUrl.pathname}${requestUrl.search}`, baseUrl)
+    return redirectResponse(redirect.href)
+  }
+  catch {
+    return null
+  }
+}
+
+function requestMatchesConfiguredBase(request: Request, requestUrl: URL, baseUrl: URL): boolean {
+  const forwardedHost = firstForwardedValue(request.headers.get('x-forwarded-host'))?.toLowerCase()
+  const forwardedProto = firstForwardedValue(request.headers.get('x-forwarded-proto'))?.toLowerCase()
+  const configuredHost = baseUrl.host.toLowerCase()
+  if (forwardedHost === configuredHost)
+    return !forwardedProto || `${forwardedProto}:` === baseUrl.protocol
+  if (requestUrl.host.toLowerCase() !== configuredHost)
+    return false
+  return requestUrl.protocol === baseUrl.protocol || (baseUrl.protocol === 'https:' && requestUrl.protocol === 'http:')
 }
 
 export async function callbackResponse(request: Request, env: NodeJS.ProcessEnv = process.env): Promise<Response> {
@@ -422,6 +451,10 @@ function parseEmailDomains(value: string): string[] {
     .split(',')
     .map(item => item.trim().toLowerCase().replace(/^@+/, ''))
     .filter(Boolean)
+}
+
+function firstForwardedValue(value: string | null): string | null {
+  return value?.split(',')[0]?.trim() || null
 }
 
 function readFirstEnv(env: NodeJS.ProcessEnv, keys: string[]): string {
