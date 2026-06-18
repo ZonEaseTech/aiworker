@@ -21,6 +21,11 @@ const contentTypes: Record<string, string> = {
   '.woff2': 'font/woff2',
 }
 
+export interface AdminRuntimeRequestOptions {
+  htmlNavigationGuard?: boolean
+  staticBoundaryMethodGuard?: boolean
+}
+
 export function staticRoot() {
   return root
 }
@@ -68,144 +73,12 @@ export function createServer(options: { hostname?: string, port?: number } = {})
     port: options.port ?? port,
     async fetch(request: Request) {
       const url = new URL(request.url)
-
-      if (url.pathname === '/healthz') {
-        return Response.json({ ok: true, surface: 'aiworker-web', runtime: 'bun' })
-      }
-
-      if (url.pathname === '/login') {
-        if (request.method !== 'GET' && request.method !== 'HEAD')
-          return methodNotAllowed('GET, HEAD')
-        return loginResponse(request, effectiveEnv)
-      }
-
-      if (url.pathname === '/callback') {
-        if (request.method !== 'GET' && request.method !== 'HEAD')
-          return methodNotAllowed('GET, HEAD')
-        return callbackResponse(request, effectiveEnv)
-      }
-
-      if (url.pathname === '/logout') {
-        if (request.method !== 'GET' && request.method !== 'POST' && request.method !== 'HEAD')
-          return methodNotAllowed('GET, POST, HEAD')
-        return logoutResponse(request, effectiveEnv)
-      }
-
-      if (url.pathname === '/api/auth/session') {
-        if (request.method !== 'GET' && request.method !== 'HEAD')
-          return methodNotAllowed('GET, HEAD')
-        const auth = authorizeAdminRead(request, effectiveEnv)
-        return Response.json({
-          auth: adminAuthBootstrapStatus(request, effectiveEnv),
-          authorized: auth.ok,
-        })
-      }
-
-      if (url.pathname === '/api/admin-data') {
-        if (request.method !== 'GET' && request.method !== 'HEAD') {
-          return methodNotAllowed('GET, HEAD')
-        }
-        const guard = adminReadGuard(request, effectiveEnv)
-        if (guard)
-          return guard
-
-        try {
-          return Response.json(await loadAdminDataApiPayload(undefined, request, effectiveEnv))
-        }
-        catch {
-          return Response.json(adminApiErrorPayload('control_plane_unavailable'), {
-            status: 500,
-            headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
-          })
-        }
-      }
-
-      const approvalMatch = url.pathname.match(/^\/api\/approvals\/([^/]+)$/)
-      if (approvalMatch) {
-        if (request.method !== 'POST') {
-          return methodNotAllowed('POST')
-        }
-        const guard = adminMutationGuard(request, effectiveEnv)
-        if (guard)
-          return guard
-
-        const root = controlPlaneDirFromEnv(effectiveEnv)
-        if (!root) {
-          return Response.json(adminApiErrorPayload('control_plane_dir_required'), {
-            status: 409,
-            headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
-          })
-        }
-
-        const input = await request.json().catch(() => ({})) as Parameters<typeof appendApprovalDecision>[2]
-        try {
-          const record = await appendApprovalDecision(root, decodeURIComponent(approvalMatch[1]!), input)
-          return Response.json({ approval: record })
-        }
-        catch (error) {
-          return adminApiErrorResponse(error, 409)
-        }
-      }
-
-      const applyMatch = url.pathname.match(/^\/api\/assignments\/([^/]+)\/apply$/)
-      if (applyMatch) {
-        if (request.method !== 'POST') {
-          return methodNotAllowed('POST')
-        }
-        const guard = adminMutationGuard(request, effectiveEnv)
-        if (guard)
-          return guard
-
-        const root = controlPlaneDirFromEnv(effectiveEnv)
-        if (!root) {
-          return Response.json(adminApiErrorPayload('control_plane_dir_required'), {
-            status: 409,
-            headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
-          })
-        }
-
-        try {
-          const result = await runApprovedAssignmentApplyJob(root, decodeURIComponent(applyMatch[1]!))
-          return Response.json({ job: result })
-        }
-        catch (error) {
-          return adminApiErrorResponse(error, 409)
-        }
-      }
-
-      const pairMatch = url.pathname.match(/^\/api\/assignments\/([^/]+)\/pair$/)
-      if (pairMatch) {
-        if (request.method !== 'POST') {
-          return methodNotAllowed('POST')
-        }
-        const guard = adminMutationGuard(request, effectiveEnv)
-        if (guard)
-          return guard
-
-        const root = controlPlaneDirFromEnv(effectiveEnv)
-        if (!root) {
-          return Response.json(adminApiErrorPayload('control_plane_dir_required'), {
-            status: 409,
-            headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
-          })
-        }
-
-        try {
-          const result = await runAssignmentPairJob(root, decodeURIComponent(pairMatch[1]!))
-          return Response.json({ pair: result })
-        }
-        catch (error) {
-          return adminApiErrorResponse(error, 409)
-        }
-      }
-
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
-        return methodNotAllowed('GET, HEAD')
-      }
-
-      const htmlGuard = await adminHtmlNavigationGuard(request, url, effectiveEnv)
-      if (htmlGuard)
-        return htmlGuard
+      const runtimeResponse = await handleAdminRuntimeRequest(request, effectiveEnv, {
+        htmlNavigationGuard: true,
+        staticBoundaryMethodGuard: true,
+      })
+      if (runtimeResponse)
+        return runtimeResponse
 
       let filePath = resolveStaticPath(url.pathname)
       if (filePath === null) {
@@ -229,6 +102,152 @@ export function createServer(options: { hostname?: string, port?: number } = {})
       })
     },
   })
+}
+
+export async function handleAdminRuntimeRequest(request: Request, env: NodeJS.ProcessEnv = process.env, options: AdminRuntimeRequestOptions = {}): Promise<Response | null> {
+  const url = new URL(request.url)
+
+  if (url.pathname === '/healthz') {
+    return Response.json({ ok: true, surface: 'aiworker-web', runtime: 'bun' })
+  }
+
+  if (url.pathname === '/login') {
+    if (request.method !== 'GET' && request.method !== 'HEAD')
+      return methodNotAllowed('GET, HEAD')
+    return loginResponse(request, env)
+  }
+
+  if (url.pathname === '/callback') {
+    if (request.method !== 'GET' && request.method !== 'HEAD')
+      return methodNotAllowed('GET, HEAD')
+    return callbackResponse(request, env)
+  }
+
+  if (url.pathname === '/logout') {
+    if (request.method !== 'GET' && request.method !== 'POST' && request.method !== 'HEAD')
+      return methodNotAllowed('GET, POST, HEAD')
+    return logoutResponse(request, env)
+  }
+
+  if (url.pathname === '/api/auth/session') {
+    if (request.method !== 'GET' && request.method !== 'HEAD')
+      return methodNotAllowed('GET, HEAD')
+    const auth = authorizeAdminRead(request, env)
+    return Response.json({
+      auth: adminAuthBootstrapStatus(request, env),
+      authorized: auth.ok,
+    })
+  }
+
+  if (url.pathname === '/api/admin-data') {
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return methodNotAllowed('GET, HEAD')
+    }
+    const guard = adminReadGuard(request, env)
+    if (guard)
+      return guard
+
+    try {
+      return Response.json(await loadAdminDataApiPayload(undefined, request, env))
+    }
+    catch {
+      return Response.json(adminApiErrorPayload('control_plane_unavailable'), {
+        status: 500,
+        headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
+      })
+    }
+  }
+
+  const approvalMatch = url.pathname.match(/^\/api\/approvals\/([^/]+)$/)
+  if (approvalMatch) {
+    if (request.method !== 'POST') {
+      return methodNotAllowed('POST')
+    }
+    const guard = adminMutationGuard(request, env)
+    if (guard)
+      return guard
+
+    const root = controlPlaneDirFromEnv(env)
+    if (!root) {
+      return Response.json(adminApiErrorPayload('control_plane_dir_required'), {
+        status: 409,
+        headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
+      })
+    }
+
+    const input = await request.json().catch(() => ({})) as Parameters<typeof appendApprovalDecision>[2]
+    try {
+      const record = await appendApprovalDecision(root, decodeURIComponent(approvalMatch[1]!), input)
+      return Response.json({ approval: record })
+    }
+    catch (error) {
+      return adminApiErrorResponse(error, 409)
+    }
+  }
+
+  const applyMatch = url.pathname.match(/^\/api\/assignments\/([^/]+)\/apply$/)
+  if (applyMatch) {
+    if (request.method !== 'POST') {
+      return methodNotAllowed('POST')
+    }
+    const guard = adminMutationGuard(request, env)
+    if (guard)
+      return guard
+
+    const root = controlPlaneDirFromEnv(env)
+    if (!root) {
+      return Response.json(adminApiErrorPayload('control_plane_dir_required'), {
+        status: 409,
+        headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
+      })
+    }
+
+    try {
+      const result = await runApprovedAssignmentApplyJob(root, decodeURIComponent(applyMatch[1]!))
+      return Response.json({ job: result })
+    }
+    catch (error) {
+      return adminApiErrorResponse(error, 409)
+    }
+  }
+
+  const pairMatch = url.pathname.match(/^\/api\/assignments\/([^/]+)\/pair$/)
+  if (pairMatch) {
+    if (request.method !== 'POST') {
+      return methodNotAllowed('POST')
+    }
+    const guard = adminMutationGuard(request, env)
+    if (guard)
+      return guard
+
+    const root = controlPlaneDirFromEnv(env)
+    if (!root) {
+      return Response.json(adminApiErrorPayload('control_plane_dir_required'), {
+        status: 409,
+        headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
+      })
+    }
+
+    try {
+      const result = await runAssignmentPairJob(root, decodeURIComponent(pairMatch[1]!))
+      return Response.json({ pair: result })
+    }
+    catch (error) {
+      return adminApiErrorResponse(error, 409)
+    }
+  }
+
+  if (request.method !== 'GET' && request.method !== 'HEAD' && options.staticBoundaryMethodGuard) {
+    return methodNotAllowed('GET, HEAD')
+  }
+
+  if (options.htmlNavigationGuard) {
+    const htmlGuard = await adminHtmlNavigationGuard(request, url, env)
+    if (htmlGuard)
+      return htmlGuard
+  }
+
+  return null
 }
 
 function adminReadGuard(request: Request, env: NodeJS.ProcessEnv): Response | null {
