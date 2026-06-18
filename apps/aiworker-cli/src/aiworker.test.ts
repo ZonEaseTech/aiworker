@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { $ } from 'bun'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, executePaseoPair, executeProvisionPlan, resolveAisshCredentials, resolveAisshInvocation } from './aiworker'
+import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, createWebLaunchPlan, executePaseoPair, executeProvisionPlan, resolveAisshCredentials, resolveAisshInvocation, runWebConsole } from './aiworker'
 
 const cliPath = path.resolve(import.meta.dirname, 'aiworker.ts')
 const packageJsonPath = path.resolve(import.meta.dirname, '../package.json')
@@ -42,6 +42,14 @@ async function readCliPackageVersion() {
   return packageJson.version
 }
 
+async function createPackagedWebRuntime() {
+  const root = await mkdtemp(path.join(tmpdir(), 'aiworker-packaged-web-'))
+  await mkdir(path.join(root, 'web/static'), { recursive: true })
+  await writeFile(path.join(root, 'web/server.js'), 'console.log("web server")\n')
+  await writeFile(path.join(root, 'web/static/index.html'), '<div id="root"></div>\n')
+  return root
+}
+
 function planArgs(descriptorPath: string) {
   return [
     '--user',
@@ -66,10 +74,12 @@ describe('aiworker thin CLI', () => {
     expect(output).toContain('$ aiworker plan')
     expect(output).toContain('$ aiworker apply')
     expect(output).toContain('$ aiworker pair')
+    expect(output).toContain('$ aiworker web')
     expect(output).toContain('doctor')
     expect(output).toContain('plan')
     expect(output).toContain('apply')
     expect(output).toContain('pair')
+    expect(output).toContain('web')
     expect(output).not.toContain('describe')
     expect(output).not.toContain('plan-provision')
     expect(output).not.toContain('--paseo-home')
@@ -94,6 +104,113 @@ describe('aiworker thin CLI', () => {
   test('reads CLI version from package metadata', async () => {
     const output = await $`bun ${cliPath} --version`.text()
     expect(output.trim()).toContain(await readCliPackageVersion())
+  })
+
+  test('web launch plan starts the packaged admin console on loopback and opens the browser', async () => {
+    const root = await createPackagedWebRuntime()
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-web-control-plane-')), 'records')
+
+    const plan = createWebLaunchPlan({ browser: 'firefox', controlPlaneDir }, [root])
+
+    expect(plan.cwd).toBe(root)
+    expect(plan.source).toBe('packaged')
+    expect(plan.url).toBe('http://127.0.0.1:20831')
+    expect(plan.open).toBe(true)
+    expect(plan.args).toEqual(['bun', path.join(root, 'web/server.js')])
+    expect(plan.env.AIWORKER_WEB_HOST).toBe('127.0.0.1')
+    expect(plan.env.AIWORKER_WEB_DIST).toBe(path.join(root, 'web/static'))
+    expect(plan.env.PORT).toBe('20831')
+    expect(plan.env.BROWSER).toBe('firefox')
+    expect(plan.browser).toBe('firefox')
+    expect(plan.env.AIWORKER_CONTROL_PLANE_DIR).toBe(controlPlaneDir)
+  })
+
+  test('web launch can avoid browser opening for terminal-only runs', () => {
+    const root = path.resolve(import.meta.dirname, '../../..')
+
+    const plan = createWebLaunchPlan({ browser: 'none' }, [root])
+
+    expect(plan.open).toBe(false)
+    expect(plan.args).toEqual(['bun', 'run', 'vite', '--host', '127.0.0.1', '--port', '20831', '--strictPort'])
+  })
+
+  test('web launch falls back to source checkout Vite only when packaged artifact is absent', () => {
+    const root = path.resolve(import.meta.dirname, '../../..')
+
+    const plan = createWebLaunchPlan({ browser: 'none' }, [root])
+
+    expect(plan.source).toBe('source-checkout')
+    expect(plan.cwd).toBe(path.join(root, 'apps/aiworker-web'))
+    expect(plan.env.AIWORKER_WEB_DIST).toBeUndefined()
+  })
+
+  test('web launch does not treat the caller cwd as a packaged runtime', async () => {
+    const callerRoot = await createPackagedWebRuntime()
+    process.chdir(callerRoot)
+
+    const plan = createWebLaunchPlan({ browser: 'none' })
+
+    expect(plan.source).toBe('source-checkout')
+    expect(plan.cwd).toEndWith('apps/aiworker-web')
+  })
+
+  test('web launch rejects remote binding unless explicitly allowed', async () => {
+    const root = await createPackagedWebRuntime()
+
+    expect(() => createWebLaunchPlan({ host: '0.0.0.0' }, [root])).toThrow('without --allow-remote')
+
+    const plan = createWebLaunchPlan({ allowRemote: true, host: '0.0.0.0', open: false, port: 20999 }, [root])
+    expect(plan.args).toEqual(['bun', path.join(root, 'web/server.js')])
+    expect(plan.env.AIWORKER_WEB_ALLOW_REMOTE).toBe('1')
+    expect(plan.url).toBe('http://0.0.0.0:20999')
+  })
+
+  test('web launch explains when the private web app is unavailable to the CLI package', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-no-web-'))
+
+    expect(() => createWebLaunchPlan({}, [root])).toThrow('AIWorker Web runtime not found')
+  })
+
+  test('runWebConsole inherits stdio and reports non-zero server exits', async () => {
+    const calls: { args: string[], options: { cwd: string, env: NodeJS.ProcessEnv, stderr: string, stdin: string, stdout: string } }[] = []
+    const plan = createWebLaunchPlan({ browser: 'none' }, [await createPackagedWebRuntime()])
+
+    await runWebConsole(plan, {
+      spawn(args, options) {
+        calls.push({ args, options })
+        return { exited: Promise.resolve(0) }
+      },
+    })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.args[0]).toBe('bun')
+    expect(calls[0]!.args[1]).toEndWith('web/server.js')
+    expect(calls[0]!.options.cwd).toBe(plan.cwd)
+    expect(calls[0]!.options.stdout).toBe('inherit')
+    expect(calls[0]!.options.stderr).toBe('inherit')
+    expect(calls[0]!.options.stdin).toBe('inherit')
+
+    await expect(runWebConsole(plan, {
+      spawn() {
+        return { exited: Promise.resolve(42) }
+      },
+    })).rejects.toThrow('AIWorker Web exited with code 42')
+  })
+
+  test('runWebConsole opens the browser itself for packaged launches', async () => {
+    const opened: { browser?: string, url: string }[] = []
+    const plan = createWebLaunchPlan({ browser: 'firefox' }, [await createPackagedWebRuntime()])
+
+    await runWebConsole(plan, {
+      openBrowser(url, browser) {
+        opened.push({ browser, url })
+      },
+      spawn() {
+        return { exited: Promise.resolve(0) }
+      },
+    })
+
+    expect(opened).toEqual([{ browser: 'firefox', url: 'http://127.0.0.1:20831' }])
   })
 
   test('plan defaults to a concise human preview without dumping the full script', async () => {

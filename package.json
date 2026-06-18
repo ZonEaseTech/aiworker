@@ -21,7 +21,7 @@
     "typecheck": "bun run --filter '*' typecheck && bun run typecheck:scripts",
     "test": "bun run --filter '*' test && bun run test:contracts",
     "test:aiworker": "bun run --filter '@zonease/aiworker-cli' test && bun run --filter '@zonease/aiworker-control' test",
-    "build": "bun run --filter '@zonease/aiworker-cli' build && bun run build:aiworker-web && bun run build:official-souls",
+    "build": "bun run build:aiworker && bun run build:official-souls",
     "build:aiworker": "bun run --filter '@zonease/aiworker-cli' build",
     "build:official-souls": "bun scripts/official-soul-dist.ts",
     "smoke:dist-release": "bun run --filter '@zonease/aiworker-cli' smoke:dist-release",

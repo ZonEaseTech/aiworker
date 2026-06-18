@@ -24,7 +24,7 @@ const retiredAiworkerSurfaces = [
 export default antfu({
   typescript: true,
   react: false,
-  ignores: ['dist', 'node_modules', '.agents', '.omx', '.serena', 'docs'],
+  ignores: ['dist', '**/dist/**', '**/dist-server/**', 'node_modules', '.agents', '.omx', '.serena', 'docs'],
 }, {
   files: ['**/*.{ts,tsx}'],
   rules: {

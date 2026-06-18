@@ -19,6 +19,9 @@ const MAX_ERROR_STREAM_CHARS = 2000
 const PLAN_EXAMPLE = '$ aiworker plan --user alice@example.com --dedicated-target-user --target aissh:server-1 --environment env-alice --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json'
 const APPLY_EXAMPLE = '$ aiworker apply --yes --user alice@example.com --dedicated-target-user --target aissh:server-1 --environment env-alice --provider codex-default --soul souls/aiworker-freeform/dist/soul.descriptor.json'
 const PAIR_EXAMPLE = '$ aiworker pair --user alice@example.com --dedicated-target-user --target aissh:server-1 --soul souls/aiworker-freeform/dist/soul.descriptor.json'
+const WEB_EXAMPLE = '$ aiworker web --control-plane-dir ./tmp/control-plane'
+const DEFAULT_WEB_HOST = '127.0.0.1'
+const DEFAULT_WEB_PORT = 20831
 
 interface AisshInvocation {
   file: string
@@ -28,6 +31,27 @@ interface AisshInvocation {
 
 export interface AisshExecutor {
   execFile: (file: string, args: string[], options: { cwd: string, env: NodeJS.ProcessEnv, maxBuffer: number }) => Promise<{ stderr?: string, stdout: string }>
+}
+
+export interface WebLaunchPlan {
+  args: string[]
+  browser?: string
+  cwd: string
+  env: NodeJS.ProcessEnv
+  open: boolean
+  source: 'packaged' | 'source-checkout'
+  url: string
+}
+
+export interface WebLauncher {
+  openBrowser?: (url: string, browser?: string) => Promise<void> | void
+  spawn: (args: string[], options: { cwd: string, env: NodeJS.ProcessEnv, stderr: 'inherit', stdin: 'inherit', stdout: 'inherit' }) => { exited: Promise<number> }
+}
+
+interface PackagedWebRuntime {
+  root: string
+  server: string
+  staticRoot: string
 }
 
 interface ProvisionExecutionOptions {
@@ -93,6 +117,7 @@ export function buildCli() {
   cli.example(PLAN_EXAMPLE)
   cli.example(APPLY_EXAMPLE)
   cli.example(PAIR_EXAMPLE)
+  cli.example(WEB_EXAMPLE)
 
   addProvisionOptions(cli.command('plan', 'Preview a Paseo workspace provisioning plan without changing the target')
     .usage('plan [options]'),
@@ -159,6 +184,21 @@ export function buildCli() {
         printJson(result)
       else
         printText(formatPairExecutionSummary(result))
+    })
+
+  cli.command('web', 'Start the private AIWorker Web admin console')
+    .usage('web [options]')
+    .option('--host <host>', `Web host to bind; defaults to ${DEFAULT_WEB_HOST}`)
+    .option('--port <port>', `Web port to bind; defaults to ${DEFAULT_WEB_PORT}`)
+    .option('--browser <name>', 'browser to open; pass "none" to disable opening')
+    .option('--control-plane-dir <path>', 'set AIWORKER_CONTROL_PLANE_DIR for live admin data')
+    .option('--allow-remote', 'allow non-loopback binding and set AIWORKER_WEB_ALLOW_REMOTE=1')
+    .example(WEB_EXAMPLE)
+    .example('$ aiworker web --browser none')
+    .action(async (options) => {
+      const plan = createWebLaunchPlan(options)
+      printText(formatWebLaunchPlanSummary(plan))
+      await runWebConsole(plan)
     })
 
   cli.command('doctor', 'Run local AIWorker CLI diagnostics without contacting a target')
@@ -368,11 +408,212 @@ function insertDescriptionSection(sections: { body: string, title?: string }[]):
       body: [
         '  Thin enterprise distribution CLI for Paseo workspaces.',
         '  AIWorker prepares assignments, aissh provisioning plans, and Soul file projection.',
-        '  Paseo owns workspace UI, sessions, logs, provider orchestration, and runtime behavior.',
+        '  AIWorker Web is an optional admin console for AIWorker-owned metadata.',
+        '  Paseo owns employee workspace UI, sessions, logs, provider orchestration, and runtime behavior.',
       ].join('\n'),
     },
     ...rest,
   ]
+}
+
+export function createWebLaunchPlan(options: Record<string, unknown>, searchRoots: string[] = [import.meta.dirname]): WebLaunchPlan {
+  const host = resolveWebHost(options)
+  const port = resolveWebPort(options)
+  const open = resolveWebOpen(options)
+  const controlPlaneDir = typeof options.controlPlaneDir === 'string' && options.controlPlaneDir.trim() !== ''
+    ? path.resolve(options.controlPlaneDir)
+    : undefined
+  const browser = typeof options.browser === 'string' && options.browser.trim() !== ''
+    ? options.browser.trim()
+    : undefined
+
+  if (!isLoopbackHost(host) && !options.allowRemote && process.env.AIWORKER_WEB_ALLOW_REMOTE !== '1') {
+    throw new Error([
+      `refusing to bind AIWorker Web to non-loopback host ${host} without --allow-remote`,
+      'Use the default loopback host for local admin work.',
+      'If an external admin boundary is already in place, rerun with --allow-remote to set AIWORKER_WEB_ALLOW_REMOTE=1.',
+    ].join('\n'))
+  }
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    AIWORKER_WEB_HOST: host,
+    PORT: String(port),
+    ...(controlPlaneDir ? { AIWORKER_CONTROL_PLANE_DIR: controlPlaneDir } : {}),
+    ...(!isLoopbackHost(host) || options.allowRemote ? { AIWORKER_WEB_ALLOW_REMOTE: '1' } : {}),
+  }
+  if (browser && browser.toLowerCase() !== 'none')
+    env.BROWSER = browser
+
+  const packaged = resolvePackagedWebRuntime(searchRoots)
+  if (packaged) {
+    return {
+      args: ['bun', packaged.server],
+      browser: browser && browser.toLowerCase() !== 'none' ? browser : undefined,
+      cwd: packaged.root,
+      env: {
+        ...env,
+        AIWORKER_WEB_DIST: packaged.staticRoot,
+      },
+      open,
+      source: 'packaged',
+      url: `http://${host}:${port}`,
+    }
+  }
+
+  const workspaceRoot = resolveAiworkerWorkspaceRoot(searchRoots)
+  if (!workspaceRoot) {
+    throw new Error([
+      'AIWorker Web runtime not found.',
+      'Rebuild the CLI package so dist/web/server.js and dist/web/static exist, or run from a source checkout that contains apps/aiworker-web.',
+      'Expected packaged artifact: web/server.js plus web/static/index.html.',
+    ].join('\n'))
+  }
+
+  const args = ['bun', 'run', 'vite', '--host', host, '--port', String(port), '--strictPort']
+  if (open)
+    args.push('--open')
+
+  return {
+    args,
+    browser: browser && browser.toLowerCase() !== 'none' ? browser : undefined,
+    cwd: path.join(workspaceRoot, 'apps', 'aiworker-web'),
+    env,
+    open,
+    source: 'source-checkout',
+    url: `http://${host}:${port}`,
+  }
+}
+
+function resolvePackagedWebRuntime(searchRoots: string[]): PackagedWebRuntime | null {
+  for (const root of searchRoots.flatMap(candidate => ancestorDirs(path.resolve(candidate)))) {
+    const server = path.join(root, 'web', 'server.js')
+    const staticRoot = path.join(root, 'web', 'static')
+    if (existsSync(server) && existsSync(path.join(staticRoot, 'index.html'))) {
+      return {
+        root,
+        server,
+        staticRoot,
+      }
+    }
+  }
+  return null
+}
+
+function resolveAiworkerWorkspaceRoot(searchRoots: string[]): string | null {
+  for (const root of searchRoots.flatMap(candidate => ancestorDirs(path.resolve(candidate)))) {
+    const webPackage = path.join(root, 'apps', 'aiworker-web', 'package.json')
+    if (existsSync(webPackage))
+      return root
+  }
+  return null
+}
+
+function ancestorDirs(start: string): string[] {
+  const dirs: string[] = []
+  let current = start
+  while (true) {
+    dirs.push(current)
+    const next = path.dirname(current)
+    if (next === current)
+      return dirs
+    current = next
+  }
+}
+
+function resolveWebHost(options: Record<string, unknown>): string {
+  const host = typeof options.host === 'string' && options.host.trim() !== ''
+    ? options.host.trim()
+    : DEFAULT_WEB_HOST
+  if (!/^[\w.:[\]-]+$/.test(host))
+    throw new Error(`invalid AIWorker Web host: ${host}`)
+  return host
+}
+
+function resolveWebPort(options: Record<string, unknown>): number {
+  const value = typeof options.port === 'number'
+    ? String(options.port)
+    : typeof options.port === 'string' && options.port.trim() !== ''
+      ? options.port.trim()
+      : String(DEFAULT_WEB_PORT)
+  if (!/^\d+$/.test(value))
+    throw new Error(`invalid AIWorker Web port: ${value}`)
+  const port = Number(value)
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65535)
+    throw new Error(`invalid AIWorker Web port: ${value}`)
+  return port
+}
+
+function resolveWebOpen(options: Record<string, unknown>): boolean {
+  const browser = typeof options.browser === 'string' ? options.browser.trim().toLowerCase() : ''
+  if (browser === 'none')
+    return false
+  return options.open !== false
+}
+
+function isLoopbackHost(host: string): boolean {
+  return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]'
+}
+
+function formatWebLaunchPlanSummary(plan: WebLaunchPlan): string {
+  return [
+    'Starting AIWorker Web admin console',
+    '',
+    `URL: ${plan.url}`,
+    `Source: ${plan.source === 'packaged' ? 'bundled CLI web artifact' : 'source checkout Vite dev server'} (${plan.cwd})`,
+    `Browser: ${plan.open ? 'open on startup' : 'not opened'}`,
+    plan.env.AIWORKER_CONTROL_PLANE_DIR ? `Control plane: ${plan.env.AIWORKER_CONTROL_PLANE_DIR}` : 'Control plane: fixture preview mode',
+    '',
+    'Press Ctrl-C to stop the Web server.',
+  ].join('\n')
+}
+
+export async function runWebConsole(plan: WebLaunchPlan, launcher: WebLauncher = createDefaultWebLauncher()): Promise<void> {
+  const child = launcher.spawn(plan.args, {
+    cwd: plan.cwd,
+    env: plan.env,
+    stderr: 'inherit',
+    stdin: 'inherit',
+    stdout: 'inherit',
+  })
+  if (plan.open && plan.source === 'packaged')
+    await openWebConsoleBrowser(plan, launcher)
+  const exitCode = await child.exited
+  if (exitCode !== 0)
+    throw new Error(`AIWorker Web exited with code ${exitCode}`)
+}
+
+async function openWebConsoleBrowser(plan: WebLaunchPlan, launcher: WebLauncher): Promise<void> {
+  try {
+    await launcher.openBrowser?.(plan.url, plan.browser)
+  }
+  catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    process.stderr.write(`AIWorker Web browser open failed; open ${plan.url} manually. ${reason}\n`)
+  }
+}
+
+function createDefaultWebLauncher(): WebLauncher {
+  return {
+    openBrowser(url, browser) {
+      const args = browser ? [browser, url] : browserOpenCommand(url)
+      Bun.spawn(args, {
+        stderr: 'ignore',
+        stdout: 'ignore',
+      })
+    },
+    spawn(args, options) {
+      return Bun.spawn(args, options)
+    },
+  }
+}
+
+function browserOpenCommand(url: string): string[] {
+  if (process.platform === 'darwin')
+    return ['open', url]
+  if (process.platform === 'win32')
+    return ['cmd', '/c', 'start', '', url]
+  return ['xdg-open', url]
 }
 
 function formatProvisionPlanSummary(plan: ProvisionPlan, options: { showScript?: boolean } = {}): string {

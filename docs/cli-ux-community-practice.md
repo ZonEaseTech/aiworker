@@ -46,6 +46,12 @@
 | Salesforce CLI `doctor`, https://developer.salesforce.com/docs/platform/salesforce-cli-reference/guide/cli_reference_doctor.html | `doctor` 用于收集 CLI 配置并运行诊断测试，发现环境问题。 | `doctor` 可加入，但只能做本地 CLI / env / aissh / descriptor 诊断，不得联系生产目标或检查 Paseo session。 |
 | Docker `info`, https://docs.docker.com/reference/cli/docker/system/info/ | `info` 展示系统级安装/daemon 信息。 | AIWorker 当前无自有 daemon，不应新增让人误会有 AIWorker runtime 的 `info`。 |
 | Docker `version`, https://docs.docker.com/reference/cli/docker/version/ | `--version` 是 CLI 版本，`version` 命令可展示多个组件版本。 | 保留 `--version`；只有当 AIWorker 真能检查 aissh/Paseo/provider CLI 版本时，才考虑 `version` 子命令。 |
+| Prisma Studio, https://www.prisma.io/docs/studio/getting-started | `npx prisma studio` 是 CLI 显式子命令；它启动本地 Studio server 并在默认浏览器打开 `http://localhost:5555`。 | AIWorker Web 应该由显式 `aiworker web` 拉起，而不是藏在 `plan/apply` 副作用里；默认可以打开浏览器。 |
+| Playwright HTML report, https://playwright.dev/docs/test-reporters | `npx playwright show-report` 会 serve 本地报告；官方暴露 open/host/port 配置和环境变量。 | Web UI 启动命令应明确 host/port/open 行为，并给 `--browser none` / host / port 控制。 |
+| Vite CLI, https://vite.dev/guide/cli | dev/preview CLI 支持 `--host`、`--port`、`--open`、`--strictPort`。 | AIWorker Web 启动器应直接传 Vite 的标准参数，不自创端口探测语义。 |
+| Vite server.host, https://vite.dev/config/server-options | `0.0.0.0` / `true` 会监听 LAN 和 public addresses；官方把 host 暴露作为显式配置。 | AIWorker Web 默认必须绑定 loopback；非 loopback 要显式 `--allow-remote`，并保持 Web 自身认证边界。 |
+| Bun `Bun.spawn`, https://bun.com/docs/guides/process/spawn | `Bun.spawn()` 支持 `cwd` / `env` 并可等待 `proc.exited`。 | CLI 可以用 Bun 子进程启动发布包内置 Web server；源码 checkout fallback 可启动 Vite，并等待 server 生命周期。 |
+| Bun stdout inherit, https://bun.com/docs/guides/process/spawn-stdout | 子进程输出可用 `stdout: "inherit"` 直接传给父进程。 | 长跑 dev server 的日志应继承到 CLI 终端，而不是被 CLI 捕获后重排。 |
 
 ## 决策表
 
@@ -57,6 +63,7 @@
 | 旧 `provision` | 不作为最终推荐命令；可保留为隐藏/弃用 alias 到 `apply`，但不能绕过新执行确认策略。 | `apply` 对 preview/execute 模型更清晰；真实执行应有显式确认。 | 现有行为直接执行；若保留 alias，测试必须证明不会悄悄扩大风险。 |
 | 裸 `describe` | 从普通公开命令面移除；产品边界放入 help/README/contract tests。 | Kubernetes `describe` 是具体资源详情，不是产品介绍。 | 当前没有 AIWorker-owned resource read API；边界 JSON 应由测试覆盖而不是用户命令。 |
 | `doctor` | 加入 `aiworker doctor`，但范围限定为本地诊断。 | Salesforce CLI `doctor` 是诊断 CLI 环境问题。 | 可检查 CLI package、aissh resolution、`AISSH_TOKEN` 是否存在、source checkout `.env` 结构、可选 Soul descriptor/template；不得连接目标机或读取 secret 值。 |
+| `web` | 加入 `aiworker web` 作为 AIWorker Web admin console 的一键启动命令。 | Prisma Studio / Playwright show-report 都把本地 Web UI 做成显式 CLI 子命令；Vite 提供标准 host/port/open 参数。 | Web 源码仍是 private app；发布后的 CLI 包内置 `web/server.js` 与 `web/static/**`，源码 checkout 里的 Vite 仅作为开发 fallback。 |
 | `status` | 暂不加入。 | GitHub CLI `status` 报告它拥有的 auth 状态。 | AIWorker 当前不存 runtime/session 状态；加入会暗示 AIWorker 可观察 Paseo runtime。 |
 | `info` | 暂不加入。 | Docker `info` 是 daemon/system-wide 信息。 | AIWorker 没有 employee runtime/daemon；容易复活旧 Worker 心智。 |
 | 默认输出 | 改为人类可读摘要。 | CLI Guidelines：human-readable output is paramount。 | 当前 plan JSON 很大；人类默认应只显示目标、workspace、provider、文件数、必需 env、下一步。 |
@@ -72,6 +79,7 @@ aiworker --help
 aiworker --version
 aiworker plan [options] [--json] [--show-script]
 aiworker apply [options] [--yes|--auto-approve] [--json]
+aiworker web [--host <host>] [--port <port>] [--browser none|<name>] [--control-plane-dir <path>]
 aiworker doctor [--soul <dist/soul.descriptor.json>] [--json]
 ```
 

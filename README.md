@@ -82,7 +82,7 @@ snapshot:
 export AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane
 export AIWORKER_WEB_ADMIN_TOKEN=<admin-token>
 bun run setup:logto                  # optional but required before remote/browser SSO access
-bun run dev:aiworker-web
+bun apps/aiworker-cli/src/aiworker.ts web
 ```
 
 `bun run setup:logto` uses Logto M2M credentials from the current checkout or
@@ -96,8 +96,14 @@ For a local token-only run:
 ```bash
 AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane \
 AIWORKER_WEB_ADMIN_TOKEN=<admin-token> \
-bun run dev:aiworker-web
+bun apps/aiworker-cli/src/aiworker.ts web
 ```
+
+The published `aiworker web` starts the bundled private Web admin console on
+loopback `http://127.0.0.1:20831` and opens the browser by default. From a
+source checkout, the same CLI surface falls back to the Vite dev server. Pass
+`--browser none` for terminal-only runs, `--port <port>` to change the port, or
+use `bun run dev:aiworker-web` only when working directly on the Web package.
 
 Without `AIWORKER_CONTROL_PLANE_DIR`, Web runs in fixture preview mode: approval
 buttons update only the current page, and apply/pair actions do not call `aissh`

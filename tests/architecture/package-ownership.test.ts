@@ -67,7 +67,9 @@ describe('Paseo thin-layer package ownership', () => {
 
     expect(aiworkerWeb.name).toBe('@zonease/aiworker-web')
     expect(aiworkerWeb.private).toBe(true)
-    expect(aiworkerWeb.scripts?.['build:server']).toContain('bun build --compile')
+    expect(aiworkerWeb.scripts?.['build:server']).toContain('bun build --target=bun')
+    expect(aiworkerWeb.scripts?.['build:server']).toContain('dist-server/server.js')
+    expect(aiworkerWeb.scripts?.['build:server']).not.toContain('--compile')
   })
 
   test('project workflow instructions do not revive retired dual-CLI or sampling surfaces', () => {
