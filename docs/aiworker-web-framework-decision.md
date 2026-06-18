@@ -26,9 +26,8 @@ It must not render or proxy Paseo workspace UI, employee sessions, transcripts, 
 
 ### Bun packaging target
 
-Official Bun docs support compiling a TypeScript/JavaScript entry to a standalone executable with `bun build --compile` and cross-targeting with `--target`.
+Official Bun docs support bundling a TypeScript/JavaScript entry for the Bun runtime with `bun build --target=bun`. AIWorker Web uses a portable Bun-runnable server bundle plus Vite static assets for the single npm CLI package, rather than a platform-specific compiled executable.
 
-- Source: https://bun.sh/docs/bundler/executables
 - Source: https://bun.sh/docs/bundler
 
 Local proof in `tmp/framework-proof` verified the intended deployment shape:
@@ -36,13 +35,13 @@ Local proof in `tmp/framework-proof` verified the intended deployment shape:
 ```bash
 cd tmp/framework-proof
 bun run build
-bun run compile
-PORT=20831 ./proof-server
+bun build --target=bun server.ts --outfile dist-server/server.js
+PORT=20831 bun dist-server/server.js
 curl -fsS http://127.0.0.1:20831/
 curl -fsS http://127.0.0.1:20831/admin/assignments
 ```
 
-Result: Vite emitted static assets under `dist/`; Bun compiled the static server; the compiled server served both `/` and deep-link fallback routes. The first proof attempt also exposed an important Bun compile constraint: `import.meta.dir` inside a compiled executable points into Bun's embedded filesystem (`/$bunfs/...`), so the production server must resolve static assets from `process.cwd()` or an explicit `AIWORKER_WEB_DIST` instead of assuming source-relative files.
+Result: Vite emitted static assets under `dist/`; Bun bundled the static server to `dist-server/server.js`; the bundled server served both `/` and deep-link fallback routes. The production server resolves static assets from `process.cwd()/dist` or explicit `AIWORKER_WEB_DIST`, which also lets the CLI package serve assets from `web/static/**`.
 
 ### Vite fit
 
@@ -77,7 +76,7 @@ Next.js is viable for full-stack React apps, but it is not the smallest reliable
 - Official Next.js deployment docs list Node.js server, Docker, static export, and adapters as deployment paths. Node/Docker/adapter paths add runtime/deployment complexity that AIWorker Web does not need yet.
 - Next.js static export can be served by any static web server, but it limits features that require a server. If we are choosing a static/admin SPA shape, Vite is the simpler direct tool.
 - Bun's official Next.js guide shows Bun can create, install, build, and start Next.js apps through `bun --bun next ...`; this is runtime support, not evidence that a Next app becomes a simple Bun-compiled executable.
-- The Next.js Bun adapter exists, but current public adapter documentation describes a `bun-dist/` runtime package that still boots Next.js from the project directory and `.next` output, so it is not a single self-contained Bun compile artifact for this project.
+- The Next.js Bun adapter exists, but current public adapter documentation describes a `bun-dist/` runtime package that still boots Next.js from the project directory and `.next` output, so it is not the minimal portable Bun server plus static asset artifact for this project.
 
 Sources:
 

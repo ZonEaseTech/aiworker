@@ -6,10 +6,10 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 20831 --strictPort",
     "build": "tsc -b && vite build",
-    "build:server": "bun build --compile src/server.ts --outfile dist/aiworker-web",
+    "build:server": "rm -rf dist-server && bun build --target=bun src/server.ts --outfile dist-server/server.js",
     "build:release": "bun run build && bun run build:server",
     "start": "bun src/server.ts",
-    "start:dist": "./dist/aiworker-web",
+    "start:dist": "bun dist-server/server.js",
     "lint": "eslint . --config ../../eslint.config.ts",
     "typecheck": "tsc -b --noEmit",
     "test": "bun test",

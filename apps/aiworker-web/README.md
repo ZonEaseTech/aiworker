@@ -36,7 +36,9 @@ AIWORKER_WEB_ADMIN_TOKEN=<admin-token> \
 bun run dev:aiworker-web
 ```
 
-发布构建使用 Bun 编译出的静态服务：
+发布构建使用 Vite 静态资产和 portable Bun server bundle；CLI release 会把
+`dist-server/server.js` 与 `dist/**` 打包到 `@zonease/aiworker-cli` 的
+`web/server.js` / `web/static/**`：
 
 ```bash
 bun run build:aiworker-web

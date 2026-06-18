@@ -42,7 +42,9 @@ describe('AIWorker Web admin surface contract', () => {
     expect(deps.vite).toBeDefined()
     expect(deps.react).toBeDefined()
     expect(deps['react-router']).toBeDefined()
-    expect(pkg.scripts['build:server']).toContain('bun build --compile')
+    expect(pkg.scripts['build:server']).toContain('bun build --target=bun')
+    expect(pkg.scripts['build:server']).toContain('dist-server/server.js')
+    expect(pkg.scripts['build:server']).not.toContain('--compile')
     expect(pkg.scripts['build:release']).toContain('build:server')
   })
 
