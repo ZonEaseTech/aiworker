@@ -9,9 +9,10 @@ import {
   LocalFileControlPlaneStore,
 } from '@zonease/aiworker-control'
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { createServer as createViteDevServer } from 'vite'
 
 import { adminBootstrapStatus, resolveAiworkerCliCommand, summarizeApplyJobResult } from '@/admin-api'
-import { assertServerHostAllowed, contentType, createServer, resolveStaticPath, serverHostname, staticRoot } from '@/server'
+import { assertServerHostAllowed, contentType, createServer, handleAdminRuntimeRequest, resolveStaticPath, serverHostname, staticRoot } from '@/server'
 
 const authEnvKeys = [
   'AIWORKER_ALLOWED_EMAIL_DOMAINS',
@@ -158,6 +159,67 @@ describe('Bun static server helpers', () => {
     expect(contentType('index.html')).toBe('text/html; charset=utf-8')
     expect(contentType('assets/app.css')).toBe('text/css; charset=utf-8')
     expect(contentType('assets/app.woff2')).toBe('font/woff2')
+  })
+
+  test('handles admin API requests through the shared runtime handler without HTML fallback', async () => {
+    const response = await handleAdminRuntimeRequest(new Request('http://127.0.0.1:20831/api/admin-data'), {})
+
+    if (!response)
+      throw new Error('admin runtime handler did not handle /api/admin-data')
+
+    const body = await response.text()
+    const payload = JSON.parse(body)
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(body).not.toContain('<!doctype')
+    expect(payload.source).toBe('fixture')
+  })
+
+  test('serves admin API JSON from the Vite dev server instead of the SPA fallback', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    delete process.env.AIWORKER_CONTROL_PLANE_DIR
+
+    const appRoot = path.resolve(import.meta.dirname, '..')
+    const vite = await createViteDevServer({
+      configFile: path.join(appRoot, 'vite.config.ts'),
+      logLevel: 'silent',
+      root: appRoot,
+      server: {
+        host: '127.0.0.1',
+        port: 0,
+        strictPort: false,
+      },
+    })
+
+    try {
+      await vite.listen()
+      const baseUrl = vite.resolvedUrls?.local[0]
+      if (!baseUrl)
+        throw new Error('Vite did not report a local dev URL')
+
+      const response = await fetch(new URL('/api/admin-data', baseUrl))
+      const body = await response.text()
+      const payload = JSON.parse(body)
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toContain('application/json')
+      expect(body).not.toContain('<!doctype')
+      expect(payload.source).toBe('fixture')
+
+      const mutationFallback = await fetch(new URL('/assignments', baseUrl), {
+        method: 'POST',
+      })
+      expect(mutationFallback.status).toBe(405)
+      expect(mutationFallback.headers.get('allow')).toBe('GET, HEAD')
+    }
+    finally {
+      await vite.close()
+      if (previousDir === undefined)
+        delete process.env.AIWORKER_CONTROL_PLANE_DIR
+      else
+        process.env.AIWORKER_CONTROL_PLANE_DIR = previousDir
+    }
   })
 
   test('reports control-plane load failures as unavailable instead of fixture preview', async () => {
