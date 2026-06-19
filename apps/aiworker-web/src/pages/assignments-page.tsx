@@ -48,14 +48,14 @@ export function AssignmentsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        eyebrow="Assignments"
-        title="员工 workspace 分配"
-        description="查看 assignment lifecycle、workspace ref、provider profile 和 redacted handoff。这里只管理元数据，不进入 Paseo workspace。"
+        eyebrow="员工开通"
+        title="员工开通记录"
+        description="查看每位员工是否已经能使用 AIWorker、下一步要处理什么，以及是否需要管理员介入。"
       />
       <Card>
         <CardHeader>
           <CardTitle>筛选</CardTitle>
-          <CardDescription>按员工、团队、workspace、Soul 或 target 搜索。</CardDescription>
+          <CardDescription>按员工、团队、能力或设备负责人搜索。</CardDescription>
         </CardHeader>
         <CardContent>
           <FieldGroup className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_220px]">
@@ -65,7 +65,7 @@ export function AssignmentsPage() {
                 id="assignment-search"
                 value={query}
                 onChange={event => setQuery(event.target.value)}
-                placeholder="alice@example.com / finance / workspace"
+                placeholder="alice@example.com / 财务 / AIWorker Freeform"
               />
             </Field>
             <Field>
@@ -90,13 +90,13 @@ export function AssignmentsPage() {
       </Card>
       {filtered.length
         ? (
-            <AssignmentTableCard title="Assignment ledger" assignments={filtered} />
+            <AssignmentTableCard title="全部员工" assignments={filtered} />
           )
         : (
             <Empty className="border">
               <EmptyHeader>
                 <EmptyTitle>没有匹配结果</EmptyTitle>
-                <EmptyDescription>调整筛选条件，或从 Provisioning 创建新的 assignment plan。</EmptyDescription>
+                <EmptyDescription>调整筛选条件，或回到总览为员工准备开通。</EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
                 <Button

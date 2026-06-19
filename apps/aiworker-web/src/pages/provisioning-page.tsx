@@ -1,4 +1,13 @@
-import type { AdminConsoleData, ApprovalStatus } from '@/lib/admin-data'
+import type {
+  AdminConsoleData,
+  ApprovalStatus,
+  AssignmentSummary,
+  PaseoEnvironmentSummary,
+  ProviderProfileSummary,
+  ProvisioningApprovalSummary,
+  SoulReleaseSummary,
+  Tone,
+} from '@/lib/admin-data'
 import type { AdminRemediation } from '@/lib/admin-remediation'
 import { CheckCircleIcon, PlayCircleIcon, WarningCircleIcon } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
@@ -8,7 +17,7 @@ import { RemediationAlert } from '@/components/remediation-alert'
 import { StatusBadge } from '@/components/status-badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from '@/components/ui/field'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
@@ -25,6 +34,7 @@ import {
   getTraceEventsForAssignment,
   providerStatusMeta,
   releaseStatusMeta,
+  statusMeta,
 } from '@/lib/admin-data'
 import { useAdminData } from '@/lib/admin-data-context'
 import { adminRemediation } from '@/lib/admin-remediation'
@@ -180,29 +190,58 @@ export function ProvisioningPage() {
     setSelectedProvider(selected.providerProfileId)
   }
 
+  const provisioningStages = buildProvisioningStages({
+    approval,
+    applySteps,
+    assignment,
+    effectiveApprovalStatus,
+    pairingOutput,
+    pairingPreconditionReady,
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        eyebrow="Provisioning"
-        title="生成 assignment plan"
-        description="该页面只预览 AIWorker 将执行的 aissh/projection/handoff 元数据，不会展示 provider secret，也不会连接 Paseo runtime。"
-        actions={(
-          <Button size="sm">
-            <PlayCircleIcon data-icon="inline-start" weight="duotone" />
-            预览审批计划
-          </Button>
-        )}
+        eyebrow="员工开通"
+        title="处理员工开通"
+        description="按管理员能理解的顺序推进：选择员工、确认能力和设备、确认开通、开始执行，最后把一次性入口发给员工。"
       />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+
+      <Card className="border-primary/30">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle>当前员工</CardTitle>
+              <CardDescription>先确认给谁开通、开通什么能力、下一步做什么。</CardDescription>
+            </div>
+            <CardAction>
+              <StatusBadge tone={assignment ? statusMeta[assignment.status].tone : 'warning'}>
+                {assignment ? statusMeta[assignment.status].label : '待选择'}
+              </StatusBadge>
+            </CardAction>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <SelectedAssignmentSummary
+            assignment={assignment}
+            environment={environment}
+            provider={provider}
+            soul={soul}
+          />
+          <ProvisioningStageStrip stages={provisioningStages} />
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card>
           <CardHeader>
-            <CardTitle>输入</CardTitle>
-            <CardDescription>选择目标员工环境、Soul release 与 provider profile。</CardDescription>
+            <CardTitle>选择员工</CardTitle>
+            <CardDescription>选择要开通 AIWorker 的员工；其余字段用于核对后台配置。</CardDescription>
           </CardHeader>
           <CardContent>
             <FieldGroup>
               <Field>
-                <FieldLabel>Assignment identity</FieldLabel>
+                <FieldLabel>员工</FieldLabel>
                 <Select value={assignment?.id ?? selectedAssignmentId} onValueChange={selectAssignment}>
                   <SelectTrigger>
                     <SelectValue />
@@ -214,7 +253,7 @@ export function ProvisioningPage() {
                           {item.assignedEmail}
                           {' '}
                           ·
-                          {item.workspaceRef}
+                          {item.team}
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -222,7 +261,7 @@ export function ProvisioningPage() {
                 </Select>
               </Field>
               <Field>
-                <FieldLabel>Paseo environment</FieldLabel>
+                <FieldLabel>员工设备</FieldLabel>
                 <Select value={selectedEnvironment} onValueChange={setSelectedEnvironment}>
                   <SelectTrigger>
                     <SelectValue />
@@ -234,7 +273,7 @@ export function ProvisioningPage() {
                           {item.ownerEmail}
                           {' '}
                           ·
-                          {item.targetRef}
+                          {environmentStatusMeta[item.status].label}
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -242,7 +281,7 @@ export function ProvisioningPage() {
                 </Select>
               </Field>
               <Field>
-                <FieldLabel>Soul release</FieldLabel>
+                <FieldLabel>能力模板</FieldLabel>
                 <Select value={selectedSoul} onValueChange={setSelectedSoul}>
                   <SelectTrigger>
                     <SelectValue />
@@ -262,7 +301,7 @@ export function ProvisioningPage() {
                 </Select>
               </Field>
               <Field>
-                <FieldLabel>Provider profile</FieldLabel>
+                <FieldLabel>后台 AI 账号</FieldLabel>
                 <Select value={selectedProvider} onValueChange={setSelectedProvider}>
                   <SelectTrigger>
                     <SelectValue />
@@ -274,7 +313,7 @@ export function ProvisioningPage() {
                           {item.label}
                           {' '}
                           ·
-                          {item.provider}
+                          {providerStatusMeta[item.status].label}
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -284,21 +323,21 @@ export function ProvisioningPage() {
             </FieldGroup>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader>
-            <CardTitle>Redacted plan preview</CardTitle>
-            <CardDescription>交付前可复制给审批或审计；secret 只显示 reference。</CardDescription>
+            <CardTitle>确认开通内容</CardTitle>
+            <CardDescription>管理员只需要核对员工、能力和设备；技术配置放在折叠区。</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <FieldGroup>
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>Install/verify Paseo</FieldTitle>
+                  <FieldTitle>员工设备</FieldTitle>
                   <FieldDescription>
-                    {environment.targetRef}
-                    {' '}
-                    · PASEO_HOME=
-                    {environment.paseoHome}
+                    {environment.ownerEmail === assignment?.assignedEmail
+                      ? '员工本人设备，技术支持已配置连接。'
+                      : `由 ${environment.ownerEmail} 代管，请确认这台设备归属正确。`}
                   </FieldDescription>
                 </FieldContent>
                 <StatusBadge tone={environmentStatusMeta[environment.status].tone}>
@@ -307,83 +346,99 @@ export function ProvisioningPage() {
               </Field>
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>Project workspace files</FieldTitle>
+                  <FieldTitle>能力模板</FieldTitle>
                   <FieldDescription>
                     {soul.fileCount}
                     {' '}
-                    files from
-                    {' '}
-                    {soul.workspaceTemplateRoot}
+                    个准备文件，会生成员工使用 AIWorker 所需的工作区内容。
                   </FieldDescription>
                 </FieldContent>
                 <StatusBadge tone={releaseStatusMeta[soul.status].tone}>{releaseStatusMeta[soul.status].label}</StatusBadge>
               </Field>
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>Provider authentication</FieldTitle>
-                  <FieldDescription>{provider.secretRef}</FieldDescription>
+                  <FieldTitle>后台 AI 账号</FieldTitle>
+                  <FieldDescription>
+                    {provider.label}
+                    {' '}
+                    的授权状态会影响员工能否开始使用。
+                  </FieldDescription>
                 </FieldContent>
                 <StatusBadge tone={providerStatusMeta[provider.status].tone}>{providerStatusMeta[provider.status].label}</StatusBadge>
               </Field>
             </FieldGroup>
-            <Separator />
-            <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs/relaxed">
-              {`aiworker plan \\
+            <details className="rounded-md border bg-muted/20 p-3">
+              <summary className="cursor-pointer text-sm font-medium">给技术支持查看开通配置</summary>
+              <dl className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+                <div>
+                  <dt className="text-muted-foreground">设备连接</dt>
+                  <dd className="mt-1 break-words font-mono">{environment.targetRef}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">工作区目录</dt>
+                  <dd className="mt-1 break-words font-mono">{environment.paseoHome}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">后台账号引用</dt>
+                  <dd className="mt-1 break-words font-mono">{provider.secretRef}</dd>
+                </div>
+                <div className="sm:col-span-3">
+                  <dt className="text-muted-foreground">能力模板文件</dt>
+                  <dd className="mt-1 break-words font-mono">{soul.workspaceTemplateRoot}</dd>
+                </div>
+              </dl>
+              <pre className="mt-3 overflow-x-auto rounded-md border bg-background p-3 text-xs/relaxed">
+                {`aiworker plan \\
   --user ${assignment?.assignedEmail ?? environment.ownerEmail} \\
   --target ${environment.targetRef} \\
   --target-owner ${environment.ownerEmail}${environment.dedication ? ' \\\n  --dedicated-target-user' : ''} \\
   --environment ${environment.id} \\
   --provider ${provider.id} \\
   --soul ${soul.descriptorRef}`}
-            </pre>
+              </pre>
+            </details>
           </CardContent>
         </Card>
       </div>
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Approval gate</CardTitle>
-            <CardDescription>管理员审批 AIWorker plan/projection/handoff 元数据；连接 control-plane 后会写入 approvals.jsonl。</CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <CardTitle>管理员确认</CardTitle>
+                <CardDescription>确认员工、能力模板和设备无误；正式环境会保存确认记录。</CardDescription>
+              </div>
+              <CardAction>
+                <StatusBadge tone={effectiveApprovalStatus ? approvalStatusMeta[effectiveApprovalStatus].tone : 'warning'}>
+                  {effectiveApprovalStatus ? approvalStatusMeta[effectiveApprovalStatus].label : '待审批'}
+                </StatusBadge>
+              </CardAction>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Alert>
               <WarningCircleIcon weight="duotone" />
-              <AlertTitle>{isLive ? 'Control API connected' : 'Fixture preview mode'}</AlertTitle>
+              <AlertTitle>{isLive ? '真实数据已连接' : '演示模式'}</AlertTitle>
               <AlertDescription>
                 {isLive
-                  ? '批准/退回会持久化到 AIWorker approvals.jsonl；不会触发 aissh，也不会连接 Paseo runtime。'
-                  : '未配置 AIWORKER_CONTROL_PLANE_DIR 时只更新本页预览状态；不会持久化，也不会触发 aissh 或 Paseo。'}
+                  ? '确认或退回会保存到管理记录；不会展示员工对话内容。'
+                  : '当前只更新本页预览状态，不会保存，也不会连接员工设备。'}
               </AlertDescription>
             </Alert>
-            <FieldGroup>
-              <Field orientation="horizontal">
-                <FieldContent>
-                  <FieldTitle>Approval is required first</FieldTitle>
-                  <FieldDescription>批准只记录 AIWorker plan/projection/handoff metadata；不会自动触发 aissh。</FieldDescription>
-                </FieldContent>
-                <StatusBadge tone="info">Step 1</StatusBadge>
-              </Field>
-              <Field orientation="horizontal">
-                <FieldContent>
-                  <FieldTitle>Apply must complete before pairing</FieldTitle>
-                  <FieldDescription>Pair 需要同一 assignment tuple 的 applied receipt 与 handoff-ready metadata。</FieldDescription>
-                </FieldContent>
-                <StatusBadge tone="info">Step 2</StatusBadge>
-              </Field>
-            </FieldGroup>
             {approvalError ? <RemediationAlert remediation={approvalError} /> : null}
             {approval && effectiveApprovalStatus
               ? (
                   <>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border p-3">
                       <div className="min-w-0">
                         <p className="text-sm font-medium">{approval.title}</p>
                         <p className="mt-1 text-xs/relaxed text-muted-foreground">
-                          reviewer:
+                          确认人：
                           {' '}
                           {approval.reviewer}
                           {' '}
-                          · submitted:
+                          · 提交时间：
                           {' '}
                           {approval.submittedAt}
                         </p>
@@ -409,87 +464,247 @@ export function ProvisioningPage() {
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="secondary" onClick={() => previewDecision('approved')}>
                         <CheckCircleIcon data-icon="inline-start" weight="duotone" />
-                        {isLive ? '批准并记录' : '预览批准'}
+                        {isLive ? '确认并保存' : '预览确认'}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => previewDecision('changes_requested')}>
                         <WarningCircleIcon data-icon="inline-start" weight="duotone" />
-                        {isLive ? '退回并记录' : '预览退回修改'}
-                      </Button>
-                      <Button disabled={!isLive || effectiveApprovalStatus !== 'approved'} size="sm" onClick={runApplyJob}>
-                        <PlayCircleIcon data-icon="inline-start" weight="duotone" />
-                        执行已审批交付
-                      </Button>
-                      <Button disabled={!isLive || effectiveApprovalStatus !== 'approved' || pairingAssignmentId === assignment?.id} size="sm" variant="outline" onClick={runPairJob}>
-                        <PlayCircleIcon data-icon="inline-start" weight="duotone" />
-                        生成配对链接
+                        {isLive ? '退回并保存' : '预览退回'}
                       </Button>
                     </div>
                     {effectiveApprovalStatus !== 'approved' ? <RemediationAlert remediation={adminRemediation('approval_required')} /> : null}
                     {provider.status !== 'ready' ? <RemediationAlert remediation={adminRemediation('provider_auth_required')} /> : null}
-                    {applyError ? <RemediationAlert remediation={applyError} /> : null}
-                    {applyRemediation ? <RemediationAlert remediation={applyRemediation} /> : null}
-                    {applySteps
-                      ? (
-                          <div className="rounded-md border bg-muted/20 p-3">
-                            <p className="mb-2 text-xs font-medium">交付进度</p>
-                            <FieldGroup>
-                              {applySteps.map(step => (
-                                <Field key={step.id} orientation="horizontal">
-                                  <FieldContent>
-                                    <FieldTitle>{step.label}</FieldTitle>
-                                  </FieldContent>
-                                  <StatusBadge tone={step.status === 'done' ? 'success' : step.status === 'needs_attention' ? 'warning' : 'destructive'}>
-                                    {step.status === 'done' ? '完成' : step.status === 'needs_attention' ? '需处理' : '失败'}
-                                  </StatusBadge>
-                                </Field>
-                              ))}
-                            </FieldGroup>
-                          </div>
-                        )
-                      : null}
-                    <div className="rounded-md border bg-muted/20 p-3 text-xs/relaxed text-muted-foreground">
-                      <p className="font-medium text-foreground">配对设备</p>
-                      <p className="mt-1">
-                        交付完成后点“生成配对链接”：Web 只让 AIWorker CLI 通过 aissh 瞬时调用 Paseo pair，结果只在当前页面显示，不写入 AIWorker 记录。
-                      </p>
-                      {!pairingPreconditionReady && !pairingOutput ? <div className="mt-3"><RemediationAlert remediation={adminRemediation('handoff_not_ready')} /></div> : null}
-                      {pairError ? <div className="mt-3"><RemediationAlert remediation={pairError} /></div> : null}
+
+                    <Separator />
+
+                    <section aria-labelledby="execute-delivery" className="flex flex-col gap-3">
+                      <div>
+                        <h3 id="execute-delivery" className="text-sm font-medium">开始开通</h3>
+                        <p className="mt-1 text-xs/relaxed text-muted-foreground">
+                          确认通过后，系统会在员工设备上准备 AIWorker 工作区。
+                        </p>
+                      </div>
+                      <Button disabled={!isLive || effectiveApprovalStatus !== 'approved'} size="sm" onClick={runApplyJob}>
+                        <PlayCircleIcon data-icon="inline-start" weight="duotone" />
+                        开始开通
+                      </Button>
+                      {applyError ? <RemediationAlert remediation={applyError} /> : null}
+                      {applyRemediation ? <RemediationAlert remediation={applyRemediation} /> : null}
+                      {applySteps ? <ApplyStepsList steps={applySteps} /> : null}
+                    </section>
+
+                    <Separator />
+
+                    <section aria-labelledby="pair-device" className="flex flex-col gap-3">
+                      <div>
+                        <h3 id="pair-device" className="text-sm font-medium">发送入口</h3>
+                        <p className="mt-1 text-xs/relaxed text-muted-foreground">
+                          开通完成后生成一次性入口，复制给员工使用；入口只在当前页面临时显示。
+                        </p>
+                      </div>
+                      <Button
+                        disabled={!isLive || effectiveApprovalStatus !== 'approved' || !pairingPreconditionReady || pairingAssignmentId === assignment?.id}
+                        size="sm"
+                        variant="outline"
+                        onClick={runPairJob}
+                      >
+                        <PlayCircleIcon data-icon="inline-start" weight="duotone" />
+                        生成一次性入口
+                      </Button>
+                      {!pairingPreconditionReady && !pairingOutput ? <RemediationAlert remediation={adminRemediation('handoff_not_ready')} /> : null}
+                      {pairError ? <RemediationAlert remediation={pairError} /> : null}
                       {pairingOutput
                         ? (
-                            <pre className="mt-3 overflow-x-auto rounded-md border bg-background p-3 text-xs/relaxed text-foreground">
+                            <pre className="overflow-x-auto rounded-md border bg-background p-3 text-xs/relaxed text-foreground">
                               {pairingOutput}
                             </pre>
                           )
                         : null}
-                    </div>
-                    <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs/relaxed">{approval.previewCommand}</pre>
+                    </section>
+
+                    <details className="rounded-md border bg-muted/20 p-3">
+                      <summary className="cursor-pointer text-sm font-medium">给技术支持查看确认命令</summary>
+                      <pre className="mt-3 overflow-x-auto rounded-md border bg-background p-3 text-xs/relaxed">{approval.previewCommand}</pre>
+                    </details>
                   </>
                 )
               : (
-                  <p className="text-xs/relaxed text-muted-foreground">当前选择还没有对应 assignment；先保存 plan 后再进入审批队列。</p>
+                  <p className="text-xs/relaxed text-muted-foreground">当前选择还没有对应员工开通记录；请先准备开通内容。</p>
                 )}
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader>
-            <CardTitle>Preview trace timeline</CardTitle>
-            <CardDescription>{isLive ? '从 control-plane snapshot 与 approvals.jsonl 派生 request → approval → receipt → handoff 链，不展示 Paseo session 或运行时日志。' : '从 fixture assignment snapshot 派生 request → approval → receipt → handoff 预览链，不展示 Paseo session 或运行时日志。'}</CardDescription>
+            <CardTitle>操作记录</CardTitle>
+            <CardDescription>{isLive ? '显示本次开通的请求、确认、执行和入口记录，不展示员工对话内容。' : '显示演示数据里的请求、确认、执行和入口记录，不展示员工对话内容。'}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {traceEvents.map(event => (
-              <div key={event.id} className="rounded-md border p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <StatusBadge tone={event.tone}>{event.at}</StatusBadge>
-                  <span className="text-xs text-muted-foreground">{event.actor}</span>
-                </div>
-                <p className="mt-2 text-xs font-medium text-foreground">{event.title}</p>
-                <p className="mt-1 text-xs/relaxed text-muted-foreground">{event.detail}</p>
-                <p className="mt-2 font-mono text-[0.625rem] text-muted-foreground">{event.evidenceRef}</p>
-              </div>
-            ))}
+            {traceEvents.length
+              ? traceEvents.map(event => (
+                  <div key={event.id} className="rounded-md border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <StatusBadge tone={event.tone}>{event.at}</StatusBadge>
+                      <span className="text-xs text-muted-foreground">{event.actor}</span>
+                    </div>
+                    <p className="mt-2 text-xs font-medium text-foreground">{event.title}</p>
+                    <p className="mt-1 text-xs/relaxed text-muted-foreground">{event.detail}</p>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-[0.625rem] text-muted-foreground">支持信息</summary>
+                      <p className="mt-1 font-mono text-[0.625rem] text-muted-foreground">{event.evidenceRef}</p>
+                    </details>
+                  </div>
+                ))
+              : <p className="text-xs/relaxed text-muted-foreground">当前员工还没有操作记录。</p>}
           </CardContent>
         </Card>
       </div>
+    </div>
+  )
+}
+
+interface ProvisioningStage {
+  description: string
+  label: string
+  tone: Tone
+}
+
+interface ProvisioningStageInput {
+  approval?: ProvisioningApprovalSummary
+  applySteps?: ApplyJobStep[]
+  assignment?: AssignmentSummary
+  effectiveApprovalStatus?: ApprovalStatus
+  pairingOutput?: string
+  pairingPreconditionReady: boolean
+}
+
+function buildProvisioningStages({
+  approval,
+  applySteps,
+  assignment,
+  effectiveApprovalStatus,
+  pairingOutput,
+  pairingPreconditionReady,
+}: ProvisioningStageInput): ProvisioningStage[] {
+  const handoffReady = Boolean(applySteps?.some(step => step.id === 'handoff' && step.status === 'done'))
+  const approvalTone = effectiveApprovalStatus ? approvalStatusMeta[effectiveApprovalStatus].tone : 'warning'
+
+  return [
+    {
+      description: assignment ? `${assignment.assignedEmail} · ${assignment.team}` : '先选择要开通的员工',
+      label: '选择员工',
+      tone: assignment ? 'success' : 'warning',
+    },
+    {
+      description: assignment ? '确认能力、设备和后台账号' : '等待员工信息',
+      label: '确认内容',
+      tone: assignment ? 'info' : 'outline',
+    },
+    {
+      description: approval ? (effectiveApprovalStatus ? approvalStatusMeta[effectiveApprovalStatus].label : '等待确认记录') : '等待确认记录',
+      label: '管理员确认',
+      tone: approvalTone,
+    },
+    {
+      description: handoffReady ? '员工入口已准备' : effectiveApprovalStatus === 'approved' ? '可开始开通' : '确认后执行',
+      label: '开始开通',
+      tone: handoffReady ? 'success' : effectiveApprovalStatus === 'approved' ? 'info' : 'outline',
+    },
+    {
+      description: pairingOutput ? '一次性入口已生成' : pairingPreconditionReady ? '可生成一次性入口' : '等待开通完成',
+      label: '发送入口',
+      tone: pairingOutput ? 'success' : pairingPreconditionReady ? 'info' : 'outline',
+    },
+  ]
+}
+
+function SelectedAssignmentSummary({
+  assignment,
+  environment,
+  provider,
+  soul,
+}: {
+  assignment?: AssignmentSummary
+  environment: PaseoEnvironmentSummary
+  provider: ProviderProfileSummary
+  soul: SoulReleaseSummary
+}) {
+  if (!assignment) {
+    return (
+      <div className="rounded-md border bg-muted/20 p-4">
+        <p className="text-sm font-medium">还没有选中员工</p>
+        <p className="mt-1 text-xs/relaxed text-muted-foreground">先从下方选择员工，再继续确认能力和设备。</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-3 rounded-md border bg-muted/20 p-4 md:grid-cols-4">
+      <div>
+        <p className="text-xs text-muted-foreground">员工</p>
+        <p className="mt-1 truncate text-sm font-medium">{assignment.assignedEmail}</p>
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">下一步</p>
+        <p className="mt-1 text-sm/relaxed font-medium">{assignment.nextStep}</p>
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">能力</p>
+        <p className="mt-1 truncate text-sm font-medium">
+          {soul.displayName}
+          {' '}
+          {soul.version}
+        </p>
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">设备</p>
+        <p className="mt-1 truncate text-sm font-medium">
+          {environment.ownerEmail === assignment.assignedEmail ? '员工本人设备' : `${environment.ownerEmail} 代管设备`}
+        </p>
+      </div>
+      <div className="md:col-span-4">
+        <p className="text-xs text-muted-foreground">后台 AI 账号</p>
+        <p className="mt-1 truncate text-sm font-medium">
+          {provider.label}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function ProvisioningStageStrip({ stages }: { stages: ProvisioningStage[] }) {
+  return (
+    <ol className="grid grid-cols-1 gap-2 md:grid-cols-5">
+      {stages.map((stage, index) => (
+        <li key={stage.label} className="rounded-md border bg-background p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              {index + 1}
+            </span>
+            <StatusBadge tone={stage.tone}>{stage.label}</StatusBadge>
+          </div>
+          <p className="mt-2 text-xs/relaxed text-muted-foreground">{stage.description}</p>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function ApplyStepsList({ steps }: { steps: ApplyJobStep[] }) {
+  return (
+    <div className="rounded-md border bg-muted/20 p-3">
+      <p className="mb-2 text-xs font-medium">开通进度</p>
+      <FieldGroup>
+        {steps.map(step => (
+          <Field key={step.id} orientation="horizontal">
+            <FieldContent>
+              <FieldTitle>{step.label}</FieldTitle>
+            </FieldContent>
+            <StatusBadge tone={step.status === 'done' ? 'success' : step.status === 'needs_attention' ? 'warning' : 'destructive'}>
+              {step.status === 'done' ? '完成' : step.status === 'needs_attention' ? '需处理' : '失败'}
+            </StatusBadge>
+          </Field>
+        ))}
+      </FieldGroup>
     </div>
   )
 }

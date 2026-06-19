@@ -27,7 +27,7 @@ export function AppSidebar() {
                 <ShieldCheckIcon weight="duotone" />
                 <span className="flex flex-col gap-0.5 leading-none">
                   <span className="font-semibold">AIWorker</span>
-                  <span className="text-[0.625rem] text-muted-foreground">Paseo Admin</span>
+                  <span className="text-[0.625rem] text-muted-foreground">管理员控制台</span>
                 </span>
               </NavLink>
             </SidebarMenuButton>
@@ -36,7 +36,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Control plane</SidebarGroupLabel>
+          <SidebarGroupLabel>日常管理</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map(item => (
@@ -57,7 +57,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton>
-              <span className="font-mono text-[0.625rem] text-muted-foreground">No runtime proxy</span>
+              <span className="text-[0.625rem] text-muted-foreground">员工在 Paseo 使用</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

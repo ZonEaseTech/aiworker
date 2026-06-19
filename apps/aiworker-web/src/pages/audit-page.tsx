@@ -8,16 +8,16 @@ export function AuditPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        eyebrow="Audit / Handoff"
-        title="交付证据与审计"
-        description="展示 redacted receipt、状态迁移和 handoff references。不会展示 provider secret、shell script 全文或 Paseo session 内容。"
+        eyebrow="操作记录"
+        title="管理员操作记录"
+        description="记录管理员开通、确认和发送入口的动作；不会展示员工对话、密钥或设备上的原始内容。"
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_0.9fr]">
         <AuditCard />
         <Card>
           <CardHeader>
-            <CardTitle>Handoff readiness</CardTitle>
-            <CardDescription>ready 表示 AIWorker 准备好了 workspace 与 handoff，而不是读取运行时。</CardDescription>
+            <CardTitle>员工入口状态</CardTitle>
+            <CardDescription>只判断员工入口是否已经可发送，不进入员工使用过程。</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {adminConsoleData.assignments.map(assignment => (
@@ -35,16 +35,20 @@ export function AuditPage() {
                       : null}
                   </div>
                 </div>
-                <p className="mt-2 font-mono text-xs/relaxed text-muted-foreground">{assignment.handoffLabel}</p>
+                <p className="mt-2 text-xs/relaxed text-muted-foreground">{assignment.handoffLabel}</p>
                 <p className="mt-2 text-[0.625rem] text-muted-foreground">
-                  Trace events:
+                  处理记录：
                   {' '}
                   {getTraceEventsForAssignment(assignment.id).length}
-                  {' '}
-                  · receipt
-                  {' '}
-                  {assignment.receiptId}
                 </p>
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-[0.625rem] text-muted-foreground">支持信息</summary>
+                  <p className="mt-1 font-mono text-[0.625rem] text-muted-foreground">
+                    开通记录编号：
+                    {' '}
+                    {assignment.receiptId}
+                  </p>
+                </details>
               </div>
             ))}
           </CardContent>

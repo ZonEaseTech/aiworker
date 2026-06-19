@@ -2,7 +2,7 @@
 
 AIWorker Web 是面向管理员的薄控制台，只管理 AIWorker-owned metadata：assignment、provisioning plan、Soul release、Paseo environment、audit 与 redacted handoff。
 
-它不渲染、不代理、不观察 Paseo project/workspace/session/runtime/provider traffic。
+No runtime proxy：它不渲染、不代理、不观察 Paseo project/workspace/session/runtime/provider traffic；AIWorker 不读取 session。
 
 ## 开发命令
 

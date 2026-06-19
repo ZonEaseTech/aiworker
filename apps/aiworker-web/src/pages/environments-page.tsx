@@ -10,29 +10,29 @@ export function EnvironmentsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        eyebrow="Paseo environments"
-        title="环境与 provider profile"
-        description="一个 Paseo environment 可承载同一员工的多个 workspace。跨员工隔离依赖 OS user/container/VM、独立 PASEO_HOME、endpoint 和 credentials。"
+        eyebrow="设备与账号"
+        title="员工设备和后台 AI 账号"
+        description="确认员工设备是否可用、后台 AI 账号是否已授权；密钥和底层连接信息不会直接显示给管理员。"
       />
       <Tabs defaultValue="environments">
         <TabsList>
-          <TabsTrigger value="environments">Environments</TabsTrigger>
-          <TabsTrigger value="providers">Provider profiles</TabsTrigger>
+          <TabsTrigger value="environments">员工设备</TabsTrigger>
+          <TabsTrigger value="providers">后台 AI 账号</TabsTrigger>
         </TabsList>
         <TabsContent value="environments" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Environment registry</CardTitle>
-              <CardDescription>仅保存连接元数据；daemon lifecycle 属于 Paseo。</CardDescription>
+              <CardTitle>员工设备</CardTitle>
+              <CardDescription>用于判断员工是否具备开通条件；更细的连接信息折叠给技术支持查看。</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Target</TableHead>
-                    <TableHead>Endpoint</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>员工/负责人</TableHead>
+                    <TableHead>设备</TableHead>
+                    <TableHead>连接方式</TableHead>
+                    <TableHead>状态</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -42,10 +42,19 @@ export function EnvironmentsPage() {
                       <TableRow key={environment.id}>
                         <TableCell>
                           <div className="font-medium">{environment.ownerEmail}</div>
-                          <div className="font-mono text-[0.625rem] text-muted-foreground">{environment.paseoHome}</div>
+                          <details className="mt-1">
+                            <summary className="cursor-pointer text-[0.625rem] text-muted-foreground">支持信息</summary>
+                            <div className="mt-1 font-mono text-[0.625rem] text-muted-foreground">{environment.paseoHome}</div>
+                          </details>
                         </TableCell>
                         <TableCell>{environment.targetRef}</TableCell>
-                        <TableCell className="font-mono text-xs">{environment.daemonEndpoint}</TableCell>
+                        <TableCell>
+                          {environment.endpointKind === 'relay-offer' ? '远程配对' : environment.endpointKind === 'local-home' ? '本机目录' : '已配置'}
+                          <details className="mt-1">
+                            <summary className="cursor-pointer text-[0.625rem] text-muted-foreground">支持信息</summary>
+                            <div className="mt-1 font-mono text-[0.625rem] text-muted-foreground">{environment.daemonEndpoint}</div>
+                          </details>
+                        </TableCell>
                         <TableCell><StatusBadge tone={meta.tone}>{meta.label}</StatusBadge></TableCell>
                       </TableRow>
                     )
@@ -58,8 +67,8 @@ export function EnvironmentsPage() {
         <TabsContent value="providers" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Provider profile references</CardTitle>
-              <CardDescription>literal provider keys never enter descriptors, receipts, logs, UI, or projected files。</CardDescription>
+              <CardTitle>后台 AI 账号</CardTitle>
+              <CardDescription>只显示账号名称和授权状态；密钥不会出现在页面、日志或开通记录里。</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
@@ -69,12 +78,18 @@ export function EnvironmentsPage() {
                     <Card key={profile.id}>
                       <CardHeader>
                         <CardTitle>{profile.label}</CardTitle>
-                        <CardDescription>{profile.provider}</CardDescription>
+                        <CardDescription>
+                          服务：
+                          {profile.provider}
+                        </CardDescription>
                       </CardHeader>
                       <CardContent className="flex flex-col gap-3 text-xs">
                         <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
-                        <p className="break-words font-mono text-muted-foreground">{profile.secretRef}</p>
-                        {profile.paseoProviderId ? <Badge variant="outline">{profile.paseoProviderId}</Badge> : null}
+                        <details>
+                          <summary className="cursor-pointer text-[0.625rem] text-muted-foreground">支持信息</summary>
+                          <p className="mt-1 break-words font-mono text-[0.625rem] text-muted-foreground">{profile.secretRef}</p>
+                        </details>
+                        {profile.paseoProviderId ? <Badge variant="outline">已关联 Paseo</Badge> : null}
                       </CardContent>
                     </Card>
                   )
