@@ -115,7 +115,7 @@ export function DashboardPage() {
               </CardContent>
               <CardFooter className="flex flex-wrap gap-2">
                 <Button asChild size="sm">
-                  <Link to="/provisioning">
+                  <Link to={provisioningLinkForAssignment(primaryTask?.assignment.id)}>
                     <ArrowRightIcon data-icon="inline-start" weight="duotone" />
                     {primaryTask ? primaryTask.actionLabel : '为新员工开通'}
                   </Link>
@@ -451,16 +451,16 @@ function DashboardTaskCard({ data, prominent = false, task }: { data: AdminConso
           <p className="truncate font-medium">{assignment.updatedAt}</p>
         </div>
       </div>
-      {prominent
-        ? (
-            <Button asChild className="mt-4" size="sm">
-              <Link to="/provisioning">
-                <ArrowRightIcon data-icon="inline-start" weight="duotone" />
-                {task.actionLabel}
-              </Link>
-            </Button>
-          )
-        : null}
+      <Button asChild className="mt-4" size="sm" variant={prominent ? 'default' : 'outline'}>
+        <Link to={provisioningLinkForAssignment(assignment.id)}>
+          <ArrowRightIcon data-icon="inline-start" weight="duotone" />
+          {task.actionLabel}
+        </Link>
+      </Button>
     </div>
   )
+}
+
+function provisioningLinkForAssignment(assignmentId?: string): string {
+  return assignmentId ? `/provisioning?assignment=${encodeURIComponent(assignmentId)}` : '/provisioning'
 }

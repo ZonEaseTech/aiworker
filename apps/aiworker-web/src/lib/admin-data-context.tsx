@@ -28,7 +28,7 @@ interface AdminDataContextValue {
   reload: () => Promise<void>
 }
 
-const AdminDataContext = createContext<AdminDataContextValue | null>(null)
+export const AdminDataContext = createContext<AdminDataContextValue | null>(null)
 
 const defaultBootstrap: AdminBootstrapStatus = {
   adminTokenRequired: false,
