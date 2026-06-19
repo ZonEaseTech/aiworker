@@ -10,6 +10,7 @@ import {
   loadAdminConsoleData,
 } from '@/lib/admin-data'
 import { adminRemediation } from '@/lib/admin-remediation'
+import { redirectToLoginIfAuthRequired } from '@/lib/admin-session'
 
 interface AdminDataApiPayload {
   approvals: ApprovalDecisionRecord[]
@@ -51,7 +52,17 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
   const [loadError, setLoadError] = useState<AdminRemediation | null>(null)
 
   async function reload() {
-    const next = await loadAdminDataFromApi().catch(adminDataUnavailableStateFromError)
+    let next: Awaited<ReturnType<typeof loadAdminDataFromApi>>
+    try {
+      next = await loadAdminDataFromApi()
+    }
+    catch (error) {
+      // 会话使用中过期时整页跳转到登录，而不是停留在管理台上显示"已锁定"横幅。
+      // 跳转已触发时页面正在卸载，直接 return 以免短暂闪过 "locked" 降级状态。
+      if (redirectToLoginIfAuthRequired(error))
+        return
+      next = adminDataUnavailableStateFromError(error)
+    }
     setBootstrap(next.bootstrap)
     setData(next.data)
     setIsLive(next.isLive)
