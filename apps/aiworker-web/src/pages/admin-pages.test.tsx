@@ -45,7 +45,7 @@ describe('admin console page composition', () => {
     expect(dashboard).toContain('本次会话使用')
     expect(dashboard).toContain('在本设备记住')
     expect(dashboard).toContain('admin-data 读取与会改变状态的 Web API 调用')
-    expect(dashboard).toContain('Control-plane directory is not bound')
+    expect(dashboard).toContain('未绑定 control-plane 目录')
     expect(dashboard).toContain('待审批')
 
     const provisioning = renderToStaticMarkup(<TooltipProvider><ProvisioningPage /></TooltipProvider>)
@@ -60,7 +60,7 @@ describe('admin console page composition', () => {
     expect(provisioning).toContain('执行已审批交付')
     expect(provisioning).toContain('生成配对链接')
     expect(provisioning).toContain('需要先完成审批')
-    expect(provisioning).toContain('Provider needs target-side setup')
+    expect(provisioning).toContain('Provider 需要在目标侧设置')
     expect(provisioning).toContain('配对前必须先完成 apply')
     expect(provisioning).toContain('只在当前页面显示')
     expect(provisioning).toContain('不会持久化')

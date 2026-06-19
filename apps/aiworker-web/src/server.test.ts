@@ -461,7 +461,7 @@ describe('Bun static server helpers', () => {
       const missingDescriptorPayload = await missingDescriptorResponse.json()
       expect(missingDescriptorResponse.status).toBe(409)
       expect(missingDescriptorPayload.error).toBe('soul_descriptor_missing')
-      expect(missingDescriptorPayload.remediation.nextSteps.join(' ')).toContain('Build the Soul release')
+      expect(missingDescriptorPayload.remediation.nextSteps.join(' ')).toContain('构建该 Soul release')
       await store.saveSnapshot({
         ...await store.loadSnapshot(),
         soulReleases: [soul],
