@@ -36,7 +36,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Control plane</SidebarGroupLabel>
+          <SidebarGroupLabel>control-plane</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map(item => (
@@ -57,7 +57,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton>
-              <span className="font-mono text-[0.625rem] text-muted-foreground">No runtime proxy</span>
+              <span className="font-mono text-[0.625rem] text-muted-foreground">无运行时代理</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

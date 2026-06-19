@@ -6,7 +6,7 @@ export function AuditCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recent audit events</CardTitle>
+        <CardTitle>最近审计事件</CardTitle>
         <CardDescription>所有事件都是 AIWorker 元数据事件，不含 Paseo 会话内容。</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">

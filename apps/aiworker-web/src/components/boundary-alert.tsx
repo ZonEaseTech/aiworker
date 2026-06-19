@@ -6,9 +6,9 @@ export function BoundaryAlert() {
   return (
     <Alert>
       <WarningCircleIcon weight="duotone" />
-      <AlertTitle>Runtime boundary</AlertTitle>
+      <AlertTitle>运行时边界</AlertTitle>
       <AlertDescription>
-        AIWorker Web is an admin control plane. It can prepare assignments and handoff metadata, but Paseo owns workspace UI, sessions, logs, permissions, and provider process lifecycle.
+        AIWorker Web 是管理员 control-plane。它可以准备 assignment 与 handoff 元数据，但 workspace UI、session、日志、权限以及 provider 进程生命周期都归 Paseo 所有。
       </AlertDescription>
     </Alert>
   )

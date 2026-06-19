@@ -32,7 +32,7 @@ export function AssignmentDetailSheet({
         <SheetHeader>
           <SheetTitle>{assignment.assignedEmail}</SheetTitle>
           <SheetDescription>
-            Assignment metadata and redacted handoff. Paseo owns the workspace runtime after handoff.
+            Assignment 元数据与脱敏 handoff。handoff 之后 workspace 运行时归 Paseo 所有。
           </SheetDescription>
         </SheetHeader>
         <AssignmentDetailContent assignment={assignment} />
@@ -58,8 +58,8 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
       <dl className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
         <Detail label="Soul release" value={`${soul.displayName} · ${soul.version}`} />
         <Detail label="Provider profile" value={`${provider.label} · ${provider.secretRef}`} />
-        <Detail label="Environment" value={`${environment.id} · ${environment.isolation}`} />
-        <Detail label="Target" value={environment.targetRef} />
+        <Detail label="环境" value={`${environment.id} · ${environment.isolation}`} />
+        <Detail label="目标" value={environment.targetRef} />
         <Detail label="Workspace" value={assignment.workspaceRef} />
         <Detail label="Receipt" value={assignment.receiptId} />
       </dl>
@@ -76,17 +76,17 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
         ? (
             <section className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">Approval</h3>
+                <h3 className="text-sm font-medium">审批</h3>
                 <StatusBadge tone={approvalStatusMeta[approval.status].tone}>{approvalStatusMeta[approval.status].label}</StatusBadge>
               </div>
               <p className="text-xs/relaxed text-muted-foreground">{approval.riskSummary}</p>
-              <p className="font-mono text-[0.625rem] text-muted-foreground">Control API not implemented · synthetic preview only</p>
+              <p className="font-mono text-[0.625rem] text-muted-foreground">Control API 尚未实现 · 仅为合成预览</p>
             </section>
           )
         : null}
       <Separator />
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium">Preview trace timeline</h3>
+        <h3 className="text-sm font-medium">预览 trace 时间线</h3>
         <div className="flex flex-col gap-2">
           {traceEvents.map(event => (
             <div key={event.id} className="rounded-md border p-3">
@@ -103,7 +103,7 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
       </section>
       <Separator />
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium">Audit trail</h3>
+        <h3 className="text-sm font-medium">审计记录</h3>
         <div className="flex flex-col gap-2">
           {assignment.audit.map(event => (
             <div key={event.id} className="rounded-md border p-3">

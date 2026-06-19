@@ -10,29 +10,29 @@ export function EnvironmentsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        eyebrow="Paseo environments"
+        eyebrow="Paseo 环境"
         title="环境与 provider profile"
         description="一个 Paseo environment 可承载同一员工的多个 workspace。跨员工隔离依赖 OS user/container/VM、独立 PASEO_HOME、endpoint 和 credentials。"
       />
       <Tabs defaultValue="environments">
         <TabsList>
-          <TabsTrigger value="environments">Environments</TabsTrigger>
-          <TabsTrigger value="providers">Provider profiles</TabsTrigger>
+          <TabsTrigger value="environments">环境</TabsTrigger>
+          <TabsTrigger value="providers">Provider profile</TabsTrigger>
         </TabsList>
         <TabsContent value="environments" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Environment registry</CardTitle>
+              <CardTitle>环境清单</CardTitle>
               <CardDescription>仅保存连接元数据；daemon lifecycle 属于 Paseo。</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Target</TableHead>
+                    <TableHead>所有者</TableHead>
+                    <TableHead>目标</TableHead>
                     <TableHead>Endpoint</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>状态</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -58,8 +58,8 @@ export function EnvironmentsPage() {
         <TabsContent value="providers" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Provider profile references</CardTitle>
-              <CardDescription>literal provider keys never enter descriptors, receipts, logs, UI, or projected files。</CardDescription>
+              <CardTitle>Provider profile 引用</CardTitle>
+              <CardDescription>provider 的明文密钥绝不会进入 descriptor、receipt、日志、UI 或投影文件。</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">

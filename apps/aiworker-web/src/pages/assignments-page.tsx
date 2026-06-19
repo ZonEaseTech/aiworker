@@ -90,7 +90,7 @@ export function AssignmentsPage() {
       </Card>
       {filtered.length
         ? (
-            <AssignmentTableCard title="Assignment ledger" assignments={filtered} />
+            <AssignmentTableCard title="Assignment 列表" assignments={filtered} />
           )
         : (
             <Empty className="border">

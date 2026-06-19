@@ -1241,8 +1241,8 @@ export const navigationItems = [
   { title: 'Assignments', path: '/assignments', icon: HandshakeIcon },
   { title: 'Provisioning', path: '/provisioning', icon: ClockClockwiseIcon },
   { title: 'Soul releases', path: '/souls', icon: ArchiveIcon },
-  { title: 'Environments', path: '/environments', icon: ShieldCheckIcon },
-  { title: 'Audit / Handoff', path: '/audit', icon: FileTextIcon },
+  { title: '环境', path: '/environments', icon: ShieldCheckIcon },
+  { title: '审计 / Handoff', path: '/audit', icon: FileTextIcon },
 ] as const
 
 export function getApprovalForAssignment(id: string, data: AdminConsoleData = adminConsoleData): ProvisioningApprovalSummary | undefined {

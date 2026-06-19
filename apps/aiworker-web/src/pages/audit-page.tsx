@@ -8,7 +8,7 @@ export function AuditPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        eyebrow="Audit / Handoff"
+        eyebrow="审计 / Handoff"
         title="交付证据与审计"
         description="展示 redacted receipt、状态迁移和 handoff references。不会展示 provider secret、shell script 全文或 Paseo session 内容。"
       />
@@ -16,7 +16,7 @@ export function AuditPage() {
         <AuditCard />
         <Card>
           <CardHeader>
-            <CardTitle>Handoff readiness</CardTitle>
+            <CardTitle>Handoff 就绪度</CardTitle>
             <CardDescription>ready 表示 AIWorker 准备好了 workspace 与 handoff，而不是读取运行时。</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -37,7 +37,7 @@ export function AuditPage() {
                 </div>
                 <p className="mt-2 font-mono text-xs/relaxed text-muted-foreground">{assignment.handoffLabel}</p>
                 <p className="mt-2 text-[0.625rem] text-muted-foreground">
-                  Trace events:
+                  Trace 事件:
                   {' '}
                   {getTraceEventsForAssignment(assignment.id).length}
                   {' '}

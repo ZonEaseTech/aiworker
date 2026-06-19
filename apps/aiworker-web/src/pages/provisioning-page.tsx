@@ -207,7 +207,7 @@ export function ProvisioningPage() {
           <CardContent>
             <FieldGroup>
               <Field>
-                <FieldLabel>Assignment identity</FieldLabel>
+                <FieldLabel>Assignment 标识</FieldLabel>
                 <Select value={assignment?.id ?? selectedAssignmentId} onValueChange={selectAssignment}>
                   <SelectTrigger>
                     <SelectValue />
@@ -291,14 +291,14 @@ export function ProvisioningPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Redacted plan preview</CardTitle>
+            <CardTitle>脱敏 plan 预览</CardTitle>
             <CardDescription>交付前可复制给审批或审计；secret 只显示 reference。</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <FieldGroup>
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>Install/verify Paseo</FieldTitle>
+                  <FieldTitle>安装/校验 Paseo</FieldTitle>
                   <FieldDescription>
                     {environment.targetRef}
                     {' '}
@@ -312,20 +312,24 @@ export function ProvisioningPage() {
               </Field>
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>Project workspace files</FieldTitle>
+                  <FieldTitle>投影 workspace 文件</FieldTitle>
                   <FieldDescription>
-                    {soul.fileCount}
-                    {' '}
-                    files from
+                    来自
                     {' '}
                     {soul.workspaceTemplateRoot}
+                    {' '}
+                    的
+                    {' '}
+                    {soul.fileCount}
+                    {' '}
+                    个文件
                   </FieldDescription>
                 </FieldContent>
                 <StatusBadge tone={releaseStatusMeta[soul.status].tone}>{releaseStatusMeta[soul.status].label}</StatusBadge>
               </Field>
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>Provider authentication</FieldTitle>
+                  <FieldTitle>Provider 鉴权</FieldTitle>
                   <FieldDescription>{provider.secretRef}</FieldDescription>
                 </FieldContent>
                 <StatusBadge tone={providerStatusMeta[provider.status].tone}>{providerStatusMeta[provider.status].label}</StatusBadge>
@@ -353,7 +357,7 @@ export function ProvisioningPage() {
           <CardContent className="flex flex-col gap-4">
             <Alert>
               <WarningCircleIcon weight="duotone" />
-              <AlertTitle>{isLive ? 'Control API connected' : 'Fixture preview mode'}</AlertTitle>
+              <AlertTitle>{isLive ? '已连接 Control API' : 'Fixture 预览模式'}</AlertTitle>
               <AlertDescription>
                 {isLive
                   ? '批准/退回会持久化到 AIWorker approvals.jsonl；不会触发 aissh，也不会连接 Paseo runtime。'
@@ -363,17 +367,17 @@ export function ProvisioningPage() {
             <FieldGroup>
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>Approval is required first</FieldTitle>
+                  <FieldTitle>需要先完成审批</FieldTitle>
                   <FieldDescription>批准只记录 AIWorker plan/projection/handoff metadata；不会自动触发 aissh。</FieldDescription>
                 </FieldContent>
-                <StatusBadge tone="info">Step 1</StatusBadge>
+                <StatusBadge tone="info">第 1 步</StatusBadge>
               </Field>
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>Apply must complete before pairing</FieldTitle>
+                  <FieldTitle>配对前必须先完成 apply</FieldTitle>
                   <FieldDescription>Pair 需要同一 assignment tuple 的 applied receipt 与 handoff-ready metadata。</FieldDescription>
                 </FieldContent>
-                <StatusBadge tone="info">Step 2</StatusBadge>
+                <StatusBadge tone="info">第 2 步</StatusBadge>
               </Field>
             </FieldGroup>
             {approvalError ? <RemediationAlert remediation={approvalError} /> : null}
@@ -384,11 +388,11 @@ export function ProvisioningPage() {
                       <div className="min-w-0">
                         <p className="text-sm font-medium">{approval.title}</p>
                         <p className="mt-1 text-xs/relaxed text-muted-foreground">
-                          reviewer:
+                          审批人:
                           {' '}
                           {approval.reviewer}
                           {' '}
-                          · submitted:
+                          · 提交时间:
                           {' '}
                           {approval.submittedAt}
                         </p>
@@ -485,7 +489,7 @@ export function ProvisioningPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Preview trace timeline</CardTitle>
+            <CardTitle>预览 trace 时间线</CardTitle>
             <CardDescription>{isLive ? '从 control-plane snapshot 与 approvals.jsonl 派生 request → approval → receipt → handoff 链，不展示 Paseo session 或运行时日志。' : '从 fixture assignment snapshot 派生 request → approval → receipt → handoff 预览链，不展示 Paseo session 或运行时日志。'}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">

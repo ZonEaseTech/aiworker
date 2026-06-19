@@ -22,17 +22,17 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardDescription>Assignment lifecycle follows draft → provisioning → projected → handoff → ready.</CardDescription>
+        <CardDescription>Assignment 生命周期：draft → provisioning → projected → handoff → ready。</CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Employee</TableHead>
+              <TableHead>员工</TableHead>
               <TableHead>Soul</TableHead>
-              <TableHead>Environment</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Detail</TableHead>
+              <TableHead>环境</TableHead>
+              <TableHead>状态</TableHead>
+              <TableHead className="text-right">详情</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
