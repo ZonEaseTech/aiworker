@@ -23,7 +23,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <NavLink to="/" aria-label="AIWorker Web home">
+              <NavLink to="/" aria-label="AIWorker 管理员控制台首页">
                 <ShieldCheckIcon weight="duotone" />
                 <span className="flex flex-col gap-0.5 leading-none">
                   <span className="font-semibold">AIWorker</span>
