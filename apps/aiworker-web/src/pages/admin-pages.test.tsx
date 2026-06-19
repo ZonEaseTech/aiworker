@@ -6,6 +6,7 @@ import { AssignmentDetailContent } from '@/components/assignment-detail-sheet'
 import { AssignmentTableCard } from '@/components/assignments/assignment-table-card'
 import { AuditCard } from '@/components/audit/audit-card'
 import { BoundaryAlert } from '@/components/boundary-alert'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { adminConsoleData } from '@/lib/admin-data'
 import { AssignmentsPage } from './assignments-page'
 import { AuditPage } from './audit-page'
@@ -24,7 +25,7 @@ describe('admin console page composition', () => {
     const pages: Array<[string, ReactElement, string]> = [
       ['dashboard', <DashboardPage />, 'AIWorker 分发控制台'],
       ['assignments', <AssignmentsPage />, '员工 workspace 分配'],
-      ['provisioning', <ProvisioningPage />, '生成 assignment plan'],
+      ['provisioning', <TooltipProvider><ProvisioningPage /></TooltipProvider>, '生成 assignment plan'],
       ['souls', <SoulsPage />, '版本化 workspace templates'],
       ['environments', <EnvironmentsPage />, '环境与 provider profile'],
       ['audit', <AuditPage />, '交付证据与审计'],
@@ -47,7 +48,7 @@ describe('admin console page composition', () => {
     expect(dashboard).toContain('Control-plane directory is not bound')
     expect(dashboard).toContain('待审批')
 
-    const provisioning = renderToStaticMarkup(<ProvisioningPage />)
+    const provisioning = renderToStaticMarkup(<TooltipProvider><ProvisioningPage /></TooltipProvider>)
     expect(provisioning).toContain('Approval gate')
     expect(provisioning).toContain('Assignment identity')
     expect(provisioning).toContain('Preview trace timeline')
@@ -72,7 +73,7 @@ describe('admin console page composition', () => {
   })
 
   test('provisioning approval controls stay preview-only and redacted', () => {
-    const markup = renderToStaticMarkup(<ProvisioningPage />)
+    const markup = renderToStaticMarkup(<TooltipProvider><ProvisioningPage /></TooltipProvider>)
 
     expect(markup).toContain('未配置 AIWORKER_CONTROL_PLANE_DIR')
     expect(markup).toContain('不会触发 aissh 或 Paseo')

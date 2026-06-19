@@ -1,6 +1,7 @@
+import type { ReactNode } from 'react'
 import type { AdminConsoleData, ApprovalStatus } from '@/lib/admin-data'
 import type { AdminRemediation } from '@/lib/admin-remediation'
-import { CheckCircleIcon, PlayCircleIcon, WarningCircleIcon } from '@phosphor-icons/react'
+import { CheckCircleIcon, CircleNotchIcon, PlayCircleIcon, WarningCircleIcon } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { PageHeader } from '@/components/page-header'
@@ -12,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from '@/components/ui/field'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AdminApiError, adminMutationHeaders, readAdminApiError } from '@/lib/admin-api-client'
 import {
   adminConsoleData,
@@ -53,6 +55,7 @@ export function ProvisioningPage() {
   const [applyError, setApplyError] = useState<AdminRemediation | null>(null)
   const [applyStepsByAssignment, setApplyStepsByAssignment] = useState<Record<string, ApplyJobStep[]>>({})
   const [applyRemediationByAssignment, setApplyRemediationByAssignment] = useState<Record<string, AdminRemediation>>({})
+  const [applyingAssignmentId, setApplyingAssignmentId] = useState<string | null>(null)
   const [pairError, setPairError] = useState<AdminRemediation | null>(null)
   const [pairingAssignmentId, setPairingAssignmentId] = useState<string | null>(null)
   const [pairingOutputByAssignment, setPairingOutputByAssignment] = useState<Record<string, string>>({})
@@ -76,6 +79,10 @@ export function ProvisioningPage() {
       || applySteps?.some(step => step.id === 'handoff' && step.status === 'done')
     ),
   )
+  const isApplying = applyingAssignmentId === assignment?.id
+  const isPairing = pairingAssignmentId === assignment?.id
+  const applyDisabledReason = resolveApplyDisabledReason(isLive, effectiveApprovalStatus)
+  const pairDisabledReason = resolvePairDisabledReason(isLive, effectiveApprovalStatus)
 
   useEffect(() => {
     if (!adminData.assignments.some(item => item.id === selectedAssignmentId))
@@ -116,6 +123,7 @@ export function ProvisioningPage() {
       return
 
     setApplyError(null)
+    setApplyingAssignmentId(assignment.id)
     try {
       const response = await fetch(`/api/assignments/${encodeURIComponent(assignment.id)}/apply`, {
         headers: adminMutationHeaders(),
@@ -139,6 +147,9 @@ export function ProvisioningPage() {
     }
     catch (error) {
       setApplyError(remediationFromCaughtError(error))
+    }
+    finally {
+      setApplyingAssignmentId(current => current === assignment.id ? null : current)
     }
   }
 
@@ -186,12 +197,6 @@ export function ProvisioningPage() {
         eyebrow="Provisioning"
         title="生成 assignment plan"
         description="该页面只预览 AIWorker 将执行的 aissh/projection/handoff 元数据，不会展示 provider secret，也不会连接 Paseo runtime。"
-        actions={(
-          <Button size="sm">
-            <PlayCircleIcon data-icon="inline-start" weight="duotone" />
-            预览审批计划
-          </Button>
-        )}
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.85fr_1.15fr]">
         <Card>
@@ -415,14 +420,22 @@ export function ProvisioningPage() {
                         <WarningCircleIcon data-icon="inline-start" weight="duotone" />
                         {isLive ? '退回并记录' : '预览退回修改'}
                       </Button>
-                      <Button disabled={!isLive || effectiveApprovalStatus !== 'approved'} size="sm" onClick={runApplyJob}>
-                        <PlayCircleIcon data-icon="inline-start" weight="duotone" />
-                        执行已审批交付
-                      </Button>
-                      <Button disabled={!isLive || effectiveApprovalStatus !== 'approved' || pairingAssignmentId === assignment?.id} size="sm" variant="outline" onClick={runPairJob}>
-                        <PlayCircleIcon data-icon="inline-start" weight="duotone" />
-                        生成配对链接
-                      </Button>
+                      <DisabledReasonTooltip reason={isApplying ? null : applyDisabledReason}>
+                        <Button disabled={isApplying || applyDisabledReason !== null} size="sm" onClick={runApplyJob}>
+                          {isApplying
+                            ? <CircleNotchIcon className="animate-spin" data-icon="inline-start" weight="bold" />
+                            : <PlayCircleIcon data-icon="inline-start" weight="duotone" />}
+                          {isApplying ? '执行中…' : '执行已审批交付'}
+                        </Button>
+                      </DisabledReasonTooltip>
+                      <DisabledReasonTooltip reason={isPairing ? null : pairDisabledReason}>
+                        <Button disabled={isPairing || pairDisabledReason !== null} size="sm" variant="outline" onClick={runPairJob}>
+                          {isPairing
+                            ? <CircleNotchIcon className="animate-spin" data-icon="inline-start" weight="bold" />
+                            : <PlayCircleIcon data-icon="inline-start" weight="duotone" />}
+                          {isPairing ? '生成配对链接…' : '生成配对链接'}
+                        </Button>
+                      </DisabledReasonTooltip>
                     </div>
                     {effectiveApprovalStatus !== 'approved' ? <RemediationAlert remediation={adminRemediation('approval_required')} /> : null}
                     {provider.status !== 'ready' ? <RemediationAlert remediation={adminRemediation('provider_auth_required')} /> : null}
@@ -536,6 +549,41 @@ export function resolveAssignmentIdentityForTuple(
   catch {
     return ''
   }
+}
+
+function DisabledReasonTooltip({ reason, children }: { reason: string | null, children: ReactNode }) {
+  if (!reason)
+    return <>{children}</>
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {/* focusable wrapper so the reason stays reachable even when the button is disabled */}
+        <span className="inline-flex" tabIndex={0} aria-label={reason}>
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{reason}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+export function resolveApplyDisabledReason(
+  isLive: boolean,
+  approvalStatus: ApprovalStatus | undefined,
+): string | null {
+  if (!isLive)
+    return '需先连接 control-plane（设置 AIWORKER_CONTROL_PLANE_DIR）'
+  if (approvalStatus !== 'approved')
+    return '需先在 Approval gate 批准该 assignment'
+  return null
+}
+
+export function resolvePairDisabledReason(
+  isLive: boolean,
+  approvalStatus: ApprovalStatus | undefined,
+): string | null {
+  return resolveApplyDisabledReason(isLive, approvalStatus)
 }
 
 function remediationFromCaughtError(error: unknown): AdminRemediation {
