@@ -6,9 +6,9 @@ export function BoundaryAlert() {
   return (
     <Alert>
       <WarningCircleIcon weight="duotone" />
-      <AlertTitle>Runtime boundary</AlertTitle>
+      <AlertTitle>员工使用入口在 Paseo</AlertTitle>
       <AlertDescription>
-        AIWorker Web is an admin control plane. It can prepare assignments and handoff metadata, but Paseo owns workspace UI, sessions, logs, permissions, and provider process lifecycle.
+        这个页面只帮管理员开通和跟踪员工的 AIWorker。员工真正使用 AIWorker、查看对话和处理权限，都在 Paseo 客户端里完成。
       </AlertDescription>
     </Alert>
   )

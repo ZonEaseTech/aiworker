@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { AssignmentDetailSheet } from '@/components/assignment-detail-sheet'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { getEnvironment, getSoulRelease, statusMeta } from '@/lib/admin-data'
 
@@ -22,17 +22,23 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardDescription>Assignment lifecycle follows draft → provisioning → projected → handoff → ready.</CardDescription>
+        <CardDescription>先看员工、下一步和状态；支持排查信息在详情里展开。</CardDescription>
+        <CardAction>
+          <StatusBadge tone={assignments.some(assignment => assignment.status === 'needs_attention') ? 'warning' : 'info'}>
+            {assignments.length}
+            {' '}
+            人
+          </StatusBadge>
+        </CardAction>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Employee</TableHead>
-              <TableHead>Soul</TableHead>
-              <TableHead>Environment</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Detail</TableHead>
+              <TableHead className="w-48">员工</TableHead>
+              <TableHead>下一步</TableHead>
+              <TableHead className="w-24">状态</TableHead>
+              <TableHead className="w-16 text-right">详情</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -44,12 +50,24 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
                 <TableRow key={assignment.id}>
                   <TableCell>
                     <div className="font-medium">{assignment.assignedEmail}</div>
-                    <div className="text-[0.625rem] text-muted-foreground">{assignment.team}</div>
+                    <div className="text-[0.625rem] text-muted-foreground">
+                      {assignment.team}
+                      {' '}
+                      ·
+                      {' '}
+                      {soul.displayName}
+                    </div>
                   </TableCell>
-                  <TableCell>{soul.displayName}</TableCell>
                   <TableCell>
-                    <div className="font-mono text-xs">{environment.id}</div>
-                    <div className="text-[0.625rem] text-muted-foreground">{environment.targetRef}</div>
+                    <div className="max-w-[18rem] text-xs/relaxed">{assignment.nextStep}</div>
+                    <div className="mt-1 truncate text-[0.625rem] text-muted-foreground">
+                      设备：
+                      {environment.ownerEmail === assignment.assignedEmail ? '员工本人' : `${environment.ownerEmail} 代管`}
+                      {' '}
+                      ·
+                      {' '}
+                      {assignment.updatedAt}
+                    </div>
                   </TableCell>
                   <TableCell><StatusBadge tone={status.tone}>{status.label}</StatusBadge></TableCell>
                   <TableCell className="text-right">

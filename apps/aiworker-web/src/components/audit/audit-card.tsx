@@ -6,8 +6,8 @@ export function AuditCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recent audit events</CardTitle>
-        <CardDescription>所有事件都是 AIWorker 元数据事件，不含 Paseo 会话内容。</CardDescription>
+        <CardTitle>最近操作记录</CardTitle>
+        <CardDescription>只记录管理员开通动作，不显示员工对话内容。</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {adminConsoleData.recentAuditEvents.map(event => (
@@ -15,8 +15,11 @@ export function AuditCard() {
             <StatusBadge tone={event.tone}>{event.at}</StatusBadge>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-foreground">{event.action}</p>
-              <p className="mt-1 truncate font-mono text-[0.625rem] text-muted-foreground">{event.target}</p>
               <p className="mt-1 text-[0.625rem] text-muted-foreground">{event.actor}</p>
+              <details className="mt-1">
+                <summary className="cursor-pointer text-[0.625rem] text-muted-foreground">支持信息</summary>
+                <p className="mt-1 truncate font-mono text-[0.625rem] text-muted-foreground">{event.target}</p>
+              </details>
             </div>
           </div>
         ))}

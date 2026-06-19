@@ -10,7 +10,7 @@ describe('admin data context unavailable state', () => {
     expect(state.bootstrap.controlPlaneDirConfigured).toBe(true)
     expect(state.isLive).toBe(false)
     expect(state.loadError.code).toBe('control_plane_unavailable')
-    expect(state.loadError.title).toBe('Control-plane is unavailable')
+    expect(state.loadError.title).toBe('管理数据暂时不可用')
   })
 
   test('sends a stored admin token on the initial admin-data read', async () => {

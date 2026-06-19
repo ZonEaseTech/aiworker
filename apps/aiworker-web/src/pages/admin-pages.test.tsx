@@ -1,12 +1,13 @@
 import type { ReactElement } from 'react'
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router'
 
 import { AssignmentDetailContent } from '@/components/assignment-detail-sheet'
 import { AssignmentTableCard } from '@/components/assignments/assignment-table-card'
 import { AuditCard } from '@/components/audit/audit-card'
 import { BoundaryAlert } from '@/components/boundary-alert'
-import { adminConsoleData } from '@/lib/admin-data'
+import { adminConsoleData, navigationItems } from '@/lib/admin-data'
 import { AssignmentsPage } from './assignments-page'
 import { AuditPage } from './audit-page'
 import { DashboardPage } from './dashboard-page'
@@ -19,63 +20,95 @@ import {
 } from './provisioning-page'
 import { SoulsPage } from './souls-page'
 
+function expectInOrder(markup: string, labels: string[]) {
+  let cursor = -1
+  for (const label of labels) {
+    const index = markup.indexOf(label, cursor + 1)
+    expect(index, label).toBeGreaterThan(cursor)
+    cursor = index
+  }
+}
+
+function renderPage(page: ReactElement) {
+  return renderToStaticMarkup(<MemoryRouter>{page}</MemoryRouter>)
+}
+
 describe('admin console page composition', () => {
   test('renders every admin route with its core heading', () => {
     const pages: Array<[string, ReactElement, string]> = [
-      ['dashboard', <DashboardPage />, 'AIWorker 分发控制台'],
-      ['assignments', <AssignmentsPage />, '员工 workspace 分配'],
-      ['provisioning', <ProvisioningPage />, '生成 assignment plan'],
-      ['souls', <SoulsPage />, '版本化 workspace templates'],
-      ['environments', <EnvironmentsPage />, '环境与 provider profile'],
-      ['audit', <AuditPage />, '交付证据与审计'],
+      ['dashboard', <DashboardPage />, '先处理这一件事'],
+      ['assignments', <AssignmentsPage />, '员工开通记录'],
+      ['provisioning', <ProvisioningPage />, '处理员工开通'],
+      ['souls', <SoulsPage />, '可分配的 AI 能力'],
+      ['environments', <EnvironmentsPage />, '员工设备和后台 AI 账号'],
+      ['audit', <AuditPage />, '管理员操作记录'],
     ]
 
     for (const [name, page, heading] of pages) {
-      const markup = renderToStaticMarkup(page)
+      const markup = renderPage(page)
       expect(markup, name).toContain(heading)
     }
 
-    const dashboard = renderToStaticMarkup(<DashboardPage />)
-    expect(dashboard).toContain('AIWorker 分发控制台')
-    expect(dashboard).toContain('Admin bootstrap')
+    const dashboard = renderPage(<DashboardPage />)
+    expect(dashboard).toContain('先处理这一件事')
+    expect(dashboard).toContain('处理 cara@example.com 的入口问题')
+    expect(dashboard).toContain('接下来处理')
+    expect(dashboard).toContain('按顺序处理，不需要先看日志或技术配置')
+    expect(dashboard).toContain('页面说明')
+    expect(dashboard).toContain('技术支持和系统状态')
     expect(dashboard).toContain('AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane')
+    expect(dashboard).toContain('给技术支持查看启动变量')
     expect(dashboard).toContain('bun run dev')
     expect(dashboard).not.toContain('bun run dev:aiworker-web')
-    expect(dashboard).toContain('Use for session')
-    expect(dashboard).toContain('Remember on this device')
-    expect(dashboard).toContain('admin-data reads and state-changing Web API calls')
-    expect(dashboard).toContain('Control-plane directory is not bound')
-    expect(dashboard).toContain('待审批')
+    expect(dashboard).toContain('本次使用')
+    expect(dashboard).toContain('记住这台设备')
+    expect(dashboard).toContain('口令只保存在当前浏览器')
+    expect(dashboard).toContain('当前为演示模式')
+    expect(dashboard).toContain('处理员工入口')
+    expect(dashboard).not.toContain('最近操作记录')
+    expect(dashboard).not.toContain('技术设置')
+    expect(dashboard).not.toContain('已开通员工')
+    expectInOrder(dashboard, [
+      '先处理这一件事',
+      '处理 cara@example.com 的入口问题',
+      '接下来处理',
+      '页面说明',
+      '技术支持和系统状态',
+      'AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane',
+    ])
 
-    const provisioning = renderToStaticMarkup(<ProvisioningPage />)
-    expect(provisioning).toContain('Approval gate')
-    expect(provisioning).toContain('Assignment identity')
-    expect(provisioning).toContain('Preview trace timeline')
-    expect(provisioning).toContain('assignment snapshot')
-    expect(provisioning).toContain('Fixture preview mode')
-    expect(provisioning).toContain('approvals.jsonl')
-    expect(provisioning).toContain('预览批准')
-    expect(provisioning).toContain('预览退回修改')
-    expect(provisioning).toContain('执行已审批交付')
-    expect(provisioning).toContain('生成配对链接')
-    expect(provisioning).toContain('Approval is required first')
-    expect(provisioning).toContain('Provider needs target-side setup')
-    expect(provisioning).toContain('Apply must complete before pairing')
-    expect(provisioning).toContain('只在当前页面显示')
-    expect(provisioning).toContain('不会持久化')
+    const provisioning = renderPage(<ProvisioningPage />)
+    expect(provisioning).toContain('处理员工开通')
+    expect(provisioning).toContain('当前员工')
+    expect(provisioning).toContain('选择员工')
+    expect(provisioning).toContain('确认内容')
+    expect(provisioning).toContain('管理员确认')
+    expect(provisioning).toContain('开始开通')
+    expect(provisioning).toContain('发送入口')
+    expect(provisioning).toContain('操作记录')
+    expect(provisioning).toContain('演示模式')
+    expect(provisioning).toContain('预览确认')
+    expect(provisioning).toContain('预览退回')
+    expect(provisioning).toContain('后台 AI 账号需要授权')
+    expect(provisioning).toContain('入口只在当前页面临时显示')
+    expect(provisioning).toContain('不会保存')
     expect(provisioning).toContain('aiworker plan')
     expect(provisioning).not.toContain('apply --yes')
+    expectInOrder(provisioning, ['选择员工', '确认内容', '管理员确认', '开始开通', '发送入口'])
+    expectInOrder(provisioning, ['确认内容', '给技术支持查看开通配置'])
+    expect(navigationItems.map(item => item.path)).not.toContain('/provisioning')
+    expect(navigationItems.map(item => item.title)).not.toContain('开通向导')
 
-    const audit = renderToStaticMarkup(<AuditPage />)
-    expect(audit).toContain('Trace events:')
-    expect(audit).toContain('receipt')
+    const audit = renderPage(<AuditPage />)
+    expect(audit).toContain('处理记录：')
+    expect(audit).toContain('开通记录')
   })
 
   test('provisioning approval controls stay preview-only and redacted', () => {
-    const markup = renderToStaticMarkup(<ProvisioningPage />)
+    const markup = renderPage(<ProvisioningPage />)
 
-    expect(markup).toContain('未配置 AIWORKER_CONTROL_PLANE_DIR')
-    expect(markup).toContain('不会触发 aissh 或 Paseo')
+    expect(markup).toContain('演示模式')
+    expect(markup).toContain('不会保存，也不会连接员工设备')
     expect(markup).not.toContain('/api/sessions/')
     expect(markup).not.toContain('engine_invocation')
     expect(markup).not.toContain('offer=')
@@ -118,17 +151,20 @@ describe('admin console page composition', () => {
       <AssignmentDetailContent assignment={adminConsoleData.assignments[0]} />,
     )
 
-    expect(markup).toContain('Approval')
-    expect(markup).toContain('Preview trace timeline')
-    expect(markup).toContain('Control API not implemented')
+    expect(markup).toContain('管理员确认')
+    expect(markup).toContain('处理记录')
+    expect(markup).toContain('当前为预览记录')
     expect(markup).toContain(`receipt:${adminConsoleData.assignments[0].receiptId}`)
     expect(markup).not.toContain('/api/sessions/')
     expect(markup).not.toContain('engine_invocation')
   })
 
   test('shared cards preserve the runtime boundary and assignment detail affordance', () => {
-    expect(renderToStaticMarkup(<BoundaryAlert />)).toContain('Paseo owns workspace UI')
-    expect(renderToStaticMarkup(<AuditCard />)).toContain('Recent audit events')
-    expect(renderToStaticMarkup(<AssignmentTableCard title="Test ledger" assignments={adminConsoleData.assignments} />)).toContain('Assignment lifecycle follows')
+    expect(renderToStaticMarkup(<BoundaryAlert />)).toContain('员工使用入口在 Paseo')
+    expect(renderToStaticMarkup(<AuditCard />)).toContain('最近操作记录')
+    const assignmentTable = renderToStaticMarkup(<AssignmentTableCard title="测试列表" assignments={adminConsoleData.assignments} />)
+    expect(assignmentTable).toContain('先看员工、下一步和状态')
+    expect(assignmentTable).toContain('下一步')
+    expect(assignmentTable).not.toContain('>Environment</')
   })
 })

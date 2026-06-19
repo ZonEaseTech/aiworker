@@ -308,12 +308,12 @@ export function summarizeApplyJobResult(assignmentId: string, exitCode: number, 
     ...(remediationCode ? { remediation: adminRemediation(remediationCode) } : {}),
     status: completed ? 'completed' : 'failed',
     steps: [
-      { id: 'approval', label: '审批已通过', status: 'done' },
-      { id: 'target', label: '目标机器已通过 aissh 返回', status: completed ? 'done' : 'failed' },
-      { id: 'paseo', label: 'Paseo daemon 可用', status: paseoReady ? 'done' : completed ? 'needs_attention' : 'failed' },
-      { id: 'workspace', label: 'Workspace 文件已投影', status: completed ? 'done' : 'failed' },
-      { id: 'provider', label: providerWarning ? 'Provider 需要登录/安装后再使用' : 'Provider 未阻塞投影', status: providerWarning ? 'needs_attention' : completed ? 'done' : 'failed' },
-      { id: 'handoff', label: 'Handoff 已准备，可请求配对', status: handoffReady ? 'done' : completed ? 'needs_attention' : 'failed' },
+      { id: 'approval', label: '管理员已确认', status: 'done' },
+      { id: 'target', label: '员工设备已连接', status: completed ? 'done' : 'failed' },
+      { id: 'paseo', label: '员工设备上的 Paseo 可用', status: paseoReady ? 'done' : completed ? 'needs_attention' : 'failed' },
+      { id: 'workspace', label: '员工工作区已准备', status: completed ? 'done' : 'failed' },
+      { id: 'provider', label: providerWarning ? '后台 AI 账号需要授权' : '后台 AI 账号未阻塞开通', status: providerWarning ? 'needs_attention' : completed ? 'done' : 'failed' },
+      { id: 'handoff', label: '员工入口已准备', status: handoffReady ? 'done' : completed ? 'needs_attention' : 'failed' },
     ],
   }
 }

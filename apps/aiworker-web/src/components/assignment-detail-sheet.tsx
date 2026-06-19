@@ -32,7 +32,7 @@ export function AssignmentDetailSheet({
         <SheetHeader>
           <SheetTitle>{assignment.assignedEmail}</SheetTitle>
           <SheetDescription>
-            Assignment metadata and redacted handoff. Paseo owns the workspace runtime after handoff.
+            查看这名员工是否已经能使用 AIWorker，以及管理员下一步要做什么。
           </SheetDescription>
         </SheetHeader>
         <AssignmentDetailContent assignment={assignment} />
@@ -56,17 +56,15 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
         <StatusBadge tone="outline">{assignment.team}</StatusBadge>
       </div>
       <dl className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-        <Detail label="Soul release" value={`${soul.displayName} · ${soul.version}`} />
-        <Detail label="Provider profile" value={`${provider.label} · ${provider.secretRef}`} />
-        <Detail label="Environment" value={`${environment.id} · ${environment.isolation}`} />
-        <Detail label="Target" value={environment.targetRef} />
-        <Detail label="Workspace" value={assignment.workspaceRef} />
-        <Detail label="Receipt" value={assignment.receiptId} />
+        <Detail label="能力模板" value={`${soul.displayName} · ${soul.version}`} />
+        <Detail label="后台 AI 账号" value={provider.label} />
+        <Detail label="员工设备" value={environment.ownerEmail === assignment.assignedEmail ? '员工本人设备' : `${environment.ownerEmail} 代管设备`} />
+        <Detail label="最近更新" value={assignment.updatedAt} />
       </dl>
       <Separator />
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">Handoff</h3>
-        <p className="rounded-md border bg-muted/30 p-3 font-mono text-xs/relaxed text-foreground">
+        <h3 className="text-sm font-medium">员工入口</h3>
+        <p className="rounded-md border bg-muted/30 p-3 text-xs/relaxed text-foreground">
           {assignment.handoffLabel}
         </p>
         <p className="text-xs/relaxed text-muted-foreground">{assignment.nextStep}</p>
@@ -76,17 +74,19 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
         ? (
             <section className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">Approval</h3>
+                <h3 className="text-sm font-medium">管理员确认</h3>
                 <StatusBadge tone={approvalStatusMeta[approval.status].tone}>{approvalStatusMeta[approval.status].label}</StatusBadge>
               </div>
               <p className="text-xs/relaxed text-muted-foreground">{approval.riskSummary}</p>
-              <p className="font-mono text-[0.625rem] text-muted-foreground">Control API not implemented · synthetic preview only</p>
+              <p className="text-[0.625rem] text-muted-foreground">
+                {approval.controlApiState === 'persisted' ? '确认记录已保存。' : '当前为预览记录，正式连接管理数据后会保存。'}
+              </p>
             </section>
           )
         : null}
       <Separator />
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium">Preview trace timeline</h3>
+        <h3 className="text-sm font-medium">处理记录</h3>
         <div className="flex flex-col gap-2">
           {traceEvents.map(event => (
             <div key={event.id} className="rounded-md border p-3">
@@ -96,14 +96,17 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
               </div>
               <p className="mt-2 text-xs font-medium text-foreground">{event.title}</p>
               <p className="mt-1 text-xs/relaxed text-muted-foreground">{event.detail}</p>
-              <p className="mt-1 font-mono text-[0.625rem] text-muted-foreground">{event.evidenceRef}</p>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[0.625rem] text-muted-foreground">支持信息</summary>
+                <p className="mt-1 font-mono text-[0.625rem] text-muted-foreground">{event.evidenceRef}</p>
+              </details>
             </div>
           ))}
         </div>
       </section>
       <Separator />
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium">Audit trail</h3>
+        <h3 className="text-sm font-medium">开通操作</h3>
         <div className="flex flex-col gap-2">
           {assignment.audit.map(event => (
             <div key={event.id} className="rounded-md border p-3">
@@ -112,20 +115,35 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
                 <span className="text-xs text-muted-foreground">{event.actor}</span>
               </div>
               <p className="mt-2 text-xs font-medium text-foreground">{event.action}</p>
-              <p className="mt-1 font-mono text-[0.625rem] text-muted-foreground">{event.target}</p>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[0.625rem] text-muted-foreground">支持信息</summary>
+                <p className="mt-1 font-mono text-[0.625rem] text-muted-foreground">{event.target}</p>
+              </details>
             </div>
           ))}
         </div>
       </section>
+      <Separator />
+      <details className="rounded-md border bg-muted/20 p-3">
+        <summary className="cursor-pointer text-sm font-medium">给技术支持查看的配置</summary>
+        <dl className="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+          <Detail label="能力版本" value={`${soul.displayName} · ${soul.version}`} technical />
+          <Detail label="后台账号引用" value={`${provider.label} · ${provider.secretRef}`} technical />
+          <Detail label="设备编号" value={`${environment.id} · ${environment.targetRef}`} technical />
+          <Detail label="隔离方式" value={environment.isolation} technical />
+          <Detail label="工作区路径" value={assignment.workspaceRef} technical />
+          <Detail label="开通记录编号" value={assignment.receiptId} technical />
+        </dl>
+      </details>
     </div>
   )
 }
 
-function Detail({ label, value }: { label: string, value: string }) {
+function Detail({ label, technical = false, value }: { label: string, technical?: boolean, value: string }) {
   return (
     <div className="rounded-md border bg-card p-3">
-      <dt className="text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words font-mono text-xs text-foreground">{value}</dd>
+      <dt className="text-[0.625rem] font-medium text-muted-foreground">{label}</dt>
+      <dd className={`mt-1 break-words text-xs text-foreground ${technical ? 'font-mono' : ''}`}>{value}</dd>
     </div>
   )
 }

@@ -110,8 +110,9 @@ describe('admin data fixtures', () => {
     expect(environments.length).toBeGreaterThan(0)
 
     for (const assignment of assignments) {
-      expect(assignment.handoffLabel).toMatch(/paseo|workspace|project|workdir|relay/i)
-      expect(assignment.nextStep).toContain('AIWorker 不读取 session')
+      expect(assignment.handoffLabel).toMatch(/员工|Paseo|AIWorker/)
+      expect(assignment.handoffLabel).not.toContain(assignment.workspaceRef)
+      expect(assignment.nextStep).toMatch(/员工|开通|入口|AIWorker/)
       expect(assignment.workspaceRef).not.toContain('transcript')
     }
   })
@@ -339,14 +340,14 @@ describe('admin data fixtures', () => {
 
     expect(Object.keys(source)).toEqual(['loadAdminConsoleData'])
     expect(data.assignments[0]?.receiptId).toBe('rcpt-1')
-    expect(data.assignments[0]?.handoffLabel).toContain('paseo daemon pair')
-    expect(data.assignments[0]?.handoffLabel).toContain('--home "$PASEO_HOME"')
-    expect(data.assignments[0]?.handoffLabel).toContain('Project workdir')
+    expect(data.assignments[0]?.handoffLabel).toContain('Paseo 客户端')
+    expect(data.assignments[0]?.handoffLabel).not.toContain('--home "$PASEO_HOME"')
+    expect(data.assignments[0]?.handoffLabel).not.toContain(data.assignments[0]?.workspaceRef ?? 'missing-workspace')
     expect(data.assignments[0]?.projectRef).toBe('$HOME/.aiworker/alice-example.com/projects/freeform')
-    expect(data.assignments[0]?.handoffLabel).toContain('paseo --host')
+    expect(data.assignments[0]?.handoffLabel).not.toContain('paseo --host')
     expect(data.environments[0]?.daemonEndpoint).toBe('127.0.0.1:42057')
     expect(data.approvals[0]?.checks.some(check => check.id.endsWith('-owner-scope') && check.status === 'warning')).toBe(true)
-    expect(data.assignments[0]?.nextStep).toContain('AIWorker 不读取 session')
+    expect(data.assignments[0]?.nextStep).toContain('AIWorker')
     expect(data.providerProfiles[0]?.secretRef).toBe('secret://providers/codex/default')
     expect(data.soulReleases[0]?.fileCount).toBe(1)
     expect(data.approvals[0]?.assignmentId).toBe(data.assignments[0]?.id)

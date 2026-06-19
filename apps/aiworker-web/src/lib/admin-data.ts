@@ -355,10 +355,10 @@ export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminCon
 
 export const statusMeta: Record<AssignmentStatus, { label: string, tone: Tone }> = {
   draft: { label: '草稿', tone: 'secondary' },
-  provisioning: { label: '配置中', tone: 'info' },
-  workspace_projected: { label: '已投影', tone: 'info' },
-  handoff_ready: { label: '可交接', tone: 'warning' },
-  ready: { label: '就绪', tone: 'success' },
+  provisioning: { label: '开通中', tone: 'info' },
+  workspace_projected: { label: '准备中', tone: 'info' },
+  handoff_ready: { label: '待发送', tone: 'warning' },
+  ready: { label: '已开通', tone: 'success' },
   needs_attention: { label: '需处理', tone: 'destructive' },
   revoked: { label: '已撤销', tone: 'outline' },
   archived: { label: '已归档', tone: 'secondary' },
@@ -620,23 +620,23 @@ const fixtureAssignments: AssignmentSummary[] = [
     workspaceRef: '$HOME/.aiworker/alice-example.com/projects/freeform',
     receiptId: 'rcpt-20260614-001',
     handoffKind: 'paseo-daemon',
-    handoffLabel: 'run paseo daemon pair --home "$PASEO_HOME"; open Project workdir with paseo --host 127.0.0.1:42057 "$HOME/.aiworker/alice-example.com/projects/freeform"',
+    handoffLabel: 'Paseo 客户端已可打开该员工的 AIWorker 工作区。',
     updatedAt: '2026-06-14 07:34 UTC',
-    nextStep: '员工可在 Paseo 客户端打开 Project workdir；AIWorker 不读取 session。',
+    nextStep: '把使用入口发给员工，员工即可在 Paseo 客户端打开 AIWorker。',
     audit: [
       {
         id: 'evt-001',
         at: '07:34',
         actor: 'admin@example.com',
-        action: 'handoff_ready -> ready',
+        action: '员工入口已准备',
         target: 'asn-alice-freeform',
         tone: 'success',
       },
       {
         id: 'evt-002',
         at: '07:31',
-        actor: 'aiworker apply',
-        action: 'projected Project workdir files',
+        actor: 'AIWorker',
+        action: '开通文件已准备',
         target: '$HOME/.aiworker/alice-example.com/projects/freeform',
         tone: 'info',
       },
@@ -654,15 +654,15 @@ const fixtureAssignments: AssignmentSummary[] = [
     workspaceRef: '/workspace/paseo/workspaces/support',
     receiptId: 'rcpt-20260614-002',
     handoffKind: 'manual-path',
-    handoffLabel: '等待容器内 Paseo daemon endpoint 确认',
+    handoffLabel: '等待员工设备连接确认后发送入口。',
     updatedAt: '2026-06-14 06:55 UTC',
-    nextStep: '确认 daemon endpoint 后生成 handoff；AIWorker 不读取 session。',
+    nextStep: '确认员工设备在线，然后发送使用入口。',
     audit: [
       {
         id: 'evt-003',
         at: '06:55',
-        actor: 'aiworker apply',
-        action: 'workspace_projected',
+        actor: 'AIWorker',
+        action: '员工工作区已准备',
         target: 'asn-bob-support',
         tone: 'info',
       },
@@ -680,15 +680,15 @@ const fixtureAssignments: AssignmentSummary[] = [
     workspaceRef: '$HOME/.aiworker/cara-example.com/projects/sales-enable',
     receiptId: 'rcpt-20260613-014',
     handoffKind: 'pairing-offer',
-    handoffLabel: 'relay offer 已脱敏，等待员工重新配对',
+    handoffLabel: '员工的配对链接已过期，需要重新生成。',
     updatedAt: '2026-06-14 05:42 UTC',
-    nextStep: '重新生成 pairing offer；AIWorker 不读取 session，也不显示 relay token。',
+    nextStep: '重新生成临时配对信息并发给员工。',
     audit: [
       {
         id: 'evt-004',
         at: '05:42',
-        actor: 'aiworker doctor',
-        action: 'relay offer expired',
+        actor: 'AIWorker 检查',
+        action: '配对信息已过期',
         target: 'env-cara-relay',
         tone: 'destructive',
       },
@@ -853,37 +853,37 @@ function buildMetrics(data: {
 }): MetricSummary[] {
   return [
     {
-      label: '就绪 assignments',
+      label: '已开通员工',
       value: String(data.assignments.filter(assignment => assignment.status === 'ready').length),
-      helper: '只表示 Project workdir + handoff 已准备，不代表可观察 Paseo session。',
+      helper: '员工已经可以从 Paseo 客户端进入 AIWorker。',
       tone: 'success',
       icon: CheckCircleIcon,
     },
     {
       label: '待处理事项',
       value: String(data.assignments.filter(assignment => assignment.status === 'needs_attention').length),
-      helper: '需要管理员处理的 provisioning/handoff 元数据。',
+      helper: '需要管理员补充设备连接或配对信息。',
       tone: 'warning',
       icon: WarningCircleIcon,
     },
     {
       label: '待审批',
       value: String(data.approvals.filter(approval => approval.status === 'pending').length),
-      helper: '审批仅覆盖 AIWorker provisioning/receipt/handoff 元数据。',
+      helper: '需要管理员确认后才能继续开通。',
       tone: 'warning',
       icon: ClockClockwiseIcon,
     },
     {
-      label: 'Soul releases',
+      label: '能力模板',
       value: String(data.soulReleases.filter(release => release.status === 'published').length),
-      helper: '已发布的 Paseo workspace templates。',
+      helper: '可分配给员工的 AIWorker 能力。',
       tone: 'info',
       icon: ArchiveIcon,
     },
     {
-      label: 'Provider profiles',
+      label: '后台账号配置',
       value: String(data.providerProfiles.length),
-      helper: '仅保存 secret reference，不保存 literal key。',
+      helper: '给技术支持维护，普通管理员通常不需要处理。',
       tone: 'secondary',
       icon: ShieldCheckIcon,
     },
@@ -917,29 +917,29 @@ function buildProvisioningApprovals(
       checks: [
         {
           id: `${assignment.id}-scope`,
-          label: 'Workspace scope',
+          label: '员工范围',
           status: assignment.status === 'needs_attention' ? 'warning' : 'pass',
-          detail: `仅审批 ${assignment.workspaceRef} 的 Soul projection、receipt 与 handoff 元数据。`,
+          detail: `只为 ${assignment.assignedEmail} 开通这个 AIWorker 工作区。`,
         },
         {
           id: `${assignment.id}-provider`,
-          label: 'Provider reference',
+          label: '后台账号',
           status: provider?.status === 'needs_auth' ? 'blocked' : provider?.status === 'reference_only' ? 'warning' : 'pass',
-          detail: provider ? `${provider.label} 使用 ${provider.secretRef}，不展示 literal secret。` : 'provider profile 待补齐。',
+          detail: provider ? `${provider.label} 已引用，不会在页面展示密钥。` : '后台账号配置待补齐。',
         },
         {
           id: `${assignment.id}-owner-scope`,
-          label: 'Target owner scope',
+          label: '员工设备',
           status: environment && environment.ownerEmail !== assignment.assignedEmail ? 'warning' : 'pass',
           detail: environment && environment.ownerEmail !== assignment.assignedEmail
-            ? `target owner/admin 是 ${environment.ownerEmail}；assigned user ${assignment.assignedEmail} 使用 ${environment.paseoHome}。Provider CLI credential 可能仍在共享 HOME 下，需管理员确认。`
-            : `target owner 与 ${assignment.assignedEmail} 一致或已声明 dedicated target。`,
+            ? `设备由 ${environment.ownerEmail} 代管；请确认这是给 ${assignment.assignedEmail} 开通的正确设备。`
+            : `${assignment.assignedEmail} 的设备范围已确认。`,
         },
         {
           id: `${assignment.id}-handoff`,
-          label: 'Handoff boundary',
+          label: '发送入口',
           status: assignment.handoffKind === 'pairing-offer' && assignment.status === 'needs_attention' ? 'warning' : 'pass',
-          detail: 'Handoff 只展示 redacted instruction；真实 pairing link 由 Paseo CLI 输出后交给前端配对。',
+          detail: '只显示可给员工使用的入口状态；真实配对内容只临时显示。',
         },
       ],
     }
@@ -958,8 +958,8 @@ function buildProvisioningTraceEvents(
         assignmentId: assignment.id,
         at: assignment.updatedAt,
         actor: approval?.requestedBy ?? 'admin@example.com',
-        title: 'Assignment request captured',
-        detail: `管理员为 ${assignment.assignedEmail} 准备 ${assignment.workspaceRef} 的 provisioning metadata。`,
+        title: '开通请求已记录',
+        detail: `管理员准备为 ${assignment.assignedEmail} 开通 AIWorker。`,
         evidenceRef: `assignment:${assignment.id}`,
         tone: 'info',
       },
@@ -971,8 +971,8 @@ function buildProvisioningTraceEvents(
         assignmentId: assignment.id,
         at: approval.decidedAt ?? approval.submittedAt,
         actor: approval.reviewer,
-        title: `Approval ${approval.status}`,
-        detail: '审批范围限定为 AIWorker plan、Soul projection、receipt 与 handoff metadata。',
+        title: `确认结果：${approvalStatusMeta[approval.status].label}`,
+        detail: '确认范围只包括员工、能力模板、设备和入口信息。',
         evidenceRef: `approval:${approval.id}`,
         tone: approvalStatusMeta[approval.status].tone,
       })
@@ -982,9 +982,9 @@ function buildProvisioningTraceEvents(
       id: `trace-${assignment.id}-receipt`,
       assignmentId: assignment.id,
       at: assignment.updatedAt,
-      actor: 'aiworker control',
-      title: 'Receipt linked',
-      detail: `Redacted receipt ${assignment.receiptId} 记录 assignment 状态与 Project workdir policy。`,
+      actor: 'AIWorker',
+      title: '开通记录已生成',
+      detail: '开通记录已保存，方便后续审计。',
       evidenceRef: `receipt:${assignment.receiptId}`,
       tone: assignment.status === 'needs_attention' ? 'warning' : 'success',
     })
@@ -996,7 +996,7 @@ function buildProvisioningTraceEvents(
         at: auditEvent.at,
         actor: auditEvent.actor,
         title: auditEvent.action,
-        detail: `审计目标 ${auditEvent.target}，只保留 AIWorker control-plane metadata。`,
+        detail: `只保留管理员需要追溯的开通记录。`,
         evidenceRef: `audit:${auditEvent.id}`,
         tone: auditEvent.tone,
       })
@@ -1006,8 +1006,8 @@ function buildProvisioningTraceEvents(
       id: `trace-${assignment.id}-handoff`,
       assignmentId: assignment.id,
       at: assignment.updatedAt,
-      actor: 'aiworker handoff',
-      title: `${assignment.handoffKind} handoff`,
+      actor: 'AIWorker',
+      title: '员工入口状态',
       detail: assignment.nextStep,
       evidenceRef: `handoff:${assignment.handoffKind}`,
       tone: statusMeta[assignment.status].tone,
@@ -1038,16 +1038,18 @@ function approvalRiskSummary(
   environment?: PaseoEnvironmentSummary,
   provider?: ProviderProfileSummary,
 ): string {
-  const providerLabel = provider ? `${provider.provider} provider reference` : 'missing provider reference'
-  const target = environment?.targetRef ?? assignment.environmentId
+  const providerLabel = provider ? `${provider.label} 已引用` : '后台账号配置缺失'
+  const deviceLabel = environment
+    ? environment.ownerEmail === assignment.assignedEmail ? '员工本人设备' : `${environment.ownerEmail} 代管设备`
+    : '员工设备配置'
   const ownerScope = environment && environment.ownerEmail !== assignment.assignedEmail
-    ? `target owner ${environment.ownerEmail} 与 assigned user ${assignment.assignedEmail} 分离；AIWorker 使用 owner-scoped PASEO_HOME，但 provider CLI credential 仍需管理员确认。`
-    : 'target owner 与 assigned user 一致或已声明 dedicated target。'
+    ? `设备由 ${environment.ownerEmail} 代管，请确认这是正确的员工设备。`
+    : '员工设备范围已确认。'
   if (assignment.status === 'needs_attention')
-    return `${target} 需要重新确认 handoff metadata；${providerLabel} 不包含 literal secret。${ownerScope}`
+    return `${deviceLabel} 需要重新生成员工入口；${providerLabel}。${ownerScope}`
   if (assignment.status === 'ready')
-    return `${target} 已完成审批与 handoff；${providerLabel} 仅作为 secret reference 展示。${ownerScope}`
-  return `${target} 等待管理员批准后才能执行 apply；${providerLabel} 仅用于 readiness check。${ownerScope}`
+    return `${deviceLabel} 已完成确认，员工可以开始使用；${providerLabel}。${ownerScope}`
+  return `${deviceLabel} 等待管理员确认后继续开通；${providerLabel}。${ownerScope}`
 }
 
 function buildPlanPreviewCommand(
@@ -1088,7 +1090,7 @@ function mapSoulRelease(release: SoulRelease): SoulReleaseSummary {
     fileCount: release.files.length,
     updatedAt: 'from control-plane snapshot',
     status: 'published',
-    summary: `${release.displayName} Project workdir template projected by AIWorker.`,
+    summary: `${release.displayName} 能力模板，可分配给员工使用。`,
   }
 }
 
@@ -1121,31 +1123,31 @@ function mapAssignment(
     handoffKind,
     handoffLabel: assignment.handoff
       ? handoffLabel(assignment.handoff.kind, assignment.handoff.daemonEndpoint, assignment.workspaceRef, environment?.paseoHome)
-      : 'manual Project workdir pending',
+      : '员工入口尚未准备好。',
     updatedAt: formatAdminTimestamp(matchingReceipt?.at),
     nextStep: nextStepForAssignment(assignment.status),
     audit: assignmentAudit,
   }
 }
 
-function handoffLabel(kind: HandoffKind, endpoint: string, workspaceRef: string, _paseoHome?: string): RedactedHandoffReference {
+function handoffLabel(kind: HandoffKind, _endpoint: string, _workspaceRef: string, _paseoHome?: string): RedactedHandoffReference {
   if (kind === 'pairing-offer')
-    return `pairing offer redacted for Project workdir ${workspaceRef}`
+    return '员工入口需要重新生成。'
   if (kind === 'manual-path')
-    return `open Project workdir ${workspaceRef}`
-  return `run paseo daemon pair --home "$PASEO_HOME"; open Project workdir with paseo --host ${endpoint} ${workspaceRef}`
+    return '员工入口已准备，可发送给员工。'
+  return '员工可通过 Paseo 客户端打开 AIWorker。'
 }
 
 function nextStepForAssignment(status: AssignmentStatus): string {
   if (status === 'ready')
-    return '员工可在 Paseo 客户端打开 Project workdir；AIWorker 不读取 session。'
+    return '把使用入口发给员工，员工即可在 Paseo 客户端打开 AIWorker。'
   if (status === 'handoff_ready')
-    return '交接 Paseo-native handoff；AIWorker 不代理 runtime。'
+    return '发送一次性入口给员工，完成最后一步。'
   if (status === 'workspace_projected')
-    return '确认 handoff metadata；AIWorker 不读取 session。'
+    return '确认员工设备在线，然后发送使用入口。'
   if (status === 'needs_attention')
-    return '处理 AIWorker provisioning metadata；AIWorker 不读取 session，也不要采集 Paseo 运行时日志。'
-  return '等待下一步 AIWorker control-plane 操作；不触碰 Paseo session。'
+    return '重新生成临时配对信息并发给员工。'
+  return '等待管理员确认开通内容。'
 }
 
 function redactedEndpointReference(endpoint: string, endpointKind: PaseoEndpointKind): string {
@@ -1238,11 +1240,10 @@ export const adminConsoleData = loadAdminConsoleData()
 
 export const navigationItems = [
   { title: '总览', path: '/', icon: DesktopTowerIcon },
-  { title: 'Assignments', path: '/assignments', icon: HandshakeIcon },
-  { title: 'Provisioning', path: '/provisioning', icon: ClockClockwiseIcon },
-  { title: 'Soul releases', path: '/souls', icon: ArchiveIcon },
-  { title: 'Environments', path: '/environments', icon: ShieldCheckIcon },
-  { title: 'Audit / Handoff', path: '/audit', icon: FileTextIcon },
+  { title: '员工开通', path: '/assignments', icon: HandshakeIcon },
+  { title: '能力模板', path: '/souls', icon: ArchiveIcon },
+  { title: '设备与账号', path: '/environments', icon: ShieldCheckIcon },
+  { title: '操作记录', path: '/audit', icon: FileTextIcon },
 ] as const
 
 export function getApprovalForAssignment(id: string, data: AdminConsoleData = adminConsoleData): ProvisioningApprovalSummary | undefined {
