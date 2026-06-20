@@ -264,7 +264,7 @@ export async function handleAdminRuntimeRequest(request: Request, env: NodeJS.Pr
       return guard
     const input = await request.json().catch(() => ({})) as Parameters<typeof previewPlanJob>[0]
     try {
-      const plan = await previewPlanJob(input)
+      const plan = await previewPlanJob(input, controlPlaneDirFromEnv(env))
       return Response.json({ plan })
     }
     catch (error) {

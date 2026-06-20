@@ -29,13 +29,13 @@ import {
   approvalStatusMeta,
   environmentStatusMeta,
   getApprovalForAssignment,
-  getEnvironment,
-  getProviderProfile,
-  getSoulRelease,
   getTraceEventsForAssignment,
   providerStatusMeta,
   releaseStatusMeta,
   statusMeta,
+  tryGetEnvironment,
+  tryGetProviderProfile,
+  tryGetSoulRelease,
 } from '@/lib/admin-data'
 import { useAdminData } from '@/lib/admin-data-context'
 import { adminRemediation } from '@/lib/admin-remediation'
@@ -70,9 +70,9 @@ export function ProvisioningPage() {
   const [pendingSelectId, setPendingSelectId] = useState<string | null>(null)
   const selectedAssignment = adminData.assignments.find(item => item.id === selectedAssignmentId)
   const assignment = selectedAssignment
-  const environment = getEnvironment(assignment?.environmentId ?? selectedEnvironment, adminData)
-  const provider = getProviderProfile(assignment?.providerProfileId ?? selectedProvider, adminData)
-  const soul = getSoulRelease(assignment?.soulReleaseId ?? selectedSoul, adminData)
+  const environment = tryGetEnvironment(assignment?.environmentId ?? selectedEnvironment, adminData)
+  const provider = tryGetProviderProfile(assignment?.providerProfileId ?? selectedProvider, adminData)
+  const soul = tryGetSoulRelease(assignment?.soulReleaseId ?? selectedSoul, adminData)
   const approval = assignment ? getApprovalForAssignment(assignment.id, adminData) : undefined
   const traceEvents = assignment ? getTraceEventsForAssignment(assignment.id, adminData) : []
   const effectiveApprovalStatus = assignment
@@ -344,73 +344,86 @@ export function ProvisioningPage() {
             <CardDescription>管理员只需要核对员工、能力和设备；技术配置放在折叠区。</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <FieldGroup>
-              <Field orientation="horizontal">
-                <FieldContent>
-                  <FieldTitle>员工设备</FieldTitle>
-                  <FieldDescription>
-                    {environment.ownerEmail === assignment?.assignedEmail
-                      ? '员工本人设备，技术支持已配置连接。'
-                      : `由 ${environment.ownerEmail} 代管，请确认这台设备归属正确。`}
-                  </FieldDescription>
-                </FieldContent>
-                <StatusBadge tone={environmentStatusMeta[environment.status].tone}>
-                  {environmentStatusMeta[environment.status].label}
-                </StatusBadge>
-              </Field>
-              <Field orientation="horizontal">
-                <FieldContent>
-                  <FieldTitle>能力模板</FieldTitle>
-                  <FieldDescription>
-                    {soul.fileCount}
-                    {' '}
-                    个准备文件，会生成员工使用 AIWorker 所需的工作区内容。
-                  </FieldDescription>
-                </FieldContent>
-                <StatusBadge tone={releaseStatusMeta[soul.status].tone}>{releaseStatusMeta[soul.status].label}</StatusBadge>
-              </Field>
-              <Field orientation="horizontal">
-                <FieldContent>
-                  <FieldTitle>后台 AI 账号</FieldTitle>
-                  <FieldDescription>
-                    {provider.label}
-                    {' '}
-                    的授权状态会影响员工能否开始使用。
-                  </FieldDescription>
-                </FieldContent>
-                <StatusBadge tone={providerStatusMeta[provider.status].tone}>{providerStatusMeta[provider.status].label}</StatusBadge>
-              </Field>
-            </FieldGroup>
-            <details className="rounded-md border bg-muted/20 p-3">
-              <summary className="cursor-pointer text-sm font-medium">给技术支持查看开通配置</summary>
-              <dl className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
-                <div>
-                  <dt className="text-muted-foreground">设备连接</dt>
-                  <dd className="mt-1 break-words font-mono">{environment.targetRef}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">工作区目录</dt>
-                  <dd className="mt-1 break-words font-mono">{environment.paseoHome}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">后台账号引用</dt>
-                  <dd className="mt-1 break-words font-mono">{provider.secretRef}</dd>
-                </div>
-                <div className="sm:col-span-3">
-                  <dt className="text-muted-foreground">能力模板文件</dt>
-                  <dd className="mt-1 break-words font-mono">{soul.workspaceTemplateRoot}</dd>
-                </div>
-              </dl>
-              <pre className="mt-3 overflow-x-auto rounded-md border bg-background p-3 text-xs/relaxed">
-                {`aiworker plan \\
+            {!environment || !provider || !soul
+              ? (
+                  <div className="rounded-md border bg-muted/20 p-4">
+                    <p className="text-sm font-medium">开通配置不完整</p>
+                    <p className="mt-1 text-xs/relaxed text-muted-foreground">
+                      当前选择引用的设备、能力模板或后台账号已不存在，请重新选择或联系技术支持核对配置。
+                    </p>
+                  </div>
+                )
+              : (
+                  <>
+                    <FieldGroup>
+                      <Field orientation="horizontal">
+                        <FieldContent>
+                          <FieldTitle>员工设备</FieldTitle>
+                          <FieldDescription>
+                            {environment.ownerEmail === assignment?.assignedEmail
+                              ? '员工本人设备，技术支持已配置连接。'
+                              : `由 ${environment.ownerEmail} 代管，请确认这台设备归属正确。`}
+                          </FieldDescription>
+                        </FieldContent>
+                        <StatusBadge tone={environmentStatusMeta[environment.status].tone}>
+                          {environmentStatusMeta[environment.status].label}
+                        </StatusBadge>
+                      </Field>
+                      <Field orientation="horizontal">
+                        <FieldContent>
+                          <FieldTitle>能力模板</FieldTitle>
+                          <FieldDescription>
+                            {soul.fileCount}
+                            {' '}
+                            个准备文件，会生成员工使用 AIWorker 所需的工作区内容。
+                          </FieldDescription>
+                        </FieldContent>
+                        <StatusBadge tone={releaseStatusMeta[soul.status].tone}>{releaseStatusMeta[soul.status].label}</StatusBadge>
+                      </Field>
+                      <Field orientation="horizontal">
+                        <FieldContent>
+                          <FieldTitle>后台 AI 账号</FieldTitle>
+                          <FieldDescription>
+                            {provider.label}
+                            {' '}
+                            的授权状态会影响员工能否开始使用。
+                          </FieldDescription>
+                        </FieldContent>
+                        <StatusBadge tone={providerStatusMeta[provider.status].tone}>{providerStatusMeta[provider.status].label}</StatusBadge>
+                      </Field>
+                    </FieldGroup>
+                    <details className="rounded-md border bg-muted/20 p-3">
+                      <summary className="cursor-pointer text-sm font-medium">给技术支持查看开通配置</summary>
+                      <dl className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+                        <div>
+                          <dt className="text-muted-foreground">设备连接</dt>
+                          <dd className="mt-1 break-words font-mono">{environment.targetRef}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground">工作区目录</dt>
+                          <dd className="mt-1 break-words font-mono">{environment.paseoHome}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground">后台账号引用</dt>
+                          <dd className="mt-1 break-words font-mono">{provider.secretRef}</dd>
+                        </div>
+                        <div className="sm:col-span-3">
+                          <dt className="text-muted-foreground">能力模板文件</dt>
+                          <dd className="mt-1 break-words font-mono">{soul.workspaceTemplateRoot}</dd>
+                        </div>
+                      </dl>
+                      <pre className="mt-3 overflow-x-auto rounded-md border bg-background p-3 text-xs/relaxed">
+                        {`aiworker plan \\
   --user ${assignment?.assignedEmail ?? environment.ownerEmail} \\
   --target ${environment.targetRef} \\
   --target-owner ${environment.ownerEmail}${environment.dedication ? ' \\\n  --dedicated-target-user' : ''} \\
   --environment ${environment.id} \\
   --provider ${provider.id} \\
   --soul ${soul.descriptorRef}`}
-              </pre>
-            </details>
+                      </pre>
+                    </details>
+                  </>
+                )}
           </CardContent>
         </Card>
       </div>
@@ -486,7 +499,7 @@ export function ProvisioningPage() {
                       </Button>
                     </div>
                     {effectiveApprovalStatus !== 'approved' ? <RemediationAlert remediation={adminRemediation('approval_required')} /> : null}
-                    {provider.status !== 'ready' ? <RemediationAlert remediation={adminRemediation('provider_auth_required')} /> : null}
+                    {provider && provider.status !== 'ready' ? <RemediationAlert remediation={adminRemediation('provider_auth_required')} /> : null}
 
                     <Separator />
 
@@ -638,15 +651,24 @@ function SelectedAssignmentSummary({
   soul,
 }: {
   assignment?: AssignmentSummary
-  environment: PaseoEnvironmentSummary
-  provider: ProviderProfileSummary
-  soul: SoulReleaseSummary
+  environment?: PaseoEnvironmentSummary
+  provider?: ProviderProfileSummary
+  soul?: SoulReleaseSummary
 }) {
   if (!assignment) {
     return (
       <div className="rounded-md border bg-muted/20 p-4">
         <p className="text-sm font-medium">还没有选中员工</p>
         <p className="mt-1 text-xs/relaxed text-muted-foreground">先从下方选择员工，再继续确认能力和设备。</p>
+      </div>
+    )
+  }
+
+  if (!environment || !provider || !soul) {
+    return (
+      <div className="rounded-md border bg-muted/20 p-4">
+        <p className="text-sm font-medium">开通配置不完整</p>
+        <p className="mt-1 text-xs/relaxed text-muted-foreground">这名员工引用的设备、能力或后台账号已不存在，请重新选择或联系技术支持核对。</p>
       </div>
     )
   }

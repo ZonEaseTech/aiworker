@@ -1,4 +1,6 @@
 import type { ReactElement } from 'react'
+import type { AdminConsoleData } from '@/lib/admin-data'
+import type { AdminBootstrapStatus } from '@/lib/admin-remediation'
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
@@ -8,6 +10,7 @@ import { AssignmentTableCard } from '@/components/assignments/assignment-table-c
 import { AuditCard } from '@/components/audit/audit-card'
 import { BoundaryAlert } from '@/components/boundary-alert'
 import { adminConsoleData, navigationItems } from '@/lib/admin-data'
+import { AdminDataContext } from '@/lib/admin-data-context'
 import { AssignmentsPage } from './assignments-page'
 import { AuditPage } from './audit-page'
 import { DashboardPage } from './dashboard-page'
@@ -31,6 +34,55 @@ function expectInOrder(markup: string, labels: string[]) {
 
 function renderPage(page: ReactElement) {
   return renderToStaticMarkup(<MemoryRouter>{page}</MemoryRouter>)
+}
+
+function renderPageWithData(page: ReactElement, data: AdminConsoleData) {
+  const bootstrap = {
+    adminTokenRequired: false,
+    auth: { authenticated: true, loginRequired: false, loginUrl: '/login', logoutUrl: '/logout', mode: 'local' },
+    controlPlaneDirConfigured: true,
+    host: '127.0.0.1',
+    remoteAccessEnabled: false,
+    source: 'control-plane',
+  } as AdminBootstrapStatus
+  const value = {
+    bootstrap,
+    async createMetadata<T>() {
+      return undefined as T
+    },
+    data,
+    async decideApproval() {},
+    isLive: true,
+    loadError: null,
+    async loadSoulCatalog() {
+      return []
+    },
+    async reload() {},
+  }
+  return renderToStaticMarkup(
+    <AdminDataContext.Provider value={value}>
+      <MemoryRouter>{page}</MemoryRouter>
+    </AdminDataContext.Provider>,
+  )
+}
+
+// Build live-shaped admin data whose first assignment references a soul/environment/
+// provider that no longer exist in the snapshot (the fixture→live switch window, or a
+// dangling ref). The render path must degrade gracefully instead of throwing.
+function adminDataWithDanglingRefs(): AdminConsoleData {
+  const [first, ...rest] = adminConsoleData.assignments
+  return {
+    ...adminConsoleData,
+    assignments: [
+      {
+        ...first,
+        environmentId: 'env-missing',
+        providerProfileId: 'provider-missing',
+        soulReleaseId: 'soul-missing@9.9.9',
+      },
+      ...rest,
+    ],
+  }
 }
 
 describe('admin console page composition', () => {
@@ -102,6 +154,12 @@ describe('admin console page composition', () => {
     const audit = renderPage(<AuditPage />)
     expect(audit).toContain('处理记录：')
     expect(audit).toContain('开通记录')
+  })
+
+  test('provisioning and assignments pages survive assignments with dangling metadata refs', () => {
+    const data = adminDataWithDanglingRefs()
+    expect(() => renderPageWithData(<ProvisioningPage />, data)).not.toThrow()
+    expect(() => renderPageWithData(<AssignmentsPage />, data)).not.toThrow()
   })
 
   test('provisioning approval controls stay preview-only and redacted', () => {

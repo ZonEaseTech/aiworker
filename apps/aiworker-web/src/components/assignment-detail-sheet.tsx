@@ -6,11 +6,11 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import {
   approvalStatusMeta,
   getApprovalForAssignment,
-  getEnvironment,
-  getProviderProfile,
-  getSoulRelease,
   getTraceEventsForAssignment,
   statusMeta,
+  tryGetEnvironment,
+  tryGetProviderProfile,
+  tryGetSoulRelease,
 } from '@/lib/admin-data'
 
 export function AssignmentDetailSheet({
@@ -42,9 +42,9 @@ export function AssignmentDetailSheet({
 }
 
 export function AssignmentDetailContent({ assignment }: { assignment: AssignmentSummary }) {
-  const environment = getEnvironment(assignment.environmentId)
-  const provider = getProviderProfile(assignment.providerProfileId)
-  const soul = getSoulRelease(assignment.soulReleaseId)
+  const environment = tryGetEnvironment(assignment.environmentId)
+  const provider = tryGetProviderProfile(assignment.providerProfileId)
+  const soul = tryGetSoulRelease(assignment.soulReleaseId)
   const status = statusMeta[assignment.status]
   const approval = getApprovalForAssignment(assignment.id)
   const traceEvents = getTraceEventsForAssignment(assignment.id)
@@ -56,9 +56,9 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
         <StatusBadge tone="outline">{assignment.team}</StatusBadge>
       </div>
       <dl className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-        <Detail label="能力模板" value={`${soul.displayName} · ${soul.version}`} />
-        <Detail label="后台 AI 账号" value={provider.label} />
-        <Detail label="员工设备" value={environment.ownerEmail === assignment.assignedEmail ? '员工本人设备' : `${environment.ownerEmail} 代管设备`} />
+        <Detail label="能力模板" value={soul ? `${soul.displayName} · ${soul.version}` : '能力模板缺失'} />
+        <Detail label="后台 AI 账号" value={provider?.label ?? '后台账号缺失'} />
+        <Detail label="员工设备" value={environment ? (environment.ownerEmail === assignment.assignedEmail ? '员工本人设备' : `${environment.ownerEmail} 代管设备`) : '设备配置缺失'} />
         <Detail label="最近更新" value={assignment.updatedAt} />
       </dl>
       <Separator />
@@ -127,10 +127,10 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
       <details className="rounded-md border bg-muted/20 p-3">
         <summary className="cursor-pointer text-sm font-medium">给技术支持查看的配置</summary>
         <dl className="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-          <Detail label="能力版本" value={`${soul.displayName} · ${soul.version}`} technical />
-          <Detail label="后台账号引用" value={`${provider.label} · ${provider.secretRef}`} technical />
-          <Detail label="设备编号" value={`${environment.id} · ${environment.targetRef}`} technical />
-          <Detail label="隔离方式" value={environment.isolation} technical />
+          <Detail label="能力版本" value={soul ? `${soul.displayName} · ${soul.version}` : '能力模板缺失'} technical />
+          <Detail label="后台账号引用" value={provider ? `${provider.label} · ${provider.secretRef}` : '后台账号缺失'} technical />
+          <Detail label="设备编号" value={environment ? `${environment.id} · ${environment.targetRef}` : '设备配置缺失'} technical />
+          <Detail label="隔离方式" value={environment?.isolation ?? '设备配置缺失'} technical />
           <Detail label="工作区路径" value={assignment.workspaceRef} technical />
           <Detail label="开通记录编号" value={assignment.receiptId} technical />
         </dl>

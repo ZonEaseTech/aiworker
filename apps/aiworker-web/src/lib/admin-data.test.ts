@@ -17,6 +17,7 @@ import {
   createAdminDataSourceFromControlPlaneSnapshot,
   getApprovalForAssignment,
   getAssignmentForPlan,
+  getSoulRelease,
   getTraceEventsForAssignment,
   loadAdminConsoleData,
   mapControlPlaneSnapshotToAdminConsoleData,
@@ -468,5 +469,63 @@ describe('admin data fixtures', () => {
         },
       }],
     })).toThrow(/literal secret/)
+  })
+
+  test('maps live soul releases whose id already carries the version without double-suffixing', () => {
+    // CLI soul register stores soulRelease.id as `${identity.id}@${identity.version}`,
+    // and assignment.soulReleaseRef points at the same `id@version`. The mapper must not
+    // re-append the version (which would produce `hr-manager@0.0.0@0.0.0`) or the page
+    // lookup by assignment.soulReleaseId would miss and crash /assignments + /provisioning.
+    const environment = {
+      environmentId: 'env-bob',
+      daemonEndpoint: '$HOME/.paseo/bob/daemon.sock',
+      endpointKind: 'local-home' as const,
+      isolation: 'os-user' as const,
+      ownerEmail: 'bob@example.com',
+      paseoHome: '$HOME/.paseo/bob',
+      providerProfileIds: ['codex-default'],
+      targetRef: 'aissh:bob-box',
+    }
+    const providerProfile = {
+      id: 'codex-default',
+      label: 'Codex Default',
+      paseoProviderId: 'paseo-codex-default',
+      provider: 'codex',
+      secretRef: 'secret://providers/codex/default',
+    }
+    // Live shape: id already is `id@version`.
+    const soul = {
+      descriptorRef: 'souls/hr-manager/dist/soul.descriptor.json',
+      displayName: 'HR Manager',
+      files: [{ relativePath: 'AGENTS.md', content: '# HR\n' }],
+      id: 'hr-manager@0.0.0',
+      version: '0.0.0',
+    }
+    const assignment = createAssignment({
+      assignedEmail: 'bob@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-manager@0.0.0',
+      status: 'ready',
+      workspaceRef: '$HOME/.aiworker/bob-example.com/projects/hr',
+    })
+    const snapshot = {
+      ...createEmptyControlPlaneSnapshot(),
+      assignments: [assignment],
+      environments: [environment],
+      providerProfiles: [providerProfile],
+      soulReleases: [soul],
+    }
+
+    const data = mapControlPlaneSnapshotToAdminConsoleData(snapshot)
+    const liveAssignment = data.assignments.find(item => item.assignedEmail === 'bob@example.com')
+    expect(liveAssignment?.soulReleaseId).toBe('hr-manager@0.0.0')
+
+    const mappedRelease = data.soulReleases.find(release => release.displayName === 'HR Manager')
+    expect(mappedRelease?.id).toBe('hr-manager@0.0.0')
+
+    // The page resolves the assignment's soul by id; this must hit, not throw.
+    expect(() => getSoulRelease(liveAssignment!.soulReleaseId, data)).not.toThrow()
+    expect(getSoulRelease(liveAssignment!.soulReleaseId, data).id).toBe('hr-manager@0.0.0')
   })
 })

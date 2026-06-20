@@ -8,7 +8,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { getEnvironment, getSoulRelease, statusMeta } from '@/lib/admin-data'
+import { statusMeta, tryGetEnvironment, tryGetSoulRelease } from '@/lib/admin-data'
 
 export function AssignmentTableCard({ title, assignments }: { title: string, assignments: AssignmentSummary[] }) {
   const [selectedAssignment, setSelectedAssignment] = useState<AssignmentSummary | null>(null)
@@ -44,8 +44,8 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
           </TableHeader>
           <TableBody>
             {assignments.map((assignment) => {
-              const soul = getSoulRelease(assignment.soulReleaseId)
-              const environment = getEnvironment(assignment.environmentId)
+              const soul = tryGetSoulRelease(assignment.soulReleaseId)
+              const environment = tryGetEnvironment(assignment.environmentId)
               const status = statusMeta[assignment.status]
               return (
                 <TableRow key={assignment.id}>
@@ -56,14 +56,16 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
                       {' '}
                       ·
                       {' '}
-                      {soul.displayName}
+                      {soul?.displayName ?? '能力模板缺失'}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="max-w-[18rem] text-xs/relaxed">{assignment.nextStep}</div>
                     <div className="mt-1 truncate text-[0.625rem] text-muted-foreground">
                       设备：
-                      {environment.ownerEmail === assignment.assignedEmail ? '员工本人' : `${environment.ownerEmail} 代管`}
+                      {environment
+                        ? (environment.ownerEmail === assignment.assignedEmail ? '员工本人' : `${environment.ownerEmail} 代管`)
+                        : '设备配置缺失'}
                       {' '}
                       ·
                       {' '}

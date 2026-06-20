@@ -10,7 +10,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { getEnvironment, getSoulRelease, statusMeta } from '@/lib/admin-data'
+import { statusMeta, tryGetEnvironment, tryGetSoulRelease } from '@/lib/admin-data'
 import { useAdminData } from '@/lib/admin-data-context'
 
 const assignmentStatusOptions: Array<AssignmentStatus | 'all'> = [
@@ -42,9 +42,9 @@ export function AssignmentsPage() {
         assignment.assignedEmail,
         assignment.team,
         assignment.workspaceRef,
-        getSoulRelease(assignment.soulReleaseId, data).displayName,
-        getEnvironment(assignment.environmentId, data).targetRef,
-      ].some(value => value.toLowerCase().includes(normalized))
+        tryGetSoulRelease(assignment.soulReleaseId, data)?.displayName,
+        tryGetEnvironment(assignment.environmentId, data)?.targetRef,
+      ].some(value => value?.toLowerCase().includes(normalized))
     })
   }, [data, query, status])
 

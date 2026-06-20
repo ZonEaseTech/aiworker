@@ -367,25 +367,80 @@ export async function registerSoulJob(root: string, input: RegisterSoulInput): P
   return runCliRecordJob(args)
 }
 
-export async function previewPlanJob(input: PreviewPlanInput): Promise<unknown> {
+export async function previewPlanJob(input: PreviewPlanInput, root: string | null = null): Promise<unknown> {
+  // Preview is only reachable in control-plane mode (the wizard disables it otherwise),
+  // so resolve the full plan args from the same snapshot+environmentId source as
+  // `runApprovedAssignmentApplyJob`. This keeps preview and apply structurally in sync —
+  // most importantly it threads `--target-owner`, whose absence made plan --json 409.
+  // The snapshot is read in-process to build args only; we never pass --control-plane-dir
+  // to the spawned plan CLI, preserving the read-only contract.
+  const resolved = await resolvePlanPreviewArgs(input, root)
   const args = ['plan', '--json']
-  appendOption(args, '--user', input.user)
-  appendOption(args, '--target', input.target)
-  appendOption(args, '--target-owner', input.targetOwner)
-  if (input.dedicatedTargetUser)
+  appendOption(args, '--user', resolved.user)
+  appendOption(args, '--target', resolved.target)
+  appendOption(args, '--target-owner', resolved.targetOwner)
+  if (resolved.dedicatedTargetUser)
     args.push('--dedicated-target-user')
-  appendOption(args, '--environment', input.environment)
-  appendOption(args, '--paseo-endpoint', input.paseoEndpoint)
-  appendOption(args, '--paseo-listen', input.paseoListen)
-  appendOption(args, '--paseo-host', input.paseoHost)
-  appendOption(args, '--provider', input.provider)
-  appendOption(args, '--provider-kind', input.providerKind)
-  appendOption(args, '--provider-base-url', input.providerBaseUrl)
-  appendOption(args, '--provider-cli', input.providerCli)
-  appendOption(args, '--provider-model', input.providerModel)
-  appendOption(args, '--provider-secret-ref', input.providerSecretRef)
-  appendOption(args, '--soul', input.soul)
+  appendOption(args, '--environment', resolved.environment)
+  appendOption(args, '--paseo-endpoint', resolved.paseoEndpoint)
+  appendOption(args, '--paseo-listen', resolved.paseoListen)
+  appendOption(args, '--paseo-host', resolved.paseoHost)
+  appendOption(args, '--provider', resolved.provider)
+  appendOption(args, '--provider-kind', resolved.providerKind)
+  appendOption(args, '--provider-base-url', resolved.providerBaseUrl)
+  appendOption(args, '--provider-cli', resolved.providerCli)
+  appendOption(args, '--provider-model', resolved.providerModel)
+  appendOption(args, '--provider-secret-ref', resolved.providerSecretRef)
+  appendOption(args, '--soul', resolved.soul)
   return runCliRecordJob(args)
+}
+
+async function resolvePlanPreviewArgs(input: PreviewPlanInput, root: string | null): Promise<PreviewPlanInput> {
+  if (!root || !input.environment?.trim())
+    return input
+
+  const payload = await loadAdminDataApiPayload(root)
+  const environment = payload.snapshot?.environments.find(item => item.environmentId === input.environment?.trim())
+  if (!environment)
+    return input
+
+  const provider = input.provider?.trim()
+    ? payload.snapshot?.providerProfiles.find(item => item.id === input.provider?.trim())
+    : undefined
+  const endpointArgs = paseoEndpointCliArgs(environment)
+  const endpoints = parsePaseoEndpointArgs(endpointArgs)
+
+  // Environment-derived values are the source of truth; fall back to any explicit
+  // payload fields so a snapshot-less / thin-payload preview still works.
+  return {
+    ...input,
+    target: environment.targetRef ?? input.target,
+    targetOwner: environment.ownerEmail ?? input.targetOwner,
+    dedicatedTargetUser: input.dedicatedTargetUser ?? Boolean(environment.dedication),
+    paseoEndpoint: endpoints.paseoEndpoint ?? input.paseoEndpoint,
+    paseoListen: endpoints.paseoListen ?? input.paseoListen,
+    paseoHost: endpoints.paseoHost ?? input.paseoHost,
+    providerKind: provider?.provider ?? input.providerKind,
+    providerCli: provider?.cliCommand ?? input.providerCli,
+    providerBaseUrl: provider?.baseUrl ?? input.providerBaseUrl,
+    providerModel: provider?.model ?? input.providerModel,
+    providerSecretRef: provider?.secretRef ?? input.providerSecretRef,
+  }
+}
+
+function parsePaseoEndpointArgs(args: string[]): { paseoEndpoint?: string, paseoHost?: string, paseoListen?: string } {
+  const result: { paseoEndpoint?: string, paseoHost?: string, paseoListen?: string } = {}
+  for (let index = 0; index < args.length; index += 2) {
+    const flag = args[index]
+    const value = args[index + 1]
+    if (flag === '--paseo-endpoint')
+      result.paseoEndpoint = value
+    else if (flag === '--paseo-listen')
+      result.paseoListen = value
+    else if (flag === '--paseo-host')
+      result.paseoHost = value
+  }
+  return result
 }
 
 async function readApprovalDecisionRecords(root: string): Promise<ApprovalDecisionRecord[]> {
