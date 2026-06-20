@@ -21,6 +21,10 @@ Paseo runtime responsibilities:
 - permission prompts and agent modes;
 - provider CLI authentication context.
 
+## Home model
+
+AIWorker home 在任何机器上都是 `~/.aiworker`（`AIWORKER_HOME` 覆盖），按角色分目录。中心机角色把 management-plane SoT 默认落在 `~/.aiworker/control-plane`（`snapshot.json` + append-only `receipts.jsonl` / `audit-events.jsonl` / `projection-manifests.jsonl`）。目标机角色对每个员工派生 owner-scoped 子树 `~/.aiworker/<userSlug>/{.paseo,run,projects/<project>}`。AIWorker 派生的 `PASEO_HOME` 永远落在 `$HOME/.aiworker/<userSlug>/.paseo` 之下，绝不产出裸 `$HOME/.paseo`：这是无条件不变量，由 contract test 钉死，确保 AIWorker 不踩目标机上别人自己安装的 Paseo。`userSlug` 受 `RESERVED_USER_SLUGS` 守卫，不得撞上 home 结构保留名。
+
 ## Daemon model
 
 AIWorker does not run a Worker daemon. It may start or verify a Paseo daemon on a target machine under the actual `aissh` execution identity. That identity's canonical remote `HOME` is the path authority.
@@ -52,7 +56,7 @@ AIWorker Web may present the same provisioning inputs, plan previews, redacted r
 
 The Web admin token/bootstrap path is intentionally local and narrow:
 
-- `AIWORKER_CONTROL_PLANE_DIR` binds Web to an AIWorker control-plane snapshot; without it Web is fixture preview only.
+- `aiworker web` 无参时把 control-plane 解析为默认 home `~/.aiworker/control-plane`（`AIWORKER_HOME` 覆盖），lazy 创建并以它为 live snapshot 绑定运行。`--control-plane-dir` / `AIWORKER_CONTROL_PLANE_DIR` 显式覆盖该默认值；只有当默认 home 无法解析或创建时，Web 才退化为 fixture 预览兜底。`apply` 与元数据 create/edit 命令不享受该默认，仍要求显式 control-plane 目录。
 - `AIWORKER_WEB_ADMIN_TOKEN` requires a matching bearer token for state-changing Web API calls, but it is not enterprise SSO/RBAC.
 - `bun run setup:logto` creates/updates a Logto Traditional app and writes the runtime `LOGTO_CLIENT_*` tuple into ignored `.env`.
 - Complete Logto runtime configuration makes browser navigation require a Logto admin session. Partial Logto configuration fails closed with `admin_auth_misconfigured`.

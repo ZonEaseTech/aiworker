@@ -65,6 +65,8 @@ AIWorker 可以通过 `aissh` 做：
 
 AIWorker 不启动/观察 native engine，不保存 transcript，不实现 follow-up API，不持有 provider API key。Author-owned MCP/config files may contain operational settings, but AIWorker must not copy literal provider secrets into descriptor, DB, receipt, log, diagnostic output, OpenAPI example, UI, or projected workspace files。
 
+AIWorker 在任何机器上的足迹全在 `~/.aiworker` 内（`AIWORKER_HOME` 覆盖）：中心机角色把 management-plane SoT 默认落在 `~/.aiworker/control-plane`，目标机角色对每个员工派生 `~/.aiworker/<userSlug>/{.paseo,run,projects/<project>}` owner-scoped 子树。AIWorker 派生的 `PASEO_HOME` 永远在 `~/.aiworker/<userSlug>/.paseo` 之下，**绝不产出裸 `~/.paseo`**——这是无条件不变量，AIWorker 不踩目标机上别人自己安装的 Paseo。`userSlug` 受 `RESERVED_USER_SLUGS` 保留名守卫，不得撞上 home 结构段。HOME-derived 拓扑已废除：拓扑永远 owner-scoped。
+
 ## Dev Services
 
 当前薄层没有自研 Worker daemon。AIWorker Web 是管理员薄控制台，默认只监听本机 Vite 端口 `20831`。默认开发入口：

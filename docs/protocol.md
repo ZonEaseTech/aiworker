@@ -121,6 +121,8 @@ ProvisionReceipt
 
 `assignedEmail` owns the derived `$HOME/.aiworker/<userSlug>` scope. `PaseoEnvironment.ownerEmail` owns/administers the target execution identity and may differ from `assignedEmail` under `owner-scoped-shared-home`. `--dedicated-target-user` records `dedication.kind=assigned-user-dedicated` when the target execution identity is explicitly dedicated to the assigned user. Legacy v1 records may omit ownership receipt fields and still load, but live apply/pair paths must receive an explicit `--target-owner` or `--dedicated-target-user` assertion before invoking `aissh`.
 
+AIWorker home 在任何机器上都是 `~/.aiworker`（`AIWORKER_HOME` 覆盖）。中心机角色把 management-plane SoT 默认落在 `~/.aiworker/control-plane`（`snapshot.json` + append-only `*.jsonl` receipts/audit/projection）；目标机角色对每个员工派生 `~/.aiworker/<userSlug>` owner-scoped 子树。`userSlug` 直接落在 home 顶层并受保留名守卫保护（`control-plane` / `config` / `cache` / `run` / `projects` / `paseo` / `.paseo`），防止员工 slug 撞上 home 结构段或中心 control-plane。`paseoHome` 因此恒为 `$HOME/.aiworker/<userSlug>/.paseo`，AIWorker 绝不派生裸 `$HOME/.paseo`。
+
 ## Create command face
 
 AIWorker CLI 是 AIWorker-owned 元数据的唯一写者。管理员既可用 CLI 直接写，也可经 AIWorker Web 发起；Web 不持有自己的 snapshot source of truth，而是 spawn 同一套 `aiworker` create/edit 命令代写：
