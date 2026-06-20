@@ -40,6 +40,53 @@ export interface ApprovalDecisionInput {
   status?: ApprovalStatus
 }
 
+export interface CreateAssignmentInput {
+  assignmentId?: string
+  environment?: string
+  provider?: string
+  soulReleaseRef?: string
+  user?: string
+}
+
+export interface CreateEnvironmentInput {
+  environment?: string
+  provider?: string
+  target?: string
+  user?: string
+}
+
+export interface CreateProviderInput {
+  baseUrl?: string
+  cliCommand?: string
+  model?: string
+  paseoProviderId?: string
+  provider?: string
+  providerKind?: string
+  secretRef?: string
+}
+
+export interface RegisterSoulInput {
+  soul?: string
+}
+
+export interface PreviewPlanInput {
+  dedicatedTargetUser?: boolean
+  environment?: string
+  paseoEndpoint?: string
+  paseoHost?: string
+  paseoListen?: string
+  provider?: string
+  providerBaseUrl?: string
+  providerCli?: string
+  providerKind?: string
+  providerModel?: string
+  providerSecretRef?: string
+  soul?: string
+  target?: string
+  targetOwner?: string
+  user?: string
+}
+
 const approvalStatuses = ['pending', 'approved', 'changes_requested'] as const
 
 export function controlPlaneDirFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -205,6 +252,82 @@ export async function runAssignmentPairJob(root: string, assignmentId: string): 
     pairingOutput: transientPairingOutput(stdout, stderr),
     status: 'paired',
   }
+}
+
+export function assertProviderSecretRefAllowed(secretRef: unknown): asserts secretRef is string {
+  if (typeof secretRef !== 'string' || !secretRef.startsWith('secret://'))
+    throw new Error('provider secret ref must start with secret://; AIWorker stores secret references only, never literal provider secrets.')
+}
+
+function appendOption(args: string[], flag: string, value: unknown): void {
+  if (typeof value === 'string' && value.trim() !== '')
+    args.push(flag, value)
+}
+
+async function runCliRecordJob<T>(args: string[]): Promise<T> {
+  const result = await runAiworkerCli(args)
+  if (result.exitCode !== 0)
+    throw new Error(`aiworker ${args[0]} ${args[1] ?? ''} command failed`.trim())
+  return JSON.parse(result.stdout) as T
+}
+
+export async function createAssignmentJob(root: string, input: CreateAssignmentInput): Promise<unknown> {
+  const args = ['assignment', 'create', '--json', '--control-plane-dir', root]
+  appendOption(args, '--user', input.user)
+  appendOption(args, '--environment', input.environment)
+  appendOption(args, '--provider', input.provider)
+  appendOption(args, '--soul-release-ref', input.soulReleaseRef)
+  appendOption(args, '--assignment-id', input.assignmentId)
+  return runCliRecordJob(args)
+}
+
+export async function createEnvironmentJob(root: string, input: CreateEnvironmentInput): Promise<unknown> {
+  const args = ['environment', 'create', '--json', '--control-plane-dir', root]
+  appendOption(args, '--environment', input.environment)
+  appendOption(args, '--user', input.user)
+  appendOption(args, '--target', input.target)
+  appendOption(args, '--provider', input.provider)
+  return runCliRecordJob(args)
+}
+
+export async function createProviderJob(root: string, input: CreateProviderInput): Promise<unknown> {
+  assertProviderSecretRefAllowed(input.secretRef)
+  const args = ['provider', 'create', '--json', '--control-plane-dir', root]
+  appendOption(args, '--provider', input.provider)
+  appendOption(args, '--provider-kind', input.providerKind)
+  appendOption(args, '--provider-secret-ref', input.secretRef)
+  appendOption(args, '--provider-base-url', input.baseUrl)
+  appendOption(args, '--provider-cli', input.cliCommand)
+  appendOption(args, '--provider-model', input.model)
+  appendOption(args, '--paseo-provider-id', input.paseoProviderId)
+  return runCliRecordJob(args)
+}
+
+export async function registerSoulJob(root: string, input: RegisterSoulInput): Promise<unknown> {
+  const args = ['soul', 'register', '--json', '--control-plane-dir', root]
+  appendOption(args, '--soul', input.soul)
+  return runCliRecordJob(args)
+}
+
+export async function previewPlanJob(input: PreviewPlanInput): Promise<unknown> {
+  const args = ['plan', '--json']
+  appendOption(args, '--user', input.user)
+  appendOption(args, '--target', input.target)
+  appendOption(args, '--target-owner', input.targetOwner)
+  if (input.dedicatedTargetUser)
+    args.push('--dedicated-target-user')
+  appendOption(args, '--environment', input.environment)
+  appendOption(args, '--paseo-endpoint', input.paseoEndpoint)
+  appendOption(args, '--paseo-listen', input.paseoListen)
+  appendOption(args, '--paseo-host', input.paseoHost)
+  appendOption(args, '--provider', input.provider)
+  appendOption(args, '--provider-kind', input.providerKind)
+  appendOption(args, '--provider-base-url', input.providerBaseUrl)
+  appendOption(args, '--provider-cli', input.providerCli)
+  appendOption(args, '--provider-model', input.providerModel)
+  appendOption(args, '--provider-secret-ref', input.providerSecretRef)
+  appendOption(args, '--soul', input.soul)
+  return runCliRecordJob(args)
 }
 
 async function readApprovalDecisionRecords(root: string): Promise<ApprovalDecisionRecord[]> {

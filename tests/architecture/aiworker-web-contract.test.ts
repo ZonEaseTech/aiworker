@@ -174,6 +174,24 @@ describe('AIWorker Web admin surface contract', () => {
     expect(controlPlaneTypes).not.toContain('LocalFileControlPlaneStore')
   })
 
+  test('web source never issues control-plane write calls, only redacted reads and approval appends', () => {
+    const combined = sourceFiles(`${appRoot}/src`)
+      .map(path => read(path))
+      .join('\n')
+
+    for (const forbiddenWrite of [
+      '.saveSnapshot(',
+      '.appendReceipt(',
+      '.appendProjectionManifest(',
+    ]) {
+      expect(combined).not.toContain(forbiddenWrite)
+    }
+
+    expect(combined).toContain('.loadSnapshot(')
+    expect(combined).toContain('appendApprovalDecision')
+    expect(combined).toContain('approvals.jsonl')
+  })
+
   test('route shell stays thin and page modules own screen composition', () => {
     const app = read(`${appRoot}/src/App.tsx`)
 

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join, normalize } from 'node:path'
 import process from 'node:process'
-import { appendApprovalDecision, controlPlaneDirFromEnv, loadAdminDataApiPayload, runApprovedAssignmentApplyJob, runAssignmentPairJob } from './admin-api'
+import { appendApprovalDecision, assertProviderSecretRefAllowed, controlPlaneDirFromEnv, createAssignmentJob, createEnvironmentJob, createProviderJob, loadAdminDataApiPayload, previewPlanJob, registerSoulJob, runApprovedAssignmentApplyJob, runAssignmentPairJob } from './admin-api'
 import { adminAuthBootstrapStatus, adminAuthErrorResponse, authorizeAdminMutation, authorizeAdminRead, callbackResponse, loginResponse, logoutResponse, logtoRuntimeState, safeReturnTo } from './lib/admin-auth'
 import { adminApiErrorPayload, classifyAdminError } from './lib/admin-remediation'
 
@@ -237,6 +237,99 @@ export async function handleAdminRuntimeRequest(request: Request, env: NodeJS.Pr
     }
   }
 
+  if (url.pathname === '/api/plan') {
+    if (request.method !== 'POST')
+      return methodNotAllowed('POST')
+    const guard = adminMutationGuard(request, env)
+    if (guard)
+      return guard
+    const input = await request.json().catch(() => ({})) as Parameters<typeof previewPlanJob>[0]
+    try {
+      const plan = await previewPlanJob(input)
+      return Response.json({ plan })
+    }
+    catch (error) {
+      return adminApiErrorResponse(error, 409)
+    }
+  }
+
+  if (url.pathname === '/api/assignments' && request.method === 'POST') {
+    const guard = adminMutationGuard(request, env)
+    if (guard)
+      return guard
+    const root = controlPlaneDirFromEnv(env)
+    if (!root)
+      return controlPlaneDirRequiredResponse()
+    const input = await request.json().catch(() => ({})) as Parameters<typeof createAssignmentJob>[1]
+    try {
+      const assignment = await createAssignmentJob(root, input)
+      return Response.json({ assignment })
+    }
+    catch (error) {
+      return adminApiErrorResponse(error, 409)
+    }
+  }
+
+  if (url.pathname === '/api/environments' && request.method === 'POST') {
+    const guard = adminMutationGuard(request, env)
+    if (guard)
+      return guard
+    const root = controlPlaneDirFromEnv(env)
+    if (!root)
+      return controlPlaneDirRequiredResponse()
+    const input = await request.json().catch(() => ({})) as Parameters<typeof createEnvironmentJob>[1]
+    try {
+      const environment = await createEnvironmentJob(root, input)
+      return Response.json({ environment })
+    }
+    catch (error) {
+      return adminApiErrorResponse(error, 409)
+    }
+  }
+
+  if (url.pathname === '/api/providers' && request.method === 'POST') {
+    const guard = adminMutationGuard(request, env)
+    if (guard)
+      return guard
+    const root = controlPlaneDirFromEnv(env)
+    if (!root)
+      return controlPlaneDirRequiredResponse()
+    const input = await request.json().catch(() => ({})) as Parameters<typeof createProviderJob>[1]
+    try {
+      assertProviderSecretRefAllowed(input.secretRef)
+    }
+    catch {
+      return Response.json(adminApiErrorPayload('provider_secret_ref_invalid'), {
+        status: 400,
+        headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
+      })
+    }
+    try {
+      const provider = await createProviderJob(root, input)
+      return Response.json({ provider })
+    }
+    catch (error) {
+      return adminApiErrorResponse(error, 409)
+    }
+  }
+
+  if (url.pathname === '/api/soul-releases' && request.method === 'POST') {
+    const guard = adminMutationGuard(request, env)
+    if (guard)
+      return guard
+    const root = controlPlaneDirFromEnv(env)
+    if (!root)
+      return controlPlaneDirRequiredResponse()
+    const input = await request.json().catch(() => ({})) as Parameters<typeof registerSoulJob>[1]
+    try {
+      const soulRelease = await registerSoulJob(root, input)
+      return Response.json({ soulRelease })
+    }
+    catch (error) {
+      return adminApiErrorResponse(error, 409)
+    }
+  }
+
   if (request.method !== 'GET' && request.method !== 'HEAD' && options.staticBoundaryMethodGuard) {
     return methodNotAllowed('GET, HEAD')
   }
@@ -328,6 +421,13 @@ function isSameOriginMutation(request: Request): boolean {
   catch {
     return false
   }
+}
+
+function controlPlaneDirRequiredResponse(): Response {
+  return Response.json(adminApiErrorPayload('control_plane_dir_required'), {
+    status: 409,
+    headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
+  })
 }
 
 function adminApiErrorResponse(error: unknown, status: number): Response {
