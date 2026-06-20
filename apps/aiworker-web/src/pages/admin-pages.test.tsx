@@ -97,6 +97,32 @@ const liveSoulDisplayMarker = 'HR Live Marker'
 const liveProviderLabelMarker = 'Live Provider Marker'
 const liveEnvironmentOwnerMarker = 'live-owner@example.com'
 
+// Audit-specific live markers — distinctly not present in the bundled fixture.
+const liveAuditActor = 'live-admin@live-org.example.com'
+const liveAuditAction = 'Live Audit Action Marker'
+const liveAssignmentEmail = 'live-worker@live-org.example.com'
+
+function adminDataWithLiveAuditRefs(): AdminConsoleData {
+  const baseEvent = adminConsoleData.recentAuditEvents[0] ?? {
+    id: 'evt-live-0',
+    at: '2026-01-01',
+    actor: liveAuditActor,
+    action: liveAuditAction,
+    target: 'ws-live-marker',
+    tone: 'neutral' as const,
+  }
+  const baseAssignment = adminConsoleData.assignments[0]
+  return {
+    ...adminConsoleData,
+    recentAuditEvents: [
+      { ...baseEvent, id: 'evt-live-1', actor: liveAuditActor, action: liveAuditAction },
+    ],
+    assignments: [
+      { ...baseAssignment, id: 'asn-live-1', assignedEmail: liveAssignmentEmail },
+    ],
+  }
+}
+
 function adminDataWithLiveOnlyRefs(): { data: AdminConsoleData, assignment: AdminConsoleData['assignments'][number] } {
   const baseSoul = adminConsoleData.soulReleases[0]
   const baseProvider = adminConsoleData.providerProfiles[0]
@@ -291,6 +317,21 @@ describe('admin console page composition', () => {
     expect(markup).toContain(`receipt:${adminConsoleData.assignments[0].receiptId}`)
     expect(markup).not.toContain('/api/sessions/')
     expect(markup).not.toContain('engine_invocation')
+  })
+
+  test('audit page and audit card resolve events and assignments from live data, not the bundled fixture', () => {
+    const data = adminDataWithLiveAuditRefs()
+    const markup = renderPageWithData(<AuditPage />, data)
+
+    // AuditCard must show the live actor/action, not the fixture actor
+    expect(markup).toContain(liveAuditActor)
+    expect(markup).toContain(liveAuditAction)
+    expect(markup).not.toContain('admin@example.com')
+
+    // Entry status card must show the live assignment email, not fixture emails
+    expect(markup).toContain(liveAssignmentEmail)
+    expect(markup).not.toContain('alice@example.com')
+    expect(markup).not.toContain('cara@example.com')
   })
 
   test('shared cards preserve the runtime boundary and assignment detail affordance', () => {
