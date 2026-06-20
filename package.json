@@ -30,6 +30,7 @@
     "build:official-souls": "bun scripts/official-soul-dist.ts",
     "smoke:dist-release": "bun run --filter '@zonease/aiworker-cli' smoke:dist-release",
     "e2e:aiworker-web:live": "bun scripts/aiworker-web-live-e2e.ts",
+    "e2e:aiworker-web:onboarding": "bun scripts/aiworker-web-onboarding-e2e.ts",
     "docs:check": "bun scripts/check-doc-contract.ts",
     "env:check": "bun scripts/check-env-structure.ts",
     "env:sync": "bun scripts/check-env-structure.ts --write",
