@@ -1,3 +1,4 @@
+import type { PaseoEnvironmentTopologyKind } from './control-plane'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -272,16 +273,24 @@ describe('Paseo thin-layer aiworker-control contract', () => {
     expect(sharedHomePlan.workspacePolicy.userSlug).toBe('alice-example.com')
     expect(sharedHomePlan.workspacePolicy.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
 
-    expect(() => createProvisionPlan({
+    // US-001: a persisted snapshot may still carry the abolished legacy topologyKind
+    // string. It must migrate-on-read to owner-scoped (never crash, never produce a
+    // bare $HOME/.paseo), so an owner!=assigned plan stays a valid shared-home plan.
+    const migratedLegacyPlan = createProvisionPlan({
       assignment,
       environment: {
         ...environment,
         ownerEmail: 'bob@example.com',
-        topologyKind: 'legacy-home-derived-paseo-home-v1',
+        topologyKind: 'legacy-home-derived-paseo-home-v1' as unknown as PaseoEnvironmentTopologyKind,
       },
       providerProfile,
       soul,
-    })).toThrow('only with owner-scoped topology')
+    })
+    expect(migratedLegacyPlan.ownership.kind).toBe('owner-scoped-shared-home')
+    expect(migratedLegacyPlan.ownership.topologyKind).toBe('owner-scoped-paseo-home-v1')
+    expect(migratedLegacyPlan.workspacePolicy.topologyKind).toBe('owner-scoped-paseo-home-v1')
+    expect(migratedLegacyPlan.workspacePolicy.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
+    expect(migratedLegacyPlan.receipt.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
 
     expect(() => createProvisionPlan({
       assignment,
@@ -319,6 +328,66 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       providerProfile,
       soul,
     })).not.toThrow('SHOULD_NOT_RUN')
+  })
+
+  test('US-001: derived PASEO_HOME is always owner-scoped, never a bare $HOME/.paseo', () => {
+    const baseAssignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+    })
+    const expectedPaseoHome = '$HOME/.aiworker/alice-example.com/.paseo'
+
+    // Any topologyKind input (missing, owner-scoped, or a persisted legacy string)
+    // must derive the same owner-scoped Paseo home and must never emit bare $HOME/.paseo.
+    const topologyInputs: Array<PaseoEnvironmentTopologyKind | undefined> = [
+      undefined,
+      'owner-scoped-paseo-home-v1',
+      'legacy-home-derived-paseo-home-v1' as unknown as PaseoEnvironmentTopologyKind,
+    ]
+    for (const topologyKind of topologyInputs) {
+      const plan = createProvisionPlan({
+        assignment: baseAssignment,
+        environment: {
+          ...environment,
+          // Even if a snapshot carried a literal bare home, projection must override it.
+          paseoHome: '$HOME/.paseo',
+          ...(topologyKind ? { topologyKind } : {}),
+        },
+        providerProfile,
+        soul,
+      })
+      expect(plan.workspacePolicy.paseoHome).toBe(expectedPaseoHome)
+      expect(plan.environment.paseoHome).toBe(expectedPaseoHome)
+      expect(plan.receipt.paseoHome).toBe(expectedPaseoHome)
+      expect(plan.workspacePolicy.topologyKind).toBe('owner-scoped-paseo-home-v1')
+      expect(plan.workspacePolicy.paseoHome).not.toBe('$HOME/.paseo')
+      // The owner-scoped Paseo home must be nested under $HOME/.aiworker/<slug>/.paseo,
+      // never the bare Paseo install another tool may own on the target machine.
+      expect(plan.workspacePolicy.paseoHome.startsWith('$HOME/.aiworker/')).toBe(true)
+      expect(plan.workspacePolicy.paseoHome.endsWith('/.paseo')).toBe(true)
+    }
+  })
+
+  test('US-001: provision script only writes under .aiworker/<slug>/, never bare $HOME/.paseo', () => {
+    const plan = createProvisionPlan({
+      assignment: createAssignment({
+        assignedEmail: 'alice@example.com',
+        environmentId: environment.environmentId,
+        providerProfileId: providerProfile.id,
+        soulReleaseRef: 'hr-recruiter@1.2.0',
+        workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+      }),
+      environment,
+      providerProfile,
+      soul,
+    })
+    expect(plan.aissh.script).toContain('AIWORKER_OWNER_ROOT')
+    expect(plan.aissh.script).toContain('AIWORKER_PASEO_HOME="$AIWORKER_OWNER_ROOT/.paseo"')
+    expect(plan.aissh.script).not.toContain('PASEO_HOME="$HOME/.paseo"')
+    expect(plan.aissh.script).not.toContain('PASEO_HOME=$HOME/.paseo')
   })
 
   test('normalizes aissh target refs without binding AIWorker to local .aissh.yaml files', () => {

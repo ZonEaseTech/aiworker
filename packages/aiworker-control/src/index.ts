@@ -76,13 +76,26 @@ const ASSIGNMENT_TRANSITIONS: Record<AssignmentStatus, AssignmentStatus[]> = {
   workspace_projected: ['handoff_ready', 'ready', 'needs_attention', 'revoked', 'archived'],
 }
 const URL_PATTERN = /\bhttps?:\/\/[^\s"'<>`]+/g
-const HOME_DERIVED_PASEO_HOME = '$HOME/.paseo' as const
+// US-001: AIWorker-derived PASEO_HOME is ALWAYS owner-scoped under
+// $HOME/.aiworker/<userSlug>/.paseo. The bare $HOME/.paseo form is recognized only so
+// that stale persisted refs can be detected and rejected/migrated; it is never emitted.
+const HOME_DERIVED_BARE_PASEO_HOME = '$HOME/.paseo' as const
 const HOME_DERIVED_AIWORKER_ROOT = '$HOME/.aiworker' as const
 const LEGACY_PROJECT_ROOT = '$HOME/aiworker-projects'
 const LEGACY_WORKSPACE_ROOT = '$HOME/aiworker-workspaces'
+// Recognition-only: old snapshots may carry this daemon endpoint string. AIWorker never
+// emits it any more, but normalizeEnvironmentForWorkspace still maps it to the owner-scoped
+// TCP ref so legacy records migrate-on-read instead of crashing.
 const HOME_DERIVED_DAEMON_ENDPOINT = 'paseo-daemon:remote-home'
 const PASEO_PROVIDER_READINESS_POLICY_KIND = 'paseo-provider-json-v1' as const
 const OWNER_SCOPED_TOPOLOGY_KIND = 'owner-scoped-paseo-home-v1' as const
+
+// US-001 migrate-on-read: any topologyKind input (missing, owner-scoped, or an abolished
+// legacy string from a persisted snapshot) collapses to the single legal owner-scoped value.
+// Never branch on or echo caller-provided topologyKind; always derive this literal.
+function normalizeTopologyKind(_input?: PaseoEnvironmentTopologyKind): PaseoEnvironmentTopologyKind {
+  return OWNER_SCOPED_TOPOLOGY_KIND
+}
 
 export function normalizeAssignedEmail(email: string): string {
   return email.trim().toLowerCase()
@@ -245,7 +258,7 @@ export function createProvisionPlan(input: ProvisionPlanInput): ProvisionPlan {
     topologyKind: ownership.topologyKind,
     userSlug,
   })
-  assertWorkspaceRefMatchesTopology(input.assignment.projectRef ?? input.assignment.workspaceRef, workspacePolicy.topologyKind)
+  assertWorkspaceRefMatchesTopology(input.assignment.projectRef ?? input.assignment.workspaceRef)
   const workspaceRef = workspacePolicy.workspaceRef
   const paseoHome = workspacePolicy.paseoHome
   const normalizedEnvironment = normalizeEnvironmentForWorkspace(input.environment, workspacePolicy)
@@ -346,13 +359,14 @@ export function createPaseoOwnershipAssertion(
 ): PaseoOwnershipAssertion {
   const assignedEmail = normalizeAssignedEmail(assignment.assignedEmail)
   const environmentOwnerEmail = normalizeAssignedEmail(environment.ownerEmail)
-  const topologyKind = environment.topologyKind ?? OWNER_SCOPED_TOPOLOGY_KIND
+  // US-001: topology is unconditionally owner-scoped. owner!=assigned is always the
+  // owner-scoped shared-home case; the derived PASEO_HOME is still assigned-user-scoped
+  // under $HOME/.aiworker/<assigned-slug>/.paseo, so there is no cross-user bleed.
+  const topologyKind = normalizeTopologyKind(environment.topologyKind)
   const dedication = environment.dedication ? normalizeEnvironmentDedication(environment.dedication) : undefined
   if (dedication && dedication.assignedEmail !== assignedEmail) {
     throw new Error(`Paseo environment dedication ${dedication.assignedEmail} must match assigned user ${assignedEmail}`)
   }
-  if (environmentOwnerEmail !== assignedEmail && topologyKind !== OWNER_SCOPED_TOPOLOGY_KIND)
-    throw new Error(`Paseo environment owner ${environmentOwnerEmail} can differ from assigned user ${assignedEmail} only with owner-scoped topology`)
 
   return {
     assignedEmail,
@@ -675,9 +689,12 @@ function parseAiworkerProjectRef(projectRef: string): { projectName: string, use
   }
 }
 
-function assertWorkspaceRefMatchesTopology(projectRef: string, topologyKind: PaseoEnvironmentTopologyKind): void {
+// US-001: topology is unconditionally owner-scoped. Any ref already under
+// $HOME/.aiworker/ must be the owner-scoped three-segment form; legacy two-segment refs
+// (and non-prefixed refs) only survive as display-only input parsed by deriveProjectName.
+function assertWorkspaceRefMatchesTopology(projectRef: string): void {
   const prefix = `${HOME_DERIVED_AIWORKER_ROOT}/`
-  if (topologyKind !== OWNER_SCOPED_TOPOLOGY_KIND || !projectRef.startsWith(prefix))
+  if (!projectRef.startsWith(prefix))
     return
   const rest = projectRef.slice(prefix.length)
   const parts = rest.split('/')
@@ -692,18 +709,15 @@ function createWorkspacePathPolicy(input: {
   topologyKind: PaseoEnvironmentTopologyKind
   userSlug: string
 }): WorkspacePathPolicy {
+  // US-001: unconditionally owner-scoped. PASEO_HOME, projects, and the daemon ref are
+  // always derived under $HOME/.aiworker/<userSlug>/, never the bare $HOME/.paseo install.
+  const topologyKind = normalizeTopologyKind(input.topologyKind)
   const ownerRoot = `${HOME_DERIVED_AIWORKER_ROOT}/${input.userSlug}` as const
   const runDir = `${ownerRoot}/run` as const
-  const projectRoot = input.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
-    ? `${ownerRoot}/projects` as const
-    : ownerRoot
-  const paseoHome = input.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
-    ? `${ownerRoot}/.paseo` as const
-    : HOME_DERIVED_PASEO_HOME
+  const projectRoot = `${ownerRoot}/projects` as const
+  const paseoHome = `${ownerRoot}/.paseo` as const
   const projectRef = `${projectRoot}/${input.projectName}` as WorkspacePathPolicy['projectRef']
-  const daemonRef = input.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
-    ? createDefaultPaseoDaemonEndpointRef(input.userSlug)
-    : HOME_DERIVED_DAEMON_ENDPOINT
+  const daemonRef = createDefaultPaseoDaemonEndpointRef(input.userSlug)
   return {
     authority: 'aissh-execution-home',
     assignedEmail: input.assignedEmail,
@@ -718,7 +732,7 @@ function createWorkspacePathPolicy(input: {
     projectRef,
     projectRoot,
     runDir,
-    topologyKind: input.topologyKind,
+    topologyKind,
     userSlug: input.userSlug,
     workspaceName: input.projectName,
     workspaceRef: projectRef,
@@ -727,35 +741,42 @@ function createWorkspacePathPolicy(input: {
 }
 
 function normalizeEnvironmentForWorkspace(environment: PaseoEnvironment, policy: WorkspacePathPolicy): PaseoEnvironment {
-  if (policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND && environment.paseoHome === HOME_DERIVED_PASEO_HOME)
-    throw new Error('owner-scoped topology must not use legacy $HOME/.paseo')
-
   if (environment.endpointKind === 'tcp' && Boolean(environment.daemonListenRef) !== Boolean(environment.daemonHostRef))
     throw new Error('explicit TCP Paseo endpoint requires both daemonListenRef and daemonHostRef')
 
   const normalized: PaseoEnvironment = {
     ...environment,
     ...(environment.dedication ? { dedication: normalizeEnvironmentDedication(environment.dedication) } : {}),
-    endpointKind: policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND && environment.endpointKind !== 'relay-offer'
+    // US-001: topology is always owner-scoped. A stale bare $HOME/.paseo in the input
+    // (or a legacy paseo-daemon:remote-home endpoint) is migrated-on-read here by being
+    // overridden with the owner-scoped policy refs, never echoed back.
+    endpointKind: environment.endpointKind !== 'relay-offer'
       ? 'tcp'
       : environment.endpointKind,
     topologyKind: policy.topologyKind,
-    paseoHome: policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND ? policy.paseoHome : environment.paseoHome,
+    paseoHome: policy.paseoHome,
     daemonEndpoint: environment.endpointKind === 'tcp'
       ? environment.daemonHostRef ?? environment.daemonEndpoint
-      : policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND && (environment.endpointKind === 'unix' || environment.daemonEndpoint === HOME_DERIVED_DAEMON_ENDPOINT)
-        ? policy.daemonEndpointRef
-        : environment.daemonEndpoint,
+      : (environment.endpointKind === 'unix' || environment.daemonEndpoint === HOME_DERIVED_DAEMON_ENDPOINT)
+          ? policy.daemonEndpointRef
+          : environment.daemonEndpoint,
     daemonListenRef: environment.endpointKind === 'tcp'
       ? environment.daemonListenRef
-      : policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
-        ? policy.daemonListenRef
-        : environment.daemonListenRef,
+      : policy.daemonListenRef,
     daemonHostRef: environment.endpointKind === 'tcp'
       ? environment.daemonHostRef
-      : policy.topologyKind === OWNER_SCOPED_TOPOLOGY_KIND
-        ? policy.daemonHostRef
-        : environment.daemonHostRef,
+      : policy.daemonHostRef,
+  }
+
+  // US-001 hard invariant: the derived PASEO_HOME must ALWAYS be owner-scoped under
+  // $HOME/.aiworker/<slug>/.paseo and must NEVER be the bare $HOME/.paseo install that
+  // another tool may own on the target machine. Unconditional, on the emitted value.
+  if (
+    normalized.paseoHome === HOME_DERIVED_BARE_PASEO_HOME
+    || !normalized.paseoHome.startsWith(`${HOME_DERIVED_AIWORKER_ROOT}/`)
+    || !normalized.paseoHome.endsWith('/.paseo')
+  ) {
+    throw new Error(`derived PASEO_HOME must be owner-scoped $HOME/.aiworker/<slug>/.paseo, never bare $HOME/.paseo; got ${normalized.paseoHome}`)
   }
 
   if (normalized.endpointKind === 'tcp' && (!normalized.daemonListenRef || !normalized.daemonHostRef))

@@ -8,10 +8,10 @@ AIWorker protocol is now a thin distribution protocol around Paseo Project workd
 PaseoEnvironment
   environmentId
   ownerEmail              # logical owner/admin of target aissh execution identity
-  topologyKind            # owner-scoped-paseo-home-v1 | legacy-home-derived-paseo-home-v1
+  topologyKind            # owner-scoped-paseo-home-v1 (only legal value; abolished legacy-home-derived strings migrate-on-read to this)
   dedication?             # assigned-user-dedicated assertion for stronger isolation
   targetRef
-  paseoHome              # default intent is $HOME/.aiworker/<userSlug>/.paseo
+  paseoHome              # ALWAYS $HOME/.aiworker/<userSlug>/.paseo; AIWorker never derives bare $HOME/.paseo
   daemonEndpoint         # real endpoint or redacted/derived endpoint reference
   daemonListenRef        # default 127.0.0.1:<stable-user-port>
   daemonHostRef          # default 127.0.0.1:<stable-user-port>
