@@ -41,6 +41,27 @@ AIWorker must not own or recreate:
 - broker APIs for local session follow-up;
 - Paseo forks, vendored Paseo server/app code, or a Soul selector inside Paseo.
 
+## Unified home model
+
+AIWorker 在任何机器上的 home 是同一个保留目录 `~/.aiworker`（`AIWORKER_HOME` 可覆盖），按角色用保留名分目录：
+
+```text
+~/.aiworker/                    # AIWorker home（默认；AIWORKER_HOME 覆盖）
+├── control-plane/              # 中心机角色：management-plane SoT
+│   ├── snapshot.json           #   AIWorker-owned 元数据快照
+│   ├── receipts.jsonl          #   append-only redacted receipts
+│   ├── audit-events.jsonl      #   append-only audit
+│   └── projection-manifests.jsonl
+└── <userSlug>/                 # 目标机角色：每个员工 owner-scoped
+    ├── .paseo/                 #   PASEO_HOME（Paseo 拥有）
+    ├── run/
+    └── projects/<project>/     #   交接点（Soul 投影入 / Paseo 打开）
+```
+
+中心机角色（运行 `aiworker web` / 元数据写命令的管理员机器）默认把 management-plane SoT 落在 `~/.aiworker/control-plane`。`aiworker web` 无参时 lazy 创建该目录并以它为 live control-plane 绑定运行；只有当默认 home 无法解析或创建时，Web 才退化为 fixture 预览兜底。`apply` 与各元数据 create/edit 命令仍要求显式 `--control-plane-dir` 或 `AIWORKER_CONTROL_PLANE_DIR`，不享受 `web` 的默认 home 兜底。
+
+目标机角色的每个员工是 `~/.aiworker/<userSlug>/` 下一棵 owner-scoped 子树。`userSlug` 直接落在 home 顶层，因此受保留名守卫（`RESERVED_USER_SLUGS`：`control-plane` / `config` / `cache` / `run` / `projects` / `paseo` / `.paseo`）保护：派生出的员工 slug 若大小写无关地撞上这些保留名即被拒绝，防止某员工 slug 覆盖中心 control-plane 或遮蔽 home 结构段。仅 user-slug 语义命中守卫；`projects/<name>` 项目名段在下一层，可合法等于保留词。
+
 ## Core model
 
 ```text

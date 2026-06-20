@@ -1,3 +1,4 @@
+import type { PaseoEnvironmentTopologyKind } from './control-plane'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -15,8 +16,11 @@ import {
   createProvisionReceipt,
   createSoulRelease,
   createWorkspaceProjectionManifest,
+  deriveAssignedUserSlug,
+  deriveOwnerScopedPaseoPort,
   LocalFileControlPlaneStore,
   normalizeAisshServerRef,
+  RESERVED_USER_SLUGS,
   userCanOpenWorkspace,
   validateProjectedFilePath,
   writeProjectedFiles,
@@ -272,16 +276,24 @@ describe('Paseo thin-layer aiworker-control contract', () => {
     expect(sharedHomePlan.workspacePolicy.userSlug).toBe('alice-example.com')
     expect(sharedHomePlan.workspacePolicy.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
 
-    expect(() => createProvisionPlan({
+    // US-001: a persisted snapshot may still carry the abolished legacy topologyKind
+    // string. It must migrate-on-read to owner-scoped (never crash, never produce a
+    // bare $HOME/.paseo), so an owner!=assigned plan stays a valid shared-home plan.
+    const migratedLegacyPlan = createProvisionPlan({
       assignment,
       environment: {
         ...environment,
         ownerEmail: 'bob@example.com',
-        topologyKind: 'legacy-home-derived-paseo-home-v1',
+        topologyKind: 'legacy-home-derived-paseo-home-v1' as unknown as PaseoEnvironmentTopologyKind,
       },
       providerProfile,
       soul,
-    })).toThrow('only with owner-scoped topology')
+    })
+    expect(migratedLegacyPlan.ownership.kind).toBe('owner-scoped-shared-home')
+    expect(migratedLegacyPlan.ownership.topologyKind).toBe('owner-scoped-paseo-home-v1')
+    expect(migratedLegacyPlan.workspacePolicy.topologyKind).toBe('owner-scoped-paseo-home-v1')
+    expect(migratedLegacyPlan.workspacePolicy.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
+    expect(migratedLegacyPlan.receipt.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
 
     expect(() => createProvisionPlan({
       assignment,
@@ -319,6 +331,66 @@ describe('Paseo thin-layer aiworker-control contract', () => {
       providerProfile,
       soul,
     })).not.toThrow('SHOULD_NOT_RUN')
+  })
+
+  test('US-001: derived PASEO_HOME is always owner-scoped, never a bare $HOME/.paseo', () => {
+    const baseAssignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: 'hr-recruiter@1.2.0',
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+    })
+    const expectedPaseoHome = '$HOME/.aiworker/alice-example.com/.paseo'
+
+    // Any topologyKind input (missing, owner-scoped, or a persisted legacy string)
+    // must derive the same owner-scoped Paseo home and must never emit bare $HOME/.paseo.
+    const topologyInputs: Array<PaseoEnvironmentTopologyKind | undefined> = [
+      undefined,
+      'owner-scoped-paseo-home-v1',
+      'legacy-home-derived-paseo-home-v1' as unknown as PaseoEnvironmentTopologyKind,
+    ]
+    for (const topologyKind of topologyInputs) {
+      const plan = createProvisionPlan({
+        assignment: baseAssignment,
+        environment: {
+          ...environment,
+          // Even if a snapshot carried a literal bare home, projection must override it.
+          paseoHome: '$HOME/.paseo',
+          ...(topologyKind ? { topologyKind } : {}),
+        },
+        providerProfile,
+        soul,
+      })
+      expect(plan.workspacePolicy.paseoHome).toBe(expectedPaseoHome)
+      expect(plan.environment.paseoHome).toBe(expectedPaseoHome)
+      expect(plan.receipt.paseoHome).toBe(expectedPaseoHome)
+      expect(plan.workspacePolicy.topologyKind).toBe('owner-scoped-paseo-home-v1')
+      expect(plan.workspacePolicy.paseoHome).not.toBe('$HOME/.paseo')
+      // The owner-scoped Paseo home must be nested under $HOME/.aiworker/<slug>/.paseo,
+      // never the bare Paseo install another tool may own on the target machine.
+      expect(plan.workspacePolicy.paseoHome.startsWith('$HOME/.aiworker/')).toBe(true)
+      expect(plan.workspacePolicy.paseoHome.endsWith('/.paseo')).toBe(true)
+    }
+  })
+
+  test('US-001: provision script only writes under .aiworker/<slug>/, never bare $HOME/.paseo', () => {
+    const plan = createProvisionPlan({
+      assignment: createAssignment({
+        assignedEmail: 'alice@example.com',
+        environmentId: environment.environmentId,
+        providerProfileId: providerProfile.id,
+        soulReleaseRef: 'hr-recruiter@1.2.0',
+        workspaceRef: '$HOME/.aiworker/alice-example.com/projects/hr-recruiter',
+      }),
+      environment,
+      providerProfile,
+      soul,
+    })
+    expect(plan.aissh.script).toContain('AIWORKER_OWNER_ROOT')
+    expect(plan.aissh.script).toContain('AIWORKER_PASEO_HOME="$AIWORKER_OWNER_ROOT/.paseo"')
+    expect(plan.aissh.script).not.toContain('PASEO_HOME="$HOME/.paseo"')
+    expect(plan.aissh.script).not.toContain('PASEO_HOME=$HOME/.paseo')
   })
 
   test('normalizes aissh target refs without binding AIWorker to local .aissh.yaml files', () => {
@@ -765,5 +837,50 @@ describe('shared control-plane factories', () => {
       descriptorRef: '/abs/path/soul.descriptor.json',
       files: [{ relativePath: 'AGENTS.md', content: '# HR Manager\n' }],
     })
+  })
+
+  test('US-002: user slug that collides with a reserved AIWorker home segment is rejected', () => {
+    // The reserved set must at least cover the control-plane SoT and the per-owner home
+    // structure segments under $HOME/.aiworker/<userSlug>/.
+    for (const reserved of ['control-plane', 'config', 'cache', 'run', 'projects', 'paseo', '.paseo'])
+      expect(RESERVED_USER_SLUGS.has(reserved)).toBe(true)
+
+    // Inputs that sanitize down to a reserved word must throw, not silently pass.
+    // Each is traced through normalizeAssignedEmail + the two .replace() passes:
+    //   'control-plane'   -> 'control-plane'   (dash survives)
+    //   'CONTROL-PLANE'   -> 'control-plane'   (lowercased)
+    //   'control-plane@'  -> 'control-plane'   (@->-, trailing - stripped)
+    //   'config'/'cache'/'run'/'projects'/'paseo' -> unchanged
+    //   '.paseo'          -> '.paseo'          (dot survives, only dashes trimmed)
+    for (const collidingEmail of [
+      'control-plane',
+      'CONTROL-PLANE',
+      'control-plane@',
+      'config',
+      'cache',
+      'run',
+      'projects',
+      'paseo',
+      '.paseo',
+    ]) {
+      expect(() => deriveAssignedUserSlug(collidingEmail)).toThrow(/reserved AIWorker home segment/)
+    }
+  })
+
+  test('US-002: reserved-name guard also rejects a pre-derived reserved slug at the port chokepoint', () => {
+    // getWorkspacePathPolicy/createDefaultPaseoDaemonEndpointRef route a raw userSlug
+    // through deriveOwnerScopedPaseoPort, so the guard must reject reserved slugs there too,
+    // not only inside deriveAssignedUserSlug.
+    expect(() => deriveOwnerScopedPaseoPort('control-plane')).toThrow(/reserved AIWorker home segment/)
+    // Project names that happen to equal a reserved word are a different segment layer
+    // (projects/<name>) and must NOT be rejected — only the user-slug layer collides.
+  })
+
+  test('US-002: normal emails are unaffected by the reserved-name guard', () => {
+    expect(deriveAssignedUserSlug('alice@example.com')).toBe('alice-example.com')
+    // 'control-plane@x.com' sanitizes to 'control-plane-x.com', which is NOT a reserved
+    // exact match, so a real employee whose email merely starts with a reserved word passes.
+    expect(deriveAssignedUserSlug('control-plane@x.com')).toBe('control-plane-x.com')
+    expect(deriveAssignedUserSlug('configurator@example.com')).toBe('configurator-example.com')
   })
 })

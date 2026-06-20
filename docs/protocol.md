@@ -8,10 +8,10 @@ AIWorker protocol is now a thin distribution protocol around Paseo Project workd
 PaseoEnvironment
   environmentId
   ownerEmail              # logical owner/admin of target aissh execution identity
-  topologyKind            # owner-scoped-paseo-home-v1 | legacy-home-derived-paseo-home-v1
+  topologyKind            # owner-scoped-paseo-home-v1 (only legal value; abolished legacy-home-derived strings migrate-on-read to this)
   dedication?             # assigned-user-dedicated assertion for stronger isolation
   targetRef
-  paseoHome              # default intent is $HOME/.aiworker/<userSlug>/.paseo
+  paseoHome              # ALWAYS $HOME/.aiworker/<userSlug>/.paseo; AIWorker never derives bare $HOME/.paseo
   daemonEndpoint         # real endpoint or redacted/derived endpoint reference
   daemonListenRef        # default 127.0.0.1:<stable-user-port>
   daemonHostRef          # default 127.0.0.1:<stable-user-port>
@@ -120,6 +120,8 @@ ProvisionReceipt
 `projectRef` is the primary user-facing derived intent (`$HOME/...`) until the target shell resolves its canonical HOME. `workspaceRef` remains as a compatibility alias for the same Project workdir. Consumers must not treat either value as a caller-controlled absolute path. New writes use the owner-scoped Project path. Legacy `$HOME/.paseo`, `daemonEndpoint=paseo-daemon:remote-home`, and `$HOME/.aiworker/<userSlug>/<project>` records may load for display, but must not be automatically migrated or used as the new default.
 
 `assignedEmail` owns the derived `$HOME/.aiworker/<userSlug>` scope. `PaseoEnvironment.ownerEmail` owns/administers the target execution identity and may differ from `assignedEmail` under `owner-scoped-shared-home`. `--dedicated-target-user` records `dedication.kind=assigned-user-dedicated` when the target execution identity is explicitly dedicated to the assigned user. Legacy v1 records may omit ownership receipt fields and still load, but live apply/pair paths must receive an explicit `--target-owner` or `--dedicated-target-user` assertion before invoking `aissh`.
+
+AIWorker home 在任何机器上都是 `~/.aiworker`（`AIWORKER_HOME` 覆盖）。中心机角色把 management-plane SoT 默认落在 `~/.aiworker/control-plane`（`snapshot.json` + append-only `*.jsonl` receipts/audit/projection）；目标机角色对每个员工派生 `~/.aiworker/<userSlug>` owner-scoped 子树。`userSlug` 直接落在 home 顶层并受保留名守卫保护（`control-plane` / `config` / `cache` / `run` / `projects` / `paseo` / `.paseo`），防止员工 slug 撞上 home 结构段或中心 control-plane。`paseoHome` 因此恒为 `$HOME/.aiworker/<userSlug>/.paseo`，AIWorker 绝不派生裸 `$HOME/.paseo`。
 
 ## Create command face
 

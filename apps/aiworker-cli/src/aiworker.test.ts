@@ -4,14 +4,36 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { LocalFileControlPlaneStore } from '@zonease/aiworker-control'
 import { $ } from 'bun'
-import { afterEach, describe, expect, test } from 'bun:test'
-import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, createPlanFromOptions, createWebLaunchPlan, executePaseoPair, executeProvisionPlan, readSoulReleaseFromOptions, resolveAisshCredentials, resolveAisshInvocation, runWebConsole, savePlanMetadataSnapshot } from './aiworker'
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
+import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, controlPlaneDirFromOptions, createPlanFromOptions, createWebLaunchPlan, executePaseoPair, executeProvisionPlan, readSoulReleaseFromOptions, resolveAisshCredentials, resolveAisshInvocation, resolveControlPlaneDir, runWebConsole, savePlanMetadataSnapshot } from './aiworker'
 
 const cliPath = path.resolve(import.meta.dirname, 'aiworker.ts')
 const packageJsonPath = path.resolve(import.meta.dirname, '../package.json')
 const savedAisshBin = process.env.AISSH_BIN
 const savedAisshToken = process.env.AISSH_TOKEN
 const savedCwd = process.cwd()
+
+// Isolate the central home so default control-plane resolution never writes to a real ~/.aiworker.
+const savedAiworkerHome = process.env.AIWORKER_HOME
+const savedControlPlaneDirEnv = process.env.AIWORKER_CONTROL_PLANE_DIR
+let isolatedHome = ''
+
+beforeAll(async () => {
+  isolatedHome = await mkdtemp(path.join(tmpdir(), 'aiworker-home-'))
+  process.env.AIWORKER_HOME = isolatedHome
+  delete process.env.AIWORKER_CONTROL_PLANE_DIR
+})
+
+afterAll(() => {
+  if (savedAiworkerHome === undefined)
+    delete process.env.AIWORKER_HOME
+  else
+    process.env.AIWORKER_HOME = savedAiworkerHome
+  if (savedControlPlaneDirEnv === undefined)
+    delete process.env.AIWORKER_CONTROL_PLANE_DIR
+  else
+    process.env.AIWORKER_CONTROL_PLANE_DIR = savedControlPlaneDirEnv
+})
 
 afterEach(() => {
   if (savedAisshBin === undefined)
@@ -124,6 +146,63 @@ describe('aiworker thin CLI', () => {
     expect(plan.env.BROWSER).toBe('firefox')
     expect(plan.browser).toBe('firefox')
     expect(plan.env.AIWORKER_CONTROL_PLANE_DIR).toBe(controlPlaneDir)
+  })
+
+  test('web launch defaults the control plane to the central home and provisions it live', async () => {
+    const root = await createPackagedWebRuntime()
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-default-home-'))
+    const expected = path.join(home, 'control-plane')
+
+    const plan = createWebLaunchPlan({ browser: 'none' }, [root], { AIWORKER_HOME: home })
+
+    expect(plan.env.AIWORKER_CONTROL_PLANE_DIR).toBe(expected)
+    expect(existsSync(expected)).toBe(true)
+  })
+
+  test('web launch keeps an explicit --control-plane-dir above home and env defaults', async () => {
+    const root = await createPackagedWebRuntime()
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-explicit-home-'))
+    const explicit = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-explicit-cpd-')), 'records')
+
+    const plan = createWebLaunchPlan({ browser: 'none', controlPlaneDir: explicit }, [root], {
+      AIWORKER_CONTROL_PLANE_DIR: '/env/should/lose',
+      AIWORKER_HOME: home,
+    })
+
+    expect(plan.env.AIWORKER_CONTROL_PLANE_DIR).toBe(explicit)
+  })
+
+  test('web launch honors AIWORKER_CONTROL_PLANE_DIR env above the home default', async () => {
+    const root = await createPackagedWebRuntime()
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-env-home-'))
+    const envCpd = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-env-cpd-')), 'records')
+
+    const plan = createWebLaunchPlan({ browser: 'none' }, [root], {
+      AIWORKER_CONTROL_PLANE_DIR: envCpd,
+      AIWORKER_HOME: home,
+    })
+
+    expect(plan.env.AIWORKER_CONTROL_PLANE_DIR).toBe(path.resolve(envCpd))
+  })
+
+  test('resolveControlPlaneDir applies explicit, env, then central home priority', async () => {
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-resolve-home-'))
+
+    expect(resolveControlPlaneDir({ AIWORKER_CONTROL_PLANE_DIR: '/env/dir', AIWORKER_HOME: home }, '/explicit/dir'))
+      .toBe(path.resolve('/explicit/dir'))
+    expect(resolveControlPlaneDir({ AIWORKER_CONTROL_PLANE_DIR: '/env/dir', AIWORKER_HOME: home }))
+      .toBe(path.resolve('/env/dir'))
+    expect(resolveControlPlaneDir({ AIWORKER_HOME: home }))
+      .toBe(path.join(home, 'control-plane'))
+  })
+
+  test('controlPlaneDirFromOptions respects env but stays opt-in without a flag or env', () => {
+    expect(controlPlaneDirFromOptions({ controlPlaneDir: '/explicit' }, { AIWORKER_CONTROL_PLANE_DIR: '/env' }))
+      .toBe(path.resolve('/explicit'))
+    expect(controlPlaneDirFromOptions({}, { AIWORKER_CONTROL_PLANE_DIR: '/env/dir' }))
+      .toBe(path.resolve('/env/dir'))
+    expect(controlPlaneDirFromOptions({}, {})).toBeNull()
+    expect(controlPlaneDirFromOptions({}, { AIWORKER_HOME: '/some/home' })).toBeNull()
   })
 
   test('web launch can avoid browser opening for terminal-only runs', () => {

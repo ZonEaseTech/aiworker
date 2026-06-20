@@ -21,7 +21,10 @@ export type AssignmentStatus = 'draft' | 'provisioning' | 'workspace_projected' 
 export type ProvisioningAdapterType = 'aissh' | 'local' | 'rootless-container'
 export type PaseoEndpointKind = 'tcp' | 'unix' | 'windows-pipe' | 'relay-offer' | 'local-home'
 export type WorkspacePathPolicyKind = 'project-workdir'
-export type PaseoEnvironmentTopologyKind = 'owner-scoped-paseo-home-v1' | 'legacy-home-derived-paseo-home-v1'
+// US-001: topology is unconditionally owner-scoped. The abolished
+// 'legacy-home-derived-paseo-home-v1' value may still appear in persisted snapshots, but it
+// is migrated-on-read to this single legal value and is no longer assignable.
+export type PaseoEnvironmentTopologyKind = 'owner-scoped-paseo-home-v1'
 export type EndpointBindingKind = 'owner-scoped-local-daemon' | 'home-derived-local-daemon' | 'external-endpoint' | 'opaque-pairing-offer'
 export type ProviderReadinessPolicyKind = 'paseo-provider-json-v1'
 
@@ -67,7 +70,7 @@ export interface WorkspacePathPolicy {
   assignedEmail: string
   ownerEmail: string
   ownerRoot: `$HOME/.aiworker/${string}`
-  paseoHome: '$HOME/.paseo' | `$HOME/.aiworker/${string}/.paseo`
+  paseoHome: `$HOME/.aiworker/${string}/.paseo`
   runDir: `$HOME/.aiworker/${string}/run`
   daemonEndpointRef: string
   daemonHostRef: string
