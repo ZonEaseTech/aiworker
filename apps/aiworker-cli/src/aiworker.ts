@@ -492,7 +492,7 @@ export function createWebLaunchPlan(options: Record<string, unknown>, searchRoot
   const host = resolveWebHost(options)
   const port = resolveWebPort(options)
   const open = resolveWebOpen(options)
-  const explicitControlPlaneDir = typeof options.controlPlaneDir === 'string' && options.controlPlaneDir.trim() !== ''
+  const explicitControlPlaneDir = typeof options.controlPlaneDir === 'string'
     ? options.controlPlaneDir
     : undefined
   let controlPlaneDir: string | undefined
@@ -1044,14 +1044,14 @@ export async function savePlanMetadataSnapshot(
 
 export function resolveCentralHome(env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.AIWORKER_HOME?.trim()
-  return configured && configured !== '' ? path.resolve(configured) : path.join(homedir(), '.aiworker')
+  return configured ? path.resolve(configured) : path.join(homedir(), '.aiworker')
 }
 
 export function resolveControlPlaneDir(env: NodeJS.ProcessEnv = process.env, explicit?: string): string {
   if (typeof explicit === 'string' && explicit.trim() !== '')
     return path.resolve(explicit)
   const fromEnv = env.AIWORKER_CONTROL_PLANE_DIR?.trim()
-  if (fromEnv && fromEnv !== '')
+  if (fromEnv)
     return path.resolve(fromEnv)
   return path.join(resolveCentralHome(env), 'control-plane')
 }
@@ -1060,7 +1060,7 @@ export function controlPlaneDirFromOptions(options: Record<string, unknown>, env
   if (typeof options.controlPlaneDir === 'string' && options.controlPlaneDir.trim() !== '')
     return path.resolve(options.controlPlaneDir)
   const fromEnv = env.AIWORKER_CONTROL_PLANE_DIR?.trim()
-  if (fromEnv && fromEnv !== '')
+  if (fromEnv)
     return path.resolve(fromEnv)
   return null
 }
