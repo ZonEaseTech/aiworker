@@ -5,47 +5,65 @@ import path from 'node:path'
 import process from 'node:process'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 
 type AdminServerModule = typeof import('./src/server')
 
+// The monorepo `.env` lives at the repo root, but `bun run --filter ... dev`
+// starts Vite with cwd = this package, so Bun never auto-loads it. Pull only the
+// central-home keys from the root `.env` into process.env (with `$HOME` expanded
+// by Vite's dotenv-expand) so dev resolves the intended home (e.g. ~/.aiworker-dev)
+// instead of the ~/.aiworker default. Deliberately scoped to home keys — copying
+// LOGTO_*/AIWORKER_WEB_* here would silently flip dev's auth/local mode.
+function hydrateCentralHomeFromRootEnv(mode: string): void {
+  const rootEnv = loadEnv(mode, path.resolve(__dirname, '..', '..'), '')
+  for (const key of ['AIWORKER_HOME', 'AIWORKER_CONTROL_PLANE_DIR'] as const) {
+    const value = rootEnv[key]?.trim()
+    if (value && !process.env[key]?.trim())
+      process.env[key] = value
+  }
+}
+
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), tailwindcss(), aiworkerAdminRuntimePlugin()],
-  build: {
-    rolldownOptions: {
-      output: {
-        codeSplitting: {
+export default defineConfig(({ mode }) => {
+  hydrateCentralHomeFromRootEnv(mode)
+  return {
+    plugins: [react(), tailwindcss(), aiworkerAdminRuntimePlugin()],
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
           // Keep package-name vendor groups explicit so Vite/Rolldown or dependency changes are reviewed before entry chunk size can drift again.
-          groups: [
-            {
-              name: 'react-vendor',
-              test: /node_modules[\\/](?:react|react-dom|react-router|scheduler)[\\/]/,
-              priority: 30,
-            },
-            {
-              name: 'ui-vendor',
-              test: /node_modules[\\/](?:radix-ui|@radix-ui|@phosphor-icons)[\\/]/,
-              priority: 20,
-            },
-            {
-              name: 'vendor',
-              test: /node_modules[\\/]/,
-              priority: 10,
-            },
-          ],
+            groups: [
+              {
+                name: 'react-vendor',
+                test: /node_modules[\\/](?:react|react-dom|react-router|scheduler)[\\/]/,
+                priority: 30,
+              },
+              {
+                name: 'ui-vendor',
+                test: /node_modules[\\/](?:radix-ui|@radix-ui|@phosphor-icons)[\\/]/,
+                priority: 20,
+              },
+              {
+                name: 'vendor',
+                test: /node_modules[\\/]/,
+                priority: 10,
+              },
+            ],
+          },
         },
       },
     },
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
     },
-  },
-  server: {
-    allowedHosts: ['20831--main--ben--ben.coder.tbc.5ok.co'],
-  },
+    server: {
+      allowedHosts: ['20831--main--ben--ben.coder.tbc.5ok.co'],
+    },
+  }
 })
 
 export function aiworkerAdminRuntimePlugin(): Plugin {
