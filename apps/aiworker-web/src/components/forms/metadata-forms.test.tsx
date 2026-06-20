@@ -93,10 +93,12 @@ describe('metadata form validation', () => {
     })).toBeNull()
   })
 
-  test('environment form requires id, owner and target', () => {
+  test('environment form requires id, owner, target and provider', () => {
     expect(validateEnvironmentForm(emptyEnvironmentForm)).toContain('设备 ID')
     expect(validateEnvironmentForm({ environment: 'env-x', provider: '', target: '', user: '' })).toContain('负责人邮箱')
-    expect(validateEnvironmentForm({ environment: 'env-x', provider: '', target: 'aissh:x', user: 'o@e.com' })).toBeNull()
+    // CLI `aiworker environment create` requires --provider; an empty provider must block submit.
+    expect(validateEnvironmentForm({ environment: 'env-x', provider: '', target: 'aissh:x', user: 'o@e.com' })).toBe('请选择关联 Provider。')
+    expect(validateEnvironmentForm({ environment: 'env-x', provider: 'codex-default', target: 'aissh:x', user: 'o@e.com' })).toBeNull()
   })
 
   test('soul form requires a descriptor selection', () => {
@@ -230,6 +232,16 @@ describe('metadata form content rendering', () => {
     )
     expect(markup).toContain('aria-label="设备 ID，environment id"')
     expect(markup).toContain('设备连接地址 target')
+  })
+
+  test('environment form marks the provider field as required, not optional', () => {
+    const markup = renderToStaticMarkup(
+      <EnvironmentFormContent error={null} onChange={() => {}} providers={providers} values={emptyEnvironmentForm} />,
+    )
+    expect(markup).toContain('关联 Provider')
+    expect(markup).not.toContain('关联 Provider（可选）')
+    expect(markup).not.toContain('可选：关联已有 Provider')
+    expect(markup).not.toContain('aria-label="关联后台 AI 账号 Provider，可选"')
   })
 
   test('form error surfaces validation message', () => {

@@ -355,6 +355,64 @@ describe('admin data fixtures', () => {
     expect(data.recentAuditEvents[0]?.tone).toBe('success')
   })
 
+  test('maps a live snapshot whose soul carries a descriptor path without falling back to fixtures', () => {
+    const environment = {
+      environmentId: 'env-bob',
+      daemonEndpoint: '127.0.0.1:51022',
+      endpointKind: 'relay-offer' as const,
+      isolation: 'os-user' as const,
+      ownerEmail: 'bob@example.com',
+      paseoHome: '$HOME/.aiworker/bob-example.com/.paseo',
+      providerProfileIds: ['codex-default'],
+      targetRef: 'aissh:server-bob',
+    }
+    const providerProfile = {
+      id: 'codex-default',
+      label: 'Codex Default',
+      paseoProviderId: 'paseo-codex-default',
+      provider: 'codex',
+      secretRef: 'secret://providers/codex/default',
+    }
+    const soul = {
+      descriptorRef: 'souls/hr-manager/dist/soul.descriptor.json',
+      displayName: 'HR Manager',
+      files: [{ relativePath: 'AGENTS.md', content: '# HR\n' }],
+      id: 'hr-manager',
+      version: '0.0.0',
+    }
+    const assignment = createAssignment({
+      assignedEmail: 'bob@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: `${soul.id}@${soul.version}`,
+      status: 'ready',
+      workspaceRef: '$HOME/.aiworker/bob-example.com/projects/hr',
+    })
+    const handoffReadyAssignment = {
+      ...assignment,
+      handoff: createHandoff(environment, assignment.workspaceRef),
+    }
+    const snapshot = {
+      ...createEmptyControlPlaneSnapshot(),
+      assignments: [handoffReadyAssignment],
+      environments: [environment],
+      providerProfiles: [providerProfile],
+      soulReleases: [soul],
+    }
+
+    expect(() => mapControlPlaneSnapshotToAdminConsoleData(snapshot)).not.toThrow()
+
+    const data = mapControlPlaneSnapshotToAdminConsoleData(snapshot)
+    const liveAssignment = data.assignments.find(item => item.assignedEmail === 'bob@example.com')
+    expect(liveAssignment).toBeDefined()
+    expect(liveAssignment?.soulReleaseId).toBe(`${soul.id}@${soul.version}`)
+    const approval = data.approvals.find(item => item.assignmentId === liveAssignment?.id)
+    expect(approval?.previewCommand).toContain(`--soul ${soul.descriptorRef}`)
+    expect(approval?.previewCommand).toContain(`--user ${assignment.assignedEmail}`)
+    expect(approval?.previewCommand).toContain(`--provider ${providerProfile.id}`)
+    expect(approval?.previewCommand).toContain(`--environment ${environment.environmentId}`)
+  })
+
   test('rejects runtime fragments and literal secrets from store-shaped admin data', () => {
     const snapshot = {
       ...createEmptyControlPlaneSnapshot(),

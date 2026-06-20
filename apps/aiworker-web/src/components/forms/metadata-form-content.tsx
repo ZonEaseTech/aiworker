@@ -151,10 +151,10 @@ export function EnvironmentFormContent({ error, onChange, providers, values }: E
         <FieldDescription>aissh / container 等连接引用，供技术支持在目标机器上定位 Paseo。</FieldDescription>
       </Field>
       <Field>
-        <FieldLabel htmlFor="environment-provider">关联 Provider（可选）</FieldLabel>
+        <FieldLabel htmlFor="environment-provider">关联 Provider</FieldLabel>
         <Select value={values.provider} onValueChange={value => onChange({ ...values, provider: value })}>
-          <SelectTrigger id="environment-provider" aria-label="关联后台 AI 账号 Provider，可选">
-            <SelectValue placeholder="可选：关联已有 Provider" />
+          <SelectTrigger id="environment-provider" aria-label="关联后台 AI 账号 Provider">
+            <SelectValue placeholder="选择已有的 Provider" />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
@@ -168,6 +168,7 @@ export function EnvironmentFormContent({ error, onChange, providers, values }: E
             </SelectGroup>
           </SelectContent>
         </Select>
+        <FieldDescription>开通时 CLI 要求设备绑定后台 AI 账号，请选择已有 Provider；缺少账号时先去“设备与账号”创建。</FieldDescription>
       </Field>
       <FieldError>{error}</FieldError>
     </FieldGroup>

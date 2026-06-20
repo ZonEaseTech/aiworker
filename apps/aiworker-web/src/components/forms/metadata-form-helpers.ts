@@ -129,6 +129,8 @@ export function validateEnvironmentForm(values: CreateEnvironmentFormValues): st
     return '请填写负责人邮箱。'
   if (!values.target.trim())
     return '请填写设备连接地址（target）。'
+  if (!values.provider.trim())
+    return '请选择关联 Provider。'
   return null
 }
 
@@ -163,7 +165,7 @@ export function buildAssignmentPayload(values: CreateAssignmentFormValues) {
 export function buildEnvironmentPayload(values: CreateEnvironmentFormValues) {
   return {
     environment: values.environment.trim(),
-    ...(values.provider.trim() ? { provider: values.provider.trim() } : {}),
+    provider: values.provider.trim(),
     target: values.target.trim(),
     user: values.user.trim(),
   }

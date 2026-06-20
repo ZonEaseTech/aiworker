@@ -281,6 +281,7 @@ export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminCon
 
   const assignmentIds = new Set(assignmentsById.keys())
   const environmentsById = new Map(data.environments.map(environment => [environment.id, environment]))
+  const soulDescriptorRefById = new Map(data.soulReleases.map(soul => [soul.id, soul.descriptorRef]))
   const approvalsById = new Map<string, ProvisioningApprovalSummary>()
   const approvalByAssignment = new Map<string, string>()
   for (const approval of data.approvals) {
@@ -314,12 +315,15 @@ export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminCon
       throw new Error(`approval ${approval.id} preview command must use aiworker plan`)
     }
 
+    const assignmentSoulDescriptorRef = soulDescriptorRefById.get(assignment.soulReleaseId)
+    const soulScoped = approval.previewCommand.includes(`--soul ${assignment.soulReleaseId}`)
+      || (assignmentSoulDescriptorRef !== undefined && approval.previewCommand.includes(`--soul ${assignmentSoulDescriptorRef}`))
     if (
       !approval.previewCommand.includes(`--user ${assignment.assignedEmail}`)
       || !approval.previewCommand.includes(`--target-owner ${environmentsById.get(assignment.environmentId)?.ownerEmail ?? assignment.assignedEmail}`)
       || !approval.previewCommand.includes(`--environment ${assignment.environmentId}`)
       || !approval.previewCommand.includes(`--provider ${assignment.providerProfileId}`)
-      || !approval.previewCommand.includes(`--soul ${assignment.soulReleaseId}`)
+      || !soulScoped
     ) {
       throw new Error(`approval ${approval.id} preview command must stay scoped to its assignment`)
     }
