@@ -19,6 +19,7 @@ import {
   ProvisioningPage,
   resolveAssignmentIdentityForTuple,
   resolveAssignmentSelectionState,
+  resolveInitialAssignmentSelection,
   resolvePreviewApprovalStatus,
 } from './provisioning-page'
 import { SoulsPage } from './souls-page'
@@ -145,6 +146,10 @@ function adminDataWithLiveOnlyRefs(): { data: AdminConsoleData, assignment: Admi
   }
 
   return { data, assignment }
+}
+
+function renderPageAt(page: ReactElement, path: string) {
+  return renderToStaticMarkup(<MemoryRouter initialEntries={[path]}>{page}</MemoryRouter>)
 }
 
 describe('admin console page composition', () => {
@@ -304,6 +309,36 @@ describe('admin console page composition', () => {
       aliceAssignment.soulReleaseId,
       'claude-ops',
     )).toBe('')
+  })
+
+  test('initial assignment selection prefers the requested id and falls back to the first assignment', () => {
+    const cara = adminConsoleData.assignments.find(assignment => assignment.id === 'asn-cara-acp')!
+    const first = adminConsoleData.assignments[0]!
+
+    expect(resolveInitialAssignmentSelection('asn-cara-acp')).toEqual({
+      assignmentId: cara.id,
+      environmentId: cara.environmentId,
+      providerProfileId: cara.providerProfileId,
+      soulReleaseId: cara.soulReleaseId,
+    })
+
+    const fallback = {
+      assignmentId: first.id,
+      environmentId: first.environmentId,
+      providerProfileId: first.providerProfileId,
+      soulReleaseId: first.soulReleaseId,
+    }
+    expect(resolveInitialAssignmentSelection('does-not-exist')).toEqual(fallback)
+    expect(resolveInitialAssignmentSelection('')).toEqual(fallback)
+  })
+
+  test('provisioning page honors the assignment search param and falls back when absent', () => {
+    const withParam = renderPageAt(<ProvisioningPage />, '/provisioning?assignment=asn-cara-acp')
+    expect(withParam).toContain('cara@example.com')
+    expect(withParam).not.toContain('alice@example.com')
+
+    const withoutParam = renderPage(<ProvisioningPage />)
+    expect(withoutParam).toContain('alice@example.com')
   })
 
   test('assignment detail sheet exposes approval and trace evidence without runtime data', () => {

@@ -10,7 +10,8 @@ import type {
 } from '@/lib/admin-data'
 import type { AdminRemediation } from '@/lib/admin-remediation'
 import { CheckCircleIcon, PlayCircleIcon, WarningCircleIcon } from '@phosphor-icons/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 
 import { ProvisioningWizard } from '@/components/forms/provisioning-wizard'
 import { PageHeader } from '@/components/page-header'
@@ -55,10 +56,14 @@ interface ApplyJobPayload {
 
 export function ProvisioningPage() {
   const { data: adminData, decideApproval, isLive } = useAdminData()
-  const [selectedSoul, setSelectedSoul] = useState(adminData.soulReleases[0]?.id ?? '')
-  const [selectedEnvironment, setSelectedEnvironment] = useState(adminData.environments[0]?.id ?? '')
-  const [selectedProvider, setSelectedProvider] = useState(adminData.providerProfiles[0]?.id ?? '')
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState(adminData.assignments[0]?.id ?? '')
+  const [searchParams] = useSearchParams()
+  const requestedAssignmentId = searchParams.get('assignment') ?? ''
+  const initialSelection = resolveInitialAssignmentSelection(requestedAssignmentId, adminData)
+  const [selectedSoul, setSelectedSoul] = useState(initialSelection.soulReleaseId)
+  const [selectedEnvironment, setSelectedEnvironment] = useState(initialSelection.environmentId)
+  const [selectedProvider, setSelectedProvider] = useState(initialSelection.providerProfileId)
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState(initialSelection.assignmentId)
+  const lastAppliedRequestedId = useRef<string | null>(null)
   const [previewDecisionByAssignment, setPreviewDecisionByAssignment] = useState<Record<string, ApprovalStatus>>({})
   const [approvalError, setApprovalError] = useState<AdminRemediation | null>(null)
   const [applyError, setApplyError] = useState<AdminRemediation | null>(null)
@@ -66,6 +71,8 @@ export function ProvisioningPage() {
   const [applyRemediationByAssignment, setApplyRemediationByAssignment] = useState<Record<string, AdminRemediation>>({})
   const [pairError, setPairError] = useState<AdminRemediation | null>(null)
   const [pairingAssignmentId, setPairingAssignmentId] = useState<string | null>(null)
+  const [decisionPendingAssignmentId, setDecisionPendingAssignmentId] = useState<string | null>(null)
+  const [applyingAssignmentId, setApplyingAssignmentId] = useState<string | null>(null)
   const [pairingOutputByAssignment, setPairingOutputByAssignment] = useState<Record<string, string>>({})
   const [pendingSelectId, setPendingSelectId] = useState<string | null>(null)
   const selectedAssignment = adminData.assignments.find(item => item.id === selectedAssignmentId)
@@ -88,6 +95,21 @@ export function ProvisioningPage() {
       || applySteps?.some(step => step.id === 'handoff' && step.status === 'done')
     ),
   )
+  const decisionPending = Boolean(assignment && decisionPendingAssignmentId === assignment.id)
+  const applying = Boolean(assignment && applyingAssignmentId === assignment.id)
+  const pairing = Boolean(assignment && pairingAssignmentId === assignment.id)
+  const applyDisabledReason = !isLive
+    ? '演示模式不可执行真实开通。'
+    : effectiveApprovalStatus !== 'approved'
+      ? '需要先确认开通内容才能开始开通。'
+      : ''
+  const pairDisabledReason = !isLive
+    ? '演示模式不可生成真实入口。'
+    : effectiveApprovalStatus !== 'approved'
+      ? '需要先确认开通内容才能生成入口。'
+      : !pairingPreconditionReady
+          ? '需要等待开通完成才能生成入口。'
+          : ''
 
   useEffect(() => {
     if (!adminData.assignments.some(item => item.id === selectedAssignmentId))
@@ -99,6 +121,19 @@ export function ProvisioningPage() {
     if (!adminData.providerProfiles.some(item => item.id === selectedProvider))
       setSelectedProvider(adminData.providerProfiles[0]?.id ?? '')
   }, [adminData, selectedAssignmentId, selectedEnvironment, selectedProvider, selectedSoul])
+
+  useEffect(() => {
+    if (requestedAssignmentId === lastAppliedRequestedId.current)
+      return
+    const selected = resolveAssignmentSelectionState(requestedAssignmentId, adminData)
+    if (!selected)
+      return
+    lastAppliedRequestedId.current = requestedAssignmentId
+    setSelectedAssignmentId(selected.assignmentId)
+    setSelectedEnvironment(selected.environmentId)
+    setSelectedSoul(selected.soulReleaseId)
+    setSelectedProvider(selected.providerProfileId)
+  }, [adminData, requestedAssignmentId])
 
   useEffect(() => {
     setSelectedAssignmentId(resolveAssignmentIdentityForTuple(selectedEnvironment, selectedSoul, selectedProvider, adminData))
@@ -116,7 +151,7 @@ export function ProvisioningPage() {
   }, [adminData, pendingSelectId])
 
   async function previewDecision(status: ApprovalStatus) {
-    if (!assignment)
+    if (!assignment || decisionPendingAssignmentId === assignment.id)
       return
 
     setApprovalError(null)
@@ -125,20 +160,25 @@ export function ProvisioningPage() {
       [assignment.id]: status,
     }))
     if (isLive) {
+      setDecisionPendingAssignmentId(assignment.id)
       try {
         await decideApproval(assignment.id, status)
       }
       catch (error) {
         setApprovalError(remediationFromCaughtError(error))
       }
+      finally {
+        setDecisionPendingAssignmentId(current => current === assignment.id ? null : current)
+      }
     }
   }
 
   async function runApplyJob() {
-    if (!assignment)
+    if (!assignment || applyingAssignmentId === assignment.id)
       return
 
     setApplyError(null)
+    setApplyingAssignmentId(assignment.id)
     try {
       const response = await fetch(`/api/assignments/${encodeURIComponent(assignment.id)}/apply`, {
         headers: adminMutationHeaders(),
@@ -163,10 +203,13 @@ export function ProvisioningPage() {
     catch (error) {
       setApplyError(remediationFromCaughtError(error))
     }
+    finally {
+      setApplyingAssignmentId(current => current === assignment.id ? null : current)
+    }
   }
 
   async function runPairJob() {
-    if (!assignment)
+    if (!assignment || pairingAssignmentId === assignment.id)
       return
 
     setPairError(null)
@@ -489,13 +532,13 @@ export function ProvisioningPage() {
                       ))}
                     </FieldGroup>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="secondary" onClick={() => previewDecision('approved')}>
+                      <Button disabled={decisionPending} size="sm" variant="secondary" onClick={() => previewDecision('approved')}>
                         <CheckCircleIcon data-icon="inline-start" weight="duotone" />
-                        {isLive ? '确认并保存' : '预览确认'}
+                        {decisionPending ? '保存中…' : isLive ? '确认并保存' : '预览确认'}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => previewDecision('changes_requested')}>
+                      <Button disabled={decisionPending} size="sm" variant="outline" onClick={() => previewDecision('changes_requested')}>
                         <WarningCircleIcon data-icon="inline-start" weight="duotone" />
-                        {isLive ? '退回并保存' : '预览退回'}
+                        {decisionPending ? '保存中…' : isLive ? '退回并保存' : '预览退回'}
                       </Button>
                     </div>
                     {effectiveApprovalStatus !== 'approved' ? <RemediationAlert remediation={adminRemediation('approval_required')} /> : null}
@@ -510,10 +553,18 @@ export function ProvisioningPage() {
                           确认通过后，系统会在员工设备上准备 AIWorker 工作区。
                         </p>
                       </div>
-                      <Button disabled={!isLive || effectiveApprovalStatus !== 'approved'} size="sm" onClick={runApplyJob}>
+                      <Button
+                        aria-describedby={applyDisabledReason ? 'apply-disabled-reason' : undefined}
+                        disabled={applying || !isLive || effectiveApprovalStatus !== 'approved'}
+                        size="sm"
+                        onClick={runApplyJob}
+                      >
                         <PlayCircleIcon data-icon="inline-start" weight="duotone" />
-                        开始开通
+                        {applying ? '开始开通中…' : '开始开通'}
                       </Button>
+                      {applyDisabledReason
+                        ? <p id="apply-disabled-reason" className="text-xs/relaxed text-muted-foreground">{applyDisabledReason}</p>
+                        : null}
                       {applyError ? <RemediationAlert remediation={applyError} /> : null}
                       {applyRemediation ? <RemediationAlert remediation={applyRemediation} /> : null}
                       {applySteps ? <ApplyStepsList steps={applySteps} /> : null}
@@ -529,14 +580,18 @@ export function ProvisioningPage() {
                         </p>
                       </div>
                       <Button
-                        disabled={!isLive || effectiveApprovalStatus !== 'approved' || !pairingPreconditionReady || pairingAssignmentId === assignment?.id}
+                        aria-describedby={pairDisabledReason ? 'pair-disabled-reason' : undefined}
+                        disabled={pairing || !isLive || effectiveApprovalStatus !== 'approved' || !pairingPreconditionReady}
                         size="sm"
                         variant="outline"
                         onClick={runPairJob}
                       >
                         <PlayCircleIcon data-icon="inline-start" weight="duotone" />
-                        生成一次性入口
+                        {pairing ? '生成入口中…' : '生成一次性入口'}
                       </Button>
+                      {pairDisabledReason
+                        ? <p id="pair-disabled-reason" className="text-xs/relaxed text-muted-foreground">{pairDisabledReason}</p>
+                        : null}
                       {!pairingPreconditionReady && !pairingOutput ? <RemediationAlert remediation={adminRemediation('handoff_not_ready')} /> : null}
                       {pairError ? <RemediationAlert remediation={pairError} /> : null}
                       {pairingOutput
@@ -751,6 +806,26 @@ export function resolvePreviewApprovalStatus(
   persistedStatus?: ApprovalStatus,
 ): ApprovalStatus | undefined {
   return previewDecisionByAssignment[assignmentId] ?? persistedStatus
+}
+
+export function resolveInitialAssignmentSelection(
+  requestedAssignmentId: string,
+  data: AdminConsoleData = adminConsoleData,
+): {
+  assignmentId: string
+  environmentId: string
+  providerProfileId: string
+  soulReleaseId: string
+} {
+  return (
+    resolveAssignmentSelectionState(requestedAssignmentId, data)
+    ?? {
+      assignmentId: data.assignments[0]?.id ?? '',
+      environmentId: data.environments[0]?.id ?? '',
+      providerProfileId: data.providerProfiles[0]?.id ?? '',
+      soulReleaseId: data.soulReleases[0]?.id ?? '',
+    }
+  )
 }
 
 export function resolveAssignmentSelectionState(id: string, data: AdminConsoleData = adminConsoleData): {
