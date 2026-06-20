@@ -97,6 +97,28 @@ function normalizeTopologyKind(_input?: PaseoEnvironmentTopologyKind): PaseoEnvi
   return OWNER_SCOPED_TOPOLOGY_KIND
 }
 
+// US-002: a userSlug becomes a directory directly under $HOME/.aiworker/. It must never
+// collide with the control-plane SoT directory or the per-owner home structure segments
+// ($HOME/.aiworker/<userSlug>/{run,projects,.paseo,...}), or one employee's slug could
+// overwrite/poison the central control plane or shadow another owner's home layout.
+// Matched by exact (case-insensitive) equality against the already-lowercased slug, so a
+// real email that merely starts with a reserved word (e.g. control-plane@x.com ->
+// control-plane-x.com) is unaffected.
+export const RESERVED_USER_SLUGS: ReadonlySet<string> = new Set([
+  'control-plane',
+  'config',
+  'cache',
+  'run',
+  'projects',
+  'paseo',
+  '.paseo',
+])
+
+// US-002: only the "user slug" semantic of validateSafeProjectSegment carries these labels;
+// project-name segments (projects/<name>) live one level below the home top-level and may
+// legitimately equal a reserved word, so they are intentionally excluded.
+const USER_SLUG_SEGMENT_LABELS: ReadonlySet<string> = new Set(['assigned user', 'project user'])
+
 export function normalizeAssignedEmail(email: string): string {
   return email.trim().toLowerCase()
 }
@@ -844,6 +866,11 @@ function validateSafeProjectSegment(candidate: string, label: string): string {
     throw new Error(`${label} name must be a safe relative segment`)
   if (!/^[\w.-]+$/.test(value))
     throw new Error(`${label} name must contain only letters, numbers, dot, underscore, or dash`)
+  // US-002: guard the user-slug layer only. Defensive lowercase even though slugs are already
+  // normalized; the hash fallback (user-<hex>) can never equal a reserved word, so guarding
+  // the final value also keeps deriveAssignedUserSlug's return strictly non-reserved.
+  if (USER_SLUG_SEGMENT_LABELS.has(label) && RESERVED_USER_SLUGS.has(value.toLowerCase()))
+    throw new Error(`${label} slug "${value}" collides with a reserved AIWorker home segment`)
   return value
 }
 

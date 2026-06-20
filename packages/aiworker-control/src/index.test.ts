@@ -16,8 +16,11 @@ import {
   createProvisionReceipt,
   createSoulRelease,
   createWorkspaceProjectionManifest,
+  deriveAssignedUserSlug,
+  deriveOwnerScopedPaseoPort,
   LocalFileControlPlaneStore,
   normalizeAisshServerRef,
+  RESERVED_USER_SLUGS,
   userCanOpenWorkspace,
   validateProjectedFilePath,
   writeProjectedFiles,
@@ -834,5 +837,50 @@ describe('shared control-plane factories', () => {
       descriptorRef: '/abs/path/soul.descriptor.json',
       files: [{ relativePath: 'AGENTS.md', content: '# HR Manager\n' }],
     })
+  })
+
+  test('US-002: user slug that collides with a reserved AIWorker home segment is rejected', () => {
+    // The reserved set must at least cover the control-plane SoT and the per-owner home
+    // structure segments under $HOME/.aiworker/<userSlug>/.
+    for (const reserved of ['control-plane', 'config', 'cache', 'run', 'projects', 'paseo', '.paseo'])
+      expect(RESERVED_USER_SLUGS.has(reserved)).toBe(true)
+
+    // Inputs that sanitize down to a reserved word must throw, not silently pass.
+    // Each is traced through normalizeAssignedEmail + the two .replace() passes:
+    //   'control-plane'   -> 'control-plane'   (dash survives)
+    //   'CONTROL-PLANE'   -> 'control-plane'   (lowercased)
+    //   'control-plane@'  -> 'control-plane'   (@->-, trailing - stripped)
+    //   'config'/'cache'/'run'/'projects'/'paseo' -> unchanged
+    //   '.paseo'          -> '.paseo'          (dot survives, only dashes trimmed)
+    for (const collidingEmail of [
+      'control-plane',
+      'CONTROL-PLANE',
+      'control-plane@',
+      'config',
+      'cache',
+      'run',
+      'projects',
+      'paseo',
+      '.paseo',
+    ]) {
+      expect(() => deriveAssignedUserSlug(collidingEmail)).toThrow(/reserved AIWorker home segment/)
+    }
+  })
+
+  test('US-002: reserved-name guard also rejects a pre-derived reserved slug at the port chokepoint', () => {
+    // getWorkspacePathPolicy/createDefaultPaseoDaemonEndpointRef route a raw userSlug
+    // through deriveOwnerScopedPaseoPort, so the guard must reject reserved slugs there too,
+    // not only inside deriveAssignedUserSlug.
+    expect(() => deriveOwnerScopedPaseoPort('control-plane')).toThrow(/reserved AIWorker home segment/)
+    // Project names that happen to equal a reserved word are a different segment layer
+    // (projects/<name>) and must NOT be rejected — only the user-slug layer collides.
+  })
+
+  test('US-002: normal emails are unaffected by the reserved-name guard', () => {
+    expect(deriveAssignedUserSlug('alice@example.com')).toBe('alice-example.com')
+    // 'control-plane@x.com' sanitizes to 'control-plane-x.com', which is NOT a reserved
+    // exact match, so a real employee whose email merely starts with a reserved word passes.
+    expect(deriveAssignedUserSlug('control-plane@x.com')).toBe('control-plane-x.com')
+    expect(deriveAssignedUserSlug('configurator@example.com')).toBe('configurator-example.com')
   })
 })
