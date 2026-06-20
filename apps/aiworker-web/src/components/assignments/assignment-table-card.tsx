@@ -3,6 +3,7 @@ import { EyeIcon } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import { AssignmentDetailSheet } from '@/components/assignment-detail-sheet'
+import { CreateAssignmentSheet } from '@/components/forms/create-assignment-sheet'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,7 +39,7 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
               <TableHead className="w-48">员工</TableHead>
               <TableHead>下一步</TableHead>
               <TableHead className="w-24">状态</TableHead>
-              <TableHead className="w-16 text-right">详情</TableHead>
+              <TableHead className="w-32 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -71,10 +72,13 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
                   </TableCell>
                   <TableCell><StatusBadge tone={status.tone}>{status.label}</StatusBadge></TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openAssignment(assignment)}>
-                      <EyeIcon data-icon="inline-start" weight="duotone" />
-                      查看
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openAssignment(assignment)}>
+                        <EyeIcon data-icon="inline-start" weight="duotone" />
+                        查看
+                      </Button>
+                      <CreateAssignmentSheet editTarget={assignment} />
+                    </div>
                   </TableCell>
                 </TableRow>
               )

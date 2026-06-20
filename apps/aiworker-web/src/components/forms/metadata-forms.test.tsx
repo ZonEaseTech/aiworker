@@ -1,8 +1,11 @@
 import type { SoulCatalogEntry } from '@/lib/admin-api-client'
-import type { PaseoEnvironmentSummary, ProviderProfileSummary, SoulReleaseSummary } from '@/lib/admin-data'
+import type { AssignmentSummary, PaseoEnvironmentSummary, ProviderProfileSummary, SoulReleaseSummary } from '@/lib/admin-data'
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 
+import { CreateAssignmentSheet } from '@/components/forms/create-assignment-sheet'
+import { CreateEnvironmentSheet } from '@/components/forms/create-environment-sheet'
+import { CreateProviderSheet } from '@/components/forms/create-provider-sheet'
 import {
   AssignmentFormContent,
   EnvironmentFormContent,
@@ -10,7 +13,9 @@ import {
   SoulFormContent,
 } from '@/components/forms/metadata-form-content'
 import {
+  assignmentFormFromSummary,
   buildAssignmentPayload,
+  buildEnvironmentPayload,
   buildPlanPreviewPayload,
   buildProviderPayload,
   buildSoulPayload,
@@ -18,7 +23,9 @@ import {
   emptyEnvironmentForm,
   emptyProviderForm,
   emptySoulForm,
+  environmentFormFromSummary,
   isValidSecretRef,
+  providerFormFromSummary,
   validateAssignmentForm,
   validateEnvironmentForm,
   validateProviderForm,
@@ -237,5 +244,138 @@ describe('metadata form content rendering', () => {
       />,
     )
     expect(markup).toContain('请填写员工邮箱。')
+  })
+})
+
+const multiProviderEnvironment: PaseoEnvironmentSummary = {
+  ...environments[0]!,
+  providerProfileIds: ['codex-default', 'claude-ops'],
+}
+
+const fullProvider: ProviderProfileSummary = {
+  id: 'codex-default',
+  label: 'Codex 默认配置',
+  provider: 'codex',
+  secretRef: 'secret://providers/codex/default',
+  baseUrl: 'https://api.example.com',
+  model: 'gpt-5-codex',
+  cliCommand: 'codex',
+  paseoProviderId: 'paseo-codex-default',
+  status: 'reference_only',
+}
+
+const assignmentSummary: AssignmentSummary = {
+  id: 'asn-alice-freeform',
+  assignedEmail: 'alice@example.com',
+  team: 'example.com',
+  status: 'ready',
+  environmentId: 'env-alice',
+  soulReleaseId: 'aiworker-freeform@0.0.0',
+  providerProfileId: 'codex-default',
+  workspaceRef: '/home/alice/projects/freeform',
+  receiptId: 'rcpt-1',
+  handoffKind: 'paseo-daemon',
+  handoffLabel: '员工可通过 Paseo 客户端打开 AIWorker。',
+  updatedAt: '2026-06-14 07:34 UTC',
+  nextStep: '把使用入口发给员工。',
+  audit: [],
+}
+
+describe('metadata edit prefill mapping', () => {
+  test('environment summary maps to form values, collapsing providers to the first id', () => {
+    expect(environmentFormFromSummary(multiProviderEnvironment)).toEqual({
+      environment: 'env-alice',
+      provider: 'codex-default',
+      target: 'aissh:prod-1',
+      user: 'alice@example.com',
+    })
+  })
+
+  test('provider summary round-trips baseUrl and model into the edit form', () => {
+    const values = providerFormFromSummary(fullProvider)
+    expect(values).toEqual({
+      baseUrl: 'https://api.example.com',
+      cliCommand: 'codex',
+      model: 'gpt-5-codex',
+      paseoProviderId: 'paseo-codex-default',
+      provider: 'codex-default',
+      providerKind: 'codex',
+      secretRef: 'secret://providers/codex/default',
+    })
+    // The resubmitted payload preserves baseUrl/model so a replace-by-id update is not lossy.
+    expect(buildProviderPayload(values)).toMatchObject({
+      baseUrl: 'https://api.example.com',
+      model: 'gpt-5-codex',
+      secretRef: 'secret://providers/codex/default',
+    })
+  })
+
+  test('assignment summary maps to form values keyed by the original id', () => {
+    expect(assignmentFormFromSummary(assignmentSummary)).toEqual({
+      assignmentId: 'asn-alice-freeform',
+      environment: 'env-alice',
+      provider: 'codex-default',
+      soulReleaseRef: 'aiworker-freeform@0.0.0',
+      user: 'alice@example.com',
+    })
+  })
+
+  test('assignment edit payload carries the original assignmentId so it updates instead of creating', () => {
+    const payload = buildAssignmentPayload(assignmentFormFromSummary(assignmentSummary))
+    expect(payload).toMatchObject({
+      assignmentId: 'asn-alice-freeform',
+      environment: 'env-alice',
+      provider: 'codex-default',
+      soulReleaseRef: 'aiworker-freeform@0.0.0',
+      user: 'alice@example.com',
+    })
+  })
+
+  test('environment edit payload keeps the original environment id', () => {
+    const payload = buildEnvironmentPayload(environmentFormFromSummary(multiProviderEnvironment))
+    expect(payload).toMatchObject({ environment: 'env-alice', provider: 'codex-default', target: 'aissh:prod-1' })
+  })
+
+  test('prefilled provider form renders the existing secret reference and optional fields', () => {
+    const markup = renderToStaticMarkup(
+      <ProviderFormContent error={null} onChange={() => {}} values={providerFormFromSummary(fullProvider)} />,
+    )
+    expect(markup).toContain('value="secret://providers/codex/default"')
+    expect(markup).toContain('value="https://api.example.com"')
+    expect(markup).toContain('value="gpt-5-codex"')
+    // A valid secret:// ref must not be flagged invalid when prefilled.
+    expect(markup).not.toContain('aria-invalid="true"')
+  })
+
+  test('prefilled environment form renders the existing target and owner', () => {
+    const markup = renderToStaticMarkup(
+      <EnvironmentFormContent
+        error={null}
+        onChange={() => {}}
+        providers={providers}
+        values={environmentFormFromSummary(multiProviderEnvironment)}
+      />,
+    )
+    expect(markup).toContain('value="env-alice"')
+    expect(markup).toContain('value="aissh:prod-1"')
+    expect(markup).toContain('value="alice@example.com"')
+  })
+})
+
+describe('metadata edit triggers expose Chinese aria-labels', () => {
+  test('provider edit trigger labels the entity being edited', () => {
+    const markup = renderToStaticMarkup(<CreateProviderSheet editTarget={fullProvider} />)
+    expect(markup).toContain('编辑后台 AI 账号 codex-default')
+    expect(markup).not.toContain('aria-label="Edit')
+  })
+
+  test('environment edit trigger labels the entity being edited', () => {
+    const markup = renderToStaticMarkup(<CreateEnvironmentSheet editTarget={multiProviderEnvironment} />)
+    expect(markup).toContain('编辑员工设备 env-alice')
+  })
+
+  test('assignment edit trigger labels the entity being edited', () => {
+    const markup = renderToStaticMarkup(<CreateAssignmentSheet editTarget={assignmentSummary} />)
+    expect(markup).toContain('编辑员工开通 asn-alice-freeform')
   })
 })

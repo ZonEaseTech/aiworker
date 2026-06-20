@@ -1,4 +1,9 @@
-import type { SoulReleaseSummary } from '@/lib/admin-data'
+import type {
+  AssignmentSummary,
+  PaseoEnvironmentSummary,
+  ProviderProfileSummary,
+  SoulReleaseSummary,
+} from '@/lib/admin-data'
 import type { AdminRemediation } from '@/lib/admin-remediation'
 import { AdminApiError } from '@/lib/admin-api-client'
 import { adminRemediation } from '@/lib/admin-remediation'
@@ -59,6 +64,44 @@ export const emptyProviderForm: CreateProviderFormValues = {
 
 export const emptySoulForm: RegisterSoulFormValues = {
   soul: '',
+}
+
+/**
+ * Prefill the environment form from an existing snapshot record.
+ *
+ * The control plane stores `providerProfileIds` as an array, while the create/edit
+ * form only models a single `provider`. We prefill the first associated provider; a
+ * multi-provider environment cannot fully round-trip through this form by construction.
+ */
+export function environmentFormFromSummary(environment: PaseoEnvironmentSummary): CreateEnvironmentFormValues {
+  return {
+    environment: environment.id,
+    provider: environment.providerProfileIds[0] ?? '',
+    target: environment.targetRef,
+    user: environment.ownerEmail,
+  }
+}
+
+export function providerFormFromSummary(provider: ProviderProfileSummary): CreateProviderFormValues {
+  return {
+    baseUrl: provider.baseUrl ?? '',
+    cliCommand: provider.cliCommand ?? '',
+    model: provider.model ?? '',
+    paseoProviderId: provider.paseoProviderId ?? '',
+    provider: provider.id,
+    providerKind: provider.provider,
+    secretRef: provider.secretRef,
+  }
+}
+
+export function assignmentFormFromSummary(assignment: AssignmentSummary): CreateAssignmentFormValues {
+  return {
+    assignmentId: assignment.id,
+    environment: assignment.environmentId,
+    provider: assignment.providerProfileId,
+    soulReleaseRef: assignment.soulReleaseId,
+    user: assignment.assignedEmail,
+  }
 }
 
 export const secretRefPrefix = 'secret://'

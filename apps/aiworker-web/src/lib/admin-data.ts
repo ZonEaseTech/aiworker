@@ -44,6 +44,8 @@ export interface ProviderProfileSummary {
   label: string
   provider: ProviderKind
   secretRef: SecretReference
+  baseUrl?: string
+  model?: string
   paseoProviderId?: string
   cliCommand?: string
   status: 'ready' | 'needs_auth' | 'reference_only'
@@ -718,8 +720,10 @@ function buildFixtureControlPlaneSnapshot(): ControlPlaneSnapshot {
     projectionManifests: [],
     providerProfiles: fixtureProviderProfiles.map(profile => ({
       id: profile.id,
+      ...(profile.baseUrl ? { baseUrl: profile.baseUrl } : {}),
       cliCommand: profile.cliCommand,
       label: profile.label,
+      ...(profile.model ? { model: profile.model } : {}),
       paseoProviderId: profile.paseoProviderId,
       provider: profile.provider,
       secretRef: profile.secretRef,
@@ -1074,6 +1078,8 @@ function mapProviderProfile(profile: ProviderProfile): ProviderProfileSummary {
     label: profile.label,
     provider: profile.provider,
     secretRef: (profile.secretRef ?? `secret://providers/${profile.provider}/${profile.id}`) as SecretReference,
+    ...(profile.baseUrl ? { baseUrl: profile.baseUrl } : {}),
+    ...(profile.model ? { model: profile.model } : {}),
     paseoProviderId: profile.paseoProviderId,
     cliCommand: profile.cliCommand,
     status: profile.paseoProviderId ? 'reference_only' : 'ready',

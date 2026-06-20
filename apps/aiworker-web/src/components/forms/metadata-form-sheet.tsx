@@ -28,6 +28,11 @@ export interface MetadataFormSheetProps {
   submitLabel: string
   submitting?: boolean
   title: string
+  /**
+   * Optional custom trigger (e.g. an inline "编辑" button). When omitted the default
+   * "新建" create button is rendered. The edit and create flows share this same Sheet.
+   */
+  trigger?: React.ReactNode
   triggerLabel: string
 }
 
@@ -43,15 +48,18 @@ export function MetadataFormSheet({
   submitLabel,
   submitting = false,
   title,
+  trigger,
   triggerLabel,
 }: MetadataFormSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetTrigger asChild>
-        <Button size="sm" aria-label={triggerLabel}>
-          <PlusIcon data-icon="inline-start" weight="duotone" />
-          {triggerLabel}
-        </Button>
+        {trigger ?? (
+          <Button size="sm" aria-label={triggerLabel}>
+            <PlusIcon data-icon="inline-start" weight="duotone" />
+            {triggerLabel}
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-md">
         <SheetHeader>

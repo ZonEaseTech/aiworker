@@ -44,6 +44,7 @@ export function EnvironmentsPage() {
                     <TableHead>设备</TableHead>
                     <TableHead>连接方式</TableHead>
                     <TableHead>状态</TableHead>
+                    <TableHead className="w-16 text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -67,6 +68,9 @@ export function EnvironmentsPage() {
                           </details>
                         </TableCell>
                         <TableCell><StatusBadge tone={meta.tone}>{meta.label}</StatusBadge></TableCell>
+                        <TableCell className="text-right">
+                          <CreateEnvironmentSheet editTarget={environment} />
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -100,6 +104,9 @@ export function EnvironmentsPage() {
                           服务：
                           {profile.provider}
                         </CardDescription>
+                        <CardAction>
+                          <CreateProviderSheet editTarget={profile} />
+                        </CardAction>
                       </CardHeader>
                       <CardContent className="flex flex-col gap-3 text-xs">
                         <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
