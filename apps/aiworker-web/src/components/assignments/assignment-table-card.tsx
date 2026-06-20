@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { statusMeta, tryGetEnvironment, tryGetSoulRelease } from '@/lib/admin-data'
+import { useAdminData } from '@/lib/admin-data-context'
 
 export function AssignmentTableCard({ title, assignments }: { title: string, assignments: AssignmentSummary[] }) {
+  const { data } = useAdminData()
   const [selectedAssignment, setSelectedAssignment] = useState<AssignmentSummary | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
 
@@ -44,8 +46,8 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
           </TableHeader>
           <TableBody>
             {assignments.map((assignment) => {
-              const soul = tryGetSoulRelease(assignment.soulReleaseId)
-              const environment = tryGetEnvironment(assignment.environmentId)
+              const soul = tryGetSoulRelease(assignment.soulReleaseId, data)
+              const environment = tryGetEnvironment(assignment.environmentId, data)
               const status = statusMeta[assignment.status]
               return (
                 <TableRow key={assignment.id}>

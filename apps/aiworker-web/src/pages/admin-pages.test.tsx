@@ -85,6 +85,42 @@ function adminDataWithDanglingRefs(): AdminConsoleData {
   }
 }
 
+// Build live admin data containing a single assignment whose soul/provider/environment
+// reference real-but-not-in-the-bundled-fixture ids, each carrying a distinctive marker
+// label. If a component looks these up against the module-level fixture instead of the
+// live `data` passed through context, the markers won't resolve and the UI renders
+// "缺失" — the data-pollution bug.
+const liveSoulReleaseId = 'hr-manager@0.0.0'
+const liveProviderProfileId = 'provider-live-marker'
+const liveEnvironmentId = 'env-live-marker'
+const liveSoulDisplayMarker = 'HR Live Marker'
+const liveProviderLabelMarker = 'Live Provider Marker'
+const liveEnvironmentOwnerMarker = 'live-owner@example.com'
+
+function adminDataWithLiveOnlyRefs(): { data: AdminConsoleData, assignment: AdminConsoleData['assignments'][number] } {
+  const baseSoul = adminConsoleData.soulReleases[0]
+  const baseProvider = adminConsoleData.providerProfiles[0]
+  const baseEnvironment = adminConsoleData.environments[0]
+  const baseAssignment = adminConsoleData.assignments[0]
+
+  const assignment = {
+    ...baseAssignment,
+    soulReleaseId: liveSoulReleaseId,
+    providerProfileId: liveProviderProfileId,
+    environmentId: liveEnvironmentId,
+  }
+
+  const data: AdminConsoleData = {
+    ...adminConsoleData,
+    soulReleases: [{ ...baseSoul, id: liveSoulReleaseId, displayName: liveSoulDisplayMarker }],
+    providerProfiles: [{ ...baseProvider, id: liveProviderProfileId, label: liveProviderLabelMarker }],
+    environments: [{ ...baseEnvironment, id: liveEnvironmentId, ownerEmail: liveEnvironmentOwnerMarker }],
+    assignments: [assignment],
+  }
+
+  return { data, assignment }
+}
+
 describe('admin console page composition', () => {
   test('renders every admin route with its core heading', () => {
     const pages: Array<[string, ReactElement, string]> = [
@@ -160,6 +196,46 @@ describe('admin console page composition', () => {
     const data = adminDataWithDanglingRefs()
     expect(() => renderPageWithData(<ProvisioningPage />, data)).not.toThrow()
     expect(() => renderPageWithData(<AssignmentsPage />, data)).not.toThrow()
+  })
+
+  test('assignment table card resolves soul and environment from live data, not the bundled fixture', () => {
+    const { data } = adminDataWithLiveOnlyRefs()
+    const markup = renderPageWithData(<AssignmentsPage />, data)
+
+    expect(markup).toContain(liveSoulDisplayMarker)
+    expect(markup).toContain(liveEnvironmentOwnerMarker)
+    expect(markup).not.toContain('能力模板缺失')
+    expect(markup).not.toContain('设备配置缺失')
+  })
+
+  test('assignment detail content resolves soul, provider, environment, approval, and trace from live data, not the bundled fixture', () => {
+    const { data, assignment } = adminDataWithLiveOnlyRefs()
+    const value = {
+      bootstrap: {} as AdminBootstrapStatus,
+      async createMetadata<T>() {
+        return undefined as T
+      },
+      data,
+      async decideApproval() {},
+      isLive: true,
+      loadError: null,
+      async loadSoulCatalog() {
+        return []
+      },
+      async reload() {},
+    }
+    const markup = renderToStaticMarkup(
+      <AdminDataContext.Provider value={value}>
+        <AssignmentDetailContent assignment={assignment} />
+      </AdminDataContext.Provider>,
+    )
+
+    expect(markup).toContain(liveSoulDisplayMarker)
+    expect(markup).toContain(liveProviderLabelMarker)
+    expect(markup).toContain(liveEnvironmentOwnerMarker)
+    expect(markup).not.toContain('能力模板缺失')
+    expect(markup).not.toContain('后台账号缺失')
+    expect(markup).not.toContain('设备配置缺失')
   })
 
   test('provisioning approval controls stay preview-only and redacted', () => {

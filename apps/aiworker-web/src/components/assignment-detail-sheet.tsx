@@ -12,6 +12,7 @@ import {
   tryGetProviderProfile,
   tryGetSoulRelease,
 } from '@/lib/admin-data'
+import { useAdminData } from '@/lib/admin-data-context'
 
 export function AssignmentDetailSheet({
   assignment,
@@ -42,12 +43,13 @@ export function AssignmentDetailSheet({
 }
 
 export function AssignmentDetailContent({ assignment }: { assignment: AssignmentSummary }) {
-  const environment = tryGetEnvironment(assignment.environmentId)
-  const provider = tryGetProviderProfile(assignment.providerProfileId)
-  const soul = tryGetSoulRelease(assignment.soulReleaseId)
+  const { data } = useAdminData()
+  const environment = tryGetEnvironment(assignment.environmentId, data)
+  const provider = tryGetProviderProfile(assignment.providerProfileId, data)
+  const soul = tryGetSoulRelease(assignment.soulReleaseId, data)
   const status = statusMeta[assignment.status]
-  const approval = getApprovalForAssignment(assignment.id)
-  const traceEvents = getTraceEventsForAssignment(assignment.id)
+  const approval = getApprovalForAssignment(assignment.id, data)
+  const traceEvents = getTraceEventsForAssignment(assignment.id, data)
 
   return (
     <div className="flex flex-col gap-5 px-4 pb-6 sm:px-6">
