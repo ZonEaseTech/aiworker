@@ -1,6 +1,6 @@
 import { RemediationAlert } from '@/components/remediation-alert'
-import { adminRemediation } from '@/lib/admin-remediation'
 import { useAdminData } from '@/lib/admin-data-context'
+import { adminRemediation } from '@/lib/admin-remediation'
 
 export function DemoDataNotice() {
   const { bootstrap } = useAdminData()

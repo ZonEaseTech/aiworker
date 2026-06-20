@@ -104,7 +104,7 @@ export function assignmentFormFromSummary(assignment: AssignmentSummary): Create
   }
 }
 
-export const secretRefPrefix = 'secret://'
+const secretRefPrefix = 'secret://'
 
 export function isValidSecretRef(value: string): boolean {
   return value.trim().startsWith(secretRefPrefix)

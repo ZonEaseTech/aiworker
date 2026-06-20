@@ -1,16 +1,14 @@
 import type { ProviderProfileSummary } from '@/lib/admin-data'
 import { PencilSimpleIcon } from '@phosphor-icons/react'
-import { useState } from 'react'
 
 import { ProviderFormContent } from '@/components/forms/metadata-form-content'
 import {
   buildProviderPayload,
   emptyProviderForm,
   providerFormFromSummary,
-  remediationFromCaughtError,
   validateProviderForm,
 } from '@/components/forms/metadata-form-helpers'
-import { MetadataFormSheet, useMetadataFormSheet } from '@/components/forms/metadata-form-sheet'
+import { MetadataFormSheet, useMetadataForm } from '@/components/forms/metadata-form-sheet'
 import { Button } from '@/components/ui/button'
 import { useAdminData } from '@/lib/admin-data-context'
 import { adminRemediation } from '@/lib/admin-remediation'
@@ -22,34 +20,16 @@ export interface CreateProviderSheetProps {
 
 export function CreateProviderSheet({ editTarget }: CreateProviderSheetProps = {}) {
   const { createMetadata, isLive } = useAdminData()
-  const sheet = useMetadataFormSheet()
   const isEdit = Boolean(editTarget)
-  const initialValues = editTarget ? providerFormFromSummary(editTarget) : emptyProviderForm
-  const [values, setValues] = useState(initialValues)
-  const [validationError, setValidationError] = useState<string | null>(null)
-
-  async function submit(): Promise<boolean> {
-    const error = validateProviderForm(values)
-    setValidationError(error)
-    if (error)
-      return false
-    sheet.setSubmitting(true)
-    sheet.setRemediation(null)
-    try {
-      await createMetadata('/api/providers', buildProviderPayload(values))
-      if (!isEdit)
-        setValues(emptyProviderForm)
-      sheet.setOpen(false)
-      return true
-    }
-    catch (caught) {
-      sheet.setRemediation(remediationFromCaughtError(caught))
-      return false
-    }
-    finally {
-      sheet.setSubmitting(false)
-    }
-  }
+  const { onOpenChange, setValues, sheet, submit, validationError, values } = useMetadataForm({
+    buildPayload: buildProviderPayload,
+    createMetadata,
+    emptyForm: emptyProviderForm,
+    endpoint: '/api/providers',
+    initialValues: editTarget ? providerFormFromSummary(editTarget) : emptyProviderForm,
+    isEdit,
+    validate: validateProviderForm,
+  })
 
   return (
     <MetadataFormSheet
@@ -68,17 +48,7 @@ export function CreateProviderSheet({ editTarget }: CreateProviderSheetProps = {
           )
         : undefined}
       open={sheet.open}
-      onOpenChange={(next) => {
-        sheet.setOpen(next)
-        if (next) {
-          setValues(initialValues)
-          setValidationError(null)
-        }
-        else {
-          sheet.reset()
-          setValidationError(null)
-        }
-      }}
+      onOpenChange={onOpenChange}
       onSubmit={submit}
       submitting={sheet.submitting}
       submitDisabled={!isLive}

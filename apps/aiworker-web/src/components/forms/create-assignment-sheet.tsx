@@ -1,16 +1,14 @@
 import type { AssignmentSummary } from '@/lib/admin-data'
 import { PencilSimpleIcon } from '@phosphor-icons/react'
-import { useState } from 'react'
 
 import { AssignmentFormContent } from '@/components/forms/metadata-form-content'
 import {
   assignmentFormFromSummary,
   buildAssignmentPayload,
   emptyAssignmentForm,
-  remediationFromCaughtError,
   validateAssignmentForm,
 } from '@/components/forms/metadata-form-helpers'
-import { MetadataFormSheet, useMetadataFormSheet } from '@/components/forms/metadata-form-sheet'
+import { MetadataFormSheet, useMetadataForm } from '@/components/forms/metadata-form-sheet'
 import { Button } from '@/components/ui/button'
 import { useAdminData } from '@/lib/admin-data-context'
 import { adminRemediation } from '@/lib/admin-remediation'
@@ -22,34 +20,16 @@ export interface CreateAssignmentSheetProps {
 
 export function CreateAssignmentSheet({ editTarget }: CreateAssignmentSheetProps = {}) {
   const { createMetadata, data, isLive } = useAdminData()
-  const sheet = useMetadataFormSheet()
   const isEdit = Boolean(editTarget)
-  const initialValues = editTarget ? assignmentFormFromSummary(editTarget) : emptyAssignmentForm
-  const [values, setValues] = useState(initialValues)
-  const [validationError, setValidationError] = useState<string | null>(null)
-
-  async function submit(): Promise<boolean> {
-    const error = validateAssignmentForm(values)
-    setValidationError(error)
-    if (error)
-      return false
-    sheet.setSubmitting(true)
-    sheet.setRemediation(null)
-    try {
-      await createMetadata('/api/assignments', buildAssignmentPayload(values))
-      if (!isEdit)
-        setValues(emptyAssignmentForm)
-      sheet.setOpen(false)
-      return true
-    }
-    catch (caught) {
-      sheet.setRemediation(remediationFromCaughtError(caught))
-      return false
-    }
-    finally {
-      sheet.setSubmitting(false)
-    }
-  }
+  const { onOpenChange, setValues, sheet, submit, validationError, values } = useMetadataForm({
+    buildPayload: buildAssignmentPayload,
+    createMetadata,
+    emptyForm: emptyAssignmentForm,
+    endpoint: '/api/assignments',
+    initialValues: editTarget ? assignmentFormFromSummary(editTarget) : emptyAssignmentForm,
+    isEdit,
+    validate: validateAssignmentForm,
+  })
 
   return (
     <MetadataFormSheet
@@ -68,17 +48,7 @@ export function CreateAssignmentSheet({ editTarget }: CreateAssignmentSheetProps
           )
         : undefined}
       open={sheet.open}
-      onOpenChange={(next) => {
-        sheet.setOpen(next)
-        if (next) {
-          setValues(initialValues)
-          setValidationError(null)
-        }
-        else {
-          sheet.reset()
-          setValidationError(null)
-        }
-      }}
+      onOpenChange={onOpenChange}
       onSubmit={submit}
       submitting={sheet.submitting}
       submitDisabled={!isLive}

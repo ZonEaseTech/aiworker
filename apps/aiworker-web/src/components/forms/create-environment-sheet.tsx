@@ -1,16 +1,14 @@
 import type { PaseoEnvironmentSummary } from '@/lib/admin-data'
 import { PencilSimpleIcon } from '@phosphor-icons/react'
-import { useState } from 'react'
 
 import { EnvironmentFormContent } from '@/components/forms/metadata-form-content'
 import {
   buildEnvironmentPayload,
   emptyEnvironmentForm,
   environmentFormFromSummary,
-  remediationFromCaughtError,
   validateEnvironmentForm,
 } from '@/components/forms/metadata-form-helpers'
-import { MetadataFormSheet, useMetadataFormSheet } from '@/components/forms/metadata-form-sheet'
+import { MetadataFormSheet, useMetadataForm } from '@/components/forms/metadata-form-sheet'
 import { Button } from '@/components/ui/button'
 import { useAdminData } from '@/lib/admin-data-context'
 import { adminRemediation } from '@/lib/admin-remediation'
@@ -22,34 +20,16 @@ export interface CreateEnvironmentSheetProps {
 
 export function CreateEnvironmentSheet({ editTarget }: CreateEnvironmentSheetProps = {}) {
   const { createMetadata, data, isLive } = useAdminData()
-  const sheet = useMetadataFormSheet()
   const isEdit = Boolean(editTarget)
-  const initialValues = editTarget ? environmentFormFromSummary(editTarget) : emptyEnvironmentForm
-  const [values, setValues] = useState(initialValues)
-  const [validationError, setValidationError] = useState<string | null>(null)
-
-  async function submit(): Promise<boolean> {
-    const error = validateEnvironmentForm(values)
-    setValidationError(error)
-    if (error)
-      return false
-    sheet.setSubmitting(true)
-    sheet.setRemediation(null)
-    try {
-      await createMetadata('/api/environments', buildEnvironmentPayload(values))
-      if (!isEdit)
-        setValues(emptyEnvironmentForm)
-      sheet.setOpen(false)
-      return true
-    }
-    catch (caught) {
-      sheet.setRemediation(remediationFromCaughtError(caught))
-      return false
-    }
-    finally {
-      sheet.setSubmitting(false)
-    }
-  }
+  const { onOpenChange, setValues, sheet, submit, validationError, values } = useMetadataForm({
+    buildPayload: buildEnvironmentPayload,
+    createMetadata,
+    emptyForm: emptyEnvironmentForm,
+    endpoint: '/api/environments',
+    initialValues: editTarget ? environmentFormFromSummary(editTarget) : emptyEnvironmentForm,
+    isEdit,
+    validate: validateEnvironmentForm,
+  })
 
   return (
     <MetadataFormSheet
@@ -68,17 +48,7 @@ export function CreateEnvironmentSheet({ editTarget }: CreateEnvironmentSheetPro
           )
         : undefined}
       open={sheet.open}
-      onOpenChange={(next) => {
-        sheet.setOpen(next)
-        if (next) {
-          setValues(initialValues)
-          setValidationError(null)
-        }
-        else {
-          sheet.reset()
-          setValidationError(null)
-        }
-      }}
+      onOpenChange={onOpenChange}
       onSubmit={submit}
       submitting={sheet.submitting}
       submitDisabled={!isLive}

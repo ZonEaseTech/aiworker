@@ -2,6 +2,7 @@ import type { AdminRemediation } from '@/lib/admin-remediation'
 import { PlusIcon } from '@phosphor-icons/react'
 import { useState } from 'react'
 
+import { remediationFromCaughtError } from '@/components/forms/metadata-form-helpers'
 import { RemediationAlert } from '@/components/remediation-alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -147,4 +148,65 @@ export function useMetadataFormSheet() {
     setSubmitting,
     submitting,
   }
+}
+
+export interface UseMetadataFormOptions<TValues> {
+  emptyForm: TValues
+  endpoint: string
+  /** When true (edit mode) the form keeps its values after a successful save. */
+  isEdit: boolean
+  initialValues: TValues
+  buildPayload: (values: TValues) => unknown
+  createMetadata: (path: string, body: unknown) => Promise<unknown>
+  validate: (values: TValues) => string | null
+}
+
+/**
+ * Shared state + submit + open/close wiring for the create/edit metadata sheets.
+ *
+ * `onOpenChange` is intentionally recreated per render so it closes over the
+ * latest `initialValues` (edit-mode prefill must not go stale).
+ */
+export function useMetadataForm<TValues>(options: UseMetadataFormOptions<TValues>) {
+  const { buildPayload, createMetadata, emptyForm, endpoint, initialValues, isEdit, validate } = options
+  const sheet = useMetadataFormSheet()
+  const [values, setValues] = useState(initialValues)
+  const [validationError, setValidationError] = useState<string | null>(null)
+
+  async function submit(): Promise<boolean> {
+    const error = validate(values)
+    setValidationError(error)
+    if (error)
+      return false
+    sheet.setSubmitting(true)
+    sheet.setRemediation(null)
+    try {
+      await createMetadata(endpoint, buildPayload(values))
+      if (!isEdit)
+        setValues(emptyForm)
+      sheet.setOpen(false)
+      return true
+    }
+    catch (caught) {
+      sheet.setRemediation(remediationFromCaughtError(caught))
+      return false
+    }
+    finally {
+      sheet.setSubmitting(false)
+    }
+  }
+
+  function onOpenChange(next: boolean) {
+    sheet.setOpen(next)
+    if (next) {
+      setValues(initialValues)
+      setValidationError(null)
+    }
+    else {
+      sheet.reset()
+      setValidationError(null)
+    }
+  }
+
+  return { onOpenChange, setValues, sheet, submit, validationError, values }
 }
