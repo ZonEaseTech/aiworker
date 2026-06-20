@@ -8,9 +8,12 @@ import {
   createAssignment,
   createAuditEvent,
   createEmptyControlPlaneSnapshot,
+  createEnvironment,
   createHandoff,
+  createProviderProfile,
   createProvisionPlan,
   createProvisionReceipt,
+  createSoulRelease,
   createWorkspaceProjectionManifest,
   LocalFileControlPlaneStore,
   normalizeAisshServerRef,
@@ -641,5 +644,126 @@ describe('Paseo thin-layer aiworker-control contract', () => {
     await store.saveSnapshot(loaded)
 
     expect((await store.loadSnapshot()).receipts).toEqual([receipt])
+  })
+})
+
+describe('shared control-plane factories', () => {
+  test('createEnvironment assembles a PaseoEnvironment and omits absent optionals', () => {
+    expect(createEnvironment({
+      environmentId: 'env-alice',
+      ownerEmail: 'alice@example.com',
+      targetRef: 'aissh:server-1',
+      paseoHome: '$HOME/.aiworker/alice/.paseo',
+      daemonEndpoint: '127.0.0.1:42057',
+      endpointKind: 'tcp',
+      isolation: 'os-user',
+      providerProfileIds: ['claude-work'],
+    })).toEqual({
+      environmentId: 'env-alice',
+      ownerEmail: 'alice@example.com',
+      targetRef: 'aissh:server-1',
+      paseoHome: '$HOME/.aiworker/alice/.paseo',
+      daemonEndpoint: '127.0.0.1:42057',
+      endpointKind: 'tcp',
+      isolation: 'os-user',
+      providerProfileIds: ['claude-work'],
+    })
+  })
+
+  test('createEnvironment carries optional refs, dedication, and topology when present', () => {
+    const env = createEnvironment({
+      environmentId: 'env-alice',
+      ownerEmail: 'alice@example.com',
+      targetRef: 'aissh:server-1',
+      paseoHome: '$HOME/.aiworker/alice/.paseo',
+      daemonEndpoint: '127.0.0.1:42057',
+      daemonListenRef: '127.0.0.1:42057',
+      daemonHostRef: '127.0.0.1:42057',
+      endpointKind: 'tcp',
+      isolation: 'os-user',
+      providerProfileIds: ['claude-work'],
+      topologyKind: 'owner-scoped-paseo-home-v1',
+      dedication: {
+        kind: 'assigned-user-dedicated',
+        assignedEmail: 'alice@example.com',
+        assertedBy: 'aiworker-cli',
+        reason: '--dedicated-target-user',
+      },
+    })
+    expect(env.daemonListenRef).toBe('127.0.0.1:42057')
+    expect(env.daemonHostRef).toBe('127.0.0.1:42057')
+    expect(env.topologyKind).toBe('owner-scoped-paseo-home-v1')
+    expect(env.dedication).toEqual({
+      kind: 'assigned-user-dedicated',
+      assignedEmail: 'alice@example.com',
+      assertedBy: 'aiworker-cli',
+      reason: '--dedicated-target-user',
+    })
+  })
+
+  test('createProviderProfile keeps required fields and omits absent optionals', () => {
+    expect(createProviderProfile({
+      id: 'claude-work',
+      label: 'claude-work',
+      provider: 'claude',
+      secretRef: 'secret://provider/claude-work',
+    })).toEqual({
+      id: 'claude-work',
+      label: 'claude-work',
+      provider: 'claude',
+      secretRef: 'secret://provider/claude-work',
+    })
+  })
+
+  test('createProviderProfile carries baseUrl/model/cliCommand/paseoProviderId when present', () => {
+    expect(createProviderProfile({
+      id: 'claude-work',
+      label: 'Claude curated',
+      provider: 'claude',
+      secretRef: 'secret://provider/claude-work',
+      baseUrl: 'https://api.example.test',
+      model: 'big-model',
+      cliCommand: 'claude',
+      paseoProviderId: 'pp-1',
+    })).toEqual({
+      id: 'claude-work',
+      label: 'Claude curated',
+      provider: 'claude',
+      secretRef: 'secret://provider/claude-work',
+      baseUrl: 'https://api.example.test',
+      model: 'big-model',
+      cliCommand: 'claude',
+      paseoProviderId: 'pp-1',
+    })
+  })
+
+  test('createSoulRelease does not compose id and omits descriptorRef when absent', () => {
+    expect(createSoulRelease({
+      id: 'hr-manager',
+      version: '1.2.3',
+      displayName: 'HR Manager',
+      files: [{ relativePath: 'AGENTS.md', content: '# HR Manager\n' }],
+    })).toEqual({
+      id: 'hr-manager',
+      version: '1.2.3',
+      displayName: 'HR Manager',
+      files: [{ relativePath: 'AGENTS.md', content: '# HR Manager\n' }],
+    })
+  })
+
+  test('createSoulRelease carries the caller-composed id and descriptorRef', () => {
+    expect(createSoulRelease({
+      id: 'hr-manager@1.2.3',
+      version: '1.2.3',
+      displayName: 'HR Manager',
+      descriptorRef: '/abs/path/soul.descriptor.json',
+      files: [{ relativePath: 'AGENTS.md', content: '# HR Manager\n' }],
+    })).toEqual({
+      id: 'hr-manager@1.2.3',
+      version: '1.2.3',
+      displayName: 'HR Manager',
+      descriptorRef: '/abs/path/soul.descriptor.json',
+      files: [{ relativePath: 'AGENTS.md', content: '# HR Manager\n' }],
+    })
   })
 })

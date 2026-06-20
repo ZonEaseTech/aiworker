@@ -2,9 +2,10 @@ import { existsSync } from 'node:fs'
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { LocalFileControlPlaneStore } from '@zonease/aiworker-control'
 import { $ } from 'bun'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, createWebLaunchPlan, executePaseoPair, executeProvisionPlan, resolveAisshCredentials, resolveAisshInvocation, runWebConsole } from './aiworker'
+import { AISSH_EXEC_CWD_PREFIX, confirmApplyApproval, createPlanFromOptions, createWebLaunchPlan, executePaseoPair, executeProvisionPlan, readSoulReleaseFromOptions, resolveAisshCredentials, resolveAisshInvocation, runWebConsole, savePlanMetadataSnapshot } from './aiworker'
 
 const cliPath = path.resolve(import.meta.dirname, 'aiworker.ts')
 const packageJsonPath = path.resolve(import.meta.dirname, '../package.json')
@@ -932,5 +933,175 @@ describe('aiworker thin CLI', () => {
     expect(stderr).toContain('[omitted: output echoed the generated provisioning command]')
     expect(stderr).toContain('aiworker plan ... --show-script')
     expect(stderr).toContain('aiworker doctor')
+  })
+})
+
+async function createPinDescriptor() {
+  const root = await mkdtemp(path.join(tmpdir(), 'aiworker-pin-'))
+  await mkdir(path.join(root, 'dist/workspace-template'), { recursive: true })
+  await writeFile(path.join(root, 'dist/workspace-template/AGENTS.md'), '# HR Manager\n')
+  await writeFile(path.join(root, 'dist/workspace-template/mcp.json'), 'mcp config\n')
+  const descriptorPath = path.join(root, 'dist/soul.descriptor.json')
+  await writeFile(descriptorPath, JSON.stringify({
+    protocol: 'soul/v1',
+    identity: { id: 'hr-manager', name: 'HR Manager', version: '1.2.3' },
+    workspaceTemplate: { root: 'dist/workspace-template', entryFiles: ['AGENTS.md'], mcpFiles: ['mcp.json'], skillDirs: [] },
+  }))
+  return descriptorPath
+}
+
+function pinOptions(descriptorPath: string): Record<string, unknown> {
+  return {
+    user: 'Alice@Example.com',
+    target: 'aissh:server-1',
+    dedicatedTargetUser: true,
+    environment: 'env-alice',
+    provider: 'claude-work',
+    providerKind: 'claude',
+    providerBaseUrl: 'https://api.example.test',
+    providerModel: 'big-model',
+    paseoProviderId: 'pp-1',
+    assignmentId: 'asn_fixed_pin_0001',
+    soul: descriptorPath,
+  }
+}
+
+describe('US-002 shared factory regression pins', () => {
+  test('createPlanFromOptions output is deterministic for fixed options', async () => {
+    const descriptorPath = await createPinDescriptor()
+    const first = createPlanFromOptions(pinOptions(descriptorPath))
+    const second = createPlanFromOptions(pinOptions(descriptorPath))
+    expect(second).toEqual(first)
+  })
+
+  test('createPlanFromOptions preserves the pre-factory plan shape (byte-level pin)', async () => {
+    const descriptorPath = await createPinDescriptor()
+    const plan = createPlanFromOptions(pinOptions(descriptorPath))
+
+    // Environment input shape produced by createEnvironment, threaded through
+    // createProvisionPlan normalization. These are the exact fields the inline
+    // object produced before the factory extraction.
+    expect(plan.environment).toMatchObject({
+      environmentId: 'env-alice',
+      ownerEmail: 'alice@example.com',
+      dedication: {
+        kind: 'assigned-user-dedicated',
+        assignedEmail: 'alice@example.com',
+        assertedBy: 'aiworker-cli',
+        reason: '--dedicated-target-user',
+      },
+      topologyKind: 'owner-scoped-paseo-home-v1',
+      targetRef: 'aissh:server-1',
+      endpointKind: 'tcp',
+      isolation: 'os-user',
+      providerProfileIds: ['claude-work'],
+    })
+    expect(plan.assignment.soulReleaseRef).toBe('hr-manager@1.2.3')
+    expect(plan.assignment.assignmentId).toBe('asn_fixed_pin_0001')
+    expect(plan.receipt.providerProfileId).toBe('claude-work')
+    expect(plan.providerReadiness.providerId).toBe('pp-1')
+  })
+
+  test('createPlanFromOptions omits optional fields when options are absent', async () => {
+    const descriptorPath = await createPinDescriptor()
+    const minimal: Record<string, unknown> = {
+      user: 'Alice@Example.com',
+      target: 'aissh:server-1',
+      targetOwner: 'owner@example.com',
+      environment: 'env-alice',
+      provider: 'claude-work',
+      providerKind: 'claude',
+      assignmentId: 'asn_fixed_pin_0002',
+      soul: descriptorPath,
+    }
+    const plan = createPlanFromOptions(minimal)
+    // No --dedicated-target-user -> dedication key must be absent (not undefined).
+    expect(Object.keys(plan.environment)).not.toContain('dedication')
+    expect(plan.environment.ownerEmail).toBe('owner@example.com')
+  })
+
+  test('readSoulReleaseFromOptions emits a versioned id and descriptorRef', async () => {
+    const descriptorPath = await createPinDescriptor()
+    const release = readSoulReleaseFromOptions(pinOptions(descriptorPath))
+    expect(release).toEqual({
+      descriptorRef: path.resolve(descriptorPath),
+      displayName: 'HR Manager',
+      files: [
+        { content: '# HR Manager\n', mode: 0o644, relativePath: 'AGENTS.md' },
+        { content: 'mcp config\n', mode: 0o644, relativePath: 'mcp.json' },
+      ],
+      id: 'hr-manager@1.2.3',
+      version: '1.2.3',
+    })
+  })
+
+  test('readSoulReleaseFromOptions is deterministic for fixed options', async () => {
+    const descriptorPath = await createPinDescriptor()
+    expect(readSoulReleaseFromOptions(pinOptions(descriptorPath)))
+      .toEqual(readSoulReleaseFromOptions(pinOptions(descriptorPath)))
+  })
+})
+
+describe('US-003 read-or-derive control-plane survival', () => {
+  test('apply does not overwrite admin-entered environment/provider/soul fields', async () => {
+    const descriptorPath = await createPinDescriptor()
+    const controlPlaneDir = await mkdtemp(path.join(tmpdir(), 'aiworker-read-or-derive-'))
+    const store = new LocalFileControlPlaneStore(controlPlaneDir)
+
+    const plan = createPlanFromOptions(pinOptions(descriptorPath))
+
+    // Admin pre-enrolls rich records via the create surface (extra fields the
+    // plan-derived records would not carry).
+    const richEnvironment = {
+      ...plan.environment,
+      label: 'Alice production box',
+      annotations: { team: 'people-ops' },
+    }
+    const richProvider = {
+      id: plan.receipt.providerProfileId,
+      label: 'Claude (admin curated)',
+      provider: 'claude',
+      secretRef: `secret://provider/${plan.receipt.providerProfileId}`,
+      baseUrl: 'https://admin-curated.example/api',
+      model: 'admin-pinned-model',
+    }
+    const richSoul = {
+      ...readSoulReleaseFromOptions(pinOptions(descriptorPath)),
+      displayName: 'HR Manager (admin renamed)',
+    }
+    const baseline = await store.loadSnapshot()
+    await store.saveSnapshot({
+      ...baseline,
+      environments: [richEnvironment],
+      providerProfiles: [richProvider],
+      soulReleases: [richSoul],
+    })
+
+    await savePlanMetadataSnapshot(store, plan, pinOptions(descriptorPath), 'handoff_ready')
+
+    const snapshot = await store.loadSnapshot()
+    expect(snapshot.environments).toHaveLength(1)
+    expect(snapshot.environments[0]).toEqual(richEnvironment)
+    expect(snapshot.providerProfiles).toHaveLength(1)
+    expect(snapshot.providerProfiles[0]).toEqual(richProvider)
+    expect(snapshot.soulReleases).toHaveLength(1)
+    expect(snapshot.soulReleases[0]).toEqual(richSoul)
+    // assignment status is derived state and must still update
+    expect(snapshot.assignments[0]?.status).toBe('handoff_ready')
+  })
+
+  test('apply inserts environment/provider/soul records on first provision', async () => {
+    const descriptorPath = await createPinDescriptor()
+    const controlPlaneDir = await mkdtemp(path.join(tmpdir(), 'aiworker-read-or-derive-insert-'))
+    const store = new LocalFileControlPlaneStore(controlPlaneDir)
+
+    const plan = createPlanFromOptions(pinOptions(descriptorPath))
+    await savePlanMetadataSnapshot(store, plan, pinOptions(descriptorPath), 'handoff_ready')
+
+    const snapshot = await store.loadSnapshot()
+    expect(snapshot.environments.map(env => env.environmentId)).toEqual(['env-alice'])
+    expect(snapshot.providerProfiles.map(profile => profile.id)).toEqual(['claude-work'])
+    expect(snapshot.soulReleases.map(release => release.id)).toEqual(['hr-manager@1.2.3'])
+    expect(snapshot.assignments[0]?.status).toBe('handoff_ready')
   })
 })

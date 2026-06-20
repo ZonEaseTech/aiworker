@@ -9,7 +9,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { promisify } from 'node:util'
-import { createAssignment, createAuditEvent, createDefaultPaseoDaemonEndpointRef, createDefaultProjectRef, createPaseoOwnershipAssertion, createProvisionPlan, createProvisionReceipt, createWorkspaceProjectionManifest, deriveAssignedUserSlug, isPaseoPairingOffer, LocalFileControlPlaneStore, normalizeAisshServerRef, redactLiteralProviderSecret, redactSecretLike } from '@zonease/aiworker-control'
+import { createAssignment, createAuditEvent, createDefaultPaseoDaemonEndpointRef, createDefaultProjectRef, createEnvironment, createPaseoOwnershipAssertion, createProviderProfile, createProvisionPlan, createProvisionReceipt, createSoulRelease, createWorkspaceProjectionManifest, deriveAssignedUserSlug, isPaseoPairingOffer, LocalFileControlPlaneStore, normalizeAisshServerRef, redactLiteralProviderSecret, redactSecretLike } from '@zonease/aiworker-control'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import cac from 'cac'
 
@@ -259,7 +259,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   await cli.runMatchedCommand()
 }
 
-function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan {
+export function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan {
   const soulPath = requireOption(options.soul, '--soul')
   const descriptor = readSoulDescriptor(soulPath)
   const templateRoot = path.resolve(path.dirname(soulPath), '..', descriptor.workspaceTemplate.root)
@@ -280,7 +280,7 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
   })
   return createProvisionPlan({
     assignment,
-    environment: {
+    environment: createEnvironment({
       environmentId,
       daemonEndpoint: endpoint.daemonEndpoint,
       ...(endpoint.daemonListenRef ? { daemonListenRef: endpoint.daemonListenRef } : {}),
@@ -302,8 +302,8 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
       providerProfileIds: [providerProfileId],
       targetRef: requireOption(options.target, '--target'),
       topologyKind: 'owner-scoped-paseo-home-v1',
-    },
-    providerProfile: {
+    }),
+    providerProfile: createProviderProfile({
       ...(typeof options.providerBaseUrl === 'string' ? { baseUrl: options.providerBaseUrl } : {}),
       ...(typeof options.providerCli === 'string' ? { cliCommand: options.providerCli } : {}),
       ...(typeof options.providerModel === 'string' ? { model: options.providerModel } : {}),
@@ -312,13 +312,13 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
       label: providerProfileId,
       provider: requireOption(options.providerKind, '--provider-kind'),
       secretRef: typeof options.providerSecretRef === 'string' ? options.providerSecretRef : `secret://provider/${providerProfileId}`,
-    },
-    soul: {
+    }),
+    soul: createSoulRelease({
       displayName: descriptor.identity.name,
       files: readWorkspaceTemplateFiles(templateRoot),
       id: descriptor.identity.id,
       version: descriptor.identity.version,
-    },
+    }),
   })
 }
 
@@ -931,7 +931,7 @@ async function persistFailureIfRequested(plan: ProvisionPlan, error: unknown, op
   }))
 }
 
-async function savePlanMetadataSnapshot(
+export async function savePlanMetadataSnapshot(
   store: LocalFileControlPlaneStore,
   plan: ProvisionPlan,
   options: Record<string, unknown>,
@@ -945,8 +945,8 @@ async function savePlanMetadataSnapshot(
       ...plan.assignment,
       status: assignmentStatus,
     }, 'assignmentId'),
-    environments: upsertById(existing.environments, plan.environment, 'environmentId'),
-    providerProfiles: upsertById(existing.providerProfiles, {
+    environments: readOrDeriveById(existing.environments, plan.environment, 'environmentId'),
+    providerProfiles: readOrDeriveById(existing.providerProfiles, {
       id: plan.receipt.providerProfileId,
       label: plan.receipt.providerProfileId,
       provider: typeof options.providerKind === 'string' ? options.providerKind : 'claude',
@@ -956,7 +956,7 @@ async function savePlanMetadataSnapshot(
       ...(typeof options.providerBaseUrl === 'string' ? { baseUrl: options.providerBaseUrl } : {}),
       ...(typeof options.providerModel === 'string' ? { model: options.providerModel } : {}),
     }, 'id'),
-    soulReleases: upsertById(existing.soulReleases, soulRelease, 'id'),
+    soulReleases: readOrDeriveById(existing.soulReleases, soulRelease, 'id'),
   }
   await store.saveSnapshot(snapshot)
 }
@@ -967,17 +967,17 @@ function controlPlaneDirFromOptions(options: Record<string, unknown>): string | 
     : null
 }
 
-function readSoulReleaseFromOptions(options: Record<string, unknown>) {
+export function readSoulReleaseFromOptions(options: Record<string, unknown>) {
   const soulPath = requireOption(options.soul, '--soul')
   const descriptor = readSoulDescriptor(soulPath)
   const templateRoot = path.resolve(path.dirname(soulPath), '..', descriptor.workspaceTemplate.root)
-  return {
+  return createSoulRelease({
     descriptorRef: path.resolve(soulPath),
     displayName: descriptor.identity.name,
     files: readWorkspaceTemplateFiles(templateRoot),
     id: `${descriptor.identity.id}@${descriptor.identity.version}`,
     version: descriptor.identity.version,
-  }
+  })
 }
 
 function extractProviderWarning(...values: string[]): string | undefined {
@@ -1002,6 +1002,12 @@ function controlPlaneAuditDetails(parts: string[]): string {
 function upsertById<T extends Record<K, string>, K extends keyof T>(items: T[], next: T, key: K): T[] {
   const filtered = items.filter(item => item[key] !== next[key])
   return [...filtered, next]
+}
+
+function readOrDeriveById<T extends Record<K, string>, K extends keyof T>(items: T[], derived: T, key: K): T[] {
+  if (items.some(item => item[key] === derived[key]))
+    return items
+  return [...items, derived]
 }
 
 function createDoctorReport(options: Record<string, unknown>): DoctorReport {

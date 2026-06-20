@@ -17,6 +17,7 @@ import type {
   ProvisionPlanInput,
   ProvisionReceipt,
   ProvisionReceiptStatus,
+  SoulRelease,
   VersionedControlPlaneRecord,
   WorkspaceAssignment,
   WorkspacePathPolicy,
@@ -130,6 +131,74 @@ export function createAssignment(input: Omit<WorkspaceAssignment, 'assignedEmail
     assignedEmail,
     assignmentId: input.assignmentId ?? createStableId('asn', `${assignedEmail}:${input.environmentId}:${input.soulReleaseRef}:${input.workspaceRef}`),
     status: input.status ?? 'draft',
+  }
+}
+
+export function createEnvironment(input: {
+  environmentId: string
+  ownerEmail: string
+  targetRef: string
+  paseoHome: string
+  daemonEndpoint: string
+  endpointKind: PaseoEnvironment['endpointKind']
+  isolation: PaseoEnvironment['isolation']
+  providerProfileIds: string[]
+  daemonListenRef?: string
+  daemonHostRef?: string
+  dedication?: PaseoEnvironment['dedication']
+  topologyKind?: PaseoEnvironmentTopologyKind
+}): PaseoEnvironment {
+  return {
+    environmentId: input.environmentId,
+    ownerEmail: input.ownerEmail,
+    ...(input.dedication ? { dedication: input.dedication } : {}),
+    ...(input.topologyKind ? { topologyKind: input.topologyKind } : {}),
+    targetRef: input.targetRef,
+    paseoHome: input.paseoHome,
+    daemonEndpoint: input.daemonEndpoint,
+    ...(input.daemonListenRef ? { daemonListenRef: input.daemonListenRef } : {}),
+    ...(input.daemonHostRef ? { daemonHostRef: input.daemonHostRef } : {}),
+    endpointKind: input.endpointKind,
+    isolation: input.isolation,
+    providerProfileIds: input.providerProfileIds,
+  }
+}
+
+export function createProviderProfile(input: {
+  id: string
+  provider: ProviderProfile['provider']
+  label: string
+  secretRef?: string
+  baseUrl?: string
+  cliCommand?: string
+  model?: string
+  paseoProviderId?: string
+}): ProviderProfile {
+  return {
+    ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
+    ...(input.cliCommand !== undefined ? { cliCommand: input.cliCommand } : {}),
+    ...(input.model !== undefined ? { model: input.model } : {}),
+    ...(input.paseoProviderId !== undefined ? { paseoProviderId: input.paseoProviderId } : {}),
+    id: input.id,
+    label: input.label,
+    provider: input.provider,
+    ...(input.secretRef !== undefined ? { secretRef: input.secretRef } : {}),
+  }
+}
+
+export function createSoulRelease(input: {
+  id: string
+  version: string
+  displayName: string
+  files: ProjectedFile[]
+  descriptorRef?: string
+}): SoulRelease {
+  return {
+    ...(input.descriptorRef !== undefined ? { descriptorRef: input.descriptorRef } : {}),
+    displayName: input.displayName,
+    files: input.files,
+    id: input.id,
+    version: input.version,
   }
 }
 

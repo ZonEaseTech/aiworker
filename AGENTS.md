@@ -96,4 +96,13 @@ Code changes need focused contract tests appropriate to scope. Before final comp
 
 ## UI
 
-当前 AIWorker 不做员工侧 UI。Paseo owns employee workspace UI. 若将来做 AIWorker 管理界面，只能管理 assignment/provisioning/audit/handoff，不能 render/fork/proxy Paseo workspace，也不能引入 ad-hoc component systems。
+当前 AIWorker 不做员工侧 UI。Paseo owns employee workspace UI.
+
+AIWorker Web 是管理员主可视化操作台，可在 UI 内**创建/编辑** AIWorker-owned 元数据：assignment、Paseo environment、provider 引用（profile + secret 引用）、Soul release（**register 已 build 的 release，不是浏览器内 authoring**），以及 provisioning/audit/handoff 记录。
+
+但仍是薄层，硬约束不变：
+
+- Web 后端**不是 snapshot source of truth**；所有创建/编辑写动作经 `aiworker` CLI spawn 代写，由 CLI 命令负责落地元数据。
+- provider 只存 `secret://` 引用，绝不在 UI/DB/receipt/log 里落 literal secret。
+- 不 render/fork/proxy/observe Paseo runtime/workspace/session/provider traffic。
+- 不引入 ad-hoc component systems；沿用既有 shadcn 基线。

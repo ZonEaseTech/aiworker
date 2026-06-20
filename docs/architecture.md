@@ -114,6 +114,12 @@ The employee work journey happens in Paseo. AIWorker may expose an optional laun
 
 AIWorker Web is allowed only as a management plane for AIWorker-owned metadata: assignments, provisioning plans and status, redacted receipts, audit events, handoff references, Soul releases, Paseo environment metadata, and provider-profile secret references. It must not proxy Paseo UI or session traffic.
 
+## AIWorker Web 定位
+
+AIWorker Web 是管理员主可视化操作台：除审批/触发 provisioning 外，它可在 UI 内创建/编辑 AIWorker-owned 元数据 —— assignment、Paseo environment、provider 引用（profile + secret 引用）、Soul release（register 已 build 的 release，不是浏览器内 authoring）。
+
+它仍是薄层，不是 snapshot source of truth：所有创建/编辑写动作经 `aiworker` CLI spawn 代写，由 CLI 命令负责落地元数据并保持与 CLI 一致的 read-or-derive 所有权契约。Web 只存 `secret://` 引用，绝不落 literal provider secret，并且不 render/proxy/observe Paseo runtime/workspace/session。
+
 ## License/commercial boundary
 
 AIWorker treats Paseo as an external CLI/daemon installed on target machines. Do not fork, vendor, embed, or patch Paseo as part of AIWorker without an explicit legal/commercial review because Paseo is AGPL-licensed.
