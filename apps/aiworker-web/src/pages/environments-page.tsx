@@ -1,14 +1,20 @@
+import { DemoDataNotice } from '@/components/demo-data-notice'
+import { CreateEnvironmentSheet } from '@/components/forms/create-environment-sheet'
+import { CreateProviderSheet } from '@/components/forms/create-provider-sheet'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { adminConsoleData, environmentStatusMeta, providerStatusMeta } from '@/lib/admin-data'
+import { environmentStatusMeta, providerStatusMeta } from '@/lib/admin-data'
+import { useAdminData } from '@/lib/admin-data-context'
 
 export function EnvironmentsPage() {
+  const { data } = useAdminData()
   return (
     <div className="flex flex-col gap-6">
+      <DemoDataNotice />
       <PageHeader
         eyebrow="设备与账号"
         title="员工设备和后台 AI 账号"
@@ -22,8 +28,15 @@ export function EnvironmentsPage() {
         <TabsContent value="environments" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>员工设备</CardTitle>
-              <CardDescription>用于判断员工是否具备开通条件；更细的连接信息折叠给技术支持查看。</CardDescription>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <CardTitle>员工设备</CardTitle>
+                  <CardDescription>用于判断员工是否具备开通条件；更细的连接信息折叠给技术支持查看。</CardDescription>
+                </div>
+                <CardAction>
+                  <CreateEnvironmentSheet />
+                </CardAction>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
@@ -33,10 +46,11 @@ export function EnvironmentsPage() {
                     <TableHead>设备</TableHead>
                     <TableHead>连接方式</TableHead>
                     <TableHead>状态</TableHead>
+                    <TableHead className="w-16 text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {adminConsoleData.environments.map((environment) => {
+                  {data.environments.map((environment) => {
                     const meta = environmentStatusMeta[environment.status]
                     return (
                       <TableRow key={environment.id}>
@@ -56,6 +70,9 @@ export function EnvironmentsPage() {
                           </details>
                         </TableCell>
                         <TableCell><StatusBadge tone={meta.tone}>{meta.label}</StatusBadge></TableCell>
+                        <TableCell className="text-right">
+                          <CreateEnvironmentSheet editTarget={environment} />
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -67,12 +84,19 @@ export function EnvironmentsPage() {
         <TabsContent value="providers" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>后台 AI 账号</CardTitle>
-              <CardDescription>只显示账号名称和授权状态；密钥不会出现在页面、日志或开通记录里。</CardDescription>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <CardTitle>后台 AI 账号</CardTitle>
+                  <CardDescription>只显示账号名称和授权状态；密钥不会出现在页面、日志或开通记录里。</CardDescription>
+                </div>
+                <CardAction>
+                  <CreateProviderSheet />
+                </CardAction>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                {adminConsoleData.providerProfiles.map((profile) => {
+                {data.providerProfiles.map((profile) => {
                   const meta = providerStatusMeta[profile.status]
                   return (
                     <Card key={profile.id}>
@@ -82,6 +106,9 @@ export function EnvironmentsPage() {
                           服务：
                           {profile.provider}
                         </CardDescription>
+                        <CardAction>
+                          <CreateProviderSheet editTarget={profile} />
+                        </CardAction>
                       </CardHeader>
                       <CardContent className="flex flex-col gap-3 text-xs">
                         <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>

@@ -1,6 +1,8 @@
 # AIWorker Web
 
-AIWorker Web 是面向管理员的薄控制台，只管理 AIWorker-owned metadata：assignment、provisioning plan、Soul release、Paseo environment、audit 与 redacted handoff。
+AIWorker Web 是面向管理员的主可视化操作台，管理 AIWorker-owned metadata：assignment、Paseo environment、provider 引用、Soul release（register 已 build 的 release）、provisioning plan、audit 与 redacted handoff。它可在 UI 内发起创建/编辑这些元数据，但仍是薄层。
+
+Thin write path：Web 后端**不持有 snapshot source of truth**；所有创建/编辑写动作经 `aiworker` CLI spawn 代写，由 CLI 命令负责落地元数据。provider 只存 `secret://` 引用，绝不落 literal secret。
 
 No runtime proxy：它不渲染、不代理、不观察 Paseo project/workspace/session/runtime/provider traffic；AIWorker 不读取 session。
 

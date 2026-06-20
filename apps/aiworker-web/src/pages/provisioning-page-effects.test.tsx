@@ -27,10 +27,16 @@ type CtxValue = NonNullable<React.ContextType<typeof AdminDataContext>>
 function makeCtx(overrides: Partial<CtxValue> = {}): CtxValue {
   return {
     bootstrap: defaultBootstrap,
+    async createMetadata<T>() {
+      return undefined as T
+    },
     data: adminConsoleData,
     decideApproval: async () => {},
     isLive: false,
     loadError: null,
+    async loadSoulCatalog() {
+      return []
+    },
     reload: async () => {},
     ...overrides,
   }

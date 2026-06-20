@@ -10,7 +10,7 @@ import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader,
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { clearAdminToken, readAdminTokenStorageState, saveAdminToken } from '@/lib/admin-api-client'
-import { getEnvironment, getSoulRelease, statusMeta } from '@/lib/admin-data'
+import { statusMeta, tryGetEnvironment, tryGetSoulRelease } from '@/lib/admin-data'
 import { useAdminData } from '@/lib/admin-data-context'
 import { adminRemediation } from '@/lib/admin-remediation'
 
@@ -416,8 +416,8 @@ function dashboardTaskPriority(assignment: AssignmentSummary): number {
 
 function DashboardTaskCard({ data, prominent = false, task }: { data: AdminConsoleData, prominent?: boolean, task: DashboardTask }) {
   const { assignment } = task
-  const soul = getSoulRelease(assignment.soulReleaseId, data)
-  const environment = getEnvironment(assignment.environmentId, data)
+  const soul = tryGetSoulRelease(assignment.soulReleaseId, data)
+  const environment = tryGetEnvironment(assignment.environmentId, data)
 
   return (
     <div className={`rounded-md border bg-muted/20 p-4 ${prominent ? 'ring-1 ring-primary/20' : ''}`}>
@@ -438,12 +438,14 @@ function DashboardTaskCard({ data, prominent = false, task }: { data: AdminConso
       <div className="mt-3 grid grid-cols-1 gap-2 text-xs/relaxed md:grid-cols-3">
         <div>
           <p className="text-muted-foreground">能力</p>
-          <p className="truncate font-medium">{soul.displayName}</p>
+          <p className="truncate font-medium">{soul?.displayName ?? '能力模板缺失'}</p>
         </div>
         <div>
           <p className="text-muted-foreground">设备</p>
           <p className="truncate font-medium">
-            {environment.ownerEmail === assignment.assignedEmail ? '员工本人设备' : `${environment.ownerEmail} 代管设备`}
+            {environment
+              ? (environment.ownerEmail === assignment.assignedEmail ? '员工本人设备' : `${environment.ownerEmail} 代管设备`)
+              : '设备配置缺失'}
           </p>
         </div>
         <div>

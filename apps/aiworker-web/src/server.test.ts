@@ -11,7 +11,7 @@ import {
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createServer as createViteDevServer } from 'vite'
 
-import { adminBootstrapStatus, resolveAiworkerCliCommand, summarizeApplyJobResult } from '@/admin-api'
+import { adminBootstrapStatus, readSoulCatalog, resolveAiworkerCliCommand, summarizeApplyJobResult } from '@/admin-api'
 import { assertServerHostAllowed, contentType, createServer, handleAdminRuntimeRequest, resolveStaticPath, serverHostname, staticRoot } from '@/server'
 
 const authEnvKeys = [
@@ -174,6 +174,44 @@ describe('Bun static server helpers', () => {
     expect(response.headers.get('content-type')).toContain('application/json')
     expect(body).not.toContain('<!doctype')
     expect(payload.source).toBe('fixture')
+  })
+
+  test('lists on-disk soul descriptors for the registration form', () => {
+    const catalog = readSoulCatalog({})
+
+    expect(catalog.length).toBeGreaterThan(0)
+    const freeform = catalog.find(entry => entry.id === 'aiworker-freeform')
+    expect(freeform).toBeDefined()
+    expect(freeform?.descriptorRef).toEndWith('souls/aiworker-freeform/dist/soul.descriptor.json')
+    expect(freeform?.soulReleaseRef).toBe(`aiworker-freeform@${freeform?.version}`)
+    for (const entry of catalog)
+      expect(entry.descriptorRef).toEndWith('soul.descriptor.json')
+  })
+
+  test('serves the soul catalog through the admin runtime handler', async () => {
+    const response = await handleAdminRuntimeRequest(new Request('http://127.0.0.1:20831/api/soul-catalog'), {})
+
+    if (!response)
+      throw new Error('admin runtime handler did not handle /api/soul-catalog')
+
+    const payload = JSON.parse(await response.text()) as { souls: Array<{ descriptorRef: string, id: string }> }
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(Array.isArray(payload.souls)).toBe(true)
+    expect(payload.souls.some(entry => entry.id === 'aiworker-freeform')).toBe(true)
+  })
+
+  test('rejects non-GET methods on the soul catalog endpoint', async () => {
+    const response = await handleAdminRuntimeRequest(
+      new Request('http://127.0.0.1:20831/api/soul-catalog', { method: 'POST' }),
+      {},
+    )
+
+    if (!response)
+      throw new Error('admin runtime handler did not handle /api/soul-catalog POST')
+
+    expect(response.status).toBe(405)
   })
 
   test('serves admin API JSON from the Vite dev server instead of the SPA fallback', async () => {
@@ -676,7 +714,387 @@ describe('Bun static server helpers', () => {
       logto.server.stop(true)
     }
   })
+
+  test('authors assignment, environment, provider, and soul metadata through thin create endpoints', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const previousCli = process.env.AIWORKER_CLI_BIN
+    const previousFakeMode = process.env.FAKE_AIWORKER_CREATE_MODE
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-web-create-'))
+    process.env.AIWORKER_CONTROL_PLANE_DIR = root
+    await new LocalFileControlPlaneStore(root).saveSnapshot(createEmptyControlPlaneSnapshot())
+
+    const fakeCli = path.join(root, 'fake-create-cli')
+    const fakeArgs = path.join(root, 'fake-create-cli.args')
+    await writeFile(fakeCli, [
+      '#!/bin/sh',
+      `printf '%s\\n' "$*" >> ${fakeArgs}`,
+      'if [ "$FAKE_AIWORKER_CREATE_MODE" = "fail" ]; then',
+      '  printf \'%s\\n\' \'metadata command failed\' >&2',
+      '  exit 7',
+      'fi',
+      'case "$1 $2" in',
+      '  "assignment create")',
+      '    printf \'%s\\n\' \'{"assignmentId":"asn-created","assignedEmail":"alice@example.com","environmentId":"env-alice","providerProfileId":"codex-default","soulReleaseRef":"aiworker-freeform@1.0.0","workspaceRef":"$HOME/.aiworker/alice-example.com/projects/aiworker-freeform","status":"draft"}\'',
+      '    ;;',
+      '  "environment create")',
+      '    printf \'%s\\n\' \'{"environmentId":"env-alice","ownerEmail":"alice@example.com","targetRef":"aissh:server-1"}\'',
+      '    ;;',
+      '  "provider create")',
+      '    printf \'%s\\n\' \'{"id":"codex-default","provider":"codex","secretRef":"secret://providers/codex/default"}\'',
+      '    ;;',
+      '  "soul register")',
+      '    printf \'%s\\n\' \'{"id":"aiworker-freeform","version":"1.0.0","displayName":"AIWorker Freeform","files":[]}\'',
+      '    ;;',
+      '  *)',
+      '    exit 64',
+      '    ;;',
+      'esac',
+    ].join('\n'))
+    await chmod(fakeCli, 0o755)
+    process.env.AIWORKER_CLI_BIN = fakeCli
+    const server = createServer({ port: 0 })
+
+    try {
+      const assignmentResponse = await fetch(`http://127.0.0.1:${server.port}/api/assignments`, {
+        body: JSON.stringify({ environment: 'env-alice', provider: 'codex-default', soulReleaseRef: 'aiworker-freeform@1.0.0', user: 'alice@example.com' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const assignmentPayload = await assignmentResponse.json()
+      expect(assignmentResponse.status).toBe(200)
+      expect(assignmentPayload.assignment.assignmentId).toBe('asn-created')
+
+      const environmentResponse = await fetch(`http://127.0.0.1:${server.port}/api/environments`, {
+        body: JSON.stringify({ environment: 'env-alice', provider: 'codex-default', target: 'aissh:server-1', user: 'alice@example.com' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const environmentPayload = await environmentResponse.json()
+      expect(environmentResponse.status).toBe(200)
+      expect(environmentPayload.environment.environmentId).toBe('env-alice')
+
+      const providerResponse = await fetch(`http://127.0.0.1:${server.port}/api/providers`, {
+        body: JSON.stringify({ provider: 'codex-default', providerKind: 'codex', secretRef: 'secret://providers/codex/default' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const providerPayload = await providerResponse.json()
+      expect(providerResponse.status).toBe(200)
+      expect(providerPayload.provider.id).toBe('codex-default')
+
+      const soulResponse = await fetch(`http://127.0.0.1:${server.port}/api/soul-releases`, {
+        body: JSON.stringify({ soul: 'souls/aiworker-freeform/dist/soul.descriptor.json' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const soulPayload = await soulResponse.json()
+      expect(soulResponse.status).toBe(200)
+      expect(soulPayload.soulRelease.id).toBe('aiworker-freeform')
+
+      const recordedArgs = await readFile(fakeArgs, 'utf8')
+      expect(recordedArgs).toContain('assignment create --json --control-plane-dir')
+      expect(recordedArgs).toContain('environment create --json --control-plane-dir')
+      expect(recordedArgs).toContain('provider create --json --control-plane-dir')
+      expect(recordedArgs).toContain('soul register --json --control-plane-dir')
+    }
+    finally {
+      server.stop(true)
+      restoreEnv('AIWORKER_CONTROL_PLANE_DIR', previousDir)
+      restoreEnv('AIWORKER_CLI_BIN', previousCli)
+      restoreEnv('FAKE_AIWORKER_CREATE_MODE', previousFakeMode)
+    }
+  })
+
+  test('returns 409 when create endpoints lack a configured control-plane directory', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    delete process.env.AIWORKER_CONTROL_PLANE_DIR
+    const server = createServer({ port: 0 })
+
+    try {
+      for (const route of ['assignments', 'environments', 'soul-releases']) {
+        const response = await fetch(`http://127.0.0.1:${server.port}/api/${route}`, {
+          body: JSON.stringify({}),
+          headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+          method: 'POST',
+        })
+        const payload = await response.json()
+        expect(response.status).toBe(409)
+        expect(payload.error).toBe('control_plane_dir_required')
+      }
+
+      const providerResponse = await fetch(`http://127.0.0.1:${server.port}/api/providers`, {
+        body: JSON.stringify({ provider: 'codex-default', secretRef: 'secret://providers/codex/default' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const providerPayload = await providerResponse.json()
+      expect(providerResponse.status).toBe(409)
+      expect(providerPayload.error).toBe('control_plane_dir_required')
+    }
+    finally {
+      server.stop(true)
+      restoreEnv('AIWORKER_CONTROL_PLANE_DIR', previousDir)
+    }
+  })
+
+  test('rejects literal provider secrets before spawning the CLI', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const previousCli = process.env.AIWORKER_CLI_BIN
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-web-secret-'))
+    process.env.AIWORKER_CONTROL_PLANE_DIR = root
+    await new LocalFileControlPlaneStore(root).saveSnapshot(createEmptyControlPlaneSnapshot())
+
+    const fakeCli = path.join(root, 'fake-secret-cli')
+    const fakeArgs = path.join(root, 'fake-secret-cli.args')
+    await writeFile(fakeCli, ['#!/bin/sh', `printf '%s\\n' "$*" >> ${fakeArgs}`, 'exit 0'].join('\n'))
+    await chmod(fakeCli, 0o755)
+    process.env.AIWORKER_CLI_BIN = fakeCli
+    const server = createServer({ port: 0 })
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/providers`, {
+        body: JSON.stringify({ provider: 'codex-default', providerKind: 'codex', secretRef: `s${'k'}-literal-secret-value` }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const payload = await response.json()
+      expect(response.status).toBe(400)
+      expect(payload.error).toBe('provider_secret_ref_invalid')
+      expect(JSON.stringify(payload)).not.toContain('literal-secret-value')
+      expect(await readFile(fakeArgs, 'utf8').catch(() => '')).toBe('')
+    }
+    finally {
+      server.stop(true)
+      restoreEnv('AIWORKER_CONTROL_PLANE_DIR', previousDir)
+      restoreEnv('AIWORKER_CLI_BIN', previousCli)
+    }
+  })
+
+  test('previews provisioning plans read-only without mutating the control-plane snapshot', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const previousCli = process.env.AIWORKER_CLI_BIN
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-web-plan-'))
+    process.env.AIWORKER_CONTROL_PLANE_DIR = root
+    const store = new LocalFileControlPlaneStore(root)
+    await store.saveSnapshot(createEmptyControlPlaneSnapshot())
+    const snapshotPath = path.join(root, 'snapshot.json')
+    const snapshotBefore = await readFile(snapshotPath)
+    const descriptorPath = path.join(root, 'plan-soul.descriptor.json')
+    await writeFile(descriptorPath, '{"schemaVersion":"soul/v1","identity":{"id":"aiworker-freeform","version":"1.0.0"},"protocol":{"runtime":"paseo-workspace"},"workspaceTemplate":{"root":"workspace-template","files":[]}}\n')
+
+    const fakeCli = path.join(root, 'fake-plan-cli')
+    const fakeArgs = path.join(root, 'fake-plan-cli.args')
+    await writeFile(fakeCli, [
+      '#!/bin/sh',
+      `printf '%s\\n' "$*" >> ${fakeArgs}`,
+      'if [ "$1" = "plan" ]; then',
+      '  printf \'%s\\n\' \'{"assignment":{"assignmentId":"asn-preview"},"environment":{"environmentId":"env-alice"}}\'',
+      '  exit 0',
+      'fi',
+      'exit 64',
+    ].join('\n'))
+    await chmod(fakeCli, 0o755)
+    process.env.AIWORKER_CLI_BIN = fakeCli
+    const server = createServer({ port: 0 })
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/plan`, {
+        body: JSON.stringify({ environment: 'env-alice', provider: 'codex-default', soul: descriptorPath, target: 'aissh:server-1', user: 'alice@example.com' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const payload = await response.json()
+      expect(response.status).toBe(200)
+      expect(payload.plan.assignment.assignmentId).toBe('asn-preview')
+
+      const recordedArgs = await readFile(fakeArgs, 'utf8')
+      expect(recordedArgs).toContain('plan --json')
+      expect(recordedArgs).not.toContain('--control-plane-dir')
+      expect(recordedArgs).not.toContain('apply')
+
+      const snapshotAfter = await readFile(snapshotPath)
+      expect(snapshotAfter.equals(snapshotBefore)).toBe(true)
+    }
+    finally {
+      server.stop(true)
+      restoreEnv('AIWORKER_CONTROL_PLANE_DIR', previousDir)
+      restoreEnv('AIWORKER_CLI_BIN', previousCli)
+    }
+  })
+
+  test('enriches plan preview args from the snapshot environment so plan --json gets --target-owner', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const previousCli = process.env.AIWORKER_CLI_BIN
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-web-plan-enrich-'))
+    process.env.AIWORKER_CONTROL_PLANE_DIR = root
+    const store = new LocalFileControlPlaneStore(root)
+    await store.saveSnapshot({
+      ...createEmptyControlPlaneSnapshot(),
+      environments: [{
+        environmentId: 'env-alice',
+        targetRef: 'aissh:alice-box',
+        ownerEmail: 'owner@example.com',
+        paseoHome: '$HOME/.paseo/alice',
+        endpointKind: 'local-home',
+        isolation: 'os-user',
+        daemonEndpoint: '$HOME/.paseo/alice/daemon.sock',
+        providerProfileIds: ['codex-default'],
+      }],
+    })
+    const snapshotPath = path.join(root, 'snapshot.json')
+    const snapshotBefore = await readFile(snapshotPath)
+    const descriptorPath = path.join(root, 'plan-soul.descriptor.json')
+    await writeFile(descriptorPath, '{"schemaVersion":"soul/v1","identity":{"id":"aiworker-freeform","version":"1.0.0"},"protocol":{"runtime":"paseo-workspace"},"workspaceTemplate":{"root":"workspace-template","files":[]}}\n')
+
+    const fakeCli = path.join(root, 'fake-plan-cli')
+    const fakeArgs = path.join(root, 'fake-plan-cli.args')
+    await writeFile(fakeCli, [
+      '#!/bin/sh',
+      `printf '%s\\n' "$*" >> ${fakeArgs}`,
+      'if [ "$1" = "plan" ]; then',
+      '  printf \'%s\\n\' \'{"assignment":{"assignmentId":"asn-preview"},"environment":{"environmentId":"env-alice"}}\'',
+      '  exit 0',
+      'fi',
+      'exit 64',
+    ].join('\n'))
+    await chmod(fakeCli, 0o755)
+    process.env.AIWORKER_CLI_BIN = fakeCli
+    const server = createServer({ port: 0 })
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/plan`, {
+        body: JSON.stringify({ environment: 'env-alice', provider: 'codex-default', soul: descriptorPath, user: 'alice@example.com' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const payload = await response.json()
+      expect(response.status).toBe(200)
+      expect(payload.plan.assignment.assignmentId).toBe('asn-preview')
+
+      const recordedArgs = await readFile(fakeArgs, 'utf8')
+      expect(recordedArgs).toContain('plan --json')
+      expect(recordedArgs).toContain('--target aissh:alice-box')
+      expect(recordedArgs).toContain('--target-owner owner@example.com')
+      expect(recordedArgs).not.toContain('--control-plane-dir')
+      expect(recordedArgs).not.toContain('apply')
+
+      const snapshotAfter = await readFile(snapshotPath)
+      expect(snapshotAfter.equals(snapshotBefore)).toBe(true)
+    }
+    finally {
+      server.stop(true)
+      restoreEnv('AIWORKER_CONTROL_PLANE_DIR', previousDir)
+      restoreEnv('AIWORKER_CLI_BIN', previousCli)
+    }
+  })
+
+  test('preview plan args include --paseo-provider-id when provider has paseoProviderId', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const previousCli = process.env.AIWORKER_CLI_BIN
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-web-plan-paseo-provider-'))
+    process.env.AIWORKER_CONTROL_PLANE_DIR = root
+    const store = new LocalFileControlPlaneStore(root)
+    await store.saveSnapshot({
+      ...createEmptyControlPlaneSnapshot(),
+      environments: [{
+        environmentId: 'env-alice',
+        targetRef: 'aissh:alice-box',
+        ownerEmail: 'owner@example.com',
+        paseoHome: '$HOME/.paseo/alice',
+        endpointKind: 'local-home',
+        isolation: 'os-user',
+        daemonEndpoint: '$HOME/.paseo/alice/daemon.sock',
+        providerProfileIds: ['provider-with-paseo'],
+      }],
+      providerProfiles: [{
+        id: 'provider-with-paseo',
+        label: 'Provider With Paseo',
+        provider: 'claude-code',
+        paseoProviderId: 'paseo-provider-xyz',
+      }],
+    })
+    const descriptorPath = path.join(root, 'plan-soul.descriptor.json')
+    await writeFile(descriptorPath, '{"schemaVersion":"soul/v1","identity":{"id":"aiworker-freeform","version":"1.0.0"},"protocol":{"runtime":"paseo-workspace"},"workspaceTemplate":{"root":"workspace-template","files":[]}}\n')
+
+    const fakeCli = path.join(root, 'fake-plan-cli')
+    const fakeArgs = path.join(root, 'fake-plan-cli.args')
+    await writeFile(fakeCli, [
+      '#!/bin/sh',
+      `printf '%s\\n' "$*" >> ${fakeArgs}`,
+      'if [ "$1" = "plan" ]; then',
+      '  printf \'%s\\n\' \'{"assignment":{"assignmentId":"asn-preview"},"environment":{"environmentId":"env-alice"}}\'',
+      '  exit 0',
+      'fi',
+      'exit 64',
+    ].join('\n'))
+    await chmod(fakeCli, 0o755)
+    process.env.AIWORKER_CLI_BIN = fakeCli
+    const server = createServer({ port: 0 })
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/plan`, {
+        body: JSON.stringify({ environment: 'env-alice', provider: 'provider-with-paseo', soul: descriptorPath, user: 'alice@example.com' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      expect(response.status).toBe(200)
+
+      const recordedArgs = await readFile(fakeArgs, 'utf8')
+      expect(recordedArgs).toContain('--paseo-provider-id paseo-provider-xyz')
+      expect(recordedArgs).not.toContain('--control-plane-dir')
+      expect(recordedArgs).not.toContain('apply')
+    }
+    finally {
+      server.stop(true)
+      restoreEnv('AIWORKER_CONTROL_PLANE_DIR', previousDir)
+      restoreEnv('AIWORKER_CLI_BIN', previousCli)
+    }
+  })
+
+  test('surfaces an error response when a create CLI invocation exits non-zero', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const previousCli = process.env.AIWORKER_CLI_BIN
+    const previousFakeMode = process.env.FAKE_AIWORKER_CREATE_MODE
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-web-create-fail-'))
+    process.env.AIWORKER_CONTROL_PLANE_DIR = root
+    const failStore = new LocalFileControlPlaneStore(root)
+    await failStore.saveSnapshot(createEmptyControlPlaneSnapshot())
+    const snapshotBefore = await readFile(path.join(root, 'snapshot.json'))
+
+    const fakeCli = path.join(root, 'fake-fail-cli')
+    await writeFile(fakeCli, ['#!/bin/sh', 'printf \'%s\\n\' \'metadata command failed\' >&2', 'exit 7'].join('\n'))
+    await chmod(fakeCli, 0o755)
+    process.env.AIWORKER_CLI_BIN = fakeCli
+    const server = createServer({ port: 0 })
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/assignments`, {
+        body: JSON.stringify({ environment: 'env-alice', provider: 'codex-default', soulReleaseRef: 'aiworker-freeform@1.0.0', user: 'alice@example.com' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const payload = await response.json()
+      expect(response.status).not.toBe(200)
+      expect(payload.error).toBeDefined()
+      expect(payload.assignment).toBeUndefined()
+      const snapshotAfter = await readFile(path.join(root, 'snapshot.json'))
+      expect(snapshotAfter.equals(snapshotBefore)).toBe(true)
+    }
+    finally {
+      server.stop(true)
+      restoreEnv('AIWORKER_CONTROL_PLANE_DIR', previousDir)
+      restoreEnv('AIWORKER_CLI_BIN', previousCli)
+      restoreEnv('FAKE_AIWORKER_CREATE_MODE', previousFakeMode)
+    }
+  })
 })
+
+function restoreEnv(key: string, previous: string | undefined): void {
+  if (previous === undefined)
+    delete process.env[key]
+  else
+    process.env[key] = previous
+}
 
 function startFakeLogto(): { baseUrl: string, server: ReturnType<typeof Bun.serve> } {
   const server = Bun.serve({

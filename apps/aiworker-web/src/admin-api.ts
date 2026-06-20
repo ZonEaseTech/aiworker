@@ -2,7 +2,7 @@ import type { ControlPlaneSnapshot } from '@zonease/aiworker-control/control-pla
 import type { ApprovalDecisionRecord, ApprovalStatus } from '@/lib/admin-data'
 import type { AdminBootstrapStatus, AdminRemediation } from '@/lib/admin-remediation'
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
@@ -40,7 +40,113 @@ export interface ApprovalDecisionInput {
   status?: ApprovalStatus
 }
 
+export interface CreateAssignmentInput {
+  assignmentId?: string
+  environment?: string
+  provider?: string
+  soulReleaseRef?: string
+  user?: string
+}
+
+export interface CreateEnvironmentInput {
+  environment?: string
+  provider?: string
+  target?: string
+  user?: string
+}
+
+export interface CreateProviderInput {
+  baseUrl?: string
+  cliCommand?: string
+  model?: string
+  paseoProviderId?: string
+  provider?: string
+  providerKind?: string
+  secretRef?: string
+}
+
+export interface RegisterSoulInput {
+  soul?: string
+}
+
+export interface PreviewPlanInput {
+  dedicatedTargetUser?: boolean
+  environment?: string
+  paseoEndpoint?: string
+  paseoHost?: string
+  paseoListen?: string
+  paseoProviderId?: string
+  provider?: string
+  providerBaseUrl?: string
+  providerCli?: string
+  providerKind?: string
+  providerModel?: string
+  providerSecretRef?: string
+  soul?: string
+  target?: string
+  targetOwner?: string
+  user?: string
+}
+
+export interface SoulCatalogEntry {
+  descriptorRef: string
+  displayName: string
+  id: string
+  soulReleaseRef: string
+  version: string
+}
+
 const approvalStatuses = ['pending', 'approved', 'changes_requested'] as const
+
+export function soulsDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.AIWORKER_SOULS_DIR?.trim()
+  if (configured)
+    return resolve(configured)
+  return resolve(import.meta.dirname, '..', '..', '..', 'souls')
+}
+
+export function readSoulCatalog(env: NodeJS.ProcessEnv = process.env): SoulCatalogEntry[] {
+  const soulsDir = soulsDirFromEnv(env)
+  if (!existsSync(soulsDir))
+    return []
+
+  const entries: SoulCatalogEntry[] = []
+  for (const dirent of readdirSync(soulsDir, { withFileTypes: true })) {
+    if (!dirent.isDirectory())
+      continue
+    const descriptorRef = join(soulsDir, dirent.name, 'dist', 'soul.descriptor.json')
+    if (!existsSync(descriptorRef))
+      continue
+    const entry = parseSoulCatalogEntry(descriptorRef)
+    if (entry)
+      entries.push(entry)
+  }
+
+  return entries.sort((left, right) => left.displayName.localeCompare(right.displayName))
+}
+
+function parseSoulCatalogEntry(descriptorRef: string): SoulCatalogEntry | null {
+  try {
+    const descriptor = JSON.parse(readFileSync(descriptorRef, 'utf8')) as {
+      identity?: { id?: unknown, name?: unknown, version?: unknown }
+    }
+    const id = descriptor.identity?.id
+    const version = descriptor.identity?.version
+    const name = descriptor.identity?.name
+    if (typeof id !== 'string' || typeof version !== 'string')
+      return null
+    return {
+      descriptorRef,
+      displayName: typeof name === 'string' && name.trim() ? name : id,
+      id,
+      soulReleaseRef: `${id}@${version}`,
+      version,
+    }
+  }
+  catch {
+    return null
+  }
+}
 
 export function controlPlaneDirFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
   const value = env.AIWORKER_CONTROL_PLANE_DIR
@@ -205,6 +311,139 @@ export async function runAssignmentPairJob(root: string, assignmentId: string): 
     pairingOutput: transientPairingOutput(stdout, stderr),
     status: 'paired',
   }
+}
+
+export function assertProviderSecretRefAllowed(secretRef: unknown): asserts secretRef is string {
+  if (typeof secretRef !== 'string' || !secretRef.startsWith('secret://'))
+    throw new Error('provider secret ref must start with secret://; AIWorker stores secret references only, never literal provider secrets.')
+}
+
+function appendOption(args: string[], flag: string, value: unknown): void {
+  if (typeof value === 'string' && value.trim() !== '')
+    args.push(flag, value)
+}
+
+async function runCliRecordJob<T>(args: string[]): Promise<T> {
+  const result = await runAiworkerCli(args)
+  if (result.exitCode !== 0)
+    throw new Error(`aiworker ${args[0]} ${args[1] ?? ''} command failed`.trim())
+  return JSON.parse(result.stdout) as T
+}
+
+export async function createAssignmentJob(root: string, input: CreateAssignmentInput): Promise<unknown> {
+  const args = ['assignment', 'create', '--json', '--control-plane-dir', root]
+  appendOption(args, '--user', input.user)
+  appendOption(args, '--environment', input.environment)
+  appendOption(args, '--provider', input.provider)
+  appendOption(args, '--soul-release-ref', input.soulReleaseRef)
+  appendOption(args, '--assignment-id', input.assignmentId)
+  return runCliRecordJob(args)
+}
+
+export async function createEnvironmentJob(root: string, input: CreateEnvironmentInput): Promise<unknown> {
+  const args = ['environment', 'create', '--json', '--control-plane-dir', root]
+  appendOption(args, '--environment', input.environment)
+  appendOption(args, '--user', input.user)
+  appendOption(args, '--target', input.target)
+  appendOption(args, '--provider', input.provider)
+  return runCliRecordJob(args)
+}
+
+export async function createProviderJob(root: string, input: CreateProviderInput): Promise<unknown> {
+  assertProviderSecretRefAllowed(input.secretRef)
+  const args = ['provider', 'create', '--json', '--control-plane-dir', root]
+  appendOption(args, '--provider', input.provider)
+  appendOption(args, '--provider-kind', input.providerKind)
+  appendOption(args, '--provider-secret-ref', input.secretRef)
+  appendOption(args, '--provider-base-url', input.baseUrl)
+  appendOption(args, '--provider-cli', input.cliCommand)
+  appendOption(args, '--provider-model', input.model)
+  appendOption(args, '--paseo-provider-id', input.paseoProviderId)
+  return runCliRecordJob(args)
+}
+
+export async function registerSoulJob(root: string, input: RegisterSoulInput): Promise<unknown> {
+  const args = ['soul', 'register', '--json', '--control-plane-dir', root]
+  appendOption(args, '--soul', input.soul)
+  return runCliRecordJob(args)
+}
+
+export async function previewPlanJob(input: PreviewPlanInput, root: string | null = null): Promise<unknown> {
+  // Preview is only reachable in control-plane mode (the wizard disables it otherwise),
+  // so resolve the full plan args from the same snapshot+environmentId source as
+  // `runApprovedAssignmentApplyJob`. This keeps preview and apply structurally in sync —
+  // most importantly it threads `--target-owner`, whose absence made plan --json 409.
+  // The snapshot is read in-process to build args only; we never pass --control-plane-dir
+  // to the spawned plan CLI, preserving the read-only contract.
+  const resolved = await resolvePlanPreviewArgs(input, root)
+  const args = ['plan', '--json']
+  appendOption(args, '--user', resolved.user)
+  appendOption(args, '--target', resolved.target)
+  appendOption(args, '--target-owner', resolved.targetOwner)
+  if (resolved.dedicatedTargetUser)
+    args.push('--dedicated-target-user')
+  appendOption(args, '--environment', resolved.environment)
+  appendOption(args, '--paseo-endpoint', resolved.paseoEndpoint)
+  appendOption(args, '--paseo-listen', resolved.paseoListen)
+  appendOption(args, '--paseo-host', resolved.paseoHost)
+  appendOption(args, '--provider', resolved.provider)
+  appendOption(args, '--provider-kind', resolved.providerKind)
+  appendOption(args, '--provider-base-url', resolved.providerBaseUrl)
+  appendOption(args, '--provider-cli', resolved.providerCli)
+  appendOption(args, '--provider-model', resolved.providerModel)
+  appendOption(args, '--provider-secret-ref', resolved.providerSecretRef)
+  appendOption(args, '--paseo-provider-id', resolved.paseoProviderId)
+  appendOption(args, '--soul', resolved.soul)
+  return runCliRecordJob(args)
+}
+
+async function resolvePlanPreviewArgs(input: PreviewPlanInput, root: string | null): Promise<PreviewPlanInput> {
+  if (!root || !input.environment?.trim())
+    return input
+
+  const payload = await loadAdminDataApiPayload(root)
+  const environment = payload.snapshot?.environments.find(item => item.environmentId === input.environment?.trim())
+  if (!environment)
+    return input
+
+  const provider = input.provider?.trim()
+    ? payload.snapshot?.providerProfiles.find(item => item.id === input.provider?.trim())
+    : undefined
+  const endpointArgs = paseoEndpointCliArgs(environment)
+  const endpoints = parsePaseoEndpointArgs(endpointArgs)
+
+  // Environment-derived values are the source of truth; fall back to any explicit
+  // payload fields so a snapshot-less / thin-payload preview still works.
+  return {
+    ...input,
+    target: environment.targetRef ?? input.target,
+    targetOwner: environment.ownerEmail ?? input.targetOwner,
+    dedicatedTargetUser: input.dedicatedTargetUser ?? Boolean(environment.dedication),
+    paseoEndpoint: endpoints.paseoEndpoint ?? input.paseoEndpoint,
+    paseoListen: endpoints.paseoListen ?? input.paseoListen,
+    paseoHost: endpoints.paseoHost ?? input.paseoHost,
+    paseoProviderId: provider?.paseoProviderId ?? input.paseoProviderId,
+    providerKind: provider?.provider ?? input.providerKind,
+    providerCli: provider?.cliCommand ?? input.providerCli,
+    providerBaseUrl: provider?.baseUrl ?? input.providerBaseUrl,
+    providerModel: provider?.model ?? input.providerModel,
+    providerSecretRef: provider?.secretRef ?? input.providerSecretRef,
+  }
+}
+
+function parsePaseoEndpointArgs(args: string[]): { paseoEndpoint?: string, paseoHost?: string, paseoListen?: string } {
+  const result: { paseoEndpoint?: string, paseoHost?: string, paseoListen?: string } = {}
+  for (let index = 0; index < args.length; index += 2) {
+    const flag = args[index]
+    const value = args[index + 1]
+    if (flag === '--paseo-endpoint')
+      result.paseoEndpoint = value
+    else if (flag === '--paseo-listen')
+      result.paseoListen = value
+    else if (flag === '--paseo-host')
+      result.paseoHost = value
+  }
+  return result
 }
 
 async function readApprovalDecisionRecords(root: string): Promise<ApprovalDecisionRecord[]> {

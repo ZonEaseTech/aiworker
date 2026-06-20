@@ -16,6 +16,7 @@ export type AdminRemediationCode
     | 'paseo_unavailable'
     | 'pair_command_failed'
     | 'provider_auth_required'
+    | 'provider_secret_ref_invalid'
     | 'same_origin_required'
     | 'soul_descriptor_missing'
     | 'unknown_admin_error'
@@ -168,6 +169,12 @@ const remediationCatalog: Record<AdminRemediationCode, Omit<AdminRemediation, 'c
     severity: 'warning',
     title: '后台 AI 账号需要授权',
   },
+  provider_secret_ref_invalid: {
+    detail: '后台 AI 账号的密钥引用格式不正确，必须以 secret:// 开头。AIWorker 只保存密钥引用，绝不保存真实密钥。',
+    nextSteps: ['请填写以 secret:// 开头的密钥引用。', '不要直接粘贴真实的 API Key 或令牌。'],
+    severity: 'warning',
+    title: '密钥引用格式不正确',
+  },
   same_origin_required: {
     detail: '出于安全原因，系统拒绝了来自其他页面的保存请求。',
     nextSteps: ['请从当前 AIWorker Web 页面重新操作。', '不要从其他网站或脚本提交管理操作。'],
@@ -237,6 +244,8 @@ export function classifyAdminError(error: unknown): AdminRemediationCode {
     return 'soul_descriptor_missing'
   if (normalized.includes('pair command failed'))
     return 'pair_command_failed'
+  if (normalized.includes('secret ref must start with secret://'))
+    return 'provider_secret_ref_invalid'
   return 'unknown_admin_error'
 }
 

@@ -1,8 +1,9 @@
 import type { ControlPlaneSnapshot } from '@zonease/aiworker-control/control-plane'
+import type { SoulCatalogEntry } from '@/lib/admin-api-client'
 import type { AdminConsoleData, ApprovalDecisionRecord, ApprovalStatus } from '@/lib/admin-data'
 import type { AdminBootstrapStatus, AdminRemediation } from '@/lib/admin-remediation'
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { AdminApiError, adminMutationHeaders, adminReadHeaders, readAdminApiError } from '@/lib/admin-api-client'
+import { AdminApiError, adminMutationHeaders, adminReadHeaders, fetchSoulCatalog, readAdminApiError, submitAdminMutation } from '@/lib/admin-api-client'
 import {
   adminConsoleData,
   applyApprovalDecisionRecords,
@@ -21,10 +22,12 @@ interface AdminDataApiPayload {
 
 interface AdminDataContextValue {
   bootstrap: AdminBootstrapStatus
+  createMetadata: <T>(path: string, body: unknown) => Promise<T>
   data: AdminConsoleData
   decideApproval: (assignmentId: string, status: ApprovalStatus) => Promise<void>
   isLive: boolean
   loadError: AdminRemediation | null
+  loadSoulCatalog: () => Promise<SoulCatalogEntry[]>
   reload: () => Promise<void>
 }
 
@@ -83,11 +86,20 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
     await reload()
   }
 
+  async function createMetadata<T>(path: string, body: unknown): Promise<T> {
+    const result = await submitAdminMutation<T>(path, body)
+    await reload()
+    return result
+  }
+
   useEffect(() => {
     void reload()
   }, [])
 
-  const value = useMemo(() => ({ bootstrap, data, decideApproval, isLive, loadError, reload }), [bootstrap, data, isLive, loadError])
+  const value = useMemo(
+    () => ({ bootstrap, createMetadata, data, decideApproval, isLive, loadError, loadSoulCatalog: fetchSoulCatalog, reload }),
+    [bootstrap, data, isLive, loadError],
+  )
 
   return <AdminDataContext.Provider value={value}>{children}</AdminDataContext.Provider>
 }
@@ -95,10 +107,16 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
 export function useAdminData(): AdminDataContextValue {
   return useContext(AdminDataContext) ?? {
     bootstrap: defaultBootstrap,
-    async decideApproval() {},
+    async createMetadata<T>() {
+      return undefined as T
+    },
     data: adminConsoleData,
+    async decideApproval() {},
     isLive: false,
     loadError: null,
+    async loadSoulCatalog() {
+      return []
+    },
     async reload() {},
   }
 }

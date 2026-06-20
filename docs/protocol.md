@@ -121,6 +121,29 @@ ProvisionReceipt
 
 `assignedEmail` owns the derived `$HOME/.aiworker/<userSlug>` scope. `PaseoEnvironment.ownerEmail` owns/administers the target execution identity and may differ from `assignedEmail` under `owner-scoped-shared-home`. `--dedicated-target-user` records `dedication.kind=assigned-user-dedicated` when the target execution identity is explicitly dedicated to the assigned user. Legacy v1 records may omit ownership receipt fields and still load, but live apply/pair paths must receive an explicit `--target-owner` or `--dedicated-target-user` assertion before invoking `aissh`.
 
+## Create command face
+
+AIWorker CLI 是 AIWorker-owned 元数据的唯一写者。管理员既可用 CLI 直接写，也可经 AIWorker Web 发起；Web 不持有自己的 snapshot source of truth，而是 spawn 同一套 `aiworker` create/edit 命令代写：
+
+```text
+aiworker environment create   # PaseoEnvironment（targetRef / paseoHome intent / daemon refs / isolation）
+aiworker provider create      # ProviderProfile（provider / label / baseUrl? / model? / secretRef?）—— 只写 secret:// 引用
+aiworker soul release register # SoulRelease（version / descriptorRef / workspaceTemplateRoot）—— register 已 build 的 release，非 authoring
+aiworker assignment create    # Assignment（assignedEmail + environmentId + soulReleaseRef + providerProfileId + projectRef）
+```
+
+create 命令是 environment / provider / soul release 的唯一写者；它写入 admin-owned 字段（user / refs / labels / secretRef），不写 derived 字段。
+
+## Read-or-derive ownership
+
+被引用实体遵循 read-or-derive 所有权契约：
+
+- **admin-owned 字段**（user、refs、labels、`secretRef`）只由对应 create/edit 命令写入。
+- **derived 字段**（handoff、status、receipts、`paseoHome` 等运行派生值）由 plan/apply 派生，不由 admin 直接编辑。
+- `plan` / `apply` 对被引用的 environment / provider / soul release 遵循「已存在则读取保留、缺失才 re-derive」：不覆盖 create 命令写入的 admin-owned 字段，只在缺失时重新派生 derived 字段。
+
+provider create 仍只接受 `secret://` 引用，绝不接受 literal secret；read-or-derive 不会把任何 literal provider key 引入 descriptor、DB、receipt、log 或 projected workdir。
+
 ## Assignment lifecycle
 
 ```text

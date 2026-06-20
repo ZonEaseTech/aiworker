@@ -3,13 +3,16 @@ import { EyeIcon } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import { AssignmentDetailSheet } from '@/components/assignment-detail-sheet'
+import { CreateAssignmentSheet } from '@/components/forms/create-assignment-sheet'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { getEnvironment, getSoulRelease, statusMeta } from '@/lib/admin-data'
+import { statusMeta, tryGetEnvironment, tryGetSoulRelease } from '@/lib/admin-data'
+import { useAdminData } from '@/lib/admin-data-context'
 
 export function AssignmentTableCard({ title, assignments }: { title: string, assignments: AssignmentSummary[] }) {
+  const { data } = useAdminData()
   const [selectedAssignment, setSelectedAssignment] = useState<AssignmentSummary | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
 
@@ -38,13 +41,13 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
               <TableHead className="w-48">员工</TableHead>
               <TableHead>下一步</TableHead>
               <TableHead className="w-24">状态</TableHead>
-              <TableHead className="w-16 text-right">详情</TableHead>
+              <TableHead className="w-32 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {assignments.map((assignment) => {
-              const soul = getSoulRelease(assignment.soulReleaseId)
-              const environment = getEnvironment(assignment.environmentId)
+              const soul = tryGetSoulRelease(assignment.soulReleaseId, data)
+              const environment = tryGetEnvironment(assignment.environmentId, data)
               const status = statusMeta[assignment.status]
               return (
                 <TableRow key={assignment.id}>
@@ -55,14 +58,16 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
                       {' '}
                       ·
                       {' '}
-                      {soul.displayName}
+                      {soul?.displayName ?? '能力模板缺失'}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="max-w-[18rem] text-xs/relaxed">{assignment.nextStep}</div>
                     <div className="mt-1 truncate text-[0.625rem] text-muted-foreground">
                       设备：
-                      {environment.ownerEmail === assignment.assignedEmail ? '员工本人' : `${environment.ownerEmail} 代管`}
+                      {environment
+                        ? (environment.ownerEmail === assignment.assignedEmail ? '员工本人' : `${environment.ownerEmail} 代管`)
+                        : '设备配置缺失'}
                       {' '}
                       ·
                       {' '}
@@ -71,10 +76,13 @@ export function AssignmentTableCard({ title, assignments }: { title: string, ass
                   </TableCell>
                   <TableCell><StatusBadge tone={status.tone}>{status.label}</StatusBadge></TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openAssignment(assignment)}>
-                      <EyeIcon data-icon="inline-start" weight="duotone" />
-                      查看
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openAssignment(assignment)}>
+                        <EyeIcon data-icon="inline-start" weight="duotone" />
+                        查看
+                      </Button>
+                      <CreateAssignmentSheet editTarget={assignment} />
+                    </div>
                   </TableCell>
                 </TableRow>
               )

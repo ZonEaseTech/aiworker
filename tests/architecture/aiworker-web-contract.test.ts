@@ -155,7 +155,10 @@ describe('AIWorker Web admin surface contract', () => {
     expect(data).not.toContain('appendReceipt(')
     expect(data).not.toContain('appendAuditEvent(')
     expect(app).not.toContain('adminConsoleData')
-    expect(assignmentsPage).toContain('adminConsoleData')
+    // The assignments page owns admin-data access through the redacted live data
+    // context (useAdminData seeds from adminConsoleData via assertRedactedAdminConsoleData),
+    // rather than importing the fixture symbol directly.
+    expect(assignmentsPage).toContain('useAdminData')
     expect(app).not.toMatch(/import\s+\{[^}]*\bassignments\b[^}]*\}\s+from ['"]@\/lib\/admin-data['"]/)
   })
 
@@ -172,6 +175,24 @@ describe('AIWorker Web admin surface contract', () => {
     expect(controlPlaneTypes).not.toContain('node:fs')
     expect(controlPlaneTypes).not.toContain('node:crypto')
     expect(controlPlaneTypes).not.toContain('LocalFileControlPlaneStore')
+  })
+
+  test('web source never issues control-plane write calls, only redacted reads and approval appends', () => {
+    const combined = sourceFiles(`${appRoot}/src`)
+      .map(path => read(path))
+      .join('\n')
+
+    for (const forbiddenWrite of [
+      '.saveSnapshot(',
+      '.appendReceipt(',
+      '.appendProjectionManifest(',
+    ]) {
+      expect(combined).not.toContain(forbiddenWrite)
+    }
+
+    expect(combined).toContain('.loadSnapshot(')
+    expect(combined).toContain('appendApprovalDecision')
+    expect(combined).toContain('approvals.jsonl')
   })
 
   test('route shell stays thin and page modules own screen composition', () => {

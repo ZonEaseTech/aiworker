@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import type { ControlPlaneSnapshot, ProjectedFile, ProvisionPlan } from '@zonease/aiworker-control'
+import type { ControlPlaneSnapshot, PaseoEnvironment, ProjectedFile, ProviderProfile, ProvisionPlan, SoulRelease, WorkspaceAssignment } from '@zonease/aiworker-control'
 import type { Command } from 'cac'
 import { execFile as execFileCallback } from 'node:child_process'
 import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -9,7 +9,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { promisify } from 'node:util'
-import { createAssignment, createAuditEvent, createDefaultPaseoDaemonEndpointRef, createDefaultProjectRef, createPaseoOwnershipAssertion, createProvisionPlan, createProvisionReceipt, createWorkspaceProjectionManifest, deriveAssignedUserSlug, isPaseoPairingOffer, LocalFileControlPlaneStore, normalizeAisshServerRef, redactLiteralProviderSecret, redactSecretLike } from '@zonease/aiworker-control'
+import { createAssignment, createAuditEvent, createDefaultPaseoDaemonEndpointRef, createDefaultProjectRef, createEnvironment, createPaseoOwnershipAssertion, createProviderProfile, createProvisionPlan, createProvisionReceipt, createSoulRelease, createWorkspaceProjectionManifest, deriveAssignedUserSlug, isPaseoPairingOffer, LocalFileControlPlaneStore, normalizeAisshServerRef, normalizeAssignedEmail, redactLiteralProviderSecret, redactSecretLike } from '@zonease/aiworker-control'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import cac from 'cac'
 
@@ -218,6 +218,78 @@ export function buildCli() {
         process.exitCode = 1
     })
 
+  cli.command('assignment <action>', 'Create or edit AIWorker assignment metadata (action: create | edit)')
+    .usage('assignment <create|edit> [options]')
+    .option('--user <email>', 'assigned employee email')
+    .option('--assignment-id <id>', 'existing AIWorker assignment id; required for edit, optional for create')
+    .option('--environment <id>', 'Paseo environment id')
+    .option('--provider <id>', 'Paseo provider profile id')
+    .option('--soul-release-ref <ref>', 'registered Soul release ref, e.g. hr-manager@1.0.0')
+    .option('--soul <path>', 'built dist/soul.descriptor.json used to derive the Soul release ref')
+    .option('--control-plane-dir <path>', 'control-plane directory for AIWorker-owned metadata')
+    .option('--json', 'print the created/updated assignment as machine-readable data')
+    .example('$ aiworker assignment create --user alice@example.com --environment env-alice --provider claude-work --soul-release-ref hr-manager@1.0.0 --control-plane-dir ./control-plane')
+    .action(async (action, options) => {
+      const record = await runAssignmentMetadataCommand(requireMetadataAction(action, 'assignment'), options)
+      if (options.json)
+        printJson(record)
+      else
+        printText(formatMetadataSummary('Assignment', record.assignmentId, action))
+    })
+
+  cli.command('environment <action>', 'Create or edit AIWorker-owned Paseo environment metadata (action: create | edit)')
+    .usage('environment <create|edit> [options]')
+    .option('--environment <id>', 'Paseo environment id')
+    .option('--user <email>', 'environment owner email')
+    .option('--target <ref>', 'aissh target ref, e.g. aissh:server-1')
+    .option('--provider <id>', 'Paseo provider profile id attached to this environment')
+    .option('--control-plane-dir <path>', 'control-plane directory for AIWorker-owned metadata')
+    .option('--json', 'print the created/updated environment as machine-readable data')
+    .example('$ aiworker environment create --environment env-alice --user alice@example.com --target aissh:server-1 --provider claude-work --control-plane-dir ./control-plane')
+    .action(async (action, options) => {
+      const record = await runEnvironmentMetadataCommand(requireMetadataAction(action, 'environment'), options)
+      if (options.json)
+        printJson(record)
+      else
+        printText(formatMetadataSummary('Environment', record.environmentId, action))
+    })
+
+  cli.command('provider <action>', 'Create or edit AIWorker-owned provider profile metadata (action: create | edit)')
+    .usage('provider <create|edit> [options]')
+    .option('--provider <id>', 'Paseo provider profile id')
+    .option('--provider-kind <kind>', 'provider kind', { default: 'claude' })
+    .option('--provider-secret-ref <ref>', 'secret reference for provider credentials; must start with secret://')
+    .option('--provider-base-url <url>', 'provider base URL metadata; no provider key')
+    .option('--provider-cli <command>', 'provider CLI command to verify on the target')
+    .option('--provider-model <model>', 'provider default model metadata')
+    .option('--paseo-provider-id <id>', 'Paseo-native provider profile id')
+    .option('--control-plane-dir <path>', 'control-plane directory for AIWorker-owned metadata')
+    .option('--json', 'print the created/updated provider profile as machine-readable data')
+    .example('$ aiworker provider create --provider claude-work --provider-kind claude --provider-secret-ref secret://provider/claude-work --control-plane-dir ./control-plane')
+    .action(async (action, options) => {
+      const record = await runProviderMetadataCommand(requireMetadataAction(action, 'provider'), options)
+      if (options.json)
+        printJson(record)
+      else
+        printText(formatMetadataSummary('Provider profile', record.id, action))
+    })
+
+  cli.command('soul <action>', 'Register a built Soul release into AIWorker-owned metadata (action: register)')
+    .usage('soul register [options]')
+    .option('--soul <path>', 'built dist/soul.descriptor.json to register')
+    .option('--control-plane-dir <path>', 'control-plane directory for AIWorker-owned metadata')
+    .option('--json', 'print the registered Soul release as machine-readable data')
+    .example('$ aiworker soul register --soul souls/aiworker-freeform/dist/soul.descriptor.json --control-plane-dir ./control-plane')
+    .action(async (action, options) => {
+      if (action !== 'register')
+        throw new Error(`unknown soul action \`${String(action)}\`. Use \`aiworker soul register\`.`)
+      const record = await runSoulRegisterCommand(options)
+      if (options.json)
+        printJson(record)
+      else
+        printText(formatMetadataSummary('Soul release', record.id, 'register'))
+    })
+
   cli.help(sections => insertDescriptionSection(sections))
   cli.version(readAiworkerPackageManifest().version)
   return cli
@@ -259,7 +331,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   await cli.runMatchedCommand()
 }
 
-function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan {
+export function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan {
   const soulPath = requireOption(options.soul, '--soul')
   const descriptor = readSoulDescriptor(soulPath)
   const templateRoot = path.resolve(path.dirname(soulPath), '..', descriptor.workspaceTemplate.root)
@@ -280,7 +352,7 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
   })
   return createProvisionPlan({
     assignment,
-    environment: {
+    environment: createEnvironment({
       environmentId,
       daemonEndpoint: endpoint.daemonEndpoint,
       ...(endpoint.daemonListenRef ? { daemonListenRef: endpoint.daemonListenRef } : {}),
@@ -302,8 +374,8 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
       providerProfileIds: [providerProfileId],
       targetRef: requireOption(options.target, '--target'),
       topologyKind: 'owner-scoped-paseo-home-v1',
-    },
-    providerProfile: {
+    }),
+    providerProfile: createProviderProfile({
       ...(typeof options.providerBaseUrl === 'string' ? { baseUrl: options.providerBaseUrl } : {}),
       ...(typeof options.providerCli === 'string' ? { cliCommand: options.providerCli } : {}),
       ...(typeof options.providerModel === 'string' ? { model: options.providerModel } : {}),
@@ -312,13 +384,13 @@ function createPlanFromOptions(options: Record<string, unknown>): ProvisionPlan 
       label: providerProfileId,
       provider: requireOption(options.providerKind, '--provider-kind'),
       secretRef: typeof options.providerSecretRef === 'string' ? options.providerSecretRef : `secret://provider/${providerProfileId}`,
-    },
-    soul: {
+    }),
+    soul: createSoulRelease({
       displayName: descriptor.identity.name,
       files: readWorkspaceTemplateFiles(templateRoot),
       id: descriptor.identity.id,
       version: descriptor.identity.version,
-    },
+    }),
   })
 }
 
@@ -931,7 +1003,7 @@ async function persistFailureIfRequested(plan: ProvisionPlan, error: unknown, op
   }))
 }
 
-async function savePlanMetadataSnapshot(
+export async function savePlanMetadataSnapshot(
   store: LocalFileControlPlaneStore,
   plan: ProvisionPlan,
   options: Record<string, unknown>,
@@ -945,8 +1017,8 @@ async function savePlanMetadataSnapshot(
       ...plan.assignment,
       status: assignmentStatus,
     }, 'assignmentId'),
-    environments: upsertById(existing.environments, plan.environment, 'environmentId'),
-    providerProfiles: upsertById(existing.providerProfiles, {
+    environments: readOrDeriveById(existing.environments, plan.environment, 'environmentId'),
+    providerProfiles: readOrDeriveById(existing.providerProfiles, {
       id: plan.receipt.providerProfileId,
       label: plan.receipt.providerProfileId,
       provider: typeof options.providerKind === 'string' ? options.providerKind : 'claude',
@@ -956,7 +1028,7 @@ async function savePlanMetadataSnapshot(
       ...(typeof options.providerBaseUrl === 'string' ? { baseUrl: options.providerBaseUrl } : {}),
       ...(typeof options.providerModel === 'string' ? { model: options.providerModel } : {}),
     }, 'id'),
-    soulReleases: upsertById(existing.soulReleases, soulRelease, 'id'),
+    soulReleases: readOrDeriveById(existing.soulReleases, soulRelease, 'id'),
   }
   await store.saveSnapshot(snapshot)
 }
@@ -967,17 +1039,186 @@ function controlPlaneDirFromOptions(options: Record<string, unknown>): string | 
     : null
 }
 
-function readSoulReleaseFromOptions(options: Record<string, unknown>) {
+function requireMetadataAction(action: unknown, entity: string): 'create' | 'edit' {
+  if (action === 'create' || action === 'edit')
+    return action
+  throw new Error(`unknown ${entity} action \`${String(action)}\`. Use \`aiworker ${entity} create\` or \`aiworker ${entity} edit\`.`)
+}
+
+function requireMetadataControlPlaneDir(options: Record<string, unknown>): string {
+  const root = controlPlaneDirFromOptions(options)
+  if (!root)
+    throw new Error('Missing required option: --control-plane-dir')
+  return root
+}
+
+function formatMetadataSummary(label: string, id: string, action: string): string {
+  const verb = action === 'create' ? 'created' : action === 'register' ? 'registered' : 'updated'
+  return `${label} ${verb}: ${id}`
+}
+
+function resolveAssignmentSoulReleaseRef(options: Record<string, unknown>): string {
+  if (typeof options.soulReleaseRef === 'string' && options.soulReleaseRef.trim() !== '')
+    return options.soulReleaseRef.trim()
+  if (typeof options.soul === 'string' && options.soul.trim() !== '') {
+    const descriptor = readSoulDescriptor(options.soul)
+    return `${descriptor.identity.id}@${descriptor.identity.version}`
+  }
+  throw new Error('Missing required option: --soul-release-ref (or --soul to derive it)')
+}
+
+function assignmentProjectName(soulReleaseRef: string): string {
+  return soulReleaseRef.split('@')[0] ?? soulReleaseRef
+}
+
+export async function runAssignmentMetadataCommand(action: 'create' | 'edit', options: Record<string, unknown>): Promise<WorkspaceAssignment> {
+  const root = requireMetadataControlPlaneDir(options)
+  const user = requireOption(options.user, '--user')
+  const environmentId = requireOption(options.environment, '--environment')
+  const providerProfileId = requireOption(options.provider, '--provider')
+  const soulReleaseRef = resolveAssignmentSoulReleaseRef(options)
+  const assignmentId = action === 'edit'
+    ? requireSafeAssignmentId(requireOption(options.assignmentId, '--assignment-id'))
+    : (typeof options.assignmentId === 'string' ? requireSafeAssignmentId(options.assignmentId) : undefined)
+  const assignment = createAssignment({
+    assignedEmail: user,
+    ...(assignmentId ? { assignmentId } : {}),
+    environmentId,
+    providerProfileId,
+    soulReleaseRef,
+    workspaceRef: createDefaultProjectRef(user, assignmentProjectName(soulReleaseRef)),
+  })
+
+  const store = new LocalFileControlPlaneStore(root)
+  const existing = await store.loadSnapshot()
+  await store.saveSnapshot({
+    ...existing,
+    assignments: upsertById(existing.assignments, assignment, 'assignmentId'),
+  })
+  await store.appendAuditEvent(createAuditEvent({
+    actor: 'aiworker-cli',
+    action: action === 'create' ? 'assignment.created' : 'assignment.updated',
+    details: controlPlaneAuditDetails([
+      `environment=${assignment.environmentId}`,
+      `provider=${assignment.providerProfileId}`,
+      `soulRelease=${assignment.soulReleaseRef}`,
+    ]),
+    target: assignment.assignmentId,
+  }))
+  return assignment
+}
+
+export async function runEnvironmentMetadataCommand(action: 'create' | 'edit', options: Record<string, unknown>): Promise<PaseoEnvironment> {
+  const root = requireMetadataControlPlaneDir(options)
+  const environmentId = requireOption(options.environment, '--environment')
+  const ownerEmail = normalizeAssignedEmail(requireOption(options.user, '--user'))
+  const targetRef = requireOption(options.target, '--target')
+  const providerProfileId = requireOption(options.provider, '--provider')
+  const userSlug = deriveAssignedUserSlug(ownerEmail)
+  const daemonEndpoint = createDefaultPaseoDaemonEndpointRef(userSlug)
+  const environment = createEnvironment({
+    environmentId,
+    ownerEmail,
+    targetRef,
+    paseoHome: `$HOME/.aiworker/${userSlug}/.paseo`,
+    daemonEndpoint,
+    daemonListenRef: daemonEndpoint,
+    daemonHostRef: daemonEndpoint,
+    endpointKind: 'tcp',
+    isolation: 'os-user',
+    providerProfileIds: [providerProfileId],
+    topologyKind: 'owner-scoped-paseo-home-v1',
+  })
+
+  const store = new LocalFileControlPlaneStore(root)
+  const existing = await store.loadSnapshot()
+  await store.saveSnapshot({
+    ...existing,
+    environments: upsertById(existing.environments, environment, 'environmentId'),
+  })
+  await store.appendAuditEvent(createAuditEvent({
+    actor: 'aiworker-cli',
+    action: action === 'create' ? 'environment.created' : 'environment.updated',
+    details: controlPlaneAuditDetails([
+      `owner=${environment.ownerEmail}`,
+      `target=${environment.targetRef}`,
+      `providers=${environment.providerProfileIds.join(',')}`,
+    ]),
+    target: environment.environmentId,
+  }))
+  return environment
+}
+
+export async function runProviderMetadataCommand(action: 'create' | 'edit', options: Record<string, unknown>): Promise<ProviderProfile> {
+  const root = requireMetadataControlPlaneDir(options)
+  const id = requireOption(options.provider, '--provider')
+  const provider = requireOption(options.providerKind, '--provider-kind')
+  const secretRef = requireOption(options.providerSecretRef, '--provider-secret-ref')
+  if (!secretRef.startsWith('secret://'))
+    throw new Error('--provider-secret-ref must start with secret://; AIWorker stores secret references only, never literal provider secrets.')
+  const profile = createProviderProfile({
+    id,
+    label: id,
+    provider,
+    secretRef,
+    ...(typeof options.providerBaseUrl === 'string' ? { baseUrl: options.providerBaseUrl } : {}),
+    ...(typeof options.providerCli === 'string' ? { cliCommand: options.providerCli } : {}),
+    ...(typeof options.providerModel === 'string' ? { model: options.providerModel } : {}),
+    ...(typeof options.paseoProviderId === 'string' ? { paseoProviderId: options.paseoProviderId } : {}),
+  })
+
+  const store = new LocalFileControlPlaneStore(root)
+  const existing = await store.loadSnapshot()
+  await store.saveSnapshot({
+    ...existing,
+    providerProfiles: upsertById(existing.providerProfiles, profile, 'id'),
+  })
+  await store.appendAuditEvent(createAuditEvent({
+    actor: 'aiworker-cli',
+    action: action === 'create' ? 'provider.created' : 'provider.updated',
+    details: controlPlaneAuditDetails([
+      `provider=${profile.provider}`,
+      `secretRef=${profile.secretRef ?? ''}`,
+    ]),
+    target: profile.id,
+  }))
+  return profile
+}
+
+export async function runSoulRegisterCommand(options: Record<string, unknown>): Promise<SoulRelease> {
+  const root = requireMetadataControlPlaneDir(options)
+  const soulPath = requireOption(options.soul, '--soul')
+  const release = readSoulReleaseFromOptions({ soul: soulPath })
+
+  const store = new LocalFileControlPlaneStore(root)
+  const existing = await store.loadSnapshot()
+  await store.saveSnapshot({
+    ...existing,
+    soulReleases: upsertById(existing.soulReleases, release, 'id'),
+  })
+  await store.appendAuditEvent(createAuditEvent({
+    actor: 'aiworker-cli',
+    action: 'soul.registered',
+    details: controlPlaneAuditDetails([
+      `version=${release.version}`,
+      `files=${release.files.length}`,
+    ]),
+    target: release.id,
+  }))
+  return release
+}
+
+export function readSoulReleaseFromOptions(options: Record<string, unknown>) {
   const soulPath = requireOption(options.soul, '--soul')
   const descriptor = readSoulDescriptor(soulPath)
   const templateRoot = path.resolve(path.dirname(soulPath), '..', descriptor.workspaceTemplate.root)
-  return {
+  return createSoulRelease({
     descriptorRef: path.resolve(soulPath),
     displayName: descriptor.identity.name,
     files: readWorkspaceTemplateFiles(templateRoot),
     id: `${descriptor.identity.id}@${descriptor.identity.version}`,
     version: descriptor.identity.version,
-  }
+  })
 }
 
 function extractProviderWarning(...values: string[]): string | undefined {
@@ -1002,6 +1243,12 @@ function controlPlaneAuditDetails(parts: string[]): string {
 function upsertById<T extends Record<K, string>, K extends keyof T>(items: T[], next: T, key: K): T[] {
   const filtered = items.filter(item => item[key] !== next[key])
   return [...filtered, next]
+}
+
+function readOrDeriveById<T extends Record<K, string>, K extends keyof T>(items: T[], derived: T, key: K): T[] {
+  if (items.some(item => item[key] === derived[key]))
+    return items
+  return [...items, derived]
 }
 
 function createDoctorReport(options: Record<string, unknown>): DoctorReport {

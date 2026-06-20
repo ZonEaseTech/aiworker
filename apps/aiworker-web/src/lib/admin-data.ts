@@ -44,6 +44,8 @@ export interface ProviderProfileSummary {
   label: string
   provider: ProviderKind
   secretRef: SecretReference
+  baseUrl?: string
+  model?: string
   paseoProviderId?: string
   cliCommand?: string
   status: 'ready' | 'needs_auth' | 'reference_only'
@@ -279,6 +281,7 @@ export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminCon
 
   const assignmentIds = new Set(assignmentsById.keys())
   const environmentsById = new Map(data.environments.map(environment => [environment.id, environment]))
+  const soulDescriptorRefById = new Map(data.soulReleases.map(soul => [soul.id, soul.descriptorRef]))
   const approvalsById = new Map<string, ProvisioningApprovalSummary>()
   const approvalByAssignment = new Map<string, string>()
   for (const approval of data.approvals) {
@@ -312,12 +315,15 @@ export function assertRedactedAdminConsoleData(data: AdminConsoleData): AdminCon
       throw new Error(`approval ${approval.id} preview command must use aiworker plan`)
     }
 
+    const assignmentSoulDescriptorRef = soulDescriptorRefById.get(assignment.soulReleaseId)
+    const soulScoped = approval.previewCommand.includes(`--soul ${assignment.soulReleaseId}`)
+      || (assignmentSoulDescriptorRef !== undefined && approval.previewCommand.includes(`--soul ${assignmentSoulDescriptorRef}`))
     if (
       !approval.previewCommand.includes(`--user ${assignment.assignedEmail}`)
       || !approval.previewCommand.includes(`--target-owner ${environmentsById.get(assignment.environmentId)?.ownerEmail ?? assignment.assignedEmail}`)
       || !approval.previewCommand.includes(`--environment ${assignment.environmentId}`)
       || !approval.previewCommand.includes(`--provider ${assignment.providerProfileId}`)
-      || !approval.previewCommand.includes(`--soul ${assignment.soulReleaseId}`)
+      || !soulScoped
     ) {
       throw new Error(`approval ${approval.id} preview command must stay scoped to its assignment`)
     }
@@ -718,8 +724,10 @@ function buildFixtureControlPlaneSnapshot(): ControlPlaneSnapshot {
     projectionManifests: [],
     providerProfiles: fixtureProviderProfiles.map(profile => ({
       id: profile.id,
+      ...(profile.baseUrl ? { baseUrl: profile.baseUrl } : {}),
       cliCommand: profile.cliCommand,
       label: profile.label,
+      ...(profile.model ? { model: profile.model } : {}),
       paseoProviderId: profile.paseoProviderId,
       provider: profile.provider,
       secretRef: profile.secretRef,
@@ -1074,6 +1082,8 @@ function mapProviderProfile(profile: ProviderProfile): ProviderProfileSummary {
     label: profile.label,
     provider: profile.provider,
     secretRef: (profile.secretRef ?? `secret://providers/${profile.provider}/${profile.id}`) as SecretReference,
+    ...(profile.baseUrl ? { baseUrl: profile.baseUrl } : {}),
+    ...(profile.model ? { model: profile.model } : {}),
     paseoProviderId: profile.paseoProviderId,
     cliCommand: profile.cliCommand,
     status: profile.paseoProviderId ? 'reference_only' : 'ready',
@@ -1081,12 +1091,17 @@ function mapProviderProfile(profile: ProviderProfile): ProviderProfileSummary {
 }
 
 function mapSoulRelease(release: SoulRelease): SoulReleaseSummary {
+  // CLI soul register stores release.id as `${identity.id}@${identity.version}`,
+  // while fixtures use a bare id (`hr-manager`). Only append the version when the id
+  // does not already carry it, otherwise we produce `hr-manager@0.0.0@0.0.0` and the
+  // assignment.soulReleaseRef lookup misses.
+  const releaseRef = release.id.includes('@') ? release.id : `${release.id}@${release.version}`
   return {
-    id: `${release.id}@${release.version}`,
+    id: releaseRef,
     displayName: release.displayName,
     version: release.version,
-    descriptorRef: release.descriptorRef ?? `${release.id}@${release.version}`,
-    workspaceTemplateRoot: `workspace-template:${release.id}@${release.version}`,
+    descriptorRef: release.descriptorRef ?? releaseRef,
+    workspaceTemplateRoot: `workspace-template:${releaseRef}`,
     fileCount: release.files.length,
     updatedAt: 'from control-plane snapshot',
     status: 'published',
@@ -1277,8 +1292,12 @@ export function getAssignmentForPlan(
   return matches[0]
 }
 
+export function tryGetProviderProfile(id: string, data: AdminConsoleData = adminConsoleData): ProviderProfileSummary | undefined {
+  return data.providerProfiles.find(item => item.id === id)
+}
+
 export function getProviderProfile(id: string, data: AdminConsoleData = adminConsoleData): ProviderProfileSummary {
-  const profile = data.providerProfiles.find(item => item.id === id)
+  const profile = tryGetProviderProfile(id, data)
   if (!profile) {
     throw new Error(`unknown provider profile ${id}`)
   }
@@ -1286,8 +1305,12 @@ export function getProviderProfile(id: string, data: AdminConsoleData = adminCon
   return profile
 }
 
+export function tryGetEnvironment(id: string, data: AdminConsoleData = adminConsoleData): PaseoEnvironmentSummary | undefined {
+  return data.environments.find(item => item.id === id)
+}
+
 export function getEnvironment(id: string, data: AdminConsoleData = adminConsoleData): PaseoEnvironmentSummary {
-  const environment = data.environments.find(item => item.id === id)
+  const environment = tryGetEnvironment(id, data)
   if (!environment) {
     throw new Error(`unknown Paseo environment ${id}`)
   }
@@ -1295,8 +1318,12 @@ export function getEnvironment(id: string, data: AdminConsoleData = adminConsole
   return environment
 }
 
+export function tryGetSoulRelease(id: string, data: AdminConsoleData = adminConsoleData): SoulReleaseSummary | undefined {
+  return data.soulReleases.find(item => item.id === id)
+}
+
 export function getSoulRelease(id: string, data: AdminConsoleData = adminConsoleData): SoulReleaseSummary {
-  const release = data.soulReleases.find(item => item.id === id)
+  const release = tryGetSoulRelease(id, data)
   if (!release) {
     throw new Error(`unknown Soul release ${id}`)
   }

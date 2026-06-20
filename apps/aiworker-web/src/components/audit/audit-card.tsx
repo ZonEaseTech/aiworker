@@ -1,8 +1,9 @@
 import { StatusBadge } from '@/components/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { adminConsoleData } from '@/lib/admin-data'
+import { useAdminData } from '@/lib/admin-data-context'
 
 export function AuditCard() {
+  const { data } = useAdminData()
   return (
     <Card>
       <CardHeader>
@@ -10,7 +11,7 @@ export function AuditCard() {
         <CardDescription>只记录管理员开通动作，不显示员工对话内容。</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {adminConsoleData.recentAuditEvents.map(event => (
+        {data.recentAuditEvents.map(event => (
           <div key={event.id} className="flex items-start gap-3 rounded-md border p-3">
             <StatusBadge tone={event.tone}>{event.at}</StatusBadge>
             <div className="min-w-0 flex-1">
