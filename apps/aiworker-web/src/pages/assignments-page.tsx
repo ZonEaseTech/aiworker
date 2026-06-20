@@ -10,6 +10,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DemoDataNotice } from '@/components/demo-data-notice'
 import { statusMeta, tryGetEnvironment, tryGetSoulRelease } from '@/lib/admin-data'
 import { useAdminData } from '@/lib/admin-data-context'
 
@@ -50,6 +51,7 @@ export function AssignmentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <DemoDataNotice />
       <PageHeader
         eyebrow="员工开通"
         title="员工开通记录"

@@ -1,4 +1,5 @@
 import { AuditCard } from '@/components/audit/audit-card'
+import { DemoDataNotice } from '@/components/demo-data-notice'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +10,7 @@ export function AuditPage() {
   const { data } = useAdminData()
   return (
     <div className="flex flex-col gap-6">
+      <DemoDataNotice />
       <PageHeader
         eyebrow="操作记录"
         title="管理员操作记录"

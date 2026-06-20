@@ -75,6 +75,7 @@ export interface PreviewPlanInput {
   paseoEndpoint?: string
   paseoHost?: string
   paseoListen?: string
+  paseoProviderId?: string
   provider?: string
   providerBaseUrl?: string
   providerCli?: string
@@ -391,6 +392,7 @@ export async function previewPlanJob(input: PreviewPlanInput, root: string | nul
   appendOption(args, '--provider-cli', resolved.providerCli)
   appendOption(args, '--provider-model', resolved.providerModel)
   appendOption(args, '--provider-secret-ref', resolved.providerSecretRef)
+  appendOption(args, '--paseo-provider-id', resolved.paseoProviderId)
   appendOption(args, '--soul', resolved.soul)
   return runCliRecordJob(args)
 }
@@ -420,6 +422,7 @@ async function resolvePlanPreviewArgs(input: PreviewPlanInput, root: string | nu
     paseoEndpoint: endpoints.paseoEndpoint ?? input.paseoEndpoint,
     paseoListen: endpoints.paseoListen ?? input.paseoListen,
     paseoHost: endpoints.paseoHost ?? input.paseoHost,
+    paseoProviderId: provider?.paseoProviderId ?? input.paseoProviderId,
     providerKind: provider?.provider ?? input.providerKind,
     providerCli: provider?.cliCommand ?? input.providerCli,
     providerBaseUrl: provider?.baseUrl ?? input.providerBaseUrl,

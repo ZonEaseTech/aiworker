@@ -988,6 +988,69 @@ describe('Bun static server helpers', () => {
     }
   })
 
+  test('preview plan args include --paseo-provider-id when provider has paseoProviderId', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const previousCli = process.env.AIWORKER_CLI_BIN
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-web-plan-paseo-provider-'))
+    process.env.AIWORKER_CONTROL_PLANE_DIR = root
+    const store = new LocalFileControlPlaneStore(root)
+    await store.saveSnapshot({
+      ...createEmptyControlPlaneSnapshot(),
+      environments: [{
+        environmentId: 'env-alice',
+        targetRef: 'aissh:alice-box',
+        ownerEmail: 'owner@example.com',
+        paseoHome: '$HOME/.paseo/alice',
+        endpointKind: 'local-home',
+        isolation: 'os-user',
+        daemonEndpoint: '$HOME/.paseo/alice/daemon.sock',
+        providerProfileIds: ['provider-with-paseo'],
+      }],
+      providerProfiles: [{
+        id: 'provider-with-paseo',
+        label: 'Provider With Paseo',
+        provider: 'claude-code',
+        paseoProviderId: 'paseo-provider-xyz',
+      }],
+    })
+    const descriptorPath = path.join(root, 'plan-soul.descriptor.json')
+    await writeFile(descriptorPath, '{"schemaVersion":"soul/v1","identity":{"id":"aiworker-freeform","version":"1.0.0"},"protocol":{"runtime":"paseo-workspace"},"workspaceTemplate":{"root":"workspace-template","files":[]}}\n')
+
+    const fakeCli = path.join(root, 'fake-plan-cli')
+    const fakeArgs = path.join(root, 'fake-plan-cli.args')
+    await writeFile(fakeCli, [
+      '#!/bin/sh',
+      `printf '%s\\n' "$*" >> ${fakeArgs}`,
+      'if [ "$1" = "plan" ]; then',
+      '  printf \'%s\\n\' \'{"assignment":{"assignmentId":"asn-preview"},"environment":{"environmentId":"env-alice"}}\'',
+      '  exit 0',
+      'fi',
+      'exit 64',
+    ].join('\n'))
+    await chmod(fakeCli, 0o755)
+    process.env.AIWORKER_CLI_BIN = fakeCli
+    const server = createServer({ port: 0 })
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/plan`, {
+        body: JSON.stringify({ environment: 'env-alice', provider: 'provider-with-paseo', soul: descriptorPath, user: 'alice@example.com' }),
+        headers: { 'content-type': 'application/json', 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      expect(response.status).toBe(200)
+
+      const recordedArgs = await readFile(fakeArgs, 'utf8')
+      expect(recordedArgs).toContain('--paseo-provider-id paseo-provider-xyz')
+      expect(recordedArgs).not.toContain('--control-plane-dir')
+      expect(recordedArgs).not.toContain('apply')
+    }
+    finally {
+      server.stop(true)
+      restoreEnv('AIWORKER_CONTROL_PLANE_DIR', previousDir)
+      restoreEnv('AIWORKER_CLI_BIN', previousCli)
+    }
+  })
+
   test('surfaces an error response when a create CLI invocation exits non-zero', async () => {
     const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
     const previousCli = process.env.AIWORKER_CLI_BIN

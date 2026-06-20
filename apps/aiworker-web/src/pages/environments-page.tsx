@@ -1,5 +1,6 @@
 import { CreateEnvironmentSheet } from '@/components/forms/create-environment-sheet'
 import { CreateProviderSheet } from '@/components/forms/create-provider-sheet'
+import { DemoDataNotice } from '@/components/demo-data-notice'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
@@ -13,6 +14,7 @@ export function EnvironmentsPage() {
   const { data } = useAdminData()
   return (
     <div className="flex flex-col gap-6">
+      <DemoDataNotice />
       <PageHeader
         eyebrow="设备与账号"
         title="员工设备和后台 AI 账号"

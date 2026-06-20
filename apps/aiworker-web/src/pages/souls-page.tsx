@@ -1,3 +1,4 @@
+import { DemoDataNotice } from '@/components/demo-data-notice'
 import { RegisterSoulSheet } from '@/components/forms/register-soul-sheet'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
@@ -9,6 +10,7 @@ export function SoulsPage() {
   const { data } = useAdminData()
   return (
     <div className="flex flex-col gap-6">
+      <DemoDataNotice />
       <PageHeader
         eyebrow="能力模板"
         title="可分配的 AI 能力"

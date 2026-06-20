@@ -342,4 +342,24 @@ describe('admin console page composition', () => {
     expect(assignmentTable).toContain('下一步')
     expect(assignmentTable).not.toContain('>Environment</')
   })
+
+  test('assignments, audit, environments and souls pages show demo notice in fixture mode and hide it in live mode', () => {
+    // fixture 模式（默认 context）下应显示演示横幅
+    const fixturePages: Array<[string, ReactElement]> = [
+      ['assignments', <AssignmentsPage />],
+      ['audit', <AuditPage />],
+      ['environments', <EnvironmentsPage />],
+      ['souls', <SoulsPage />],
+    ]
+    for (const [name, page] of fixturePages) {
+      const markup = renderPage(page)
+      expect(markup, `${name} fixture: 应显示演示横幅`).toContain('当前为演示模式')
+    }
+
+    // live 模式（source='control-plane'）下不应显示演示横幅
+    for (const [name, page] of fixturePages) {
+      const markup = renderPageWithData(page, adminConsoleData)
+      expect(markup, `${name} live: 不应显示演示横幅`).not.toContain('当前为演示模式')
+    }
+  })
 })
