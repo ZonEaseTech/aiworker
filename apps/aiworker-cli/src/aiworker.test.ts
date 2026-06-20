@@ -1105,3 +1105,155 @@ describe('US-003 read-or-derive control-plane survival', () => {
     expect(snapshot.assignments[0]?.status).toBe('handoff_ready')
   })
 })
+
+async function readControlPlaneFiles(controlPlaneDir: string) {
+  const snapshot = JSON.parse(await readFile(path.join(controlPlaneDir, 'snapshot.json'), 'utf8'))
+  const audits = existsSync(path.join(controlPlaneDir, 'audit-events.jsonl'))
+    ? (await readFile(path.join(controlPlaneDir, 'audit-events.jsonl'), 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+    : []
+  return { audits, snapshot }
+}
+
+describe('US-004 assignment/environment create+edit metadata commands', () => {
+  test('assignment create persists a draft assignment and an audit event after save', async () => {
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-assignment-create-')), 'records')
+    const result = await $`bun ${cliPath} assignment create --user Alice@Example.com --environment env-alice --provider claude-work --soul-release-ref hr-manager@1.2.3 --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    expect(result.assignedEmail).toBe('alice@example.com')
+    expect(result.environmentId).toBe('env-alice')
+    expect(result.providerProfileId).toBe('claude-work')
+    expect(result.soulReleaseRef).toBe('hr-manager@1.2.3')
+    expect(result.status).toBe('draft')
+
+    const { audits, snapshot } = await readControlPlaneFiles(controlPlaneDir)
+    expect(snapshot.assignments).toHaveLength(1)
+    expect(snapshot.assignments[0].assignedEmail).toBe('alice@example.com')
+    expect(snapshot.assignments[0].environmentId).toBe('env-alice')
+    expect(snapshot.assignments[0].workspaceRef).toContain('$HOME/.aiworker/alice-example.com/projects/')
+    expect(audits.some((event: { action: string }) => event.action === 'assignment.created')).toBe(true)
+    expect(audits[0].target).toBe(snapshot.assignments[0].assignmentId)
+  })
+
+  test('assignment edit updates the same record by id without creating a duplicate', async () => {
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-assignment-edit-')), 'records')
+    const created = await $`bun ${cliPath} assignment create --user Alice@Example.com --environment env-alice --provider claude-work --soul-release-ref hr-manager@1.2.3 --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    const edited = await $`bun ${cliPath} assignment edit --assignment-id ${created.assignmentId} --user Alice@Example.com --environment env-alice-2 --provider codex-work --soul-release-ref hr-manager@1.2.3 --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    expect(edited.assignmentId).toBe(created.assignmentId)
+    expect(edited.environmentId).toBe('env-alice-2')
+    expect(edited.providerProfileId).toBe('codex-work')
+
+    const { audits, snapshot } = await readControlPlaneFiles(controlPlaneDir)
+    expect(snapshot.assignments).toHaveLength(1)
+    expect(snapshot.assignments[0].environmentId).toBe('env-alice-2')
+    expect(snapshot.assignments[0].providerProfileId).toBe('codex-work')
+    expect(audits.some((event: { action: string }) => event.action === 'assignment.updated')).toBe(true)
+  })
+
+  test('assignment create rejects a missing required option without writing the snapshot', async () => {
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-assignment-missing-')), 'records')
+    const result = await $`bun ${cliPath} assignment create --user Alice@Example.com --provider claude-work --soul-release-ref hr-manager@1.2.3 --control-plane-dir ${controlPlaneDir} --json`.nothrow()
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr.toString()).toContain('--environment')
+    expect(existsSync(path.join(controlPlaneDir, 'snapshot.json'))).toBe(false)
+  })
+
+  test('environment create persists an owner-scoped environment and audit event', async () => {
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-environment-create-')), 'records')
+    const result = await $`bun ${cliPath} environment create --environment env-alice --user Alice@Example.com --target aissh:server-1 --provider claude-work --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    expect(result.environmentId).toBe('env-alice')
+    expect(result.ownerEmail).toBe('alice@example.com')
+    expect(result.targetRef).toBe('aissh:server-1')
+    expect(result.providerProfileIds).toEqual(['claude-work'])
+    expect(result.paseoHome).toBe('$HOME/.aiworker/alice-example.com/.paseo')
+
+    const { audits, snapshot } = await readControlPlaneFiles(controlPlaneDir)
+    expect(snapshot.environments).toHaveLength(1)
+    expect(snapshot.environments[0].environmentId).toBe('env-alice')
+    expect(audits.some((event: { action: string }) => event.action === 'environment.created')).toBe(true)
+  })
+
+  test('environment edit upserts the same environment id and emits an update audit event', async () => {
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-environment-edit-')), 'records')
+    await $`bun ${cliPath} environment create --environment env-alice --user Alice@Example.com --target aissh:server-1 --provider claude-work --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    const edited = await $`bun ${cliPath} environment edit --environment env-alice --user Alice@Example.com --target aissh:server-2 --provider claude-work --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    expect(edited.targetRef).toBe('aissh:server-2')
+
+    const { audits, snapshot } = await readControlPlaneFiles(controlPlaneDir)
+    expect(snapshot.environments).toHaveLength(1)
+    expect(snapshot.environments[0].targetRef).toBe('aissh:server-2')
+    expect(audits.some((event: { action: string }) => event.action === 'environment.updated')).toBe(true)
+  })
+})
+
+describe('US-005 provider create+edit and soul register metadata commands', () => {
+  test('provider create accepts a secret:// reference and persists the profile', async () => {
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-provider-create-')), 'records')
+    const result = await $`bun ${cliPath} provider create --provider claude-work --provider-kind claude --provider-secret-ref secret://provider/claude-work --provider-model big-model --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    expect(result.id).toBe('claude-work')
+    expect(result.provider).toBe('claude')
+    expect(result.secretRef).toBe('secret://provider/claude-work')
+    expect(result.model).toBe('big-model')
+
+    const { audits, snapshot } = await readControlPlaneFiles(controlPlaneDir)
+    expect(snapshot.providerProfiles).toHaveLength(1)
+    expect(snapshot.providerProfiles[0].secretRef).toBe('secret://provider/claude-work')
+    expect(audits.some((event: { action: string }) => event.action === 'provider.created')).toBe(true)
+  })
+
+  test('provider edit updates the profile by id and emits an update audit event', async () => {
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-provider-edit-')), 'records')
+    await $`bun ${cliPath} provider create --provider claude-work --provider-kind claude --provider-secret-ref secret://provider/claude-work --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    const edited = await $`bun ${cliPath} provider edit --provider claude-work --provider-kind claude --provider-secret-ref secret://provider/claude-work --provider-model edited-model --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    expect(edited.model).toBe('edited-model')
+
+    const { audits, snapshot } = await readControlPlaneFiles(controlPlaneDir)
+    expect(snapshot.providerProfiles).toHaveLength(1)
+    expect(snapshot.providerProfiles[0].model).toBe('edited-model')
+    expect(audits.some((event: { action: string }) => event.action === 'provider.updated')).toBe(true)
+  })
+
+  test('provider create rejects a raw non-secret token and never writes the snapshot', async () => {
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-provider-rawtoken-')), 'records')
+    const result = await $`bun ${cliPath} provider create --provider claude-work --provider-kind claude --provider-secret-ref rawtoken12345 --control-plane-dir ${controlPlaneDir} --json`.nothrow()
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr.toString()).toContain('secret://')
+    expect(existsSync(path.join(controlPlaneDir, 'snapshot.json'))).toBe(false)
+    expect(existsSync(path.join(controlPlaneDir, 'audit-events.jsonl'))).toBe(false)
+  })
+
+  test('soul register persists a release derived from a built descriptor and template', async () => {
+    const descriptorPath = await createDescriptor('# HR Manager\n', 'hr-manager')
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-soul-register-')), 'records')
+    const result = await $`bun ${cliPath} soul register --soul ${descriptorPath} --control-plane-dir ${controlPlaneDir} --json`.json()
+
+    expect(result.id).toBe('hr-manager@1.0.0')
+    expect(result.version).toBe('1.0.0')
+    expect(result.descriptorRef).toBe(path.resolve(descriptorPath))
+    expect(result.files.map((file: { relativePath: string }) => file.relativePath)).toEqual(['AGENTS.md'])
+
+    const { audits, snapshot } = await readControlPlaneFiles(controlPlaneDir)
+    expect(snapshot.soulReleases).toHaveLength(1)
+    expect(snapshot.soulReleases[0].id).toBe('hr-manager@1.0.0')
+    expect(audits.some((event: { action: string }) => event.action === 'soul.registered')).toBe(true)
+  })
+
+  test('soul register fails when the descriptor path does not exist', async () => {
+    const controlPlaneDir = path.join(await mkdtemp(path.join(tmpdir(), 'aiworker-soul-missing-')), 'records')
+    const missingPath = path.join(tmpdir(), 'aiworker-does-not-exist', 'dist', 'soul.descriptor.json')
+    const result = await $`bun ${cliPath} soul register --soul ${missingPath} --control-plane-dir ${controlPlaneDir} --json`.nothrow()
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr.toString()).toContain('Soul descriptor not found')
+    expect(existsSync(path.join(controlPlaneDir, 'snapshot.json'))).toBe(false)
+  })
+})
