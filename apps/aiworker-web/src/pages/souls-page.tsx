@@ -1,18 +1,22 @@
+import { RegisterSoulSheet } from '@/components/forms/register-soul-sheet'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { adminConsoleData, releaseStatusMeta } from '@/lib/admin-data'
+import { releaseStatusMeta } from '@/lib/admin-data'
+import { useAdminData } from '@/lib/admin-data-context'
 
 export function SoulsPage() {
+  const { data } = useAdminData()
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         eyebrow="能力模板"
         title="可分配的 AI 能力"
         description="管理员选择员工需要的能力包；模板内容由专业人员维护，页面只展示发布状态和适用说明。"
+        actions={<RegisterSoulSheet />}
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {adminConsoleData.soulReleases.map((release) => {
+        {data.soulReleases.map((release) => {
           const meta = releaseStatusMeta[release.status]
           return (
             <Card key={release.id}>

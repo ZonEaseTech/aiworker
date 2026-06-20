@@ -11,7 +11,7 @@ import {
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createServer as createViteDevServer } from 'vite'
 
-import { adminBootstrapStatus, resolveAiworkerCliCommand, summarizeApplyJobResult } from '@/admin-api'
+import { adminBootstrapStatus, readSoulCatalog, resolveAiworkerCliCommand, summarizeApplyJobResult } from '@/admin-api'
 import { assertServerHostAllowed, contentType, createServer, handleAdminRuntimeRequest, resolveStaticPath, serverHostname, staticRoot } from '@/server'
 
 const authEnvKeys = [
@@ -174,6 +174,44 @@ describe('Bun static server helpers', () => {
     expect(response.headers.get('content-type')).toContain('application/json')
     expect(body).not.toContain('<!doctype')
     expect(payload.source).toBe('fixture')
+  })
+
+  test('lists on-disk soul descriptors for the registration form', () => {
+    const catalog = readSoulCatalog({})
+
+    expect(catalog.length).toBeGreaterThan(0)
+    const freeform = catalog.find(entry => entry.id === 'aiworker-freeform')
+    expect(freeform).toBeDefined()
+    expect(freeform?.descriptorRef).toEndWith('souls/aiworker-freeform/dist/soul.descriptor.json')
+    expect(freeform?.soulReleaseRef).toBe(`aiworker-freeform@${freeform?.version}`)
+    for (const entry of catalog)
+      expect(entry.descriptorRef).toEndWith('soul.descriptor.json')
+  })
+
+  test('serves the soul catalog through the admin runtime handler', async () => {
+    const response = await handleAdminRuntimeRequest(new Request('http://127.0.0.1:20831/api/soul-catalog'), {})
+
+    if (!response)
+      throw new Error('admin runtime handler did not handle /api/soul-catalog')
+
+    const payload = JSON.parse(await response.text()) as { souls: Array<{ descriptorRef: string, id: string }> }
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(Array.isArray(payload.souls)).toBe(true)
+    expect(payload.souls.some(entry => entry.id === 'aiworker-freeform')).toBe(true)
+  })
+
+  test('rejects non-GET methods on the soul catalog endpoint', async () => {
+    const response = await handleAdminRuntimeRequest(
+      new Request('http://127.0.0.1:20831/api/soul-catalog', { method: 'POST' }),
+      {},
+    )
+
+    if (!response)
+      throw new Error('admin runtime handler did not handle /api/soul-catalog POST')
+
+    expect(response.status).toBe(405)
   })
 
   test('serves admin API JSON from the Vite dev server instead of the SPA fallback', async () => {

@@ -12,6 +12,7 @@ import type { AdminRemediation } from '@/lib/admin-remediation'
 import { CheckCircleIcon, PlayCircleIcon, WarningCircleIcon } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
+import { ProvisioningWizard } from '@/components/forms/provisioning-wizard'
 import { PageHeader } from '@/components/page-header'
 import { RemediationAlert } from '@/components/remediation-alert'
 import { StatusBadge } from '@/components/status-badge'
@@ -66,6 +67,7 @@ export function ProvisioningPage() {
   const [pairError, setPairError] = useState<AdminRemediation | null>(null)
   const [pairingAssignmentId, setPairingAssignmentId] = useState<string | null>(null)
   const [pairingOutputByAssignment, setPairingOutputByAssignment] = useState<Record<string, string>>({})
+  const [pendingSelectId, setPendingSelectId] = useState<string | null>(null)
   const selectedAssignment = adminData.assignments.find(item => item.id === selectedAssignmentId)
   const assignment = selectedAssignment
   const environment = getEnvironment(assignment?.environmentId ?? selectedEnvironment, adminData)
@@ -101,6 +103,17 @@ export function ProvisioningPage() {
   useEffect(() => {
     setSelectedAssignmentId(resolveAssignmentIdentityForTuple(selectedEnvironment, selectedSoul, selectedProvider, adminData))
   }, [adminData, selectedEnvironment, selectedProvider, selectedSoul])
+
+  // 向导创建 Assignment 后由 reload 刷新数据；等新记录进入快照再选中它，
+  // 避免依赖向导回调里过期的 adminData 闭包。
+  useEffect(() => {
+    if (!pendingSelectId)
+      return
+    if (adminData.assignments.some(item => item.id === pendingSelectId)) {
+      selectAssignment(pendingSelectId)
+      setPendingSelectId(null)
+    }
+  }, [adminData, pendingSelectId])
 
   async function previewDecision(status: ApprovalStatus) {
     if (!assignment)
@@ -205,6 +218,7 @@ export function ProvisioningPage() {
         eyebrow="员工开通"
         title="处理员工开通"
         description="按管理员能理解的顺序推进：选择员工、确认能力和设备、确认开通、开始执行，最后把一次性入口发给员工。"
+        actions={<ProvisioningWizard onAssignmentCreated={setPendingSelectId} />}
       />
 
       <Card className="border-primary/30">

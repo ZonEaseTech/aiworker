@@ -2,7 +2,7 @@ import type { ControlPlaneSnapshot } from '@zonease/aiworker-control/control-pla
 import type { ApprovalDecisionRecord, ApprovalStatus } from '@/lib/admin-data'
 import type { AdminBootstrapStatus, AdminRemediation } from '@/lib/admin-remediation'
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
@@ -87,7 +87,65 @@ export interface PreviewPlanInput {
   user?: string
 }
 
+export interface SoulCatalogEntry {
+  descriptorRef: string
+  displayName: string
+  id: string
+  soulReleaseRef: string
+  version: string
+}
+
 const approvalStatuses = ['pending', 'approved', 'changes_requested'] as const
+
+export function soulsDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.AIWORKER_SOULS_DIR?.trim()
+  if (configured)
+    return resolve(configured)
+  return resolve(import.meta.dirname, '..', '..', '..', 'souls')
+}
+
+export function readSoulCatalog(env: NodeJS.ProcessEnv = process.env): SoulCatalogEntry[] {
+  const soulsDir = soulsDirFromEnv(env)
+  if (!existsSync(soulsDir))
+    return []
+
+  const entries: SoulCatalogEntry[] = []
+  for (const dirent of readdirSync(soulsDir, { withFileTypes: true })) {
+    if (!dirent.isDirectory())
+      continue
+    const descriptorRef = join(soulsDir, dirent.name, 'dist', 'soul.descriptor.json')
+    if (!existsSync(descriptorRef))
+      continue
+    const entry = parseSoulCatalogEntry(descriptorRef)
+    if (entry)
+      entries.push(entry)
+  }
+
+  return entries.sort((left, right) => left.displayName.localeCompare(right.displayName))
+}
+
+function parseSoulCatalogEntry(descriptorRef: string): SoulCatalogEntry | null {
+  try {
+    const descriptor = JSON.parse(readFileSync(descriptorRef, 'utf8')) as {
+      identity?: { id?: unknown, name?: unknown, version?: unknown }
+    }
+    const id = descriptor.identity?.id
+    const version = descriptor.identity?.version
+    const name = descriptor.identity?.name
+    if (typeof id !== 'string' || typeof version !== 'string')
+      return null
+    return {
+      descriptorRef,
+      displayName: typeof name === 'string' && name.trim() ? name : id,
+      id,
+      soulReleaseRef: `${id}@${version}`,
+      version,
+    }
+  }
+  catch {
+    return null
+  }
+}
 
 export function controlPlaneDirFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
   const value = env.AIWORKER_CONTROL_PLANE_DIR

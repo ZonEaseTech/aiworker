@@ -155,7 +155,10 @@ describe('AIWorker Web admin surface contract', () => {
     expect(data).not.toContain('appendReceipt(')
     expect(data).not.toContain('appendAuditEvent(')
     expect(app).not.toContain('adminConsoleData')
-    expect(assignmentsPage).toContain('adminConsoleData')
+    // The assignments page owns admin-data access through the redacted live data
+    // context (useAdminData seeds from adminConsoleData via assertRedactedAdminConsoleData),
+    // rather than importing the fixture symbol directly.
+    expect(assignmentsPage).toContain('useAdminData')
     expect(app).not.toMatch(/import\s+\{[^}]*\bassignments\b[^}]*\}\s+from ['"]@\/lib\/admin-data['"]/)
   })
 

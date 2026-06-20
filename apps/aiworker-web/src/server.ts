@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join, normalize } from 'node:path'
 import process from 'node:process'
-import { appendApprovalDecision, assertProviderSecretRefAllowed, controlPlaneDirFromEnv, createAssignmentJob, createEnvironmentJob, createProviderJob, loadAdminDataApiPayload, previewPlanJob, registerSoulJob, runApprovedAssignmentApplyJob, runAssignmentPairJob } from './admin-api'
+import { appendApprovalDecision, assertProviderSecretRefAllowed, controlPlaneDirFromEnv, createAssignmentJob, createEnvironmentJob, createProviderJob, loadAdminDataApiPayload, previewPlanJob, readSoulCatalog, registerSoulJob, runApprovedAssignmentApplyJob, runAssignmentPairJob } from './admin-api'
 import { adminAuthBootstrapStatus, adminAuthErrorResponse, authorizeAdminMutation, authorizeAdminRead, callbackResponse, loginResponse, logoutResponse, logtoRuntimeState, safeReturnTo } from './lib/admin-auth'
 import { adminApiErrorPayload, classifyAdminError } from './lib/admin-remediation'
 
@@ -149,6 +149,25 @@ export async function handleAdminRuntimeRequest(request: Request, env: NodeJS.Pr
 
     try {
       return Response.json(await loadAdminDataApiPayload(undefined, request, env))
+    }
+    catch {
+      return Response.json(adminApiErrorPayload('control_plane_unavailable'), {
+        status: 500,
+        headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
+      })
+    }
+  }
+
+  if (url.pathname === '/api/soul-catalog') {
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return methodNotAllowed('GET, HEAD')
+    }
+    const guard = adminReadGuard(request, env)
+    if (guard)
+      return guard
+
+    try {
+      return Response.json({ souls: readSoulCatalog(env) })
     }
     catch {
       return Response.json(adminApiErrorPayload('control_plane_unavailable'), {

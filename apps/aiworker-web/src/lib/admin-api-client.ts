@@ -3,6 +3,14 @@ import { adminRemediation, isAdminApiErrorPayload } from '@/lib/admin-remediatio
 
 const adminTokenStorageKey = 'AIWORKER_WEB_ADMIN_TOKEN'
 
+export interface SoulCatalogEntry {
+  descriptorRef: string
+  displayName: string
+  id: string
+  soulReleaseRef: string
+  version: string
+}
+
 export interface AdminTokenStorageState {
   location: 'local' | 'session' | null
   stored: boolean
@@ -36,6 +44,30 @@ export function adminReadHeaders(): Record<string, string> {
   if (token)
     headers.authorization = `Bearer ${token}`
   return headers
+}
+
+export async function submitAdminMutation<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(path, {
+    body: JSON.stringify(body),
+    headers: {
+      ...adminMutationHeaders(),
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  })
+  if (!response.ok)
+    throw await readAdminApiError(response)
+  return await response.json() as T
+}
+
+export async function fetchSoulCatalog(): Promise<SoulCatalogEntry[]> {
+  const response = await fetch('/api/soul-catalog', {
+    headers: adminReadHeaders(),
+  })
+  if (!response.ok)
+    throw await readAdminApiError(response)
+  const payload = await response.json() as { souls?: SoulCatalogEntry[] }
+  return payload.souls ?? []
 }
 
 export async function readAdminApiError(response: Response): Promise<AdminApiError> {

@@ -2,6 +2,7 @@ import type { AssignmentStatus } from '@/lib/admin-data'
 import { useMemo, useState } from 'react'
 
 import { AssignmentTableCard } from '@/components/assignments/assignment-table-card'
+import { CreateAssignmentSheet } from '@/components/forms/create-assignment-sheet'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,7 +10,8 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { adminConsoleData, getEnvironment, getSoulRelease, statusMeta } from '@/lib/admin-data'
+import { getEnvironment, getSoulRelease, statusMeta } from '@/lib/admin-data'
+import { useAdminData } from '@/lib/admin-data-context'
 
 const assignmentStatusOptions: Array<AssignmentStatus | 'all'> = [
   'all',
@@ -22,11 +24,12 @@ const assignmentStatusOptions: Array<AssignmentStatus | 'all'> = [
 ]
 
 export function AssignmentsPage() {
+  const { data } = useAdminData()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<AssignmentStatus | 'all'>('all')
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase()
-    return adminConsoleData.assignments.filter((assignment) => {
+    return data.assignments.filter((assignment) => {
       if (status !== 'all' && assignment.status !== status) {
         return false
       }
@@ -39,11 +42,11 @@ export function AssignmentsPage() {
         assignment.assignedEmail,
         assignment.team,
         assignment.workspaceRef,
-        getSoulRelease(assignment.soulReleaseId).displayName,
-        getEnvironment(assignment.environmentId).targetRef,
+        getSoulRelease(assignment.soulReleaseId, data).displayName,
+        getEnvironment(assignment.environmentId, data).targetRef,
       ].some(value => value.toLowerCase().includes(normalized))
     })
-  }, [query, status])
+  }, [data, query, status])
 
   return (
     <div className="flex flex-col gap-6">
@@ -51,6 +54,7 @@ export function AssignmentsPage() {
         eyebrow="员工开通"
         title="员工开通记录"
         description="查看每位员工是否已经能使用 AIWorker、下一步要处理什么，以及是否需要管理员介入。"
+        actions={<CreateAssignmentSheet />}
       />
       <Card>
         <CardHeader>
