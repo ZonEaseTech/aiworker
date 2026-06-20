@@ -4,12 +4,12 @@ import type { Command } from 'cac'
 import { execFile as execFileCallback } from 'node:child_process'
 import { accessSync, constants, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { chmod, mkdtemp, rm } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { promisify } from 'node:util'
-import { createAssignment, createAuditEvent, createDefaultPaseoDaemonEndpointRef, createDefaultProjectRef, createEnvironment, createPaseoOwnershipAssertion, createProviderProfile, createProvisionPlan, createProvisionReceipt, createSoulRelease, createWorkspaceProjectionManifest, deriveAssignedUserSlug, isPaseoPairingOffer, LocalFileControlPlaneStore, normalizeAisshServerRef, normalizeAssignedEmail, redactLiteralProviderSecret, redactSecretLike } from '@zonease/aiworker-control'
+import { createAssignment, createAuditEvent, createDefaultPaseoDaemonEndpointRef, createDefaultProjectRef, createEnvironment, createPaseoOwnershipAssertion, createProviderProfile, createProvisionPlan, createProvisionReceipt, createSoulRelease, createWorkspaceProjectionManifest, deriveAssignedUserSlug, isPaseoPairingOffer, LocalFileControlPlaneStore, normalizeAisshServerRef, normalizeAssignedEmail, redactLiteralProviderSecret, redactSecretLike, resolveControlPlaneDir } from '@zonease/aiworker-control'
 import { parseSoulDescriptorV1 } from '@zonease/aiworker-soul-descriptor'
 import cac from 'cac'
 
@@ -1042,19 +1042,7 @@ export async function savePlanMetadataSnapshot(
   await store.saveSnapshot(snapshot)
 }
 
-export function resolveCentralHome(env: NodeJS.ProcessEnv = process.env): string {
-  const configured = env.AIWORKER_HOME?.trim()
-  return configured ? path.resolve(configured) : path.join(homedir(), '.aiworker')
-}
-
-export function resolveControlPlaneDir(env: NodeJS.ProcessEnv = process.env, explicit?: string): string {
-  if (typeof explicit === 'string' && explicit.trim() !== '')
-    return path.resolve(explicit)
-  const fromEnv = env.AIWORKER_CONTROL_PLANE_DIR?.trim()
-  if (fromEnv)
-    return path.resolve(fromEnv)
-  return path.join(resolveCentralHome(env), 'control-plane')
-}
+export { resolveCentralHome, resolveControlPlaneDir } from '@zonease/aiworker-control'
 
 export function controlPlaneDirFromOptions(options: Record<string, unknown>, env: NodeJS.ProcessEnv = process.env): string | null {
   if (typeof options.controlPlaneDir === 'string' && options.controlPlaneDir.trim() !== '')

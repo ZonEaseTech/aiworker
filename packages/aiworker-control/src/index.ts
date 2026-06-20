@@ -26,6 +26,7 @@ import type {
 import { Buffer } from 'node:buffer'
 import { createHash, randomBytes } from 'node:crypto'
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import path from 'node:path'
 
 import process from 'node:process'
@@ -426,6 +427,20 @@ function paseoDaemonReadinessCommands(): string[] {
     'AIWORKER_PASEO_STATUS="$(paseo daemon status --home "$PASEO_HOME" 2>&1 || true)"',
     `case "$AIWORKER_PASEO_LISTEN" in */*) test -S "$AIWORKER_PASEO_LISTEN" ;; *) printf '%s\\n' "$AIWORKER_PASEO_STATUS" | grep -F "$AIWORKER_PASEO_LISTEN" >/dev/null && printf '%s\\n' "$AIWORKER_PASEO_STATUS" | grep -Eq ${shellQuote(runningPattern)} ;; esac || { printf '%s\\n' "Paseo daemon readiness failed after start for $PASEO_HOME. Run paseo daemon status/start under this aissh user, then retry." >&2; exit 127; }`,
   ]
+}
+
+export function resolveCentralHome(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.AIWORKER_HOME?.trim()
+  return configured ? path.resolve(configured) : path.join(homedir(), '.aiworker')
+}
+
+export function resolveControlPlaneDir(env: NodeJS.ProcessEnv = process.env, explicit?: string): string {
+  if (typeof explicit === 'string' && explicit.trim() !== '')
+    return path.resolve(explicit)
+  const fromEnv = env.AIWORKER_CONTROL_PLANE_DIR?.trim()
+  if (fromEnv)
+    return path.resolve(fromEnv)
+  return path.join(resolveCentralHome(env), 'control-plane')
 }
 
 export function createEmptyControlPlaneSnapshot(): ControlPlaneSnapshot {

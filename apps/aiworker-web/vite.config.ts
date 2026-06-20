@@ -50,7 +50,16 @@ export default defineConfig({
 
 export function aiworkerAdminRuntimePlugin(): Plugin {
   return {
-    configureServer(server) {
+    async configureServer(server) {
+      try {
+        const { ensureControlPlaneDirEnv } = await server.ssrLoadModule('/src/server.ts') as AdminServerModule
+        const controlPlaneDir = ensureControlPlaneDirEnv(process.env)
+        server.config.logger.info(`aiworker-web admin runtime control-plane=${controlPlaneDir ?? 'fixture'}`)
+      }
+      catch (error) {
+        server.config.logger.warn(`aiworker-web admin runtime could not resolve control-plane dir: ${String(error)}`)
+      }
+
       server.middlewares.use(async (request, response, next) => {
         if (!isAdminRuntimeCandidate(request)) {
           next()
