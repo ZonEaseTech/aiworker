@@ -1,3 +1,4 @@
+import { rmSync } from 'node:fs'
 import { chmod, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -214,9 +215,15 @@ describe('Bun static server helpers', () => {
     expect(response.status).toBe(405)
   })
 
-  test('serves admin API JSON from the Vite dev server instead of the SPA fallback', async () => {
+  test('serves admin API JSON from the Vite dev server, defaulting to the central-home control plane', async () => {
     const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const previousHome = process.env.AIWORKER_HOME
     delete process.env.AIWORKER_CONTROL_PLANE_DIR
+    // Point the boot default at a throwaway home so the dev server resolves an
+    // (empty) real control plane instead of the demo fixture, without ever
+    // touching the operator's real ~/.aiworker.
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-web-dev-home-'))
+    process.env.AIWORKER_HOME = home
 
     const appRoot = path.resolve(import.meta.dirname, '..')
     const vite = await createViteDevServer({
@@ -243,7 +250,9 @@ describe('Bun static server helpers', () => {
       expect(response.status).toBe(200)
       expect(response.headers.get('content-type')).toContain('application/json')
       expect(body).not.toContain('<!doctype')
-      expect(payload.source).toBe('fixture')
+      // The boot layer wired <AIWORKER_HOME>/control-plane before serving, so the
+      // dev server reads live (empty) control-plane data rather than demo mode.
+      expect(payload.source).toBe('control-plane')
 
       const mutationFallback = await fetch(new URL('/assignments', baseUrl), {
         method: 'POST',
@@ -253,10 +262,15 @@ describe('Bun static server helpers', () => {
     }
     finally {
       await vite.close()
+      rmSync(home, { force: true, recursive: true })
       if (previousDir === undefined)
         delete process.env.AIWORKER_CONTROL_PLANE_DIR
       else
         process.env.AIWORKER_CONTROL_PLANE_DIR = previousDir
+      if (previousHome === undefined)
+        delete process.env.AIWORKER_HOME
+      else
+        process.env.AIWORKER_HOME = previousHome
     }
   })
 

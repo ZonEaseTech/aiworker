@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join, normalize } from 'node:path'
 import process from 'node:process'
-import { appendApprovalDecision, assertProviderSecretRefAllowed, controlPlaneDirFromEnv, createAssignmentJob, createEnvironmentJob, createProviderJob, loadAdminDataApiPayload, previewPlanJob, readSoulCatalog, registerSoulJob, runApprovedAssignmentApplyJob, runAssignmentPairJob } from './admin-api'
+import { appendApprovalDecision, assertProviderSecretRefAllowed, controlPlaneDirFromEnv, createAssignmentJob, createEnvironmentJob, createProviderJob, ensureControlPlaneDirEnv, loadAdminDataApiPayload, previewPlanJob, readSoulCatalog, registerSoulJob, runApprovedAssignmentApplyJob, runAssignmentPairJob } from './admin-api'
 import { adminAuthBootstrapStatus, adminAuthErrorResponse, authorizeAdminMutation, authorizeAdminRead, callbackResponse, loginResponse, logoutResponse, logtoRuntimeState, safeReturnTo } from './lib/admin-auth'
 import { adminApiErrorPayload, classifyAdminError } from './lib/admin-remediation'
 
@@ -471,7 +471,11 @@ function methodNotAllowed(allow: string): Response {
   })
 }
 
+export { ensureControlPlaneDirEnv } from './admin-api'
+
 if (import.meta.main) {
+  const controlPlaneDir = ensureControlPlaneDirEnv(process.env)
   createServer()
-  process.stdout.write(`aiworker-web listening on http://${hostname}:${port} root=${root}\n`)
+  const controlPlaneLine = controlPlaneDir ? ` control-plane=${controlPlaneDir}` : ' control-plane=fixture'
+  process.stdout.write(`aiworker-web listening on http://${hostname}:${port} root=${root}${controlPlaneLine}\n`)
 }

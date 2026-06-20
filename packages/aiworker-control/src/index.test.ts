@@ -1,6 +1,6 @@
 import type { PaseoEnvironmentTopologyKind } from './control-plane'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import {
@@ -21,6 +21,8 @@ import {
   LocalFileControlPlaneStore,
   normalizeAisshServerRef,
   RESERVED_USER_SLUGS,
+  resolveCentralHome,
+  resolveControlPlaneDir,
   userCanOpenWorkspace,
   validateProjectedFilePath,
   writeProjectedFiles,
@@ -716,6 +718,23 @@ describe('Paseo thin-layer aiworker-control contract', () => {
     await store.saveSnapshot(loaded)
 
     expect((await store.loadSnapshot()).receipts).toEqual([receipt])
+  })
+})
+
+describe('central home / control-plane dir resolution', () => {
+  test('resolveCentralHome honors AIWORKER_HOME then falls back to ~/.aiworker', () => {
+    expect(resolveCentralHome({ AIWORKER_HOME: '/srv/aiworker-dev' })).toBe(path.resolve('/srv/aiworker-dev'))
+    expect(resolveCentralHome({ AIWORKER_HOME: '   ' })).toBe(path.join(homedir(), '.aiworker'))
+    expect(resolveCentralHome({})).toBe(path.join(homedir(), '.aiworker'))
+  })
+
+  test('resolveControlPlaneDir applies explicit, env, then central home priority', () => {
+    expect(resolveControlPlaneDir({ AIWORKER_CONTROL_PLANE_DIR: '/env/dir', AIWORKER_HOME: '/home-dir' }, '/explicit/dir'))
+      .toBe(path.resolve('/explicit/dir'))
+    expect(resolveControlPlaneDir({ AIWORKER_CONTROL_PLANE_DIR: '/env/dir', AIWORKER_HOME: '/home-dir' }))
+      .toBe(path.resolve('/env/dir'))
+    expect(resolveControlPlaneDir({ AIWORKER_HOME: '/home-dir' }))
+      .toBe(path.join(path.resolve('/home-dir'), 'control-plane'))
   })
 })
 

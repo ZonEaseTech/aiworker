@@ -2,11 +2,11 @@ import type { ControlPlaneSnapshot } from '@zonease/aiworker-control/control-pla
 import type { ApprovalDecisionRecord, ApprovalStatus } from '@/lib/admin-data'
 import type { AdminBootstrapStatus, AdminRemediation } from '@/lib/admin-remediation'
 import { randomUUID } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
-import { CONTROL_PLANE_SCHEMA_VERSION, LocalFileControlPlaneStore, redactSecretLike } from '@zonease/aiworker-control'
+import { CONTROL_PLANE_SCHEMA_VERSION, LocalFileControlPlaneStore, redactSecretLike, resolveControlPlaneDir } from '@zonease/aiworker-control'
 import { adminAuthBootstrapStatus } from '@/lib/admin-auth'
 import { adminRemediation, classifyApplyOutput } from '@/lib/admin-remediation'
 
@@ -151,6 +151,31 @@ function parseSoulCatalogEntry(descriptorRef: string): SoulCatalogEntry | null {
 export function controlPlaneDirFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
   const value = env.AIWORKER_CONTROL_PLANE_DIR
   return value && value.trim() !== '' ? resolve(value) : null
+}
+
+/**
+ * Boot-layer default: ensure the central-home control plane is wired before the
+ * server starts serving. Request handlers stay purely env-driven (an unset
+ * AIWORKER_CONTROL_PLANE_DIR still falls back to the redacted fixture via
+ * controlPlaneDirFromEnv); this only runs once at boot so `bun run dev` and the
+ * release server default to live `<AIWORKER_HOME>/control-plane` data instead of
+ * demo mode. An explicit AIWORKER_CONTROL_PLANE_DIR is respected, never
+ * overwritten. mkdir failure degrades gracefully (returns null) so boot never
+ * crashes and the fixture remains the safety net.
+ */
+export function ensureControlPlaneDirEnv(env: NodeJS.ProcessEnv = process.env): string | null {
+  const explicit = env.AIWORKER_CONTROL_PLANE_DIR
+  if (explicit && explicit.trim() !== '')
+    return resolve(explicit)
+  const dir = resolveControlPlaneDir(env)
+  try {
+    mkdirSync(dir, { recursive: true })
+  }
+  catch {
+    return null
+  }
+  env.AIWORKER_CONTROL_PLANE_DIR = dir
+  return dir
 }
 
 export function adminBootstrapStatus(source: AdminDataApiPayload['source'], env: NodeJS.ProcessEnv = process.env, request: Request | null = null): AdminBootstrapStatus {
