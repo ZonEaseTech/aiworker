@@ -10,15 +10,29 @@ import { defineConfig, loadEnv } from 'vite'
 type AdminServerModule = typeof import('./src/server')
 
 // The monorepo `.env` lives at the repo root, but `bun run --filter ... dev`
-// starts Vite with cwd = this package, so Bun never auto-loads it. Pull only the
-// central-home keys from the root `.env` into process.env (with `$HOME` expanded
-// by Vite's dotenv-expand) so dev resolves the intended home (e.g. ~/.aiworker-dev)
-// instead of the ~/.aiworker default. Deliberately scoped to home keys — copying
-// LOGTO_*/AIWORKER_WEB_* here would silently flip dev's auth/local mode.
+// starts Vite with cwd = this package, so Bun never auto-loads it. Pull the
+// central-home keys plus the auth/web namespace (`LOGTO_*` / `AIWORKER_WEB_*`)
+// from the root `.env` into process.env (with `$HOME` expanded by Vite's
+// dotenv-expand) so dev resolves the intended home (e.g. ~/.aiworker-dev) AND
+// honors Logto when the developer has configured it. This intentionally mirrors
+// aiworker-next: filling `LOGTO_*` in `.env` makes dev proactively redirect to
+// `/login`; leaving them empty keeps `bun run dev` login-free. Only keys not
+// already present in process.env are filled, so an explicit shell override wins.
 function hydrateCentralHomeFromRootEnv(mode: string): void {
   const rootEnv = loadEnv(mode, path.resolve(__dirname, '..', '..'), '')
-  for (const key of ['AIWORKER_HOME', 'AIWORKER_CONTROL_PLANE_DIR'] as const) {
-    const value = rootEnv[key]?.trim()
+  // Home keys plus the two non-prefixed auth fallback aliases that admin-auth
+  // reads (AIWORKER_SESSION_SECRET ↔ LOGTO_COOKIE_SECRET, AIWORKER_ALLOWED_EMAIL_DOMAINS
+  // ↔ LOGTO_ALLOWED_EMAIL_DOMAINS), so an alias-form `.env` isn't misread as misconfigured.
+  const homeKeys = new Set([
+    'AIWORKER_HOME',
+    'AIWORKER_CONTROL_PLANE_DIR',
+    'AIWORKER_SESSION_SECRET',
+    'AIWORKER_ALLOWED_EMAIL_DOMAINS',
+  ])
+  for (const [key, raw] of Object.entries(rootEnv)) {
+    if (!homeKeys.has(key) && !key.startsWith('LOGTO_') && !key.startsWith('AIWORKER_WEB_'))
+      continue
+    const value = raw?.trim()
     if (value && !process.env[key]?.trim())
       process.env[key] = value
   }
