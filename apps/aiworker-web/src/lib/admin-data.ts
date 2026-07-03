@@ -19,7 +19,6 @@ import {
   ClockClockwiseIcon,
   DesktopTowerIcon,
   FileTextIcon,
-  HandshakeIcon,
   ShieldCheckIcon,
   WarningCircleIcon,
 } from '@phosphor-icons/react'
@@ -1253,12 +1252,138 @@ export function loadAdminConsoleData(
 
 export const adminConsoleData = loadAdminConsoleData()
 
+// --- 操作台（cockpit）派生 ---
+// 把 assignment 作为唯一主对象投影成一张 fleet 表所需的行模型。
+// 生命周期用真实 AssignmentStatus；AIWorker 不代理 Paseo runtime，
+// `ready` 是 AIWorker 侧终态（入口已发），不代表也无法观测"员工已接入"。
+
+export type CockpitFocusBucket = 'needs-action' | 'in-progress' | 'done' | 'inactive'
+
+export type CockpitActionKind = 'provision' | 'pair' | 'retry' | 'view' | 'none'
+
+export interface CockpitGate {
+  blocked: boolean
+  canProvision: boolean
+  blockingChecks: ProvisioningApprovalCheckSummary[]
+  warningChecks: ProvisioningApprovalCheckSummary[]
+}
+
+export interface CockpitRow {
+  assignment: AssignmentSummary
+  soulDisplayName: string
+  environmentLabel: string
+  providerLabel: string
+  status: AssignmentStatus
+  statusLabel: string
+  statusTone: Tone
+  focusBucket: CockpitFocusBucket
+  actionKind: CockpitActionKind
+  gate: CockpitGate
+  checks: ProvisioningApprovalCheckSummary[]
+}
+
+export interface CockpitFocusCounts {
+  needsProvision: number
+  needsPairing: number
+  failing: number
+  inProgress: number
+  done: number
+  inactive: number
+  total: number
+}
+
+interface StatusPresentation {
+  bucket: CockpitFocusBucket
+  action: CockpitActionKind
+  order: number
+}
+
+const cockpitStatusPresentation: Record<AssignmentStatus, StatusPresentation> = {
+  needs_attention: { bucket: 'needs-action', action: 'retry', order: 0 },
+  handoff_ready: { bucket: 'needs-action', action: 'pair', order: 1 },
+  draft: { bucket: 'needs-action', action: 'provision', order: 2 },
+  provisioning: { bucket: 'in-progress', action: 'none', order: 3 },
+  workspace_projected: { bucket: 'in-progress', action: 'none', order: 3 },
+  ready: { bucket: 'done', action: 'view', order: 4 },
+  revoked: { bucket: 'inactive', action: 'view', order: 5 },
+  archived: { bucket: 'inactive', action: 'view', order: 6 },
+}
+
+function cockpitGateFromChecks(checks: ProvisioningApprovalCheckSummary[]): CockpitGate {
+  const blockingChecks = checks.filter(check => check.status === 'blocked')
+  const warningChecks = checks.filter(check => check.status === 'warning')
+  const blocked = blockingChecks.length > 0
+  return { blocked, canProvision: !blocked, blockingChecks, warningChecks }
+}
+
+export function buildCockpitRows(data: AdminConsoleData = adminConsoleData): CockpitRow[] {
+  const approvalByAssignment = new Map(data.approvals.map(approval => [approval.assignmentId, approval]))
+  const soulById = new Map(data.soulReleases.map(soul => [soul.id, soul]))
+  const environmentById = new Map(data.environments.map(environment => [environment.id, environment]))
+  const providerById = new Map(data.providerProfiles.map(provider => [provider.id, provider]))
+
+  return data.assignments
+    .map((assignment) => {
+      const approval = approvalByAssignment.get(assignment.id)
+      const checks = approval?.checks ?? []
+      const presentation = cockpitStatusPresentation[assignment.status]
+      const soul = soulById.get(assignment.soulReleaseId)
+      const environment = environmentById.get(assignment.environmentId)
+      const provider = providerById.get(assignment.providerProfileId)
+      return {
+        assignment,
+        soulDisplayName: soul?.displayName ?? assignment.soulReleaseId,
+        environmentLabel: environment?.targetRef ?? assignment.environmentId,
+        providerLabel: provider?.label ?? assignment.providerProfileId,
+        status: assignment.status,
+        statusLabel: statusMeta[assignment.status].label,
+        statusTone: statusMeta[assignment.status].tone,
+        focusBucket: presentation.bucket,
+        actionKind: presentation.action,
+        gate: cockpitGateFromChecks(checks),
+        checks,
+      }
+    })
+    .sort((left, right) => {
+      const byOrder = cockpitStatusPresentation[left.status].order - cockpitStatusPresentation[right.status].order
+      if (byOrder !== 0)
+        return byOrder
+      return left.assignment.assignedEmail.localeCompare(right.assignment.assignedEmail)
+    })
+}
+
+export function buildCockpitFocusCounts(rows: CockpitRow[]): CockpitFocusCounts {
+  const counts: CockpitFocusCounts = {
+    needsProvision: 0,
+    needsPairing: 0,
+    failing: 0,
+    inProgress: 0,
+    done: 0,
+    inactive: 0,
+    total: rows.length,
+  }
+  for (const row of rows) {
+    if (row.status === 'draft')
+      counts.needsProvision += 1
+    else if (row.status === 'handoff_ready')
+      counts.needsPairing += 1
+    else if (row.status === 'needs_attention')
+      counts.failing += 1
+    else if (row.focusBucket === 'in-progress')
+      counts.inProgress += 1
+    else if (row.focusBucket === 'done')
+      counts.done += 1
+    else if (row.focusBucket === 'inactive')
+      counts.inactive += 1
+  }
+  return counts
+}
+
 export const navigationItems = [
-  { title: '总览', path: '/', icon: DesktopTowerIcon },
-  { title: '员工开通', path: '/assignments', icon: HandshakeIcon },
-  { title: '能力模板', path: '/souls', icon: ArchiveIcon },
-  { title: '设备与账号', path: '/environments', icon: ShieldCheckIcon },
-  { title: '操作记录', path: '/audit', icon: FileTextIcon },
+  { title: '操作台', path: '/', icon: DesktopTowerIcon },
+  { title: '能力库', path: '/souls', icon: ArchiveIcon },
+  { title: '资源', path: '/environments', icon: ShieldCheckIcon },
+  { title: '记录', path: '/audit', icon: FileTextIcon },
 ] as const
 
 export function getApprovalForAssignment(id: string, data: AdminConsoleData = adminConsoleData): ProvisioningApprovalSummary | undefined {

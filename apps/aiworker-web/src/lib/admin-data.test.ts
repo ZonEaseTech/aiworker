@@ -14,6 +14,8 @@ import {
   adminConsoleData,
   applyApprovalDecisionRecords,
   assertRedactedAdminConsoleData,
+  buildCockpitFocusCounts,
+  buildCockpitRows,
   createAdminDataSourceFromControlPlaneSnapshot,
   getApprovalForAssignment,
   getAssignmentForPlan,
@@ -21,6 +23,7 @@ import {
   getTraceEventsForAssignment,
   loadAdminConsoleData,
   mapControlPlaneSnapshotToAdminConsoleData,
+  navigationItems,
 } from './admin-data'
 
 describe('admin data fixtures', () => {
@@ -469,6 +472,77 @@ describe('admin data fixtures', () => {
         },
       }],
     })).toThrow(/literal secret/)
+  })
+
+  test('projects assignments into a single cockpit fleet with lifecycle-driven action and sort', () => {
+    const rows = buildCockpitRows(adminConsoleData)
+
+    expect(rows.length).toBe(adminConsoleData.assignments.length)
+
+    // 每行主对象仍是 assignment，且带出 soul/环境/后台账号显示名。
+    for (const row of rows) {
+      expect(row.assignment.id).toBeTruthy()
+      expect(row.soulDisplayName).toBeTruthy()
+      expect(row.environmentLabel).toBeTruthy()
+      expect(row.providerLabel).toBeTruthy()
+      expect(row.statusLabel).toBe(row.assignment.status === 'ready' ? '已开通' : row.statusLabel)
+      // 绝不声称 liveness：终态文案不得包含"接入/在线/live"。
+      expect(row.statusLabel.toLowerCase()).not.toContain('live')
+      expect(row.statusLabel).not.toContain('接入')
+    }
+
+    // 失败(needs_attention)置顶，终态/失活下沉。
+    const failingRow = rows.find(row => row.status === 'needs_attention')
+    expect(failingRow).toBeDefined()
+    expect(rows[0]?.status).toBe('needs_attention')
+    expect(failingRow?.actionKind).toBe('retry')
+
+    // draft → 开通；handoff_ready → 发入口；ready → 查看。
+    const byStatus = (status: string) => rows.find(row => row.status === status)
+    expect(byStatus('draft')?.actionKind ?? 'provision').toBe('provision')
+    expect(byStatus('ready')?.actionKind).toBe('view')
+  })
+
+  test('derives a real-time provision gate from approval checks (blocked disables, warning surfaces)', () => {
+    const rows = buildCockpitRows(adminConsoleData)
+    // fixture env-alice-prod-1 owner ops-admin@ ≠ alice@ → owner-scope warning 必须浮到门里。
+    const aliceRow = rows.find(row => row.assignment.assignedEmail === 'alice@example.com')
+    expect(aliceRow).toBeDefined()
+    expect(aliceRow!.gate.warningChecks.some(check => check.id.endsWith('-owner-scope'))).toBe(true)
+    // 无 blocked check 时可开通（warning 由 UI 逼确认，不在数据层静默放行）。
+    expect(aliceRow!.gate.blocked).toBe(false)
+    expect(aliceRow!.gate.canProvision).toBe(true)
+
+    // 构造一个 blocked check → 门必须禁止开通。
+    const blockedData = {
+      ...adminConsoleData,
+      approvals: adminConsoleData.approvals.map((approval, index) => index === 0
+        ? { ...approval, checks: approval.checks.map(check => ({ ...check, status: 'blocked' as const })) }
+        : approval),
+    }
+    const blockedRow = buildCockpitRows(blockedData).find(row => row.assignment.id === adminConsoleData.approvals[0].assignmentId)
+    expect(blockedRow!.gate.blocked).toBe(true)
+    expect(blockedRow!.gate.canProvision).toBe(false)
+    expect(blockedRow!.gate.blockingChecks.length).toBeGreaterThan(0)
+  })
+
+  test('counts focus buckets for the needs-me bar', () => {
+    const counts = buildCockpitFocusCounts(buildCockpitRows(adminConsoleData))
+    expect(counts.total).toBe(adminConsoleData.assignments.length)
+    // fixtures: alice ready, bob workspace_projected, cara needs_attention。
+    expect(counts.done).toBe(1)
+    expect(counts.inProgress).toBe(1)
+    expect(counts.failing).toBe(1)
+    expect(counts.needsProvision + counts.needsPairing + counts.failing
+      + counts.inProgress + counts.done + counts.inactive).toBe(counts.total)
+  })
+
+  test('navigation collapses to four cockpit-first items and hides the assignments/provisioning routes', () => {
+    const paths = navigationItems.map(item => item.path)
+    expect(paths).toEqual(['/', '/souls', '/environments', '/audit'])
+    expect(paths).not.toContain('/assignments')
+    expect(paths).not.toContain('/provisioning')
+    expect(navigationItems.map(item => item.title)).toContain('操作台')
   })
 
   test('maps live soul releases whose id already carries the version without double-suffixing', () => {
