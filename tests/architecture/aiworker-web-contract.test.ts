@@ -199,8 +199,9 @@ describe('AIWorker Web admin surface contract', () => {
     const app = read(`${appRoot}/src/App.tsx`)
 
     expect(app.split('\n').length).toBeLessThanOrEqual(50)
+    // /assignments 已并入操作台(重定向)，不再是 App 直接路由的页面模块；此清单只列
+    // App 真正 import 并挂载的页面模块。
     for (const page of [
-      'assignments-page',
       'audit-page',
       'dashboard-page',
       'environments-page',
