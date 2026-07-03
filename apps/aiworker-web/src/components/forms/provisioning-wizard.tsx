@@ -139,7 +139,9 @@ export function ProvisioningWizard({ onAssignmentCreated }: ProvisioningWizardPr
         blockingChecks: effectiveChecks.filter(check => check.status === 'blocked'),
         warningChecks: effectiveChecks.filter(check => check.status === 'warning'),
       }
-    : { blocked: false, canProvision: true, blockingChecks: [], warningChecks: [] }
+    // fail-closed：assignment 已建但 approval 尚未在快照里（reload 未回或未来 approval 变稀疏）时，
+    // 宁可禁止开通也不放行一个"零 check"的开通。校验门是承重安全机制，缺信息即拒绝。
+    : { blocked: true, canProvision: false, blockingChecks: [], warningChecks: [] }
 
   function toggleWarning(id: string, next: boolean) {
     setAcknowledged((current) => {

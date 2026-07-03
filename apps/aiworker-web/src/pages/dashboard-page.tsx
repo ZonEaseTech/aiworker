@@ -144,8 +144,8 @@ export function DashboardPage() {
                     id="cockpit-search"
                     value={query}
                     onChange={event => setQuery(event.target.value)}
-                    placeholder="员工邮箱 / 能力名，例如 alice@example.com 或 AIWorker Freeform"
-                    aria-label="按员工邮箱或能力名搜索"
+                    placeholder="员工邮箱 / 能力名 / 目标机，例如 alice@example.com 或 AIWorker Freeform"
+                    aria-label="按员工邮箱、能力名或目标机搜索"
                   />
                 </Field>
               </CardContent>
@@ -367,6 +367,7 @@ function filterCockpitRows(rows: CockpitRow[], focus: FocusFilter, query: string
       return true
     return row.assignment.assignedEmail.toLowerCase().includes(normalized)
       || row.soulDisplayName.toLowerCase().includes(normalized)
+      || row.environmentLabel.toLowerCase().includes(normalized)
   })
 }
 
