@@ -5,7 +5,6 @@ import { AuthGate } from '@/components/auth-gate'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AdminDataProvider } from '@/lib/admin-data-context'
-import { AssignmentsPage } from '@/pages/assignments-page'
 import { AuditPage } from '@/pages/audit-page'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { EnvironmentsPage } from '@/pages/environments-page'
@@ -28,7 +27,9 @@ export function App() {
                 <main className="min-w-0 flex-1 p-4 md:p-6">
                   <Routes>
                     <Route path="/" element={<DashboardPage />} />
-                    <Route path="/assignments" element={<AssignmentsPage />} />
+                    {/* 兼容旧深链：/assignments 已并入操作台，重定向到操作台。 */}
+                    <Route path="/assignments" element={<Navigate to="/" replace />} />
+                    {/* 兼容旧深链：/provisioning 动作已行内化，仍保留页面避免 404。 */}
                     <Route path="/provisioning" element={<ProvisioningPage />} />
                     <Route path="/souls" element={<SoulsPage />} />
                     <Route path="/environments" element={<EnvironmentsPage />} />

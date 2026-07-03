@@ -8,9 +8,10 @@ import { MemoryRouter } from 'react-router'
 import { adminConsoleData } from '@/lib/admin-data'
 import { AdminDataContext } from '@/lib/admin-data-context'
 import { ProvisioningPage } from './provisioning-page'
-// Effect-exercising tests for ProvisioningPage.
-// Uses happy-dom + React createRoot/act to run useEffect hooks,
-// unlike admin-pages.test.tsx which uses renderToStaticMarkup (effects don't fire).
+// DOM + act tests for the /provisioning compat shell.
+// The action-driven flow now lives in the cockpit (dashboard + row action + drawer);
+// this page is only a read-only deep-link detail shell that must survive live data
+// arriving asynchronously.
 import '../test-setup-dom'
 
 const defaultBootstrap: AdminBootstrapStatus = {
@@ -37,6 +38,12 @@ function makeCtx(overrides: Partial<CtxValue> = {}): CtxValue {
     async loadSoulCatalog() {
       return []
     },
+    async pairAssignment() {
+      return undefined
+    },
+    async provisionAssignment() {
+      return undefined
+    },
     reload: async () => {},
     ...overrides,
   }
@@ -51,11 +58,6 @@ afterEach(() => {
   }
 })
 
-/**
- * Mounts ProvisioningPage inside a controllable context wrapper.
- * The wrapper holds context in state so tests can swap it after mount,
- * simulating live data arriving asynchronously.
- */
 function mountWithControllableCtx(path: string, initialCtx: CtxValue) {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -87,8 +89,8 @@ function mountWithControllableCtx(path: string, initialCtx: CtxValue) {
   }
 }
 
-describe('provisioning page effect tests (DOM + act)', () => {
-  test('param ?assignment=asn-cara-acp seeds cara on mount', async () => {
+describe('provisioning compat page (DOM + act)', () => {
+  test('param ?assignment=asn-cara-acp renders cara detail on mount', async () => {
     const { text, unmount } = mountWithControllableCtx(
       '/provisioning?assignment=asn-cara-acp',
       makeCtx(),
@@ -99,15 +101,16 @@ describe('provisioning page effect tests (DOM + act)', () => {
     unmount()
   })
 
-  test('no param falls back to first assignment (alice)', async () => {
+  test('no param guides back to the cockpit instead of picking an assignment', async () => {
     const { text, unmount } = mountWithControllableCtx('/provisioning', makeCtx())
     await act(async () => {})
-    expect(text()).toContain('alice@example.com')
+    expect(text()).toContain('去操作台开通')
+    expect(text()).not.toContain('alice@example.com')
     unmount()
   })
 
-  test('data arrives after mount with assignment absent — param effect applies cara once data includes it', async () => {
-    // Simulate live first render: control-plane not yet responded, assignments empty
+  test('data arriving after mount resolves the requested assignment once it is in the snapshot', async () => {
+    // Simulate live first render: control-plane not yet responded, assignments empty.
     const emptyCtx = makeCtx({ data: { ...adminConsoleData, assignments: [] } })
     const { text, setCtx, unmount } = mountWithControllableCtx(
       '/provisioning?assignment=asn-cara-acp',
@@ -115,37 +118,16 @@ describe('provisioning page effect tests (DOM + act)', () => {
     )
     await act(async () => {})
 
-    // Before data arrives: cara not resolvable, no email in selected-employee summary
+    // Before data arrives: cara not resolvable.
     expect(text()).not.toContain('cara@example.com')
 
-    // Data arrives (context value updates, same React tree stays mounted)
+    // Data arrives (context value updates, same React tree stays mounted).
     await act(async () => {
       setCtx(makeCtx())
     })
 
-    // Param effect must now resolve asn-cara-acp → cara (HIGH bug was that ref was marked
-    // consumed before resolution succeeded, blocking this re-apply)
     expect(text()).toContain('cara@example.com')
     expect(text()).not.toContain('alice@example.com')
-    unmount()
-  })
-
-  test('after param applied, data identity change does not re-clobber selection back', async () => {
-    const { text, setCtx, unmount } = mountWithControllableCtx(
-      '/provisioning?assignment=asn-cara-acp',
-      makeCtx(),
-    )
-    await act(async () => {})
-    expect(text()).toContain('cara@example.com')
-
-    // Shallow-clone adminData (identity change, same content) — simulates a data refresh
-    await act(async () => {
-      setCtx(makeCtx({ data: { ...adminConsoleData } }))
-    })
-
-    // ref guard (lastAppliedRequestedId.current === requestedAssignmentId) prevents re-apply;
-    // cara must still be showing
-    expect(text()).toContain('cara@example.com')
     unmount()
   })
 })

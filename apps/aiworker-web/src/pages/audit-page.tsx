@@ -3,19 +3,33 @@ import { DemoDataNotice } from '@/components/demo-data-notice'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { approvalStatusMeta, getApprovalForAssignment, getTraceEventsForAssignment, statusMeta } from '@/lib/admin-data'
 import { useAdminData } from '@/lib/admin-data-context'
 
 export function AuditPage() {
   const { data } = useAdminData()
+  const isEmpty = data.recentAuditEvents.length === 0 && data.assignments.length === 0
   return (
     <div className="flex flex-col gap-6">
       <DemoDataNotice />
       <PageHeader
-        eyebrow="操作记录"
+        eyebrow="记录"
         title="管理员操作记录"
-        description="记录管理员开通、确认和发送入口的动作；不会展示员工对话、密钥或设备上的原始内容。"
+        description="记录（audit + handoff）留存管理员开通、确认和发送入口的动作，方便追溯；不会展示员工对话、密钥或设备上的原始内容。"
       />
+      {isEmpty
+        ? (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyTitle>还没有操作记录</EmptyTitle>
+                <EmptyDescription>
+                  当你在操作台给员工开通、发入口或重试后，这里会自动留下可追溯的记录。先去操作台完成第一次开通。
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )
+        : null}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_0.9fr]">
         <AuditCard />
         <Card>

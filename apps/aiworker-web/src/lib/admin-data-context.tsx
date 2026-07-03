@@ -28,6 +28,10 @@ interface AdminDataContextValue {
   isLive: boolean
   loadError: AdminRemediation | null
   loadSoulCatalog: () => Promise<SoulCatalogEntry[]>
+  // cockpit 一键开通：审批折叠进 apply 的单个后端动作（reviewer 由服务端按登录操作员填）。
+  provisionAssignment: (assignmentId: string, note?: string) => Promise<unknown>
+  // 发送一次性入口（pair）；一次性入口只临时返回，不落库。
+  pairAssignment: (assignmentId: string) => Promise<unknown>
   reload: () => Promise<void>
 }
 
@@ -92,12 +96,28 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
     return result
   }
 
+  async function provisionAssignment(assignmentId: string, note?: string): Promise<unknown> {
+    const result = await submitAdminMutation<unknown>(
+      `/api/assignments/${encodeURIComponent(assignmentId)}/provision`,
+      note?.trim() ? { note: note.trim() } : {},
+    )
+    await reload()
+    return result
+  }
+
+  async function pairAssignment(assignmentId: string): Promise<unknown> {
+    // pair 的一次性入口只临时返回给调用方展示，不写入 data，故这里返回后不强制 reload 覆盖它。
+    const result = await submitAdminMutation<unknown>(`/api/assignments/${encodeURIComponent(assignmentId)}/pair`, {})
+    await reload()
+    return result
+  }
+
   useEffect(() => {
     void reload()
   }, [])
 
   const value = useMemo(
-    () => ({ bootstrap, createMetadata, data, decideApproval, isLive, loadError, loadSoulCatalog: fetchSoulCatalog, reload }),
+    () => ({ bootstrap, createMetadata, data, decideApproval, isLive, loadError, loadSoulCatalog: fetchSoulCatalog, pairAssignment, provisionAssignment, reload }),
     [bootstrap, data, isLive, loadError],
   )
 
@@ -116,6 +136,12 @@ export function useAdminData(): AdminDataContextValue {
     loadError: null,
     async loadSoulCatalog() {
       return []
+    },
+    async pairAssignment() {
+      return undefined
+    },
+    async provisionAssignment() {
+      return undefined
     },
     async reload() {},
   }

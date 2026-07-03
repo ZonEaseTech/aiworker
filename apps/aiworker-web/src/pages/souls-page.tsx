@@ -3,6 +3,7 @@ import { RegisterSoulSheet } from '@/components/forms/register-soul-sheet'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { releaseStatusMeta } from '@/lib/admin-data'
 import { useAdminData } from '@/lib/admin-data-context'
 
@@ -12,11 +13,26 @@ export function SoulsPage() {
     <div className="flex flex-col gap-6">
       <DemoDataNotice />
       <PageHeader
-        eyebrow="能力模板"
+        eyebrow="能力库"
         title="可分配的 AI 能力"
-        description="管理员选择员工需要的能力包；模板内容由专业人员维护，页面只展示发布状态和适用说明。"
+        description="Soul（能力）= 版本化的能力模板，登记后可在“新开通”里分配给员工；模板内容由专业人员构建，这里只登记已 build 的 release。"
         actions={<RegisterSoulSheet />}
       />
+      {data.soulReleases.length === 0
+        ? (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyTitle>还没有登记能力 Soul</EmptyTitle>
+                <EmptyDescription>
+                  Soul 是给员工分配的能力模板。先在服务器上 build 好 Soul release，再用右上角“登记模板”登记，之后就能在操作台“新开通”里选到它。
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <RegisterSoulSheet />
+              </EmptyContent>
+            </Empty>
+          )
+        : null}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {data.soulReleases.map((release) => {
           const meta = releaseStatusMeta[release.status]

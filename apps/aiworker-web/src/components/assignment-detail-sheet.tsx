@@ -1,4 +1,4 @@
-import type { AssignmentSummary } from '@/lib/admin-data'
+import type { AssignmentStatus, AssignmentSummary, Tone } from '@/lib/admin-data'
 
 import { StatusBadge } from '@/components/status-badge'
 import { Separator } from '@/components/ui/separator'
@@ -57,15 +57,30 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
         <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
         <StatusBadge tone="outline">{assignment.team}</StatusBadge>
       </div>
+      <p className="rounded-md border bg-muted/20 p-3 text-[0.6875rem]/relaxed text-muted-foreground">
+        名词速览：
+        <b className="text-foreground">Assignment（开通）</b>
+        = 一位员工在一台目标机上的开通；
+        <b className="text-foreground">Soul（能力）</b>
+        = 可复用的能力模板；
+        <b className="text-foreground">Provider（后台账号）</b>
+        = 员工背后用的 AI 账号（只存引用）；
+        <b className="text-foreground">Paseo</b>
+        = 员工真正使用 AIWorker 的客户端环境。
+      </p>
       <dl className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-        <Detail label="能力模板" value={soul ? `${soul.displayName} · ${soul.version}` : '能力模板缺失'} />
-        <Detail label="后台 AI 账号" value={provider?.label ?? '后台账号缺失'} />
-        <Detail label="员工设备" value={environment ? (environment.ownerEmail === assignment.assignedEmail ? '员工本人设备' : `${environment.ownerEmail} 代管设备`) : '设备配置缺失'} />
+        <Detail label="能力 Soul" value={soul ? `${soul.displayName} · ${soul.version}` : '能力模板缺失'} />
+        <Detail label="后台账号 Provider" value={provider?.label ?? '后台账号缺失'} />
+        <Detail label="目标机 Environment" value={environment ? (environment.ownerEmail === assignment.assignedEmail ? '员工本人设备' : `${environment.ownerEmail} 代管设备`) : '设备配置缺失'} />
         <Detail label="最近更新" value={assignment.updatedAt} />
       </dl>
       <Separator />
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">员工入口</h3>
+        <h3 className="text-sm font-medium">员工入口 Handoff</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge tone={handoffToneForStatus(status.tone)}>{handoffLabelForAssignmentStatus(assignment.status)}</StatusBadge>
+          <span className="text-[0.625rem] text-muted-foreground">{assignment.handoffKind}</span>
+        </div>
         <p className="rounded-md border bg-muted/30 p-3 text-xs/relaxed text-foreground">
           {assignment.handoffLabel}
         </p>
@@ -81,6 +96,7 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
               </div>
               <p className="text-xs/relaxed text-muted-foreground">{approval.riskSummary}</p>
               <p className="text-[0.625rem] text-muted-foreground">
+                审批已折叠进开通动作：确认记录由开通时的登录操作员署名。
                 {approval.controlApiState === 'persisted' ? '确认记录已保存。' : '当前为预览记录，正式连接管理数据后会保存。'}
               </p>
             </section>
@@ -139,6 +155,21 @@ export function AssignmentDetailContent({ assignment }: { assignment: Assignment
       </details>
     </div>
   )
+}
+
+function handoffLabelForAssignmentStatus(status: AssignmentStatus): string {
+  if (status === 'ready')
+    return '入口已发'
+  if (status === 'handoff_ready')
+    return '待发入口'
+  if (status === 'needs_attention')
+    return '入口待处理'
+  return '尚未就绪'
+}
+
+// AIWorker 不代理 Paseo runtime，ready 只是 AIWorker 侧终态（入口已发），不代表也无法观测“员工已接入”。
+function handoffToneForStatus(statusTone: Tone): Tone {
+  return statusTone
 }
 
 function Detail({ label, technical = false, value }: { label: string, technical?: boolean, value: string }) {
