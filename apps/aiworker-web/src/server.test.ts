@@ -559,6 +559,110 @@ describe('Bun static server helpers', () => {
     }
   })
 
+  test('provision endpoint folds approval and apply into a single operator action', async () => {
+    const previousDir = process.env.AIWORKER_CONTROL_PLANE_DIR
+    const previousCli = process.env.AIWORKER_CLI_BIN
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-web-provision-'))
+    process.env.AIWORKER_CONTROL_PLANE_DIR = root
+    const environment = {
+      daemonEndpoint: '127.0.0.1:42057',
+      daemonHostRef: '127.0.0.1:42057',
+      daemonListenRef: '127.0.0.1:42057',
+      endpointKind: 'tcp' as const,
+      environmentId: 'env-prov',
+      isolation: 'os-user' as const,
+      ownerEmail: 'ops-admin@example.com',
+      paseoHome: '$HOME/.aiworker/alice-example.com/.paseo',
+      providerProfileIds: ['codex-default'],
+      targetRef: 'aissh:server-prov',
+      topologyKind: 'owner-scoped-paseo-home-v1' as const,
+    }
+    const providerProfile = {
+      id: 'codex-default',
+      label: 'Codex Default',
+      provider: 'codex',
+      secretRef: 'secret://providers/codex/default',
+    }
+    const soul = {
+      descriptorRef: path.join(root, 'soul.descriptor.json'),
+      displayName: 'AIWorker Freeform',
+      files: [{ content: '# Freeform\n', relativePath: 'AGENTS.md' }],
+      id: 'aiworker-freeform',
+      version: '1.0.0',
+    }
+    const assignment = createAssignment({
+      assignedEmail: 'alice@example.com',
+      environmentId: environment.environmentId,
+      providerProfileId: providerProfile.id,
+      soulReleaseRef: `${soul.id}@${soul.version}`,
+      workspaceRef: '$HOME/.aiworker/alice-example.com/projects/aiworker-freeform',
+    })
+    await writeFile(soul.descriptorRef, '{"schemaVersion":"soul/v1","identity":{"id":"aiworker-freeform","version":"1.0.0"},"protocol":{"runtime":"paseo-workspace"},"workspaceTemplate":{"files":[]}}\n')
+    const store = new LocalFileControlPlaneStore(root)
+    await store.saveSnapshot({
+      ...createEmptyControlPlaneSnapshot(),
+      assignments: [{ ...assignment, status: 'draft' }],
+      environments: [environment],
+      providerProfiles: [providerProfile],
+      soulReleases: [soul],
+    })
+    const fakeCli = path.join(root, 'fake-cli')
+    const fakeArgs = path.join(root, 'fake-cli.args')
+    await writeFile(fakeCli, [
+      '#!/bin/sh',
+      `printf '%s\\n' "$*" >> ${fakeArgs}`,
+      'printf \'%s\\n\' \'{"status":"executed","stdout":"Local Daemon      running\\nAIWORKER_HANDOFF_READY: run pair","stderr":""}\'',
+    ].join('\n'))
+    await chmod(fakeCli, 0o755)
+    process.env.AIWORKER_CLI_BIN = fakeCli
+    const server = createServer({ port: 0 })
+
+    try {
+      // apply alone must fail closed until an approval exists (backend gate stays intact).
+      const bareApply = await fetch(`http://127.0.0.1:${server.port}/api/assignments/${assignment.assignmentId}/apply`, {
+        headers: { 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      expect(bareApply.status).toBe(409)
+      expect(await bareApply.text()).toContain('approval_required')
+
+      // provision = one call → records an approved decision then applies.
+      const provisionResponse = await fetch(`http://127.0.0.1:${server.port}/api/assignments/${assignment.assignmentId}/provision`, {
+        headers: { 'x-aiworker-admin-action': '1' },
+        method: 'POST',
+      })
+      const provisionPayload = await provisionResponse.json()
+      expect(provisionResponse.status).toBe(200)
+      expect(provisionPayload.job).toBeDefined()
+
+      const approvalsLog = await readFile(path.join(root, 'approvals.jsonl'), 'utf8')
+      expect(approvalsLog).toContain('"status":"approved"')
+      // No Logto session in this harness → reviewer defaults to the console identity, never a fixture name.
+      expect(approvalsLog).toContain('admin-console')
+      expect(approvalsLog).not.toContain('approver@example.com')
+
+      const args = await readFile(fakeArgs, 'utf8')
+      expect(args).toContain('apply')
+      expect(args).toContain(`--assignment-id ${assignment.assignmentId}`)
+      // Provisioning output must never leak raw runtime markers or provider secrets.
+      const serialized = JSON.stringify(provisionPayload)
+      expect(serialized).not.toContain('AIWORKER_HANDOFF_READY')
+      expect(serialized).not.toContain('secret://')
+    }
+    finally {
+      server.stop(true)
+      if (previousDir === undefined)
+        delete process.env.AIWORKER_CONTROL_PLANE_DIR
+      else
+        process.env.AIWORKER_CONTROL_PLANE_DIR = previousDir
+      if (previousCli === undefined)
+        delete process.env.AIWORKER_CLI_BIN
+      else
+        process.env.AIWORKER_CLI_BIN = previousCli
+      rmSync(root, { force: true, recursive: true })
+    }
+  })
+
   test('requires the configured admin token for mutation endpoints without leaking it', async () => {
     const previousToken = process.env.AIWORKER_WEB_ADMIN_TOKEN
     process.env.AIWORKER_WEB_ADMIN_TOKEN = 'expected-admin-token'

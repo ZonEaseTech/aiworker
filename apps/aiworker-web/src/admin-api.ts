@@ -286,6 +286,29 @@ export async function runApprovedAssignmentApplyJob(root: string, assignmentId: 
   return summarizeApplyJobResult(assignmentId, result.exitCode, result.stdout, result.stderr)
 }
 
+export interface ProvisionAssignmentInput {
+  reviewer?: string
+  note?: string
+}
+
+/**
+ * cockpit 的"一键开通"= 单个后端动作：先落审批决定（reviewer=登录操作员），再跑 apply。
+ * 折叠的是 UI 上的独立审批步骤，不是审批记录本身——后端审批门与审计轨迹保持不变，
+ * 避免前端串两个 POST 产生"已审批未 apply"的半态。
+ */
+export async function provisionAssignmentJob(
+  root: string,
+  assignmentId: string,
+  input: ProvisionAssignmentInput = {},
+): Promise<ApplyJobResult> {
+  await appendApprovalDecision(root, assignmentId, {
+    status: 'approved',
+    ...(input.reviewer ? { reviewer: input.reviewer } : {}),
+    ...(input.note ? { note: input.note } : {}),
+  })
+  return runApprovedAssignmentApplyJob(root, assignmentId)
+}
+
 function paseoEndpointCliArgs(environment: ControlPlaneSnapshot['environments'][number]): string[] {
   if (environment.endpointKind === 'tcp' && environment.daemonListenRef && environment.daemonHostRef)
     return ['--paseo-listen', environment.daemonListenRef, '--paseo-host', environment.daemonHostRef]

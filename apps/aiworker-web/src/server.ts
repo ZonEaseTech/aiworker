@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { join, normalize } from 'node:path'
 import process from 'node:process'
-import { appendApprovalDecision, assertProviderSecretRefAllowed, controlPlaneDirFromEnv, createAssignmentJob, createEnvironmentJob, createProviderJob, ensureControlPlaneDirEnv, loadAdminDataApiPayload, previewPlanJob, readSoulCatalog, registerSoulJob, runApprovedAssignmentApplyJob, runAssignmentPairJob } from './admin-api'
-import { adminAuthBootstrapStatus, adminAuthErrorResponse, authorizeAdminMutation, authorizeAdminRead, callbackResponse, loginResponse, logoutResponse, logtoRuntimeState, safeReturnTo } from './lib/admin-auth'
+import { appendApprovalDecision, assertProviderSecretRefAllowed, controlPlaneDirFromEnv, createAssignmentJob, createEnvironmentJob, createProviderJob, ensureControlPlaneDirEnv, loadAdminDataApiPayload, previewPlanJob, provisionAssignmentJob, readSoulCatalog, registerSoulJob, runApprovedAssignmentApplyJob, runAssignmentPairJob } from './admin-api'
+import { adminAuthBootstrapStatus, adminAuthErrorResponse, authorizeAdminMutation, authorizeAdminRead, callbackResponse, loginResponse, logoutResponse, logtoRuntimeState, readAdminSession, safeReturnTo } from './lib/admin-auth'
 import { adminApiErrorPayload, classifyAdminError } from './lib/admin-remediation'
 
 const root = process.env.AIWORKER_WEB_DIST ?? join(process.cwd(), 'dist')
@@ -223,6 +223,37 @@ export async function handleAdminRuntimeRequest(request: Request, env: NodeJS.Pr
 
     try {
       const result = await runApprovedAssignmentApplyJob(root, decodeURIComponent(applyMatch[1]!))
+      return Response.json({ job: result })
+    }
+    catch (error) {
+      return adminApiErrorResponse(error, 409)
+    }
+  }
+
+  const provisionMatch = url.pathname.match(/^\/api\/assignments\/([^/]+)\/provision$/)
+  if (provisionMatch) {
+    if (request.method !== 'POST') {
+      return methodNotAllowed('POST')
+    }
+    const guard = adminMutationGuard(request, env)
+    if (guard)
+      return guard
+
+    const root = controlPlaneDirFromEnv(env)
+    if (!root) {
+      return Response.json(adminApiErrorPayload('control_plane_dir_required'), {
+        status: 409,
+        headers: { 'x-aiworker-boundary': 'admin-control-plane-only' },
+      })
+    }
+
+    const input = await request.json().catch(() => ({})) as { note?: string }
+    const reviewer = readAdminSession(request, env)?.email
+    try {
+      const result = await provisionAssignmentJob(root, decodeURIComponent(provisionMatch[1]!), {
+        ...(reviewer ? { reviewer } : {}),
+        ...(typeof input?.note === 'string' && input.note.trim() ? { note: input.note } : {}),
+      })
       return Response.json({ job: result })
     }
     catch (error) {

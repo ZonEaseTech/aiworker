@@ -15,13 +15,7 @@ import { AssignmentsPage } from './assignments-page'
 import { AuditPage } from './audit-page'
 import { DashboardPage } from './dashboard-page'
 import { EnvironmentsPage } from './environments-page'
-import {
-  ProvisioningPage,
-  resolveAssignmentIdentityForTuple,
-  resolveAssignmentSelectionState,
-  resolveInitialAssignmentSelection,
-  resolvePreviewApprovalStatus,
-} from './provisioning-page'
+import { ProvisioningPage } from './provisioning-page'
 import { SoulsPage } from './souls-page'
 
 function expectInOrder(markup: string, labels: string[]) {
@@ -57,6 +51,12 @@ function renderPageWithData(page: ReactElement, data: AdminConsoleData) {
     loadError: null,
     async loadSoulCatalog() {
       return []
+    },
+    async pairAssignment() {
+      return undefined
+    },
+    async provisionAssignment() {
+      return undefined
     },
     async reload() {},
   }
@@ -155,7 +155,7 @@ function renderPageAt(page: ReactElement, path: string) {
 describe('admin console page composition', () => {
   test('renders every admin route with its core heading', () => {
     const pages: Array<[string, ReactElement, string]> = [
-      ['dashboard', <DashboardPage />, '先处理这一件事'],
+      ['dashboard', <DashboardPage />, '员工开通操作台'],
       ['assignments', <AssignmentsPage />, '员工开通记录'],
       ['provisioning', <ProvisioningPage />, '处理员工开通'],
       ['souls', <SoulsPage />, '可分配的 AI 能力'],
@@ -168,12 +168,18 @@ describe('admin console page composition', () => {
       expect(markup, name).toContain(heading)
     }
 
+    // 操作台（cockpit）= 新首页：焦点条 + 搜索 + fleet 表 + 保留的技术支持折叠块。
     const dashboard = renderPage(<DashboardPage />)
-    expect(dashboard).toContain('先处理这一件事')
-    expect(dashboard).toContain('处理 cara@example.com 的入口问题')
-    expect(dashboard).toContain('接下来处理')
-    expect(dashboard).toContain('按顺序处理，不需要先看日志或技术配置')
-    expect(dashboard).toContain('页面说明')
+    expect(dashboard).toContain('员工开通操作台')
+    expect(dashboard).toContain('需我处理')
+    expect(dashboard).toContain('员工开通列表')
+    // fleet 表列（Provider 已降级，不作列）。
+    expect(dashboard).toContain('能力 Soul')
+    expect(dashboard).toContain('目标机 Environment')
+    expect(dashboard).not.toContain('后台账号 Provider') // Provider 不作主表列
+    // 失败置顶 + 行内可见员工（cara needs_attention 应出现在表里）。
+    expect(dashboard).toContain('cara@example.com')
+    // 承重接线保留：技术支持块 / token 管理 / 启动变量。
     expect(dashboard).toContain('技术支持和系统状态')
     expect(dashboard).toContain('AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane')
     expect(dashboard).toContain('给技术支持查看启动变量')
@@ -182,40 +188,30 @@ describe('admin console page composition', () => {
     expect(dashboard).toContain('本次使用')
     expect(dashboard).toContain('记住这台设备')
     expect(dashboard).toContain('口令只保存在当前浏览器')
-    expect(dashboard).toContain('当前为演示模式')
-    expect(dashboard).toContain('处理员工入口')
-    expect(dashboard).not.toContain('最近操作记录')
-    expect(dashboard).not.toContain('技术设置')
-    expect(dashboard).not.toContain('已开通员工')
+    // 绝不声称 liveness：ready 文案不得出现“已接入/在线/live”。
+    expect(dashboard).not.toContain('已接入')
+    expect(dashboard).not.toContain('在线')
     expectInOrder(dashboard, [
-      '先处理这一件事',
-      '处理 cara@example.com 的入口问题',
-      '接下来处理',
-      '页面说明',
+      '员工开通操作台',
+      '需我处理',
+      '员工开通列表',
       '技术支持和系统状态',
       'AIWORKER_CONTROL_PLANE_DIR=/path/to/control-plane',
     ])
 
+    // /provisioning 现为兼容深链页（动作已行内化），仍不在导航，不再有独立审批步骤。
     const provisioning = renderPage(<ProvisioningPage />)
     expect(provisioning).toContain('处理员工开通')
-    expect(provisioning).toContain('当前员工')
-    expect(provisioning).toContain('选择员工')
-    expect(provisioning).toContain('确认内容')
-    expect(provisioning).toContain('管理员确认')
-    expect(provisioning).toContain('开始开通')
-    expect(provisioning).toContain('发送入口')
-    expect(provisioning).toContain('操作记录')
-    expect(provisioning).toContain('演示模式')
-    expect(provisioning).toContain('预览确认')
-    expect(provisioning).toContain('预览退回')
-    expect(provisioning).toContain('后台 AI 账号需要授权')
-    expect(provisioning).toContain('入口只在当前页面临时显示')
-    expect(provisioning).toContain('不会保存')
-    expect(provisioning).toContain('aiworker plan')
-    expect(provisioning).not.toContain('apply --yes')
-    expectInOrder(provisioning, ['选择员工', '确认内容', '管理员确认', '开始开通', '发送入口'])
-    expectInOrder(provisioning, ['确认内容', '给技术支持查看开通配置'])
+    expect(provisioning).toContain('回操作台')
+    // 独立“审批”步骤已下线（折叠进开通动作）。
+    expect(provisioning).not.toContain('预览确认')
+    expect(provisioning).not.toContain('预览退回')
+    // 不代理 runtime。
+    expect(provisioning).not.toContain('/api/sessions/')
+    expect(provisioning).not.toContain('engine_invocation')
     expect(navigationItems.map(item => item.path)).not.toContain('/provisioning')
+    expect(navigationItems.map(item => item.path)).not.toContain('/assignments')
+    expect(navigationItems.map(item => item.path)).toContain('/')
     expect(navigationItems.map(item => item.title)).not.toContain('开通向导')
 
     const audit = renderPage(<AuditPage />)
@@ -253,6 +249,12 @@ describe('admin console page composition', () => {
       async loadSoulCatalog() {
         return []
       },
+      async pairAssignment() {
+        return undefined
+      },
+      async provisionAssignment() {
+        return undefined
+      },
       async reload() {},
     }
     const markup = renderToStaticMarkup(
@@ -269,76 +271,28 @@ describe('admin console page composition', () => {
     expect(markup).not.toContain('设备配置缺失')
   })
 
-  test('provisioning approval controls stay preview-only and redacted', () => {
-    const markup = renderPage(<ProvisioningPage />)
+  test('provisioning compat page stays a read-only detail shell and preserves the runtime boundary', () => {
+    // 动作已折叠进操作台行内；兼容页只读，无独立审批步骤、不代理 runtime。
+    const markup = renderPageAt(<ProvisioningPage />, '/provisioning?assignment=asn-cara-acp')
 
-    expect(markup).toContain('演示模式')
-    expect(markup).toContain('不会保存，也不会连接员工设备')
+    expect(markup).toContain('回操作台')
+    expect(markup).not.toContain('预览确认')
+    expect(markup).not.toContain('预览退回')
     expect(markup).not.toContain('/api/sessions/')
     expect(markup).not.toContain('engine_invocation')
     expect(markup).not.toContain('offer=')
     expect(markup).not.toContain('sk-')
   })
 
-  test('approval preview decisions are scoped by assignment id', () => {
-    expect(resolvePreviewApprovalStatus('asn-1', { 'asn-1': 'approved', 'asn-2': 'changes_requested' }, 'pending')).toBe('approved')
-    expect(resolvePreviewApprovalStatus('asn-2', { 'asn-1': 'approved', 'asn-2': 'changes_requested' }, 'pending')).toBe('changes_requested')
-    expect(resolvePreviewApprovalStatus('asn-3', { 'asn-1': 'approved', 'asn-2': 'changes_requested' }, 'pending')).toBe('pending')
-  })
-
-  test('assignment identity selection is the source of truth for provisioning tuple selectors', () => {
-    for (const assignment of adminConsoleData.assignments) {
-      expect(resolveAssignmentSelectionState(assignment.id)).toEqual({
-        assignmentId: assignment.id,
-        environmentId: assignment.environmentId,
-        providerProfileId: assignment.providerProfileId,
-        soulReleaseId: assignment.soulReleaseId,
-      })
-    }
-
-    const aliceAssignment = adminConsoleData.assignments.find(assignment => assignment.id === 'asn-alice-freeform')!
-
-    expect(resolveAssignmentSelectionState('missing-assignment')).toBeUndefined()
-    expect(resolveAssignmentIdentityForTuple(
-      aliceAssignment.environmentId,
-      aliceAssignment.soulReleaseId,
-      aliceAssignment.providerProfileId,
-    )).toBe(aliceAssignment.id)
-    expect(resolveAssignmentIdentityForTuple(
-      aliceAssignment.environmentId,
-      aliceAssignment.soulReleaseId,
-      'claude-ops',
-    )).toBe('')
-  })
-
-  test('initial assignment selection prefers the requested id and falls back to the first assignment', () => {
-    const cara = adminConsoleData.assignments.find(assignment => assignment.id === 'asn-cara-acp')!
-    const first = adminConsoleData.assignments[0]!
-
-    expect(resolveInitialAssignmentSelection('asn-cara-acp')).toEqual({
-      assignmentId: cara.id,
-      environmentId: cara.environmentId,
-      providerProfileId: cara.providerProfileId,
-      soulReleaseId: cara.soulReleaseId,
-    })
-
-    const fallback = {
-      assignmentId: first.id,
-      environmentId: first.environmentId,
-      providerProfileId: first.providerProfileId,
-      soulReleaseId: first.soulReleaseId,
-    }
-    expect(resolveInitialAssignmentSelection('does-not-exist')).toEqual(fallback)
-    expect(resolveInitialAssignmentSelection('')).toEqual(fallback)
-  })
-
-  test('provisioning page honors the assignment search param and falls back when absent', () => {
+  test('provisioning compat page shows the requested assignment detail and guides back when absent', () => {
     const withParam = renderPageAt(<ProvisioningPage />, '/provisioning?assignment=asn-cara-acp')
     expect(withParam).toContain('cara@example.com')
     expect(withParam).not.toContain('alice@example.com')
 
+    // 无参数：不渲染任何具体员工，引导回操作台干活。
     const withoutParam = renderPage(<ProvisioningPage />)
-    expect(withoutParam).toContain('alice@example.com')
+    expect(withoutParam).toContain('去操作台开通')
+    expect(withoutParam).not.toContain('alice@example.com')
   })
 
   test('assignment detail sheet exposes approval and trace evidence without runtime data', () => {
