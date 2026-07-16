@@ -1,5 +1,17 @@
 # AIWorker
 
+> [!WARNING]
+> **This repository is archived and no longer maintained.** It accepts no new
+> features, bug fixes, support requests, or releases. Its source, tags, and
+> documentation remain available only as a historical record.
+>
+> Ongoing development has moved to
+> [ZonEaseTech/aiworker-next](https://github.com/ZonEaseTech/aiworker-next),
+> which is currently private. To request an access evaluation, contact
+> [ZonEaseTech](https://github.com/ZonEaseTech) at
+> [yypsgdsg@gmail.com](mailto:yypsgdsg@gmail.com). Do not use the historical
+> instructions below for new deployments.
+
 AIWorker CLI and AIWorker Web are thin enterprise distribution surfaces for [Paseo](https://paseo.sh/docs) Project workdirs.
 
 The product no longer builds an employee-side Worker daemon, Workbench, chat UI, session runtime, or native-engine bridge. Paseo already owns the daemon, clients, projects/workspaces, optional worktrees, sessions, provider orchestration, permissions, logs, relay/direct connections, and CLI automation. AIWorker keeps only the enterprise layer required to turn expert-authored capability into assigned Paseo Project workdirs. AIWorker Web is an admin/control console for AIWorker-owned assignment, provisioning, receipt, audit, and handoff metadata; it is not a Paseo workspace UI.
